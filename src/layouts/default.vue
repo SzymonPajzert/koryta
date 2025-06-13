@@ -2,7 +2,8 @@
   <header>
     <nav>
       <ul>
-        <li><router-link to="/">Lista</router-link></li>
+        <li><router-link to="/">Strona początkowa</router-link></li>
+        <li><router-link to="/list">Lista</router-link></li>
         <li><router-link to="/login">Zaloguj się</router-link></li>
       </ul>
     </nav>

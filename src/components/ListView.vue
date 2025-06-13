@@ -1,5 +1,6 @@
 <template>
   <div>
+    TODO
     <v-row>
       <v-col v-for="link in links" :key="link.href" cols="12">
         <v-card
@@ -31,5 +32,5 @@
   </div>
 </template>
 
-<script lang="ts" setup>
+<script setup lang="ts" >
 </script>
