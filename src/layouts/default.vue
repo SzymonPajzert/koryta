@@ -1,10 +1,11 @@
 <template>
   <v-app-bar>
-    <v-app-bar-nav-icon></v-app-bar-nav-icon>
+    <v-app-bar-nav-icon />
     <v-toolbar-title>koryta.pl</v-toolbar-title>
-    <v-spacer></v-spacer>
+    <v-spacer />
     <v-btn text to="/">Start</v-btn>
     <v-btn text to="/list">Lista</v-btn>
+    <v-btn text to="/add">Dodaj</v-btn>
     <v-btn text to="/login">Zaloguj się</v-btn>
   </v-app-bar>
   <v-main>

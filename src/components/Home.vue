@@ -10,17 +10,16 @@
         </div>
       </v-col>
       <v-col cols="4">
-        <PartyChart></PartyChart>
+        <PartyChart />
       </v-col>
 
-      <v-col v-for="link in links" :key="link.href" cols="12">
+      <v-col v-for="link in links" :key="link.destination" cols="12">
         <v-card
           append-icon="mdi-open-in-new"
           class="py-4"
           color="surface-variant"
           :to="link.destination"
           :prepend-icon="link.icon" rel="noopener noreferrer" rounded="lg" variant="tonal">
-
           <template #title>
             <h2 class="text-h5 font-weight-bold">
               {{ link.title }}
@@ -40,12 +39,14 @@
 
 <script setup lang="ts">
 import PartyChart from './PartyChart.vue';
+import {useListEmployment} from '@/composables/party'
+const { people } = useListEmployment();
 
-const links = [
+const links = computed(() => [
   {
     destination: 'list',
     icon: 'mdi-text-box-outline',
-    title: 'Zobacz listę',
+    title: 'Zobacz listę ' + people.value.length + ' osób',
   },
   {
     destination: 'add',
@@ -59,5 +60,5 @@ const links = [
     subtitle: 'Zaloguj się lub dołącz do serwera Discord',
     title: 'Dołącz do projektu',
   },
-]
+])
 </script>
