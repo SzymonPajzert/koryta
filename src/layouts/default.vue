@@ -5,7 +5,7 @@
     <v-spacer />
     <v-btn text to="/">Start</v-btn>
     <v-btn text to="/list">Lista</v-btn>
-    <v-btn text to="/add">Dodaj</v-btn>
+    <SimpleSuggestionDialog />
     <v-btn text v-if="user" to="/profil">Profil</v-btn>
     <v-btn text v-if="!user" to="/login">Zaloguj się</v-btn>
     <v-btn text v-if="user" @click="logout">Wyloguj</v-btn>
