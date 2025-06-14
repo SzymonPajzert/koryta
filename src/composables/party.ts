@@ -1,10 +1,10 @@
-import { ref, computed } from 'vue'
-import nepoEmployment from '@/assets/people.json'
+import { ref, computed, watch } from 'vue'
+import { useReadDB } from '@/composables/staticDB'
 
 export interface NepoEmployment {
   name: string
   parties: string[]
-  nepotism: Array<{
+  nepotism?: Array<{
     relation: string;
     person: {
       name: string;
@@ -23,11 +23,16 @@ export interface NepoEmployment {
 }
 
 export function useListEmployment() {
+  const { watchPath } = useReadDB<{employed: NepoEmployment[]}>()
+  const raw = watchPath<NepoEmployment[]>("employed")
+  watch(raw, (value) => {
+    console.log(value)
+  })
+
   const people = computed<NepoEmployment[]>(() => {
-    const raw = nepoEmployment as NepoEmployment[];
-    return raw.map(r => {
+    return (raw.value ?? []).map(r => {
       r.parties = [
-        ...r.nepotism.map(n => n.person.party),
+        ...(r.nepotism ?? []).map(n => n.person.party),
       ];
       return r;
     })
@@ -43,7 +48,7 @@ export function usePartyStatistics() {
   const results = computed<number[]>(() => {
     return parties.value.map((party) => {
       return people.value.filter((person) => {
-        return person.nepotism.findIndex((nepo) => nepo.person.party == party) != -1;
+        return (person.nepotism ?? []).findIndex((nepo) => nepo.person.party == party) != -1;
       }).length
     });
   })

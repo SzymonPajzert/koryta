@@ -1,4 +1,5 @@
-[
+{
+    "employed": [
     {
         "name": "Jolanta Sobczyk",
         "nepotism": [
@@ -361,4 +362,4 @@
             "company": "spółki państwowe"
         }
     }
-]
+]}
