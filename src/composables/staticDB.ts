@@ -2,6 +2,9 @@ import { app } from '@/stores/firebase';
 import {ref as vueRef, type Ref} from 'vue';
 import { getDatabase, ref, get, Database, DataSnapshot, onValue } from 'firebase/database';
 
+// TODO it seems to me that DB refs should be shared outside of the use functions
+// This way we'll be able to reuse this state.
+
 /**
  * Reads data from the root of your non-default Firebase Realtime Database.
  * @returns A Promise that resolves with the data (categories and recommendations)

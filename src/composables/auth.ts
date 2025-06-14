@@ -2,14 +2,13 @@ import { getAuth, onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { ref } from 'vue';
 import router from '@/router';
 
+const auth = getAuth();
+const user = ref<User | null>();
+const isAdmin = ref<boolean>(false);
+const isBookTester = ref<boolean>(false);
+const idToken = ref<string>('');
+
 export function useAuthState() {
-  const auth = getAuth();
-
-  const user = ref<User | null>();
-  const isAdmin = ref<boolean>(false);
-  const isBookTester = ref<boolean>(false);
-  const idToken = ref<string>('');
-
   onAuthStateChanged(auth, (userIn) => {
     user.value = userIn;
     user.value?.getIdTokenResult().then((idTokenResult) => {
