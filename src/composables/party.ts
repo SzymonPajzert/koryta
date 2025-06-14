@@ -2,7 +2,8 @@ import { ref, computed } from 'vue'
 import nepoEmployment from '@/assets/people.json'
 
 export interface NepoEmployment {
-  name: string;
+  name: string
+  parties: string[]
   nepotism: Array<{
     relation: string;
     person: {
@@ -12,18 +13,25 @@ export interface NepoEmployment {
     };
     source?: string;
   }>;
-  employment: {
+  employment?: {
     role?: string;
     company?: string;
     source?: string;
+    noSelectionProcess?: boolean;
     salary?: string;
-    additional_info?: string;
   };
-  additional_info?: string; // For cases like "Internetowy hejter wspierający PO"
 }
 
 export function useListEmployment() {
-  const people = ref<NepoEmployment[]>(nepoEmployment as NepoEmployment[])
+  const people = computed<NepoEmployment[]>(() => {
+    const raw = nepoEmployment as NepoEmployment[];
+    return raw.map(r => {
+      r.parties = [
+        ...r.nepotism.map(n => n.person.party),
+      ];
+      return r;
+    })
+  })
   return { people };
 }
 

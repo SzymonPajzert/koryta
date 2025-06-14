@@ -12,14 +12,30 @@
           <template #title>
             <h2 class="text-h5 font-weight-bold">
               {{ person.name }}
+              <PartyChip v-for="party in person.parties" :key="party" :party />
             </h2>
           </template>
 
           <template #subtitle>
             <div class="text-subtitle-1">
-              <span class="chip chip--category">
-                PSL
-              </span>
+              <template v-for="nepo in person.nepotism">
+                {{ nepo.relation }}
+                {{ nepo.person.name }} z {{ nepo.person.party }} <template v-if="nepo.person.role">({{ nepo.person.role }})</template>
+              </template>
+              <br>
+              <template v-if="person.employment">
+                {{ person.employment.role }} w {{ person.employment.company }}
+                <a
+                  v-if="person.employment.noSelectionProcess"
+                  :href="person.employment.source"
+                  target="_blank"
+                >
+                  (bez konkursu)
+                </a>
+              </template>
+              <template v-else>
+                Brak danych o miejscu zatrudnienia
+              </template>
             </div>
           </template>
         </v-card>
@@ -30,20 +46,6 @@
 
 <script setup lang="ts">
 import {useListEmployment} from '@/composables/party'
+import PartyChip from './PartyChip.vue';
 const { people } = useListEmployment();
 </script>
-
-<style scoped>
-.chip {
-  padding: 0.1rem 0.4rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border-radius: 0.3rem;
-  font-weight: 550;
-}
-
-.chip--category {
-  background-color: var(--primary);
-  color: var(--on-primary);
-}</style>

@@ -232,11 +232,7 @@
                     "party": "PiS"
                 }
             }
-        ],
-        "employment": {
-            "role": "Brak danych",
-            "company": "spółki Skarbu Państwa"
-        }
+        ]
     },
     {
         "name": "Patrycja Kotecka",
@@ -245,7 +241,7 @@
                 "relation": "żona",
                 "person": {
                     "name": "Zbigniew Ziobro",
-                    "role": "PiS"
+                    "party": "PiS"
                 }
             }
         ],
@@ -300,8 +296,7 @@
         "employment": {
             "role": "władze spółki",
             "company": "Grupa Azoty Kędzierzyn"
-        },
-        "additional_info": "Zastępca prezydenta Ostrołęki z PiS"
+        }
     },
     {
         "name": "Krzysztof Kozłowski",
@@ -314,10 +309,22 @@
     },
     {
         "name": "Piotr Smogorzewski",
-        "nepotism": [],
+        "nepotism": [
+            {
+                "relation": "brat",
+                "person": {
+                    "name": "Roman Smogorzewski",
+                    "role": "prezydent Legionowa",
+                    "party": "PO"
+                },
+                "source": "https://dorzeczy.pl/kraj/651703/posady-dla-ludzi-psl-w-panstwowej-natura-tour-bez-konkursow.html"
+            }
+        ],
         "employment": {
             "role": "Członek Zarządu",
-            "company": "CS Natura Tour"
+            "company": "CS Natura Tour",
+            "noSelectionProcess": true,
+            "source": "https://dorzeczy.pl/kraj/651703/posady-dla-ludzi-psl-w-panstwowej-natura-tour-bez-konkursow.html"
         },
         "additional_info": "Brak danych o bezpośrednich powiązaniach (kontekst: nowy zarząd Natura Tour z PSL)"
     },

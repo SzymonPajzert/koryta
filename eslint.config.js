@@ -1,23 +1,45 @@
-import pluginVue from 'eslint-plugin-vue'
-import globals from 'globals'
+import pluginVue from 'eslint-plugin-vue';
+import globals from 'globals';
+import tseslint from 'typescript-eslint'; // Import the typescript-eslint package
 
 export default [
-  // add more generic rulesets here, such as:
-  // js.configs.recommended,
+  // Generic ESLint recommended rules (good to include)
+  // ...tseslint.configs.eslintRecommended, // You can choose to include this if you want ESLint's base recommended rules for TS
+
+  // Vue recommended rules (ensure these are applied correctly)
   ...pluginVue.configs['flat/recommended'],
-  // ...pluginVue.configs['flat/vue2-recommended'], // Use this if you are using Vue.js 2.x.
+
+  // Configuration for TypeScript files
   {
+    files: ['**/*.ts', '**/*.tsx', '**/*.vue'], // Apply this configuration to .ts, .tsx, and .vue files
+    extends: [
+      // Recommended TypeScript ESLint rules
+      ...tseslint.configs.recommended,
+      // You might also consider 'strict' or 'recommended-type-checked' if you have type information setup
+      // ...tseslint.configs.strict,
+      // ...tseslint.configs.recommendedTypeChecked,
+    ],
+    languageOptions: {
+      parser: tseslint.parser, // Specify the TypeScript parser
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        // If you're using type-aware linting rules, you'll need to specify your tsconfig.json
+        // project: './tsconfig.json', // Adjust the path to your tsconfig.json
+      },
+      globals: {
+        ...globals.browser,
+      },
+    },
     rules: {
-      // override/add rules settings here, such as:
+      // Override/add Vue rules specific to your project
       'vue/max-attributes-per-line': 'off',
       'vue/singleline-html-element-content-newline': 'off',
       'vue/multi-word-component-names': 'off',
+
+      // Add or override TypeScript ESLint rules here
+      // For example, if you want to disable a specific TS rule:
+      // '@typescript-eslint/no-explicit-any': 'off',
     },
-    languageOptions: {
-      sourceType: 'module',
-      globals: {
-        ...globals.browser
-      }
-    }
   }
 ]
