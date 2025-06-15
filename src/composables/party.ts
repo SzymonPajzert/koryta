@@ -25,9 +25,6 @@ export interface NepoEmployment {
 export function useListEmployment() {
   const { watchPath } = useReadDB<{employed: NepoEmployment[]}>()
   const raw = watchPath<NepoEmployment[]>("employed")
-  watch(raw, (value) => {
-    console.log(value)
-  })
 
   const people = computed<NepoEmployment[]>(() => {
     return (raw.value ?? []).map(r => {

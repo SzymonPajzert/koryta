@@ -4,7 +4,7 @@
       append-icon="mdi-open-in-new"
       class="py-4"
       color="surface-variant"
-      :to="props.router"
+      :to="props.router ? props.router : undefined"
       :prepend-icon="props.icon"
       rel="noopener noreferrer" rounded="lg" variant="tonal">
       <template #title>
@@ -23,5 +23,5 @@
 </template>
 
 <script lang="ts" setup>
-const props = defineProps<{router: string, icon: string}>();
+const props = defineProps<{router?: string, icon: string}>();
 </script>

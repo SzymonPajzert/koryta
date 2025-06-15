@@ -7,7 +7,7 @@
         <div class="mb-8 text-center">
           <h1 class="text-h2 font-weight-bold">koryta.pl</h1>
           <div class="text-body-2 font-weight-light mb-n1">
-            Polityczny wypas
+            {{ ["Polityczny wypas", "Pójdź tam, gdzie politycy zimują"][Math.floor(Math.random() * 2)] }}
           </div>
         </div>
       </v-col>
@@ -19,8 +19,9 @@
         <template #header>
           Zobacz listę {{ people.length }} {{ koryciarz.plural.genitive }}
         </template>
+        Osób na ciepłych państwowych posadkach, dzięki ich rodzicom, rodzeństwu lub kolegom z pracy.
       </HomeItem>
-      <HomeItem router="add" icon="mdi-plus-box-outline">
+      <HomeItem icon="mdi-plus-box-outline">
         <template #header> Dodaj osoby </template>
         Dodaj brakujące osoby w spółkach państwa lub samorządu
       </HomeItem>

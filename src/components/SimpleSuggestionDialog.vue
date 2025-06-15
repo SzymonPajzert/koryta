@@ -1,5 +1,6 @@
 <template>
-  <v-dialog
+  <div>
+    <v-dialog
     v-model="dialog"
     max-width="600"
   >
@@ -97,20 +98,38 @@
         <v-spacer></v-spacer>
 
         <v-btn
-          text="Close"
+          text="Zamknij"
           variant="plain"
           @click="dialog = false"
         ></v-btn>
 
         <v-btn
           color="primary"
-          text="Save"
+          text="Dodaj"
           variant="tonal"
           @click="saveSuggestion"
         ></v-btn>
       </v-card-actions>
     </v-card>
-  </v-dialog>
+    </v-dialog>
+
+    <v-snackbar
+      v-model="showConfirmationSnackbar"
+      :timeout="3000"
+      color="success"
+      location="top end"
+    >
+      Sugestia została pomyślnie dodana!
+      <template v-slot:actions>
+        <v-btn
+          variant="text"
+          @click="showConfirmationSnackbar = false"
+        >
+          Zamknij
+        </v-btn>
+      </template>
+    </v-snackbar>
+  </div>
 </template>
 
 <script lang="ts" setup>
@@ -134,6 +153,7 @@
   const { koryciarz, tuczyciel } = useFeminatyw();
 
   const dialog = shallowRef(false);
+  const showConfirmationSnackbar = vueRef(false);
 
   const formData = vueRef({
     person: '',
@@ -144,13 +164,22 @@
   });
 
   const saveSuggestion = () => {
-    const suggestionsRef = dbRef(db, 'suggestions');
-    push(suggestionsRef, {
+    if (!user.value?.uid) {
+      console.error("User not authenticated or UID not available.");
+      // Można tu dodać powiadomienie dla użytkownika
+      return;
+    }
+    const keyRef = push(dbRef(db, 'suggestions'), {
       ...formData.value,
       date: Date.now(),
       user: user.value?.uid,
-    });
+    }).key;
+    push(dbRef(db, `user/${user.value?.uid}/suggestions`), keyRef)
+
     dialog.value = false;
-      // Optionally, reset form data: formData.value = { person: '', politician: '', source: '', party: null, company: null };
+    // Reset form data
+    formData.value = { person: '', politician: '', source: '', party: null, company: null };
+    // Show confirmation snackbar
+    showConfirmationSnackbar.value = true;
   };
 </script>
