@@ -10,6 +10,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AppFooter: typeof import('./components/AppFooter.vue')['default']
     Home: typeof import('./components/Home.vue')['default']
+    HomeItem: typeof import('./components/HomeItem.vue')['default']
     ListView: typeof import('./components/ListView.vue')['default']
     LoginView: typeof import('./components/LoginView.vue')['default']
     PartyChart: typeof import('./components/PartyChart.vue')['default']

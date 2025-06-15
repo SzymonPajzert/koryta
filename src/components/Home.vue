@@ -6,61 +6,39 @@
 
         <div class="mb-8 text-center">
           <h1 class="text-h2 font-weight-bold">koryta.pl</h1>
-          <div class="text-body-2 font-weight-light mb-n1">Polityczny wypas</div>
+          <div class="text-body-2 font-weight-light mb-n1">
+            Polityczny wypas
+          </div>
         </div>
       </v-col>
       <v-col cols="4">
         <PartyChart />
       </v-col>
 
-      <v-col v-for="link in links" :key="link.destination" cols="12">
-        <v-card
-          append-icon="mdi-open-in-new"
-          class="py-4"
-          color="surface-variant"
-          :to="link.destination"
-          :prepend-icon="link.icon" rel="noopener noreferrer" rounded="lg" variant="tonal">
-          <template #title>
-            <h2 class="text-h5 font-weight-bold">
-              {{ link.title }}
-            </h2>
-          </template>
-
-          <template #subtitle>
-            <div class="text-subtitle-1">
-              {{ link.subtitle }}
-            </div>
-          </template>
-        </v-card>
-      </v-col>
+      <HomeItem router="list" icon="mdi-text-box-outline">
+        <template #header>
+          Zobacz listę {{ people.length }} {{ koryciarz.plural.genitive }}
+        </template>
+      </HomeItem>
+      <HomeItem router="add" icon="mdi-plus-box-outline">
+        <template #header> Dodaj osoby </template>
+        Dodaj brakujące osoby w spółkach państwa lub samorządu
+      </HomeItem>
+      <HomeItem router="login" icon="mdi-star-circle-outline">
+        <template #header> Dołącz do projektu </template>
+        <a href="/login" @click.stop to='/login'>Zaloguj się</a> lub
+        <a href="https://discord.gg/pnyPh7zXxS" target="_blank" @click.stop
+          >dołącz do serwera Discord</a
+        >
+      </HomeItem>
     </v-row>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useFeminatyw } from '@/composables/feminatyw';
-import PartyChart from './PartyChart.vue';
-import {useListEmployment} from '@/composables/party'
+import { useFeminatyw } from "@/composables/feminatyw";
+import PartyChart from "./PartyChart.vue";
+import { useListEmployment } from "@/composables/party";
 const { people } = useListEmployment();
 const { koryciarz } = useFeminatyw();
-
-const links = computed(() => [
-  {
-    destination: 'list',
-    icon: 'mdi-text-box-outline',
-    title: 'Zobacz listę ' + people.value.length + ' ' + koryciarz.plural.genitive,
-  },
-  {
-    destination: 'add',
-    icon: 'mdi-plus-box-outline',
-    subtitle: 'Dodaj brakujące osoby w spółkach państwa lub samorządu',
-    title: 'Dodaj osoby',
-  },
-  {
-    destination: 'login',
-    icon: 'mdi-star-circle-outline',
-    subtitle: 'Zaloguj się lub dołącz do serwera Discord',
-    title: 'Dołącz do projektu',
-  },
-])
 </script>
