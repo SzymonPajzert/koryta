@@ -1,8 +1,8 @@
-import { getAuth, onAuthStateChanged, signOut, type User } from 'firebase/auth';
+import { auth } from '@/stores/firebase'
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { ref } from 'vue';
 import router from '@/router';
 
-const auth = getAuth();
 const user = ref<User | null>();
 const isAdmin = ref<boolean>(false);
 const isBookTester = ref<boolean>(false);
