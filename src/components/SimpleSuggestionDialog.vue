@@ -22,7 +22,7 @@
             sm="12"
           >
             <v-text-field
-              label="Koryciarz"
+              :label="koryciarz.singular.nominative"
               hint="Osoba zatrudniona w publicznej firmie"
               required
             ></v-text-field>
@@ -34,8 +34,8 @@
             sm="12"
           >
             <v-text-field
-              hint="Bliska koryciarzowi osoba polityczna"
-              label="Tuczyciel"
+              :hint="`Osoba polityczna bliska ${koryciarz.singular.dative}`"
+              :label="tuczyciel.singular.nominative"
               required
             ></v-text-field>
           </v-col>
@@ -58,7 +58,7 @@
             sm="6"
           >
             <v-select
-              :items="['0-17', '18-29', '30-54', '54+']"
+              :items="['PO', 'PiS', 'PSL', 'SLD', 'inna']"
               label="Partia"
               required
             ></v-select>
@@ -73,7 +73,6 @@
               :items="['Skiing', 'Ice hockey', 'Soccer', 'Basketball', 'Hockey', 'Reading', 'Writing', 'Coding', 'Basejump']"
               label="Miejsce zatrudnienia"
               auto-select-first
-              multiple
             ></v-autocomplete>
           </v-col>
         </v-row>
@@ -102,6 +101,10 @@
 </template>
 
 <script setup>
+  import { useFeminatyw } from '@/composables/feminatyw';
   import { shallowRef } from 'vue'
+
+  const { koryciarz, tuczyciel } = useFeminatyw();
+
   const dialog = shallowRef(false)
 </script>

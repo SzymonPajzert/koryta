@@ -38,15 +38,17 @@
 </template>
 
 <script setup lang="ts">
+import { useFeminatyw } from '@/composables/feminatyw';
 import PartyChart from './PartyChart.vue';
 import {useListEmployment} from '@/composables/party'
 const { people } = useListEmployment();
+const { koryciarz } = useFeminatyw();
 
 const links = computed(() => [
   {
     destination: 'list',
     icon: 'mdi-text-box-outline',
-    title: 'Zobacz listę ' + people.value.length + ' osób',
+    title: 'Zobacz listę ' + people.value.length + ' ' + koryciarz.plural.genitive,
   },
   {
     destination: 'add',

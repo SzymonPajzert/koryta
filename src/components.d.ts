@@ -8,7 +8,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AddSimpleSuggestion: typeof import('./components/SimpleSuggestionDialog.vue')['default']
     AppFooter: typeof import('./components/AppFooter.vue')['default']
     Home: typeof import('./components/Home.vue')['default']
     ListView: typeof import('./components/ListView.vue')['default']
