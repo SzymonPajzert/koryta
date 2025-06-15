@@ -23,7 +23,7 @@
       </HomeItem>
       <HomeItem icon="mdi-plus-box-outline">
         <template #header> Dodaj osoby </template>
-        Dodaj brakujące osoby w spółkach państwa lub samorządu
+        Dodaj brakujące osoby w spółkach państwa lub samorządu, w prawym górnym rogu ekranu.
       </HomeItem>
       <HomeItem router="login" icon="mdi-star-circle-outline">
         <template #header> Dołącz do projektu </template>
@@ -40,6 +40,7 @@
 import { useFeminatyw } from "@/composables/feminatyw";
 import PartyChart from "./PartyChart.vue";
 import { useListEmployment } from "@/composables/party";
+import SimpleSuggestionDialog from "./SimpleSuggestionDialog.vue";
 const { people } = useListEmployment();
 const { koryciarz } = useFeminatyw();
 </script>

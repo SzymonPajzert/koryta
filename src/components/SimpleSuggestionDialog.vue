@@ -5,18 +5,20 @@
     max-width="600"
   >
     <template v-slot:activator="{ props: activatorProps }">
-      <!-- If user is logged in, show button to open dialog -->
-      <v-btn
-        v-if="user"
-        text="Dodaj"
-        v-bind="activatorProps"
-      ></v-btn>
-      <!-- If user is not logged in, show button to redirect to login -->
-      <v-btn
-        v-else
-        text="Dodaj"
-        to="/login"
-      ></v-btn>
+      <slot>
+        <!-- If user is logged in, show button to open dialog -->
+        <v-btn
+          v-if="user"
+          text="Dodaj"
+          v-bind="activatorProps"
+        ></v-btn>
+        <!-- If user is not logged in, show button to redirect to login -->
+        <v-btn
+          v-else
+          text="Dodaj"
+          to="/login"
+        ></v-btn>
+      </slot>
     </template>
 
     <v-card
@@ -88,6 +90,19 @@
               label="Miejsce zatrudnienia"
               auto-select-first
             ></v-autocomplete>
+          </v-col>
+
+          <v-col
+            cols="12"
+            md="12"
+            sm="6"
+          >
+            <v-textarea
+              v-model="formData.comment"
+              label="Dodatkowe informacje"
+              hint="Co jeszcze powinniśmy wiedzieć?"
+              required
+            ></v-textarea>
           </v-col>
         </v-row>
       </v-card-text>
@@ -161,6 +176,7 @@
     source: '',
     party: null,
     company: null,
+    comment: '',
   });
 
   const saveSuggestion = () => {
@@ -178,7 +194,7 @@
 
     dialog.value = false;
     // Reset form data
-    formData.value = { person: '', politician: '', source: '', party: null, company: null };
+    formData.value = { person: '', politician: '', source: '', party: null, company: null, comment: '' };
     // Show confirmation snackbar
     showConfirmationSnackbar.value = true;
   };

@@ -1,7 +1,6 @@
 <template>
   <v-col cols="12">
     <v-card
-      append-icon="mdi-open-in-new"
       class="py-4"
       color="surface-variant"
       :to="props.router ? props.router : undefined"
