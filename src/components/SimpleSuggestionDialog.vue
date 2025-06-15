@@ -4,9 +4,17 @@
     max-width="600"
   >
     <template v-slot:activator="{ props: activatorProps }">
+      <!-- If user is logged in, show button to open dialog -->
       <v-btn
+        v-if="user"
         text="Dodaj"
         v-bind="activatorProps"
+      ></v-btn>
+      <!-- If user is not logged in, show button to redirect to login -->
+      <v-btn
+        v-else
+        text="Dodaj"
+        to="/login"
       ></v-btn>
     </template>
 
@@ -22,6 +30,7 @@
             sm="12"
           >
             <v-text-field
+              v-model="formData.person"
               :label="koryciarz.singular.nominative"
               hint="Osoba zatrudniona w publicznej firmie"
               required
@@ -34,6 +43,7 @@
             sm="12"
           >
             <v-text-field
+              v-model="formData.politician"
               :hint="`Osoba polityczna bliska ${koryciarz.singular.dative}`"
               :label="tuczyciel.singular.nominative"
               required
@@ -46,6 +56,7 @@
             sm="12"
           >
             <v-text-field
+              v-model="formData.source"
               label="Źródło"
               hint="Link do artykułu"
               required
@@ -58,7 +69,8 @@
             sm="6"
           >
             <v-select
-              :items="['PO', 'PiS', 'PSL', 'SLD', 'inna']"
+              v-model="formData.party"
+              :items="partiesDefault"
               label="Partia"
               required
             ></v-select>
@@ -70,7 +82,8 @@
             sm="6"
           >
             <v-autocomplete
-              :items="['Skiing', 'Ice hockey', 'Soccer', 'Basketball', 'Hockey', 'Reading', 'Writing', 'Coding', 'Basejump']"
+              v-model="formData.company"
+              :items="companies"
               label="Miejsce zatrudnienia"
               auto-select-first
             ></v-autocomplete>
@@ -93,18 +106,51 @@
           color="primary"
           text="Save"
           variant="tonal"
-          @click="dialog = false"
+          @click="saveSuggestion"
         ></v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
 </template>
 
-<script setup>
+<script lang="ts" setup>
   import { useFeminatyw } from '@/composables/feminatyw';
-  import { shallowRef } from 'vue'
+  import { useAuthState } from '@/composables/auth'
+  import { usePartyStatistics, useListEmployment } from '@/composables/party';
+  import { useReadDB } from '@/composables/staticDB'
 
+  import { shallowRef, computed, ref as vueRef } from 'vue'
+  import { ref as dbRef, push } from 'firebase/database';
+
+  const { parties } = usePartyStatistics();
+  const { people } = useListEmployment();
+  const { user } = useAuthState();
+  const { db } = useReadDB();
+
+  const partiesDefault = computed<string[]>(() => [...parties.value, 'inne'])
+  const companies = computed(() => {
+    return Array.from(new Set(people.value.map(value => value.employment?.company)));
+  })
   const { koryciarz, tuczyciel } = useFeminatyw();
 
-  const dialog = shallowRef(false)
+  const dialog = shallowRef(false);
+
+  const formData = vueRef({
+    person: '',
+    politician: '',
+    source: '',
+    party: null,
+    company: null,
+  });
+
+  const saveSuggestion = () => {
+    const suggestionsRef = dbRef(db, 'suggestions');
+    push(suggestionsRef, {
+      ...formData.value,
+      date: Date.now(),
+      user: user.value?.uid,
+    });
+    dialog.value = false;
+      // Optionally, reset form data: formData.value = { person: '', politician: '', source: '', party: null, company: null };
+  };
 </script>

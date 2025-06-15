@@ -1,6 +1,11 @@
 {
   "rules": {
     ".read": true,
-    ".write": false
+    ".write": false,
+    "suggestions": {
+      "$suggestion": {
+        ".write": "auth != null && !data.exists()"
+      }
+    }
   }
 }

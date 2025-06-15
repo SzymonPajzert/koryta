@@ -1,9 +1,6 @@
 import { app } from '@/stores/firebase';
 import {ref as vueRef, type Ref} from 'vue';
-import { getDatabase, ref, get, Database, DataSnapshot, onValue } from 'firebase/database';
-
-// TODO it seems to me that DB refs should be shared outside of the use functions
-// This way we'll be able to reuse this state.
+import { getDatabase, ref, get, Database, DataSnapshot, onValue, connectDatabaseEmulator, push} from 'firebase/database';
 
 /**
  * Reads data from the root of your non-default Firebase Realtime Database.
@@ -12,9 +9,13 @@ import { getDatabase, ref, get, Database, DataSnapshot, onValue } from 'firebase
  */
 export function useReadDB<T>(dbURL?: string) {
   const db: Database = getDatabase(app, dbURL);
-  const dbRootRef = ref(db, '/');
+  if (location.hostname === "localhost" && location.port !== "3000") {
+    // Point to the RTDB emulator running on localhost.
+    connectDatabaseEmulator(db, "127.0.0.1", 9000);
+  }
 
-  const stream = async function(dbURL?: string): Promise<T | null> {
+  const stream = async function(): Promise<T | null> {
+    const dbRootRef = ref(db, '/');
     const snapshot: DataSnapshot = await get(dbRootRef);
 
     if (snapshot.exists()) {
@@ -36,5 +37,5 @@ export function useReadDB<T>(dbURL?: string) {
     return output;
   }
 
-  return {stream, watchPath}
+  return {db, stream, watchPath}
 }

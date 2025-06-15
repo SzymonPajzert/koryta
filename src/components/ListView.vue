@@ -45,7 +45,8 @@
 </template>
 
 <script setup lang="ts">
-import {useListEmployment} from '@/composables/party'
+import {type NepoEmployment} from '@/composables/party'
 import PartyChip from './PartyChip.vue';
-const { people } = useListEmployment();
+
+const { people } = defineProps<{ people: NepoEmployment[] }>();
 </script>
