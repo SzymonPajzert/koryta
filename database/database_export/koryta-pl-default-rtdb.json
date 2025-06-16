@@ -1,0 +1,163 @@
+{
+  "articles": [
+    {
+      "source": "https://finanse.wp.pl/najwazniejsza-jest-rodzina-spolka-zarzadzana-przez-corke-struzika-dostala-dofinansowanie-6336578723452545a",
+      "added": {
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3",
+        "date": 1749982400893
+      },
+      "todos": {
+        "-OSn3ZSt341sQU_nEOfY": {
+          "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3",
+          "date": 1749982267096,
+          "content": "dodać wszystkie rzeczy o Struziku",
+          "status": "todo"
+        },
+        "-OSn447mHDSMRSPKwU1f": {
+          "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3",
+          "date": 1749982400893,
+          "content": "zrobione",
+          "status": "done"
+        }
+      }
+    }
+  ],
+  "employed": [
+    {
+      "employments": ["Członek Rady Nadzorczej w CS Natura Tour"],
+      "name": "Miłosz Wojnarowski",
+      "connections": ["brat Konrada Wojnarowskiego wiceministra z PSL"],
+      "parties": ["PSL"],
+      "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+    },
+    {
+      "employments": ["Członek Rady Nadzorcze w CS Natura Tour"],
+      "name": "Mikołaj Grzyb",
+      "connections": ["syn Andrzeja Grzyba wiceszefa PSLu"],
+      "parties": ["PSL"],
+      "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+    },
+    {
+      "employments": ["Stanowisko w spółce (brak szczegółów) w CS Natura Tour"],
+      "name": "Nienazwana z imienia",
+      "connections": [
+        "podwładna Adama Struzika marszałka województwa mazowieckiego z PSL"
+      ],
+      "parties": ["PSL"],
+      "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+    },
+    {
+      "employments": [
+        "Umowa zlecenie (wsparcie w redagowaniu tekstów marketingowych) w Totalizator Sportowy"
+      ],
+      "name": "Bartosz Kopania (Pablo Morales)",
+      "connections": ["internetowy hejter z PO"],
+      "parties": ["PO"]
+    },
+    {
+      "employments": [
+        "Zarządza spółką (brak dokładnego stanowiska); Prezes Zarządu (wg kontekstu) w Przedsiębiorstwo Gospodarowania Odpadami w Płocku"
+      ],
+      "name": "Córka Adama Struzika",
+      "connections": [
+        "córka Adama Struzika marszałk województwa mazowieckiego z PSL"
+      ],
+      "parties": ["PSL"]
+    },
+    {
+      "employments": [
+        "Członek Rady Nadzorczej (od stycznia 2024), Wiceprezes Zarządu (od maja 2024) w Energa (Kandydat Trzeciej Drogi (PSL) w wyborach, radca prawny)"
+      ],
+      "name": "Piotr Szymanek",
+      "connections": ["kandydat w wyborach z PSL"],
+      "parties": ["PSL"]
+    },
+    {
+      "employments": [
+        "Członek Rady Nadzorczej (od lipca 2024) w PKP Telkol"
+      ],
+      "name": "Karol Bielski",
+      "connections": ["członek z PSL", "kandydat Trzeciej Drogi w wyborach"],
+      "parties": ["PSL"]
+    },
+    {
+      "employments": [
+        "Członek Rady Nadzorczej (od października 2024) w PGZ Stocznia Wojenna"
+      ],
+      "name": "Łukasz Guliński",
+      "connections": ["członek z PSL", "kandydat Trzeciej Drogi w wyborach"],
+      "parties": ["PSL"]
+    },
+    {
+      "employments": ["władze spółki w Grupa Azoty"],
+      "name": "Tomasz Hinc",
+      "connections": ["działacz z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "employments": ["władze spółki w Grupa Azoty"],
+      "name": "Mariusz Grab",
+      "connections": ["działacz z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "employments": ["władze spółki w Grupa Azoty"],
+      "name": "Grzegorz Kądzielawski",
+      "connections": ["działacz z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "employments": ["władze spółki w Grupa Azoty"],
+      "name": "Bartłomiej Litwińczuk",
+      "connections": ["powiązany Zbigniew Ziobro z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "name": "Renata Stefaniuk",
+      "connections": ["żona Dariusza Stefaniuka posła z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "employments": ["sprzedaż online i marketing w Link4 - spółki zależnej od PZU za 4.5 mln złotych"],
+      "name": "Patrycja Kotecka-Ziobro",
+      "connections": ["żona Zbigniewa Ziobro z PiS"],
+      "parties": ["PiS"],
+      "source": "https://www.money.pl/gospodarka/ujawnili-zarobki-patrycji-koteckiej-ziobro-w-spolce-corce-pzu-odpowiedziala-7081511776266848a.html"
+    },
+    {
+      "employments": ["Brak danych w spółki Skarbu Państwa"],
+      "name": "Janina Goss",
+      "connections": ["bliska osoba z otoczenia Jarosław Kaczyński z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "employments": ["władze spółki w Energa"],
+      "name": "Jacek Goliński",
+      "connections": ["brat posłanka z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "employments": ["władze spółki w Grupa Azoty Kędzierzyn"],
+      "name": "Paweł Stańczyk",
+      "connections": ["zastępca prezydent Ostrołęki z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "employments": [
+        "władze spółki w Grupa Azoty Police (Były wojewoda z PiS/MSWiA)"
+      ],
+      "name": "Krzysztof Kozłowski",
+      "connections": ["wojewoda z PiS"],
+      "parties": ["PiS"]
+    },
+    {
+      "employments": [
+        "Członek Zarządu w CS Natura Tour (Brak danych o bezpośrednich powiązaniach (kontekst: nowy zarząd Natura Tour z PSL))"
+      ],
+      "name": "Piotr Smogorzewski",
+      "connections": ["brat Roman Smogorzewski prezydent Legionowa z PO"],
+      "parties": ["PO", "PSL"],
+      "source": "https://dorzeczy.pl/kraj/651703/posady-dla-ludzi-psl-w-panstwowej-natura-tour-bez-konkursow.html"
+    }
+  ]
+}
