@@ -40,7 +40,7 @@
 import { useFeminatyw } from "@/composables/feminatyw";
 import PartyChart from "./PartyChart.vue";
 import { useListEmployment } from "@/composables/party";
-import SimpleSuggestionDialog from "./SimpleSuggestionDialog.vue";
+import SimpleSuggestionDialog from "./AddEmployedDialog.vue";
 const { people } = useListEmployment();
 const { koryciarz } = useFeminatyw();
 </script>

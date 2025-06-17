@@ -8,6 +8,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AddEmployedDialog: typeof import('./components/AddEmployedDialog.vue')['default']
     AppFooter: typeof import('./components/AppFooter.vue')['default']
     HelpView: typeof import('./components/HelpView.vue')['default']
     Home: typeof import('./components/Home.vue')['default']
@@ -19,6 +20,5 @@ declare module 'vue' {
     PartyChip: typeof import('./components/PartyChip.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    SimpleSuggestionDialog: typeof import('./components/SimpleSuggestionDialog.vue')['default']
   }
 }
