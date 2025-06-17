@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
-    "watch": "NODE_ENV=development vite build --watch --mode development --sourcemap",
+    "watch": "vite build --watch --mode development --sourcemap",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",

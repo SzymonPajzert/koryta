@@ -17,7 +17,7 @@
 
       <HomeItem router="list" icon="mdi-text-box-outline">
         <template #header>
-          Zobacz listę {{ people.length }} {{ koryciarz.plural.genitive }}
+          Zobacz listę {{ Object.values(people).length }} {{ koryciarz.plural.genitive }}
         </template>
         Osób na ciepłych państwowych posadkach, dzięki ich rodzicom, rodzeństwu lub kolegom z pracy.
       </HomeItem>

@@ -1,39 +1,23 @@
 import { ref, computed, watch } from 'vue'
 import { useReadDB } from '@/composables/staticDB'
 
+interface Textable {
+  text: string
+}
+
 export interface NepoEmployment {
   name: string
   parties: string[]
-  nepotism?: Array<{
-    relation: string;
-    person: {
-      name: string;
-      role?: string;
-      party: string;
-    };
-    source?: string;
-  }>;
-  employment?: {
-    role?: string;
-    company?: string;
-    source?: string;
-    noSelectionProcess?: boolean;
-    salary?: string;
-  };
+  employments: Record<string, Textable>
+  connections: Record<string, Textable>
+  source: string
+  comments: Record<string, Comment>
 }
 
 export function useListEmployment() {
-  const { watchPath } = useReadDB<{employed: NepoEmployment[]}>()
-  const raw = watchPath<NepoEmployment[]>("employed")
-
-  const people = computed<NepoEmployment[]>(() => {
-    return (raw.value ?? []).map(r => {
-      r.parties = [
-        ...(r.nepotism ?? []).map(n => n.person.party),
-      ];
-      return r;
-    })
-  })
+  const { watchPath } = useReadDB<{employed: Record<string, NepoEmployment>}>()
+  const peopleRaw = watchPath<Record<string, NepoEmployment>>("employed")
+  const people = computed<Record<string, NepoEmployment>>(() => peopleRaw.value ?? {})
   return { people };
 }
 
@@ -44,8 +28,8 @@ export function usePartyStatistics() {
   const partyColors = ref(["#fca241", '#073b76', '#2ed396'])
   const results = computed<number[]>(() => {
     return parties.value.map((party) => {
-      return people.value.filter((person) => {
-        return (person.nepotism ?? []).findIndex((nepo) => nepo.person.party == party) != -1;
+      return Object.values(people.value).filter((person) => {
+        return (person.parties ?? []).findIndex((p) => p === party) != -1;
       }).length
     });
   })

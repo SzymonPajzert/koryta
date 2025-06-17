@@ -1,5 +1,5 @@
 {
-  "articles": [
+  "data": [
     {
       "added": {
         "date": 1749982400893,
@@ -19,7 +19,8 @@
           "status": "done",
           "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
         }
-      }
+      },
+      "type": "article"
     }
   ],
   "employed": {
@@ -292,11 +293,24 @@
       "parties": ["PO"],
       "sourceURL": "s",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+    },
+    "-OSwoH-OKarP5WSzo1Vj": {
+      "additionalNotes": "Test",
+      "connections": { "-OSwoH-OKarP5WSzo1Vi": { "text": "Syn Pymona" } },
+      "date": 1750145769499,
+      "employments": { "-OSwoH-OKarP5WSzo1Vh": { "text": "Członek Google" } },
+      "name": "Szymon Pajzert",
+      "parties": ["inne"],
+      "sourceURL": "google.com",
+      "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     }
   },
   "user": {
     "of0BKlwqWLX21Cuml4NMHZ18xoC3": {
-      "suggestions": { "-OSuSr8agIdIN6_lgcdu": "-OSuSr8_EB2fS7XbdzrI" }
+      "suggestions": {
+        "-OSuSr8agIdIN6_lgcdu": "-OSuSr8_EB2fS7XbdzrI",
+        "-OSwoH-PXJDWLnzD0H6-": "-OSwoH-OKarP5WSzo1Vj"
+      }
     }
   }
 }
