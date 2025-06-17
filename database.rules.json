@@ -1,12 +1,29 @@
 {
   "rules": {
-    ".read": true,
-    ".write": false,
+    ".write": "auth.token.admin === true",
+
+    // List of approved articles and sources
+    "data": {
+      ".read": true,
+    },
+    // List of employed people
+    "employed": {
+      ".read": true,
+    },
+
+
+    // User created suggestions, visible to admins
+    // Anyone logged in can suggest in many categories
     "suggestions": {
-      "$suggestion": {
-        ".write": "auth != null && !data.exists()"
+      ".read": "auth.token.admin === true",
+      "$category": {
+        "$suggestion": {
+          ".write": "auth != null && !data.exists()"
+        }
       }
     },
+
+    // Per-user space that they can configure for themselves
     "user": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
