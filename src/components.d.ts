@@ -8,7 +8,10 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AddAbstractDialog: typeof import('./components/AddAbstractDialog.vue')['default']
+    AddArticleDialog: typeof import('./components/AddArticleDialog.vue')['default']
     AddEmployedDialog: typeof import('./components/AddEmployedDialog.vue')['default']
+    AddSuggestionDialog: typeof import('./components/AddSuggestionDialog.vue')['default']
     AppFooter: typeof import('./components/AppFooter.vue')['default']
     HelpView: typeof import('./components/HelpView.vue')['default']
     Home: typeof import('./components/Home.vue')['default']

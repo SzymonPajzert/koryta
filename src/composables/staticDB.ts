@@ -9,10 +9,8 @@ import { getDatabase, ref, get, Database, DataSnapshot, onValue, connectDatabase
  */
 export function useReadDB<T>(dbURL?: string) {
   const db: Database = getDatabase(app, dbURL);
-  if (true || ((location.hostname === "localhost" || location.hostname == "127.0.0.1") && location.port === "5002")) {
-    // Point to the RTDB emulator running on localhost.
-    console.log("Connecting to locally emulated DB")
-    connectDatabaseEmulator(db, "127.0.0.1", 9000);
+  if ((location.hostname === "localhost" || location.hostname == "127.0.0.1") && location.port === "5002") {
+    connectDatabaseEmulator(db, "127.0.0.1", 9003);
   }
 
   const stream = async function(): Promise<T | null> {
