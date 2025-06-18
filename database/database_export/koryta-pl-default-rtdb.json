@@ -1,315 +1,379 @@
 {
-  "data": [
-    {
-      "added": {
-        "date": 1749982400893,
-        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
-      },
-      "source": "https://finanse.wp.pl/najwazniejsza-jest-rodzina-spolka-zarzadzana-przez-corke-struzika-dostala-dofinansowanie-6336578723452545a",
-      "todos": {
-        "-OSn3ZSt341sQU_nEOfY": {
-          "content": "dodać wszystkie rzeczy o Struziku",
-          "date": 1749982267096,
-          "status": "todo",
-          "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
-        },
-        "-OSn447mHDSMRSPKwU1f": {
-          "content": "zrobione",
-          "date": 1749982400893,
-          "status": "done",
-          "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
-        }
-      },
-      "type": "article"
-    }
-  ],
   "employed": {
-    "-OQyB6P9Yt5fG2z1C8x3": {
-      "connections": {
-        "b6bcf674-1b97-4cb7-863c-ee9702610707": {
-          "text": "brat Konrada Wojnarowskiego wiceministra z PSL"
-        }
+    "0": {
+      "employment": {
+        "company": "CS Natura Tour",
+        "role": "Prezes Zarządu",
+        "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
       },
-      "employments": {
-        "ff01064d-c109-4ed9-ba1b-c3410efe13fe": {
-          "text": "Członek Rady Nadzorczej w CS Natura Tour"
+      "name": "Jolanta Sobczyk",
+      "nepotism": [
+        {
+          "person": {
+            "name": "Dariusz Klimczak",
+            "party": "PSL",
+            "role": "minister"
+          },
+          "relation": "znajoma",
+          "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
         }
+      ]
+    },
+    "1": {
+      "employment": {
+        "company": "CS Natura Tour",
+        "role": "Członek Rady Nadzorczej",
+        "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
       },
       "name": "Miłosz Wojnarowski",
-      "parties": ["PSL"],
-      "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+      "nepotism": [
+        {
+          "person": {
+            "name": "Konrad Wojnarowski",
+            "party": "PSL",
+            "role": "wiceminister"
+          },
+          "relation": "brat",
+          "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+        }
+      ]
     },
-    "-OQyC0M6Zq7hE4s2D9y0": {
-      "connections": {
-        "cc48fcc4-219a-4209-92f5-ea7075d2da76": {
-          "text": "syn Andrzeja Grzyba wiceszefa PSLu"
-        }
-      },
-      "employments": {
-        "e26fca05-b03c-4220-b456-3c48118ed3dc": {
-          "text": "Członek Rady Nadzorcze w CS Natura Tour"
-        }
+    "2": {
+      "employment": {
+        "company": "CS Natura Tour",
+        "role": "Członek Rady Nadzorczej",
+        "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
       },
       "name": "Mikołaj Grzyb",
-      "parties": ["PSL"],
-      "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+      "nepotism": [
+        {
+          "person": {
+            "name": "Andrzej Grzyb",
+            "party": "PSL",
+            "role": "wiceszef"
+          },
+          "relation": "syn",
+          "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+        }
+      ]
     },
-    "-OQyC5L1Xa9jI6r4F0w2": {
-      "connections": {
-        "0d3dac3b-425b-4730-96c0-d0167a9dc16c": {
-          "text": "podwładna Adama Struzika marszałka województwa mazowieckiego z PSL"
-        }
-      },
-      "employments": {
-        "9f6a7102-3b90-439b-bf51-2d19c2db15be": {
-          "text": "Stanowisko w spółce (brak szczegółów) w CS Natura Tour"
-        }
+    "3": {
+      "employment": {
+        "company": "CS Natura Tour",
+        "role": "Stanowisko w spółce (brak szczegółów)",
+        "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
       },
       "name": "Nienazwana z imienia",
-      "parties": ["PSL"],
-      "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+      "nepotism": [
+        {
+          "person": {
+            "name": "Adam Struzik",
+            "party": "PSL",
+            "role": "marszałek"
+          },
+          "relation": "podwładna",
+          "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t"
+        }
+      ]
     },
-    "-OQyC8J7Bs1kD8t6H2u4": {
-      "connections": {
-        "2773677d-5601-4c76-8464-4cebd0bd7972": {
-          "text": "internetowy hejter z PO"
-        }
-      },
-      "employments": {
-        "29683070-db1c-4bda-9ffc-0b0b1a828949": {
-          "text": "Umowa zlecenie (wsparcie w redagowaniu tekstów marketingowych) w Totalizator Sportowy"
-        }
+    "4": {
+      "employment": {
+        "company": "Totalizator Sportowy",
+        "role": "Umowa zlecenie (wsparcie w redagowaniu tekstów marketingowych)",
+        "salary": "ok. 17 tys. zł miesięcznie (łącznie 102 600 zł brutto za 6 m-cy)"
       },
       "name": "Bartosz Kopania (Pablo Morales)",
-      "parties": ["PO"]
+      "nepotism": [
+        { "person": { "party": "PO" }, "relation": "internetowy hejter" }
+      ]
     },
-    "-OQyD2N5Rt3vF0y8K4z6": {
-      "connections": {
-        "cde3d225-70c5-49ea-b5a0-73fa98796076": {
-          "text": "córka Adama Struzika marszałk województwa mazowieckiego z PSL"
-        }
-      },
-      "employments": {
-        "d9daf02c-ab2a-4669-8a90-1d0307902445": {
-          "text": "Zarządza spółką (brak dokładnego stanowiska); Prezes Zarządu (wg kontekstu) w Przedsiębiorstwo Gospodarowania Odpadami w Płocku"
-        }
+    "5": {
+      "employment": {
+        "additional_info": "spółka otrzymała 1,4 mln zł dofinansowania",
+        "company": "Przedsiębiorstwo Gospodarowania Odpadami w Płocku",
+        "role": "Zarządza spółką (brak dokładnego stanowiska); Prezes Zarządu (wg kontekstu)"
       },
       "name": "Córka Adama Struzika",
-      "parties": ["PSL"]
+      "nepotism": [
+        {
+          "person": {
+            "name": "Adam Struzik",
+            "party": "PSL",
+            "role": "marszałek województwa mazowieckiego"
+          },
+          "relation": "córka"
+        }
+      ]
     },
-    "-OQyD7J0Hw5xG2s9L1t3": {
-      "connections": {
-        "d1a58987-773c-4453-92e0-d1e8f6822fc2": {
-          "text": "kandydat w wyborach z PSL"
-        }
-      },
-      "employments": {
-        "96e18781-7e34-4e7f-9795-ab1b5f9bad0b": {
-          "text": "Członek Rady Nadzorczej (od stycznia 2024), Wiceprezes Zarządu (od maja 2024) w Energa (Kandydat Trzeciej Drogi (PSL) w wyborach, radca prawny)"
-        }
+    "6": {
+      "additional_info": "Kandydat Trzeciej Drogi (PSL) w wyborach, radca prawny",
+      "employment": {
+        "company": "Energa",
+        "role": "Członek Rady Nadzorczej (od stycznia 2024), Wiceprezes Zarządu (od maja 2024)"
       },
       "name": "Piotr Szymanek",
-      "parties": ["PSL"]
+      "nepotism": [
+        { "person": { "party": "PSL" }, "relation": "kandydat w wyborach" }
+      ]
     },
-    "-OQyD_L3Za7bC5v2N9m1": {
-      "connections": {
-        "6b31871b-30d3-43cb-8afd-8e6c7bafc602": {
-          "text": "kandydat Trzeciej Drogi w wyborach"
-        },
-        "dc1cf2eb-518a-4d8e-a250-59e613108a65": { "text": "członek z PSL" }
-      },
-      "employments": {
-        "dac57538-9220-40ca-b53e-b96053a9f118": {
-          "text": "Członek Rady Nadzorczej (od lipca 2024) w PKP Telkol"
-        }
+    "7": {
+      "additional_info": "Członek PSL, kandydat Trzeciej Drogi w wyborach",
+      "employment": {
+        "company": "PKP Telkol",
+        "role": "Członek Rady Nadzorczej (od lipca 2024)"
       },
       "name": "Karol Bielski",
-      "parties": ["PSL"]
+      "nepotism": [{ "person": { "party": "PSL" }, "relation": "członek" }]
     },
-    "-OQyE3K8Sd9fV1x7P0q2": {
-      "connections": {
-        "27361ae5-fa9b-49a0-a9bc-b48e0e935d19": { "text": "członek z PSL" },
-        "d30e2351-a9f8-42a6-9696-9e2b68f74825": {
-          "text": "kandydat Trzeciej Drogi w wyborach"
-        }
-      },
-      "employments": {
-        "1495abe8-5558-44bb-8194-549a1ab1e255": {
-          "text": "Członek Rady Nadzorczej (od października 2024) w PGZ Stocznia Wojenna"
-        }
+    "8": {
+      "additional_info": "Polityk PSL, kandydat Trzeciej Drogi w wyborach",
+      "employment": {
+        "company": "PGZ Stocznia Wojenna",
+        "role": "Członek Rady Nadzorczej (od października 2024)"
       },
       "name": "Łukasz Guliński",
-      "parties": ["PSL"]
+      "nepotism": [{ "person": { "party": "PSL" }, "relation": "członek" }]
     },
-    "-OQyE6G5Hb1gT9z3Q4r6": {
-      "connections": {
-        "279e2e0f-398b-4ae2-b32b-7b110a6aaa4f": { "text": "działacz z PiS" }
-      },
-      "employments": {
-        "38cf7c55-355f-4ed6-9005-97cd6b807ed4": {
-          "text": "władze spółki w Grupa Azoty"
-        }
-      },
+    "9": {
+      "additional_info": "Działacz PiS",
+      "employment": { "company": "Grupa Azoty", "role": "władze spółki" },
       "name": "Tomasz Hinc",
-      "parties": ["PiS"]
+      "nepotism": [{ "person": { "party": "PiS" }, "relation": "działacz" }]
     },
-    "-OQyE_M2Nf3jL5k1U7v9": {
-      "connections": {
-        "f0c425cf-74db-44ce-80c1-79d68ff652af": { "text": "działacz z PiS" }
-      },
-      "employments": {
-        "8b3b75a7-c0cc-4107-b352-fe9aa34d504c": {
-          "text": "władze spółki w Grupa Azoty"
-        }
-      },
+    "10": {
+      "additional_info": "Działacz PiS",
+      "employment": { "company": "Grupa Azoty", "role": "władze spółki" },
       "name": "Mariusz Grab",
-      "parties": ["PiS"]
+      "nepotism": [{ "person": { "party": "PiS" }, "relation": "działacz" }]
     },
-    "-OQyF1P4Qg5aS7d3E9f1": {
-      "connections": {
-        "34f77ee3-057e-427f-bd4a-c86d70b31409": { "text": "działacz z PiS" }
-      },
-      "employments": {
-        "14a1f7c9-a8c7-477b-bd65-54fbf5f47317": {
-          "text": "władze spółki w Grupa Azoty"
-        }
-      },
+    "11": {
+      "additional_info": "Działacz PiS",
+      "employment": { "company": "Grupa Azoty", "role": "władze spółki" },
       "name": "Grzegorz Kądzielawski",
-      "parties": ["PiS"]
+      "nepotism": [{ "person": { "party": "PiS" }, "relation": "działacz" }]
     },
-    "-OQyF4S0Tn7bU9c5W1x3": {
-      "connections": {
-        "f97c0391-4d62-4b73-84ac-2016ddc21d0a": {
-          "text": "powiązany Zbigniew Ziobro z PiS"
-        }
-      },
-      "employments": {
-        "53d5a101-6026-42b1-8c03-5a4914bc3b21": {
-          "text": "władze spółki w Grupa Azoty"
-        }
-      },
+    "12": {
+      "employment": { "company": "Grupa Azoty", "role": "władze spółki" },
       "name": "Bartłomiej Litwińczuk",
-      "parties": ["PiS"]
-    },
-    "-OQyF_V6Yd2eF4g0H8i6": {
-      "connections": {
-        "4611daa6-6eb7-481a-8dd5-43a90dc17966": {
-          "text": "żona Dariusza Stefaniuka posła z PiS"
+      "nepotism": [
+        {
+          "person": { "name": "Zbigniew Ziobro", "party": "PiS" },
+          "relation": "powiązany"
         }
-      },
+      ]
+    },
+    "13": {
       "name": "Renata Stefaniuk",
-      "parties": ["PiS"]
+      "nepotism": [
+        {
+          "person": {
+            "name": "Dariusz Stefaniuk",
+            "party": "PiS",
+            "role": "poseł"
+          },
+          "relation": "żona"
+        }
+      ]
     },
-    "-OQyG0C1Jp3qK5r7S9t1": {
-      "connections": {
-        "adec72e1-f5b5-412f-8c93-713038c5ae1e": {
-          "text": "żona Zbigniewa Ziobro z PiS"
-        }
+    "14": {
+      "employment": {
+        "company": "spółki Skarbu Państwa",
+        "role": "Brak danych"
       },
-      "employments": {
-        "f1dec7a1-da1c-45e5-ba62-b8e1a6f46f6f": {
-          "text": "sprzedaż online i marketing w Link4 - spółki zależnej od PZU za 4.5 mln złotych"
+      "name": "Patrycja Kotecka",
+      "nepotism": [
+        {
+          "person": { "name": "Zbigniew Ziobro", "party": "PiS" },
+          "relation": "żona"
         }
-      },
-      "name": "Patrycja Kotecka-Ziobro",
-      "parties": ["PiS"],
-      "source": "https://www.money.pl/gospodarka/ujawnili-zarobki-patrycji-koteckiej-ziobro-w-spolce-corce-pzu-odpowiedziala-7081511776266848a.html"
+      ]
     },
-    "-OQyG3F7Lm9nO1p3Q5r7": {
-      "connections": {
-        "827ef066-503b-4170-b641-ac12f1b5e7f3": {
-          "text": "bliska osoba z otoczenia Jarosław Kaczyński z PiS"
-        }
-      },
-      "employments": {
-        "8d1010ac-137e-4b1a-9174-bd7c56d40118": {
-          "text": "Brak danych w spółki Skarbu Państwa"
-        }
+    "15": {
+      "employment": {
+        "company": "spółki Skarbu Państwa",
+        "role": "Brak danych"
       },
       "name": "Janina Goss",
-      "parties": ["PiS"]
+      "nepotism": [
+        {
+          "person": { "name": "Jarosław Kaczyński", "party": "PiS" },
+          "relation": "bliska osoba z otoczenia"
+        }
+      ]
     },
-    "-OQyG8I2St4uV6w8X0y2": {
-      "connections": {
-        "17a45df4-cee3-48c8-ba9b-0232fe553ba4": {
-          "text": "brat posłanka z PiS"
-        }
-      },
-      "employments": {
-        "41e31e88-1d89-4a8c-b066-9b638aa1b5ce": {
-          "text": "władze spółki w Energa"
-        }
-      },
+    "16": {
+      "employment": { "company": "Energa", "role": "władze spółki" },
       "name": "Jacek Goliński",
-      "parties": ["PiS"]
+      "nepotism": [
+        { "person": { "name": "posłanka", "party": "PiS" }, "relation": "brat" }
+      ]
     },
-    "-OQyH0K5Zv6aB8cD2e4": {
-      "connections": {
-        "e89687fb-619c-4175-858e-41ade3e837e0": {
-          "text": "zastępca prezydent Ostrołęki z PiS"
-        }
-      },
-      "employments": {
-        "84a4101d-2c24-447a-8cbb-c996e19c5f51": {
-          "text": "władze spółki w Grupa Azoty Kędzierzyn"
-        }
+    "17": {
+      "employment": {
+        "company": "Grupa Azoty Kędzierzyn",
+        "role": "władze spółki"
       },
       "name": "Paweł Stańczyk",
-      "parties": ["PiS"]
-    },
-    "-OQyH3M8Qh8iJ0k2L4m6": {
-      "connections": {
-        "5369f2e5-cb0e-49d3-beee-519682082d4d": { "text": "wojewoda z PiS" }
-      },
-      "employments": {
-        "d6141f80-1c9b-472a-ad98-6f765b2b725c": {
-          "text": "władze spółki w Grupa Azoty Police (Były wojewoda z PiS/MSWiA)"
+      "nepotism": [
+        {
+          "person": { "party": "PiS", "role": "prezydent Ostrołęki" },
+          "relation": "zastępca"
         }
+      ]
+    },
+    "18": {
+      "additional_info": "Były wojewoda z PiS/MSWiA",
+      "employment": {
+        "company": "Grupa Azoty Police",
+        "role": "władze spółki"
       },
       "name": "Krzysztof Kozłowski",
-      "parties": ["PiS"]
+      "nepotism": [{ "person": { "party": "PiS" }, "relation": "wojewoda" }]
     },
-    "-OSn447mHDSMRSPKwU1f": {
-      "connections": {
-        "b37587c3-8784-4d3a-ac12-95d7452753a0": {
-          "text": "brat Roman Smogorzewski prezydent Legionowa z PO"
-        }
-      },
-      "employments": {
-        "6f70c8df-02dd-4b9f-8d35-0173e2b25bbd": {
-          "text": "Członek Zarządu w CS Natura Tour (Brak danych o bezpośrednich powiązaniach (kontekst: nowy zarząd Natura Tour z PSL))"
-        }
+    "19": {
+      "additional_info": "Brak danych o bezpośrednich powiązaniach (kontekst: nowy zarząd Natura Tour z PSL)",
+      "employment": {
+        "company": "CS Natura Tour",
+        "noSelectionProcess": true,
+        "role": "Członek Zarządu",
+        "source": "https://dorzeczy.pl/kraj/651703/posady-dla-ludzi-psl-w-panstwowej-natura-tour-bez-konkursow.html"
       },
       "name": "Piotr Smogorzewski",
-      "parties": ["PO", "PSL"],
-      "source": "https://dorzeczy.pl/kraj/651703/posady-dla-ludzi-psl-w-panstwowej-natura-tour-bez-konkursow.html"
+      "nepotism": [
+        {
+          "person": {
+            "name": "Roman Smogorzewski",
+            "party": "PO",
+            "role": "prezydent Legionowa"
+          },
+          "relation": "brat",
+          "source": "https://dorzeczy.pl/kraj/651703/posady-dla-ludzi-psl-w-panstwowej-natura-tour-bez-konkursow.html"
+        }
+      ]
+    },
+    "20": {
+      "employment": { "company": "spółki państwowe", "role": "Brak danych" },
+      "name": "Brat Wojciecha Olejniczaka",
+      "nepotism": [
+        {
+          "person": {
+            "name": "Wojciech Olejniczak",
+            "party": "SLD",
+            "role": "były szef"
+          },
+          "relation": "brat"
+        }
+      ]
+    },
+    "21": {
+      "employment": { "company": "spółki państwowe", "role": "Brak danych" },
+      "name": "Ojciec Sylwii Spurek",
+      "nepotism": [
+        {
+          "person": {
+            "name": "Sylwia Spurek",
+            "party": "Lewica/Zieloni (wówczas związana)"
+          },
+          "relation": "ojciec"
+        }
+      ]
+    },
+    "batch-upload": {
+      "-OT-BVLlSr7MTqLF_oPY": {
+        "date": 1750202451406,
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+      },
+      "-OT-CvIzD6hUCnwEji9w": {
+        "date": 1750202823939,
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+      },
+      "-OT-DL4M_xS_ixgxM9nz": {
+        "connection": "Dariusz Klimczak minister PSL",
+        "date": 1750202933592,
+        "employed": "CS Natura Tour",
+        "name": "Jolanta Sobczyk",
+        "party": "PSL",
+        "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+      },
+      "-OT-DL4Neh80m9fY7d8m": {
+        "connection": "Konrad Wojnarowski wiceminister PSL",
+        "date": 1750202933594,
+        "employed": "CS Natura Tour",
+        "name": "Miłosz Wojnarowski",
+        "party": "PSL",
+        "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+      },
+      "-OT-DL4OtgBRpXEyRUXQ": {
+        "connection": "Andrzej Grzyb wiceszef PSL",
+        "date": 1750202933595,
+        "employed": "CS Natura Tour",
+        "name": "Mikołaj Grzyb",
+        "party": "PSL",
+        "source": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+      },
+      "-OT-DL4PrvX8GsjRYTHV": {
+        "connection": "Adam Struzik marszałek PSL",
+        "date": 1750202933596,
+        "employed": "wiceprezes Przedsiębiorstwa Gospodarowania Odpadami (PGO) w Płocku",
+        "name": "Katarzyna Jakubowska",
+        "party": "PSL",
+        "source": "https://finanse.wp.pl/najwazniejsza-jest-rodzina-spolka-zarzadzana-przez-corke-struzika-dostala-dofinansowanie-6336578723452545a",
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+      },
+      "-OT-DL4PrvX8GsjRYTHX": {
+        "connection": "Zawodowy hejter dla PO",
+        "date": 1750202933596,
+        "employed": "Totalizator Sportowy",
+        "name": "Bartosz Kopania (Pablo Morales)",
+        "party": "PO",
+        "source": "https://wiadomosci.wp.pl/internetowy-hejter-w-systemie-panstwowej-spolki-dostal-zlecenie-od-totalizatora-7139988727548736a",
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+      },
+      "-OT-DL4QUco4V4_ApDxp": {
+        "connection": "Kandydat na listach PSL",
+        "date": 1750202933597,
+        "employed": "Energa",
+        "name": "Piotr Szymanek",
+        "party": "PSL",
+        "source": "https://biznes.pap.pl/wiadomosci/firmy/energa-sa-202025-powolanie-czlonkow-zarzadu-energa-sa-na-nowa-wspolna-kadencje",
+        "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
+      }
     }
   },
   "suggestions": {
-    "-OSuSr8_EB2fS7XbdzrI": {
-      "additionalNotes": "",
-      "date": 1750106337898,
-      "name": "A test",
-      "parties": ["PO"],
-      "sourceURL": "s",
+    "-OSn3ZSsQA21NHATdXG1": {
+      "date": 1749982267096,
+      "person": "A",
+      "politician": "B",
+      "source": "s",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
-    "-OSwoH-OKarP5WSzo1Vj": {
-      "additionalNotes": "Test",
-      "connections": { "-OSwoH-OKarP5WSzo1Vi": { "text": "Syn Pymona" } },
-      "date": 1750145769499,
-      "employments": { "-OSwoH-OKarP5WSzo1Vh": { "text": "Członek Google" } },
-      "name": "Szymon Pajzert",
-      "parties": ["inne"],
-      "sourceURL": "google.com",
+    "-OSn447lYZP4UE4XRv-_": {
+      "date": 1749982400893,
+      "person": "Anna Maria",
+      "politician": "",
+      "source": "",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     }
   },
   "user": {
     "of0BKlwqWLX21Cuml4NMHZ18xoC3": {
       "suggestions": {
-        "-OSuSr8agIdIN6_lgcdu": "-OSuSr8_EB2fS7XbdzrI",
-        "-OSwoH-PXJDWLnzD0H6-": "-OSwoH-OKarP5WSzo1Vj"
+        "-OSn3ZSt341sQU_nEOdY": "-OSn3ZSsQA21NHATdXG1",
+        "-OSn447mHDSMRSPKwU1e": "-OSn447lYZP4UE4XRv-_",
+        "batchEmployed": {
+          "-OT-BVLmASohEGULROvX": "-OT-BVLlSr7MTqLF_oPY",
+          "-OT-CvJ-X4eCCIr1kCOF": "-OT-CvIzD6hUCnwEji9w",
+          "-OT-DL4Neh80m9fY7d8l": "-OT-DL4M_xS_ixgxM9nz",
+          "-OT-DL4OtgBRpXEyRUXP": "-OT-DL4Neh80m9fY7d8m",
+          "-OT-DL4PrvX8GsjRYTHU": "-OT-DL4OtgBRpXEyRUXQ",
+          "-OT-DL4PrvX8GsjRYTHW": "-OT-DL4PrvX8GsjRYTHV",
+          "-OT-DL4PrvX8GsjRYTHY": "-OT-DL4PrvX8GsjRYTHX",
+          "-OT-DL4QUco4V4_ApDxq": "-OT-DL4QUco4V4_ApDxp"
+        }
       }
     }
   }
