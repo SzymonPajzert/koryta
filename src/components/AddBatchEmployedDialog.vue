@@ -1,6 +1,6 @@
 <template>
   <AddAbstractDialog
-    buttonText="Wgraj plik CSV"
+    buttonText="Wiele osób z CSV"
     title="Masowe dodawanie zatrudnionych (CSV)"
     title-icon="mdi-file-upload-outline"
     suggestionPath="suggestions/employed"
@@ -11,6 +11,15 @@
     v-model="formData"
   >
     <v-row dense>
+      <v-col cols="12">
+        <v-card>
+          <v-card-text variant="flat">
+            Wypełnij plik CSV w <a href="https://docs.google.com/spreadsheets/d/1nGxM_rqPHLp_VyvQTVgLmfHZJFxifIJeVyOAxS9iI8c" target="_blank">tym formacie</a> i prześlij go do nas.
+
+            Zobacz <a href="https://youtu.be/FEq3f0eQ-9A" target="_blank">krótki poradnik</a>  i napisz pod nim, jeśli coś Ci nie działa.
+          </v-card-text>
+        </v-card>
+      </v-col>
       <v-col cols="12">
         <v-file-input
           v-model="formData.file"
@@ -29,12 +38,14 @@
 import { useSuggestDB } from '@/composables/suggestDB'
 import AddAbstractDialog from './AddAbstractDialog.vue';
 import { ref } from 'vue';
+import Papa from 'papaparse';
 
-interface EmployedRecord {
+interface CsvRow {
   employed: string;
   connection: string;
   name: string;
   party: string;
+  source: string;
 }
 
 const initialFormData = () => ({
@@ -53,38 +64,49 @@ const toOutput = async (data: {
   }
 
   try {
-    const text = await data.file.text();
-    const lines = text.split(/\r?\n/).filter((line) => line.trim() !== '');
-
-    if (lines.length < 2) {
-      console.error('CSV file must contain a header row and at least one data row.');
-      // Ideally, show this error to the user via the dialog
-      return null;
-    }
-
-    const headerLine = lines[0];
-    const headers = headerLine.split(',').map((h) => h.trim().toLowerCase());
-    const expectedHeaders = ['employed', 'connection', 'name', 'party', 'source'];
-    const headerMap: Record<string, number> = {};
-
-    for (const eh of expectedHeaders) {
-      const index = headers.indexOf(eh);
-      if (index === -1) {
-        console.error(`CSV file is missing required header: ${eh}. Expected headers are: ${expectedHeaders.join(', ')}.`);
-        return null;
+    return new Promise((resolve, reject) => {
+      if (!data.file) {
+        resolve(null);
+        return;
       }
-      headerMap[eh] = index;
-    }
+      Papa.parse<CsvRow>(data.file, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: header => header.trim().toLowerCase(),
+        complete: (results) => {
+          const expectedHeaders = ['employed', 'connection', 'name', 'party', 'source'];
+          const actualHeaders = results.meta.fields;
 
-    return lines.slice(1).map((line) => {
-      const values = line.split(',').map((v) => v.trim());
-      return {
-        name: values[headerMap.name] || '',
-        parties: [values[headerMap.party]],
-        employments: arrayToKeysMap([{ text: values[headerMap.employed] }]),
-        connections: arrayToKeysMap([{ text: values[headerMap.connection] }]),
-        sourceURL: values[headerMap.source] || '',
-      };
+          if (!actualHeaders) {
+            console.error('CSV file is missing headers.');
+            // Idealnie, pokaż ten błąd użytkownikowi przez dialog
+            reject(new Error('CSV file is missing headers.'));
+            return;
+          }
+
+          for (const eh of expectedHeaders) {
+            if (!actualHeaders.includes(eh)) {
+              console.error(`CSV file is missing required header: ${eh}. Expected headers are: ${expectedHeaders.join(', ')}.`);
+              // Idealnie, pokaż ten błąd użytkownikowi
+              reject(new Error(`CSV file is missing required header: ${eh}.`));
+              return;
+            }
+          }
+
+          resolve(results.data.map(row => ({
+            name: row.name || '',
+            parties: row.party ? [row.party] : [],
+            employments: arrayToKeysMap(row.employed ? [{ text: row.employed }] : []),
+            connections: arrayToKeysMap(row.connection ? [{ text: row.connection }] : []),
+            sourceURL: row.source || '',
+          })));
+        },
+        error: (error: any) => {
+          console.error('Error parsing CSV file:', error);
+          // Idealnie, pokaż ten błąd użytkownikowi
+          reject(error);
+        }
+      });
     });
   } catch (error) {
     console.error('Error processing CSV file:', error);

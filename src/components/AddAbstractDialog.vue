@@ -1,22 +1,21 @@
 <template>
-  <div>
     <v-dialog
     v-model="dialog"
     max-width="600"
   >
     <template v-slot:activator="{ props: activatorProps }">
       <!-- If user is logged in, show button to open dialog -->
-      <v-btn
+      <v-list-item :prepend-icon="props.titleIcon"
         v-if="user"
-        :text="props.buttonText"
+        :title="props.buttonText"
         v-bind="activatorProps"
-      ></v-btn>
+      ></v-list-item>
       <!-- If user is not logged in, show button to redirect to login -->
-      <v-btn
+      <v-list-item :prepend-icon="props.titleIcon"
         v-else
-        :text="props.buttonText"
+        :title="props.buttonText"
         to="/login"
-      ></v-btn>
+      ></v-list-item>
     </template>
 
     <v-card
@@ -66,7 +65,6 @@
         </v-btn>
       </template>
     </v-snackbar>
-  </div>
 </template>
 
 <script lang="ts" setup>

@@ -16,6 +16,12 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig({
   plugins: [
     VueRouter({
+      extendRoute(route) {
+        if (route.name === '/pomoc') {
+          route.addAlias('/help')
+        }
+      },
+
       dts: 'src/typed-router.d.ts',
     }),
     Layouts(),

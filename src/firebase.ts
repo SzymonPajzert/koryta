@@ -1,10 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getDatabase } from "firebase/database";
+import { getDatabase, connectDatabaseEmulator } from "firebase/database";
 import { getAuth } from "firebase/auth";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
   authDomain: "koryta-pl.firebaseapp.com",
@@ -16,8 +15,17 @@ const firebaseConfig = {
   measurementId: "G-PL6L1B0CZY"
 };
 
-// Initialize Firebase
 export const app = initializeApp(firebaseConfig);
 export const analytics = getAnalytics(app);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
+export const functions = getFunctions(app, 'europe-west1');
+export function isTest() {
+  return ((location.hostname === "localhost" || location.hostname == "127.0.0.1"));
+}
+
+if (isTest()) {
+  connectDatabaseEmulator(db, "127.0.0.1", 9003);
+  connectFunctionsEmulator(functions, "127.0.0.1", 5001)
+}
+

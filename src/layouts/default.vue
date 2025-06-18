@@ -5,7 +5,7 @@
     <v-spacer />
     <v-btn text to="/">Start</v-btn>
     <v-btn text to="/list">Lista</v-btn>
-    <v-btn text to="/help">Działaj</v-btn>
+    <v-btn text to="/pomoc">Działaj</v-btn>
     <v-btn text v-if="user" to="/profil">Profil</v-btn>
     <v-btn text v-if="!user" to="/login">Zaloguj się</v-btn>
     <v-btn text v-if="user" @click="logout">Wyloguj</v-btn>
@@ -19,7 +19,7 @@
 
 <script lang="ts" setup>
 import { onMounted } from 'vue';
-import { app } from '@/stores/firebase'
+import { app } from '@/firebase'
 import { getAnalytics, logEvent } from 'firebase/analytics';
 import { useAuthState } from '@/composables/auth';
 const { user, logout } = useAuthState();

@@ -1,8 +1,8 @@
 <template>
   <AddAbstractDialog
-    buttonText="Zaproponuj zmianę na stronie"
+    buttonText="Pomysł na stronę"
     title="Zaproponuj poprawki na stronie"
-    title-icon="mdi-plus-box-outline"
+    title-icon="mdi-lightbulb-on-10"
     suggestionPath="suggestions/improvements"
     suggestionType="improvement"
     :initialFormData

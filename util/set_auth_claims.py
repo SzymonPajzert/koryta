@@ -38,6 +38,7 @@ def dict_diff(d1, d2):
 ROLE_LEVELS = {
     "dx5149dNlFTbKTovirqZ4a8K7ey2": Level.ADMIN,
     "of0BKlwqWLX21Cuml4NMHZ18xoC3": Level.ADMIN,
+    "rJNsODgkXuZ9di81GTcgPhc192o2": Level.ADMIN,
 }
 
 PROJECT_ID = "koryta-pl"

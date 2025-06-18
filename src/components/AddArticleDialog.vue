@@ -2,7 +2,7 @@
   <AddAbstractDialog
     buttonText="Dodaj artykuł / źródło"
     title="Dodaj nowy artykuł"
-    title-icon="mdi-file-document-outline"
+    title-icon="mdi-file-document-plus-outline"
     suggestionPath="suggestions/data"
     adminSuggestionPath="data"
     suggestionType="data"
@@ -20,6 +20,18 @@
           hint="Link do artykułu"
           autocomplete="off"
           required
+          @blur="fetchAndSetArticleTitle"
+          :loading="formData.isFetchingTitle"
+          :disabled="formData.isFetchingTitle"
+        ></v-text-field>
+      </v-col>
+
+      <v-col cols="12">
+        <v-text-field
+          v-model="formData.title"
+          label="Tytuł artykułu"
+          autocomplete="off"
+          :disabled="formData.isFetchingTitle"
         ></v-text-field>
       </v-col>
 
@@ -36,23 +48,45 @@
 
 <script lang="ts" setup>
   import AddAbstractDialog from './AddAbstractDialog.vue';
-  import { type Textable, useSuggestDB } from '@/composables/suggestDB'
+  import { type Textable, useSuggestDB } from '@/composables/suggestDB';
+  import { functions } from '@/firebase'
+  import { httpsCallable } from 'firebase/functions';
 
   import { ref } from 'vue'
   import MultiTextField from './MultiTextField.vue';
 
   const { arrayToKeysMap } = useSuggestDB();
+  const getPageTitle = httpsCallable(functions, 'getPageTitle');
 
   const initialFormData = () => ({
     source: '',
+    title: '',
     comments: [{ text: '' }] as Textable[],
+    isFetchingTitle: false,
   });
 
   const formData = ref(initialFormData());
 
+  const fetchAndSetArticleTitle = async () => {
+    if (formData.value.source && !formData.value.title) {
+      formData.value.isFetchingTitle = true;
+      try {
+        const result = await getPageTitle({ url: formData.value.source });
+        const title = (result.data as any).title;
+        formData.value.title = title || '';
+      } catch (error) {
+        console.error("Error fetching page title:", error);
+        formData.value.title = '';
+      } finally {
+        formData.value.isFetchingTitle = false;
+      }
+    }
+  };
+
   const toOutput = (data: ReturnType<typeof initialFormData>) => {
     return {
       sourceURL: data.source,
+      title: data.title,
       comments: arrayToKeysMap(data.comments),
     };
   };
