@@ -10,6 +10,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AddAbstractDialog: typeof import('./components/AddAbstractDialog.vue')['default']
     AddArticleDialog: typeof import('./components/AddArticleDialog.vue')['default']
+    AddBatchEmployedDialog: typeof import('./components/AddBatchEmployedDialog.vue')['default']
     AddEmployedDialog: typeof import('./components/AddEmployedDialog.vue')['default']
     AddSuggestionDialog: typeof import('./components/AddSuggestionDialog.vue')['default']
     AppFooter: typeof import('./components/AppFooter.vue')['default']

@@ -9,6 +9,9 @@
     <v-col cols="12" sm="4">
       <AddSuggestionDialog/>
     </v-col>
+    <v-col cols="12" sm="4">
+      <AddBatchEmployedDialog/>
+    </v-col>
   </v-row>
 </template>
 

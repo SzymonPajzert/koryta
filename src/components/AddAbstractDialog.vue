@@ -85,7 +85,7 @@
     adminSuggestionPath?: string;
     suggestionType: string;
     initialFormData: () => any;
-    toOutput: (formData: any) => Record<string, any>;
+    toOutput: (formData: any) => Record<string, any> | Record<string, any>[];
   }>();
   const formData = defineModel<any>();
   formData.value = props.initialFormData();
@@ -93,7 +93,7 @@
   const dialog = shallowRef(false);
   const showConfirmationSnackbar = vueRef(false);
 
-  const saveSuggestion = () => {
+  const saveSuggestion = async () => {
     if (!user.value?.uid) {
       console.error("User not authenticated or UID not available.");
       // Można tu dodać powiadomienie dla użytkownika
@@ -105,14 +105,19 @@
       submitPath = dbRef(db, props.adminSuggestionPath)
     }
 
-    const output = props.toOutput(formData.value)
+    const outputSingleton = await props.toOutput(formData.value)
+    let output: Record<string, any>[]
+    if (!Array.isArray(outputSingleton)) output = [outputSingleton]
+    else output = outputSingleton
 
-    const keyRef = push(submitPath, {
-      ...output,
-      date: Date.now(),
-      user: user.value?.uid,
-    }).key;
-    push(dbRef(db, `user/${user.value?.uid}/suggestions/${props.suggestionType}`), keyRef)
+    output.forEach(item => {
+      const keyRef = push(submitPath, {
+        ...item,
+        date: Date.now(),
+        user: user.value?.uid,
+      }).key;
+      push(dbRef(db, `user/${user.value?.uid}/suggestions/${props.suggestionType}`), keyRef)
+    })
 
     dialog.value = false;
     // Reset form data
