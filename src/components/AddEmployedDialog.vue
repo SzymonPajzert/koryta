@@ -2,7 +2,7 @@
   <AddAbstractDialog
     buttonText="Dodaj nową osobę"
     title="Dodaj nową osobę"
-    title-icon="mdi-account"
+    title-icon="mdi-account-plus-outline"
     suggestionPath="suggestions/employed"
     adminSuggestionPath="employed"
     suggestionType="employed"

@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, type User, onAuthStateChanged } from 'firebase/auth';
 import router from '@/router';
-import { auth } from '@/stores/firebase';
+import { auth } from '@/firebase';
 
 const email = ref('');
 const password = ref('');

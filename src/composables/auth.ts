@@ -1,4 +1,4 @@
-import { auth } from '@/stores/firebase'
+import { auth } from '@/firebase'
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { ref } from 'vue';
 import router from '@/router';
