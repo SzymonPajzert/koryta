@@ -8,15 +8,21 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AddAbstractDialog: typeof import('./components/AddAbstractDialog.vue')['default']
+    AddArticleDialog: typeof import('./components/AddArticleDialog.vue')['default']
+    AddBatchEmployedDialog: typeof import('./components/AddBatchEmployedDialog.vue')['default']
+    AddEmployedDialog: typeof import('./components/AddEmployedDialog.vue')['default']
+    AddSuggestionDialog: typeof import('./components/AddSuggestionDialog.vue')['default']
     AppFooter: typeof import('./components/AppFooter.vue')['default']
+    HelpView: typeof import('./components/HelpView.vue')['default']
     Home: typeof import('./components/Home.vue')['default']
     HomeItem: typeof import('./components/HomeItem.vue')['default']
     ListView: typeof import('./components/ListView.vue')['default']
     LoginView: typeof import('./components/LoginView.vue')['default']
+    MultiTextField: typeof import('./components/MultiTextField.vue')['default']
     PartyChart: typeof import('./components/PartyChart.vue')['default']
     PartyChip: typeof import('./components/PartyChip.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    SimpleSuggestionDialog: typeof import('./components/SimpleSuggestionDialog.vue')['default']
   }
 }

@@ -5,7 +5,6 @@ import router from '@/router';
 
 const user = ref<User | null>();
 const isAdmin = ref<boolean>(false);
-const isBookTester = ref<boolean>(false);
 const idToken = ref<string>('');
 
 export function useAuthState() {
@@ -13,7 +12,6 @@ export function useAuthState() {
     user.value = userIn;
     user.value?.getIdTokenResult().then((idTokenResult) => {
       isAdmin.value = idTokenResult.claims.admin as boolean;
-      isBookTester.value = idTokenResult.claims.bookTester as boolean;
       idToken.value = idTokenResult.token;
     });
   });
@@ -28,5 +26,5 @@ export function useAuthState() {
     }
   };
 
-  return { user, isAdmin, isBookTester, idToken, logout };
+  return { user, isAdmin, idToken, logout };
 }

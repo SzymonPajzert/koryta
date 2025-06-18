@@ -16,26 +16,16 @@
             </h2>
           </template>
 
-          <template #subtitle>
+          <template #text>
             <div class="text-subtitle-1">
-              <template v-for="nepo in person.nepotism">
-                {{ nepo.relation }}
-                {{ nepo.person.name }} z {{ nepo.person.party }} <template v-if="nepo.person.role">({{ nepo.person.role }})</template>
+              <template v-for="connection in person.connections" :key="connection">
+                {{ connection.text }}
               </template>
               <br>
-              <template v-if="person.employment">
-                {{ person.employment.role }} w {{ person.employment.company }}
-                <a
-                  v-if="person.employment.noSelectionProcess"
-                  :href="person.employment.source"
-                  target="_blank"
-                >
-                  (bez konkursu)
-                </a>
+              <template v-for="employment in person.employments" :key="employment">
+                {{ employment.text }}
               </template>
-              <template v-else>
-                Brak danych o miejscu zatrudnienia
-              </template>
+
             </div>
           </template>
         </v-card>
@@ -48,5 +38,5 @@
 import {type NepoEmployment} from '@/composables/party'
 import PartyChip from './PartyChip.vue';
 
-const { people } = defineProps<{ people: NepoEmployment[] }>();
+const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
 </script>
