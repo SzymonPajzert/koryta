@@ -5,10 +5,19 @@
     // List of approved articles and sources
     "data": {
       ".read": true,
+      "$id": {
+        "status": {
+          "$category": {
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid"
+            }
+          }
+        }
+      }
     },
     // List of employed people
     "employed": {
-      ".read": true,
+      ".read": true
     },
 
 
