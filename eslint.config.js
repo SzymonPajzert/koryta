@@ -24,8 +24,7 @@ export default [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
-        // If you're using type-aware linting rules, you'll need to specify your tsconfig.json
-        // project: './tsconfig.json', // Adjust the path to your tsconfig.json
+        project: './tsconfig.json',
       },
       globals: {
         ...globals.browser,

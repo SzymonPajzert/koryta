@@ -27,7 +27,6 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
-          <!-- TODO The color is currently ignored -->
           <v-btn
             variant="tonal"
             :color="article.enrichedStatus?.isAssignedToCurrentUser ? 'yellow' : undefined"
@@ -52,19 +51,22 @@
         </v-card-actions>
       </v-card>
     </v-col>
+    <v-col cols="12">
+      <h2 class="text-h5 font-weight-bold">
+        Statystyki aktywności:
+      </h2>
+      <UserActivityTable />
+    </v-col>
   </v-row>
 </template>
 
 <script lang="ts" setup>
-import { useReadDB } from '@/composables/staticDB';
-const { watchPath } = useReadDB();
+import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { computed } from 'vue';
 import type { Textable } from '@/composables/suggestDB';
 import { useAuthState } from '@/composables/auth'; // Assuming auth store path
 import { ref as dbRef, set, remove } from 'firebase/database';
 import { db } from '@/firebase'
-
-const { user, isAdmin } = useAuthState();
 
 interface ArticleStatus {
   signedUp: Record<string, number>
@@ -96,12 +98,13 @@ function getShortTitle(data: SubmittedData): string {
   return data.title.split('.', 1)[0].trim();
 }
 
+const { user, isAdmin } = useAuthState();
+
 const assignToArticle = async (articleId: string, setAssigned: boolean) => {
   if (!user.value) return;
   if (setAssigned) {
     set(dbRef(db, `data/${articleId}/status/signedUp/${user.value.uid}`), Date.now())
   } else {
-    console.log("db ref remove")
     remove(dbRef(db, `data/${articleId}/status/signedUp/${user.value.uid}`))
   }
 }
@@ -122,7 +125,7 @@ function removeOlderEntries(entries: Record<string, number>): Record<string, num
   }))
 }
 
-const allArticlesUnfiltered = watchPath<Record<string, SubmittedData>>('data')
+const allArticlesUnfiltered = useRTDB<Record<string, SubmittedData>>(dbRef(db, 'data'))
 const articles = computed<Record<string, SubmittedData>>(() => {
   // Don't show any articles if the user is not logged in or there's no data yet.
   if (!user.value) return {};
@@ -159,5 +162,5 @@ const articles = computed<Record<string, SubmittedData>>(() => {
       return articleA.date - articleB.date;
     })
   );
-    });
+});
 </script>

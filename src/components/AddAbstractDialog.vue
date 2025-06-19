@@ -24,7 +24,7 @@
     >
       <v-card-text>
         <slot>
-          TODO
+          this is misconfigured
         </slot>
       </v-card-text>
 
@@ -69,12 +69,11 @@
 
 <script lang="ts" setup>
   import { useAuthState } from '@/composables/auth'
-  import { useReadDB } from '@/composables/staticDB'
   import { shallowRef, ref as vueRef } from 'vue'
   import { ref as dbRef, push } from 'firebase/database';
+  import { db } from '@/firebase'
 
   const { user, isAdmin } = useAuthState();
-  const { db } = useReadDB();
   const props = defineProps<{
     buttonText: string;
     title: string;

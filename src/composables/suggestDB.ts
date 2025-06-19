@@ -1,14 +1,12 @@
 // A set of utils to submit to DB a user specified suggestion
-import { useReadDB } from '@/composables/staticDB'
 import { ref as dbRef, push } from 'firebase/database';
+import { db } from '@/firebase'
 
 export interface Textable {
   text: string;
 }
 
 export function useSuggestDB() {
-  const { db } = useReadDB();
-
   function arrayToKeysMap(array: Textable[]) : Record<string, Textable> {
     const map: Record<string, Textable> = {};
     array.forEach((elt) => {
