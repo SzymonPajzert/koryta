@@ -10,6 +10,11 @@
   <v-row cols="12">
     <v-col cols="12">
       <h2 class="text-h5 font-weight-bold">
+        Twoje statystyki
+      </h2>
+    </v-col>
+    <v-col cols="12">
+      <h2 class="text-h5 font-weight-bold">
         Przejrzyj te artykuły
       </h2>
     </v-col>
@@ -51,6 +56,11 @@
           </v-btn>
         </v-card-actions>
       </v-card>
+    </v-col>
+    <v-col cols="12">
+      <h2 class="text-h5 font-weight-bold">
+        Statystyki innych
+      </h2>
     </v-col>
   </v-row>
 </template>
