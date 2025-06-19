@@ -2,7 +2,8 @@
 import { ref } from 'vue';
 import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, type User, onAuthStateChanged } from 'firebase/auth';
 import router from '@/router';
-import { auth } from '@/firebase';
+import { auth, db } from '@/firebase';
+import { set, ref as dbRef } from 'firebase/database';
 
 const email = ref('');
 const password = ref('');
@@ -12,6 +13,9 @@ const loading = ref(false);
 const user = ref<User | null>();
 onAuthStateChanged(auth, (userIn) => {
   user.value = userIn
+  set(dbRef(db, `user/${userIn?.uid}/displayName`), userIn?.displayName)
+  set(dbRef(db, `user/${userIn?.uid}/email`), userIn?.email)
+  set(dbRef(db, `user/${userIn?.uid}/photoURL`), userIn?.photoURL)
 });
 
 const login = async () => {

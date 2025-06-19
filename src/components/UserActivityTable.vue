@@ -32,11 +32,11 @@
 
 <script lang="ts" setup>
 import { useRTDB } from '@vueuse/firebase/useRTDB'
-import { computed } from 'vue';
+import { computed, type WatchHandle } from 'vue';
 import { useAuthState } from '@/composables/auth'; // Assuming auth store path
 import { ref as dbRef } from 'firebase/database';
 import { db } from '@/firebase'
-const { user } = useAuthState();
+const { user, isAdmin } = useAuthState();
 
 interface UserSuggestionTypes {
   data?: Record<string, any>;
@@ -57,7 +57,25 @@ interface UserActivityStat {
   improvementCount: number;
 }
 
-const allUsersData = useRTDB<Record<string, UserProfileData>>(dbRef(db, 'user'));
+const allUsersData = computed<Record<string, UserProfileData> | undefined>(() => {
+  console.log("listen iteration", user.value, isAdmin.value)
+
+  if (!user.value) return;
+  if (isAdmin.value) {
+    console.log("listen as admin")
+    return useRTDB<Record<string, UserProfileData>>(dbRef(db, 'user')).value;
+  }
+
+  const uid = user.value.uid;
+  const userData = useRTDB<UserProfileData>(dbRef(db, `user/${uid}`));
+  return computed(() => {
+    if (!userData.value) return;
+    const result : Record<string, UserProfileData> = {};
+    result[uid] = userData.value;
+    return result;
+  }).value;
+})
+
 
 const userActivityStats = computed<UserActivityStat[]>(() => {
   if (!allUsersData.value) {
