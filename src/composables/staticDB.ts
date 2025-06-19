@@ -26,7 +26,9 @@ export function useReadDB<T>() {
     const output = vueRef<A>();
     onValue(ref(db, path), (snapshot) => {
       if (snapshot.val()) {
+        console.log(snapshot.val())
         output.value = snapshot.val() as A;
+        console.log(output.value)
       }
     });
     return output;

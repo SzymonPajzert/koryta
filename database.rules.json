@@ -1,7 +1,9 @@
 {
   "rules": {
+    ".read": "auth.token.admin === true",
     ".write": "auth.token.admin === true",
 
+    // TODO create a trusted level that allows people to view comments on docs
     // List of approved articles and sources
     "data": {
       ".read": true,
