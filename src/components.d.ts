@@ -24,5 +24,6 @@ declare module 'vue' {
     PartyChip: typeof import('./components/PartyChip.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    UserActivityTable: typeof import('./components/UserActivityTable.vue')['default']
   }
 }

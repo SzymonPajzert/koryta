@@ -13,7 +13,6 @@
         Przejrzyj te artykuły
       </h2>
     </v-col>
-    <!-- TODO split into two subcomponents -->
     <v-col v-for="(article, articleId) in articles" :key="articleId" cols="12" md="6">
       <v-card
         v-if="!article.enrichedStatus?.hideArticle"
@@ -28,7 +27,6 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
-          <!-- TODO The color is currently ignored -->
           <v-btn
             variant="tonal"
             :color="article.enrichedStatus?.isAssignedToCurrentUser ? 'yellow' : undefined"
@@ -57,42 +55,12 @@
       <h2 class="text-h5 font-weight-bold">
         Statystyki aktywności:
       </h2>
-      <v-table>
-        <thead>
-          <tr>
-            <th class="text-left">
-              Użytkownik
-            </th>
-            <th class="text-left">
-              Dodane artykuły
-            </th>
-            <th class="text-left">
-              Dodane osoby
-            </th>
-            <th class="text-left">
-              Zasugerowane poprawy strony
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="item in userActivityStats"
-            :key="item.id"
-          >
-            <td>{{ item.name }}</td>
-            <td>{{ item.dataCount }}</td>
-            <td>{{ item.employedCount }}</td>
-            <td>{{ item.improvementCount }}</td>
-          </tr>
-        </tbody>
-      </v-table>
+      <UserActivityTable />
     </v-col>
   </v-row>
 </template>
 
 <script lang="ts" setup>
-import { useReadDB } from '@/composables/staticDB';
-const { watchPath } = useReadDB();
 import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { computed } from 'vue';
 import type { Textable } from '@/composables/suggestDB';
@@ -119,25 +87,6 @@ interface SubmittedData {
     isAssignedToCurrentUser: boolean;
     hideArticle: boolean;
   }
-}
-
-interface UserSuggestionTypes {
-  data?: Record<string, any>;
-  employed?: Record<string, any>;
-  improvement?: Record<string, any>;
-}
-
-interface UserProfileData {
-  suggestions?: UserSuggestionTypes;
-  displayName?: string; // Assuming displayName might exist for users
-}
-
-interface UserActivityStat {
-  id: string; // UID
-  name: string; // displayName or UID
-  dataCount: number;
-  employedCount: number;
-  improvementCount: number;
 }
 
 function getSubtitle(data: SubmittedData): string | undefined {
@@ -176,7 +125,7 @@ function removeOlderEntries(entries: Record<string, number>): Record<string, num
   }))
 }
 
-const allArticlesUnfiltered = watchPath<Record<string, SubmittedData>>('data')
+const allArticlesUnfiltered = useRTDB<Record<string, SubmittedData>>(dbRef(db, 'data'))
 const articles = computed<Record<string, SubmittedData>>(() => {
   // Don't show any articles if the user is not logged in or there's no data yet.
   if (!user.value) return {};
@@ -213,34 +162,5 @@ const articles = computed<Record<string, SubmittedData>>(() => {
       return articleA.date - articleB.date;
     })
   );
-    });
-
-const allUsersData = useRTDB(dbRef(db, 'user'));
-const userActivityStats = computed<UserActivityStat[]>(() => {
-  if (!allUsersData.value) {
-    return [];
-  }
-
-  const stats: UserActivityStat[] = [];
-  for (const uid in allUsersData.value) {
-    const userData = allUsersData.value[uid];
-    const suggestions = userData.suggestions || {};
-
-    const dataCount = Object.keys(suggestions.data || {}).length;
-    const employedCount = Object.keys(suggestions.employed || {}).length;
-    const improvementCount = Object.keys(suggestions.improvement || {}).length;
-
-    // Use displayName if available, otherwise fallback to UID
-    const userName = userData.displayName || uid;
-
-    stats.push({
-      id: uid,
-      name: userName,
-      dataCount,
-      employedCount,
-      improvementCount,
-    });
-  }
-  return stats.sort((a, b) => (b.dataCount + b.employedCount + b.improvementCount) - (a.dataCount + a.employedCount + a.improvementCount));
 });
 </script>

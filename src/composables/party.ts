@@ -1,5 +1,7 @@
-import { ref, computed, watch } from 'vue'
-import { useReadDB } from '@/composables/staticDB'
+import { ref, computed } from 'vue'
+import { useRTDB } from '@vueuse/firebase/useRTDB'
+import { db } from '@/firebase'
+import { ref as dbRef } from 'firebase/database'
 
 interface Textable {
   text: string
@@ -15,8 +17,7 @@ export interface NepoEmployment {
 }
 
 export function useListEmployment() {
-  const { watchPath } = useReadDB<{employed: Record<string, NepoEmployment>}>()
-  const peopleRaw = watchPath<Record<string, NepoEmployment>>("employed")
+  const peopleRaw = useRTDB<{employed: Record<string, NepoEmployment>}>(dbRef(db, 'employed'))
   const people = computed<Record<string, NepoEmployment>>(() => peopleRaw.value ?? {})
   return { people };
 }
