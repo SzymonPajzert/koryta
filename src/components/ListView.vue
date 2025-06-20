@@ -28,6 +28,19 @@
 
             </div>
           </template>
+          <v-card-actions v-if="isAdmin">
+            <v-spacer></v-spacer>
+            <AddEmployedDialog>
+              <template #button="activatorProps">
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-pencil-outline"
+                  v-bind="activatorProps">
+                  Edit article
+                </v-btn>
+              </template>
+            </AddEmployedDialog>
+          </v-card-actions>
         </v-card>
       </v-col>
     </v-row>
@@ -37,6 +50,8 @@
 <script setup lang="ts">
 import {type NepoEmployment} from '@/composables/party'
 import PartyChip from './PartyChip.vue';
+import { useAuthState} from '@/composables/auth'
+const { isAdmin } = useAuthState();
 
 const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
 </script>

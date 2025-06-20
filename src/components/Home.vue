@@ -19,11 +19,11 @@
         <template #header>
           Zobacz listę {{ Object.values(people).length }} {{ koryciarz.plural.genitive }}
         </template>
-        Osób na ciepłych państwowych posadkach, dzięki ich rodzicom, rodzeństwu lub kolegom z pracy.
+        Osób na ciepłych państwowych posadkach, dzięki ich rodzicom, rodzeństwu lub kolegom z pracy
       </HomeItem>
-      <HomeItem icon="mdi-plus-box-outline">
-        <template #header> Dodaj osoby </template>
-        Dodaj brakujące osoby w spółkach państwa lub samorządu, w prawym górnym rogu ekranu.
+      <HomeItem router="pomoc" icon="mdi-plus-box-outline">
+        <template #header> Dodaj osoby i artykuły </template>
+        Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do artykułów wypisujących je
       </HomeItem>
       <HomeItem router="login" icon="mdi-star-circle-outline">
         <template #header> Dołącz do projektu </template>

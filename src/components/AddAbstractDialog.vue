@@ -4,18 +4,20 @@
     max-width="600"
   >
     <template v-slot:activator="{ props: activatorProps }">
-      <!-- If user is logged in, show button to open dialog -->
-      <v-list-item :prepend-icon="props.titleIcon"
-        v-if="user"
-        :title="props.buttonText"
-        v-bind="activatorProps"
-      ></v-list-item>
-      <!-- If user is not logged in, show button to redirect to login -->
-      <v-list-item :prepend-icon="props.titleIcon"
-        v-else
-        :title="props.buttonText"
-        to="/login"
-      ></v-list-item>
+      <slot name="button" v-bind="activatorProps">
+        <!-- If user is logged in, show button to open dialog -->
+        <v-list-item :prepend-icon="props.titleIcon"
+          v-if="user"
+          :title="props.buttonText"
+          v-bind="activatorProps"
+        ></v-list-item>
+        <!-- If user is not logged in, show button to redirect to login -->
+        <v-list-item :prepend-icon="props.titleIcon"
+          v-else
+          :title="props.buttonText"
+          to="/login"
+        ></v-list-item>
+      </slot>
     </template>
 
     <v-card

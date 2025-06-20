@@ -10,6 +10,9 @@
     :toOutput
     v-model="formData"
   >
+    <template #button="activatorProps">
+      <slot name="button" v-bind="activatorProps"></slot>
+    </template>
     <v-row dense>
       <v-col
         cols="12"
