@@ -6,9 +6,13 @@
 import { usePartyStatistics } from '@/composables/party'
 import { computed } from 'vue'
 
-const { parties, partyColors, results } = usePartyStatistics();
+const { parties: partiesUnfiltered, partyColors: partyColorsUnfiltered, results: resultsUnfiltered } = usePartyStatistics()
+const nonZeroIndices = computed(() => resultsUnfiltered.value.map((x, i) => x > 0 ? i : -1).filter(i => i >= 0))
+const parties = computed(() => partiesUnfiltered.value.filter((_, i) => nonZeroIndices.value.includes(i)))
+const partyColors = computed(() => partyColorsUnfiltered.value.filter((_, i) => nonZeroIndices.value.includes(i)))
+const results = computed(() => resultsUnfiltered.value.filter((_, i) => nonZeroIndices.value.includes(i)))
 const resultPercentage = computed(() => results.value.map(x => 100 * x / results.value.reduce((x, y) => Math.max(x, y))))
-const chartOptions = {
+const chartOptions = computed(() => ({
   chart: {
     height: 390,
     type: 'radialBar',
@@ -53,5 +57,5 @@ const chartOptions = {
       }
     }
   }]
-}
+}));
 </script>

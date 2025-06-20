@@ -10,10 +10,10 @@ interface Textable {
 export interface NepoEmployment {
   name: string
   parties: string[]
-  employments: Record<string, Textable>
-  connections: Record<string, Textable>
-  source: string
-  comments: Record<string, Comment>
+  employments?: Record<string, Textable>
+  connections?: Record<string, Textable>
+  sourceURL: string
+  comments?: Record<string, Textable>
 }
 
 export function useListEmployment() {
@@ -25,8 +25,8 @@ export function useListEmployment() {
 export function usePartyStatistics() {
   const { people } = useListEmployment();
 
-  const parties = ref(["PO", "PiS", "PSL"])
-  const partyColors = ref(["#fca241", '#073b76', '#2ed396'])
+  const parties = ref(["PO", "PiS", "PSL", "Polska 2050", "Nowa Lewica", "Konfederacja", "Razem"])
+  const partyColors = ref(["#fca241", '#073b76', '#2ed396', '#FFCB03', '#D40E20', '#102440', '#871057'])
   const results = computed<number[]>(() => {
     return parties.value.map((party) => {
       return Object.values(people.value).filter((person) => {

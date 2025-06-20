@@ -4,18 +4,20 @@
     max-width="600"
   >
     <template v-slot:activator="{ props: activatorProps }">
-      <!-- If user is logged in, show button to open dialog -->
-      <v-list-item :prepend-icon="props.titleIcon"
-        v-if="user"
-        :title="props.buttonText"
-        v-bind="activatorProps"
-      ></v-list-item>
-      <!-- If user is not logged in, show button to redirect to login -->
-      <v-list-item :prepend-icon="props.titleIcon"
-        v-else
-        :title="props.buttonText"
-        to="/login"
-      ></v-list-item>
+      <slot name="button" v-bind="activatorProps">
+        <!-- If user is logged in, show button to open dialog -->
+        <v-list-item :prepend-icon="props.titleIcon"
+          v-if="user"
+          :title="props.buttonText"
+          v-bind="activatorProps"
+        ></v-list-item>
+        <!-- If user is not logged in, show button to redirect to login -->
+        <v-list-item :prepend-icon="props.titleIcon"
+          v-else
+          :title="props.buttonText"
+          to="/login"
+        ></v-list-item>
+      </slot>
     </template>
 
     <v-card
@@ -70,7 +72,7 @@
 <script lang="ts" setup>
   import { useAuthState } from '@/composables/auth'
   import { shallowRef, ref as vueRef } from 'vue'
-  import { ref as dbRef, push } from 'firebase/database';
+  import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database';
   import { db } from '@/firebase'
 
   const { user, isAdmin } = useAuthState();
@@ -82,6 +84,7 @@
     adminSuggestionPath?: string;
     suggestionType: string;
     initialFormData: () => any;
+    editKey?: string;
     toOutput: (formData: any) => Record<string, any> | Record<string, any>[];
   }>();
   const formData = defineModel<any>();
@@ -99,16 +102,27 @@
 
     let submitPath = dbRef(db, props.suggestionPath)
     if (props.adminSuggestionPath && isAdmin.value) {
-      submitPath = dbRef(db, props.adminSuggestionPath)
+      // Only admins can actually edit
+      submitPath = dbRef(db, props.adminSuggestionPath + (props.editKey ? "/" + props.editKey : ""))
     }
 
+    let operation = push;
+    if (props.editKey && isAdmin.value) {
+      operation = (parent, value) => {
+        set(parent, value);
+        return {key: props.editKey, ref: parent} as ThenableReference
+      }
+    }
+
+    // we need to keep await here, since it's sometimes async
+    // TODO test this
     const outputSingleton = await props.toOutput(formData.value)
     let output: Record<string, any>[]
     if (!Array.isArray(outputSingleton)) output = [outputSingleton]
     else output = outputSingleton
 
     output.forEach(item => {
-      const keyRef = push(submitPath, {
+      const keyRef = operation(submitPath, {
         ...item,
         date: Date.now(),
         user: user.value?.uid,
