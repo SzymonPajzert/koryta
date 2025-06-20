@@ -7,7 +7,6 @@ node_modules
 .firebase
 database-debug.log
 firebase-debug.log
-database/database_export
 
 # local env files
 .env.local
