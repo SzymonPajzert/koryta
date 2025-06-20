@@ -114,7 +114,9 @@
       }
     }
 
-    const outputSingleton = props.toOutput(formData.value)
+    // we need to keep await here, since it's sometimes async
+    // TODO test this
+    const outputSingleton = await props.toOutput(formData.value)
     let output: Record<string, any>[]
     if (!Array.isArray(outputSingleton)) output = [outputSingleton]
     else output = outputSingleton
