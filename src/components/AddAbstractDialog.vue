@@ -109,7 +109,6 @@
     let operation = push;
     if (props.editKey && isAdmin.value) {
       operation = (parent, value) => {
-        console.log("using edit")
         set(parent, value);
         return {key: props.editKey, ref: parent} as ThenableReference
       }
@@ -119,8 +118,6 @@
     let output: Record<string, any>[]
     if (!Array.isArray(outputSingleton)) output = [outputSingleton]
     else output = outputSingleton
-
-    console.log(output)
 
     output.forEach(item => {
       const keyRef = operation(submitPath, {

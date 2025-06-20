@@ -58,11 +58,8 @@ interface UserActivityStat {
 }
 
 const allUsersData = computed<Record<string, UserProfileData> | undefined>(() => {
-  console.log("listen iteration", user.value, isAdmin.value)
-
   if (!user.value) return;
   if (isAdmin.value) {
-    console.log("listen as admin")
     return useRTDB<Record<string, UserProfileData>>(dbRef(db, 'user')).value;
   }
 

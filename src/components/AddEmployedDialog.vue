@@ -130,7 +130,6 @@
   const formData = ref(initialFormData());
 
   const toOutput = (data: ReturnType<typeof initialFormData>) => {
-    console.log("producing output")
     return {
       name: data.name,
       parties: data.parties,
