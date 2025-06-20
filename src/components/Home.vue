@@ -7,7 +7,7 @@
         <div class="mb-8 text-center">
           <h1 class="text-h2 font-weight-bold">koryta.pl</h1>
           <div class="text-body-2 font-weight-light mb-n1">
-            {{ ["Polityczny wypas", "Pójdź tam, gdzie politycy zimują"][Math.floor(Math.random() * 2)] }}
+            {{ subtitle }}
           </div>
         </div>
       </v-col>
@@ -40,7 +40,10 @@
 import { useFeminatyw } from "@/composables/feminatyw";
 import PartyChart from "./PartyChart.vue";
 import { useListEmployment } from "@/composables/party";
-import SimpleSuggestionDialog from "./AddEmployedDialog.vue";
+import { isTest } from "@/firebase";
 const { people } = useListEmployment();
 const { koryciarz } = useFeminatyw();
+
+const idx = isTest() ? 1 : Math.floor(Math.random() * 2)
+const subtitle = ["Polityczny wypas", "Pójdź tam, gdzie politycy zimują"][idx]
 </script>
