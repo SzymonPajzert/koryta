@@ -23,11 +23,14 @@
     "vuetify": "^3.8.1"
   },
   "devDependencies": {
+    "@cypress/snapshot": "^2.1.1",
+    "@simonsmith/cypress-image-snapshot": "^9.1.0",
     "@tsconfig/node22": "^22.0.0",
     "@types/node": "^22.9.0",
     "@types/papaparse": "^5.3.16",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/tsconfig": "^0.7.0",
+    "cypress": "^14.5.0",
     "eslint": "^9.23.0",
     "eslint-config-vuetify": "^4.0.0",
     "firebase": "^11.9.1",
