@@ -1,3 +1,5 @@
+import { isTest } from "@/firebase"
+
 export interface PolishNoun {
   nominative: string
   genitive: string
@@ -25,8 +27,10 @@ function toNoun(input: InputNoun): PolishNoun {
   }
 }
 
+const isTestConst = isTest()
+
 export function useFeminatyw() {
-  const useFemale : boolean = Math.random() > 0.5
+  const useFemale : boolean = Math.random() > 0.5 || isTestConst
 
   function createNoun(femaleSingular: InputNoun, femalePlural: InputNoun, maleSingular: InputNoun, malePlural: InputNoun): Feminatyw {
     if (useFemale) {
