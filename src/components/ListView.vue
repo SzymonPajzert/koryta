@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-row>
-      <v-col v-for="person in people" :key="person.name" cols="12">
+      <v-col v-for="(person, key) in people" :key="person.name" cols="12">
         <v-card
           class="py-4"
           color="surface-variant"
@@ -30,13 +30,16 @@
           </template>
           <v-card-actions v-if="isAdmin">
             <v-spacer></v-spacer>
-            <AddEmployedDialog>
+            <AddEmployedDialog :initial="person" :editKey="key">
               <template #button="activatorProps">
                 <v-btn
-                  color="primary"
+                  variant="tonal"
                   prepend-icon="mdi-pencil-outline"
                   v-bind="activatorProps">
-                  Edit article
+                  <template #prepend>
+                    <v-icon color="warning"></v-icon>
+                  </template>
+                  Edytuj
                 </v-btn>
               </template>
             </AddEmployedDialog>

@@ -1,13 +1,14 @@
 <template>
   <AddAbstractDialog
-    buttonText="Dodaj nową osobę"
-    title="Dodaj nową osobę"
+    :buttonText='editKey ? "Zapisz zmiany" : "Dodaj nową osobę"'
+    :title='editKey ? "Edytuj osobę" : "Dodaj nową osobę"'
     title-icon="mdi-account-plus-outline"
     suggestionPath="suggestions/employed"
     adminSuggestionPath="employed"
     suggestionType="employed"
     :initialFormData
     :toOutput
+    :editKey="editKey"
     v-model="formData"
   >
     <template #button="activatorProps">
@@ -87,11 +88,16 @@
 <script lang="ts" setup>
   import AddAbstractDialog from './AddAbstractDialog.vue';
   import { useFeminatyw } from '@/composables/feminatyw';
-  import { usePartyStatistics } from '@/composables/party';
+  import { usePartyStatistics, type NepoEmployment } from '@/composables/party';
   import { type Textable, useSuggestDB } from '@/composables/suggestDB'
 
   import { computed, ref } from 'vue'
   import MultiTextField from './MultiTextField.vue';
+
+  const { initial, editKey } = defineProps<{
+    initial?: NepoEmployment,  // if defined, sets the value of the form
+    editKey?: string           // if provided, modifies the entry rather than submitting a new one
+  }>();
 
   const { parties } = usePartyStatistics();
   const { arrayToKeysMap } = useSuggestDB();
@@ -99,18 +105,32 @@
   const partiesDefault = computed<string[]>(() => [...parties.value, 'inne'])
   const { koryciarz } = useFeminatyw();
 
-  const initialFormData = () => ({
-    name: '',
-    parties: [] as string[],
-    employments: [{ text: '' }] as Textable[],
-    connections: [{ text: '' }] as Textable[],
-    source: '',
-    comments: [{ text: '' }] as Textable[],
-  });
+  const initialFormData = () => {
+    if (initial) {
+      return {
+        name: initial.name,
+        parties: initial.parties,
+        employments: Object.values(initial.employments || {}) as Textable[],
+        connections: Object.values(initial.connections || {}) as Textable[],
+        source: initial.sourceURL,
+        comments: Object.values(initial.comments || {}) as Textable[],
+      };
+    }
+
+    return {
+      name: '',
+      parties: [] as string[],
+      employments: [{ text: '' }] as Textable[],
+      connections: [{ text: '' }] as Textable[],
+      source: '',
+      comments: [{ text: '' }] as Textable[],
+    }
+  };
 
   const formData = ref(initialFormData());
 
   const toOutput = (data: ReturnType<typeof initialFormData>) => {
+    console.log("producing output")
     return {
       name: data.name,
       parties: data.parties,

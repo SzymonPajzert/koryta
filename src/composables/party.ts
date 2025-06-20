@@ -10,10 +10,10 @@ interface Textable {
 export interface NepoEmployment {
   name: string
   parties: string[]
-  employments: Record<string, Textable>
-  connections: Record<string, Textable>
-  source: string
-  comments: Record<string, Comment>
+  employments?: Record<string, Textable>
+  connections?: Record<string, Textable>
+  sourceURL: string
+  comments?: Record<string, Textable>
 }
 
 export function useListEmployment() {

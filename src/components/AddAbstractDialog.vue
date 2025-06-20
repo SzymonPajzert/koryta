@@ -72,7 +72,7 @@
 <script lang="ts" setup>
   import { useAuthState } from '@/composables/auth'
   import { shallowRef, ref as vueRef } from 'vue'
-  import { ref as dbRef, push } from 'firebase/database';
+  import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database';
   import { db } from '@/firebase'
 
   const { user, isAdmin } = useAuthState();
@@ -84,6 +84,7 @@
     adminSuggestionPath?: string;
     suggestionType: string;
     initialFormData: () => any;
+    editKey?: string;
     toOutput: (formData: any) => Record<string, any> | Record<string, any>[];
   }>();
   const formData = defineModel<any>();
@@ -101,16 +102,28 @@
 
     let submitPath = dbRef(db, props.suggestionPath)
     if (props.adminSuggestionPath && isAdmin.value) {
-      submitPath = dbRef(db, props.adminSuggestionPath)
+      // Only admins can actually edit
+      submitPath = dbRef(db, props.adminSuggestionPath + (props.editKey ? "/" + props.editKey : ""))
     }
 
-    const outputSingleton = await props.toOutput(formData.value)
+    let operation = push;
+    if (props.editKey && isAdmin.value) {
+      operation = (parent, value) => {
+        console.log("using edit")
+        set(parent, value);
+        return {key: props.editKey, ref: parent} as ThenableReference
+      }
+    }
+
+    const outputSingleton = props.toOutput(formData.value)
     let output: Record<string, any>[]
     if (!Array.isArray(outputSingleton)) output = [outputSingleton]
     else output = outputSingleton
 
+    console.log(output)
+
     output.forEach(item => {
-      const keyRef = push(submitPath, {
+      const keyRef = operation(submitPath, {
         ...item,
         date: Date.now(),
         user: user.value?.uid,
