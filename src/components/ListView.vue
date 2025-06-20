@@ -8,6 +8,7 @@
           prepend-icon="mdi-account-outline"
           rounded="lg"
           variant="tonal"
+          :href="person.sourceURL"
         >
           <template #title>
             <h2 class="text-h5 font-weight-bold">
@@ -33,6 +34,7 @@
             <AddEmployedDialog :initial="person" :editKey="key">
               <template #button="activatorProps">
                 <v-btn
+                  @click.prevent
                   variant="tonal"
                   prepend-icon="mdi-pencil-outline"
                   v-bind="activatorProps">
