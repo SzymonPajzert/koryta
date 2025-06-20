@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-row>
-      <v-col cols="8">
+      <v-col cols="12" md="7">
         <v-img class="mb-4" height="150" src="@/assets/świnia.png" />
 
         <div class="mb-8 text-center">
@@ -11,7 +11,7 @@
           </div>
         </div>
       </v-col>
-      <v-col cols="4">
+      <v-col cols="12" md="5">
         <PartyChart />
       </v-col>
 
