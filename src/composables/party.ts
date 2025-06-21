@@ -12,7 +12,8 @@ export interface NepoEmployment {
   parties: string[]
   employments?: Record<string, Textable>
   connections?: Record<string, Textable>
-  sourceURL: string
+  sources: Record<string, Textable>
+  sourceURL: string // TODO get rid of it
   comments?: Record<string, Textable>
 }
 
@@ -26,7 +27,8 @@ export function usePartyStatistics() {
   const { people } = useListEmployment();
 
   const parties = ref(["PO", "PiS", "PSL", "Polska 2050", "Nowa Lewica", "Konfederacja", "Razem"])
-  const partyColors = ref(["#fca241", '#073b76', '#2ed396', '#FFCB03', '#D40E20', '#102440', '#871057'])
+  // TODO '#073b76',  '#102440',
+  const partyColors = ref(["#fca241", '#A9D1DF', '#2ed396', '#FFCB03', '#D40E20', '#A9D1DF', '#871057'])
   const results = computed<number[]>(() => {
     return parties.value.map((party) => {
       return Object.values(people.value).filter((person) => {

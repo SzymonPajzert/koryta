@@ -7,19 +7,23 @@ export interface Textable {
 }
 
 export function useSuggestDB() {
+  function newKey() {
+    const newKey = push(dbRef(db, '_temp_keys/employments')).key;
+    if (!newKey) {
+      throw "Failed to create a key"
+    }
+    return newKey
+  }
+
   function arrayToKeysMap(array: Textable[]) : Record<string, Textable> {
     const map: Record<string, Textable> = {};
     array.forEach((elt) => {
       if (elt.text.trim() !== '') {
-        const newKey = push(dbRef(db, '_temp_keys/employments')).key;
-        if (!newKey) {
-          throw "Failed to create a key"
-        }
-        map[newKey] = elt;
+        map[newKey()] = elt;
       }
     });
     return map;
   }
 
-  return { arrayToKeysMap }
+  return { arrayToKeysMap, newKey }
 }

@@ -25,13 +25,6 @@
         <template #header> Dodaj osoby i artykuły </template>
         Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do artykułów wypisujących je
       </HomeItem>
-      <HomeItem router="login" icon="mdi-star-circle-outline">
-        <template #header> Dołącz do projektu </template>
-        <a href="/login" @click.stop to='/login'>Zaloguj się</a> lub
-        <a href="https://discord.gg/pnyPh7zXxS" target="_blank" @click.stop
-          >dołącz do serwera Discord</a
-        >
-      </HomeItem>
     </v-row>
   </div>
 </template>

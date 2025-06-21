@@ -8,6 +8,11 @@
     <AddBatchEmployedDialog/>
   </v-navigation-drawer>
   <v-row cols="12">
+    <p> Jeśli masz pytania,
+      <a href="https://discord.gg/pnyPh7zXxS" target="_blank" @click.stop>
+        dołącz do serwera Discord
+      </a> - mamy kanał specjalnie dla koryta.pl
+    </p>
     <v-col cols="12">
       <h2 class="text-h5 font-weight-bold">
         Przejrzyj te artykuły

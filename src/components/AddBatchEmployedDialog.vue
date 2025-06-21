@@ -38,6 +38,7 @@
 import { useSuggestDB } from '@/composables/suggestDB'
 import AddAbstractDialog from './AddAbstractDialog.vue';
 import { ref } from 'vue';
+import { type NepoEmployment } from '@/composables/party';
 import Papa from 'papaparse';
 
 interface CsvRow {
@@ -46,6 +47,7 @@ interface CsvRow {
   name: string;
   party: string;
   source: string;
+  comment: string;
 }
 
 const initialFormData = () => ({
@@ -54,7 +56,7 @@ const initialFormData = () => ({
 
 const formData = ref(initialFormData());
 
-const { arrayToKeysMap } = useSuggestDB();
+const { arrayToKeysMap, newKey } = useSuggestDB();
 
 const toOutput = async (data: {
   file: File | null;
@@ -74,7 +76,7 @@ const toOutput = async (data: {
         skipEmptyLines: true,
         transformHeader: header => header.trim().toLowerCase(),
         complete: (results) => {
-          const expectedHeaders = ['employed', 'connection', 'name', 'party', 'source'];
+          const expectedHeaders = ['employed', 'connection', 'name', 'party', 'source', 'comment'];
           const actualHeaders = results.meta.fields;
 
           if (!actualHeaders) {
@@ -93,24 +95,58 @@ const toOutput = async (data: {
             }
           }
 
-          resolve(results.data.map(row => ({
-            name: row.name || '',
-            parties: row.party ? [row.party] : [],
-            employments: arrayToKeysMap(row.employed ? [{ text: row.employed }] : []),
-            connections: arrayToKeysMap(row.connection ? [{ text: row.connection }] : []),
-            sourceURL: row.source || '',
-          })));
+          const outputData: NepoEmployment[] = []
+          results.data.forEach(row => {
+            if (row.name == '') {
+              // Append the data to the previous row
+              const prev = outputData[outputData.length - 1];
+              if (row.party) {
+                prev.parties.push(row.party);
+              }
+              if (row.employed) {
+                if (!prev.employments) prev.employments = {};
+                prev.employments[newKey()] = { text: row.employed };
+              }
+              if (row.connection) {
+                if (!prev.connections) prev.connections = {};
+                prev.connections[newKey()] = { text: row.connection };
+              }
+              if (row.comment) {
+                if (!prev.comments) prev.comments = {};
+                prev.comments[newKey()] = { text: row.comment };
+              }
+              if (row.source) {
+                if (!prev.sources) prev.sources = {};
+                prev.sources[newKey()] = { text: row.source };
+              }
+              return
+            }
+
+            outputData.push({
+              name: row.name,
+              parties: row.party ? [row.party] : [],
+              employments: arrayToKeysMap(row.employed ? [{ text: row.employed }] : []),
+              connections: arrayToKeysMap(row.connection ? [{ text: row.connection }] : []),
+              // TODO do they work?
+              // TODO am I happy with sources as hash map? I guess so
+              sources: arrayToKeysMap(row.source ? [{ text: row.source }] : []),
+              comments: arrayToKeysMap(row.comment ? [{ text: row.comment }] : []),
+              sourceURL: row.source || '',
+            } as NepoEmployment)
+          });
+
+          resolve(outputData);
         },
         error: (error: any) => {
           console.error('Error parsing CSV file:', error);
-          // Idealnie, pokaż ten błąd użytkownikowi
+          // TODO Idealnie, pokaż ten błąd użytkownikowi
           reject(error);
         }
       });
     });
   } catch (error) {
     console.error('Error processing CSV file:', error);
-    // Ideally, show this error to the user
+    // TODO Ideally, show this error to the user
     return null;
   }
 };

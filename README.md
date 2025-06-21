@@ -1,6 +1,12 @@
 # Koryta.pl
 
 ## Testing
+First make the code auto update with
+
+```
+npm run watch
+```
+
 Run to start a prepopulated DB
 
 ```
