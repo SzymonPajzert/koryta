@@ -10,6 +10,7 @@
     <v-app-bar-title style="cursor: pointer" @click="$router.push('/')">koryta.pl</v-app-bar-title>
     <v-spacer />
     <v-btn text to="/list">Lista</v-btn>
+    <v-btn text to="/graf">Graf</v-btn>
     <v-btn text to="/pomoc">Działaj</v-btn>
     <v-btn text to="/zrodla">Źródła</v-btn>
     <v-btn icon v-if="user" to="/profil">
