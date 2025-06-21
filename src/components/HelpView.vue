@@ -18,13 +18,20 @@
         Przejrzyj te artykuły
       </h2>
     </v-col>
+    <v-col cols="12" v-if="!user">
+      <v-container>
+        Zaloguj się, by zobaczyć zawartość.
+      </v-container>
+    </v-col>
     <v-col v-for="(article, articleId) in articles" :key="articleId" cols="12" md="6">
       <v-card
         v-if="!article.enrichedStatus?.hideArticle"
         :title="getShortTitle(article)"
         :subtitle="getSubtitle(article)"
         :href="article.sourceURL"
-        target="_blank" >
+        target="_blank"
+        height="100%"
+        >
         <v-card-text>
           <p v-for="(comment, commentKey) in article.comments" :key="commentKey">
             {{ comment.text }}
