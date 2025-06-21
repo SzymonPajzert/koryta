@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-row>
-      <v-col v-for="(person, key) in people" :key="person.name" cols="12" sm="6">
+      <v-col v-for="([key, person]) in peopleOrdered" :key="person.name" cols="12" sm="6">
         <v-card
           class="py-4"
           color="surface-variant"
@@ -57,4 +57,10 @@ import { useAuthState} from '@/composables/auth'
 const { isAdmin } = useAuthState();
 
 const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
+const peopleOrdered = computed<[string, NepoEmployment][]>(() => {
+  const result = Object.entries(people ?? {});
+  result.sort((a, b) => (b[1].descriptionLen ?? 0) - (a[1].descriptionLen ?? 0));
+  return result;
+})
+
 </script>
