@@ -1,34 +1,32 @@
 <template>
   <div>
     <v-row>
-      <v-col v-for="(person, key) in people" :key="person.name" cols="12">
+      <v-col v-for="([key, person]) in peopleOrdered" :key="person.name" cols="12" sm="6">
         <v-card
           class="py-4"
           color="surface-variant"
           prepend-icon="mdi-account-outline"
           rounded="lg"
           variant="tonal"
+          height="100%"
           :href="person.sourceURL"
         >
           <template #title>
+            <PartyChip v-for="party in person.parties" :key="party" :party />
             <h2 class="text-h5 font-weight-bold">
               {{ person.name }}
-              <PartyChip v-for="party in person.parties" :key="party" :party />
             </h2>
           </template>
 
-          <template #text>
-            <div class="text-subtitle-1">
-              <template v-for="connection in person.connections" :key="connection">
-                {{ connection.text }}
-              </template>
-              <br>
-              <template v-for="employment in person.employments" :key="employment">
-                {{ employment.text }}
-              </template>
-
-            </div>
-          </template>
+          <v-card-text>
+            <p v-for="connection in person.connections" :key="connection.text">
+              {{ connection.text }}
+            </p>
+            <br>
+            <p v-for="employment in person.employments" :key="employment.text">
+              {{ employment.text }}
+            </p>
+          </v-card-text>
           <v-card-actions v-if="isAdmin">
             <v-spacer></v-spacer>
             <AddEmployedDialog :initial="person" :editKey="key">
@@ -59,4 +57,10 @@ import { useAuthState} from '@/composables/auth'
 const { isAdmin } = useAuthState();
 
 const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
+const peopleOrdered = computed<[string, NepoEmployment][]>(() => {
+  const result = Object.entries(people ?? {});
+  result.sort((a, b) => (b[1].descriptionLen ?? 0) - (a[1].descriptionLen ?? 0));
+  return result;
+})
+
 </script>

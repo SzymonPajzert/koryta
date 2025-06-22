@@ -1,12 +1,20 @@
 <template>
   <v-app-bar>
-    <v-app-bar-nav-icon />
-    <v-toolbar-title to="/">koryta.pl</v-toolbar-title>
+    <v-img
+      class="mx-2"
+      src="@/assets/świnia2.png"
+      max-height="40"
+      max-width="40"
+      contain
+    ></v-img>
+    <v-app-bar-title style="cursor: pointer" @click="$router.push('/')">koryta.pl</v-app-bar-title>
     <v-spacer />
-    <v-btn text to="/">Start</v-btn>
     <v-btn text to="/list">Lista</v-btn>
     <v-btn text to="/pomoc">Działaj</v-btn>
-    <v-btn text v-if="user" to="/profil">Profil</v-btn>
+    <v-btn text to="/zrodla">Źródła</v-btn>
+    <v-btn icon v-if="user" to="/profil">
+      <v-icon>mdi-account</v-icon>
+    </v-btn>
     <v-btn text v-if="!user" to="/login">Zaloguj się</v-btn>
     <v-btn text v-if="user" @click="logout">Wyloguj</v-btn>
   </v-app-bar>
