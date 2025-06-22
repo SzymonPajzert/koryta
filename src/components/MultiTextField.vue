@@ -3,7 +3,7 @@
     <v-row v-for="(item, index) in model" :key="`item-${index}`" dense align="center">
       <component
         v-if="model"
-        :is="props.fieldType === 'textarea' ? VTextarea : VTextField"
+        :is="props.fieldType"
         v-model="item.text"
         :label="`${props.title} ${index + 1}`"
         :hint="props.hint"
@@ -41,10 +41,10 @@ const props = withDefaults(defineProps<{
   hint?: string;
   addItemTooltip?: string;
   removeItemTooltip?: string;
-  fieldType?: 'textfield' | 'textarea';
+  fieldType?: any;
 }>(), {
   hint: 'Wprowadź wartość',
-  fieldType: 'textfield',
+  fieldType: VTextField,
 });
 
 const model = defineModel<Textable[]>();

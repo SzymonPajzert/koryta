@@ -1,7 +1,7 @@
 <template>
     <v-dialog
     v-model="dialog"
-    max-width="600"
+    :max-width="props.maxWidth ?? 600"
   >
     <template v-slot:activator="{ props: activatorProps }">
       <slot name="button" v-bind="activatorProps">
@@ -80,6 +80,7 @@
     buttonText: string;
     title: string;
     titleIcon: string;
+    maxWidth?: number;
     suggestionPath: string;
     adminSuggestionPath?: string;
     suggestionType: string;

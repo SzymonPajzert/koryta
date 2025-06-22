@@ -5,6 +5,7 @@
     <AddArticleDialog />
     <AddSuggestionDialog/>
     <AddEmployedDialog/>
+    <AddCompanyDialog/>
     <AddBatchEmployedDialog/>
   </v-navigation-drawer>
   <v-row cols="12">
