@@ -22,6 +22,7 @@ declare module 'vue' {
     ListView: typeof import('./components/ListView.vue')['default']
     LoginView: typeof import('./components/LoginView.vue')['default']
     MultiTextField: typeof import('./components/MultiTextField.vue')['default']
+    NestedConnectionField: typeof import('./components/NestedConnectionField.vue')['default']
     PartyChart: typeof import('./components/PartyChart.vue')['default']
     PartyChip: typeof import('./components/PartyChip.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

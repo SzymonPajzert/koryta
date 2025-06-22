@@ -2,13 +2,13 @@ import { ref, computed } from 'vue'
 import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { db } from '@/firebase'
 import { ref as dbRef } from 'firebase/database'
-import { type Textable } from './entity'
+import { type Textable, type Connection } from './entity'
 
 export interface NepoEmployment {
   name: string
   parties: string[]
-  employments?: Record<string, Textable>
-  connections?: Record<string, Textable>
+  employments?: Record<string, Connection>
+  connections?: Record<string, Connection>
   sources: Record<string, Textable>
   sourceURL: string // TODO get rid of it
   comments?: Record<string, Textable>

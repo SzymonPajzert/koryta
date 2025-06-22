@@ -41,6 +41,7 @@
         hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
         add-item-tooltip="Dodaj kolejne zadanie"
         remove-item-tooltip="Usuń zadanie"
+        :empty-value="() => ({ text: '' })"
       />
     </v-row>
   </AddAbstractDialog>

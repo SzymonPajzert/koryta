@@ -63,17 +63,24 @@
       <MultiTextField
         title="Zatrudnienie"
         v-model="formData.employments"
+        :field-type=NestedConnectionField
+        entity="company"
         hint="np. Członek rady nadzorczej XYZ sp. z o.o."
         add-item-tooltip="Dodaj kolejne zatrudnienie"
         remove-item-tooltip="Usuń zatrudnienie"
+        :empty-value="() => ({ text: '' })"
       />
       <MultiTextField
         title="Koneksja"
         v-model="formData.connections"
+        :field-type=NestedConnectionField
+        entity="employed"
         hint="np. Znajomy ministra"
         add-item-tooltip="Dodaj kolejną koneksję"
         remove-item-tooltip="Usuń koneksję"
+        :empty-value="() => ({ text: '' })"
       />
+      <!-- TODO MultiTextField now doesn't pass .text it's going to mess things up -->
       <MultiTextField
         title="Inna uwaga"
         v-model="formData.comments"
@@ -81,6 +88,7 @@
         hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
         add-item-tooltip="Dodaj kolejną uwagę"
         remove-item-tooltip="Usuń uwagę"
+        :empty-value="() => ({ text: '' })"
       />
     </v-row>
   </AddAbstractDialog>
@@ -96,6 +104,7 @@
 
   import { computed, ref } from 'vue'
   import MultiTextField from './MultiTextField.vue';
+import NestedConnectionField from './NestedConnectionField.vue';
 
   const { initial, editKey } = defineProps<{
     initial?: NepoEmployment,  // if defined, sets the value of the form

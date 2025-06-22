@@ -10,6 +10,12 @@ export interface Nameable {
   name: string
 }
 
+export interface Connection {
+  text: string;
+  connection?: Link<Destination>;
+  relation: string;
+}
+
 export type Destination = 'employed' | 'company'
 
 export class Link<T extends Destination> {
@@ -29,6 +35,5 @@ type ImprovedLinks = {
 
 export function useListEntity(entity: Destination) {
   const entities = useRTDB<Record<string, Nameable>>(dbRef(db, entity))
-  watch(entities, console.log)
   return { entities }
 }
