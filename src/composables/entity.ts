@@ -12,13 +12,19 @@ export interface Nameable {
 
 export type Destination = 'employed' | 'company'
 
-export class Linkable<T extends Destination> {
+export class Link<T extends Destination> {
   public readonly type: T;
-  constructor(type: T) { this.type = type; }
+  public readonly id: string
+  public readonly text: string
+  constructor(type: T, id: string, text: string) {
+    this.type = type;
+    this.id = id;
+    this.text = text
+  }
 }
 
 type ImprovedLinks = {
-  [K in Destination]: Record<string, Linkable<K>>;
+  [K in Destination]: Record<string, Link<K>>;
 };
 
 export function useListEntity(entity: Destination) {

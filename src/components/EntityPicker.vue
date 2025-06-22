@@ -7,11 +7,12 @@
     item-title="text"
     item-value="id"
     required
+    return-object
   ></v-autocomplete>
 </template>
 
 <script setup lang="ts">
-import { useListEntity, type Destination } from '@/composables/entity';
+import { useListEntity, type Destination, Link } from '@/composables/entity';
 
 const props = defineProps<{
   label: string;
@@ -21,14 +22,11 @@ const props = defineProps<{
   entity: Destination;
 }>()
 
-const model = defineModel<string>();
+const model = defineModel<Link<typeof props.entity>>();
 
 const { entities } = useListEntity(props.entity)
 
 const entitiesList = computed(() => Object.entries(entities.value ?? {}).map(([key, value]) => {
-  return {
-    text: value.name,
-    id: key
-  }
+  return new Link<typeof props.entity>(props.entity, key, value.name)
 }))
 </script>
