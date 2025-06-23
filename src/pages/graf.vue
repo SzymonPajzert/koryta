@@ -10,7 +10,6 @@ import {
 } from "v-network-graph/lib/force-layout";
 import {usePartyStatistics} from '@/composables/party'
 import { watchThrottled } from '@vueuse/core'
-import { layouts as layoutsHardcoded } from '@/graphLayout'
 
 const { people } = useListEmployment();
 const { entities: companies } = useListEntity<Company>("company");
@@ -83,7 +82,7 @@ const edges = computed(() => {
   return result;
 });
 
-const layouts = ref(layoutsHardcoded)
+const layouts = ref({})
 const layoutsText = computed(() => {
   return JSON.stringify(layouts.value, null, 2)
 })
@@ -119,10 +118,11 @@ const configs = defineConfigs({
         return d3
           .forceSimulation(nodes)
           .force("edge", forceLink.distance(80).strength(0.3))
-          .force("charge", d3.forceManyBody().strength(-300))
+          .force("charge", d3.forceManyBody().strength(-400))
           .force("center", d3.forceCenter().strength(0.3))
           .force("x", d3.forceX().strength(0.02))
-          .force("y", d3.forceY().strength(0.02));
+          .force("y", d3.forceY().strength(0.02))
+          .alphaDecay(0.0003)
       },
     }),
   },

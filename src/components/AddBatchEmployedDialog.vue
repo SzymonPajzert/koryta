@@ -101,6 +101,7 @@ const toOutput = async (data: {
               // Append the data to the previous row
               const prev = outputData[outputData.length - 1];
               if (row.party) {
+                if (!prev.parties) prev.parties = [];
                 prev.parties.push(row.party);
               }
               if (row.employed) {
