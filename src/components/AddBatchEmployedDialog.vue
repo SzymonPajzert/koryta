@@ -105,11 +105,11 @@ const toOutput = async (data: {
               }
               if (row.employed) {
                 if (!prev.employments) prev.employments = {};
-                prev.employments[newKey()] = { text: row.employed };
+                prev.employments[newKey()] = { text: row.employed, relation: '' };
               }
               if (row.connection) {
                 if (!prev.connections) prev.connections = {};
-                prev.connections[newKey()] = { text: row.connection };
+                prev.connections[newKey()] = { text: row.connection, relation: '' };
               }
               if (row.comment) {
                 if (!prev.comments) prev.comments = {};

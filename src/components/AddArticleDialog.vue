@@ -41,7 +41,7 @@
         hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
         add-item-tooltip="Dodaj kolejne zadanie"
         remove-item-tooltip="Usuń zadanie"
-        :empty-value="() => ({ text: '' })"
+        :empty-value="() => ''"
       />
     </v-row>
   </AddAbstractDialog>
@@ -62,7 +62,7 @@
   const initialFormData = () => ({
     source: '',
     title: '',
-    comments: [{ text: '' }] as Textable[],
+    comments: [''] as string[],
     isFetchingTitle: false,
   });
 
@@ -88,7 +88,7 @@
     return {
       sourceURL: data.source,
       title: data.title,
-      comments: arrayToKeysMap(data.comments),
+      comments: arrayToKeysMap(data.comments.map(s => ({text: s}))),
     };
   };
 </script>

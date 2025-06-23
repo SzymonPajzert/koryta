@@ -88,7 +88,7 @@
         hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
         add-item-tooltip="Dodaj kolejną uwagę"
         remove-item-tooltip="Usuń uwagę"
-        :empty-value="() => ({ text: '' })"
+        :empty-value="() => ''"
       />
     </v-row>
   </AddAbstractDialog>
@@ -125,7 +125,7 @@ import NestedConnectionField from './NestedConnectionField.vue';
         employments: Object.values(initial.employments || {}) as Textable[],
         connections: Object.values(initial.connections || {}) as Textable[],
         source: initial.sourceURL,
-        comments: Object.values(initial.comments || {}) as Textable[],
+        comments: Object.values(initial.comments || {}).map(s => s.text) as string[],
       };
     }
 
@@ -135,7 +135,7 @@ import NestedConnectionField from './NestedConnectionField.vue';
       employments: [{ text: '' }] as Textable[],
       connections: [{ text: '' }] as Textable[],
       source: '',
-      comments: [{ text: '' }] as Textable[],
+      comments: [''] as string[],
     }
   };
 
@@ -148,7 +148,7 @@ import NestedConnectionField from './NestedConnectionField.vue';
       employments: arrayToKeysMap(data.employments),
       connections: arrayToKeysMap(data.connections),
       sourceURL: data.source,
-      comments: arrayToKeysMap(data.comments),
+      comments: arrayToKeysMap(data.comments.map(s => ({ text: s }))),
     };
   };
 </script>

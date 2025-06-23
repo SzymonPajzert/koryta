@@ -1,5 +1,8 @@
 <template>
   <div>
+    <div v-if="isAdmin">
+
+    </div>
     <v-row>
       <v-col v-for="([key, person]) in peopleOrdered" :key="person.name" cols="12" sm="6">
         <v-card

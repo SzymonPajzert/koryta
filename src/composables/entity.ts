@@ -33,7 +33,7 @@ type ImprovedLinks = {
   [K in Destination]: Record<string, Link<K>>;
 };
 
-export function useListEntity(entity: Destination) {
-  const entities = useRTDB<Record<string, Nameable>>(dbRef(db, entity))
+export function useListEntity<T extends Nameable>(entity: Destination) {
+  const entities = useRTDB<Record<string, T>>(dbRef(db, entity))
   return { entities }
 }
