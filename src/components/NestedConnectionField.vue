@@ -1,43 +1,42 @@
 <template>
   <!-- Main VTextField component -->
-  <v-col cols="12" v-if="modelValue">
-    <VTextField
+  <v-col cols="12" md="8" v-if="modelValue">
+    <VTextarea
       v-bind="$attrs"
       v-model="modelValue.text"
       @click="toggleNestedFields"
+      auto-grow
+      rows="3"
     >
       <template v-slot:prepend>
         <slot name="prepend" />
       </template>
-    </VTextField>
+    </VTextarea>
   </v-col>
 
   <!-- Nested fields that appear/disappear with a transition -->
-  <VExpandTransition v-if="modelValue">
-    <v-col cols="12" md="6" v-if="showNestedFields">
+  <v-col cols="12" md="4" v-if="modelValue">
+    <v-container ma-0 pa-0>
       <VTextField
         :label="relationLabel"
         :hint="relationHint"
         class="mt-2"
         v-model="modelValue.relation"
+        autocomplete="off"
       />
-    </v-col>
-  </VExpandTransition>
-  <VExpandTransition v-if="modelValue">
-    <v-col cols="12" md="6" v-if="showNestedFields">
       <EntityPicker
         v-model="modelValue.connection"
         :entity="entity"
         :label="connectedLabel"
         :hint="connectedHint"
       ></EntityPicker>
-    </v-col>
-  </VExpandTransition>
+    </v-container>
+  </v-col>
 </template>
 
 <script lang="ts" setup>
 import { ref } from "vue";
-import { VTextField, VExpandTransition } from "vuetify/components";
+import { VTextField, VExpandTransition, VTextarea } from "vuetify/components";
 import { Link, type Destination, type Connection } from "@/composables/entity";
 
 // Define props for the component, specifically for v-model support.
@@ -65,3 +64,9 @@ const toggleNestedFields = () => {
   showNestedFields.value = !showNestedFields.value;
 };
 </script>
+
+<style scoped>
+.v-container {
+  padding: 0px
+}
+</style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useListEmployment } from "@/composables/party";
-import { useListEntity, type Nameable } from "@/composables/entity";
+import { useListEntity } from "@/composables/entity";
 import { type Company } from '@/composables/company'
 import { defineConfigs, type Node as vNGNode } from "v-network-graph";
 import {
@@ -9,7 +9,6 @@ import {
   type ForceEdgeDatum,
 } from "v-network-graph/lib/force-layout";
 import {usePartyStatistics} from '@/composables/party'
-import { watchThrottled } from '@vueuse/core'
 
 const { people } = useListEmployment();
 const { entities: companies } = useListEntity<Company>("company");
@@ -82,13 +81,6 @@ const edges = computed(() => {
   return result;
 });
 
-const layouts = ref({})
-const layoutsText = computed(() => {
-  return JSON.stringify(layouts.value, null, 2)
-})
-// TODO to update layouts
-// watchThrottled(layoutsText, console.log, { throttle: 5000 },)
-
 const configs = defineConfigs({
   node: {
     normal: {
@@ -131,8 +123,6 @@ const configs = defineConfigs({
 
 <template>
   <v-network-graph
-    v-model:layouts="layouts"
-    class="graph"
     :nodes="nodes"
     :edges="edges"
     :configs="configs"
@@ -142,11 +132,3 @@ const configs = defineConfigs({
     </template>
   </v-network-graph>
 </template>
-
-<style>
-.graph {
-  width: 800px;
-  height: 600px;
-  border: 1px solid #000;
-}
-</style>
