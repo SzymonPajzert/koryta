@@ -1,6 +1,7 @@
 <template>
   <v-col cols="12">
     <v-row v-for="(item, index) in model" :key="`item-${index}`" dense align="center">
+      <!-- TODO probably just use model { required: true } -->
       <component
         v-if="model"
         :is="props.fieldType"

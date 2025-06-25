@@ -28,5 +28,6 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     UserActivityTable: typeof import('./components/UserActivityTable.vue')['default']
+    UserDetailDialog: typeof import('./components/UserDetailDialog.vue')['default']
   }
 }

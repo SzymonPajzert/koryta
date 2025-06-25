@@ -2,13 +2,14 @@
 import { useListEmployment } from "@/composables/party";
 import { useListEntity } from "@/composables/entity";
 import { type Company } from '@/composables/company'
-import { defineConfigs, type Node as vNGNode } from "v-network-graph";
+import { defineConfigs, type Node as vNGNode, type EventHandlers, type NodeEvent } from "v-network-graph";
 import {
   ForceLayout,
   type ForceNodeDatum,
   type ForceEdgeDatum,
-} from "v-network-graph/lib/force-layout";
+} from "v-network-graph/lib/force-layout"; // Corrected import path for ForceLayout
 import {usePartyStatistics} from '@/composables/party'
+import UserDetailDialog from '@/components/UserDetailDialog.vue'
 
 const { people } = useListEmployment();
 const { entities: companies } = useListEntity<Company>("company");
@@ -81,6 +82,17 @@ const edges = computed(() => {
   return result;
 });
 
+const dialog = ref<typeof UserDetailDialog>();
+
+const handleNodeClick = ({node}: NodeEvent<MouseEvent>) => {
+  console.log("click")
+  if (dialog.value) dialog.value.setNode(node)
+};
+
+const eventHandlers: EventHandlers = {
+  "node:click": handleNodeClick,
+}
+
 const configs = defineConfigs({
   node: {
     normal: {
@@ -122,10 +134,13 @@ const configs = defineConfigs({
 </script>
 
 <template>
+  <UserDetailDialog ref="dialog"></UserDetailDialog>
+
   <v-network-graph
     :nodes="nodes"
     :edges="edges"
     :configs="configs"
+    :eventHandlers="eventHandlers"
   >
     <template #edge-label="{ edge, ...slotProps }">
       <v-edge-label :text="edge.label" align="center" vertical-align="above" v-bind="slotProps" />
