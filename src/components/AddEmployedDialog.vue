@@ -80,7 +80,6 @@
         remove-item-tooltip="Usuń koneksję"
         :empty-value="() => ({ text: '' })"
       />
-      <!-- TODO MultiTextField now doesn't pass .text it's going to mess things up -->
       <MultiTextField
         title="Inna uwaga"
         v-model="formData.comments"
