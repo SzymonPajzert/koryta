@@ -2,10 +2,7 @@ import { ref, computed } from 'vue'
 import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { db } from '@/firebase'
 import { ref as dbRef } from 'firebase/database'
-
-interface Textable {
-  text: string
-}
+import { type Textable } from './entity'
 
 export interface NepoEmployment {
   name: string

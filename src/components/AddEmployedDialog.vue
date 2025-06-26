@@ -10,6 +10,7 @@
     :toOutput
     :editKey="editKey"
     v-model="formData"
+    :maxWidth="800"
   >
     <template #button="activatorProps">
       <slot name="button" v-bind="activatorProps"></slot>
@@ -76,7 +77,7 @@
       <MultiTextField
         title="Inna uwaga"
         v-model="formData.comments"
-        field-type="textarea"
+        :field-type=VTextarea
         hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
         add-item-tooltip="Dodaj kolejną uwagę"
         remove-item-tooltip="Usuń uwagę"
@@ -90,6 +91,8 @@
   import { useFeminatyw } from '@/composables/feminatyw';
   import { usePartyStatistics, type NepoEmployment } from '@/composables/party';
   import { type Textable, useSuggestDB } from '@/composables/suggestDB'
+  import { VTextarea, VTextField } from 'vuetify/components';
+
 
   import { computed, ref } from 'vue'
   import MultiTextField from './MultiTextField.vue';
