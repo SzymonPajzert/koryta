@@ -63,16 +63,22 @@
       <MultiTextField
         title="Zatrudnienie"
         v-model="formData.employments"
+        :field-type=NestedConnectionField
+        entity="company"
         hint="np. Członek rady nadzorczej XYZ sp. z o.o."
         add-item-tooltip="Dodaj kolejne zatrudnienie"
         remove-item-tooltip="Usuń zatrudnienie"
+        :empty-value="() => ({ text: '' })"
       />
       <MultiTextField
         title="Koneksja"
         v-model="formData.connections"
+        :field-type=NestedConnectionField
+        entity="employed"
         hint="np. Znajomy ministra"
         add-item-tooltip="Dodaj kolejną koneksję"
         remove-item-tooltip="Usuń koneksję"
+        :empty-value="() => ({ text: '' })"
       />
       <MultiTextField
         title="Inna uwaga"
@@ -81,6 +87,7 @@
         hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
         add-item-tooltip="Dodaj kolejną uwagę"
         remove-item-tooltip="Usuń uwagę"
+        :empty-value="() => ''"
       />
     </v-row>
   </AddAbstractDialog>
@@ -96,6 +103,7 @@
 
   import { computed, ref } from 'vue'
   import MultiTextField from './MultiTextField.vue';
+import NestedConnectionField from './NestedConnectionField.vue';
 
   const { initial, editKey } = defineProps<{
     initial?: NepoEmployment,  // if defined, sets the value of the form
@@ -116,7 +124,7 @@
         employments: Object.values(initial.employments || {}) as Textable[],
         connections: Object.values(initial.connections || {}) as Textable[],
         source: initial.sourceURL,
-        comments: Object.values(initial.comments || {}) as Textable[],
+        comments: Object.values(initial.comments || {}).map(s => s.text) as string[],
       };
     }
 
@@ -126,7 +134,7 @@
       employments: [{ text: '' }] as Textable[],
       connections: [{ text: '' }] as Textable[],
       source: '',
-      comments: [{ text: '' }] as Textable[],
+      comments: [''] as string[],
     }
   };
 
@@ -139,7 +147,7 @@
       employments: arrayToKeysMap(data.employments),
       connections: arrayToKeysMap(data.connections),
       sourceURL: data.source,
-      comments: arrayToKeysMap(data.comments),
+      comments: arrayToKeysMap(data.comments.map(s => ({ text: s }))),
     };
   };
 </script>

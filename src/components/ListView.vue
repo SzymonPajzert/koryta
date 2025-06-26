@@ -1,5 +1,6 @@
 <template>
   <div>
+    <UserDetailDialog ref="dialog"></UserDetailDialog>
     <v-row>
       <v-col v-for="([key, person]) in peopleOrdered" :key="person.name" cols="12" sm="6">
         <v-card
@@ -9,8 +10,10 @@
           rounded="lg"
           variant="tonal"
           height="100%"
-          :href="person.sourceURL"
+          @click="showUser(key)"
         >
+        <!-- TODO show sources somewhere -->
+        <!-- TODO sources in the source view are buggy and don't lead anywhere -->
           <template #title>
             <PartyChip v-for="party in person.parties" :key="party" :party />
             <h2 class="text-h5 font-weight-bold">
@@ -55,6 +58,14 @@ import {type NepoEmployment} from '@/composables/party'
 import PartyChip from './PartyChip.vue';
 import { useAuthState} from '@/composables/auth'
 const { isAdmin } = useAuthState();
+import UserDetailDialog from './UserDetailDialog.vue';
+
+const dialog = ref<typeof UserDetailDialog>();
+
+function showUser(key: string) {
+  if (!dialog.value) return;
+  dialog.value.setNode(key);
+}
 
 const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
 const peopleOrdered = computed<[string, NepoEmployment][]>(() => {
