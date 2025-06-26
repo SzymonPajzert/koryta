@@ -11,7 +11,7 @@
         <p v-for="connection in person?.connections" :key="connection.text">
           {{ connection.text }}
         </p>
-        <br>
+        <br />
         <p v-for="employment in person?.employments" :key="employment.text">
           {{ employment.text }}
         </p>
@@ -24,7 +24,8 @@
               @click.prevent
               variant="tonal"
               prepend-icon="mdi-pencil-outline"
-              v-bind="activatorProps">
+              v-bind="activatorProps"
+            >
               <template #prepend>
                 <v-icon color="warning"></v-icon>
               </template>
@@ -39,9 +40,9 @@
 </template>
 
 <script lang="ts" setup>
-import { useListEmployment } from '@/composables/party';
-import { useAuthState} from '@/composables/auth'
-const { isAdmin } = useAuthState()
+import { useListEmployment } from "@/composables/party";
+import { useAuthState } from "@/composables/auth";
+const { isAdmin } = useAuthState();
 
 const visible = ref(false);
 const node = ref<string | undefined>();
@@ -50,12 +51,14 @@ const { people } = useListEmployment();
 const person = computed(() => {
   if (!people.value) return;
   if (!node.value) return;
-  return people.value?.[node.value]
-})
+  return people.value?.[node.value];
+});
 
 // This exposes the node setting option, so the users of this component can just call it.
-defineExpose({setNode: function(nodeId: string) {
-  node.value = nodeId;
-  visible.value = true;
-}})
+defineExpose({
+  setNode: function (nodeId: string) {
+    node.value = nodeId;
+    visible.value = true;
+  },
+});
 </script>
