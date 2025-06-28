@@ -32,20 +32,15 @@
           </v-card-text>
           <v-card-actions v-if="isAdmin">
             <v-spacer></v-spacer>
-            <AddEmployedDialog :initial="person" :editKey="key">
-              <template #button="activatorProps">
-                <v-btn
-                  @click.prevent
-                  variant="tonal"
-                  prepend-icon="mdi-pencil-outline"
-                  v-bind="activatorProps">
-                  <template #prepend>
-                    <v-icon color="warning"></v-icon>
-                  </template>
-                  Edytuj
-                </v-btn>
+            <v-btn
+              @click.stop="dialogStore.openNewEntityDialog({ name: '', type: { entity: 'employed' }, edit: { value: person, key: key  }})"
+              variant="tonal"
+              prepend-icon="mdi-pencil-outline">
+              <template #prepend>
+                <v-icon color="warning"></v-icon>
               </template>
-            </AddEmployedDialog>
+              Edytuj
+            </v-btn>
           </v-card-actions>
         </v-card>
       </v-col>
@@ -59,6 +54,9 @@ import PartyChip from './PartyChip.vue';
 import { useAuthState} from '@/composables/auth'
 const { isAdmin } = useAuthState();
 import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
+import { useDialogStore } from '@/stores/dialog'; // Import the new store
+
+const dialogStore = useDialogStore();
 
 const dialog = ref<typeof UserDetailDialog>();
 

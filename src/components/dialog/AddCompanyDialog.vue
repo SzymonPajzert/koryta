@@ -11,6 +11,7 @@
     :editKey="editKey"
     v-model="formData"
     :maxWidth="800"
+    :dialog-type="{ entity: 'company' }"
   >
     <template #button="activatorProps">
       <slot name="button" v-bind="activatorProps"></slot>

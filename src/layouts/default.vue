@@ -1,4 +1,10 @@
 <template>
+  <add-article-dialog />
+  <add-batch-employed-dialog />
+  <add-company-dialog />
+  <add-employed-dialog />
+  <add-suggestion-dialog />
+
   <v-app-bar>
     <v-img
       class="mx-2"

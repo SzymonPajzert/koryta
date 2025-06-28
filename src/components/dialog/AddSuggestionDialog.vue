@@ -8,6 +8,7 @@
     :initialFormData
     :toOutput
     v-model="formData"
+    :dialog-type="{ entity: 'suggestion' }"
   >
     <v-row dense>
       <v-col

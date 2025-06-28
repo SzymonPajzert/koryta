@@ -9,6 +9,7 @@
     :initialFormData
     :toOutput
     v-model="formData"
+    :dialog-type="{ entity: 'data' }"
   >
     <v-row dense>
       <v-col

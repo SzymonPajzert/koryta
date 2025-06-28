@@ -1,6 +1,6 @@
 <template>
     <v-dialog
-    v-model="dialog"
+    v-model="dialogStore.showNewEntityDialog[dialogTypeStr(props.dialogType)]"
     :max-width="props.maxWidth ?? 600"
   >
     <v-card
@@ -21,7 +21,7 @@
         <v-btn
           text="Zamknij"
           variant="plain"
-          @click="dialog = false"
+          @click="dialogStore.showNewEntityDialog[dialogTypeStr(props.dialogType)] = false"
         ></v-btn>
 
         <v-btn
@@ -54,9 +54,14 @@
 
 <script lang="ts" setup>
   import { useAuthState } from '@/composables/auth'
-  import { shallowRef, ref as vueRef } from 'vue'
+  import { ref as vueRef } from 'vue'
   import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database';
   import { db } from '@/firebase'
+  import { useDialogStore, type DialogType, dialogTypeStr } from '@/stores/dialog'; // Import the new store
+
+  const dialogStore = useDialogStore();
+  // TODO remember to configure it to depend on the array here
+  // dialogStore.showNewEntityDialog - use this
 
   const { user, isAdmin } = useAuthState();
   const props = defineProps<{
@@ -70,11 +75,11 @@
     initialFormData: () => any;
     editKey?: string;
     toOutput: (formData: any) => Record<string, any> | Record<string, any>[];
+    dialogType: DialogType;
   }>();
   const formData = defineModel<any>();
-  formData.value = props.initialFormData();
+  formData.value = dialogStore.newEntityPayload?.edit ? dialogStore.newEntityPayload.edit : props.initialFormData();
 
-  const dialog = shallowRef(false);
   const showConfirmationSnackbar = vueRef(false);
 
   const saveSuggestion = async () => {
@@ -114,7 +119,7 @@
       push(dbRef(db, `user/${user.value?.uid}/suggestions/${props.suggestionType}`), keyRef)
     })
 
-    dialog.value = false;
+    dialogStore.showNewEntityDialog[dialogTypeStr(props.dialogType)]= false;
     // Reset form data
     formData.value = props.initialFormData();
     // Show confirmation snackbar

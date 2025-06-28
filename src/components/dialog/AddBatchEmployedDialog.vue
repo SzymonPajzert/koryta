@@ -9,6 +9,7 @@
     :initialFormData
     :toOutput
     v-model="formData"
+    :dialog-type="{ entity: 'employed', format: 'batch' }"
   >
     <v-row dense>
       <v-col cols="12">
