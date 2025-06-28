@@ -9,7 +9,7 @@ import {
   type ForceEdgeDatum,
 } from "v-network-graph/lib/force-layout"; // Corrected import path for ForceLayout
 import {usePartyStatistics} from '@/composables/party'
-import UserDetailDialog from '@/components/UserDetailDialog.vue'
+import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue'
 
 const { people } = useListEmployment();
 const { entities: companies } = useListEntity<Company>("company");

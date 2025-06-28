@@ -99,11 +99,9 @@
   import { usePartyStatistics, type NepoEmployment } from '@/composables/party';
   import { type Textable, useSuggestDB } from '@/composables/suggestDB'
   import { VTextarea, VTextField } from 'vuetify/components';
-
-
   import { computed, ref } from 'vue'
-  import MultiTextField from './MultiTextField.vue';
-import NestedConnectionField from './NestedConnectionField.vue';
+  import MultiTextField from '@/components/forms/MultiTextField.vue';
+  import NestedConnectionField from '@/components/forms/NestedConnectionField.vue';
 
   const { initial, editKey } = defineProps<{
     initial?: NepoEmployment,  // if defined, sets the value of the form

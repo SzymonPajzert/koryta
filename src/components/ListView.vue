@@ -58,7 +58,7 @@ import {type NepoEmployment} from '@/composables/party'
 import PartyChip from './PartyChip.vue';
 import { useAuthState} from '@/composables/auth'
 const { isAdmin } = useAuthState();
-import UserDetailDialog from './UserDetailDialog.vue';
+import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
 
 const dialog = ref<typeof UserDetailDialog>();
 
