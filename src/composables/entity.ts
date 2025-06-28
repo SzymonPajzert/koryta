@@ -16,7 +16,7 @@ export interface Connection {
   relation: string;
 }
 
-export type Destination = 'employed' | 'company'
+export type Destination = 'employed' | 'company' | 'data' | 'suggestion'
 
 export class Link<T extends Destination> {
   public readonly type: T;

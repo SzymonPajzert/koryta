@@ -2,11 +2,11 @@
   <v-navigation-drawer
     location="right"
     permanent>
-    <AddArticleDialog />
-    <AddSuggestionDialog/>
-    <AddEmployedDialog/>
-    <AddCompanyDialog/>
-    <AddBatchEmployedDialog/>
+    <OpenAbstractDialog :dialog="{ entity: 'data' }"/>
+    <OpenAbstractDialog :dialog="{ entity: 'suggestion' }"/>
+    <OpenAbstractDialog :dialog="{ entity: 'employed' }"/>
+    <OpenAbstractDialog :dialog="{ entity: 'company' }"/>
+    <OpenAbstractDialog :dialog="{ entity: 'employed', format: 'batch' }"/>
   </v-navigation-drawer>
   <v-row cols="12">
     <p> Jeśli masz pytania,
