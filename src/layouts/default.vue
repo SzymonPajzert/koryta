@@ -1,10 +1,4 @@
 <template>
-  <add-article-dialog />
-  <add-batch-employed-dialog />
-  <add-company-dialog />
-  <add-employed-dialog />
-  <add-suggestion-dialog />
-
   <v-app-bar>
     <v-img
       class="mx-2"
@@ -27,6 +21,8 @@
   </v-app-bar>
   <v-main>
     <v-container class="fill-height" :max-width="maxWidth">
+      <multi-dialog />
+
       <router-view />
     </v-container>
   </v-main>

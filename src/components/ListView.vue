@@ -33,7 +33,11 @@
           <v-card-actions v-if="isAdmin">
             <v-spacer></v-spacer>
             <v-btn
-              @click.stop="dialogStore.openNewEntityDialog({ name: '', type: { entity: 'employed' }, edit: { value: person, key: key  }})"
+              @click.stop="dialogStore.open({
+                name: '',
+                type: { entity: 'employed' },
+                edit: { value: person, key: key  },
+                defaultValue: () => empty('employed')})"
               variant="tonal"
               prepend-icon="mdi-pencil-outline">
               <template #prepend>
@@ -52,12 +56,12 @@
 import {type NepoEmployment} from '@/composables/party'
 import PartyChip from './PartyChip.vue';
 import { useAuthState} from '@/composables/auth'
-const { isAdmin } = useAuthState();
+import { empty } from "@/composables/entity"
 import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
 import { useDialogStore } from '@/stores/dialog'; // Import the new store
 
 const dialogStore = useDialogStore();
-
+const { isAdmin } = useAuthState();
 const dialog = ref<typeof UserDetailDialog>();
 
 function showUser(key: string) {

@@ -47,6 +47,10 @@ switch (props.dialog.entity) {
 }
 
 function openDialog() {
-  dialogStore.openNewEntityDialog({ name: '', type: props.dialog });
+  dialogStore.open({
+    name: 'Nowe ' + props.dialog.entity,
+    type: props.dialog,
+    defaultValue: () => ({name:"Nowe"}),
+  });
 }
 </script>

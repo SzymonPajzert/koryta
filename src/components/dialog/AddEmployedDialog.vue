@@ -12,6 +12,7 @@
     v-model="formData"
     :maxWidth="800"
     :dialog-type="{ entity: 'employed' }"
+    :store-id
   >
     <template #button="activatorProps">
       <slot name="button" v-bind="activatorProps"></slot>
@@ -107,6 +108,7 @@
   const { initial, editKey } = defineProps<{
     initial?: NepoEmployment,  // if defined, sets the value of the form
     editKey?: string           // if provided, modifies the entry rather than submitting a new one
+    storeId: number;
   }>();
 
   const { parties } = usePartyStatistics();

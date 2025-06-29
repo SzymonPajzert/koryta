@@ -10,6 +10,7 @@
     :toOutput
     v-model="formData"
     :dialog-type="{ entity: 'employed', format: 'batch' }"
+    :store-id
   >
     <v-row dense>
       <v-col cols="12">
@@ -41,6 +42,10 @@ import AddAbstractDialog from './AddAbstractDialog.vue';
 import { ref } from 'vue';
 import { type NepoEmployment } from '@/composables/party';
 import Papa from 'papaparse';
+
+const { storeId } = defineProps<{
+  storeId: number;
+}>();
 
 interface CsvRow {
   employed: string;

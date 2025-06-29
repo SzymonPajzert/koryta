@@ -1,12 +1,8 @@
 <template>
-    <v-dialog
-    v-model="dialogStore.showNewEntityDialog[dialogTypeStr(props.dialogType)]"
-    :max-width="props.maxWidth ?? 600"
+  <v-card
+    :prepend-icon="props.titleIcon"
+    :title="props.title"
   >
-    <v-card
-      :prepend-icon="props.titleIcon"
-      :title="props.title"
-    >
       <v-card-text>
         <slot>
           this is misconfigured
@@ -21,18 +17,17 @@
         <v-btn
           text="Zamknij"
           variant="plain"
-          @click="dialogStore.showNewEntityDialog[dialogTypeStr(props.dialogType)] = false"
+          @click="dialogStore.close(props.storeId, $event, false)"
         ></v-btn>
 
         <v-btn
           color="primary"
           text="Dodaj"
           variant="tonal"
-          @click="saveSuggestion()"
+          @click="dialogStore.close(props.storeId, $event, false)"
         ></v-btn>
       </v-card-actions>
     </v-card>
-  </v-dialog>
 
     <v-snackbar
       v-model="showConfirmationSnackbar"
@@ -57,14 +52,14 @@
   import { ref as vueRef } from 'vue'
   import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database';
   import { db } from '@/firebase'
-  import { useDialogStore, type DialogType, dialogTypeStr } from '@/stores/dialog'; // Import the new store
+  import { useDialogStore, type DialogType } from '@/stores/dialog'; // Import the new store
 
   const dialogStore = useDialogStore();
-  // TODO remember to configure it to depend on the array here
-  // dialogStore.showNewEntityDialog - use this
+  const { dialogs } = storeToRefs(dialogStore);
 
   const { user, isAdmin } = useAuthState();
   const props = defineProps<{
+    storeId: number;
     buttonText: string;
     title: string;
     titleIcon: string;
@@ -77,8 +72,8 @@
     toOutput: (formData: any) => Record<string, any> | Record<string, any>[];
     dialogType: DialogType;
   }>();
-  const formData = defineModel<any>();
-  formData.value = dialogStore.newEntityPayload?.edit ? dialogStore.newEntityPayload.edit : props.initialFormData();
+
+  if (!dialogs.value[props.storeId].value) dialogs.value[props.storeId].value = props.initialFormData();
 
   const showConfirmationSnackbar = vueRef(false);
 
@@ -105,7 +100,7 @@
 
     // we need to keep await here, since it's sometimes async
     // TODO test this
-    const outputSingleton = await props.toOutput(formData.value)
+    const outputSingleton = await props.toOutput(dialogs.value[props.storeId].value)
     let output: Record<string, any>[]
     if (!Array.isArray(outputSingleton)) output = [outputSingleton]
     else output = outputSingleton
@@ -119,9 +114,7 @@
       push(dbRef(db, `user/${user.value?.uid}/suggestions/${props.suggestionType}`), keyRef)
     })
 
-    dialogStore.showNewEntityDialog[dialogTypeStr(props.dialogType)]= false;
-    // Reset form data
-    formData.value = props.initialFormData();
+    dialogStore.close(props.storeId, undefined, true);
     // Show confirmation snackbar
     showConfirmationSnackbar.value = true;
   };

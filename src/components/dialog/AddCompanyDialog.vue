@@ -12,6 +12,7 @@
     v-model="formData"
     :maxWidth="800"
     :dialog-type="{ entity: 'company' }"
+    :store-id
   >
     <template #button="activatorProps">
       <slot name="button" v-bind="activatorProps"></slot>
@@ -62,7 +63,8 @@
 
   const { initial, editKey } = defineProps<{
     initial?: Company,  // if defined, sets the value of the form
-    editKey?: string           // if provided, modifies the entry rather than submitting a new one
+    editKey?: string    // if provided, modifies the entry rather than submitting a new one
+    storeId: number;
   }>();
 
   const initialFormData = () => {

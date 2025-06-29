@@ -7,3 +7,5 @@ Tests
 Cleanup
 - Listview should be moved to the page, and the subcomponents cleaned up
 - ListView is duplicated with the UserDialog - it should use a common component
+- Don't allow TODOs while compiling
+- Don't allow console.log while compiling

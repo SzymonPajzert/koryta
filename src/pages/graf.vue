@@ -126,7 +126,9 @@ const configs = defineConfigs({
           .force("center", d3.forceCenter().strength(0.3))
           .force("x", d3.forceX().strength(0.02))
           .force("y", d3.forceY().strength(0.02))
-          .alphaDecay(0.0003)
+          .alpha(1)
+          .velocityDecay(0.2)
+          .alphaDecay(0.0001)
       },
     }),
   },

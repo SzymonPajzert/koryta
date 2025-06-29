@@ -20,6 +20,7 @@ declare module 'vue' {
     HomeItem: typeof import('./components/HomeItem.vue')['default']
     ListView: typeof import('./components/ListView.vue')['default']
     LoginView: typeof import('./components/LoginView.vue')['default']
+    MultiDialog: typeof import('./components/dialog/MultiDialog.vue')['default']
     MultiTextField: typeof import('./components/forms/MultiTextField.vue')['default']
     NestedConnectionField: typeof import('./components/forms/NestedConnectionField.vue')['default']
     OpenAbstractDialog: typeof import('./components/OpenAbstractDialog.vue')['default']

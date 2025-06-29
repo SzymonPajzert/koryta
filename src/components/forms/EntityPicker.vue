@@ -10,6 +10,7 @@
     item-value="id"
     required
     return-object
+    autocomplete="off"
   >
     <template #no-data>
       <v-list-item v-if="search" @click="addNewItem">
@@ -53,7 +54,11 @@ function addNewItem() {
     // This prevents the "Add new..." option from reappearing immediately
     // if the dialog is closed without selecting the newly created item.
     search.value = '';
-    dialogStore.openNewEntityDialog({ name: newEntityName, type: { entity: props.entity} });
+    dialogStore.open({
+      name: newEntityName,
+      type: { entity: props.entity},
+      defaultValue: () => ({name: newEntityName}),
+     });
   }
 }
 </script>

@@ -10,6 +10,7 @@
     :toOutput
     v-model="formData"
     :dialog-type="{ entity: 'data' }"
+    :store-id
   >
     <v-row dense>
       <v-col
@@ -55,6 +56,10 @@
   import { httpsCallable } from 'firebase/functions';
 
   import { ref } from 'vue'
+
+  const { storeId } = defineProps<{
+    storeId: number;
+  }>();
 
   const { arrayToKeysMap } = useSuggestDB();
   const getPageTitle = httpsCallable(functions, 'getPageTitle');

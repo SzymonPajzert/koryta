@@ -19,14 +19,19 @@
       <v-card-actions>
         <v-spacer></v-spacer>
         <v-btn
-              @click.stop="dialogStore.openNewEntityDialog({ name: '', type: { entity: 'employed' }, edit: { value: person, key: node.value  }})"
-              variant="tonal"
-              prepend-icon="mdi-pencil-outline">
-              <template #prepend>
-                <v-icon color="warning"></v-icon>
-              </template>
-              Edytuj
-            </v-btn>
+          @click.stop="dialogStore.open({
+            name: '',
+            type: { entity: 'employed' },
+            edit: { value: person, key: node  },
+            defaultValue: () => empty('employed')
+          })"
+          variant="tonal"
+          prepend-icon="mdi-pencil-outline">
+          <template #prepend>
+            <v-icon color="warning"></v-icon>
+          </template>
+          Edytuj
+        </v-btn>
         <v-btn variant="tonal" @click="visible = false">Zamknij</v-btn>
       </v-card-actions>
     </v-card>
@@ -36,6 +41,7 @@
 <script lang="ts" setup>
 import { useListEmployment } from "@/composables/party";
 import { useDialogStore } from "@/stores/dialog";
+import { empty } from "@/composables/entity"
 
 const dialogStore = useDialogStore();
 

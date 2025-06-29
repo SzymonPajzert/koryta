@@ -42,7 +42,7 @@ const props = withDefaults(defineProps<{
   addItemTooltip?: string;
   removeItemTooltip?: string;
   prependIcon?: string; // New prop for the inner prepend icon
-  fieldType?: any;
+  fieldType?: any; // TODO replace with unknown
   emptyValue: () => T;
   entity?: Destination
 }>(), {

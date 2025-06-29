@@ -9,6 +9,7 @@
     :toOutput
     v-model="formData"
     :dialog-type="{ entity: 'suggestion' }"
+    :store-id
   >
     <v-row dense>
       <v-col
@@ -29,6 +30,10 @@
 <script lang="ts" setup>
   import AddAbstractDialog from './AddAbstractDialog.vue';
   import { ref } from 'vue'
+
+  const { storeId } = defineProps<{
+    storeId: number;
+  }>();
 
   const initialFormData = () => ({
     suggestion: '',

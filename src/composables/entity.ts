@@ -1,6 +1,7 @@
 import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { db } from '@/firebase'
 import { ref as dbRef } from 'firebase/database'
+import type { NepoEmployment } from './party'
 
 export interface Textable {
   text: string
@@ -33,7 +34,24 @@ type ImprovedLinks = {
   [K in Destination]: Record<string, Link<K>>;
 };
 
+export function empty(d: 'employed'): NepoEmployment;
+export function empty(d: Destination) {
+  if (d == 'employed') {
+    return {
+      'name': '',
+      'comments': {},
+      'connections': {},
+      'employments': {},
+      'sources': {},
+      'sourceURL': ''
+    }
+  }
+
+  return undefined as any
+}
+
 export function useListEntity<T extends Nameable>(entity: Destination) {
+
   const entities = useRTDB<Record<string, T>>(dbRef(db, entity))
-  return { entities }
+  return { entities, empty }
 }
