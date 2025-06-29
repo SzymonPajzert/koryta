@@ -137,31 +137,43 @@
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750348428232 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750348428232
+        }
       },
       "title": "Nie dostali się do parlamentu. Trafili do spółek Skarbu Państwa [Lista]",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OSzzSfK3Hb1eI2L1eLp": {
-      "comments": { "-OSzzSfK3Hb1eI2L1eLo": { "text": "Córka Struzika" } },
+      "comments": {
+        "-OSzzSfK3Hb1eI2L1eLo": {
+          "text": "Córka Struzika"
+        }
+      },
       "date": 1750199032518,
       "sourceURL": "https://finanse.wp.pl/najwazniejsza-jest-rodzina-spolka-zarzadzana-przez-corke-struzika-dostala-dofinansowanie-6336578723452545a",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750663056739 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750663056739
+        }
       },
       "title": "Najważniejsza jest rodzina. Spółka zarządzana przez córkę Struzika dostała dofinansowanie",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OSzzZ5CiurvMg2BSi3O": {
       "comments": {
-        "-OSzzZ5CiurvMg2BSi3N": { "text": "Lista polityków PSLu" }
+        "-OSzzZ5CiurvMg2BSi3N": {
+          "text": "Lista polityków PSLu"
+        }
       },
       "date": 1750199058792,
       "sourceURL": "https://wiadomosci.onet.pl/tylko-w-onecie/ujawnili-desant-psl-na-panstwowa-spolke-dobrze-panowie-ministrowie/5chpvl3",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750663084256 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750663084256
+        }
       },
       "title": "Ujawnili desant PSL na państwową spółkę. \"Dobrze, panowie ministrowie\"",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -193,8 +205,12 @@
       "sourceURL": "https://wiadomosci.wp.pl/dyrektorski-stolek-dla-czlowieka-lewicy-zajmowal-sie-prawami-zwierzat-trafil-do-centralnego-osrodka-informatyki-7164391888616384a",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750365099921 },
-        "signedUp": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750364877606 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750365099921
+        },
+        "signedUp": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750364877606
+        }
       },
       "title": "Dyrektorski stołek dla człowieka Lewicy. Zajmował się prawami zwierząt, trafił do Centralnego Ośrodka Informatyki",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -204,22 +220,32 @@
       "sourceURL": "https://transinfo.pl/infobus/z-konfederacji-do-mzk-belchatow-nowy-prezes-autobusowej-spolki/",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750502864499 },
-        "signedUp": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750502860770 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750502864499
+        },
+        "signedUp": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750502860770
+        }
       },
       "title": "Z Konfederacji do MZK Bełchatów: Nowy prezes autobusowej spółki - TransInfo",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OT8teLJj03ZR7QgRkd1": {
       "comments": {
-        "-OT8teLIgwO0JzEX1Hoh": { "text": "Zabrała lodówkę, dostała promocję" }
+        "-OT8teLIgwO0JzEX1Hoh": {
+          "text": "Zabrała lodówkę, dostała promocję"
+        }
       },
       "date": 1750365283702,
       "sourceURL": "https://legio24.pl/pl/11_wiadomosci/735_legionowo/115874_legionowski-ops-ma-nowego-dyrektora-dlaczego-doszlo-do-zmian-kadrowych.html",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750502983782 },
-        "signedUp": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750437759825 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750502983782
+        },
+        "signedUp": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750437759825
+        }
       },
       "title": "Legionowski OPS ma nowego dyrektora. Dlaczego doszło do zmian kadrowych? - legio24.pl",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -240,8 +266,12 @@
       "sourceURL": "https://wiadomosci.onet.pl/kraj/corka-polityka-psl-wiceprezesem-kghm-czlonek-rady-nadzorczej-konkursy-sa-fikcja/5hnvjqq",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750502886649 },
-        "signedUp": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750426390052 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750502886649
+        },
+        "signedUp": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750426390052
+        }
       },
       "title": "Córka polityka PSL wiceprezesem KGHM. Członek rady nadzorczej: konkursy są fikcją\n        \n        - Wiadomości",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -256,7 +286,9 @@
       "sourceURL": "https://paulinamatysiak.pl/2024/09/04/kontrowersje-wokol-wojskowych-zakladow-lotniczych-nr-1-co-sie-dzieje-w-strategicznej-spolce/",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750667987519 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750667987519
+        }
       },
       "title": "Kontrowersje wokół Wojskowych Zakładów Lotniczych nr 1 – co się dzieje w strategicznej spółce? | PAULINA MATYSIAK",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -274,7 +306,9 @@
     },
     "-OTDCXWFFISN04pdAVWW": {
       "comments": {
-        "-OTDCXWEAquAuqz6GAgu": { "text": "Radny PiS" },
+        "-OTDCXWEAquAuqz6GAgu": {
+          "text": "Radny PiS"
+        },
         "-OTDCXWEAquAuqz6GAgv": {
           "text": "Edward Sidoruk też wypisany - czy coś jest ciekawego?"
         },
@@ -292,17 +326,27 @@
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750504167824 },
-        "signedUp": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750437744271 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750504167824
+        },
+        "signedUp": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750437744271
+        }
       },
       "title": "Partyjni \"hotelarze\" w spółce Skarbu Państwa. Ujawniamy kolejne nazwiska\n        \n        - Wiadomości",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTDDeienipxTMK47YOY": {
       "comments": {
-        "-OTDDeienipxTMK47YOV": { "text": "Totalizator Sportowy" },
-        "-OTDDeienipxTMK47YOW": { "text": "R4S" },
-        "-OTDDeienipxTMK47YOX": { "text": "PiS" }
+        "-OTDDeienipxTMK47YOV": {
+          "text": "Totalizator Sportowy"
+        },
+        "-OTDDeienipxTMK47YOW": {
+          "text": "R4S"
+        },
+        "-OTDDeienipxTMK47YOX": {
+          "text": "PiS"
+        }
       },
       "date": 1750437899121,
       "sourceURL": "https://wiadomosci.onet.pl/tylko-w-onecie/ujawniamy-czego-agenci-cba-szukali-w-totalizatorze-sportowym-trop-wiedzie-do-dawnej/832w5pz",
@@ -311,7 +355,9 @@
     },
     "-OTDEKfwlvN-EzMvv8LC": {
       "comments": {
-        "-OTDEKfwlvN-EzMvv8LB": { "text": "Ponad 10 osób od koalicji 2023" }
+        "-OTDEKfwlvN-EzMvv8LB": {
+          "text": "Ponad 10 osób od koalicji 2023"
+        }
       },
       "date": 1750438075075,
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjny-desant-na-totalizator-sportowy-oni-dostali-lukratywne-stanowiska/7nvq01b",
@@ -320,7 +366,9 @@
     },
     "-OTDEdG7BVJv0GyegWGl": {
       "comments": {
-        "-OTDEdG7BVJv0GyegWGj": { "text": "Totalizator Sportowy" },
+        "-OTDEdG7BVJv0GyegWGj": {
+          "text": "Totalizator Sportowy"
+        },
         "-OTDEdG7BVJv0GyegWGk": {
           "text": "prezes Krzemień odwołany dla przykładu"
         }
@@ -346,7 +394,9 @@
         "-OTDIIir4_As1dVAk5YM": {
           "text": "Odwołanie Jacka Bartmińskiego jako wiceministra aktywów państwowych"
         },
-        "-OTDIIir4_As1dVAk5YN": { "text": "Totalizator Sportowy" }
+        "-OTDIIir4_As1dVAk5YN": {
+          "text": "Totalizator Sportowy"
+        }
       },
       "date": 1750439115646,
       "sourceURL": "https://wiadomosci.onet.pl/tylko-w-onecie/zdymisjonowany-wiceminister-komentuje-prosilem-o-informacje-bez-efektu/32ttwsk",
@@ -355,8 +405,12 @@
     },
     "-OTDIbFaRmOTOlmxmT0m": {
       "comments": {
-        "-OTDIbFaRmOTOlmxmT0k": { "text": "PKP" },
-        "-OTDIbFaRmOTOlmxmT0l": { "text": "PSL" }
+        "-OTDIbFaRmOTOlmxmT0k": {
+          "text": "PKP"
+        },
+        "-OTDIbFaRmOTOlmxmT0l": {
+          "text": "PSL"
+        }
       },
       "date": 1750439195629,
       "sourceURL": "https://wiadomosci.onet.pl/kraj/zielona-fala-nakryla-polska-kolej-ponad-20-ludzi-zwiazanych-z-psl-we-wladzach-spolek/mjc1n25",
@@ -420,14 +474,22 @@
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTHC51cOGwdnx0ttRqa": {
-      "comments": { "-OTHC51cOGwdnx0ttRq_": { "text": "Desant PSN na AMW" } },
+      "comments": {
+        "-OTHC51cOGwdnx0ttRq_": {
+          "text": "Desant PSN na AMW"
+        }
+      },
       "date": 1750504595601,
       "sourceURL": "https://wydarzenia.interia.pl/kraj/news-desant-psl-na-agencje-mienia-wojskowego-pajeczyna-powiazan,nId,7858973",
       "title": "Agencja Mienia Wojskowego. Desant polityków PSL na prestiżowe stanowiska - Wydarzenia w INTERIA.PL",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTHwOO6TRsjOLqTgcLl": {
-      "comments": { "-OTHwOO6TRsjOLqTgcLk": { "text": "Lista 100 osób" } },
+      "comments": {
+        "-OTHwOO6TRsjOLqTgcLk": {
+          "text": "Lista 100 osób"
+        }
+      },
       "date": 1750516995574,
       "sourceURL": "https://stoppatowladzy.pl/przykorycie/",
       "title": "Koalicja #PrzyKorycie - stopPATOwładzy (od PiSu)",
@@ -455,7 +517,9 @@
         "-OTIA8OLqab1ENVrYc8Q": {
           "text": "Z nieoficjalnych informacji „GP” wynika, że na szefa tej państwowej instytucji miał go rekomendować Rafał Komarewicz, poseł ugrupowania Szymona Hołowni i jego małopolski baron."
         },
-        "-OTIA8OLqab1ENVrYc8R": { "text": "Kim jest Rafał Komarewicz?" }
+        "-OTIA8OLqab1ENVrYc8R": {
+          "text": "Kim jest Rafał Komarewicz?"
+        }
       },
       "date": 1750520862104,
       "sourceURL": "https://niezalezna.pl/polityka/usmiechniete-synekury-polski-2050-31-tys-zl-dla-prezesa-kzn-i-etaty-dla-dzialaczy/533532",
@@ -464,7 +528,9 @@
     },
     "-OTIFapkn0Ov-Lz5AWJJ": {
       "comments": {
-        "-OTIFapkn0Ov-Lz5AWJI": { "text": "WFOŚiGW - dużo ludzi, duża spółka" }
+        "-OTIFapkn0Ov-Lz5AWJI": {
+          "text": "WFOŚiGW - dużo ludzi, duża spółka"
+        }
       },
       "date": 1750522293434,
       "sourceURL": "https://wiadomosci.onet.pl/lublin/nowe-wladze-wfosigw-w-lublinie-bez-konkursu-i-bez-wysluchania-kandydatow/cpw9ltt",
@@ -493,7 +559,9 @@
       "sourceURL": "https://biznes.pap.pl/wiadomosci/firmy/energa-sa-202025-powolanie-czlonkow-zarzadu-energa-sa-na-nowa-wspolna-kadencje",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750539973096 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750539973096
+        }
       },
       "title": "Powołanie Członków Zarządu Energa SA na nową wspólną kadencję. Biznes PAP ENERGA SA (20/2025) ",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -503,7 +571,9 @@
       "sourceURL": "https://radomszczanska.pl/artykul/nowy-zaciag-tlustych-n1256470",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540047679 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540047679
+        }
       },
       "title": "Hotelarz Rząsowski: Robota w spółce podległej MON dla radnego powiatowego. Nowy zaciąg tłustych kotów?  - wiadomości Radomsko",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -513,7 +583,9 @@
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540045711 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540045711
+        }
       },
       "title": "Tak PSL obsadził państwową spółkę. Pracę dostał m.in. 29-letni brat wiceministra\n        \n        - Wiadomości",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -523,7 +595,9 @@
       "sourceURL": "https://wiadomosci.onet.pl/lublin/henryk-lucjan-w-radzie-nadzorczej-azotow-to-polityk-platformy-obywatelskiej/69d333x",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540043662 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540043662
+        }
       },
       "title": "Henryk Łucjan w radzie nadzorczej Azotów. To polityk Platformy Obywatelskiej\n        \n        - Wiadomości",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -533,7 +607,9 @@
       "sourceURL": "https://wiadomosci.onet.pl/tylko-w-onecie/rafal-trzaskowski-wyrzucil-go-za-hejterstwo-marcin-kopania-odnalazl-sie-w-phn/3zp8m3y",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540062813 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540062813
+        }
       },
       "title": "Rafał Trzaskowski wyrzucił go za hejterstwo. Marcin Kopania odnalazł się w PHN\n        \n        - Wiadomości",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -543,7 +619,9 @@
       "sourceURL": "https://www.msn.com/pl-pl/wiadomosci/polska/polityk-wygra%C5%82a-konkurs-fundacj%C4%99-za%C5%82o%C5%BCy%C5%82a-cztery-dni-po-jego-og%C5%82oszeniu-sprawa-nie-do-obrony/ar-AA1GIHCj",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540079560 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540079560
+        }
       },
       "title": "Polityk wygrała konkurs, fundację założyła cztery dni po jego ogłoszeniu. „Sprawa nie do obrony”",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -553,7 +631,9 @@
       "sourceURL": "https://www.nik.gov.pl/kontrole/P/16/041/KPS/",
       "status": {
         "confirmedDone": true,
-        "markedDone": { "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540103895 }
+        "markedDone": {
+          "of0BKlwqWLX21Cuml4NMHZ18xoC3": 1750540103895
+        }
       },
       "title": "Najwyższa Izba Kontroli - Legionowo. Opieka nad osobami starszymi w dziennych domach pomocy",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
@@ -649,7 +729,9 @@
         }
       },
       "name": "Jolanta Sobczyk",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -678,7 +760,9 @@
         }
       },
       "name": "Miłosz Wojnarowski",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -716,7 +800,9 @@
         }
       },
       "name": "Mikołaj Grzyb",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -739,13 +825,17 @@
         }
       },
       "name": "Katarzyna Jakubowska",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://finanse.wp.pl/najwazniejsza-jest-rodzina-spolka-zarzadzana-przez-corke-struzika-dostala-dofinansowanie-6336578723452545a",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OT-G8vHHKsOmzjN_wHF": {
       "connections": {
-        "-OTP2tS2kVLeLtsUUt-A": { "text": "Zawodowy hejter dla PO" }
+        "-OTP2tS2kVLeLtsUUt-A": {
+          "text": "Zawodowy hejter dla PO"
+        }
       },
       "date": 1750636402436,
       "employments": {
@@ -760,18 +850,28 @@
         }
       },
       "name": "Bartosz Kopania (Pablo Morales)",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://wiadomosci.wp.pl/internetowy-hejter-w-systemie-panstwowej-spolki-dostal-zlecenie-od-totalizatora-7139988727548736a",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OT-G8vHHKsOmzjN_wHH": {
       "connections": {
-        "-OT-G8vFf75wWlDzRAll": { "text": "Kandydat na listach PSL" }
+        "-OT-G8vFf75wWlDzRAll": {
+          "text": "Kandydat na listach PSL"
+        }
       },
       "date": 1750203670174,
-      "employments": { "-OT-G8vFf75wWlDzRAlk": { "text": "Energa" } },
+      "employments": {
+        "-OT-G8vFf75wWlDzRAlk": {
+          "text": "Energa"
+        }
+      },
       "name": "Piotr Szymanek",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://biznes.pap.pl/wiadomosci/firmy/energa-sa-202025-powolanie-czlonkow-zarzadu-energa-sa-na-nowa-wspolna-kadencje",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -783,10 +883,14 @@
       },
       "date": 1750283608267,
       "employments": {
-        "-OT4153_ALROicne5NFl": { "text": "członek rady nadzorczej PKP Telkol" }
+        "-OT4153_ALROicne5NFl": {
+          "text": "członek rady nadzorczej PKP Telkol"
+        }
       },
       "name": "Karol Bielski",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -803,7 +907,9 @@
         }
       },
       "name": "Leszek Świętowski",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -820,7 +926,9 @@
         }
       },
       "name": "Paweł Bartoszek",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -837,7 +945,9 @@
         }
       },
       "name": "Łukasz Guliński",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -854,7 +964,9 @@
         }
       },
       "name": "Leszek Zawadzki",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -871,7 +983,9 @@
         }
       },
       "name": "Anna Mikołajczyk",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -888,7 +1002,9 @@
         }
       },
       "name": "Artur Bagieński",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -905,7 +1021,9 @@
         }
       },
       "name": "Michał Gniatkowski",
-      "parties": ["Polska 2050"],
+      "parties": [
+        "Polska 2050"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -922,13 +1040,17 @@
         }
       },
       "name": "Agnieszka Jędrzejewska",
-      "parties": ["Nowa Lewica"],
+      "parties": [
+        "Nowa Lewica"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OT4153dI6-qui1wYqKg": {
       "connections": {
-        "-OT4153azFG_S7CFrJ1v": { "text": "członek partii Nowa Lewica" }
+        "-OT4153azFG_S7CFrJ1v": {
+          "text": "członek partii Nowa Lewica"
+        }
       },
       "date": 1750283608270,
       "employments": {
@@ -937,7 +1059,9 @@
         }
       },
       "name": "Michał Olejniczak",
-      "parties": ["Nowa Lewica"],
+      "parties": [
+        "Nowa Lewica"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -954,7 +1078,9 @@
         }
       },
       "name": "Marek Rutka",
-      "parties": ["Nowa Lewica"],
+      "parties": [
+        "Nowa Lewica"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -971,7 +1097,9 @@
         }
       },
       "name": "Bartłomiej Gębala",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -982,7 +1110,9 @@
         }
       },
       "connections": {
-        "-OTHojNQ7j3RpUt9MdEG": { "text": "Członek Platformy Obywatelskiej" },
+        "-OTHojNQ7j3RpUt9MdEG": {
+          "text": "Członek Platformy Obywatelskiej"
+        },
         "-OTHojNQ7j3RpUt9MdEH": {
           "text": "w październiku 2023 r., ubiegał się on o miejsce w Sejmie z okręgu wyborczego nr 6 (Lublin oraz przygraniczne powiaty)"
         }
@@ -994,7 +1124,9 @@
         }
       },
       "name": "Henryk Łucjan",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1011,7 +1143,9 @@
         }
       },
       "name": "Filip Szymczak",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1028,7 +1162,9 @@
         }
       },
       "name": "Andrzej Pilot",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://demagog.org.pl/analizy_i_raporty/nie-dostali-sie-do-parlamentu-trafili-do-spolek-skarbu-panstwa-lista/",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1042,7 +1178,9 @@
         }
       },
       "connections": {
-        "-OTByPAiEFTLc-S9jE2I": { "text": "były wiceprezes partii Wiosna" },
+        "-OTByPAiEFTLc-S9jE2I": {
+          "text": "były wiceprezes partii Wiosna"
+        },
         "-OTByPAiEFTLc-S9jE2J": {
           "text": "wieloletni współpracownik Roberta Biedronia"
         },
@@ -1057,13 +1195,17 @@
         }
       },
       "name": "Marcin Anaszewicz",
-      "parties": ["Nowa Lewica"],
+      "parties": [
+        "Nowa Lewica"
+      ],
       "sourceURL": "https://wiadomosci.wp.pl/dyrektorski-stolek-dla-czlowieka-lewicy-zajmowal-sie-prawami-zwierzat-trafil-do-centralnego-osrodka-informatyki-7164391888616384a",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTDB7RHvrDXe8ddUmI2": {
       "connections": {
-        "-OTP2Me3RY3Kf6XhOevv": { "text": "radny PiS z Lublina" }
+        "-OTP2Me3RY3Kf6XhOevv": {
+          "text": "radny PiS z Lublina"
+        }
       },
       "date": 1750636264005,
       "employments": {
@@ -1078,7 +1220,9 @@
         }
       },
       "name": "Piotr Breś",
-      "parties": ["PiS"],
+      "parties": [
+        "PiS"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/lublin/radny-pis-z-dyrektorska-posada-w-panstwowej-spolce/kn4kr9p",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1106,7 +1250,9 @@
         }
       },
       "name": "Marcin Kopania",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/tylko-w-onecie/rafal-trzaskowski-wyrzucil-go-za-hejterstwo-marcin-kopania-odnalazl-sie-w-phn/3zp8m3y",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1138,10 +1284,14 @@
           "relation": "prezes",
           "text": "wcześniej szefowa hotelarskiej spółki AMW Rewita"
         },
-        "-OTP-_6pwGtiK_9a1Am6": { "text": "wiceprezes KGHM-u" }
+        "-OTP-_6pwGtiK_9a1Am6": {
+          "text": "wiceprezes KGHM-u"
+        }
       },
       "name": "Anna Sobieraj-Kozakiewicz",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/corka-polityka-psl-wiceprezesem-kghm-czlonek-rady-nadzorczej-konkursy-sa-fikcja/5hnvjqq",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1172,7 +1322,9 @@
         }
       },
       "name": "Anna Brzezińska",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://legio24.pl/pl/11_wiadomosci/735_legionowo/115874_legionowski-ops-ma-nowego-dyrektora-dlaczego-doszlo-do-zmian-kadrowych.html",
       "sources": {
         "-OTHFDM-kzr0UdYRYy5_": {
@@ -1200,7 +1352,9 @@
         }
       },
       "name": "Marek Kwapisiewicz",
-      "parties": ["Konfederacja"],
+      "parties": [
+        "Konfederacja"
+      ],
       "sourceURL": "https://transinfo.pl/infobus/z-konfederacji-do-mzk-belchatow-nowy-prezes-autobusowej-spolki/",
       "sources": {
         "-OTHFDM-kzr0UdYRYy5h": {
@@ -1211,7 +1365,9 @@
     },
     "-OTHFDM1R5mIpMs7JELc": {
       "connections": {
-        "-OTP18cMEQgana4gDYF6": { "text": "Radny PO z Radomska" },
+        "-OTP18cMEQgana4gDYF6": {
+          "text": "Radny PO z Radomska"
+        },
         "-OTP18cMEQgana4gDYF7": {
           "connection": {
             "id": "-OTP0jnUYfKFI_8aqVdv",
@@ -1235,7 +1391,9 @@
         }
       },
       "name": "Marek Rząsowski",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1244,7 +1402,9 @@
         "-OTP-xQ0gPLaoTc6mFLh": {
           "text": "w latach 2006-2013 szef Związku Młodzieży Wiejskiej, kiedyś nieformalnej młodzieżówki PSL - teraz zapleczem kadrowym tej partii"
         },
-        "-OTP-xQ0gPLaoTc6mFLi": { "text": "sekretarz rady naczelnej PSL" }
+        "-OTP-xQ0gPLaoTc6mFLi": {
+          "text": "sekretarz rady naczelnej PSL"
+        }
       },
       "date": 1750635632261,
       "employments": {
@@ -1259,13 +1419,17 @@
         }
       },
       "name": "Michał Modrzejewski",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTHFDM31bO1eRUgozqn": {
       "connections": {
-        "-OTP1DXBXWfzie6aoH4d": { "text": "skarbnik PO w Sieradzu" },
+        "-OTP1DXBXWfzie6aoH4d": {
+          "text": "skarbnik PO w Sieradzu"
+        },
         "-OTP1DXBXWfzie6aoH4e": {
           "connection": {
             "id": "-OTP0jnUYfKFI_8aqVdv",
@@ -1292,7 +1456,9 @@
         }
       },
       "name": "Radosław Tyrakowski",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1318,7 +1484,9 @@
         }
       },
       "name": "Witold Olszewski",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1344,7 +1512,9 @@
         }
       },
       "name": "Beata Juralewicz",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1370,13 +1540,17 @@
         }
       },
       "name": "Błażej Papiernik",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTHFDM31bO1eRUgozqv": {
       "comments": {
-        "-OTHFDM-kzr0UdYRYy6A": { "text": "znany jako \"poseł z ferrari\"" },
+        "-OTHFDM-kzr0UdYRYy6A": {
+          "text": "znany jako \"poseł z ferrari\""
+        },
         "-OTHFDM-kzr0UdYRYy6B": {
           "text": "parlamentarzysta pobrał z kasy Sejmu ponad 778 tys. zł ze względu na trudną sytuację materialną, mimo że posiada kilka luksusowych samochodów, nieruchomości i dobrze prosperującą spółkę dentystyczną."
         }
@@ -1388,7 +1562,9 @@
       },
       "date": 1750505416073,
       "name": "Radosław Lubczyk",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.wp.pl/lubczyk-dalej-ciagnie-kase-z-sejmu-ale-sa-lepsi-od-niego-6998874649205248a",
       "sources": {
         "-OTHFDM-kzr0UdYRYy69": {
@@ -1422,7 +1598,9 @@
         }
       },
       "name": "Witold Kocaj",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1457,7 +1635,9 @@
         }
       },
       "name": "Marcin Horyń",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1480,7 +1660,9 @@
         }
       },
       "name": "Rafał Kiersikowski",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1509,7 +1691,9 @@
         }
       },
       "name": "Szymon Gawryszczak",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/grupa-wiceministra-na-stolkach-w-totalizatorze-sportowym-ujawniamy-nowe-nominacje/8v419rj",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1543,22 +1727,32 @@
         }
       },
       "name": "Beata Springer",
-      "parties": ["Polska 2050"],
+      "parties": [
+        "Polska 2050"
+      ],
       "sourceURL": "https://www.msn.com/pl-pl/wiadomosci/polska/polityk-wygra%C5%82a-konkurs-fundacj%C4%99-za%C5%82o%C5%BCy%C5%82a-cztery-dni-po-jego-og%C5%82oszeniu-sprawa-nie-do-obrony/ar-AA1GIHCj",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTOpglRxhX3UhzX2zSN": {
       "date": 1750632680512,
       "name": "Dariusz Klimczak",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTOqu7AAxsntf295071": {
       "date": 1750632997360,
-      "employments": { "-OTOqu7AAxsntf295070": { "text": "Wiceszef PSL" } },
+      "employments": {
+        "-OTOqu7AAxsntf295070": {
+          "text": "Wiceszef PSL"
+        }
+      },
       "name": "Andrzej Grzyb",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1570,7 +1764,9 @@
         }
       },
       "name": "Adam Struzik",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1599,7 +1795,9 @@
         }
       },
       "name": "Agnieszka Gonczaryk",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1647,7 +1845,9 @@
         }
       },
       "name": "Konrad Wojnarowski",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1681,7 +1881,9 @@
         }
       },
       "name": "Piotr Smogrzewski",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1693,7 +1895,9 @@
         }
       },
       "name": "Roman Smogrzewski",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1711,14 +1915,18 @@
         }
       },
       "name": "Wojciech Brzeski",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/tak-psl-obsadzil-panstwowa-spolke-prace-dostal-min-29-letni-brat-wiceministra/ezt8y9t",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTOygFlCK3Junfe49Y5": {
       "date": 1750635037787,
       "name": "Władysław Kosiniak-Kamysz",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1750,7 +1958,9 @@
         }
       },
       "name": "Dariusz Sobieraj",
-      "parties": ["PSL"],
+      "parties": [
+        "PSL"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1768,7 +1978,9 @@
         }
       },
       "name": "Cezary Tomczyk",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/partyjni-hotelarze-w-spolce-skarbu-panstwa-ujawniamy-kolejne-nazwiska/xcv03lb",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1786,14 +1998,18 @@
         }
       },
       "name": "Robert Kropiwnicki",
-      "parties": ["PO"],
+      "parties": [
+        "PO"
+      ],
       "sourceURL": "https://www.gov.pl/web/aktywa-panstwowe/robert-kropiwnicki",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
     "-OTP52rPKhJt8QVPgQSG": {
       "date": 1750636969363,
       "name": "Paulina Hennig-Kloska",
-      "parties": ["Polska 2050"],
+      "parties": [
+        "Polska 2050"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/lublin/nowe-wladze-wfosigw-w-lublinie-bez-konkursu-i-bez-wysluchania-kandydatow/cpw9ltt",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1838,7 +2054,12 @@
         }
       },
       "name": "Rząd",
-      "parties": ["PO", "PSL", "Polska 2050", "Nowa Lewica"],
+      "parties": [
+        "PO",
+        "PSL",
+        "Polska 2050",
+        "Nowa Lewica"
+      ],
       "sourceURL": "",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1875,7 +2096,9 @@
         }
       },
       "name": "Robert Gajda",
-      "parties": ["Polska 2050"],
+      "parties": [
+        "Polska 2050"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/holownia-i-spolki-czyli-polska-2050-bierze-udzial-w-podziale-lupow-analiza/bm6z0zt",
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     },
@@ -1909,80 +2132,10 @@
         }
       },
       "name": "Emilia Wasilewska",
-      "parties": ["Polska 2050"],
+      "parties": [
+        "Polska 2050"
+      ],
       "sourceURL": "https://wiadomosci.onet.pl/kraj/holownia-i-spolki-czyli-polska-2050-bierze-udzial-w-podziale-lupow-analiza/bm6z0zt",
-      "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
-    },
-    "-OTwiJoaehgP5KU16HcU": {
-      "comments": {
-        "-OTJaVI0rmxT-GrbUUqq": {
-          "text": "Został wyrzucony ze swojego stanowiska w 2024 roku przez Rafała Trzaskowskiego"
-        }
-      },
-      "connections": {
-        "-OTJaVI0rmxT-GrbUUqo": {
-          "text": "Prowadzi na Twitterze konto pod pseudonimem \"CasperVanDerHaag\", na którym promuje polityków PO i obraża ich rywali i koalicjantów"
-        },
-        "-OTJaVI0rmxT-GrbUUqp": {
-          "text": "brat Bartosza Kopani, prowadzącego inne popularne konto w mediach społecznościowych pod pseudonimem \"Pablo Morales\""
-        }
-      },
-      "date": 1751217949991,
-      "descriptionLen": 445,
-      "employments": {
-        "-OTJaVI-nEiIOzTcpJ4i": {
-          "connection": {
-            "id": "-OTOq2CpVuIll16NmukB",
-            "text": "Ministerstwo Infrastruktury",
-            "type": "company"
-          },
-          "relation": "córka",
-          "text": "Od czerwca 2025 zastępca dyrektora Biura Marketingu, Strategii, Relacji Inwestorskich i PR w Polskim Holdingu Nieruchomości (PHN)"
-        },
-        "-OTJaVI0rmxT-GrbUUqn": {
-          "text": "prezes Miejskiego Przedsiębiorstwa Realizacji Inwestycji od 2018 do 2024"
-        }
-      },
-      "name": "Marcin Kopania",
-      "parties": ["PO"],
-      "sourceURL": "https://wiadomosci.onet.pl/tylko-w-onecie/rafal-trzaskowski-wyrzucil-go-za-hejterstwo-marcin-kopania-odnalazl-sie-w-phn/3zp8m3y",
-      "sources": { "-OTwiGqBUA7xCvi5UkKF": { "text": "" } },
-      "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
-    },
-    "-OTwiKv51pq9ccs3abce": {
-      "comments": {
-        "-OTJaVI0rmxT-GrbUUqq": {
-          "text": "Został wyrzucony ze swojego stanowiska w 2024 roku przez Rafała Trzaskowskiego"
-        }
-      },
-      "connections": {
-        "-OTJaVI0rmxT-GrbUUqo": {
-          "text": "Prowadzi na Twitterze konto pod pseudonimem \"CasperVanDerHaag\", na którym promuje polityków PO i obraża ich rywali i koalicjantów"
-        },
-        "-OTJaVI0rmxT-GrbUUqp": {
-          "text": "brat Bartosza Kopani, prowadzącego inne popularne konto w mediach społecznościowych pod pseudonimem \"Pablo Morales\""
-        }
-      },
-      "date": 1751217954504,
-      "descriptionLen": 445,
-      "employments": {
-        "-OTJaVI-nEiIOzTcpJ4i": {
-          "connection": {
-            "id": "-OTOq2CpVuIll16NmukB",
-            "text": "Ministerstwo Infrastruktury",
-            "type": "company"
-          },
-          "relation": "córka",
-          "text": "Od czerwca 2025 zastępca dyrektora Biura Marketingu, Strategii, Relacji Inwestorskich i PR w Polskim Holdingu Nieruchomości (PHN)"
-        },
-        "-OTJaVI0rmxT-GrbUUqn": {
-          "text": "prezes Miejskiego Przedsiębiorstwa Realizacji Inwestycji od 2018 do 2024"
-        }
-      },
-      "name": "Marcin Kopania",
-      "parties": ["PO"],
-      "sourceURL": "https://wiadomosci.onet.pl/tylko-w-onecie/rafal-trzaskowski-wyrzucil-go-za-hejterstwo-marcin-kopania-odnalazl-sie-w-phn/3zp8m3y",
-      "sources": { "-OTwiGqBUA7xCvi5UkKF": { "text": "" } },
       "user": "of0BKlwqWLX21Cuml4NMHZ18xoC3"
     }
   },
@@ -1990,14 +2143,30 @@
     "data": {
       "-OTBeKGEKNBPOhlIffZF": {
         "comments": {
-          "-OTBeKG8Oyh709u4o-O2": { "text": "Grzegorz Bykowski" },
-          "-OTBeKG9eH_gTs1oiz0Y": { "text": "Jacek Jaśkowiak" },
-          "-OTBeKG9eH_gTs1oiz0Z": { "text": "Dominik Herberholz" },
-          "-OTBeKG9eH_gTs1oiz0_": { "text": "Mariusz Wiatrowski" },
-          "-OTBeKG9eH_gTs1oiz0a": { "text": "Poznań " },
-          "-OTBeKG9eH_gTs1oiz0b": { "text": "Lotnisko Ławica" },
-          "-OTBeKG9eH_gTs1oiz0c": { "text": "Pracownicy" },
-          "-OTBeKG9eH_gTs1oiz0d": { "text": "Dyskryminajca" }
+          "-OTBeKG8Oyh709u4o-O2": {
+            "text": "Grzegorz Bykowski"
+          },
+          "-OTBeKG9eH_gTs1oiz0Y": {
+            "text": "Jacek Jaśkowiak"
+          },
+          "-OTBeKG9eH_gTs1oiz0Z": {
+            "text": "Dominik Herberholz"
+          },
+          "-OTBeKG9eH_gTs1oiz0_": {
+            "text": "Mariusz Wiatrowski"
+          },
+          "-OTBeKG9eH_gTs1oiz0a": {
+            "text": "Poznań "
+          },
+          "-OTBeKG9eH_gTs1oiz0b": {
+            "text": "Lotnisko Ławica"
+          },
+          "-OTBeKG9eH_gTs1oiz0c": {
+            "text": "Pracownicy"
+          },
+          "-OTBeKG9eH_gTs1oiz0d": {
+            "text": "Dyskryminajca"
+          }
         },
         "date": 1750411596689,
         "sourceURL": "https://wiadomosci.onet.pl/poznan/konflikt-na-lotnisku-w-poznaniu-pracownicy-skarza-sie-na-prezesa-zwiazanego-z-po/qxy71zz",
@@ -2018,7 +2187,9 @@
       "email": "adam.przybylak00@gmail.com",
       "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocJwGejPAbm0h0TpVZsJ7JMFVz6vqeYwZ2CycNG3zdNJ3WTrLQ=s96-c",
       "suggestions": {
-        "data": { "-OTBeKGJ9gHP3BfiP59Z": "-OTBeKGEKNBPOhlIffZF" }
+        "data": {
+          "-OTBeKGJ9gHP3BfiP59Z": "-OTBeKGEKNBPOhlIffZF"
+        }
       }
     },
     "of0BKlwqWLX21Cuml4NMHZ18xoC3": {
@@ -2177,20 +2348,22 @@
           "-OTP8C5ZlKI8EQybtb8V": "-OTHFDM435xVTqGjVfKf",
           "-OTRWlNHx1r4qxR_W6b8": "-OTRWlND8Ku-nllm1qj_",
           "-OTRjngNG5NIOPOXnfuC": "-OTRjngL9aKS-nrDeBON",
-          "-OTRkMcM-_jtlLtLsdzV": "-OTRkMcL5pDadWCPOQ1r",
-          "-OTwiJoz5hVo8ymMEVms": "-OTwiJoaehgP5KU16HcU",
-          "-OTwiKvHUIQvlUVsEQJu": "-OTwiKv51pq9ccs3abce"
+          "-OTRkMcM-_jtlLtLsdzV": "-OTRkMcL5pDadWCPOQ1r"
         }
       }
     },
     "rJNsODgkXuZ9di81GTcgPhc192o2": {
       "suggestions": {
-        "data": { "-OT3M578AoGx7yyqCcNL": "-OT3M577dD-wvFPcKTbJ" },
+        "data": {
+          "-OT3M578AoGx7yyqCcNL": "-OT3M577dD-wvFPcKTbJ"
+        },
         "employed": {
           "-OT3M3jvOEhPrh_bIXRT": "-OT3M3jt2XTJaEdX_znK",
           "-OT3MiaC0cltGXFMCujX": "-OT3MiaAFNF5IpHqfKO1"
         },
-        "improvement": { "-OT3Loe8rOS4oJrOPRMh": "-OT3Loe6YSmxH-tpCI8d" }
+        "improvement": {
+          "-OT3Loe8rOS4oJrOPRMh": "-OT3Loe6YSmxH-tpCI8d"
+        }
       }
     }
   }

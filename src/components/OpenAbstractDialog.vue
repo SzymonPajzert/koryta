@@ -50,7 +50,6 @@ switch (props.dialog) {
 
 function openDialog() {
   dialogStore.open({
-    name: 'Nowe ' + props.dialog,
     type: props.dialog
   });
 }

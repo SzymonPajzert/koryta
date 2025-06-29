@@ -7,7 +7,6 @@ import type { DestinationTypeMap } from '@/composables/model';
 
 // TODO this could be a class and have everything defined already
 interface NewEntityPayload<D extends Destination> {
-  name: string;      // name of the dialog to open
   type: D;          // what type of dialog to open
   edit?: {
     value: DestinationTypeMap[D]    // value to prepopulate with
@@ -38,6 +37,7 @@ export const config: Record<Destination, {title: string, titleIcon: string}> = {
 interface Dialog<D extends Destination> {
   value: DestinationTypeMap[D]
   type: D
+  editKey?: string
 }
 
 export const useDialogStore = defineStore('dialog', () => {
@@ -55,7 +55,8 @@ export const useDialogStore = defineStore('dialog', () => {
     shown.value = true
     const dialog: Dialog<D> = {
       value: filler(payload.edit?.value || defaultValue()),
-      type: payload.type
+      type: payload.type,
+      editKey: payload.edit?.key
     }
     console.log(dialog)
     const len = dialogs.value.push(dialog)
@@ -65,7 +66,7 @@ export const useDialogStore = defineStore('dialog', () => {
   function close(idx: Idx, shouldSubmit: boolean) {
     if (shouldSubmit) {
       const { submit } = useListEntity(dialogs.value[idx].type)
-      submit(dialogs.value[idx].value) // TODO handle edit
+      submit(dialogs.value[idx].value, dialogs.value[idx].editKey) // TODO handle edit
     }
     remove(idx)
   }

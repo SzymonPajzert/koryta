@@ -20,7 +20,6 @@
         <v-spacer></v-spacer>
         <v-btn
           @click.stop="dialogStore.open({
-            name: '',
             type: 'employed',
             edit: { value: person, key: node  }
           })"

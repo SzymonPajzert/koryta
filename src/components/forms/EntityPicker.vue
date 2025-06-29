@@ -56,7 +56,6 @@ function addNewItem() {
     // if the dialog is closed without selecting the newly created item.
     search.value = '';
     dialogStore.open({
-      name: newEntityName,
       type: props.entity,
      });
   }

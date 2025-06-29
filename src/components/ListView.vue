@@ -34,7 +34,6 @@
             <v-spacer></v-spacer>
             <v-btn
               @click.stop="dialogStore.open({
-                name: '',
                 type: 'employed',
                 edit: { value: person, key: key  }})"
               variant="tonal"
@@ -55,7 +54,6 @@
 import {type NepoEmployment} from '@/composables/model'
 import PartyChip from './PartyChip.vue';
 import { useAuthState} from '@/composables/auth'
-import { empty } from "@/composables/model"
 import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
 import { useDialogStore } from '@/stores/dialog'; // Import the new store
 
