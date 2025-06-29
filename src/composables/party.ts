@@ -2,18 +2,7 @@ import { ref, computed } from "vue";
 import { useRTDB } from "@vueuse/firebase/useRTDB";
 import { db } from "@/firebase";
 import { ref as dbRef } from "firebase/database";
-import { type Textable, type Connection } from "./entity";
-
-export interface NepoEmployment {
-  name: string;
-  parties?: string[];
-  employments?: Record<string, Connection>;
-  connections?: Record<string, Connection>;
-  sources: Record<string, Textable>;
-  sourceURL: string; // TODO get rid of it
-  comments?: Record<string, Textable>;
-  descriptionLen?: number;
-}
+import { type NepoEmployment } from "./model";
 
 export function useListEmployment() {
   const peopleRaw = useRTDB<{ employed: Record<string, NepoEmployment> }>(

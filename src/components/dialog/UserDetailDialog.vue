@@ -21,7 +21,7 @@
         <v-btn
           @click.stop="dialogStore.open({
             name: '',
-            type: { entity: 'employed' },
+            type: 'employed',
             edit: { value: person, key: node  },
             defaultValue: () => empty('employed')
           })"
@@ -41,7 +41,7 @@
 <script lang="ts" setup>
 import { useListEmployment } from "@/composables/party";
 import { useDialogStore } from "@/stores/dialog";
-import { empty } from "@/composables/entity"
+import { empty } from "@/composables/model"
 
 const dialogStore = useDialogStore();
 

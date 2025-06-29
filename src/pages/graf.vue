@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useListEmployment } from "@/composables/party";
 import { useListEntity } from "@/composables/entity";
-import { type Company } from '@/composables/company'
+import { type Company } from '@/composables/model'
 import { defineConfigs, type Node as vNGNode, type EventHandlers, type NodeEvent } from "v-network-graph";
 import {
   ForceLayout,
@@ -12,7 +12,7 @@ import {usePartyStatistics} from '@/composables/party'
 import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue'
 
 const { people } = useListEmployment();
-const { entities: companies } = useListEntity<Company>("company");
+const { entities: companies } = useListEntity("company");
 
 interface Node extends vNGNode {
   type: "circle" | "rect"

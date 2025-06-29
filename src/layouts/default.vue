@@ -1,4 +1,5 @@
 <template>
+  <multi-dialog />
   <v-app-bar>
     <v-img
       class="mx-2"
@@ -21,8 +22,6 @@
   </v-app-bar>
   <v-main>
     <v-container class="fill-height" :max-width="maxWidth">
-      <multi-dialog />
-
       <router-view />
     </v-container>
   </v-main>

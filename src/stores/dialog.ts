@@ -1,67 +1,74 @@
 // src/stores/dialog.ts
 import { defineStore } from 'pinia';
-import { markRaw, type Component, ref } from 'vue';
-import { type Destination, type Nameable } from '@/composables/entity';
-import AddCompanyDialog from '@/components/dialog/AddCompanyDialog.vue';
-import AddArticleDialog from '@/components/dialog/AddArticleDialog.vue';
-import AddSuggestionDialog from '@/components/dialog/AddSuggestionDialog.vue';
-import AddBatchEmployedDialog from '@/components/dialog/AddBatchEmployedDialog.vue';
-import AddEmployedDialog from '@/components/dialog/AddEmployedDialog.vue';
+import { ref } from 'vue';
+import { useListEntity } from '@/composables/entity';
+import type { Destination } from '@/composables/model';
+import type { DestinationTypeMap } from '@/composables/model';
 
-export interface DialogType {
-  entity: Destination
-  format?: "batch"
-}
-
-function lookupComponent(d: DialogType) {
-  switch(d.entity) {
-    case 'employed':
-      if (d.format == 'batch') return AddBatchEmployedDialog
-      return AddEmployedDialog
-    case 'company':
-      return AddCompanyDialog
-    case 'data':
-      return AddArticleDialog
-    case 'suggestion':
-      return AddSuggestionDialog
-  }
-}
-
-interface NewEntityPayload<T extends Nameable> {
+interface NewEntityPayload<D extends Destination> {
   name: string;      // name of the dialog to open
-  type: DialogType;  // what type of dialog to open
+  type: D;          // what type of dialog to open
   edit?: {
-    value: T    // value to prepopulate with
+    value: DestinationTypeMap[D]    // value to prepopulate with
     key: string
   }
-  defaultValue: () => T
+  defaultValue: () => DestinationTypeMap[D]
 }
 
-interface Dialog {
-  component: Component
-  value: Nameable
-  show: boolean
-  props?: Record<string, unknown>
+export const config: Record<Destination, {title: string, titleIcon: string}> = {
+  data: {
+    title: "Dodaj nowy artykuł",
+    titleIcon: "mdi-file-document-plus-outline"
+  },
+  employed: {
+    title: "Dodaj nową osobę",
+    titleIcon: "mdi-account-plus-outline"
+  },
+  company: {
+    title: "Dodaj miejsce pracy",
+    titleIcon: "mdi-domain"
+  },
+  suggestion: {
+    title: "Dodaj pomysł na stronę",
+    titleIcon: "mdi-lightbulb-on-10"
+  }
+}
+
+// Values shown by the dialog tab
+interface Dialog<D extends Destination> {
+  value: DestinationTypeMap[D]
+  type: D
 }
 
 export const useDialogStore = defineStore('dialog', () => {
-  const dialogs = ref<Dialog[]>([]);
+  const dialogs = ref<Dialog<Destination>[]>([]);
   const currentDialog = ref<number>()
   const shown = ref(false)
+  const showSnackbar = ref(false)
   type Idx = number
 
-  function open<T extends Nameable>(payload: NewEntityPayload<T>) {
+  function open<D extends Destination>(payload: NewEntityPayload<D>) {
     shown.value = true
-    const dialog: Dialog = {
-      component: lookupComponent(payload.type), // TODO markRaw
+    const dialog: Dialog<D> = {
       value: payload.edit?.value || payload.defaultValue(),
-      show: true,
+      type: payload.type
+      // TODO remove component: markRaw(lookupComponent(payload.type)),
+      // TODO remove payload: markRaw(payload)
     }
+    console.log(dialog)
     const len = dialogs.value.push(dialog)
     currentDialog.value = len - 1
   }
 
-  function close(idx: Idx, data?: unknown, isSuccess = true) {
+  function close(idx: Idx, shouldSubmit: boolean) {
+    if (shouldSubmit) {
+      const { submit } = useListEntity(dialogs.value[idx].type)
+      submit(dialogs.value[idx].value) // TODO handle edit
+    }
+    remove(idx)
+  }
+
+  function remove(idx: Idx) {
     dialogs.value.splice(idx)
     if (currentDialog.value ?? -1 >= dialogs.value.length) currentDialog.value = dialogs.value.length - 1
     if (dialogs.value.length == 0) {
@@ -70,5 +77,5 @@ export const useDialogStore = defineStore('dialog', () => {
     }
   }
 
-  return { dialogs, shown, currentDialog, open, close };
+  return { dialogs, shown, currentDialog, showSnackbar, open, close };
 });

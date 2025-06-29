@@ -25,7 +25,8 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useDialogStore } from '@/stores/dialog'; // Import the new store
-import { useListEntity, type Destination, Link } from '@/composables/entity';
+import { useListEntity } from '@/composables/entity';
+import { type Destination, Link } from '@/composables/model'
 
 const props = defineProps<{
   label: string;
@@ -56,7 +57,7 @@ function addNewItem() {
     search.value = '';
     dialogStore.open({
       name: newEntityName,
-      type: { entity: props.entity},
+      type: props.entity,
       defaultValue: () => ({name: newEntityName}),
      });
   }

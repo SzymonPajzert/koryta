@@ -14,7 +14,8 @@
 
 <script lang="ts" setup>
 import { useAuthState } from '@/composables/auth';
-import { useDialogStore, type DialogType } from '@/stores/dialog'; // Import the new store
+import { useDialogStore } from '@/stores/dialog'; // Import the new store
+import { empty, type Destination } from '@/composables/model'
 
 const { user } = useAuthState();
 
@@ -22,12 +23,13 @@ const dialogStore = useDialogStore();
 
 type Environment = 'list'
 
-const props = defineProps<{env?: Environment; dialog: DialogType}>()
+const props = defineProps<{env?: Environment; dialog: Destination}>()
 
 let titleIcon = ''
 let buttonText = ''
 
-switch (props.dialog.entity) {
+// TODO look it up in the config in dialog.ts
+switch (props.dialog) {
   case 'employed':
     titleIcon = 'mdi-account-plus-outline'
     buttonText = 'Dodaj osobę'
@@ -48,9 +50,9 @@ switch (props.dialog.entity) {
 
 function openDialog() {
   dialogStore.open({
-    name: 'Nowe ' + props.dialog.entity,
+    name: 'Nowe ' + props.dialog,
     type: props.dialog,
-    defaultValue: () => ({name:"Nowe"}),
+    defaultValue: () => empty(props.dialog),
   });
 }
 </script>

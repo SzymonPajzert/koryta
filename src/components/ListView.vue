@@ -35,7 +35,7 @@
             <v-btn
               @click.stop="dialogStore.open({
                 name: '',
-                type: { entity: 'employed' },
+                type: 'employed',
                 edit: { value: person, key: key  },
                 defaultValue: () => empty('employed')})"
               variant="tonal"
@@ -53,10 +53,10 @@
 </template>
 
 <script setup lang="ts">
-import {type NepoEmployment} from '@/composables/party'
+import {type NepoEmployment} from '@/composables/model'
 import PartyChip from './PartyChip.vue';
 import { useAuthState} from '@/composables/auth'
-import { empty } from "@/composables/entity"
+import { empty } from "@/composables/model"
 import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
 import { useDialogStore } from '@/stores/dialog'; // Import the new store
 

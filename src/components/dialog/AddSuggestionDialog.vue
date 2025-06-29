@@ -1,46 +1,20 @@
 <template>
-  <AddAbstractDialog
-    buttonText="Pomysł na stronę"
-    title="Zaproponuj poprawki na stronie"
-    title-icon="mdi-lightbulb-on-10"
-    suggestionPath="suggestions/improvements"
-    suggestionType="improvement"
-    :initialFormData
-    :toOutput
-    v-model="formData"
-    :dialog-type="{ entity: 'suggestion' }"
-    :store-id
-  >
-    <v-row dense>
-      <v-col
-        cols="12"
-      >
-        <v-textarea
-          v-model="formData.suggestion"
-          label="Sugestia"
-          hint="Co możemy poprawić na stronie"
-          autocomplete="off"
-          required
-        ></v-textarea>
-      </v-col>
-    </v-row>
-  </AddAbstractDialog>
+  <v-row dense>
+    <v-col
+      cols="12"
+    >
+      <v-textarea
+        v-model="formData.name"
+        label="Sugestia"
+        hint="Co możemy poprawić na stronie"
+        autocomplete="off"
+        required
+      ></v-textarea>
+    </v-col>
+  </v-row>
 </template>
 
 <script lang="ts" setup>
-  import AddAbstractDialog from './AddAbstractDialog.vue';
-  import { ref } from 'vue'
-
-  const { storeId } = defineProps<{
-    storeId: number;
-  }>();
-
-  const initialFormData = () => ({
-    suggestion: '',
-  });
-
-  const formData = ref(initialFormData());
-  const toOutput = (data: ReturnType<typeof initialFormData>) => {
-    return data;
-  };
+  import type { Nameable } from '@/composables/model';
+  const formData = defineModel<Nameable>({required: true});
 </script>

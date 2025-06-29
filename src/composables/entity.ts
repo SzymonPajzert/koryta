@@ -1,57 +1,51 @@
 import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { db } from '@/firebase'
-import { ref as dbRef } from 'firebase/database'
-import type { NepoEmployment } from './party'
+import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database'
+import type { NepoEmployment, DestinationTypeMap } from './model'
+import { useAuthState } from './auth'
+import {type Destination} from './model'
 
-export interface Textable {
-  text: string
-}
-
-export interface Nameable {
-  name: string
-}
-
-export interface Connection {
-  text: string;
-  connection?: Link<Destination>;
-  relation: string;
-}
-
-export type Destination = 'employed' | 'company' | 'data' | 'suggestion'
-
-export class Link<T extends Destination> {
-  public readonly type: T;
-  public readonly id: string
-  public readonly text: string
-  constructor(type: T, id: string, text: string) {
-    this.type = type;
-    this.id = id;
-    this.text = text
-  }
-}
-
-type ImprovedLinks = {
-  [K in Destination]: Record<string, Link<K>>;
-};
-
-export function empty(d: 'employed'): NepoEmployment;
-export function empty(d: Destination) {
-  if (d == 'employed') {
-    return {
-      'name': '',
-      'comments': {},
-      'connections': {},
-      'employments': {},
-      'sources': {},
-      'sourceURL': ''
+function operation(editKey?: string) {
+  let operation = push;
+  if (editKey && isAdmin.value) {
+    operation = (parent, value) => {
+      set(parent, value);
+      return {key: editKey, ref: parent} as ThenableReference
     }
   }
-
-  return undefined as any
+  return operation
 }
 
-export function useListEntity<T extends Nameable>(entity: Destination) {
+const { user, isAdmin } = useAuthState()
+
+export function useListEntity<D extends Destination>(entity: D) {
+
+  type T = DestinationTypeMap[D]
 
   const entities = useRTDB<Record<string, T>>(dbRef(db, entity))
-  return { entities, empty }
+  const suggestions = useRTDB<Record<string, T>>(dbRef(db, `suggestions/${entity}`))
+
+  function submitPath(): string {
+    if (isAdmin.value) return entity // Only admins can actually edit
+    return `suggestions/${entity}` // Everything else goes to suggestion
+  }
+
+  function submit(value: T, editKey?: string) {
+    if (!user.value?.uid) {
+      return "User not authenticated or UID not available."
+    }
+
+    const path = dbRef(db, submitPath())
+    const op = operation()
+    console.log("trying to write: ", value)
+
+    const keyRef = op(path, {
+      ...value,
+      date: Date.now(),
+      user: user.value?.uid,
+    }).key;
+    push(dbRef(db, `user/${user.value?.uid}/suggestions/${entity}`), keyRef)
+  }
+
+  return { entities, suggestions, submit }
 }
