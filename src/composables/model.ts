@@ -1,3 +1,5 @@
+import { useSuggestDB } from '@/composables/suggestDB'
+
 export interface Textable {
   text: string
 }
@@ -52,6 +54,24 @@ interface ArticleStatus {
   markedDone: Record<string, number>
   confirmedDone: boolean
 }
+
+const { newKey } = useSuggestDB();
+
+function recordOf<T>(value: T): Record<string, T> {
+  const result: Record<string, T>= {}
+  result[newKey()] = value
+  return result
+}
+
+export function fillBlankRecords<D extends Destination>(value: DestinationTypeMap[D], d: D): DestinationTypeMap[D];
+export function fillBlankRecords(value: NepoEmployment, d: 'employed'): NepoEmployment {
+  if (!value.comments) value.comments = recordOf({ text: ''})
+  if (!value.connections) value.connections = recordOf({text: '', relation: ''})
+  if (!value.employments) value.employments = recordOf({text: '', relation: ''})
+  if (!value.sources) value.sources = recordOf({text: ''})
+  return value
+}
+
 
 export function empty<D extends Destination>(d: D): DestinationTypeMap[D];
 export function empty(d: Destination) {

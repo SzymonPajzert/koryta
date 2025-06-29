@@ -79,15 +79,6 @@ import NestedConnectionField from "@/components/forms/NestedConnectionField.vue"
 import { emptyTextable, emptyNestedConnection } from "@/composables/multiTextHelper";
 
 const formData = defineModel<NepoEmployment>({required: true});
-if (!formData.value) formData.value =  {
-  name: '',
-  parties: [] as string[],
-  employments: {},
-  connections: {},
-  sourceURL: '',
-  sources: {},
-  comments: {},
-}
 
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);

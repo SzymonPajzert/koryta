@@ -15,7 +15,7 @@
 <script lang="ts" setup>
 import { useAuthState } from '@/composables/auth';
 import { useDialogStore } from '@/stores/dialog'; // Import the new store
-import { empty, type Destination } from '@/composables/model'
+import { empty, fillBlankRecords, type Destination } from '@/composables/model'
 
 const { user } = useAuthState();
 
@@ -51,8 +51,7 @@ switch (props.dialog) {
 function openDialog() {
   dialogStore.open({
     name: 'Nowe ' + props.dialog,
-    type: props.dialog,
-    defaultValue: () => empty(props.dialog),
+    type: props.dialog
   });
 }
 </script>

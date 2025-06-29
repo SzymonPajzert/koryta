@@ -36,8 +36,7 @@
               @click.stop="dialogStore.open({
                 name: '',
                 type: 'employed',
-                edit: { value: person, key: key  },
-                defaultValue: () => empty('employed')})"
+                edit: { value: person, key: key  }})"
               variant="tonal"
               prepend-icon="mdi-pencil-outline">
               <template #prepend>

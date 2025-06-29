@@ -15,7 +15,6 @@
               <v-card-text>
                 <component
                   :is="lookupComponent(dialog.type)"
-                  :store-id="id"
                   v-model="dialog.value"
                   @close="dialogStore.close(id, false)"
                   @submit="dialogStore.close(id, true)"

@@ -2,9 +2,10 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useListEntity } from '@/composables/entity';
-import type { Destination } from '@/composables/model';
+import { empty, fillBlankRecords, type Destination } from '@/composables/model'
 import type { DestinationTypeMap } from '@/composables/model';
 
+// TODO this could be a class and have everything defined already
 interface NewEntityPayload<D extends Destination> {
   name: string;      // name of the dialog to open
   type: D;          // what type of dialog to open
@@ -12,7 +13,6 @@ interface NewEntityPayload<D extends Destination> {
     value: DestinationTypeMap[D]    // value to prepopulate with
     key: string
   }
-  defaultValue: () => DestinationTypeMap[D]
 }
 
 export const config: Record<Destination, {title: string, titleIcon: string}> = {
@@ -47,13 +47,15 @@ export const useDialogStore = defineStore('dialog', () => {
   const showSnackbar = ref(false)
   type Idx = number
 
+  // TODO open could be just type and optional edit payload (value and key to submit)
   function open<D extends Destination>(payload: NewEntityPayload<D>) {
+    const defaultValue = () => empty(payload.type)
+    const filler = (r: DestinationTypeMap[D]) => fillBlankRecords(r, payload.type)
+
     shown.value = true
     const dialog: Dialog<D> = {
-      value: payload.edit?.value || payload.defaultValue(),
+      value: filler(payload.edit?.value || defaultValue()),
       type: payload.type
-      // TODO remove component: markRaw(lookupComponent(payload.type)),
-      // TODO remove payload: markRaw(payload)
     }
     console.log(dialog)
     const len = dialogs.value.push(dialog)

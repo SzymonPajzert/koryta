@@ -58,7 +58,6 @@ function addNewItem() {
     dialogStore.open({
       name: newEntityName,
       type: props.entity,
-      defaultValue: () => ({name: newEntityName}),
      });
   }
 }
