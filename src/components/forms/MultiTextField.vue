@@ -7,6 +7,7 @@
         :label="`${props.title} ${index + 1}`"
         :hint="props.hint"
         autocomplete="off"
+        :fieldType="props.fieldType"
         :rows="props.fieldType === 'textarea' ? 2 : undefined"
         :prepend-inner-icon="props.prependIcon"
         :entity="props.entity"
@@ -44,7 +45,7 @@
     fieldType: F;
     fieldComponent?: CompatibleComponent[F];
     emptyValue: () => ComponentModel[F];
-    entity: Destination
+    entity?: Destination
   }>(), {
     hint: 'Wprowadź wartość',
   });

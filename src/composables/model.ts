@@ -63,13 +63,29 @@ function recordOf<T>(value: T): Record<string, T> {
   return result
 }
 
-export function fillBlankRecords<D extends Destination>(value: DestinationTypeMap[D], d: D): DestinationTypeMap[D];
-export function fillBlankRecords(value: NepoEmployment, d: 'employed'): NepoEmployment {
-  if (!value.comments) value.comments = recordOf({ text: ''})
-  if (!value.connections) value.connections = recordOf({text: '', relation: ''})
-  if (!value.employments) value.employments = recordOf({text: '', relation: ''})
-  if (!value.sources) value.sources = recordOf({text: ''})
-  return value
+export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D): DestinationTypeMap[D];
+export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D) {
+  if (d == 'employed') {
+    const value = valueUntyped as NepoEmployment
+    if (!value.comments) value.comments = recordOf({ text: ''})
+    if (!value.connections) value.connections = recordOf({text: '', relation: ''})
+    if (!value.employments) value.employments = recordOf({text: '', relation: ''})
+    if (!value.sources) value.sources = recordOf({text: ''})
+    return value
+  }
+  if (d == 'company') {
+    return valueUntyped as Company
+  }
+  if (d == 'suggestion') {
+    return valueUntyped as Nameable
+  }
+  if (d == 'data') {
+    const value = valueUntyped as Article
+    if (!value.comments) value.comments = recordOf({ text: ''})
+    return value
+  }
+
+  return undefined as any
 }
 
 
@@ -112,11 +128,10 @@ export function empty(d: Destination) {
 export interface DestinationTypeMap {
   employed: NepoEmployment;
   company: Company;
-  data: Article; // TODO
+  data: Article;
   suggestion: Nameable; // TODO
 }
 
-// TODO what does this class do?
 export class Link<T extends Destination> {
   public readonly type: T;
   public readonly id: string
@@ -127,8 +142,3 @@ export class Link<T extends Destination> {
     this.text = text
   }
 }
-
-// TODO do I still need it
-type ImprovedLinks = {
-  [K in Destination]: Record<string, Link<K>>;
-};

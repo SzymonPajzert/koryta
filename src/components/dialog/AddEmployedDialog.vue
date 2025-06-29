@@ -59,7 +59,7 @@
       title="Inna uwaga"
       v-model="formData.comments"
       field-type="textarea"
-      :field-component="VTextarea"
+      :field-component="TextableWrap"
       hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
       add-item-tooltip="Dodaj kolejną uwagę"
       remove-item-tooltip="Usuń uwagę"
@@ -77,6 +77,7 @@ import { computed } from "vue";
 import MultiTextField from "@/components/forms/MultiTextField.vue";
 import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";
 import { emptyTextable, emptyNestedConnection } from "@/composables/multiTextHelper";
+import TextableWrap from "../forms/TextableWrap.vue";
 
 const formData = defineModel<NepoEmployment>({required: true});
 

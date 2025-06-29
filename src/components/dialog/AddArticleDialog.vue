@@ -28,7 +28,7 @@
       title="Co jest w nim ciekawego"
       v-model="formData.comments"
       field-type="textarea"
-      :field-component="VTextarea"
+      :field-component="TextableWrap"
       :empty-value="emptyTextable"
       hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
       add-item-tooltip="Dodaj kolejne zadanie"
@@ -42,7 +42,7 @@
   import { httpsCallable } from 'firebase/functions';
   import type { Article } from '@/composables/model';
   import { emptyTextable } from "@/composables/multiTextHelper";
-  import { VTextarea } from 'vuetify/components';
+  import TextableWrap from '../forms/TextableWrap.vue';
 
   interface ArticleExtended extends Article {
     isFetchingTitle?: boolean;

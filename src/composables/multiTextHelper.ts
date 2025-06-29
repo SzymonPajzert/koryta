@@ -1,12 +1,12 @@
-import type { VTextarea, VTextField } from "vuetify/components"
 import NestedConnestionField from '@/components/forms/NestedConnectionField.vue'
+import TextableWrap from '@/components/forms/TextableWrap.vue'
 import { type Connection, type Textable} from "@/composables/model";
 
 export type Type = 'textField' | 'textarea' | 'nestedConnection'
 
 export interface CompatibleComponent {
-  textField: VTextField
-  textarea: VTextarea
+  textField: typeof TextableWrap
+  textarea: typeof TextableWrap
   nestedConnection: typeof NestedConnestionField
 }
 
