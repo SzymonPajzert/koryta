@@ -9,21 +9,7 @@ export function useListEmployment() {
     dbRef(db, "employed")
   );
   const people = computed<Record<string, NepoEmployment>>(() =>
-    Object.fromEntries(
-      Object.entries(peopleRaw.value ?? {}).map(([key, value]) => [
-        key,
-        {
-          ...value,
-          descriptionLen:
-            Object.values(value.employments ?? {})
-              .map((e) => e.text.length)
-              .reduce((a, b) => a + b, 0) +
-            Object.values(value.connections ?? {})
-              .map((e) => e.text.length)
-              .reduce((a, b) => a + b, 0),
-        } as NepoEmployment,
-      ])
-    )
+    peopleRaw.value ?? {}
   );
   return { people };
 }

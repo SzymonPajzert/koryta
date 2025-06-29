@@ -68,9 +68,19 @@ function showUser(key: string) {
   dialog.value.setNode(key);
 }
 
+type SortedEmployment = NepoEmployment & { descriptionLen: number };
+
 const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
-const peopleOrdered = computed<[string, NepoEmployment][]>(() => {
-  const result = Object.entries(people ?? {});
+const peopleOrdered = computed<[string, SortedEmployment][]>(() => {
+  const result = Object.entries(people ?? {}).map(([key, value]) => [key, {
+    ...value,
+    descriptionLen:
+            Object.values(value.employments ?? {})
+              .map((e) => e.text.length)
+              .reduce((a, b) => a + b, 0) +
+            Object.values(value.connections ?? {})
+              .map((e) => e.text.length)
+              .reduce((a, b) => a + b, 0)}] as [string, SortedEmployment]);
   result.sort((a, b) => (b[1].descriptionLen ?? 0) - (a[1].descriptionLen ?? 0));
   return result;
 })

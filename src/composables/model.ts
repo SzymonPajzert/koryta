@@ -18,8 +18,6 @@ export interface NepoEmployment extends Nameable {
   name: string;
   parties?: string[];
 
-  descriptionLen?: number; // Calculated after retrieving from DB
-
   sourceURL: string; // TODO get rid of it
 
   sources: Record<string, Textable>;
@@ -40,13 +38,6 @@ export interface Article extends Nameable {
 
   date?: number;
   status?: ArticleStatus
-
-  // We precalculate some state for the articles list
-  // To not worry about the DB.
-  enrichedStatus?: {
-    isAssignedToCurrentUser: boolean;
-    hideArticle: boolean;
-  }
 }
 
 interface ArticleStatus {

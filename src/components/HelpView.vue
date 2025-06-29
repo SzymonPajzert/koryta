@@ -116,8 +116,15 @@ function removeOlderEntries(entries: Record<string, number>): Record<string, num
   }))
 }
 
+interface EnrichedStatus {
+  enrichedStatus: {
+    isAssignedToCurrentUser: boolean;
+    hideArticle: boolean;
+  }
+}
+
 const allArticlesUnfiltered = useRTDB<Record<string, Article>>(dbRef(db, 'data'))
-const articles = computed<Record<string, Article>>(() => {
+const articles = computed<Record<string, Article & EnrichedStatus>>(() => {
   // Don't show any articles if the user is not logged in or there's no data yet.
   if (!user.value) return {};
   if (!allArticlesUnfiltered.value) return {};
@@ -133,7 +140,7 @@ const articles = computed<Record<string, Article>>(() => {
       }
       const status = articleData.status;
 
-      if (!user.value) return [articleId, articleData] as [string, Article];
+      if (!user.value) return [articleId, articleData] as [string, Article & EnrichedStatus];
       const userMarkedAsDone : boolean = !!(status.markedDone[user.value.uid])
       const twoUsersMarkedAsDone : boolean  = Object.keys(status.markedDone).length > 1
       const userAssignedToThemselves : boolean  = !!(status.signedUp[user.value.uid])
@@ -145,7 +152,7 @@ const articles = computed<Record<string, Article>>(() => {
           isAssignedToCurrentUser: userAssignedToThemselves,
           hideArticle: status.confirmedDone || userMarkedAsDone || twoUsersMarkedAsDone || assignedToAnotherUser
         }
-      } as Article] as [string, Article];
+      }] as [string, Article & EnrichedStatus];
     }).filter(([_, article]) => !article.enrichedStatus?.hideArticle)
     .sort(([_1, articleA], [_2, articleB]) => {
       if (articleA.enrichedStatus?.isAssignedToCurrentUser) return -1;
