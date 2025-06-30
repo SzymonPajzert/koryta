@@ -63,6 +63,10 @@ function recordOf<T>(value: T): Record<string, T> {
   return result
 }
 
+// TODO(cleanup) this seems like it could be a class
+// I just don't know how we could do it  and even if this is better to do
+// we're mainly using interfaces elsewhere and it seems to work
+
 export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D): DestinationTypeMap[D];
 export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D) {
   if (d == 'employed') {
