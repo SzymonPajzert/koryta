@@ -60,12 +60,15 @@ function addNewItem() {
     search.value = '';
     dialogStore.open({
       type: props.entity,
-      name: newEntityName
+      name: newEntityName,
+      callback: (name, key) => {
+        if (!key) {
+          console.warn("failed to obtain key for new entity: ", name);
+          return
+        }
+        model.value = new Link<typeof props.entity>(props.entity, key, name);
+      }
      });
-
-     // TODO watch the corresponding dialog for closing.
-     // If it does, set its key and name as the value of this field
-     // This is the parent who caused its creation
   }
 }
 </script>

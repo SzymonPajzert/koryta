@@ -34,7 +34,7 @@ export function useListEntity<D extends Destination>(entity: D) {
 
   function submit(value: T, editKey: string | undefined) {
     if (!user.value?.uid) {
-      return "User not authenticated or UID not available."
+      return { error: "User not authenticated or UID not available." }
     }
 
     const path = dbRef(db, submitPath(editKey))
@@ -47,6 +47,7 @@ export function useListEntity<D extends Destination>(entity: D) {
       user: user.value?.uid,
     }).key;
     push(dbRef(db, `user/${user.value?.uid}/suggestions/${entity}`), keyRef)
+    return { key: keyRef }
   }
 
   return { entities, suggestions, submit }
