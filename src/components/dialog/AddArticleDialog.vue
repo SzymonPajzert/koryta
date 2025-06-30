@@ -24,16 +24,22 @@
       ></v-text-field>
     </v-col>
 
-    <MultiTextField
-      title="Co jest w nim ciekawego"
-      v-model="formData.comments"
-      field-type="textarea"
-      :field-component="TextableWrap"
-      :empty-value="emptyTextable"
-      hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
-      add-item-tooltip="Dodaj kolejne zadanie"
-      remove-item-tooltip="Usuń zadanie"
-    />
+    <v-col cols="12" md="8">
+      <v-text-field
+        v-model="formData.shortName"
+        label="Skrócony tytuł"
+        autocomplete="off"
+        :disabled="formData.isFetchingTitle"
+      ></v-text-field>
+    </v-col>
+
+    <v-col cols="12" md="4">
+      <v-text-field
+        v-model="formData.estimates.mentionedPeople"
+        label="Liczba wspomnianych osób"
+        autocomplete="off"
+      ></v-text-field>
+    </v-col>
 
     <MultiTextField
       title="Wspomniane osoby"
@@ -58,6 +64,17 @@
       remove-item-tooltip="Usuń miejsce"
       :empty-value="() => emptyEntityPicker('company')"
     />
+
+    <MultiTextField
+      title="Co jest w nim ciekawego"
+      v-model="formData.comments"
+      field-type="textarea"
+      :field-component="TextableWrap"
+      :empty-value="emptyTextable"
+      hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
+      add-item-tooltip="Dodaj kolejne zadanie"
+      remove-item-tooltip="Usuń zadanie"
+    />
   </v-row>
 </template>
 
@@ -68,6 +85,7 @@
   import { emptyTextable, emptyEntityPicker } from "@/composables/multiTextHelper";
   import TextableWrap from '../forms/TextableWrap.vue';
   import EntityPicker from '../forms/EntityPicker.vue';
+  import { splitTitle } from '@/composables/entities/articles';
 
   interface ArticleExtended extends Article {
     isFetchingTitle?: boolean;
@@ -81,8 +99,9 @@
       formData.value.isFetchingTitle = true;
       try {
         const result = await getPageTitle({ url: formData.value.sourceURL });
-        const title = (result.data as any).title;
+        const title: string | undefined = (result.data as any).title;
         formData.value.name = title || '';
+        formData.value.shortName = title ? splitTitle(title, 1)[0] : undefined;
       } catch (error) {
         console.error("Error fetching page title:", error);
         formData.value.name = '';

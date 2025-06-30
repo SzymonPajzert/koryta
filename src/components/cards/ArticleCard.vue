@@ -45,20 +45,11 @@
 
 <script lang="ts" setup>
 import type {Article} from '@/composables/model'
-import { type EnrichedStatus, useArticles } from '@/composables/entities/articles'
+import { type EnrichedStatus, useArticles, getShortTitle, getSubtitle } from '@/composables/entities/articles'
 import { useDialogStore } from '@/stores/dialog'; // Import the new store
 
 const dialogStore = useDialogStore();
 
 const { articleID, article } = defineProps<{ articleID: string, article: Article & EnrichedStatus }>()
 const { markArticleAsDone, assignToArticle } = useArticles()
-
-function getSubtitle(data: Article): string | undefined {
-  const parts = data.name.split('.', 2);
-  return parts.length > 1 ? parts[1].trim() : undefined;
-}
-
-function getShortTitle(data: Article): string {
-  return data.name.split('.', 1)[0].trim();
-}
 </script>

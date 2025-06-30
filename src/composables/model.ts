@@ -38,6 +38,11 @@ export interface Article extends Nameable {
   people: Record<string, Link<'employed'>>
   companies: Record<string, Link<'company'>>
 
+  shortName?: string
+  estimates: {
+    mentionedPeople?: number
+  }
+
   date?: number;
   status?: ArticleStatus
 }
@@ -77,6 +82,7 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
     if (!value.comments) value.comments = recordOf({ text: ''})
     if (!value.companies) value.companies = recordOf(new Link("company", '', ''))
     if (!value.people) value.people = recordOf(new Link("employed", '', ''))
+    if (!value.estimates) value.estimates = {}
     return value
   }
 
@@ -110,6 +116,7 @@ export function empty(d: Destination) {
       comments: {},
       people: {},
       companies: {},
+      estimates: {},
     }
     return result
   }
