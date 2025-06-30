@@ -28,8 +28,10 @@ export interface NepoEmployment extends Nameable {
 
 export interface Company extends Nameable {
   name: string
-  owner?: Link<'company'>
+  owners: Record<string, Link<'company'>>
+  owner?: Link<'company'> // TODO(migrate-db) deprecate this field, prefer owners
   manager?: Link<'employed'>
+  comments: Record<string, Textable>
 }
 
 export interface Article extends Nameable {
@@ -72,7 +74,13 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
     return value
   }
   if (d == 'company') {
-    return valueUntyped as Company
+    const value = valueUntyped as Company
+    if (!value.owners) {
+      if (value.owner) value.owners = recordOf(value.owner)
+      else value.owners = recordOf(new Link("company", '', ''))
+    }
+    value.comments = {}
+    return value // TODO(cleanup) remove this return - some check should start failing
   }
   if (d == 'suggestion') {
     return valueUntyped as Nameable
@@ -105,7 +113,9 @@ export function empty(d: Destination) {
   }
   if (d == 'company') {
     const result: Company = {
-      name: ''
+      name: '',
+      owners: {},
+      comments: {},
     }
     return result
   }
