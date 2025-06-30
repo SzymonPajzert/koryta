@@ -88,7 +88,7 @@ const userActivityStats = computed<UserActivityStat[]>(() => {
     const improvementCount = Object.keys(suggestions.improvement || {}).length;
 
     // Use displayName if available, otherwise fallback to UID
-    const userName = userData.displayName || uid == user.value?.uid ? user.value?.displayName || uid : uid;
+    const userName = userData.displayName || (uid == user.value?.uid ? user.value?.displayName || uid : uid);
 
     stats.push({
       id: uid,
