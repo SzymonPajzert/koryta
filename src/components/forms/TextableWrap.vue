@@ -3,13 +3,21 @@
     <VTextField
       v-model="textable.text"
       v-bind="$attrs"
-    ></VTextField>
+    >
+      <template #prepend>
+        <slot name="prepend"></slot>
+      </template>
+    </VTextField>
   </template>
   <template v-if="props.fieldType == 'textarea'">
     <VTextarea
       v-model="textable.text"
       v-bind="$attrs"
-    ></VTextarea>
+    >
+      <template #prepend>
+        <slot name="prepend"></slot>
+      </template>
+    </VTextarea>
   </template>
 </template>
 

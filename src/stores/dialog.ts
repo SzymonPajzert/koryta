@@ -8,6 +8,7 @@ import type { DestinationTypeMap } from '@/composables/model';
 // TODO this could be a class and have everything defined already
 interface NewEntityPayload<D extends Destination> {
   type: D;          // what type of dialog to open
+  name?: string     // name to populate if given
   edit?: {
     value: DestinationTypeMap[D]    // value to prepopulate with
     key: string
@@ -58,7 +59,7 @@ export const useDialogStore = defineStore('dialog', () => {
       type: payload.type,
       editKey: payload.edit?.key
     }
-    console.log(dialog)
+    if (payload.name) dialog.value.name = payload.name
     const len = dialogs.value.push(dialog)
     currentDialog.value = len - 1
   }

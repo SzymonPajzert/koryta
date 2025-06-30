@@ -32,7 +32,6 @@
       ></v-select>
     </v-col>
 
-    <!-- Dynamic fields for Employments -->
     <MultiTextField
       title="Zatrudnienie"
       v-model="formData.employments"

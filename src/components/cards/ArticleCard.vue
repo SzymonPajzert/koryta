@@ -5,7 +5,9 @@
     :subtitle="getSubtitle(article)"
     class="mb-2"
 
-    :href="article.sourceURL"
+    @click="dialogStore.open({
+      type: 'data',
+      edit: { value: article, key: articleID  }})"
     target="_blank"
     height="100%"
     >
@@ -44,6 +46,9 @@
 <script lang="ts" setup>
 import type {Article} from '@/composables/model'
 import { type EnrichedStatus, useArticles } from '@/composables/entities/articles'
+import { useDialogStore } from '@/stores/dialog'; // Import the new store
+
+const dialogStore = useDialogStore();
 
 const { articleID, article } = defineProps<{ articleID: string, article: Article & EnrichedStatus }>()
 const { markArticleAsDone, assignToArticle } = useArticles()

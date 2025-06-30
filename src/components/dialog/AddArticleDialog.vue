@@ -34,6 +34,30 @@
       add-item-tooltip="Dodaj kolejne zadanie"
       remove-item-tooltip="Usuń zadanie"
     />
+
+    <MultiTextField
+      title="Wspomniane osoby"
+      v-model="formData.people"
+      field-type="entityPicker"
+      :field-component="EntityPicker"
+      entity="employed"
+      hint="np. polityk Adam"
+      add-item-tooltip="Dodaj kolejną osobę"
+      remove-item-tooltip="Usuń osobę"
+      :empty-value="() => emptyEntityPicker('employed')"
+    />
+
+    <MultiTextField
+      title="Wspomniane firmy / ministerstra"
+      v-model="formData.companies"
+      field-type="entityPicker"
+      :field-component="EntityPicker"
+      entity="company"
+      hint="np. spółka skarbu państwa"
+      add-item-tooltip="Dodaj kolejne miejsce"
+      remove-item-tooltip="Usuń miejsce"
+      :empty-value="() => emptyEntityPicker('company')"
+    />
   </v-row>
 </template>
 
@@ -41,8 +65,9 @@
   import { functions } from '@/firebase'
   import { httpsCallable } from 'firebase/functions';
   import type { Article } from '@/composables/model';
-  import { emptyTextable } from "@/composables/multiTextHelper";
+  import { emptyTextable, emptyEntityPicker } from "@/composables/multiTextHelper";
   import TextableWrap from '../forms/TextableWrap.vue';
+  import EntityPicker from '../forms/EntityPicker.vue';
 
   interface ArticleExtended extends Article {
     isFetchingTitle?: boolean;

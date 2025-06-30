@@ -15,9 +15,12 @@
     <template #no-data>
       <v-list-item v-if="search" @click="addNewItem">
         <v-list-item-title>
-          Add "<strong>{{ search }}</strong>" as a new {{ props.entity }}.
+          Dodaj "<strong>{{ search }}</strong>" do bazy.
         </v-list-item-title>
       </v-list-item>
+    </template>
+    <template #prepend>
+      <slot name="prepend"></slot>
     </template>
   </v-autocomplete>
 </template>
@@ -57,7 +60,12 @@ function addNewItem() {
     search.value = '';
     dialogStore.open({
       type: props.entity,
+      name: newEntityName
      });
+
+     // TODO watch the corresponding dialog for closing.
+     // If it does, set its key and name as the value of this field
+     // This is the parent who caused its creation
   }
 }
 </script>
