@@ -1,103 +1,100 @@
 <script setup lang="ts">
-import { useListEmployment } from "@/composables/party";
-import { useListEntity } from "@/composables/entity";
-import { type Company } from '@/composables/model'
-import { defineConfigs, type Node as vNGNode, type EventHandlers, type NodeEvent } from "v-network-graph";
+import { defineConfigs } from "v-network-graph";
+import  {
+  type EventHandlers,
+  type NodeEvent,
+  type ViewEvent,
+  type LayoutHandler,
+  SimpleLayout
+} from "v-network-graph";
 import {
   ForceLayout,
   type ForceNodeDatum,
   type ForceEdgeDatum,
-} from "v-network-graph/lib/force-layout"; // Corrected import path for ForceLayout
-import {usePartyStatistics} from '@/composables/party'
-import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue'
+} from "v-network-graph/lib/force-layout";
+import * as d3 from "d3-force";
 
-const { people } = useListEmployment();
-const { entities: companies } = useListEntity("company");
+import { useDialogStore } from "@/stores/dialog";
+import { useGraph } from "@/composables/graph";
 
-interface Node extends vNGNode {
-  type: "circle" | "rect"
-  color: string
-}
+const dialogStore = useDialogStore();
 
-const { partyColors } = usePartyStatistics()
+const showActiveArticles = ref(true);
+const showInactiveArticles = ref(true);
+const runSimulation = ref(true)
 
-const nodes = computed(() => {
-  const result: Record<string, Node> = {};
-  Object.entries(people.value).forEach(([key, person]) => {
-    result[key] = {
-      ...person,
-      type: "circle",
-      color: person.parties && person.parties.length > 0 ? partyColors.value[person.parties[0]] : "#4466cc"
-    };
-  });
-  if (!companies.value) return result;
-  Object.entries(companies.value).forEach(([key, company]) => {
-    result[key] = {
-      ...company,
-      type: "rect",
-      color: "gray"
-    };
-  });
-  return result;
-});
+const { nodes, edges } = useGraph(showActiveArticles, showInactiveArticles);
 
-const edges = computed(() => {
-  //     edge1: { source: "node1", target: "node2" },
-  const result: { source: string; target: string; label: string }[] = [];
 
-  Object.entries(people.value).forEach(([key, person]) => {
-    Object.values(person.employments ?? {}).forEach((connection) => {
-      if (connection?.connection?.id) {
-        result.push({
-          source: key,
-          target: connection.connection.id,
-          label: connection.relation,
-        });
-      }
-    });
-    Object.values(person.connections ?? {}).forEach((connection) => {
-      if (connection?.connection?.id) {
-        result.push({
-          source: key,
-          target: connection.connection.id,
-          label: connection.relation,
-        });
-      }
-    });
-  });
+const handleNodeClick = ({ node }: NodeEvent<MouseEvent>) => {
+  dialogStore.openExisting(node);
+};
 
-  Object.entries(companies.value ?? {}).forEach(([key, company]) => {
-    if (company.manager) result.push({
-      source: key,
-      target: company.manager.id,
-      label: "zarządzający",
-    });
-    if (company.owner) result.push({
-      source: key,
-      target: company.owner.id,
-      label: "właściciel",
-    });
+type d3Type = typeof d3;
+
+type CreateSimulationFunction = (
+  d3: d3Type,
+  nodes: ForceNodeDatum[],
+  edges: ForceEdgeDatum[]
+) => d3.Simulation<ForceNodeDatum, ForceEdgeDatum>;
+
+const simulationProgress = ref(0);
+const simulation: CreateSimulationFunction = (d3, nodes, edges) => {
+  // d3-force parameters
+  const forceLink = d3
+    .forceLink<ForceNodeDatum, ForceEdgeDatum>(edges)
+    .id((d: any) => d.id);
+
+  const target = 0.001
+  const log_target = Math.log10(target)
+
+  const result = d3
+    .forceSimulation(nodes)
+    .force("edge", forceLink.distance(80).strength(0.3))
+    .force("charge", d3.forceManyBody().strength(-400))
+    .force("center", d3.forceCenter().strength(0.3))
+    .force("x", d3.forceX().strength(0.02))
+    .force("y", d3.forceY().strength(0.02))
+    .alpha(1)
+    .velocityDecay(0.2)
+    .alphaDecay(0.003);
+
+  result.on("tick.monitor", () => {
+    const currentAlpha = result.alpha();
+    // we start from 1, i.e log 0, the target can be 0.001 i.e -3 (log_target)
+    const linear = Math.log10(currentAlpha) / log_target
+    simulationProgress.value = 100 * linear;
+  })
+  result.on("end.monitor", () => {
+    simulationProgress.value = 100
+    runSimulation.value = false
   })
 
   return result;
-});
-
-const dialog = ref<typeof UserDetailDialog>();
-
-const handleNodeClick = ({node}: NodeEvent<MouseEvent>) => {
-  console.log("click")
-  if (dialog.value) dialog.value.setNode(node)
 };
+
+const newForceLayout = () => new ForceLayout({
+  positionFixedByDrag: false,
+  positionFixedByClickWithAltKey: true,
+  createSimulation: simulation,
+})
+
+const handleDoubleClick = (event : ViewEvent<MouseEvent>) => {
+  dialogStore.openMain()
+}
 
 const eventHandlers: EventHandlers = {
   "node:click": handleNodeClick,
-}
+  "view:dblclick": handleDoubleClick,
+};
 
-const configs = defineConfigs({
+const configs = reactive(defineConfigs({
   node: {
     normal: {
-      type: node => node.type,
-      color: node => node.color,
+      type: (node) => node.type,
+      width: (node) => (node.sizeMult ?? 1) * 32,
+      height: (node) => (node.sizeMult ?? 1) * 32,
+      color: (node) => node.color,
     },
     label: {
       color: "#fff",
@@ -111,33 +108,44 @@ const configs = defineConfigs({
   },
   view: {
     scalingObjects: true,
-    layoutHandler: new ForceLayout({
-      positionFixedByDrag: false,
-      positionFixedByClickWithAltKey: true,
-      createSimulation: (d3, nodes, edges) => {
-        // d3-force parameters
-        const forceLink = d3
-          .forceLink<ForceNodeDatum, ForceEdgeDatum>(edges)
-          .id((d: any) => d.id);
-        return d3
-          .forceSimulation(nodes)
-          .force("edge", forceLink.distance(80).strength(0.3))
-          .force("charge", d3.forceManyBody().strength(-400))
-          .force("center", d3.forceCenter().strength(0.3))
-          .force("x", d3.forceX().strength(0.02))
-          .force("y", d3.forceY().strength(0.02))
-          .alpha(1)
-          .velocityDecay(0.2)
-          .alphaDecay(0.0001)
-      },
-    }),
+    layoutHandler: newForceLayout() as LayoutHandler,
+    doubleClickZoomEnabled: false,
   },
-});
+}));
+
+watch(runSimulation, (value) => {
+  if(value) {
+    configs.view.layoutHandler = newForceLayout()
+  } else {
+    configs.view.layoutHandler = new SimpleLayout()
+  }
+})
 </script>
 
 <template>
-  <UserDetailDialog ref="dialog"></UserDetailDialog>
+  <v-navigation-drawer
+    location="right"
+    permanent>
+    <v-checkbox
+      v-model="showActiveArticles"
+      label="Pokaż aktywne artykuły"
+    ></v-checkbox>
+    <v-checkbox
+      v-model="showInactiveArticles"
+      label="Pokaż nieaktywne artykuły"
+    ></v-checkbox>
+    <v-btn v-model="runSimulation" @click="runSimulation = !runSimulation">
+      Symuluj wierzchołki
 
+      <v-progress-linear
+        v-model="simulationProgress"
+        :active="runSimulation"
+        color="deep-purple-accent-4"
+        location="bottom"
+        absolute
+      ></v-progress-linear>
+    </v-btn>
+  </v-navigation-drawer>
   <v-network-graph
     :nodes="nodes"
     :edges="edges"
@@ -145,7 +153,13 @@ const configs = defineConfigs({
     :eventHandlers="eventHandlers"
   >
     <template #edge-label="{ edge, ...slotProps }">
-      <v-edge-label :text="edge.label" align="center" vertical-align="above" v-bind="slotProps" />
+      <v-edge-label
+        :text="edge.label"
+        align="center"
+        vertical-align="above"
+        v-bind="slotProps"
+      />
     </template>
   </v-network-graph>
+
 </template>
