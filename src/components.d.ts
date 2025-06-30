@@ -8,9 +8,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AddAbstractDialog: typeof import('./components/dialog/AddAbstractDialog.vue')['default']
     AddArticleDialog: typeof import('./components/dialog/AddArticleDialog.vue')['default']
-    AddBatchEmployedDialog: typeof import('./components/dialog/AddBatchEmployedDialog.vue')['default']
     AddCompanyDialog: typeof import('./components/dialog/AddCompanyDialog.vue')['default']
     AddEmployedDialog: typeof import('./components/dialog/AddEmployedDialog.vue')['default']
     AddSuggestionDialog: typeof import('./components/dialog/AddSuggestionDialog.vue')['default']
@@ -20,12 +18,15 @@ declare module 'vue' {
     HomeItem: typeof import('./components/HomeItem.vue')['default']
     ListView: typeof import('./components/ListView.vue')['default']
     LoginView: typeof import('./components/LoginView.vue')['default']
+    MultiDialog: typeof import('./components/dialog/MultiDialog.vue')['default']
     MultiTextField: typeof import('./components/forms/MultiTextField.vue')['default']
     NestedConnectionField: typeof import('./components/forms/NestedConnectionField.vue')['default']
+    OpenAbstractDialog: typeof import('./components/OpenAbstractDialog.vue')['default']
     PartyChart: typeof import('./components/PartyChart.vue')['default']
     PartyChip: typeof import('./components/PartyChip.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    TextableWrap: typeof import('./components/forms/TextableWrap.vue')['default']
     UserActivityTable: typeof import('./components/UserActivityTable.vue')['default']
     UserDetailDialog: typeof import('./components/dialog/UserDetailDialog.vue')['default']
   }

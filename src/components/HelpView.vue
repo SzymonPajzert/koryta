@@ -2,11 +2,10 @@
   <v-navigation-drawer
     location="right"
     permanent>
-    <AddArticleDialog />
-    <AddSuggestionDialog/>
-    <AddEmployedDialog/>
-    <AddCompanyDialog/>
-    <AddBatchEmployedDialog/>
+    <OpenAbstractDialog dialog="data"/>
+    <OpenAbstractDialog dialog="suggestion"/>
+    <OpenAbstractDialog dialog="employed"/>
+    <OpenAbstractDialog dialog="company"/>
   </v-navigation-drawer>
   <v-row cols="12">
     <p> Jeśli masz pytania,
@@ -76,39 +75,18 @@
 <script lang="ts" setup>
 import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { computed } from 'vue';
-import type { Textable } from '@/composables/suggestDB';
 import { useAuthState } from '@/composables/auth'; // Assuming auth store path
 import { ref as dbRef, set, remove } from 'firebase/database';
 import { db } from '@/firebase'
+import type { Article } from '@/composables/model';
 
-interface ArticleStatus {
-  signedUp: Record<string, number>
-  markedDone: Record<string, number>
-  confirmedDone: boolean
-}
-
-interface SubmittedData {
-  date: number;
-  title: string;
-  sourceURL: string;
-  comments: Record<string, Textable>
-  status?: ArticleStatus
-
-  // We precalculate some state for the articles list
-  // To not worry about the DB.
-  enrichedStatus?: {
-    isAssignedToCurrentUser: boolean;
-    hideArticle: boolean;
-  }
-}
-
-function getSubtitle(data: SubmittedData): string | undefined {
-  const parts = data.title.split('.', 2);
+function getSubtitle(data: Article): string | undefined {
+  const parts = data.name.split('.', 2);
   return parts.length > 1 ? parts[1].trim() : undefined;
 }
 
-function getShortTitle(data: SubmittedData): string {
-  return data.title.split('.', 1)[0].trim();
+function getShortTitle(data: Article): string {
+  return data.name.split('.', 1)[0].trim();
 }
 
 const { user, isAdmin } = useAuthState();
@@ -138,8 +116,15 @@ function removeOlderEntries(entries: Record<string, number>): Record<string, num
   }))
 }
 
-const allArticlesUnfiltered = useRTDB<Record<string, SubmittedData>>(dbRef(db, 'data'))
-const articles = computed<Record<string, SubmittedData>>(() => {
+interface EnrichedStatus {
+  enrichedStatus: {
+    isAssignedToCurrentUser: boolean;
+    hideArticle: boolean;
+  }
+}
+
+const allArticlesUnfiltered = useRTDB<Record<string, Article>>(dbRef(db, 'data'))
+const articles = computed<Record<string, Article & EnrichedStatus>>(() => {
   // Don't show any articles if the user is not logged in or there's no data yet.
   if (!user.value) return {};
   if (!allArticlesUnfiltered.value) return {};
@@ -155,7 +140,7 @@ const articles = computed<Record<string, SubmittedData>>(() => {
       }
       const status = articleData.status;
 
-      if (!user.value) return [articleId, articleData] as [string, SubmittedData];
+      if (!user.value) return [articleId, articleData] as [string, Article & EnrichedStatus];
       const userMarkedAsDone : boolean = !!(status.markedDone[user.value.uid])
       const twoUsersMarkedAsDone : boolean  = Object.keys(status.markedDone).length > 1
       const userAssignedToThemselves : boolean  = !!(status.signedUp[user.value.uid])
@@ -167,12 +152,12 @@ const articles = computed<Record<string, SubmittedData>>(() => {
           isAssignedToCurrentUser: userAssignedToThemselves,
           hideArticle: status.confirmedDone || userMarkedAsDone || twoUsersMarkedAsDone || assignedToAnotherUser
         }
-      } as SubmittedData] as [string, SubmittedData];
+      }] as [string, Article & EnrichedStatus];
     }).filter(([_, article]) => !article.enrichedStatus?.hideArticle)
     .sort(([_1, articleA], [_2, articleB]) => {
       if (articleA.enrichedStatus?.isAssignedToCurrentUser) return -1;
       if (articleB.enrichedStatus?.isAssignedToCurrentUser) return 1;
-      return articleA.date - articleB.date;
+      return (articleA.date ?? 0) - (articleB.date ?? 0);
     })
   );
 });

@@ -2,39 +2,14 @@ import { ref, computed } from "vue";
 import { useRTDB } from "@vueuse/firebase/useRTDB";
 import { db } from "@/firebase";
 import { ref as dbRef } from "firebase/database";
-import { type Textable, type Connection } from "./entity";
-
-export interface NepoEmployment {
-  name: string;
-  parties?: string[];
-  employments?: Record<string, Connection>;
-  connections?: Record<string, Connection>;
-  sources: Record<string, Textable>;
-  sourceURL: string; // TODO get rid of it
-  comments?: Record<string, Textable>;
-  descriptionLen?: number;
-}
+import { type NepoEmployment } from "./model";
 
 export function useListEmployment() {
   const peopleRaw = useRTDB<{ employed: Record<string, NepoEmployment> }>(
     dbRef(db, "employed")
   );
   const people = computed<Record<string, NepoEmployment>>(() =>
-    Object.fromEntries(
-      Object.entries(peopleRaw.value ?? {}).map(([key, value]) => [
-        key,
-        {
-          ...value,
-          descriptionLen:
-            Object.values(value.employments ?? {})
-              .map((e) => e.text.length)
-              .reduce((a, b) => a + b, 0) +
-            Object.values(value.connections ?? {})
-              .map((e) => e.text.length)
-              .reduce((a, b) => a + b, 0),
-        } as NepoEmployment,
-      ])
-    )
+    peopleRaw.value ?? {}
   );
   return { people };
 }

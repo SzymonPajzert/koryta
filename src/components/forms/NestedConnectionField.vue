@@ -36,8 +36,8 @@
 
 <script lang="ts" setup>
 import { ref } from "vue";
-import { VTextField, VExpandTransition, VTextarea } from "vuetify/components";
-import { Link, type Destination, type Connection } from "@/composables/entity";
+import { VTextField, VTextarea } from "vuetify/components";
+import { type Destination, type Connection } from "@/composables/model";
 
 // Define props for the component, specifically for v-model support.
 // All other props passed to NestedConnectionField will automatically be bound to VTextField via $attrs.

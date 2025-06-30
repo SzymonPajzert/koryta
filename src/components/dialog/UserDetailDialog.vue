@@ -1,6 +1,6 @@
 <template>
   <v-dialog v-model="visible" max-width="500">
-    <v-card>
+    <v-card v-if="person && node">
       <v-card-title class="headline">
         <PartyChip v-for="party in person?.parties" :key="party" :party />
         <h2 class="text-h5 font-weight-bold">
@@ -18,21 +18,18 @@
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
-        <AddEmployedDialog :initial="person" :editKey="node" v-if="isAdmin">
-          <template #button="activatorProps">
-            <v-btn
-              @click.prevent
-              variant="tonal"
-              prepend-icon="mdi-pencil-outline"
-              v-bind="activatorProps"
-            >
-              <template #prepend>
-                <v-icon color="warning"></v-icon>
-              </template>
-              Edytuj
-            </v-btn>
+        <v-btn
+          @click.stop="dialogStore.open({
+            type: 'employed',
+            edit: { value: person, key: node  }
+          })"
+          variant="tonal"
+          prepend-icon="mdi-pencil-outline">
+          <template #prepend>
+            <v-icon color="warning"></v-icon>
           </template>
-        </AddEmployedDialog>
+          Edytuj
+        </v-btn>
         <v-btn variant="tonal" @click="visible = false">Zamknij</v-btn>
       </v-card-actions>
     </v-card>
@@ -41,8 +38,10 @@
 
 <script lang="ts" setup>
 import { useListEmployment } from "@/composables/party";
-import { useAuthState } from "@/composables/auth";
-const { isAdmin } = useAuthState();
+import { useDialogStore } from "@/stores/dialog";
+import { empty } from "@/composables/model"
+
+const dialogStore = useDialogStore();
 
 const visible = ref(false);
 const node = ref<string | undefined>();

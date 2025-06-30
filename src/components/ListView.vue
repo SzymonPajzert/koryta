@@ -32,20 +32,17 @@
           </v-card-text>
           <v-card-actions v-if="isAdmin">
             <v-spacer></v-spacer>
-            <AddEmployedDialog :initial="person" :editKey="key">
-              <template #button="activatorProps">
-                <v-btn
-                  @click.prevent
-                  variant="tonal"
-                  prepend-icon="mdi-pencil-outline"
-                  v-bind="activatorProps">
-                  <template #prepend>
-                    <v-icon color="warning"></v-icon>
-                  </template>
-                  Edytuj
-                </v-btn>
+            <v-btn
+              @click.stop="dialogStore.open({
+                type: 'employed',
+                edit: { value: person, key: key  }})"
+              variant="tonal"
+              prepend-icon="mdi-pencil-outline">
+              <template #prepend>
+                <v-icon color="warning"></v-icon>
               </template>
-            </AddEmployedDialog>
+              Edytuj
+            </v-btn>
           </v-card-actions>
         </v-card>
       </v-col>
@@ -54,12 +51,14 @@
 </template>
 
 <script setup lang="ts">
-import {type NepoEmployment} from '@/composables/party'
+import {type NepoEmployment} from '@/composables/model'
 import PartyChip from './PartyChip.vue';
 import { useAuthState} from '@/composables/auth'
-const { isAdmin } = useAuthState();
 import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
+import { useDialogStore } from '@/stores/dialog'; // Import the new store
 
+const dialogStore = useDialogStore();
+const { isAdmin } = useAuthState();
 const dialog = ref<typeof UserDetailDialog>();
 
 function showUser(key: string) {
@@ -67,9 +66,19 @@ function showUser(key: string) {
   dialog.value.setNode(key);
 }
 
+type SortedEmployment = NepoEmployment & { descriptionLen: number };
+
 const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
-const peopleOrdered = computed<[string, NepoEmployment][]>(() => {
-  const result = Object.entries(people ?? {});
+const peopleOrdered = computed<[string, SortedEmployment][]>(() => {
+  const result = Object.entries(people ?? {}).map(([key, value]) => [key, {
+    ...value,
+    descriptionLen:
+            Object.values(value.employments ?? {})
+              .map((e) => e.text.length)
+              .reduce((a, b) => a + b, 0) +
+            Object.values(value.connections ?? {})
+              .map((e) => e.text.length)
+              .reduce((a, b) => a + b, 0)}] as [string, SortedEmployment]);
   result.sort((a, b) => (b[1].descriptionLen ?? 0) - (a[1].descriptionLen ?? 0));
   return result;
 })

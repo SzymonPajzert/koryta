@@ -1,93 +1,69 @@
 <template>
-  <AddAbstractDialog
-    buttonText="Dodaj artykuł / źródło"
-    title="Dodaj nowy artykuł"
-    title-icon="mdi-file-document-plus-outline"
-    suggestionPath="suggestions/data"
-    adminSuggestionPath="data"
-    suggestionType="data"
-    :initialFormData
-    :toOutput
-    v-model="formData"
-  >
-    <v-row dense>
-      <v-col
-        cols="12"
-      >
-        <v-text-field
-          v-model="formData.source"
-          label="Źródło"
-          hint="Link do artykułu"
-          autocomplete="off"
-          required
-          @blur="fetchAndSetArticleTitle"
-          :loading="formData.isFetchingTitle"
-          :disabled="formData.isFetchingTitle"
-        ></v-text-field>
-      </v-col>
+  <v-row dense>
+    <v-col
+      cols="12"
+    >
+      <v-text-field
+        v-model="formData.sourceURL"
+        label="Źródło"
+        hint="Link do artykułu"
+        autocomplete="off"
+        required
+        @blur="fetchAndSetArticleTitle"
+        :loading="formData.isFetchingTitle"
+        :disabled="formData.isFetchingTitle"
+      ></v-text-field>
+    </v-col>
 
-      <v-col cols="12">
-        <v-text-field
-          v-model="formData.title"
-          label="Tytuł artykułu"
-          autocomplete="off"
-          :disabled="formData.isFetchingTitle"
-        ></v-text-field>
-      </v-col>
+    <v-col cols="12">
+      <v-text-field
+        v-model="formData.name"
+        label="Tytuł artykułu"
+        autocomplete="off"
+        :disabled="formData.isFetchingTitle"
+      ></v-text-field>
+    </v-col>
 
-      <MultiTextField
-        title="Co jest w nim ciekawego"
-        v-model="formData.comments"
-        hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
-        add-item-tooltip="Dodaj kolejne zadanie"
-        remove-item-tooltip="Usuń zadanie"
-        :empty-value="() => ''"
-      />
-    </v-row>
-  </AddAbstractDialog>
+    <MultiTextField
+      title="Co jest w nim ciekawego"
+      v-model="formData.comments"
+      field-type="textarea"
+      :field-component="TextableWrap"
+      :empty-value="emptyTextable"
+      hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
+      add-item-tooltip="Dodaj kolejne zadanie"
+      remove-item-tooltip="Usuń zadanie"
+    />
+  </v-row>
 </template>
 
 <script lang="ts" setup>
-  import AddAbstractDialog from './AddAbstractDialog.vue';
-  import { type Textable, useSuggestDB } from '@/composables/suggestDB';
   import { functions } from '@/firebase'
   import { httpsCallable } from 'firebase/functions';
+  import type { Article } from '@/composables/model';
+  import { emptyTextable } from "@/composables/multiTextHelper";
+  import TextableWrap from '../forms/TextableWrap.vue';
 
-  import { ref } from 'vue'
+  interface ArticleExtended extends Article {
+    isFetchingTitle?: boolean;
+  }
 
-  const { arrayToKeysMap } = useSuggestDB();
+  const formData = defineModel<ArticleExtended>({required: true});
   const getPageTitle = httpsCallable(functions, 'getPageTitle');
 
-  const initialFormData = () => ({
-    source: '',
-    title: '',
-    comments: [''] as string[],
-    isFetchingTitle: false,
-  });
-
-  const formData = ref(initialFormData());
-
   const fetchAndSetArticleTitle = async () => {
-    if (formData.value.source && !formData.value.title) {
+    if (formData.value.sourceURL && !formData.value.name) {
       formData.value.isFetchingTitle = true;
       try {
-        const result = await getPageTitle({ url: formData.value.source });
+        const result = await getPageTitle({ url: formData.value.sourceURL });
         const title = (result.data as any).title;
-        formData.value.title = title || '';
+        formData.value.name = title || '';
       } catch (error) {
         console.error("Error fetching page title:", error);
-        formData.value.title = '';
+        formData.value.name = '';
       } finally {
         formData.value.isFetchingTitle = false;
       }
     }
-  };
-
-  const toOutput = (data: ReturnType<typeof initialFormData>) => {
-    return {
-      sourceURL: data.source,
-      title: data.title,
-      comments: arrayToKeysMap(data.comments.map(s => ({text: s}))),
-    };
   };
 </script>
