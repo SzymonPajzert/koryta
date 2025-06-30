@@ -19,7 +19,7 @@ export function useAuthState() {
   const logout = async () => {
     try {
       await signOut(auth);
-      console.log('User logged out successfully!');
+      console.debug('User logged out successfully!');
       router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);

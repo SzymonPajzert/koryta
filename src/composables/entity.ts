@@ -39,7 +39,7 @@ export function useListEntity<D extends Destination>(entity: D) {
 
     const path = dbRef(db, submitPath(editKey))
     const op = operation(editKey)
-    console.log("trying to write: ", value)
+    console.debug("trying to write: ", value)
 
     const keyRef = op(path, {
       ...value,
