@@ -20,7 +20,7 @@ export interface NepoEmployment extends Nameable {
 
   sourceURL: string; // TODO get rid of it
 
-  sources: Record<string, Textable>;
+  sources: Record<string, Link<'data'>>;
   employments: Record<string, Connection>;
   connections: Record<string, Connection>;
   comments: Record<string, Textable>;
@@ -74,7 +74,7 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
     if (!value.comments) value.comments = recordOf({ text: ''})
     if (!value.connections) value.connections = recordOf({text: '', relation: ''})
     if (!value.employments) value.employments = recordOf({text: '', relation: ''})
-    if (!value.sources) value.sources = recordOf({text: ''})
+    if (!value.sources) value.sources = recordOf(new Link("data", '', ''))
     return value
   }
   if (d == 'company') {

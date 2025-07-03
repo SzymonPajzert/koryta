@@ -1,20 +1,10 @@
 <template>
   <v-row dense>
-    <v-col cols="12" md="12">
+    <v-col cols="12" md="8">
       <v-text-field
         v-model="formData.name"
         :label="`Imię i nazwisko ${koryciarz.singular.genitive}`"
         hint="Osoba zatrudniona w publicznej firmie"
-        autocomplete="off"
-        required
-      ></v-text-field>
-    </v-col>
-
-    <v-col cols="12" md="8" sm="12">
-      <v-text-field
-        v-model="formData.sourceURL"
-        label="Źródło"
-        hint="Link do artykułu"
         autocomplete="off"
         required
       ></v-text-field>
@@ -64,6 +54,10 @@
       remove-item-tooltip="Usuń uwagę"
       :empty-value="emptyTextable"
     />
+
+    <v-col v-for="(source, id) in articles" :key="id" cols="12" md="6">
+      <ArticleCard :article="source" :articleID="id" dense />
+    </v-col>
   </v-row>
 </template>
 
@@ -71,16 +65,23 @@
 import { useFeminatyw } from "@/composables/feminatyw";
 import { usePartyStatistics } from "@/composables/party";
 import type { NepoEmployment } from "@/composables/model";
-import { VTextarea, VTextField } from "vuetify/components";
+import { VTextField } from "vuetify/components";
 import { computed } from "vue";
 import MultiTextField from "@/components/forms/MultiTextField.vue";
 import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";
 import { emptyTextable, emptyNestedConnection } from "@/composables/multiTextHelper";
 import TextableWrap from "../forms/TextableWrap.vue";
+import { useArticles } from "@/composables/entities/articles";
 
 const formData = defineModel<NepoEmployment>({required: true});
+const { id } = defineProps<{ id?: string }>();
 
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);
 const { koryciarz } = useFeminatyw();
+const { userArticles } = useArticles()
+const articles = computed(() => {
+  if (!id) return {}
+  return userArticles.value[id]
+})
 </script>

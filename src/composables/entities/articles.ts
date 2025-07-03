@@ -134,6 +134,19 @@ export function useArticles() {
       ([_, a]) => !a.enrichedStatus?.isAssignedToCurrentUser
     )
   );
+
+  type userArticlesT = Record<string, Record<string, Article & EnrichedStatus>>
+  const userArticles = computed<userArticlesT>(() => {
+    const result : userArticlesT = {}
+    allArticles.value.filter(([id, a]) => {
+      Object.entries(a.people ?? {}).forEach(([_, person]) => {
+        if (!(person.id in result)) result[person.id] = {}
+        result[person.id][id] = a
+      })
+    })
+    return result
+  })
+
   const articles = computed<Record<string, Article & EnrichedStatus>>(() =>
     Object.fromEntries(allArticles.value)
   );
@@ -144,5 +157,6 @@ export function useArticles() {
     assignToArticle,
     articlesAssigned,
     articlesUnssigned,
+    userArticles,
   };
 }

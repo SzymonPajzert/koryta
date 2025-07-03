@@ -16,6 +16,7 @@
                 <component
                   :is="lookupComponent(dialog.type)"
                   v-model="dialog.value"
+                  :id="dialog.editKey"
                   @close="dialogStore.close(id, false)"
                   @submit="dialogStore.close(id, true)"
                 />
