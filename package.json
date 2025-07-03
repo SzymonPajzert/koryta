@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
+    "format": "prettier --write .",
     "lint": "eslint . --fix"
   },
   "dependencies": {
@@ -36,6 +37,7 @@
     "cypress": "^14.5.0",
     "eslint": "^9.23.0",
     "eslint-config-vuetify": "^4.0.0",
+    "prettier": "^3.6.2",
     "firebase": "^11.9.1",
     "npm-run-all2": "^7.0.2",
     "pinia": "^3.0.1",

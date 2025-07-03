@@ -1,25 +1,30 @@
 <script setup lang="ts">
 import { useListEmployment } from "@/composables/party";
 import { useListEntity } from "@/composables/entity";
-import { type Company } from '@/composables/model'
-import { defineConfigs, type Node as vNGNode, type EventHandlers, type NodeEvent } from "v-network-graph";
+import { type Company } from "@/composables/model";
+import {
+  defineConfigs,
+  type Node as vNGNode,
+  type EventHandlers,
+  type NodeEvent,
+} from "v-network-graph";
 import {
   ForceLayout,
   type ForceNodeDatum,
   type ForceEdgeDatum,
 } from "v-network-graph/lib/force-layout"; // Corrected import path for ForceLayout
-import {usePartyStatistics} from '@/composables/party'
-import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue'
+import { usePartyStatistics } from "@/composables/party";
+import UserDetailDialog from "@/components/dialog/UserDetailDialog.vue";
 
 const { people } = useListEmployment();
 const { entities: companies } = useListEntity("company");
 
 interface Node extends vNGNode {
-  type: "circle" | "rect"
-  color: string
+  type: "circle" | "rect";
+  color: string;
 }
 
-const { partyColors } = usePartyStatistics()
+const { partyColors } = usePartyStatistics();
 
 const nodes = computed(() => {
   const result: Record<string, Node> = {};
@@ -27,7 +32,10 @@ const nodes = computed(() => {
     result[key] = {
       ...person,
       type: "circle",
-      color: person.parties && person.parties.length > 0 ? partyColors.value[person.parties[0]] : "#4466cc"
+      color:
+        person.parties && person.parties.length > 0
+          ? partyColors.value[person.parties[0]]
+          : "#4466cc",
     };
   });
   if (!companies.value) return result;
@@ -35,7 +43,7 @@ const nodes = computed(() => {
     result[key] = {
       ...company,
       type: "rect",
-      color: "gray"
+      color: "gray",
     };
   });
   return result;
@@ -67,37 +75,39 @@ const edges = computed(() => {
   });
 
   Object.entries(companies.value ?? {}).forEach(([key, company]) => {
-    if (company.manager) result.push({
-      source: key,
-      target: company.manager.id,
-      label: "zarządzający",
-    });
-    if (company.owner) result.push({
-      source: key,
-      target: company.owner.id,
-      label: "właściciel",
-    });
-  })
+    if (company.manager)
+      result.push({
+        source: key,
+        target: company.manager.id,
+        label: "zarządzający",
+      });
+    if (company.owner)
+      result.push({
+        source: key,
+        target: company.owner.id,
+        label: "właściciel",
+      });
+  });
 
   return result;
 });
 
 const dialog = ref<typeof UserDetailDialog>();
 
-const handleNodeClick = ({node}: NodeEvent<MouseEvent>) => {
-  console.log("click")
-  if (dialog.value) dialog.value.setNode(node)
+const handleNodeClick = ({ node }: NodeEvent<MouseEvent>) => {
+  console.log("click");
+  if (dialog.value) dialog.value.setNode(node);
 };
 
 const eventHandlers: EventHandlers = {
   "node:click": handleNodeClick,
-}
+};
 
 const configs = defineConfigs({
   node: {
     normal: {
-      type: node => node.type,
-      color: node => node.color,
+      type: (node) => node.type,
+      color: (node) => node.color,
     },
     label: {
       color: "#fff",
@@ -128,7 +138,7 @@ const configs = defineConfigs({
           .force("y", d3.forceY().strength(0.02))
           .alpha(1)
           .velocityDecay(0.2)
-          .alphaDecay(0.0001)
+          .alphaDecay(0.0001);
       },
     }),
   },
@@ -145,7 +155,12 @@ const configs = defineConfigs({
     :eventHandlers="eventHandlers"
   >
     <template #edge-label="{ edge, ...slotProps }">
-      <v-edge-label :text="edge.label" align="center" vertical-align="above" v-bind="slotProps" />
+      <v-edge-label
+        :text="edge.label"
+        align="center"
+        vertical-align="above"
+        v-bind="slotProps"
+      />
     </template>
   </v-network-graph>
 </template>

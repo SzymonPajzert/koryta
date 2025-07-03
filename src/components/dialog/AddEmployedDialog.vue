@@ -76,10 +76,13 @@ import { VTextarea, VTextField } from "vuetify/components";
 import { computed } from "vue";
 import MultiTextField from "@/components/forms/MultiTextField.vue";
 import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";
-import { emptyTextable, emptyNestedConnection } from "@/composables/multiTextHelper";
+import {
+  emptyTextable,
+  emptyNestedConnection,
+} from "@/composables/multiTextHelper";
 import TextableWrap from "../forms/TextableWrap.vue";
 
-const formData = defineModel<NepoEmployment>({required: true});
+const formData = defineModel<NepoEmployment>({ required: true });
 
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);

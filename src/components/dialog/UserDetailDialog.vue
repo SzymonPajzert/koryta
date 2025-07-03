@@ -19,12 +19,15 @@
       <v-card-actions>
         <v-spacer></v-spacer>
         <v-btn
-          @click.stop="dialogStore.open({
-            type: 'employed',
-            edit: { value: person, key: node  }
-          })"
+          @click.stop="
+            dialogStore.open({
+              type: 'employed',
+              edit: { value: person, key: node },
+            })
+          "
           variant="tonal"
-          prepend-icon="mdi-pencil-outline">
+          prepend-icon="mdi-pencil-outline"
+        >
           <template #prepend>
             <v-icon color="warning"></v-icon>
           </template>
@@ -39,7 +42,7 @@
 <script lang="ts" setup>
 import { useListEmployment } from "@/composables/party";
 import { useDialogStore } from "@/stores/dialog";
-import { empty } from "@/composables/model"
+import { empty } from "@/composables/model";
 
 const dialogStore = useDialogStore();
 

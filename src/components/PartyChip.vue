@@ -5,12 +5,12 @@
 </template>
 
 <script setup lang="ts">
-import {computed} from 'vue';
-import {usePartyStatistics} from '@/composables/party'
+import { computed } from "vue";
+import { usePartyStatistics } from "@/composables/party";
 const { parties, partyColors } = usePartyStatistics();
 
 const props = defineProps<{
-  party: string
+  party: string;
 }>();
 
 const style = computed(() => {

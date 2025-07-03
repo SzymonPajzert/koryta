@@ -32,5 +32,5 @@
 
 <script lang="ts" setup>
 import { type Company } from "@/composables/model";
-const formData = defineModel<Company>({required: true});
+const formData = defineModel<Company>({ required: true });
 </script>
