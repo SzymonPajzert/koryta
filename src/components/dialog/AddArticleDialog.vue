@@ -3,16 +3,17 @@
     <v-col
       cols="12"
     >
-      <v-text-field
+      <AlreadyExisting
         v-model="formData.sourceURL"
+        entity="data"
+        :create="create"
         label="Źródło"
         hint="Link do artykułu"
         autocomplete="off"
         required
         @blur="fetchAndSetArticleTitle"
         :loading="formData.isFetchingTitle"
-        :disabled="formData.isFetchingTitle"
-      ></v-text-field>
+        :disabled="formData.isFetchingTitle" />
     </v-col>
 
     <v-col cols="12">
@@ -92,6 +93,8 @@
   }
 
   const formData = defineModel<ArticleExtended>({required: true});
+  const { create } = defineProps<{ create?: boolean }>();
+
   const getPageTitle = httpsCallable(functions, 'getPageTitle');
 
   const fetchAndSetArticleTitle = async () => {

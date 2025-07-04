@@ -1,13 +1,14 @@
 <template>
   <v-row dense>
     <v-col cols="12" md="12">
-      <v-text-field
+      <AlreadyExisting
         v-model="formData.name"
-        :label="`Nazwa`"
+        entity="company"
+        label="Nazwa"
         hint="Firma, organizacja, ministerstwo"
         autocomplete="off"
-        required
-      ></v-text-field>
+        :create="create"
+        required />
     </v-col>
 
     <MultiTextField
@@ -51,4 +52,6 @@ import EntityPicker from '../forms/EntityPicker.vue';
 import TextableWrap from '../forms/TextableWrap.vue';
 
 const formData = defineModel<Company>({required: true});
+const { create } = defineProps<{ create?: boolean }>();
+
 </script>

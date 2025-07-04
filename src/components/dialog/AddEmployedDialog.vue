@@ -1,13 +1,14 @@
 <template>
   <v-row dense>
     <v-col cols="12" md="8">
-      <v-text-field
+      <AlreadyExisting
         v-model="formData.name"
+        entity="employed"
+        :create="create"
         :label="`Imię i nazwisko ${koryciarz.singular.genitive}`"
         hint="Osoba zatrudniona w publicznej firmie"
         autocomplete="off"
-        required
-      ></v-text-field>
+        required />
     </v-col>
 
     <v-col cols="12" md="4" sm="6">
@@ -83,7 +84,7 @@ import { useDialogStore } from "@/stores/dialog";
 const dialogStore = useDialogStore();
 
 const formData = defineModel<NepoEmployment>({required: true});
-const { id } = defineProps<{ id?: string }>();
+const { id, create } = defineProps<{ id?: string, create?: boolean }>();
 
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);

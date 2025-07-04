@@ -1,16 +1,16 @@
 import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { db } from '@/firebase'
 import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database'
-import type { NepoEmployment, DestinationTypeMap } from './model'
+import type { NepoEmployment, DestinationTypeMap, Nameable } from './model'
 import { useAuthState } from './auth'
 import {type Destination} from './model'
 
 const { user, isAdmin } = useAuthState()
 
 export function useListEntity<D extends Destination>(entity: D) {
-
   type T = DestinationTypeMap[D]
 
+  // TODO you can migrate here to list suggestions from the user
   const entities = useRTDB<Record<string, T>>(dbRef(db, entity))
   const suggestions = useRTDB<Record<string, T>>(dbRef(db, `suggestions/${entity}`))
 
