@@ -23,11 +23,11 @@
 
           <v-card-text>
             <p v-for="connection in person.connections" :key="connection.text">
-              {{ connection.text }}
+              {{ connection.text || (connection.relation + " " + connection.connection?.text) }}
             </p>
             <br>
             <p v-for="employment in person.employments" :key="employment.text">
-              {{ employment.text }}
+              {{ employment.text || (employment.relation + " " + employment.connection?.text)}}
             </p>
           </v-card-text>
           <v-card-actions v-if="isAdmin">

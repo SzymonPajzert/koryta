@@ -55,9 +55,15 @@
       :empty-value="emptyTextable"
     />
 
-    <v-col v-for="(source, id) in articles" :key="id" cols="12" md="6">
-      <ArticleCard :article="source" :articleID="id" dense />
-    </v-col>
+    <v-list>
+      <!-- TODO turn into an entity picker -->
+      <v-list-item class="mb-2" @click="dialogStore.open({ type: 'data' })">
+        <v-list-item-title>
+          Dodaj źródło
+        </v-list-item-title>
+      </v-list-item>
+      <ArticleBacklink :article="source" :articleID="id" dense v-for="(source, id) in articles" width="100%" />
+    </v-list>
   </v-row>
 </template>
 
@@ -72,6 +78,9 @@ import NestedConnectionField from "@/components/forms/NestedConnectionField.vue"
 import { emptyTextable, emptyNestedConnection } from "@/composables/multiTextHelper";
 import TextableWrap from "../forms/TextableWrap.vue";
 import { useArticles } from "@/composables/entities/articles";
+import { useDialogStore } from "@/stores/dialog";
+
+const dialogStore = useDialogStore();
 
 const formData = defineModel<NepoEmployment>({required: true});
 const { id } = defineProps<{ id?: string }>();

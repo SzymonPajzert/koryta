@@ -12,6 +12,7 @@ declare module 'vue' {
     AddCompanyDialog: typeof import('./components/dialog/AddCompanyDialog.vue')['default']
     AddEmployedDialog: typeof import('./components/dialog/AddEmployedDialog.vue')['default']
     AddSuggestionDialog: typeof import('./components/dialog/AddSuggestionDialog.vue')['default']
+    ArticleBacklink: typeof import('./components/cards/ArticleBacklink.vue')['default']
     ArticleCard: typeof import('./components/cards/ArticleCard.vue')['default']
     EntityPicker: typeof import('./components/forms/EntityPicker.vue')['default']
     Home: typeof import('./components/Home.vue')['default']
