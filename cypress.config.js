@@ -15,16 +15,18 @@ export default defineConfig({
           launchOptions.args.push('--window-size=1400,1200')
 
           // force screen to be non-retina (1400x1200 size)
-          launchOptions.args.push('--force-device-scale-factor=1')
+          launchOptions.args.push('--force-device-scale-factor=3')
 
           // force screen to be retina (2800x2400 size)
           // launchOptions.args.push('--force-device-scale-factor=2')
         }
 
-        if (browser.name === 'electron' && browser.isHeadless) {
+        if (browser.name === 'electron') {
           // fullPage screenshot size is 1400x1200
           launchOptions.preferences.width = 1400
           launchOptions.preferences.height = 1200
+          launchOptions.preferences.frame = false;
+          launchOptions.preferences.useContentSize = true;
         }
 
         if (browser.name === 'firefox' && browser.isHeadless) {

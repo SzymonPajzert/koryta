@@ -46,7 +46,6 @@ jobs:
         with:
           wait-on: 'http://localhost:5002'
           record: true
-          headless: true
           parallel: true
         env:
           # This environment variable tells your Firebase JS SDK to connect to the emulators.
