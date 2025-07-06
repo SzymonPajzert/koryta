@@ -4,6 +4,11 @@ import { getDatabase, connectDatabaseEmulator } from "firebase/database";
 import { getAuth } from "firebase/auth";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
+const useEmulators = import.meta.env.VITE_USE_EMULATORS === 'true';
+export function isTest() {
+  return useEmulators || (location.hostname === "localhost" || location.hostname == "127.0.0.1");
+}
+
 const firebaseConfig = {
   apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
   authDomain: "koryta-pl.firebaseapp.com",
