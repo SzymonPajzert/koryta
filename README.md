@@ -1,26 +1,12 @@
 # Koryta.pl
 
 ## Testing
-First make the code auto update with
-
+You can run everything with:
 ```
-npm run watch
-```
-
-Run to start a prepopulated DB
-
-```
-firebase emulators:start --import=database
-```
-
-or start an empty instance
-
-```
-firebase emulators:start
+npm run dev
 ```
 
 Run tests through
-
 ```
 npx cypress run
 ```

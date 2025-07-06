@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "dev:be": "firebase emulators:start --import=database",
+    "dev:watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
+    "dev:emulate": "concurrently 'npm run dev:watch' 'npm run dev:be'",
+    
     "build": "run-p type-check \"build-only {@}\" --",
-    "watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
@@ -34,6 +36,7 @@
     "@types/papaparse": "^5.3.16",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/tsconfig": "^0.7.0",
+    "concurrently": "^9.2.0",
     "cypress": "^14.5.0",
     "eslint": "^9.23.0",
     "eslint-config-vuetify": "^4.0.0",
