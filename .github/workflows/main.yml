@@ -33,9 +33,4 @@ jobs:
       - name: Cypress run
         uses: cypress-io/github-action@v6
         with:
-          # Wait for the server to be ready before running tests.
-          # Adjust the port if your application runs on a different one (Firebase hosting emulator often uses 5000).
           wait-on: 'http://localhost:5002'
-          # Point Cypress to the server running on the host machine.
-          # The port must match the one your server is listening on.
-          config: baseUrl=http://host.docker.internal:5002
