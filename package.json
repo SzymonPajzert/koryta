@@ -38,6 +38,7 @@
     "eslint": "^9.23.0",
     "eslint-config-vuetify": "^4.0.0",
     "firebase": "^11.9.1",
+    "firebase-tools": "^14.9.0",
     "npm-run-all2": "^7.0.2",
     "pinia": "^3.0.1",
     "sass-embedded": "^1.86.3",
