@@ -40,7 +40,6 @@ type CreateSimulationFunction = (
 ) => d3.Simulation<ForceNodeDatum, ForceEdgeDatum>;
 
 const simulationProgress = ref(0);
-const tickCount = ref(0)
 function simulation(initial: boolean): CreateSimulationFunction {
   return (d3, nodes, edges) => {
     // d3-force parameters
@@ -74,7 +73,6 @@ function simulation(initial: boolean): CreateSimulationFunction {
 
     result.on("tick.monitor", () => {
       const currentAlpha = result.alpha();
-      tickCount.value++;
       // we start from 1, i.e log 0, the target can be 0.001 i.e -3 (log_target)
       const linear = Math.log10(currentAlpha) / log_target
       simulationProgress.value = 100 * linear;
@@ -159,7 +157,6 @@ watch(runSimulation, (value) => {
         absolute
       ></v-progress-linear>
     </v-btn>
-    {{ tickCount }}
   </v-navigation-drawer>
   <v-network-graph
     :nodes="nodes"
