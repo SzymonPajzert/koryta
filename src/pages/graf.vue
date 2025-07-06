@@ -19,8 +19,9 @@ import { useGraph } from "@/composables/graph";
 
 const dialogStore = useDialogStore();
 
-const showActiveArticles = ref(true);
-const showInactiveArticles = ref(true);
+// TODO read this from user config
+const showActiveArticles = ref(false);
+const showInactiveArticles = ref(false);
 const runSimulation = ref(true)
 
 const { nodes, edges } = useGraph(showActiveArticles, showInactiveArticles);
