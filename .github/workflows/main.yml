@@ -42,9 +42,13 @@ jobs:
         with:
           wait-on: 'http://localhost:5002'
           record: true
+          headless: true
           parallel: true
         env:
           # This environment variable tells your Firebase JS SDK to connect to the emulators.
           # The name (e.g., VITE_USE_EMULATORS) must match what you check in your app's code.
           VITE_USE_EMULATORS: true
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v6
