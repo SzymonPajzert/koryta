@@ -1,4 +1,4 @@
-describe('list', () => {
+describe('list', {viewportHeight: 1320, viewportWidth: 2000}, () => {
   beforeEach(() => {
     cy.visit('/list')
   })
