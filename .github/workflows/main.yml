@@ -52,6 +52,9 @@ jobs:
           # The name (e.g., VITE_USE_EMULATORS) must match what you check in your app's code.
           VITE_USE_EMULATORS: true
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          updateSnapshots: true
+          CYPRESS_updateSnapshots: true
+          SNAPSHOT_UPDATE: 1
 
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v6
