@@ -8,10 +8,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      # Install npm dependencies, cache them correctly
-      # and run all Cypress tests
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Or your project's Node.js version
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start server and emulators
+        run: npm run dev:be &
+
       - name: Cypress run
         uses: cypress-io/github-action@v6
         with:
-          build: npm run build
-          start: npm run dev:be
+          # Wait for the server to be ready before running tests.
+          # Adjust the port if your application runs on a different one (Firebase hosting emulator often uses 5000).
+          wait-on: 'http://localhost:5002'
+          # Point Cypress to the server running on the host machine.
+          # The port must match the one your server is listening on.
+          config: baseUrl=http://host.docker.internal:5002
