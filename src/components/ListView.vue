@@ -12,8 +12,6 @@
           height="100%"
           @click="showUser(key)"
         >
-        <!-- TODO show sources somewhere -->
-        <!-- TODO sources in the source view are buggy and don't lead anywhere -->
           <template #title>
             <PartyChip v-for="party in person.parties" :key="party" :party />
             <h2 class="text-h5 font-weight-bold">
