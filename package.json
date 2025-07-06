@@ -4,10 +4,10 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "dev:unsafe": "vite",
+    "dev": "vite",
     "dev:be": "firebase emulators:start --import=database",
     "dev:watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
-    "dev": "concurrently 'npm run dev:watch' 'npm run dev:be'",
+    "dev:emulate": "concurrently 'npm run dev:watch' 'npm run dev:be'",
     
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
