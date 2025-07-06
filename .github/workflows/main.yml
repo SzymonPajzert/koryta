@@ -5,6 +5,13 @@ on: push
 jobs:
   cypress-run:
     runs-on: ubuntu-24.04
+    # Runs tests in parallel with matrix strategy https://docs.cypress.io/guides/guides/parallelization
+    # https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs
+    # Also see warning here https://github.com/cypress-io/github-action#parallel
+    strategy:
+      fail-fast: false # https://github.com/cypress-io/github-action/issues/48
+      matrix:
+        containers: [1, 2] # Uses 2 parallel instances
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,7 +41,10 @@ jobs:
         uses: cypress-io/github-action@v6
         with:
           wait-on: 'http://localhost:5002'
+          record: true
+          parallel: true
         env:
           # This environment variable tells your Firebase JS SDK to connect to the emulators.
           # The name (e.g., VITE_USE_EMULATORS) must match what you check in your app's code.
           VITE_USE_EMULATORS: true
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
