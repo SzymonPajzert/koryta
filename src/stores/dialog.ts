@@ -5,13 +5,18 @@ import { useListEntity } from '@/composables/entity';
 import { empty, fillBlankRecords, type Destination } from '@/composables/model'
 import type { DestinationTypeMap } from '@/composables/model';
 
+// callback to call after the dialog was closed
+type Callback = (name: string, key?: string) => void
+
 // TODO this could be a class and have everything defined already
 interface NewEntityPayload<D extends Destination> {
   type: D;          // what type of dialog to open
+  name?: string     // name to populate if given
   edit?: {
     value: DestinationTypeMap[D]    // value to prepopulate with
     key: string
   }
+  callback?: Callback
 }
 
 export const config: Record<Destination, {title: string, titleIcon: string}> = {
@@ -38,6 +43,7 @@ interface Dialog<D extends Destination> {
   value: DestinationTypeMap[D]
   type: D
   editKey?: string
+  callback?: Callback
 }
 
 export const useDialogStore = defineStore('dialog', () => {
@@ -47,7 +53,6 @@ export const useDialogStore = defineStore('dialog', () => {
   const showSnackbar = ref(false)
   type Idx = number
 
-  // TODO open could be just type and optional edit payload (value and key to submit)
   function open<D extends Destination>(payload: NewEntityPayload<D>) {
     const defaultValue = () => empty(payload.type)
     const filler = (r: DestinationTypeMap[D]) => fillBlankRecords(r, payload.type)
@@ -56,17 +61,22 @@ export const useDialogStore = defineStore('dialog', () => {
     const dialog: Dialog<D> = {
       value: filler(payload.edit?.value || defaultValue()),
       type: payload.type,
-      editKey: payload.edit?.key
+      editKey: payload.edit?.key,
+      callback: payload.callback,
     }
-    console.log(dialog)
+    if (payload.name) dialog.value.name = payload.name
     const len = dialogs.value.push(dialog)
     currentDialog.value = len - 1
   }
 
   function close(idx: Idx, shouldSubmit: boolean) {
+    let key = dialogs.value[idx].editKey
     if (shouldSubmit) {
       const { submit } = useListEntity(dialogs.value[idx].type)
-      submit(dialogs.value[idx].value, dialogs.value[idx].editKey) // TODO handle edit
+      key = submit(dialogs.value[idx].value, dialogs.value[idx].editKey).key
+    }
+    if (dialogs.value[idx].callback) {
+      dialogs.value[idx].callback(dialogs.value[idx].value.name, key)
     }
     remove(idx)
   }

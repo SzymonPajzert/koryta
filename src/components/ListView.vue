@@ -12,8 +12,6 @@
           height="100%"
           @click="showUser(key)"
         >
-        <!-- TODO show sources somewhere -->
-        <!-- TODO sources in the source view are buggy and don't lead anywhere -->
           <template #title>
             <PartyChip v-for="party in person.parties" :key="party" :party />
             <h2 class="text-h5 font-weight-bold">
@@ -23,11 +21,11 @@
 
           <v-card-text>
             <p v-for="connection in person.connections" :key="connection.text">
-              {{ connection.text }}
+              {{ connectionText(connection) }}
             </p>
             <br>
             <p v-for="employment in person.employments" :key="employment.text">
-              {{ employment.text }}
+              {{ connectionText(employment) }}
             </p>
           </v-card-text>
           <v-card-actions v-if="isAdmin">
@@ -51,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import {type NepoEmployment} from '@/composables/model'
+import {type Connection, type NepoEmployment} from '@/composables/model'
 import PartyChip from './PartyChip.vue';
 import { useAuthState} from '@/composables/auth'
 import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
@@ -64,6 +62,14 @@ const dialog = ref<typeof UserDetailDialog>();
 function showUser(key: string) {
   if (!dialog.value) return;
   dialog.value.setNode(key);
+}
+
+function connectionText(connection: Connection) {
+  if (connection.text != "") return connection.text
+  if (connection.connection?.text && connection.relation != "") {
+    return connection.relation + " " + connection.connection?.text
+  }
+  return ""
 }
 
 type SortedEmployment = NepoEmployment & { descriptionLen: number };

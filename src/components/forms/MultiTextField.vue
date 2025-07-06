@@ -62,7 +62,7 @@
   };
 
   if (!model.value || Object.keys(model.value).length === 0) {
-    console.log(model.value)
+    console.debug(model.value)
     addItem()
   }
 

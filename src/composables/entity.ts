@@ -1,16 +1,16 @@
 import { useRTDB } from '@vueuse/firebase/useRTDB'
 import { db } from '@/firebase'
 import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database'
-import type { NepoEmployment, DestinationTypeMap } from './model'
+import type { NepoEmployment, DestinationTypeMap, Nameable } from './model'
 import { useAuthState } from './auth'
 import {type Destination} from './model'
 
 const { user, isAdmin } = useAuthState()
 
 export function useListEntity<D extends Destination>(entity: D) {
-
   type T = DestinationTypeMap[D]
 
+  // TODO you can migrate here to list suggestions from the user
   const entities = useRTDB<Record<string, T>>(dbRef(db, entity))
   const suggestions = useRTDB<Record<string, T>>(dbRef(db, `suggestions/${entity}`))
 
@@ -34,12 +34,12 @@ export function useListEntity<D extends Destination>(entity: D) {
 
   function submit(value: T, editKey: string | undefined) {
     if (!user.value?.uid) {
-      return "User not authenticated or UID not available."
+      return { error: "User not authenticated or UID not available." }
     }
 
     const path = dbRef(db, submitPath(editKey))
     const op = operation(editKey)
-    console.log("trying to write: ", value)
+    console.debug("trying to write: ", value)
 
     const keyRef = op(path, {
       ...value,
@@ -47,6 +47,7 @@ export function useListEntity<D extends Destination>(entity: D) {
       user: user.value?.uid,
     }).key;
     push(dbRef(db, `user/${user.value?.uid}/suggestions/${entity}`), keyRef)
+    return { key: keyRef }
   }
 
   return { entities, suggestions, submit }

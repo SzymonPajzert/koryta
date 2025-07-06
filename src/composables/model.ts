@@ -20,7 +20,7 @@ export interface NepoEmployment extends Nameable {
 
   sourceURL: string; // TODO get rid of it
 
-  sources: Record<string, Textable>;
+  sources: Record<string, Link<'data'>>;
   employments: Record<string, Connection>;
   connections: Record<string, Connection>;
   comments: Record<string, Textable>;
@@ -28,13 +28,22 @@ export interface NepoEmployment extends Nameable {
 
 export interface Company extends Nameable {
   name: string
-  owner?: Link<'company'>
+  owners: Record<string, Link<'company'>>
+  owner?: Link<'company'> // TODO(migrate-db) deprecate this field, prefer owners
   manager?: Link<'employed'>
+  comments: Record<string, Textable>
 }
 
 export interface Article extends Nameable {
   sourceURL: string,
   comments: Record<string, Textable>
+  people: Record<string, Link<'employed'>>
+  companies: Record<string, Link<'company'>>
+
+  shortName?: string
+  estimates: {
+    mentionedPeople?: number
+  }
 
   date?: number;
   status?: ArticleStatus
@@ -54,6 +63,10 @@ function recordOf<T>(value: T): Record<string, T> {
   return result
 }
 
+// TODO(cleanup) this seems like it could be a class
+// I just don't know how we could do it  and even if this is better to do
+// we're mainly using interfaces elsewhere and it seems to work
+
 export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D): DestinationTypeMap[D];
 export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D) {
   if (d == 'employed') {
@@ -61,11 +74,17 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
     if (!value.comments) value.comments = recordOf({ text: ''})
     if (!value.connections) value.connections = recordOf({text: '', relation: ''})
     if (!value.employments) value.employments = recordOf({text: '', relation: ''})
-    if (!value.sources) value.sources = recordOf({text: ''})
+    if (!value.sources) value.sources = recordOf(new Link("data", '', ''))
     return value
   }
   if (d == 'company') {
-    return valueUntyped as Company
+    const value = valueUntyped as Company
+    if (!value.owners) {
+      if (value.owner) value.owners = recordOf(value.owner)
+      else value.owners = recordOf(new Link("company", '', ''))
+    }
+    value.comments = {}
+    return value // TODO(cleanup) remove this return - some check should start failing
   }
   if (d == 'suggestion') {
     return valueUntyped as Nameable
@@ -73,6 +92,9 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
   if (d == 'data') {
     const value = valueUntyped as Article
     if (!value.comments) value.comments = recordOf({ text: ''})
+    if (!value.companies) value.companies = recordOf(new Link("company", '', ''))
+    if (!value.people) value.people = recordOf(new Link("employed", '', ''))
+    if (!value.estimates) value.estimates = {}
     return value
   }
 
@@ -95,7 +117,9 @@ export function empty(d: Destination) {
   }
   if (d == 'company') {
     const result: Company = {
-      name: ''
+      name: '',
+      owners: {},
+      comments: {},
     }
     return result
   }
@@ -103,7 +127,10 @@ export function empty(d: Destination) {
     const result: Article = {
       name: '',
       sourceURL: '',
-      comments: {}
+      comments: {},
+      people: {},
+      companies: {},
+      estimates: {},
     }
     return result
   }

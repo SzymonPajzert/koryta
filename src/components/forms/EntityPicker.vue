@@ -15,9 +15,12 @@
     <template #no-data>
       <v-list-item v-if="search" @click="addNewItem">
         <v-list-item-title>
-          Add "<strong>{{ search }}</strong>" as a new {{ props.entity }}.
+          Dodaj "<strong>{{ search }}</strong>" do bazy.
         </v-list-item-title>
       </v-list-item>
+    </template>
+    <template #prepend>
+      <slot name="prepend"></slot>
     </template>
   </v-autocomplete>
 </template>
@@ -34,6 +37,7 @@ const props = defineProps<{
   // which entity type to use to lookup suggested values to bind to this field
   // e.g. employed, company
   entity: Destination;
+  // TODO customFilter: (value: string, query: string, item?: {value: any}) => boolean
 }>()
 
 const dialogStore = useDialogStore();
@@ -57,6 +61,14 @@ function addNewItem() {
     search.value = '';
     dialogStore.open({
       type: props.entity,
+      name: newEntityName,
+      callback: (name, key) => {
+        if (!key) {
+          console.warn("failed to obtain key for new entity: ", name);
+          return
+        }
+        model.value = new Link<typeof props.entity>(props.entity, key, name);
+      }
      });
   }
 }

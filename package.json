@@ -8,7 +8,6 @@
     "dev:be": "firebase emulators:start --import=database",
     "dev:watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
     "dev:emulate": "concurrently 'npm run dev:watch' 'npm run dev:be'",
-    
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
@@ -23,6 +22,7 @@
     "apexcharts": "^4.7.0",
     "d3-force": "^3.0.0",
     "papaparse": "^5.5.3",
+    "string-similarity": "^4.0.4",
     "v-network-graph": "^0.9.21",
     "vue": "^3.5.13",
     "vue3-apexcharts": "^1.8.0",
@@ -34,6 +34,7 @@
     "@tsconfig/node22": "^22.0.0",
     "@types/node": "^22.9.0",
     "@types/papaparse": "^5.3.16",
+    "@types/string-similarity": "^4.0.2",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/tsconfig": "^0.7.0",
     "concurrently": "^9.2.0",
