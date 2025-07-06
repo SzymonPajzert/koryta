@@ -7,6 +7,7 @@ node_modules
 .firebase
 database-debug.log
 firebase-debug.log
+pglite-debug.log
 
 # local env files
 .env.local
