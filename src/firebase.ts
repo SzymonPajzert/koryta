@@ -15,6 +15,11 @@ const firebaseConfig = {
   measurementId: "G-PL6L1B0CZY"
 };
 
+if (isTest()) {
+  firebaseConfig.apiKey = ""
+  firebaseConfig.projectId = "demo-test-project"
+}
+
 export const app = initializeApp(firebaseConfig);
 export const analytics = getAnalytics(app);
 export const db = getDatabase(app);
