@@ -43,7 +43,7 @@ jobs:
         run: npm run build -- --mode test
 
       - name: Start server and emulators
-        run: npm run dev:be
+        run: npm run dev:be &
 
       - name: Cypress run
         uses: cypress-io/github-action@v6
