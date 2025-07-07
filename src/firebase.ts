@@ -4,30 +4,30 @@ import { getDatabase, connectDatabaseEmulator } from "firebase/database";
 import { getAuth } from "firebase/auth";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
-const useEmulators = import.meta.env.VITE_USE_EMULATORS === 'true';
-export function isTest() {
-  return useEmulators || (location.hostname === "localhost" || location.hostname == "127.0.0.1");
-}
+export const isTest = import.meta.env.MODE === "test";
+const isDevelopment = import.meta.env.MODE === "development";
+
+const useEmulators = isTest || isDevelopment;
 
 const firebaseConfig = {
   apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
   authDomain: "koryta-pl.firebaseapp.com",
-  databaseURL: "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "koryta-pl",
+  databaseURL:
+    "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
   storageBucket: "koryta-pl.firebasestorage.app",
+  projectId: "koryta-pl",
   messagingSenderId: "735903577811",
   appId: "1:735903577811:web:6862ab6d2e0a46fa4e8626",
-  measurementId: "G-PL6L1B0CZY"
+  measurementId: "G-PL6L1B0CZY",
 };
 
 export const app = initializeApp(firebaseConfig);
 export const analytics = getAnalytics(app);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
-export const functions = getFunctions(app, 'europe-west1');
+export const functions = getFunctions(app, "europe-west1");
 
-if (isTest()) {
+if (useEmulators) {
   connectDatabaseEmulator(db, "127.0.0.1", 9003);
-  connectFunctionsEmulator(functions, "127.0.0.1", 5001)
+  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
 }
-

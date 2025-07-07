@@ -27,10 +27,8 @@ function toNoun(input: InputNoun): PolishNoun {
   }
 }
 
-const isTestConst = isTest()
-
 export function useFeminatyw() {
-  const useFemale : boolean = Math.random() > 0.5 || isTestConst
+  const useFemale : boolean = Math.random() > 0.5 || isTest
 
   function createNoun(femaleSingular: InputNoun, femalePlural: InputNoun, maleSingular: InputNoun, malePlural: InputNoun): Feminatyw {
     if (useFemale) {

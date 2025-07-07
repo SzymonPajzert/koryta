@@ -40,10 +40,10 @@ jobs:
         run: npm ci
 
       - name: Build application
-        run: npm run build
+        run: npm run build -- --mode test
 
       - name: Start server and emulators
-        run: npm run dev:be -- --project=demo-koryta &
+        run: npm run dev:be
 
       - name: Cypress run
         uses: cypress-io/github-action@v6
@@ -51,9 +51,6 @@ jobs:
           wait-on: 'http://localhost:5002'
           record: true
         env:
-          # This environment variable tells your Firebase JS SDK to connect to the emulators.
-          # The name (e.g., VITE_USE_EMULATORS) must match what you check in your app's code.
-          VITE_USE_EMULATORS: true
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           updateSnapshots: true
           CYPRESS_updateSnapshots: true

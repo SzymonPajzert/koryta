@@ -4,13 +4,11 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "dev": "vite",
-    "dev:be": "firebase emulators:start --import=database",
-    "dev:watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
-    "dev:emulate": "concurrently 'npm run dev:watch' 'npm run dev:be'",
-    "build": "run-p type-check \"build-only {@}\" --",
+    "dev:fe": "vite",
+    "dev:be": "firebase emulators:start --import=database --project=demo-koryta-pl",
+    "dev": "concurrently 'npm run dev:fe' 'npm run dev:be'",
     "preview": "vite preview",
-    "build-only": "vite build",
+    "build": "vite build",
     "type-check": "vue-tsc --build --force",
     "lint": "eslint . --fix"
   },

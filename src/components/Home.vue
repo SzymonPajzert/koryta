@@ -37,6 +37,6 @@ import { isTest } from "@/firebase";
 const { people } = useListEmployment();
 const { koryciarz } = useFeminatyw();
 
-const idx = isTest() ? 1 : Math.floor(Math.random() * 2)
+const idx = isTest ? 1 : Math.floor(Math.random() * 2)
 const subtitle = ["Polityczny wypas", "Pójdź tam, gdzie politycy zimują"][idx]
 </script>

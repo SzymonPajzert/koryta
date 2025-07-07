@@ -13,7 +13,7 @@
       }
     ],
     "predeploy": [
-      "npm run build"
+      "npm run type-check && npm run build"
     ]
   },
   "emulators": {
