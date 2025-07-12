@@ -76,41 +76,6 @@
       add-item-tooltip="Dodaj kolejne zadanie"
       remove-item-tooltip="Usuń zadanie"
     />
-
-    <MultiTextField
-      title="Wspomniane osoby"
-      v-model="formData.people"
-      field-type="entityPicker"
-      :field-component="EntityPicker"
-      entity="employed"
-      hint="np. polityk Adam"
-      add-item-tooltip="Dodaj kolejną osobę"
-      remove-item-tooltip="Usuń osobę"
-      :empty-value="() => emptyEntityPicker('employed')"
-    />
-
-    <MultiTextField
-      title="Wspomniane firmy / ministerstra"
-      v-model="formData.companies"
-      field-type="entityPicker"
-      :field-component="EntityPicker"
-      entity="company"
-      hint="np. spółka skarbu państwa"
-      add-item-tooltip="Dodaj kolejne miejsce"
-      remove-item-tooltip="Usuń miejsce"
-      :empty-value="() => emptyEntityPicker('company')"
-    />
-
-    <MultiTextField
-      title="Co jest w nim ciekawego"
-      v-model="formData.comments"
-      field-type="textarea"
-      :field-component="TextableWrap"
-      :empty-value="emptyTextable"
-      hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
-      add-item-tooltip="Dodaj kolejne zadanie"
-      remove-item-tooltip="Usuń zadanie"
-    />
   </v-row>
 </template>
 

@@ -19,8 +19,9 @@ import { useGraph } from "@/composables/graph";
 
 const dialogStore = useDialogStore();
 
-const showActiveArticles = ref(true);
-const showInactiveArticles = ref(true);
+// TODO read this from user config
+const showActiveArticles = ref(false);
+const showInactiveArticles = ref(false);
 const runSimulation = ref(true)
 
 const { nodes, edges } = useGraph(showActiveArticles, showInactiveArticles);
@@ -39,44 +40,56 @@ type CreateSimulationFunction = (
 ) => d3.Simulation<ForceNodeDatum, ForceEdgeDatum>;
 
 const simulationProgress = ref(0);
-const simulation: CreateSimulationFunction = (d3, nodes, edges) => {
-  // d3-force parameters
-  const forceLink = d3
-    .forceLink<ForceNodeDatum, ForceEdgeDatum>(edges)
-    .id((d: any) => d.id);
+function simulation(initial: boolean): CreateSimulationFunction {
+  return (d3, nodes, edges) => {
+    // d3-force parameters
+    const forceLink = d3
+      .forceLink<ForceNodeDatum, ForceEdgeDatum>(edges)
+      .id((d: any) => d.id);
 
-  const target = 0.001
-  const log_target = Math.log10(target)
+    const target = 0.001
+    const log_target = Math.log10(target)
 
-  const result = d3
-    .forceSimulation(nodes)
-    .force("edge", forceLink.distance(80).strength(0.3))
-    .force("charge", d3.forceManyBody().strength(-400))
-    .force("center", d3.forceCenter().strength(0.3))
-    .force("x", d3.forceX().strength(0.02))
-    .force("y", d3.forceY().strength(0.02))
-    .alpha(1)
-    .velocityDecay(0.2)
-    .alphaDecay(0.003);
+    const temporary = d3
+      .forceSimulation(nodes)
+      .force("edge", forceLink.distance(80).strength(0.3))
+      .force("charge", d3.forceManyBody().strength(-400))
+      .force("center", d3.forceCenter().strength(0.3))
+      .force("x", d3.forceX().strength(0.02))
+      .force("y", d3.forceY().strength(0.02))
 
-  result.on("tick.monitor", () => {
-    const currentAlpha = result.alpha();
-    // we start from 1, i.e log 0, the target can be 0.001 i.e -3 (log_target)
-    const linear = Math.log10(currentAlpha) / log_target
-    simulationProgress.value = 100 * linear;
-  })
-  result.on("end.monitor", () => {
-    simulationProgress.value = 100
-    runSimulation.value = false
-  })
+    let result;
+    if (initial) {
+      result = temporary
+        .velocityDecay(0.2)
+        .alphaDecay(0.003)
+        .stop()
+        .tick(3000)
+        .restart();
+    } else {
+      result = temporary
+        .alphaDecay(0.05)
+    }
 
-  return result;
-};
+    result.on("tick.monitor", () => {
+      const currentAlpha = result.alpha();
+      // we start from 1, i.e log 0, the target can be 0.001 i.e -3 (log_target)
+      const linear = Math.log10(currentAlpha) / log_target
+      simulationProgress.value = 100 * linear;
+    })
+    result.on("end.monitor", () => {
+      runSimulation.value = false
+      simulationProgress.value = 0
+    })
 
-const newForceLayout = () => new ForceLayout({
+    return result;
+  };
+}
+
+const newForceLayout = (initial: boolean) => new ForceLayout({
   positionFixedByDrag: false,
   positionFixedByClickWithAltKey: true,
-  createSimulation: simulation,
+  createSimulation: simulation(initial),
 })
 
 const handleDoubleClick = (event : ViewEvent<MouseEvent>) => {
@@ -108,14 +121,14 @@ const configs = reactive(defineConfigs({
   },
   view: {
     scalingObjects: true,
-    layoutHandler: newForceLayout() as LayoutHandler,
+    layoutHandler: newForceLayout(true) as LayoutHandler,
     doubleClickZoomEnabled: false,
   },
 }));
 
 watch(runSimulation, (value) => {
   if(value) {
-    configs.view.layoutHandler = newForceLayout()
+    configs.view.layoutHandler = newForceLayout(false)
   } else {
     configs.view.layoutHandler = new SimpleLayout()
   }
@@ -136,7 +149,6 @@ watch(runSimulation, (value) => {
     ></v-checkbox>
     <v-btn v-model="runSimulation" @click="runSimulation = !runSimulation">
       Symuluj wierzchołki
-
       <v-progress-linear
         v-model="simulationProgress"
         :active="runSimulation"

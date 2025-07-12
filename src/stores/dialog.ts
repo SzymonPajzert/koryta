@@ -4,7 +4,6 @@ import { ref } from 'vue';
 import { useListEntity } from '@/composables/entity';
 import { empty, fillBlankRecords, type Destination } from '@/composables/model'
 import type { DestinationTypeMap } from '@/composables/model';
-import { useListEmployment } from "@/composables/party";
 import { useArticles } from "@/composables/entities/articles";
 
 // callback to call after the dialog was closed
@@ -49,7 +48,7 @@ interface Dialog<D extends Destination> {
 }
 
 export const useDialogStore = defineStore('dialog', () => {
-  const { people } = useListEmployment();
+  const { entities: people } = useListEntity("employed");
   const { entities: companies } = useListEntity("company");
   const { articles } = useArticles();
 

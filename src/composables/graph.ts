@@ -1,4 +1,3 @@
-import { useListEmployment } from "@/composables/party";
 import { usePartyStatistics } from "@/composables/party";
 import { useListEntity } from "@/composables/entity";
 import { useArticles, getHostname } from "@/composables/entities/articles";
@@ -11,7 +10,7 @@ export interface Node {
   sizeMult?: number
 }
 
-const { people } = useListEmployment();
+const { entities: people } = useListEntity("employed");
 const { entities: companies } = useListEntity("company");
 const { articles } = useArticles();
 
@@ -19,7 +18,7 @@ const { partyColors } = usePartyStatistics();
 
 
 export function useGraph(showActiveArticles: Ref<boolean>, showInactiveArticles: Ref<boolean>) {
-  const showArticles = showActiveArticles.value || showInactiveArticles.value
+  const showArticles = computed(() => showActiveArticles.value || showInactiveArticles.value)
 
   const nodes = computed(() => {
     const result: Record<string, Node> = {};
@@ -42,7 +41,7 @@ export function useGraph(showActiveArticles: Ref<boolean>, showInactiveArticles:
         };
       });
     }
-    if (showArticles && articles.value) {
+    if (showArticles.value && articles.value) {
       Object.entries(articles.value).forEach(([articleID, article]) => {
         const shouldShow = article.enrichedStatus.hideArticle ? showInactiveArticles.value : showActiveArticles.value;
         if (shouldShow) {
