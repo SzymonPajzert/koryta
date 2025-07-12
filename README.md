@@ -3,7 +3,7 @@
 ## Testing
 You can run everything with:
 ```
-npm run dev
+npm run import-db && npm run dev:emulate
 ```
 
 Run tests through
