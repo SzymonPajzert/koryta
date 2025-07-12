@@ -18,7 +18,7 @@ const { partyColors } = usePartyStatistics();
 
 
 export function useGraph(showActiveArticles: Ref<boolean>, showInactiveArticles: Ref<boolean>) {
-  const showArticles = showActiveArticles.value || showInactiveArticles.value
+  const showArticles = computed(() => showActiveArticles.value || showInactiveArticles.value)
 
   const nodes = computed(() => {
     const result: Record<string, Node> = {};
@@ -41,7 +41,7 @@ export function useGraph(showActiveArticles: Ref<boolean>, showInactiveArticles:
         };
       });
     }
-    if (showArticles && articles.value) {
+    if (showArticles.value && articles.value) {
       Object.entries(articles.value).forEach(([articleID, article]) => {
         const shouldShow = article.enrichedStatus.hideArticle ? showInactiveArticles.value : showActiveArticles.value;
         if (shouldShow) {
