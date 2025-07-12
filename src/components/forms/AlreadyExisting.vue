@@ -6,7 +6,7 @@
         @click="
           dialogStore.open({ type: entity, edit: { value: item, key: key } })
         "
-        >{{ item.name }}</v-list-item-title
+        ><span :style="item.equal ? { 'font-weight': 'bold', 'font-style': 'italic' } : undefined">{{ item.name }}</span></v-list-item-title
       >
     </v-list-item>
   </v-list>

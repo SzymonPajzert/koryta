@@ -23,6 +23,13 @@
       ></v-select>
     </v-col>
 
+    <v-text-field
+      v-if="formData.sourceURL"
+      v-model="formData.sourceURL"
+      label="Źródło"
+      autocomplete="off"
+    />
+
     <MultiTextField
       title="Zatrudnienie"
       v-model="formData.employments"
