@@ -6,6 +6,7 @@ export interface Textable {
   text: string;
 }
 
+// TODO remove this I think
 export function useSuggestDB() {
   function newKey() {
     const newKey = push(dbRef(db, '_temp_keys/employments')).key;

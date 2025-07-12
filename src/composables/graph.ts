@@ -1,4 +1,3 @@
-import { useListEmployment } from "@/composables/party";
 import { usePartyStatistics } from "@/composables/party";
 import { useListEntity } from "@/composables/entity";
 import { useArticles, getHostname } from "@/composables/entities/articles";
@@ -11,7 +10,7 @@ export interface Node {
   sizeMult?: number
 }
 
-const { people } = useListEmployment();
+const { entities: people } = useListEntity("employed");
 const { entities: companies } = useListEntity("company");
 const { articles } = useArticles();
 

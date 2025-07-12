@@ -32,9 +32,10 @@
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
 import PartyChart from "./PartyChart.vue";
-import { useListEmployment } from "@/composables/party";
+import { useListEntity } from "@/composables/entity";
 import { isTest } from "@/firebase";
-const { people } = useListEmployment();
+
+const { entities: people } = useListEntity("employed");
 const { koryciarz } = useFeminatyw();
 
 const idx = isTest() ? 1 : Math.floor(Math.random() * 2)

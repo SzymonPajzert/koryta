@@ -1,21 +1,8 @@
 import { ref, computed } from "vue";
-import { useRTDB } from "@vueuse/firebase/useRTDB";
-import { db } from "@/firebase";
-import { ref as dbRef } from "firebase/database";
-import { type NepoEmployment } from "./model";
-
-export function useListEmployment() {
-  const peopleRaw = useRTDB<{ employed: Record<string, NepoEmployment> }>(
-    dbRef(db, "employed")
-  );
-  const people = computed<Record<string, NepoEmployment>>(() =>
-    peopleRaw.value ?? {}
-  );
-  return { people };
-}
+import { useListEntity } from "./entity";
 
 export function usePartyStatistics() {
-  const { people } = useListEmployment();
+  const { entities: people } = useListEntity("employed");
 
   const parties = ref<string[]>([
     "PO",
