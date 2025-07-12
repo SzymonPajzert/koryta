@@ -21,6 +21,9 @@
     "employed": {
       ".read": true
     },
+    "company": {
+      ".read": true
+    },
 
     // User created suggestions, visible to admins
     // Anyone logged in can suggest in many categories
