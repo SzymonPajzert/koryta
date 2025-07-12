@@ -1,57 +1,12 @@
 <template>
   <v-dialog v-model="visible" max-width="500">
-    <v-card v-if="person && node">
-      <v-card-title class="headline">
-        <PartyChip v-for="party in person?.parties" :key="party" :party />
-        <h2 class="text-h5 font-weight-bold">
-          {{ person?.name }}
-        </h2>
-      </v-card-title>
-      <v-card-text>
-        <p v-for="connection in person?.connections" :key="connection.text">
-          {{ connection.text }}
-        </p>
-        <br />
-        <p v-for="employment in person?.employments" :key="employment.text">
-          {{ employment.text }}
-        </p>
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-          @click.stop="dialogStore.open({
-            type: 'employed',
-            edit: { value: person, key: node  }
-          })"
-          variant="tonal"
-          prepend-icon="mdi-pencil-outline">
-          <template #prepend>
-            <v-icon color="warning"></v-icon>
-          </template>
-          Edytuj
-        </v-btn>
-        <v-btn variant="tonal" @click="visible = false">Zamknij</v-btn>
-      </v-card-actions>
-    </v-card>
+    <EmployedDetail :node="node" :close="() => {visible = false}" v-if="node"/>
   </v-dialog>
 </template>
 
 <script lang="ts" setup>
-// TODO probably remove it now and just write a user card to be shown in the list view
-import { useListEntity } from "@/composables/entity";
-import { useDialogStore } from "@/stores/dialog";
-
-const dialogStore = useDialogStore();
-
 const visible = ref(false);
 const node = ref<string | undefined>();
-const { entities: people } = useListEntity("employed");
-
-const person = computed(() => {
-  if (!people.value) return;
-  if (!node.value) return;
-  return people.value?.[node.value];
-});
 
 // This exposes the node setting option, so the users of this component can just call it.
 defineExpose({

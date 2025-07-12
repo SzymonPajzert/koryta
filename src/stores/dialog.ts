@@ -68,6 +68,10 @@ export const useDialogStore = defineStore("dialog", () => {
   }
 
   function open<D extends Destination>(payload: NewEntityPayload<D>) {
+    // TODO remove
+    console.log(payload.edit?.key)
+    console.log(payload.edit?.value)
+
     const defaultValue = () => empty(payload.type);
     const filler = (r: DestinationTypeMap[D]) =>
       fillBlankRecords(r, payload.type);
@@ -112,7 +116,7 @@ export const useDialogStore = defineStore("dialog", () => {
     let key = dialogs.value[idx].editKey;
     if (shouldSubmit) {
       const { submit } = useListEntity(dialogs.value[idx].type);
-      key = submit(dialogs.value[idx].value, dialogs.value[idx].editKey).key;
+      key = submit(dialogs.value[idx].value, dialogs.value[idx].type, dialogs.value[idx].editKey).key;
     }
     if (dialogs.value[idx].callback) {
       dialogs.value[idx].callback(dialogs.value[idx].value.name, key);

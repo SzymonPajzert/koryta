@@ -18,21 +18,7 @@
         absolute
       ></v-progress-linear>
     </v-btn>
-    <v-autocomplete
-      label="Filtruj po miejscu zatrudnienia"
-      :items="nodeGroups"
-      item-title="name"
-      v-model="nodeGroupPicked"
-      return-object
-    >
-      <template v-slot:item="{ props, item }">
-        <v-list-item
-          v-bind="props"
-          :subtitle="`${item.raw.stats.people} powiązanych osób`"
-          :title="item.raw.name"
-        ></v-list-item>
-      </template>
-    </v-autocomplete>
+    <PlaceFilter />
   </v-navigation-drawer>
   <RouterView></RouterView>
 </template>
@@ -48,7 +34,7 @@ const { nodeGroups, showActiveArticles, showInactiveArticles, nodeGroupPicked } 
 const { runSimulation, simulationProgress} = storeToRefs(simulationStore)
 
 const router = useRouter()
-const route = useRoute<'/zobacz/graf/[[id]]'>()
+const route = useRoute<'/zobacz/graf/[[id]]' | '/zobacz/lista/[[id]]'>()
 
 onMounted(() => {
   const params = route.params

@@ -3,7 +3,7 @@ import { db } from '@/firebase'
 import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database'
 import type { DestinationTypeMap } from './model'
 import { useAuthState } from './auth'
-import {type Destination} from './model'
+import {removeBlankRecords, type Destination} from './model'
 
 const { user, isAdmin } = useAuthState()
 
@@ -39,13 +39,14 @@ export function useListEntity<D extends Destination>(entity: D) {
     return operation
   }
 
-  function submit(value: T, editKey: string | undefined) {
+  function submit<D extends Destination>(value: DestinationTypeMap[D], d: D, editKey: string | undefined) {
     if (!user.value?.uid) {
       return { error: "User not authenticated or UID not available." }
     }
 
     const path = dbRef(db, submitPath(editKey))
     const op = operation(editKey)
+    value = removeBlankRecords(value, d)
     console.debug("trying to write: ", value)
 
     const keyRef = op(path, {

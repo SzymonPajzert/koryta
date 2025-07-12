@@ -3,7 +3,7 @@ import { useListEntity } from '@/composables/entity'
 import type { Ref } from 'vue'
 import { compareTwoStrings } from 'string-similarity';
 
-type Entry<D> = [string, D & {similarity: number}]
+type Entry<D> = [string, D & {similarity: number, equal: boolean}]
 
 export function useEntitiesFiltered<D extends Destination>(destination: D, filter: Ref<string>, max?: number) {
   const { entities } = useListEntity(destination)
@@ -31,6 +31,7 @@ function entitySimilarity<T extends Nameable, D extends Destination>(d: D, match
     return [key, {
       ...obj,
       similarity: compareTwoStrings(match, value),
+      equal: value == match,
     }]
   }
 }

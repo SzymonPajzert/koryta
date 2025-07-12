@@ -6,8 +6,11 @@
     <OpenAbstractDialog dialog="suggestion"/>
     <OpenAbstractDialog dialog="employed"/>
     <OpenAbstractDialog dialog="company"/>
+
+    <PlaceFilter />
+    <!-- TODO Filter issues to show, some are not that important -->
   </v-navigation-drawer>
-  <v-alert type="info">
+  <v-alert type="info" closable>
     Jeśli masz pytania,
     <a href="https://discord.gg/pnyPh7zXxS" target="_blank" class="text-white">
       dołącz do serwera Discord
@@ -61,6 +64,14 @@
       </p>
     </v-container>
   </v-col>
+
+  <v-col cols="12">
+    <h2 class="text-h5 font-weight-bold">
+      Rzeczy do zrobienia:
+    </h2>
+    <EntityStatusList />
+  </v-col>
+
   <v-col cols="12">
     <h2 class="text-h5 font-weight-bold">
       Statystyki aktywności:

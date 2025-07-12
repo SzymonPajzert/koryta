@@ -1,7 +1,7 @@
 <template>
   <v-row dense>
     <v-col
-      cols="12"
+      cols="11"
     >
       <AlreadyExisting
         v-model="formData.sourceURL"
@@ -14,6 +14,15 @@
         @blur="fetchAndSetArticleTitle"
         :loading="formData.isFetchingTitle"
         :disabled="formData.isFetchingTitle" />
+    </v-col>
+    <v-col cols="1">
+      <v-btn
+        color="grey-lighten-1"
+        :href="formData.sourceURL"
+        target="_none"
+        icon="mdi-open-in-new"
+        variant="text"
+      ></v-btn>
     </v-col>
 
     <v-col cols="12">
@@ -35,6 +44,7 @@
     </v-col>
 
     <v-col cols="12" md="4">
+      <!-- TODO how to solve this issue with the type? Estimates can't be optional -->
       <v-text-field
         v-model="formData.estimates.mentionedPeople"
         label="Liczba wspomnianych osób"

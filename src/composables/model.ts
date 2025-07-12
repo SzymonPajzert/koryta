@@ -14,6 +14,20 @@ export interface Connection {
 
 export type Destination = 'employed' | 'company' | 'data' | 'suggestion'
 
+export const destinationIcon: Record<Destination, string> = {
+  'employed': 'mdi-account-outline',
+  'company': 'mdi-office-building-outline',
+  'data': 'mdi-file-document-outline',
+  'suggestion': 'mdi-help-circle-outline',
+}
+
+export const destinationAddText: Record<Destination, string> = {
+  'employed': 'Dodaj osobę',
+  'company': 'Dodaj firmę',
+  'data': 'Dodaj artykuł',
+  'suggestion': 'Dodaj sugestię',
+}
+
 export interface NepoEmployment extends Nameable {
   name: string;
   parties?: string[];
@@ -57,6 +71,12 @@ interface ArticleStatus {
 
 const { newKey } = useSuggestDB();
 
+// TODO test that adding all of the fields work - I've broke them because I was removing too much.
+
+function clearEmptyRecord(record: Record<string, {text: string}>) {
+  // TODO implement a function that knows what it removes, it's hard to accidentally not remove a partial field.
+}
+
 function recordOf<T>(value: T): Record<string, T> {
   const result: Record<string, T>= {}
   result[newKey()] = value
@@ -95,6 +115,36 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
     if (!value.companies) value.companies = recordOf(new Link("company", '', ''))
     if (!value.people) value.people = recordOf(new Link("employed", '', ''))
     if (!value.estimates) value.estimates = {}
+    return value
+  }
+
+  return undefined as any
+}
+
+export function removeBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D): DestinationTypeMap[D];
+export function removeBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D) {
+  if (d == 'employed') {
+    const value = valueUntyped as NepoEmployment
+    clearEmptyRecord(value.comments)
+    clearEmptyRecord(value.connections)
+    clearEmptyRecord(value.employments)
+    clearEmptyRecord(value.sources)
+    return value
+  }
+  if (d == 'company') {
+    const value = valueUntyped as Company
+    clearEmptyRecord(value.owners)
+    clearEmptyRecord(value.comments)
+    return value // TODO(cleanup) remove this return - some check should start failing
+  }
+  if (d == 'suggestion') {
+    return valueUntyped as Nameable
+  }
+  if (d == 'data') {
+    const value = valueUntyped as Article
+    clearEmptyRecord(value.comments)
+    clearEmptyRecord(value.companies)
+    clearEmptyRecord(value.people)
     return value
   }
 
