@@ -23,11 +23,12 @@ declare module 'vue' {
     MultiTextField: typeof import('./components/forms/MultiTextField.vue')['default']
     NestedConnectionField: typeof import('./components/forms/NestedConnectionField.vue')['default']
     OpenAbstractDialog: typeof import('./components/OpenAbstractDialog.vue')['default']
-    PartyChart: typeof import('./components/PartyChart.vue')['default']
     PartyChip: typeof import('./components/PartyChip.vue')['default']
+    RadialPartyChart: typeof import('./components/chart/RadialPartyChart.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     TextableWrap: typeof import('./components/forms/TextableWrap.vue')['default']
+    TreemapPartyChart: typeof import('./components/chart/TreemapPartyChart.vue')['default']
     UserActivityTable: typeof import('./components/UserActivityTable.vue')['default']
     UserDetailDialog: typeof import('./components/dialog/UserDetailDialog.vue')['default']
   }

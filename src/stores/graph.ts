@@ -1,7 +1,6 @@
 import { usePartyStatistics } from "@/composables/party";
 import { useListEntity } from "@/composables/entity";
 import { useArticles, getHostname } from "@/composables/entities/articles";
-import { type Ref } from "vue";
 import type { Connection } from "../composables/model";
 import { DiGraph } from "digraph-js";
 
@@ -16,6 +15,9 @@ export interface NodeGroup {
   id: string;
   name: string;
   connected: string[];
+  stats: {
+    people: number
+  }
 }
 
 export interface TraversePolicy {
@@ -107,11 +109,11 @@ export const useGraphStore = defineStore("graph", () => {
         .edgeFrom((manager) => [manager.id, "zarządzający"]),
       relationFrom(companies.value)
         .forField((company) => company.owner)
-        .setTraverse({ place: "bidirect" })
+        .setTraverse({ place: "backward" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
       relationFrom(companies.value)
         .forEach((company) => company.owners)
-        .setTraverse({ place: "bidirect" })
+        .setTraverse({ place: "backward" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
 
       relationFrom(articles.value, showArticles.value)
@@ -150,17 +152,26 @@ export const useGraphStore = defineStore("graph", () => {
       }
     });
 
-    const entries = Object.entries(companies.value).map(([placeID, place]) => ({
-      id: placeID,
-      name: place.name,
-      connected: [placeID, ...placeConnection.getDeepChildren(placeID)],
-    }));
+    const entries = Object.entries(companies.value).map(([placeID, place]) => {
+      const children = [...placeConnection.getDeepChildren(placeID)]
+      return {
+        id: placeID,
+        name: place.name,
+        connected: [placeID, ...children],
+        stats: {
+          people: children.filter(node => nodes.value[node].type === "circle").length
+        },
+      }
+    });
     entries.push({
       id: "",
       name: "Wszystkie",
       connected: Object.keys(nodes.value),
+      stats: {
+        people: Object.keys(people.value).length
+      }
     });
-    return entries.sort((a, b) => b.connected.length - a.connected.length);
+    return entries.sort((a, b) => b.stats.people - a.stats.people);
   });
 
   const nodeGroupPicked = ref<NodeGroup | undefined>();

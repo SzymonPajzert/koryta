@@ -8,8 +8,8 @@
       v-model="showInactiveArticles"
       label="Pokaż nieaktywne artykuły"
     ></v-checkbox>
-    <v-btn v-model="runSimulation" @click="runSimulation = !runSimulation">
-      Symuluj wierzchołki
+    <v-btn v-model="runSimulation" @click="runSimulation = !runSimulation" v-if="route.path.startsWith('/zobacz/graf')">
+      Uporządkuj wierzchołki
       <v-progress-linear
         v-model="simulationProgress"
         :active="runSimulation"
@@ -28,7 +28,7 @@
       <template v-slot:item="{ props, item }">
         <v-list-item
           v-bind="props"
-          :subtitle="`${item.raw.connected.length} powiązanych osób`"
+          :subtitle="`${item.raw.stats.people} powiązanych osób`"
           :title="item.raw.name"
         ></v-list-item>
       </template>
@@ -48,7 +48,15 @@ const { nodeGroups, showActiveArticles, showInactiveArticles, nodeGroupPicked } 
 const { runSimulation, simulationProgress} = storeToRefs(simulationStore)
 
 const router = useRouter()
-const route = useRoute()
+const route = useRoute<'/zobacz/graf/[[id]]'>()
+
+onMounted(() => {
+  const params = route.params
+  if (params.id) {
+    nodeGroupPicked.value = nodeGroups.value.find(x => x.id == params.id)
+  }
+})
+
 watch(nodeGroupPicked, (value) => {
   const params = value ? { id: value.id } : {}
   router.push({ name: route.name, params: params })
