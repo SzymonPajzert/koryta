@@ -8,6 +8,9 @@
     "dev:be": "firebase emulators:start --import=database",
     "dev:watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
     "dev:emulate": "concurrently 'npm run dev:watch' 'npm run dev:be'",
+
+    "import-db": "firebase database:get / > database/database_export/koryta-pl-default-rtdb.json",
+
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
@@ -46,6 +49,7 @@
     "firebase-tools": "^14.9.0",
     "npm-run-all2": "^7.0.2",
     "pinia": "^3.0.1",
+    "run-p": "^0.0.0",
     "sass-embedded": "^1.86.3",
     "typescript": "~5.8.2",
     "unplugin-auto-import": "^19.1.1",
