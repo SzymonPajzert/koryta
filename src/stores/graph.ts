@@ -1,0 +1,280 @@
+import { usePartyStatistics } from "@/composables/party";
+import { useListEntity } from "@/composables/entity";
+import { useArticles, getHostname } from "@/composables/entities/articles";
+import { type Ref } from "vue";
+import type { Connection } from "../composables/model";
+import { DiGraph } from "digraph-js";
+
+export interface Node {
+  name: string;
+  type: "circle" | "rect" | "document";
+  color: string;
+  sizeMult?: number;
+}
+
+export interface NodeGroup {
+  id: string
+  name: string
+  connected: string[]
+}
+
+export interface TraversePolicy {
+  // When filterting by place, should this relation be included?
+  place: "forward" | "backward" | "bidirect";
+}
+
+export interface Edge {
+  source: string;
+  target: string;
+  label: string;
+
+  traverse?: TraversePolicy;
+}
+
+const { entities: people } = useListEntity("employed");
+const { entities: companies } = useListEntity("company");
+const { articles } = useArticles();
+
+const { partyColors } = usePartyStatistics();
+
+export const useGraphStore = defineStore('graph', () => {
+  // TODO read this from user config
+  const showActiveArticles = ref(false)
+  const showInactiveArticles = ref(false)
+  const showArticles = computed(
+    () => showActiveArticles.value || showInactiveArticles.value
+  );
+
+  const nodes = computed(() => {
+    const result: Record<string, Node> = {};
+    Object.entries(people.value).forEach(([key, person]) => {
+      result[key] = {
+        ...person,
+        type: "circle",
+        color:
+          person.parties && person.parties.length > 0
+            ? partyColors.value[person.parties[0]]
+            : "#4466cc",
+      };
+    });
+    if (companies.value) {
+      Object.entries(companies.value).forEach(([key, company]) => {
+        result[key] = {
+          ...company,
+          type: "rect",
+          color: "gray",
+        };
+      });
+    }
+    if (showArticles.value && articles.value) {
+      Object.entries(articles.value).forEach(([articleID, article]) => {
+        const shouldShow = article.enrichedStatus.hideArticle
+          ? showInactiveArticles.value
+          : showActiveArticles.value;
+        if (shouldShow) {
+          const mentionedPeople = article.estimates?.mentionedPeople ?? 1;
+          const linkedPeople = article.people
+            ? Object.keys(article.people).length
+            : 0;
+          const peopleLeft = Math.max(1, mentionedPeople - linkedPeople);
+          result[articleID] = {
+            name: article.shortName || getHostname(article),
+            sizeMult: Math.pow(peopleLeft, 0.3),
+            type: "document",
+            color: "pink", // TODO the color should be based if the article is active or not
+          };
+        }
+      });
+    }
+    return result;
+  });
+
+  const edges = computed(() => {
+    return executeGraph([
+      relationFrom(people.value)
+        .forEach((person) => person.employments)
+        .setTraverse({ place: "backward" })
+        .edgeFromConnection(),
+
+      relationFrom(people.value)
+        .forEach((person) => person.connections)
+        .setTraverse({ place: "bidirect" })
+        .edgeFromConnection(),
+
+      relationFrom(companies.value)
+        .forField((company) => company.manager)
+        .setTraverse({ place: "forward" })
+        .edgeFrom((manager) => [manager.id, "zarządzający"]),
+      relationFrom(companies.value)
+        .forField((company) => company.owner)
+        .setTraverse({ place: "backward" })
+        .edgeFrom((owner) => [owner.id, "właściciel"]),
+      relationFrom(companies.value)
+        .forEach((company) => company.owners)
+        .setTraverse({ place: "backward" })
+        .edgeFrom((owner) => [owner.id, "właściciel"]),
+
+      relationFrom(articles.value, showArticles.value)
+        .forEach((article) => article.people)
+        .setTraverse({ place: "backward" })
+        .edgeFrom((person) => [person.id, "wspomina"]),
+      relationFrom(articles.value, showArticles.value)
+        .forEach((article) => article.companies)
+        .setTraverse({ place: "backward" })
+        .edgeFrom((company) => [company.id, "wspomina"]),
+    ]);
+  });
+
+  const nodeGroups = computed<NodeGroup[]>(() => {
+    const placeConnection = new DiGraph();
+    placeConnection.addVertices(
+      ...Object.keys(nodes.value).map((key) => ({
+        id: key,
+        adjacentTo: [],
+        body: {},
+      }))
+    );
+
+    edges.value.forEach((edge: Edge) => {
+      if (!edge.traverse) return;
+      if (edge.traverse.place == "forward") {
+        placeConnection.addEdge({ from: edge.source, to: edge.target });
+      } else if (edge.traverse.place == "backward") {
+        placeConnection.addEdge({ from: edge.target, to: edge.source });
+      } else if (edge.traverse.place == "bidirect") {
+        placeConnection.addEdge({ from: edge.source, to: edge.target });
+        placeConnection.addEdge({ from: edge.target, to: edge.source });
+      }
+    });
+
+    return Object.entries(companies.value)
+      .map(([placeID, place]) => ({
+        id: placeID,
+        name: place.name,
+        connected: [...placeConnection.getDeepChildren(placeID)],
+      }))
+      .sort((a, b) => b.connected.length - a.connected.length);
+  });
+
+  return { nodes, edges, nodeGroups, showActiveArticles, showInactiveArticles };
+});
+
+type Closure<A> = (a: A) => void;
+
+function relationFrom<A>(
+  relations: Record<string, A>,
+  include: boolean = true
+): HalfEdgeMaker<A> {
+  return new HalfEdgeMaker<A>((closure: Closure<[string, A]>) => {
+    if (include) {
+      Object.entries(relations).forEach(([key, relation]) => {
+        closure([key, relation]);
+      });
+    }
+  });
+}
+
+class HalfEdgeMaker<A> {
+  readonly outer: Closure<Closure<[string, A]>>;
+
+  constructor(outer: Closure<Closure<[string, A]>>) {
+    this.outer = outer;
+  }
+
+  forEach<B>(
+    extractor: (elt: A) => Record<string, B> | undefined
+  ): EdgeMaker<A, B> {
+    return new EdgeMaker<A, B>(([result, mapper]) => {
+      this.outer(([key, relation]) => {
+        Object.values(extractor(relation) ?? {}).forEach((subRelation) => {
+          const mapped = mapper(subRelation);
+          if (mapped) {
+            result.push({
+              source: key,
+              ...mapped,
+            });
+          }
+        });
+      });
+    });
+  }
+
+  forField<B>(extractor: (elt: A) => B | undefined): EdgeMaker<A, B> {
+    return new EdgeMaker<A, B>(([result, mapper]) => {
+      this.outer(([key, relation]) => {
+        const field = extractor(relation);
+        if (field) {
+          const mapped = mapper(field);
+          if (mapped) {
+            result.push({
+              source: key,
+              ...mapped,
+            });
+          }
+        }
+      });
+    });
+  }
+}
+
+type EdgeMissing = { target: string; label: string; traverse?: TraversePolicy };
+
+class EdgeMaker<A, B> {
+  traversePolicy?: TraversePolicy;
+
+  readonly outer: Closure<[Edge[], (b: B) => EdgeMissing | undefined]>;
+
+  constructor(outer: Closure<[Edge[], (b: B) => EdgeMissing | undefined]>) {
+    this.outer = outer;
+  }
+
+  setTraverse(policy: TraversePolicy): EdgeMaker<A, B> {
+    this.traversePolicy = policy;
+    return this;
+  }
+
+  edgeFromConnection(): (results: Edge[]) => void {
+    return (results: Edge[]) => {
+      this.outer([
+        results,
+        (b: B) => {
+          const connection = b as Connection;
+
+          if (!connection.connection) {
+            return undefined;
+          }
+
+          return {
+            target: connection.connection!.id,
+            label: connection.relation,
+            traverse: this.traversePolicy,
+          };
+        },
+      ]);
+    };
+  }
+
+  edgeFrom(extractor: (b: B) => [string, string]): (results: Edge[]) => void {
+    return (results: Edge[]) => {
+      this.outer([
+        results,
+        (b: B) => {
+          const [label, policy] = extractor(b);
+          return {
+            target: label,
+            label: policy,
+            policy: this.traversePolicy,
+          };
+        },
+      ]);
+    };
+  }
+}
+
+function executeGraph(makers: ((results: Edge[]) => void)[]): Edge[] {
+  const results: Edge[] = [];
+  makers.forEach((maker) => {
+    maker(results);
+  });
+  return results;
+}
