@@ -20,6 +20,8 @@ interface NewEntityPayload<D extends Destination> {
   callback?: Callback
 }
 
+
+
 export const config: Record<Destination, {title: string, titleIcon: string}> = {
   data: {
     title: "Dodaj nowy artykuł",
