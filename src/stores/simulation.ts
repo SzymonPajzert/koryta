@@ -10,7 +10,7 @@ type d3Type = typeof d3;
 type CreateSimulationFunction = (
   d3: d3Type,
   nodes: ForceNodeDatum[],
-  edges: ForceEdgeDatum[]
+  edges: ForceEdgeDatum[],
 ) => d3.Simulation<ForceNodeDatum, ForceEdgeDatum>;
 
 export const useSimulationStore = defineStore("simulation", () => {
@@ -69,5 +69,5 @@ export const useSimulationStore = defineStore("simulation", () => {
       createSimulation: simulation(initial),
     });
 
-  return { simulationProgress, runSimulation, simulation, newForceLayout }
+  return { simulationProgress, runSimulation, simulation, newForceLayout };
 });
