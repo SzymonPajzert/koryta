@@ -13,9 +13,9 @@ export interface Node {
 }
 
 export interface NodeGroup {
-  id: string
-  name: string
-  connected: string[]
+  id: string;
+  name: string;
+  connected: string[];
 }
 
 export interface TraversePolicy {
@@ -37,12 +37,12 @@ const { articles } = useArticles();
 
 const { partyColors } = usePartyStatistics();
 
-export const useGraphStore = defineStore('graph', () => {
+export const useGraphStore = defineStore("graph", () => {
   // TODO read this from user config
-  const showActiveArticles = ref(false)
-  const showInactiveArticles = ref(false)
+  const showActiveArticles = ref(false);
+  const showInactiveArticles = ref(false);
   const showArticles = computed(
-    () => showActiveArticles.value || showInactiveArticles.value
+    () => showActiveArticles.value || showInactiveArticles.value,
   );
 
   const nodes = computed(() => {
@@ -107,11 +107,11 @@ export const useGraphStore = defineStore('graph', () => {
         .edgeFrom((manager) => [manager.id, "zarządzający"]),
       relationFrom(companies.value)
         .forField((company) => company.owner)
-        .setTraverse({ place: "backward" })
+        .setTraverse({ place: "bidirect" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
       relationFrom(companies.value)
         .forEach((company) => company.owners)
-        .setTraverse({ place: "backward" })
+        .setTraverse({ place: "bidirect" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
 
       relationFrom(articles.value, showArticles.value)
@@ -132,11 +132,14 @@ export const useGraphStore = defineStore('graph', () => {
         id: key,
         adjacentTo: [],
         body: {},
-      }))
+      })),
     );
 
     edges.value.forEach((edge: Edge) => {
-      if (!edge.traverse) return;
+      if (!edge.traverse) {
+        console.error("no traverse policy in ", edge);
+        return;
+      }
       if (edge.traverse.place == "forward") {
         placeConnection.addEdge({ from: edge.source, to: edge.target });
       } else if (edge.traverse.place == "backward") {
@@ -147,23 +150,47 @@ export const useGraphStore = defineStore('graph', () => {
       }
     });
 
-    return Object.entries(companies.value)
-      .map(([placeID, place]) => ({
-        id: placeID,
-        name: place.name,
-        connected: [...placeConnection.getDeepChildren(placeID)],
-      }))
-      .sort((a, b) => b.connected.length - a.connected.length);
+    const entries = Object.entries(companies.value).map(([placeID, place]) => ({
+      id: placeID,
+      name: place.name,
+      connected: [placeID, ...placeConnection.getDeepChildren(placeID)],
+    }));
+    entries.push({
+      id: "",
+      name: "Wszystkie",
+      connected: Object.keys(nodes.value),
+    });
+    return entries.sort((a, b) => b.connected.length - a.connected.length);
   });
 
-  return { nodes, edges, nodeGroups, showActiveArticles, showInactiveArticles };
+  const nodeGroupPicked = ref<NodeGroup | undefined>();
+  const nodesFiltered = computed(() => {
+    if (nodeGroupPicked.value) {
+      return Object.fromEntries(
+        Object.entries(nodes.value).filter(([key, _]) =>
+          nodeGroupPicked.value?.connected.includes(key),
+        ),
+      );
+    }
+    return nodes.value;
+  });
+
+  return {
+    nodes,
+    edges,
+    nodeGroups,
+    showActiveArticles,
+    showInactiveArticles,
+    nodeGroupPicked,
+    nodesFiltered,
+  };
 });
 
 type Closure<A> = (a: A) => void;
 
 function relationFrom<A>(
   relations: Record<string, A>,
-  include: boolean = true
+  include: boolean = true,
 ): HalfEdgeMaker<A> {
   return new HalfEdgeMaker<A>((closure: Closure<[string, A]>) => {
     if (include) {
@@ -182,7 +209,7 @@ class HalfEdgeMaker<A> {
   }
 
   forEach<B>(
-    extractor: (elt: A) => Record<string, B> | undefined
+    extractor: (elt: A) => Record<string, B> | undefined,
   ): EdgeMaker<A, B> {
     return new EdgeMaker<A, B>(([result, mapper]) => {
       this.outer(([key, relation]) => {
@@ -234,6 +261,7 @@ class EdgeMaker<A, B> {
   }
 
   edgeFromConnection(): (results: Edge[]) => void {
+    const policy = this.traversePolicy;
     return (results: Edge[]) => {
       this.outer([
         results,
@@ -241,13 +269,14 @@ class EdgeMaker<A, B> {
           const connection = b as Connection;
 
           if (!connection.connection) {
+            // TODO this should be reported somewhere
             return undefined;
           }
 
           return {
             target: connection.connection!.id,
             label: connection.relation,
-            traverse: this.traversePolicy,
+            traverse: policy,
           };
         },
       ]);
@@ -255,15 +284,16 @@ class EdgeMaker<A, B> {
   }
 
   edgeFrom(extractor: (b: B) => [string, string]): (results: Edge[]) => void {
+    const policy = this.traversePolicy;
     return (results: Edge[]) => {
       this.outer([
         results,
         (b: B) => {
-          const [label, policy] = extractor(b);
+          const [id, label] = extractor(b);
           return {
-            target: label,
-            label: policy,
-            policy: this.traversePolicy,
+            target: id,
+            label: label,
+            traverse: policy,
           };
         },
       ]);

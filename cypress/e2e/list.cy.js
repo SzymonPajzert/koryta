@@ -1,6 +1,6 @@
 describe('list', () => {
   beforeEach(() => {
-    cy.visit('/list')
+    cy.visit('/zobacz/lista')
   })
 
   it('screenshots', () => {

@@ -10,8 +10,8 @@
     ></v-img>
     <v-app-bar-title style="cursor: pointer" @click="$router.push('/')">koryta.pl</v-app-bar-title>
     <v-spacer />
-    <v-btn text to="/list">Lista</v-btn>
-    <v-btn text to="/graf">Graf</v-btn>
+    <v-btn text to="/zobacz/lista">Lista</v-btn>
+    <v-btn text to="/zobacz/graf">Graf</v-btn>
     <v-btn text to="/pomoc">Działaj</v-btn>
     <v-btn text to="/zrodla">Źródła</v-btn>
     <v-btn icon v-if="user" to="/profil">
@@ -48,6 +48,6 @@ onMounted(() => {
 });
 
 const route = useRoute();
-const maxWidth = computed(() => route.path == "/graf" ? 'none' : 900)
-const rootPadding = computed(() => route.path == "/graf" ? 0 : undefined)
+const maxWidth = computed(() => route.name == "/zobacz/graf/[[id]]" ? 'none' : 900)
+const rootPadding = computed(() => route.name == "/zobacz/graf/[[id]]" ? 0 : undefined)
 </script>

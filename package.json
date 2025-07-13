@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:be": "firebase emulators:start --import=database",
     "dev:watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
-    "dev:emulate": "concurrently 'npm run dev' 'npm run dev:be'",
+    "dev:emulate": "concurrently 'npm run dev' 'npm run build; npm run dev:be'",
     "import-db": "firebase database:get / > database/database_export/koryta-pl-default-rtdb.json",
     "format:diff": "prettier --write $(git diff --name-only origin/main origin/${GITHUB_HEAD_REF} | grep '\\.ts$' | xargs)",
     "build": "run-p type-check \"build-only {@}\" --",
