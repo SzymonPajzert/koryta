@@ -15,6 +15,7 @@ declare module 'vue' {
     AlreadyExisting: typeof import('./components/forms/AlreadyExisting.vue')['default']
     ArticleBacklink: typeof import('./components/cards/ArticleBacklink.vue')['default']
     ArticleCard: typeof import('./components/cards/ArticleCard.vue')['default']
+    BacklinksList: typeof import('./components/BacklinksList.vue')['default']
     EntityPicker: typeof import('./components/forms/EntityPicker.vue')['default']
     HomeItem: typeof import('./components/HomeItem.vue')['default']
     ListView: typeof import('./components/ListView.vue')['default']

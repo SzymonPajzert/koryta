@@ -56,15 +56,7 @@
       :empty-value="emptyTextable"
     />
 
-    <v-list>
-      <!-- TODO turn into an entity picker -->
-      <v-list-item class="mb-2" @click="dialogStore.open({ type: 'data' })">
-        <v-list-item-title>
-          Dodaj źródło
-        </v-list-item-title>
-      </v-list-item>
-      <ArticleBacklink :article="source" :articleID="id" dense v-for="(source, id) in articles" width="100%" />
-    </v-list>
+    <BacklinksList :id="id"/>
   </v-row>
 </template>
 
@@ -72,16 +64,11 @@
 import { useFeminatyw } from "@/composables/feminatyw";
 import { usePartyStatistics } from "@/composables/party";
 import type { NepoEmployment } from "@/composables/model";
-import { VTextField } from "vuetify/components";
 import { computed } from "vue";
 import MultiTextField from "@/components/forms/MultiTextField.vue";
 import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";
 import { emptyTextable, emptyNestedConnection } from "@/composables/multiTextHelper";
 import TextableWrap from "../forms/TextableWrap.vue";
-import { useArticles } from "@/composables/entities/articles";
-import { useDialogStore } from "@/stores/dialog";
-
-const dialogStore = useDialogStore();
 
 const formData = defineModel<NepoEmployment>({required: true});
 const { id, create } = defineProps<{ id?: string, create?: boolean }>();
@@ -89,9 +76,5 @@ const { id, create } = defineProps<{ id?: string, create?: boolean }>();
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);
 const { koryciarz } = useFeminatyw();
-const { userArticles } = useArticles()
-const articles = computed(() => {
-  if (!id) return {}
-  return userArticles.value[id]
-})
+
 </script>

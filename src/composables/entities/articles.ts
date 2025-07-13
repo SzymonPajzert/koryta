@@ -135,13 +135,18 @@ export function useArticles() {
     )
   );
 
-  type userArticlesT = Record<string, Record<string, Article & EnrichedStatus>>
-  const userArticles = computed<userArticlesT>(() => {
-    const result : userArticlesT = {}
-    allArticles.value.filter(([id, a]) => {
+  type entityArticlesT = Record<string, Record<string, Article & EnrichedStatus>>
+  const entityArticles = computed<entityArticlesT>(() => {
+    const result : entityArticlesT = {}
+    allArticles.value.forEach(([id, a]) => {
       Object.entries(a.people ?? {}).forEach(([_, person]) => {
         if (!(person.id in result)) result[person.id] = {}
         result[person.id][id] = a
+      })
+
+      Object.entries(a.companies ?? {}).forEach(([_, company]) => {
+        if (!(company.id in result)) result[company.id] = {}
+        result[company.id][id] = a
       })
     })
     return result
@@ -157,6 +162,6 @@ export function useArticles() {
     assignToArticle,
     articlesAssigned,
     articlesUnssigned,
-    userArticles,
+    entityArticles,
   };
 }

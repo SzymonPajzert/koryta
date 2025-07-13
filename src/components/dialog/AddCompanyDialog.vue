@@ -42,6 +42,8 @@
       remove-item-tooltip="Usuń uwagę"
       :empty-value="emptyTextable"
     />
+
+    <BacklinksList :id="id"/>
   </v-row>
 </template>
 
@@ -52,6 +54,6 @@ import EntityPicker from '../forms/EntityPicker.vue';
 import TextableWrap from '../forms/TextableWrap.vue';
 
 const formData = defineModel<Company>({required: true});
-const { create } = defineProps<{ create?: boolean }>();
+const { create } = defineProps<{ id?: string, create?: boolean }>();
 
 </script>
