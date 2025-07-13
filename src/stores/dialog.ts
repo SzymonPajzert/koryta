@@ -1,94 +1,93 @@
 // src/stores/dialog.ts
-import { defineStore } from 'pinia';
-import { ref } from 'vue';
-import { useListEntity } from '@/composables/entity';
-import { empty, fillBlankRecords, type Destination } from '@/composables/model'
-import type { DestinationTypeMap } from '@/composables/model';
+import { defineStore } from "pinia";
+import { ref } from "vue";
+import { useListEntity } from "@/composables/entity";
+import { empty, fillBlankRecords, type Destination } from "@/composables/model";
+import type { DestinationTypeMap } from "@/composables/model";
 import { useArticles } from "@/composables/entities/articles";
 
 // callback to call after the dialog was closed
-type Callback = (name: string, key?: string) => void
+type Callback = (name: string, key?: string) => void;
 
 // TODO this could be a class and have everything defined already
 interface NewEntityPayload<D extends Destination> {
-  type: D;          // what type of dialog to open
-  name?: string     // name to populate if given
+  type: D; // what type of dialog to open
+  name?: string; // name to populate if given
   edit?: {
-    value: DestinationTypeMap[D]    // value to prepopulate with
-    key: string
-  }
-  callback?: Callback
+    value: DestinationTypeMap[D]; // value to prepopulate with
+    key: string;
+  };
+  callback?: Callback;
 }
 
-
-
-export const config: Record<Destination, {title: string, titleIcon: string}> = {
-  data: {
-    title: "Dodaj nowy artykuł",
-    titleIcon: "mdi-file-document-plus-outline"
-  },
-  employed: {
-    title: "Dodaj nową osobę",
-    titleIcon: "mdi-account-plus-outline"
-  },
-  company: {
-    title: "Dodaj miejsce pracy",
-    titleIcon: "mdi-domain"
-  },
-  suggestion: {
-    title: "Dodaj pomysł na stronę",
-    titleIcon: "mdi-lightbulb-on-10"
-  }
-}
+export const config: Record<Destination, { title: string; titleIcon: string }> =
+  {
+    data: {
+      title: "Dodaj nowy artykuł",
+      titleIcon: "mdi-file-document-plus-outline",
+    },
+    employed: {
+      title: "Dodaj nową osobę",
+      titleIcon: "mdi-account-plus-outline",
+    },
+    company: {
+      title: "Dodaj miejsce pracy",
+      titleIcon: "mdi-domain",
+    },
+    suggestion: {
+      title: "Dodaj pomysł na stronę",
+      titleIcon: "mdi-lightbulb-on-10",
+    },
+  };
 
 // Values shown by the dialog tab
 interface Dialog<D extends Destination> {
-  value: DestinationTypeMap[D]
-  type: D
-  editKey?: string
-  callback?: Callback
+  value: DestinationTypeMap[D];
+  type: D;
+  editKey?: string;
+  callback?: Callback;
 }
 
-export const useDialogStore = defineStore('dialog', () => {
+export const useDialogStore = defineStore("dialog", () => {
   const { entities: people } = useListEntity("employed");
   const { entities: companies } = useListEntity("company");
   const { articles } = useArticles();
 
   const dialogs = ref<Dialog<Destination>[]>([]);
-  const currentDialog = ref<number>()
-  const shown = ref(false)
-  const showSnackbar = ref(false)
-  const showMain = ref(false)
+  const currentDialog = ref<number>();
+  const shown = ref(false);
+  const showSnackbar = ref(false);
+  const showMain = ref(false);
 
-  type Idx = number
+  type Idx = number;
 
   function openMain() {
-    shown.value = true
-    showMain.value = true
-    currentDialog.value = -1
+    shown.value = true;
+    showMain.value = true;
+    currentDialog.value = -1;
   }
 
   function open<D extends Destination>(payload: NewEntityPayload<D>) {
-    const defaultValue = () => empty(payload.type)
-    const filler = (r: DestinationTypeMap[D]) => fillBlankRecords(r, payload.type)
+    const defaultValue = () => empty(payload.type);
+    const filler = (r: DestinationTypeMap[D]) =>
+      fillBlankRecords(r, payload.type);
 
-    shown.value = true
+    shown.value = true;
     const dialog: Dialog<D> = {
       value: filler(payload.edit?.value || defaultValue()),
       type: payload.type,
       editKey: payload.edit?.key,
       callback: payload.callback ? markRaw(payload.callback) : undefined,
-    }
-    if (payload.name) dialog.value.name = payload.name
-    const len = dialogs.value.push(dialog)
-    currentDialog.value = len - 1
+    };
+    if (payload.name) dialog.value.name = payload.name;
+    const len = dialogs.value.push(dialog);
+    currentDialog.value = len - 1;
   }
 
   function openExisting(node: string) {
     if (node in people.value) {
       console.debug("opening user dialog");
-      open(
-      {
+      open({
         type: "employed",
         edit: { value: people.value[node], key: node },
       });
@@ -110,25 +109,35 @@ export const useDialogStore = defineStore('dialog', () => {
   }
 
   function close(idx: Idx, shouldSubmit: boolean) {
-    let key = dialogs.value[idx].editKey
+    let key = dialogs.value[idx].editKey;
     if (shouldSubmit) {
-      const { submit } = useListEntity(dialogs.value[idx].type)
-      key = submit(dialogs.value[idx].value, dialogs.value[idx].editKey).key
+      const { submit } = useListEntity(dialogs.value[idx].type);
+      key = submit(dialogs.value[idx].value, dialogs.value[idx].editKey).key;
     }
     if (dialogs.value[idx].callback) {
-      dialogs.value[idx].callback(dialogs.value[idx].value.name, key)
+      dialogs.value[idx].callback(dialogs.value[idx].value.name, key);
     }
-    remove(idx)
+    remove(idx);
   }
 
   function remove(idx: Idx) {
-    dialogs.value.splice(idx)
-    if (currentDialog.value ?? -1 >= dialogs.value.length) currentDialog.value = dialogs.value.length - 1
+    dialogs.value.splice(idx);
+    if (currentDialog.value ?? -1 >= dialogs.value.length)
+      currentDialog.value = dialogs.value.length - 1;
     if (dialogs.value.length == 0) {
-      currentDialog.value = undefined
-      shown.value = false
+      currentDialog.value = undefined;
+      shown.value = false;
     }
   }
 
-  return { dialogs, shown, currentDialog, showSnackbar, openMain, open, openExisting, close };
+  return {
+    dialogs,
+    shown,
+    currentDialog,
+    showSnackbar,
+    openMain,
+    open,
+    openExisting,
+    close,
+  };
 });
