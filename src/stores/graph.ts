@@ -16,8 +16,8 @@ export interface NodeGroup {
   name: string;
   connected: string[];
   stats: {
-    people: number
-  }
+    people: number;
+  };
 }
 
 export interface TraversePolicy {
@@ -153,23 +153,24 @@ export const useGraphStore = defineStore("graph", () => {
     });
 
     const entries = Object.entries(companies.value).map(([placeID, place]) => {
-      const children = [...placeConnection.getDeepChildren(placeID)]
+      const children = [...placeConnection.getDeepChildren(placeID)];
       return {
         id: placeID,
         name: place.name,
         connected: [placeID, ...children],
         stats: {
-          people: children.filter(node => nodes.value[node].type === "circle").length
+          people: children.filter((node) => nodes.value[node].type === "circle")
+            .length,
         },
-      }
+      };
     });
     entries.push({
       id: "",
       name: "Wszystkie",
       connected: Object.keys(nodes.value),
       stats: {
-        people: Object.keys(people.value).length
-      }
+        people: Object.keys(people.value).length,
+      },
     });
     return entries.sort((a, b) => b.stats.people - a.stats.people);
   });

@@ -6,7 +6,7 @@ describe('home', () => {
   })
 
   it('displays three clickable cards', () => {
-    cy.get('.v-card').should('have.length', 2)
+    cy.get('.v-card').should('have.length', 4)
     cy.get('img')
       .should('be.visible')
       .and('have.prop', 'naturalWidth')
