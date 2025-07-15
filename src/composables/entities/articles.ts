@@ -14,13 +14,33 @@ export interface EnrichedStatus {
   };
 }
 
+const breakpoint = /\.|\-/
+
+// uses a list of defined markers to split the title
+export function splitTitle(title: string, limit?: number): string[] {
+  return title.split(breakpoint, limit)
+}
+
+export function getSubtitle(data: Article): string | undefined {
+  const parts = splitTitle(data.name, 2);
+  return parts.length > 1 ? parts[1].trim() : undefined;
+}
+
+export function getShortTitle(data: Article): string {
+  return splitTitle(data.name, 1)[0].trim();
+}
+
+export function getHostname(data: Article): string {
+  return new URL(data.sourceURL).hostname
+}
+
 export function useArticles() {
   const assignToArticle = async (articleId: string, setAssigned: boolean) => {
     if (!user.value) return;
     if (setAssigned) {
       set(
         dbRef(db, `data/${articleId}/status/signedUp/${user.value.uid}`),
-        Date.now(),
+        Date.now()
       );
     } else {
       remove(dbRef(db, `data/${articleId}/status/signedUp/${user.value.uid}`));
@@ -31,7 +51,7 @@ export function useArticles() {
     if (!user.value) return;
     set(
       dbRef(db, `data/${articleId}/status/markedDone/${user.value.uid}`),
-      Date.now(),
+      Date.now()
     );
     if (isAdmin.value) {
       set(dbRef(db, `data/${articleId}/status/confirmedDone`), true);
@@ -39,28 +59,28 @@ export function useArticles() {
   };
 
   function removeOlderEntries(
-    entries: Record<string, number>,
+    entries: Record<string, number>
   ): Record<string, number> {
     return Object.fromEntries(
       Object.entries(entries).filter(([uid, date]) => {
         const now = new Date();
         const diff = now.getTime() - date;
         return diff < 1000 * 3600 * 24;
-      }),
+      })
     );
   }
 
   const allArticlesUnfiltered = useRTDB<Record<string, Article>>(
-    dbRef(db, "data"),
+    dbRef(db, "data")
   );
-  const articles = computed<[string, Article & EnrichedStatus][]>(() => {
+  const allArticles = computed<[string, Article & EnrichedStatus][]>(() => {
     // Don't show any articles if the user is not logged in or there's no data yet.
     if (!user.value) return [];
     if (!allArticlesUnfiltered.value) return [];
     if (!user.value?.uid) return [];
 
     const result: [string, Article & EnrichedStatus][] = Object.entries(
-      allArticlesUnfiltered.value,
+      allArticlesUnfiltered.value
     )
       .map(([articleId, articleData]) => {
         // remove status entries older than 24hs
@@ -104,15 +124,31 @@ export function useArticles() {
     return result;
   });
 
-  const articlesAssigned = computed(() =>
-    articles.value.filter(
-      ([_, a]) => a.enrichedStatus?.isAssignedToCurrentUser,
-    ),
+  const articlesAssigned = computed<[string, Article & EnrichedStatus][]>(() =>
+    allArticles.value.filter(
+      ([_, a]) => a.enrichedStatus?.isAssignedToCurrentUser
+    )
   );
-  const articlesUnssigned = computed(() =>
-    articles.value.filter(
-      ([_, a]) => !a.enrichedStatus?.isAssignedToCurrentUser,
-    ),
+  const articlesUnssigned = computed<[string, Article & EnrichedStatus][]>(() =>
+    allArticles.value.filter(
+      ([_, a]) => !a.enrichedStatus?.isAssignedToCurrentUser
+    )
+  );
+
+  type userArticlesT = Record<string, Record<string, Article & EnrichedStatus>>
+  const userArticles = computed<userArticlesT>(() => {
+    const result : userArticlesT = {}
+    allArticles.value.filter(([id, a]) => {
+      Object.entries(a.people ?? {}).forEach(([_, person]) => {
+        if (!(person.id in result)) result[person.id] = {}
+        result[person.id][id] = a
+      })
+    })
+    return result
+  })
+
+  const articles = computed<Record<string, Article & EnrichedStatus>>(() =>
+    Object.fromEntries(allArticles.value)
   );
 
   return {
@@ -121,5 +157,6 @@ export function useArticles() {
     assignToArticle,
     articlesAssigned,
     articlesUnssigned,
+    userArticles,
   };
 }

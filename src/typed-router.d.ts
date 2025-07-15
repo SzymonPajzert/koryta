@@ -19,11 +19,13 @@ declare module 'vue-router/auto-routes' {
    */
   export interface RouteNamedMap {
     '/': RouteRecordInfo<'/', '/', Record<never, never>, Record<never, never>>,
-    '/graf': RouteRecordInfo<'/graf', '/graf', Record<never, never>, Record<never, never>>,
-    '/list': RouteRecordInfo<'/list', '/list', Record<never, never>, Record<never, never>>,
+    '/admin': RouteRecordInfo<'/admin', '/admin', Record<never, never>, Record<never, never>>,
     '/login': RouteRecordInfo<'/login', '/login', Record<never, never>, Record<never, never>>,
     '/pomoc': RouteRecordInfo<'/pomoc', '/pomoc', Record<never, never>, Record<never, never>>,
     '/profil': RouteRecordInfo<'/profil', '/profil', Record<never, never>, Record<never, never>>,
+    '/zobacz': RouteRecordInfo<'/zobacz', '/zobacz', Record<never, never>, Record<never, never>>,
+    '/zobacz/graf/[[id]]': RouteRecordInfo<'/zobacz/graf/[[id]]', '/zobacz/graf/:id?', { id?: ParamValueZeroOrOne<true> }, { id?: ParamValueZeroOrOne<false> }>,
+    '/zobacz/lista/[[id]]': RouteRecordInfo<'/zobacz/lista/[[id]]', '/zobacz/lista/:id?', { id?: ParamValueZeroOrOne<true> }, { id?: ParamValueZeroOrOne<false> }>,
     '/zrodla': RouteRecordInfo<'/zrodla', '/zrodla', Record<never, never>, Record<never, never>>,
   }
 }

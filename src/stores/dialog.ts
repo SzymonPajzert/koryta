@@ -4,14 +4,20 @@ import { ref } from "vue";
 import { useListEntity } from "@/composables/entity";
 import { empty, fillBlankRecords, type Destination } from "@/composables/model";
 import type { DestinationTypeMap } from "@/composables/model";
+import { useArticles } from "@/composables/entities/articles";
+
+// callback to call after the dialog was closed
+type Callback = (name: string, key?: string) => void;
 
 // TODO this could be a class and have everything defined already
 interface NewEntityPayload<D extends Destination> {
   type: D; // what type of dialog to open
+  name?: string; // name to populate if given
   edit?: {
     value: DestinationTypeMap[D]; // value to prepopulate with
     key: string;
   };
+  callback?: Callback;
 }
 
 export const config: Record<Destination, { title: string; titleIcon: string }> =
@@ -39,16 +45,28 @@ interface Dialog<D extends Destination> {
   value: DestinationTypeMap[D];
   type: D;
   editKey?: string;
+  callback?: Callback;
 }
 
 export const useDialogStore = defineStore("dialog", () => {
+  const { entities: people } = useListEntity("employed");
+  const { entities: companies } = useListEntity("company");
+  const { articles } = useArticles();
+
   const dialogs = ref<Dialog<Destination>[]>([]);
   const currentDialog = ref<number>();
   const shown = ref(false);
   const showSnackbar = ref(false);
+  const showMain = ref(false);
+
   type Idx = number;
 
-  // TODO open could be just type and optional edit payload (value and key to submit)
+  function openMain() {
+    shown.value = true;
+    showMain.value = true;
+    currentDialog.value = -1;
+  }
+
   function open<D extends Destination>(payload: NewEntityPayload<D>) {
     const defaultValue = () => empty(payload.type);
     const filler = (r: DestinationTypeMap[D]) =>
@@ -59,16 +77,45 @@ export const useDialogStore = defineStore("dialog", () => {
       value: filler(payload.edit?.value || defaultValue()),
       type: payload.type,
       editKey: payload.edit?.key,
+      callback: payload.callback ? markRaw(payload.callback) : undefined,
     };
-    console.log(dialog);
+    if (payload.name) dialog.value.name = payload.name;
     const len = dialogs.value.push(dialog);
     currentDialog.value = len - 1;
   }
 
+  function openExisting(node: string) {
+    if (node in people.value) {
+      console.debug("opening user dialog");
+      open({
+        type: "employed",
+        edit: { value: people.value[node], key: node },
+      });
+      return;
+    }
+    if (companies.value && node in companies.value) {
+      open({
+        type: "company",
+        edit: { value: companies.value[node], key: node },
+      });
+      return;
+    }
+    if (articles.value && node in articles.value) {
+      open({
+        type: "data",
+        edit: { value: articles.value[node], key: node },
+      });
+    }
+  }
+
   function close(idx: Idx, shouldSubmit: boolean) {
+    let key = dialogs.value[idx].editKey;
     if (shouldSubmit) {
       const { submit } = useListEntity(dialogs.value[idx].type);
-      submit(dialogs.value[idx].value, dialogs.value[idx].editKey); // TODO handle edit
+      key = submit(dialogs.value[idx].value, dialogs.value[idx].editKey).key;
+    }
+    if (dialogs.value[idx].callback) {
+      dialogs.value[idx].callback(dialogs.value[idx].value.name, key);
     }
     remove(idx);
   }
@@ -83,5 +130,14 @@ export const useDialogStore = defineStore("dialog", () => {
     }
   }
 
-  return { dialogs, shown, currentDialog, showSnackbar, open, close };
+  return {
+    dialogs,
+    shown,
+    currentDialog,
+    showSnackbar,
+    openMain,
+    open,
+    openExisting,
+    close,
+  };
 });

@@ -40,15 +40,15 @@
 </template>
 
 <script lang="ts" setup>
-import { useListEmployment } from "@/composables/party";
+// TODO probably remove it now and just write a user card to be shown in the list view
+import { useListEntity } from "@/composables/entity";
 import { useDialogStore } from "@/stores/dialog";
-import { empty } from "@/composables/model";
 
 const dialogStore = useDialogStore();
 
 const visible = ref(false);
 const node = ref<string | undefined>();
-const { people } = useListEmployment();
+const { entities: people } = useListEntity("employed");
 
 const person = computed(() => {
   if (!people.value) return;

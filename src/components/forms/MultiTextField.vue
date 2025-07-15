@@ -89,15 +89,9 @@ const addItem = () => {
   keys.value.push(key);
 };
 
-if (!model.value || Object.keys(model.value).length === 0) {
-  console.log(model.value);
-  addItem();
-}
-
-const removeItem = (index: number) => {
-  if (keys.value.length > 1) {
-    delete model.value[keys.value[index]];
-    keys.value.splice(index, 1);
+  if (!model.value || Object.keys(model.value).length === 0) {
+    console.debug(model.value)
+    addItem()
   }
 };
 </script>

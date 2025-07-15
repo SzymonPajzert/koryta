@@ -1,31 +1,31 @@
 <template>
   <v-dialog v-model="shown" max-width="800">
     <v-card>
-      <v-tabs v-model="currentDialog" selected-class="bg-success">
-        <v-tab
-          v-for="(dialog, id) in dialogs"
-          :key="id"
-          :value="id"
-          variant="tonal"
-        >
+      <v-tabs
+        v-model="currentDialog"
+        selected-class="bg-success">
+        <v-tab value="-1" variant="tonal">
+          Wybierz typ
+        </v-tab>
+        <v-tab v-for="(dialog, id) in dialogs" :key="id" :value="id" variant="tonal">
           {{ dialog.value.name.slice(0, 20) }}
         </v-tab>
       </v-tabs>
       <v-card-text class="overflow-y-auto">
         <v-tabs-window v-model="currentDialog">
-          <v-tabs-window-item
-            v-for="(dialog, id) in dialogs"
-            :key="id"
-            :value="id"
-          >
-            <v-card
-              :prepend-icon="config[dialog.type].titleIcon"
-              :title="config[dialog.type].title"
-            >
+          <v-tabs-window-item value="-1">
+            <OpenAbstractDialog dialog="data"/>
+            <OpenAbstractDialog dialog="employed"/>
+            <OpenAbstractDialog dialog="company"/>
+          </v-tabs-window-item>
+          <v-tabs-window-item v-for="(dialog, id) in dialogs" :key="id" :value="id">
+            <v-card :prepend-icon="config[dialog.type].titleIcon" :title="config[dialog.type].title">
               <v-card-text>
                 <component
                   :is="lookupComponent(dialog.type)"
                   v-model="dialog.value"
+                  :create="!dialog.editKey"
+                  :id="dialog.editKey"
                   @close="dialogStore.close(id, false)"
                   @submit="dialogStore.close(id, true)"
                 />

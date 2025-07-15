@@ -1,24 +1,25 @@
-import { useRTDB } from "@vueuse/firebase/useRTDB";
-import { db } from "@/firebase";
-import {
-  ref as dbRef,
-  push,
-  set,
-  type ThenableReference,
-} from "firebase/database";
-import type { NepoEmployment, DestinationTypeMap } from "./model";
-import { useAuthState } from "./auth";
-import { type Destination } from "./model";
+import { useRTDB } from '@vueuse/firebase/useRTDB'
+import { db } from '@/firebase'
+import { ref as dbRef, push, set, type ThenableReference } from 'firebase/database'
+import type { DestinationTypeMap } from './model'
+import { useAuthState } from './auth'
+import {type Destination} from './model'
 
 const { user, isAdmin } = useAuthState();
 
 export function useListEntity<D extends Destination>(entity: D) {
-  type T = DestinationTypeMap[D];
+  type T = DestinationTypeMap[D]
 
-  const entities = useRTDB<Record<string, T>>(dbRef(db, entity));
-  const suggestions = useRTDB<Record<string, T>>(
-    dbRef(db, `suggestions/${entity}`),
-  );
+  // TODO you can migrate here to list suggestions from the user
+  const entitiesApproved = useRTDB<Record<string, T>>(dbRef(db, entity))
+  const suggestions = computed(() => {
+    const { user } = useAuthState()
+    return useRTDB<Record<string, T>>(dbRef(db, `suggestions/${user.value?.uid}/${entity}`)).value
+  })
+  const entities = computed(() => ({
+    ...entitiesApproved.value,
+    ...suggestions.value,
+  }))
 
   function submitPath(editKey: string | undefined): string {
     let result = `suggestions/${entity}`; // Everything else goes to suggestion
@@ -40,19 +41,20 @@ export function useListEntity<D extends Destination>(entity: D) {
 
   function submit(value: T, editKey: string | undefined) {
     if (!user.value?.uid) {
-      return "User not authenticated or UID not available.";
+      return { error: "User not authenticated or UID not available." }
     }
 
-    const path = dbRef(db, submitPath(editKey));
-    const op = operation(editKey);
-    console.log("trying to write: ", value);
+    const path = dbRef(db, submitPath(editKey))
+    const op = operation(editKey)
+    console.debug("trying to write: ", value)
 
     const keyRef = op(path, {
       ...value,
       date: Date.now(),
       user: user.value?.uid,
     }).key;
-    push(dbRef(db, `user/${user.value?.uid}/suggestions/${entity}`), keyRef);
+    push(dbRef(db, `user/${user.value?.uid}/suggestions/${entity}`), keyRef)
+    return { key: keyRef }
   }
 
   return { entities, suggestions, submit };

@@ -1,9 +1,23 @@
 <template>
   <template v-if="props.fieldType == 'textField'">
-    <VTextField v-model="textable.text" v-bind="$attrs"></VTextField>
+    <VTextField
+      v-model="textable.text"
+      v-bind="$attrs"
+    >
+      <template #prepend>
+        <slot name="prepend"></slot>
+      </template>
+    </VTextField>
   </template>
   <template v-if="props.fieldType == 'textarea'">
-    <VTextarea v-model="textable.text" v-bind="$attrs"></VTextarea>
+    <VTextarea
+      v-model="textable.text"
+      v-bind="$attrs"
+    >
+      <template #prepend>
+        <slot name="prepend"></slot>
+      </template>
+    </VTextarea>
   </template>
 </template>
 

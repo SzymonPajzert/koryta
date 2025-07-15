@@ -1,16 +1,19 @@
 <template>
   <v-row dense>
-    <v-col cols="12">
-      <v-text-field
+    <v-col
+      cols="12"
+    >
+      <AlreadyExisting
         v-model="formData.sourceURL"
+        entity="data"
+        :create="create"
         label="Źródło"
         hint="Link do artykułu"
         autocomplete="off"
         required
         @blur="fetchAndSetArticleTitle"
         :loading="formData.isFetchingTitle"
-        :disabled="formData.isFetchingTitle"
-      ></v-text-field>
+        :disabled="formData.isFetchingTitle" />
     </v-col>
 
     <v-col cols="12">
@@ -21,6 +24,47 @@
         :disabled="formData.isFetchingTitle"
       ></v-text-field>
     </v-col>
+
+    <v-col cols="12" md="8">
+      <v-text-field
+        v-model="formData.shortName"
+        label="Skrócony tytuł"
+        autocomplete="off"
+        :disabled="formData.isFetchingTitle"
+      ></v-text-field>
+    </v-col>
+
+    <v-col cols="12" md="4">
+      <v-text-field
+        v-model="formData.estimates.mentionedPeople"
+        label="Liczba wspomnianych osób"
+        autocomplete="off"
+      ></v-text-field>
+    </v-col>
+
+    <MultiTextField
+      title="Wspomniane osoby"
+      v-model="formData.people"
+      field-type="entityPicker"
+      :field-component="EntityPicker"
+      entity="employed"
+      hint="np. polityk Adam"
+      add-item-tooltip="Dodaj kolejną osobę"
+      remove-item-tooltip="Usuń osobę"
+      :empty-value="() => emptyEntityPicker('employed')"
+    />
+
+    <MultiTextField
+      title="Wspomniane firmy / ministerstra"
+      v-model="formData.companies"
+      field-type="entityPicker"
+      :field-component="EntityPicker"
+      entity="company"
+      hint="np. spółka skarbu państwa"
+      add-item-tooltip="Dodaj kolejne miejsce"
+      remove-item-tooltip="Usuń miejsce"
+      :empty-value="() => emptyEntityPicker('company')"
+    />
 
     <MultiTextField
       title="Co jest w nim ciekawego"
@@ -36,31 +80,37 @@
 </template>
 
 <script lang="ts" setup>
-import { functions } from "@/firebase";
-import { httpsCallable } from "firebase/functions";
-import type { Article } from "@/composables/model";
-import { emptyTextable } from "@/composables/multiTextHelper";
-import TextableWrap from "../forms/TextableWrap.vue";
+  import { functions } from '@/firebase'
+  import { httpsCallable } from 'firebase/functions';
+  import type { Article } from '@/composables/model';
+  import { emptyTextable, emptyEntityPicker } from "@/composables/multiTextHelper";
+  import TextableWrap from '../forms/TextableWrap.vue';
+  import EntityPicker from '../forms/EntityPicker.vue';
+  import { splitTitle } from '@/composables/entities/articles';
 
 interface ArticleExtended extends Article {
   isFetchingTitle?: boolean;
 }
 
-const formData = defineModel<ArticleExtended>({ required: true });
-const getPageTitle = httpsCallable(functions, "getPageTitle");
+  const formData = defineModel<ArticleExtended>({required: true});
+  const { create } = defineProps<{ create?: boolean }>();
 
-const fetchAndSetArticleTitle = async () => {
-  if (formData.value.sourceURL && !formData.value.name) {
-    formData.value.isFetchingTitle = true;
-    try {
-      const result = await getPageTitle({ url: formData.value.sourceURL });
-      const title = (result.data as any).title;
-      formData.value.name = title || "";
-    } catch (error) {
-      console.error("Error fetching page title:", error);
-      formData.value.name = "";
-    } finally {
-      formData.value.isFetchingTitle = false;
+  const getPageTitle = httpsCallable(functions, 'getPageTitle');
+
+  const fetchAndSetArticleTitle = async () => {
+    if (formData.value.sourceURL && !formData.value.name) {
+      formData.value.isFetchingTitle = true;
+      try {
+        const result = await getPageTitle({ url: formData.value.sourceURL });
+        const title: string | undefined = (result.data as any).title;
+        formData.value.name = title || '';
+        formData.value.shortName = title ? splitTitle(title, 1)[0] : undefined;
+      } catch (error) {
+        console.error("Error fetching page title:", error);
+        formData.value.name = '';
+      } finally {
+        formData.value.isFetchingTitle = false;
+      }
     }
   }
 };

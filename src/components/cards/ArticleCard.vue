@@ -2,13 +2,18 @@
   <v-card
     v-if="!article.enrichedStatus?.hideArticle"
     :title="getShortTitle(article)"
-    :subtitle="getSubtitle(article)"
+    :subtitle="dense ? undefined : getSubtitle(article)"
     class="mb-2"
-    :href="article.sourceURL"
+    @click="
+      dialogStore.open({
+        type: 'data',
+        edit: { value: article, key: articleID },
+      })
+    "
     target="_blank"
     height="100%"
   >
-    <v-card-text>
+    <v-card-text v-if="!dense">
       <p v-for="(comment, commentKey) in article.comments" :key="commentKey">
         {{ comment.text }}
       </p>
@@ -17,13 +22,22 @@
       <v-spacer></v-spacer>
       <v-btn
         variant="tonal"
+        :href="article.sourceURL"
+        @click.stop
+        target="_blank"
+        prepend-icon="mdi-open-in-new"
+      >
+        Zobacz
+      </v-btn>
+      <v-btn
+        variant="tonal"
         :color="
           article.enrichedStatus?.isAssignedToCurrentUser ? 'yellow' : undefined
         "
         @click.prevent="
           assignToArticle(
             articleID,
-            !article.enrichedStatus?.isAssignedToCurrentUser,
+            !article.enrichedStatus?.isAssignedToCurrentUser
           )
         "
         prepend-icon="mdi-hand-back-left-outline"
@@ -56,20 +70,17 @@ import type { Article } from "@/composables/model";
 import {
   type EnrichedStatus,
   useArticles,
+  getShortTitle,
+  getSubtitle,
 } from "@/composables/entities/articles";
+import { useDialogStore } from "@/stores/dialog";
+
+const dialogStore = useDialogStore();
 
 const { articleID, article } = defineProps<{
   articleID: string;
   article: Article & EnrichedStatus;
+  dense?: boolean;
 }>();
 const { markArticleAsDone, assignToArticle } = useArticles();
-
-function getSubtitle(data: Article): string | undefined {
-  const parts = data.name.split(".", 2);
-  return parts.length > 1 ? parts[1].trim() : undefined;
-}
-
-function getShortTitle(data: Article): string {
-  return data.name.split(".", 1)[0].trim();
-}
 </script>
