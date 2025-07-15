@@ -30,9 +30,6 @@ export const analytics = getAnalytics(app);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
 export const functions = getFunctions(app, "europe-west1");
-export function isTest() {
-  return location.hostname === "localhost" || location.hostname == "127.0.0.1";
-}
 
 if (isTest()) {
   connectDatabaseEmulator(db, "127.0.0.1", 9003);
