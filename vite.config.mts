@@ -21,7 +21,6 @@ export default defineConfig({
           route.addAlias('/help')
         }
       },
-
       dts: 'src/typed-router.d.ts',
     }),
     Layouts(),

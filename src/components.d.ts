@@ -16,7 +16,6 @@ declare module 'vue' {
     ArticleBacklink: typeof import('./components/cards/ArticleBacklink.vue')['default']
     ArticleCard: typeof import('./components/cards/ArticleCard.vue')['default']
     EntityPicker: typeof import('./components/forms/EntityPicker.vue')['default']
-    Home: typeof import('./components/Home.vue')['default']
     HomeItem: typeof import('./components/HomeItem.vue')['default']
     ListView: typeof import('./components/ListView.vue')['default']
     LoginView: typeof import('./components/LoginView.vue')['default']

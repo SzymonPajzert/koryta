@@ -1,5 +1,6 @@
 <template>
   {{ user?.displayName }} to Ty
+  {{ user?.email }} to Twój email
 </template>
 
 <script lang="ts" setup>
