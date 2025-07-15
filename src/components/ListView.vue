@@ -58,11 +58,11 @@
 </template>
 
 <script setup lang="ts">
-import {type Connection, type NepoEmployment} from '@/composables/model'
-import PartyChip from './PartyChip.vue';
-import { useAuthState} from '@/composables/auth'
-import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
-import { useDialogStore } from '@/stores/dialog'; // Import the new store
+import { type Connection, type NepoEmployment } from "@/composables/model";
+import PartyChip from "./PartyChip.vue";
+import { useAuthState } from "@/composables/auth";
+import UserDetailDialog from "@/components/dialog/UserDetailDialog.vue";
+import { useDialogStore } from "@/stores/dialog"; // Import the new store
 
 const dialogStore = useDialogStore();
 const { isAdmin } = useAuthState();
@@ -74,11 +74,11 @@ function showUser(key: string) {
 }
 
 function connectionText(connection: Connection) {
-  if (connection.text != "") return connection.text
+  if (connection.text != "") return connection.text;
   if (connection.connection?.text && connection.relation != "") {
-    return connection.relation + " " + connection.connection?.text
+    return connection.relation + " " + connection.connection?.text;
   }
-  return ""
+  return "";
 }
 
 type SortedEmployment = NepoEmployment & { descriptionLen: number };

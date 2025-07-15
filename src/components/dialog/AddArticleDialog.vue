@@ -1,8 +1,6 @@
 <template>
   <v-row dense>
-    <v-col
-      cols="12"
-    >
+    <v-col cols="12">
       <AlreadyExisting
         v-model="formData.sourceURL"
         entity="data"
@@ -13,7 +11,8 @@
         required
         @blur="fetchAndSetArticleTitle"
         :loading="formData.isFetchingTitle"
-        :disabled="formData.isFetchingTitle" />
+        :disabled="formData.isFetchingTitle"
+      />
     </v-col>
 
     <v-col cols="12">

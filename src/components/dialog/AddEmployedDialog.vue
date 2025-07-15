@@ -8,7 +8,8 @@
         :label="`Imię i nazwisko ${koryciarz.singular.genitive}`"
         hint="Osoba zatrudniona w publicznej firmie"
         autocomplete="off"
-        required />
+        required
+      />
     </v-col>
 
     <v-col cols="12" md="4" sm="6">
@@ -59,11 +60,15 @@
     <v-list>
       <!-- TODO turn into an entity picker -->
       <v-list-item class="mb-2" @click="dialogStore.open({ type: 'data' })">
-        <v-list-item-title>
-          Dodaj źródło
-        </v-list-item-title>
+        <v-list-item-title> Dodaj źródło </v-list-item-title>
       </v-list-item>
-      <ArticleBacklink :article="source" :articleID="id" dense v-for="(source, id) in articles" width="100%" />
+      <ArticleBacklink
+        :article="source"
+        :articleID="id"
+        dense
+        v-for="(source, id) in articles"
+        width="100%"
+      />
     </v-list>
   </v-row>
 </template>
@@ -86,15 +91,15 @@ import { useDialogStore } from "@/stores/dialog";
 
 const dialogStore = useDialogStore();
 
-const formData = defineModel<NepoEmployment>({required: true});
-const { id, create } = defineProps<{ id?: string, create?: boolean }>();
+const formData = defineModel<NepoEmployment>({ required: true });
+const { id, create } = defineProps<{ id?: string; create?: boolean }>();
 
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);
 const { koryciarz } = useFeminatyw();
-const { userArticles } = useArticles()
+const { userArticles } = useArticles();
 const articles = computed(() => {
-  if (!id) return {}
-  return userArticles.value[id]
-})
+  if (!id) return {};
+  return userArticles.value[id];
+});
 </script>

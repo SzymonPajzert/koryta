@@ -15,7 +15,8 @@
     <template #no-data>
       <v-list-item v-if="search" @click="addNewItem">
         <v-list-item-title>
-          Dodaj "<strong>{{ search }}</strong>" do bazy.
+          Dodaj "<strong>{{ search }}</strong
+          >" do bazy.
         </v-list-item-title>
       </v-list-item>
     </template>
@@ -38,7 +39,7 @@ const props = defineProps<{
   // e.g. employed, company
   entity: Destination;
   // TODO customFilter: (value: string, query: string, item?: {value: any}) => boolean
-}>()
+}>();
 
 const dialogStore = useDialogStore();
 
@@ -67,11 +68,11 @@ function addNewItem() {
       callback: (name, key) => {
         if (!key) {
           console.warn("failed to obtain key for new entity: ", name);
-          return
+          return;
         }
         model.value = new Link<typeof props.entity>(props.entity, key, name);
-      }
-     });
+      },
+    });
   }
 }
 </script>

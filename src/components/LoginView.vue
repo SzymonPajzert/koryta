@@ -32,8 +32,8 @@ const login = async () => {
     const auth = getAuth();
     await signInWithEmailAndPassword(auth, email.value, password.value);
     // User is signed in.
-    console.debug('User logged in successfully!');
-    router.push('/')
+    console.debug("User logged in successfully!");
+    router.push("/");
   } catch (err: any) {
     console.error("Login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
@@ -49,8 +49,8 @@ const loginWithGoogle = async () => {
     const auth = getAuth();
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
-    console.debug('User logged in with Google successfully!');
-    router.push('/')
+    console.debug("User logged in with Google successfully!");
+    router.push("/");
   } catch (err: any) {
     console.error("Google login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);

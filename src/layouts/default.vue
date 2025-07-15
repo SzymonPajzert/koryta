@@ -23,18 +23,22 @@
     <v-btn text v-if="user" @click="logout">Wyloguj</v-btn>
   </v-app-bar>
   <v-main>
-    <v-container class="fill-height" :max-width="maxWidth" :style="{ padding: rootPadding }">
+    <v-container
+      class="fill-height"
+      :max-width="maxWidth"
+      :style="{ padding: rootPadding }"
+    >
       <router-view />
     </v-container>
   </v-main>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, computed } from 'vue';
-import { app } from '@/firebase'
-import { getAnalytics, logEvent } from 'firebase/analytics';
-import { useAuthState } from '@/composables/auth';
-import { useRoute } from 'vue-router'
+import { onMounted, computed } from "vue";
+import { app } from "@/firebase";
+import { getAnalytics, logEvent } from "firebase/analytics";
+import { useAuthState } from "@/composables/auth";
+import { useRoute } from "vue-router";
 
 const { user, logout } = useAuthState();
 
@@ -50,6 +54,10 @@ onMounted(() => {
 });
 
 const route = useRoute();
-const maxWidth = computed(() => route.name == "/zobacz/graf/[[id]]" ? 'none' : 900)
-const rootPadding = computed(() => route.name == "/zobacz/graf/[[id]]" ? 0 : undefined)
+const maxWidth = computed(() =>
+  route.name == "/zobacz/graf/[[id]]" ? "none" : 900,
+);
+const rootPadding = computed(() =>
+  route.name == "/zobacz/graf/[[id]]" ? 0 : undefined,
+);
 </script>
