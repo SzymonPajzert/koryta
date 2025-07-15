@@ -4,9 +4,13 @@ import { getDatabase, connectDatabaseEmulator } from "firebase/database";
 import { getAuth } from "firebase/auth";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
-const useEmulators = import.meta.env.VITE_USE_EMULATORS === 'true';
+const useEmulators = import.meta.env.VITE_USE_EMULATORS === "true";
 export function isTest() {
-  return useEmulators || (location.hostname === "localhost" || location.hostname == "127.0.0.1");
+  return (
+    useEmulators ||
+    location.hostname === "localhost" ||
+    location.hostname == "127.0.0.1"
+  );
 }
 
 const firebaseConfig = {
