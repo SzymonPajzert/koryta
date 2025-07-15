@@ -1,6 +1,8 @@
 <template>
   <v-row dense>
-    <v-col cols="12">
+    <v-col
+      cols="12"
+    >
       <AlreadyExisting
         v-model="formData.sourceURL"
         entity="data"
@@ -11,8 +13,7 @@
         required
         @blur="fetchAndSetArticleTitle"
         :loading="formData.isFetchingTitle"
-        :disabled="formData.isFetchingTitle"
-      />
+        :disabled="formData.isFetchingTitle" />
     </v-col>
 
     <v-col cols="12">
@@ -79,40 +80,37 @@
 </template>
 
 <script lang="ts" setup>
-import { functions } from "@/firebase";
-import { httpsCallable } from "firebase/functions";
-import type { Article } from "@/composables/model";
-import {
-  emptyTextable,
-  emptyEntityPicker,
-} from "@/composables/multiTextHelper";
-import TextableWrap from "../forms/TextableWrap.vue";
-import EntityPicker from "../forms/EntityPicker.vue";
-import { splitTitle } from "@/composables/entities/articles";
+  import { functions } from '@/firebase'
+  import { httpsCallable } from 'firebase/functions';
+  import type { Article } from '@/composables/model';
+  import { emptyTextable, emptyEntityPicker } from "@/composables/multiTextHelper";
+  import TextableWrap from '../forms/TextableWrap.vue';
+  import EntityPicker from '../forms/EntityPicker.vue';
+  import { splitTitle } from '@/composables/entities/articles';
 
-interface ArticleExtended extends Article {
-  isFetchingTitle?: boolean;
-}
-
-const formData = defineModel<ArticleExtended>({ required: true });
-const { create } = defineProps<{ create?: boolean }>();
-
-const getPageTitle = httpsCallable(functions, "getPageTitle");
-
-const fetchAndSetArticleTitle = async () => {
-  if (formData.value.sourceURL && !formData.value.name) {
-    formData.value.isFetchingTitle = true;
-    try {
-      const result = await getPageTitle({ url: formData.value.sourceURL });
-      const title: string | undefined = (result.data as any).title;
-      formData.value.name = title || "";
-      formData.value.shortName = title ? splitTitle(title, 1)[0] : undefined;
-    } catch (error) {
-      console.error("Error fetching page title:", error);
-      formData.value.name = "";
-    } finally {
-      formData.value.isFetchingTitle = false;
-    }
+  interface ArticleExtended extends Article {
+    isFetchingTitle?: boolean;
   }
-};
+
+  const formData = defineModel<ArticleExtended>({required: true});
+  const { create } = defineProps<{ create?: boolean }>();
+
+  const getPageTitle = httpsCallable(functions, 'getPageTitle');
+
+  const fetchAndSetArticleTitle = async () => {
+    if (formData.value.sourceURL && !formData.value.name) {
+      formData.value.isFetchingTitle = true;
+      try {
+        const result = await getPageTitle({ url: formData.value.sourceURL });
+        const title: string | undefined = (result.data as any).title;
+        formData.value.name = title || '';
+        formData.value.shortName = title ? splitTitle(title, 1)[0] : undefined;
+      } catch (error) {
+        console.error("Error fetching page title:", error);
+        formData.value.name = '';
+      } finally {
+        formData.value.isFetchingTitle = false;
+      }
+    }
+  };
 </script>

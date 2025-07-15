@@ -37,7 +37,7 @@
         @click.prevent="
           assignToArticle(
             articleID,
-            !article.enrichedStatus?.isAssignedToCurrentUser,
+            !article.enrichedStatus?.isAssignedToCurrentUser
           )
         "
         prepend-icon="mdi-hand-back-left-outline"

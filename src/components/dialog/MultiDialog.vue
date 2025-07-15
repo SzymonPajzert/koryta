@@ -1,33 +1,25 @@
 <template>
   <v-dialog v-model="shown" max-width="800">
     <v-card>
-      <v-tabs v-model="currentDialog" selected-class="bg-success">
-        <v-tab value="-1" variant="tonal"> Wybierz typ </v-tab>
-        <v-tab
-          v-for="(dialog, id) in dialogs"
-          :key="id"
-          :value="id"
-          variant="tonal"
-        >
+      <v-tabs
+        v-model="currentDialog"
+        selected-class="bg-success">
+        <v-tab value="-1" variant="tonal">
+          Wybierz typ
+        </v-tab>
+        <v-tab v-for="(dialog, id) in dialogs" :key="id" :value="id" variant="tonal">
           {{ dialog.value.name.slice(0, 20) }}
         </v-tab>
       </v-tabs>
       <v-card-text class="overflow-y-auto">
         <v-tabs-window v-model="currentDialog">
           <v-tabs-window-item value="-1">
-            <OpenAbstractDialog dialog="data" />
-            <OpenAbstractDialog dialog="employed" />
-            <OpenAbstractDialog dialog="company" />
+            <OpenAbstractDialog dialog="data"/>
+            <OpenAbstractDialog dialog="employed"/>
+            <OpenAbstractDialog dialog="company"/>
           </v-tabs-window-item>
-          <v-tabs-window-item
-            v-for="(dialog, id) in dialogs"
-            :key="id"
-            :value="id"
-          >
-            <v-card
-              :prepend-icon="config[dialog.type].titleIcon"
-              :title="config[dialog.type].title"
-            >
+          <v-tabs-window-item v-for="(dialog, id) in dialogs" :key="id" :value="id">
+            <v-card :prepend-icon="config[dialog.type].titleIcon" :title="config[dialog.type].title">
               <v-card-text>
                 <component
                   :is="lookupComponent(dialog.type)"
@@ -70,7 +62,12 @@
   >
     Sugestia została pomyślnie dodana!
     <template v-slot:actions>
-      <v-btn variant="text" @click="showSnackbar = false"> Zamknij </v-btn>
+      <v-btn
+        variant="text"
+        @click="showSnackbar = false"
+      >
+        Zamknij
+      </v-btn>
     </template>
   </v-snackbar>
 </template>
@@ -80,28 +77,27 @@
 // It uses useDialogStore to keep track of the opened dialogs and their values
 //
 // It's a replacement for just listing unique types of all the dialog components.
-import { useDialogStore, config } from "@/stores/dialog";
-import { storeToRefs } from "pinia";
-import AddCompanyDialog from "@/components/dialog/AddCompanyDialog.vue";
-import AddArticleDialog from "@/components/dialog/AddArticleDialog.vue";
-import AddSuggestionDialog from "@/components/dialog/AddSuggestionDialog.vue";
-import AddEmployedDialog from "@/components/dialog/AddEmployedDialog.vue";
-import { type Destination } from "@/composables/model";
+import { useDialogStore, config } from '@/stores/dialog'
+import { storeToRefs } from 'pinia'
+import AddCompanyDialog from '@/components/dialog/AddCompanyDialog.vue';
+import AddArticleDialog from '@/components/dialog/AddArticleDialog.vue';
+import AddSuggestionDialog from '@/components/dialog/AddSuggestionDialog.vue';
+import AddEmployedDialog from '@/components/dialog/AddEmployedDialog.vue';
+import { type Destination } from '@/composables/model'
 
-const dialogStore = useDialogStore();
-const { dialogs, shown, currentDialog, showSnackbar } =
-  storeToRefs(dialogStore);
+const dialogStore = useDialogStore()
+const { dialogs, shown, currentDialog, showSnackbar } = storeToRefs(dialogStore)
 
 function lookupComponent(d: Destination) {
-  switch (d) {
-    case "employed":
-      return AddEmployedDialog;
-    case "company":
-      return AddCompanyDialog;
-    case "data":
-      return AddArticleDialog;
-    case "suggestion":
-      return AddSuggestionDialog;
+  switch(d) {
+    case 'employed':
+      return AddEmployedDialog
+    case 'company':
+      return AddCompanyDialog
+    case 'data':
+      return AddArticleDialog
+    case 'suggestion':
+      return AddSuggestionDialog
   }
 }
 </script>

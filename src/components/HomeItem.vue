@@ -5,10 +5,7 @@
       color="surface-variant"
       :to="props.router ? props.router : undefined"
       :prepend-icon="props.icon"
-      rel="noopener noreferrer"
-      rounded="lg"
-      variant="tonal"
-    >
+      rel="noopener noreferrer" rounded="lg" variant="tonal">
       <template #title>
         <h2 class="text-h5 font-weight-bold">
           <slot name="header"></slot>
@@ -25,5 +22,5 @@
 </template>
 
 <script lang="ts" setup>
-const props = defineProps<{ router?: string; icon: string }>();
+const props = defineProps<{router?: string, icon: string}>();
 </script>

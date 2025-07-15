@@ -44,18 +44,13 @@ import { useSimulationStore } from "@/stores/simulation";
 const graphStore = useGraphStore();
 const simulationStore = useSimulationStore();
 
-const {
-  nodeGroups,
-  showActiveArticles,
-  showInactiveArticles,
-  nodeGroupPicked,
-} = storeToRefs(graphStore);
-const { runSimulation, simulationProgress } = storeToRefs(simulationStore);
+const { nodeGroups, showActiveArticles, showInactiveArticles, nodeGroupPicked } = storeToRefs(graphStore)
+const { runSimulation, simulationProgress} = storeToRefs(simulationStore)
 
-const router = useRouter();
-const route = useRoute();
+const router = useRouter()
+const route = useRoute()
 watch(nodeGroupPicked, (value) => {
-  const params = value ? { id: value.id } : {};
-  router.push({ name: route.name, params: params });
-});
+  const params = value ? { id: value.id } : {}
+  router.push({ name: route.name, params: params })
+})
 </script>

@@ -1,5 +1,4 @@
 # Koryta.pl
-
 This project uses
 
 - [jj](https://github.com/jj-vcs/jj) because git is bad

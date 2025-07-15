@@ -8,8 +8,7 @@
         hint="Firma, organizacja, ministerstwo"
         autocomplete="off"
         :create="create"
-        required
-      />
+        required />
     </v-col>
 
     <MultiTextField
@@ -48,13 +47,11 @@
 
 <script lang="ts" setup>
 import { type Company } from "@/composables/model";
-import {
-  emptyEntityPicker,
-  emptyTextable,
-} from "@/composables/multiTextHelper";
-import EntityPicker from "../forms/EntityPicker.vue";
-import TextableWrap from "../forms/TextableWrap.vue";
+import { emptyEntityPicker, emptyTextable } from "@/composables/multiTextHelper";
+import EntityPicker from '../forms/EntityPicker.vue';
+import TextableWrap from '../forms/TextableWrap.vue';
 
-const formData = defineModel<Company>({ required: true });
+const formData = defineModel<Company>({required: true});
 const { create } = defineProps<{ create?: boolean }>();
+
 </script>

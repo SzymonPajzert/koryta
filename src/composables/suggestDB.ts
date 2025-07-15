@@ -1,6 +1,6 @@
 // A set of utils to submit to DB a user specified suggestion
-import { ref as dbRef, push } from "firebase/database";
-import { db } from "@/firebase";
+import { ref as dbRef, push } from 'firebase/database';
+import { db } from '@/firebase'
 
 export interface Textable {
   text: string;
@@ -9,22 +9,22 @@ export interface Textable {
 // TODO remove this I think
 export function useSuggestDB() {
   function newKey() {
-    const newKey = push(dbRef(db, "_temp_keys/employments")).key;
+    const newKey = push(dbRef(db, '_temp_keys/employments')).key;
     if (!newKey) {
-      throw "Failed to create a key";
+      throw "Failed to create a key"
     }
-    return newKey;
+    return newKey
   }
 
-  function arrayToKeysMap(array: Textable[]): Record<string, Textable> {
+  function arrayToKeysMap(array: Textable[]) : Record<string, Textable> {
     const map: Record<string, Textable> = {};
     array.forEach((elt) => {
-      if (elt.text.trim() !== "") {
+      if (elt.text.trim() !== '') {
         map[newKey()] = elt;
       }
     });
     return map;
   }
 
-  return { arrayToKeysMap, newKey };
+  return { arrayToKeysMap, newKey }
 }

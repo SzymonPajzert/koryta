@@ -67,6 +67,6 @@ const toggleNestedFields = () => {
 
 <style scoped>
 .v-container {
-  padding: 0px;
+  padding: 0px
 }
 </style>

@@ -1,9 +1,9 @@
-describe("list", () => {
+describe('list', () => {
   beforeEach(() => {
-    cy.visit("/zrodla");
-  });
+    cy.visit('/zrodla')
+  })
 
-  it("screenshots", () => {
-    cy.wait(1500).get("body").matchImageSnapshot();
-  });
-});
+  it('screenshots', () => {
+    cy.wait(1500).get("body").matchImageSnapshot()
+  })
+})

@@ -1,11 +1,11 @@
-import { auth } from "@/firebase";
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { ref } from "vue";
-import router from "@/router";
+import { auth } from '@/firebase'
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
+import { ref } from 'vue';
+import router from '@/router';
 
 const user = ref<User | null>();
 const isAdmin = ref<boolean>(false);
-const idToken = ref<string>("");
+const idToken = ref<string>('');
 
 export function useAuthState() {
   onAuthStateChanged(auth, (userIn) => {
@@ -19,10 +19,10 @@ export function useAuthState() {
   const logout = async () => {
     try {
       await signOut(auth);
-      console.debug("User logged out successfully!");
-      router.push("/login");
+      console.debug('User logged out successfully!');
+      router.push('/login');
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error('Logout error:', error);
     }
   };
 

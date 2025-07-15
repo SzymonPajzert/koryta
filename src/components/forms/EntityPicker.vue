@@ -15,8 +15,7 @@
     <template #no-data>
       <v-list-item v-if="search" @click="addNewItem">
         <v-list-item-title>
-          Dodaj "<strong>{{ search }}</strong
-          >" do bazy.
+          Dodaj "<strong>{{ search }}</strong>" do bazy.
         </v-list-item-title>
       </v-list-item>
     </template>
@@ -27,10 +26,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
-import { useDialogStore } from "@/stores/dialog"; // Import the new store
-import { useListEntity } from "@/composables/entity";
-import { type Destination, Link } from "@/composables/model";
+import { ref } from 'vue';
+import { useDialogStore } from '@/stores/dialog'; // Import the new store
+import { useListEntity } from '@/composables/entity';
+import { type Destination, Link } from '@/composables/model'
 
 const props = defineProps<{
   label: string;
@@ -39,21 +38,19 @@ const props = defineProps<{
   // e.g. employed, company
   entity: Destination;
   // TODO customFilter: (value: string, query: string, item?: {value: any}) => boolean
-}>();
+}>()
 
 const dialogStore = useDialogStore();
 
 const model = defineModel<Link<typeof props.entity>>();
 
-const search = ref("");
+const search = ref('');
 
-const { entities } = useListEntity(props.entity);
+const { entities } = useListEntity(props.entity)
 
-const entitiesList = computed(() =>
-  Object.entries(entities.value ?? {}).map(([key, value]) => {
-    return new Link<typeof props.entity>(props.entity, key, value.name);
-  }),
-);
+const entitiesList = computed(() => Object.entries(entities.value ?? {}).map(([key, value]) => {
+  return new Link<typeof props.entity>(props.entity, key, value.name)
+}))
 
 function addNewItem() {
   const newEntityName = search.value;
@@ -61,18 +58,18 @@ function addNewItem() {
     // Clear the search input after triggering the add new item action
     // This prevents the "Add new..." option from reappearing immediately
     // if the dialog is closed without selecting the newly created item.
-    search.value = "";
+    search.value = '';
     dialogStore.open({
       type: props.entity,
       name: newEntityName,
       callback: (name, key) => {
         if (!key) {
           console.warn("failed to obtain key for new entity: ", name);
-          return;
+          return
         }
         model.value = new Link<typeof props.entity>(props.entity, key, name);
-      },
-    });
+      }
+     });
   }
 }
 </script>

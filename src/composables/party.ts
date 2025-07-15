@@ -15,13 +15,13 @@ export function usePartyStatistics() {
   ]);
 
   const partyColors = ref<Record<string, string>>({
-    PO: "#fca241",
-    PiS: "#A9D1DF", // TODO jasny placeholder dla '#073b76'
-    PSL: "#2ed396",
+    "PO": "#fca241",
+    "PiS": "#A9D1DF", // TODO jasny placeholder dla '#073b76'
+    "PSL": "#2ed396",
     "Polska 2050": "#FFCB03",
     "Nowa Lewica": "#D40E20",
-    Konfederacja: "#A9D1DF", // TODO jasny placeholder dla '#102440'
-    Razem: "#871057",
+    "Konfederacja": "#A9D1DF", // TODO jasny placeholder dla '#102440'
+    "Razem": "#871057",
   });
   const results = computed<number[]>(() => {
     return Object.keys(partyColors.value).map((party) => {

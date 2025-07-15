@@ -17,7 +17,7 @@ const graphStore = useGraphStore();
 const simulationStore = useSimulationStore();
 
 const { runSimulation } = storeToRefs(simulationStore);
-const { nodes, edges, nodesFiltered } = storeToRefs(graphStore);
+const { nodes, edges, nodesFiltered } = storeToRefs(graphStore)
 
 const handleNodeClick = ({ node }: NodeEvent<MouseEvent>) => {
   dialogStore.openExisting(node);
@@ -56,7 +56,7 @@ const configs = reactive(
       layoutHandler: simulationStore.newForceLayout(true) as LayoutHandler,
       doubleClickZoomEnabled: false,
     },
-  }),
+  })
 );
 
 watch(runSimulation, (value) => {
