@@ -68,24 +68,19 @@ export const useGraphStore = defineStore("graph", () => {
         };
       });
     }
-    if (showArticles.value && articles.value) {
+    if (articles.value) {
       Object.entries(articles.value).forEach(([articleID, article]) => {
-        const shouldShow = article.enrichedStatus.hideArticle
-          ? showInactiveArticles.value
-          : showActiveArticles.value;
-        if (shouldShow) {
-          const mentionedPeople = article.estimates?.mentionedPeople ?? 1;
-          const linkedPeople = article.people
-            ? Object.keys(article.people).length
-            : 0;
-          const peopleLeft = Math.max(1, mentionedPeople - linkedPeople);
-          result[articleID] = {
-            name: article.shortName || getHostname(article),
-            sizeMult: Math.pow(peopleLeft, 0.3),
-            type: "document",
-            color: "pink", // TODO the color should be based if the article is active or not
-          };
-        }
+        const mentionedPeople = article.estimates?.mentionedPeople ?? 1;
+        const linkedPeople = article.people
+          ? Object.keys(article.people).length
+          : 0;
+        const peopleLeft = Math.max(1, mentionedPeople - linkedPeople);
+        result[articleID] = {
+          name: article.shortName || getHostname(article),
+          sizeMult: Math.pow(peopleLeft, 0.3),
+          type: "document",
+          color: "pink", // TODO the color should be based if the article is active or not
+        };
       });
     }
     return result;
@@ -116,11 +111,11 @@ export const useGraphStore = defineStore("graph", () => {
         .setTraverse({ place: "backward" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
 
-      relationFrom(articles.value, showArticles.value)
+      relationFrom(articles.value)
         .forEach((article) => article.people)
         .setTraverse({ place: "backward" })
         .edgeFrom((person) => [person.id, "wspomina"]),
-      relationFrom(articles.value, showArticles.value)
+      relationFrom(articles.value)
         .forEach((article) => article.companies)
         .setTraverse({ place: "backward" })
         .edgeFrom((company) => [company.id, "wspomina"]),

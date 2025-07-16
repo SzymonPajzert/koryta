@@ -68,10 +68,6 @@ export const useDialogStore = defineStore("dialog", () => {
   }
 
   function open<D extends Destination>(payload: NewEntityPayload<D>) {
-    // TODO remove
-    console.log(payload.edit?.key)
-    console.log(payload.edit?.value)
-
     const defaultValue = () => empty(payload.type);
     const filler = (r: DestinationTypeMap[D]) =>
       fillBlankRecords(r, payload.type);

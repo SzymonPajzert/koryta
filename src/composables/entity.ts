@@ -45,6 +45,8 @@ export function useListEntity<D extends Destination>(entity: D) {
     }
 
     const path = dbRef(db, submitPath(editKey))
+    console.debug("before removal: ", value)
+
     const op = operation(editKey)
     value = removeBlankRecords(value, d)
     console.debug("trying to write: ", value)

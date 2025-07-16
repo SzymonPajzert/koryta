@@ -30,28 +30,34 @@
       autocomplete="off"
     />
 
-    <MultiTextField
-      title="Zatrudnienie"
-      v-model="formData.employments"
-      field-type="nestedConnection"
-      :field-component="NestedConnectionField"
-      entity="company"
-      hint="np. Członek rady nadzorczej XYZ sp. z o.o."
-      add-item-tooltip="Dodaj kolejne zatrudnienie"
-      remove-item-tooltip="Usuń zatrudnienie"
-      :empty-value="emptyNestedConnection"
-    />
-    <MultiTextField
-      title="Koneksja"
-      v-model="formData.connections"
-      field-type="nestedConnection"
-      :field-component="NestedConnectionField"
-      entity="employed"
-      hint="np. Znajomy ministra"
-      add-item-tooltip="Dodaj kolejną koneksję"
-      remove-item-tooltip="Usuń koneksję"
-      :empty-value="emptyNestedConnection"
-    />
+    <v-expansion-panels>
+      <MultiTextField
+        title="Zatrudnienie"
+        v-model="formData.employments"
+        field-type="nestedConnection"
+        :field-component="NestedConnectionField"
+        entity="company"
+        hint="np. Członek rady nadzorczej XYZ sp. z o.o."
+        add-item-tooltip="Dodaj kolejne zatrudnienie"
+        remove-item-tooltip="Usuń zatrudnienie"
+        :empty-value="emptyNestedConnection"
+      />
+    </v-expansion-panels>
+
+    <v-expansion-panels>
+      <MultiTextField
+        title="Koneksja"
+        v-model="formData.connections"
+        field-type="nestedConnection"
+        :field-component="NestedConnectionField"
+        entity="employed"
+        hint="np. Znajomy ministra"
+        add-item-tooltip="Dodaj kolejną koneksję"
+        remove-item-tooltip="Usuń koneksję"
+        :empty-value="emptyNestedConnection"
+      />
+    </v-expansion-panels>
+
     <MultiTextField
       title="Inna uwaga"
       v-model="formData.comments"
