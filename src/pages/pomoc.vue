@@ -8,7 +8,12 @@
     <OpenAbstractDialog dialog="company"/>
 
     <PlaceFilter />
-    <!-- TODO Filter issues to show, some are not that important -->
+    <v-select
+      label="Typ problemu"
+      v-model="allowedIssues"
+      :items="issueNames"
+      multiple
+    />
   </v-navigation-drawer>
   <v-alert type="info" closable>
     Jeśli masz pytania,
@@ -69,7 +74,7 @@
     <h2 class="text-h5 font-weight-bold">
       Rzeczy do zrobienia:
     </h2>
-    <EntityStatusList />
+    <EntityStatusList :allowedIssues="allowedIssues" />
   </v-col>
 
   <v-col cols="12">
@@ -83,8 +88,11 @@
 <script lang="ts" setup>
 import { useAuthState } from '@/composables/auth';
 import { useArticles } from '@/composables/entities/articles'
+import { useEntityStatus } from '@/composables/entities/status';
 
 const { articlesAssigned, articlesUnssigned } = useArticles()
 const { user } = useAuthState();
+const { issueNames } = useEntityStatus()
+const allowedIssues = ref<string[]>([]);
 
 </script>
