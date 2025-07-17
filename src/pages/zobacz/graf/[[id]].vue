@@ -32,8 +32,7 @@ const eventHandlers: EventHandlers = {
   "view:dblclick": handleDoubleClick,
 };
 
-const configs = reactive(
-  defineConfigs({
+const configs = defineConfigs({
     node: {
       normal: {
         type: (node) => node.type,
@@ -53,11 +52,10 @@ const configs = reactive(
     },
     view: {
       scalingObjects: true,
-      layoutHandler: simulationStore.newForceLayout(true) as LayoutHandler,
+      layoutHandler: markRaw(simulationStore.newForceLayout(true) as LayoutHandler),
       doubleClickZoomEnabled: false,
     },
   })
-);
 
 watch(runSimulation, (value) => {
   if (value) {
@@ -66,13 +64,17 @@ watch(runSimulation, (value) => {
     configs.view.layoutHandler = new SimpleLayout();
   }
 });
+
+const layouts = ref()
+watch(layouts, console.log)
 </script>
 
 <template>
   <v-network-graph
-    :nodes="nodesFiltered ?? nodes"
-    :edges="edges"
+    :nodes="unref(nodesFiltered ?? nodes)"
+    :edges="unref(edges)"
     :configs="configs"
+    :layouts="layouts"
     :eventHandlers="eventHandlers"
   >
     <template #edge-label="{ edge, ...slotProps }">
