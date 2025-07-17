@@ -11,17 +11,19 @@
         required />
     </v-col>
 
-    <MultiTextField
-      title="Właściciele"
-      v-model="formData.owners"
-      field-type="entityPicker"
-      :field-component="EntityPicker"
-      entity="company"
-      hint="np. grupa kapitałowa, ministerstwo"
-      add-item-tooltip="Dodaj kolejne miejsce"
-      remove-item-tooltip="Usuń miejsce"
-      :empty-value="() => emptyEntityPicker('company')"
-    />
+    <v-col cols="12">
+      <MultiTextField
+        title="Właściciele"
+        v-model="formData.owners"
+        field-type="entityPicker"
+        :field-component="EntityPicker"
+        entity="company"
+        hint="np. grupa kapitałowa, ministerstwo"
+        add-item-tooltip="Dodaj kolejne miejsce"
+        remove-item-tooltip="Usuń miejsce"
+        :empty-value="() => emptyEntityPicker('company')"
+      />
+    </v-col>
 
     <v-col cols="12">
       <EntityPicker
@@ -32,16 +34,18 @@
       ></EntityPicker>
     </v-col>
 
-    <MultiTextField
-      title="Inna uwaga"
-      v-model="formData.comments"
-      field-type="textarea"
-      :field-component="TextableWrap"
-      hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
-      add-item-tooltip="Dodaj kolejną uwagę"
-      remove-item-tooltip="Usuń uwagę"
-      :empty-value="emptyTextable"
-    />
+    <v-col cols="12">
+      <MultiTextField
+        title="Inna uwaga"
+        v-model="formData.comments"
+        field-type="textarea"
+        :field-component="TextableWrap"
+        hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
+        add-item-tooltip="Dodaj kolejną uwagę"
+        remove-item-tooltip="Usuń uwagę"
+        :empty-value="emptyTextable"
+      />
+    </v-col>
 
     <BacklinksList :id="id" :todo-consumer="addCreatedTodo"/>
   </v-row>

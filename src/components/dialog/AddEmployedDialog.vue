@@ -23,19 +23,17 @@
       ></v-select>
     </v-col>
 
-    <v-expansion-panels>
-      <MultiTextField
-        title="Zatrudnienie"
-        v-model="formData.employments"
-        field-type="nestedConnection"
-        :field-component="NestedConnectionField"
-        entity="company"
-        hint="np. Członek rady nadzorczej XYZ sp. z o.o."
-        add-item-tooltip="Dodaj kolejne zatrudnienie"
-        remove-item-tooltip="Usuń zatrudnienie"
-        :empty-value="emptyNestedConnection"
-      />
-    </v-expansion-panels>
+    <MultiTextField
+      title="Zatrudnienie"
+      v-model="formData.employments"
+      field-type="nestedConnection"
+      :field-component="NestedConnectionField"
+      entity="company"
+      hint="np. Członek rady nadzorczej XYZ sp. z o.o."
+      add-item-tooltip="Dodaj kolejne zatrudnienie"
+      remove-item-tooltip="Usuń zatrudnienie"
+      :empty-value="emptyNestedConnection"
+    />
 
     <v-expansion-panels>
       <MultiTextField
@@ -51,16 +49,19 @@
       />
     </v-expansion-panels>
 
-    <MultiTextField
-      title="Inna uwaga"
-      v-model="formData.comments"
-      field-type="textarea"
-      :field-component="TextableWrap"
-      hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
-      add-item-tooltip="Dodaj kolejną uwagę"
-      remove-item-tooltip="Usuń uwagę"
-      :empty-value="emptyTextable"
-    />
+    <v-col cols="12">
+      <MultiTextField
+        title="Inna uwaga"
+        v-model="formData.comments"
+        field-type="textarea"
+        :field-component="TextableWrap"
+        hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
+        add-item-tooltip="Dodaj kolejną uwagę"
+        remove-item-tooltip="Usuń uwagę"
+        :empty-value="emptyTextable"
+      />
+    </v-col>
+
 
     <BacklinksList :id="id" :todo-consumer="addCreatedTodo"/>
   </v-row>

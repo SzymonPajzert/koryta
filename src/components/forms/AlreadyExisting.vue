@@ -1,12 +1,23 @@
 <template>
-  <v-text-field v-bind="$attrs" v-model="model" />
+  <v-text-field v-bind="$attrs" v-model="model" hide-details />
   <v-list v-if="create">
-    <v-list-item v-for="([key, item], index) in closest" :key="index">
+    <v-list-item
+      v-for="([key, item], index) in closest"
+      :key="index"
+      class="w-100"
+      @click="
+        dialogStore.open({ type: entity, edit: { value: item, key: key } })
+      "
+    >
       <v-list-item-title
-        @click="
-          dialogStore.open({ type: entity, edit: { value: item, key: key } })
-        "
-        ><span :style="item.equal ? { 'font-weight': 'bold', 'font-style': 'italic' } : undefined">{{ item.name }}</span></v-list-item-title
+        ><span
+          :style="
+            item.equal
+              ? { 'font-weight': 'bold', 'font-style': 'italic' }
+              : undefined
+          "
+          >{{ item.name }}</span
+        ></v-list-item-title
       >
     </v-list-item>
   </v-list>

@@ -70,40 +70,46 @@
       <v-btn>Zrobione</v-btn>
     </v-col>
 
-    <MultiTextField
-      title="Wspomniane osoby"
-      v-model="formData.people"
-      field-type="entityPicker"
-      :field-component="EntityPicker"
-      entity="employed"
-      hint="np. polityk Adam"
-      add-item-tooltip="Dodaj kolejną osobę"
-      remove-item-tooltip="Usuń osobę"
-      :empty-value="() => emptyEntityPicker('employed')"
-    />
+    <v-col cols="12">
+      <MultiTextField
+        title="Wspomniane osoby"
+        v-model="formData.people"
+        field-type="entityPicker"
+        :field-component="EntityPicker"
+        entity="employed"
+        hint="np. polityk Adam"
+        add-item-tooltip="Dodaj kolejną osobę"
+        remove-item-tooltip="Usuń osobę"
+        :empty-value="() => emptyEntityPicker('employed')"
+      />
+    </v-col>
 
-    <MultiTextField
-      title="Wspomniane firmy / ministerstra"
-      v-model="formData.companies"
-      field-type="entityPicker"
-      :field-component="EntityPicker"
-      entity="company"
-      hint="np. spółka skarbu państwa"
-      add-item-tooltip="Dodaj kolejne miejsce"
-      remove-item-tooltip="Usuń miejsce"
-      :empty-value="() => emptyEntityPicker('company')"
-    />
+    <v-col cols="12">
+      <MultiTextField
+        title="Wspomniane firmy / ministerstra"
+        v-model="formData.companies"
+        field-type="entityPicker"
+        :field-component="EntityPicker"
+        entity="company"
+        hint="np. spółka skarbu państwa"
+        add-item-tooltip="Dodaj kolejne miejsce"
+        remove-item-tooltip="Usuń miejsce"
+        :empty-value="() => emptyEntityPicker('company')"
+      />
+    </v-col>
 
-    <MultiTextField
-      title="Co jest w nim ciekawego"
-      v-model="formData.comments"
-      field-type="textarea"
-      :field-component="TextableWrap"
-      :empty-value="emptyTextable"
-      hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
-      add-item-tooltip="Dodaj kolejne zadanie"
-      remove-item-tooltip="Usuń zadanie"
-    />
+    <v-col cols="12">
+      <MultiTextField
+        title="Co jest w nim ciekawego"
+        v-model="formData.comments"
+        field-type="textarea"
+        :field-component="TextableWrap"
+        :empty-value="emptyTextable"
+        hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
+        add-item-tooltip="Dodaj kolejne zadanie"
+        remove-item-tooltip="Usuń zadanie"
+      />
+    </v-col>
   </v-row>
 </template>
 
