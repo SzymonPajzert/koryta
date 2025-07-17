@@ -104,12 +104,6 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
     return Object.entries(peopleRaw.value).map(([key, person]) => {
       const results = emptyIssue(key, person, "employed");
 
-      if (person.sourceURL) {
-        results[1].issues.push({
-          name: "Przestarzały format źródła",
-          priority: 10,
-        });
-      }
       if (!person.connections) {
         results[1].issues.push({ name: "Brak połączonych ludzi", priority: 5 });
       }
