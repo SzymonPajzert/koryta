@@ -34,6 +34,7 @@ export function getHostname(data: Article): string {
   return new URL(data.sourceURL).hostname;
 }
 
+// TODO migrate this logic to entities
 export function useArticles() {
   const assignToArticle = async (articleId: string, setAssigned: boolean) => {
     if (!user.value) return;
@@ -88,6 +89,7 @@ export function useArticles() {
           signedUp: removeOlderEntries(articleData.status?.signedUp ?? {}),
           markedDone: removeOlderEntries(articleData.status?.markedDone ?? {}),
           confirmedDone: articleData.status?.confirmedDone ?? false,
+          tags: articleData.status?.tags ?? [],
         };
         const status = articleData.status;
 

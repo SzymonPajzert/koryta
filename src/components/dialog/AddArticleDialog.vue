@@ -52,6 +52,24 @@
       ></v-text-field>
     </v-col>
 
+    <v-col cols="12" md="8">
+      <v-select
+        v-model="formData.status.tags"
+        label="Tagi artykułu"
+        autocomplete="off"
+        :items="[...articleTags]"
+        multiple
+      ></v-select>
+    </v-col>
+
+    <v-col cols="12" md="2">
+      <v-btn>Zrobione</v-btn>
+    </v-col>
+
+    <v-col cols="12" md="2">
+      <v-btn>Zrobione</v-btn>
+    </v-col>
+
     <MultiTextField
       title="Wspomniane osoby"
       v-model="formData.people"
@@ -92,7 +110,7 @@
 <script lang="ts" setup>
   import { functions } from '@/firebase'
   import { httpsCallable } from 'firebase/functions';
-  import type { Article } from '@/composables/model';
+  import { articleTags, type Article } from '@/composables/model';
   import { emptyTextable, emptyEntityPicker } from "@/composables/multiTextHelper";
   import TextableWrap from '../forms/TextableWrap.vue';
   import EntityPicker from '../forms/EntityPicker.vue';

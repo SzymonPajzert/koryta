@@ -1,7 +1,7 @@
 import { usePartyStatistics } from "@/composables/party";
 import { useListEntity } from "@/composables/entity";
 import { useArticles, getHostname } from "@/composables/entities/articles";
-import type { Connection } from "../composables/model";
+import type { Article, Connection } from "../composables/model";
 import { DiGraph } from "digraph-js";
 
 export interface Node {
@@ -85,12 +85,22 @@ export const useGraphStore = defineStore("graph", () => {
           ? Object.keys(article.people).length
           : 0;
         const peopleLeft = Math.max(1, mentionedPeople - linkedPeople);
-        result[articleID] = {
+        const entry: Node = {
           name: article.shortName || getHostname(article),
           sizeMult: Math.pow(peopleLeft, 0.3),
           type: "document",
-          color: "pink", // TODO the color should be based if the article is active or not
+          color: "pink",
         };
+        if (article.status.tags) {
+          if(article.status.tags.includes('dodatkowe informacje') ||
+            article.status.tags.includes('ludzie wyciągnięci') ||
+            // TODO suppport multipeople
+            article.status.tags.includes('przeczytane')) {
+            entry.color = "gray"
+            entry.sizeMult = 0.6
+          }
+        }
+        result[articleID] = entry
       });
     }
     return result;
@@ -121,14 +131,17 @@ export const useGraphStore = defineStore("graph", () => {
         .setTraverse({ place: "backward" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
 
-      // TODO How to stop the articles spreading too much?
       relationFrom(articles.value)
         .forEach((article) => article.people)
         .setTraverse({ place: "bidirect" })
         .edgeFrom((person) => [person.id, "wspomina"]),
       relationFrom(articles.value)
-        .forEach((article) => article.companies)
+        .forEach(extractIf((a) => a.companies, a => allowConnect(a)))
         .setTraverse({ place: "bidirect" })
+        .edgeFrom((company) => [company.id, "wspomina"]),
+      relationFrom(articles.value)
+        .forEach(extractIf((a) => a.companies, a => !allowConnect(a)))
+        .setTraverse({ place: "backward" })
         .edgeFrom((company) => [company.id, "wspomina"]),
     ]);
   });
@@ -204,6 +217,22 @@ export const useGraphStore = defineStore("graph", () => {
 });
 
 type Closure<A> = (a: A) => void;
+
+// Returns true if the article should connect to other companies mentioned
+// If article has 'nie łącz w grafie' set, for shouldConnect = true it returns true
+function allowConnect(article: Article) {
+  if (!article.status.tags) return true
+  return !article.status.tags.includes('nie łącz w grafie')
+}
+
+function extractIf<A, B>(extractor: (arg: A) => B, condition: (arg: A) => boolean): (arg: A) => B | undefined {
+  return (a: A) => {
+    if (condition(a)) {
+      return extractor(a)
+    }
+    return undefined
+  }
+}
 
 function relationFrom<A>(
   relations: Record<string, A>,

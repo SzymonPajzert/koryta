@@ -59,10 +59,15 @@ export interface Article extends Nameable {
   }
 
   date?: number;
-  status?: ArticleStatus
+  status: ArticleStatus
 }
 
+export const articleTags = ['ludzie wyciągnięci', 'dodatkowe informacje', 'nie łącz w grafie', 'przeczytane'] as const;
+type ArticleTag = typeof articleTags[number];
+
 interface ArticleStatus {
+  tags: ArticleTag[]
+
   signedUp: Record<string, number>
   markedDone: Record<string, number>
   confirmedDone: boolean
@@ -115,6 +120,7 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
     if (!value.companies) value.companies = recordOf(new Link("company", '', ''))
     if (!value.people) value.people = recordOf(new Link("employed", '', ''))
     if (!value.estimates) value.estimates = {}
+    if (!value.status) value.status = {tags: [], signedUp: {}, markedDone: {}, confirmedDone: false}
     return value
   }
 
@@ -179,6 +185,7 @@ export function empty(d: Destination) {
       people: {},
       companies: {},
       estimates: {},
+      status: {tags: [], signedUp: {}, markedDone: {}, confirmedDone: false},
     }
     return result
   }
