@@ -10,7 +10,6 @@ const { user, isAdmin } = useAuthState()
 export function useListEntity<D extends Destination>(entity: D) {
   type T = DestinationTypeMap[D]
 
-  // TODO you can migrate here to list suggestions from the user
   const entitiesApproved = useRTDB<Record<string, T>>(dbRef(db, entity))
   const suggestions = computed(() => {
     const { user } = useAuthState()

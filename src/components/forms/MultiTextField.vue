@@ -33,7 +33,7 @@
 
 <script lang="ts" setup generic="F extends Type">
   import { type Destination } from '@/composables/model';
-  import { useSuggestDB } from '@/composables/suggestDB';
+  import { newKey } from '@/composables/model';
   import { type Type, type CompatibleComponent, type ComponentModel, emptyNestedConnection, emptyTextable } from '@/composables/multiTextHelper'
 
   const props = withDefaults(defineProps<{
@@ -52,8 +52,6 @@
 
   const model = defineModel<Record<string, ComponentModel[F]>>({required: true});
   const keys = ref(Object.keys(model.value ?? {}));
-
-  const { newKey } = useSuggestDB();
 
   const addItem = () => {
     const key = newKey()

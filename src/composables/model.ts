@@ -1,4 +1,5 @@
-import { useSuggestDB } from '@/composables/suggestDB'
+import { ref as dbRef, push } from 'firebase/database';
+import { db } from '@/firebase'
 
 export interface Textable {
   text: string
@@ -40,7 +41,8 @@ export interface NepoEmployment extends Nameable {
 export interface Company extends Nameable {
   name: string
   owners: Record<string, Link<'company'>>
-  owner?: Link<'company'> // TODO(migrate-db) deprecate this field, prefer owners
+  // TODO(https://github.com/SzymonPajzert/koryta/issues/44): Migrate away from them
+  owner?: Link<'company'>
   manager?: Link<'employed'>
   comments: Record<string, Textable>
 }
@@ -66,12 +68,17 @@ interface ArticleStatus {
   confirmedDone: boolean
 }
 
-const { newKey } = useSuggestDB();
+export function newKey() {
+  const newKey = push(dbRef(db, '_temp_keys/employments')).key;
+  if (!newKey) {
+    throw "Failed to create a key"
+  }
+  return newKey
+}
 
-// TODO test that adding all of the fields work - I've broke them because I was removing too much.
 
 function clearEmptyRecord(record: Record<string, {text: string}>) {
-  // TODO implement a function that knows what it removes, it's hard to accidentally not remove a partial field.
+  // TODO(https://github.com/SzymonPajzert/koryta/issues/45): Implement
 }
 
 function recordOf<T>(value: T): Record<string, T> {
@@ -79,10 +86,6 @@ function recordOf<T>(value: T): Record<string, T> {
   result[newKey()] = value
   return result
 }
-
-// TODO(cleanup) this seems like it could be a class
-// I just don't know how we could do it  and even if this is better to do
-// we're mainly using interfaces elsewhere and it seems to work
 
 export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D): DestinationTypeMap[D];
 export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D) {
@@ -100,7 +103,8 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
       else value.owners = recordOf(new Link("company", '', ''))
     }
     value.comments = {}
-    return value // TODO(cleanup) remove this return - some check should start failing
+    // TODO(https://github.com/SzymonPajzert/koryta/issues/45): remove this return and see if tests fail
+    return value
   }
   if (d == 'suggestion') {
     return valueUntyped as Nameable
@@ -130,7 +134,8 @@ export function removeBlankRecords<D extends Destination>(valueUntyped: Destinat
     const value = valueUntyped as Company
     clearEmptyRecord(value.owners)
     clearEmptyRecord(value.comments)
-    return value // TODO(cleanup) remove this return - some check should start failing
+    // TODO(https://github.com/SzymonPajzert/koryta/issues/45) remove this return and see if tests fail
+    return value
   }
   if (d == 'suggestion') {
     return valueUntyped as Nameable
@@ -190,7 +195,7 @@ export interface DestinationTypeMap {
   employed: NepoEmployment;
   company: Company;
   data: Article;
-  suggestion: Nameable; // TODO
+  suggestion: Nameable;
 }
 
 export class Link<T extends Destination> {

@@ -15,12 +15,13 @@ export function usePartyStatistics() {
   ]);
 
   const partyColors = ref<Record<string, string>>({
+    // TODO if the color is dark enough, switch text color in the chip to white
     "PO": "#fca241",
-    "PiS": "#A9D1DF", // TODO jasny placeholder dla '#073b76'
+    "PiS": "#073b76",
     "PSL": "#2ed396",
     "Polska 2050": "#FFCB03",
     "Nowa Lewica": "#D40E20",
-    "Konfederacja": "#A9D1DF", // TODO jasny placeholder dla '#102440'
+    "Konfederacja": "#102440",
     "Razem": "#871057",
   });
   const results = computed<number[]>(() => {

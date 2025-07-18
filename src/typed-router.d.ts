@@ -23,11 +23,7 @@ declare module 'vue-router/auto-routes' {
     '/entity/[destination]/[id]': RouteRecordInfo<'/entity/[destination]/[id]', '/entity/:destination/:id', { destination: ParamValue<true>, id: ParamValue<true> }, { destination: ParamValue<false>, id: ParamValue<false> }>,
     '/entity/[...path]': RouteRecordInfo<'/entity/[...path]', '/entity/:path(.*)', { path: ParamValue<true> }, { path: ParamValue<false> }>,
     '/login': RouteRecordInfo<'/login', '/login', Record<never, never>, Record<never, never>>,
-    '/pomoc': RouteRecordInfo<'/pomoc', '/pomoc', Record<never, never>, Record<never, never>>,
     '/profil': RouteRecordInfo<'/profil', '/profil', Record<never, never>, Record<never, never>>,
-    '/zobacz': RouteRecordInfo<'/zobacz', '/zobacz', Record<never, never>, Record<never, never>>,
-    '/zobacz/graf/[[id]]': RouteRecordInfo<'/zobacz/graf/[[id]]', '/zobacz/graf/:id?', { id?: ParamValueZeroOrOne<true> }, { id?: ParamValueZeroOrOne<false> }>,
-    '/zobacz/lista/[[id]]': RouteRecordInfo<'/zobacz/lista/[[id]]', '/zobacz/lista/:id?', { id?: ParamValueZeroOrOne<true> }, { id?: ParamValueZeroOrOne<false> }>,
     '/zrodla': RouteRecordInfo<'/zrodla', '/zrodla', Record<never, never>, Record<never, never>>,
   }
 }
