@@ -3,7 +3,7 @@
     location="right"
     permanent>
     <OpenAbstractDialog dialog="data"/>
-    <OpenAbstractDialog dialog="suggestion"/>
+    <OpenAbstractDialog dialog="todo"/>
     <OpenAbstractDialog dialog="employed"/>
     <OpenAbstractDialog dialog="company"/>
 

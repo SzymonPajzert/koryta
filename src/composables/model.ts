@@ -13,20 +13,21 @@ export interface Connection {
   relation: string;
 }
 
-export type Destination = 'employed' | 'company' | 'data' | 'suggestion'
+// Top level types represented by their own path in the DB.
+export type Destination = 'employed' | 'company' | 'data' | 'todo'
 
 export const destinationIcon: Record<Destination, string> = {
   'employed': 'mdi-account-outline',
   'company': 'mdi-office-building-outline',
   'data': 'mdi-file-document-outline',
-  'suggestion': 'mdi-help-circle-outline',
+  'todo': 'mdi-help-circle-outline',
 }
 
 export const destinationAddText: Record<Destination, string> = {
   'employed': 'Dodaj osobę',
   'company': 'Dodaj firmę',
   'data': 'Dodaj artykuł',
-  'suggestion': 'Dodaj sugestię',
+  'todo': 'Dodaj zadanie',
 }
 
 export interface NepoEmployment extends Nameable {
@@ -35,7 +36,9 @@ export interface NepoEmployment extends Nameable {
 
   employments: Record<string, Connection>;
   connections: Record<string, Connection>;
-  comments: Record<string, Textable>;
+
+  todos: Record<string, Link<'todo'>>
+  comments: Record<string, Textable>
 }
 
 export interface Company extends Nameable {
@@ -44,12 +47,13 @@ export interface Company extends Nameable {
   // TODO(https://github.com/SzymonPajzert/koryta/issues/44): Migrate away from them
   owner?: Link<'company'>
   manager?: Link<'employed'>
+
+  todos: Record<string, Link<'todo'>>
   comments: Record<string, Textable>
 }
 
 export interface Article extends Nameable {
   sourceURL: string,
-  comments: Record<string, Textable>
   people: Record<string, Link<'employed'>>
   companies: Record<string, Link<'company'>>
 
@@ -60,16 +64,26 @@ export interface Article extends Nameable {
 
   date?: number;
   status: ArticleStatus
+
+  todos: Record<string, Link<'todo'>>
+  comments: Record<string, Textable>
+}
+
+export interface Todo extends Nameable {
+  text: string
+  subtasks: Record<string, Link<'todo'>>
 }
 
 export const articleTags = ['ludzie wyciągnięci', 'dodatkowe informacje', 'nie łącz w grafie', 'przeczytane'] as const;
 type ArticleTag = typeof articleTags[number];
 
+type uid = string;
+
 interface ArticleStatus {
   tags: ArticleTag[]
 
-  signedUp: Record<string, number>
-  markedDone: Record<string, number>
+  signedUp: Record<uid, number>
+  markedDone: Record<uid, number>
   confirmedDone: boolean
 }
 
@@ -92,17 +106,17 @@ function recordOf<T>(value: T): Record<string, T> {
   return result
 }
 
-export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D): DestinationTypeMap[D];
-export function fillBlankRecords<D extends Destination>(valueUntyped: DestinationTypeMap[D], d: D) {
+export function fillBlankRecords<D extends Destination>(valueUntyped: Partial<DestinationTypeMap[D]>, d: D): DestinationTypeMap[D];
+export function fillBlankRecords<D extends Destination>(valueUntyped: Partial<DestinationTypeMap[D]>, d: D) {
   if (d == 'employed') {
-    const value = valueUntyped as NepoEmployment
+    const value = valueUntyped as Partial<NepoEmployment>
     if (!value.comments) value.comments = recordOf({ text: ''})
     if (!value.connections) value.connections = recordOf({text: '', relation: ''})
     if (!value.employments) value.employments = recordOf({text: '', relation: ''})
     return value
   }
   if (d == 'company') {
-    const value = valueUntyped as Company
+    const value = valueUntyped as Partial<Company>
     if (!value.owners) {
       if (value.owner) value.owners = recordOf(value.owner)
       else value.owners = recordOf(new Link("company", '', ''))
@@ -111,11 +125,13 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Destinatio
     // TODO(https://github.com/SzymonPajzert/koryta/issues/45): remove this return and see if tests fail
     return value
   }
-  if (d == 'suggestion') {
-    return valueUntyped as Nameable
+  if (d == 'todo') {
+    const value = valueUntyped as Partial<Todo>
+    if (!value.subtasks) value.subtasks = recordOf(new Link("todo", '', ''))
+    return value
   }
   if (d == 'data') {
-    const value = valueUntyped as Article
+    const value = valueUntyped as Partial<Article>
     if (!value.comments) value.comments = recordOf({ text: ''})
     if (!value.companies) value.companies = recordOf(new Link("company", '', ''))
     if (!value.people) value.people = recordOf(new Link("employed", '', ''))
@@ -143,8 +159,10 @@ export function removeBlankRecords<D extends Destination>(valueUntyped: Destinat
     // TODO(https://github.com/SzymonPajzert/koryta/issues/45) remove this return and see if tests fail
     return value
   }
-  if (d == 'suggestion') {
-    return valueUntyped as Nameable
+  if (d == 'todo') {
+    const value = valueUntyped as Todo
+    clearEmptyRecord(value.subtasks)
+    return value
   }
   if (d == 'data') {
     const value = valueUntyped as Article
@@ -163,9 +181,11 @@ export function empty(d: Destination) {
   if (d == 'employed') {
     const result: NepoEmployment = {
       'name': '',
-      'comments': {},
       'connections': {},
       'employments': {},
+
+      'todos': {},
+      'comments': {},
     }
     return result
   }
@@ -173,6 +193,8 @@ export function empty(d: Destination) {
     const result: Company = {
       name: '',
       owners: {},
+
+      todos: {},
       comments: {},
     }
     return result
@@ -181,17 +203,21 @@ export function empty(d: Destination) {
     const result: Article = {
       name: '',
       sourceURL: '',
-      comments: {},
       people: {},
       companies: {},
       estimates: {},
       status: {tags: [], signedUp: {}, markedDone: {}, confirmedDone: false},
+
+      todos: {},
+      comments: {},
     }
     return result
   }
-  if (d == 'suggestion') {
-    const result: Nameable = {
-      name: ''
+  if (d == 'todo') {
+    const result: Todo = {
+      name: '',
+      text: '',
+      subtasks: {},
     }
     return result
   }
@@ -202,7 +228,7 @@ export interface DestinationTypeMap {
   employed: NepoEmployment;
   company: Company;
   data: Article;
-  suggestion: Nameable;
+  todo: Todo;
 }
 
 export class Link<T extends Destination> {

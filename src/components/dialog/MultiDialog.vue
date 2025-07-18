@@ -17,6 +17,7 @@
             <OpenAbstractDialog dialog="data"/>
             <OpenAbstractDialog dialog="employed"/>
             <OpenAbstractDialog dialog="company"/>
+            <OpenAbstractDialog dialog="todo"/>
           </v-tabs-window-item>
           <v-tabs-window-item v-for="(dialog, id) in dialogs" :key="id" :value="id">
             <v-card :prepend-icon="config[dialog.type].titleIcon" :title="config[dialog.type].title">
@@ -83,21 +84,26 @@ import AddCompanyDialog from '@/components/dialog/AddCompanyDialog.vue';
 import AddArticleDialog from '@/components/dialog/AddArticleDialog.vue';
 import AddSuggestionDialog from '@/components/dialog/AddSuggestionDialog.vue';
 import AddEmployedDialog from '@/components/dialog/AddEmployedDialog.vue';
-import { type Destination } from '@/composables/model'
+import { type Destination, type DestinationTypeMap } from '@/composables/model'
 
 const dialogStore = useDialogStore()
 const { dialogs, shown, currentDialog, showSnackbar } = storeToRefs(dialogStore)
 
-function lookupComponent(d: Destination) {
-  switch(d) {
-    case 'employed':
-      return AddEmployedDialog
-    case 'company':
-      return AddCompanyDialog
-    case 'data':
-      return AddArticleDialog
-    case 'suggestion':
-      return AddSuggestionDialog
+function lookupComponent<D extends Destination>(d: D): Component<{modelValue: DestinationTypeMap[D]}>
+function lookupComponent<D extends Destination>(d: D) {
+  if (d == 'employed') {
+    return AddEmployedDialog
   }
+  if (d == 'company') {
+    return AddCompanyDialog
+  }
+  if (d == 'data') {
+    return AddArticleDialog
+  }
+  if (d == 'todo') {
+    return AddSuggestionDialog
+  }
+
+  return undefined as any
 }
 </script>

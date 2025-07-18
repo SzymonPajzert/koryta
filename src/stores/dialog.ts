@@ -7,14 +7,14 @@ import type { DestinationTypeMap } from "@/composables/model";
 import { useArticles } from "@/composables/entities/articles";
 
 // callback to call after the dialog was closed
-type Callback = (name: string, key?: string) => void;
+export type Callback = (name: string, key?: string) => void;
 
 // TODO this could be a class and have everything defined already
-interface NewEntityPayload<D extends Destination> {
+export interface NewEntityPayload<D extends Destination> {
   type: D; // what type of dialog to open
   name?: string; // name to populate if given
   edit?: {
-    value: DestinationTypeMap[D]; // value to prepopulate with
+    value: Partial<DestinationTypeMap[D]>; // value to prepopulate with
     key: string;
   };
   callback?: Callback;
@@ -34,8 +34,8 @@ export const config: Record<Destination, { title: string; titleIcon: string }> =
       title: "Dodaj miejsce pracy",
       titleIcon: "mdi-domain",
     },
-    suggestion: {
-      title: "Dodaj pomysł na stronę",
+    todo: {
+      title: "Dodaj zadanie",
       titleIcon: "mdi-lightbulb-on-10",
     },
   };
@@ -69,7 +69,7 @@ export const useDialogStore = defineStore("dialog", () => {
 
   function open<D extends Destination>(payload: NewEntityPayload<D>) {
     const defaultValue = () => empty(payload.type);
-    const filler = (r: DestinationTypeMap[D]) =>
+    const filler = (r: Partial<DestinationTypeMap[D]>) =>
       fillBlankRecords(r, payload.type);
 
     shown.value = true;

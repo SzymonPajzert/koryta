@@ -132,9 +132,14 @@ export const useGraphStore = defineStore("graph", () => {
         .edgeFrom((owner) => [owner.id, "właściciel"]),
 
       relationFrom(articles.value)
-        .forEach((article) => article.people)
+        .forEach(extractIf((a) => a.people, a => allowConnect(a)))
         .setTraverse({ place: "bidirect" })
         .edgeFrom((person) => [person.id, "wspomina"]),
+      relationFrom(articles.value)
+        .forEach(extractIf((a) => a.people, a => !allowConnect(a)))
+        .setTraverse({ place: "backward" })
+        .edgeFrom((person) => [person.id, "wspomina"]),
+
       relationFrom(articles.value)
         .forEach(extractIf((a) => a.companies, a => allowConnect(a)))
         .setTraverse({ place: "bidirect" })

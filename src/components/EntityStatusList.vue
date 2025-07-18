@@ -18,7 +18,7 @@
                 dialogStore.open({
                   type: entity.destination,
                   edit: { value: entity, key: key },
-                })
+                } as NewEntityPayload<typeof entity.destination>)
               "
               icon="mdi-pencil-outline"
               variant="text"
@@ -39,8 +39,9 @@
 <script setup lang="ts">
 import { useEntityStatus } from "@/composables/entities/status";
 import { destinationIcon } from "@/composables/model";
-import { useDialogStore } from "@/stores/dialog";
+import { useDialogStore, type NewEntityPayload } from "@/stores/dialog";
 import { useGraphStore } from "@/stores/graph";
+
 const graphStore = useGraphStore();
 
 const props = defineProps<{

@@ -43,17 +43,27 @@
       :empty-value="emptyTextable"
     />
 
-    <BacklinksList :id="id"/>
+    <BacklinksList :id="id" :todo-consumer="addCreatedTodo"/>
   </v-row>
 </template>
 
 <script lang="ts" setup>
-import { type Company } from "@/composables/model";
+import { Link, type Company } from "@/composables/model";
 import { emptyEntityPicker, emptyTextable } from "@/composables/multiTextHelper";
 import EntityPicker from '../forms/EntityPicker.vue';
 import TextableWrap from '../forms/TextableWrap.vue';
+import type { Callback } from "@/stores/dialog";
 
 const formData = defineModel<Company>({required: true});
 const { create } = defineProps<{ id?: string, create?: boolean }>();
+
+const addCreatedTodo: Callback = (name, key) => {
+  if (!key) {
+    console.warn("failed to obtain key for new entity: ", name);
+    // TODO log on the server all console.warns and higher
+    return
+  }
+  formData.value.todos[key] = new Link<"todo">("todo", key, name);
+}
 
 </script>

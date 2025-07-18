@@ -62,22 +62,32 @@
       :empty-value="emptyTextable"
     />
 
-    <BacklinksList :id="id"/>
+    <BacklinksList :id="id" :todo-consumer="addCreatedTodo"/>
   </v-row>
 </template>
 
 <script lang="ts" setup>
 import { useFeminatyw } from "@/composables/feminatyw";
 import { usePartyStatistics } from "@/composables/party";
-import type { NepoEmployment } from "@/composables/model";
+import { Link, type NepoEmployment } from "@/composables/model";
 import { computed } from "vue";
 import MultiTextField from "@/components/forms/MultiTextField.vue";
 import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";
 import { emptyTextable, emptyNestedConnection } from "@/composables/multiTextHelper";
 import TextableWrap from "../forms/TextableWrap.vue";
+import type { Callback } from "@/stores/dialog";
 
 const formData = defineModel<NepoEmployment>({required: true});
 const { id, create } = defineProps<{ id?: string, create?: boolean }>();
+
+const addCreatedTodo: Callback = (name, key) => {
+  if (!key) {
+    console.warn("failed to obtain key for new entity: ", name);
+    // TODO log on the server all console.warns and higher
+    return
+  }
+  formData.value.todos[key] = new Link<"todo">("todo", key, name);
+}
 
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);

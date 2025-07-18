@@ -13,7 +13,10 @@ export function useListEntity<D extends Destination>(entity: D) {
   const entitiesApproved = useRTDB<Record<string, T>>(dbRef(db, entity))
   const suggestions = computed(() => {
     const { user } = useAuthState()
-    return useRTDB<Record<string, T>>(dbRef(db, `suggestions/${user.value?.uid}/${entity}`)).value
+    if (user.value && user.value.uid) {
+      return useRTDB<Record<string, T>>(dbRef(db, `suggestions/${user.value?.uid}/${entity}`)).value
+    }
+    return {}
   })
   const entities = computed(() => ({
     ...entitiesApproved.value,

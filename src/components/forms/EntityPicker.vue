@@ -65,6 +65,7 @@ function addNewItem() {
       callback: (name, key) => {
         if (!key) {
           console.warn("failed to obtain key for new entity: ", name);
+          // TODO log on the server all console.warns and higher
           return
         }
         model.value = new Link<typeof props.entity>(props.entity, key, name);
