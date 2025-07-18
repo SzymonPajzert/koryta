@@ -27,7 +27,7 @@ export const useSimulationStore = defineStore("simulation", () => {
       const target = 0.001;
       const log_target = Math.log10(target);
 
-      const temporary = d3
+      const commonConfig = d3
         .forceSimulation(nodes)
         .force("edge", forceLink.distance(80).strength(0.3))
         .force("charge", d3.forceManyBody().strength(-400))
@@ -37,14 +37,14 @@ export const useSimulationStore = defineStore("simulation", () => {
 
       let result;
       if (initial) {
-        result = temporary
+        result = commonConfig
           .velocityDecay(0.2)
           .alphaDecay(0.003)
           .stop()
           .tick(3000)
           .restart();
       } else {
-        result = temporary.alphaDecay(0.05);
+        result = commonConfig.alphaDecay(0.05);
       }
 
       result.on("tick.monitor", () => {

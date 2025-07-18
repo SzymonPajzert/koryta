@@ -71,7 +71,7 @@ watch(layouts, console.log)
 
 <template>
   <v-network-graph
-    :nodes="unref(nodesFiltered ?? nodes)"
+    :nodes="nodesFiltered ?? nodes"
     :edges="unref(edges)"
     :configs="configs"
     :layouts="layouts"

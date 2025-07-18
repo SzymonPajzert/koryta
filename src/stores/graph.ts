@@ -40,9 +40,12 @@ const { articles } = useArticles();
 const { partyColors } = usePartyStatistics();
 
 export const useGraphStore = defineStore("graph", () => {
-  // TODO read this from user config
+  // TODO read this from user config or page config
   const showActiveArticles = ref(false);
   const showInactiveArticles = ref(false);
+  const nodeGroupPicked = ref<NodeGroup | undefined>();
+
+  // TODO reinstate it
   const showArticles = computed(
     () => showActiveArticles.value || showInactiveArticles.value,
   );
@@ -61,11 +64,18 @@ export const useGraphStore = defineStore("graph", () => {
     });
     if (companies.value) {
       Object.entries(companies.value).forEach(([key, company]) => {
-        result[key] = {
+        const entry : Node = {
           ...company,
           type: "rect",
           color: "gray",
         };
+        if (nodeGroupPicked.value && nodeGroupPicked.value.id === key) {
+          // We are centering on this node, increase its size
+          entry.sizeMult = 3
+          entry.color = "blue"
+        }
+
+        result[key] = entry
       });
     }
     if (articles.value) {
@@ -111,13 +121,14 @@ export const useGraphStore = defineStore("graph", () => {
         .setTraverse({ place: "backward" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
 
+      // TODO How to stop the articles spreading too much?
       relationFrom(articles.value)
         .forEach((article) => article.people)
-        .setTraverse({ place: "backward" })
+        .setTraverse({ place: "bidirect" })
         .edgeFrom((person) => [person.id, "wspomina"]),
       relationFrom(articles.value)
         .forEach((article) => article.companies)
-        .setTraverse({ place: "backward" })
+        .setTraverse({ place: "bidirect" })
         .edgeFrom((company) => [company.id, "wspomina"]),
     ]);
   });
@@ -170,7 +181,6 @@ export const useGraphStore = defineStore("graph", () => {
     return entries.sort((a, b) => b.stats.people - a.stats.people);
   });
 
-  const nodeGroupPicked = ref<NodeGroup | undefined>();
   const nodesFiltered = computed(() => {
     if (nodeGroupPicked.value) {
       return Object.fromEntries(
