@@ -111,6 +111,7 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Partial<De
   if (d == 'employed') {
     const value = valueUntyped as Partial<NepoEmployment>
     if (!value.comments) value.comments = recordOf({ text: ''})
+    if (!value.todos) value.todos = {}
     if (!value.connections) value.connections = recordOf({text: '', relation: ''})
     if (!value.employments) value.employments = recordOf({text: '', relation: ''})
     return value
@@ -121,7 +122,8 @@ export function fillBlankRecords<D extends Destination>(valueUntyped: Partial<De
       if (value.owner) value.owners = recordOf(value.owner)
       else value.owners = recordOf(new Link("company", '', ''))
     }
-    value.comments = {}
+    if (!value.comments) value.comments = {}
+    if (!value.todos) value.todos = {}
     // TODO(https://github.com/SzymonPajzert/koryta/issues/45): remove this return and see if tests fail
     return value
   }
