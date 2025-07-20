@@ -8,7 +8,7 @@ import { useGraphStore } from "@/stores/graph";
 import {type Ref} from 'vue'
 
 const graphStore = useGraphStore();
-const { nodeGroupPicked } = storeToRefs(graphStore);
+const { nodes, nodeGroupsMap } = storeToRefs(graphStore);
 const { entities: articlesRaw } = useListEntity("data");
 const { entities: peopleRaw } = useListEntity("employed");
 const { entities: placesRaw } = useListEntity("company");
@@ -28,7 +28,7 @@ export interface Status {
   subtitle: string;
 }
 
-export function useEntityStatus(allowedIssues?: Ref<string[]>) {
+export function useEntityStatus(allowedIssues?: Ref<string[]>, pickedPlace?: Ref<string | undefined>) {
   // We will set priority later, so it's ommited from the type
   function emptyIssue(
     key: string,
@@ -148,6 +148,14 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
     })
   })
 
+  const nodeGroupConnected = computed(() => {
+    if (pickedPlace && pickedPlace.value) {
+      return nodeGroupsMap.value[pickedPlace.value].connected
+    }
+    return Object.keys(nodes.value)
+  })
+
+
   // Gather all of them together and list their state.
   const statusList = computed<ListItem[]>(() => {
     return [...articles.value, ...people.value, ...places.value]
@@ -169,8 +177,8 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
       })
       .filter(([key, entity]) => {
         const matchesFilter =
-          !nodeGroupPicked.value ||
-          nodeGroupPicked.value?.connected.includes(key);
+          !nodeGroupConnected.value ||
+          nodeGroupConnected.value.includes(key);
         const nonEmptyIssues = !!entity.issues;
         return (!entity.hasPlace || matchesFilter) && nonEmptyIssues;
       })

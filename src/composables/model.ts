@@ -16,6 +16,15 @@ export interface Connection {
 // Top level types represented by their own path in the DB.
 export type Destination = 'employed' | 'company' | 'data' | 'todo'
 
+export const articleTags = [
+  'ludzie wyciągnięci',
+  'dodatkowe informacje',
+  'nie łącz w grafie',
+  'nie pokazuj w grafie',
+  'przeczytane',
+] as const;
+type ArticleTag = typeof articleTags[number];
+
 export const destinationIcon: Record<Destination, string> = {
   'employed': 'mdi-account-outline',
   'company': 'mdi-office-building-outline',
@@ -73,9 +82,6 @@ export interface Todo extends Nameable {
   text: string
   subtasks: Record<string, Link<'todo'>>
 }
-
-export const articleTags = ['ludzie wyciągnięci', 'dodatkowe informacje', 'nie łącz w grafie', 'przeczytane'] as const;
-type ArticleTag = typeof articleTags[number];
 
 type uid = string;
 

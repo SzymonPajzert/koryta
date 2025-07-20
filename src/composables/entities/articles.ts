@@ -31,7 +31,13 @@ export function getShortTitle(data: Article): string {
 }
 
 export function getHostname(data: Article): string {
-  return new URL(data.sourceURL).hostname;
+  try {
+    if (!data.sourceURL) return ""
+    return new URL(data.sourceURL).hostname;
+  } catch (e) {
+    console.error("failed to parse URL", data.sourceURL)
+    return data.sourceURL;
+  }
 }
 
 // TODO migrate this logic to entities

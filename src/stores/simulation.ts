@@ -41,8 +41,7 @@ export const useSimulationStore = defineStore("simulation", () => {
           .velocityDecay(0.2)
           .alphaDecay(0.003)
           .stop()
-          .tick(3000)
-          .restart();
+          .tick(10000);
       } else {
         result = commonConfig.alphaDecay(0.05);
       }

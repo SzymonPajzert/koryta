@@ -6,7 +6,7 @@
           v-bind="props"
           :title="entity.name"
           :subtitle="entity.subtitle"
-          :variant="!entity.hasPlace && nodeGroupPicked ? 'tonal' : undefined"
+          :variant="!entity.hasPlace && placeFilterID ? 'tonal' : undefined"
         >
           <template v-slot:prepend>
             <v-icon :icon="destinationIcon[entity.destination]" />
@@ -40,15 +40,12 @@
 import { useEntityStatus } from "@/composables/entities/status";
 import { destinationIcon } from "@/composables/model";
 import { useDialogStore, type NewEntityPayload } from "@/stores/dialog";
-import { useGraphStore } from "@/stores/graph";
-
-const graphStore = useGraphStore();
 
 const props = defineProps<{
   allowedIssues: string[];
+  placeFilterID?: string;
 }>();
 
 const dialogStore = useDialogStore();
-const { nodeGroupPicked } = storeToRefs(graphStore);
-const { statusList } = useEntityStatus(toRef(props, "allowedIssues"));
+const { statusList } = useEntityStatus(toRef(props, "allowedIssues"), toRef(props, "placeFilterID"));
 </script>

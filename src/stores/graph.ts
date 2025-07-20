@@ -1,6 +1,6 @@
 import { usePartyStatistics } from "@/composables/party";
 import { useListEntity } from "@/composables/entity";
-import { useArticles, getHostname } from "@/composables/entities/articles";
+import { getHostname } from "@/composables/entities/articles";
 import type { Article, Connection } from "../composables/model";
 import { DiGraph } from "digraph-js";
 
@@ -9,6 +9,7 @@ export interface Node {
   type: "circle" | "rect" | "document";
   color: string;
   sizeMult?: number;
+  hide?: boolean;
 }
 
 export interface NodeGroup {
@@ -20,9 +21,15 @@ export interface NodeGroup {
   };
 }
 
+type TraverseState = "active" | "dead_end";
+const SPLIT = "*split*" as const
+
 export interface TraversePolicy {
   // When filterting by place, should this relation be included?
-  place: "forward" | "backward" | "bidirect";
+  // What to do if you connect from this -> node
+  forward?: TraverseState;
+  // What to do if you connect from node -> this
+  backward?: TraverseState;
 }
 
 export interface Edge {
@@ -35,21 +42,11 @@ export interface Edge {
 
 const { entities: people } = useListEntity("employed");
 const { entities: companies } = useListEntity("company");
-const { articles } = useArticles();
+const { entities: articles } = useListEntity("data");
 
 const { partyColors } = usePartyStatistics();
 
 export const useGraphStore = defineStore("graph", () => {
-  // TODO read this from user config or page config
-  const showActiveArticles = ref(false);
-  const showInactiveArticles = ref(false);
-  const nodeGroupPicked = ref<NodeGroup | undefined>();
-
-  // TODO reinstate it
-  const showArticles = computed(
-    () => showActiveArticles.value || showInactiveArticles.value,
-  );
-
   const nodes = computed(() => {
     const result: Record<string, Node> = {};
     Object.entries(people.value).forEach(([key, person]) => {
@@ -64,18 +61,13 @@ export const useGraphStore = defineStore("graph", () => {
     });
     if (companies.value) {
       Object.entries(companies.value).forEach(([key, company]) => {
-        const entry : Node = {
+        const entry: Node = {
           ...company,
           type: "rect",
           color: "gray",
         };
-        if (nodeGroupPicked.value && nodeGroupPicked.value.id === key) {
-          // We are centering on this node, increase its size
-          entry.sizeMult = 3
-          entry.color = "blue"
-        }
 
-        result[key] = entry
+        result[key] = entry;
       });
     }
     if (articles.value) {
@@ -91,16 +83,21 @@ export const useGraphStore = defineStore("graph", () => {
           type: "document",
           color: "pink",
         };
-        if (article.status.tags) {
-          if(article.status.tags.includes('dodatkowe informacje') ||
-            article.status.tags.includes('ludzie wyciągnięci') ||
+        if (article.status && article.status.tags) {
+          if (
+            article.status.tags.includes("dodatkowe informacje") ||
+            article.status.tags.includes("ludzie wyciągnięci") ||
             // TODO suppport multipeople
-            article.status.tags.includes('przeczytane')) {
-            entry.color = "gray"
-            entry.sizeMult = 0.6
+            article.status.tags.includes("przeczytane")
+          ) {
+            entry.color = "gray";
+            entry.sizeMult = 0.6;
+          }
+          if (article.status.tags.includes("nie pokazuj w grafie")) {
+            entry.hide = true;
           }
         }
-        result[articleID] = entry
+        result[articleID] = entry;
       });
     }
     return result;
@@ -110,43 +107,34 @@ export const useGraphStore = defineStore("graph", () => {
     return executeGraph([
       relationFrom(people.value)
         .forEach((person) => person.employments)
-        .setTraverse({ place: "backward" })
+        .setTraverse({ backward: "active" })
         .edgeFromConnection(),
 
       relationFrom(people.value)
         .forEach((person) => person.connections)
-        .setTraverse({ place: "bidirect" })
+        .setTraverse({ forward: "active", backward: "active" })
         .edgeFromConnection(),
 
       relationFrom(companies.value)
         .forField((company) => company.manager)
-        .setTraverse({ place: "forward" })
+        .setTraverse({ forward: "active" })
         .edgeFrom((manager) => [manager.id, "zarządzający"]),
       relationFrom(companies.value)
         .forField((company) => company.owner)
-        .setTraverse({ place: "backward" })
+        .setTraverse({ backward: "active" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
       relationFrom(companies.value)
         .forEach((company) => company.owners)
-        .setTraverse({ place: "backward" })
+        .setTraverse({ backward: "active" })
         .edgeFrom((owner) => [owner.id, "właściciel"]),
 
       relationFrom(articles.value)
-        .forEach(extractIf((a) => a.people, a => allowConnect(a)))
-        .setTraverse({ place: "bidirect" })
+        .forEach((a) => a.people)
+        .setTraverse({ forward: "dead_end", backward: "active" })
         .edgeFrom((person) => [person.id, "wspomina"]),
       relationFrom(articles.value)
-        .forEach(extractIf((a) => a.people, a => !allowConnect(a)))
-        .setTraverse({ place: "backward" })
-        .edgeFrom((person) => [person.id, "wspomina"]),
-
-      relationFrom(articles.value)
-        .forEach(extractIf((a) => a.companies, a => allowConnect(a)))
-        .setTraverse({ place: "bidirect" })
-        .edgeFrom((company) => [company.id, "wspomina"]),
-      relationFrom(articles.value)
-        .forEach(extractIf((a) => a.companies, a => !allowConnect(a)))
-        .setTraverse({ place: "backward" })
+        .forEach((a) => a.companies)
+        .setTraverse({ forward: "dead_end", backward: "active" })
         .edgeFrom((company) => [company.id, "wspomina"]),
     ]);
   });
@@ -154,11 +142,11 @@ export const useGraphStore = defineStore("graph", () => {
   const nodeGroups = computed<NodeGroup[]>(() => {
     const placeConnection = new DiGraph();
     placeConnection.addVertices(
-      ...Object.keys(nodes.value).map((key) => ({
-        id: key,
-        adjacentTo: [],
-        body: {},
-      })),
+      ...Object.keys(nodes.value).flatMap((key) => [
+        // Corresponds to TraverseState
+        { id: key + SPLIT + "active", adjacentTo: [], body: {} },
+        { id: key + SPLIT + "dead_end", adjacentTo: [], body: {} },
+      ]),
     );
 
     edges.value.forEach((edge: Edge) => {
@@ -166,18 +154,40 @@ export const useGraphStore = defineStore("graph", () => {
         console.error("no traverse policy in ", edge);
         return;
       }
-      if (edge.traverse.place == "forward") {
-        placeConnection.addEdge({ from: edge.source, to: edge.target });
-      } else if (edge.traverse.place == "backward") {
-        placeConnection.addEdge({ from: edge.target, to: edge.source });
-      } else if (edge.traverse.place == "bidirect") {
-        placeConnection.addEdge({ from: edge.source, to: edge.target });
-        placeConnection.addEdge({ from: edge.target, to: edge.source });
+      // If the edge should spread the node group, either map it to active node or dead_end
+      // Only active states have out-edges.
+      if (edge.traverse.forward) {
+        placeConnection.addEdge({
+          from: edge.source + SPLIT + "active",
+          to: edge.target + SPLIT + edge.traverse.forward,
+        });
+      }
+      if (edge.traverse.backward) {
+        placeConnection.addEdge({
+          from: edge.target + SPLIT + "active",
+          to: edge.source + SPLIT + edge.traverse.backward,
+        });
       }
     });
 
     const entries = Object.entries(companies.value).map(([placeID, place]) => {
-      const children = [...placeConnection.getDeepChildren(placeID)];
+      const children = [...placeConnection.getDeepChildren(placeID + SPLIT + "active")]
+        // Remove node state from the ID.
+        .map((extendedID) => extendedID.split(SPLIT)[0])
+        .filter((id) => {
+          try {
+            return !nodes.value[id].hide;
+          } catch (e) {
+            console.error(
+              "trying node",
+              id,
+              nodes.value[id],
+              "got exception",
+              e,
+            );
+            throw e;
+          }
+        });
       return {
         id: placeID,
         name: place.name,
@@ -199,25 +209,15 @@ export const useGraphStore = defineStore("graph", () => {
     return entries.sort((a, b) => b.stats.people - a.stats.people);
   });
 
-  const nodesFiltered = computed(() => {
-    if (nodeGroupPicked.value) {
-      return Object.fromEntries(
-        Object.entries(nodes.value).filter(([key, _]) =>
-          nodeGroupPicked.value?.connected.includes(key),
-        ),
-      );
-    }
-    return nodes.value;
-  });
+  const nodeGroupsMap = computed(() => {
+    return Object.fromEntries(nodeGroups.value.map(v => [v.id, v]))
+  })
 
   return {
     nodes,
     edges,
     nodeGroups,
-    showActiveArticles,
-    showInactiveArticles,
-    nodeGroupPicked,
-    nodesFiltered,
+    nodeGroupsMap
   };
 });
 
@@ -226,17 +226,21 @@ type Closure<A> = (a: A) => void;
 // Returns true if the article should connect to other companies mentioned
 // If article has 'nie łącz w grafie' set, for shouldConnect = true it returns true
 function allowConnect(article: Article) {
-  if (!article.status.tags) return true
-  return !article.status.tags.includes('nie łącz w grafie')
+  if (!article.status || !article.status.tags) return true;
+  // TODO maybe we don't need this value anymore?
+  return !article.status.tags.includes("nie łącz w grafie");
 }
 
-function extractIf<A, B>(extractor: (arg: A) => B, condition: (arg: A) => boolean): (arg: A) => B | undefined {
+function extractIf<A, B>(
+  extractor: (arg: A) => B,
+  condition: (arg: A) => boolean,
+): (arg: A) => B | undefined {
   return (a: A) => {
     if (condition(a)) {
-      return extractor(a)
+      return extractor(a);
     }
-    return undefined
-  }
+    return undefined;
+  };
 }
 
 function relationFrom<A>(
@@ -254,9 +258,16 @@ function relationFrom<A>(
 
 class HalfEdgeMaker<A> {
   readonly outer: Closure<Closure<[string, A]>>;
+  filter?: (elt: A) => boolean;
+
 
   constructor(outer: Closure<Closure<[string, A]>>) {
     this.outer = outer;
+  }
+
+  extractIf(predicate: (elt: A) => boolean) {
+    this.filter = predicate
+    return this
   }
 
   forEach<B>(
@@ -266,7 +277,7 @@ class HalfEdgeMaker<A> {
       this.outer(([key, relation]) => {
         Object.values(extractor(relation) ?? {}).forEach((subRelation) => {
           const mapped = mapper(subRelation);
-          if (mapped) {
+          if (mapped && (!this.filter || this.filter(relation))) {
             result.push({
               source: key,
               ...mapped,

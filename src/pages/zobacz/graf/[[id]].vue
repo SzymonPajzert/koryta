@@ -11,13 +11,28 @@ import {
 import { useDialogStore } from "@/stores/dialog";
 import { useSimulationStore } from "@/stores/simulation";
 import { useGraphStore } from "@/stores/graph";
+import { useRoute } from "vue-router";
 
 const dialogStore = useDialogStore();
 const graphStore = useGraphStore();
 const simulationStore = useSimulationStore();
 
 const { runSimulation } = storeToRefs(simulationStore);
-const { nodes, edges, nodesFiltered } = storeToRefs(graphStore)
+const { nodes, edges } = storeToRefs(graphStore)
+const { nodeGroupsMap } = storeToRefs(graphStore);
+const route = useRoute<'/zobacz/graf/[[id]]'>()
+
+const nodesFiltered = computed(() => {
+  if (route.params.id) {
+    const nodeGroupPicked = nodeGroupsMap.value[route.params.id]
+    return Object.fromEntries(
+      Object.entries(nodes.value).filter(([key, _]) =>
+        nodeGroupPicked.connected.includes(key),
+      ),
+    );
+  }
+  return nodes.value;
+});
 
 const handleNodeClick = ({ node }: NodeEvent<MouseEvent>) => {
   dialogStore.openExisting(node);
@@ -32,7 +47,7 @@ const eventHandlers: EventHandlers = {
   "view:dblclick": handleDoubleClick,
 };
 
-const configs = defineConfigs({
+const configs = reactive(defineConfigs({
     node: {
       normal: {
         type: (node) => node.type,
@@ -52,29 +67,26 @@ const configs = defineConfigs({
     },
     view: {
       scalingObjects: true,
-      layoutHandler: markRaw(simulationStore.newForceLayout(true) as LayoutHandler),
+      layoutHandler: simulationStore.newForceLayout(true) as LayoutHandler,
       doubleClickZoomEnabled: false,
     },
-  })
+  }))
 
 watch(runSimulation, (value) => {
+  if (!configs.view) return
   if (value) {
     configs.view.layoutHandler = simulationStore.newForceLayout(false);
   } else {
     configs.view.layoutHandler = new SimpleLayout();
   }
 });
-
-const layouts = ref()
-watch(layouts, console.log)
 </script>
 
 <template>
   <v-network-graph
-    :nodes="nodesFiltered ?? nodes"
+    :nodes="nodesFiltered"
     :edges="unref(edges)"
     :configs="configs"
-    :layouts="layouts"
     :eventHandlers="eventHandlers"
   >
     <template #edge-label="{ edge, ...slotProps }">
