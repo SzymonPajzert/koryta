@@ -1,6 +1,7 @@
 <template>
   <v-navigation-drawer
-    location="right"
+    :location="location"
+    :width="width"
     permanent>
     <OpenAbstractDialog dialog="data"/>
     <OpenAbstractDialog dialog="todo"/>
@@ -89,7 +90,9 @@
 import { useAuthState } from '@/composables/auth';
 import { useArticles } from '@/composables/entities/articles'
 import { useEntityStatus } from '@/composables/entities/status';
+import { useDrawer } from "@/composables/drawer";
 
+const { width, location } = useDrawer();
 const { articlesAssigned, articlesUnssigned } = useArticles()
 const { user } = useAuthState();
 const { issueNames } = useEntityStatus()

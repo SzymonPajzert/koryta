@@ -1,6 +1,14 @@
 <template>
-  <v-navigation-drawer location="right" width="300" permanent>
-    <v-btn v-model="runSimulation" @click="runSimulation = !runSimulation" v-if="route.path.startsWith('/zobacz/graf')">
+  <v-navigation-drawer
+    :location="location"
+    :width="width"
+    permanent
+  >
+    <v-btn
+      v-model="runSimulation"
+      @click="runSimulation = !runSimulation"
+      v-if="route.path.startsWith('/zobacz/graf')"
+    >
       Uporządkuj wierzchołki
       <v-progress-linear
         v-model="simulationProgress"
@@ -16,15 +24,12 @@
 </template>
 
 <script setup lang="ts">
-import { useGraphStore } from "@/stores/graph";
 import { useSimulationStore } from "@/stores/simulation";
+import { useDrawer } from "@/composables/drawer";
 
-const graphStore = useGraphStore();
+const { width, location } = useDrawer();
 const simulationStore = useSimulationStore();
+const { runSimulation, simulationProgress } = storeToRefs(simulationStore);
 
-const { nodeGroups } = storeToRefs(graphStore)
-const { runSimulation, simulationProgress} = storeToRefs(simulationStore)
-
-const router = useRouter()
-const route = useRoute<'/zobacz/graf/[[id]]' | '/zobacz/lista/[[id]]'>()
+const route = useRoute<"/zobacz/graf/[[id]]" | "/zobacz/lista/[[id]]">();
 </script>
