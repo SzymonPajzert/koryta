@@ -6,7 +6,7 @@ describe("graph", () => {
   });
 
   beforeEach(() => {
-    cy.visit("/zobacz/graf");
+    cy.visit("/graf");
   });
 
   it("displays a lot of nodes", () => {
@@ -57,7 +57,7 @@ describe("graph", () => {
     });
 
     it("shows subgraph by URL", () => {
-      cy.visit("/zobacz/graf/-OTP5Zwp5n3Z1I6Fu5B6");
+      cy.visit("/graf?miejsce=-OTP5Zwp5n3Z1I6Fu5B6");
 
       cy.get("g > text").contains("Waldemar Miśko").should("exist");
       cy.get("g > text").contains("Jerzy Kaczmarek").should("exist");

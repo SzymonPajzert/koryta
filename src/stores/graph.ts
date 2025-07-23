@@ -6,6 +6,8 @@ import { DiGraph } from "digraph-js";
 
 export interface Node {
   name: string;
+  prettyURL?: string;
+
   type: "circle" | "rect" | "document";
   color: string;
   sizeMult?: number;

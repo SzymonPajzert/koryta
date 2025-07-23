@@ -13,8 +13,8 @@
     >
     <v-spacer />
     <v-btn text to="/">Start</v-btn>
-    <v-btn text to="/zobacz/lista">Lista</v-btn>
-    <v-btn text to="/zobacz/graf">Graf</v-btn>
+    <v-btn text to="lista">Lista</v-btn>
+    <v-btn text to="/graf">Graf</v-btn>
     <v-btn text to="/pomoc">Działaj</v-btn>
     <v-btn text to="/zrodla">Źródła</v-btn>
     <v-btn icon v-if="user" to="/profil">
@@ -55,10 +55,6 @@ onMounted(() => {
 });
 
 const route = useRoute();
-const maxWidth = computed(() =>
-  route.name == "/zobacz/graf/[[id]]" ? "none" : 900,
-);
-const rootPadding = computed(() =>
-  route.name == "/zobacz/graf/[[id]]" ? 0 : undefined,
-);
+const maxWidth = computed(() => (route.meta.isGraph ? "none" : 900));
+const rootPadding = computed(() => (route.meta.isGraph ? 0 : undefined));
 </script>

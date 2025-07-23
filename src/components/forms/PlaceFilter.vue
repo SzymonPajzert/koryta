@@ -5,6 +5,7 @@
     item-title="name"
     v-model="nodeGroupPicked"
     return-object
+    autocomplete="off"
   >
     <template v-slot:item="{ props, item }">
       <v-list-item
@@ -19,7 +20,7 @@
 
 <script setup lang="ts">
 import { useGraphStore, type NodeGroup } from "@/stores/graph";
-import router from "@/router";
+const { push, currentRoute } = useRouter();
 
 const graphStore = useGraphStore();
 const { nodeGroups } = storeToRefs(graphStore);
@@ -28,8 +29,12 @@ const { nodeGroups } = storeToRefs(graphStore);
 
 const nodeGroupPicked = ref<NodeGroup>();
 watch(nodeGroupPicked, (value) => {
-  if (value) {
-    router.push(`/zobacz/graf/${value.id}`);
-  }
+  if (!value) return;
+  push({
+    query: {
+      ...currentRoute.value.query,
+      miejsce: value.id,
+    },
+  });
 });
 </script>

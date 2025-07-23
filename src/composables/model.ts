@@ -6,6 +6,10 @@ export interface Textable {
 }
 export interface Nameable {
   name: string;
+  // If set, the name will be used as the url
+  isStable?: boolean;
+  // If isStable and stablePath is set, use the path instead of the name
+  stablePath?: string[];
 }
 export interface Connection {
   text: string;

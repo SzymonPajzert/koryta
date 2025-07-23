@@ -176,7 +176,7 @@ export function useEntityStatus(
           priority: value.issues
             .filter(
               (i) =>
-                !allowedIssues ||
+                !allowedIssues?.value ||
                 allowedIssues.value.length == 0 ||
                 allowedIssues.value.includes(i.name),
             )

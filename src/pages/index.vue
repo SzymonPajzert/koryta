@@ -13,7 +13,7 @@
       </v-col>
       <v-col cols="12" md="6">
         <v-card
-          to="/zobacz/lista"
+          to="/lista"
           class="py-4"
           color="surface-variant"
           variant="tonal"
@@ -21,6 +21,8 @@
         >
           <v-card-title>
             <h2 class="text-h5 font-weight-bold">
+              Lista wszystkich {{ Object.values(people).length }}
+              {{ koryciarz.plural.genitive }}
               Lista wszystkich {{ Object.values(people).length }}
               {{ koryciarz.plural.genitive }}
             </h2>
@@ -33,7 +35,7 @@
 
       <v-col cols="12" md="6">
         <v-card
-          to="/zobacz/graf/-OTOq2CpVuIll16NmukB"
+          to="/graf/-OTOq2CpVuIll16NmukB"
           class="py-4"
           color="surface-variant"
           variant="tonal"
@@ -51,7 +53,7 @@
       </v-col>
       <v-col cols="12" md="6">
         <v-card
-          to="/zobacz/graf/-OTP58QPQ2cUXMgPn7UL"
+          to="/graf/-OTP58QPQ2cUXMgPn7UL"
           class="py-4"
           color="surface-variant"
           variant="tonal"
@@ -70,6 +72,8 @@
 
       <HomeItem router="pomoc" icon="mdi-plus-box-outline">
         <template #header> Dodaj osoby i artykuły </template>
+        Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do
+        artykułów wypisujących je
         Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do
         artykułów wypisujących je
       </HomeItem>

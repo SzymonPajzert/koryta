@@ -43,7 +43,7 @@ addMatchImageSnapshotCommand({
 });
 
 Cypress.Commands.add("filterPlace", (placeName: string) => {
-  cy.get(".v-input input").type(placeName);
+  cy.get(".v-input input").first().type(placeName);
   cy.get("div.v-list-item").contains(placeName).click();
 });
 
