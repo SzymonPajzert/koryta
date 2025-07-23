@@ -1,4 +1,4 @@
-<template>
+<template id="place-filter">
   <v-autocomplete
       label="Filtruj po miejscu zatrudnienia"
       :items="nodeGroups"

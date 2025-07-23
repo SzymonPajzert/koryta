@@ -12,13 +12,15 @@ export interface Node {
   hide?: boolean;
 }
 
+export interface NodeStats {
+  people: number;
+};
+
 export interface NodeGroup {
   id: string;
   name: string;
   connected: string[];
-  stats: {
-    people: number;
-  };
+  stats: NodeStats
 }
 
 type TraverseState = "active" | "dead_end";
@@ -47,7 +49,7 @@ const { entities: articles } = useListEntity("data");
 const { partyColors } = usePartyStatistics();
 
 export const useGraphStore = defineStore("graph", () => {
-  const nodes = computed(() => {
+  const nodesNoStats = computed(() => {
     const result: Record<string, Node> = {};
     Object.entries(people.value).forEach(([key, person]) => {
       result[key] = {
@@ -107,7 +109,7 @@ export const useGraphStore = defineStore("graph", () => {
     return executeGraph([
       relationFrom(people.value)
         .forEach((person) => person.employments)
-        .setTraverse({ backward: "active" })
+        .setTraverse({ backward: "active", forward: "dead_end" })
         .edgeFromConnection(),
 
       relationFrom(people.value)
@@ -142,7 +144,7 @@ export const useGraphStore = defineStore("graph", () => {
   const nodeGroups = computed<NodeGroup[]>(() => {
     const placeConnection = new DiGraph();
     placeConnection.addVertices(
-      ...Object.keys(nodes.value).flatMap((key) => [
+      ...Object.keys(nodesNoStats.value).flatMap((key) => [
         // Corresponds to TraverseState
         { id: key + SPLIT + "active", adjacentTo: [], body: {} },
         { id: key + SPLIT + "dead_end", adjacentTo: [], body: {} },
@@ -176,12 +178,12 @@ export const useGraphStore = defineStore("graph", () => {
         .map((extendedID) => extendedID.split(SPLIT)[0])
         .filter((id) => {
           try {
-            return !nodes.value[id].hide;
+            return !nodesNoStats.value[id].hide;
           } catch (e) {
             console.error(
               "trying node",
               id,
-              nodes.value[id],
+              nodesNoStats.value[id],
               "got exception",
               e,
             );
@@ -193,7 +195,7 @@ export const useGraphStore = defineStore("graph", () => {
         name: place.name,
         connected: [placeID, ...children],
         stats: {
-          people: children.filter((node) => nodes.value[node].type === "circle")
+          people: children.filter((node) => nodesNoStats.value[node].type === "circle")
             .length,
         },
       };
@@ -201,7 +203,7 @@ export const useGraphStore = defineStore("graph", () => {
     entries.push({
       id: "",
       name: "Wszystkie",
-      connected: Object.keys(nodes.value),
+      connected: Object.keys(nodesNoStats.value),
       stats: {
         people: Object.keys(people.value).length,
       },
@@ -213,35 +215,23 @@ export const useGraphStore = defineStore("graph", () => {
     return Object.fromEntries(nodeGroups.value.map(v => [v.id, v]))
   })
 
+  const nodes = computed<Record<string, Node & { stats: NodeStats }>>(() => {
+    return Object.fromEntries(Object.entries(nodesNoStats.value).map(([key, node]) => [key, {
+      ...node,
+      stats: nodeGroupsMap.value[key]?.stats ?? { people: 0 }
+    }]))
+  })
+
   return {
-    nodes,
+    nodesNoStats,
     edges,
     nodeGroups,
-    nodeGroupsMap
+    nodeGroupsMap,
+    nodes
   };
 });
 
 type Closure<A> = (a: A) => void;
-
-// Returns true if the article should connect to other companies mentioned
-// If article has 'nie łącz w grafie' set, for shouldConnect = true it returns true
-function allowConnect(article: Article) {
-  if (!article.status || !article.status.tags) return true;
-  // TODO maybe we don't need this value anymore?
-  return !article.status.tags.includes("nie łącz w grafie");
-}
-
-function extractIf<A, B>(
-  extractor: (arg: A) => B,
-  condition: (arg: A) => boolean,
-): (arg: A) => B | undefined {
-  return (a: A) => {
-    if (condition(a)) {
-      return extractor(a);
-    }
-    return undefined;
-  };
-}
 
 function relationFrom<A>(
   relations: Record<string, A>,
@@ -259,7 +249,6 @@ function relationFrom<A>(
 class HalfEdgeMaker<A> {
   readonly outer: Closure<Closure<[string, A]>>;
   filter?: (elt: A) => boolean;
-
 
   constructor(outer: Closure<Closure<[string, A]>>) {
     this.outer = outer;

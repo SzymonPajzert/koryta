@@ -41,3 +41,16 @@ import { addMatchImageSnapshotCommand } from '@simonsmith/cypress-image-snapshot
 addMatchImageSnapshotCommand({
    failureThreshold: 0.2
 })
+
+Cypress.Commands.add("filterPlace", (placeName: string) => {
+  cy.get(".v-input input").type(placeName);
+  cy.get("div.v-list-item").contains(placeName).click();
+})
+
+declare global {
+  namespace Cypress {
+    interface Chainable {
+      filterPlace(placeName: string): Chainable<JQuery<HTMLElement>>
+    }
+  }
+}

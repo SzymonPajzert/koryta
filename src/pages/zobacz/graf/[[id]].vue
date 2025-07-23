@@ -21,30 +21,46 @@ const { runSimulation } = storeToRefs(simulationStore);
 const { nodes, edges } = storeToRefs(graphStore)
 const { nodeGroupsMap } = storeToRefs(graphStore);
 const route = useRoute<'/zobacz/graf/[[id]]'>()
+import router from '@/router';
+
+const interestingNodes = computed(() => {
+  return Object.fromEntries(
+      // TODO make it a parameter
+      Object.entries(nodes.value).filter(([_, node]) => node.type !== "rect" || node.stats.people > 0),
+  )
+})
 
 const nodesFiltered = computed(() => {
   if (route.params.id) {
     const nodeGroupPicked = nodeGroupsMap.value[route.params.id]
     return Object.fromEntries(
-      Object.entries(nodes.value).filter(([key, _]) =>
+      Object.entries(interestingNodes.value).filter(([key, _]) =>
         nodeGroupPicked.connected.includes(key),
       ),
     );
   }
-  return nodes.value;
+  return interestingNodes.value;
 });
 
-const handleNodeClick = ({ node }: NodeEvent<MouseEvent>) => {
-  dialogStore.openExisting(node);
+const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
+  if (event.detail !== 2) {
+    dialogStore.openExisting(node);
+  } else {
+    if (nodesFiltered.value[node].type === "rect") {
+      router.push(`/zobacz/graf/${node}`)
+    }
+  }
 };
 
 const handleDoubleClick = (event: ViewEvent<MouseEvent>) => {
   dialogStore.openMain();
 };
 
+
 const eventHandlers: EventHandlers = {
   "node:click": handleNodeClick,
   "view:dblclick": handleDoubleClick,
+  "node:dblclick": handleNodeClick,
 };
 
 const configs = reactive(defineConfigs({
@@ -71,6 +87,10 @@ const configs = reactive(defineConfigs({
       doubleClickZoomEnabled: false,
     },
   }))
+
+watch(nodesFiltered, () => {
+  configs.view.layoutHandler = simulationStore.newForceLayout(true);
+})
 
 watch(runSimulation, (value) => {
   if (!configs.view) return
