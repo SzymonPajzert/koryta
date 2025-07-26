@@ -14,17 +14,17 @@ export interface Node {
 
 export interface NodeStats {
   people: number;
-};
+}
 
 export interface NodeGroup {
   id: string;
   name: string;
   connected: string[];
-  stats: NodeStats
+  stats: NodeStats;
 }
 
 type TraverseState = "active" | "dead_end";
-const SPLIT = "*split*" as const
+const SPLIT = "*split*" as const;
 
 export interface TraversePolicy {
   // When filterting by place, should this relation be included?
@@ -173,7 +173,9 @@ export const useGraphStore = defineStore("graph", () => {
     });
 
     const entries = Object.entries(companies.value).map(([placeID, place]) => {
-      const children = [...placeConnection.getDeepChildren(placeID + SPLIT + "active")]
+      const children = [
+        ...placeConnection.getDeepChildren(placeID + SPLIT + "active"),
+      ]
         // Remove node state from the ID.
         .map((extendedID) => extendedID.split(SPLIT)[0])
         .filter((id) => {
@@ -195,8 +197,9 @@ export const useGraphStore = defineStore("graph", () => {
         name: place.name,
         connected: [placeID, ...children],
         stats: {
-          people: children.filter((node) => nodesNoStats.value[node].type === "circle")
-            .length,
+          people: children.filter(
+            (node) => nodesNoStats.value[node].type === "circle",
+          ).length,
         },
       };
     });
@@ -212,22 +215,27 @@ export const useGraphStore = defineStore("graph", () => {
   });
 
   const nodeGroupsMap = computed(() => {
-    return Object.fromEntries(nodeGroups.value.map(v => [v.id, v]))
-  })
+    return Object.fromEntries(nodeGroups.value.map((v) => [v.id, v]));
+  });
 
   const nodes = computed<Record<string, Node & { stats: NodeStats }>>(() => {
-    return Object.fromEntries(Object.entries(nodesNoStats.value).map(([key, node]) => [key, {
-      ...node,
-      stats: nodeGroupsMap.value[key]?.stats ?? { people: 0 }
-    }]))
-  })
+    return Object.fromEntries(
+      Object.entries(nodesNoStats.value).map(([key, node]) => [
+        key,
+        {
+          ...node,
+          stats: nodeGroupsMap.value[key]?.stats ?? { people: 0 },
+        },
+      ]),
+    );
+  });
 
   return {
     nodesNoStats,
     edges,
     nodeGroups,
     nodeGroupsMap,
-    nodes
+    nodes,
   };
 });
 
@@ -255,8 +263,8 @@ class HalfEdgeMaker<A> {
   }
 
   extractIf(predicate: (elt: A) => boolean) {
-    this.filter = predicate
-    return this
+    this.filter = predicate;
+    return this;
   }
 
   forEach<B>(

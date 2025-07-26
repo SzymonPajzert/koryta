@@ -32,10 +32,10 @@ export function getShortTitle(data: Article): string {
 
 export function getHostname(data: Article): string {
   try {
-    if (!data.sourceURL) return ""
+    if (!data.sourceURL) return "";
     return new URL(data.sourceURL).hostname;
   } catch (e) {
-    console.error("failed to parse URL", data.sourceURL)
+    console.error("failed to parse URL", data.sourceURL);
     return data.sourceURL;
   }
 }

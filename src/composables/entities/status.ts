@@ -5,7 +5,7 @@ import {
   type Nameable,
 } from "@/composables/model";
 import { useGraphStore } from "@/stores/graph";
-import {type Ref} from 'vue'
+import { type Ref } from "vue";
 
 const graphStore = useGraphStore();
 const { nodes, nodeGroupsMap } = storeToRefs(graphStore);
@@ -28,7 +28,10 @@ export interface Status {
   subtitle: string;
 }
 
-export function useEntityStatus(allowedIssues?: Ref<string[]>, pickedPlace?: Ref<string | undefined>) {
+export function useEntityStatus(
+  allowedIssues?: Ref<string[]>,
+  pickedPlace?: Ref<string | undefined>,
+) {
   // We will set priority later, so it's ommited from the type
   function emptyIssue(
     key: string,
@@ -144,17 +147,16 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>, pickedPlace?: Ref
         });
       }
 
-      return results
-    })
-  })
+      return results;
+    });
+  });
 
   const nodeGroupConnected = computed(() => {
     if (pickedPlace && pickedPlace.value) {
-      return nodeGroupsMap.value[pickedPlace.value].connected
+      return nodeGroupsMap.value[pickedPlace.value].connected;
     }
-    return Object.keys(nodes.value)
-  })
-
+    return Object.keys(nodes.value);
+  });
 
   // Gather all of them together and list their state.
   const statusList = computed<ListItem[]>(() => {
@@ -163,7 +165,12 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>, pickedPlace?: Ref
         const entity = {
           ...value,
           priority: value.issues
-            .filter((i) => !allowedIssues || allowedIssues.value.length == 0 || allowedIssues.value.includes(i.name))
+            .filter(
+              (i) =>
+                !allowedIssues ||
+                allowedIssues.value.length == 0 ||
+                allowedIssues.value.includes(i.name),
+            )
             .reduce((a, b) => a + b.priority, 0),
           subtitle: "",
         };
@@ -177,8 +184,7 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>, pickedPlace?: Ref
       })
       .filter(([key, entity]) => {
         const matchesFilter =
-          !nodeGroupConnected.value ||
-          nodeGroupConnected.value.includes(key);
+          !nodeGroupConnected.value || nodeGroupConnected.value.includes(key);
         const nonEmptyIssues = !!entity.issues;
         return (!entity.hasPlace || matchesFilter) && nonEmptyIssues;
       })
