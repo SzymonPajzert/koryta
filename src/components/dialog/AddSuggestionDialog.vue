@@ -22,7 +22,7 @@
 </template>
 
 <script lang="ts" setup>
-  // TODO rename this file
-  import type { Todo } from '@/composables/model';
-  const formData = defineModel<Todo>({required: true});
+// TODO rename this file
+import type { Todo } from "@/composables/model";
+const formData = defineModel<Todo>({ required: true });
 </script>

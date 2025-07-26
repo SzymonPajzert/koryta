@@ -6,7 +6,7 @@
           {{ title }}
         </p>
         <p class="text-no-wrap font-italic" v-else>
-          {{  props.hint }}
+          {{ props.hint }}
         </p>
       </v-expansion-panel-title>
       <v-expansion-panel-text>

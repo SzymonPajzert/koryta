@@ -18,12 +18,15 @@
     <v-card-actions>
       <v-spacer></v-spacer>
       <v-btn
-        @click.stop="dialogStore.open({
-          type: 'employed',
-          edit: { value: person, key: node  }
-        })"
+        @click.stop="
+          dialogStore.open({
+            type: 'employed',
+            edit: { value: person, key: node },
+          })
+        "
         variant="tonal"
-        prepend-icon="mdi-pencil-outline">
+        prepend-icon="mdi-pencil-outline"
+      >
         <template #prepend>
           <v-icon color="warning"></v-icon>
         </template>
@@ -41,7 +44,11 @@ import { useDialogStore } from "@/stores/dialog";
 
 const dialogStore = useDialogStore();
 
-const { node, close } = defineProps<{ node: string, close: () => void, dialog?: boolean }>();
+const { node, close } = defineProps<{
+  node: string;
+  close: () => void;
+  dialog?: boolean;
+}>();
 
 const { entities: people } = useListEntity("employed");
 

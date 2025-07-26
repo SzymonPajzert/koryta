@@ -8,7 +8,8 @@
         :label="`Imię i nazwisko ${koryciarz.singular.genitive}`"
         hint="Osoba zatrudniona w publicznej firmie"
         autocomplete="off"
-        required />
+        required
+      />
     </v-col>
 
     <v-col cols="12" md="4" sm="6">
@@ -62,8 +63,7 @@
       />
     </v-col>
 
-
-    <BacklinksList :id="id" :todo-consumer="addCreatedTodo"/>
+    <BacklinksList :id="id" :todo-consumer="addCreatedTodo" />
   </v-row>
 </template>
 
@@ -74,24 +74,26 @@ import { Link, type NepoEmployment } from "@/composables/model";
 import { computed } from "vue";
 import MultiTextField from "@/components/forms/MultiTextField.vue";
 import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";
-import { emptyTextable, emptyNestedConnection } from "@/composables/multiTextHelper";
+import {
+  emptyTextable,
+  emptyNestedConnection,
+} from "@/composables/multiTextHelper";
 import TextableWrap from "../forms/TextableWrap.vue";
 import type { Callback } from "@/stores/dialog";
 
-const formData = defineModel<NepoEmployment>({required: true});
-const { id, create } = defineProps<{ id?: string, create?: boolean }>();
+const formData = defineModel<NepoEmployment>({ required: true });
+const { id, create } = defineProps<{ id?: string; create?: boolean }>();
 
 const addCreatedTodo: Callback = (name, key) => {
   if (!key) {
     console.warn("failed to obtain key for new entity: ", name);
     // TODO log on the server all console.warns and higher
-    return
+    return;
   }
   formData.value.todos[key] = new Link<"todo">("todo", key, name);
-}
+};
 
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);
 const { koryciarz } = useFeminatyw();
-
 </script>

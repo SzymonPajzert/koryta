@@ -20,23 +20,28 @@ describe("graph", () => {
     });
 
     it("normally doesn't see a dialog", () => {
-      cy.get(".v-overlay__content").should("not.exist")
-    })
+      cy.get(".v-overlay__content").should("not.exist");
+    });
 
     it("shows dialog on person", () => {
-      cy.get("g > text").contains("Aleksander Miszalski").should("exist").click();
-      cy.get(".v-overlay__content").should("exist")
+      cy.get("g > text")
+        .contains("Aleksander Miszalski")
+        .should("exist")
+        .click();
+      cy.get(".v-overlay__content").should("exist");
     });
 
     it("shows dialog on company", () => {
       cy.get("g > text").contains("NFOŚiGW").click();
-      cy.get(".v-overlay__content").should("exist")
-    })
+      cy.get(".v-overlay__content").should("exist");
+    });
 
     it("shows dialog on article", () => {
-      cy.get("g > text").contains("NFOŚiGW wesprze budowę kanalizacji w Krakowie ").click();
-      cy.get(".v-overlay__content").should("exist")
-    })
+      cy.get("g > text")
+        .contains("NFOŚiGW wesprze budowę kanalizacji w Krakowie ")
+        .click();
+      cy.get(".v-overlay__content").should("exist");
+    });
   });
 
   context("NFOŚiGW", () => {
@@ -65,7 +70,9 @@ describe("graph", () => {
       cy.filterPlace("Miasto Kraków");
 
       cy.get("g > text").contains("Aleksander Miszalski").should("exist");
-      cy.get("g > text").contains("NFOŚiGW wesprze budowę kanalizacji w Krakowie ").should("exist");
+      cy.get("g > text")
+        .contains("NFOŚiGW wesprze budowę kanalizacji w Krakowie ")
+        .should("exist");
       cy.get("g > text").contains("Emilia Wasilewska").should("not.exist");
     });
   });
@@ -73,12 +80,14 @@ describe("graph", () => {
   describe("Miasto Warszawa", () => {
     beforeEach(() => {
       cy.filterPlace("Miasto Warszawa");
-    })
+    });
 
     it("pokazuje tylko interesującą część Polimex-Mostostal", () => {
       cy.get("g > text").contains("Wojciech Bartelski").should("exist");
       cy.get("g > text").contains("Polimex-Mostostal").should("exist");
-      cy.get("g > text").contains("Władze Polimex-Mostostal").should("not.exist");
+      cy.get("g > text")
+        .contains("Władze Polimex-Mostostal")
+        .should("not.exist");
     });
   });
 
@@ -93,5 +102,4 @@ describe("graph", () => {
 
   // TODO AMW nie ma PKP
   // TODO Województwo Mazowieckie - nie ma PKP
-
 });

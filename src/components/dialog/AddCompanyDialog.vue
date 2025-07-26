@@ -8,7 +8,8 @@
         hint="Firma, organizacja, ministerstwo"
         autocomplete="off"
         :create="create"
-        required />
+        required
+      />
     </v-col>
 
     <v-col cols="12">
@@ -47,27 +48,29 @@
       />
     </v-col>
 
-    <BacklinksList :id="id" :todo-consumer="addCreatedTodo"/>
+    <BacklinksList :id="id" :todo-consumer="addCreatedTodo" />
   </v-row>
 </template>
 
 <script lang="ts" setup>
 import { Link, type Company } from "@/composables/model";
-import { emptyEntityPicker, emptyTextable } from "@/composables/multiTextHelper";
-import EntityPicker from '../forms/EntityPicker.vue';
-import TextableWrap from '../forms/TextableWrap.vue';
+import {
+  emptyEntityPicker,
+  emptyTextable,
+} from "@/composables/multiTextHelper";
+import EntityPicker from "../forms/EntityPicker.vue";
+import TextableWrap from "../forms/TextableWrap.vue";
 import type { Callback } from "@/stores/dialog";
 
-const formData = defineModel<Company>({required: true});
-const { create } = defineProps<{ id?: string, create?: boolean }>();
+const formData = defineModel<Company>({ required: true });
+const { create } = defineProps<{ id?: string; create?: boolean }>();
 
 const addCreatedTodo: Callback = (name, key) => {
   if (!key) {
     console.warn("failed to obtain key for new entity: ", name);
     // TODO log on the server all console.warns and higher
-    return
+    return;
   }
   formData.value.todos[key] = new Link<"todo">("todo", key, name);
-}
-
+};
 </script>

@@ -2,7 +2,12 @@
   <div>
     <UserDetailDialog ref="dialog"></UserDetailDialog>
     <v-row>
-      <v-col v-for="([key, person]) in peopleOrdered" :key="person.name" cols="12" sm="6">
+      <v-col
+        v-for="[key, person] in peopleOrdered"
+        :key="person.name"
+        cols="12"
+        sm="6"
+      >
         <v-card
           class="py-4"
           color="surface-variant"
@@ -23,7 +28,7 @@
             <p v-for="connection in person.connections" :key="connection.text">
               {{ connectionText(connection) }}
             </p>
-            <br>
+            <br />
             <p v-for="employment in person.employments" :key="employment.text">
               {{ connectionText(employment) }}
             </p>
@@ -31,11 +36,15 @@
           <v-card-actions v-if="isAdmin">
             <v-spacer></v-spacer>
             <v-btn
-              @click.stop="dialogStore.open({
-                type: 'employed',
-                edit: { value: person, key: key  }})"
+              @click.stop="
+                dialogStore.open({
+                  type: 'employed',
+                  edit: { value: person, key: key },
+                })
+              "
               variant="tonal"
-              prepend-icon="mdi-pencil-outline">
+              prepend-icon="mdi-pencil-outline"
+            >
               <template #prepend>
                 <v-icon color="warning"></v-icon>
               </template>
@@ -49,12 +58,12 @@
 </template>
 
 <script setup lang="ts">
-import {type Connection, type NepoEmployment} from '@/composables/model'
-import PartyChip from './PartyChip.vue';
-import { useAuthState} from '@/composables/auth'
-import UserDetailDialog from '@/components/dialog/UserDetailDialog.vue';
-import { useDialogStore } from '@/stores/dialog'; // Import the new store
-import router from '@/router';
+import { type Connection, type NepoEmployment } from "@/composables/model";
+import PartyChip from "./PartyChip.vue";
+import { useAuthState } from "@/composables/auth";
+import UserDetailDialog from "@/components/dialog/UserDetailDialog.vue";
+import { useDialogStore } from "@/stores/dialog"; // Import the new store
+import router from "@/router";
 
 const dialogStore = useDialogStore();
 const { isAdmin } = useAuthState();
@@ -65,18 +74,17 @@ function showUser(key: string) {
 }
 
 function connectionText(connection: Connection) {
-  if (connection.text != "") return connection.text
+  if (connection.text != "") return connection.text;
   if (connection.connection?.text && connection.relation != "") {
-    return connection.relation + " " + connection.connection?.text
+    return connection.relation + " " + connection.connection?.text;
   }
-  return ""
+  return "";
 }
 
 const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
 const peopleOrdered = computed<[string, NepoEmployment][]>(() => {
-  const result = Object.entries(people ?? {})
-  result.sort((a, b) => (a[1].name.localeCompare(b[1].name)));
+  const result = Object.entries(people ?? {});
+  result.sort((a, b) => a[1].name.localeCompare(b[1].name));
   return result;
-})
-
+});
 </script>
