@@ -47,5 +47,8 @@ const props = defineProps<{
 }>();
 
 const dialogStore = useDialogStore();
-const { statusList } = useEntityStatus(toRef(props, "allowedIssues"), toRef(props, "placeFilterID"));
+const { statusList } = useEntityStatus(
+  toRef(props, "allowedIssues"),
+  toRef(props, "placeFilterID"),
+);
 </script>

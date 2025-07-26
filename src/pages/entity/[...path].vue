@@ -1,3 +1,1 @@
-<template>
-  Nie ma takiej strony
-</template>
+<template>Nie ma takiej strony</template>

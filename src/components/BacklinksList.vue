@@ -4,7 +4,10 @@
     <v-list-item class="mb-2" @click="dialogStore.open({ type: 'data' })">
       <v-list-item-title> Dodaj źródło </v-list-item-title>
     </v-list-item>
-    <v-list-item class="mb-2" @click="dialogStore.open({ type: 'todo', callback: todoConsumer})">
+    <v-list-item
+      class="mb-2"
+      @click="dialogStore.open({ type: 'todo', callback: todoConsumer })"
+    >
       <v-list-item-title> Dodaj zadanie </v-list-item-title>
     </v-list-item>
     <ArticleBacklink
@@ -21,7 +24,10 @@
 import { useArticles } from "@/composables/entities/articles";
 import { useDialogStore, type Callback } from "@/stores/dialog";
 
-const { id, todoConsumer } = defineProps<{ id?: string, todoConsumer: Callback }>();
+const { id, todoConsumer } = defineProps<{
+  id?: string;
+  todoConsumer: Callback;
+}>();
 
 const dialogStore = useDialogStore();
 const { entityArticles } = useArticles();

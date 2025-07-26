@@ -1,9 +1,5 @@
 <template>
-  <v-navigation-drawer
-    :location="location"
-    :width="width"
-    permanent
-  >
+  <v-navigation-drawer :location="location" :width="width" permanent>
     <v-btn
       v-model="runSimulation"
       @click="runSimulation = !runSimulation"

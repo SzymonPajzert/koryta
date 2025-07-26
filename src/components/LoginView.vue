@@ -1,21 +1,28 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, type User, onAuthStateChanged } from 'firebase/auth';
-import router from '@/router';
-import { auth, db } from '@/firebase';
-import { set, ref as dbRef } from 'firebase/database';
+import { ref } from "vue";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+  type User,
+  onAuthStateChanged,
+} from "firebase/auth";
+import router from "@/router";
+import { auth, db } from "@/firebase";
+import { set, ref as dbRef } from "firebase/database";
 
-const email = ref('');
-const password = ref('');
+const email = ref("");
+const password = ref("");
 const error = ref<string | null>(null);
 const loading = ref(false);
 
 const user = ref<User | null>();
 onAuthStateChanged(auth, (userIn) => {
-  user.value = userIn
-  set(dbRef(db, `user/${userIn?.uid}/displayName`), userIn?.displayName)
-  set(dbRef(db, `user/${userIn?.uid}/email`), userIn?.email)
-  set(dbRef(db, `user/${userIn?.uid}/photoURL`), userIn?.photoURL)
+  user.value = userIn;
+  set(dbRef(db, `user/${userIn?.uid}/displayName`), userIn?.displayName);
+  set(dbRef(db, `user/${userIn?.uid}/email`), userIn?.email);
+  set(dbRef(db, `user/${userIn?.uid}/photoURL`), userIn?.photoURL);
 });
 
 const login = async () => {
@@ -25,10 +32,10 @@ const login = async () => {
     const auth = getAuth();
     await signInWithEmailAndPassword(auth, email.value, password.value);
     // User is signed in.
-    console.debug('User logged in successfully!');
-    router.push('/')
+    console.debug("User logged in successfully!");
+    router.push("/");
   } catch (err: any) {
-    console.error('Login error:', err.code, err.message);
+    console.error("Login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
   } finally {
     loading.value = false;
@@ -42,10 +49,10 @@ const loginWithGoogle = async () => {
     const auth = getAuth();
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
-    console.debug('User logged in with Google successfully!');
-    router.push('/')
+    console.debug("User logged in with Google successfully!");
+    router.push("/");
   } catch (err: any) {
-    console.error('Google login error:', err.code, err.message);
+    console.error("Google login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
   } finally {
     loading.value = false;
@@ -54,35 +61,38 @@ const loginWithGoogle = async () => {
 
 const getErrorMessage = (errorCode: string) => {
   switch (errorCode) {
-    case 'auth/invalid-email':
-      return 'Invalid email address.';
-    case 'auth/user-disabled':
-      return 'This user account has been disabled.';
-    case 'auth/user-not-found':
-      return 'User not found.';
-    case 'auth/wrong-password':
-      return 'Incorrect password.';
-    case 'auth/popup-closed-by-user':
-      return 'Login popup was closed by user.';
-    case 'auth/cancelled-popup-request':
-      return 'Login popup request was cancelled.';
-    case 'auth/popup-blocked':
-      return 'Login popup was blocked by the browser.';
+    case "auth/invalid-email":
+      return "Invalid email address.";
+    case "auth/user-disabled":
+      return "This user account has been disabled.";
+    case "auth/user-not-found":
+      return "User not found.";
+    case "auth/wrong-password":
+      return "Incorrect password.";
+    case "auth/popup-closed-by-user":
+      return "Login popup was closed by user.";
+    case "auth/cancelled-popup-request":
+      return "Login popup request was cancelled.";
+    case "auth/popup-blocked":
+      return "Login popup was blocked by the browser.";
     default:
-      return 'An unexpected error occurred. Please try again.';
+      return "An unexpected error occurred. Please try again.";
   }
 };
 </script>
 
 <template>
-  <main v-if="user">
-    Cześć {{ user?.displayName }}!
-  </main>
+  <main v-if="user">Cześć {{ user?.displayName }}!</main>
   <main v-if="!user">
     <h2 class="blue">Zaloguj się</h2>
     <v-form @submit.prevent="login">
       <div class="form-group">
-        <button type="button" @click="loginWithGoogle" :disabled="loading" class="google-button">
+        <button
+          type="button"
+          @click="loginWithGoogle"
+          :disabled="loading"
+          class="google-button"
+        >
           <span v-if="loading">Logging in...</span>
           <span v-else>Zaloguj się z Google</span>
         </button>
@@ -101,7 +111,12 @@ const getErrorMessage = (errorCode: string) => {
             </div>
             <div class="form-group">
               <label for="password">Hasło:</label>
-              <input type="password" id="password" v-model="password" required />
+              <input
+                type="password"
+                id="password"
+                v-model="password"
+                required
+              />
             </div>
             <div class="form-group">
               <button type="submit" :disabled="loading">
@@ -140,8 +155,8 @@ label {
   margin-bottom: 5px;
 }
 
-input[type='email'],
-input[type='password'] {
+input[type="email"],
+input[type="password"] {
   width: 100%;
   padding: 8px;
   border: 1px solid #ccc;

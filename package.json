@@ -9,14 +9,13 @@
     "dev:watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
     "dev:emulate": "concurrently 'npm run dev' 'npm run dev:watch' 'npm run dev:be'",
     "import-db": "firebase database:get / > database/database_export/koryta-pl-default-rtdb.json",
-
     "format:diff": "prettier --write $(git diff --name-only --diff-filter=ACMR origin/main origin/${GITHUB_HEAD_REF} | grep '\\.ts$' | xargs)",
     "check-forbidden": "! ./util/check_forbidden.sh",
-
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
+    "format": "prettier --write .",
     "lint": "eslint . --fix"
   },
   "dependencies": {
@@ -28,7 +27,6 @@
     "d3-force": "^3.0.0",
     "digraph-js": "^2.2.3",
     "papaparse": "^5.5.3",
-    "prettier": "^3.6.2",
     "string-similarity": "^4.0.4",
     "v-network-graph": "^0.9.21",
     "vue": "^3.5.13",
@@ -49,6 +47,7 @@
     "cypress": "^14.5.0",
     "eslint": "^9.23.0",
     "eslint-config-vuetify": "^4.0.0",
+    "prettier": "^3.6.2",
     "firebase": "^11.9.1",
     "firebase-tools": "^14.9.0",
     "npm-run-all2": "^7.0.2",
