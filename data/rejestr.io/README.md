@@ -1,0 +1,1 @@
+We need to use Python 3.12, because requests doesn't support 3.13 yet

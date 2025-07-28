@@ -17,8 +17,3 @@ jobs:
           node-version: "24.x"
       - run: npm ci
       - run: npm run format
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v6
-        with:
-          commit_message: Apply formatting changes
-          branch: ${{ github.head_ref }}
