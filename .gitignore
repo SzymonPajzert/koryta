@@ -3,6 +3,11 @@ node_modules
 /dist
 /img
 
+# Ignore data/ related files
+venv*
+.venv*
+plwiki*
+
 # Firebase
 .firebase
 database-debug.log
