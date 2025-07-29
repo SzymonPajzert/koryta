@@ -1,5 +1,5 @@
 import type { Article, Destination, Nameable } from "@/composables/model";
-import { useListEntity } from "@/composables/entity";
+import { createEntityStore } from "@/stores/entity";
 import type { Ref } from "vue";
 import { compareTwoStrings } from "string-similarity";
 
@@ -10,7 +10,9 @@ export function useEntitiesFiltered<D extends Destination>(
   filter: Ref<string>,
   max?: number,
 ) {
-  const { entities } = useListEntity(destination);
+  const useListEntity = createEntityStore(destination);
+  const entityStore = useListEntity();
+  const { entities } = storeToRefs(entityStore);
 
   const closest = computed(() => {
     if (!filter.value) return [];

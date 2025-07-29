@@ -1,5 +1,5 @@
 import { usePartyStatistics } from "@/composables/party";
-import { useListEntity } from "@/composables/entity";
+import { createEntityStore } from "@/stores/entity";
 import { getHostname } from "@/composables/entities/articles";
 import type { Article, Connection } from "../composables/model";
 import { DiGraph } from "digraph-js";
@@ -42,9 +42,17 @@ export interface Edge {
   traverse?: TraversePolicy;
 }
 
-const { entities: people } = useListEntity("employed");
-const { entities: companies } = useListEntity("company");
-const { entities: articles } = useListEntity("data");
+const useListEmployed = createEntityStore("employed");
+const employedStore = useListEmployed();
+const { entities: people } = storeToRefs(employedStore);
+
+const useListCompanies = createEntityStore("company");
+const companyStore = useListCompanies();
+const { entities: companies } = storeToRefs(companyStore);
+
+const useListData = createEntityStore("data");
+const dataStore = useListData();
+const { entities: articles } = storeToRefs(dataStore);
 
 const { partyColors } = usePartyStatistics();
 

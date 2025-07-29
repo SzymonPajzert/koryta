@@ -79,10 +79,12 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
-import { useListEntity } from "@/composables/entity";
+import { createEntityStore } from "@/stores/entity";
 import { isTest } from "@/firebase";
 
-const { entities: people } = useListEntity("employed");
+const useListEntity = createEntityStore("employed");
+const entityStore = useListEntity();
+const { entities: people } = storeToRefs(entityStore);
 const { koryciarz } = useFeminatyw();
 
 const idx = isTest() ? 1 : Math.floor(Math.random() * 2);

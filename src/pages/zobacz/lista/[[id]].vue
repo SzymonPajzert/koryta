@@ -3,8 +3,10 @@
 </template>
 
 <script lang="ts" setup>
-import { useListEntity } from "@/composables/entity";
-const { entities: peopleUnfiltered } = useListEntity("employed");
+import { createEntityStore } from "@/stores/entity";
+const useListEntity = createEntityStore("employed");
+const entityStore = useListEntity();
+const { entities: peopleUnfiltered } = storeToRefs(entityStore);
 
 import { useGraphStore } from "@/stores/graph";
 const graphStore = useGraphStore();

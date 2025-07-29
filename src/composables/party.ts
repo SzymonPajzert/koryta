@@ -1,8 +1,10 @@
 import { ref, computed } from "vue";
-import { useListEntity } from "./entity";
+import { createEntityStore } from "../stores/entity";
 
 export function usePartyStatistics() {
-  const { entities: people } = useListEntity("employed");
+  const useListEntity = createEntityStore("employed");
+  const entityStore = useListEntity();
+  const { entities: people } = storeToRefs(entityStore);
 
   const parties = ref<string[]>([
     "PO",

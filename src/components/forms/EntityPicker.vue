@@ -29,7 +29,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
-import { useListEntity } from "@/composables/entity";
+import { createEntityStore } from "@/stores/entity";
 import { type Destination, Link } from "@/composables/model";
 
 const props = defineProps<{
@@ -47,7 +47,9 @@ const model = defineModel<Link<typeof props.entity>>();
 
 const search = ref("");
 
-const { entities } = useListEntity(props.entity);
+const useListEntity = createEntityStore(props.entity);
+const entityStore = useListEntity();
+const { entities } = storeToRefs(entityStore);
 
 const entitiesList = computed(() =>
   Object.entries(entities.value ?? {}).map(([key, value]) => {
