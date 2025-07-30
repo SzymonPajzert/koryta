@@ -52,7 +52,7 @@ jobs:
         uses: cypress-io/github-action@v6
         with:
           # Wait on database to start, we will notice if UI is failing
-          wait-on: "http://localhost:9003"
+          wait-on: "http://localhost:4000"
           record: true
         env:
           # This environment variable tells your Firebase JS SDK to connect to the emulators.

@@ -5,7 +5,7 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "vite",
-    "dev:be": "firebase emulators:start --import=database",
+    "dev:be": "firebase emulators:start --only=database,functions --import=database",
     "dev:watch": "NODE_ENV=development vite build --watch --mode development --minify false --sourcemap",
     "dev:emulate": "concurrently 'npm run dev' 'npm run dev:be'",
     "import-db": "firebase database:get / > database/database_export/koryta-pl-default-rtdb.json",
