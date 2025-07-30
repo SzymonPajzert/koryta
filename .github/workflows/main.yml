@@ -51,7 +51,8 @@ jobs:
       - name: Cypress run
         uses: cypress-io/github-action@v6
         with:
-          wait-on: "http://localhost:3000"
+          # Wait on database to start, we will notice if UI is failing
+          wait-on: "http://localhost:9003"
           record: true
         env:
           # This environment variable tells your Firebase JS SDK to connect to the emulators.

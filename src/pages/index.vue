@@ -23,8 +23,6 @@
             <h2 class="text-h5 font-weight-bold">
               Lista wszystkich {{ Object.values(people).length }}
               {{ koryciarz.plural.genitive }}
-              Lista wszystkich {{ Object.values(people).length }}
-              {{ koryciarz.plural.genitive }}
             </h2>
           </v-card-title>
           <v-card-text>
@@ -73,8 +71,7 @@
       <HomeItem router="pomoc" icon="mdi-plus-box-outline">
         <template #header> Dodaj osoby i artykuły </template>
         Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do
-        artykułów wypisujących je Dodaj brakujące osoby w spółkach państwa lub
-        samorządu albo linki do artykułów wypisujących je
+        artykułów wypisujących je.
       </HomeItem>
     </v-row>
   </div>
