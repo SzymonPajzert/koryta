@@ -73,9 +73,8 @@
       <HomeItem router="pomoc" icon="mdi-plus-box-outline">
         <template #header> Dodaj osoby i artykuły </template>
         Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do
-        artykułów wypisujących je
-        Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do
-        artykułów wypisujących je
+        artykułów wypisujących je Dodaj brakujące osoby w spółkach państwa lub
+        samorządu albo linki do artykułów wypisujących je
       </HomeItem>
     </v-row>
   </div>

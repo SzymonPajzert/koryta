@@ -11,8 +11,8 @@ definePage({
 
 import { createEntityStore } from "@/stores/entity";
 import { useParams } from "@/composables/params";
-const useListEntities = createEntityStore("employed")
-const entitiesStore =  useListEntities()
+const useListEntities = createEntityStore("employed");
+const entitiesStore = useListEntities();
 const { entities: peopleUnfiltered } = storeToRefs(entitiesStore);
 
 const { filtered } = useParams("Lista ");
