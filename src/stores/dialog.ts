@@ -1,10 +1,9 @@
 // src/stores/dialog.ts
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { useListEntity } from "@/composables/entity";
+import { createEntityStore } from "@/stores/entity";
 import { empty, fillBlankRecords, type Destination } from "@/composables/model";
 import type { DestinationTypeMap } from "@/composables/model";
-import { useArticles } from "@/composables/entities/articles";
 
 // callback to call after the dialog was closed
 export type Callback = (name: string, key?: string) => void;
@@ -49,9 +48,30 @@ interface Dialog<D extends Destination> {
 }
 
 export const useDialogStore = defineStore("dialog", () => {
-  const { entities: people } = useListEntity("employed");
-  const { entities: companies } = useListEntity("company");
-  const { articles } = useArticles();
+  const useListEmployed = createEntityStore("employed");
+  const employedStore = useListEmployed();
+  const { entities: people } = storeToRefs(employedStore);
+
+  const useListCompanies = createEntityStore("company");
+  const companyStore = useListCompanies();
+  const { entities: companies } = storeToRefs(companyStore);
+
+  const useListData = createEntityStore("data");
+  const dataStore = useListData();
+  const { entities: articles } = storeToRefs(dataStore);
+
+  function lookupStore(type: Destination) {
+    switch (type) {
+      case "data":
+        return dataStore;
+      case "employed":
+        return employedStore;
+      case "company":
+        return companyStore;
+    }
+    // This should not happen
+    return dataStore;
+  }
 
   const dialogs = ref<Dialog<Destination>[]>([]);
   const currentDialog = ref<number>();
@@ -111,8 +131,8 @@ export const useDialogStore = defineStore("dialog", () => {
   function close(idx: Idx, shouldSubmit: boolean) {
     let key = dialogs.value[idx].editKey;
     if (shouldSubmit) {
-      const { submit } = useListEntity(dialogs.value[idx].type);
-      key = submit(
+      const store = lookupStore(dialogs.value[idx].type);
+      key = store.submit(
         dialogs.value[idx].value,
         dialogs.value[idx].type,
         dialogs.value[idx].editKey,

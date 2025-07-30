@@ -1,4 +1,11 @@
 <script setup lang="ts">
+definePage({
+  meta: {
+    title: "Graf",
+    isGraph: true,
+  },
+});
+
 import { defineConfigs } from "v-network-graph";
 import {
   type EventHandlers,
@@ -11,7 +18,6 @@ import {
 import { useDialogStore } from "@/stores/dialog";
 import { useSimulationStore } from "@/stores/simulation";
 import { useGraphStore } from "@/stores/graph";
-import { useRoute } from "vue-router";
 
 const dialogStore = useDialogStore();
 const graphStore = useGraphStore();
@@ -19,9 +25,8 @@ const simulationStore = useSimulationStore();
 
 const { runSimulation } = storeToRefs(simulationStore);
 const { nodes, edges } = storeToRefs(graphStore);
-const { nodeGroupsMap } = storeToRefs(graphStore);
-const route = useRoute<"/zobacz/graf/[[id]]">();
 import router from "@/router";
+import { useParams } from "@/composables/params";
 
 const interestingNodes = computed(() => {
   return Object.fromEntries(
@@ -32,16 +37,14 @@ const interestingNodes = computed(() => {
   );
 });
 
+const { filtered } = useParams("Graf ");
+
 const nodesFiltered = computed(() => {
-  if (route.params.id) {
-    const nodeGroupPicked = nodeGroupsMap.value[route.params.id];
-    return Object.fromEntries(
-      Object.entries(interestingNodes.value).filter(([key, _]) =>
-        nodeGroupPicked.connected.includes(key),
-      ),
-    );
-  }
-  return interestingNodes.value;
+  return Object.fromEntries(
+    Object.entries(interestingNodes.value).filter(([key, _]) =>
+      filtered.value.includes(key),
+    ),
+  );
 });
 
 const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
@@ -49,7 +52,8 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
     dialogStore.openExisting(node);
   } else {
     if (nodesFiltered.value[node].type === "rect") {
-      router.push(`/zobacz/graf/${node}`);
+      // TODO add previous place
+      router.push({ query: { miejsce: node } });
     }
   }
 };

@@ -1,4 +1,4 @@
-import { useListEntity } from "@/composables/entity";
+import { createEntityStore } from "@/stores/entity";
 import {
   type Connection,
   type Destination,
@@ -9,9 +9,18 @@ import { type Ref } from "vue";
 
 const graphStore = useGraphStore();
 const { nodes, nodeGroupsMap } = storeToRefs(graphStore);
-const { entities: articlesRaw } = useListEntity("data");
-const { entities: peopleRaw } = useListEntity("employed");
-const { entities: placesRaw } = useListEntity("company");
+
+const useListData = createEntityStore("data");
+const dataStore = useListData();
+const { entities: articlesRaw } = storeToRefs(dataStore);
+
+const useListEmployed = createEntityStore("employed");
+const employedStore = useListEmployed();
+const { entities: peopleRaw } = storeToRefs(employedStore);
+
+const useListCompany = createEntityStore("company");
+const companyStore = useListCompany();
+const { entities: placesRaw } = storeToRefs(companyStore);
 
 type ListItem = [string, Nameable & Status];
 
@@ -167,7 +176,7 @@ export function useEntityStatus(
           priority: value.issues
             .filter(
               (i) =>
-                !allowedIssues ||
+                !allowedIssues?.value ||
                 allowedIssues.value.length == 0 ||
                 allowedIssues.value.includes(i.name),
             )

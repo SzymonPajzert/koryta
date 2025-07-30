@@ -1,18 +1,4 @@
 <template>
-  <v-navigation-drawer :location="location" :width="width" permanent>
-    <OpenAbstractDialog dialog="data" />
-    <OpenAbstractDialog dialog="todo" />
-    <OpenAbstractDialog dialog="employed" />
-    <OpenAbstractDialog dialog="company" />
-
-    <PlaceFilter />
-    <v-select
-      label="Typ problemu"
-      v-model="allowedIssues"
-      :items="issueNames"
-      multiple
-    />
-  </v-navigation-drawer>
   <v-alert type="info" closable>
     Jeśli masz pytania,
     <a href="https://discord.gg/pnyPh7zXxS" target="_blank" class="text-white">
@@ -71,14 +57,17 @@
 </template>
 
 <script lang="ts" setup>
+definePage({
+  meta: {
+    title: "Działaj z nami",
+    isHelp: true,
+  },
+});
+
 import { useAuthState } from "@/composables/auth";
 import { useArticles } from "@/composables/entities/articles";
-import { useEntityStatus } from "@/composables/entities/status";
-import { useDrawer } from "@/composables/drawer";
 
-const { width, location } = useDrawer();
 const { articlesAssigned, articlesUnssigned } = useArticles();
 const { user } = useAuthState();
-const { issueNames } = useEntityStatus();
-const allowedIssues = ref<string[]>([]);
+const { allowedIssues } = defineProps<{ allowedIssues: string[] }>();
 </script>

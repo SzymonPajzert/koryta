@@ -38,8 +38,7 @@
 </template>
 
 <script lang="ts" setup>
-// TODO can it cache the results or is it already doing it? What happens if I call it from multiple places
-import { useListEntity } from "@/composables/entity";
+import { createEntityStore } from "@/stores/entity";
 import { useDialogStore } from "@/stores/dialog";
 
 const dialogStore = useDialogStore();
@@ -50,7 +49,9 @@ const { node, close } = defineProps<{
   dialog?: boolean;
 }>();
 
-const { entities: people } = useListEntity("employed");
+const useListEntity = createEntityStore("employed");
+const employed = useListEntity();
+const { entities: people } = storeToRefs(employed);
 
 const person = computed(() => {
   if (!people.value) return;

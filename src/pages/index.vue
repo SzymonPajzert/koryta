@@ -13,7 +13,7 @@
       </v-col>
       <v-col cols="12" md="6">
         <v-card
-          to="/zobacz/lista"
+          to="/lista"
           class="py-4"
           color="surface-variant"
           variant="tonal"
@@ -33,7 +33,7 @@
 
       <v-col cols="12" md="6">
         <v-card
-          to="/zobacz/graf/-OTOq2CpVuIll16NmukB"
+          to="/graf?miejsce=-OTOq2CpVuIll16NmukB"
           class="py-4"
           color="surface-variant"
           variant="tonal"
@@ -51,7 +51,7 @@
       </v-col>
       <v-col cols="12" md="6">
         <v-card
-          to="/zobacz/graf/-OTP58QPQ2cUXMgPn7UL"
+          to="/graf?miejsce=-OTP58QPQ2cUXMgPn7UL"
           class="py-4"
           color="surface-variant"
           variant="tonal"
@@ -71,7 +71,7 @@
       <HomeItem router="pomoc" icon="mdi-plus-box-outline">
         <template #header> Dodaj osoby i artykuły </template>
         Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do
-        artykułów wypisujących je
+        artykułów wypisujących je.
       </HomeItem>
     </v-row>
   </div>
@@ -79,10 +79,12 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
-import { useListEntity } from "@/composables/entity";
+import { createEntityStore } from "@/stores/entity";
 import { isTest } from "@/firebase";
 
-const { entities: people } = useListEntity("employed");
+const useListEntity = createEntityStore("employed");
+const entityStore = useListEntity();
+const { entities: people } = storeToRefs(entityStore);
 const { koryciarz } = useFeminatyw();
 
 const idx = isTest() ? 1 : Math.floor(Math.random() * 2);

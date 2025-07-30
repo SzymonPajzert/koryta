@@ -15,3 +15,12 @@
 
 // Import commands.js using ES2015 syntax:
 import "./commands";
+
+if (!Cypress.env("CI")) {
+  // Overwrite the command to do nothing but log a message
+  Cypress.Commands.overwrite("matchImageSnapshot", () => {
+    cy.log(
+      "Skipping image snapshot in local environment. This test will only run in CI.",
+    );
+  });
+}

@@ -1,9 +1,14 @@
 <template>
   <v-navigation-drawer :location="location" :width="width" permanent>
+    <PlaceFilter />
+    <OpenAbstractDialog dialog="data" />
+    <OpenAbstractDialog dialog="todo" />
+    <OpenAbstractDialog dialog="employed" />
+    <OpenAbstractDialog dialog="company" />
     <v-btn
       v-model="runSimulation"
       @click="runSimulation = !runSimulation"
-      v-if="route.path.startsWith('/zobacz/graf')"
+      v-show="route.meta.isGraph"
     >
       Uporządkuj wierzchołki
       <v-progress-linear
@@ -14,18 +19,27 @@
         absolute
       ></v-progress-linear>
     </v-btn>
-    <PlaceFilter />
+    <v-select
+      label="Typ problemu"
+      v-model="allowedIssues"
+      :items="issueNames"
+      multiple
+      v-show="route.meta.isHelp"
+    />
   </v-navigation-drawer>
-  <RouterView></RouterView>
+  <RouterView :allowedIssues="allowedIssues"></RouterView>
 </template>
 
 <script setup lang="ts">
 import { useSimulationStore } from "@/stores/simulation";
 import { useDrawer } from "@/composables/drawer";
+import { useEntityStatus } from "@/composables/entities/status";
 
+const { issueNames } = useEntityStatus();
 const { width, location } = useDrawer();
 const simulationStore = useSimulationStore();
 const { runSimulation, simulationProgress } = storeToRefs(simulationStore);
 
-const route = useRoute<"/zobacz/graf/[[id]]" | "/zobacz/lista/[[id]]">();
+const route = useRoute();
+const allowedIssues = ref<string[]>([]);
 </script>
