@@ -35,7 +35,7 @@
 
       <v-col cols="12" md="6">
         <v-card
-          to="/graf/-OTOq2CpVuIll16NmukB"
+          to="/graf?miejsce=-OTOq2CpVuIll16NmukB"
           class="py-4"
           color="surface-variant"
           variant="tonal"
@@ -53,7 +53,7 @@
       </v-col>
       <v-col cols="12" md="6">
         <v-card
-          to="/graf/-OTP58QPQ2cUXMgPn7UL"
+          to="/graf?miejsce=-OTP58QPQ2cUXMgPn7UL"
           class="py-4"
           color="surface-variant"
           variant="tonal"
