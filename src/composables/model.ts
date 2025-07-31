@@ -105,156 +105,6 @@ export function newKey() {
   return newKey;
 }
 
-function clearEmptyRecord(record: Record<string, { text: string }>) {
-  // TODO(https://github.com/SzymonPajzert/koryta/issues/45): Implement
-}
-
-function recordOf<T>(value: T): Record<string, T> {
-  const result: Record<string, T> = {};
-  result[newKey()] = value;
-  return result;
-}
-
-export function fillBlankRecords<D extends Destination>(
-  valueUntyped: Partial<DestinationTypeMap[D]>,
-  d: D,
-): DestinationTypeMap[D];
-export function fillBlankRecords<D extends Destination>(
-  valueUntyped: Partial<DestinationTypeMap[D]>,
-  d: D,
-) {
-  if (d == "employed") {
-    const value = valueUntyped as Partial<NepoEmployment>;
-    if (!value.comments) value.comments = recordOf({ text: "" });
-    if (!value.todos) value.todos = {};
-    if (!value.connections)
-      value.connections = recordOf({ text: "", relation: "" });
-    if (!value.employments)
-      value.employments = recordOf({ text: "", relation: "" });
-    return value;
-  }
-  if (d == "company") {
-    const value = valueUntyped as Partial<Company>;
-    if (!value.owners) {
-      if (value.owner) value.owners = recordOf(value.owner);
-      else value.owners = recordOf(new Link("company", "", ""));
-    }
-    if (!value.comments) value.comments = {};
-    if (!value.todos) value.todos = {};
-    // TODO(https://github.com/SzymonPajzert/koryta/issues/45): remove this return and see if tests fail
-    return value;
-  }
-  if (d == "todo") {
-    const value = valueUntyped as Partial<Todo>;
-    if (!value.subtasks) value.subtasks = recordOf(new Link("todo", "", ""));
-    return value;
-  }
-  if (d == "data") {
-    const value = valueUntyped as Partial<Article>;
-    if (!value.comments) value.comments = recordOf({ text: "" });
-    if (!value.companies)
-      value.companies = recordOf(new Link("company", "", ""));
-    if (!value.people) value.people = recordOf(new Link("employed", "", ""));
-    if (!value.estimates) value.estimates = {};
-    if (!value.status)
-      value.status = {
-        tags: [],
-        signedUp: {},
-        markedDone: {},
-        confirmedDone: false,
-      };
-    return value;
-  }
-
-  return undefined as any;
-}
-
-export function removeBlankRecords<D extends Destination>(
-  valueUntyped: DestinationTypeMap[D],
-  d: D,
-): DestinationTypeMap[D];
-export function removeBlankRecords<D extends Destination>(
-  valueUntyped: DestinationTypeMap[D],
-  d: D,
-) {
-  if (d == "employed") {
-    const value = valueUntyped as NepoEmployment;
-    clearEmptyRecord(value.comments);
-    clearEmptyRecord(value.connections);
-    clearEmptyRecord(value.employments);
-    return value;
-  }
-  if (d == "company") {
-    const value = valueUntyped as Company;
-    clearEmptyRecord(value.owners);
-    clearEmptyRecord(value.comments);
-    // TODO(https://github.com/SzymonPajzert/koryta/issues/45) remove this return and see if tests fail
-    return value;
-  }
-  if (d == "todo") {
-    const value = valueUntyped as Todo;
-    clearEmptyRecord(value.subtasks);
-    return value;
-  }
-  if (d == "data") {
-    const value = valueUntyped as Article;
-    clearEmptyRecord(value.comments);
-    clearEmptyRecord(value.companies);
-    clearEmptyRecord(value.people);
-    return value;
-  }
-
-  return undefined as any;
-}
-
-export function empty<D extends Destination>(d: D): DestinationTypeMap[D];
-export function empty(d: Destination) {
-  if (d == "employed") {
-    const result: NepoEmployment = {
-      name: "",
-      connections: {},
-      employments: {},
-
-      todos: {},
-      comments: {},
-    };
-    return result;
-  }
-  if (d == "company") {
-    const result: Company = {
-      name: "",
-      owners: {},
-
-      todos: {},
-      comments: {},
-    };
-    return result;
-  }
-  if (d == "data") {
-    const result: Article = {
-      name: "",
-      sourceURL: "",
-      people: {},
-      companies: {},
-      estimates: {},
-      status: { tags: [], signedUp: {}, markedDone: {}, confirmedDone: false },
-
-      todos: {},
-      comments: {},
-    };
-    return result;
-  }
-  if (d == "todo") {
-    const result: Todo = {
-      name: "",
-      text: "",
-      subtasks: {},
-    };
-    return result;
-  }
-  return undefined as any;
-}
-
 export interface DestinationTypeMap {
   employed: NepoEmployment;
   company: Company;
@@ -271,4 +121,248 @@ export class Link<T extends Destination> {
     this.id = id;
     this.text = text;
   }
+}
+
+function recordOf<T>(value: T): Record<string, T> {
+  const result: Record<string, T> = {};
+  result[newKey()] = value;
+  return result;
+}
+
+// TODO: Implement this function as per your issue tracker
+function clearEmptyRecord(record: Record<string, any>) {
+  // ...
+}
+
+/**
+ * Base class for all entities, implementing the common Nameable interface.
+ */
+abstract class EntityModel<D extends Destination> implements Nameable {
+  destination: D;
+  name: string;
+
+  constructor(destination: D, data: Partial<Nameable>) {
+    this.destination = destination;
+    this.name = data.name ?? "";
+  }
+
+  /** Fills required fields with empty defaults. */
+  abstract fillBlanks(): ModelMap[D];
+
+  /** Removes empty/placeholder records before saving. */
+  abstract removeBlanks(): ModelMap[D];
+}
+
+/**
+ * An abstract class for entities that have 'todos' and 'comments' fields.
+ */
+abstract class CommentableModel<D extends Destination> extends EntityModel<D> {
+  todos: Record<string, Link<"todo">>;
+  comments: Record<string, Textable>;
+
+  constructor(d: D, data: Partial<Company | Article | NepoEmployment>) {
+    super(d, data);
+    this.todos = data.todos ?? {};
+    this.comments = data.comments ?? {};
+  }
+
+  protected fillCommonBlanks(): void {
+    if (Object.keys(this.comments).length === 0) {
+      this.comments = recordOf({ text: "" });
+    }
+  }
+
+  protected removeCommonBlanks(): void {
+    clearEmptyRecord(this.comments);
+  }
+}
+
+class NepoEmploymentModel
+  extends CommentableModel<"employed">
+  implements NepoEmployment
+{
+  parties?: string[];
+  employments: Record<string, Connection>;
+  connections: Record<string, Connection>;
+
+  constructor(data: Partial<NepoEmployment> = {}) {
+    super("employed", data);
+    this.parties = data.parties;
+    this.employments = data.employments ?? {};
+    this.connections = data.connections ?? {};
+  }
+
+  fillBlanks(): this {
+    this.fillCommonBlanks();
+    if (Object.keys(this.connections).length === 0) {
+      this.connections = recordOf({ text: "", relation: "" });
+    }
+    if (Object.keys(this.employments).length === 0) {
+      this.employments = recordOf({ text: "", relation: "" });
+    }
+    return this;
+  }
+
+  removeBlanks(): this {
+    this.removeCommonBlanks();
+    if (!this.parties) this.parties = [];
+    clearEmptyRecord(this.connections);
+    clearEmptyRecord(this.employments);
+    return this;
+  }
+}
+
+class CompanyModel extends CommentableModel<"company"> implements Company {
+  owners: Record<string, Link<"company">>;
+  owner?: Link<"company">;
+  manager?: Link<"employed">;
+
+  constructor(data: Partial<Company> = {}) {
+    super("company", data);
+    this.owners = data.owners ?? {};
+    this.owner = data.owner;
+    this.manager = data.manager;
+  }
+
+  fillBlanks(): this {
+    this.fillCommonBlanks();
+    if (Object.keys(this.owners).length === 0) {
+      if (this.owner) this.owners = recordOf(this.owner);
+      else this.owners = recordOf(new Link("company", "", ""));
+    }
+    return this;
+  }
+
+  removeBlanks(): this {
+    this.removeCommonBlanks();
+    clearEmptyRecord(this.owners);
+    if (!this.owner) this.owner = undefined;
+    if (!this.manager) this.manager = undefined;
+    return this;
+  }
+}
+
+class ArticleModel extends CommentableModel<"data"> implements Article {
+  sourceURL: string;
+  people: Record<string, Link<"employed">>;
+  companies: Record<string, Link<"company">>;
+  shortName?: string;
+  estimates: { mentionedPeople?: number };
+  date?: number;
+  status: ArticleStatus;
+
+  constructor(data: Partial<Article> = {}) {
+    super("data", data);
+    this.sourceURL = data.sourceURL ?? "";
+    this.people = data.people ?? {};
+    this.companies = data.companies ?? {};
+    this.shortName = data.shortName;
+    this.estimates = data.estimates ?? {};
+    this.status = data.status ?? {
+      tags: [],
+      signedUp: {},
+      markedDone: {},
+      confirmedDone: false,
+    };
+  }
+
+  fillBlanks(): this {
+    this.fillCommonBlanks();
+    if (Object.keys(this.companies).length === 0) {
+      this.companies = recordOf(new Link("company", "", ""));
+    }
+    if (Object.keys(this.people).length === 0) {
+      this.people = recordOf(new Link("employed", "", ""));
+    }
+    return this;
+  }
+
+  removeBlanks(): this {
+    this.removeCommonBlanks();
+    if (!this.shortName) this.shortName = undefined;
+    if (!this.date) this.date = undefined;
+    if (!this.estimates.mentionedPeople)
+      this.estimates.mentionedPeople = undefined;
+    if (!this.status.tags) this.status.tags = [];
+    if (!this.status.signedUp) this.status.signedUp = {};
+    if (!this.status.markedDone) this.status.markedDone = {};
+    if (this.status.confirmedDone === undefined)
+      this.status.confirmedDone = false;
+    if (!this.sourceURL) this.sourceURL = "";
+    clearEmptyRecord(this.companies);
+    clearEmptyRecord(this.people);
+    return this;
+  }
+}
+
+class TodoModel extends EntityModel<"todo"> implements Todo {
+  text: string;
+  subtasks: Record<string, Link<"todo">>;
+
+  constructor(data: Partial<Todo> = {}) {
+    super("todo", data);
+    this.text = data.text ?? "";
+    this.subtasks = data.subtasks ?? {};
+  }
+
+  fillBlanks(): this {
+    if (Object.keys(this.subtasks).length === 0) {
+      this.subtasks = recordOf(new Link("todo", "", ""));
+    }
+    return this;
+  }
+
+  removeBlanks(): this {
+    clearEmptyRecord(this.subtasks);
+    return this;
+  }
+}
+
+interface ModelMap {
+  employed: NepoEmploymentModel;
+  company: CompanyModel;
+  data: ArticleModel;
+  todo: TodoModel;
+}
+
+const modelMap = {
+  employed: NepoEmploymentModel,
+  company: CompanyModel,
+  data: ArticleModel,
+  todo: TodoModel,
+};
+
+function createModel<D extends Destination>(
+  destination: D,
+  data?: Partial<DestinationTypeMap[D]>,
+): ModelMap[D] & EntityModel<D>;
+function createModel<D extends Destination>(
+  destination: D,
+  data?: Partial<DestinationTypeMap[D]>,
+) {
+  const ModelClass = modelMap[destination];
+  // The 'any' cast is a pragmatic choice here to handle the dynamic nature of the factory.
+  return new ModelClass(data as any);
+}
+
+export function empty<D extends Destination>(d: D): DestinationTypeMap[D] {
+  // Spread the class instance to return a plain object
+  return { ...createModel(d) };
+}
+
+export function fillBlankRecords<D extends Destination>(
+  value: Partial<DestinationTypeMap[D]>,
+  d: D,
+): DestinationTypeMap[D] {
+  const model: EntityModel<D> = createModel(d, value);
+  // The fillBlanks method returns the instance, so spread it to get a plain object
+  return { ...model.fillBlanks() };
+}
+
+export function removeBlankRecords<D extends Destination>(
+  value: DestinationTypeMap[D],
+  d: D,
+): DestinationTypeMap[D] {
+  const model: EntityModel<D> = createModel(d, value);
+  return { ...model.removeBlanks() };
 }

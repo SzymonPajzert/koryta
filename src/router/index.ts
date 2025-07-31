@@ -45,7 +45,6 @@ router.isReady().then(() => {
 const defaultTitle = "Koryta.pl";
 
 router.afterEach((to) => {
-  console.debug("afterEach", to.meta);
   // Check if the route has a title meta field
   if (to.meta.title) {
     // If it's a function, call it with the route object
