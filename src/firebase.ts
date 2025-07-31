@@ -13,18 +13,6 @@ export function isTest() {
   );
 }
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
-  authDomain: "koryta-pl.firebaseapp.com",
-  databaseURL:
-    "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "koryta-pl",
-  storageBucket: "koryta-pl.firebasestorage.app",
-  messagingSenderId: "735903577811",
-  appId: "1:735903577811:web:6862ab6d2e0a46fa4e8626",
-  measurementId: "G-PL6L1B0CZY",
-};
-
 export const app = initializeApp(firebaseConfig);
 export const analytics = getAnalytics(app);
 export const db = getDatabase(app);
