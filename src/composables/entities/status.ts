@@ -61,7 +61,7 @@ export function useEntityStatus(
   function testConnection(
     issues: Issue[],
     name: string,
-  ): (connection: Connection) => void {
+  ): (connection: Connection<any>) => void {
     return (connection) => {
       if (!connection.text) {
         issues.push({ name: `Brak tekstu o relacji ${name}`, priority: 1 });

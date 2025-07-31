@@ -51,7 +51,7 @@
 
                 <v-btn
                   color="primary"
-                  text="Dodaj"
+                  :text="dialog.editKey ? 'Zapisz' : 'Dodaj'"
                   variant="tonal"
                   @click="dialogStore.close(id, true)"
                 ></v-btn>
