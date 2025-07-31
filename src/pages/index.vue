@@ -31,6 +31,25 @@
         </v-card>
       </v-col>
 
+      <v-col cols="12">
+        <v-card
+          to="/kpo"
+          class="py-4"
+          color="surface-variant"
+          variant="tonal"
+          rounded="lg"
+        >
+          <v-card-title>
+            <h2 class="text-h5 font-weight-bold">
+              Zagłosuj na najśmieszniejsze zgłoszenia w KPO
+            </h2>
+          </v-card-title>
+          <v-card-text>
+            Czy jacht, czy zestaw do kawy są najbardziej odklejonymi pomysłami?
+          </v-card-text>
+        </v-card>
+      </v-col>
+
       <v-col cols="12" md="6">
         <v-card
           to="/graf?miejsce=-OTOq2CpVuIll16NmukB"
