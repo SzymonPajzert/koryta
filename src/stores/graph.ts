@@ -335,7 +335,7 @@ class EdgeMaker<A, B> {
       this.outer([
         results,
         (b: B) => {
-          const connection = b as Connection;
+          const connection = b as Connection<any>;
 
           if (!connection.connection) {
             // TODO this should be reported somewhere

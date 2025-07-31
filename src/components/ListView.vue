@@ -64,6 +64,7 @@ import { useAuthState } from "@/composables/auth";
 import UserDetailDialog from "@/components/dialog/UserDetailDialog.vue";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
 import router from "@/router";
+import { type Destination } from "@/composables/model";
 
 const dialogStore = useDialogStore();
 const { isAdmin } = useAuthState();
@@ -73,7 +74,7 @@ function showUser(key: string) {
   router.push(`/entity/employed/${key}`);
 }
 
-function connectionText(connection: Connection) {
+function connectionText<D extends Destination>(connection: Connection<D>) {
   if (connection.text != "") return connection.text;
   if (connection.connection?.text && connection.relation != "") {
     return connection.relation + " " + connection.connection?.text;

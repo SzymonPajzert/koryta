@@ -98,36 +98,6 @@ const getErrorMessage = (errorCode: string) => {
         </button>
       </div>
 
-      <v-expansion-panels>
-        <v-expansion-panel>
-          <v-expansion-panel-title>
-            Zaloguj się za pomocą maila
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            Tylko dla osób z discorda z założonym kontem.
-            <div class="form-group">
-              <label for="email">Email:</label>
-              <input type="email" id="email" v-model="email" required />
-            </div>
-            <div class="form-group">
-              <label for="password">Hasło:</label>
-              <input
-                type="password"
-                id="password"
-                v-model="password"
-                required
-              />
-            </div>
-            <div class="form-group">
-              <button type="submit" :disabled="loading">
-                <span v-if="loading">Logging in...</span>
-                <span v-else>Wyślij</span>
-              </button>
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-      </v-expansion-panels>
-
       <div v-if="error" class="error-message">
         {{ error }}
       </div>

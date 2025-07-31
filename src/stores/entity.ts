@@ -8,7 +8,7 @@ import {
 } from "firebase/database";
 import type { DestinationTypeMap } from "../composables/model";
 import { useAuthState } from "../composables/auth";
-import { removeBlankRecords, type Destination } from "../composables/model";
+import { removeBlanks, type Destination } from "../composables/model";
 
 const { user, isAdmin } = useAuthState();
 
@@ -62,7 +62,7 @@ export function createEntityStore<D extends Destination>(entity: D) {
       console.debug("before removal: ", value);
 
       const op = operation(editKey);
-      value = removeBlankRecords(value, d);
+      value = removeBlanks(value);
       console.debug("trying to write: ", value);
 
       const keyRef = op(path, {

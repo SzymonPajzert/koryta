@@ -13,7 +13,7 @@
     >
     <v-spacer />
     <v-btn text to="/">Start</v-btn>
-    <v-btn text to="lista">Lista</v-btn>
+    <v-btn text to="/lista">Lista</v-btn>
     <v-btn text to="/graf">Graf</v-btn>
     <v-btn text to="/pomoc">Działaj</v-btn>
     <v-btn text to="/zrodla">Źródła</v-btn>
