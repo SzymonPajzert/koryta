@@ -37,6 +37,14 @@ export const config: Record<Destination, { title: string; titleIcon: string }> =
       title: "Dodaj zadanie",
       titleIcon: "mdi-lightbulb-on-10",
     },
+    "external/rejestr-io/krs": {
+      title: "Dodaj organizację KRS",
+      titleIcon: "mdi-office-building-outline",
+    },
+    "external/rejestr-io/person": {
+      title: "Dodaj osobę w KRSie",
+      titleIcon: "mdi-account-outline",
+    },
   };
 
 // Values shown by the dialog tab

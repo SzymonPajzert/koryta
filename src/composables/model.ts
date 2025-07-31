@@ -49,8 +49,8 @@ export const destinationAddText: Record<Destination, string> = {
   company: "Dodaj firmę",
   data: "Dodaj artykuł",
   todo: "Dodaj zadanie",
-  "external/rejestr-io/krs": undefined,
-  "external/rejestr-io/person": undefined,
+  "external/rejestr-io/krs": "",
+  "external/rejestr-io/person": "",
 };
 
 export interface NepoEmployment extends Nameable {
@@ -98,14 +98,18 @@ export interface Todo extends Nameable {
 }
 
 export interface PersonRejestr extends Nameable {
+  // TODO move these to proper fields, instead of the ingested external basic
   external_basic: {
     id: string;
+    state: "aktualne" | "historyczne"
     tozsamosc: {
       data_urodzenia: string
     }
   }
 
+  comment?: string;
   score ?: number
+  person ?: Link<"employed">
 }
 
 type uid = string;
@@ -312,6 +316,7 @@ class ArticleModel extends CommentableModel<"data"> implements Article {
     if (this.status.confirmedDone === undefined)
       this.status.confirmedDone = false;
     if (!this.sourceURL) this.sourceURL = "";
+    if (!this.estimates) this.estimates = {}
     clearEmptyRecord(this.companies);
     clearEmptyRecord(this.people);
     return this;
@@ -355,8 +360,8 @@ const modelMap = {
   company: CompanyModel,
   data: ArticleModel,
   todo: TodoModel,
-  "external/rejestr-io/krs": undefined,
-  "external/rejestr-io/person": undefined,
+  "external/rejestr-io/krs": Object,
+  "external/rejestr-io/person": Object,
 };
 
 function createModel<D extends Destination>(

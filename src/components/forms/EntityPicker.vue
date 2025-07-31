@@ -34,7 +34,7 @@ import { type Destination, Link } from "@/composables/model";
 
 const props = defineProps<{
   label: string;
-  hint: string;
+  hint?: string;
   // which entity type to use to lookup suggested values to bind to this field
   // e.g. employed, company
   entity: Destination;
