@@ -9,8 +9,6 @@
 # From /rejestr/krs/{KRS_ID}/connection/{ID}/
 
 import requests
-import sys
-import json
 from datetime import datetime
 from db import KRSRef, PersonRef
 from rejestr import REJESTR_KEY

@@ -39,6 +39,12 @@ KRSs = [
     "0000081828",
     "0000334972",
     "0000056031",
+    "0000031962", # NFOŚiGW
+    "0000146138", # Miejskie Przedsiębiorstwo Wodociągów i Kanalizacji (MPWiK)
+    "0000050531", # WarEXPO
+    "0000173077", # Miejskie Przedsiębiorstwo Realizacji Inwestycji w Warszawie
+    "0000206762", # SKM
+    "0000478458", # Szpital Grochowski
 ]
 
 PEOPLE = [

@@ -18,7 +18,13 @@ export interface Connection {
 }
 
 // Top level types represented by their own path in the DB.
-export type Destination = "employed" | "company" | "data" | "todo";
+export type Destination =
+  | "employed"
+  | "company"
+  | "data"
+  | "todo"
+  | "external/rejestr-io/krs"
+  | "external/rejestr-io/person";
 
 export const articleTags = [
   "ludzie wyciągnięci",
@@ -34,6 +40,8 @@ export const destinationIcon: Record<Destination, string> = {
   company: "mdi-office-building-outline",
   data: "mdi-file-document-outline",
   todo: "mdi-help-circle-outline",
+  "external/rejestr-io/krs": "mdi-office-building-outline",
+  "external/rejestr-io/person": "mdi-account-outline",
 };
 
 export const destinationAddText: Record<Destination, string> = {
@@ -41,6 +49,8 @@ export const destinationAddText: Record<Destination, string> = {
   company: "Dodaj firmę",
   data: "Dodaj artykuł",
   todo: "Dodaj zadanie",
+  "external/rejestr-io/krs": undefined,
+  "external/rejestr-io/person": undefined,
 };
 
 export interface NepoEmployment extends Nameable {
@@ -87,6 +97,17 @@ export interface Todo extends Nameable {
   subtasks: Record<string, Link<"todo">>;
 }
 
+export interface PersonRejestr extends Nameable {
+  external_basic: {
+    id: string;
+    tozsamosc: {
+      data_urodzenia: string
+    }
+  }
+
+  score ?: number
+}
+
 type uid = string;
 
 interface ArticleStatus {
@@ -110,6 +131,8 @@ export interface DestinationTypeMap {
   company: Company;
   data: Article;
   todo: Todo;
+  "external/rejestr-io/krs": any;
+  "external/rejestr-io/person": PersonRejestr;
 }
 
 export class Link<T extends Destination> {
@@ -323,6 +346,8 @@ interface ModelMap {
   company: CompanyModel;
   data: ArticleModel;
   todo: TodoModel;
+  "external/rejestr-io/krs": any;
+  "external/rejestr-io/person": any;
 }
 
 const modelMap = {
@@ -330,6 +355,8 @@ const modelMap = {
   company: CompanyModel,
   data: ArticleModel,
   todo: TodoModel,
+  "external/rejestr-io/krs": undefined,
+  "external/rejestr-io/person": undefined,
 };
 
 function createModel<D extends Destination>(
