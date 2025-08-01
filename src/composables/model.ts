@@ -107,7 +107,8 @@ export interface PersonRejestr extends Nameable {
     }
   }
 
-  comment?: string;
+  comment?: Record<string, string>;
+  link?: Record<string, string>;
   score ?: number
   person ?: Link<"employed">
 }
@@ -316,7 +317,7 @@ class ArticleModel extends CommentableModel<"data"> implements Article {
     if (this.status.confirmedDone === undefined)
       this.status.confirmedDone = false;
     if (!this.sourceURL) this.sourceURL = "";
-    if (!this.estimates) this.estimates = {}
+    if (this.estimates.mentionedPeople === undefined) this.estimates = {}
     clearEmptyRecord(this.companies);
     clearEmptyRecord(this.people);
     return this;

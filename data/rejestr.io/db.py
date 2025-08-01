@@ -113,6 +113,13 @@ dumped = """0000037957
 0000027151
 0000130498"""
 
+KRSs += dumped.split("\n")
+
+# TODO 
+# https://rejestr.io/krs/146138/miejskie-przedsiebiorstwo-wodociagow-i-kanalizacji-w-m-st-warszawie
+# Bardzo dobre źródło ludzi w spółkach
+# TODO Dla tych oznaczonych, znajdź najpopularniejsze ich miejsca pracy
+
 PEOPLE = [
     ("720445", "marcin-skwierawski"),
 ]

@@ -1,5 +1,6 @@
 <template>
   <!-- <v-card>
+    TODO wypisz linki
     TODO wyszukaj tez bez srodkowego imienia
     TODO List active companies that the person is a part of, filter on them
     TODO: Yellow if person is suggested (because in DB) and put on to
@@ -10,6 +11,8 @@
       Znalazłem {{ Object.keys(peopleOrdered).length }} osób
     </v-card-title>
     <v-card-text>
+      {{ visited }} przejrzanych
+      <br/>
       {{ toAdd }} do dodania
       <br/>
       {{ toCheck }} do sprawdzenia
@@ -49,6 +52,17 @@
                 icon="mdi-comment-quote-outline"
               ></v-icon>
               <em>{{ comment }}</em>
+            </div>
+            <div
+              v-for="link in person.link"
+              class="text-caption text-blue-grey-darken-1 mt-2"
+            >
+              <v-icon
+                size="x-small"
+                start
+                icon="mdi-link-variant-outline"
+              ></v-icon>
+              <em>{{ link }}</em>
             </div>
           </v-col>
 
@@ -141,7 +155,6 @@
               <v-text-field
                 label="Dodaj link"
                 v-model="tempLink"
-                type="number"
                 variant="outlined"
                 density="compact"
                 hide-details
@@ -217,6 +230,7 @@ const peopleOrdered = computed<[string, PersonRejestr][]>(() => {
   return keys.value.map((key) => [key, filtered[key]]);
 });
 
+const visited = computed(() => Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) != 0).length)
 const toAdd = computed(() => Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) > 0).length)
 const toCheck = computed(() => Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) == 0).length)
 
