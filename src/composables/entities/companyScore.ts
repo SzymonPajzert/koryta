@@ -35,10 +35,10 @@ export function useCompanyScore(
         if (!people.value && !(personKey in people.value)) return;
         const person = people.value[personKey];
         if (!person) return;
-        console.log(personKey)
         if (!(key in result)) {
           result[key] = {
-            name: (company.basic ?? company.external_basic)?.nazwy.skrocona ?? "",
+            name:
+              (company.basic ?? company.external_basic)?.nazwy.skrocona ?? "",
             good: 0,
             bad: 0,
             score: 0,
@@ -70,5 +70,21 @@ export function useCompanyScore(
     return result;
   });
 
-  return { scores };
+  const personScore = computed(() => {
+    const result: Record<string, number> = {};
+
+    Object.entries(companies.value).forEach(([companyID, company]) => {
+      // TODO decide if we include historical or not
+      Object.keys(company.connections ?? {}).forEach((personKey) => {
+        result[personKey] = Math.max(
+          result[personKey] ?? Number.MIN_SAFE_INTEGER,
+          toNumber(scores.value[companyID].score) ?? 0,
+        );
+      });
+    });
+
+    return result;
+  });
+
+  return { scores, personScore };
 }

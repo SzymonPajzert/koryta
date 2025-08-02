@@ -104,7 +104,8 @@ interface RejestrCompany {
   };
 }
 
-export interface KRSCompany {
+// TODO actually it's not the case, we need to get rid of this
+export interface KRSCompany extends Nameable {
   external_basic?: RejestrCompany
   basic?: RejestrCompany
   connections?: Record<

@@ -6,11 +6,13 @@
     TODO: Yellow if person is suggested (because in DB) and put on to
   </v-card> -->
 
-  <v-list>
-    <v-list-item v-for="([krs, companyScore], _) in companiesSorted">
-      {{ krs }} - {{ companyScore }}
-    </v-list-item>
-  </v-list>
+  <v-expand-transition>
+    <v-list v-if="showScores">
+      <v-list-item v-for="([krs, companyScore], _) in companiesSorted">
+        {{ companyScore.name }} ({{ companyScore.score }} / {{ krs }})
+      </v-list-item>
+    </v-list>
+  </v-expand-transition>
 
   <v-card width="100%" align="center" class="mt-3">
     <v-card-title>
@@ -25,6 +27,7 @@
     </v-card-text>
     <v-card-actions>
       <v-spacer />
+      <v-btn @click="showScores = !showScores">Kolejność organizacji</v-btn>
       <v-btn @click="sortKeys">Sortuj</v-btn>
     </v-card-actions>
   </v-card>
@@ -200,10 +203,11 @@ const usePeopleStore = createEntityStore("external/rejestr-io/person");
 const peopleStore = usePeopleStore();
 const { entities: people } = storeToRefs(peopleStore);
 
+const showScores = ref(false);
 const firstChance = ref(2);
 const ignoreSuccess = ref(3);
 
-const { scores } = useCompanyScore(firstChance, ignoreSuccess);
+const { scores, personScore } = useCompanyScore(firstChance, ignoreSuccess);
 const companiesSorted = computed(() =>
   Object.entries(scores.value).sort(
     (a, b) => toNumber(b[1].score) - toNumber(a[1].score),
@@ -236,8 +240,14 @@ watch(peopleFiltered, (value, oldValue) => {
 });
 const sortKeys = function () {
   keys.value.sort(
-    (a, b) =>
-      peopleFiltered.value[b].score ?? 0 - (peopleFiltered.value[a].score ?? 0),
+    (a, b) => {
+      const bVal = peopleFiltered.value[b]?.score ?? 0;
+      const aVal = peopleFiltered.value[a]?.score ?? 0;
+      if (bVal == 0 && aVal == 0) {
+        return personScore.value[b] - personScore.value[a]
+      }
+      return bVal - aVal;
+    }
   );
 };
 

@@ -8,6 +8,7 @@ firebase_admin.initialize_app(
     }
 )
 
+# TODO read this list from the DB as well
 KRSs = [
     "0000293205",
     "0000394569",
@@ -45,6 +46,7 @@ KRSs = [
     "0000173077", # Miejskie Przedsiębiorstwo Realizacji Inwestycji w Warszawie
     "0000206762", # SKM
     "0000478458", # Szpital Grochowski
+    "0000019230", # TBS Bemowo
 ]
 
 dumped = """0000037957
@@ -114,6 +116,7 @@ dumped = """0000037957
 0000130498"""
 
 KRSs += dumped.split("\n")
+KRSs = list(set(KRSs))
 
 # TODO 
 # https://rejestr.io/krs/146138/miejskie-przedsiebiorstwo-wodociagow-i-kanalizacji-w-m-st-warszawie

@@ -89,6 +89,8 @@ def something_removed(prev: dict, after: dict) -> list[tuple[str, str]]:
 
 if __name__ == "__main__":
     state_before = db.reference("/external/rejestr-io").get()
+    # TODO dump it somewhere in case it breaks
+
     for krs in KRSs:
         save_org_connections(krs)
 
