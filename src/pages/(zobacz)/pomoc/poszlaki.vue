@@ -6,17 +6,22 @@
     TODO: Yellow if person is suggested (because in DB) and put on to
   </v-card> -->
 
+  <v-list>
+    <v-list-item v-for="([krs, companyScore], _) in companiesSorted">
+      {{ krs }} - {{ companyScore }}
+    </v-list-item>
+  </v-list>
+
   <v-card width="100%" align="center" class="mt-3">
     <v-card-title>
       Znalazłem {{ Object.keys(peopleOrdered).length }} osób
     </v-card-title>
     <v-card-text>
       {{ visited }} przejrzanych
-      <br/>
+      <br />
       {{ toAdd }} do dodania
-      <br/>
+      <br />
       {{ toCheck }} do sprawdzenia
-
     </v-card-text>
     <v-card-actions>
       <v-spacer />
@@ -32,7 +37,7 @@
         v-if="person.external_basic.state == 'aktualne'"
         @click="setActive(index)"
         :variant="index === activeItem ? 'tonal' : 'flat'"
-        >
+      >
         <!-- Main two-column content -->
         <v-row align="center">
           <!-- Column 1: Product Info & Comment -->
@@ -189,10 +194,21 @@ import { createEntityStore } from "@/stores/entity";
 import { set, ref as dbRef, push } from "firebase/database";
 import { db } from "@/firebase";
 import EntityPicker from "@/components/forms/EntityPicker.vue";
+import { toNumber, useCompanyScore } from "@/composables/entities/companyScore";
 
 const usePeopleStore = createEntityStore("external/rejestr-io/person");
 const peopleStore = usePeopleStore();
 const { entities: people } = storeToRefs(peopleStore);
+
+const firstChance = ref(2);
+const ignoreSuccess = ref(3);
+
+const { scores } = useCompanyScore(firstChance, ignoreSuccess);
+const companiesSorted = computed(() =>
+  Object.entries(scores.value).sort(
+    (a, b) => toNumber(b[1].score) - toNumber(a[1].score),
+  ),
+);
 
 const peopleFiltered = computed(() => {
   return Object.fromEntries(
@@ -230,9 +246,21 @@ const peopleOrdered = computed<[string, PersonRejestr][]>(() => {
   return keys.value.map((key) => [key, filtered[key]]);
 });
 
-const visited = computed(() => Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) != 0).length)
-const toAdd = computed(() => Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) > 0).length)
-const toCheck = computed(() => Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) == 0).length)
+const visited = computed(
+  () =>
+    Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) != 0)
+      .length,
+);
+const toAdd = computed(
+  () =>
+    Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) > 0)
+      .length,
+);
+const toCheck = computed(
+  () =>
+    Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) == 0)
+      .length,
+);
 
 type EditType = "comment" | "link" | "person";
 const editingItemId = ref<string | null>(null);
@@ -245,7 +273,7 @@ const pickedPerson = ref<Link<"employed"> | undefined>();
 
 function setActive(index: string) {
   if (activeItem.value === index) {
-    activeItem.value = null
+    activeItem.value = null;
   } else {
     activeItem.value = index;
   }
@@ -267,7 +295,10 @@ function openExploration(person: PersonRejestr) {
   // TODO link the most important places and open them as well
   // TODO can I go to the news page straight away
   window.open("https://www.google.com/search?q=" + person.name, "_blank");
-  window.open("https://www.google.com/search?q=" + person.name + " pkw", "_blank");
+  window.open(
+    "https://www.google.com/search?q=" + person.name + " pkw",
+    "_blank",
+  );
   window.open("https://rejestr.io/osoby/" + person.external_basic.id, "_blank");
 }
 function cancelEdit() {

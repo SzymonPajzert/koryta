@@ -142,12 +142,10 @@ class PersonRef:
         self.id = id
         self.ref = db.reference(f"/external/rejestr-io/person/{id}")
 
-    def is_scraped(self) -> bool:
+    def is_scraped(self, expect_full=False) -> bool:
         current = self.ref.get()
-        if isinstance(current, tuple):
-            print(f"Unexpectedly the read value of {id} is a tuple")
-            sys.exit(1)
-        if current is not None and "read" in current and "name" in current:
+        assert(not isinstance(current, tuple))
+        if current is not None and (not expect_full or "read" in current) and "name" in current:
             print(f"Already read person {self.id} - {current['name']}, SKIPPING...")
             return True
         return False

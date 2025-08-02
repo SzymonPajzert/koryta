@@ -97,20 +97,36 @@ export interface Todo extends Nameable {
   subtasks: Record<string, Link<"todo">>;
 }
 
+interface RejestrCompany {
+  id: string;
+  nazwy: {
+    skrocona: string;
+  };
+}
+
+export interface KRSCompany {
+  external_basic?: RejestrCompany
+  basic?: RejestrCompany
+  connections?: Record<
+    string,
+    { state: "aktualne" | "historyczne"; type: "person" | "org" }
+  >;
+}
+
 export interface PersonRejestr extends Nameable {
   // TODO move these to proper fields, instead of the ingested external basic
   external_basic: {
     id: string;
-    state: "aktualne" | "historyczne"
+    state: "aktualne" | "historyczne";
     tozsamosc: {
-      data_urodzenia: string
-    }
-  }
+      data_urodzenia: string;
+    };
+  };
 
   comment?: Record<string, string>;
   link?: Record<string, string>;
-  score ?: number
-  person ?: Link<"employed">
+  score?: number;
+  person?: Link<"employed">;
 }
 
 type uid = string;
@@ -136,7 +152,7 @@ export interface DestinationTypeMap {
   company: Company;
   data: Article;
   todo: Todo;
-  "external/rejestr-io/krs": any;
+  "external/rejestr-io/krs": KRSCompany;
   "external/rejestr-io/person": PersonRejestr;
 }
 
@@ -317,7 +333,7 @@ class ArticleModel extends CommentableModel<"data"> implements Article {
     if (this.status.confirmedDone === undefined)
       this.status.confirmedDone = false;
     if (!this.sourceURL) this.sourceURL = "";
-    if (this.estimates.mentionedPeople === undefined) this.estimates = {}
+    if (this.estimates.mentionedPeople === undefined) this.estimates = {};
     clearEmptyRecord(this.companies);
     clearEmptyRecord(this.people);
     return this;

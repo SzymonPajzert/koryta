@@ -13,6 +13,7 @@ from datetime import datetime
 from db import KRSRef, PersonRef
 from rejestr import REJESTR_KEY
 from db import KRSs
+from firebase_admin import db
 
 
 def get_rejestr_io(url: str):
@@ -31,23 +32,23 @@ def save_org_connections(krs: str):
     current_org = KRSRef(krs)
     if current_org.is_scraped():
         return
-
     basic = get_rejestr_io(f"https://rejestr.io/api/v2/org/{krs}")
     current_org.ref.update({"read": f"{datetime.now()}", "basic": basic})
 
-    # TODO reenable "historyczne"
-    for aktualnosc in ["aktualne"]:
+    for aktualnosc in ["aktualne", "historyczne"]:
         connections = get_rejestr_io(
             f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc={aktualnosc}"
         )
         for connection in connections:
-            print("Saving connection")
-            connection["state"] = aktualnosc
+            print(f"Saving connection {connection['id']}...  ", end="")
             type = "person"
             if connection["typ"] == "organizacja":
                 type = "org"
-            current_org.ref.child("connections").child(type).update(
-                {connection["id"]: connection}
+            current_org.ref.child("connections").child(f"{connection["id"]}").set(
+                {
+                    "state": aktualnosc,
+                    "type": type,
+                }
             )
 
             if type == "org":
@@ -67,8 +68,37 @@ def save_org_connections(krs: str):
                             "name": connection["tozsamosc"]["imiona_i_nazwisko"],
                         }
                     )
+                    
+            print("DONE")
+
+
+def something_removed(prev: dict, after: dict) -> list[tuple[str, str]]:
+    def diff_pair(k, v):
+        if k not in after:
+            return [(k, "removed")]
+        if isinstance(v, dict) and isinstance(after[k], dict):
+            return [(k  + "." + n, t) for n, t in something_removed(v, after[k])]
+        elif v != after[k]:
+            return [(k, "changed")]
+        return []
+
+    return [r for k, v in prev.items() for r in diff_pair(k, v)] + [
+        (k, "added") for k in after.keys() if k not in prev
+    ]
 
 
 if __name__ == "__main__":
+    state_before = db.reference("/external/rejestr-io").get()
     for krs in KRSs:
         save_org_connections(krs)
+
+    state_after = db.reference("/external/rejestr-io").get()
+
+    assert isinstance(state_before, dict)
+    assert isinstance(state_after, dict)
+    print(
+        "Diff:"
+        + "\n  ".join(
+            [k + " " + v for (k, v) in something_removed(state_before, state_after)]
+        )
+    )
