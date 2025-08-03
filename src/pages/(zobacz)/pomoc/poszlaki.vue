@@ -115,12 +115,12 @@
             ></v-btn>
             <v-btn
               size="small"
-              icon="mdi-account-outline"
+              icon="mdi-account-question-outline"
               variant="text"
-              @click="toggleEditing(person, 'person')"
+              @click="setValue(person, 'unknown')"
               title="Edytuj"
             >
-              <v-icon color="success" v-if="person.person"></v-icon>
+              <v-icon color="warning" v-if="person.status === 'unknown'"></v-icon>
               <v-icon v-else></v-icon>
             </v-btn>
           </div>
@@ -139,6 +139,26 @@
               @click="toggleEditing(person, 'link')"
               title="Edytuj"
             ></v-btn>
+          </div>
+          <div class="d-flex flex-sm-column ga-1">
+            <v-btn
+              size="small"
+              icon="mdi-office-building-outline"
+              variant="text"
+              title="Edytuj"
+            >
+              <!-- TODO support linking the company from this button -->
+            </v-btn>
+            <v-btn
+              size="small"
+              icon="mdi-account-outline"
+              variant="text"
+              @click="toggleEditing(person, 'person')"
+              title="Edytuj"
+            >
+              <v-icon color="success" v-if="person.person"></v-icon>
+              <v-icon v-else></v-icon>
+            </v-btn>
           </div>
         </template>
       </v-list-item>
@@ -238,11 +258,20 @@ watch(peopleFiltered, (value, oldValue) => {
   }
   keys.value = Object.keys(value);
 });
+
+function getScore(person?: PersonRejestr): number {
+  if (!person) return 0;
+  if (person.status === "unknown") {
+    return -0.5;
+  }
+  return person.score ?? 0;
+}
+
 const sortKeys = function () {
   keys.value.sort(
     (a, b) => {
-      const bVal = peopleFiltered.value[b]?.score ?? 0;
-      const aVal = peopleFiltered.value[a]?.score ?? 0;
+      const bVal = getScore(peopleFiltered.value[b]);
+      const aVal = getScore(peopleFiltered.value[a]);
       if (bVal == 0 && aVal == 0) {
         return personScore.value[b] - personScore.value[a]
       }
@@ -344,6 +373,13 @@ function scoreColor(person: PersonRejestr) {
   if (score < 0) return "negative";
   return "neutral";
 }
+function setValue(person: PersonRejestr, value: PersonRejestr["status"]) {
+  set(
+    dbRef(db, `external/rejestr-io/person/${person.external_basic.id}/status`),
+    value,
+  );
+}
+
 function addValue(person: PersonRejestr, value: number) {
   person.score = (person.score ?? 0) + value;
   set(

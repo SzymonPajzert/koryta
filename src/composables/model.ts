@@ -126,6 +126,7 @@ export interface PersonRejestr extends Nameable {
 
   comment?: Record<string, string>;
   link?: Record<string, string>;
+  status?: "unknown"
   score?: number;
   person?: Link<"employed">;
 }
