@@ -1,9 +1,13 @@
 <template>
   <!-- <v-card>
+    TODO Znajdź ludzi z takich organizacji jak 0000336643. Nie iteresują mnie, ale algorytm powienien je proponować bo duo ludzi wychodzi z nich.
     TODO wypisz linki
     TODO wyszukaj tez bez srodkowego imienia
     TODO List active companies that the person is a part of, filter on them
     TODO: Yellow if person is suggested (because in DB) and put on to
+    TODO: Wyszukaj w google nazwisko bez drugiego imienia
+    TODO: Wyszukaj osobę + nazwa firmy
+    TODO: Rodziel punkty jeśli są między radę nadzorczą i zarząd (ale chyba nie jest to warte)
   </v-card> -->
 
   <v-expand-transition>

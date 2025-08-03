@@ -33,9 +33,10 @@ def save_org_connections(krs: str):
     if current_org.is_scraped():
         return
     basic = get_rejestr_io(f"https://rejestr.io/api/v2/org/{krs}")
+
     current_org.ref.update({"read": f"{datetime.now()}", "basic": basic})
 
-    for aktualnosc in ["aktualne", "historyczne"]:
+    for aktualnosc in ["historyczne", "aktualne"]:
         connections = get_rejestr_io(
             f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc={aktualnosc}"
         )
@@ -88,19 +89,24 @@ def something_removed(prev: dict, after: dict) -> list[tuple[str, str]]:
 
 
 if __name__ == "__main__":
-    state_before = db.reference("/external/rejestr-io").get()
+    show_diff = False
+    
+    state_before = None
+    state_after = None
+    if show_diff:
+        state_before = db.reference("/external/rejestr-io").get()
     # TODO dump it somewhere in case it breaks
 
-    for krs in KRSs:
+    for krs in ["0000085139"]:
         save_org_connections(krs)
 
-    state_after = db.reference("/external/rejestr-io").get()
-
-    assert isinstance(state_before, dict)
-    assert isinstance(state_after, dict)
-    print(
-        "Diff:"
-        + "\n  ".join(
-            [k + " " + v for (k, v) in something_removed(state_before, state_after)]
+    if show_diff:
+        state_after = db.reference("/external/rejestr-io").get()
+        assert isinstance(state_before, dict)
+        assert isinstance(state_after, dict)
+        print(
+            "Diff:"
+            + "\n  ".join(
+                [k + " " + v for (k, v) in something_removed(state_before, state_after)]
+            )
         )
-    )

@@ -41,6 +41,27 @@
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"
       }
+    },
+
+    "external": {
+      "rejestr-io": {
+        ".read": "auth.uid === 'rejestr-io-appender'",
+        ".write": "auth.uid === 'rejestr-io-appender' && !data.exists()",
+
+        "$type": {
+          "$id": {
+            "$field": {
+              // Allow appending to the empty fields
+              ".write": "auth.uid === 'rejestr-io-appender' && !data.exists()",
+            },
+            "connections": {
+              "$id": {
+                ".write": "auth.uid === 'rejestr-io-appender'"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

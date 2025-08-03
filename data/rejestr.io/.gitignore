@@ -1,2 +1,4 @@
 .env
 *.csv
+# JSON credentials
+koryta-pl*.json

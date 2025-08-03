@@ -1,10 +1,12 @@
-import sys
 import firebase_admin
 from firebase_admin import db
 
 firebase_admin.initialize_app(
     options={
-        "databaseURL": "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app"
+        "databaseURL": "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
+        "databaseAuthVariableOverride": {
+            "uid": "rejestr-io-appender"
+        }
     }
 )
 
@@ -47,6 +49,8 @@ KRSs = [
     "0000206762", # SKM
     "0000478458", # Szpital Grochowski
     "0000019230", # TBS Bemowo
+    "0000636771", # Aplikacje krytyczne - nalezy do ministerstwa finansow
+    "0000085139", # Nalezy do ARP, duzo ludzi po znajomosciach i bylych politykow
 ]
 
 dumped = """0000037957
@@ -125,29 +129,45 @@ KRSs = list(set(KRSs))
 
 PEOPLE = [
     ("720445", "marcin-skwierawski"),
+    # TODO read all from DB
+    # TODO sync the ones in employed and company with the ones in rejestr.io DB
 ]
 
-class KRSRef:
+class DBModel:
+    def __init__(self, path):
+        self.path = path
+        self.ref = db.reference(path)
+        self.__value = None
+        
+    def get(self) -> dict:
+        if not self.__value:    
+            v =  db.reference(self.path).get()
+            assert(not isinstance(v, tuple))
+            self.__value = v
+
+        return self.__value
+        
+
+class KRSRef(DBModel):
     def __init__(self, krs: str):
+        super().__init__(f"/external/rejestr-io/krs/{krs}")
         self.krs = krs
-        self.ref = db.reference(f"/external/rejestr-io/krs/{krs}")
 
     def is_scraped(self) -> bool:
-        current = self.ref.get()
+        current = self.get()
         if current is not None and "read" in current:
             print(f"Already read KRS {self.krs}, SKIPPING...")
             return True
         return False
 
 
-class PersonRef:
+class PersonRef(DBModel):
     def __init__(self, id: str):
+        super().__init__(f"/external/rejestr-io/person/{id}")
         self.id = id
-        self.ref = db.reference(f"/external/rejestr-io/person/{id}")
 
     def is_scraped(self, expect_full=False) -> bool:
-        current = self.ref.get()
-        assert(not isinstance(current, tuple))
+        current = self.get()
         if current is not None and (not expect_full or "read" in current) and "name" in current:
             print(f"Already read person {self.id} - {current['name']}, SKIPPING...")
             return True
