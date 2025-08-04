@@ -8,6 +8,13 @@ interface CompanyScore {
   score: Score;
 }
 
+export interface CompanyMembership {
+  name: string;
+  id: string;
+  state: "aktualne" | "historyczne";
+  score: CompanyScore
+}
+
 export type Score = number | "start";
 
 export function toNumber(a: Score): number {
@@ -70,6 +77,26 @@ export function useCompanyScore(
     return result;
   });
 
+  const personCompanies = computed(() => {
+    const result: Record<string, CompanyMembership[]> = {};
+
+    Object.entries(companies.value).forEach(([companyID, company]) => {
+      Object.entries(company.connections ?? {}).forEach(
+        ([personKey, state]) => {
+          if (!result[personKey]) result[personKey] = [];
+          result[personKey].push({
+            name: company.basic?.nazwy.skrocona ?? "",
+            id: companyID,
+            state: state.state,
+            score: scores.value[companyID],
+          });
+        },
+      );
+    });
+
+    return result;
+  });
+
   const personScore = computed(() => {
     const result: Record<string, number> = {};
 
@@ -86,5 +113,5 @@ export function useCompanyScore(
     return result;
   });
 
-  return { scores, personScore };
+  return { scores, personCompanies, personScore };
 }

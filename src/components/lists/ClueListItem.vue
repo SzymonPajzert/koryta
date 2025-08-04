@@ -5,7 +5,6 @@
   -->
 
   <v-list-item
-    v-if="person.external_basic.state == 'aktualne'"
     @click="setActive()"
     :variant="activeItem ? 'tonal' : 'flat'"
   >
@@ -16,6 +15,11 @@
         <div class="font-weight-bold">{{ person.name }}</div>
         <div class="text-body-2">
           {{ person.external_basic.tozsamosc.data_urodzenia }}
+          <v-chip
+            v-for="company in companies"
+            :class="companyColors(company)"
+            >{{ company.name }}</v-chip
+          >
         </div>
         <!-- Display comment if it exists -->
         <div
@@ -33,22 +37,12 @@
           v-for="link in person.link"
           class="text-caption text-blue-grey-darken-1 mt-2"
         >
-          <v-icon
-            size="x-small"
-            start
-            icon="mdi-link-variant-outline"
-          ></v-icon>
+          <v-icon size="x-small" start icon="mdi-link-variant-outline"></v-icon>
           <em>{{ link }}</em>
         </div>
       </v-col>
 
-      <!-- Column 2: Price and Stock Status -->
-      <v-col
-        cols="12"
-        sm="5"
-        md="4"
-        class="d-flex flex-column align-sm-end"
-      >
+      <v-col cols="12" sm="5" md="4" class="d-flex flex-column align-sm-end">
         <span :class="['stock-status', scoreColor()]">
           {{ person.score ?? 0 }}
         </span>
@@ -162,9 +156,7 @@
         />
 
         <div class="d-flex justify-end mt-3">
-          <v-btn size="small" variant="text" @click="cancelEdit"
-            >Anuluj</v-btn
-          >
+          <v-btn size="small" variant="text" @click="cancelEdit">Anuluj</v-btn>
           <v-btn size="small" color="primary" flat @click="saveEdit"
             >Dodaj</v-btn
           >
@@ -180,8 +172,12 @@ import { Link, type PersonRejestr } from "@/composables/model";
 import { set, ref as dbRef, push } from "firebase/database";
 import { db } from "@/firebase";
 import EntityPicker from "@/components/forms/EntityPicker.vue";
+import type { CompanyMembership } from "@/composables/entities/companyScore";
 
-const { person } = defineProps<{person: PersonRejestr}>();
+const { person } = defineProps<{
+  person: PersonRejestr;
+  companies: CompanyMembership[];
+}>();
 
 type EditType = "comment" | "link" | "person";
 
@@ -259,8 +255,18 @@ function scoreColor() {
   if (score < 0) return "negative";
   return "neutral";
 }
+function companyColors(company: CompanyMembership) {
+  if (company.state !== "aktualne") return "bg-gray";
+
+  let good = "bg-green";
+  if (company.score.score === "start") good += "-darken-1";
+  else if (company.score.score < 0) good += "-darken-2";
+  else if (company.score.score > 0) good += "-lighten-2";
+  return good;
+}
+
 function setValue(value: PersonRejestr["status"]) {
-  person.status = value
+  person.status = value;
   set(
     dbRef(db, `external/rejestr-io/person/${person.external_basic.id}/status`),
     value,

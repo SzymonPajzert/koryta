@@ -39,7 +39,7 @@
       v-for="[index, person] in peopleOrdered"
       :key="index"
       :person="person"
-      :index="index"
+      :companies="personCompanies[index]"
     />
   </v-list>
 </template>
@@ -58,24 +58,29 @@ const showScores = ref(false);
 const firstChance = ref(2);
 const ignoreSuccess = ref(3);
 
-const { scores, personScore } = useCompanyScore(firstChance, ignoreSuccess);
+const { scores, personScore, personCompanies } = useCompanyScore(
+  firstChance,
+  ignoreSuccess,
+);
 const companiesSorted = computed(() =>
   Object.entries(scores.value).sort(
     (a, b) => toNumber(b[1].score) - toNumber(a[1].score),
   ),
 );
 
+// Show only people that are active
+// TODO active only in selected companies
 const peopleFiltered = computed(() => {
+  const activePeopleKey = new Set();
+  Object.entries(personCompanies.value).forEach(([key, companies]) => {
+    if (companies.filter((c) => c.state === "aktualne").length > 0) {
+      activePeopleKey.add(key);
+    }
+  });
+
   return Object.fromEntries(
-    Object.entries(people.value).filter(
-      ([key, person]: [string, PersonRejestr]) => {
-        // TODO support filtering per KRS stattus, now it's just the last used value and it's very brittle
-        return (
-          person &&
-          person.external_basic &&
-          person.external_basic.state == "aktualne"
-        );
-      },
+    Object.entries(people.value).filter(([key, _]: [string, PersonRejestr]) =>
+      activePeopleKey.has(key),
     ),
   );
 });
