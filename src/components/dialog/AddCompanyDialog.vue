@@ -26,13 +26,19 @@
       />
     </v-col>
 
-    <v-col cols="12">
-      <EntityPicker
-        v-model="formData.manager"
-        entity="employed"
-        label="Zarządca"
-        hint="Osoba, która zarządza firmą"
-      ></EntityPicker>
+    <v-col cols="12" md="6">
+      <v-text-field
+        label="Numer KRS"
+        :rules="[
+          (value) =>
+            prependZeros(value) != value ? 'Dodaj zera na początku' : true,
+          (value) => (prependZeros(value).length != 10 ? '10 cyfr' : true),
+        ]"
+        :v-model="formData.krs_number"
+      />
+    </v-col>
+    <v-col cols="12" md="6">
+      <v-text-field label="Numer NIP" :v-model="formData.nip_number" />
     </v-col>
 
     <v-col cols="12">
@@ -64,6 +70,10 @@ import type { Callback } from "@/stores/dialog";
 
 const formData = defineModel<Company>({ required: true });
 const { create } = defineProps<{ id?: string; create?: boolean }>();
+
+function prependZeros(value: string) {
+  return value.padStart(10, "0");
+}
 
 const addCreatedTodo: Callback = (name, key) => {
   if (!key) {

@@ -67,6 +67,9 @@ export interface NepoEmployment extends Nameable {
 export interface Company extends Nameable {
   name: string;
   owners: Record<string, Link<"company">>;
+  krs_number?: string;
+  nip_number?: string;
+
   // TODO(https://github.com/SzymonPajzert/koryta/issues/44): Migrate away from them
   owner?: Link<"company">;
   manager?: Link<"employed">;
