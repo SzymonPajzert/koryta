@@ -1,12 +1,24 @@
 import firebase_admin
 from firebase_admin import db
+from typing import Literal, Any
+import os
+import sys
+import re
+
+DATABASE_URL = "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app"
+if "FIREBASE_DATABASE_EMULATOR_HOST" in os.environ:
+    print("Connecting to emulated DB")
+else:
+    print("Should I connect to prod DB? Type 'yes, connect me'")
+    if input() != "yes, connect me":
+        print("Stopping, run $ export FIREBASE_DATABASE_EMULATOR_HOST=\"127.0.0.1:9003\"")
+        sys.exit(1)
+    
 
 firebase_admin.initialize_app(
     options={
-        "databaseURL": "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
-        "databaseAuthVariableOverride": {
-            "uid": "rejestr-io-appender"
-        }
+        "databaseURL": DATABASE_URL,
+        "databaseAuthVariableOverride": {"uid": "rejestr-io-appender"},
     }
 )
 
@@ -42,15 +54,16 @@ KRSs = [
     "0000081828",
     "0000334972",
     "0000056031",
-    "0000031962", # NFOŚiGW
-    "0000146138", # Miejskie Przedsiębiorstwo Wodociągów i Kanalizacji (MPWiK)
-    "0000050531", # WarEXPO
-    "0000173077", # Miejskie Przedsiębiorstwo Realizacji Inwestycji w Warszawie
-    "0000206762", # SKM
-    "0000478458", # Szpital Grochowski
-    "0000019230", # TBS Bemowo
-    "0000636771", # Aplikacje krytyczne - nalezy do ministerstwa finansow
-    "0000085139", # Nalezy do ARP, duzo ludzi po znajomosciach i bylych politykow
+    "0000031962",  # NFOŚiGW
+    "0000146138",  # Miejskie Przedsiębiorstwo Wodociągów i Kanalizacji (MPWiK)
+    "0000050531",  # WarEXPO
+    "0000173077",  # Miejskie Przedsiębiorstwo Realizacji Inwestycji w Warszawie
+    "0000206762",  # SKM
+    "0000478458",  # Szpital Grochowski
+    "0000019230",  # TBS Bemowo
+    "0000636771",  # Aplikacje krytyczne - nalezy do ministerstwa finansow
+    "0000085139",  # Nalezy do ARP, duzo ludzi po znajomosciach i bylych politykow
+    "0000019193",  # PKP
 ]
 
 dumped = """0000037957
@@ -122,7 +135,9 @@ dumped = """0000037957
 KRSs += dumped.split("\n")
 KRSs = list(set(KRSs))
 
-# TODO 
+type Aktualnosc = Literal["aktualne", "historyczne"]
+
+# TODO
 # https://rejestr.io/krs/146138/miejskie-przedsiebiorstwo-wodociagow-i-kanalizacji-w-m-st-warszawie
 # Bardzo dobre źródło ludzi w spółkach
 # TODO Dla tych oznaczonych, znajdź najpopularniejsze ich miejsca pracy
@@ -133,30 +148,96 @@ PEOPLE = [
     # TODO sync the ones in employed and company with the ones in rejestr.io DB
 ]
 
+class Autoapprovers:
+    def __init__(self, patterns):
+        self.patterns = patterns
+
+    def matches(self, path: str) -> bool:
+        for pattern in self.patterns:
+            if re.match(pattern, path):
+                return True
+        return False
+
+autoapprovers = Autoapprovers([
+    "/external/rejestr-io/krs/\\d+/to_read",
+    "/external/rejestr-io/krs/\\d+/connections/\\d+/state",
+    "/external/rejestr-io/krs/\\d+/external_basic"
+])
+
+def single_value_diff(prev, after):
+    return f"  current: {prev}\n  new: {after}"
+
+def something_removed(prev: dict, after: dict) -> list[tuple[str, str]]:
+    def diff_pair(k, v):
+        if k not in after:
+            return [(k, "removed")]
+        if isinstance(v, dict) and isinstance(after[k], dict):
+            return [(k  + "." + n, t) for n, t in something_removed(v, after[k])]
+        elif v != after[k]:
+            return [(k, f"changed\n{single_value_diff(v, after[k])}")]
+        return []
+
+    return [r for k, v in prev.items() for r in diff_pair(k, v)] + [
+        (k, "added") for k in after.keys() if k not in prev
+    ]
+
+def diff_maybe_dict(prev: dict | Any, after: dict | Any) -> tuple[bool, str]:
+    if isinstance(prev, dict) and isinstance(after, dict):
+        diff = something_removed(prev, after)
+        return len(diff) > 0, "\n".join([k + " " + v for (k, v) in diff])
+    return prev != after, single_value_diff(prev, after)
+
+
 class DBModel:
     def __init__(self, path):
         self.path = path
-        self.ref = db.reference(path)
+        self.__ref = db.reference(path)
         self.__value = None
-        
+
     def get(self) -> dict:
-        if not self.__value:    
-            v =  db.reference(self.path).get()
-            assert(not isinstance(v, tuple))
+        if not self.__value:
+            v = self.__ref.get()
+            assert not isinstance(v, tuple)
             self.__value = v
 
         return self.__value
-        
+    
+    def push(self, path, value):
+        self.__ref.child(path).push(value)
+
+    def update(self, data: dict):
+        for k, v in data.items():
+            current = self.__ref.child(k).get()
+            approved = False
+            path = f"{self.path}/{k}"
+            if not current:
+                approved = True
+            else:
+                is_diff, diff = diff_maybe_dict(current, v)
+                if not is_diff:
+                    continue
+                if autoapprovers.matches(path):
+                    print(f"Diff, skipping {path}")
+                    approved = False
+                else:
+                    print(f"Found difference for key {path}:\n{diff}")
+                    print("Set the value? [y/N]")
+                    if input() == "y":
+                        approved = True
+            if approved:
+                self.__ref.child(k).set(v)
+
 
 class KRSRef(DBModel):
     def __init__(self, krs: str):
         super().__init__(f"/external/rejestr-io/krs/{krs}")
         self.krs = krs
 
-    def is_scraped(self) -> bool:
+    def is_scraped(self, should_print=False) -> bool:
         current = self.get()
         if current is not None and "read" in current:
-            print(f"Already read KRS {self.krs}, SKIPPING...")
+            if should_print:
+                print(f"Already read KRS {self.krs}, SKIPPING...")
             return True
         return False
 
@@ -166,9 +247,52 @@ class PersonRef(DBModel):
         super().__init__(f"/external/rejestr-io/person/{id}")
         self.id = id
 
-    def is_scraped(self, expect_full=False) -> bool:
+    def is_scraped(self, expect_full=False, should_print=False) -> bool:
         current = self.get()
-        if current is not None and (not expect_full or "read" in current) and "name" in current:
-            print(f"Already read person {self.id} - {current['name']}, SKIPPING...")
+        if (
+            current is not None
+            and (not expect_full or "read" in current)
+            and "name" in current
+        ):
+            if should_print:
+                print(f"Already read person {self.id} - {current['name']}, SKIPPING...")
             return True
         return False
+
+
+def list_missing_people() -> tuple[set[tuple[str, Aktualnosc]], set[str]]:
+    companies = db.reference("/external/rejestr-io/krs/").get()
+    assert isinstance(companies, dict)
+
+    people = db.reference("/external/rejestr-io/person/").get()
+    assert isinstance(people, dict)
+
+    companies_to_ingest = set()
+    people_missing = set()
+
+    for id, company in companies.items():
+        for person, status in company.get("connections", {}).items():
+            if person not in people:
+                companies_to_ingest.add((id, status["state"]))
+                people_missing.add(person)
+
+    print(f"{len(companies_to_ingest)} companies to reprocess")
+    print(f"{len(people_missing)} people missing")
+
+    return companies_to_ingest, people_missing
+
+
+def orgs_to_process() -> set[tuple[str, Aktualnosc]]:
+    states: list[Aktualnosc] = ["aktualne", "historyczne"]
+    not_scraped: set[tuple[str, Aktualnosc]] = set(
+        (krs, st) for krs in KRSs if not KRSRef(krs).is_scraped() for st in states
+    )
+    companies_to_ingest = list_missing_people()[0]
+    # TODO list children of the KRSs
+    return companies_to_ingest.union(not_scraped)
+
+
+def people_to_process():
+    not_scraped = [id[0] for id in PEOPLE if not PersonRef(id[0]).is_scraped()]
+    people_missing = list_missing_people()[1]
+    return set(not_scraped).union(people_missing)

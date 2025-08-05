@@ -52,12 +52,15 @@
           "$id": {
             "$field": {
               // Allow appending to the empty fields
-              ".write": "auth.uid === 'rejestr-io-appender' && !data.exists()",
+              ".write": "auth.uid === 'rejestr-io-appender' && !data.exists()"
             },
             "connections": {
               "$id": {
                 ".write": "auth.uid === 'rejestr-io-appender'"
               }
+            },
+            "external_basic": {
+              ".write": "auth.uid === 'rejestr-io-appender'"
             }
           }
         }
