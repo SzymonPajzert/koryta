@@ -2,7 +2,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { createEntityStore } from "@/stores/entity";
-import { empty, fillBlankRecords, type Destination } from "@/composables/model";
+import { fillBlanks, type Destination } from "@/composables/model";
 import type { DestinationTypeMap } from "@/composables/model";
 
 // callback to call after the dialog was closed
@@ -96,13 +96,10 @@ export const useDialogStore = defineStore("dialog", () => {
   }
 
   function open<D extends Destination>(payload: NewEntityPayload<D>) {
-    const defaultValue = () => empty(payload.type);
-    const filler = (r: Partial<DestinationTypeMap[D]>) =>
-      fillBlankRecords(r, payload.type);
-
     shown.value = true;
     const dialog: Dialog<D> = {
-      value: filler(payload.edit?.value || defaultValue()),
+      // This should be safe and I don't know why it's not
+      value: fillBlanks<D>(payload.edit?.value ?? {}, payload.type) as unknown as DestinationTypeMap[D],
       type: payload.type,
       editKey: payload.edit?.key,
       callback: payload.callback ? markRaw(payload.callback) : undefined,

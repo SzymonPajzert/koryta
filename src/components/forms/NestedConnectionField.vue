@@ -41,13 +41,17 @@
   </v-expansion-panels>
 </template>
 
-<script lang="ts" setup>
+<script lang="ts" setup generic="D extends Destination">
 import { VTextField, VTextarea } from "vuetify/components";
 import { type Destination, type Connection } from "@/composables/model";
 
 // Define props for the component, specifically for v-model support.
 // All other props passed to NestedConnectionField will automatically be bound to VTextField via $attrs.
-const modelValue = defineModel<Connection>();
+const props = defineProps<{
+  hint: string;
+  entity: D;
+}>();
+const modelValue = defineModel<Connection<D>>();
 
 const title = computed(() => {
   if (!modelValue.value) return undefined;
@@ -59,10 +63,7 @@ const title = computed(() => {
   return undefined;
 });
 
-const props = defineProps<{
-  hint: string;
-  entity: Destination;
-}>();
+
 
 const relationLabel = props.entity === "company" ? "Stanowisko" : "Relacja";
 const relationHint =

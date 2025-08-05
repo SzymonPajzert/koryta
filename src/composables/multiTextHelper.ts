@@ -4,28 +4,37 @@ import TextableWrap from "@/components/forms/TextableWrap.vue";
 import type { Connection, Textable, Destination } from "@/composables/model";
 import { Link } from "@/composables/model";
 
+// TODO this should be a class and not this abomination
+
 export type Type =
   | "textField"
   | "textarea"
-  | "nestedConnection"
+  | "nestedCompanyConnection"
+  | "nestedEmployedConnection"
   | "entityPicker";
 
 export interface CompatibleComponent {
   textField: typeof TextableWrap;
   textarea: typeof TextableWrap;
-  nestedConnection: typeof NestedConnestionField;
+  nestedEmployedConnection: typeof NestedConnestionField;
+  nestedCompanyConnection: typeof NestedConnestionField;
   entityPicker: typeof EntityPicker;
 }
 
 export interface ComponentModel {
   textField: Textable;
   textarea: Textable;
-  nestedConnection: Connection;
+  nestedEmployedConnection: Connection<"employed">;
+  nestedCompanyConnection: Connection<"company">;
   entityPicker: Link<Destination>;
 }
 
-export function emptyNestedConnection(): ComponentModel["nestedConnection"] {
-  return { text: "", relation: "" } as ComponentModel["nestedConnection"];
+export function emptyNestedEmployedConnection(): ComponentModel["nestedEmployedConnection"] {
+  return { text: "", relation: "" } as ComponentModel["nestedEmployedConnection"];
+}
+
+export function emptyNestedCompanyConnection(): ComponentModel["nestedCompanyConnection"] {
+  return { text: "", relation: "" } as ComponentModel["nestedCompanyConnection"];
 }
 
 export function emptyTextable(): ComponentModel["textField"] &

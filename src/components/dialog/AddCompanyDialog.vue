@@ -34,11 +34,11 @@
             prependZeros(value) != value ? 'Dodaj zera na początku' : true,
           (value) => (prependZeros(value).length != 10 ? '10 cyfr' : true),
         ]"
-        :v-model="formData.krs_number"
+        :v-model="formData.krsNumber"
       />
     </v-col>
     <v-col cols="12" md="6">
-      <v-text-field label="Numer NIP" :v-model="formData.nip_number" />
+      <v-text-field label="Numer NIP" :v-model="formData.nipNumber" />
     </v-col>
 
     <v-col cols="12">
