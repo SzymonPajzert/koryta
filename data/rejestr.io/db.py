@@ -11,9 +11,9 @@ if "FIREBASE_DATABASE_EMULATOR_HOST" in os.environ:
 else:
     print("Should I connect to prod DB? Type 'yes, connect me'")
     if input() != "yes, connect me":
-        print("Stopping, run $ export FIREBASE_DATABASE_EMULATOR_HOST=\"127.0.0.1:9003\"")
+        print('Stopping, run $ export FIREBASE_DATABASE_EMULATOR_HOST="127.0.0.1:9003"')
         sys.exit(1)
-    
+
 
 firebase_admin.initialize_app(
     options={
@@ -148,6 +148,7 @@ PEOPLE = [
     # TODO sync the ones in employed and company with the ones in rejestr.io DB
 ]
 
+
 class Autoapprovers:
     def __init__(self, patterns):
         self.patterns = patterns
@@ -158,21 +159,26 @@ class Autoapprovers:
                 return True
         return False
 
-autoapprovers = Autoapprovers([
-    "/external/rejestr-io/krs/\\d+/to_read",
-    "/external/rejestr-io/krs/\\d+/connections/\\d+/state",
-    "/external/rejestr-io/krs/\\d+/external_basic"
-])
+
+autoapprovers = Autoapprovers(
+    [
+        "/external/rejestr-io/krs/\\d+/to_read",
+        "/external/rejestr-io/krs/\\d+/connections/\\d+/state",
+        "/external/rejestr-io/krs/\\d+/external_basic",
+    ]
+)
+
 
 def single_value_diff(prev, after):
     return f"  current: {prev}\n  new: {after}"
+
 
 def something_removed(prev: dict, after: dict) -> list[tuple[str, str]]:
     def diff_pair(k, v):
         if k not in after:
             return [(k, "removed")]
         if isinstance(v, dict) and isinstance(after[k], dict):
-            return [(k  + "." + n, t) for n, t in something_removed(v, after[k])]
+            return [(k + "." + n, t) for n, t in something_removed(v, after[k])]
         elif v != after[k]:
             return [(k, f"changed\n{single_value_diff(v, after[k])}")]
         return []
@@ -180,6 +186,7 @@ def something_removed(prev: dict, after: dict) -> list[tuple[str, str]]:
     return [r for k, v in prev.items() for r in diff_pair(k, v)] + [
         (k, "added") for k in after.keys() if k not in prev
     ]
+
 
 def diff_maybe_dict(prev: dict | Any, after: dict | Any) -> tuple[bool, str]:
     if isinstance(prev, dict) and isinstance(after, dict):
@@ -201,7 +208,7 @@ class DBModel:
             self.__value = v
 
         return self.__value
-    
+
     def push(self, path, value):
         self.__ref.child(path).push(value)
 
@@ -242,6 +249,7 @@ class KRSRef(DBModel):
         return False
 
 
+# TODO fill the missing name for some fields, they use basic or external
 class PersonRef(DBModel):
     def __init__(self, id: str):
         super().__init__(f"/external/rejestr-io/person/{id}")
@@ -249,31 +257,28 @@ class PersonRef(DBModel):
 
     def is_scraped(self, expect_full=False, should_print=False) -> bool:
         current = self.get()
-        if (
-            current is not None
-            and (not expect_full or "read" in current)
-            and "name" in current
-        ):
+        if current is not None and (not expect_full or "read" in current):
             if should_print:
                 print(f"Already read person {self.id} - {current['name']}, SKIPPING...")
             return True
         return False
 
 
-def list_missing_people() -> tuple[set[tuple[str, Aktualnosc]], set[str]]:
+def list_missing_people() -> tuple[dict[str, list[Aktualnosc]], set[str]]:
     companies = db.reference("/external/rejestr-io/krs/").get()
     assert isinstance(companies, dict)
 
     people = db.reference("/external/rejestr-io/person/").get()
     assert isinstance(people, dict)
 
-    companies_to_ingest = set()
+    companies_to_ingest = dict()
     people_missing = set()
 
     for id, company in companies.items():
         for person, status in company.get("connections", {}).items():
             if person not in people:
-                companies_to_ingest.add((id, status["state"]))
+                companies_to_ingest[id] = companies_to_ingest.get(id, [])
+                companies_to_ingest[id].append((status["state"]))
                 people_missing.add(person)
 
     print(f"{len(companies_to_ingest)} companies to reprocess")
@@ -282,14 +287,22 @@ def list_missing_people() -> tuple[set[tuple[str, Aktualnosc]], set[str]]:
     return companies_to_ingest, people_missing
 
 
-def orgs_to_process() -> set[tuple[str, Aktualnosc]]:
-    states: list[Aktualnosc] = ["aktualne", "historyczne"]
-    not_scraped: set[tuple[str, Aktualnosc]] = set(
-        (krs, st) for krs in KRSs if not KRSRef(krs).is_scraped() for st in states
-    )
+def orgs_to_process() -> dict[str, list[Aktualnosc]]:
+    states: list[Aktualnosc] = ["historyczne", "aktualne"]
+    not_scraped = {
+        krs: states for krs in KRSs if not KRSRef(krs).is_scraped()
+    }
     companies_to_ingest = list_missing_people()[0]
     # TODO list children of the KRSs
-    return companies_to_ingest.union(not_scraped)
+    print(
+        "Not scraped",
+        len(not_scraped),
+        "Companies for missing people",
+        len(companies_to_ingest),
+    )
+    for k, v in companies_to_ingest.items():
+        not_scraped[k] = list(set(not_scraped[k]).union(v))
+    return not_scraped
 
 
 def people_to_process():

@@ -24,6 +24,8 @@
       {{ toAdd }} do dodania
       <br />
       {{ toCheck }} do sprawdzenia
+      <br />
+      {{ Object.keys(people).length }} łącznie
     </v-card-text>
     <v-card-actions>
       <v-spacer />
