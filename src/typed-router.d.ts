@@ -30,6 +30,7 @@ declare module 'vue-router/auto-routes' {
     '/admin': RouteRecordInfo<'/admin', '/admin', Record<never, never>, Record<never, never>>,
     '/entity/[destination]/[id]': RouteRecordInfo<'/entity/[destination]/[id]', '/entity/:destination/:id', { destination: ParamValue<true>, id: ParamValue<true> }, { destination: ParamValue<false>, id: ParamValue<false> }>,
     '/entity/[...path]': RouteRecordInfo<'/entity/[...path]', '/entity/:path(.*)', { path: ParamValue<true> }, { path: ParamValue<false> }>,
+    '/kpo': RouteRecordInfo<'/kpo', '/kpo', Record<never, never>, Record<never, never>>,
     '/login': RouteRecordInfo<'/login', '/login', Record<never, never>, Record<never, never>>,
     '/profil': RouteRecordInfo<'/profil', '/profil', Record<never, never>, Record<never, never>>,
     '/zrodla': RouteRecordInfo<'/zrodla', '/zrodla', Record<never, never>, Record<never, never>>,
