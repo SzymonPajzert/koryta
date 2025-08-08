@@ -44,6 +44,10 @@
     },
 
     "external": {
+      "kpo": {
+        ".read": "true",
+        ".write": "auth.uid === 'kpo-appender'"
+      },
       "rejestr-io": {
         ".read": "auth.uid === 'rejestr-io-appender'",
         ".write": "auth.uid === 'rejestr-io-appender' && !data.exists()",

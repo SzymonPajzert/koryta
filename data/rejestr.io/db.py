@@ -13,12 +13,24 @@ else:
     if input() != "yes, connect me":
         print('Stopping, run $ export FIREBASE_DATABASE_EMULATOR_HOST="127.0.0.1:9003"')
         sys.exit(1)
-
+        
+DB_UID = ""
+ACCEPTABLE_UIDs=[
+    "rejestr-io-appender",
+    "kpo-appender",
+]
+print("Provide UID to connect to firebase. Available options: ")
+for uid in ACCEPTABLE_UIDs:
+    print(f"  {uid}")
+DB_UID = input("> ")
+if DB_UID not in ACCEPTABLE_UIDs:
+    print(f"UID '{DB_UID}' is not allowed")
+    sys.exit(1)
 
 firebase_admin.initialize_app(
     options={
         "databaseURL": DATABASE_URL,
-        "databaseAuthVariableOverride": {"uid": "rejestr-io-appender"},
+        "databaseAuthVariableOverride": {"uid": DB_UID},
     }
 )
 
