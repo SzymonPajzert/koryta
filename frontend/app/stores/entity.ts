@@ -5,7 +5,7 @@ import {
   set,
   type ThenableReference,
 } from "firebase/database";
-import type { DestinationTypeMap } from "@/composables/model";
+import type { DestinationTypeMap } from "@/../shared/model";
 import { useAuthState } from "@/composables/auth";
 import { removeBlanks, type Destination } from "@/composables/model";
 
