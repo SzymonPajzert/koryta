@@ -57,9 +57,7 @@ import { useAuthState } from "@/composables/auth";
 const { user } = useAuthState();
 const router = useRouter();
 
-definePage({
-  meta: {
-    title: "Ranking KPO",
-  },
+definePageMeta({
+  title: "Ranking KPO",
 });
 </script>

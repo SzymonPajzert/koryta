@@ -8,14 +8,15 @@ import {
   type User,
   onAuthStateChanged,
 } from "firebase/auth";
-import router from "@/router";
-import { auth, db } from "@/firebase";
 import { set, ref as dbRef } from "firebase/database";
 
 const email = ref("");
 const password = ref("");
 const error = ref<string | null>(null);
 const loading = ref(false);
+
+const auth = useFirebaseAuth()!
+const db = useDatabase();
 
 const user = ref<User | null>();
 onAuthStateChanged(auth, (userIn) => {

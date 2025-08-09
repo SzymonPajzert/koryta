@@ -1,24 +1,23 @@
 import { useRTDB } from "@vueuse/firebase/useRTDB";
-import { db } from "@/firebase";
 import {
   ref as dbRef,
   push,
   set,
   type ThenableReference,
 } from "firebase/database";
-import type { DestinationTypeMap } from "../composables/model";
-import { useAuthState } from "../composables/auth";
-import { removeBlanks, type Destination } from "../composables/model";
-
-const { user, isAdmin } = useAuthState();
+import type { DestinationTypeMap } from "@/composables/model";
+import { useAuthState } from "@/composables/auth";
+import { removeBlanks, type Destination } from "@/composables/model";
 
 export function createEntityStore<D extends Destination>(entity: D) {
+  const db = useDatabase();
+  const { user, isAdmin } = useAuthState();
+
   return defineStore("entity_" + entity, () => {
     type T = DestinationTypeMap[D];
 
     const entitiesApproved = useRTDB<Record<string, T>>(dbRef(db, entity));
     const suggestions = computed(() => {
-      const { user } = useAuthState();
       if (user.value && user.value.uid) {
         return useRTDB<Record<string, T>>(
           dbRef(db, `suggestions/${user.value?.uid}/${entity}`),

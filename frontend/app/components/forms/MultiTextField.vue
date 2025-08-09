@@ -48,12 +48,14 @@
 
 <script lang="ts" setup generic="F extends Type">
 import { type Destination } from "@/composables/model";
-import { newKey } from "@/composables/model";
+import { useDBUtils } from "@/composables/model";
 import {
   type Type,
   type CompatibleComponent,
   type ComponentModel,
 } from "@/composables/multiTextHelper";
+
+const { newKey } = useDBUtils();
 
 const props = withDefaults(
   defineProps<{

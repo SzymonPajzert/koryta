@@ -170,9 +170,10 @@
 <script setup lang="ts">
 import { Link, type PersonRejestr } from "@/composables/model";
 import { set, ref as dbRef, push } from "firebase/database";
-import { db } from "@/firebase";
 import EntityPicker from "@/components/forms/EntityPicker.vue";
 import type { CompanyMembership } from "@/composables/entities/companyScore";
+
+const db = useDatabase();
 
 const { person } = defineProps<{
   person: PersonRejestr;

@@ -21,11 +21,11 @@
 
 <script lang="ts" setup>
 import { useRTDB } from "@vueuse/firebase/useRTDB";
-import { computed, type WatchHandle } from "vue";
+import { computed } from "vue";
 import { useAuthState } from "@/composables/auth"; // Assuming auth store path
 import { ref as dbRef } from "firebase/database";
-import { db } from "@/firebase";
 const { user, isAdmin } = useAuthState();
+const db = useDatabase();
 
 interface UserSuggestionTypes {
   data?: Record<string, any>;

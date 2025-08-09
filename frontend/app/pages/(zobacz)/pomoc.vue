@@ -19,11 +19,9 @@
 </template>
 
 <script lang="ts" setup>
-definePage({
-  meta: {
-    title: "Działaj z nami",
-    isHelp: true,
-  },
+definePageMeta({
+  title: "Działaj z nami",
+  isHelp: true,
 });
 
 import { useAuthState } from "@/composables/auth";

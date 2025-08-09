@@ -99,13 +99,12 @@
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
 import { createEntityStore } from "@/stores/entity";
-import { isTest } from "@/firebase";
 
 const useListEntity = createEntityStore("employed");
 const entityStore = useListEntity();
 const { entities: people } = storeToRefs(entityStore);
 const { koryciarz } = useFeminatyw();
 
-const idx = isTest() ? 1 : Math.floor(Math.random() * 2);
+const idx = import.meta.test ? 1 : Math.floor(Math.random() * 2);
 const subtitle = ["Polityczny wypas", "Pójdź tam, gdzie politycy zimują"][idx];
 </script>

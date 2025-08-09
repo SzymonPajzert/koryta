@@ -1,5 +1,5 @@
 <template>
-  <multi-dialog />
+  <MultiDialog />
   <v-app-bar>
     <v-img
       class="mx-2"
@@ -29,30 +29,33 @@
       :max-width="maxWidth"
       :style="{ padding: rootPadding }"
     >
-      <router-view />
+      <NuxtPage />
     </v-container>
   </v-main>
 </template>
 
 <script lang="ts" setup>
 import { onMounted, computed } from "vue";
-import { app } from "@/firebase";
 import { getAnalytics, logEvent } from "firebase/analytics";
 import { useAuthState } from "@/composables/auth";
 import { useRoute } from "vue-router";
+import MultiDialog from "~/components/dialog/MultiDialog.vue";
 
 const { user, logout } = useAuthState();
 
-onMounted(() => {
-  const analytics = getAnalytics(app);
+if (import.meta.client) {
+  onMounted(() => {
+    const app = useFirebaseApp()
+    const analytics = getAnalytics(app);
 
-  logEvent(analytics, "page_view", {
-    page_location: window.location.href,
-    page_path: window.location.pathname,
-    page_title: document.title,
-    user_agent: navigator.userAgent,
+    logEvent(analytics, "page_view", {
+      page_location: window.location.href,
+      page_path: window.location.pathname,
+      page_title: document.title,
+      user_agent: navigator.userAgent,
+    });
   });
-});
+}
 
 const route = useRoute();
 const maxWidth = computed(() => (route.meta.isGraph ? "none" : 900));

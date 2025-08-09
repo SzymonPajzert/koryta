@@ -1,7 +1,7 @@
 import { usePartyStatistics } from "@/composables/party";
 import { createEntityStore } from "@/stores/entity";
 import { getHostname } from "@/composables/entities/articles";
-import type { Article, Connection } from "../composables/model";
+import type { Connection } from "@/composables/model";
 import { DiGraph } from "digraph-js";
 
 export interface Node {
@@ -44,21 +44,21 @@ export interface Edge {
   traverse?: TraversePolicy;
 }
 
-const useListEmployed = createEntityStore("employed");
-const employedStore = useListEmployed();
-const { entities: people } = storeToRefs(employedStore);
-
-const useListCompanies = createEntityStore("company");
-const companyStore = useListCompanies();
-const { entities: companies } = storeToRefs(companyStore);
-
-const useListData = createEntityStore("data");
-const dataStore = useListData();
-const { entities: articles } = storeToRefs(dataStore);
-
-const { partyColors } = usePartyStatistics();
-
 export const useGraphStore = defineStore("graph", () => {
+  const useListEmployed = createEntityStore("employed");
+  const employedStore = useListEmployed();
+  const { entities: people } = storeToRefs(employedStore);
+
+  const useListCompanies = createEntityStore("company");
+  const companyStore = useListCompanies();
+  const { entities: companies } = storeToRefs(companyStore);
+
+  const useListData = createEntityStore("data");
+  const dataStore = useListData();
+  const { entities: articles } = storeToRefs(dataStore);
+
+  const { partyColors } = usePartyStatistics();
+
   const nodesNoStats = computed(() => {
     const result: Record<string, Node> = {};
     Object.entries(people.value).forEach(([key, person]) => {

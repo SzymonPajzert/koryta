@@ -7,21 +7,6 @@ import {
 import { useGraphStore } from "@/stores/graph";
 import { type Ref } from "vue";
 
-const graphStore = useGraphStore();
-const { nodes, nodeGroupsMap } = storeToRefs(graphStore);
-
-const useListData = createEntityStore("data");
-const dataStore = useListData();
-const { entities: articlesRaw } = storeToRefs(dataStore);
-
-const useListEmployed = createEntityStore("employed");
-const employedStore = useListEmployed();
-const { entities: peopleRaw } = storeToRefs(employedStore);
-
-const useListCompany = createEntityStore("company");
-const companyStore = useListCompany();
-const { entities: placesRaw } = storeToRefs(companyStore);
-
 type ListItem = [string, Nameable & Status];
 
 interface Issue {
@@ -41,6 +26,21 @@ export function useEntityStatus(
   allowedIssues?: Ref<string[]>,
   pickedPlace?: Ref<string | undefined>,
 ) {
+  const graphStore = useGraphStore();
+  const { nodes, nodeGroupsMap } = storeToRefs(graphStore);
+
+  const useListData = createEntityStore("data");
+  const dataStore = useListData();
+  const { entities: articlesRaw } = storeToRefs(dataStore);
+
+  const useListEmployed = createEntityStore("employed");
+  const employedStore = useListEmployed();
+  const { entities: peopleRaw } = storeToRefs(employedStore);
+
+  const useListCompany = createEntityStore("company");
+  const companyStore = useListCompany();
+  const { entities: placesRaw } = storeToRefs(companyStore);
+
   // We will set priority later, so it's ommited from the type
   function emptyIssue(
     key: string,

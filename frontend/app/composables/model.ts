@@ -1,5 +1,4 @@
 import { ref as dbRef, push } from "firebase/database";
-import { db } from "@/firebase";
 
 export interface Textable {
   text: string;
@@ -144,14 +143,6 @@ interface ArticleStatus {
   confirmedDone: boolean;
 }
 
-export function newKey() {
-  const newKey = push(dbRef(db, "_temp_keys/employments")).key;
-  if (!newKey) {
-    throw "Failed to create a key";
-  }
-  return newKey;
-}
-
 export interface DestinationTypeMap {
   employed: NepoEmployment;
   company: Company;
@@ -172,10 +163,24 @@ export class Link<T extends Destination> {
   }
 }
 
-function recordOf<T>(value: T): Record<string, T> {
-  const result: Record<string, T> = {};
-  result[newKey()] = value;
-  return result;
+export function useDBUtils() {
+  const db = useDatabase();
+
+  function newKey() {
+    const newKey = push(dbRef(db, "_temp_keys/employments")).key;
+    if (!newKey) {
+      throw "Failed to create a key";
+    }
+    return newKey;
+  }
+
+  function recordOf<T>(value: T): Record<string, T> {
+    const result: Record<string, T> = {};
+    result[newKey()] = value;
+    return result;
+  }
+
+  return { newKey, recordOf };
 }
 
 export function fillBlanks<D extends Destination>(

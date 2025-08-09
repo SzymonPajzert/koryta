@@ -3,10 +3,8 @@
 </template>
 
 <script lang="ts" setup>
-definePage({
-  meta: {
-    title: "Lista",
-  },
+definePageMeta({
+  title: "Lista",
 });
 
 import { createEntityStore } from "@/stores/entity";
