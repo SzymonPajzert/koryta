@@ -25,7 +25,7 @@
 
 <script lang="ts" setup>
 import { useEntitiesFiltered } from "@/composables/entities/filtered";
-import type { Destination } from "@/composables/model";
+import type { Destination } from "~~/shared/model";
 import { useDialogStore } from "@/stores/dialog";
 
 const dialogStore = useDialogStore();

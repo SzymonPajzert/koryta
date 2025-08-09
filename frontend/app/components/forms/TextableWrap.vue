@@ -18,8 +18,8 @@
 <script lang="ts" setup>
 // TODO inherit props from the parent
 
-import { type Textable } from "@/composables/model";
-import { type Type } from "@/composables/multiTextHelper";
+import type { Textable } from "~~/shared/model";
+import type { Type } from "@/composables/multiTextHelper";
 
 const props = defineProps<{
   fieldType: Type;

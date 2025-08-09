@@ -14,13 +14,9 @@
 </template>
 
 <script lang="ts" setup>
-import type { Article } from "@/composables/model";
-import {
-  type EnrichedStatus,
-  useArticles,
-  getShortTitle,
-  getSubtitle,
-} from "@/composables/entities/articles";
+import type { Article } from "~~/shared/model";
+import type { EnrichedStatus } from "@/composables/entities/articles";
+import { getShortTitle } from "~~/shared/misc";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
 
 const dialogStore = useDialogStore();
@@ -30,5 +26,4 @@ const { articleID, article } = defineProps<{
   article: Article & EnrichedStatus;
   dense?: boolean;
 }>();
-const { markArticleAsDone, assignToArticle } = useArticles();
 </script>

@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { usePartyStatistics } from "@/composables/party";
-const { parties, partyColors } = usePartyStatistics();
+const { partyColors } = usePartyStatistics();
 
 const props = defineProps<{
   party: string;
@@ -15,7 +15,7 @@ const props = defineProps<{
 
 const style = computed(() => {
   return {
-    backgroundColor: partyColors.value[props.party],
+    backgroundColor: partyColors[props.party],
   };
 });
 </script>

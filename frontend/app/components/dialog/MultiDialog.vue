@@ -87,7 +87,7 @@ import AddCompanyDialog from "@/components/dialog/AddCompanyDialog.vue";
 import AddArticleDialog from "@/components/dialog/AddArticleDialog.vue";
 import AddSuggestionDialog from "@/components/dialog/AddSuggestionDialog.vue";
 import AddEmployedDialog from "@/components/dialog/AddEmployedDialog.vue";
-import { type Destination, type DestinationTypeMap } from "@/composables/model";
+import type { Destination, DestinationTypeMap } from "~~/shared/model";
 
 const dialogStore = useDialogStore();
 const { dialogs, shown, currentDialog, showSnackbar } =

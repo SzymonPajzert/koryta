@@ -59,7 +59,7 @@
 </template>
 
 <script lang="ts" setup>
-import { Link, type Company } from "@/composables/model";
+import { Link, type Company } from "~~/shared/model";
 import {
   emptyEntityPicker,
   emptyTextable,

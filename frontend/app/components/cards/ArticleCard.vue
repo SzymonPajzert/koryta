@@ -37,7 +37,7 @@
         @click.prevent="
           assignToArticle(
             articleID,
-            !article.enrichedStatus?.isAssignedToCurrentUser,
+            !article.enrichedStatus?.isAssignedToCurrentUser
           )
         "
         prepend-icon="mdi-hand-back-left-outline"
@@ -66,13 +66,12 @@
 </template>
 
 <script lang="ts" setup>
-import type { Article } from "@/composables/model";
+import type { Article } from "@/../shared/model";
 import {
   type EnrichedStatus,
   useArticles,
-  getShortTitle,
-  getSubtitle,
 } from "@/composables/entities/articles";
+import { getShortTitle, getSubtitle } from "@/../shared/misc";
 import { useDialogStore } from "@/stores/dialog";
 
 const dialogStore = useDialogStore();

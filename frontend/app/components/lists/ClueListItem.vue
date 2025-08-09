@@ -168,7 +168,7 @@
 </template>
 
 <script setup lang="ts">
-import { Link, type PersonRejestr } from "@/composables/model";
+import type { Link, PersonRejestr } from "~~/shared/model";
 import { set, ref as dbRef, push } from "firebase/database";
 import EntityPicker from "@/components/forms/EntityPicker.vue";
 import type { CompanyMembership } from "@/composables/entities/companyScore";

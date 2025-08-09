@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { useEntityStatus } from "@/composables/entities/status";
-import { destinationIcon } from "@/composables/model";
+import { destinationIcon } from "@/../shared/model";
 import { useDialogStore, type NewEntityPayload } from "@/stores/dialog";
 
 const props = defineProps<{

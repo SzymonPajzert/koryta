@@ -1,8 +1,8 @@
 import type EntityPicker from "@/components/forms/EntityPicker.vue";
-import NestedConnestionField from "@/components/forms/NestedConnectionField.vue";
-import TextableWrap from "@/components/forms/TextableWrap.vue";
-import type { Connection, Textable, Destination } from "@/composables/model";
-import { Link } from "@/composables/model";
+import type NestedConnestionField from "@/components/forms/NestedConnectionField.vue";
+import type TextableWrap from "@/components/forms/TextableWrap.vue";
+import type { Connection, Textable, Destination } from "~~/shared/model";
+import { Link } from "~~/shared/model";
 
 // TODO this should be a class and not this abomination
 

@@ -113,16 +113,15 @@
 </template>
 
 <script lang="ts" setup>
-import { httpsCallable } from "firebase/functions";
-import { articleTags, type Article } from "@/composables/model";
+import { httpsCallable, getFunctions } from "firebase/functions";
+import { articleTags, type Article } from "~~/shared/model";
 import {
   emptyTextable,
   emptyEntityPicker,
 } from "@/composables/multiTextHelper";
 import TextableWrap from "../forms/TextableWrap.vue";
 import EntityPicker from "../forms/EntityPicker.vue";
-import { splitTitle } from "@/composables/entities/articles";
-import {getFunctions} from "firebase/functions"
+import { splitTitle } from "~~/shared/misc";
 
 const firebaseApp = useFirebaseApp();
 const functions = getFunctions(firebaseApp);

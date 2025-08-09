@@ -43,7 +43,7 @@
 
 <script lang="ts" setup generic="D extends Destination">
 import { VTextField, VTextarea } from "vuetify/components";
-import { type Destination, type Connection } from "@/composables/model";
+import type { Destination, Connection } from "~~/shared/model";
 
 // Define props for the component, specifically for v-model support.
 // All other props passed to NestedConnectionField will automatically be bound to VTextField via $attrs.
