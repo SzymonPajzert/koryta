@@ -3,9 +3,9 @@ import {
   type Connection,
   type Destination,
   type Nameable,
-} from "@/composables/model";
-import { useGraphStore } from "@/stores/graph";
+} from "@/../shared/model";
 import { type Ref } from "vue";
+import { type GraphLayout } from "~/../shared/graph/util";
 
 type ListItem = [string, Nameable & Status];
 
@@ -22,13 +22,8 @@ export interface Status {
   subtitle: string;
 }
 
-export function useEntityStatus(
-  allowedIssues?: Ref<string[]>,
-  pickedPlace?: Ref<string | undefined>,
-) {
-  const graphStore = useGraphStore();
-  const { nodes, nodeGroupsMap } = storeToRefs(graphStore);
-
+export function useEntityStatus(allowedIssues?: Ref<string[]>) {
+  const { allowEntity } = useParams("Status");
   const useListData = createEntityStore("data");
   const dataStore = useListData();
   const { entities: articlesRaw } = storeToRefs(dataStore);
@@ -160,13 +155,6 @@ export function useEntityStatus(
     });
   });
 
-  const nodeGroupConnected = computed(() => {
-    if (pickedPlace && pickedPlace.value) {
-      return nodeGroupsMap.value[pickedPlace.value].connected;
-    }
-    return Object.keys(nodes.value);
-  });
-
   // Gather all of them together and list their state.
   const statusList = computed<ListItem[]>(() => {
     return [...articles.value, ...people.value, ...places.value]
@@ -192,8 +180,7 @@ export function useEntityStatus(
         return result;
       })
       .filter(([key, entity]) => {
-        const matchesFilter =
-          !nodeGroupConnected.value || nodeGroupConnected.value.includes(key);
+        const matchesFilter = allowEntity(key);
         const nonEmptyIssues = !!entity.issues;
         return (!entity.hasPlace || matchesFilter) && nonEmptyIssues;
       })

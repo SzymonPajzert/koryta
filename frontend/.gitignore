@@ -22,3 +22,6 @@ logs
 .env
 .env.*
 !.env.example
+
+# Firebase service auth
+service_account.json

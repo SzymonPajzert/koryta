@@ -5,15 +5,16 @@ import {
   set,
   type ThenableReference,
 } from "firebase/database";
-import type { DestinationTypeMap } from "@/../shared/model";
+import type { DestinationTypeMap, Destination } from "@/../shared/model";
 import { useAuthState } from "@/composables/auth";
-import { removeBlanks, type Destination } from "@/composables/model";
+import { defineStore } from "pinia";
 
 export function createEntityStore<D extends Destination>(entity: D) {
-  const db = useDatabase();
-  const { user, isAdmin } = useAuthState();
-
   return defineStore("entity_" + entity, () => {
+    const db = useDatabase();
+    const { removeBlanks } = useDBUtils();
+    const { user, isAdmin } = useAuthState();
+
     type T = DestinationTypeMap[D];
 
     const entitiesApproved = useRTDB<Record<string, T>>(dbRef(db, entity));

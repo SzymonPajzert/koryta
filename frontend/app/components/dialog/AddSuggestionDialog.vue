@@ -23,6 +23,6 @@
 
 <script lang="ts" setup>
 // TODO rename this file
-import type { Todo } from "@/composables/model";
+import type { Todo } from "~~/shared/model";
 const formData = defineModel<Todo>({ required: true });
 </script>

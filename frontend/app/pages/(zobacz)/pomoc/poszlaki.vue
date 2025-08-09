@@ -8,7 +8,10 @@
 
   <v-expand-transition>
     <v-list v-if="showScores">
-      <v-list-item v-for="([krs, companyScore], _) in companiesSorted">
+      <v-list-item
+        v-for="([krs, companyScore], _) in companiesSorted"
+        :key="krs"
+      >
         {{ companyScore.name }} ({{ companyScore.score }} / {{ krs }})
       </v-list-item>
     </v-list>
@@ -47,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { type PersonRejestr } from "@/composables/model";
+import type { PersonRejestr } from "~~/shared/model";
 import { createEntityStore } from "@/stores/entity";
 import { toNumber, useCompanyScore } from "@/composables/entities/companyScore";
 import ClueListItem from "@/components/lists/ClueListItem.vue";
@@ -62,12 +65,12 @@ const ignoreSuccess = ref(3);
 
 const { scores, personScore, personCompanies } = useCompanyScore(
   firstChance,
-  ignoreSuccess,
+  ignoreSuccess
 );
 const companiesSorted = computed(() =>
   Object.entries(scores.value).sort(
-    (a, b) => toNumber(b[1].score) - toNumber(a[1].score),
-  ),
+    (a, b) => toNumber(b[1].score) - toNumber(a[1].score)
+  )
 );
 
 // Show only people that are active
@@ -82,8 +85,8 @@ const peopleFiltered = computed(() => {
 
   return Object.fromEntries(
     Object.entries(people.value).filter(([key, _]: [string, PersonRejestr]) =>
-      activePeopleKey.has(key),
-    ),
+      activePeopleKey.has(key)
+    )
   );
 });
 
@@ -124,16 +127,16 @@ const peopleOrdered = computed<[string, PersonRejestr][]>(() => {
 const visited = computed(
   () =>
     Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) != 0)
-      .length,
+      .length
 );
 const toAdd = computed(
   () =>
     Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) > 0)
-      .length,
+      .length
 );
 const toCheck = computed(
   () =>
     Object.values(peopleOrdered.value).filter(([_, p]) => (p.score ?? 0) == 0)
-      .length,
+      .length
 );
 </script>

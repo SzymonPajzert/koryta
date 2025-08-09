@@ -47,12 +47,12 @@
 </template>
 
 <script lang="ts" setup generic="F extends Type">
-import { type Destination } from "@/composables/model";
+import type { Destination } from "~~/shared/model";
 import { useDBUtils } from "@/composables/model";
-import {
-  type Type,
-  type CompatibleComponent,
-  type ComponentModel,
+import type {
+  Type,
+  CompatibleComponent,
+  ComponentModel,
 } from "@/composables/multiTextHelper";
 
 const { newKey } = useDBUtils();

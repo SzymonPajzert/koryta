@@ -21,7 +21,7 @@
       </v-list-item>
     </template>
     <template #prepend>
-      <slot name="prepend"></slot>
+      <slot name="prepend" />
     </template>
   </v-autocomplete>
 </template>
@@ -30,7 +30,7 @@
 import { ref } from "vue";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
 import { createEntityStore } from "@/stores/entity";
-import { type Destination, Link } from "@/composables/model";
+import { type Destination, Link } from "~~/shared/model";
 
 const props = defineProps<{
   label: string;

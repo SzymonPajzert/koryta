@@ -21,7 +21,7 @@ import {
   type Destination,
   destinationIcon,
   destinationAddText,
-} from "@/composables/model";
+} from "~~/shared/model";
 
 const { user } = useAuthState();
 

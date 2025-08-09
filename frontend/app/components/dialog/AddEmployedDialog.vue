@@ -70,7 +70,7 @@
 <script lang="ts" setup>
 import { useFeminatyw } from "@/composables/feminatyw";
 import { usePartyStatistics } from "@/composables/party";
-import { Link, type NepoEmployment } from "@/composables/model";
+import { Link, type NepoEmployment } from "~~/shared/model";
 import { computed } from "vue";
 import MultiTextField from "@/components/forms/MultiTextField.vue";
 import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";

@@ -1,4 +1,4 @@
-import type { Article, Destination, Nameable } from "@/composables/model";
+import type { Article, Destination, Nameable } from "~~/shared/model";
 import { createEntityStore } from "@/stores/entity";
 import type { Ref } from "vue";
 import { compareTwoStrings } from "string-similarity";

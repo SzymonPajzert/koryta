@@ -58,12 +58,11 @@
 </template>
 
 <script setup lang="ts">
-import { type Connection, type NepoEmployment } from "@/composables/model";
+import type { Connection, NepoEmployment, Destination} from "~~/shared/model";
 import PartyChip from "./PartyChip.vue";
 import { useAuthState } from "@/composables/auth";
 import UserDetailDialog from "@/components/dialog/UserDetailDialog.vue";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
-import { type Destination } from "@/composables/model";
 
 const dialogStore = useDialogStore();
 const { isAdmin } = useAuthState();

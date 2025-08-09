@@ -1,38 +1,39 @@
 <script setup lang="ts">
-definePageMeta({
-  title: "Graf",
-  isGraph: true,
-});
-
 import { defineConfigs } from "v-network-graph";
 import {
   type EventHandlers,
   type NodeEvent,
-  type ViewEvent,
   type LayoutHandler,
   SimpleLayout,
 } from "v-network-graph";
 
 import { useDialogStore } from "@/stores/dialog";
 import { useSimulationStore } from "@/stores/simulation";
-import { useGraphStore } from "@/stores/graph";
+import { useParams } from "@/composables/params";
+
+definePageMeta({
+  title: "Graf",
+  isGraph: true,
+});
 
 const dialogStore = useDialogStore();
-const graphStore = useGraphStore();
 const simulationStore = useSimulationStore();
 
 const { runSimulation } = storeToRefs(simulationStore);
-const { nodes, edges } = storeToRefs(graphStore);
-import { useParams } from "@/composables/params";
+const { data } = await useAsyncData("graph", () =>
+  $fetch("/api/graph")
+);
+const nodes = computed(() => data.value?.nodes);
+const edges = computed(() => data.value?.edges);
 
 const router = useRouter();
 
 const interestingNodes = computed(() => {
   return Object.fromEntries(
     // TODO make it a parameter
-    Object.entries(nodes.value).filter(
-      ([_, node]) => node.type !== "rect" || node.stats.people > 0,
-    ),
+    Object.entries(nodes.value ?? {}).filter(
+      ([_, node]) => node.type !== "rect" || node.stats.people > 0
+    )
   );
 });
 
@@ -41,8 +42,8 @@ const { filtered } = useParams("Graf ");
 const nodesFiltered = computed(() => {
   return Object.fromEntries(
     Object.entries(interestingNodes.value).filter(([key, _]) =>
-      filtered.value.includes(key),
-    ),
+      filtered.value.includes(key)
+    )
   );
 });
 
@@ -57,7 +58,7 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
   }
 };
 
-const handleDoubleClick = (event: ViewEvent<MouseEvent>) => {
+const handleDoubleClick = () => {
   dialogStore.openMain();
 };
 
@@ -91,7 +92,7 @@ const configs = reactive(
       layoutHandler: simulationStore.newForceLayout(true) as LayoutHandler,
       doubleClickZoomEnabled: false,
     },
-  }),
+  })
 );
 
 watch(nodesFiltered, () => {
@@ -113,7 +114,7 @@ watch(runSimulation, (value) => {
     :nodes="nodesFiltered"
     :edges="unref(edges)"
     :configs="configs"
-    :eventHandlers="eventHandlers"
+    :event-handlers="eventHandlers"
   >
     <template #edge-label="{ edge, ...slotProps }">
       <v-edge-label

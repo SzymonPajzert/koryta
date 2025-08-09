@@ -1,6 +1,10 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
+  // TODO Enable strict
+  typescript: {
+    strict: false,
+  },
   devtools: { enabled: true },
   // TODO enable SSR
   ssr: false,
@@ -30,7 +34,6 @@ export default defineNuxtConfig({
     // TODO what do I need it for '@nuxt/test-utils'
     "@nuxt/fonts",
     "@nuxt/eslint",
-    "@pinia/nuxt",
     "nuxt-vuefire",
     "vuetify-nuxt-module",
   ],
@@ -40,14 +43,14 @@ export default defineNuxtConfig({
     defaults: {
       weights: [100, 300, 400, 500, 700, 900],
       styles: ["normal", "italic"],
+      subsets: ["latin"],
     },
   },
 
   vuetify: {
-    /* vuetify options */
     vuetifyOptions: {
       theme: {
-        defaultTheme: "dark", // 'light' | 'dark' | 'system'
+        defaultTheme: "dark",
       },
     },
   },

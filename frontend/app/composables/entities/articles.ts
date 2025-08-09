@@ -2,39 +2,13 @@ import { useRTDB } from "@vueuse/firebase/useRTDB";
 import { computed } from "vue";
 import { useAuthState } from "@/composables/auth"; // Assuming auth store path
 import { ref as dbRef, set, remove, getDatabase } from "firebase/database";
-import type { Article } from "@/composables/model";
+import type { Article } from "@/../shared/model";
 
 export interface EnrichedStatus {
   enrichedStatus: {
     isAssignedToCurrentUser: boolean;
     hideArticle: boolean;
   };
-}
-
-const breakpoint = /\.|\-/;
-
-// uses a list of defined markers to split the title
-export function splitTitle(title: string, limit?: number): string[] {
-  return title.split(breakpoint, limit);
-}
-
-export function getSubtitle(data: Article): string | undefined {
-  const parts = splitTitle(data.name, 2);
-  return parts.length > 1 ? parts[1].trim() : undefined;
-}
-
-export function getShortTitle(data: Article): string {
-  return splitTitle(data.name, 1)[0].trim();
-}
-
-export function getHostname(data: Article): string {
-  try {
-    if (!data.sourceURL) return "";
-    return new URL(data.sourceURL).hostname;
-  } catch (e) {
-    console.error("failed to parse URL", data.sourceURL);
-    return data.sourceURL;
-  }
 }
 
 // TODO migrate this logic to entities

@@ -2,8 +2,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { createEntityStore } from "@/stores/entity";
-import { fillBlanks, type Destination } from "@/composables/model";
-import type { DestinationTypeMap } from "@/composables/model";
+import type { Destination, DestinationTypeMap } from "@/../shared/model";
 
 // callback to call after the dialog was closed
 export type Callback = (name: string, key?: string) => void;
@@ -56,6 +55,8 @@ interface Dialog<D extends Destination> {
 }
 
 export const useDialogStore = defineStore("dialog", () => {
+  const { fillBlanks } = useDBUtils();
+
   const useListEmployed = createEntityStore("employed");
   const employedStore = useListEmployed();
   const { entities: people } = storeToRefs(employedStore);
