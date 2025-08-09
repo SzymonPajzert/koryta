@@ -19,15 +19,24 @@
     "@nuxt/test-utils": "^3.19.2",
     "@pinia/nuxt": "^0.11.2",
     "@unhead/vue": "^2.0.13",
+    "@vueuse/firebase": "^13.6.0",
+    "d3-force": "^3.0.0",
+    "digraph-js": "^2.2.3",
     "eslint": "^9.32.0",
     "firebase": "^12.1.0",
     "firebase-admin": "^13.4.0",
     "firebase-functions": "^6.4.0",
     "nuxt": "^4.0.1",
     "nuxt-vuefire": "^1.1.0",
+    "string-similarity": "^4.0.4",
+    "v-network-graph": "^0.9.21",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1",
+    "vue3-apexcharts": "^1.8.0",
     "vuefire": "^3.2.2",
     "vuetify-nuxt-module": "^0.18.7"
+  },
+  "devDependencies": {
+    "@types/d3-force": "^3.0.10"
   }
 }

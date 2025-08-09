@@ -49,10 +49,8 @@
 
 <script setup lang="ts">
 import { type Submission } from "@/composables/kpo";
-import { db } from "@/firebase";
 import { ref as dbRef, set } from "firebase/database";
 import { useAuthState } from "@/composables/auth";
-import router from "@/router";
 import { type Ref } from "vue";
 
 const { submission, score } = defineProps<{
@@ -61,6 +59,8 @@ const { submission, score } = defineProps<{
 }>();
 
 const { user } = useAuthState();
+const router = useRouter();
+const db = useDatabase();
 
 function addValue(value: number) {
   score.value = (score.value ?? 0) + value;
