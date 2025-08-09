@@ -1,11 +1,8 @@
 import { useRTDB } from "@vueuse/firebase/useRTDB";
 import { computed } from "vue";
 import { useAuthState } from "@/composables/auth"; // Assuming auth store path
-import { ref as dbRef, set, remove } from "firebase/database";
-import { db } from "@/firebase";
+import { ref as dbRef, set, remove, getDatabase } from "firebase/database";
 import type { Article } from "@/composables/model";
-
-const { user, isAdmin } = useAuthState();
 
 export interface EnrichedStatus {
   enrichedStatus: {
@@ -42,6 +39,9 @@ export function getHostname(data: Article): string {
 
 // TODO migrate this logic to entities
 export function useArticles() {
+  const db = getDatabase();
+  const { user, isAdmin } = useAuthState();
+
   const assignToArticle = async (articleId: string, setAssigned: boolean) => {
     if (!user.value) return;
     if (setAssigned) {

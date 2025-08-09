@@ -37,11 +37,9 @@
 </template>
 
 <script lang="ts" setup>
-definePage({
-  meta: {
-    title: "Artykuły do dodania",
-    isHelp: true,
-  },
+definePageMeta({
+  title: "Artykuły do dodania",
+  isHelp: true,
 });
 
 import { useArticles } from "@/composables/entities/articles";

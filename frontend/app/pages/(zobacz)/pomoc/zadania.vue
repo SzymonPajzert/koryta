@@ -6,11 +6,9 @@
 </template>
 
 <script lang="ts" setup>
-definePage({
-  meta: {
-    title: "Zadania",
-    isHelp: true,
-  },
+definePageMeta({
+  title: "Zadania",
+  isHelp: true,
 });
 
 const { allowedIssues } = defineProps<{ allowedIssues: string[] }>();

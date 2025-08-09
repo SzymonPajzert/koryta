@@ -63,12 +63,12 @@ import PartyChip from "./PartyChip.vue";
 import { useAuthState } from "@/composables/auth";
 import UserDetailDialog from "@/components/dialog/UserDetailDialog.vue";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
-import router from "@/router";
 import { type Destination } from "@/composables/model";
 
 const dialogStore = useDialogStore();
 const { isAdmin } = useAuthState();
 const dialog = ref<typeof UserDetailDialog>();
+const router = useRouter();
 
 function showUser(key: string) {
   router.push(`/entity/employed/${key}`);

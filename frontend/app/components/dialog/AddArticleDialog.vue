@@ -113,7 +113,6 @@
 </template>
 
 <script lang="ts" setup>
-import { functions } from "@/firebase";
 import { httpsCallable } from "firebase/functions";
 import { articleTags, type Article } from "@/composables/model";
 import {
@@ -123,6 +122,10 @@ import {
 import TextableWrap from "../forms/TextableWrap.vue";
 import EntityPicker from "../forms/EntityPicker.vue";
 import { splitTitle } from "@/composables/entities/articles";
+import {getFunctions} from "firebase/functions"
+
+const firebaseApp = useFirebaseApp();
+const functions = getFunctions(firebaseApp);
 
 interface ArticleExtended extends Article {
   isFetchingTitle?: boolean;

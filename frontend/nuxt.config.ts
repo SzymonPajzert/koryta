@@ -2,17 +2,38 @@
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
   devtools: { enabled: true },
+  // TODO enable SSR
+  ssr: false,
+
+  hooks: {
+    "pages:extend"(pages) {
+      // This is a hot fix so the pages for (zobacz) don't overwrite index.
+      // We're removing the (zobacz) page but its children are kept.
+      const zobaczIndex = pages.findIndex((page) => page.name === "");
+      pages.splice(zobaczIndex, 1);
+    },
+  },
 
   modules: [
-    "@pinia/nuxt",
-    // TODO what do I need it for '@nuxt/content',
+    "@pinia/nuxt", // TODO what do I need it for '@nuxt/content',
     // TODO what do I need it for '@nuxt/icon',
     // TODO what do I need it for '@nuxt/image',
     // TODO what do I need it for '@nuxt/scripts',
     // TODO what do I need it for '@nuxt/test-utils'
     "@nuxt/eslint",
+    "@pinia/nuxt",
     "nuxt-vuefire",
+    "vuetify-nuxt-module",
   ],
+
+  vuetify: {
+    /* vuetify options */
+    vuetifyOptions: {
+      theme: {
+        defaultTheme: "dark", // 'light' | 'dark' | 'system'
+      },
+    },
+  },
 
   vuefire: {
     auth: {
@@ -30,4 +51,6 @@ export default defineNuxtConfig({
       measurementId: "G-PL6L1B0CZY",
     },
   },
+
+  css: ["v-network-graph/lib/style.css"],
 });

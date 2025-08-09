@@ -1,9 +1,7 @@
 <script setup lang="ts">
-definePage({
-  meta: {
-    title: "Graf",
-    isGraph: true,
-  },
+definePageMeta({
+  title: "Graf",
+  isGraph: true,
 });
 
 import { defineConfigs } from "v-network-graph";
@@ -25,8 +23,9 @@ const simulationStore = useSimulationStore();
 
 const { runSimulation } = storeToRefs(simulationStore);
 const { nodes, edges } = storeToRefs(graphStore);
-import router from "@/router";
 import { useParams } from "@/composables/params";
+
+const router = useRouter();
 
 const interestingNodes = computed(() => {
   return Object.fromEntries(
