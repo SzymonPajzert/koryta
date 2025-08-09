@@ -28,11 +28,20 @@ export default defineNuxtConfig({
     // TODO what do I need it for '@nuxt/image',
     // TODO what do I need it for '@nuxt/scripts',
     // TODO what do I need it for '@nuxt/test-utils'
+    "@nuxt/fonts",
     "@nuxt/eslint",
     "@pinia/nuxt",
     "nuxt-vuefire",
     "vuetify-nuxt-module",
   ],
+
+  fonts: {
+    families: [{ name: "Roboto", provider: "fontsource" }],
+    defaults: {
+      weights: [100, 300, 400, 500, 700, 900],
+      styles: ["normal", "italic"],
+    },
+  },
 
   vuetify: {
     /* vuetify options */

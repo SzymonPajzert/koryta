@@ -13,6 +13,7 @@
     "@firebase/app-types": "^0.9.3",
     "@nuxt/content": "^2.7.2",
     "@nuxt/eslint": "^1.7.1",
+    "@nuxt/fonts": "^0.11.4",
     "@nuxt/icon": "^1.15.0",
     "@nuxt/image": "^1.11.0",
     "@nuxt/scripts": "^0.11.10",

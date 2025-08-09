@@ -17,6 +17,7 @@ const loading = ref(false);
 
 const auth = useFirebaseAuth()!
 const db = useDatabase();
+const router = useRouter();
 
 const user = ref<User | null>();
 onAuthStateChanged(auth, (userIn) => {
