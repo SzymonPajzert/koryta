@@ -1,4 +1,3 @@
-import { db } from "@/firebase";
 import { ref as dbRef } from "firebase/database";
 import { useRTDB } from "@vueuse/firebase";
 import { useAuthState } from "@/composables/auth";
@@ -10,6 +9,7 @@ export type Submission = {
 };
 
 export function useKPO() {
+  const db = useDatabase();
   const { user } = useAuthState();
 
   const submissionsRecord = useRTDB<Record<string, Submission>>(
