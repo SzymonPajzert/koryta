@@ -4,6 +4,14 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   // TODO enable SSR
   ssr: false,
+  components: [
+    {
+      path: "~/components",
+
+      // TODO disable it, so we have nice nested names
+      pathPrefix: false,
+    },
+  ],
 
   hooks: {
     "pages:extend"(pages) {
