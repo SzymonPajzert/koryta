@@ -122,8 +122,6 @@ watch(filtered, () => {
   </v-network-graph>
   <div v-else class="d-flex justify-center" width="100%">
     <v-progress-circular indeterminate />
-    <v-sheet v-for="n in 3" :key="n" class="ma-2 pa-2">
-      justify-center
-    </v-sheet>
+    Ładuję...
   </div>
 </template>
