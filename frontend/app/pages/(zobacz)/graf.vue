@@ -3,7 +3,6 @@ import { defineConfigs } from "v-network-graph";
 import {
   type EventHandlers,
   type NodeEvent,
-  type LayoutHandler,
   SimpleLayout,
 } from "v-network-graph";
 
@@ -18,13 +17,20 @@ definePageMeta({
 
 const dialogStore = useDialogStore();
 const simulationStore = useSimulationStore();
-
 const { runSimulation } = storeToRefs(simulationStore);
-const { data } = await useAsyncData("graph", () =>
-  $fetch("/api/graph")
+const { data: graph } = await useAsyncData(
+  "graph",
+  () => $fetch("/api/graph"),
+  { lazy: true }
 );
-const nodes = computed(() => data.value?.nodes);
-const edges = computed(() => data.value?.edges);
+const { data: layout } = await useAsyncData(
+  "layout",
+  () => $fetch("/api/graphLayout"),
+  { lazy: true }
+);
+
+const nodes = computed(() => graph.value?.nodes);
+const edges = computed(() => graph.value?.edges);
 
 const router = useRouter();
 
@@ -68,35 +74,36 @@ const eventHandlers: EventHandlers = {
   "node:dblclick": handleNodeClick,
 };
 
-const configs = reactive(
-  defineConfigs({
-    node: {
-      normal: {
-        type: (node) => node.type,
-        width: (node) => (node.sizeMult ?? 1) * 32,
-        height: (node) => (node.sizeMult ?? 1) * 32,
-        color: (node) => node.color,
-      },
-      label: {
-        color: "#fff",
-      },
+// TODO reenable reactive for simulation to show
+const configs = defineConfigs({
+  node: {
+    normal: {
+      type: (node) => node.type,
+      width: (node) => (node.sizeMult ?? 1) * 32,
+      height: (node) => (node.sizeMult ?? 1) * 32,
+      color: (node) => node.color,
     },
-    edge: {
-      label: {
-        fontSize: 11,
-        color: "#fff",
-      },
+    label: {
+      color: "#fff",
     },
-    view: {
-      scalingObjects: true,
-      layoutHandler: simulationStore.newForceLayout(true) as LayoutHandler,
-      doubleClickZoomEnabled: false,
+  },
+  edge: {
+    label: {
+      fontSize: 11,
+      color: "#fff",
     },
-  })
-);
+  },
+  view: {
+    autoPanAndZoomOnLoad: "fit-content",
+    scalingObjects: true,
+    doubleClickZoomEnabled: false,
+  },
+});
 
-watch(nodesFiltered, () => {
-  configs.view.layoutHandler = simulationStore.newForceLayout(true);
+watch(filtered, () => {
+  // Don't run the simulation if it's the whole graph
+  if (filtered.value.length === 0) return;
+  configs.view.layoutHandler = simulationStore.newForceLayout(false);
 });
 
 watch(runSimulation, (value) => {
@@ -111,9 +118,11 @@ watch(runSimulation, (value) => {
 
 <template>
   <v-network-graph
-    :nodes="nodesFiltered"
-    :edges="unref(edges)"
+    v-if="graph && layout"
+    :nodes="shallowRef(nodesFiltered)"
+    :edges="shallowRef(edges)"
     :configs="configs"
+    :layouts="layout"
     :event-handlers="eventHandlers"
   >
     <template #edge-label="{ edge, ...slotProps }">
@@ -125,4 +134,10 @@ watch(runSimulation, (value) => {
       />
     </template>
   </v-network-graph>
+  <div v-else class="d-flex justify-center" width="100%">
+    <v-progress-circular indeterminate />
+    <v-sheet v-for="n in 3" :key="n" class="ma-2 pa-2">
+      justify-center
+    </v-sheet>
+  </div>
 </template>
