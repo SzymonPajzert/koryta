@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { defineConfigs } from "v-network-graph";
-import {
-  type EventHandlers,
-  type NodeEvent,
-  SimpleLayout,
-} from "v-network-graph";
+import type { EventHandlers, NodeEvent } from "v-network-graph";
 
 import { useDialogStore } from "@/stores/dialog";
 import { useSimulationStore } from "@/stores/simulation";
@@ -17,7 +13,6 @@ definePageMeta({
 
 const dialogStore = useDialogStore();
 const simulationStore = useSimulationStore();
-const { runSimulation } = storeToRefs(simulationStore);
 const { data: graph } = await useAsyncData(
   "graph",
   () => $fetch("/api/graph"),
@@ -102,17 +97,8 @@ const configs = defineConfigs({
 
 watch(filtered, () => {
   // Don't run the simulation if it's the whole graph
-  if (filtered.value.length === 0) return;
+  if (filtered.value.length === Object.keys(nodes.value ?? {}).length) return;
   configs.view.layoutHandler = simulationStore.newForceLayout(false);
-});
-
-watch(runSimulation, (value) => {
-  if (!configs.view) return;
-  if (value) {
-    configs.view.layoutHandler = simulationStore.newForceLayout(false);
-  } else {
-    configs.view.layoutHandler = new SimpleLayout();
-  }
 });
 </script>
 

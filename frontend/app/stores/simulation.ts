@@ -3,7 +3,7 @@ import { simulation, log_target } from "~~/shared/graph/simulation";
 
 export const useSimulationStore = defineStore("simulation", () => {
   const simulationProgress = ref(0);
-  const runSimulation = ref(true);
+  const runSimulation = ref(false);
 
   function newForceLayout(initial: boolean) {
     return new ForceLayout({
