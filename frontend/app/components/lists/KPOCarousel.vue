@@ -45,14 +45,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue';
+import { computed } from 'vue';
 import { useNow } from '@vueuse/core';
 
 const props = defineProps({
   targetDate: {
     type: String,
     required: false,
-    default: '2025-08-10T23:59:59',
+    default: '2025-08-11T23:59:59',
   },
 });
 
