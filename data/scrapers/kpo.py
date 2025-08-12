@@ -4,11 +4,12 @@ from typing import Any
 from time import sleep
 from random import random
 from firebase_admin import db
+from tqdm import tqdm
 
 LIST_URL="https://bazakonkurencyjnosci.funduszeeuropejskie.gov.pl/api/announcements/search?page={page}&limit=100&sort=default&status%5B0%5D=PUBLISHED"
 ITEM_URL="https://bazakonkurencyjnosci.funduszeeuropejskie.gov.pl/api/announcements/{id}"
 
-root = db.reference("/external/kpo")
+root_basic = db.reference("/external/kpo")
 
 def query_kpo(page: int) -> dict[str, Any]:
     url = LIST_URL.format(page=page)
@@ -27,7 +28,7 @@ def iterate_pages():
         result = query_kpo(page)
         for adv in result["data"]["advertisements"]:
             print(f"Saving {adv['id']}...")
-            root.update({adv["id"]: adv})
+            root_basic.update({adv["id"]: adv})
         
         # Sleep a few seconds so the gods don't smite us
         sleep(random() * 10)
@@ -35,13 +36,21 @@ def iterate_pages():
         page += 1
         
 def iterate_items():
-    data = root.get()
-    assert(isinstance(data, dict))
-    for id, value in data.items():
-        if "read" not in value:
-            print(f"trying to read {id}")
-            data = query_item(id, 5)
-            root.update({id: {"read": True, "data": data}})
+    existing = root_basic.get()
+    detailed = DBModel("/external/kpo_detailed")
+    current = detailed.get()
+    if current:
+        assert(isinstance(current, dict))
+    else:
+        current = {}
+    assert(isinstance(existing, dict))
+    
+    print(f"Found {len(existing)} items to process, {len(current)} already processed")
+    to_process = set(existing.keys()) - set(current.keys())
+    for id in tqdm(to_process, initial=len(current), total=len(existing), smoothing=0.01):        
+        print(f"trying to read {id}")
+        data = query_item(id, 3)
+        detailed.update({id: data})
             
 
 if __name__ == "__main__":
@@ -52,6 +61,7 @@ if __name__ == "__main__":
     except InterruptedError:
         print("Interrupted")
     finally:
-        state_after = root.get()
-        assert isinstance(state_after, dict)
-        print(f"Now having {len(state_after)} items")
+        pass
+        # state_after = root_basic.get()
+        # assert isinstance(state_after, dict)
+        # print(f"Now having {len(state_after)} items")

@@ -1,8 +1,9 @@
 {
   "rules": {
     // Admins can see the whole DB
-    ".read": "auth.token.admin === true",
+    ".read": "auth.token.admin === true || auth.uid === 'reader'",
     ".write": "auth.token.admin === true",
+
 
     // List of approved articles and sources
     "data": {
@@ -45,6 +46,10 @@
 
     "external": {
       "kpo": {
+        ".read": "true",
+        ".write": "auth.uid === 'kpo-appender'"
+      },
+      "kpo_detailed": {
         ".read": "true",
         ".write": "auth.uid === 'kpo-appender'"
       },
