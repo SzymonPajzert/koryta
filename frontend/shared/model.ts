@@ -92,6 +92,18 @@ export interface Todo extends Nameable {
   subtasks: Record<string, Link<"todo">>;
 }
 
+export type KPOSubmission = {
+  id: string;
+  content: string;
+  title: string;
+  admin: {
+    title: string;
+    approved?: boolean;
+    connected: Record<string, Link<"employed">>;
+  }
+  score: number;
+};
+
 interface RejestrCompany {
   id: string;
   nazwy: {

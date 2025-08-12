@@ -71,8 +71,8 @@
 
     <v-col cols="12">
       <MultiTextField
-        title="Wspomniane osoby"
         v-model="formData.people"
+        title="Wspomniane osoby"
         field-type="entityPicker"
         :field-component="EntityPicker"
         entity="employed"

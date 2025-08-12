@@ -15,7 +15,7 @@
     </div>
 
     <!-- Action buttons in the append slot for clean alignment -->
-    <template v-slot:append>
+    <template #append>
       <div class="d-flex flex-sm-column ga-1">
         <span v-if="score.value && score.value > 0" class="text-orange-darken-1">
           {{  "X" + "D".repeat(score.value ?? 0) }}
@@ -26,32 +26,29 @@
       </div>
       <div class="d-flex flex-sm-column ga-1">
         <v-btn
+          title="Dodaj"
           size="small"
           icon="mdi-arrow-up-bold"
           variant="text"
           @click.prevent="addValue(1)"
-          title="Dodaj"
-        ></v-btn>
+        />
         <v-btn
+          title="Zwiększ"
           size="small"
           icon="mdi-arrow-down-bold"
           variant="text"
           @click.prevent="addValue(-1)"
-          title="Zwiększ"
-        ></v-btn>
+        />
       </div>
     </template>
   </v-list-item>
-
-  <!-- Expansion area for the editing form -->
-  <v-expand-transition> </v-expand-transition>
 </template>
 
 <script setup lang="ts">
-import { type Submission } from "@/composables/kpo";
-import { ref as dbRef, set } from "firebase/database";
+import type { KPOSubmission as Submission } from "~~/shared/model";
+import { ref as dbRef, update } from "firebase/database";
 import { useAuthState } from "@/composables/auth";
-import { type Ref } from "vue";
+import type { Ref } from "vue";
 
 const { submission, score } = defineProps<{
   submission: Submission;
@@ -64,16 +61,23 @@ const db = useDatabase();
 
 function addValue(value: number) {
   score.value = (score.value ?? 0) + value;
+  const newScore = score.value;
 
-  if(!user.value?.uid) {
+  if (!user.value?.uid) {
     router.push("/login");
     return;
   }
 
-  set(
-    dbRef(db, `/user/${user.value?.uid}/kpo/scores/${submission.id}`),
-    score.value,
-  );
+  const userId = user.value.uid;
+  const submissionId = submission.id;
+
+  const updates: Record<string, number> = {};
+  updates[`/user/${userId}/kpo/scores/${submissionId}`] = newScore;
+  // TODO set this path for all the ones above
+  updates[`/kpo_scores/${submissionId}/${userId}`] = newScore;
+
+  // Use update() for atomic multi-path writes.
+  update(dbRef(db), updates);
 }
 </script>
 
