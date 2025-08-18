@@ -91,11 +91,11 @@ const getErrorMessage = (errorCode: string) => {
       <div class="form-group">
         <button
           type="button"
-          @click="loginWithGoogle"
           :disabled="loading"
           class="google-button"
+          @click="loginWithGoogle"
         >
-          <span v-if="loading">Logging in...</span>
+          <span v-if="loading">Loguję się</span>
           <span v-else>Zaloguj się z Google</span>
         </button>
       </div>
@@ -104,6 +104,9 @@ const getErrorMessage = (errorCode: string) => {
         {{ error }}
       </div>
     </v-form>
+    <div>
+      Logowanie się oznacza zgodę z <a href="/plik/regulamin">regulaminem</a> oraz <a href="/plik/polityka_prywatnosci">polityką prywatności</a>.
+    </div>
   </main>
 </template>
 
