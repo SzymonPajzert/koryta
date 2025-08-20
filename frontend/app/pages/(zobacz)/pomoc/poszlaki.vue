@@ -34,6 +34,7 @@
 </template>
 
 <script setup lang="ts">
+
 import type { PersonRejestr } from "~~/shared/model";
 import { createEntityStore } from "@/stores/entity";
 import { useCompanyScore } from "@/composables/entities/companyScore";

@@ -6,3 +6,4 @@
 - TODO Wyszukaj osobę + ich miasta
 - TODO wypisz linki w karcie
 - TODO Yellow if person is suggested (because in DB) and put on to
+- TODO use good sources, e.g. https://infokolej.pl/ for trains. How to find them?

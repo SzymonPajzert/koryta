@@ -28,6 +28,7 @@
         <span class="d-none d-md-inline">Działaj</span>
       </v-btn>
       <v-btn v-if="mdAndUp" text to="/zrodla">Źródła</v-btn>
+      <v-btn v-if="mdAndUp && isAdmin" text to="/admin">Admin</v-btn>
       <v-avatar v-if="user && pictureURL" :image="pictureURL" size="32" @click="router.push('/profil')"/>
       <v-btn v-if="user && !pictureURL" icon to="/profil">
         <v-icon>mdi-account</v-icon>
@@ -71,7 +72,7 @@ if (import.meta.client) {
 }
 
 const { mdAndUp } = useDisplay()
-const { user, pictureURL, logout } = useAuthState();
+const { user, isAdmin, pictureURL, logout } = useAuthState();
 const router = useRouter();
 const route = useRoute();
 const maxWidth = computed(() => (route.meta.fullWidth ? "none" : 900));
