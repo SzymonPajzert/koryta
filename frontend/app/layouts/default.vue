@@ -58,6 +58,6 @@ if (import.meta.client) {
 }
 
 const route = useRoute();
-const maxWidth = computed(() => (route.meta.isGraph ? "none" : 900));
-const rootPadding = computed(() => (route.meta.isGraph ? 0 : undefined));
+const maxWidth = computed(() => (route.meta.fullWidth ? "none" : 900));
+const rootPadding = computed(() => (route.meta.fullWidth ? 0 : undefined));
 </script>

@@ -206,6 +206,7 @@ function openExploration() {
   // TODO Wyszukaj osobę + nazwa firmy
   // TODO Wyszukaj osobę + ich miasta
   // TODO wypisz linki w karcie
+  // TODO Yellow if person is suggested (because in DB) and put on to
 
   window.open("https://www.google.com/search?q=" + person.name, "_blank");
   window.open(
