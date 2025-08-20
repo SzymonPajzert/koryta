@@ -38,22 +38,30 @@
           clearable
           width="160"
           :hide-details="true"
-          @keydown.escape="stopEditingKRS"
-          @keydown.enter="submitKRSNumber"
+          @keydown.escape="editKRS.stop"
+          @keydown.enter="editKRS.submit"
         />
         <v-chip
           v-else
           :text="value.value"
           size="x-small"
-          @click="editKRS(index, value)"
+          @click="editKRS.start(index, value)"
         />
       </template>
 
       <template v-slot:item.websiteStatus="{ value, index }">
+        <entity-picker
+          v-if="editConnectionIndex == index"
+          v-model="editConnectionValue"
+          entity="company"
+          @update:model-value="editConnection.submit"
+          @keydown.escape="editConnection.stop"
+        />
         <v-chip
-          :text="value.internalID ? 'Tak' : 'Nie'"
+          v-else
+          :text="value.connection?.name ?? 'Nie'"
           size="x-small"
-          @click="editKRS(index, value)"
+          @click="editConnection.start(index, value)"
         />
       </template>
 
@@ -63,7 +71,9 @@
           :color="goodStatus(value.success)"
           :text="value.success ? 'Tak' : 'Nie'"
           size="x-small"
-          :href="value.id ? `https://rejestr.io/krs/${value.krsNumber}` : undefined"
+          :href="
+            value.id ? `https://rejestr.io/krs/${value.krsNumber}` : undefined
+          "
           target="_blank"
         />
       </template>
@@ -72,59 +82,56 @@
 </template>
 
 <script lang="ts" setup>
+import type { VDataTable } from "vuetify/components";
+import type { Link } from "~~/shared/model";
 import { toNumber, useCompanyScore } from "@/composables/entities/companyScore";
-import type { VDataTable } from 'vuetify/components'
+import { useEditIntexedField } from "~/composables/entities/editIndexedField";
 
 definePageMeta({
-  fullWidth: true
-})
+  fullWidth: true,
+  middleware: "admin",
+});
 
 interface CompanyScoredEditable {
   name: string;
   score: string;
   isPublic: boolean;
   websiteStatus: {
-    internalID: string,
-  }
+    connection?: Link<"company">;
+  };
   krsNumber: {
     id: string;
     value: string;
   };
   importedFromRejestr: {
-    success: boolean
-    krsNumber: string
+    success: boolean;
+    krsNumber: string;
   };
 }
 
 const { scores } = useCompanyScore();
 const search = ref("");
-const editKRSIndex = ref<number | undefined>(undefined);
-const editKRSValue = ref("");
 
-function editKRS(index: number, krsNumber: CompanyScoredEditable["krsNumber"]) {
-  editKRSIndex.value = index;
-  editKRSValue.value = krsNumber.value;
-}
+const editKRS = useEditIntexedField(
+  (krsNumber: CompanyScoredEditable["krsNumber"]) => krsNumber.value,
+);
+const { index: editKRSIndex, value: editKRSValue } = editKRS;
 
-function stopEditingKRS() {
-  editKRSIndex.value = undefined;
-  editKRSValue.value = "";
-}
-function submitKRSNumber() {
-  console.debug(editKRSIndex.value)
-  console.debug(editKRSValue.value)
-  stopEditingKRS();
-}
+const editConnection = useEditIntexedField<
+  Link<"company">,
+  CompanyScoredEditable["websiteStatus"]
+>((krsNumber) => krsNumber.connection);
+const { index: editConnectionIndex, value: editConnectionValue } = editConnection;
 
-type ReadonlyHeaders = VDataTable['$props']['headers']
+type ReadonlyHeaders = VDataTable["$props"]["headers"];
 const headers: ReadonlyHeaders = [
-  { title: "Nazwa", value: "name", sortable: true, minWidth: "80%"},
+  { title: "Nazwa", value: "name", sortable: true, minWidth: "80%" },
   { title: "Wynik", value: "score", sortable: true },
-  { title: "Publiczna", value: "isPublic", sortable: true },
+  // TODO { title: "Publiczna", value: "isPublic", sortable: true },
   { title: "Na stronie", value: "websiteStatus", sortable: true },
   { title: "KRS", value: "krsNumber", sortable: true },
   { title: "Rejestr.io", value: "importedFromRejestr", sortable: true },
-] as const
+] as const;
 
 const companies = computed(() => {
   const mapped = new Map<string, CompanyScoredEditable>();
@@ -137,18 +144,18 @@ const companies = computed(() => {
       name: value.name,
       score: toNumber(value.score).toFixed(2),
       websiteStatus: {
-        internalID: undefined,
+        connection: undefined,
       },
       isPublic: false, // TODO model it and import it
       importedFromRejestr: {
         success: !!value.score,
         krsNumber: key,
-      }
+      },
     });
   });
 
   return Array.from(mapped.values());
-})
+});
 
 function goodStatus(value: boolean): string {
   return value ? "success" : "error";

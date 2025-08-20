@@ -33,7 +33,7 @@ import { createEntityStore } from "@/stores/entity";
 import { type Destination, Link } from "~~/shared/model";
 
 const props = defineProps<{
-  label: string;
+  label?: string;
   hint?: string;
   // which entity type to use to lookup suggested values to bind to this field
   // e.g. employed, company
