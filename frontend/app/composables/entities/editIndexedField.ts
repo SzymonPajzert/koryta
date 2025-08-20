@@ -1,33 +1,48 @@
-/* Allows editing one of many values.
+import { set, ref as dbRef } from "firebase/database";
+
+
+/** Type of the key identifying currently set value */
+type IndexT = string;
+
+/** Allows editing one of many values.
  *
  * Handles state of the edit and value submission to the chosen DB.
  */
-export function useEditIntexedField<ValueT, StructT, IndexT = number>(extract: (value: StructT) => ValueT) {
-  const index = ref<IndexT | undefined>(undefined);
+export function useEditIndexedField<ValueT, StructT>(
+  extract: (value: StructT) => ValueT,
+  ...setPaths: ((index: IndexT, value: ValueT) => [string, unknown])[]
+) {
+  const key = ref<IndexT | undefined>(undefined);
   const value = ref<ValueT | undefined>(undefined);
+  const db = useDatabase();
 
-  function start(
-    indexEdit: number,
-    valueEdit: StructT,
-  ) {
-    index.value = indexEdit;
+  function start(keyEdit: string, valueEdit: StructT) {
+    key.value = keyEdit;
     value.value = extract(valueEdit);
   }
   function stop() {
-    index.value = undefined;
+    key.value = undefined;
     value.value = "";
   }
   function submit() {
-    console.debug(index.value);
+    console.debug(key.value);
     console.debug(value.value);
+    if (!key.value || !value.value) {
+      // TODO report the issue
+      return;
+    }
 
-    // TODO implement submission
+    setPaths.forEach((setter) => {
+      const [path, v] = setter(key.value!, value.value!);
+      console.debug(path, v);
+      set(dbRef(db, path), v)
+    });
 
     stop();
   }
 
   return {
-    index,
+    key,
     value,
     start,
     stop,

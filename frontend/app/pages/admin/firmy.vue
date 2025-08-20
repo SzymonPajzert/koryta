@@ -30,9 +30,27 @@
     >
       <!-- eslint fails to pick up the dynamically created slots here -->
       <!-- eslint-disable vue/v-slot-style vue/valid-v-slot -->
-      <template v-slot:item.krsNumber="{ value, index }">
+      <template v-slot:item.entityID="{ value, item }">
+        <entity-picker
+          v-if="item.krsNumber && editConnectionKRSNumber == item.krsNumber"
+          v-model="editConnectionValue"
+          entity="company"
+          @update:model-value="editConnection.submit"
+          @keydown.escape="editConnection.stop"
+        />
+        <v-chip
+          v-else
+          :text="value ? 'Tak' : 'Dodaj powiązanie'"
+          :color="goodStatus(value)"
+          size="x-small"
+          :disabled="!item.krsNumber"
+          @click="editConnection.start(item.krsNumber, value)"
+        />
+      </template>
+
+      <template v-slot:item.krsNumber="{ value, item }">
         <v-text-field
-          v-if="editKRSIndex == index"
+          v-if="item.entityID && editKRSCompanyKey == item.entityID"
           v-model="editKRSValue"
           density="compact"
           clearable
@@ -43,36 +61,21 @@
         />
         <v-chip
           v-else
-          :text="value.value"
+          :text="value ?? 'Dodaj KRS'"
           size="x-small"
-          @click="editKRS.start(index, value)"
+          :disabled="!item.entityID || !!value"
+          @click="editKRS.start(item.entityID, value)"
         />
       </template>
 
-      <template v-slot:item.websiteStatus="{ value, index }">
-        <entity-picker
-          v-if="editConnectionIndex == index"
-          v-model="editConnectionValue"
-          entity="company"
-          @update:model-value="editConnection.submit"
-          @keydown.escape="editConnection.stop"
-        />
+      <template v-slot:item.importedFromRejestr="{ value, item }">
         <v-chip
-          v-else
-          :text="value.connection?.name ?? 'Nie'"
-          size="x-small"
-          @click="editConnection.start(index, value)"
-        />
-      </template>
-
-      <template v-slot:item.importedFromRejestr="{ value }">
-        <v-chip
-          :border="`${goodStatus(value.success)} thin opacity-25`"
-          :color="goodStatus(value.success)"
-          :text="value.success ? 'Tak' : 'Nie'"
+          :border="`${goodStatus(value)} thin opacity-25`"
+          :color="goodStatus(value)"
+          :text="value ? 'Tak' : (item.krsNumber ? 'Zobacz' : 'Brak')"
           size="x-small"
           :href="
-            value.id ? `https://rejestr.io/krs/${value.krsNumber}` : undefined
+            item.krsNumber ? `https://rejestr.io/krs/${item.krsNumber}` : undefined
           "
           target="_blank"
         />
@@ -83,9 +86,9 @@
 
 <script lang="ts" setup>
 import type { VDataTable } from "vuetify/components";
-import type { Link } from "~~/shared/model";
+import type { Link, Company } from "~~/shared/model";
 import { toNumber, useCompanyScore } from "@/composables/entities/companyScore";
-import { useEditIntexedField } from "~/composables/entities/editIndexedField";
+import { useEditIndexedField } from "~/composables/entities/editIndexedField";
 
 definePageMeta({
   fullWidth: true,
@@ -93,71 +96,91 @@ definePageMeta({
 });
 
 interface CompanyScoredEditable {
+  // RTDB name takes precedence
   name: string;
-  score: string;
-  isPublic: boolean;
-  websiteStatus: {
-    connection?: Link<"company">;
-  };
-  krsNumber: {
-    id: string;
-    value: string;
-  };
-  importedFromRejestr: {
-    success: boolean;
-    krsNumber: string;
-  };
+
+  // From rejestr.io and its derivatives
+  krsNumber?: string;
+  score?: string;
+  importedFromRejestr: boolean
+
+  // From the RTDB /company entity
+  entityID?: string;
 }
 
 const { scores } = useCompanyScore();
+const useCompanyStore = createEntityStore("company");
+const companyStore = useCompanyStore();
+const { entities } = storeToRefs(companyStore);
+
 const search = ref("");
 
-const editKRS = useEditIntexedField(
-  (krsNumber: CompanyScoredEditable["krsNumber"]) => krsNumber.value,
-);
-const { index: editKRSIndex, value: editKRSValue } = editKRS;
+const COMPANY_FIELD : keyof Company = "krsNumber" as const;
+function setKRSOperation(entityKey: string, krsNumber: string): [string, string] {
+  return [`company/${entityKey}/${COMPANY_FIELD}`, krsNumber];
+}
 
-const editConnection = useEditIntexedField<
+// We use those two composables to manage the state and submission to RTDB.
+// We make sure that the refs are unwrapped and can be used in the template.
+const editKRS = useEditIndexedField(
+  (krsNumber: CompanyScoredEditable["krsNumber"]) => krsNumber,
+  (entityKey, value) => setKRSOperation(entityKey, value),
+);
+const { key: editKRSCompanyKey, value: editKRSValue } = editKRS;
+
+const editConnection = useEditIndexedField<
   Link<"company">,
-  CompanyScoredEditable["websiteStatus"]
->((krsNumber) => krsNumber.connection);
-const { index: editConnectionIndex, value: editConnectionValue } = editConnection;
+  Link<"company">
+>(
+  (linked) => linked,
+  (krsNumber, linked) => setKRSOperation(linked.id, krsNumber),
+);
+const { key: editConnectionKRSNumber, value: editConnectionValue } = editConnection;
 
 type ReadonlyHeaders = VDataTable["$props"]["headers"];
 const headers: ReadonlyHeaders = [
   { title: "Nazwa", value: "name", sortable: true, minWidth: "80%" },
   { title: "Wynik", value: "score", sortable: true },
   // TODO { title: "Publiczna", value: "isPublic", sortable: true },
-  { title: "Na stronie", value: "websiteStatus", sortable: true },
+  { title: "Na stronie", value: "entityID", sortable: true },
   { title: "KRS", value: "krsNumber", sortable: true },
   { title: "Rejestr.io", value: "importedFromRejestr", sortable: true },
 ] as const;
 
 const companies = computed(() => {
   const mapped = new Map<string, CompanyScoredEditable>();
+
   Object.entries(scores.value).forEach(([key, value]) => {
     mapped.set(key, {
-      krsNumber: {
-        id: key,
-        value: key,
-      },
       name: value.name,
+      krsNumber: key,
       score: toNumber(value.score).toFixed(2),
-      websiteStatus: {
-        connection: undefined,
-      },
-      isPublic: false, // TODO model it and import it
-      importedFromRejestr: {
-        success: !!value.score,
-        krsNumber: key,
-      },
+
+      // This needs to be set by the website version of the item.
+      // TODO make sure you can't set if it's in this version.
+      // isPublic: false,
+      importedFromRejestr: !!value.score,
     });
+  });
+
+  Object.entries(entities.value).forEach(([key, company]) => {
+    const fetched = mapped.get(company.krsNumber) ?? {};
+
+    mapped.set(key, {
+      importedFromRejestr: false,
+      krsNumber: company.krsNumber,
+      ...fetched,
+      name: company.name,
+      entityID: key,
+    });
+
+    mapped.delete(company.krsNumber);
   });
 
   return Array.from(mapped.values());
 });
 
 function goodStatus(value: boolean): string {
-  return value ? "success" : "error";
+  return value ? "success" : "warning";
 }
 </script>
