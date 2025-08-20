@@ -17,6 +17,7 @@
           {{ person.external_basic.tozsamosc.data_urodzenia }}
           <v-chip
             v-for="company in companies"
+            :key="company.id"
             :class="companyColors(company)"
             >{{ company.name }}</v-chip
           >
@@ -24,20 +25,22 @@
         <!-- Display comment if it exists -->
         <div
           v-for="comment in person.comment"
+          :key="comment"
           class="text-caption text-blue-grey-darken-1 mt-2"
         >
           <v-icon
             size="x-small"
             start
             icon="mdi-comment-quote-outline"
-          ></v-icon>
+          />
           <em>{{ comment }}</em>
         </div>
         <div
           v-for="link in person.link"
+          :key="link"
           class="text-caption text-blue-grey-darken-1 mt-2"
         >
-          <v-icon size="x-small" start icon="mdi-link-variant-outline"></v-icon>
+          <v-icon size="x-small" start icon="mdi-link-variant-outline" />
           <em>{{ link }}</em>
         </div>
       </v-col>
