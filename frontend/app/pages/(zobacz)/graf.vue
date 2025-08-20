@@ -9,6 +9,7 @@ import { useParams } from "@/composables/params";
 definePageMeta({
   title: "Graf",
   isGraph: true,
+  fullWidth: true,
 });
 
 const dialogStore = useDialogStore();

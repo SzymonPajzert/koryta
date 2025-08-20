@@ -1,80 +1,50 @@
 <template>
-  <!-- <v-card>
-    TODO Znajdź ludzi z takich organizacji jak 0000336643. Nie iteresują mnie, ale algorytm powienien je proponować bo duo ludzi wychodzi z nich.
-    TODO List active companies that the person is a part of, filter on them
-    TODO: Yellow if person is suggested (because in DB) and put on to
-    TODO: Rodziel punkty jeśli są między radę nadzorczą i zarząd (ale chyba nie jest to warte)
-  </v-card> -->
+  <div v-if="Object.keys(peopleOrdered).length > 0">
+    <v-card width="100%" align="center" class="mt-3">
+      <v-card-title>
+        Znalazłem {{ Object.keys(peopleOrdered).length }} osób
+      </v-card-title>
+      <v-card-text>
+        {{ visited }} przejrzanych
+        <br>
+        {{ toAdd }} do dodania
+        <br>
+        {{ toCheck }} do sprawdzenia
+        <br>
+        {{ Object.keys(people).length }} łącznie
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn to="/admin/firmy">Statystyki organizacji i firm</v-btn>
+        <v-btn @click="sortKeys">Sortuj</v-btn>
+      </v-card-actions>
+    </v-card>
 
-  <v-expand-transition>
-    <v-list v-if="showScores">
-      <v-list-item
-        v-for="([krs, companyScore], _) in companiesSorted"
-        :key="krs"
-      >
-        {{ companyScore.name }} ({{ companyScore.score }} / {{ krs }})
-      </v-list-item>
+    <v-divider />
+
+    <v-list lines="two" width="100%">
+      <ClueListItem
+        v-for="[index, person] in peopleOrdered"
+        :key="index"
+        :person="person"
+        :companies="personCompanies[index]"
+      />
     </v-list>
-  </v-expand-transition>
-
-  <v-card width="100%" align="center" class="mt-3">
-    <v-card-title>
-      Znalazłem {{ Object.keys(peopleOrdered).length }} osób
-    </v-card-title>
-    <v-card-text>
-      {{ visited }} przejrzanych
-      <br />
-      {{ toAdd }} do dodania
-      <br />
-      {{ toCheck }} do sprawdzenia
-      <br />
-      {{ Object.keys(people).length }} łącznie
-    </v-card-text>
-    <v-card-actions>
-      <v-spacer />
-      <v-btn @click="showScores = !showScores">Kolejność organizacji</v-btn>
-      <v-btn @click="sortKeys">Sortuj</v-btn>
-    </v-card-actions>
-  </v-card>
-
-  <v-divider />
-
-  <v-list lines="two" width="100%">
-    <ClueListItem
-      v-for="[index, person] in peopleOrdered"
-      :key="index"
-      :person="person"
-      :companies="personCompanies[index]"
-    />
-  </v-list>
+  </div>
 </template>
 
 <script setup lang="ts">
 import type { PersonRejestr } from "~~/shared/model";
 import { createEntityStore } from "@/stores/entity";
-import { toNumber, useCompanyScore } from "@/composables/entities/companyScore";
+import { useCompanyScore } from "@/composables/entities/companyScore";
 import ClueListItem from "@/components/lists/ClueListItem.vue";
 
 const usePeopleStore = createEntityStore("external/rejestr-io/person");
 const peopleStore = usePeopleStore();
 const { entities: people } = storeToRefs(peopleStore);
 
-const showScores = ref(false);
-const firstChance = ref(2);
-const ignoreSuccess = ref(3);
+const { personScore, personCompanies } = useCompanyScore();
 
-const { scores, personScore, personCompanies } = useCompanyScore(
-  firstChance,
-  ignoreSuccess
-);
-const companiesSorted = computed(() =>
-  Object.entries(scores.value).sort(
-    (a, b) => toNumber(b[1].score) - toNumber(a[1].score)
-  )
-);
-
-// Show only people that are active
-// TODO active only in selected companies
 const peopleFiltered = computed(() => {
   const activePeopleKey = new Set();
   Object.entries(personCompanies.value).forEach(([key, companies]) => {

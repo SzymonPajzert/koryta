@@ -1,4 +1,3 @@
-import { type Ref } from "vue";
 import { createEntityStore } from "@/stores/entity";
 
 interface CompanyScore {
@@ -22,10 +21,10 @@ export function toNumber(a: Score): number {
   return a;
 }
 
-export function useCompanyScore(
-  firstChance: Ref<number>,
-  ignoreSuccess: Ref<number>,
-) {
+const firstChance = 2 as const;
+const ignoreSuccess = 3 as const;
+
+export function useCompanyScore() {
   const useCompanyStore = createEntityStore("external/rejestr-io/krs");
   const companyStore = useCompanyStore();
   const { entities: companies } = storeToRefs(companyStore);
@@ -63,11 +62,11 @@ export function useCompanyScore(
 
     Object.keys(result).forEach((key) => {
       const v = result[key];
-      if (v.good == 0 && v.good + v.bad < firstChance.value) {
+      if (v.good == 0 && v.good + v.bad < firstChance) {
         result[key].score = "start";
       } else if (v.good == 0) {
         result[key].score = -v.bad;
-      } else if (v.bad > v.good * ignoreSuccess.value) {
+      } else if (v.bad > v.good * ignoreSuccess) {
         result[key].score = -v.bad / v.good;
       } else {
         result[key].score = result[key].good / Math.max(result[key].bad, 0.01);

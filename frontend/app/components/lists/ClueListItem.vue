@@ -1,43 +1,38 @@
 <template>
-  <!--
-    TODO wypisz linki w karcie
-    TODO support linking the company from this button
-  -->
-
   <v-list-item
-    @click="setActive()"
     :variant="activeItem ? 'tonal' : 'flat'"
+    @click="setActive()"
   >
-    <!-- Main two-column content -->
     <v-row align="center">
-      <!-- Column 1: Product Info & Comment -->
       <v-col cols="12" sm="7" md="8">
         <div class="font-weight-bold">{{ person.name }}</div>
         <div class="text-body-2">
           {{ person.external_basic.tozsamosc.data_urodzenia }}
           <v-chip
             v-for="company in companies"
+            :key="company.id"
             :class="companyColors(company)"
             >{{ company.name }}</v-chip
           >
         </div>
-        <!-- Display comment if it exists -->
         <div
           v-for="comment in person.comment"
+          :key="comment"
           class="text-caption text-blue-grey-darken-1 mt-2"
         >
           <v-icon
             size="x-small"
             start
             icon="mdi-comment-quote-outline"
-          ></v-icon>
+          />
           <em>{{ comment }}</em>
         </div>
         <div
           v-for="link in person.link"
+          :key="link"
           class="text-caption text-blue-grey-darken-1 mt-2"
         >
-          <v-icon size="x-small" start icon="mdi-link-variant-outline"></v-icon>
+          <v-icon size="x-small" start icon="mdi-link-variant-outline" />
           <em>{{ link }}</em>
         </div>
       </v-col>
@@ -49,58 +44,57 @@
       </v-col>
     </v-row>
 
-    <!-- Action buttons in the append slot for clean alignment -->
-    <template v-slot:append>
+    <template #append>
       <div class="d-flex flex-sm-column ga-1">
         <v-btn
+          title="Add"
           size="small"
           icon="mdi-arrow-up-bold"
           variant="text"
           @click="addValue(1)"
-          title="Add"
-        ></v-btn>
+        />
         <v-btn
+          title="Decrease"
           size="small"
           icon="mdi-arrow-down-bold"
           variant="text"
           @click="addValue(-1)"
-          title="Decrease"
-        ></v-btn>
+        />
       </div>
       <div class="d-flex flex-sm-column ga-1">
         <v-btn
+          title="Add/Edit Comment"
           size="small"
           icon="mdi-magnify"
           variant="text"
           @click="openExploration()"
-          title="Add/Edit Comment"
-        ></v-btn>
+        />
         <v-btn
+          title="Edytuj"
           size="small"
           icon="mdi-account-question-outline"
           variant="text"
           @click="setValue('unknown')"
-          title="Edytuj"
         >
-          <v-icon color="warning" v-if="person.status === 'unknown'"></v-icon>
-          <v-icon v-else></v-icon>
+          <v-icon v-if="person.status === 'unknown'" color="warning"/>
+          <v-icon v-else/>
         </v-btn>
       </div>
       <div class="d-flex flex-sm-column ga-1">
         <v-btn
+          title="Add/Edit Comment"
           size="small"
           icon="mdi-comment-plus-outline"
           variant="text"
           @click="toggleEditing('comment')"
-          title="Add/Edit Comment"
-        ></v-btn>
+        />
         <v-btn
+          title="Edytuj"
           size="small"
           icon="mdi-link-variant-plus"
           variant="text"
           @click="toggleEditing('link')"
-          title="Edytuj"
-        ></v-btn>
+        />
       </div>
       <div class="d-flex flex-sm-column ga-1">
         <v-btn
@@ -110,49 +104,47 @@
           title="Dodaj firmę"
         />
         <v-btn
+          title="Edytuj"
           size="small"
           icon="mdi-account-outline"
           variant="text"
           @click="toggleEditing('person')"
-          title="Edytuj"
         >
-          <v-icon color="success" v-if="person.person"></v-icon>
-          <v-icon v-else></v-icon>
+          <v-icon v-if="person.person" color="success"/>
+          <v-icon v-else/>
         </v-btn>
       </div>
     </template>
   </v-list-item>
 
-  <!-- Expansion area for the editing form -->
   <v-expand-transition>
     <div v-if="editingItemId === person.external_basic.id">
       <div class="edit-area pa-4">
-        <!-- Comment Form -->
         <div v-if="editingType === 'comment'">
           <v-textarea
-            label="Dodaj komentarz"
             v-model="tempComment"
+            label="Dodaj komentarz"
             rows="1"
             auto-grow
             variant="outlined"
             density="compact"
             hide-details
-          ></v-textarea>
+          />
         </div>
         <div v-if="editingType === 'link'">
           <v-text-field
-            label="Dodaj link"
             v-model="tempLink"
+            label="Dodaj link"
             variant="outlined"
             density="compact"
             hide-details
-          ></v-text-field>
+          />
         </div>
         <EntityPicker
           v-if="editingType === 'person'"
+          v-model="pickedPerson"
           label="Połącz z osobą"
           entity="employed"
-          v-model="pickedPerson"
         />
 
         <div class="d-flex justify-end mt-3">
@@ -175,7 +167,7 @@ import type { CompanyMembership } from "@/composables/entities/companyScore";
 
 const db = useDatabase();
 
-const { person } = defineProps<{
+const { person, companies } = defineProps<{
   person: PersonRejestr;
   companies: CompanyMembership[];
 }>();
@@ -209,18 +201,26 @@ function openExploration() {
   activeItem.value = true;
   // TODO link the most important places and open them as well
   // TODO can I go to the news page straight away
-  /*
-  TODO wyszukaj tez bez srodkowego imienia
-  TODO: Wyszukaj w google nazwisko bez drugiego imienia
-  TODO: Wyszukaj osobę + nazwa firmy
-  TODO Wyszukaj osobę + ich miasta
-  TODO rejestr io zawsze na końcu, bo jest dobre do wyszukiwania i szacowania osoby
-  */
+  // TODO wyszukaj tez bez srodkowego imienia
+  // TODO Wyszukaj w google nazwisko bez drugiego imienia
+  // TODO Wyszukaj osobę + nazwa firmy
+  // TODO Wyszukaj osobę + ich miasta
+  // TODO wypisz linki w karcie
+  // TODO Yellow if person is suggested (because in DB) and put on to
+
   window.open("https://www.google.com/search?q=" + person.name, "_blank");
   window.open(
     "https://www.google.com/search?q=" + person.name + " pkw",
     "_blank",
   );
+  companies.forEach((company) => {
+    window.open("https://www.google.com/search?q=" + `${person.name} ${company.name}`, "_blank");
+  });
+  window.open(
+    "https://www.google.com/search?q=" + person.name + " pkw",
+    "_blank",
+  );
+  // rejestr.io is always last, so we can check out the person's history easily
   window.open("https://rejestr.io/osoby/" + person.external_basic.id, "_blank");
 }
 function cancelEdit() {
