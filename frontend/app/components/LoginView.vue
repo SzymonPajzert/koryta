@@ -20,6 +20,7 @@ const db = useDatabase();
 const router = useRouter();
 
 const user = ref<User | null>();
+// TODO move it into a composable
 onAuthStateChanged(auth, (userIn) => {
   user.value = userIn;
   set(dbRef(db, `user/${userIn?.uid}/displayName`), userIn?.displayName);
@@ -36,7 +37,7 @@ const login = async () => {
     // User is signed in.
     console.debug("User logged in successfully!");
     router.push("/");
-  } catch (err: any) {
+  } catch (err) {
     console.error("Login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
   } finally {
@@ -53,7 +54,7 @@ const loginWithGoogle = async () => {
     await signInWithPopup(auth, provider);
     console.debug("User logged in with Google successfully!");
     router.push("/");
-  } catch (err: any) {
+  } catch (err) {
     console.error("Google login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
   } finally {
