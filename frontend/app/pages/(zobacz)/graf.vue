@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineConfigs } from "v-network-graph";
+import { defineConfigs, SimpleLayout } from "v-network-graph";
 import type { EventHandlers, NodeEvent } from "v-network-graph";
 
 import { useDialogStore } from "@/stores/dialog";
@@ -71,7 +71,7 @@ const eventHandlers: EventHandlers = {
 };
 
 // TODO reenable reactive for simulation to show
-const configs = defineConfigs({
+const configs = reactive(defineConfigs({
   node: {
     normal: {
       type: (node) => node.type,
@@ -94,19 +94,22 @@ const configs = defineConfigs({
     scalingObjects: true,
     doubleClickZoomEnabled: false,
   },
-});
+}));
 
 watch(filtered, () => {
-  // Don't run the simulation if it's the whole graph
-  if (filtered.value.length === Object.keys(nodes.value ?? {}).length) return;
-  configs.view.layoutHandler = simulationStore.newForceLayout(false);
+  if (filtered.value.length > 150) {
+    // Don't run the simulation if it's the whole graph
+    // TODO Return the state of the layout to the original
+    configs.view.layoutHandler = new SimpleLayout();
+  }
+  else configs.view.layoutHandler = simulationStore.newForceLayout();
 });
 </script>
 
 <template>
   <v-network-graph
     v-if="graph && layout"
-    :nodes="shallowRef(nodesFiltered)"
+    :nodes="nodesFiltered"
     :edges="shallowRef(edges)"
     :configs="configs"
     :layouts="layout"

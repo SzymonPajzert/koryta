@@ -7,21 +7,29 @@
       max-height="40"
       max-width="40"
       contain
-    ></v-img>
+    />
     <v-app-bar-title style="cursor: pointer" @click="$router.push('/')"
       >koryta.pl</v-app-bar-title
     >
     <v-spacer />
-    <v-btn text to="/">Start</v-btn>
-    <v-btn text to="/lista">Lista</v-btn>
-    <v-btn text to="/graf">Graf</v-btn>
+    <omni-search />
+    <v-spacer />
+    <v-btn icon :to="{ path: '/lista', query: route.query }"
+      ><v-icon>mdi-format-list-bulleted-type</v-icon></v-btn
+    >
+    <v-btn icon :to="{ path: '/graf', query: route.query }"
+      ><v-icon>mdi-graph-outline</v-icon></v-btn
+    >
     <v-btn text to="/pomoc">Działaj</v-btn>
     <v-btn text to="/zrodla">Źródła</v-btn>
-    <v-btn icon v-if="user" to="/profil">
+    <v-avatar v-if="user && pictureURL" :image="pictureURL" to="/profil" size="32"/>
+    <v-btn v-if="user && !pictureURL" icon to="/profil">
       <v-icon>mdi-account</v-icon>
     </v-btn>
-    <v-btn text v-if="!user" to="/login">Zaloguj się</v-btn>
-    <v-btn text v-if="user" @click="logout">Wyloguj</v-btn>
+    <v-btn v-if="!user" icon to="/login">
+      <v-icon>mdi-account</v-icon>
+    </v-btn>
+    <v-btn v-if="user" text @click="logout">Wyloguj</v-btn>
   </v-app-bar>
   <v-main>
     <v-container
@@ -41,11 +49,11 @@ import { useAuthState } from "@/composables/auth";
 import { useRoute } from "vue-router";
 import MultiDialog from "~/components/dialog/MultiDialog.vue";
 
-const { user, logout } = useAuthState();
+const { user, pictureURL, logout } = useAuthState();
 
 if (import.meta.client) {
   onMounted(() => {
-    const app = useFirebaseApp()
+    const app = useFirebaseApp();
     const analytics = getAnalytics(app);
 
     logEvent(analytics, "page_view", {
