@@ -26,7 +26,9 @@
             </h2>
           </v-card-title>
           <v-card-text>
-            <TreemapPartyChart />
+            <ClientOnly>
+              <TreemapPartyChart />
+            </ClientOnly>
           </v-card-text>
         </v-card>
       </v-col>

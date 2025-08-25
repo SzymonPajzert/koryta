@@ -42,7 +42,7 @@ export function simulation(
         .stop()
         .tick(10000);
     } else {
-      result = commonConfig.alphaDecay(0.05);
+      result = commonConfig.velocityDecay(0.5).alphaDecay(0.01);
     }
 
     if (tick) {

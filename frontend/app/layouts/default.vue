@@ -14,22 +14,29 @@
     <v-spacer />
     <omni-search />
     <v-spacer />
-    <v-btn icon :to="{ path: '/lista', query: route.query }"
-      ><v-icon>mdi-format-list-bulleted-type</v-icon></v-btn
-    >
-    <v-btn icon :to="{ path: '/graf', query: route.query }"
-      ><v-icon>mdi-graph-outline</v-icon></v-btn
-    >
-    <v-btn text to="/pomoc">Działaj</v-btn>
-    <v-btn text to="/zrodla">Źródła</v-btn>
-    <v-avatar v-if="user && pictureURL" :image="pictureURL" to="/profil" size="32"/>
-    <v-btn v-if="user && !pictureURL" icon to="/profil">
-      <v-icon>mdi-account</v-icon>
-    </v-btn>
-    <v-btn v-if="!user" icon to="/login">
-      <v-icon>mdi-account</v-icon>
-    </v-btn>
-    <v-btn v-if="user" text @click="logout">Wyloguj</v-btn>
+
+    <template #append>
+      <v-btn icon :to="{ path: '/lista', query: route.query }"
+        ><v-icon>mdi-format-list-bulleted-type</v-icon></v-btn
+      >
+      <v-btn icon :to="{ path: '/graf', query: route.query }"
+        ><v-icon>mdi-graph-outline</v-icon></v-btn
+      >
+      <v-btn :icon="!mdAndUp">
+        <v-icon :start="mdAndUp">mdi-plus</v-icon>
+        <!-- This span will be hidden on 'sm' and smaller screens -->
+        <span class="d-none d-md-inline">Działaj</span>
+      </v-btn>
+      <v-btn v-if="mdAndUp" text to="/zrodla">Źródła</v-btn>
+      <v-avatar v-if="user && pictureURL" :image="pictureURL" size="32" @click="router.push('/profil')"/>
+      <v-btn v-if="user && !pictureURL" icon to="/profil">
+        <v-icon>mdi-account</v-icon>
+      </v-btn>
+      <v-btn v-if="!user" icon to="/login">
+        <v-icon>mdi-account</v-icon>
+      </v-btn>
+      <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
+    </template>
   </v-app-bar>
   <v-main>
     <v-container
@@ -48,13 +55,11 @@ import { getAnalytics, logEvent } from "firebase/analytics";
 import { useAuthState } from "@/composables/auth";
 import { useRoute } from "vue-router";
 import MultiDialog from "~/components/dialog/MultiDialog.vue";
-
-const { user, pictureURL, logout } = useAuthState();
+import { useDisplay } from 'vuetify'
 
 if (import.meta.client) {
   onMounted(() => {
-    const app = useFirebaseApp();
-    const analytics = getAnalytics(app);
+    const analytics = getAnalytics();
 
     logEvent(analytics, "page_view", {
       page_location: window.location.href,
@@ -65,6 +70,9 @@ if (import.meta.client) {
   });
 }
 
+const { mdAndUp } = useDisplay()
+const { user, pictureURL, logout } = useAuthState();
+const router = useRouter();
 const route = useRoute();
 const maxWidth = computed(() => (route.meta.fullWidth ? "none" : 900));
 const rootPadding = computed(() => (route.meta.fullWidth ? 0 : undefined));

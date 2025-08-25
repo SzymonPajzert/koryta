@@ -97,7 +97,7 @@ const configs = reactive(defineConfigs({
 }));
 
 watch(filtered, () => {
-  if (filtered.value.length > 150) {
+  if (filtered.value.length > 200) {
     // Don't run the simulation if it's the whole graph
     // TODO Return the state of the layout to the original
     configs.view.layoutHandler = new SimpleLayout();

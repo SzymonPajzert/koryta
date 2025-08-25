@@ -1,8 +1,9 @@
 <template>
   {{ user?.displayName }} to Ty {{ user?.email }} to Twój email
+  <v-btn text @click="logout">Wyloguj</v-btn>
 </template>
 
 <script lang="ts" setup>
 import { useAuthState } from "@/composables/auth";
-const { user } = useAuthState();
+const { user, logout } = useAuthState();
 </script>
