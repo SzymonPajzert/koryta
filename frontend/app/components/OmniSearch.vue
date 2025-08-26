@@ -39,6 +39,8 @@
 
 <script setup lang="ts">
 import type { NodeGroup } from "~~/shared/graph/model";
+import { getAnalytics, logEvent } from "firebase/analytics";
+
 const { data: graph } = await useAsyncData(
   "graph",
   () => $fetch("/api/graph"),
@@ -67,6 +69,7 @@ const items = computed(() => {
 });
 
 const { push, currentRoute } = useRouter();
+const analytics = getAnalytics();
 
 const nodeGroupPicked = ref<NodeGroup & { path?: string }>();
 const autocompleteFocus = ref(false);
@@ -83,6 +86,10 @@ watch(nodeGroupPicked, (value) => {
       ...currentRoute.value.query,
       miejsce: value.id,
     },
+  });
+  logEvent(analytics, "select_content", {
+    content_id: value.id,
+    content_type: "nodeGroup",
   });
   autocompleteFocus.value = false;
 });
