@@ -22,7 +22,7 @@
       <v-btn icon :to="{ path: '/graf', query: route.query }"
         ><v-icon>mdi-graph-outline</v-icon></v-btn
       >
-      <v-btn :icon="!mdAndUp">
+      <v-btn :icon="!mdAndUp" to="/pomoc">
         <v-icon :start="mdAndUp">mdi-plus</v-icon>
         <!-- This span will be hidden on 'sm' and smaller screens -->
         <span class="d-none d-md-inline">Działaj</span>
