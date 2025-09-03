@@ -3,12 +3,12 @@
   <v-app-bar>
     <v-img
       class="mx-2"
-      src="@/assets/świnia2.png"
+      src="@/assets/logo_small.png"
       max-height="40"
       max-width="40"
       contain
     />
-    <v-app-bar-title style="cursor: pointer" @click="$router.push('/')"
+    <v-app-bar-title v-if="mdAndUp" style="cursor: pointer" @click="$router.push('/')"
       >koryta.pl</v-app-bar-title
     >
     <v-spacer />
