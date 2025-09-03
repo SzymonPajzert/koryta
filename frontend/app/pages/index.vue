@@ -1,17 +1,10 @@
 <template>
   <div>
     <v-row>
-      <v-col cols="12" md="6">
-        <v-img class="mb-4" height="150" src="@/assets/świnia.png" />
-
-        <div class="mb-8 text-center">
-          <h1 class="text-h2 font-weight-bold">koryta.pl</h1>
-          <div class="text-body-2 font-weight-light mb-n1">
-            {{ subtitle }}
-          </div>
-        </div>
+      <v-col cols="12" md="5" class="text-center">
+        <v-img position="center" height="300" src="@/assets/logo.png"/>
       </v-col>
-      <v-col cols="12" md="6">
+      <v-col cols="12" md="7">
         <v-card
           to="/lista"
           class="py-4"
