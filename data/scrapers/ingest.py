@@ -26,10 +26,10 @@ def save_org_connections(krs: str, aktualnosci: list[Aktualnosc]):
         basic = get_rejestr_io(f"https://rejestr.io/api/v2/org/{krs}")
         current_org.update({"read": f"{datetime.now()}", "basic": basic})
 
-    connections = get_rejestr_io(
-        f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc={aktualnosc}"
-    )
     for aktualnosc in sorted(aktualnosci, reverse=True):
+        connections = get_rejestr_io(
+            f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc={aktualnosc}"
+        )
         for connection in connections:
             print(f"Saving connection {connection['id']}...  ")
             type = "person"
@@ -86,8 +86,9 @@ if __name__ == "__main__":
             )
             if input() != "y":
                 break
-            for krs in orgs:
-                save_org_connections(*krs)
+            for krs, aktualnosci in orgs.items():
+                print(f"Processing {krs}")
+                save_org_connections(krs, aktualnosci)
 
             if len(orgs) == 0:
                 break
