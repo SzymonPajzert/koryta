@@ -40,16 +40,14 @@
   </v-row>
 
   <v-alert
-    text="Zaloguj się, by móc zagłosować"
     v-if="!user || !user?.uid"
-    @click.stop="() => router.push('/login')"
+    text="Zaloguj się, by móc zagłosować"
     color="warning"
     closable
-  ></v-alert>
+    @click.stop="() => router.push('/login')"
+  />
 
-  <KPOCarousel />
-
-  <KPOItemsList />
+  <KPOItemsList/>
 </template>
 
 <script setup lang="ts">
