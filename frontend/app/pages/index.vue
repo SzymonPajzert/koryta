@@ -3,6 +3,9 @@
     <v-row>
       <v-col cols="12" md="5" class="text-center">
         <v-img position="center" height="300" src="@/assets/logo.png"/>
+        <v-btn variant="elevated" color="primary" class="ma-2" to="/pomoc">
+          <v-icon>mdi-hand</v-icon> Zgłoś się do pomocy
+        </v-btn>
       </v-col>
       <v-col cols="12" md="7">
         <v-card
@@ -99,7 +102,4 @@ const useListEntity = createEntityStore("employed");
 const entityStore = useListEntity();
 const { entities: people } = storeToRefs(entityStore);
 const { koryciarz } = useFeminatyw();
-
-const idx = import.meta.test ? 1 : Math.floor(Math.random() * 2);
-const subtitle = ["Polityczny wypas", "Pójdź tam, gdzie politycy zimują"][idx];
 </script>
