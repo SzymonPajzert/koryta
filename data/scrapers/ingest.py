@@ -2,7 +2,6 @@
 
 # Iterate given KRS numbers
 # Check if the KRS-ORG ID is populated
-# TODO get company connections by KRS number
 # save each in /rejestr/krs/{KRS_ID}/connection
 # From /rejestr/krs/{KRS_ID}/connection/{ID}/
 
@@ -19,7 +18,6 @@ def int_to_krs(number: int) -> str:
     return str(number).zfill(10)
 
 
-# TODO revert back to list of aktualnosc, so historyczne is always before
 def save_org_connections(krs: str, aktualnosci: list[Aktualnosc]):
     current_org = KRSRef(krs)
     if not current_org.is_scraped():
@@ -99,9 +97,6 @@ if __name__ == "__main__":
     except InterruptedError:
         print("Interrupted")
     finally:
-        # TODO List child companies
-        # TODO READ people to update
-        # TODO Print how much would performing of all steps cost
         if show_diff:
             state_after = db.reference("/external/rejestr-io").get()
             assert isinstance(state_before, dict)

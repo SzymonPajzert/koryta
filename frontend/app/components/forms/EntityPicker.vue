@@ -38,7 +38,6 @@ const props = defineProps<{
   // which entity type to use to lookup suggested values to bind to this field
   // e.g. employed, company
   entity: Destination;
-  // TODO customFilter: (value: string, query: string, item?: {value: any}) => boolean
 }>();
 
 const dialogStore = useDialogStore();
@@ -70,7 +69,6 @@ function addNewItem() {
       callback: (name, key) => {
         if (!key) {
           console.warn("failed to obtain key for new entity: ", name);
-          // TODO log on the server all console.warns and higher
           return;
         }
         model.value = new Link<typeof props.entity>(props.entity, key, name);

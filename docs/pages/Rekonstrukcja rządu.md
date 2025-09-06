@@ -1,0 +1,3 @@
+- [Tłuste koty Motyki](https://docs.google.com/document/d/1rOVw_FAQYOIAB3cVWkMNVNq349pRS8dCx4g5y43EJ-w)
+	- [[Miłosz Motyka]] rozpoczął całą inbę z tłustymi kotami kilka lat temu
+	- Teraz jest ministrem energii

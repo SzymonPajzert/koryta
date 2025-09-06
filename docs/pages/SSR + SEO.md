@@ -1,0 +1,5 @@
+- TODO Pretty URLs
+- TODO You mark if you want to make it a node
+- TODO Maybe integrate with nuxt content
+- TODO Migrated and shown at Google
+- TODO Set up hybrid rendering for the #koryta pages

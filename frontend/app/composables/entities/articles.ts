@@ -11,7 +11,6 @@ export interface EnrichedStatus {
   };
 }
 
-// TODO migrate this logic to entities
 export function useArticles() {
   const db = getDatabase();
   const { user, isAdmin } = useAuthState();

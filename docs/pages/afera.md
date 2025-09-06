@@ -1,0 +1,4 @@
+- Szpital w Płocku
+	- [[2025-06-20]] -
+		- Ogólnie w jakim stanie są szpitale, to powinno być możliwie monitorowane
+		- Płock - rolka od Razem - zamknęli szpital

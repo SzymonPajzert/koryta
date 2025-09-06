@@ -1,0 +1,101 @@
+{:blocks (
+{:block/created-at 1757190278754
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:blockType "P"
+:stroke ""
+:rotation 0
+:collapsed false
+:borderRadius 8
+:index 0
+:scale [1 1]
+:pageId "entity/person"
+:scaleLevel "md"
+:fill ""
+:compact false
+:isAutoResizing true
+:type "logseq-portal"
+:size [264 113]
+:strokeType "line"
+:strokeWidth 2
+:opacity 1
+:id "7d3a6ba0-8b5f-11f0-94bb-c517c5685bdd"
+:noFill false
+:point [128 160]
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:collapsedHeight 0
+:nonce 1757190268814}}
+:block/updated-at 1757190278754} 
+{:block/created-at 1757190285960
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:blockType "P"
+:stroke ""
+:rotation 0
+:collapsed false
+:borderRadius 8
+:index 1
+:scale [1 1]
+:pageId "entity/company"
+:scaleLevel "md"
+:fill ""
+:compact false
+:isAutoResizing true
+:type "logseq-portal"
+:size [264 93]
+:strokeType "line"
+:strokeWidth 2
+:opacity 1
+:id "83a50770-8b5f-11f0-94bb-c517c5685bdd"
+:noFill false
+:point [448 176]
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:collapsedHeight 0
+:nonce 1757190279542}}
+:block/updated-at 1757190285960} 
+{:block/created-at 1757190297307
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:blockType "P"
+:stroke ""
+:collapsed false
+:borderRadius 8
+:index 2
+:scale [1 1]
+:pageId "entity/article"
+:scaleLevel "md"
+:fill ""
+:compact false
+:isAutoResizing true
+:type "logseq-portal"
+:size [400 93]
+:strokeType "line"
+:strokeWidth 2
+:opacity 1
+:id "890a1a20-8b5f-11f0-94bb-c517c5685bdd"
+:noFill false
+:point [920 192]
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:collapsedHeight 0
+:nonce 1757190288580}}
+:block/updated-at 1757190297307})
+:pages (
+{:block/uuid #uuid "68bc9875-dae4-403d-a532-97b9754c3346"
+:block/properties 
+{:ls-type :whiteboard-page
+:logseq.tldraw.page 
+{:id "68bc9875-dae4-403d-a532-97b9754c3346"
+:name "entities relations"
+:bindings 
+{}
+:nonce 1
+:assets []
+:shapes-index ("7d3a6ba0-8b5f-11f0-94bb-c517c5685bdd" "83a50770-8b5f-11f0-94bb-c517c5685bdd" "890a1a20-8b5f-11f0-94bb-c517c5685bdd")}}
+:block/updated-at 1757190297307
+:block/created-at 1757190261536
+:block/type "whiteboard"
+:block/name "entities relations"
+:block/original-name "Entities relations"})}

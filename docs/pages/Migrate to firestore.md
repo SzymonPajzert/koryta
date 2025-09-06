@@ -1,0 +1,4 @@
+- #Google/Firestore from #Google/RTDB
+-
+- TODO Move entities one by one
+- TODO useArticles should be removed

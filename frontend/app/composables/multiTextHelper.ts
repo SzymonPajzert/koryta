@@ -4,8 +4,6 @@ import type TextableWrap from "@/components/forms/TextableWrap.vue";
 import type { Connection, Textable, Destination } from "~~/shared/model";
 import { Link } from "~~/shared/model";
 
-// TODO this should be a class and not this abomination
-
 export type Type =
   | "textField"
   | "textarea"

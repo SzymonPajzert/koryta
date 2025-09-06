@@ -49,7 +49,6 @@ const db = useDatabase();
 const router = useRouter();
 
 const user = ref<User | null>();
-// TODO move it into a composable
 onAuthStateChanged(auth, (userIn) => {
   user.value = userIn;
   set(dbRef(db, `user/${userIn?.uid}/displayName`), userIn?.displayName);

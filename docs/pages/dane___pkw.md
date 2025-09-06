@@ -1,0 +1,3 @@
+- LATER Wypełnij wniosek o sprawozdanie finansowe komitetów z wyborów
+	- Kto komu ile wrzucał #dane/pieniądze
+- TODO Ściągnij CSV i wrzuć je do [[Data lake]]
