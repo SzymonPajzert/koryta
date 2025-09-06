@@ -1,0 +1,2 @@
+- Przed kolejnym WOŚPem można zebrać kto, gdzie ile wrzucał z samorządowych pieniędzy
+- Kolejny filmik na #ROMB

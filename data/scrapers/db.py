@@ -29,8 +29,6 @@ else:
             print('Stopping, run $ export FIREBASE_DATABASE_EMULATOR_HOST="127.0.0.1:9003"')
             sys.exit(1)
             
-# TODO implement the root caching for readonly operations
-
 firebase_admin.initialize_app(
     options={
         "databaseURL": DATABASE_URL,
@@ -502,17 +500,9 @@ KRSs = list(set(KRSs))
 
 type Aktualnosc = Literal["aktualne", "historyczne"]
 
-# TODO
-# https://rejestr.io/krs/146138/miejskie-przedsiebiorstwo-wodociagow-i-kanalizacji-w-m-st-warszawie
-# Bardzo dobre źródło ludzi w spółkach
-# TODO Dla tych oznaczonych, znajdź najpopularniejsze ich miejsca pracy
-
 PEOPLE = [
     ("720445", "marcin-skwierawski"),
-    # TODO read all from DB
-    # TODO sync the ones in employed and company with the ones in rejestr.io DB
 ]
-
 
 class Autoapprovers:
     def __init__(self, patterns):
@@ -616,7 +606,6 @@ class KRSRef(DBModel):
         return False
 
 
-# TODO fill the missing name for some fields, they use basic or external
 class PersonRef(DBModel):
     def __init__(self, id: str):
         super().__init__(f"/external/rejestr-io/person/{id}")
@@ -682,7 +671,6 @@ def orgs_to_process() -> dict[str, list[Aktualnosc]]:
         krs: states for krs in missing_krs
     }
     companies_to_ingest = list_missing_people()[0]
-    # TODO list children of the KRSs
     print(
         "Not scraped",
         len(not_scraped),

@@ -17,7 +17,6 @@ export function useParams(title: string) {
 
   const filtered = computed(() => {
     if (route.query.miejsce && typeof route.query.miejsce === "string") {
-      // TODO don't use document title
       document.title = title + nodeGroupsMap.value[route.query.miejsce]?.name;
       return nodeGroupsMap.value[route.query.miejsce]?.connected ?? [];
     }

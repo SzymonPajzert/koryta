@@ -1,0 +1,11 @@
+- A utility search bar at the top of every #view
+-
+- DONE Miejsca
+- DONE Osoby
+- LATER Search history
+- TODO Fix flipping magnifier
+  id:: 68bc9788-68e7-484c-a30e-90178dfa6c77
+- DONE All in the graph
+- DONE All in the list
+- LATER List people's number of connections #entity/person
+- LATER Make it a nicer search, e.g. the one on https://dash14.github.io/v-network-graph

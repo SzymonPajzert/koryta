@@ -78,7 +78,6 @@ function prependZeros(value: string) {
 const addCreatedTodo: Callback = (name, key) => {
   if (!key) {
     console.warn("failed to obtain key for new entity: ", name);
-    // TODO log on the server all console.warns and higher
     return;
   }
   formData.value.todos[key] = new Link<"todo">("todo", key, name);

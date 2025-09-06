@@ -1,7 +1,6 @@
-import { type Article } from "./model";
+import type { Article } from "./model";
 
 export const partyColors = {
-  // TODO if the color is dark enough, switch text color in the chip to white
   PO: "#fca241",
   PiS: "#073b76",
   PSL: "#2ed396",
@@ -11,7 +10,7 @@ export const partyColors = {
   Razem: "#871057",
 };
 
-const breakpoint = /\.|\-/;
+const breakpoint = /\.|-/;
 
 // uses a list of defined markers to split the title
 export function splitTitle(title: string, limit?: number): string[] {
@@ -34,7 +33,7 @@ export function getHostname(data: Article): string {
   try {
     if (!data.sourceURL) return "";
     return new URL(data.sourceURL).hostname;
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("failed to parse URL", data.sourceURL);
     return data.sourceURL;
   }

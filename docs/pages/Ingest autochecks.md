@@ -1,0 +1,12 @@
+- Usecases
+	- [[Prasa do siana]] ingests an article, tags some people. People can vote if the connection is legit
+-
+- TODO think about it, because it looks like a needed part for #aktywizacja
+-
+- TODO What do we need
+	- Connections are first class elements in #entity?
+-
+- The page auto suggests connections
+	- A name of two entities are similar?
+	- Date of birth, e.g. from #dane/pkw and #dane/krs
+-

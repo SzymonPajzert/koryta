@@ -25,6 +25,5 @@ export default defineEventHandler(async () => {
   const nodeGroups = getNodeGroups(nodesNoStats, edges, people, companies);
   const nodes = getNodes(nodeGroups, nodesNoStats);
 
-  // TODO set cache https://firebase.google.com/docs/hosting/manage-cache#set_cache-control
   return { nodesNoStats, edges, nodeGroups, nodes } as GraphLayout;
 });

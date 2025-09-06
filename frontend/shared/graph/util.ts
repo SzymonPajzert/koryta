@@ -152,7 +152,6 @@ export function getNodesNoStats(
         if (
           article.status.tags.includes("dodatkowe informacje") ||
           article.status.tags.includes("ludzie wyciągnięci") ||
-          // TODO suppport multipeople
           article.status.tags.includes("przeczytane")
         ) {
           entry.color = "gray";
@@ -297,7 +296,7 @@ class EdgeMaker<A, B> {
           const connection = b as Connection<D>;
 
           if (!connection.connection) {
-            // TODO this should be reported somewhere
+            console.warn("No connection found")
             return undefined;
           }
 

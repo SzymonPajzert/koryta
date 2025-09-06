@@ -1,0 +1,22 @@
+- [[Ingest autochecks]] - Allow people to make connections between ingested data
+-
+- Kolejne #[[Data lake]] do integracji
+	- [[dane/krs]] - Ingested through #rejestr.io
+	- [[dane/pkw]]
+	- [[dane/wiki]]
+	- [[dane/artykuły]] + [[Prasa do siana]]
+-
+- [[NFOŚiGW ma dużo osób]] - dobre do ręcznego
+	- To jest przykład, dlaczego [[Tasks are first class objects]]
+-
+- Na później
+	- [[dane/nip]]
+	- [[dane/fundacje rodzinne]]
+	- [[dane/bip]]
+	- [[dane/gminy]]
+	- [[dane/wośp]]
+	- CEIDG
+-
+- #afera , #timely
+	- [[dane/kpo]] - afera z KPO, tam były ciekawe smaczki
+	- TODO [[dane/stopalko]] - Kto jak głosował, gdzie pracuje w publicznych spółkach

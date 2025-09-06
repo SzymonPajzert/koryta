@@ -1,0 +1,4 @@
+- TODO Widok osoby wypisuje ich najbliższe i drugie powiązanie, np córka albo współpracownica Struzika
+- TODO Nice url, e.g. osoba/adam-struzik
+- TODO Show [[backlinks]] for #entity/task
+- TODO [[kadencyjność]]

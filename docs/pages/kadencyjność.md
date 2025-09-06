@@ -1,0 +1,4 @@
+- #projekt
+-
+- #view/person
+- powinno też mieć informację, czy dane zatrudnienie jest aktualne, czy może jest z przeszłości

@@ -1,0 +1,9 @@
+- TODO Create a Google Form where people can sign up for help
+	- Ask for
+		- Contact details - phone, email - and how do you prefer to keep in touch
+		- How you could help
+			- pick IT
+			- data gathering
+			- I know people
+		- How many people are going to be on the website - wisdom of the crowds just for fun
+- TODO The form should be on the front page after #promocja

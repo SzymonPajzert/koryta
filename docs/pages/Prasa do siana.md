@@ -1,0 +1,4 @@
+- TODO Chrome extension
+- TODO Downloads the content and puts it into a [[Google/Storage]]
+- TODO Create an [[entity/article]] with an #entity/tag
+- TODO After it's parsed, we can use language analysis, so people can

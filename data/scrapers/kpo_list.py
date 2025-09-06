@@ -17,7 +17,6 @@ class Company:
     id_type: str
 
 if __name__ == "__main__":
-    # TODO import caching of the data, so I don't read it each time
     detailed = DBModel("/external/kpo_detailed")
     current = detailed.get()
     print("after")

@@ -12,6 +12,7 @@
     </v-list-item>
     <ArticleBacklink
       v-for="(source, id) in articles"
+      :key="id"
       width="100%"
       dense
       :article="source"

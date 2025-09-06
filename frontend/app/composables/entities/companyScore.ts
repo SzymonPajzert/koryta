@@ -100,7 +100,6 @@ export function useCompanyScore() {
     const result: Record<string, number> = {};
 
     Object.entries(companies.value).forEach(([companyID, company]) => {
-      // TODO decide if we include historical or not
       Object.keys(company.connections ?? {}).forEach((personKey) => {
         result[personKey] = Math.max(
           result[personKey] ?? Number.MIN_SAFE_INTEGER,

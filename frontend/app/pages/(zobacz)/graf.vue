@@ -32,7 +32,6 @@ const router = useRouter();
 
 const interestingNodes = computed(() => {
   return Object.fromEntries(
-    // TODO make it a parameter
     Object.entries(nodes.value ?? {}).filter(
       ([_, node]) => node.type !== "rect" || node.stats.people > 0
     )
@@ -54,7 +53,6 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
     dialogStore.openExisting(node);
   } else {
     if (nodesFiltered.value[node].type === "rect") {
-      // TODO add previous place
       router.push({ query: { miejsce: node } });
     }
   }
@@ -70,7 +68,6 @@ const eventHandlers: EventHandlers = {
   "node:dblclick": handleNodeClick,
 };
 
-// TODO reenable reactive for simulation to show
 const configs = reactive(defineConfigs({
   node: {
     normal: {
@@ -99,7 +96,6 @@ const configs = reactive(defineConfigs({
 watch(filtered, () => {
   if (filtered.value.length > 200) {
     // Don't run the simulation if it's the whole graph
-    // TODO Return the state of the layout to the original
     configs.view.layoutHandler = new SimpleLayout();
   }
   else configs.view.layoutHandler = simulationStore.newForceLayout();

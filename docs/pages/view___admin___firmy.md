@@ -1,0 +1,8 @@
+- TODO Add checkbox - https://vuetifyjs.com/en/components/data-tables/basics/#simple-checkbox
+- TODO Always sort the table by the company score
+- TODO Allow adding KRS to ingest
+	- Znajdź ludzi z takich organizacji jak 0000336643.
+	- Nie iteresują mnie, ale algorytm powienien je proponować bo duo ludzi wychodzi z nich.
+- TODO If the KRS is set twice, get two rows and mark them as yellow with a warning
+- TODO Make this table server side if it's too long
+- TODO Support isPublic column

@@ -1,0 +1,15 @@
+- Subtasks
+	- [[Tasks are first class objects]]
+	-
+-
+-
+- TODO Aktywizuj ludzi
+	- Z grup
+		- Myśleć głębiej - Discord
+		- Jan Śpiewak - Patronite
+		- Może DLR
+		- Co to ma być
+		- Może Razem
+		- Może MJN
+	- TODO Filmik promocyjny na #ROMB
+	-

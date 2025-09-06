@@ -1,0 +1,8 @@
+- TODO link the most important places and open them as well
+- TODO can I go to the news page straight away
+- TODO wyszukaj tez bez srodkowego imienia
+- TODO Wyszukaj w google nazwisko bez drugiego imienia
+- TODO Wyszukaj osobę + nazwa firmy
+- TODO Wyszukaj osobę + ich miasta
+- TODO wypisz linki w karcie
+- TODO Yellow if person is suggested (because in DB) and put on to

@@ -28,7 +28,7 @@ export function useEditIndexedField<ValueT, StructT>(
     console.debug(key.value);
     console.debug(value.value);
     if (!key.value || !value.value) {
-      // TODO report the issue
+      console.warn("No key or value")
       return;
     }
 

@@ -1,0 +1,5 @@
+- #dane/kpo #afera
+-
+- Koryta - KPO integracja na szybko
+	- TODO Ludzie mogą głosować w finale
+	- TODO Możliwość maili do konwersji osób na teraz #email

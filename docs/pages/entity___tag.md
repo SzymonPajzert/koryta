@@ -1,0 +1,13 @@
+- Entities should be taggeable
+-
+- TODO Add tag for #entity/person - trait
+	- Kot na cztery łapy
+	- Szczęśliwa gwiazda
+	- Człowiek renesansu
+	- Ręka rękę
+		- #Śpiewak na to mówi Erasmus
+- TODO Add tag for #entity/article
+	- IsScraped
+	- IsRead
+	- Move existing ones
+	- #afera

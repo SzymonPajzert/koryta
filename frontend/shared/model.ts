@@ -1,15 +1,8 @@
-import { ref as dbRef, push } from "firebase/database";
-
 export interface Textable {
   text: string;
 }
 export interface Nameable {
   name: string;
-  // TODO support stability
-  // If set, the name will be used as the url
-  // isStable?: boolean;
-  // If isStable and stablePath is set, use the path instead of the name
-  // stablePath?: string[];
 }
 export interface Connection<D extends Destination> {
   text: string;
@@ -70,7 +63,6 @@ export interface Company extends Nameable {
   krsNumber?: string;
   nipNumber?: string;
 
-  // TODO(https://github.com/SzymonPajzert/koryta/issues/44): Migrate away from them
   owner?: Link<"company">;
   manager?: Link<"employed">;
 
@@ -107,7 +99,6 @@ interface RejestrCompany {
   };
 }
 
-// TODO move these to proper fields, instead of the ingested external basic and basic
 export interface KRSCompany extends Nameable {
   external_basic?: RejestrCompany;
   basic?: RejestrCompany;

@@ -1,0 +1,5 @@
+- LATER Could they be integrated between #logseq and #Google/Firestore?
+	- So when we have discussions they can be ingested into the graph here and linked
+	- [datomic how large data does it support - Szukaj w Google](https://www.google.com/search?q=datomic+how+large+data+does+it+support&oq=datomic+how+large+data+does+it+support&gs_lcrp=EgZjaHJvbWUyBggAEEUYOdIBCDg0NDhqMGoxqAIAsAIA&sourceid=chrome&ie=UTF-8)
+	- [Capacity Planning | Datomic](https://docs.datomic.com/operation/capacity.html)
+	- [My experience with Datomic was that it is not appropriate for a system that has ... | Hacker News](https://news.ycombinator.com/item?id=16170955)

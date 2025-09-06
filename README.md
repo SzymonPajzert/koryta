@@ -2,7 +2,8 @@
 
 This project uses
 
-- [jj](https://github.com/jj-vcs/jj) because git is bad
+- [jj](https://github.com/jj-vcs/jj) for version control, because git is bad
+- [Logseq](https://logseq.com) for documentation and notes. See logseq://graph/docs?page=2025-09-06
 - Vue + Vite framework
 - UI libraries
   - Vuetify components

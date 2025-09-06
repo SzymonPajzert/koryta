@@ -1,0 +1,2 @@
+- TODO Tasks have status
+- TODO Tasks have assigned person

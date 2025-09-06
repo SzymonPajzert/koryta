@@ -1,12 +1,4 @@
 <template id="omni-search">
-  <!-- TODO Add a button search on the right, similar to GCP console -->
-  <!-- TODO :menu-props="{ scrim: true }" Enable -->
-  <!-- TODO List people by the number of their connections -->
-  <!-- TODO fix flipping magnifier -->
-  <!-- Far in the future ideas:
-    Include search history
-    Make it a nicer search, e.g. the one on https://dash14.github.io/v-network-graph
-  -->
   <v-autocomplete
     v-model="nodeGroupPicked"
     v-model:focused="autocompleteFocus"
