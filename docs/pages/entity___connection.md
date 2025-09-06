@@ -1,0 +1,4 @@
+- TODO Connects two entities
+- TODO People can vote
+- TODO Some connections are auto added by a bot
+- TODO People can add more connections
