@@ -15,12 +15,24 @@ export function useParams(title: string) {
   );
   const nodes = computed(() => data.value?.nodes ?? {});
 
+  // Identifiers of the nodes, that should be returned
+  // TODO move the query to the server
   const filtered = computed(() => {
+    let keys = Object.keys(nodes.value);
+
     if (route.query.miejsce && typeof route.query.miejsce === "string") {
       document.title = title + nodeGroupsMap.value[route.query.miejsce]?.name;
-      return nodeGroupsMap.value[route.query.miejsce]?.connected ?? [];
+      keys = nodeGroupsMap.value[route.query.miejsce]?.connected ?? [];
     }
-    return Object.keys(nodes.value);
+
+    if (route.query.partia && typeof route.query.partia === "string") {
+      document.title = title + route.query.partia
+      keys = Object.keys(nodes.value).filter((key) => {
+        nodes.value[key].parties.includes(route.query.partia as string);
+      });
+    }
+
+    return keys;
   });
 
   const allowEntity = (key: string) => {

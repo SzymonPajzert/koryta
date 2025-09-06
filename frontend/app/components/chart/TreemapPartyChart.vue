@@ -17,6 +17,7 @@ const {
   partyColors: partyColorsUnfiltered,
   results: resultsUnfiltered,
 } = usePartyStatistics();
+const router = useRouter();
 
 const nonZeroIndices = computed(() =>
   resultsUnfiltered.value.map((x, i) => (x > 0 ? i : -1)).filter((i) => i >= 0),
@@ -42,6 +43,12 @@ const chartOptions = computed(() => ({
     toolbar: {
       show: false,
     },
+    events: {
+      click: function (event, _chartContext: unknown, opts: {dataPointIndex: number}) {
+        console.log(opts.dataPointIndex)
+        router.push({path: "/lista", query: {partia: parties.value[opts.dataPointIndex]}})
+      }
+    }
   },
   colors: partyColors.value,
   plotOptions: {
