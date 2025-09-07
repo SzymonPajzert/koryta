@@ -17,3 +17,5 @@ fi
 firebase emulators:start --import=./firestore_copy/${LATEST_TIMESTAMP}
 
 # You should be able to see the DB in http://127.0.0.1:4000/firestore/default/data
+# Remember to set `export FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"` to access it from scripts.
+# You can dump the modified data with `firebase emulators:export ./firestore_modified`
