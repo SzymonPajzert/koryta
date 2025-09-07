@@ -19,7 +19,7 @@
       <v-btn icon :to="{ path: '/lista', query: route.query }"
         ><v-icon>mdi-format-list-bulleted-type</v-icon></v-btn
       >
-      <v-btn icon :to="{ path: '/graf', query: route.query }"
+      <v-btn icon :to="{ path: '/graf', query: pick(route.query, 'miejsce') }"
         ><v-icon>mdi-graph-outline</v-icon></v-btn
       >
       <v-btn :icon="!mdAndUp" to="/pomoc">
@@ -76,4 +76,15 @@ const router = useRouter();
 const route = useRoute();
 const maxWidth = computed(() => (route.meta.fullWidth ? "none" : 900));
 const rootPadding = computed(() => (route.meta.fullWidth ? 0 : undefined));
+
+function pick<T>(obj: Record<string, T>, ...keys: string[]) {
+  const result: Record<string, T> = {};
+  for (const key of keys) {
+    if (obj[key] !== undefined) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
+
 </script>

@@ -9,7 +9,6 @@
       </v-col>
       <v-col cols="12" md="7">
         <v-card
-          to="/lista"
           class="py-4"
           color="surface-variant"
           variant="tonal"
