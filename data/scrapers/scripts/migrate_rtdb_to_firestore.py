@@ -7,7 +7,7 @@ and writes it to two new collections in Firestore: `external` and `votes`.
 
 This corresponds to data referenced in model.ts as PersonRejestr
 
-TODO Create entry in firestore://external/{newRandomID1} with fields:
+DONE Create entry in firestore://external/{newRandomID1} with fields:
   - person.name.first
   - person.name.last
   - person.name.full
@@ -16,7 +16,7 @@ TODO Create entry in firestore://external/{newRandomID1} with fields:
   - source.id - e.g. 599
   - source.type - "rejestr-io/person"
   
-TODO Create an entry in firestore://votes/{newRandomID2} with fields:
+DONE Create an entry in firestore://votes/{newRandomID2} with fields:
   - reference
     - entity_id - not set this time
     - external_id - set to newRandomID1
@@ -133,7 +133,8 @@ def copy_entries(source: str, destination: str):
     print("Migration complete!")
 
 if __name__ == "__main__":
-    # migrate_rejestr_io_data()
-    copy_entries("employed", "person")
-    copy_entries("company", "place")
-    copy_entries("data", "article")
+    # DONE migrate_rejestr_io_data()
+    # DONE copy_entries("employed", "person")
+    # DONE copy_entries("company", "place")
+    # DONE copy_entries("data", "article")
+    pass

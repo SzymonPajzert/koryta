@@ -296,7 +296,6 @@ class EdgeMaker<A, B> {
           const connection = b as Connection<D>;
 
           if (!connection.connection) {
-            console.warn("No connection found")
             return undefined;
           }
 
