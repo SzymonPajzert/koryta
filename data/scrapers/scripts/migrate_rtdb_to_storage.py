@@ -4,7 +4,7 @@ This script helps us migrate the data,
 """
 
 from dataclasses import dataclass
-from storage import upload_json_to_gcs
+from data.scrapers.util.storage import upload_json_to_gcs
 from db import db
 # from util import trim_object
 

@@ -1,3 +1,5 @@
+import { firestore } from "firebase-functions";
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
@@ -78,6 +80,14 @@ export default defineNuxtConfig({
       messagingSenderId: "735903577811",
       appId: "1:735903577811:web:6862ab6d2e0a46fa4e8626",
       measurementId: "G-PL6L1B0CZY",
+    },
+    services: {
+      firestore: {
+        databaseId: "koryta-pl",
+      },
+    },
+    firestore: {
+      databaseId: "koryta-pl",
     },
   },
 

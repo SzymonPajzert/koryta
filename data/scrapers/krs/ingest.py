@@ -7,7 +7,7 @@
 
 from datetime import datetime
 from db import KRSRef, PersonRef
-from rejestr import get_rejestr_io
+from data.scrapers.util.rejestr import get_rejestr_io
 from db import orgs_to_process, people_to_process, Aktualnosc, something_removed
 from firebase_admin import db
 import json
