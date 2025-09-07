@@ -9,12 +9,15 @@ from firebase_admin.auth import UserRecord
 class Level(IntEnum):
     UNKNOWN = 0
     NORMAL = 1
-    ADMIN = 2
+    TRUSTED = 2
+    ADMIN = 3
     
 def get_custom_claims_dict(l: Level):
     c = Level.UNKNOWN
     result = {}
     while int(c) <= int(l):
+        if c == Level.TRUSTED:
+            result["trusted"] = True
         if c == Level.ADMIN:
             result["admin"] = True
         c = c + 1
@@ -36,9 +39,7 @@ def dict_diff(d1, d2):
         
 
 ROLE_LEVELS = {
-    "dx5149dNlFTbKTovirqZ4a8K7ey2": Level.ADMIN,
     "of0BKlwqWLX21Cuml4NMHZ18xoC3": Level.ADMIN,
-    "rJNsODgkXuZ9di81GTcgPhc192o2": Level.ADMIN,
 }
 
 PROJECT_ID = "koryta-pl"
