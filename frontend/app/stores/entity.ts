@@ -1,5 +1,5 @@
 import { useCollection } from 'vuefire'
-import { collection, getFirestore } from 'firebase/firestore'
+import { collection } from 'firebase/firestore'
 import type { DestinationTypeMap, Destination } from "@/../shared/model";
 // import { useAuthState } from "@/composables/auth";
 import { defineStore } from "pinia";
@@ -18,7 +18,7 @@ function entityNewLocation(entity: Destination) {
 
 export function createEntityStore<D extends Destination>(entity: D) {
   return defineStore("entity_" + entity, () => {
-    const db = getFirestore(useFirebaseApp(), "koryta-pl")
+    const db = useFirestore();
     // const { removeBlanks } = useDBUtils();
     // const { user, isAdmin } = useAuthState();
 
