@@ -1,0 +1,2 @@
+- a [[Google/Storage]] bucket for [[firestore]] exports
+- See database/import_firestore.sh
