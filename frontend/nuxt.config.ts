@@ -70,16 +70,16 @@ export default defineNuxtConfig({
     auth: {
       enabled: true,
     },
+    // TODO parametrize in the env, so I can pass autopush and local test config
     config: {
       apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
       authDomain: "koryta-pl.firebaseapp.com",
-      databaseURL:
-        "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
+      databaseURL: "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
       projectId: "koryta-pl",
       storageBucket: "koryta-pl.firebasestorage.app",
       messagingSenderId: "735903577811",
-      appId: "1:735903577811:web:6862ab6d2e0a46fa4e8626",
-      measurementId: "G-PL6L1B0CZY",
+      appId: "1:735903577811:web:53e6461c641b947a4e8626",
+      measurementId: "G-KRYVKQ4T7T"
     },
     services: {
       firestore: {
