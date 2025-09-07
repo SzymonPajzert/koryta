@@ -1,10 +1,28 @@
 <template>
-  <main v-if="user">Cześć {{ user?.displayName }}!</main>
+  <main v-if="user">
+    Cześć {{ user?.displayName }}!
+    <div v-if="!user.emailVerified">
+      Zweryfikuj swój email:
+      <v-btn :loading="loading" @click="sendVerification">
+        Wyślij ponownie
+      </v-btn>
+    </div>
+  </main>
   <main v-if="!user">
-    <h2 class="blue">Zaloguj się</h2>
-    <v-form @submit.prevent="login">
+    <h2 class="blue">{{ isLogin ? "Zaloguj się" : "Rejestracja" }}</h2>
+    <div>
+      <a href="#" @click.prevent="isLogin = !isLogin">
+        {{
+          isLogin
+            ? "Nie masz konta? Zarejestruj się"
+            : "Masz już konto? Zaloguj się"
+        }}
+      </a>
+    </div>
+    <v-form @submit.prevent="isLogin ? login() : register()">
       <div class="form-group">
         <button
+          v-if="isLogin"
           type="button"
           :disabled="loading"
           class="google-button"
@@ -15,12 +33,29 @@
         </button>
       </div>
 
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email"  v-model="email" type="email" required >
+      </div>
+
+      <div class="form-group">
+        <label for="password">Hasło</label>
+        <input id="password" v-model="password" type="password" required >
+      </div>
+
+      <div class="form-group">
+        <button type="submit" :disabled="loading">
+          <span v-if="loading">Proszę czekać...</span>
+          <span v-else>{{ isLogin ? "Zaloguj się" : "Stwórz konto" }}</span>
+        </button>
+      </div>
+
       <div v-if="error" class="error-message">
         {{ error }}
       </div>
     </v-form>
     <div>
-      Logowanie się oznacza zgodę z
+      {{ isLogin ? "Logowanie się" : "Rejestracja" }} oznacza zgodę z
       <a href="/plik/regulamin">regulaminem</a> oraz
       <a href="/plik/polityka_prywatnosci">polityką prywatności</a>.
     </div>
@@ -30,12 +65,13 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import {
-  getAuth,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
   type User,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
 } from "firebase/auth";
 import { set, ref as dbRef } from "firebase/database";
 
@@ -43,6 +79,7 @@ const email = ref("");
 const password = ref("");
 const error = ref<string | null>(null);
 const loading = ref(false);
+const isLogin = ref(true);
 
 const auth = useFirebaseAuth()!;
 const db = useDatabase();
@@ -60,7 +97,6 @@ const login = async () => {
   error.value = null;
   loading.value = true;
   try {
-    const auth = getAuth();
     await signInWithEmailAndPassword(auth, email.value, password.value);
     // User is signed in.
     console.debug("User logged in successfully!");
@@ -77,7 +113,6 @@ const loginWithGoogle = async () => {
   error.value = null;
   loading.value = true;
   try {
-    const auth = getAuth();
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
     console.debug("User logged in with Google successfully!");
@@ -90,10 +125,41 @@ const loginWithGoogle = async () => {
   }
 };
 
+const register = async () => {
+  error.value = null;
+  loading.value = true;
+  try {
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email.value,
+      password.value,
+    );
+    await sendEmailVerification(userCredential.user);
+    alert("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
+    router.push("/");
+  } catch (err) {
+    console.error("Registration error:", err.code, err.message);
+    error.value = getErrorMessage(err.code);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const sendVerification = async () => {
+  if (!user.value) return;
+  loading.value = true;
+  try {
+    await sendEmailVerification(user.value);
+    alert("Wysłano email weryfikacyjny.");
+  } catch (err) {
+    error.value = getErrorMessage(err.code);
+  } finally {
+    loading.value = false;
+  }
+};
+
 const getErrorMessage = (errorCode: string) => {
   switch (errorCode) {
-    case "auth/invalid-email":
-      return "Invalid email address.";
     case "auth/user-disabled":
       return "This user account has been disabled.";
     case "auth/user-not-found":
@@ -106,6 +172,10 @@ const getErrorMessage = (errorCode: string) => {
       return "Login popup request was cancelled.";
     case "auth/popup-blocked":
       return "Login popup was blocked by the browser.";
+    case "auth/email-already-in-use":
+      return "Ten email jest już w użyciu.";
+    case "auth/weak-password":
+      return "Hasło jest zbyt słabe. Powinno mieć co najmniej 6 znaków.";
     default:
       return "An unexpected error occurred. Please try again.";
   }
