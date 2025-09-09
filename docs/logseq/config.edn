@@ -299,7 +299,7 @@
  ;;  :charge-range    600}   ; Default value: 600
 
  ;; Favorites to list on the left sidebar
- :favorites ["Małe zadania" "Start"]
+ :favorites ["TODO" "Małe zadania" "Start"]
 
  ;; Set flashcards interval.
  ;; Expected value:
@@ -419,4 +419,7 @@
  ;;      ;use triple underscore `___` for slash `/` in page title
  ;;      ;use Percent-encoding for other invalid characters
  :file/name-format :triple-lowbar
- :journal/page-title-format "yyyy-MM-dd"}
+ :journal/page-title-format "yyyy-MM-dd"
+ :graph/forcesettings {:link-dist 120
+ :charge-strength -1000
+ :charge-range 2500}}

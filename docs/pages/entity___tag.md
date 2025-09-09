@@ -1,11 +1,15 @@
 - Entities should be taggeable
 -
-- TODO Add tag for #entity/person - trait
+- LATER Add tag for #entity/person - trait
 	- Kot na cztery łapy
 	- Szczęśliwa gwiazda
 	- Człowiek renesansu
 	- Ręka rękę
 		- #Śpiewak na to mówi Erasmus
+- TODO Pole statusu - #entity/tag
+	- Czy w mediach
+	- Czy nowa znaleziona
+	- Czy ma mieć [[SSR + SEO]]
 - TODO Add tag for #entity/article
 	- IsScraped
 	- IsRead

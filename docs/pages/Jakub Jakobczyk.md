@@ -1,0 +1,4 @@
+- LATER - WORDy to też może być ciekawa kopalnia powiązań patrząc na to jak bardzo są nastawione na zysk - [[dane]]
+- Do przeszukiwania [[dane/artykuły]] Bielik.ai ma ciekawą opcję Newsroom, i np na hasło "Agnieszka Gonczaryk powiązania z PKP" wypluł podsumowanie na podstawie artykułów prasowych
+- [](https://jawnylublin.pl/wszystko-zostaje-w-rodzinie-tesc-posla-pis-dyrektorem-w-miejsce-czlowieka-sasina/)
+-

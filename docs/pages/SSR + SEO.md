@@ -1,5 +1,8 @@
 - TODO Pretty URLs
 - TODO You mark if you want to make it a node
 - TODO Maybe integrate with nuxt content
-- TODO Migrated and shown at Google
+- Google console
+	- TODO Sitemap generated
+	- TODO Migrated and shown at Google
 - TODO Set up hybrid rendering for the #koryta pages
+- LATER Everything on the page is shareable for future interactions

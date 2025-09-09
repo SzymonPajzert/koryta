@@ -1,8 +1,17 @@
-- TODO link the most important places and open them as well
-- TODO can I go to the news page straight away
-- TODO wyszukaj tez bez srodkowego imienia
-- TODO Wyszukaj w google nazwisko bez drugiego imienia
-- TODO Wyszukaj osobę + nazwa firmy
-- TODO Wyszukaj osobę + ich miasta
-- TODO wypisz linki w karcie
-- TODO Yellow if person is suggested (because in DB) and put on to
+- LATER Improved opened tabs
+	- Wyszukaj osobę + ich miasta
+	- Wyszukaj osobę + nazwa firmy
+	- szukaj w google nazwisko bez drugiego imienia
+- LATER Look up good newspapers and matching places
+	- Based on the past articles
+	- Based on the matched location for the person
+- LATER Yellow if person is suggested (because in DB) and put on to - [[view/pomoc/connect]]
+-
+- Subviews
+	- TODO Implement #view/pomoc/scal
+-
+-
+- LATER has sliders and filters to modify search parameters
+- #view/pomoc/merge
+	- do mergowania podobnych osób
+- Otwieraj strony onet, wyborcza, jakieś lokalne gazety, bez drugiego imienia ale z całym nazwiskiem, miasto

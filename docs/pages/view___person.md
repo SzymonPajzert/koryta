@@ -2,3 +2,4 @@
 - TODO Nice url, e.g. osoba/adam-struzik
 - TODO Show [[backlinks]] for #entity/task
 - TODO [[kadencyjność]]
+- TODO Add links in the person view, because it's visible only on edit now

@@ -1,7 +1,7 @@
 alias:: pieniądze
 
 -
-- TODO [[Zorganizuj zrzutka]]
+- LATER [[Zorganizuj zrzutka]]
 -
 - Ile aktualnie kosztuje projekt miesięcznie?
 	- Subskrypcje

@@ -1,4 +1,4 @@
 - LATER OneTab has a nice UI where crosses x are appearing only on hover, that's pretty
 - LATER Strona deepmind google gemma wygląda dobrze do kradzieży
 - LATER Ukradnij jak wygląda landing page skrótu politycznego
--
+- LATER Ładna stopka - https://wpolsce24.tv/sport/nie-chca-grac-w-pilke-z-klubem-z-izraela,45668

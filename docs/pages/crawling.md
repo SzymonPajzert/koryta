@@ -1,0 +1,5 @@
+- [[dane/artykuły]]
+-
+- I've learned that Common Crawl is not good enough for us, because it doesn't list many good websites
+-
+- TODO We will write our own crawler, because the [[Prasa do siana]] extension doesn't work that well

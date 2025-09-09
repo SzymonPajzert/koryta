@@ -1,0 +1,2 @@
+- #osoba
+- TODO Wrzuć na koryta
