@@ -1,2 +1,5 @@
 - Mówił o nich #Zandberg ostatnio koło #2025-08-25
+	- https://www.youtube.com/shorts/W4IXK5oEVqA
+-
+-
 -

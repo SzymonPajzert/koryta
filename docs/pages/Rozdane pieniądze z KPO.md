@@ -3,3 +3,8 @@
 - Koryta - KPO integracja na szybko
 	- TODO Ludzie mogą głosować w finale
 	- TODO Możliwość maili do konwersji osób na teraz #email
+	- LATER Restore ability to use it, because I gave up on it currently during [[Migrate to firestore]]
+-
+- LATER Notki do #promocja
+	- To nie były merytorycznie wydane pieniądze, bo takich warunków nie było - https://youtu.be/hLg9J-AfaCA?si=O8CEGuij9HMyt8sD&t=1265
+	- [[Paweł Pecur]] miał też swoją reklamę, jak można kupić sobie jachty - info też w Co to będzie.

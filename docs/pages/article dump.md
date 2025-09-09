@@ -1,0 +1,4 @@
+- TODO Implement it
+-
+- LATER copy info
+	- [https://jawnylublin.pl/wszystko-zostaje-w-rodzinie-tesc-posla-pis-dyrektorem-w-miejsce-czlowieka-sasina/](https://jawnylublin.pl/wszystko-zostaje-w-rodzinie-tesc-posla-pis-dyrektorem-w-miejsce-czlowieka-sasina/) - [[Jakub Jakobczyk]]

@@ -1,3 +1,3 @@
-- TODO Dzwoń do losowych informatyków, dowiedz się czy coś mogę ich odblokować
-- TODO Dodaj dostęp dla IT, ale nie lepszy niż admin
-- TODO Wypisz osoby informatyczne
+- LATER Dzwoń do losowych informatyków, dowiedz się czy coś mogę ich odblokować
+- DONE Dodaj dostęp dla IT, ale nie lepszy niż admin
+- LATER Wypisz osoby informatyczne

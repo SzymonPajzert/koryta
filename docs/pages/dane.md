@@ -5,6 +5,7 @@
 	- [[dane/pkw]]
 	- [[dane/wiki]]
 	- [[dane/artykuły]] + [[Prasa do siana]]
+		- TODO ingest the cloud storage files and extract entities with [[Google/Natural Language]]
 -
 - [[NFOŚiGW ma dużo osób]] - dobre do ręcznego
 	- To jest przykład, dlaczego [[Tasks are first class objects]]

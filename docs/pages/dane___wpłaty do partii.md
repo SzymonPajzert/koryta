@@ -1,0 +1,9 @@
+- https://platforma.org/upload/document/188/attachments/533/Rejestr_wplat.pdf
+- https://pkw.gov.pl/finansowanie-polityki/finansowanie-kampanii-wyborczych/wybory-do-sejmu-i-do-senatu/wybory-do-sejmu-rp-i-do-senatu-rp-2023/sprawozdania-finansowe-komitetow-wyborczych-uczestniczacych-w-wyborach-do-sejmu-rzeczypospolitej-pol
+- https://pkw.gov.pl/uploaded_files/1709116861_kkw-ko-platforma-n-ipl-zieloni.pdf
+- https://psl.bip.org.pl/index//id/143
+- https://psl.bip.org.pl/pliki/psl/rejestr_wplat_2025.pdf?20250901082412
+-
+-
+-
+- https://sip.lex.pl/akty-prawne/dzu-dziennik-ustaw/kodeks-wyborczy-17679859/dz-1-roz-15

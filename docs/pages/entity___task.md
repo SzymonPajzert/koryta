@@ -1,2 +1,3 @@
-- TODO Tasks have status
-- TODO Tasks have assigned person
+- LATER Tasks have status
+- LATER Tasks have assigned person
+- TODO Can be added quickly, so people can quickly say what should be improved

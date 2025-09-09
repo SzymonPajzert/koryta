@@ -3,7 +3,7 @@
 	-
 -
 -
-- TODO Aktywizuj ludzi
+- LATER Aktywizuj ludzi
 	- Z grup
 		- Myśleć głębiej - Discord
 		- Jan Śpiewak - Patronite
@@ -11,5 +11,8 @@
 		- Co to ma być
 		- Może Razem
 		- Może MJN
-	- TODO Filmik promocyjny na #ROMB
+	- LATER Filmik promocyjny na #ROMB
+	  :LOGBOOK:
+	  CLOCK: [2025-09-07 Sun 12:57:15]--[2025-09-07 Sun 12:57:15] =>  00:00:00
+	  :END:
 	-

@@ -3,7 +3,7 @@
 - DONE Miejsca
 - DONE Osoby
 - LATER Search history
-- TODO Fix flipping magnifier
+- LATER Fix flipping magnifier
   id:: 68bc9788-68e7-484c-a30e-90178dfa6c77
 - DONE All in the graph
 - DONE All in the list

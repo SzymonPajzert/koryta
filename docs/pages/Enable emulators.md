@@ -1,0 +1,2 @@
+- TODO enable them in NUXT - https://vuefire.vuejs.org/api/interfaces/packages_nuxt_src_module.VueFireNuxtModuleOptions.html#emulators
+-

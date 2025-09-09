@@ -1,0 +1,10 @@
+- Możemy wypisać dla wszystkich firm ich przewinienia, żeby pokazać, że są źle zarządzane
+-
+- https://cloud.google.com/python/docs/reference/storage/latest#tracing-with-opentelemetry - check out, does it make sense to integrate with it for better tracking, metrics?
+-
+- Do I need [[sidepanel]]? Maybe just for the registered people, who want to do more on the website?
+-
+- Nierówności tych spółek też są ogromne, Ci ludzie zarabiają dużo pieniędzy
+	- https://dziennikpolski24.pl/krakow-nie-ma-jak-w-spolkach-miejskich-czyli-rekordowe-zarobki-prezesow/gh/c3-13346714/2
+-
+- #view/graph - Right click graph to filter to the specified node

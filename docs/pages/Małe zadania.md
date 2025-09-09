@@ -1,4 +1,4 @@
-- TODO Czcionka na stronie jest słaba, polskie znaki, np Ł wyglądają źle
+- LATER Czcionka na stronie jest słaba, polskie znaki, np Ł wyglądają źle
 - LATER Add view with progress bar in #view/pomoc
   collapsed:: true
 	- Show estimate on how many people are in total
@@ -12,5 +12,6 @@
 - LATER see as toggle for admins and devs
 - LATER Check that each person has an article #entity/task
 - TODO Allow removing / hiding an [[entity]]
-- TODO check that TODOs are not in the produced code
-- TODO create a trusted level that allows people to view comments on docs
+- LATER check that TODOs are not in the produced code
+- TODO create a trusted level that allows people to view comments on docs #auth
+-
