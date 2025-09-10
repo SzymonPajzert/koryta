@@ -1,4 +1,4 @@
-- TODO Create a Google Form where people can sign up for help
+- TODO Create a Google Form where people can sign up for help [[iteration/25W38]]
 	- Ask for
 		- Contact details - phone, email - and how do you prefer to keep in touch
 		- How you could help
@@ -6,5 +6,5 @@
 			- data gathering
 			- I know people
 		- How many people are going to be on the website - wisdom of the crowds just for fun
-- TODO The form should be on the front page after #promocja
-- LATER Personal results for a client UID
+	- TODO The form should be on the front page after #promocja
+- LATER Personal results for a client UID [[firestore]]

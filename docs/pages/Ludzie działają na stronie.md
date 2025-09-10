@@ -1,4 +1,5 @@
 - Subtasks
+	- [[Migrate to firestore]]
 	- [[Tasks are first class objects]]
 	-
 -

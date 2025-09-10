@@ -5,4 +5,51 @@ alias:: firestore
   CLOCK: [2025-09-07 Sun 19:41:56]--[2025-09-08 Mon 12:02:50] =>  16:20:54
   :END:
 -
+- TODO CUJs to be supported
+	- TODO [[aktywizacja/users can suggest merges]]
+	- TODO [[aktywizacja/users can vote]]
+		- What do we vote on?
+		- It's still not clear what is the common object to vote on
+		- I think it should be an internal object of [[entity/person]] that contains all the merges
+	- TODO [[aktywizacja/users can read an article]]
+		- There's a list of articles they could read
+		- They can pick what interests them and all
+	- TODO [[aktywizacja/]]
+-
+- Data scheme
+	- golden objects
+		- This is an abstract grouping
+		- All 3 below share common fields
+			- `name`
+			- LATER `internal` - first stage of the rollout, visible only to logged in users
+			- LATER `stable` - generate a stable URL for it and add it to sitemap
+			- LATER references
+				- A map to references to
+		- `person` - [[entity/person]]
+		- `company` - [[entity/company]]
+		- `article` - [[entity/article]]
+			- TODO When a new entity is added here, [[crawling]] is called
+			-
+	-
+	- suggestion
+		- This allows [[aktywizacja/users can suggest changes]], users can also suggest articles
+		- person
+		- company
+		- article
+			- People can suggest articles to be added
+	-
+	- external
+		- golden_id - If set, it marks as an approved reference to this object by this external data
+		- auto_golden_id - Suggested by the scraping bot
+		- source_id - Used to link external entities together, this acts like a node between golden_ids
+		- source_type
+		- Data
+			- Person
+				- First name
+				- Last name
+				- Full name
+				- Birth year
+			- Company
+				-
+-
 -

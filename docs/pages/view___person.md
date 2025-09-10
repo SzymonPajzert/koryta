@@ -1,5 +1,5 @@
 - TODO Widok osoby wypisuje ich najbliższe i drugie powiązanie, np córka albo współpracownica Struzika
-- TODO Nice url, e.g. osoba/adam-struzik
+- TODO Nice url, e.g. osoba/adam-struzik [[iteration/25W38]]
 - TODO Show [[backlinks]] for #entity/task
-- TODO [[kadencyjność]]
+- TODO [[kadencyjność]] [[iteration/25W38]]
 - TODO Add links in the person view, because it's visible only on edit now
