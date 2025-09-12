@@ -24,10 +24,10 @@ export function createEntityStore<D extends Destination>(entity: D) {
 
     type T = DestinationTypeMap[D];
 
-    const entitiesApproved = useCollection(collection(db, entityNewLocation(entity)))
-    // TODO we need to fix IDs of references
+    const location = entityNewLocation(entity)
+    const entitiesApproved = useCollection(collection(db, location))
     const entities = computed(() =>
-      Object.fromEntries(entitiesApproved.value.map(e => [e["rtdb_id"], e] as [string, T])));
+      Object.fromEntries(entitiesApproved.value.map(e => [`${location}/${e.id}`, e] as [string, T])));
 
     // TODO restore edit
     // function submitPath(editKey: string | undefined): string {
