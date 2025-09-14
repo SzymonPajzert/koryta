@@ -1,5 +1,5 @@
 import { useCollection } from 'vuefire'
-import { collection } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import type { DestinationTypeMap, Destination } from "@/../shared/model";
 // import { useAuthState } from "@/composables/auth";
 import { defineStore } from "pinia";
@@ -25,9 +25,11 @@ export function createEntityStore<D extends Destination>(entity: D) {
     type T = DestinationTypeMap[D];
 
     const location = entityNewLocation(entity)
-    const entitiesApproved = useCollection(collection(db, location))
+    const entitiesApproved = useCollection(query(
+      collection(db, "nodes"),
+      where("type", "==", location)))
     const entities = computed(() =>
-      Object.fromEntries(entitiesApproved.value.map(e => [`${location}/${e.id}`, e] as [string, T])));
+      Object.fromEntries(entitiesApproved.value.map(e => [e.id, e] as [string, T])));
 
     // TODO restore edit
     // function submitPath(editKey: string | undefined): string {
