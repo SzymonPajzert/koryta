@@ -7,24 +7,10 @@ in the links with the new Firestore document IDs by looking up the corresponding
 documents in the target collections ('person', 'place') using the stored 'rtdb_id'.
 """
 
-from google.cloud import firestore
+from ..util.firestore import firestore_db, path_occurrence
 from tqdm import tqdm
 import json
-
-print("Connecting to Firestore...")
-# Use a service account for authentication.
-# Make sure to point to your service account key file.
-# You can also use `gcloud auth application-default login`
-try:
-    firestore_db = firestore.Client(project="koryta-pl")
-    print("Successfully connected to Firestore.")
-except Exception as e:
-    print(f"Failed to connect to Firestore: {e}")
-    print("Please ensure you have authenticated correctly.")
-    exit(1)
     
-print(firestore_db)
-
 def get_id_mapping(collections: list[str]) -> dict[str, str]:
     """
     Creates a mapping from rtdb_id to Firestore document ID for a given collection.
@@ -48,32 +34,6 @@ def get_id_mapping(collections: list[str]) -> dict[str, str]:
                 raise ValueError("Missing rtdb_id in Firestore document")
         print(f"Found {len(mapping) - prev_size} entries in '{collection_name}'.")
     return mapping
-
-def extract_keys(prefix: str, d: dict, db_keys): 
-    result = []
-    for k, v in d.items():
-        if k in db_keys or (len(k) == 20 and k[0] == '-'):
-            k = "<key>"
-        result.append(prefix + "." + k)
-        if isinstance(v, dict):
-            result += extract_keys(prefix + "." + k, v, db_keys)
-    return result
-
-
-def firestore_paths(mapping):
-    keys = dict()
-    collections = dict()
-    
-    for collection in firestore_db.collections():
-        counter = 0
-        for doc in tqdm(collection.stream(), collection.id):
-            counter += 1
-            for key in extract_keys(collection.id, doc.to_dict(), mapping):
-                keys[key] = keys.get(key, 0) + 1
-        collections[collection.id] = counter
-                
-    return keys, collections
-
 
 def update_links(mapping):
     batch = firestore_db.batch()
@@ -99,7 +59,7 @@ if __name__ == "__main__":
     mapping = get_id_mapping(["person", "place", "article"])
     print()
     # TODO remove fields that are flukes in the DB, by % of usage
-    paths, collections = firestore_paths(mapping)
+    paths, collections = path_occurrence(mapping)
     
     print(json.dumps(mapping, indent=2))
     # print(json.dumps(firestore_paths(mapping), indent=2))
