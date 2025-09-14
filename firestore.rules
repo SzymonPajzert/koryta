@@ -2,28 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /tasks/{taskId} {
-      allow read: if request.auth != null && request.auth.token.trusted == true;
-      allow write: if true;
-    }
-    match /external/{taskId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.token.trusted == true;
-    }
-    // match /votes/{taskId} {
-    //   // TODO
-    // }
-    // match /merges/{taskId} {
-    //   // TODO
-    // }
-    match /article/{entityId} {
-      allow read: if true;
-    }
-    match /person/{entityId} {
-      allow read: if true;
-    }
-    match /place/{entityId} {
-      allow read: if true;
+    match /nodes/{nodeId} {
+      allow read: if resource.data.type == "article" || resource.data.type == "person" || resource.data.type == "place";
     }
   }
 }

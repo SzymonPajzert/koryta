@@ -6,7 +6,7 @@ import {
   getNodesNoStats,
   type GraphLayout,
 } from "~~/shared/graph/util";
-import { fetchEntity } from "../utils/fetch";
+import { fetchEntity } from "~~/server/utils/fetch";
 
 export default defineEventHandler(async () => {
   const [people, companies, articles] = await Promise.all([
