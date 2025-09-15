@@ -2,10 +2,12 @@ import type { TraversePolicy, Edge, Node, NodeStats } from "./model";
 import { SPLIT } from "./model";
 import type {
   Connection,
-  NepoEmployment,
+  Person,
   Company,
   Article,
   Destination,
+  Edge as DBEdge,
+  EdgeType
 } from "@/../shared/model";
 import { DiGraph } from "digraph-js";
 import { getHostname } from "../misc";
@@ -20,7 +22,7 @@ export interface GraphLayout {
 export function getNodeGroups(
   nodesNoStats: ReturnType<typeof getNodesNoStats>,
   edges: ReturnType<typeof getEdges>,
-  people: Record<string, NepoEmployment>,
+  people: Record<string, Person>,
   companies: Record<string, Company>,
 ) {
   const placeConnection = new DiGraph();
@@ -34,7 +36,7 @@ export function getNodeGroups(
 
   edges.forEach((edge: Edge) => {
     if (!edge.traverse) {
-      console.error("no traverse policy in ", edge);
+      // TODO console.error("no traverse policy in ", edge);
       return;
     }
     // If the edge should spread the node group, either map it to active node or dead_end
@@ -104,7 +106,7 @@ export function getNodes(
 }
 
 export function getNodesNoStats(
-  people: Record<string, NepoEmployment>,
+  people: Record<string, Person>,
   companies: Record<string, Company>,
   articles: Record<string, Article>,
   partyColors: Record<string, string>,
@@ -137,74 +139,61 @@ export function getNodesNoStats(
   }
   if (articles) {
     Object.entries(articles).forEach(([articleID, article]) => {
-      const mentionedPeople = article.estimates?.mentionedPeople ?? 1;
-      const linkedPeople = article.people
-        ? Object.keys(article.people).length
-        : 0;
-      const peopleLeft = Math.max(1, mentionedPeople - linkedPeople);
       const entry: Node = {
         name: article.shortName || getHostname(article),
-        sizeMult: Math.pow(peopleLeft, 0.3),
+        sizeMult: 1,
         type: "document",
         color: "pink",
       };
-      if (article.status && article.status.tags) {
-        if (
-          article.status.tags.includes("dodatkowe informacje") ||
-          article.status.tags.includes("ludzie wyciągnięci") ||
-          article.status.tags.includes("przeczytane")
-        ) {
-          entry.color = "gray";
-          entry.sizeMult = 0.6;
-        }
-        if (article.status.tags.includes("nie pokazuj w grafie")) {
-          entry.hide = true;
-        }
-      }
       result[articleID] = entry;
     });
   }
   return result;
 }
 
+const edgeLabel: Record<EdgeType, string> = {
+  employed: "pracuje",
+  connection: "zna",
+  mentions: "wspomina",
+  owns: "właściciel",
+  comment: "komentarz",
+}
+
+const edgeTraverse : Record<EdgeType, TraversePolicy> = {
+  employed: {
+    forward: "active",
+    backward: "dead_end",
+  },
+  connection: {
+    forward: "active",
+    backward: "active",
+  },
+  mentions: {
+    forward: "dead_end",
+    backward: "active",
+  },
+  owns: {
+    forward: "active",
+    backward: "dead_end",
+  },
+  comment: {
+    forward: "dead_end",
+    backward: "dead_end",
+  },
+}
+
 export function getEdges(
-  people: Record<string, NepoEmployment>,
-  companies: Record<string, Company>,
-  articles: Record<string, Article>,
+  edgesFromDB: DBEdge[],
 ) {
-  return executeGraph([
-    relationFrom(people)
-      .forEach((person) => person.employments)
-      .setTraverse({ backward: "active", forward: "dead_end" })
-      .edgeFromConnection(),
-
-    relationFrom(people)
-      .forEach((person) => person.connections)
-      .setTraverse({ forward: "active", backward: "active" })
-      .edgeFromConnection(),
-
-    relationFrom(companies)
-      .forField((company) => company.manager)
-      .setTraverse({ forward: "active" })
-      .edgeFrom((manager) => [manager.id, "zarządzający"]),
-    relationFrom(companies)
-      .forField((company) => company.owner)
-      .setTraverse({ backward: "active" })
-      .edgeFrom((owner) => [owner.id, "właściciel"]),
-    relationFrom(companies)
-      .forEach((company) => company.owners)
-      .setTraverse({ backward: "active" })
-      .edgeFrom((owner) => [owner.id, "właściciel"]),
-
-    relationFrom(articles)
-      .forEach((a) => a.people)
-      .setTraverse({ forward: "dead_end", backward: "active" })
-      .edgeFrom((person) => [person.id, "wspomina"]),
-    relationFrom(articles)
-      .forEach((a) => a.companies)
-      .setTraverse({ forward: "dead_end", backward: "active" })
-      .edgeFrom((company) => [company.id, "wspomina"]),
-  ]);
+  return edgesFromDB.map((edge: DBEdge) => {
+    const result: Edge = {
+      source: edge.source,
+      target: edge.target,
+      label: edge.name ?? edgeLabel[edge.type],
+      traverse: edgeTraverse[edge.type],
+    };
+    return result
+  });
 }
 
 type Closure<A> = (a: A) => void;

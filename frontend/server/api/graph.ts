@@ -6,23 +6,24 @@ import {
   getNodesNoStats,
   type GraphLayout,
 } from "~~/shared/graph/util";
-import { fetchEntity } from "~~/server/utils/fetch";
+import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
 export default defineEventHandler(async () => {
-  const [people, companies, articles] = await Promise.all([
-    fetchEntity("employed"),
-    fetchEntity("company"),
-    fetchEntity("data"),
+  const [people, places, articles, edgesFromDB] = await Promise.all([
+    fetchNodes("employed"),
+    fetchNodes("company"),
+    fetchNodes("data"),
+    fetchEdges(),
   ]);
 
   const nodesNoStats = getNodesNoStats(
     people,
-    companies,
+    places,
     articles,
     partyColors,
   );
-  const edges = getEdges(people, companies, articles);
-  const nodeGroups = getNodeGroups(nodesNoStats, edges, people, companies);
+  const edges = getEdges(edgesFromDB);
+  const nodeGroups = getNodeGroups(nodesNoStats, edges, people, places);
   const nodes = getNodes(nodeGroups, nodesNoStats);
 
   return { nodesNoStats, edges, nodeGroups, nodes } as GraphLayout;
