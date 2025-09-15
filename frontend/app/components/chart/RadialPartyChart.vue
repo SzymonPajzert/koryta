@@ -4,7 +4,7 @@
     height="390"
     :options="chartOptions"
     :series="resultPercentage"
-  ></apexchart>
+  />
 </template>
 
 <script lang="ts" setup>
@@ -23,7 +23,7 @@ const parties = computed(() =>
   partiesUnfiltered.value.filter((_, i) => nonZeroIndices.value.includes(i)),
 );
 const partyColors = computed(() =>
-  Object.values(partyColorsUnfiltered.value).filter((_, i) =>
+  Object.values(partyColorsUnfiltered).filter((_, i) =>
     nonZeroIndices.value.includes(i),
   ),
 );
@@ -64,7 +64,7 @@ const chartOptions = computed(() => ({
         useSeriesColors: true,
         offsetX: -8,
         fontSize: "16px",
-        formatter: function (seriesName: string, opts: any) {
+        formatter: function (seriesName: string, opts: { seriesIndex: string | number; }) {
           return seriesName + ":  " + results.value[opts.seriesIndex];
         },
       },

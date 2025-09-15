@@ -7,7 +7,7 @@
         hint="Krótko co trzeba zrobić"
         autocomplete="off"
         required
-      ></v-text-field>
+      />
     </v-col>
 
     <v-col cols="12">
@@ -16,7 +16,7 @@
         label="Krok po kroku, co jest do zrobienia"
         autocomplete="off"
         required
-      ></v-textarea>
+      />
     </v-col>
   </v-row>
 </template>

@@ -14,16 +14,18 @@
 
     <v-col cols="12">
       <MultiTextField
+        v-slot="itemProps"
         title="Właściciele"
-        v-model="formData.owners"
-        field-type="entityPicker"
-        :field-component="EntityPicker"
-        entity="company"
-        hint="np. grupa kapitałowa, ministerstwo"
-        add-item-tooltip="Dodaj kolejne miejsce"
-        remove-item-tooltip="Usuń miejsce"
-        :empty-value="() => emptyEntityPicker('company')"
-      />
+        edge-type="owns"
+        :edge-reverse="true"
+        :source-id="id"
+      >
+        <EntityPicker
+          v-model="itemProps.value"
+          entity="company"
+          hint="np. grupa kapitałowa, ministerstwo"
+        />
+      </MultiTextField>
     </v-col>
 
     <v-col cols="12" md="6">
@@ -41,45 +43,32 @@
       <v-text-field label="Numer NIP" :v-model="formData.nipNumber" />
     </v-col>
 
-    <v-col cols="12">
-      <MultiTextField
-        title="Inna uwaga"
-        v-model="formData.comments"
-        field-type="textarea"
-        :field-component="TextableWrap"
+    <MultiTextField
+      v-slot="itemProps"
+      title="Inna uwaga"
+      edge-type="comment"
+      :source-id="id"
+    >
+      <VTextarea
+        v-model="itemProps.value.text"
+        auto-grow
+        rows="2"
         hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
-        add-item-tooltip="Dodaj kolejną uwagę"
-        remove-item-tooltip="Usuń uwagę"
-        :empty-value="emptyTextable"
       />
-    </v-col>
+    </MultiTextField>
 
-    <BacklinksList :id="id" :todo-consumer="addCreatedTodo" />
+    <!-- TODO Reenable <BacklinksList :id="id" /> -->
   </v-row>
 </template>
 
 <script lang="ts" setup>
-import { Link, type Company } from "~~/shared/model";
-import {
-  emptyEntityPicker,
-  emptyTextable,
-} from "@/composables/multiTextHelper";
+import type { Company } from "~~/shared/model";
 import EntityPicker from "../forms/EntityPicker.vue";
-import TextableWrap from "../forms/TextableWrap.vue";
-import type { Callback } from "@/stores/dialog";
 
 const formData = defineModel<Company>({ required: true });
-const { create } = defineProps<{ id?: string; create?: boolean }>();
+const { create } = defineProps<{ id: string | undefined; create?: boolean }>();
 
 function prependZeros(value: string) {
   return value.padStart(10, "0");
 }
-
-const addCreatedTodo: Callback = (name, key) => {
-  if (!key) {
-    console.warn("failed to obtain key for new entity: ", name);
-    return;
-  }
-  formData.value.todos[key] = new Link<"todo">("todo", key, name);
-};
 </script>

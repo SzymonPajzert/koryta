@@ -28,12 +28,12 @@
         </v-card-title>
         Tam, gdzie ten wydatek był nieuzasadniony merytorycznie, Donald Tusk
         oczekuje odebrania środków.
-        <br />
+        <br >
         <strong
           >Jednak, który z tych projektów jest najbardziej...
           "XD"</strong
         >
-        <br/>
+        <br>
         Zagłosuj pod najbardziej odklejonymi zgłoszeniami poniżej
       </v-card>
     </v-col>

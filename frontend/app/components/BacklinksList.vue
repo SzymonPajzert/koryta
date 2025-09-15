@@ -11,12 +11,12 @@
       <v-list-item-title> Dodaj zadanie </v-list-item-title>
     </v-list-item>
     <ArticleBacklink
-      v-for="(source, id) in articles"
-      :key="id"
+      v-for="(source, article_id) in articles"
+      :key="article_id"
       width="100%"
       dense
       :article="source"
-      :articleID="id"
+      :article-id="article_id"
     />
   </v-list>
 </template>
@@ -26,7 +26,7 @@ import { useArticles } from "@/composables/entities/articles";
 import { useDialogStore, type Callback } from "@/stores/dialog";
 
 const { id, todoConsumer } = defineProps<{
-  id?: string;
+  id: string | undefined;
   todoConsumer: Callback;
 }>();
 

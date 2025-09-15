@@ -1,7 +1,7 @@
 <template>
   <v-col cols="12">
     <h2 class="text-h5 font-weight-bold">Rzeczy do zrobienia:</h2>
-    <EntityStatusList :allowedIssues="allowedIssues" />
+    <EntityStatusList :allowed-issues="allowedIssues" />
   </v-col>
 </template>
 

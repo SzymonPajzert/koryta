@@ -28,9 +28,9 @@ const { user, isAdmin } = useAuthState();
 const db = useDatabase();
 
 interface UserSuggestionTypes {
-  data?: Record<string, any>;
-  employed?: Record<string, any>;
-  improvement?: Record<string, any>;
+  data?: Record<string, unknown>;
+  employed?: Record<string, unknown>;
+  improvement?: Record<string, unknown>;
 }
 
 interface UserProfileData {

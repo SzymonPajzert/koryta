@@ -6,11 +6,10 @@
     @click="
       dialogStore.open({
         type: 'data',
-        edit: { value: article, key: articleID },
+        edit: { value: article, key: articleId },
       })
     "
-  >
-  </v-list-item>
+  />
 </template>
 
 <script lang="ts" setup>
@@ -21,8 +20,8 @@ import { useDialogStore } from "@/stores/dialog"; // Import the new store
 
 const dialogStore = useDialogStore();
 
-const { articleID, article } = defineProps<{
-  articleID: string;
+const { articleId, article } = defineProps<{
+  articleId: string;
   article: Article & EnrichedStatus;
   dense?: boolean;
 }>();

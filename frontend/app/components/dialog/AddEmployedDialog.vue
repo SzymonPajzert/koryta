@@ -21,77 +21,65 @@
         chips
         deletable-chips
         required
-      ></v-select>
+      />
     </v-col>
 
     <MultiTextField
+      v-slot="itemProps"
       title="Zatrudnienie"
-      v-model="formData.employments"
-      field-type="nestedCompanyConnection"
-      :field-component="NestedConnectionField"
-      entity="company"
-      hint="np. Członek rady nadzorczej XYZ sp. z o.o."
-      add-item-tooltip="Dodaj kolejne zatrudnienie"
-      remove-item-tooltip="Usuń zatrudnienie"
-      :empty-value="emptyNestedCompanyConnection"
-    />
+      edge-type="employed"
+      :source-id="id"
+    >
+      <NestedConnectionField
+        v-model="itemProps.value"
+        entity="company"
+        hint="np. Członek rady nadzorczej XYZ sp. z o.o."
+      />
+    </MultiTextField>
 
-    <v-expansion-panels>
-      <MultiTextField
-        title="Koneksja"
-        v-model="formData.connections"
-        field-type="nestedEmployedConnection"
-        :field-component="NestedConnectionField"
+    <MultiTextField
+      v-slot="itemProps"
+      title="Koneksja"
+      edge-type="connection"
+      :source-id="id"
+    >
+      <NestedConnectionField
+        v-model="itemProps.value"
         entity="employed"
         hint="np. Znajomy ministra"
-        add-item-tooltip="Dodaj kolejną koneksję"
-        remove-item-tooltip="Usuń koneksję"
-        :empty-value="emptyNestedEmployedConnection"
       />
-    </v-expansion-panels>
+    </MultiTextField>
 
-    <v-col cols="12">
-      <MultiTextField
-        title="Inna uwaga"
-        v-model="formData.comments"
-        field-type="textarea"
-        :field-component="TextableWrap"
+    <MultiTextField
+      v-slot="itemProps"
+      title="Inna uwaga"
+      edge-type="comment"
+      :source-id="id"
+    >
+      <VTextarea
+        v-model="itemProps.value.text"
+        auto-grow
+        rows="2"
         hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
-        add-item-tooltip="Dodaj kolejną uwagę"
-        remove-item-tooltip="Usuń uwagę"
-        :empty-value="emptyTextable"
       />
-    </v-col>
+    </MultiTextField>
 
-    <BacklinksList :id="id" :todo-consumer="addCreatedTodo" />
+    <!-- TODO Reenable <BacklinksList :id="id" /> -->
   </v-row>
 </template>
 
 <script lang="ts" setup>
 import { useFeminatyw } from "@/composables/feminatyw";
 import { usePartyStatistics } from "@/composables/party";
-import { Link, type NepoEmployment } from "~~/shared/model";
+import type { Person } from "~~/shared/model";
 import { computed } from "vue";
-import MultiTextField from "@/components/forms/MultiTextField.vue";
 import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";
-import {
-  emptyTextable,
-  emptyNestedCompanyConnection,
-  emptyNestedEmployedConnection
-} from "@/composables/multiTextHelper";
-import TextableWrap from "../forms/TextableWrap.vue";
-import type { Callback } from "@/stores/dialog";
 
-const formData = defineModel<NepoEmployment>({ required: true });
-const { id, create } = defineProps<{ id?: string; create?: boolean }>();
-
-const addCreatedTodo: Callback = (name, key) => {
-  if (!key) {
-    console.warn("failed to obtain key for new entity: ", name);
-    return;
-  }
-  formData.value.todos[key] = new Link<"todo">("todo", key, name);
-};
+const formData = defineModel<Person>({ required: true });
+const { id, create } = defineProps<{
+  id: string;
+  create?: boolean;
+}>();
 
 const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);

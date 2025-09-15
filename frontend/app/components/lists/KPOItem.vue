@@ -15,7 +15,7 @@
     </div>
 
     <!-- Action buttons in the append slot for clean alignment -->
-    <template v-slot:append>
+    <template #append>
       <div class="d-flex flex-sm-column ga-1">
         <span v-if="score.value && score.value > 0" class="text-orange-darken-1">
           {{  "X" + "D".repeat(score.value ?? 0) }}
@@ -29,29 +29,29 @@
           size="small"
           icon="mdi-arrow-up-bold"
           variant="text"
-          @click.prevent="addValue(1)"
           title="Dodaj"
-        ></v-btn>
+          @click.prevent="addValue(1)"
+        />
         <v-btn
           size="small"
           icon="mdi-arrow-down-bold"
           variant="text"
-          @click.prevent="addValue(-1)"
           title="Zwiększ"
-        ></v-btn>
+          @click.prevent="addValue(-1)"
+        />
       </div>
     </template>
   </v-list-item>
 
   <!-- Expansion area for the editing form -->
-  <v-expand-transition> </v-expand-transition>
+  <v-expand-transition/>
 </template>
 
 <script setup lang="ts">
-import { type Submission } from "@/composables/kpo";
+import type { Submission } from "@/composables/kpo";
 import { ref as dbRef, set } from "firebase/database";
 import { useAuthState } from "@/composables/auth";
-import { type Ref } from "vue";
+import type { Ref } from "vue";
 
 const { submission, score } = defineProps<{
   submission: Submission;

@@ -32,29 +32,29 @@
               <v-card-text>
                 <component
                   :is="lookupComponent(dialog.type)"
+                  :id="dialog.editKey"
                   v-model="dialog.value"
                   :create="!dialog.editKey"
-                  :id="dialog.editKey"
                   @close="dialogStore.close(id, false)"
                   @submit="dialogStore.close(id, true)"
                 />
               </v-card-text>
-              <v-divider></v-divider>
+              <v-divider/>
               <v-card-actions>
-                <v-spacer></v-spacer>
+                <v-spacer/>
 
                 <v-btn
                   text="Anuluj"
                   variant="plain"
                   @click="dialogStore.close(id, false)"
-                ></v-btn>
+                />
 
                 <v-btn
                   color="primary"
                   :text="dialog.editKey ? 'Zapisz' : 'Dodaj'"
                   variant="tonal"
                   @click="dialogStore.close(id, true)"
-                ></v-btn>
+                />
               </v-card-actions>
             </v-card>
           </v-tabs-window-item>
@@ -70,7 +70,7 @@
     location="top end"
   >
     Sugestia została pomyślnie dodana!
-    <template v-slot:actions>
+    <template #actions>
       <v-btn variant="text" @click="showSnackbar = false"> Zamknij </v-btn>
     </template>
   </v-snackbar>
@@ -110,6 +110,6 @@ function lookupComponent<D extends Destination>(d: D) {
     return AddSuggestionDialog;
   }
 
-  return undefined as any;
+  return undefined as unknown;
 }
 </script>

@@ -334,11 +334,11 @@
  ;; :ignored-page-references-keywords #{:author :website}
 
  ;; logbook configuration.
- ;; :logbook/settings
+ :logbook/settings {
  ;; {:with-second-support? false ;limit logbook to minutes, seconds will be eliminated
- ;;  :enabled-in-all-blocks true ;display logbook in all blocks after timetracking
- ;;  :enabled-in-timestamped-blocks false ;don't display logbook at all
- ;; }
+   :enabled-in-all-blocks false ;display logbook in all blocks after timetracking
+   :enabled-in-timestamped-blocks false ;don't display logbook at all
+ }
 
  ;; Mobile photo upload configuration.
  ;; :mobile/photo
@@ -422,4 +422,5 @@
  :journal/page-title-format "yyyy-MM-dd"
  :graph/forcesettings {:link-dist 120
  :charge-strength -1000
- :charge-range 2500}}
+ :charge-range 2500}
+ :feature/enable-timetracking? false}

@@ -1,6 +1,6 @@
 <template>
   <div>
-    <UserDetailDialog ref="dialog"></UserDetailDialog>
+    <UserDetailDialog ref="dialog" />
     <v-row>
       <v-col
         v-for="[key, person] in peopleOrdered"
@@ -28,25 +28,25 @@
             <p v-for="connection in person.connections" :key="connection.text">
               {{ connectionText(connection) }}
             </p>
-            <br />
+            <br >
             <p v-for="employment in person.employments" :key="employment.text">
               {{ connectionText(employment) }}
             </p>
           </v-card-text>
           <v-card-actions v-if="isAdmin">
-            <v-spacer></v-spacer>
+            <v-spacer />
             <v-btn
+              variant="tonal"
+              prepend-icon="mdi-pencil-outline"
               @click.stop="
                 dialogStore.open({
                   type: 'employed',
                   edit: { value: person, key: key },
                 })
               "
-              variant="tonal"
-              prepend-icon="mdi-pencil-outline"
             >
               <template #prepend>
-                <v-icon color="warning"></v-icon>
+                <v-icon color="warning" />
               </template>
               Edytuj
             </v-btn>
@@ -58,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Connection, NepoEmployment, Destination} from "~~/shared/model";
+import type { Connection, Person, Destination} from "~~/shared/model";
 import PartyChip from "./PartyChip.vue";
 import { useAuthState } from "@/composables/auth";
 import UserDetailDialog from "@/components/dialog/UserDetailDialog.vue";
@@ -81,8 +81,8 @@ function connectionText<D extends Destination>(connection: Connection<D>) {
   return "";
 }
 
-const { people } = defineProps<{ people: Record<string, NepoEmployment> }>();
-const peopleOrdered = computed<[string, NepoEmployment][]>(() => {
+const { people } = defineProps<{ people: Record<string, Person> }>();
+const peopleOrdered = computed<[string, Person][]>(() => {
   const result = Object.entries(people ?? {});
   result.sort((a, b) => a[1].name.localeCompare(b[1].name));
   return result;

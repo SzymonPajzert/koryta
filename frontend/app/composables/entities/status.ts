@@ -1,11 +1,10 @@
 import { createEntityStore } from "@/stores/entity";
-import {
-  type Connection,
-  type Destination,
-  type Nameable,
+import type {
+  Connection,
+  Destination,
+  Nameable,
 } from "@/../shared/model";
-import { type Ref } from "vue";
-import { type GraphLayout } from "~/../shared/graph/util";
+import type { Ref } from "vue";
 
 type ListItem = [string, Nameable & Status];
 
@@ -53,10 +52,10 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
     ];
   }
 
-  function testConnection(
+  function checkConnection<D extends Destination>(
     issues: Issue[],
     name: string,
-  ): (connection: Connection<any>) => void {
+  ): (connection: Connection<D>) => void {
     return (connection) => {
       if (!connection.text) {
         issues.push({ name: `Brak tekstu o relacji ${name}`, priority: 1 });
@@ -115,15 +114,15 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
         results[1].issues.push({ name: "Brak połączonych ludzi", priority: 5 });
       }
       Object.values(person.connections ?? {}).forEach(
-        testConnection(results[1].issues, "znajomy/a"),
+        checkConnection(results[1].issues, "znajomy/a"),
       );
       if (!person.employments) {
         results[1].issues.push({ name: "Brak miejsc pracy", priority: 5 });
       }
       Object.values(person.employments ?? {}).forEach(
-        testConnection(results[1].issues, "zatrudnienie"),
+        checkConnection(results[1].issues, "zatrudnienie"),
       );
-      Object.values(person.comments ?? {}).forEach((comment) => {
+      Object.values(person.comments ?? {}).forEach(() => {
         results[1].issues.push({
           name: "Nierozwiązany komentarz",
           priority: 5,

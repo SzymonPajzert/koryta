@@ -9,9 +9,9 @@
         hint="Link do artykułu"
         autocomplete="off"
         required
-        @blur="fetchAndSetArticleTitle"
         :loading="formData.isFetchingTitle"
         :disabled="formData.isFetchingTitle"
+        @blur="fetchAndSetArticleTitle"
       />
     </v-col>
     <v-col cols="1">
@@ -21,7 +21,7 @@
         target="_none"
         icon="mdi-open-in-new"
         variant="text"
-      ></v-btn>
+      />
     </v-col>
 
     <v-col cols="12">
@@ -30,7 +30,7 @@
         label="Tytuł artykułu"
         autocomplete="off"
         :disabled="formData.isFetchingTitle"
-      ></v-text-field>
+      />
     </v-col>
 
     <v-col cols="12" md="8">
@@ -39,7 +39,7 @@
         label="Skrócony tytuł"
         autocomplete="off"
         :disabled="formData.isFetchingTitle"
-      ></v-text-field>
+      />
     </v-col>
 
     <v-col cols="12" md="4">
@@ -48,17 +48,7 @@
         v-model="formData.estimates.mentionedPeople"
         label="Liczba wspomnianych osób"
         autocomplete="off"
-      ></v-text-field>
-    </v-col>
-
-    <v-col cols="12" md="8">
-      <v-select
-        v-model="formData.status.tags"
-        label="Tagi artykułu"
-        autocomplete="off"
-        :items="[...articleTags]"
-        multiple
-      ></v-select>
+      />
     </v-col>
 
     <v-col cols="12" md="2">
@@ -71,55 +61,37 @@
 
     <v-col cols="12">
       <MultiTextField
+        v-slot="itemProps"
         title="Wspomniane osoby"
-        v-model="formData.people"
-        field-type="entityPicker"
-        :field-component="EntityPicker"
-        entity="employed"
-        hint="np. polityk Adam"
-        add-item-tooltip="Dodaj kolejną osobę"
-        remove-item-tooltip="Usuń osobę"
-        :empty-value="() => emptyEntityPicker('employed')"
-      />
+        edge-type="mentions"
+        :source-id="id"
+      >
+        <EntityPicker
+          v-model="itemProps.value"
+          hint="np. polityk Adam albo firma XYZ"
+        />
+      </MultiTextField>
     </v-col>
 
-    <v-col cols="12">
-      <MultiTextField
-        title="Wspomniane firmy / ministerstra"
-        v-model="formData.companies"
-        field-type="entityPicker"
-        :field-component="EntityPicker"
-        entity="company"
-        hint="np. spółka skarbu państwa"
-        add-item-tooltip="Dodaj kolejne miejsce"
-        remove-item-tooltip="Usuń miejsce"
-        :empty-value="() => emptyEntityPicker('company')"
+    <MultiTextField
+      v-slot="itemProps"
+      title="Inna uwaga"
+      edge-type="comment"
+      :source-id="id"
+    >
+      <VTextarea
+        v-model="itemProps.value.text"
+        auto-grow
+        rows="2"
+        hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
       />
-    </v-col>
-
-    <v-col cols="12">
-      <MultiTextField
-        title="Co jest w nim ciekawego"
-        v-model="formData.comments"
-        field-type="textarea"
-        :field-component="TextableWrap"
-        :empty-value="emptyTextable"
-        hint="Ciekawa informacja z artykułu, ile osób w nim jest wspomnianych"
-        add-item-tooltip="Dodaj kolejne zadanie"
-        remove-item-tooltip="Usuń zadanie"
-      />
-    </v-col>
+    </MultiTextField>
   </v-row>
 </template>
 
 <script lang="ts" setup>
 import { httpsCallable, getFunctions } from "firebase/functions";
-import { articleTags, type Article } from "~~/shared/model";
-import {
-  emptyTextable,
-  emptyEntityPicker,
-} from "@/composables/multiTextHelper";
-import TextableWrap from "../forms/TextableWrap.vue";
+import type { Article } from "~~/shared/model";
 import EntityPicker from "../forms/EntityPicker.vue";
 import { splitTitle } from "~~/shared/misc";
 
@@ -132,6 +104,8 @@ interface ArticleExtended extends Article {
 
 const formData = defineModel<ArticleExtended>({ required: true });
 const { create } = defineProps<{ create?: boolean }>();
+// TODO actually set it
+const id = "0";
 
 const getPageTitle = httpsCallable(functions, "getPageTitle");
 
@@ -140,7 +114,7 @@ const fetchAndSetArticleTitle = async () => {
     formData.value.isFetchingTitle = true;
     try {
       const result = await getPageTitle({ url: formData.value.sourceURL });
-      const title: string | undefined = (result.data as any).title;
+      const title: string | undefined = (result.data as unknown as { title: string }).title;
       formData.value.name = title || "";
       formData.value.shortName = title ? splitTitle(title, 1)[0] : undefined;
     } catch (error) {

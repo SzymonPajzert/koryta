@@ -10,29 +10,29 @@
       <p v-for="connection in person?.connections" :key="connection.text">
         {{ connection.text }}
       </p>
-      <br />
+      <br >
       <p v-for="employment in person?.employments" :key="employment.text">
         {{ employment.text }}
       </p>
     </v-card-text>
     <v-card-actions>
-      <v-spacer></v-spacer>
+      <v-spacer/>
       <v-btn
+        variant="tonal"
+        prepend-icon="mdi-pencil-outline"
         @click.stop="
           dialogStore.open({
             type: 'employed',
             edit: { value: person, key: node },
           })
         "
-        variant="tonal"
-        prepend-icon="mdi-pencil-outline"
       >
         <template #prepend>
-          <v-icon color="warning"></v-icon>
+          <v-icon color="warning"/>
         </template>
         Edytuj
       </v-btn>
-      <v-btn variant="tonal" @click="close" v-if="dialog">Zamknij</v-btn>
+      <v-btn v-if="dialog" variant="tonal" @click="close">Zamknij</v-btn>
     </v-card-actions>
   </v-card>
 </template>

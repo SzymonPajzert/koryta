@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     event.$fetch("/api/graph"),
     fetchRTDB<typeof result>("layout"),
   ]);
-  if (Object.keys(graph.nodes).length === Object.keys(layout.nodes).length) {
+  if (layout.nodes && Object.keys(graph.nodes).length === Object.keys(layout.nodes).length) {
     console.log("reading saved from DB");
     return layout;
   } else {
