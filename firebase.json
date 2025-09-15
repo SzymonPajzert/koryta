@@ -11,14 +11,12 @@
     "predeploy": ["npm run build"]
   },
   "emulators": {
-    "database": {
-      "port": 9003
-    },
-    "hosting": {
-      "port": 5002
-    },
+    "import": "./database/current_firestore",
     "ui": {
       "enabled": true
+    },
+    "firestore": {
+      "port": 8080
     },
     "singleProjectMode": true
   },

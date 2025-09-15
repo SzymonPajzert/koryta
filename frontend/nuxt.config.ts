@@ -1,4 +1,7 @@
+import { isDev } from "@nuxt/test-utils";
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
+const isTest = !!process.env.VITEST;
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
   // TODO Enable strict
@@ -32,7 +35,7 @@ export default defineNuxtConfig({
     // TODO what do I need it for '@nuxt/icon',
     // TODO what do I need it for '@nuxt/image',
     // TODO what do I need it for '@nuxt/scripts',
-    // TODO what do I need it for '@nuxt/test-utils'
+    '@nuxt/test-utils',
     "@nuxt/fonts",
     "@nuxt/eslint",
     "nuxt-vuefire",
@@ -78,7 +81,26 @@ export default defineNuxtConfig({
       messagingSenderId: "735903577811",
       appId: "1:735903577811:web:53e6461c641b947a4e8626",
       measurementId: "G-KRYVKQ4T7T"
-    }
+    },
+    emulators: {
+      enabled: isTest || isDev,
+      auth: {
+        host: 'localhost',
+        port: 9099,
+      },
+      database: {
+        host: 'localhost',
+        port: 9000,
+      },
+      firestore: {
+        host: 'localhost',
+        port: 8080,
+      },
+      storage: {
+        host: 'localhost',
+        port: 9199,
+      },
+    },
   },
 
   css: ["v-network-graph/lib/style.css"],
