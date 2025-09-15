@@ -1,94 +1,4 @@
 {:blocks (
-{:block/created-at 1757200386064
-:block/properties 
-{:ls-type :whiteboard-shape
-:logseq.tldraw.shape 
-{:blockType "P"
-:stroke ""
-:rotation 0
-:collapsed false
-:borderRadius 8
-:index 0
-:scale [1 1]
-:pageId "entity/person"
-:scaleLevel "md"
-:fill ""
-:compact false
-:isAutoResizing true
-:type "logseq-portal"
-:size [264 93.00000228930972]
-:strokeType "line"
-:strokeWidth 2
-:opacity 1
-:id "7d3a6ba0-8b5f-11f0-94bb-c517c5685bdd"
-:noFill false
-:point [128 160]
-:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
-:collapsedHeight 0
-:nonce 1757190268815}}
-:block/updated-at 1757200386064} 
-{:block/created-at 1757190285960
-:block/properties 
-{:ls-type :whiteboard-shape
-:logseq.tldraw.shape 
-{:blockType "P"
-:stroke ""
-:rotation 0
-:collapsed false
-:borderRadius 8
-:index 1
-:scale [1 1]
-:pageId "entity/company"
-:scaleLevel "md"
-:fill ""
-:compact false
-:isAutoResizing true
-:type "logseq-portal"
-:size [264 93]
-:strokeType "line"
-:strokeWidth 2
-:opacity 1
-:id "83a50770-8b5f-11f0-94bb-c517c5685bdd"
-:noFill false
-:point [448 176]
-:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
-:collapsedHeight 0
-:nonce 1757190279542}}
-:block/updated-at 1757190285960} 
-{:block/created-at 1757200545650
-:block/properties 
-{:ls-type :whiteboard-shape
-:logseq.tldraw.shape 
-{:blockType "P"
-:stroke ""
-:collapsed false
-:borderRadius 8
-:index 2
-:scale [1 1]
-:pageId "entity/article"
-:scaleLevel "md"
-:fill ""
-:compact false
-:isAutoResizing true
-:type "logseq-portal"
-:size [400 166.00002381615326]
-:strokeType "line"
-:strokeWidth 2
-:opacity 1
-:id "890a1a20-8b5f-11f0-94bb-c517c5685bdd"
-:noFill false
-:point [224 336]
-:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
-:collapsedHeight 0
-:nonce 1757190288689}}
-:block/updated-at 1757200545650} 
-{:block/content "entity/externalData"
-:block/format :markdown
-:block/left 
-{:block/uuid #uuid "68bc9875-dae4-403d-a532-97b9754c3346"}
-:block/parent 
-{:block/uuid #uuid "68bc9875-dae4-403d-a532-97b9754c3346"}
-:block/uuid #uuid "68bcc00f-2cba-4167-9bb8-e7e57fc72cdf"} 
 {:block/created-at 1757200550963
 :block/properties 
 {:ls-type :whiteboard-shape
@@ -99,7 +9,7 @@
 :borderRadius 8
 :index 3
 :scale [1 1]
-:pageId "entity/externalData"
+:pageId "entity/record"
 :scaleLevel "md"
 :fill ""
 :compact false
@@ -116,132 +26,6 @@
 :collapsedHeight 0
 :nonce 1757200524736}}
 :block/updated-at 1757200550963} 
-{:block/created-at 1757200549343
-:block/properties 
-{:ls-type :whiteboard-shape
-:logseq.tldraw.shape 
-{:blockType "P"
-:stroke ""
-:collapsed false
-:borderRadius 8
-:index 4
-:scale [1 1]
-:pageId "entity/connection"
-:scaleLevel "md"
-:fill ""
-:compact false
-:isAutoResizing true
-:type "logseq-portal"
-:size [400 248.00003606140888]
-:strokeType "line"
-:strokeWidth 2
-:opacity 1
-:id "658305e0-8b77-11f0-94bb-c517c5685bdd"
-:noFill false
-:point [848 448]
-:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
-:collapsedHeight 0
-:nonce 1757200537087}}
-:block/updated-at 1757200549343} 
-{:block/created-at 1757200555788
-:block/properties 
-{:ls-type :whiteboard-shape
-:logseq.tldraw.shape 
-{:blockType "P"
-:stroke ""
-:collapsed false
-:borderRadius 8
-:index 5
-:scale [1 1]
-:pageId "Google/Storage"
-:scaleLevel "md"
-:fill ""
-:compact false
-:isAutoResizing true
-:type "logseq-portal"
-:size [400 93]
-:strokeType "line"
-:strokeWidth 2
-:opacity 1
-:id "6e4637b0-8b77-11f0-94bb-c517c5685bdd"
-:noFill false
-:point [1352 272]
-:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
-:collapsedHeight 0
-:nonce 1757200551597}}
-:block/updated-at 1757200555788} 
-{:block/created-at 1757200575126
-:block/properties 
-{:ls-type :whiteboard-shape
-:logseq.tldraw.shape 
-{:stroke ""
-:index 6
-:scale [1 1]
-:scaleLevel "md"
-:fill ""
-:type "line"
-:strokeType "line"
-:strokeWidth 1
-:opacity 1
-:label ""
-:id "755b9272-8b77-11f0-94bb-c517c5685bdd"
-:fontWeight 400
-:noFill true
-:point [1252 253.63]
-:fontSize 20
-:handles 
-{:start 
-{:id "start"
-:canBind true
-:point [99 21.41]
-:bindingId "755b9270-8b77-11f0-94bb-c517c5685bdd"}
-:end 
-{:id "end"
-:canBind true
-:point [0 0]
-:bindingId "755b9271-8b77-11f0-94bb-c517c5685bdd"}}
-:decorations 
-{:end "arrow"}
-:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
-:nonce 1757200563554
-:italic false}}
-:block/updated-at 1757200575126} 
-{:block/created-at 1757200586010
-:block/properties 
-{:ls-type :whiteboard-shape
-:logseq.tldraw.shape 
-{:stroke ""
-:index 7
-:scale [1 1]
-:scaleLevel "md"
-:fill ""
-:type "line"
-:strokeType "line"
-:strokeWidth 1
-:opacity 1
-:label ""
-:id "7efe4ed2-8b77-11f0-94bb-c517c5685bdd"
-:fontWeight 400
-:noFill true
-:point [393 215.29]
-:fontSize 20
-:handles 
-{:start 
-{:id "start"
-:canBind true
-:point [0 0]
-:bindingId "7efe4ed0-8b77-11f0-94bb-c517c5685bdd"}
-:end 
-{:id "end"
-:canBind true
-:point [51 3.38]
-:bindingId "7efe4ed1-8b77-11f0-94bb-c517c5685bdd"}}
-:decorations 
-{:end "arrow"}
-:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
-:nonce 1757200579735
-:italic false}}
-:block/updated-at 1757200586010} 
 {:block/created-at 1757200590429
 :block/properties 
 {:ls-type :whiteboard-shape
@@ -311,9 +95,225 @@
 :parentId "68bc9875-dae4-403d-a532-97b9754c3346"
 :nonce 1757200588787
 :italic false}}
-:block/updated-at 1757200590424})
+:block/updated-at 1757200590424} 
+{:block/created-at 1757200586010
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:stroke ""
+:index 7
+:scale [1 1]
+:scaleLevel "md"
+:fill ""
+:type "line"
+:strokeType "line"
+:strokeWidth 1
+:opacity 1
+:label ""
+:id "7efe4ed2-8b77-11f0-94bb-c517c5685bdd"
+:fontWeight 400
+:noFill true
+:point [393 215.29]
+:fontSize 20
+:handles 
+{:start 
+{:id "start"
+:canBind true
+:point [0 0]
+:bindingId "7efe4ed0-8b77-11f0-94bb-c517c5685bdd"}
+:end 
+{:id "end"
+:canBind true
+:point [51 3.38]
+:bindingId "7efe4ed1-8b77-11f0-94bb-c517c5685bdd"}}
+:decorations 
+{:end "arrow"}
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:nonce 1757200579735
+:italic false}}
+:block/updated-at 1757200586010} 
+{:block/created-at 1757200555788
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:blockType "P"
+:stroke ""
+:collapsed false
+:borderRadius 8
+:index 5
+:scale [1 1]
+:pageId "Google/Storage"
+:scaleLevel "md"
+:fill ""
+:compact false
+:isAutoResizing true
+:type "logseq-portal"
+:size [400 93]
+:strokeType "line"
+:strokeWidth 2
+:opacity 1
+:id "6e4637b0-8b77-11f0-94bb-c517c5685bdd"
+:noFill false
+:point [1352 272]
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:collapsedHeight 0
+:nonce 1757200551597}}
+:block/updated-at 1757200555788} 
+{:block/created-at 1757200549343
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:blockType "P"
+:stroke ""
+:collapsed false
+:borderRadius 8
+:index 4
+:scale [1 1]
+:pageId "entity/connection"
+:scaleLevel "md"
+:fill ""
+:compact false
+:isAutoResizing true
+:type "logseq-portal"
+:size [400 248.00003606140888]
+:strokeType "line"
+:strokeWidth 2
+:opacity 1
+:id "658305e0-8b77-11f0-94bb-c517c5685bdd"
+:noFill false
+:point [848 448]
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:collapsedHeight 0
+:nonce 1757200537087}}
+:block/updated-at 1757200549343} 
+{:block/created-at 1757190285960
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:blockType "P"
+:stroke ""
+:rotation 0
+:collapsed false
+:borderRadius 8
+:index 1
+:scale [1 1]
+:pageId "entity/company"
+:scaleLevel "md"
+:fill ""
+:compact false
+:isAutoResizing true
+:type "logseq-portal"
+:size [264 93]
+:strokeType "line"
+:strokeWidth 2
+:opacity 1
+:id "83a50770-8b5f-11f0-94bb-c517c5685bdd"
+:noFill false
+:point [448 176]
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:collapsedHeight 0
+:nonce 1757190279542}}
+:block/updated-at 1757190285960} 
+{:block/created-at 1757200575126
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:stroke ""
+:index 6
+:scale [1 1]
+:scaleLevel "md"
+:fill ""
+:type "line"
+:strokeType "line"
+:strokeWidth 1
+:opacity 1
+:label ""
+:id "755b9272-8b77-11f0-94bb-c517c5685bdd"
+:fontWeight 400
+:noFill true
+:point [1252 253.63]
+:fontSize 20
+:handles 
+{:start 
+{:id "start"
+:canBind true
+:point [99 21.41]
+:bindingId "755b9270-8b77-11f0-94bb-c517c5685bdd"}
+:end 
+{:id "end"
+:canBind true
+:point [0 0]
+:bindingId "755b9271-8b77-11f0-94bb-c517c5685bdd"}}
+:decorations 
+{:end "arrow"}
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:nonce 1757200563554
+:italic false}}
+:block/updated-at 1757200575126} 
+{:block/created-at 1757200545650
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:blockType "P"
+:stroke ""
+:collapsed false
+:borderRadius 8
+:index 2
+:scale [1 1]
+:pageId "entity/article"
+:scaleLevel "md"
+:fill ""
+:compact false
+:isAutoResizing true
+:type "logseq-portal"
+:size [400 166.00002381615326]
+:strokeType "line"
+:strokeWidth 2
+:opacity 1
+:id "890a1a20-8b5f-11f0-94bb-c517c5685bdd"
+:noFill false
+:point [224 336]
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:collapsedHeight 0
+:nonce 1757190288689}}
+:block/updated-at 1757200545650} 
+{:block/created-at 1757200386064
+:block/properties 
+{:ls-type :whiteboard-shape
+:logseq.tldraw.shape 
+{:blockType "P"
+:stroke ""
+:rotation 0
+:collapsed false
+:borderRadius 8
+:index 0
+:scale [1 1]
+:pageId "entity/person"
+:scaleLevel "md"
+:fill ""
+:compact false
+:isAutoResizing true
+:type "logseq-portal"
+:size [264 93.00000228930972]
+:strokeType "line"
+:strokeWidth 2
+:opacity 1
+:id "7d3a6ba0-8b5f-11f0-94bb-c517c5685bdd"
+:noFill false
+:point [128 160]
+:parentId "68bc9875-dae4-403d-a532-97b9754c3346"
+:collapsedHeight 0
+:nonce 1757190268815}}
+:block/updated-at 1757200386064} 
+{:block/content "entity/externalData"
+:block/format :markdown
+:block/left 
+{:block/uuid #uuid "68bd62e1-8b9c-40c3-af92-18325ad7dd1c"}
+:block/parent 
+{:block/uuid #uuid "68bd62e1-8b9c-40c3-af92-18325ad7dd1c"}
+:block/uuid #uuid "68bcc00f-2cba-4167-9bb8-e7e57fc72cdf"})
 :pages (
-{:block/uuid #uuid "68bc9875-dae4-403d-a532-97b9754c3346"
+{:block/uuid #uuid "68bd62e1-8b9c-40c3-af92-18325ad7dd1c"
 :block/properties 
 {:ls-type :whiteboard-page
 :logseq.tldraw.page 

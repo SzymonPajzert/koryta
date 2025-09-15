@@ -1,5 +1,7 @@
 - Tutaj są wszystkie notatki na początek
 -
+- Najważniejszy projekt na teraz - [[Ludzie działają na stronie]]
+-
 - ## [[aktywizacja]]
 	- [[Ludzie działają na stronie]]
 	- [[Informatycy mogą pracować]]

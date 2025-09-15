@@ -16,12 +16,12 @@
 		- ID - Link to [[Google/Storage]]
 		- Type
 	- TODO Contains extracted values from the storage
-		- [[entity/externalData/company/name]]
-		- [[entity/externalData/company/krs]]
-		- [[entity/externalData/company/regon]]
-		- [[entity/externalData/company/nip]]
-		- [[entity/externalData/person/name]]
-		- [[entity/externalData/person/birthYear]]
-		- [[entity/externalData/location/city]]
-		- [[entity/externalData/location/commune]]
+		- [[entity/record/company/name]]
+		- [[entity/record/company/krs]]
+		- [[entity/record/company/regon]]
+		- [[entity/record/company/nip]]
+		- [[entity/record/person/name]]
+		- [[entity/record/person/birthYear]]
+		- [[entity/record/location/city]]
+		- [[entity/record/location/commune]]
 	-

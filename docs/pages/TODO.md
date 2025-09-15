@@ -1,2 +1,6 @@
+- Current iteration - [[iteration/25W38]]
+-
+-
+- {{query (and (and [[TODO]] (not [[LATER]])) (not [[iteration/25W38]]))}}
 -
 -

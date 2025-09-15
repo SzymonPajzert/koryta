@@ -1,8 +1,8 @@
 - #dane/kpo #afera
 -
 - Koryta - KPO integracja na szybko
-	- TODO Ludzie mogą głosować w finale
-	- TODO Możliwość maili do konwersji osób na teraz #email
+	- LATER Ludzie mogą głosować w finale
+	- LATER Możliwość maili do konwersji osób na teraz #email
 	- LATER Restore ability to use it, because I gave up on it currently during [[Migrate to firestore]]
 -
 - LATER Notki do #promocja

@@ -2,6 +2,6 @@
 	- DB - connect to actual entries
 		- entity_type
 		- id of the entity
-	- #entity/externalData
+	- #entity/record
 		- id
 		- data_source - corresponds to [[dane]]

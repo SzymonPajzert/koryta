@@ -13,5 +13,5 @@
 - LATER Check that each person has an article #entity/task
 - TODO Allow removing / hiding an [[entity]]
 - LATER check that TODOs are not in the produced code
-- TODO create a trusted level that allows people to view comments on docs #auth
+- LATER create a trusted level that allows people to view comments on docs #auth
 -
