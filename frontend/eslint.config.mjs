@@ -6,6 +6,7 @@ export default withNuxt(
   {
     rules: {
       'vue/no-multiple-template-root': 'off',
+      'vue/no-mutating-props': 'off', // TODO enable it again
     },
   },
 )

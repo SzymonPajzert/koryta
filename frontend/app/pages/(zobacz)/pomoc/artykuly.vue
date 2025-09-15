@@ -2,32 +2,32 @@
   <v-col cols="12">
     <h2 class="text-h5 font-weight-bold">Przejrzyj te artykuły</h2>
   </v-col>
-  <v-col cols="12" md="6" alignSelf="start">
+  <v-col cols="12" md="6" align-self="start">
     <h3 class="text-h6 font-weight-bold">
       Oczekujące artykuły do których się zgłosiłeś
     </h3>
     <v-virtual-scroll
-      :maxHeight="400"
-      :items="articlesAssigned"
       v-if="articlesAssigned.length > 0"
+      :max-height="400"
+      :items="articlesAssigned"
     >
-      <template v-slot:default="{ item: article }">
-        <ArticleCard :article="article[1]" :articleID="article[0]" />
+      <template #default="{ item: article }">
+        <ArticleCard :article="article[1]" :article-i-d="article[0]" />
       </template>
     </v-virtual-scroll>
     <v-container v-else>
       <p>Nie masz żadnych oczekujących artykułów do których się zgłosiłeś.</p>
     </v-container>
   </v-col>
-  <v-col cols="12" md="6" alignSelf="start">
+  <v-col cols="12" md="6" align-self="start">
     <h3 class="text-h6 font-weight-bold">Pozostałe oczekujące artykuły</h3>
     <v-virtual-scroll
-      :maxHeight="400"
-      :items="articlesUnssigned"
       v-if="articlesUnssigned.length > 0"
+      :max-height="400"
+      :items="articlesUnssigned"
     >
-      <template v-slot:default="{ item: article }">
-        <ArticleCard :article="article[1]" :articleID="article[0]" />
+      <template #default="{ item: article }">
+        <ArticleCard :article="article[1]" :article-i-d="article[0]" />
       </template>
     </v-virtual-scroll>
     <v-container v-else>
@@ -37,12 +37,12 @@
 </template>
 
 <script lang="ts" setup>
+import { useArticles } from "@/composables/entities/articles";
+
 definePageMeta({
   title: "Artykuły do dodania",
   isHelp: true,
 });
-
-import { useArticles } from "@/composables/entities/articles";
 
 const { articlesAssigned, articlesUnssigned } = useArticles();
 </script>

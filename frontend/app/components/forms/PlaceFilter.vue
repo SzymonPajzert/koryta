@@ -1,19 +1,19 @@
 <template id="place-filter">
   <v-autocomplete
+    v-model="nodeGroupPicked"
     label="Filtruj po miejscu zatrudnienia"
     :items="nodeGroups"
     item-title="name"
-    v-model="nodeGroupPicked"
     return-object
     autocomplete="off"
   >
-    <template v-slot:item="{ props, item }">
+    <template #item="{ props, item }">
       <v-list-item
         v-bind="props"
         :subtitle="`${item.raw.stats.people} powiązanych osób`"
         :title="item.raw.name"
         max-width="250px"
-      ></v-list-item>
+      />
     </template>
   </v-autocomplete>
 </template>

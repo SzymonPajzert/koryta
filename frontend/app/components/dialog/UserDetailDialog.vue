@@ -1,13 +1,13 @@
 <template>
   <v-dialog v-model="visible" max-width="500">
     <EmployedDetail
+      v-if="node"
       :node="node"
       :close="
         () => {
           visible = false;
         }
       "
-      v-if="node"
     />
   </v-dialog>
 </template>

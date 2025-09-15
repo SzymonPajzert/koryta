@@ -4,14 +4,14 @@
     :title="getShortTitle(article)"
     :subtitle="dense ? undefined : getSubtitle(article)"
     class="mb-2"
+    target="_blank"
+    height="100%"
     @click="
       dialogStore.open({
         type: 'data',
         edit: { value: article, key: articleID },
       })
     "
-    target="_blank"
-    height="100%"
   >
     <v-card-text v-if="!dense">
       <p v-for="(comment, commentKey) in article.comments" :key="commentKey">
@@ -19,13 +19,13 @@
       </p>
     </v-card-text>
     <v-card-actions>
-      <v-spacer></v-spacer>
+      <v-spacer/>
       <v-btn
         variant="tonal"
         :href="article.sourceURL"
-        @click.stop
         target="_blank"
         prepend-icon="mdi-open-in-new"
+        @click.stop
       >
         Zobacz
       </v-btn>
@@ -34,16 +34,16 @@
         :color="
           article.enrichedStatus?.isAssignedToCurrentUser ? 'yellow' : undefined
         "
+        prepend-icon="mdi-hand-back-left-outline"
         @click.prevent="
           assignToArticle(
             articleID,
             !article.enrichedStatus?.isAssignedToCurrentUser
           )
         "
-        prepend-icon="mdi-hand-back-left-outline"
       >
         <template #prepend>
-          <v-icon color="success"></v-icon>
+          <v-icon color="success"/>
         </template>
         {{
           article.enrichedStatus?.isAssignedToCurrentUser
@@ -53,11 +53,11 @@
       </v-btn>
       <v-btn
         variant="tonal"
-        @click.prevent="markArticleAsDone(articleID)"
         prepend-icon="mdi-check-circle-outline"
+        @click.prevent="markArticleAsDone(articleID)"
       >
         <template #prepend>
-          <v-icon color="success"></v-icon>
+          <v-icon color="success"/>
         </template>
         Zrobione
       </v-btn>

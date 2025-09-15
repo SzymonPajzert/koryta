@@ -27,7 +27,7 @@
     <v-col cols="12">
       <v-list>
         <v-list-item
-          v-for="(source, key) in articles"
+          v-for="(source) in articles"
           :key="source.name"
           :href="source.sourceURL"
         >

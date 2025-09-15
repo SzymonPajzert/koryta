@@ -42,7 +42,7 @@ export function useArticles() {
     entries: Record<string, number>,
   ): Record<string, number> {
     return Object.fromEntries(
-      Object.entries(entries).filter(([uid, date]) => {
+      Object.entries(entries).filter(([_, date]) => {
         const now = new Date();
         const diff = now.getTime() - date;
         return diff < 1000 * 3600 * 24;

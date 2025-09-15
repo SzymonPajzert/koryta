@@ -6,9 +6,9 @@
     <OpenAbstractDialog dialog="employed" />
     <OpenAbstractDialog dialog="company" />
     <v-btn
+      v-show="route.meta.isGraph"
       v-model="runSimulation"
       @click="runSimulation = !runSimulation"
-      v-show="route.meta.isGraph"
     >
       Uporządkuj wierzchołki
       <v-progress-linear
@@ -17,17 +17,17 @@
         color="deep-purple-accent-4"
         location="bottom"
         absolute
-      ></v-progress-linear>
+      />
     </v-btn>
     <v-select
-      label="Typ problemu"
+      v-show="route.meta.isHelp"
       v-model="allowedIssues"
+      label="Typ problemu"
       :items="issueNames"
       multiple
-      v-show="route.meta.isHelp"
     />
   </v-navigation-drawer>
-  <RouterView :allowedIssues="allowedIssues"></RouterView>
+  <RouterView :allowed-issues="allowedIssues"/>
 </template>
 
 <script setup lang="ts">

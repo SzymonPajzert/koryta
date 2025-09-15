@@ -9,26 +9,27 @@
         <v-spacer />
         <v-col>
           <v-btn
-            @click="set('voted')"
             color="primary"
             :variant="filter == 'voted' ? 'flat' : 'outlined'"
             :active="filter == 'voted'"
+            @click="set('voted')"
           >
             Tylko zagłosowane
           </v-btn>
         </v-col>
         <v-col>
           <v-btn
-            @click="set('unvoted')"
             color="primary"
             :variant="filter == 'unvoted' ? 'flat' : 'outlined'"
             :active="filter == 'unvoted'"
+            @click="set('unvoted')"
           >
             Tylko niewidziane
           </v-btn>
         </v-col>
         <v-col cols="12">
           <v-text-field
+            v-model="filterText"
             append-inner-icon="mdi-magnify"
             density="compact"
             label="Szukaj projektów"
@@ -37,8 +38,7 @@
             single-line
             bg-color="white"
             autocomplete="off"
-            v-model="filterText"
-          ></v-text-field>
+          />
         </v-col>
       </v-row>
     </v-card-title>
@@ -46,7 +46,7 @@
 
   <v-list v-list lines="two" width="100%" style="display: flex; height: 1000px">
     <v-virtual-scroll :items="filteredSubmissions">
-      <template v-slot:default="{ item: submission }">
+      <template #default="{ item: submission }">
         <KPOItem
           :submission="submission"
           :score="toRef(scores, submission.id)"

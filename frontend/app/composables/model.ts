@@ -4,7 +4,7 @@ import type {
   Company,
   Destination,
   DestinationTypeMap,
-  NepoEmployment,
+  Person,
   Todo,
   KRSCompany,
   PersonRejestr,
@@ -54,7 +54,7 @@ export function useDBUtils() {
     }
 
     if (d == "employed") {
-      const value = valueUntyped as Partial<NepoEmployment>;
+      const value = valueUntyped as Partial<Person>;
       const result: Required<DestinationTypeMap["employed"]> = {
         name: value.name ?? "",
         parties: value.parties ?? [],
@@ -153,7 +153,7 @@ export function useDBUtils() {
     obj: DestinationTypeMap[D],
   ): DestinationTypeMap[D] {
     // Create a new object to avoid mutating the original
-    const payload: any = {};
+    const payload: unknown = {};
 
     for (const key in obj) {
       // Ensure the key belongs to the object and not its prototype chain

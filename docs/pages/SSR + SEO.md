@@ -6,3 +6,4 @@
 	- TODO Migrated and shown at Google
 - TODO Set up hybrid rendering for the #koryta pages
 - LATER Everything on the page is shareable for future interactions
+- TODO Enable cookies for #auth - https://vuefire.vuejs.org/nuxt/auth.html#Session-Cookie

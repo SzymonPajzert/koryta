@@ -33,7 +33,7 @@ export function getHostname(data: Article): string {
   try {
     if (!data.sourceURL) return "";
     return new URL(data.sourceURL).hostname;
-  } catch (e: unknown) {
+  } catch {
     console.error("failed to parse URL", data.sourceURL);
     return data.sourceURL;
   }

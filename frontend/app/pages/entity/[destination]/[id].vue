@@ -1,5 +1,5 @@
 <template>
-  <EmployedDetail :node="id" :close="() => {}" v-if="type === 'employed'" />
+  <EmployedDetail v-if="type === 'employed'" :node="id" :close="() => {}" />
 </template>
 
 <script setup lang="ts">

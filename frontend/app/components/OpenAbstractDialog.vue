@@ -1,17 +1,17 @@
 <template>
   <v-list-item
-    :prepend-icon="destinationIcon[props.dialog]"
     v-if="user"
+    :prepend-icon="destinationIcon[props.dialog]"
     :title="destinationAddText[props.dialog]"
     @click="openDialog()"
-  ></v-list-item>
+  />
   <!-- If user is not logged in, show button to redirect to login -->
   <v-list-item
-    :prepend-icon="destinationIcon[props.dialog]"
     v-else
+    :prepend-icon="destinationIcon[props.dialog]"
     :title="destinationAddText[props.dialog]"
     to="/login"
-  ></v-list-item>
+  />
 </template>
 
 <script lang="ts" setup>
