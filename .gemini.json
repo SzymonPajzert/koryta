@@ -1,0 +1,10 @@
+{
+  "assistant": {
+    "name": "Gemini",
+    "version": "1.0"
+  },
+  "project_context": {
+    "testing_readme": "docs/gemini.md",
+    "testing_todo": "docs/tests-todo.md"
+  }
+}

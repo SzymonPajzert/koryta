@@ -13,6 +13,7 @@ __pycache__
 .firebase
 database-debug.log
 firebase-debug.log
+firestore-debug.log
 pglite-debug.log
 
 # local env files
