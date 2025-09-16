@@ -5,7 +5,7 @@ set -e
 # Initiate a new export to a koryta-pl-firestore-backups Cloud Storage
 
 # Set the timestamp of the export here
-LATEST_TIMESTAMP=2025-09-13T12:13:52_72256
+LATEST_TIMESTAMP=2025-09-19T13:25:45_19758
 
 rm -r current_firestore
 
