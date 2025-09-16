@@ -18,18 +18,16 @@ export default defineNuxtConfig({
   components: [
     {
       path: "~/components",
-
       // TODO disable it, so we have nice nested names
       pathPrefix: false,
     },
   ],
 
   routeRules: {
-    '/': { prerender: true },
+    "/": { prerender: true },
     // Cached for 6 hours
-    '/api/*': { cache: { maxAge: 6 * 60 * 60 } },
+    // '/api/*': { cache: { maxAge: 1 * 60 * 60 } },
   },
-
 
   hooks: {
     "pages:extend"(pages) {
@@ -40,10 +38,18 @@ export default defineNuxtConfig({
     },
   },
 
-  modules: ["@pinia/nuxt", '@nuxt/content', // TODO what do I need it for '@nuxt/icon',
-  // TODO what do I need it for '@nuxt/image',
-  // TODO what do I need it for '@nuxt/scripts',
-  '@nuxt/test-utils', "@nuxt/fonts", "@nuxt/eslint", "nuxt-vuefire", "vuetify-nuxt-module", "@sentry/nuxt/module"],
+  modules: [
+    "@pinia/nuxt",
+    "@nuxt/content", // TODO what do I need it for '@nuxt/icon',
+    // TODO what do I need it for '@nuxt/image',
+    // TODO what do I need it for '@nuxt/scripts',
+    "@nuxt/test-utils",
+    "@nuxt/fonts",
+    "@nuxt/eslint",
+    "nuxt-vuefire",
+    "vuetify-nuxt-module",
+    "@sentry/nuxt/module",
+  ],
 
   fonts: {
     families: [{ name: "Roboto", provider: "fontsource" }],
@@ -78,29 +84,31 @@ export default defineNuxtConfig({
     config: {
       apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
       authDomain: "koryta-pl.firebaseapp.com",
-      databaseURL: "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
+      databaseURL:
+        "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
       projectId: "koryta-pl",
       storageBucket: "koryta-pl.firebasestorage.app",
       messagingSenderId: "735903577811",
       appId: "1:735903577811:web:53e6461c641b947a4e8626",
-      measurementId: "G-KRYVKQ4T7T"
+      measurementId: "G-KRYVKQ4T7T",
     },
     emulators: {
       enabled: isTest || isDev,
       auth: {
-        host: 'localhost',
+        host: "localhost",
         port: 9099,
       },
       database: {
-        host: 'localhost',
+        host: "localhost",
         port: 9000,
       },
       firestore: {
-        host: 'localhost',
+        host: "localhost",
+        database: "koryta-pl",
         port: 8080,
       },
       storage: {
-        host: 'localhost',
+        host: "localhost",
         port: 9199,
       },
     },

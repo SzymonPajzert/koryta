@@ -1,6 +1,3 @@
-import { set, ref as dbRef } from "firebase/database";
-
-
 /** Type of the key identifying currently set value */
 type IndexT = string;
 
@@ -14,7 +11,6 @@ export function useEditIndexedField<ValueT, StructT>(
 ) {
   const key = ref<IndexT | undefined>(undefined);
   const value = ref<ValueT | undefined>(undefined);
-  const db = useDatabase();
 
   function start(keyEdit: string, valueEdit: StructT) {
     key.value = keyEdit;
@@ -35,7 +31,7 @@ export function useEditIndexedField<ValueT, StructT>(
     setPaths.forEach((setter) => {
       const [path, v] = setter(key.value!, value.value!);
       console.debug(path, v);
-      set(dbRef(db, path), v)
+      throw new SyntaxError("This is not implemented")
     });
 
     stop();

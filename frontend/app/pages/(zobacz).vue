@@ -2,7 +2,6 @@
   <v-navigation-drawer :location="location" :width="width" permanent>
     <PlaceFilter />
     <OpenAbstractDialog dialog="data" />
-    <OpenAbstractDialog dialog="todo" />
     <OpenAbstractDialog dialog="employed" />
     <OpenAbstractDialog dialog="company" />
     <v-btn

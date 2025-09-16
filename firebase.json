@@ -12,11 +12,9 @@
   },
   "emulators": {
     "import": "./database/current_firestore",
-    "ui": {
-      "enabled": true
-    },
     "firestore": {
-      "port": 8080
+      "port": 8080,
+      "database": "koryta-pl"
     },
     "singleProjectMode": true
   },
@@ -24,8 +22,8 @@
     "rules": "database.rules.json"
   },
   "firestore": {
-      "rules": "firestore.rules",
-      "database": "koryta-pl"
+    "rules": "firestore.rules",
+    "database": "koryta-pl"
   },
   "functions": [
     {

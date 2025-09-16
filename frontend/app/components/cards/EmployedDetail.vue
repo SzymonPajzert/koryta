@@ -7,17 +7,18 @@
       </h2>
     </v-card-title>
     <v-card-text>
-      <p v-for="connection in person?.connections" :key="connection.text">
+      <p v-for="connection in connections(node)" :key="connection.text">
         {{ connection.text }}
       </p>
-      <br >
-      <p v-for="employment in person?.employments" :key="employment.text">
+      <br />
+      <p v-for="employment in employments(node)" :key="employment.text">
         {{ employment.text }}
       </p>
     </v-card-text>
     <v-card-actions>
-      <v-spacer/>
+      <v-spacer />
       <v-btn
+        v-if="user"
         variant="tonal"
         prepend-icon="mdi-pencil-outline"
         @click.stop="
@@ -28,7 +29,7 @@
         "
       >
         <template #prepend>
-          <v-icon color="warning"/>
+          <v-icon color="warning" />
         </template>
         Edytuj
       </v-btn>
@@ -38,10 +39,14 @@
 </template>
 
 <script lang="ts" setup>
-import { createEntityStore } from "@/stores/entity";
 import { useDialogStore } from "@/stores/dialog";
+import { getFirestore, doc } from "firebase/firestore";
+import { useEdges } from "~/composables/edges";
+import type { Person } from "~~/shared/model";
 
 const dialogStore = useDialogStore();
+const { connections, employments } = useEdges();
+const { user } = useAuthState();
 
 const { node, close } = defineProps<{
   node: string;
@@ -49,13 +54,6 @@ const { node, close } = defineProps<{
   dialog?: boolean;
 }>();
 
-const useListEntity = createEntityStore("employed");
-const employed = useListEntity();
-const { entities: people } = storeToRefs(employed);
-
-const person = computed(() => {
-  if (!people.value) return;
-  if (!node) return;
-  return people.value?.[node];
-});
+const db = getFirestore(useFirebaseApp(), "koryta-pl");
+const person = useDocument<Person>(doc(db, "nodes", node));
 </script>
