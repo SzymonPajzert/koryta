@@ -2,3 +2,6 @@
 - LATER Strona deepmind google gemma wygląda dobrze do kradzieży
 - LATER Ukradnij jak wygląda landing page skrótu politycznego
 - LATER Ładna stopka - https://wpolsce24.tv/sport/nie-chca-grac-w-pilke-z-klubem-z-izraela,45668
+-
+- [[cuj/visit on a phone for a quick check]]
+-

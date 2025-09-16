@@ -1,0 +1,15 @@
+- Dump contains raw data that I've already found and that doesn't fit on the website yet
+-
+- TODO Full data to import - https://drive.google.com/drive/folders/1Quf-3EHImdD82au3qFNHH-KvVSsGDXK0?hl=pl
+-
+- All the cases are:
+	- [[list of KRS numbers]]
+	- [[list of interesting articles]]
+	- Some places I tried to do research - [[poszlaki]]
+		- [[AMW Sineva]]
+		- [[Agencja Mienia Wojskowego]]
+		- [[Urząd Mazowiecki]]
+		- [[Łódź]]
+-
+- TODO clean up each case
+- TODO Import each case

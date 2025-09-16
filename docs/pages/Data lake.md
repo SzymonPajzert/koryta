@@ -1,3 +1,29 @@
-- TODO [[Finish migration to Storage]]
-- LATER Create #Google/BigQuery from the storage data
+- This document outlines WHAT we have (the infrastructure)
 -
+- ## See #import and #dump requests for HOW
+	- Make sure that all references there can be modeled with the current version of the lake
+	- #import lists cases that we would like to support
+	- #dump lists any data that should be moved at some point
+	- [[cuj/quick add]]
+	- [[cuj/suggest changes to website nodes]]
+	- [[cuj/assign category score to node]]
+	- [[cuj/explore article library]]
+	- [[cuj/group people easily]]
+	- [[cuj/merge and approve]]
+-
+- ## Data model
+	- [[Cloud Storage]] - for unstructured, ingested data
+	- [[BigQuery]]
+		- [[BigQuery/documents]] - References to data in [[Cloud Storage]]
+		- [[BigQuery/records]] - Extracted data from [[BigQuery/documents]]
+	- [[Firestore]]
+		- Each [[Firestore/nodes]] has common fields for management of [[visibility]] and changes
+			- [[Firestore/nodes/article]] - all articles from documents that are linkable
+			- [[Firestore/nodes/person]] - a single person
+			- [[Firestore/nodes/place]] -
+			- [[Firestore/nodes/blobs]] -
+		- [[Firestore/edges]] - edges between nodes, employment, ownership, connection, merge requests
+		- [[Firestore/slugs]]
+-
+- # Relationships
+- {{embed [[Data model graph]]}}

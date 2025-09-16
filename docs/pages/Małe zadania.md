@@ -2,7 +2,7 @@
 - LATER Add view with progress bar in #view/pomoc
   collapsed:: true
 	- Show estimate on how many people are in total
-	- Use keys from #RTDB or #Google/Firestore to get time of creation
+	- Use keys from #RTDB or #Firestore to get time of creation
 - LATER #view/index - Licznik Balcerowicza
   collapsed:: true
 	- Ile przelaliśmy pieniędzy dla tych ludzi

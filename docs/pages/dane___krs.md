@@ -4,7 +4,5 @@
 - TODO Uncomment the listed KRS numbers in the ingest file
 - TODO Also ingest confirmed people's companies
 - TODO [[Finish migration to Storage]]
-	- Modify references to nested basic, external_basic fields to those fields that are still in the #Google/Firestore
+	- Modify references to nested basic, external_basic fields to those fields that are still in the #Firestore
 	- KRSCompany and PersonRejestr #entity
-	-
-	-

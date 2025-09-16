@@ -1,5 +1,5 @@
 - [[dane/artykuły]]
 -
 - I've learned that Common Crawl is not good enough for us, because it doesn't list many good websites
--
+- TODO Use [[list of interesting articles]] and some subpages in [[dump]] for a starter for scraper
 - TODO We will write our own crawler, because the [[Prasa do siana]] extension doesn't work that well [[iteration/25W38]]

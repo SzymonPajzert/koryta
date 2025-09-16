@@ -142,7 +142,7 @@
 :borderRadius 8
 :index 5
 :scale [1 1]
-:pageId "Google/Storage"
+:pageId "Cloud Storage"
 :scaleLevel "md"
 :fill ""
 :compact false

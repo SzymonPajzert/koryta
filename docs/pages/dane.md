@@ -1,6 +1,6 @@
 - [[Ingest autochecks]] - Allow people to make connections between ingested data
 -
-- Kolejne #[[Data lake]] do integracji. Wszystkie reprezentowane przez [[entity/record]]
+- Kolejne #[[Data lake]] do integracji w #import
 	- [[dane/krs]] - Ingested through #rejestr.io
 	- [[dane/pkw]]
 	- [[dane/wiki]]

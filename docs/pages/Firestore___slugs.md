@@ -1,0 +1,1 @@
+- TODO Implement for [[SSR + SEO]] pretty URLs

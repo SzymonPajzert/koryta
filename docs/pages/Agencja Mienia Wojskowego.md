@@ -1,0 +1,8 @@
+- [https://amwkwatera.pl/spolka/wladze-spolki/](https://amwkwatera.pl/spolka/wladze-spolki/)
+- [https://amwkwatera.pl/oddzialy-terenowe/](https://amwkwatera.pl/oddzialy-terenowe/)
+- [https://amwkwatera.pl/spolka/nasze-osiedla/](https://amwkwatera.pl/spolka/nasze-osiedla/)
+- [https://amwkwatera.pl/oddzial-terenowy/oddzial-terenowy-malopolski/](https://amwkwatera.pl/oddzial-terenowy/oddzial-terenowy-malopolski/)
+- [https://amwkwatera.pl/spolka/o-nas/](https://amwkwatera.pl/spolka/o-nas/)
+- [https://www.researchgate.net/profile/Anna-Wazna](https://www.researchgate.net/profile/Anna-Wazna)
+- [https://monitorfirm.pb.pl/firma/ecal-polska/wazna-jagoda-anna-prezes-zarzadu/](https://monitorfirm.pb.pl/firma/ecal-polska/wazna-jagoda-anna-prezes-zarzadu/)
+- [https://amw.com.pl/pl/amw/o-agencji/spolki-amw](https://amw.com.pl/pl/amw/o-agencji/spolki-amw)

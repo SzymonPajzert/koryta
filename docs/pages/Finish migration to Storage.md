@@ -1,1 +1,1 @@
-- Finish migration to #Google/Storage
+- Finish migration to #[[Cloud Storage]]

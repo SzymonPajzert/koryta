@@ -2,6 +2,11 @@
 -
 - Najważniejszy projekt na teraz - [[Ludzie działają na stronie]]
 -
+- [[Data lake]] - infrastructure
+- [[import]] - what actions we perform
+	- [[dump]] - Contains data to actually import
+-
+-
 - ## [[aktywizacja]]
 	- [[Ludzie działają na stronie]]
 	- [[Informatycy mogą pracować]]
