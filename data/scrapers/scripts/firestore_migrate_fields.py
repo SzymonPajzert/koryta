@@ -8,7 +8,7 @@ class Context:
     path: str
     value: dict
     db: firestore.Client
-    batch: firestore.WriteBatch
+    batch: any
     root_id: str  # ID of the document that is being processed
 
 def delete(verbose=False, confirm=False):
@@ -63,10 +63,11 @@ def create_link(ctx: Context, root, value, config: EdgeConfig):
             raise ValueError(f"No ID found for {ctx.path}: {value}")
         return
         
+    source = ctx.root_id
     if config.revert:
-        create_edge(ctx, data["target"], ctx.root_id, config.edge_type, **data)
-    else:
-        create_edge(ctx, ctx.root_id, data["target"], config.edge_type, **data)
+        source = data["target"]
+        data["target"] = ctx.root_id
+    create_edge(ctx, source, data["target"], config.edge_type, **data)
         
 @dataclass
 class BlobConfig:
@@ -199,7 +200,7 @@ def find_nested_fields(collection_name, data):
     return nested_keys
 
 def perform_operations():
-    batch = firestore_db.batch()
+    bulk_writer = firestore_db.bulk_writer()
 
     for collection in firestore_db.collections():
         print(f"Performing operations in collection: '{collection.id}'")
@@ -215,7 +216,7 @@ def perform_operations():
                     field_path = key.split(".", 1)[1]
                     value = doc.get(field_path)
                     try:
-                        operation(Context(key, value, firestore_db, batch, doc.id))
+                        operation(Context(key, value, firestore_db, bulk_writer, doc.id))
                     except KeyError:
                         print(f"KeyError for {key}, {value}")
                         raise
@@ -224,7 +225,8 @@ def perform_operations():
                         raise
                         
                 
-    batch.commit()
+    bulk_writer.flush()
+    print("Operations complete!")
     
 def print_path_diff(paths_before, paths_after):
     added_paths = {}
@@ -285,16 +287,16 @@ def migrate_to_nodes(collections: list[str]):
     print("Migration complete!")
 
 if __name__ == "__main__":
-    # paths_before, _, _, values_before = path_occurrence()
+    paths_before, _, _, values_before = path_occurrence()
     
-    # perform_operations()
+    perform_operations()
     
     # TODO compare Presence print_path_diff(paths_before, paths_after)
     
     migrate_to_nodes(["article", "person", "place", ("external", "record")])
     
-    # paths_after, _, _, values_after = path_occurrence()
+    paths_after, _, _, values_after = path_occurrence()
     
-    # print(len(values_before), len(values_after))
-    # print("\n".join(list(values_before.difference(values_after)), indent=2))
-    # print("\n".join(list(values_after.difference(values_before)), indent=2))
+    print(len(values_before), len(values_after))
+    print("\n".join(list(values_before.difference(values_after))))
+    print("\n".join(list(values_after.difference(values_before))))

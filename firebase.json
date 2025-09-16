@@ -24,7 +24,8 @@
     "rules": "database.rules.json"
   },
   "firestore": {
-      "rules": "firestore.rules"
+      "rules": "firestore.rules",
+      "database": "koryta-pl"
   },
   "functions": [
     {

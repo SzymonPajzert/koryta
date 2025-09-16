@@ -8,7 +8,7 @@ print("Connecting to Firestore...")
 # Make sure to point to your service account key file.
 # You can also use `gcloud auth application-default login`
 try:
-    firestore_db = firestore.Client(project="koryta-pl")
+    firestore_db = firestore.Client(project="koryta-pl", database="koryta-pl")
     print("Successfully connected to Firestore.")
 except Exception as e:
     print(f"Failed to connect to Firestore: {e}")
