@@ -5,7 +5,7 @@ import { getFirestore } from "firebase-admin/firestore";
 export async function fetchNodes<D extends Destination>(
   destination: D,
 ): Promise<Record<string, DestinationTypeMap[D]>> {
-  const db = getFirestore();
+  const db = getFirestore("koryta-pl");
   const path = destinationToNodeType[destination];
   const nodes = await db.collection("nodes").where("type", "==", path).get();
   return (
@@ -16,7 +16,7 @@ export async function fetchNodes<D extends Destination>(
 }
 
 export async function fetchEdges(): Promise<Edge[]> {
-  const db = getFirestore();
+  const db = getFirestore("koryta-pl");
   const edges = (await db.collection("edges").get()).docs.map((doc) =>
     doc.data() as Edge,
   );
