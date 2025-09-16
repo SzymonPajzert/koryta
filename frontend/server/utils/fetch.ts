@@ -1,16 +1,22 @@
-import { destinationToNodeType, type Destination, type DestinationTypeMap, type Edge } from "~~/shared/model";
+import type { NodeType, Edge, Person, Company, Article } from "~~/shared/model";
 import { getDatabase } from "firebase-admin/database";
 import { getFirestore } from "firebase-admin/firestore";
 
-export async function fetchNodes<D extends Destination>(
-  destination: D,
-): Promise<Record<string, DestinationTypeMap[D]>> {
+interface nodeData {
+  person: Person
+  place: Company
+  article: Article
+  record: unknown
+}
+
+export async function fetchNodes<N extends NodeType>(
+  path: N,
+): Promise<Record<string, nodeData[N]>> {
   const db = getFirestore("koryta-pl");
-  const path = destinationToNodeType[destination];
   const nodes = await db.collection("nodes").where("type", "==", path).get();
   return (
     Object.fromEntries(
-      nodes.docs.map((doc) => [doc.id, doc.data() as DestinationTypeMap[D]]),
+      nodes.docs.map((doc) => [doc.id, doc.data() as nodeData[N]]),
     ) || {}
   );
 }

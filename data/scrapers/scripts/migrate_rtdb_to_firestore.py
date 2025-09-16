@@ -104,7 +104,7 @@ def migrate_rejestr_io_data():
     batch.commit()
     print("Migration complete!")
     
-def copy_entries(source: str, destination: str):
+def copy_entries(source: str, destination: str, keep_id=False):
     """
     Migrates person data from Firebase RTDB to Cloud Firestore.
     """
@@ -119,17 +119,20 @@ def copy_entries(source: str, destination: str):
 
     print(f"Found {len(people_data)} entries to migrate.")
 
-    # Use a batch to write to Firestore for efficiency
-    batch = firestore_db.batch()
+    batch = firestore_db.bulk_writer()
 
     for person_rtdb_id, data in tqdm(people_data.items()):
-        # Create a new document in the 'external' collection
-        external_doc_ref = firestore_db.collection(destination).document()
-        data["rtdb_id"] = person_rtdb_id        
+        external_doc_ref = None
+        if keep_id:
+            external_doc_ref = firestore_db.collection(destination).document(person_rtdb_id)
+        else:
+            external_doc_ref = firestore_db.collection(destination).document()
+            data["rtdb_id"] = person_rtdb_id
+
         batch.set(external_doc_ref, data)
 
     print("Committing batch to Firestore...")
-    batch.commit()
+    batch.flush()
     print("Migration complete!")
 
 if __name__ == "__main__":
@@ -137,4 +140,5 @@ if __name__ == "__main__":
     # DONE copy_entries("employed", "person")
     # DONE copy_entries("company", "place")
     # DONE copy_entries("data", "article")
+    # copy_entries("user", "users", True)
     pass

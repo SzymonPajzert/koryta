@@ -10,9 +10,9 @@ import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
 export default defineEventHandler(async () => {
   const [people, places, articles, edgesFromDB] = await Promise.all([
-    fetchNodes("employed"),
-    fetchNodes("company"),
-    fetchNodes("data"),
+    fetchNodes("person"),
+    fetchNodes("place"),
+    fetchNodes("article"),
     fetchEdges(),
   ]);
 

@@ -1,4 +1,3 @@
-import { useRTDB } from "@vueuse/firebase/useRTDB";
 import { computed } from "vue";
 import { useAuthState } from "@/composables/auth"; // Assuming auth store path
 import { ref as dbRef, set, remove, getDatabase } from "firebase/database";
@@ -50,8 +49,10 @@ export function useArticles() {
     );
   }
 
-  const allArticlesUnfiltered = useRTDB<Record<string, Article>>(
-    dbRef(db, "data"),
+  const allArticlesUnfiltered = useAsyncData(
+    "nodes/article",
+    () => $fetch("/api/nodes/article"),
+    { lazy: true },
   );
   const allArticles = computed<[string, Article & EnrichedStatus][]>(() => {
     // Don't show any articles if the user is not logged in or there's no data yet.
