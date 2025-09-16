@@ -24,6 +24,13 @@ export default defineNuxtConfig({
     },
   ],
 
+  routeRules: {
+    '/': { prerender: true },
+    // Cached for 6 hours
+    '/api/*': { cache: { maxAge: 6 * 60 * 60 } },
+  },
+
+
   hooks: {
     "pages:extend"(pages) {
       // This is a hot fix so the pages for (zobacz) don't overwrite index.
