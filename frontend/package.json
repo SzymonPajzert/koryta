@@ -20,6 +20,7 @@
     "@nuxt/scripts": "^0.11.10",
     "@nuxt/test-utils": "^3.19.2",
     "@pinia/nuxt": "^0.11.2",
+    "@sentry/nuxt": "^10.11.0",
     "@unhead/vue": "^2.0.13",
     "@vueuse/firebase": "^13.6.0",
     "better-sqlite3": "^12.2.0",
@@ -46,5 +47,8 @@
     "eslint-config-prettier": "^10.1.8",
     "happy-dom": "^18.0.1",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "@vercel/nft": "^0.27.4"
   }
 }

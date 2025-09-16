@@ -25,3 +25,6 @@ logs
 
 # Firebase service auth
 service_account.json
+
+# Sentry Config File
+.env.sentry-build-plugin

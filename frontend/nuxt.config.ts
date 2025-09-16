@@ -4,13 +4,17 @@ import { isDev } from "@nuxt/test-utils";
 const isTest = !!process.env.VITEST;
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
+
   // TODO Enable strict
   typescript: {
     strict: false,
   },
+
   devtools: { enabled: true },
+
   // TODO enable SSR
   ssr: false,
+
   components: [
     {
       path: "~/components",
@@ -29,18 +33,10 @@ export default defineNuxtConfig({
     },
   },
 
-  modules: [
-    "@pinia/nuxt",
-    '@nuxt/content',
-    // TODO what do I need it for '@nuxt/icon',
-    // TODO what do I need it for '@nuxt/image',
-    // TODO what do I need it for '@nuxt/scripts',
-    '@nuxt/test-utils',
-    "@nuxt/fonts",
-    "@nuxt/eslint",
-    "nuxt-vuefire",
-    "vuetify-nuxt-module",
-  ],
+  modules: ["@pinia/nuxt", '@nuxt/content', // TODO what do I need it for '@nuxt/icon',
+  // TODO what do I need it for '@nuxt/image',
+  // TODO what do I need it for '@nuxt/scripts',
+  '@nuxt/test-utils', "@nuxt/fonts", "@nuxt/eslint", "nuxt-vuefire", "vuetify-nuxt-module", "@sentry/nuxt/module"],
 
   fonts: {
     families: [{ name: "Roboto", provider: "fontsource" }],
@@ -104,4 +100,15 @@ export default defineNuxtConfig({
   },
 
   css: ["v-network-graph/lib/style.css"],
+
+  sentry: {
+    sourceMapsUploadOptions: {
+      org: "romb",
+      project: "koryta-pl",
+    },
+  },
+
+  sourcemap: {
+    client: "hidden",
+  },
 });
