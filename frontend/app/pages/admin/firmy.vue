@@ -84,15 +84,13 @@ definePageMeta({
 });
 
 interface CompanyScoredEditable {
-  // RTDB name takes precedence
+  // DB name takes precedence
   name: string;
 
   // From rejestr.io and its derivatives
   krsNumber?: string;
   score?: string;
   importedFromRejestr: boolean
-
-  // From the RTDB /company entity
   entityID?: string;
 }
 

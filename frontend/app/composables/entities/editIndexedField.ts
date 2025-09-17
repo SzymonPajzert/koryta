@@ -1,6 +1,3 @@
-import { set, ref as dbRef } from "firebase/database";
-
-
 /** Type of the key identifying currently set value */
 type IndexT = string;
 
@@ -14,7 +11,7 @@ export function useEditIndexedField<ValueT, StructT>(
 ) {
   const key = ref<IndexT | undefined>(undefined);
   const value = ref<ValueT | undefined>(undefined);
-  const db = useDatabase();
+  const db = useFirestore();
 
   function start(keyEdit: string, valueEdit: StructT) {
     key.value = keyEdit;

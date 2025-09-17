@@ -1,6 +1,5 @@
 import { computed } from "vue";
 import { useAuthState } from "@/composables/auth"; // Assuming auth store path
-import { ref as dbRef, set, remove, getDatabase } from "firebase/database";
 import type { Article } from "@/../shared/model";
 
 export interface EnrichedStatus {

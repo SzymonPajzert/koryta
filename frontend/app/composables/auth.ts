@@ -1,6 +1,5 @@
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { ref } from "vue";
-import { ref as dbRef, get } from "firebase/database"
 
 const user = ref<User | null>();
 const isAdmin = ref<boolean>(false);
@@ -10,7 +9,7 @@ const pictureURL = ref("")
 export function useAuthState() {
   const auth = useFirebaseAuth()!;
   const router = useRouter();
-  const db = useDatabase();
+  const db = useFirestore();
 
   onAuthStateChanged(auth, (userIn) => {
     user.value = userIn;

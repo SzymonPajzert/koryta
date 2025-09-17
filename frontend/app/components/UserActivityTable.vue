@@ -22,9 +22,7 @@
 <script lang="ts" setup>
 import { computed } from "vue";
 import { useAuthState } from "@/composables/auth"; // Assuming auth store path
-import { ref as dbRef } from "firebase/database";
-const { user, isAdmin } = useAuthState();
-const db = useDatabase();
+const { user } = useAuthState();
 
 interface UserSuggestionTypes {
   data?: Record<string, unknown>;
@@ -47,19 +45,7 @@ interface UserActivityStat {
 
 const allUsersData = computed<Record<string, UserProfileData> | undefined>(
   () => {
-    if (!user.value) return;
-    if (isAdmin.value) {
-      return useRTDB<Record<string, UserProfileData>>(dbRef(db, "user")).value;
-    }
-
-    const uid = user.value.uid;
-    const userData = useRTDB<UserProfileData>(dbRef(db, `user/${uid}`));
-    return computed(() => {
-      if (!userData.value) return;
-      const result: Record<string, UserProfileData> = {};
-      result[uid] = userData.value;
-      return result;
-    }).value;
+    return undefined;
   },
 );
 
