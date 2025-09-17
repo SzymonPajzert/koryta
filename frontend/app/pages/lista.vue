@@ -3,16 +3,13 @@
 </template>
 
 <script lang="ts" setup>
-import { createEntityStore } from "@/stores/entity";
 import { useParams } from "@/composables/params";
 
 definePageMeta({
   title: "Lista",
 });
 
-const useListEntities = createEntityStore("employed");
-const entitiesStore = useListEntities();
-const { entities: peopleUnfiltered } = storeToRefs(entitiesStore);
+const { entities: peopleUnfiltered } = await useEntity("person");
 
 const { filtered } = useParams("Lista ");
 

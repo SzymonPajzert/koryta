@@ -60,10 +60,12 @@
         <v-chip
           :border="`${goodStatus(value)} thin opacity-25`"
           :color="goodStatus(value)"
-          :text="value ? 'Tak' : (item.krsNumber ? 'Zobacz' : 'Brak')"
+          :text="value ? 'Tak' : item.krsNumber ? 'Zobacz' : 'Brak'"
           size="x-small"
           :href="
-            item.krsNumber ? `https://rejestr.io/krs/${item.krsNumber}` : undefined
+            item.krsNumber
+              ? `https://rejestr.io/krs/${item.krsNumber}`
+              : undefined
           "
           target="_blank"
         />
@@ -74,9 +76,8 @@
 
 <script lang="ts" setup>
 import type { VDataTable } from "vuetify/components";
-import type { Link, Company } from "~~/shared/model";
-import { toNumber, useCompanyScore } from "@/composables/entities/companyScore";
-import { useEditIndexedField } from "~/composables/entities/editIndexedField";
+import type { Company } from "~~/shared/model";
+import { useEditIndexedField } from "~/composables/editIndexedField";
 
 definePageMeta({
   fullWidth: true,
@@ -90,19 +91,19 @@ interface CompanyScoredEditable {
   // From rejestr.io and its derivatives
   krsNumber?: string;
   score?: string;
-  importedFromRejestr: boolean
+  importedFromRejestr: boolean;
   entityID?: string;
 }
 
-const { scores } = useCompanyScore();
-const useCompanyStore = createEntityStore("company");
-const companyStore = useCompanyStore();
-const { entities } = storeToRefs(companyStore);
+const { entities } = await useEntity("place");
 
 const search = ref("");
 
-const COMPANY_FIELD : keyof Company = "krsNumber" as const;
-function setKRSOperation(entityKey: string, krsNumber: string): [string, string] {
+const COMPANY_FIELD: keyof Company = "krsNumber" as const;
+function setKRSOperation(
+  entityKey: string,
+  krsNumber: string,
+): [string, string] {
   return [`company/${entityKey}/${COMPANY_FIELD}`, krsNumber];
 }
 
@@ -114,14 +115,12 @@ const editKRS = useEditIndexedField(
 );
 const { key: editKRSCompanyKey, value: editKRSValue } = editKRS;
 
-const editConnection = useEditIndexedField<
-  Link<"company">,
-  Link<"company">
->(
+const editConnection = useEditIndexedField<Link<"company">, Link<"company">>(
   (linked) => linked,
   (krsNumber, linked) => setKRSOperation(linked.id, krsNumber),
 );
-const { key: editConnectionKRSNumber, value: editConnectionValue } = editConnection;
+const { key: editConnectionKRSNumber, value: editConnectionValue } =
+  editConnection;
 
 type ReadonlyHeaders = VDataTable["$props"]["headers"];
 const headers: ReadonlyHeaders = [

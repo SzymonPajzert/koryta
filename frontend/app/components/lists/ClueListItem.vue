@@ -1,8 +1,5 @@
 <template>
-  <v-list-item
-    :variant="activeItem ? 'tonal' : 'flat'"
-    @click="setActive()"
-  >
+  <v-list-item :variant="activeItem ? 'tonal' : 'flat'" @click="setActive()">
     <v-row align="center">
       <v-col cols="12" sm="7" md="8">
         <div class="font-weight-bold">{{ person.name }}</div>
@@ -20,11 +17,7 @@
           :key="comment"
           class="text-caption text-blue-grey-darken-1 mt-2"
         >
-          <v-icon
-            size="x-small"
-            start
-            icon="mdi-comment-quote-outline"
-          />
+          <v-icon size="x-small" start icon="mdi-comment-quote-outline" />
           <em>{{ comment }}</em>
         </div>
         <div
@@ -76,8 +69,8 @@
           variant="text"
           @click="setValue('unknown')"
         >
-          <v-icon v-if="person.status === 'unknown'" color="warning"/>
-          <v-icon v-else/>
+          <v-icon v-if="person.status === 'unknown'" color="warning" />
+          <v-icon v-else />
         </v-btn>
       </div>
       <div class="d-flex flex-sm-column ga-1">
@@ -110,8 +103,8 @@
           variant="text"
           @click="toggleEditing('person')"
         >
-          <v-icon v-if="person.person" color="success"/>
-          <v-icon v-else/>
+          <v-icon v-if="person.person" color="success" />
+          <v-icon v-else />
         </v-btn>
       </div>
     </template>
@@ -140,11 +133,11 @@
             hide-details
           />
         </div>
-        <EntityPicker
+        <FormEntityPicker
           v-if="editingType === 'person'"
           v-model="pickedPerson"
           label="Połącz z osobą"
-          entity="employed"
+          entity="person"
         />
 
         <div class="d-flex justify-end mt-3">
@@ -160,26 +153,22 @@
 </template>
 
 <script setup lang="ts">
-import type { Link, PersonRejestr } from "~~/shared/model";
-import EntityPicker from "@/components/forms/EntityPicker.vue";
-import type { CompanyMembership } from "@/composables/entities/companyScore";
-
-const db = useDatabase();
-
-const { person, companies } = defineProps<{
-  person: PersonRejestr;
-  companies: CompanyMembership[];
-}>();
-
 type EditType = "comment" | "link" | "person";
 
 const editingItemId = ref<string | null>(null);
 const editingType = ref<EditType | null>(null);
 const activeItem = ref<boolean>(false);
 
+const person = ref({
+  name: "",
+  id: "",
+  rejestr_io_id: "",
+  score: 0,
+});
 const tempComment = ref<string>();
 const tempLink = ref<string>();
-const pickedPerson = ref<Link<"employed"> | undefined>();
+const pickedPerson = ref<string | undefined>();
+const companies = [];
 
 function setActive() {
   activeItem.value = !activeItem.value;
@@ -187,32 +176,39 @@ function setActive() {
 
 function toggleEditing(editType: EditType) {
   if (
-    editingItemId.value === person.external_basic.id &&
+    editingItemId.value === person.value.id &&
     editingType.value === editType
   ) {
     cancelEdit();
     return;
   }
-  editingItemId.value = person.external_basic.id;
+  editingItemId.value = person.value.id;
   editingType.value = editType;
 }
 function openExploration() {
   activeItem.value = true;
 
-  window.open("https://www.google.com/search?q=" + person.name, "_blank");
+  window.open("https://www.google.com/search?q=" + person.value.name, "_blank");
   window.open(
-    "https://www.google.com/search?q=" + person.name + " pkw",
+    "https://www.google.com/search?q=" + person.value.name + " pkw",
     "_blank",
   );
   companies.forEach((company) => {
-    window.open("https://www.google.com/search?q=" + `${person.name} ${company.name}`, "_blank");
+    window.open(
+      "https://www.google.com/search?q=" +
+        `${person.value.name} ${company.name}`,
+      "_blank",
+    );
   });
   window.open(
-    "https://www.google.com/search?q=" + person.name + " pkw",
+    "https://www.google.com/search?q=" + person.value.name + " pkw",
     "_blank",
   );
   // rejestr.io is always last, so we can check out the person's history easily
-  window.open("https://rejestr.io/osoby/" + person.external_basic.id, "_blank");
+  window.open(
+    "https://rejestr.io/osoby/" + person.value.rejestr_io_id,
+    "_blank",
+  );
 }
 function cancelEdit() {
   tempComment.value = undefined;
@@ -222,27 +218,14 @@ function cancelEdit() {
   editingType.value = null;
 }
 function saveEdit() {
-  if (editingType.value === "comment") {
-    push(
-      dbRef(db, `external/rejestr-io/person/${editingItemId.value}/comment`),
-      tempComment.value,
-    );
-  } else if (editingType.value === "link") {
-    push(
-      dbRef(db, `external/rejestr-io/person/${editingItemId.value}/link`),
-      tempLink.value,
-    );
-  } else if (editingType.value === "person") {
-    set(
-      dbRef(db, `external/rejestr-io/person/${editingItemId.value}/person`),
-      pickedPerson.value,
-    );
-  }
+  // TODO save comment
+  // TODO save link
+  // TODO save person association
   cancelEdit();
 }
 
 function scoreColor() {
-  const score = person.score ?? 0;
+  const score = person.value.score ?? 0;
   if (score > 0) return "positive";
   if (score < 0) return "negative";
   return "neutral";
@@ -257,20 +240,14 @@ function companyColors(company: CompanyMembership) {
   return good;
 }
 
-function setValue(value: PersonRejestr["status"]) {
-  person.status = value;
-  set(
-    dbRef(db, `external/rejestr-io/person/${person.external_basic.id}/status`),
-    value,
-  );
+function setValue(_value: unknown) {
+  // TODO I'm not sure what
+  // external/rejestr-io/person/${person.external_basic.id}/status was
 }
 
 function addValue(value: number) {
-  person.score = (person.score ?? 0) + value;
-  set(
-    dbRef(db, `external/rejestr-io/person/${person.external_basic.id}/score`),
-    person.score,
-  );
+  person.value.score = (person.value.score ?? 0) + value;
+  // TODO set it in DB as well
 }
 </script>
 

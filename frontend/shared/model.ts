@@ -1,15 +1,3 @@
-export interface Textable {
-  text: string;
-}
-export interface Nameable {
-  name: string;
-}
-export interface Connection<D extends Destination> {
-  text: string;
-  connection?: Link<D>;
-  relation: string;
-}
-
 export type Node = {
   name: string;
   type: NodeType;
@@ -25,26 +13,18 @@ export type EdgeType =
   | "owns"
   | "comment";
 
-// TODO Get rid of destination
-// Top level types represented by their own path in the DB.
-export type Destination = "employed" | "company" | "data";
-
-export const destinationToNodeType: Record<Destination, NodeType> = {
-  employed: "person",
-  company: "place",
-  data: "article",
+export const nodeTypeIcon: Record<NodeType, string> = {
+  person: "mdi-account-outline",
+  place: "mdi-office-building-outline",
+  article: "mdi-file-document-outline",
+  record: "mdi-file-document-outline",
 };
 
-export const destinationIcon: Record<Destination, string> = {
-  employed: "mdi-account-outline",
-  company: "mdi-office-building-outline",
-  data: "mdi-file-document-outline",
-};
-
-export const destinationAddText: Record<Destination, string> = {
-  employed: "Dodaj osobę",
-  company: "Dodaj firmę",
-  data: "Dodaj artykuł",
+export const destinationAddText: Record<NodeType, string> = {
+  person: "Dodaj osobę",
+  place: "Dodaj firmę",
+  article: "Dodaj artykuł",
+  record: "Dodaj rekord",
 };
 
 export interface Edge {
@@ -55,18 +35,19 @@ export interface Edge {
   type: EdgeType;
 }
 
-export interface Person extends Nameable {
+export interface Person {
   name: string;
   parties?: string[];
 }
 
-export interface Company extends Nameable {
+export interface Company {
   name: string;
   krsNumber?: string;
   nipNumber?: string;
 }
 
-export interface Article extends Nameable {
+export interface Article {
+  name: string;
   sourceURL: string;
   shortName?: string;
   estimates: {
@@ -74,53 +55,9 @@ export interface Article extends Nameable {
   };
 }
 
-interface RejestrCompany {
-  id: string;
-  nazwy: {
-    skrocona: string;
-  };
-}
-
-export interface KRSCompany extends Nameable {
-  external_basic?: RejestrCompany;
-  basic?: RejestrCompany;
-  connections?: Record<
-    string,
-    { state: "aktualne" | "historyczne"; type: "person" | "org" }
-  >;
-}
-
-export interface PersonRejestr extends Nameable {
-  external_basic: {
-    id: string;
-    state: "aktualne" | "historyczne";
-    tozsamosc: {
-      data_urodzenia: string;
-    };
-  };
-
-  comment?: Record<string, string>;
-  link?: Record<string, string>;
-  status?: "unknown";
-  score?: number;
-  person?: Link<"employed">;
-}
-
-export interface DestinationTypeMap {
-  employed: Person;
-  company: Company;
-  data: Article;
-  "external/rejestr-io/krs": KRSCompany;
-  "external/rejestr-io/person": PersonRejestr;
-}
-
-export class Link<T extends Destination> {
-  public readonly type: T;
-  public readonly id: string;
-  public readonly text: string;
-  constructor(type: T, id: string, text: string) {
-    this.type = type;
-    this.id = id;
-    this.text = text;
-  }
+export interface NodeTypeMap {
+  person: Person;
+  place: Company;
+  article: Article;
+  record: never;
 }

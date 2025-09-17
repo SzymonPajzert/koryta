@@ -27,7 +27,7 @@
           </v-card-title>
           <v-card-text>
             <ClientOnly>
-              <TreemapPartyChart />
+              <ChartTreemapParty />
             </ClientOnly>
           </v-card-text>
         </v-card>
@@ -70,21 +70,17 @@
         </v-card>
       </v-col>
 
-      <HomeItem router="pomoc" icon="mdi-plus-box-outline">
+      <CardHomeItem router="pomoc" icon="mdi-plus-box-outline">
         <template #header> Dodaj osoby i artykuły </template>
         Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do
         artykułów wypisujących je.
-      </HomeItem>
+      </CardHomeItem>
     </v-row>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
-import { createEntityStore } from "@/stores/entity";
-
-const useListEntity = createEntityStore("employed");
-const entityStore = useListEntity();
-const { entities: people } = storeToRefs(entityStore);
+const { entities: people } = await useEntity("person");
 const { koryciarz } = useFeminatyw();
 </script>

@@ -1,6 +1,6 @@
 <template>
   <div class="position-absolute top-0 ma-4">
-    <v-card v-if="type == 'employed'" width="100%">
+    <v-card v-if="type == 'person'" width="100%">
       <v-card-title class="headline">
         <PartyChip v-for="party in person?.parties" :key="party" :party />
         <h2 class="text-h5 font-weight-bold">
@@ -18,7 +18,7 @@
           cols="12"
           md="6"
         >
-          <ShortNode :edge="edge" />
+          <CardShortNode :edge="edge" />
         </v-col>
       </v-row>
     </div>
@@ -33,7 +33,7 @@
           cols="12"
           md="6"
         >
-          <ShortNode :edge="edge" />
+          <CardShortNode :edge="edge" />
         </v-col>
       </v-row>
     </div>

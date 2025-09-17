@@ -15,9 +15,9 @@
       <v-card-text class="overflow-y-auto">
         <v-tabs-window v-model="currentDialog">
           <v-tabs-window-item value="-1">
-            <OpenAbstractDialog dialog="data" />
-            <OpenAbstractDialog dialog="employed" />
-            <OpenAbstractDialog dialog="company" />
+            <OpenAbstractDialog dialog="article" />
+            <OpenAbstractDialog dialog="person" />
+            <OpenAbstractDialog dialog="place" />
           </v-tabs-window-item>
           <v-tabs-window-item
             v-for="(dialog, id) in dialogs"
@@ -38,9 +38,9 @@
                   @submit="dialogStore.close(id, true)"
                 />
               </v-card-text>
-              <v-divider/>
+              <v-divider />
               <v-card-actions>
-                <v-spacer/>
+                <v-spacer />
 
                 <v-btn
                   text="Anuluj"
@@ -82,27 +82,29 @@
 // It's a replacement for just listing unique types of all the dialog components.
 import { useDialogStore, config } from "@/stores/dialog";
 import { storeToRefs } from "pinia";
-import AddCompanyDialog from "@/components/dialog/AddCompanyDialog.vue";
-import AddArticleDialog from "@/components/dialog/AddArticleDialog.vue";
-import AddEmployedDialog from "@/components/dialog/AddEmployedDialog.vue";
-import type { Destination, DestinationTypeMap } from "~~/shared/model";
+import type { NodeType, NodeTypeMap } from "~~/shared/model";
+import {
+  DialogAddEmployed,
+  DialogAddCompany,
+  DialogAddArticle,
+} from "#components";
 
 const dialogStore = useDialogStore();
 const { dialogs, shown, currentDialog, showSnackbar } =
   storeToRefs(dialogStore);
 
-function lookupComponent<D extends Destination>(
-  d: D,
-): Component<{ modelValue: DestinationTypeMap[D] }>;
-function lookupComponent<D extends Destination>(d: D) {
-  if (d == "employed") {
-    return AddEmployedDialog;
+function lookupComponent<N extends NodeType>(
+  n: N,
+): Component<{ modelValue: NodeTypeMap[N] }>;
+function lookupComponent<N extends NodeType>(n: N) {
+  if (n == "person") {
+    return DialogAddEmployed;
   }
-  if (d == "company") {
-    return AddCompanyDialog;
+  if (n == "place") {
+    return DialogAddCompany;
   }
-  if (d == "data") {
-    return AddArticleDialog;
+  if (n == "article") {
+    return DialogAddArticle;
   }
 
   return undefined as unknown;

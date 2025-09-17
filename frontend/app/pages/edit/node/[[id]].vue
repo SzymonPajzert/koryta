@@ -17,6 +17,7 @@
 <script setup lang="ts">
 import { getFirestore, doc } from "firebase/firestore";
 import type { Person } from "~~/shared/model";
+import { parties } from "~~/shared/misc";
 
 definePageMeta({
   middleware: "auth",
@@ -32,6 +33,5 @@ console.log(value);
 
 const current = ref<Person>({ name: "", parties: [] });
 
-const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);
 </script>

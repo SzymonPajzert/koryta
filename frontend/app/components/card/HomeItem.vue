@@ -11,13 +11,13 @@
     >
       <template #title>
         <h2 class="text-h5 font-weight-bold">
-          <slot name="header"/>
+          <slot name="header" />
         </h2>
       </template>
 
       <template #subtitle>
         <div class="text-subtitle-1">
-          <slot/>
+          <slot />
         </div>
       </template>
     </v-card>

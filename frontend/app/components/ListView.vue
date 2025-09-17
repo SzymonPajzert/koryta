@@ -14,7 +14,7 @@
           rounded="lg"
           variant="tonal"
           height="100%"
-          @click="showUser(key)"
+          :to="`/entity/person/${key}`"
         >
           <template #title>
             <PartyChip v-for="party in person.parties" :key="party" :party />
@@ -55,11 +55,6 @@ import { useDialogStore } from "@/stores/dialog"; // Import the new store
 
 const dialogStore = useDialogStore();
 const { isAdmin } = useAuthState();
-const router = useRouter();
-
-function showUser(key: string) {
-  router.push(`/entity/employed/${key}`);
-}
 
 const { people } = defineProps<{ people: Record<string, Person> }>();
 const peopleOrdered = computed<[string, Person][]>(() => {

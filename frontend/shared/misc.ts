@@ -1,5 +1,15 @@
 import type { Article } from "./model";
 
+export const parties = [
+  "PO",
+  "PiS",
+  "PSL",
+  "Polska 2050",
+  "Nowa Lewica",
+  "Konfederacja",
+  "Razem",
+];
+
 export const partyColors = {
   PO: "#fca241",
   PiS: "#073b76",

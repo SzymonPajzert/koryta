@@ -41,22 +41,20 @@
 </template>
 
 <script lang="ts" setup>
-import { useDBUtils } from "@/composables/model";
 import type { EdgeType } from "~~/shared/model";
-const { newKey } = useDBUtils();
 
 const connections = ref({});
 const keys = ref(Object.keys(connections.value));
 
 const props = defineProps<{
-    title: string
-    edgeType: EdgeType
-    sourceId: string
-    edgeReverse?: boolean
-  }>();
+  title: string;
+  edgeType: EdgeType;
+  sourceId: string;
+  edgeReverse?: boolean;
+}>();
 
 const addItem = () => {
-  const key = newKey();
+  const key = "12345";
   connections.value[key] = undefined;
   keys.value.push(key);
 };

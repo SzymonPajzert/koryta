@@ -1,5 +1,5 @@
 <template>
-  <MultiDialog />
+  <DialogMulti />
   <v-app-bar>
     <v-img
       class="mx-2"
@@ -7,6 +7,8 @@
       max-height="40"
       max-width="40"
       contain
+      style="cursor: pointer"
+      @click="$router.push('/')"
     />
     <v-app-bar-title
       v-if="mdAndUp"
@@ -61,7 +63,6 @@
 import { onMounted, computed } from "vue";
 import { getAnalytics, logEvent } from "firebase/analytics";
 import { useAuthState } from "@/composables/auth";
-import MultiDialog from "~/components/dialog/MultiDialog.vue";
 import { useDisplay } from "vuetify";
 
 if (import.meta.client) {
