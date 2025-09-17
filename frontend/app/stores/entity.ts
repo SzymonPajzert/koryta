@@ -23,7 +23,7 @@ export function createEntityStore<D extends Destination>(entity: D) {
       _d: D,
       _editKey: string | undefined,
     ) {
-      return {}
+      return {key: "0"}
     }
 
     return { entities, submit };

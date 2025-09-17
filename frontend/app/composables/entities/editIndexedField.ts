@@ -11,7 +11,6 @@ export function useEditIndexedField<ValueT, StructT>(
 ) {
   const key = ref<IndexT | undefined>(undefined);
   const value = ref<ValueT | undefined>(undefined);
-  const db = useFirestore();
 
   function start(keyEdit: string, valueEdit: StructT) {
     key.value = keyEdit;
@@ -32,7 +31,7 @@ export function useEditIndexedField<ValueT, StructT>(
     setPaths.forEach((setter) => {
       const [path, v] = setter(key.value!, value.value!);
       console.debug(path, v);
-      set(dbRef(db, path), v)
+      throw new SyntaxError("This is not implemented")
     });
 
     stop();
