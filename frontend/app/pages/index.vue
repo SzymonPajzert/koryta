@@ -2,7 +2,7 @@
   <div>
     <v-row>
       <v-col cols="12" md="5" class="text-center">
-        <v-img position="center" height="300" src="@/assets/logo.png"/>
+        <v-img position="center" height="300" src="@/assets/logo.png" />
         <v-btn variant="elevated" color="primary" class="ma-2" to="/pomoc">
           <v-icon>mdi-hand</v-icon> Zgłoś się do pomocy
         </v-btn>
@@ -30,7 +30,7 @@
 
       <v-col cols="12" md="6">
         <v-card
-          to="/graf?miejsce=-OTOq2CpVuIll16NmukB"
+          to="/graf?miejsce=0qGH8AL9bwUCQvrLNwiO"
           class="py-4"
           color="surface-variant"
           variant="tonal"
@@ -48,7 +48,7 @@
       </v-col>
       <v-col cols="12" md="6">
         <v-card
-          to="/graf?miejsce=-OTP58QPQ2cUXMgPn7UL"
+          to="/graf?miejsce=YLMeu6hJgYGUokxec9D8"
           class="py-4"
           color="surface-variant"
           variant="tonal"
