@@ -12,6 +12,8 @@
 	- LATER Remove Company.owner and manager fields
 		- https://github.com/SzymonPajzert/koryta/issues/44
 -
+- [[pages/pomoc/problemy]] checks that all nodes are good
+-
 - | Entity | Where modeled |
   | --- | --- |
   | #entity/person | #RTDB |
