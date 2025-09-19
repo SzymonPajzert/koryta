@@ -1,0 +1,8 @@
+- TODO allow users to suggest changes [[iteration/25W38]]
+	- Change content - add a new node in [[Firestore/nodes]]
+		- Reference to the existing node
+		- Never private
+		- User owner set
+	- Add a link
+		- Same as for the nodes, but the edge is created instead of the node
+- TODO Support merges as well

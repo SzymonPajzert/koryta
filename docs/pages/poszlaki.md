@@ -1,0 +1,60 @@
+- #idea - OSiRy średnio działają. Możnaby w sumie zrobić sobie listę wszystkich, i pchać narrację, że może gdybyśmy mieli ogarniętych dyrektorów, to nie mielibyśmy problemów, zamkniętych w wakację albo pomylonych rejestracji. Kuba Taratuta o tym mówił.
+-
+- [[list of interesting articles]]
+-
+- ### Polska spółka gazownictwa - Bydgoszcz - Darek - Rejestr
+  collapsed:: true
+	- [Polska Spółka Gazownictwa rada nadzorcza - Szukaj w Google](https://www.google.com/search?q=Polska+Sp%C3%B3%C5%82ka+Gazownictwa+rada+nadzorcza&sca_esv=7f0bd94c4cf1a1fb&sxsrf=AE3TifPthTNmOLf9LDVwE8xuP5GN-YKmTw%3A1753713232382&ei=UIqHaKSEF_-rwPAPtNaH-Ag&ved=0ahUKEwik7IPy4t-OAxX_FRAIHTTrAY8Q4dUDCBA&uact=5&oq=Polska+Sp%C3%B3%C5%82ka+Gazownictwa+rada+nadzorcza&gs_lp=Egxnd3Mtd2l6LXNlcnAiKlBvbHNrYSBTcMOzxYJrYSBHYXpvd25pY3R3YSByYWRhIG5hZHpvcmN6YTIFEAAYgAQyBRAAGO8FMggQABiABBiiBDIIEAAYgAQYogRIvxhQlAJYpBdwA3gBkAEAmAGoAaABrxCqAQQwLjE3uAEDyAEA-AEBmAIUoAKJEcICChAAGLADGNYEGEfCAg0QABiABBiwAxhDGIoFwgIOEAAYsAMY5AIY1gTYAQHCAhkQLhiABBiwAxjRAxhDGMcBGMgDGIoF2AEBwgIKEAAYgAQYQxiKBcICCxAuGIAEGMcBGK8BwgIOEC4YgAQYxwEYjgUYrwHCAgYQABgWGB7CAhoQLhiABBjHARivARiXBRjcBBjeBBjgBNgBAcICCBAAGKIEGIkFwgIFECEYoAHCAgQQIRgVwgIFECEYnwWYAwCIBgGQBhO6BgYIARABGAmSBwQzLjE3oAevarIHBDAuMTe4B_QQwgcGMC44LjEyyAdK&sclient=gws-wiz-serp)
+	- [Polska Spółka Gazownictwa - O Spółce](https://www.psgaz.pl/o-spolce)
+	- [Dariusz Gręzicki bydgoszcz - Szukaj w Google](https://www.google.com/search?sca_esv=7f0bd94c4cf1a1fb&sxsrf=AE3TifNV0z-u34T5ACI5NmU51LFIDma--Q:1753811479467&q=Dariusz+Gr%C4%99zicki+bydgoszcz&tbm=nws&source=lnms&fbs=AIIjpHwW-0r_Aj4UyfJvqQzQzjQGITTmC230_MNxN_VvYo5ocHop9ov5eCakTC7Zhh19Os6Spl7OyrGWt6JCOSAH8pp3Br44MUtU4FlZtpREcg3VNeOBFMlbMTFQha0Etxo3UREArY9-4pYZ0RlHqTRCNPf1s9cOIM_geC9ATpi5pfDDCkKYy6Wa7ZJcNofACZjfHF5sJuaYQ_IER-AkcqjoFSugVA7_Bg&sa=X&ved=2ahUKEwiwj_Lx0OKOAxWjHhAIHfs5GDUQ0pQJegQIFBAB&biw=1470&bih=805&dpr=2)
+	- [bydgoszcz24.pl](https://bydgoszcz24.pl/article/dariusz-grezicki-czyli-konrada-mikolajskiego-preferencje-kadrowe)
+	- [bydgoszcz24.pl](https://bydgoszcz24.pl/article/dariusz-grezicki-czyli-konrada-mikolajskiego-preferencje-kadrowe)
+	- [PiS „wzięło” spółki Skarbu Państwa. Platforma obsadziła swoimi ludźmi spółki samorządowe | Express Bydgoski](https://expressbydgoski.pl/pis-wzielo-spolki-skarbu-panstwa-platforma-obsadzila-swoimi-ludzmi-spolki-samorzadowe/ar/c3-10779158)
+	- [Dariusz Gręzicki | Powiązania | Rejestr.io](https://rejestr.io/osoby/422095/dariusz-grezicki)
+	- [Bydgoska ProNatura z wizytą w ukraińskim Krzemieńczuku](https://www.bydgoszcz.com/artykul/1666,bydgoska-pronatura-z-wizyta-w-ukrainskim-krzemienczuku)
+	- [ProNatura przyjmie na praktyki uczniów Zespołu Szkół Chemicznych](https://metropoliabydgoska.pl/pronatura-przyjmie-na-praktyki-uczniow-zespolu-szkol-chemicznych/)
+	- [(64) Dariusz Grezicki | LinkedIn](https://www.linkedin.com/in/dariusz-grezicki-2b0b123/?originalSubdomain=pl)
+	- [bydgoszcz24.pl](https://bydgoszcz24.pl/article/dariusz-grezicki-czyli-konrada-mikolajskiego-preferencje-kadrowe)
+	- [Paweł Głogowski z inicjatywy Ulepsz Poznań odwiedza Kawa Festival [CYKL: Co pan robi w weekend?]](https://poznan.wyborcza.pl/poznan/7,105531,21265578,pawel-glogowski-z-inicjatywy-ulepsz-poznan-odwiedza-kawa-festival.html)
+	- [Porozumienie polsko-włoskie – Sozosfera - ochrona środowiska](https://sozosfera.pl/odpady/porozumienie-polsko-wloskie/)
+	- [(64) Paweł Głogowski | LinkedIn](https://www.linkedin.com/in/pawelglogowski/?originalSubdomain=pl)
+	- [https://rejestr.io/osoby/1166568/jacek-zielinski](https://rejestr.io/osoby/1166568/jacek-zielinski) - Jacek Zieliński, wydaje się być zaagnażowany politycznie
+- ### Z ostatniej chwili - 6 osób
+  collapsed:: true
+	- [https://polityka.se.pl/wiadomosci/desant-dzialaczy-lewicy-na-pfron-z-partia-zwiazanych-jest-6-na-8-nowych-dyrektoro-aa-xeFK-kvKt-7x49.html](https://polityka.se.pl/wiadomosci/desant-dzialaczy-lewicy-na-pfron-z-partia-zwiazanych-jest-6-na-8-nowych-dyrektoro-aa-xeFK-kvKt-7x49.html)
+- ### Timely - Dior Świdnica upada
+  collapsed:: true
+	- [https://gazetawroclawska.pl/koniec-wielkiej-historii-diory-swidnica-maciej-rojek-jest-kupiec-diore-mozna-jeszcze-uratowac-co-zrobi-agencja-rozwoju-przemyslu/ar/c3p2-27707705](https://gazetawroclawska.pl/koniec-wielkiej-historii-diory-swidnica-maciej-rojek-jest-kupiec-diore-mozna-jeszcze-uratowac-co-zrobi-agencja-rozwoju-przemyslu/ar/c3p2-27707705)
+	- [https://polityka.se.pl/wiadomosci/posel-robert-jagla-o-sytuacji-diory-swidnica-prezes-mial-postawic-firme-na-nogi-ale-tylko-ja-zepsul-aa-jKFD-NAXv-YMY7.html](https://polityka.se.pl/wiadomosci/posel-robert-jagla-o-sytuacji-diory-swidnica-prezes-mial-postawic-firme-na-nogi-ale-tylko-ja-zepsul-aa-jKFD-NAXv-YMY7.html)
+	- AGNIESZKA KATARZYNA ZIELIŃSKA - Była w komitecie wyborczym w 2024 Marian Błachut z  OK Polska, powiązane z Polska 2050
+	- Prezes MACIEJ MIECZYSŁAW ROJEK z PiSu
+	- MARIUSZ GRZEGORZ GREGORCZYK - [Startował w 2015 z list PSLu](https://parlament2015.pkw.gov.pl/351_Wyniki_Senat/5/0/4/021908.html)
+	- Ryszard Sobański - [Rada Seniorów](https://swietochlowice.pl/urzad/organy-doradcze-i-konsultacyjne/rada-seniorow/)
+		- Oraz prezydent - [https://swidnica24.pl/2015/03/swidnicki-samorzad-gospodarczy-wsparciem-dla-przedsiebiorcow/](https://swidnica24.pl/2015/03/swidnicki-samorzad-gospodarczy-wsparciem-dla-przedsiebiorcow/)
+	- [https://swidnica24.pl/2015/03/swidnicki-samorzad-gospodarczy-wsparciem-dla-przedsiebiorcow/](https://swidnica24.pl/2015/03/swidnicki-samorzad-gospodarczy-wsparciem-dla-przedsiebiorcow/)
+- [[Agencja Mienia Wojskowego]]
+- [[AMW Sineva]]
+- Inne spółki, też na PSL
+  collapsed:: true
+	- [https://wiadomosci.onet.pl/krakow/ze-szklarni-do-urzedu-czyli-jak-starosta-zatrudnil-corke-nepotyzm-w-podhalanskim-pis/z3d5xpn](https://wiadomosci.onet.pl/krakow/ze-szklarni-do-urzedu-czyli-jak-starosta-zatrudnil-corke-nepotyzm-w-podhalanskim-pis/z3d5xpn)
+	- [https://wiadomosci.onet.pl/kraj/burza-po-tekscie-onetu-wrze-w-obozie-wladzy-nie-na-to-sie-umawialismy/rdh5p8r](https://wiadomosci.onet.pl/kraj/burza-po-tekscie-onetu-wrze-w-obozie-wladzy-nie-na-to-sie-umawialismy/rdh5p8r)
+	- [https://wiadomosci.onet.pl/kraj/zielona-fala-nakryla-polska-kolej-ponad-20-ludzi-zwiazanych-z-psl-we-wladzach-spolek/mjc1n25](https://wiadomosci.onet.pl/kraj/zielona-fala-nakryla-polska-kolej-ponad-20-ludzi-zwiazanych-z-psl-we-wladzach-spolek/mjc1n25)
+	- [https://wiadomosci.onet.pl/kraj/trzesienie-ziemi-na-czele-totalizatora-sportowego-w-sieci-fala-komentarzy/zygln36](https://wiadomosci.onet.pl/kraj/trzesienie-ziemi-na-czele-totalizatora-sportowego-w-sieci-fala-komentarzy/zygln36)
+- Azoty
+  collapsed:: true
+	- Fundacja PARK, jej szefowa jest w azotach, wygląda trochę podejrzanie - [https://kedzierzynkozle.pl/pl/aktualnosc/fundacja-park-czyli-nowe-dziecko-kkpp](https://kedzierzynkozle.pl/pl/aktualnosc/fundacja-park-czyli-nowe-dziecko-kkpp)
+	- Tomasz Starowicz kim jest? Czy można go podłączyć jako politycznego, wtedy też będzie
+- [[Urząd Mazowiecki]]
+- [[Łódź]]
+- [[Warszawa]]
+-
+-
+- Lech Urbanowski
+	- To ja biorę na siebie zbadanie 1. ARiMR -  Kierowników biur powiatowych, 2. zarządów i rad nadzorczych spółek należących do gmin zrzeszonych w stowarzyszeniu Metropolia Warszawska
+- Warto jeszcze powiedzieć, że oni idą do tamtych miejsc bo w sumie słabo płacą politykom. Więc lepiej iść do dużej partii, ona Ci rozda stanowiska, jak przegrasz wybory albo nie to będzie dobrze #idea
+- Nie rozdzielaj ludzi na kompetencje, bo to jest slippery slope - ciężko postawić granicę i to nie jest nasza rola. #idea
+- Pokazuj gęby tych ludzi, więc są ich wizytówki na gminie powiatu miasta można stamtąd i nikt nie może nic powiedzieć. [[entity/person]]
+- Dodaj do disclaimera o źródłach że dla osób pełniących funkcje publiczne są oświadczenia podatkowe #idea
+	- Oświadczenia majątkowe dla każdej osoby wyskakuje
+-
+- [NFOŚiGW](https://docs.google.com/document/u/0/d/1HKZyy3VWkmIRdzwZxjoHjQDCXxmf_XbjM4wzwJu3eJI/edit)

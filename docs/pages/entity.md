@@ -1,4 +1,4 @@
-- Modeled in #Google/Firestore or #Google/RTDB
+- Modeled in #Firestore or #Google/RTDB
 -
 - TODO Some new entities
 	- Connection

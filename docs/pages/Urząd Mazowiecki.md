@@ -1,0 +1,58 @@
+- TODO #dump
+-
+- Przemysław Szymański - [https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/kancelaria-sejmiku.html](https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/kancelaria-sejmiku.html)
+	- [https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-rolnictwa-i-rozwoju-obszarow-wiejskich.html](https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-rolnictwa-i-rozwoju-obszarow-wiejskich.html)
+		- Radosław Rybicki
+		- Jacek Kaca - znowu legionowo
+	- [https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-rozwoju-regionalnego-i-funduszy-europejskich.html](https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-rozwoju-regionalnego-i-funduszy-europejskich.html)
+		- Marcin Wajda
+		- Aleksandra Szwed
+	- [https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-zdrowia-i-polityki-spolecznej.html](https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-zdrowia-i-polityki-spolecznej.html)
+		- Marzena Cendrowska
+- Marzena Cendrowska
+	- [https://www.wnp.pl/polityka-i-sondaze/osoba/marzena-cendrowska,197088.html](https://www.wnp.pl/polityka-i-sondaze/osoba/marzena-cendrowska,197088.html)
+- Aleksandra Szwed
+	- [https://samorzad2024.pkw.gov.pl/samorzad2024/en/rada_dzielnicy/kandydat/3360131](https://samorzad2024.pkw.gov.pl/samorzad2024/en/rada_dzielnicy/kandydat/3360131)
+	- [https://przedsiebiorcaroku.uw.edu.pl/kapitula-i-komisja-konkursu/aleksandra-szwed](https://przedsiebiorcaroku.uw.edu.pl/kapitula-i-komisja-konkursu/aleksandra-szwed)
+- Radosław Rybicki
+	- [https://www.facebook.com/p/Rados%C5%82aw-Rybicki-w-samorz%C4%85dzie-dla-Ciebie-61557489730387/?_rdr](https://www.facebook.com/p/Rados%C5%82aw-Rybicki-w-samorz%C4%85dzie-dla-Ciebie-61557489730387/?_rdr) - zdjęcie ze struzikiem
+	- [https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-rolnictwa-i-rozwoju-obszarow-wiejskich.html](https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-rolnictwa-i-rozwoju-obszarow-wiejskich.html)
+	- Pracuje w departamencie rolnictwa
+- Dariusz Klimaszewski
+	- [https://tustolica.pl/dariusz-klimaszewski-bylismy-slabo-reprezentowani_68579](https://tustolica.pl/dariusz-klimaszewski-bylismy-slabo-reprezentowani_68579)
+- GRAJDA Małgorzata Wioletta
+- Katarzyna Magdzińska
+	- [https://srodmiescie.um.warszawa.pl/-/katarzyna-magdzinska](https://srodmiescie.um.warszawa.pl/-/katarzyna-magdzinska)
+- Andrzej Różycki
+- Agnieszka Kuźmińska
+	- Na pewno startowała w wyborach
+- Paweł Martofel
+	- [https://srodmiescie.um.warszawa.pl/-/pawel-martofel](https://srodmiescie.um.warszawa.pl/-/pawel-martofel)
+- Mariola Niczyporuk
+	- [https://ipl.org.pl/mariola-niczyporuk-nasza-kandydatka-do-rady-dzielnicy-mokotow/](https://ipl.org.pl/mariola-niczyporuk-nasza-kandydatka-do-rady-dzielnicy-mokotow/)
+- [https://rembertow.um.warszawa.pl/-/nowa-rada-i-zarzad](https://rembertow.um.warszawa.pl/-/nowa-rada-i-zarzad)
+	- Marcin Ziętek osir
+		- Na pewno pracuje w osirze - [https://archiwum.osir.waw.pl/wp-content/uploads/2020/10/2020-10-19-Naprawa-systemu-dozuj%C4%85cego-w-p%C5%82ywalni-Wodnik-zapytanie-ofertowe.pdf](https://archiwum.osir.waw.pl/wp-content/uploads/2020/10/2020-10-19-Naprawa-systemu-dozuj%C4%85cego-w-p%C5%82ywalni-Wodnik-zapytanie-ofertowe.pdf)
+- Ośrodek Pomocy Społecznej Praga Południe
+- [https://pragapld.um.warszawa.pl/-/sklad-rady-dzielnicy-praga-poludnie](https://pragapld.um.warszawa.pl/-/sklad-rady-dzielnicy-praga-poludnie)
+- Jarosław Górczyński
+- Artur Łakomiec
+- Oraz już naprawdę losowe
+	- https://sport.um.warszawa.pl/waw/osir-pragapld/-/turniej-pilkarski-w-hali-siennicka-gralismy-dla-wosp
+	- https://sport.um.warszawa.pl/waw/osir-pragapld
+	- https://pragapld.um.warszawa.pl/waw/zgn-pragapld/-/kim-jestesmy
+	- https://samorzad2024.pkw.gov.pl/samorzad2024/en/rada_dzielnicy/kandydat/3260831
+	- https://www.google.com/search?q=Kinga+Ciukta+osir&oq=Kinga+Ciukta+osir&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIGCAEQLhhA0gEIMTIxMWowajGoAgCwAgA&sourceid=chrome&ie=UTF-8
+	- https://www.portalsamorzadowy.pl/osoba/kinga-ciukta,190672.html
+	- https://www.google.com/search?q=Kinga+Ciukta+przewodnicz%C4%85ca+komisji+rewizyjnej&oq=Kinga+Ciukta+przewodnicz%C4%85ca+komisji+rewizyjnej&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIGCAEQLhhA0gEINTg5N2owajGoAgCwAgA&sourceid=chrome&ie=UTF-8
+	- https://www.google.com/search?q=Kinga+Ciukta+osir&oq=Kinga+Ciukta+osir&gs_lcrp=EgZjaHJvbWUqBggAEEUYOzIGCAAQRRg7MgYIARAuGEDSAQc4MDRqMGoxqAIAsAIA&sourceid=chrome&ie=UTF-8
+	- https://sport.um.warszawa.pl/waw/osir-pragapld/-/szukamy-do-wspolpracy-instruktorki-lub-instruktora-zajec-z-aquaaerobicu
+	- https://archiwum.osir.waw.pl/wp-content/uploads/2020/12/2020-12-23-G%C5%82%C3%B3wny-Specjalista-w-Dziale-Programowym-wynik-naboru.pdf
+	- https://www.google.com/search?q=Bogdan+Jeziorski+osir&sca_esv=2dc8bb8b89129ca2&sxsrf=AE3TifNhMiq4ZjnLwulMmrUoia9nR3czRA:1753218804007&ei=9P5_aK4b06PdA7K-uokJ&start=10&sa=N&sstk=Ac65TH7KjBXKJFjjx8CPy_8hEkTKCwHD1J2wMkklaGaV3Npvnwk3ibYQLY9_Nm1G2Zo4o6GIf0ZywsxOdKNAhCE84mqf6EtYAzsxbA&ved=2ahUKEwiu5ZqAsdGOAxXTUXcKHTKfLpEQ8tMDegQIDBAG&biw=1470&bih=805&dpr=2
+	- https://www.facebook.com/story.php?story_fbid=1061015389377109&id=100064059732143&_rdr
+	- https://www.google.com/search?q=Ma%C5%82gorzata+Rynkiewicz+zgn&oq=Ma%C5%82gorzata+Rynkiewicz+zgn&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIGCAEQLhhA0gEIMTU3N2owajGoAgCwAgA&sourceid=chrome&ie=UTF-8
+	- https://pl.linkedin.com/in/magorzata-rynkiewicz-84536571
+	- https://bip.um.warszawa.pl/en/web/praga-poludnie/-/malgorzata-rynkiewicz
+	- https://www.portalsamorzadowy.pl/osoba/malgorzata-rynkiewicz,190656.html
+	- https://pragapld.um.warszawa.pl/-/sklad-rady-dzielnicy-praga-poludnie
+	-

@@ -1,0 +1,5 @@
+- Unstructured data submitted by users
+- URL - for quick reference if person wants to see it online
+- Text
+- References [[BigQuery/documents]] if exists
+- References [[Cloud Storage]]

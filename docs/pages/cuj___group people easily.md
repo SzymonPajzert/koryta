@@ -1,0 +1,12 @@
+- E.g. [[dane/stopalko]]
+- [[dane/fundacje rodzinne]]
+-
+- Highlight any case of failure for these people
+-
+- CSV - prepare a csv listing the people
+- Name - name the group
+- Submit it
+- It's sent to [[Cloud Storage]]
+- ingested into [[BigQuery/documents]]
+- [[Firestore/edges]]
+-

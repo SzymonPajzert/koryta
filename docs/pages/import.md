@@ -1,0 +1,8 @@
+- [[cuj/quick add]] [[dane/krs]] numbers added manually - probably as a list
+- TODO [[dane/krs]] - ingest [[rejestr.io]]
+-
+-
+-
+-
+- TODO [[Finish migration to Storage]]
+- LATER Create #BigQuery from the storage data

@@ -13,7 +13,7 @@
 -
 - Model
 	- Source - corresponds to [[dane]]
-		- ID - Link to [[Google/Storage]]
+		- ID - Link to [[Cloud Storage]]
 		- Type
 	- TODO Contains extracted values from the storage
 		- [[entity/record/company/name]]

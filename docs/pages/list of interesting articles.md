@@ -1,0 +1,6 @@
+- TODO [[cuj/quick add]] #import You can quickly add one or multiple, either raw link or a bracket, parenthesis format
+-
+- Format
+	- URL
+	- Note - why is it interesting
+- List of the articles - https://docs.google.com/spreadsheets/d/164YrVJhOvmOZoWIAFmE63pWtO4N1-pKxUBP2aQbxX-U/edit?gid=0#gid=0

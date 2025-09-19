@@ -1,0 +1,10 @@
+- TODO Add a small note
+	- Article URL
+	- KRS
+	- Link to Google Sheets or CSV
+	- Quick note
+	- TO DO item
+	- Person name
+		- With optional history
+	- TODO Either from main
+	- TODO Linked to the current entity if clicked there

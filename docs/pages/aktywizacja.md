@@ -7,4 +7,9 @@
 			- I know people
 		- How many people are going to be on the website - wisdom of the crowds just for fun
 	- TODO The form should be on the front page after #promocja
-- LATER Personal results for a client UID [[firestore]]
+- LATER Personal results for a client UID [[Firestore]]
+-
+- LATER some other ideas what to do
+	- Organize and manage people on the website
+	- Promote the website
+	-

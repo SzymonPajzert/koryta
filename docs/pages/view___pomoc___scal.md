@@ -1,4 +1,4 @@
-- TODO add a #firestore #entity/connection
+- TODO add a #Firestore #entity/connection
 	- DB - connect to actual entries
 		- entity_type
 		- id of the entity

@@ -1,4 +1,4 @@
-- #Google/Firestore from #Google/RTDB
+- #Firestore from #Google/RTDB
 -
 - DONE Move entities one by one
 - DONE fix ID references

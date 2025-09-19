@@ -1,0 +1,5 @@
+- #dump - #import other KRS companies with [[cuj/quick add]] #dump
+	-
+- A list of 10 letter strings representing a number
+- https://docs.google.com/spreadsheets/d/1Zk-hp0nZbDhi9TdhoA4kjkA2kSO_KAq6wp_l5V4rSYU
+	-
