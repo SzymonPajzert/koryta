@@ -161,7 +161,6 @@
 
 <script setup lang="ts">
 import type { Link, PersonRejestr } from "~~/shared/model";
-import { set, ref as dbRef, push } from "firebase/database";
 import EntityPicker from "@/components/forms/EntityPicker.vue";
 import type { CompanyMembership } from "@/composables/entities/companyScore";
 

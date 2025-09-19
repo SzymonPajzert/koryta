@@ -52,7 +52,7 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
     ];
   }
 
-  function checkConnection<D extends Destination>(
+  function _checkConnection<D extends Destination>(
     issues: Issue[],
     name: string,
   ): (connection: Connection<D>) => void {
@@ -82,25 +82,25 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
       if (!article.shortName) {
         results[1].issues.push({ name: "Brak skróconej nazwy", priority: 10 });
       }
-      if (!article.people) {
-        results[1].issues.push({
-          name: "Brak wspomnianych ludzi",
-          priority: 2,
-        });
-      }
-      const peopleLeft =
-        (article.estimates?.mentionedPeople ?? 0) -
-        Object.keys(article.people ?? {}).length;
-      if (peopleLeft > 0) {
-        results[1].issues.push({
-          name: "Brak wspomnianych ludzi",
-          priority: peopleLeft,
-        });
-      }
-      if (!article.companies) {
-        results[1].hasPlace = false;
-        results[1].issues.push({ name: "Brak wspomnianych firm", priority: 1 });
-      }
+      // if (!article.people) {
+      //   results[1].issues.push({
+      //     name: "Brak wspomnianych ludzi",
+      //     priority: 2,
+      //   });
+      // }
+      // const peopleLeft =
+      //   (article.estimates?.mentionedPeople ?? 0) -
+      //   Object.keys(article.people ?? {}).length;
+      // if (peopleLeft > 0) {
+      //   results[1].issues.push({
+      //     name: "Brak wspomnianych ludzi",
+      //     priority: peopleLeft,
+      //   });
+      // }
+      // if (!article.companies) {
+      //   results[1].hasPlace = false;
+      //   results[1].issues.push({ name: "Brak wspomnianych firm", priority: 1 });
+      // }
 
       return results;
     });
@@ -110,24 +110,24 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
     return Object.entries(peopleRaw.value).map(([key, person]) => {
       const results = emptyIssue(key, person, "employed");
 
-      if (!person.connections) {
-        results[1].issues.push({ name: "Brak połączonych ludzi", priority: 5 });
-      }
-      Object.values(person.connections ?? {}).forEach(
-        checkConnection(results[1].issues, "znajomy/a"),
-      );
-      if (!person.employments) {
-        results[1].issues.push({ name: "Brak miejsc pracy", priority: 5 });
-      }
-      Object.values(person.employments ?? {}).forEach(
-        checkConnection(results[1].issues, "zatrudnienie"),
-      );
-      Object.values(person.comments ?? {}).forEach(() => {
-        results[1].issues.push({
-          name: "Nierozwiązany komentarz",
-          priority: 5,
-        });
-      });
+      // if (!person.connections) {
+      //   results[1].issues.push({ name: "Brak połączonych ludzi", priority: 5 });
+      // }
+      // Object.values(person.connections ?? {}).forEach(
+      //   checkConnection(results[1].issues, "znajomy/a"),
+      // );
+      // if (!person.employments) {
+      //   results[1].issues.push({ name: "Brak miejsc pracy", priority: 5 });
+      // }
+      // Object.values(person.employments ?? {}).forEach(
+      //   checkConnection(results[1].issues, "zatrudnienie"),
+      // );
+      // Object.values(person.comments ?? {}).forEach(() => {
+      //   results[1].issues.push({
+      //     name: "Nierozwiązany komentarz",
+      //     priority: 5,
+      //   });
+      // });
 
       return results;
     });
@@ -137,18 +137,18 @@ export function useEntityStatus(allowedIssues?: Ref<string[]>) {
     return Object.entries(placesRaw.value).map(([key, place]) => {
       const results = emptyIssue(key, place, "company");
 
-      if (place.owner) {
-        results[1].issues.push({
-          name: "Przestarzały format",
-          priority: 5,
-        });
-      }
-      if (place.manager) {
-        results[1].issues.push({
-          name: "Przestarzały format",
-          priority: 5,
-        });
-      }
+      // if (place.owner) {
+      //   results[1].issues.push({
+      //     name: "Przestarzały format",
+      //     priority: 5,
+      //   });
+      // }
+      // if (place.manager) {
+      //   results[1].issues.push({
+      //     name: "Przestarzały format",
+      //     priority: 5,
+      //   });
+      // }
 
       return results;
     });

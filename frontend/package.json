@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "nuxt build",
+    "emulators": "firebase emulators:start --import=../database/current_firestore",
     "dev": "GOOGLE_APPLICATION_CREDENTIALS=service_account.json nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",

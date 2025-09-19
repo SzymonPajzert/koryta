@@ -23,36 +23,29 @@ export type EdgeType =
   | "owns"
   | "comment"
 
+// TODO Get rid of destination
 // Top level types represented by their own path in the DB.
 export type Destination =
   | "employed"
   | "company"
   | "data"
-  | "external/rejestr-io/krs"
-  | "external/rejestr-io/person";
 
 export const destinationToNodeType: Record<Destination, NodeType> = {
   employed: "person",
   company: "place",
   data: "article",
-  "external/rejestr-io/krs": "record",
-  "external/rejestr-io/person": "record",
 };
 
 export const destinationIcon: Record<Destination, string> = {
   employed: "mdi-account-outline",
   company: "mdi-office-building-outline",
-  data: "mdi-file-document-outline",
-  "external/rejestr-io/krs": "mdi-office-building-outline",
-  "external/rejestr-io/person": "mdi-account-outline",
+  data: "mdi-file-document-outline"
 };
 
 export const destinationAddText: Record<Destination, string> = {
   employed: "Dodaj osobę",
   company: "Dodaj firmę",
   data: "Dodaj artykuł",
-  "external/rejestr-io/krs": "",
-  "external/rejestr-io/person": "",
 };
 
 export interface Edge {

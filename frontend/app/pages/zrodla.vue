@@ -27,7 +27,7 @@
     <v-col cols="12">
       <v-list>
         <v-list-item
-          v-for="(source) in articles"
+          v-for="source in articles"
           :key="source.name"
           :href="source.sourceURL"
         >
@@ -48,6 +48,6 @@
 </template>
 
 <script lang="ts" setup>
-import { useArticles } from "@/composables/entities/articles";
-const { articles } = useArticles();
+const useListEntity = createEntityStore("data");
+const { entities: articles } = useListEntity();
 </script>

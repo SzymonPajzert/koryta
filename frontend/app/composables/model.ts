@@ -5,9 +5,6 @@ import type {
   Destination,
   DestinationTypeMap,
   Person,
-  Todo,
-  KRSCompany,
-  PersonRejestr,
 } from "../../shared/model";
 import { Link } from "../../shared/model";
 
@@ -42,13 +39,6 @@ export function useDBUtils() {
         name: value.name ?? "",
         krsNumber: value.krsNumber ?? "",
         nipNumber: value.nipNumber ?? "",
-
-        owners: value.owners ?? recordOf(new Link("company", "", "")),
-        todos: value.todos ?? recordOf(new Link("todo", "", "")),
-        comments: value.comments ?? recordOf({ text: "" }),
-
-        owner: value.owner ?? new Link("company", "", ""),
-        manager: value.manager ?? new Link("employed", "", ""),
       };
       return result;
     }
@@ -58,23 +48,6 @@ export function useDBUtils() {
       const result: Required<DestinationTypeMap["employed"]> = {
         name: value.name ?? "",
         parties: value.parties ?? [],
-
-        employments:
-          value.employments ??
-          recordOf({
-            text: "",
-            relation: "",
-            connection: new Link("company", "", ""),
-          }),
-        connections:
-          value.connections ??
-          recordOf({
-            text: "",
-            relation: "",
-            connection: new Link("employed", "", ""),
-          }),
-        todos: value.todos ?? recordOf(new Link("todo", "", "")),
-        comments: value.comments ?? recordOf({ text: "" }),
       };
       return result;
     }
@@ -86,63 +59,7 @@ export function useDBUtils() {
         sourceURL: value.sourceURL ?? "",
         shortName: value.shortName ?? "",
         estimates: value.estimates ?? { mentionedPeople: 0 },
-        people: value.people ?? recordOf(new Link("employed", "", "")),
-        companies: value.companies ?? recordOf(new Link("company", "", "")),
-        date: value.date ?? Date.now(),
-        status: value.status ?? {
-          tags: [],
-          signedUp: {},
-          markedDone: {},
-          confirmedDone: false,
-        },
-        todos: value.todos ?? recordOf(new Link("todo", "", "")),
-        comments: value.comments ?? recordOf({ text: "" }),
       };
-      return result;
-    }
-
-    if (d == "todo") {
-      const value = valueUntyped as Partial<Todo>;
-      const result: Required<DestinationTypeMap["todo"]> = {
-        name: value.name ?? "",
-        text: value.text ?? "",
-        subtasks: value.subtasks ?? recordOf(new Link("todo", "", "")),
-      };
-      return result;
-    }
-
-    if (d == "external/rejestr-io/krs") {
-      const value = valueUntyped as Partial<KRSCompany>;
-      const result: Required<DestinationTypeMap["external/rejestr-io/krs"]> = {
-        name: value.name ?? "",
-        connections:
-          value.connections ?? recordOf({ state: "aktualne", type: "person" }),
-        external_basic: value.external_basic ?? {
-          id: "",
-          nazwy: { skrocona: "" },
-        },
-        basic: value.basic ?? { id: "", nazwy: { skrocona: "" } },
-      };
-      return result;
-    }
-
-    if (d == "external/rejestr-io/person") {
-      const value = valueUntyped as Partial<PersonRejestr>;
-      const result: Required<DestinationTypeMap["external/rejestr-io/person"]> =
-        {
-          name: value.name ?? "",
-          external_basic: value.external_basic ?? {
-            id: "",
-            state: "aktualne",
-            tozsamosc: { data_urodzenia: "" },
-          },
-          comment: value.comment ?? recordOf(""),
-          link: value.link ?? recordOf(""),
-
-          status: value.status ?? "unknown",
-          score: value.score ?? 0,
-          person: value.person ?? new Link("employed", "", ""),
-        };
       return result;
     }
 

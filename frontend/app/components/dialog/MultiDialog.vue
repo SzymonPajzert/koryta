@@ -18,7 +18,6 @@
             <OpenAbstractDialog dialog="data" />
             <OpenAbstractDialog dialog="employed" />
             <OpenAbstractDialog dialog="company" />
-            <OpenAbstractDialog dialog="todo" />
           </v-tabs-window-item>
           <v-tabs-window-item
             v-for="(dialog, id) in dialogs"
@@ -85,7 +84,6 @@ import { useDialogStore, config } from "@/stores/dialog";
 import { storeToRefs } from "pinia";
 import AddCompanyDialog from "@/components/dialog/AddCompanyDialog.vue";
 import AddArticleDialog from "@/components/dialog/AddArticleDialog.vue";
-import AddSuggestionDialog from "@/components/dialog/AddSuggestionDialog.vue";
 import AddEmployedDialog from "@/components/dialog/AddEmployedDialog.vue";
 import type { Destination, DestinationTypeMap } from "~~/shared/model";
 
@@ -105,9 +103,6 @@ function lookupComponent<D extends Destination>(d: D) {
   }
   if (d == "data") {
     return AddArticleDialog;
-  }
-  if (d == "todo") {
-    return AddSuggestionDialog;
   }
 
   return undefined as unknown;

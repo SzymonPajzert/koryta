@@ -53,7 +53,6 @@
 import { onMounted, computed } from "vue";
 import { getAnalytics, logEvent } from "firebase/analytics";
 import { useAuthState } from "@/composables/auth";
-import { useRoute } from "vue-router";
 import MultiDialog from "~/components/dialog/MultiDialog.vue";
 import { useDisplay } from 'vuetify'
 
@@ -71,11 +70,12 @@ if (import.meta.client) {
 }
 
 const { mdAndUp } = useDisplay()
-const { user, pictureURL, logout } = useAuthState();
+const { user, userConfig, logout } = useAuthState();
 const router = useRouter();
 const route = useRoute();
 const maxWidth = computed(() => (route.meta.fullWidth ? "none" : 900));
 const rootPadding = computed(() => (route.meta.fullWidth ? 0 : undefined));
+const pictureURL = computed(() => userConfig.data.value?.photoURL)
 
 function pick<T>(obj: Record<string, T>, ...keys: string[]) {
   const result: Record<string, T> = {};
