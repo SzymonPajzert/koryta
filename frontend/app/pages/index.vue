@@ -3,7 +3,12 @@
     <v-row>
       <v-col cols="12" md="5" class="text-center">
         <v-img position="center" height="300" src="@/assets/logo.png" />
-        <v-btn variant="elevated" color="primary" class="ma-2" to="/pomoc">
+        <v-btn
+          variant="elevated"
+          color="primary"
+          class="ma-2"
+          href="https://www.guidedtrack.com/programs/9fk0fj2/run"
+        >
           <v-icon>mdi-hand</v-icon> Zgłoś się do pomocy
         </v-btn>
       </v-col>
