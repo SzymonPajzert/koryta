@@ -3,9 +3,9 @@ import os
 import xml.etree.ElementTree as ET
 from google.cloud import storage
 import duckdb
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import regex as re
-from regex import findall
+from regex import findall, match
 from tqdm import tqdm
 from collections import Counter
 
@@ -13,16 +13,56 @@ from collections import Counter
 DUMP_FILENAME = "versioned/plwiki-latest-articles.xml.bz2"
 # Check https://dumps.wikimedia.org/plwiki/20250920/dumpstatus.json
 # pages-articles-multistream for the most recent value
+# We actually are using decompressed size though.
 DUMP_SIZE = 12314670146
 
-duckdb.execute(
-    """CREATE TABLE people AS
-    SELECT *
-    FROM read_json('./versioned/people.jsonl')"""
-)
+dbs = []
 
-# Your Google Cloud Storage bucket name
-# GCS_BUCKET_NAME = "your-gcs-bucket-name"
+
+def dump_dbs():
+    for db in dbs:
+        duckdb.execute(f"COPY {db} TO './versioned/{db}.jsonl'")
+
+
+def ducktable(cls):
+    sql_type = {
+        int: "INTEGER",
+        str: "VARCHAR",
+        str | None: "VARCHAR",
+        int | None: "INTEGER",
+    }
+
+    table_name = cls.__name__.lower()
+    dbs.append(table_name)
+    table_fields = [f"{field.name} {sql_type[field.type]}" for field in fields(cls)]
+    duckdb.execute(f"CREATE TABLE {table_name} ({", ".join(table_fields)})")
+
+    def insert_into(arg):
+        assert isinstance(arg, cls), "arg must be an instance of cls"
+        field_values = [getattr(arg, field.name) for field in fields(cls)]
+        duckdb.execute(
+            f"INSERT INTO {table_name} VALUES ({', '.join(['?'] * len(field_values))})",
+            field_values,
+        )
+
+    cls.insert_into = insert_into
+    return cls
+
+
+@ducktable
+@dataclass
+class People:
+    source: str
+    title: str
+    party: str
+    birth_iso8601: str | None
+    birth_year: int | None
+
+
+@ducktable
+@dataclass
+class IgnoredDates:
+    date: str
 
 
 def upload_to_gcs(bucket_name, destination_blob_name, data):
@@ -46,6 +86,38 @@ CATEGORY_SCORE = {
     "Kategoria:Polscy senatorowie": 5,
 }
 
+INFOBOXES = set("Polityk")
+
+MONTH_NUMBER = {
+    "styczeń": 1,
+    "luty": 2,
+    "marzec": 3,
+    "kwiecień": 4,
+    "maj": 5,
+    "czerwiec": 6,
+    "lipiec": 7,
+    "sierpień": 8,
+    "wrzesień": 9,
+    "październik": 10,
+    "listopad": 11,
+    "grudzień": 12,
+}
+
+MONTH_NUMBER_GENITIVE = {
+    "stycznia": 1,
+    "lutego": 2,
+    "marca": 3,
+    "kwietnia": 4,
+    "maja": 5,
+    "czerwca": 6,
+    "lipca": 7,
+    "sierpnia": 8,
+    "września": 9,
+    "października": 10,
+    "listopada": 11,
+    "grudnia": 12,
+}
+
 
 @dataclass
 class InfoboxStats:
@@ -54,32 +126,114 @@ class InfoboxStats:
 
 
 interesting_count = 0
+infobox_types = Counter()
 polityk_infobox_stats = Counter()
 category_stats = Counter()
 
 
 class PolitykInfobox:
-    full_text: str
+    inf_type: str
     fields: dict[str, str]
 
-    def __init__(self, full_text, fields) -> None:
-        self.full_text = full_text
+    def __init__(self, inf_type, fields) -> None:
+        self.inf_type = inf_type
         self.fields = fields
+        infobox_types[inf_type] += 1
         for field in fields:
             polityk_infobox_stats[field] += 1
 
+    @property
+    def birth_iso(self):
+        v = getattr(self, "_birth_iso", None)
+        if v is not None:
+            return v
+
+        human_readable = self.fields.get("data urodzenia", "")
+
+        def get():
+            human_readable = self.fields.get("data urodzenia", "")
+            human_readable = human_readable.replace("[", "")
+            human_readable = human_readable.replace("]", "")
+            human_readable = human_readable.replace("{{data|", "")
+            human_readable = human_readable.replace("}}", "")
+            human_readable = human_readable.split("<ref")[0]
+            human_readable = human_readable.split(" r.")[0]
+            if human_readable == "":
+                return None
+
+            for ignorable in [
+                "n.e",
+                "(",
+                "ok.",
+                "lub",
+                "/",
+                "przed",
+                "ochrz.",
+                "między",
+            ]:
+                if ignorable in human_readable:
+                    return None
+
+            m = match("^\\d{4}-\\d{2}-\\d{2}$", human_readable)
+            if m is not None:
+                return human_readable
+
+            try:
+                m = match("^(\\d+) (\\w+) (\\d{4})$", human_readable)
+                if m is not None:
+                    days = int(m.group(1))
+                    month = MONTH_NUMBER_GENITIVE[m.group(2)]
+                    return f"{m.group(3)}-{month:02d}-{days:02d}"
+
+                m = match("^(\\w+) (\\d{4})$", human_readable)
+                if m is not None:
+                    month = MONTH_NUMBER[m.group(1)]
+                    return f"{m.group(2)}-{month:02d}-00"
+            except KeyError:
+                return None
+
+            m = match("^(\\d+)$", human_readable)
+            if m is not None:
+                return f"{m.group(1)}-00-00"
+
+        self._birth_iso = get()
+        if self._birth_iso is None and human_readable != "":
+            IgnoredDates(date=human_readable).insert_into()
+
+    @property
+    def birth_year(self):
+        ba = self.birth_iso
+        if ba is not None:
+            return int(ba.split("-")[0])
+
     @staticmethod
     def parse(wikitext):
-        polityk_infobox = findall("{{Polityk infobox.*}}", wikitext, re.DOTALL)
-        if len(polityk_infobox) == 0:
+        all_infoboxes = findall("{{([^ {]+) infobox(.*)}}", wikitext, re.DOTALL)
+        if len(all_infoboxes) == 0:
             return None
-        polityk_infobox = polityk_infobox[0]
-        fields = findall("\\|([^=]+)=(.+)", polityk_infobox)
+        result = []
+        for inf_type, infobox in all_infoboxes:
+            fields = findall("\\|([^=]+)=(.+)", infobox)
+            fields = {
+                field[0].strip(): field[1].strip()
+                for field in fields
+                if fields[0] != ""
+            }
+            if "imię i nazwisko" in fields or inf_type in INFOBOXES:
+                result.append(
+                    PolitykInfobox(
+                        inf_type,
+                        fields,
+                    )
+                )
 
-        return PolitykInfobox(
-            polityk_infobox,
-            {field[0].strip(): field[1].strip() for field in fields if fields[0] != ""},
-        )
+        if len(result) == 0:
+            return None
+
+        if len(result) > 1:
+            print(result)
+
+        return result[0]
 
 
 @dataclass
@@ -119,14 +273,13 @@ class WikiArticle:
                 article.polityk_infobox = PolitykInfobox("", {})
             global interesting_count
             interesting_count += 1
-            duckdb.execute(
-                "INSERT INTO people VALUES (?, ?, ?)",
-                (
-                    article.title,
-                    article.polityk_infobox.fields.get("partia", ""),
-                    article.polityk_infobox.fields.get("data urodzenia", ""),
-                ),
-            )
+            People(
+                source=f"https://pl.wikipedia.org/wiki/{article.title}",
+                title=article.title,
+                party=article.polityk_infobox.fields.get("partia", ""),
+                birth_iso8601=article.polityk_infobox.birth_iso,
+                birth_year=article.polityk_infobox.birth_year,
+            ).insert_into()
 
         # if article.polityk_infobox is not None:
         #     print(article.title)
@@ -156,7 +309,7 @@ def process_wikipedia_dump():
         # We only care about the 'end' event of a 'page' tag
         print(f"🗂️  Starts processing dump file: {DUMP_FILENAME}")
 
-        tq = tqdm(total=DUMP_SIZE, unit_scale=True)
+        tq = tqdm(total=DUMP_SIZE, unit_scale=True, smoothing=0)
         prev = 0
         global interesting_count
         for event, elem in ET.iterparse(f, events=("end",)):
@@ -185,7 +338,8 @@ if __name__ == "__main__":
         print(f"An error occurred: {e}")
         raise
     finally:
-        duckdb.execute("COPY people TO './versioned/people.jsonl'")
+        dump_dbs()
 
         print("\n".join([str(t) for t in category_stats.most_common(200)]))
+        print("\n".join([str(t) for t in infobox_types.most_common(50)]))
         print("\n".join([str(t) for t in polityk_infobox_stats.most_common(30)]))
