@@ -53,7 +53,7 @@ def ducktable(cls):
 @dataclass
 class People:
     source: str
-    title: str
+    full_name: str
     party: str
     birth_iso8601: str | None
     birth_year: int | None
@@ -198,7 +198,10 @@ class PolitykInfobox:
 
         self._birth_iso = get()
         if self._birth_iso is None and human_readable != "":
-            IgnoredDates(date=human_readable).insert_into()
+            IgnoredDates(
+                date=human_readable
+            ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
+        return self._birth_iso
 
     @property
     def birth_year(self):
@@ -275,11 +278,11 @@ class WikiArticle:
             interesting_count += 1
             People(
                 source=f"https://pl.wikipedia.org/wiki/{article.title}",
-                title=article.title,
+                full_name=article.title,
                 party=article.polityk_infobox.fields.get("partia", ""),
                 birth_iso8601=article.polityk_infobox.birth_iso,
                 birth_year=article.polityk_infobox.birth_year,
-            ).insert_into()
+            ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
 
         # if article.polityk_infobox is not None:
         #     print(article.title)
@@ -309,12 +312,13 @@ def process_wikipedia_dump():
         # We only care about the 'end' event of a 'page' tag
         print(f"🗂️  Starts processing dump file: {DUMP_FILENAME}")
 
-        tq = tqdm(total=DUMP_SIZE, unit_scale=True, smoothing=0)
+        tq = tqdm(total=DUMP_SIZE, unit_scale=True, smoothing=0.1)
         prev = 0
         global interesting_count
         for event, elem in ET.iterparse(f, events=("end",)):
-            if interesting_count % 1000 == 0:
+            if interesting_count % 10000 == 0:
                 print(f"Found {interesting_count} interesting articles")
+                print(f"Expecting {interesting_count * DUMP_SIZE / f.tell():.2f}")
                 interesting_count += 1
             tq.update(f.tell() - prev)
             prev = f.tell()
