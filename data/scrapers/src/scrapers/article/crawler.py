@@ -11,22 +11,24 @@ import duckdb
 from uuid_extensions import uuid7str
 from duckdb.typing import VARCHAR
 import copy
+import os
+from util.config import VERSIONED_DIR
 
 
 duckdb.execute(
-    """CREATE TABLE hostname_config AS
+    f"""CREATE TABLE hostname_config AS
     SELECT *
-    FROM read_json('./versioned/hostname_config.jsonl')"""
+    FROM read_json('{os.path.join(VERSIONED_DIR, 'hostname_config.jsonl')}')"""
 )
 duckdb.execute(
-    """CREATE TABLE request_logs AS
+    f"""CREATE TABLE request_logs AS
     SELECT *
-    FROM read_json('./versioned/request_logs.jsonl')"""
+    FROM read_json('{os.path.join(VERSIONED_DIR, 'request_logs.jsonl')}')"""
 )
 duckdb.execute(
-    """CREATE TABLE website_index AS
+    f"""CREATE TABLE website_index AS
     SELECT *
-    FROM read_json('./versioned/website_index.jsonl')"""
+    FROM read_json('{os.path.join(VERSIONED_DIR, 'website_index.jsonl')}')"""
 )
 
 
@@ -235,9 +237,9 @@ def crawl_website(uid, current_url):
 
 
 def save_to_disk():
-    duckdb.execute("COPY website_index TO './versioned/website_index.jsonl'")
-    duckdb.execute("COPY request_logs TO './versioned/request_logs.jsonl'")
-    duckdb.execute("COPY hostname_config TO './versioned/hostname_config.jsonl'")
+    duckdb.execute(f"COPY website_index TO '{os.path.join(VERSIONED_DIR, 'website_index.jsonl')}'")
+    duckdb.execute(f"COPY request_logs TO '{os.path.join(VERSIONED_DIR, 'request_logs.jsonl')}'")
+    duckdb.execute(f"COPY hostname_config TO '{os.path.join(VERSIONED_DIR, 'hostname_config.jsonl')}'")
 
 
 if __name__ == "__main__":

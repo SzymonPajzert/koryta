@@ -1,13 +1,18 @@
 import duckdb
 from dataclasses import fields
+import os
+from util.config import VERSIONED_DIR
 
 
 dbs = []
 
 
-def dump_dbs():
-    for db in dbs:
-        duckdb.execute(f"COPY {db} TO './versioned/{db}.jsonl'")
+def dump_dbs(tables_to_dump=None):
+    if tables_to_dump is None:
+        tables_to_dump = dbs
+    for db in tables_to_dump:
+        file_path = os.path.join(VERSIONED_DIR, f"{db}.jsonl")
+        duckdb.execute(f"COPY {db} TO '{file_path}'")
 
 
 def ducktable(cls):
@@ -31,5 +36,5 @@ def ducktable(cls):
             field_values,
         )
 
-    cls.insert_into = insert_into
+    setattr(cls, "insert_into", insert_into)
     return cls
