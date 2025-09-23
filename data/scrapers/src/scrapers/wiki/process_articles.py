@@ -54,7 +54,7 @@ CATEGORY_SCORE = {
     "Kategoria:Polscy senatorowie": 5,
 }
 
-INFOBOXES = set("Polityk")
+INFOBOXES = {"Polityk"}
 
 MONTH_NUMBER = {
     "styczeń": 1,
@@ -179,17 +179,17 @@ class PolitykInfobox:
 
     @staticmethod
     def parse(wikitext):
-        all_infoboxes = findall("{{([^ {]+) infobox(.*)}}", wikitext, re.DOTALL)
+        all_infoboxes = findall("{{([^{{]+) infobox(.*)}}+", wikitext, re.DOTALL)
         if len(all_infoboxes) == 0:
             return None
         result = []
         for inf_type, infobox in all_infoboxes:
-            fields = findall("\\|([^=]+)=(.+)", infobox)
-            fields = {
-                field[0].strip(): field[1].strip()
-                for field in fields
-                if fields[0] != ""
-            }
+            fields_list = infobox.strip().split('|')
+            fields = {}
+            for field_str in fields_list:
+                if '=' in field_str:
+                    key, value = field_str.split('=', 1)
+                    fields[key.strip()] = value.strip()
             if "imię i nazwisko" in fields or inf_type in INFOBOXES:
                 result.append(
                     PolitykInfobox(
@@ -232,7 +232,7 @@ class WikiArticle:
 
         article = WikiArticle(
             title=title,
-            categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
+            categories=findall("\\\\\\\\\[\\\\\\\\\[Kategoria:[^\\]]+\\\\ \\\]", wikitext),
             polityk_infobox=PolitykInfobox.parse(wikitext),
             osoba_imie="imię i nazwisko" in wikitext,
         )
@@ -241,7 +241,7 @@ class WikiArticle:
             for cat in article.categories:
                 category_stats[cat] += 1
             if article.polityk_infobox is None:
-                article.polityk_infobox = PolitykInfobox("", {})
+                article.polityk_infobox = PolitykInfobox("", {{}})
             global interesting_count
             interesting_count += 1
             People(
