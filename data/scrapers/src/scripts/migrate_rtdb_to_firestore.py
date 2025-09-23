@@ -15,38 +15,29 @@ DONE Create entry in firestore://external/{newRandomID1} with fields:
   - person.birth.date
   - source.id - e.g. 599
   - source.type - "rejestr-io/person"
-  
+
 DONE Create an entry in firestore://votes/{newRandomID2} with fields:
   - reference
     - entity_id - not set this time
     - external_id - set to newRandomID1
   - scores collection (each document for user of our website). If score is set, we will use UID of0BKlwqWLX21Cuml4NMHZ18xoC3, my vote
     - score - number
-    
+
 """
 
-import firebase_admin
 from firebase_admin import db
 from google.cloud import firestore
 from tqdm import tqdm
 
-print("Connecting to databases...")
-DATABASE_URL = "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app"            
-firebase_admin.initialize_app(
-    options={
-        "databaseURL": DATABASE_URL,
-        "databaseAuthVariableOverride": {"uid": "reader"},
-    }
-)
-
 firestore_db = firestore.Client(project="koryta-pl", database="koryta-pl")
 print("Successfully connected to Firestore.")
+
 
 def migrate_rejestr_io_data():
     """
     Migrates person data from Firebase RTDB to Cloud Firestore.
     """
-    
+
     print("Reading data from RTDB path: external/rejestr-io/person")
     people_ref = db.reference("external/rejestr-io/person")
     people_data = people_ref.get()
@@ -60,6 +51,7 @@ def migrate_rejestr_io_data():
     # Use a batch to write to Firestore for efficiency
     batch = firestore_db.batch()
 
+    assert isinstance(people_data, dict)
     for person_rtdb_id, person in people_data.items():
         print(f"Processing person: {person.get('name', 'N/A')} (ID: {person_rtdb_id})")
 
@@ -103,12 +95,13 @@ def migrate_rejestr_io_data():
     print("Committing batch to Firestore...")
     batch.commit()
     print("Migration complete!")
-    
+
+
 def copy_entries(source: str, destination: str, keep_id=False):
     """
     Migrates person data from Firebase RTDB to Cloud Firestore.
     """
-    
+
     print(f"Reading data from RTDB path: {source}")
     people_ref = db.reference(source)
     people_data = people_ref.get()
@@ -121,10 +114,13 @@ def copy_entries(source: str, destination: str, keep_id=False):
 
     batch = firestore_db.bulk_writer()
 
+    assert isinstance(people_data, dict)
     for person_rtdb_id, data in tqdm(people_data.items()):
         external_doc_ref = None
         if keep_id:
-            external_doc_ref = firestore_db.collection(destination).document(person_rtdb_id)
+            external_doc_ref = firestore_db.collection(destination).document(
+                person_rtdb_id
+            )
         else:
             external_doc_ref = firestore_db.collection(destination).document()
             data["rtdb_id"] = person_rtdb_id
@@ -134,6 +130,7 @@ def copy_entries(source: str, destination: str, keep_id=False):
     print("Committing batch to Firestore...")
     batch.flush()
     print("Migration complete!")
+
 
 if __name__ == "__main__":
     # DONE migrate_rejestr_io_data()
