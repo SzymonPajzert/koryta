@@ -7,29 +7,50 @@ from bs4 import BeautifulSoup
 from zoneinfo import ZoneInfo
 from google.cloud import storage
 import sys, select
-import duckdb
 from uuid_extensions import uuid7str
-from duckdb.typing import VARCHAR
 import copy
-import os
-from util.config import VERSIONED_DIR
+from dataclasses import dataclass
+import duckdb
+from duckdb.typing import VARCHAR
+from stores.duckdb import ducktable, dump_dbs
 
 
-duckdb.execute(
-    f"""CREATE TABLE hostname_config AS
-    SELECT *
-    FROM read_json('{os.path.join(VERSIONED_DIR, 'hostname_config.jsonl')}')"""
-)
-duckdb.execute(
-    f"""CREATE TABLE request_logs AS
-    SELECT *
-    FROM read_json('{os.path.join(VERSIONED_DIR, 'request_logs.jsonl')}')"""
-)
-duckdb.execute(
-    f"""CREATE TABLE website_index AS
-    SELECT *
-    FROM read_json('{os.path.join(VERSIONED_DIR, 'website_index.jsonl')}')"""
-)
+@ducktable(read=True, name="hostname_config")
+@dataclass
+class HostnameConfig:
+    hostname: str
+    allowed: bool
+    quality: str
+
+    def insert_into(self):
+        pass
+
+
+@ducktable(read=True, name="request_logs")
+@dataclass
+class RequestLog:
+    id: str
+    website_id: str
+    domain: str
+    url: str
+    time: datetime
+    response_code: int
+    payload_size_bytes: int
+    duration: str
+
+    def insert_into(self):
+        pass
+
+
+@ducktable(read=True, name="website_index")
+@dataclass
+class WebsiteIndex:
+    id: str
+    url: str
+    interesting: bool | None
+
+    def insert_into(self):
+        pass
 
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
@@ -103,12 +124,16 @@ def robot_txt_allowed(url, parsed_url):
 
 def add_crawl_record(uid, parsed, url, response_code, payload_size_bytes, duration):
     """Updates the timestamp for a successfully crawled URL in the sites file."""
-    duckdb.execute(
-        f"""INSERT INTO request_logs
-        (id, website_id, domain, url, time, response_code, payload_size_bytes, duration)
-        VALUES
-        (uuid7str(), '{uid}', '{parsed.hostname_normalized}', '{url}', '{datetime.now(warsaw_tz)}', {response_code}, {payload_size_bytes}, '{duration}')"""
-    )
+    RequestLog(
+        uuid7str(),
+        uid,
+        parsed.hostname_normalized,
+        url,
+        datetime.now(warsaw_tz),
+        response_code,
+        payload_size_bytes,
+        duration,
+    ).insert_into()
 
 
 def upload_to_gcs(
@@ -216,10 +241,9 @@ def crawl_website(uid, current_url):
                 row[0] for row in duckdb.sql("SELECT url FROM website_index").fetchall()
             )
             if len(pages_to_visit) > 0:
-                duckdb.executemany(
-                    "INSERT INTO website_index VALUES (uuid7str(), ?, NULL)",
-                    [(url,) for url in pages_to_visit],
-                )
+                for url in pages_to_visit:
+                    WebsiteIndex(uuid7str(), current_url, None).insert_into()
+
         else:
             print(f"  -> Failed to retrieve page: Status code {response.status_code}")
 
@@ -236,13 +260,7 @@ def crawl_website(uid, current_url):
         print(f"  -> An error occurred: {e}")
 
 
-def save_to_disk():
-    duckdb.execute(f"COPY website_index TO '{os.path.join(VERSIONED_DIR, 'website_index.jsonl')}'")
-    duckdb.execute(f"COPY request_logs TO '{os.path.join(VERSIONED_DIR, 'request_logs.jsonl')}'")
-    duckdb.execute(f"COPY hostname_config TO '{os.path.join(VERSIONED_DIR, 'hostname_config.jsonl')}'")
-
-
-if __name__ == "__main__":
+def crawl():
     try:
         pages_to_visit_query = duckdb.sql(
             """
@@ -264,6 +282,6 @@ if __name__ == "__main__":
         for row in pages_to_visit_list:
             crawl_website(row[0], row[1])
             if datetime.now(warsaw_tz) - last_save > timedelta(minutes=2):
-                save_to_disk()
+                dump_dbs()
     finally:
-        save_to_disk()
+        dump_dbs()
