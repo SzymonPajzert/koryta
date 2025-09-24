@@ -26,7 +26,7 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { prerender: true },
     // Cached for 6 hours
-    // '/api/*': { cache: { maxAge: 1 * 60 * 60 } },
+    "/api/*": { isr: 60 * 60 * 6 },
   },
 
   hooks: {

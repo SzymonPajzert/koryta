@@ -22,7 +22,6 @@ export default defineEventHandler(async () => {
   const nodes = getNodes(nodeGroups, nodesNoStats);
 
   return {
-    nodesNoStats,
     edges,
     nodeGroups,
     nodes,

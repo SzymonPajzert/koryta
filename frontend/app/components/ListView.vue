@@ -1,6 +1,5 @@
 <template>
   <div>
-    <UserDetailDialog ref="dialog" />
     <v-row>
       <v-col
         v-for="[key, person] in peopleOrdered"
@@ -24,15 +23,6 @@
             </h2>
           </template>
 
-          <v-card-text>
-            <p v-for="connection in person.connections" :key="connection.text">
-              {{ connectionText(connection) }}
-            </p>
-            <br >
-            <p v-for="employment in person.employments" :key="employment.text">
-              {{ connectionText(employment) }}
-            </p>
-          </v-card-text>
           <v-card-actions v-if="isAdmin">
             <v-spacer />
             <v-btn
@@ -58,27 +48,17 @@
 </template>
 
 <script setup lang="ts">
-import type { Connection, Person, Destination} from "~~/shared/model";
+import type { Person } from "~~/shared/model";
 import PartyChip from "./PartyChip.vue";
 import { useAuthState } from "@/composables/auth";
-import UserDetailDialog from "@/components/dialog/UserDetailDialog.vue";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
 
 const dialogStore = useDialogStore();
 const { isAdmin } = useAuthState();
-const dialog = ref<typeof UserDetailDialog>();
 const router = useRouter();
 
 function showUser(key: string) {
   router.push(`/entity/employed/${key}`);
-}
-
-function connectionText<D extends Destination>(connection: Connection<D>) {
-  if (connection.text != "") return connection.text;
-  if (connection.connection?.text && connection.relation != "") {
-    return connection.relation + " " + connection.connection?.text;
-  }
-  return "";
 }
 
 const { people } = defineProps<{ people: Record<string, Person> }>();

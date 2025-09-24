@@ -1,15 +1,72 @@
 <template>
-  <EmployedDetail
-    v-if="type === 'employed'"
-    :node="id"
-    :close="() => {}"
-    width="100%"
-  />
+  <div class="position-absolute top-0 ma-4">
+    <v-card v-if="type == 'employed'" width="100%">
+      <v-card-title class="headline">
+        <PartyChip v-for="party in person?.parties" :key="party" :party />
+        <h2 class="text-h5 font-weight-bold">
+          {{ person?.name }}
+        </h2>
+      </v-card-title>
+    </v-card>
+    <div class="mt-4">
+      <v-row>
+        <v-col
+          v-for="edge in edges.filter((edge) =>
+            ['employed', 'connection', 'owns'].includes(edge.type),
+          )"
+          :key="edge.richNode?.name"
+          cols="12"
+          md="6"
+        >
+          <ShortNode :edge="edge" />
+        </v-col>
+      </v-row>
+    </div>
+
+    <div class="mt-4">
+      <v-row>
+        <v-col
+          v-for="edge in edges.filter((edge) =>
+            ['comment', 'mentions'].includes(edge.type),
+          )"
+          :key="edge.richNode?.name"
+          cols="12"
+          md="6"
+        >
+          <ShortNode :edge="edge" />
+        </v-col>
+      </v-row>
+    </div>
+
+    <div class="mt-4">
+      <v-btn
+        variant="tonal"
+        prepend-icon="mdi-pencil-outline"
+        :href="`/edit/node/${node}`"
+      >
+        <template #prepend>
+          <v-icon color="warning" />
+        </template>
+        Zaproponuj zmianę
+      </v-btn>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
+import { getFirestore, doc } from "firebase/firestore";
+import { useEdges } from "~/composables/edges";
+import type { Person } from "~~/shared/model";
+
 const route = useRoute<"/entity/[destination]/[id]">();
 
-const id = route.params.id as string;
+const node = route.params.id as string;
 const type = route.params.destination;
+
+const db = getFirestore(useFirebaseApp(), "koryta-pl");
+const person = useDocument<Person>(doc(db, "nodes", node));
+
+const { sources, targets } = await useEdges(node);
+
+const edges = computed(() => [...sources, ...targets]);
 </script>
