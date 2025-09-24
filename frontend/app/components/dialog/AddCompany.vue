@@ -20,9 +20,9 @@
         :edge-reverse="true"
         :source-id="id"
       >
-        <EntityPicker
+        <FormEntityPicker
           v-model="itemProps.value"
-          entity="company"
+          entity="place"
           hint="np. grupa kapitałowa, ministerstwo"
         />
       </MultiTextField>
@@ -63,7 +63,6 @@
 
 <script lang="ts" setup>
 import type { Company } from "~~/shared/model";
-import EntityPicker from "../forms/EntityPicker.vue";
 
 const formData = defineModel<Company>({ required: true });
 const { create } = defineProps<{ id: string | undefined; create?: boolean }>();

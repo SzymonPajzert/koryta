@@ -10,17 +10,17 @@
 <script lang="ts" setup>
 import { usePartyStatistics } from "@/composables/party";
 import { computed } from "vue";
+import {
+  parties as partiesUnfiltered,
+  partyColors as partyColorsUnfiltered,
+} from "~~/shared/misc";
 
-const {
-  parties: partiesUnfiltered,
-  partyColors: partyColorsUnfiltered,
-  results: resultsUnfiltered,
-} = usePartyStatistics();
+const { results: resultsUnfiltered } = await usePartyStatistics();
 const nonZeroIndices = computed(() =>
   resultsUnfiltered.value.map((x, i) => (x > 0 ? i : -1)).filter((i) => i >= 0),
 );
 const parties = computed(() =>
-  partiesUnfiltered.value.filter((_, i) => nonZeroIndices.value.includes(i)),
+  partiesUnfiltered.filter((_, i) => nonZeroIndices.value.includes(i)),
 );
 const partyColors = computed(() =>
   Object.values(partyColorsUnfiltered).filter((_, i) =>
@@ -64,7 +64,10 @@ const chartOptions = computed(() => ({
         useSeriesColors: true,
         offsetX: -8,
         fontSize: "16px",
-        formatter: function (seriesName: string, opts: { seriesIndex: string | number; }) {
+        formatter: function (
+          seriesName: string,
+          opts: { seriesIndex: number },
+        ) {
           return seriesName + ":  " + results.value[opts.seriesIndex];
         },
       },

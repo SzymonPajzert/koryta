@@ -29,31 +29,36 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
-import { createEntityStore } from "@/stores/entity";
-import { type Destination, Link } from "~~/shared/model";
+import type { NodeType } from "~~/shared/model";
 
 const props = defineProps<{
   label?: string;
   hint?: string;
   // which entity type to use to lookup suggested values to bind to this field
   // e.g. employed, company
-  entity: Destination;
+  entity: NodeType;
 }>();
 
 const dialogStore = useDialogStore();
+
+interface Link<T extends NodeType> {
+  type: T;
+  id: string;
+  name: string;
+}
 
 const model = defineModel<Link<typeof props.entity>>();
 
 const search = ref("");
 
-const useListEntity = createEntityStore(props.entity);
-const entityStore = useListEntity();
-const { entities } = storeToRefs(entityStore);
+const { entities } = await useEntity(props.entity);
 
 const entitiesList = computed(() =>
-  Object.entries(entities.value ?? {}).map(([key, value]) => {
-    return new Link<typeof props.entity>(props.entity, key, value.name);
-  }),
+  Object.entries(entities.value ?? {}).map(([key, value]) => ({
+    type: props.entity,
+    id: key,
+    name: value.name,
+  })),
 );
 
 function addNewItem() {
@@ -71,7 +76,11 @@ function addNewItem() {
           console.warn("failed to obtain key for new entity: ", name);
           return;
         }
-        model.value = new Link<typeof props.entity>(props.entity, key, name);
+        model.value = {
+          type: props.entity,
+          id: key,
+          name,
+        };
       },
     });
   }

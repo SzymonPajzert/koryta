@@ -1,14 +1,14 @@
 <template>
   <v-list-item
     v-if="user"
-    :prepend-icon="destinationIcon[props.dialog]"
+    :prepend-icon="nodeTypeIcon[props.dialog]"
     :title="destinationAddText[props.dialog]"
     @click="openDialog()"
   />
   <!-- If user is not logged in, show button to redirect to login -->
   <v-list-item
     v-else
-    :prepend-icon="destinationIcon[props.dialog]"
+    :prepend-icon="nodeTypeIcon[props.dialog]"
     :title="destinationAddText[props.dialog]"
     to="/login"
   />
@@ -18,8 +18,8 @@
 import { useAuthState } from "@/composables/auth";
 import { useDialogStore } from "@/stores/dialog"; // Import the new store
 import {
-  type Destination,
-  destinationIcon,
+  type NodeType,
+  nodeTypeIcon,
   destinationAddText,
 } from "~~/shared/model";
 
@@ -29,7 +29,7 @@ const dialogStore = useDialogStore();
 
 type Environment = "list";
 
-const props = defineProps<{ env?: Environment; dialog: Destination }>();
+const props = defineProps<{ env?: Environment; dialog: NodeType }>();
 
 function openDialog() {
   dialogStore.open({

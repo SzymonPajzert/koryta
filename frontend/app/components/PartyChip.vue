@@ -6,8 +6,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { usePartyStatistics } from "@/composables/party";
-const { partyColors } = usePartyStatistics();
+import { partyColors } from "~~/shared/misc";
 
 const props = defineProps<{
   party: string;

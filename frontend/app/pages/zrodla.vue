@@ -48,6 +48,5 @@
 </template>
 
 <script lang="ts" setup>
-const useListEntity = createEntityStore("data");
-const { entities: articles } = useListEntity();
+const { entities: articles } = await useEntity("article");
 </script>

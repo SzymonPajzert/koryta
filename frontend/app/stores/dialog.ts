@@ -1,76 +1,68 @@
 // src/stores/dialog.ts
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { createEntityStore } from "@/stores/entity";
-import type { Destination, DestinationTypeMap } from "@/../shared/model";
+import type { NodeType, NodeTypeMap } from "@/../shared/model";
 
 // callback to call after the dialog was closed
 export type Callback = (name: string, key?: string) => void;
 
 // TODO this could be a class and have everything defined already
-export interface NewEntityPayload<D extends Destination> {
-  type: D; // what type of dialog to open
+export interface NewEntityPayload<N extends NodeType> {
+  type: N; // what type of dialog to open
   name?: string; // name to populate if given
   edit?: {
-    value: Partial<DestinationTypeMap[D]>; // value to prepopulate with
+    value: Partial<NodeTypeMap[N]>; // value to prepopulate with
     key: string;
   };
   callback?: Callback;
 }
 
-export const config: Record<Destination, { title: string; titleIcon: string }> =
-  {
-    data: {
-      title: "Dodaj nowy artykuł",
-      titleIcon: "mdi-file-document-plus-outline",
-    },
-    employed: {
-      title: "Dodaj nową osobę",
-      titleIcon: "mdi-account-plus-outline",
-    },
-    company: {
-      title: "Dodaj miejsce pracy",
-      titleIcon: "mdi-domain",
-    },
-  };
+export const config: Record<NodeType, { title: string; titleIcon: string }> = {
+  article: {
+    title: "Dodaj nowy artykuł",
+    titleIcon: "mdi-file-document-plus-outline",
+  },
+  person: {
+    title: "Dodaj nową osobę",
+    titleIcon: "mdi-account-plus-outline",
+  },
+  place: {
+    title: "Dodaj miejsce pracy",
+    titleIcon: "mdi-domain",
+  },
+  record: {
+    title: "Dodaj nowy rekord",
+    titleIcon: "mdi-file-document-plus-outline",
+  },
+};
 
 // Values shown by the dialog tab
-interface Dialog<D extends Destination> {
-  value: DestinationTypeMap[D];
-  type: D;
+interface Dialog<N extends NodeType> {
+  value: Partial<NodeTypeMap[N]>;
+  type: N;
   editKey?: string;
   callback?: Callback;
 }
 
 export const useDialogStore = defineStore("dialog", () => {
-  const { fillBlanks } = useDBUtils();
+  const { entities: people, submit: submitPerson } = useEntity("person");
+  const { entities: companies, submit: submitCompany } = useEntity("place");
+  const { entities: articles, submit: submitArticle } = useEntity("article");
 
-  const useListEmployed = createEntityStore("employed");
-  const employedStore = useListEmployed();
-  const { entities: people } = storeToRefs(employedStore);
-
-  const useListCompanies = createEntityStore("company");
-  const companyStore = useListCompanies();
-  const { entities: companies } = storeToRefs(companyStore);
-
-  const useListData = createEntityStore("data");
-  const dataStore = useListData();
-  const { entities: articles } = storeToRefs(dataStore);
-
-  function lookupStore(type: Destination) {
+  function lookupSubmit(type: NodeType) {
     switch (type) {
-      case "data":
-        return dataStore;
-      case "employed":
-        return employedStore;
-      case "company":
-        return companyStore;
+      case "person":
+        return submitPerson;
+      case "place":
+        return submitCompany;
+      case "article":
+        return submitArticle;
     }
     // This should not happen
-    return dataStore;
+    return null;
   }
 
-  const dialogs = ref<Dialog<Destination>[]>([]);
+  const dialogs = ref<Dialog<NodeType>[]>([]);
   const currentDialog = ref<number>();
   const shown = ref(false);
   const showSnackbar = ref(false);
@@ -84,14 +76,10 @@ export const useDialogStore = defineStore("dialog", () => {
     currentDialog.value = -1;
   }
 
-  function open<D extends Destination>(payload: NewEntityPayload<D>) {
+  function open<N extends NodeType>(payload: NewEntityPayload<N>) {
     shown.value = true;
-    const dialog: Dialog<D> = {
-      // This should be safe and I don't know why it's not
-      value: fillBlanks<D>(
-        payload.edit?.value ?? {},
-        payload.type,
-      ) as unknown as DestinationTypeMap[D],
+    const dialog: Dialog<N> = {
+      value: payload.edit?.value ?? {},
       type: payload.type,
       editKey: payload.edit?.key,
       callback: payload.callback ? markRaw(payload.callback) : undefined,
@@ -105,21 +93,21 @@ export const useDialogStore = defineStore("dialog", () => {
     if (node in people.value) {
       console.debug("opening user dialog");
       open({
-        type: "employed",
+        type: "person",
         edit: { value: people.value[node], key: node },
       });
       return;
     }
     if (companies.value && node in companies.value) {
       open({
-        type: "company",
+        type: "place",
         edit: { value: companies.value[node], key: node },
       });
       return;
     }
     if (articles.value && node in articles.value) {
       open({
-        type: "data",
+        type: "article",
         edit: { value: articles.value[node], key: node },
       });
     }
@@ -128,8 +116,8 @@ export const useDialogStore = defineStore("dialog", () => {
   function close(idx: Idx, shouldSubmit: boolean) {
     let key = dialogs.value[idx].editKey;
     if (shouldSubmit) {
-      const store = lookupStore(dialogs.value[idx].type);
-      key = store.submit(
+      const submit = lookupSubmit(dialogs.value[idx].type);
+      key = submit(
         dialogs.value[idx].value,
         dialogs.value[idx].type,
         dialogs.value[idx].editKey,

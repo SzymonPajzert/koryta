@@ -1,21 +1,8 @@
-import { ref, computed } from "vue";
-import { createEntityStore } from "../stores/entity";
-import { partyColors } from "~/../shared/misc";
+import { computed } from "vue";
+import { partyColors } from "~~/shared/misc";
 
-export function usePartyStatistics() {
-  const useListEntity = createEntityStore("employed");
-  const entityStore = useListEntity();
-  const { entities: people } = storeToRefs(entityStore);
-
-  const parties = ref<string[]>([
-    "PO",
-    "PiS",
-    "PSL",
-    "Polska 2050",
-    "Nowa Lewica",
-    "Konfederacja",
-    "Razem",
-  ]);
+export async function usePartyStatistics() {
+  const { entities: people } = await useEntity("person");
 
   const results = computed<number[]>(() => {
     if (!people.value) return [];
@@ -27,5 +14,5 @@ export function usePartyStatistics() {
     });
   });
 
-  return { parties, partyColors, results };
+  return { results };
 }

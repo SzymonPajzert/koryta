@@ -70,10 +70,10 @@
 
 <script lang="ts" setup>
 import { useFeminatyw } from "@/composables/feminatyw";
-import { usePartyStatistics } from "@/composables/party";
 import type { Person } from "~~/shared/model";
 import { computed } from "vue";
-import NestedConnectionField from "@/components/forms/NestedConnectionField.vue";
+import NestedConnectionField from "@/components/form/NestedConnectionField.vue";
+import { parties } from "~~/shared/misc";
 
 const formData = defineModel<Person>({ required: true });
 const { id, create } = defineProps<{
@@ -81,7 +81,6 @@ const { id, create } = defineProps<{
   create?: boolean;
 }>();
 
-const { parties } = usePartyStatistics();
 const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);
 const { koryciarz } = useFeminatyw();
 </script>

@@ -18,8 +18,7 @@ export default defineNuxtConfig({
   components: [
     {
       path: "~/components",
-      // TODO disable it, so we have nice nested names
-      pathPrefix: false,
+      pathPrefix: true,
     },
   ],
 
@@ -27,15 +26,6 @@ export default defineNuxtConfig({
     "/": { prerender: true },
     // Cached for 6 hours
     "/api/*": { isr: 60 * 60 * 6 },
-  },
-
-  hooks: {
-    "pages:extend"(pages) {
-      // This is a hot fix so the pages for (zobacz) don't overwrite index.
-      // We're removing the (zobacz) page but its children are kept.
-      const zobaczIndex = pages.findIndex((page) => page.name === "");
-      pages.splice(zobaczIndex, 1);
-    },
   },
 
   modules: [

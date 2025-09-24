@@ -5,7 +5,7 @@ import type { EventHandlers, NodeEvent } from "v-network-graph";
 import { useDialogStore } from "@/stores/dialog";
 import { useSimulationStore } from "@/stores/simulation";
 import { useParams } from "@/composables/params";
-import type { Destination } from "~~/shared/model";
+import type { NodeType } from "~~/shared/model";
 
 definePageMeta({
   title: "Graf",
@@ -52,16 +52,16 @@ const nodesFiltered = computed(() => {
 const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
   console.log(event.detail);
   const nodeWhole = nodesFiltered.value[node];
-  let destination: Destination | undefined = undefined;
+  let destination: NodeType | undefined = undefined;
   switch (nodeWhole.type) {
     case "rect":
-      destination = "company";
+      destination = "place";
       break;
     case "circle":
-      destination = "employed";
+      destination = "person";
       break;
     case "document":
-      destination = "data";
+      destination = "article";
       break;
   }
 

@@ -60,20 +60,20 @@
     </v-col>
 
     <v-col cols="12">
-      <MultiTextField
+      <FormMultiTextField
         v-slot="itemProps"
         title="Wspomniane osoby"
         edge-type="mentions"
         :source-id="id"
       >
-        <EntityPicker
+        <FormEntityPicker
           v-model="itemProps.value"
           hint="np. polityk Adam albo firma XYZ"
         />
-      </MultiTextField>
+      </FormMultiTextField>
     </v-col>
 
-    <MultiTextField
+    <FormMultiTextField
       v-slot="itemProps"
       title="Inna uwaga"
       edge-type="comment"
@@ -85,14 +85,13 @@
         rows="2"
         hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"
       />
-    </MultiTextField>
+    </FormMultiTextField>
   </v-row>
 </template>
 
 <script lang="ts" setup>
 import { httpsCallable, getFunctions } from "firebase/functions";
 import type { Article } from "~~/shared/model";
-import EntityPicker from "../forms/EntityPicker.vue";
 import { splitTitle } from "~~/shared/misc";
 
 const firebaseApp = useFirebaseApp();
@@ -114,7 +113,9 @@ const fetchAndSetArticleTitle = async () => {
     formData.value.isFetchingTitle = true;
     try {
       const result = await getPageTitle({ url: formData.value.sourceURL });
-      const title: string | undefined = (result.data as unknown as { title: string }).title;
+      const title: string | undefined = (
+        result.data as unknown as { title: string }
+      ).title;
       formData.value.name = title || "";
       formData.value.shortName = title ? splitTitle(title, 1)[0] : undefined;
     } catch (error) {
