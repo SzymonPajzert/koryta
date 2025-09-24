@@ -1,8 +1,6 @@
 import copy
 
-import pytest
-
-from util import trim_object
+from util.dict import trim_object
 
 
 def test_trim_object_simple_keys():
@@ -12,14 +10,16 @@ def test_trim_object_simple_keys():
     expected = {"a": 1, "c": 3}
     assert trim_object(source, keys) == expected
 
+
 def test_trim_object_simple_keys_missing():
     """Should ignore missing keys."""
     source = {"a": 1, "b": 2}
     keys = ["a", "c"]
     expected = {"a": 1}
     assert trim_object(source, keys) == expected
-    
-def test_trim_object_simple_keys_missing():
+
+
+def test_trim_object_simple_keys_missing_nested():
     """Should ignore missing keys."""
     source = {"a": 1, "b": {"c": 2}}
     keys = ["a", "b/c", "b/d"]
@@ -114,4 +114,3 @@ def test_trim_object_source_unmodified():
     keys = ["a", "b/c"]
     trim_object(source, keys)
     assert source == source_copy
-

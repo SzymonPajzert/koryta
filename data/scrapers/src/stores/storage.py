@@ -12,6 +12,7 @@ warsaw_tz = ZoneInfo("Europe/Warsaw")
 now = datetime.now(warsaw_tz)
 storage_client = storage.Client()
 
+
 def upload_json_to_gcs(
     source: str,
     method: str,
@@ -30,7 +31,7 @@ def upload_json_to_gcs(
         json_data (dict): The Python dictionary to upload.
     """
     try:
-        
+
         destination_blob_name = (
             f"source={source}/"
             f"method={method}/"
@@ -45,10 +46,7 @@ def upload_json_to_gcs(
         # Can't be indented, because it needs to be a JSONL file
         data_to_upload = json.dumps(json_data, ensure_ascii=False)
         # Upload the string data
-        blob.upload_from_string(
-            data_to_upload,
-            content_type="application/json"
-        )
+        blob.upload_from_string(data_to_upload, content_type="application/json")
 
         full_path = f"gs://{BUCKET_NAME}/{destination_blob_name}"
         if verbose:

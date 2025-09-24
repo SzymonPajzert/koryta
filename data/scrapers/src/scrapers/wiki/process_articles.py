@@ -2,54 +2,20 @@ import bz2
 import os
 import xml.etree.ElementTree as ET
 from google.cloud import storage
-import duckdb
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 import regex as re
 from regex import findall, match
 from tqdm import tqdm
 from collections import Counter
+from stores.duckdb import ducktable, dump_dbs
+from util.config import VERSIONED_DIR
 
 
-DUMP_FILENAME = "versioned/plwiki-latest-articles.xml.bz2"
-# Check https://dumps.wikimedia.org/plwiki/20250920/dumpstatus.json
-# pages-articles-multistream for the most recent value
-# We actually are using decompressed size though.
+DUMP_FILENAME = os.path.join(VERSIONED_DIR, "plwiki-latest-articles.xml.bz2")
 DUMP_SIZE = 12314670146
 
-dbs = []
 
-
-def dump_dbs():
-    for db in dbs:
-        duckdb.execute(f"COPY {db} TO './versioned/{db}.jsonl'")
-
-
-def ducktable(cls):
-    sql_type = {
-        int: "INTEGER",
-        str: "VARCHAR",
-        str | None: "VARCHAR",
-        int | None: "INTEGER",
-    }
-
-    table_name = cls.__name__.lower()
-    dbs.append(table_name)
-    table_fields = [f"{field.name} {sql_type[field.type]}" for field in fields(cls)]
-    duckdb.execute(f"CREATE TABLE {table_name} ({", ".join(table_fields)})")
-
-    def insert_into(arg):
-        assert isinstance(arg, cls), "arg must be an instance of cls"
-        field_values = [getattr(arg, field.name) for field in fields(cls)]
-        duckdb.execute(
-            f"INSERT INTO {table_name} VALUES ({', '.join(['?'] * len(field_values))})",
-            field_values,
-        )
-
-    cls.insert_into = insert_into
-    return cls
-
-
-@ducktable
+@ducktable()
 @dataclass
 class People:
     source: str
@@ -59,7 +25,7 @@ class People:
     birth_year: int | None
 
 
-@ducktable
+@ducktable()
 @dataclass
 class IgnoredDates:
     date: str
@@ -86,7 +52,7 @@ CATEGORY_SCORE = {
     "Kategoria:Polscy senatorowie": 5,
 }
 
-INFOBOXES = set("Polityk")
+INFOBOXES = {"Polityk"}
 
 MONTH_NUMBER = {
     "styczeń": 1,
@@ -211,17 +177,17 @@ class PolitykInfobox:
 
     @staticmethod
     def parse(wikitext):
-        all_infoboxes = findall("{{([^ {]+) infobox(.*)}}", wikitext, re.DOTALL)
+        all_infoboxes = findall("{{([^{{]+) infobox(.*)}}+", wikitext, re.DOTALL)
         if len(all_infoboxes) == 0:
             return None
         result = []
         for inf_type, infobox in all_infoboxes:
-            fields = findall("\\|([^=]+)=(.+)", infobox)
-            fields = {
-                field[0].strip(): field[1].strip()
-                for field in fields
-                if fields[0] != ""
-            }
+            fields_list = infobox.strip().split("|")
+            fields = {}
+            for field_str in fields_list:
+                if "=" in field_str:
+                    key, value = field_str.split("=", 1)
+                    fields[key.strip()] = value.strip()
             if "imię i nazwisko" in fields or inf_type in INFOBOXES:
                 result.append(
                     PolitykInfobox(
@@ -335,7 +301,7 @@ def process_wikipedia_dump():
     print("🎉 Processing complete.")
 
 
-if __name__ == "__main__":
+def main():
     try:
         process_wikipedia_dump()
     except Exception as e:

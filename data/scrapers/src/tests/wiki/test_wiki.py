@@ -1,8 +1,4 @@
-import copy
-
-import pytest
-
-from process_articles import PolitykInfobox
+from scrapers.wiki.process_articles import PolitykInfobox
 
 
 def test_polityk_infobox():

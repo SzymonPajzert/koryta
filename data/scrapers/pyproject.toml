@@ -1,17 +1,20 @@
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "scrapers"
 version = "0.1.0"
+description = "Scrapers used for koryta.pl"
+authors = [
+    {name = "Szymon Pajzert",email = "szymonpajzert@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "annotated-types==0.7.0",
     "anyio==4.9.0",
     "beautifulsoup4==4.13.5",
     "blis==1.3.0",
     "bs4==0.0.2",
-    "CacheControl==0.14.0",
+    "CacheControl==0.14.3",
     "cachetools==5.5.2",
     "catalogue==2.0.10",
     "certifi==2025.7.14",
@@ -110,5 +113,11 @@ dependencies = [
     '''pl_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl#sha256=3bc7296cd4d67fa9ee0904b25401b0e9a9a772d5c4756edf54143a2ff4c9dcc0'''
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.scripts]
+scrape_articles = "scrapers.article.crawler:crawl"
+scrape_wiki = "scrapers.wiki.process_articles:main"
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

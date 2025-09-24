@@ -7,10 +7,11 @@ in the links with the new Firestore document IDs by looking up the corresponding
 documents in the target collections ('person', 'place') using the stored 'rtdb_id'.
 """
 
-from ..util.firestore import firestore_db, path_occurrence
+from stores.firestore import firestore_db, path_occurrence
 from tqdm import tqdm
 import json
-    
+
+
 def get_id_mapping(collections: list[str]) -> dict[str, str]:
     """
     Creates a mapping from rtdb_id to Firestore document ID for a given collection.
@@ -28,12 +29,14 @@ def get_id_mapping(collections: list[str]) -> dict[str, str]:
         docs = firestore_db.collection(collection_name).stream()
         for doc in tqdm(docs, desc=f"Mapping {collection_name}"):
             data = doc.to_dict()
+            assert data is not None
             if "rtdb_id" in data:
                 mapping[data["rtdb_id"]] = "/".join([collection_name, doc.id])
             else:
                 raise ValueError("Missing rtdb_id in Firestore document")
         print(f"Found {len(mapping) - prev_size} entries in '{collection_name}'.")
     return mapping
+
 
 def update_links(mapping):
     batch = firestore_db.batch()
@@ -50,17 +53,20 @@ def update_links(mapping):
                     raw = raw.replace(source, replacement)
             if update:
                 updated = json.loads(raw)
-                batch.set(firestore_db.collection(collection.id).document(doc.id), updated)
+                batch.set(
+                    firestore_db.collection(collection.id).document(doc.id), updated
+                )
                 print(f"Updated {collection.id}/{doc.id}")
-                
+
     batch.commit()
+
 
 if __name__ == "__main__":
     mapping = get_id_mapping(["person", "place", "article"])
     print()
     # TODO remove fields that are flukes in the DB, by % of usage
-    paths, collections = path_occurrence(mapping)
-    
+    paths, _, collections, _ = path_occurrence()
+
     print(json.dumps(mapping, indent=2))
     # print(json.dumps(firestore_paths(mapping), indent=2))
 
