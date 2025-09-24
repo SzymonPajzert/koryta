@@ -6,7 +6,7 @@
 DUMP_URL="https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2"
 
 # Output filename
-OUTPUT_FILE="versioned/plwiki-latest-articles.xml.bz2"
+OUTPUT_FILE="plwiki-latest-articles.xml.bz2"
 
 echo "➡️  Starting download of the Polish Wikipedia dump..."
 echo "URL: $DUMP_URL"

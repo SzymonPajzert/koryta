@@ -8,16 +8,14 @@ from regex import findall, match
 from tqdm import tqdm
 from collections import Counter
 from stores.duckdb import ducktable, dump_dbs
+from util.config import VERSIONED_DIR
 
 
-DUMP_FILENAME = "versioned/plwiki-latest-articles.xml.bz2"
-# Check https://dumps.wikimedia.org/plwiki/20250920/dumpstatus.json
-# pages-articles-multistream for the most recent value
-# We actually are using decompressed size though.
+DUMP_FILENAME = os.path.join(VERSIONED_DIR, "plwiki-latest-articles.xml.bz2")
 DUMP_SIZE = 12314670146
 
 
-@ducktable
+@ducktable()
 @dataclass
 class People:
     source: str
@@ -27,7 +25,7 @@ class People:
     birth_year: int | None
 
 
-@ducktable
+@ducktable()
 @dataclass
 class IgnoredDates:
     date: str
@@ -184,11 +182,11 @@ class PolitykInfobox:
             return None
         result = []
         for inf_type, infobox in all_infoboxes:
-            fields_list = infobox.strip().split('|')
+            fields_list = infobox.strip().split("|")
             fields = {}
             for field_str in fields_list:
-                if '=' in field_str:
-                    key, value = field_str.split('=', 1)
+                if "=" in field_str:
+                    key, value = field_str.split("=", 1)
                     fields[key.strip()] = value.strip()
             if "imię i nazwisko" in fields or inf_type in INFOBOXES:
                 result.append(
@@ -232,7 +230,7 @@ class WikiArticle:
 
         article = WikiArticle(
             title=title,
-            categories=findall("\\\\\\\\\[\\\\\\\\\[Kategoria:[^\\]]+\\\\ \\\]", wikitext),
+            categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
             polityk_infobox=PolitykInfobox.parse(wikitext),
             osoba_imie="imię i nazwisko" in wikitext,
         )
@@ -241,7 +239,7 @@ class WikiArticle:
             for cat in article.categories:
                 category_stats[cat] += 1
             if article.polityk_infobox is None:
-                article.polityk_infobox = PolitykInfobox("", {{}})
+                article.polityk_infobox = PolitykInfobox("", {})
             global interesting_count
             interesting_count += 1
             People(
@@ -303,7 +301,7 @@ def process_wikipedia_dump():
     print("🎉 Processing complete.")
 
 
-if __name__ == "__main__":
+def main():
     try:
         process_wikipedia_dump()
     except Exception as e:

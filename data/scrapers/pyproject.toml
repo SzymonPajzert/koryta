@@ -115,6 +115,7 @@ dependencies = [
 
 [project.scripts]
 scrape_articles = "scrapers.article.crawler:crawl"
+scrape_wiki = "scrapers.wiki.process_articles:main"
 
 
 [build-system]
