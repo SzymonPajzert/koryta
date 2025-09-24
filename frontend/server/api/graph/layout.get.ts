@@ -1,6 +1,6 @@
 import { simulation } from "~~/shared/graph/simulation";
 import * as d3 from "d3-force";
-import { fetchRTDB, setRTDB } from "../utils/fetch";
+import { fetchRTDB, setRTDB } from "~~/server/utils/fetch";
 
 type NodeLocation = {
   id: string;
@@ -13,7 +13,10 @@ export default defineEventHandler(async (event) => {
     event.$fetch("/api/graph"),
     fetchRTDB<typeof result>("layout"),
   ]);
-  if (layout.nodes && Object.keys(graph.nodes).length === Object.keys(layout.nodes).length) {
+  if (
+    layout.nodes &&
+    Object.keys(graph.nodes).length === Object.keys(layout.nodes).length
+  ) {
     console.log("reading saved from DB");
     return layout;
   } else {

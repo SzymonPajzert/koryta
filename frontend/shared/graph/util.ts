@@ -7,13 +7,12 @@ import type {
   Article,
   Destination,
   Edge as DBEdge,
-  EdgeType
+  EdgeType,
 } from "@/../shared/model";
 import { DiGraph } from "digraph-js";
 import { getHostname } from "../misc";
 
 export interface GraphLayout {
-  nodesNoStats: Record<string, Node>;
   edges: Edge[];
   nodeGroups: ReturnType<typeof getNodeGroups>;
   nodes: Record<string, Node & { stats: NodeStats }>;
@@ -157,9 +156,9 @@ const edgeLabel: Record<EdgeType, string> = {
   mentions: "wspomina",
   owns: "właściciel",
   comment: "komentarz",
-}
+};
 
-const edgeTraverse : Record<EdgeType, TraversePolicy> = {
+const edgeTraverse: Record<EdgeType, TraversePolicy> = {
   employed: {
     forward: "active",
     backward: "dead_end",
@@ -180,19 +179,18 @@ const edgeTraverse : Record<EdgeType, TraversePolicy> = {
     forward: "dead_end",
     backward: "dead_end",
   },
-}
+};
 
-export function getEdges(
-  edgesFromDB: DBEdge[],
-) {
+export function getEdges(edgesFromDB: DBEdge[]) {
   return edgesFromDB.map((edge: DBEdge) => {
     const result: Edge = {
       source: edge.source,
       target: edge.target,
       label: edge.name ?? edgeLabel[edge.type],
+      type: edge.type,
       traverse: edgeTraverse[edge.type],
     };
-    return result
+    return result;
   });
 }
 

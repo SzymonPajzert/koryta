@@ -8,7 +8,10 @@
       max-width="40"
       contain
     />
-    <v-app-bar-title v-if="mdAndUp" style="cursor: pointer" @click="$router.push('/')"
+    <v-app-bar-title
+      v-if="mdAndUp"
+      style="cursor: pointer"
+      @click="$router.push('/')"
       >koryta.pl</v-app-bar-title
     >
     <v-spacer />
@@ -28,7 +31,12 @@
         <span class="d-none d-md-inline">Działaj</span>
       </v-btn>
       <v-btn v-if="mdAndUp" text to="/zrodla">Źródła</v-btn>
-      <v-avatar v-if="user && pictureURL" :image="pictureURL" size="32" @click="router.push('/profil')"/>
+      <v-avatar
+        v-if="user && pictureURL"
+        :image="pictureURL"
+        size="32"
+        @click="router.push('/profil')"
+      />
       <v-btn v-if="user && !pictureURL" icon to="/profil">
         <v-icon>mdi-account</v-icon>
       </v-btn>
@@ -40,7 +48,7 @@
   </v-app-bar>
   <v-main>
     <v-container
-      class="fill-height"
+      class="fill-height position-relative"
       :max-width="maxWidth"
       :style="{ padding: rootPadding }"
     >
@@ -54,7 +62,7 @@ import { onMounted, computed } from "vue";
 import { getAnalytics, logEvent } from "firebase/analytics";
 import { useAuthState } from "@/composables/auth";
 import MultiDialog from "~/components/dialog/MultiDialog.vue";
-import { useDisplay } from 'vuetify'
+import { useDisplay } from "vuetify";
 
 if (import.meta.client) {
   onMounted(() => {
@@ -69,13 +77,13 @@ if (import.meta.client) {
   });
 }
 
-const { mdAndUp } = useDisplay()
+const { mdAndUp } = useDisplay();
 const { user, userConfig, logout } = useAuthState();
 const router = useRouter();
 const route = useRoute();
 const maxWidth = computed(() => (route.meta.fullWidth ? "none" : 900));
 const rootPadding = computed(() => (route.meta.fullWidth ? 0 : undefined));
-const pictureURL = computed(() => userConfig.data.value?.photoURL)
+const pictureURL = computed(() => userConfig.data.value?.photoURL);
 
 function pick<T>(obj: Record<string, T>, ...keys: string[]) {
   const result: Record<string, T> = {};
@@ -86,5 +94,4 @@ function pick<T>(obj: Record<string, T>, ...keys: string[]) {
   }
   return result;
 }
-
 </script>

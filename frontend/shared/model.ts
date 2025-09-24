@@ -10,25 +10,24 @@ export interface Connection<D extends Destination> {
   relation: string;
 }
 
-export type NodeType =
-  | "person"
-  | "place"
-  | "article"
-  | "record"
+export type Node = {
+  name: string;
+  type: NodeType;
+  text?: string;
+};
+
+export type NodeType = "person" | "place" | "article" | "record";
 
 export type EdgeType =
   | "employed"
   | "connection"
   | "mentions"
   | "owns"
-  | "comment"
+  | "comment";
 
 // TODO Get rid of destination
 // Top level types represented by their own path in the DB.
-export type Destination =
-  | "employed"
-  | "company"
-  | "data"
+export type Destination = "employed" | "company" | "data";
 
 export const destinationToNodeType: Record<Destination, NodeType> = {
   employed: "person",
@@ -39,7 +38,7 @@ export const destinationToNodeType: Record<Destination, NodeType> = {
 export const destinationIcon: Record<Destination, string> = {
   employed: "mdi-account-outline",
   company: "mdi-office-building-outline",
-  data: "mdi-file-document-outline"
+  data: "mdi-file-document-outline",
 };
 
 export const destinationAddText: Record<Destination, string> = {
