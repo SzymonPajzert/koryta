@@ -117,7 +117,9 @@ dependencies = [
 scrape_articles = "scrapers.article.crawler:crawl"
 scrape_wiki = "scrapers.wiki.process_articles:main"
 scrape_pkw = "scrapers.pkw.process:main"
-scrape_rejestrio = "scrapers.krs.process:scrape_rejestrio"
+scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
+scrape_krs = "scrapers.krs.process:extract_people"
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

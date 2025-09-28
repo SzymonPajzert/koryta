@@ -7,6 +7,7 @@ BUCKET = "koryta-pl-crawled"
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 now = datetime.now(warsaw_tz)
+
 storage_client = storage.Client()
 
 
@@ -29,7 +30,6 @@ def upload_to_gcs(
         )
         destination_blob_name = destination_blob_name.replace("//", "/")
         destination_blob_name = destination_blob_name.rstrip("/")
-
         bucket = storage_client.bucket(BUCKET)
         blob = bucket.blob(destination_blob_name)
         # Upload the string data
@@ -44,7 +44,19 @@ def upload_to_gcs(
 
 
 def list_blobs(hostname):
+    """Lists blobs in a GCS bucket with a given prefix."""
     bucket = storage_client.bucket(BUCKET)
     blobs = bucket.list_blobs(prefix=f"hostname={hostname}/")
     for blob in blobs:
         yield blob.name
+
+
+def download_from_gcs(blob_name: str) -> str | None:
+    """Downloads a blob from GCS as a string."""
+    bucket = storage_client.bucket(BUCKET)
+    blob = bucket.blob(blob_name)
+    try:
+        return blob.download_as_text()
+    except Exception as e:
+        print(f"Failed to download gs://{BUCKET}/{blob_name}: {e}")
+        return None
