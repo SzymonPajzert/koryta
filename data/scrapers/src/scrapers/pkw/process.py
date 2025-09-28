@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import regex as re
 from collections import Counter
-from stores.duckdb import dump_dbs
+from stores.duckdb import dump_dbs, ducktable
 from util.download import FileSource
 import csv
 from zipfile import ZipFile
@@ -84,6 +84,7 @@ counters = {k: Counter() for k in CSV_HEADERS_2024.keys()}
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
 
 
+@ducktable(name="people_pkw")
 @dataclass
 class ExtractedData:
     pkw_name: str
@@ -113,6 +114,9 @@ class ExtractedData:
             print(f"Skipping setting middle name: {self.pkw_name}")
 
         self.birth_year = 2024 - int(self.age_in_2024)
+
+    def insert_into(self):
+        pass
 
     def spadochroniarz(self):
         candidacy = self.teryt_candidacy.rstrip("0")
@@ -243,11 +247,8 @@ def process_pkw():
         )
 
         # TODO check the year, since it's currently hardcoded for 2024
-        count = 0
         for item in process_csv(reader, config.position):
-            if count < 10:
-                print(item)
-            count += 1
+            item.insert_into()
 
         print("🎉 Processing complete.")
 
