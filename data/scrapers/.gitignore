@@ -3,5 +3,9 @@
 *.csv
 *.json
 
+downloaded
+versioned-*
+versioned_*
+
 # JSON credentials
 koryta-pl*.json

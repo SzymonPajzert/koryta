@@ -10,7 +10,7 @@ print("Reading rejestr.io key: ", REJESTR_KEY)
 if not REJESTR_KEY:
     print("Not found, go to https://rejestr.io/konto/api and set it in .env")
     sys.exit(1)
-    
+
 ALWAYS_ALLOW = False
 print("Should I always ask before querying rejestr.io? [Yn]")
 if input() == "n":
@@ -18,6 +18,7 @@ if input() == "n":
     ALWAYS_ALLOW = True
 else:
     print("I will always ask for permission")
+
 
 def get_rejestr_io(url: str):
     allowed = ALWAYS_ALLOW
@@ -28,6 +29,9 @@ def get_rejestr_io(url: str):
     if not allowed:
         print("Not allowed")
         return {}
+
     response = requests.get(url, headers={"Authorization": REJESTR_KEY})
-    js = response.json()
-    return js
+    if response.status_code != 200:
+        print(response.status_code)
+        return None
+    return response.text
