@@ -148,6 +148,7 @@ MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs = [
     "0000955885",
 ]
 
+# https://docs.google.com/spreadsheets/d/1Y9G14keoAgwI9VWkW766d9sLH9LD84UcCqpGdo4ndZ8
 SPOLKI_SKARBU_PANSTWA = [
     "0000002251",
     "0000002710",

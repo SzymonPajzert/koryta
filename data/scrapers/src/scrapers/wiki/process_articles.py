@@ -18,7 +18,8 @@ DUMP_URL = "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articl
 
 OUTPUT_FILE = "plwiki-latest-articles.xml.bz2"
 
-FileSource(DUMP_URL).download()
+if __name__ == "__main__":
+    FileSource(DUMP_URL).download()
 
 DUMP_FILENAME = os.path.join(DOWNLOADED_DIR, "plwiki-latest-articles.xml.bz2")
 DUMP_SIZE = 12314670146

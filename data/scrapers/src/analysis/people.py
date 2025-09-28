@@ -26,6 +26,13 @@ pkw_file = check_versioned_dir("people_pkw.jsonl")
 koryta_file = check_versioned_dir("people_koryta.jsonl")
 
 con = duckdb.connect(database=":memory:")
+
+con.execute(
+    """
+    INSTALL fuzzy;
+    LOAD fuzzy;"""
+)
+
 read_limit = ""
 
 con.execute(
@@ -144,7 +151,7 @@ def find_all_matches(con, limit: int | None = 20):
                 jaro_winkler_similarity(k.full_name, p.full_name)
             ) / 4.0 as pkw_score
         FROM krs_people k
-        JOIN pkw_people p ON ABS(k.birth_year - p.birth_year) <= 1
+        FULL JOIN pkw_people p ON k.birth_year = p.birth_year
         WHERE jaro_winkler_similarity(k.last_name, p.last_name) > 0.95
           AND jaro_winkler_similarity(k.first_name, p.first_name) > 0.95
     ),
@@ -194,9 +201,8 @@ def find_all_matches(con, limit: int | None = 20):
     print("\n--- Overlaps between Koryta, KRS, PKW, and Wiki ---")
     df = con.execute(query).df()
     if df.empty:
-        print("No matches found with the current criteria.")
-    else:
-        print(df)
+        raise Exception("No matches found with the current criteria.")
+    return df
 
 
 def main():
@@ -210,7 +216,8 @@ def main():
     # find_two_way_matches(con, "krs_people", "wiki_people", limit=100)
     # find_two_way_matches(con, "krs_people", "pkw_people", limit=100)
 
-    find_all_matches(con, limit=2000)
+    df = find_all_matches(con, limit=4000)
+    print(df)
     con.close()
 
 

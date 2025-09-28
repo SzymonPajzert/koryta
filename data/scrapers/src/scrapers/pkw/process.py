@@ -7,7 +7,6 @@ import csv
 from zipfile import ZipFile
 import io
 import typing
-import abc
 
 
 class ZipExtractor:
