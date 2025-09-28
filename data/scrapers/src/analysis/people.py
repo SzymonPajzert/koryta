@@ -124,6 +124,9 @@ def find_two_way_matches(con, table1, table2, limit: int | None = 20):
         print(df)
 
 
+# TODO Bonus points if wiki people has polityk infobox
+
+
 def find_all_matches(con, limit: int | None = 20):
     limit_str = f"LIMIT {limit}" if limit is not None else ""
     query = f"""
@@ -207,7 +210,7 @@ def main():
     # find_two_way_matches(con, "krs_people", "wiki_people", limit=100)
     # find_two_way_matches(con, "krs_people", "pkw_people", limit=100)
 
-    find_all_matches(con, limit=1000)
+    find_all_matches(con, limit=2000)
     con.close()
 
 

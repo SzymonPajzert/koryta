@@ -2,6 +2,7 @@ import typing
 import itertools
 from time import sleep
 
+from scrapers.krs.process import iterate_blobs
 from util.rejestr import get_rejestr_io
 from stores.storage import upload_to_gcs, list_blobs
 
@@ -27,7 +28,7 @@ class KRS:
 
 def save_org_connections(krss: typing.Iterable[KRS]):
     for krs in krss:
-        yield f"https://rejestr.io/api/v2/org/{krs}"
+        # Remember to increase the price - yield f"https://rejestr.io/api/v2/org/{krs}"
         yield f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=aktualne"
         yield f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne"
 
@@ -372,6 +373,18 @@ KRAKOW = [
 ]
 
 
+def child_companies() -> set[KRS]:
+    result = set()
+    for blob_name, data in iterate_blobs():
+        try:
+            for item in data:
+                if item.get("typ") == "organizacja":
+                    result.add(KRS(item["numery"]["krs"]))
+        except KeyError as e:
+            print(f"  [ERROR] Could not process {blob_name}: {e}")
+    return result
+
+
 def scrape_rejestrio():
     # TODO Find children of the mentioned companies
 
@@ -384,11 +397,12 @@ def scrape_rejestrio():
             MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs, WARSZAWA, SPOLKI_SKARBU_PANSTWA
         )
     )
-    to_scrape = starters - already_scraped
+    children = child_companies()
+    to_scrape = (starters | children) - already_scraped
 
     print(f"Already scraped: {already_scraped}")
     print(f"To scrape: {to_scrape}")
-    print(f"Will cost: {len(to_scrape) * 0.15} PLN")
+    print(f"Will cost: {len(to_scrape) * 0.10} PLN")
     input("Press enter to continue...")
 
     for url in save_org_connections(to_scrape):
