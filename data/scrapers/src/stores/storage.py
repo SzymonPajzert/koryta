@@ -81,7 +81,6 @@ def download_from_gcs(blob_name: str) -> str | None:
     """Downloads a blob from GCS as a string."""
     cached = CachedStorage(blob_name)
     if cached.downloaded():
-        print(f"Using cached file {cached.downloaded_path}")
         return open(cached.downloaded_path).read()
 
     bucket = storage_client.bucket(BUCKET)
