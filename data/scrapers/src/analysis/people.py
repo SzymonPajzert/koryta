@@ -31,12 +31,11 @@ read_limit = ""
 con.execute(
     f"""
 CREATE OR REPLACE TABLE krs_people AS
-SELECT
+SELECT DISTINCT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
     CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
-    'krs' as source,
-    id as source_id,
+    id as rejestrio_id,
     full_name
 FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
@@ -48,12 +47,10 @@ WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NUL
 con.execute(
     f"""
 CREATE OR REPLACE TABLE wiki_people AS
-SELECT
+SELECT DISTINCT
     lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
     lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
     birth_year,
-    'wiki' as source,
-    source as source_id,
     full_name
 FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
@@ -64,12 +61,10 @@ WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
 con.execute(
     f"""
 CREATE OR REPLACE TABLE pkw_people AS
-SELECT
+SELECT DISTINCT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
     birth_year,
-    'pkw' as source,
-    pkw_name as source_id,
     pkw_name as full_name
 FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
@@ -80,10 +75,15 @@ WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NUL
 con.execute(
     f"""
 CREATE OR REPLACE TABLE koryta_people AS
-SELECT
-    full_name as full_name
+-- koryta_people lacks birth_year, so we can't use it as a base for joining with others on birth_year.
+-- We will use it for enrichment if we can parse first/last names.
+SELECT DISTINCT
+    lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
+    lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
+    id as koryta_id,
+    full_name
 FROM read_json_auto('{koryta_file}', format='newline_delimited', auto_detect=true)
-WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
+WHERE full_name IS NOT NULL
 {read_limit}
 """
 )
@@ -124,15 +124,90 @@ def find_two_way_matches(con, table1, table2, limit: int | None = 20):
         print(df)
 
 
+def find_all_matches(con, limit: int | None = 20):
+    limit_str = f"LIMIT {limit}" if limit is not None else ""
+    query = f"""
+    WITH krs_pkw AS (
+        SELECT
+            k.full_name as krs_name,
+            p.full_name as pkw_name,
+            k.birth_year as birth_year,
+            k.first_name as base_first_name, -- Carry forward base names for subsequent joins
+            k.last_name as base_last_name,
+            k.full_name as base_full_name,
+            (
+                jaro_winkler_similarity(k.first_name, p.first_name) +
+                jaro_winkler_similarity(k.last_name, p.last_name) * 2 +
+                jaro_winkler_similarity(k.full_name, p.full_name)
+            ) / 4.0 as pkw_score
+        FROM krs_people k
+        JOIN pkw_people p ON ABS(k.birth_year - p.birth_year) <= 1
+        WHERE jaro_winkler_similarity(k.last_name, p.last_name) > 0.95
+          AND jaro_winkler_similarity(k.first_name, p.first_name) > 0.95
+    ),
+    krs_pkw_wiki AS (
+        SELECT
+            kp.*,
+            w.full_name as wiki_name,
+            (
+                jaro_winkler_similarity(kp.base_first_name, w.first_name) +
+                jaro_winkler_similarity(kp.base_last_name, w.last_name) * 2 +
+                jaro_winkler_similarity(kp.base_full_name, w.full_name)
+            ) / 4.0 as wiki_score
+        FROM krs_pkw kp
+        LEFT JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1
+            AND jaro_winkler_similarity(kp.base_last_name, w.last_name) > 0.95
+            AND jaro_winkler_similarity(kp.base_first_name, w.first_name) > 0.95
+    ),
+    all_sources AS (
+        SELECT
+            kpw.*,
+            ko.full_name as koryta_name,
+            (
+                jaro_winkler_similarity(kpw.base_first_name, ko.first_name) +
+                jaro_winkler_similarity(kpw.base_last_name, ko.last_name) * 2 +
+                jaro_winkler_similarity(kpw.base_full_name, ko.full_name)
+            ) / 4.0 as koryta_score
+        FROM krs_pkw_wiki kpw
+        FULL JOIN koryta_people ko ON jaro_winkler_similarity(kpw.base_last_name, ko.last_name) > 0.95
+            AND jaro_winkler_similarity(kpw.base_first_name, ko.first_name) > 0.95
+    )
+    SELECT
+        koryta_name,
+        krs_name,
+        pkw_name,
+        wiki_name,
+        birth_year,
+        (
+            (CASE WHEN krs_name IS NOT NULL THEN 8 ELSE 0 END) +
+            (CASE WHEN pkw_name IS NOT NULL THEN 4 ELSE 0 END) +
+            (CASE WHEN koryta_name IS NOT NULL THEN 2 ELSE 0 END) +
+            (CASE WHEN wiki_name IS NOT NULL THEN 1 ELSE 0 END)
+        ) as overall_score
+    FROM all_sources
+    ORDER BY overall_score DESC
+    {limit_str};
+    """
+    print("\n--- Overlaps between Koryta, KRS, PKW, and Wiki ---")
+    df = con.execute(query).df()
+    if df.empty:
+        print("No matches found with the current criteria.")
+    else:
+        print(df)
+
+
 def main():
     print("--- Imported table sizes ---")
     print(f"KRS: {con.sql("SELECT COUNT(*) FROM krs_people").fetchall()}")
     print(f"Wiki: {con.sql("SELECT COUNT(*) FROM wiki_people").fetchall()}")
     print(f"PKW: {con.sql("SELECT COUNT(*) FROM pkw_people").fetchall()}")
+    print(f"Koryta: {con.sql("SELECT COUNT(*) FROM koryta_people").fetchall()}")
 
     print("--- Overlaps between all three sources (KRS, Wiki, PKW) ---")
-    find_two_way_matches(con, "krs_people", "wiki_people", limit=None)
-    find_two_way_matches(con, "krs_people", "pkw_people", limit=None)
+    # find_two_way_matches(con, "krs_people", "wiki_people", limit=100)
+    # find_two_way_matches(con, "krs_people", "pkw_people", limit=100)
+
+    find_all_matches(con, limit=1000)
     con.close()
 
 
