@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import regex as re
 from collections import Counter
 from stores.duckdb import dump_dbs
@@ -47,6 +47,7 @@ CSV_HEADERS_2024 = {
     # Party
     "Skrót nazwy komitetu": SetField("party"),
     "Przynależność do partii": SetField("party_member"),
+    "Poparcie": None,  # TODO check if this field is useful SetField("party_member"),
     "Nazwa komitetu": None,
     # Office
     "Dzielnica": SetField("position", processor=lambda x: "Rada dzielnicy"),
@@ -57,10 +58,12 @@ CSV_HEADERS_2024 = {
     "Rada": None,
     "Sejmik": SetField("position", processor=lambda x: "Rada sejmiku"),
     # Success, position in the party
-    "Czy uzyskał mandat": None,
-    "Czy uzyskał prawo kandydowania w drugiej turze": None,
+    # TODO Capture the success
+    "Czy uzyskał mandat": SetField(
+        "candidacy_success", lambda x: "TRUE" if x == "Tak" else "FALSE"
+    ),
+    "Czy uzyskał prawo kandydowania w drugiej turze": None,  # TODO check if this field is useful
     "Pozycja na liście": None,
-    "Poparcie": None,
     "Procent głosów oddanych na listę": None,
     "Procent głosów oddanych w okręgu": None,
     "Procent głosów": None,
@@ -77,20 +80,39 @@ CSV_HEADERS_2024 = {
 
 counters = {k: Counter() for k in CSV_HEADERS_2024.keys()}
 
+# TODO Is there any better way to list upper case characters?
+UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
+
 
 @dataclass
 class ExtractedData:
     pkw_name: str
-    age_in_2024: int
+    last_name: str = field(init=False)
+    first_name: str = field(init=False)
+    age_in_2024: str
+    birth_year: int = field(init=False)
     sex: str
     teryt_living: str
     teryt_candidacy: str
+    candidacy_success: str
     party: str
     position: str
+    middle_name: str | None = None
     party_member: str | None = None
 
     def __post_init__(self):
-        self.pkw_name
+        m = re.match(f"(?:[-{UPPER}]+ )+", self.pkw_name)
+        if not m:
+            raise ValueError(f"Invalid name: {self.pkw_name}")
+        self.last_name = m.group().strip()
+        names = self.pkw_name[len(self.last_name) :].strip().split(" ")
+        self.first_name = names[0]
+        if len(names) == 2:
+            self.middle_name = " ".join(names[1:])
+        if len(names) > 2:
+            print(f"Skipping setting middle name: {self.pkw_name}")
+
+        self.birth_year = 2024 - int(self.age_in_2024)
 
     def spadochroniarz(self):
         candidacy = self.teryt_candidacy.rstrip("0")
@@ -113,7 +135,7 @@ def process_csv(reader, position):
                     replacements[CSV_HEADERS_2024[col].name] = col
                 else:
                     raise ValueError(
-                        f"Duplicate column name: {col} and {replacements[CSV_HEADERS_2024[col]]} map to {CSV_HEADERS_2024[col]}"
+                        f"Duplicate column name: {col} and {replacements[CSV_HEADERS_2024[col].name]} map to {CSV_HEADERS_2024[col].name}"
                     )
 
             continue
@@ -235,6 +257,8 @@ def main():
         process_pkw()
 
         # TODO compare teryt_candidacy and teryt_living and find people who are too far
+
+        print("\n\n")
 
         for column, counter in counters.items():
             if len(counter) == 0:
