@@ -1,7 +1,7 @@
 import requests
 import time
 from datetime import datetime, timedelta
-from urllib.parse import urljoin, urlparse, ParseResult
+from urllib.parse import urljoin
 from urllib.robotparser import RobotFileParser
 from bs4 import BeautifulSoup
 from zoneinfo import ZoneInfo
@@ -13,6 +13,8 @@ from dataclasses import dataclass
 import duckdb
 from duckdb.typing import VARCHAR
 from stores.duckdb import ducktable, dump_dbs
+from util.url import NormalizedParse
+from stores.storage import upload_to_gcs
 
 
 @ducktable(read=True, name="hostname_config")
@@ -56,7 +58,6 @@ class WebsiteIndex:
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 storage_client = storage.Client()
 
-BUCKET = "koryta-pl-crawled"
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
 CRAWL_DELAY_SECONDS = 20
 
@@ -77,29 +78,6 @@ next_request_time = {}
 robot_parsers = {}
 url_to_update = set()
 page_score = dict()
-
-
-class NormalizedParse:
-    def __init__(self, arg: ParseResult):
-        self.scheme = arg.scheme
-        self.netloc = arg.netloc
-        self.path = arg.path
-        self.hostname = arg.hostname
-        if not self.hostname:
-            self.hostname = arg.netloc
-        self.hostname_normalized = self.hostname.lower()
-        if self.hostname_normalized.startswith("www."):
-            self.hostname_normalized = self.hostname_normalized[4:]
-        self.domain = f"{self.scheme}://{self.hostname}"
-
-    hostname_normalized: str
-    domain: str
-
-
-def parse_url(url):
-    if url.endswith("/"):
-        url = url[:-1]
-    return NormalizedParse(urlparse(url))
 
 
 def robot_txt_allowed(url, parsed_url):
@@ -136,36 +114,6 @@ def add_crawl_record(uid, parsed, url, response_code, payload_size_bytes, durati
     ).insert_into()
 
 
-def upload_to_gcs(
-    source: NormalizedParse,
-    data,
-    content_type,
-):
-    try:
-        now = datetime.now(warsaw_tz)
-        if source.path == "":
-            source.path = "index"
-        destination_blob_name = (
-            f"hostname={source.hostname}/"
-            f"date={now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}/"
-            f"{source.path}"
-        )
-        destination_blob_name = destination_blob_name.replace("//", "/")
-        destination_blob_name = destination_blob_name.rstrip("/")
-
-        bucket = storage_client.bucket(BUCKET)
-        blob = bucket.blob(destination_blob_name)
-        # Upload the string data
-        blob.upload_from_string(data, content_type=f"{content_type}; charset=utf-8")
-
-        full_path = f"gs://{BUCKET}/{destination_blob_name}"
-        print(f"Successfully uploaded data to: {full_path}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
-
-
 def input_with_timeout(msg, timeout=10):
     print(msg)
     sys.stdout.flush()
@@ -189,7 +137,7 @@ def ready_to_crawl(parsed):
 
 
 def parse_hostname(url: str) -> str:
-    return parse_url(url).hostname_normalized
+    return NormalizedParse.parse(url).hostname_normalized
 
 
 def uuid7():
@@ -202,7 +150,7 @@ duckdb.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
 
 # --- Main Crawler Logic ---
 def crawl_website(uid, current_url):
-    parsed = parse_url(current_url)
+    parsed = NormalizedParse.parse(current_url)
     if not robot_txt_allowed(current_url, parsed):
         print(f"Skipping (disallowed by robots.txt): {current_url}")
         return
