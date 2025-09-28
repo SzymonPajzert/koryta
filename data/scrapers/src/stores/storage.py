@@ -1,7 +1,15 @@
+import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from util.url import NormalizedParse
+from pathlib import Path
+
 from google.cloud import storage
+
+from util.url import NormalizedParse
+from util.config import DOWNLOADED_DIR
+
+
+base_dir = Path(DOWNLOADED_DIR)
 
 BUCKET = "koryta-pl-crawled"
 
@@ -51,12 +59,38 @@ def list_blobs(hostname):
         yield blob.name
 
 
+class CachedStorage:
+    blob_name: str
+
+    def __init__(self, blob_name: str) -> None:
+        self.blob_name = blob_name
+
+    @property
+    def filename(self) -> str:
+        return self.blob_name.replace("/", ".")
+
+    @property
+    def downloaded_path(self) -> Path:
+        return base_dir / self.filename
+
+    def downloaded(self) -> bool:
+        return os.path.exists(base_dir / self.filename)
+
+
 def download_from_gcs(blob_name: str) -> str | None:
     """Downloads a blob from GCS as a string."""
+    cached = CachedStorage(blob_name)
+    if cached.downloaded():
+        print(f"Using cached file {cached.downloaded_path}")
+        return open(cached.downloaded_path).read()
+
     bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(blob_name)
     try:
-        return blob.download_as_text()
+        print(f"Downloading gs://{BUCKET}/{blob_name} to {cached.downloaded_path}...")
+        text = blob.download_as_text()
+        open(cached.downloaded_path, "w").write(text)
+        return text
     except Exception as e:
         print(f"Failed to download gs://{BUCKET}/{blob_name}: {e}")
         return None

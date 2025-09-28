@@ -8,15 +8,23 @@ from regex import findall, match
 from tqdm import tqdm
 from collections import Counter
 from stores.duckdb import ducktable, dump_dbs
-from util.config import VERSIONED_DIR
+from util.download import FileSource
+from util.config import DOWNLOADED_DIR
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 
 
-DUMP_FILENAME = os.path.join(VERSIONED_DIR, "plwiki-latest-articles.xml.bz2")
+# URL for the latest Polish Wikipedia articles dump
+DUMP_URL = "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2"
+
+OUTPUT_FILE = "plwiki-latest-articles.xml.bz2"
+
+FileSource(DUMP_URL).download()
+
+DUMP_FILENAME = os.path.join(DOWNLOADED_DIR, "plwiki-latest-articles.xml.bz2")
 DUMP_SIZE = 12314670146
 
 
-@ducktable()
+@ducktable(name="people_wiki")
 @dataclass
 class People:
     source: str

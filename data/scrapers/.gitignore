@@ -3,6 +3,7 @@
 *.csv
 *.json
 
+downloaded
 versioned-*
 versioned_*
 

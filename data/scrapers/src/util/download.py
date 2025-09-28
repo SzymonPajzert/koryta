@@ -1,9 +1,9 @@
 import urllib.request
 from pathlib import Path
-from util.config import VERSIONED_DIR
+from util.config import DOWNLOADED_DIR
 import os
 
-base_dir = Path(VERSIONED_DIR)
+base_dir = Path(DOWNLOADED_DIR)
 
 
 class FileSource:
