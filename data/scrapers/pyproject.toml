@@ -120,9 +120,8 @@ scrape_wiki = "scrapers.wiki.process_articles:main"
 scrape_pkw = "scrapers.pkw.process:main"
 scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
 scrape_krs = "scrapers.krs.process:extract_people"
+scrape_koryta = "scrapers.koryta.download:process"
 analyze_people = "analysis.people:main"
-
-
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

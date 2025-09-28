@@ -4,6 +4,10 @@ import os
 import pandas as pd
 from util.config import VERSIONED_DIR
 
+pd.set_option("display.max_rows", None)
+pd.set_option("display.max_columns", None)
+pd.set_option("display.width", None)
+
 
 def find_three_way_matches(con, limit=20):
     three_way_query = f"""
@@ -77,9 +81,6 @@ def find_two_way_matches(con, table1, table2, limit: int | None = 20):
     if df.empty:
         print("No matches found with the current criteria.")
     else:
-        pd.set_option("display.max_rows", None)
-        pd.set_option("display.max_columns", None)
-        pd.set_option("display.width", None)
         print(df)
 
 
