@@ -33,6 +33,7 @@ class People:
     party: str
     birth_iso8601: str | None
     birth_year: int | None
+    infobox: str
 
 
 @ducktable()
@@ -228,6 +229,7 @@ class WikiArticle:
                 party=article.polityk_infobox.fields.get("partia", ""),
                 birth_iso8601=article.polityk_infobox.birth_iso,
                 birth_year=article.polityk_infobox.birth_year,
+                infobox=article.polityk_infobox.inf_type,
             ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
 
         # if article.polityk_infobox is not None:

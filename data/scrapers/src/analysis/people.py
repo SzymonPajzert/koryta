@@ -61,6 +61,12 @@ SELECT DISTINCT
     lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
     double_metaphone(last_name) as metaphone,
     birth_year,
+    CASE
+        WHEN infobox = 'Polityk' THEN 'Polityk'
+        WHEN infobox = 'Biogram' THEN 'Biogram'
+        WHEN infobox = 'Naukowiec' THEN 'Naukowiec'
+        ELSE NULL    
+    END as is_polityk,
     full_name
 FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
@@ -165,6 +171,7 @@ def find_all_matches(con, limit: int | None = 20):
         SELECT
             kp.*,
             w.full_name as wiki_name,
+            w.is_polityk,
             (
                 jaro_winkler_similarity(kp.base_first_name, w.first_name) +
                 jaro_winkler_similarity(kp.base_last_name, w.last_name) * 2 +
@@ -194,11 +201,17 @@ def find_all_matches(con, limit: int | None = 20):
         pkw_name,
         wiki_name,
         birth_year,
+        is_polityk,
         (
             (CASE WHEN krs_name IS NOT NULL THEN 8 ELSE 0 END) +
             (CASE WHEN pkw_name IS NOT NULL THEN 4 ELSE 0 END) +
-            (CASE WHEN koryta_name IS NOT NULL THEN 2 ELSE 0 END) +
-            (CASE WHEN wiki_name IS NOT NULL THEN 1 ELSE 0 END)
+            (CASE WHEN koryta_name IS NOT NULL THEN 16 ELSE 0 END) +
+            (CASE WHEN wiki_name IS NOT NULL THEN 2 ELSE 0 END) +
+            (CASE
+                WHEN is_polityk = 'Polityk' THEN 1
+                WHEN is_polityk IS NOT NULL THEN 0.5
+                ELSE 0
+            END)
         ) as overall_score
     FROM all_sources
     ORDER BY overall_score DESC

@@ -35,6 +35,24 @@ def test_excluded_people():
     )
 
 
+def test_bip_warszawa():
+    assert exists_in_output(Person(any="Agata Marciniak-Różak"))
+    # We should scrape people from bip somehow, but they work in smaller places and they're not even in krs
+    assert False  # Does it work?
+
+
+# TODO Memoize the df lookup and tell user to remove it if they changed the logic
+# TODO Grzegorz Pastuszko is a lawyer in wiki, but also connected to PiS
+# TODO Check that people have interesting mentions on their pages
+# Another interesting is Krzysztof Czeszejko-Sochacki
+# https://pl.wikipedia.org/wiki/Krzysztof_Czeszejko-Sochacki
+# TODO Find another lawyer and ignore them if they have a specialty
+# TODO Watch out to also not scrape https://pl.wikipedia.org/wiki/%C5%81ukasz_Krawiec
+# Check for death, usually it's safe to not add them.
+# TODO This is also a fake - https://pl.wikipedia.org/wiki/Jerzy_Skrzypek
+# TODO Check other people on wiki without correct infobox
+
+
 def test_missing_kaminska():
     assert False  # 1200071 - rejestr.io - Agnieszka Kamińska - jest na stronie i w rejestrze krs
 
