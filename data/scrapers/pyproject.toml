@@ -112,7 +112,8 @@ dependencies = [
     "wrapt==1.17.3",
     '''pl_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl#sha256=3bc7296cd4d67fa9ee0904b25401b0e9a9a772d5c4756edf54143a2ff4c9dcc0''',
     "pandas (>=2.3.2,<3.0.0)",
-    "matplotlib (>=3.10.6,<4.0.0)"
+    "matplotlib (>=3.10.6,<4.0.0)",
+    "xlrd (>=2.0.2,<3.0.0)"
 ]
 
 [project.scripts]

@@ -7,18 +7,53 @@ import csv
 from zipfile import ZipFile
 import io
 import typing
+import pandas
+import abc
 
 
-class ZipExtractor:
+class Extractor:
+    @abc.abstractmethod
+    def read(self, file_path):
+        raise NotImplementedError()
+
+
+class ZipExtractor(Extractor):
     inner_filename: str
 
     def __init__(self, inner_filename) -> None:
         self.inner_filename = inner_filename
 
-    def read(self, zip_file_path):
-        with ZipFile(zip_file_path, "r").open(self.inner_filename, "r") as raw_bytes:
-            for line in io.TextIOWrapper(raw_bytes, encoding="utf-8"):
+    def read(self, file_path):
+        with ZipFile(file_path, "r").open(self.inner_filename, "r") as raw_bytes:
+
+            def generator():
+                for line in io.TextIOWrapper(raw_bytes, encoding="utf-8"):
+                    yield line
+
+            first = True
+            for line in csv.reader(generator(), delimiter=";"):
+                if first:
+                    first = False
+                    line = [col.strip('\ufeff"') for col in line]
                 yield line
+
+
+class XlsExtractor(Extractor):
+    inner_filename: str
+    skip_rows: int  # Row many rows to skip, e.g additional headers
+
+    def __init__(self, inner_filename, skip_rows=0) -> None:
+        self.inner_filename = inner_filename
+        self.skip_rows = skip_rows
+
+    def read(self, file_path):
+        df = pandas.read_excel(file_path)
+        count = 0
+        for _, row in df.iterrows():
+            if count < self.skip_rows:
+                count += 1
+                continue
+            yield row
 
 
 @dataclass
@@ -27,11 +62,25 @@ class SetField:
     processor: typing.Callable[[str], str] = lambda x: x
 
 
+def parse_sex(s: str) -> str:
+    match s:
+        case "K":
+            return "F"
+        case "M":
+            return "M"
+        case "Mężczyzna":
+            return "M"
+        case "Kobieta":
+            return "F"
+
+    raise ValueError(f"Unknown sex: {s}")
+
+
 CSV_HEADERS_2024 = {
     # Personal
     "Nazwisko i imiona": SetField("pkw_name"),
-    "Wiek": SetField("age_in_2024"),
-    "Płeć": SetField("sex", processor=lambda x: "M" if x == "Mężczyzna" else ""),
+    "Wiek": SetField("age"),
+    "Płeć": SetField("sex", parse_sex),
     # Location of living
     "Miejsce zamieszkania": None,
     "Gmina m. z.": None,
@@ -77,7 +126,22 @@ CSV_HEADERS_2024 = {
     "Liczba głosów ważnych na wszystkich kandydatów": None,
 }
 
-counters = {k: Counter() for k in CSV_HEADERS_2024.keys()}
+CSV_HEADERS_2006 = {
+    "Nazwa": None,
+    "Okręg nr": None,
+    "lista nr": None,
+    "prefix nazwiska": None,
+    "Nazwisko": SetField("last_name"),
+    "Imona": SetField("first_name"),
+    "L.głosów": None,
+}
+
+CSV_HEADERS = {
+    **CSV_HEADERS_2024,
+    **CSV_HEADERS_2006,
+}
+
+counters = {k: Counter() for k in CSV_HEADERS.keys()}
 
 # TODO Is there any better way to list upper case characters?
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
@@ -86,59 +150,71 @@ UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢ
 @ducktable(name="people_pkw")
 @dataclass
 class ExtractedData:
-    pkw_name: str
-    last_name: str = field(init=False)
-    first_name: str = field(init=False)
-    age_in_2024: str
+    election_year: str
+    age: str
     birth_year: int = field(init=False)
     sex: str
-    teryt_living: str
     teryt_candidacy: str
-    candidacy_success: str
-    party: str
-    position: str
+    teryt_living: str | None = None
+    candidacy_success: str | None = None
+    party: str | None = None
+    position: str | None = None
+    pkw_name: str | None = None
+    first_name: str | None = None
     middle_name: str | None = None
+    last_name: str | None = None
     party_member: str | None = None
 
     def __post_init__(self):
-        m = re.match(f"(?:[-{UPPER}]+ )+", self.pkw_name)
-        if not m:
-            raise ValueError(f"Invalid name: {self.pkw_name}")
-        self.last_name = m.group().strip()
-        names = self.pkw_name[len(self.last_name) :].strip().split(" ")
-        self.first_name = names[0]
-        if len(names) == 2:
-            self.middle_name = " ".join(names[1:])
-        if len(names) > 2:
-            print(f"Skipping setting middle name: {self.pkw_name}")
+        if self.pkw_name is not None:
+            m = re.match(f"(?:[-{UPPER}]+ )+", self.pkw_name)
+            if not m:
+                raise ValueError(f"Invalid name: {self.pkw_name}")
+            self.last_name = m.group().strip()
+            names = self.pkw_name[len(self.last_name) :].strip().split(" ")
+            self.first_name = names[0]
+            if len(names) == 2:
+                self.middle_name = " ".join(names[1:])
+            if len(names) > 2:
+                print(f"Skipping setting middle name: {self.pkw_name}")
+        else:
+            # TODO why I can't use upper here
+            self.pkw_name = f"{self.last_name} {self.first_name}"
 
-        self.birth_year = 2024 - int(self.age_in_2024)
+        if self.first_name is not None and " " in self.first_name:
+            names = self.first_name.split(" ", 1)
+            self.first_name = names[0]
+            self.middle_name = names[1]
+
+        self.birth_year = int(self.election_year) - int(self.age)
 
     def insert_into(self):
         pass
 
+    # TODO currently it doesn't work well, I could improve it
     def spadochroniarz(self):
         candidacy = self.teryt_candidacy.rstrip("0")
+        assert self.teryt_living is not None
         living = self.teryt_living[: len(candidacy)]
         return candidacy != living
 
 
-def process_csv(reader, position):
+def process_csv(reader, election_year, csv_headers):
     header = None
 
     for row in reader:
-        if not header:
-            header = [col.strip('\ufeff"') for col in row]
+        if header is None:
+            header = row
             replacements = dict()
             for col in header:
-                if CSV_HEADERS_2024[col] == "" or CSV_HEADERS_2024[col] is None:
+                if csv_headers[col] == "" or csv_headers[col] is None:
                     continue
 
-                if CSV_HEADERS_2024[col].name not in replacements:
-                    replacements[CSV_HEADERS_2024[col].name] = col
+                if csv_headers[col].name not in replacements:
+                    replacements[csv_headers[col].name] = col
                 else:
                     raise ValueError(
-                        f"Duplicate column name: {col} and {replacements[CSV_HEADERS_2024[col].name]} map to {CSV_HEADERS_2024[col].name}"
+                        f"Duplicate column name: {col} and {replacements[csv_headers[col].name]} map to {csv_headers[col].name}"
                     )
 
             continue
@@ -146,17 +222,17 @@ def process_csv(reader, position):
         row_dict = dict(zip(header, row))
 
         for k, v in row_dict.items():
-            if CSV_HEADERS_2024[k] == "":
+            if csv_headers[k] == "":
                 counters[k].update([v])
 
         mapped = dict()
         for k, v in row_dict.items():
-            if CSV_HEADERS_2024[k] == "" or CSV_HEADERS_2024[k] is None:
+            if csv_headers[k] == "" or csv_headers[k] is None:
                 continue
-            mapped[CSV_HEADERS_2024[k].name] = CSV_HEADERS_2024[k].processor(v)
+            mapped[csv_headers[k].name] = csv_headers[k].processor(v)
 
         try:
-            yield ExtractedData(**mapped)
+            yield ExtractedData(election_year=election_year, **mapped)
         except TypeError:
             print(row_dict)
             raise
@@ -165,15 +241,126 @@ def process_csv(reader, position):
 @dataclass
 class InputSource:
     source: FileSource
-    extractor: ZipExtractor
+    extractor: Extractor
     year: int
-    position: str
+    position: str | None = None
+    province: str | None = None
 
 
 # These sources are from pkw website
 # TODO Add 2023 parliment elections
 # TODO Add previous ones
 sources = [
+    InputSource(
+        FileSource(
+            "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/dolnoslaskie.xls"
+        ),
+        XlsExtractor("dolnoslaskie.xls"),
+        2006,
+        province="dolnoslaskie",
+    ),
+    InputSource(
+        FileSource(
+            "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/kujawsko_pomorskie.xls"
+        ),
+        XlsExtractor("kujawsko_pomorskie.xls"),
+        2006,
+        province="kujawsko-pomorskie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lubelskie.xls"),
+        XlsExtractor("lubelskie.xls"),
+        2006,
+        province="lubelskie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lubuskie.xls"),
+        XlsExtractor("lubuskie.xls"),
+        2006,
+        province="lubuskie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lodzkie.xls"),
+        XlsExtractor("lodzkie.xls"),
+        2006,
+        province="lodzkie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/malopolskie.xls"),
+        XlsExtractor("malopolskie.xls"),
+        2006,
+        province="malopolskie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/mazowieckie.xls"),
+        XlsExtractor("mazowieckie.xls"),
+        2006,
+        province="mazowieckie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/opolskie.xls"),
+        XlsExtractor("opolskie.xls"),
+        2006,
+        province="opolskie",
+    ),
+    InputSource(
+        FileSource(
+            "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/podkarpackie.xls"
+        ),
+        XlsExtractor("podkarpackie.xls"),
+        2006,
+        province="podkarpackie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/podlaskie.xls"),
+        XlsExtractor("podlaskie.xls"),
+        2006,
+        province="podlaskie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/pomorskie.xls"),
+        XlsExtractor("pomorskie.xls"),
+        2006,
+        province="pomorskie",
+    ),
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/slaskie.xls"),
+        XlsExtractor("slaskie.xls"),
+        2006,
+        province="slaskie",
+    ),
+    InputSource(
+        FileSource(
+            "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/swietokrzyskie.xls"
+        ),
+        XlsExtractor("swietokrzyskie.xls"),
+        2006,
+        province="swietokrzyskie",
+    ),
+    InputSource(
+        FileSource(
+            "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/warminsko_mazurskie.xls"
+        ),
+        XlsExtractor("warminsko_mazurskie.xls"),
+        2006,
+        province="warminsko-mazurskie",
+    ),
+    InputSource(
+        FileSource(
+            "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/wielkopolskie.xls"
+        ),
+        XlsExtractor("wielkopolskie.xls"),
+        2006,
+        province="wielkopolskie",
+    ),
+    InputSource(
+        FileSource(
+            "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/zachodniopomorskie.xls"
+        ),
+        XlsExtractor("zachodniopomorskie.xls"),
+        2006,
+        province="zachodniopomorskie",
+    ),
     InputSource(
         FileSource(
             "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_sejmiki_wojewodztw_csv.zip"
@@ -241,12 +428,10 @@ def process_pkw():
     for config in sources:
         # TODO Correctly open zip file
         print(f"🗂️  Starts processing CSV file: {config.source.filename}")
-        reader = csv.reader(
-            config.extractor.read(config.source.downloaded_path), delimiter=";"
-        )
+        reader = config.extractor.read(config.source.downloaded_path)
 
         # TODO check the year, since it's currently hardcoded for 2024
-        for item in process_csv(reader, config.position):
+        for item in process_csv(reader, config.year, CSV_HEADERS):
             item.insert_into()
 
         print("🎉 Processing complete.")
