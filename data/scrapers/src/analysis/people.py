@@ -29,8 +29,9 @@ con = duckdb.connect(database=":memory:")
 
 con.execute(
     """
-    INSTALL fuzzy;
-    LOAD fuzzy;"""
+    INSTALL splink_udfs FROM community;
+    LOAD splink_udfs;
+    """
 )
 
 read_limit = ""
@@ -41,6 +42,7 @@ CREATE OR REPLACE TABLE krs_people AS
 SELECT DISTINCT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
+    double_metaphone(last_name) as metaphone,
     CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
     id as rejestrio_id,
     full_name
@@ -57,6 +59,7 @@ CREATE OR REPLACE TABLE wiki_people AS
 SELECT DISTINCT
     lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
     lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
+    double_metaphone(last_name) as metaphone,
     birth_year,
     full_name
 FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
@@ -71,6 +74,7 @@ CREATE OR REPLACE TABLE pkw_people AS
 SELECT DISTINCT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
+    double_metaphone(last_name) as metaphone,
     birth_year,
     pkw_name as full_name
 FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
@@ -87,6 +91,7 @@ CREATE OR REPLACE TABLE koryta_people AS
 SELECT DISTINCT
     lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
     lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
+    double_metaphone(last_name) as metaphone,
     id as koryta_id,
     full_name
 FROM read_json_auto('{koryta_file}', format='newline_delimited', auto_detect=true)
@@ -139,6 +144,7 @@ def find_all_matches(con, limit: int | None = 20):
     query = f"""
     WITH krs_pkw AS (
         SELECT
+            k.metaphone as metaphone,
             k.full_name as krs_name,
             p.full_name as pkw_name,
             k.birth_year as birth_year,
@@ -151,9 +157,9 @@ def find_all_matches(con, limit: int | None = 20):
                 jaro_winkler_similarity(k.full_name, p.full_name)
             ) / 4.0 as pkw_score
         FROM krs_people k
-        FULL JOIN pkw_people p ON k.birth_year = p.birth_year
-        WHERE jaro_winkler_similarity(k.last_name, p.last_name) > 0.95
-          AND jaro_winkler_similarity(k.first_name, p.first_name) > 0.95
+        FULL JOIN pkw_people p ON k.birth_year = p.birth_year AND k.metaphone = p.metaphone
+            AND jaro_winkler_similarity(k.last_name, p.last_name) > 0.95
+            AND jaro_winkler_similarity(k.first_name, p.first_name) > 0.95
     ),
     krs_pkw_wiki AS (
         SELECT
@@ -165,7 +171,7 @@ def find_all_matches(con, limit: int | None = 20):
                 jaro_winkler_similarity(kp.base_full_name, w.full_name)
             ) / 4.0 as wiki_score
         FROM krs_pkw kp
-        LEFT JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1
+        LEFT JOIN wiki_people w ON kp.birth_year = w.birth_year AND kp.metaphone = w.metaphone
             AND jaro_winkler_similarity(kp.base_last_name, w.last_name) > 0.95
             AND jaro_winkler_similarity(kp.base_first_name, w.first_name) > 0.95
     ),
@@ -207,10 +213,10 @@ def find_all_matches(con, limit: int | None = 20):
 
 def main():
     print("--- Imported table sizes ---")
-    print(f"KRS: {con.sql("SELECT COUNT(*) FROM krs_people").fetchall()}")
-    print(f"Wiki: {con.sql("SELECT COUNT(*) FROM wiki_people").fetchall()}")
-    print(f"PKW: {con.sql("SELECT COUNT(*) FROM pkw_people").fetchall()}")
-    print(f"Koryta: {con.sql("SELECT COUNT(*) FROM koryta_people").fetchall()}")
+    for table in ["krs_people", "wiki_people", "pkw_people", "koryta_people"]:
+        print(f"{table}: {con.sql(f"SELECT COUNT(*) FROM {table}").fetchall()}")
+        print(con.sql(f"SELECT * FROM {table} LIMIT 10").df())
+        print("\n\n")
 
     print("--- Overlaps between all three sources (KRS, Wiki, PKW) ---")
     # find_two_way_matches(con, "krs_people", "wiki_people", limit=100)

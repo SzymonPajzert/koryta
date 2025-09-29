@@ -23,15 +23,20 @@ def exists_in_output(person: Person):
 
 
 def test_included_matches():
-    assert len(df) > 0
+    assert exists_in_output(Person(any="Wojciech Bartelski"))
 
+
+def test_excluded_people():
     assert not exists_in_output(
         Person(krs_name="Magdalena Stanilewicz", pkw_name="STANKIEWICZ Magdalena Anna")
     )
     assert not exists_in_output(
         Person(krs_name="Dariusz Jerzy Kowalczyk", pkw_name="KOWALCZYK Dariusz Anatol")
     )
-    assert exists_in_output(Person(any="Wojciech Bartelski"))
+
+
+def test_missing_kaminska():
+    assert False  # 1200071 - rejestr.io - Agnieszka Kamińska - jest na stronie i w rejestrze krs
 
 
 def test_second_names_match():
