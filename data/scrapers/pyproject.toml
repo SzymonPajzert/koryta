@@ -111,7 +111,8 @@ dependencies = [
     "webencodings==0.5.1",
     "wrapt==1.17.3",
     '''pl_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl#sha256=3bc7296cd4d67fa9ee0904b25401b0e9a9a772d5c4756edf54143a2ff4c9dcc0''',
-    "pandas (>=2.3.2,<3.0.0)"
+    "pandas (>=2.3.2,<3.0.0)",
+    "matplotlib (>=3.10.6,<4.0.0)"
 ]
 
 [project.scripts]
@@ -122,7 +123,13 @@ scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
 scrape_krs = "scrapers.krs.process:extract_people"
 scrape_koryta = "scrapers.koryta.download:process"
 analyze_people = "analysis.people:main"
+# jupyter lab is available as well for analysis
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "jupyterlab (>=4.4.9,<5.0.0)"
+]

@@ -9,3 +9,5 @@ versioned_*
 
 # JSON credentials
 koryta-pl*.json
+
+.ipynb_checkpoints
