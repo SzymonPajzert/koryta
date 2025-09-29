@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 from analysis.people import find_all_matches, con
 
 df = find_all_matches(con, limit=4000)
@@ -44,17 +42,17 @@ def test_bip_warszawa():
     assert False  # Does it work?
 
 
-# TODO Memoize the df lookup and tell user to remove it if they changed the logic
-# TODO Check that people have interesting mentions on their pages, e.g. Pastuszko
-# Another interesting is Krzysztof Czeszejko-Sochacki
-# https://pl.wikipedia.org/wiki/Krzysztof_Czeszejko-Sochacki
-# TODO Find another lawyer and ignore them if they have a specialty
-# TODO Watch out to also not scrape https://pl.wikipedia.org/wiki/%C5%81ukasz_Krawiec
-# Check for death, usually it's safe to not add them.
-# TODO This is also a fake - https://pl.wikipedia.org/wiki/Jerzy_Skrzypek
-# TODO Check other people on wiki without correct infobox
-# Kaja Godek - fun to list people who work in places they don't really have any competency for - https://pl.wikipedia.org/wiki/Kaja_Godek
-# TODO wiki_people Marek Tomasz Pawłowski wrong first/last name split
+def test_not_duplicated():
+    df.groupby("krs_name")
+    df.groupby("pkw_name")
+    assert False  # If someone has multiple lines (many years in PKW, join them)
+
+
+def test_ignore_false_positives():
+    assert False
+    # TODO Watch out to also not scrape https://pl.wikipedia.org/wiki/%C5%81ukasz_Krawiec
+    # Check for death, usually it's safe to not add them.
+    # TODO This is also a fake - https://pl.wikipedia.org/wiki/Jerzy_Skrzypek
 
 
 def test_missing_kaminska():
@@ -62,4 +60,24 @@ def test_missing_kaminska():
 
 
 def test_second_names_match():
-    assert False  # TODO Implement
+    # TODO wiki_people Marek Tomasz Pawłowski wrong first/last name split
+    assert False
+
+
+def test_nepotism_by_surname():
+    pass
+    # TODO Agnelika Rybak Gawkowska - WKD, żona Gawkowskiego
+    # TODO Jacek Pużuk - mąż, Szpital Grochowski
+
+
+def test_warszawa_bip():
+    pass
+    # TODO Marek Chmurski jest pełnomocnikiem prezydenta miasta ds. rozowju struktury kolejowej. To wygląda jak jakieś sztuczne stanowisko żeby mu pensję dołożyć
+
+
+def test_lawyers():
+    pass
+    # TODO Check that people have interesting mentions on their pages, e.g. Pastuszko
+    # Another interesting is Krzysztof Czeszejko-Sochacki
+    # https://pl.wikipedia.org/wiki/Krzysztof_Czeszejko-Sochacki
+    # TODO Find another lawyer and ignore them if they have a specialty

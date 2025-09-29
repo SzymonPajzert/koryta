@@ -1,29 +1,18 @@
-import glob
-import os
-import sys
-
 import duckdb
 import pandas as pd
+import os
 
-from util.config import VERSIONED_DIR
+from util.config import versioned
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 
 
-def check_versioned_dir(filename: str) -> str:
-    try:
-        return glob.glob(os.path.join(VERSIONED_DIR, filename))[0]
-    except IndexError:
-        print(f"{filename} is missing.")
-        sys.exit(1)
-
-
-krs_file = check_versioned_dir("people_krs.jsonl")
-wiki_file = check_versioned_dir("people_wiki.jsonl")
-pkw_file = check_versioned_dir("people_pkw.jsonl")
-koryta_file = check_versioned_dir("people_koryta.jsonl")
+krs_file = versioned.get_path("people_krs.jsonl")
+wiki_file = versioned.get_path("people_wiki.jsonl")
+pkw_file = versioned.get_path("people_pkw.jsonl")
+koryta_file = versioned.get_path("people_koryta.jsonl")
 
 con = duckdb.connect(database=":memory:")
 
@@ -232,10 +221,16 @@ def main():
         print("\n\n")
 
     print("--- Overlaps between all three sources (KRS, Wiki, PKW) ---")
-    # find_two_way_matches(con, "krs_people", "wiki_people", limit=100)
-    # find_two_way_matches(con, "krs_people", "pkw_people", limit=100)
 
-    df = find_all_matches(con, limit=4000)
+    df_path = versioned.get_path("matched")
+    df = None  # TODO Do I need it for visibility?
+    if os.path.exists(df_path):
+        print(f"Reading memoized {df_path}")
+        df = pd.read_parquet(df_path)
+    else:
+        df = find_all_matches(con, limit=4000)
+        print(f"Got results, saving to {df_path}")
+        df.to_parquet(df_path)
     print(df)
     con.close()
 
