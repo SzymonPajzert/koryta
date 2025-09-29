@@ -36,7 +36,8 @@ class KrsPerson:
     first_name: str
     last_name: str
     full_name: str
-    krs: str
+    employed_krs: str
+    employed_end: str | None
     birth_date: str | None = None
     second_names: str | None = None
     sex: str | None = None
@@ -46,6 +47,13 @@ class KrsPerson:
 
     def insert_into(self):
         pass
+
+
+@ducktable(name="companies_krs")
+@dataclass
+class KrsCompany:
+    krs: str
+    name: str
 
 
 def iterate_blobs():
@@ -62,6 +70,17 @@ def iterate_blobs():
             yield blob_name, data
         except json.JSONDecodeError as e:
             print(f"  [ERROR] Could not process {blob_name}: {e}")
+
+
+def end_time(item):
+    max_end = "1900-01-01"
+    for conn in item["krs_powiazania_kwerendowane"]:
+        assert isinstance(conn, dict)
+        v = conn.get("data_koniec", "2025-10-07")
+        if v is None:
+            v = "2025-10-07"
+        max_end = max(max_end, v)
+    return max_end
 
 
 def extract_people():
@@ -83,7 +102,8 @@ def extract_people():
                             birth_date=identity.get("data_urodzenia"),
                             second_names=identity.get("drugie_imiona"),
                             sex=identity.get("plec"),
-                            krs=KRS.from_blob_name(blob_name).id,
+                            employed_krs=KRS.from_blob_name(blob_name).id,
+                            employed_end=end_time(item),
                         ).insert_into()
             except KeyError as e:
                 print(f"  [ERROR] Could not process {blob_name}: {e}")

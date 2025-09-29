@@ -58,40 +58,57 @@ def test_not_duplicated(column):
     assert len(df[column].unique()) == len(df[column].dropna())
 
 
-def test_second_names_match():
+def get_words(name):
+    if name is None:
+        return set()
+    return set(re.findall(r"\b\w+\b", name.lower()))
+
+
+def no_diff_sets(a, b):
+    if len(a.difference(b)) == 0:
+        return ""
+    if len(b.difference(a)) == 0:
+        return ""
+    disjoint_words = b.difference(a) | a.difference(b)
+    return " ".join(disjoint_words)
+
+
+@pytest.mark.parametrize(
+    "row", (row for _, row in df.iterrows()), ids=lambda row: f"{row["krs_name"]}"
+)
+def test_second_names_match(row):
     # Split each row and each _name column into single words.
     # Make sure that each lowercase word matches the words in other columns, e.g. second names match
-    def get_words(name):
-        if name is None:
-            return set()
-        return set(re.findall(r"\b\w+\b", name.lower()))
 
-    for _, row in df.iterrows():
-        krs_words = get_words(row["krs_name"])
-        pkw_words = get_words(row["pkw_name"])
-        wiki_words = get_words(row["wiki_name"])
+    krs_words = get_words(row["krs_name"])
+    pkw_words = get_words(row["pkw_name"])
+    wiki_words = get_words(row["wiki_name"])
 
-        # Check if there's at least one common word between krs_name and pkw_name
+    assert no_diff_sets(krs_words, pkw_words) == ""
+    assert no_diff_sets(krs_words, wiki_words) == ""
+    assert no_diff_sets(pkw_words, wiki_words) == ""
+
+    # Check if there's at least one common word between krs_name and pkw_name
+    if krs_words and pkw_words:
+        assert (
+            len(krs_words.intersection(pkw_words)) > 0
+        ), f"No common words between KRS: '{row['krs_name']}' and PKW: '{row['pkw_name']}'"
+
+    # If wiki_name exists, check for common words with krs_name or pkw_name
+    if wiki_words:
         if krs_words and pkw_words:
             assert (
-                len(krs_words.intersection(pkw_words)) > 0
-            ), f"No common words between KRS: '{row['krs_name']}' and PKW: '{row['pkw_name']}'"
-
-        # If wiki_name exists, check for common words with krs_name or pkw_name
-        if wiki_words:
-            if krs_words and pkw_words:
-                assert (
-                    len(wiki_words.intersection(krs_words)) > 0
-                    or len(wiki_words.intersection(pkw_words)) > 0
-                ), f"No common words between Wiki: '{row['wiki_name']}' and KRS/PKW: '{row['krs_name']}', '{row['pkw_name']}'"
-            elif krs_words:
-                assert (
-                    len(wiki_words.intersection(krs_words)) > 0
-                ), f"No common words between Wiki: '{row['wiki_name']}' and KRS: '{row['krs_name']}'"
-            elif pkw_words:
-                assert (
-                    len(wiki_words.intersection(pkw_words)) > 0
-                ), f"No common words between Wiki: '{row['wiki_name']}' and PKW: '{row['pkw_name']}'"
+                len(wiki_words.intersection(krs_words)) > 0
+                or len(wiki_words.intersection(pkw_words)) > 0
+            ), f"No common words between Wiki: '{row['wiki_name']}' and KRS/PKW: '{row['krs_name']}', '{row['pkw_name']}'"
+        elif krs_words:
+            assert (
+                len(wiki_words.intersection(krs_words)) > 0
+            ), f"No common words between Wiki: '{row['wiki_name']}' and KRS: '{row['krs_name']}'"
+        elif pkw_words:
+            assert (
+                len(wiki_words.intersection(pkw_words)) > 0
+            ), f"No common words between Wiki: '{row['wiki_name']}' and PKW: '{row['pkw_name']}'"
 
 
 def file_lines(filename):

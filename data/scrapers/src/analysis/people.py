@@ -28,15 +28,18 @@ read_limit = ""
 con.execute(
     f"""
 CREATE OR REPLACE TABLE krs_people AS
-SELECT DISTINCT
+SELECT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
     double_metaphone(last_name) as metaphone,
     CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
+    MAX(employed_end) AS employed_end,
+    ANY_VALUE(employed_krs) AS employed_krs,
     id as rejestrio_id,
     full_name
 FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
+GROUP BY ALL
 {read_limit}
 """
 )
@@ -145,6 +148,8 @@ def _find_all_matches(con):
             k.first_name as base_first_name, -- Carry forward base names for subsequent joins
             k.last_name as base_last_name,
             k.full_name as base_full_name,
+            employed_end,
+            employed_krs,
             (
                 jaro_winkler_similarity(k.first_name, p.first_name) +
                 jaro_winkler_similarity(k.last_name, p.last_name) * 2 +
@@ -168,8 +173,8 @@ def _find_all_matches(con):
             ) / 4.0 as wiki_score
         FROM krs_pkw kp
         LEFT JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1 AND kp.metaphone = w.metaphone
-            AND jaro_winkler_similarity(kp.base_last_name, w.last_name) > 0.95
-            AND jaro_winkler_similarity(kp.base_first_name, w.first_name) > 0.95
+            AND kp.base_last_name = w.last_name
+            AND kp.base_first_name = w.first_name
     ),
     all_sources AS (
         SELECT
@@ -190,6 +195,8 @@ def _find_all_matches(con):
         pkw_name,
         wiki_name,
         birth_year,
+        employed_end,
+        employed_krs,
         is_polityk,
         (
             (CASE WHEN krs_name IS NOT NULL THEN 8 ELSE 0 END) +
