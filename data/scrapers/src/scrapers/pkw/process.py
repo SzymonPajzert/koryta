@@ -9,6 +9,7 @@ import io
 import typing
 import pandas
 import abc
+import math
 
 
 class Extractor:
@@ -40,20 +41,36 @@ class ZipExtractor(Extractor):
 
 class XlsExtractor(Extractor):
     inner_filename: str
-    skip_rows: int  # Row many rows to skip, e.g additional headers
+    header_rows: int  # Row many rows to skip, e.g additional headers
 
-    def __init__(self, inner_filename, skip_rows=0) -> None:
+    def __init__(self, inner_filename, header_rows=2) -> None:
         self.inner_filename = inner_filename
-        self.skip_rows = skip_rows
+        self.header_rows = header_rows
 
     def read(self, file_path):
-        df = pandas.read_excel(file_path)
+        df = pandas.read_excel(file_path, header=None)
         count = 0
-        for _, row in df.iterrows():
-            if count < self.skip_rows:
+        header = None
+        # We set index and name, to get just plain tuples
+        for row in df.itertuples(index=False, name=None):
+            if count < self.header_rows:
                 count += 1
-                continue
-            yield row
+                current = list(row)
+                for idx, _ in enumerate(current):
+                    if not isinstance(current[idx], str) and math.isnan(current[idx]):
+                        # Nan means that the cell is merged, carry over the value
+                        current[idx] = current[idx - 1]
+
+                if header is None:
+                    header = current
+                else:
+                    header = [f"{p} {c}" for p, c in zip(header, current)]
+            elif count == self.header_rows:
+                # Return aggregated header
+                yield header
+                count += 1
+            else:
+                yield row
 
 
 @dataclass
@@ -127,13 +144,43 @@ CSV_HEADERS_2024 = {
 }
 
 CSV_HEADERS_2006 = {
-    "Nazwa": None,
-    "Okręg nr": None,
-    "lista nr": None,
-    "prefix nazwiska": None,
-    "Nazwisko": SetField("last_name"),
-    "Imona": SetField("first_name"),
-    "L.głosów": None,
+    "Gmina TERYT": SetField("teryt_candidacy"),
+    "Rada TERYT": SetField("teryt_candidacy"),
+    "Gmina nazwa": None,
+    "Gmina powiat": None,
+    "Gmina województwo": None,
+    "Gmina urząd": SetField("position"),
+    "Komitet wyborczy nazwa": None,
+    "Komitet wyborczy skrót nazwy": SetField("party"),
+    "Dane Nazwisko": SetField("last_name"),
+    "Dane  Nazwisko": SetField("last_name"),
+    "Dane Imiona": SetField("first_name"),
+    "Dane  Imona": SetField("first_name"),
+    "Dane Syn": None,
+    "Dane  Płeć": SetField("sex"),
+    "Dane Płeć": SetField("sex"),
+    "Dane Wiek": SetField("age"),
+    "Dane  Wiek": SetField("age"),
+    "Miejsce zamieszkania Miejscowość": None,
+    "Miejsce zamieszkania TERYT": None,
+    "Poparcie TERYT": None,
+    "Partia polityczna TERYT": None,
+    "Wykształcenie TERYT": None,
+    "Głosy I tura": None,
+    "Głosy II tura": None,
+    "Data\nwyboru II tura": None,
+    "Rada Rada": None,
+    "Rada Nazwa": None,
+    "Komitet Nazwa": SetField("party"),
+    "nazwa": None,
+    "powiat": None,
+    "województwo": None,
+    "Rada Okręg nr": None,
+    "Komitet lista nr": None,
+    "Dane  prefix nazwiska": None,
+    "Miejscowość": None,  # TODO watch out, for wbp we have double TERYT and we skip Miejscowość for the Miejsce Zamieszkania
+    "Syn": None,
+    "Dane  L.głosów": None,
 }
 
 CSV_HEADERS = {
@@ -206,7 +253,11 @@ def process_csv(reader, election_year, csv_headers):
         if header is None:
             header = row
             replacements = dict()
-            for col in header:
+            print(header)
+            for idx, col in enumerate(header):
+                if col != col or col == float("nan"):
+                    # It's NaN
+                    header[idx] = ""
                 if csv_headers[col] == "" or csv_headers[col] is None:
                     continue
 
@@ -243,6 +294,7 @@ class InputSource:
     source: FileSource
     extractor: Extractor
     year: int
+    config_override: dict = field(default_factory=dict)
     position: str | None = None
     province: str | None = None
 
@@ -251,6 +303,13 @@ class InputSource:
 # TODO Add 2023 parliment elections
 # TODO Add previous ones
 sources = [
+    InputSource(
+        FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/wbp-wybrani.xls"),
+        XlsExtractor("wbp-wybrani.xls"),
+        2006,
+        position="prezydent",
+        config_override={"TERYT": None},
+    ),
     InputSource(
         FileSource(
             "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/dolnoslaskie.xls"
@@ -367,7 +426,7 @@ sources = [
         ),
         ZipExtractor("kandydaci_sejmiki_wojewodztw_utf8.csv"),
         2024,
-        "sejmik",
+        position="sejmik",
     ),
     InputSource(
         FileSource(
@@ -375,7 +434,7 @@ sources = [
         ),
         ZipExtractor("kandydaci_rady_powiatow_utf8.csv"),
         2024,
-        "powiat",
+        position="powiat",
     ),
     InputSource(
         FileSource(
@@ -383,7 +442,7 @@ sources = [
         ),
         ZipExtractor("kandydaci_rady_gmin_powyzej_20k_utf8.csv"),
         2024,
-        "gmina",
+        position="gmina",
     ),
     InputSource(
         FileSource(
@@ -391,7 +450,7 @@ sources = [
         ),
         ZipExtractor("kandydaci_rady_gmin_do_20k_utf8.csv"),
         2024,
-        "gmina",
+        position="gmina",
     ),
     InputSource(
         FileSource(
@@ -399,7 +458,7 @@ sources = [
         ),
         ZipExtractor("kandydaci_rady_dzielnic_utf8.csv"),
         2024,
-        "gmina",
+        position="gmina",
     ),
     InputSource(
         FileSource(
@@ -407,7 +466,7 @@ sources = [
         ),
         ZipExtractor("kandydaci_wbp_utf8.csv"),
         2024,
-        "burmistrz",
+        position="burmistrz",
     ),
 ]
 
@@ -431,7 +490,8 @@ def process_pkw():
         reader = config.extractor.read(config.source.downloaded_path)
 
         # TODO check the year, since it's currently hardcoded for 2024
-        for item in process_csv(reader, config.year, CSV_HEADERS):
+        headers = {**CSV_HEADERS, **config.config_override}
+        for item in process_csv(reader, config.year, headers):
             item.insert_into()
 
         print("🎉 Processing complete.")

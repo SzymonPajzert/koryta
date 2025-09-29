@@ -25,6 +25,8 @@ def exists_in_output(person: Person):
 def test_included_matches():
     assert exists_in_output(Person(any="Wojciech Bartelski"))
     assert exists_in_output(Person(any="Tomasz Mencina"))
+    # is a lawyer in wiki, but also connected to PiS
+    assert exists_in_output(Person(any="Grzegorz Pastuszko"))
 
 
 def test_excluded_people():
@@ -43,8 +45,7 @@ def test_bip_warszawa():
 
 
 # TODO Memoize the df lookup and tell user to remove it if they changed the logic
-# TODO Grzegorz Pastuszko is a lawyer in wiki, but also connected to PiS
-# TODO Check that people have interesting mentions on their pages
+# TODO Check that people have interesting mentions on their pages, e.g. Pastuszko
 # Another interesting is Krzysztof Czeszejko-Sochacki
 # https://pl.wikipedia.org/wiki/Krzysztof_Czeszejko-Sochacki
 # TODO Find another lawyer and ignore them if they have a specialty
@@ -53,6 +54,7 @@ def test_bip_warszawa():
 # TODO This is also a fake - https://pl.wikipedia.org/wiki/Jerzy_Skrzypek
 # TODO Check other people on wiki without correct infobox
 # Kaja Godek - fun to list people who work in places they don't really have any competency for - https://pl.wikipedia.org/wiki/Kaja_Godek
+# TODO wiki_people Marek Tomasz Pawłowski wrong first/last name split
 
 
 def test_missing_kaminska():
