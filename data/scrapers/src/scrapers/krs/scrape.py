@@ -1,29 +1,20 @@
 import typing
 import itertools
 from time import sleep
+from dataclasses import dataclass
+from pprint import pprint
+from collections import Counter
 
-from scrapers.krs.process import iterate_blobs
+from scrapers.krs.process import iterate_blobs, KRS
 from util.rejestr import get_rejestr_io
 from stores.storage import upload_to_gcs, list_blobs
 
 
-class KRS:
-    id: str
-
-    def __init__(self, id: int | str) -> None:
-        self.id = str(id).zfill(10)
-
-    def __str__(self) -> str:
-        return self.id
-
-    def __repr__(self) -> str:
-        return self.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, KRS) and self.id == other.id
+@dataclass(frozen=True)
+class Company:
+    krs: KRS
+    name: str
+    parent: KRS
 
 
 def save_org_connections(krss: typing.Iterable[KRS]):
@@ -308,6 +299,15 @@ SPOLKI_SKARBU_PANSTWA = [
     "0000760312",
 ]
 
+# SKARB PAŃSTWA REPREZENTOWANY PRZEZ AGENCJĘ MIENIA WOJSKOWEGO
+AMW = [
+    "0000392868",
+    "0000140528",
+    "0000394569",
+    "0000003772",
+    "0000184990",
+]
+
 # TODO What is a good source of them?
 # Dumped some manually from https://bip.warszawa.pl/jednostki-organizacyjne
 # https://docs.google.com/spreadsheets/d/14SM3cuO0gZ897T2mT40Pm4mUqXtY5JCvaemHMvs9AcQ
@@ -374,13 +374,86 @@ KRAKOW = [
 ]
 
 
-def child_companies() -> set[KRS]:
-    result = set()
+def get_conn_type(powiazanie_kwerendowane):
+    return f"{powiazanie_kwerendowane['typ']} {powiazanie_kwerendowane['kierunek']}"
+
+
+IS_PARENT = {
+    "KRS_ONLY_SHAREHOLDER PASYWNY",
+    "KRS_SHAREHOLDER PASYWNY",
+    "KRS_SUPERVISION PASYWNY",
+    "KRS_FOUNDER PASYWNY",
+}
+
+
+class CompanyGraph:
+    def __init__(self):
+        self.companies = dict()
+        self.children: dict[KRS, list[KRS]] = dict()
+
+        for blob_name, data in iterate_blobs():
+            for item in data:
+                if item.get("typ") != "organizacja":
+                    continue
+
+                krs = KRS(item["numery"]["krs"])
+                parent = KRS.from_blob_name(blob_name)
+                conn_type = get_conn_type(item["krs_powiazania_kwerendowane"][0])
+                if item["krs_powiazania_kwerendowane"][0]["kierunek"] == "AKTYWNY":
+                    continue
+                if conn_type == "KRS_BOARD PASYWNY":
+                    # The company itself is the board member
+                    continue
+                if conn_type == "KRS_MEMBER PASYWNY":
+                    #  The company is a member of a group, not interesting
+                    continue
+                if conn_type == "KRS_COMMISSIONER PASYWNY":
+                    #  The company is probably liquidated
+                    continue
+                if conn_type == "KRS_RECEIVER PASYWNY":
+                    #  The company is probably liquidated
+                    continue
+                if conn_type == "KRS_GENERAL_PARTNER PASYWNY":
+                    #  The company is probably liquidated
+                    continue
+                if conn_type == "KRS_RESTRUCTURIZATOR PASYWNY":
+                    #  The company is probably liquidated
+                    continue
+
+                if conn_type not in IS_PARENT:
+                    raise ValueError(f"Unknown type: {conn_type} {krs} {parent}")
+
+                self.companies[krs] = Company(
+                    krs=krs,
+                    name=item["nazwy"]["pelna"],
+                    parent=parent,
+                )
+                self.children[parent] = self.children.get(parent, []) + [krs]
+
+    def all_descendants(self, krss: typing.Iterable[KRS]):
+        descendants: set[KRS] = set()
+        todo = set(krss)
+        while todo:
+            krs = todo.pop()
+            descendants.add(krs)
+            if krs in self.children:
+                todo.update(set(self.children[krs]) - descendants)
+        return descendants
+
+
+def child_companies() -> set[Company]:
+    result: set[Company] = set()
     for blob_name, data in iterate_blobs():
         try:
             for item in data:
                 if item.get("typ") == "organizacja":
-                    result.add(KRS(item["numery"]["krs"]))
+                    result.add(
+                        Company(
+                            krs=KRS(item["numery"]["krs"]),
+                            name=item["nazwy"]["pelna"],
+                            parent=KRS.from_blob_name(blob_name),
+                        )
+                    )
         except KeyError as e:
             print(f"  [ERROR] Could not process {blob_name}: {e}")
     return result
@@ -389,20 +462,32 @@ def child_companies() -> set[KRS]:
 def scrape_rejestrio():
     # TODO Find children of the mentioned companies
 
-    already_scraped = set(
-        KRS(path.split("org/")[1].split("/")[0]) for path in list_blobs("rejestr.io")
-    )
+    already_scraped = set(KRS.from_blob_name(path) for path in list_blobs("rejestr.io"))
     starters = set(
         KRS(krs)
         for krs in itertools.chain(
-            MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs, WARSZAWA, SPOLKI_SKARBU_PANSTWA
+            MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs,
+            WARSZAWA,
+            SPOLKI_SKARBU_PANSTWA,
+            AMW,
+            KRAKOW,
         )
     )
-    children = child_companies()
+    graph = CompanyGraph()
+    children = graph.all_descendants(starters)
+    pprint(children)
+    children_companies = set(
+        company for krs, company in graph.companies.items() if krs in children
+    )
     to_scrape = (starters | children) - already_scraped
 
     print(f"Already scraped: {already_scraped}")
     print(f"To scrape: {to_scrape}")
+    # print("To scrape (children):")
+    # to_scrape_children = set(filter(lambda x: x.krs in to_scrape, children_companies))
+    # pprint(to_scrape_children)
+    # parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
+    # pprint(parent_count.most_common(100))
     print(f"Will cost: {len(to_scrape) * 0.10} PLN")
     input("Press enter to continue...")
 

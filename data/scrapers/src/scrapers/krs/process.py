@@ -6,6 +6,29 @@ from stores.storage import list_blobs, download_from_gcs
 from stores.duckdb import ducktable, dump_dbs
 
 
+class KRS:
+    id: str
+
+    def __init__(self, id: int | str) -> None:
+        self.id = str(id).zfill(10)
+
+    @staticmethod
+    def from_blob_name(blob_name: str) -> "KRS":
+        return KRS(blob_name.split("org/")[1].split("/")[0])
+
+    def __str__(self) -> str:
+        return self.id
+
+    def __repr__(self) -> str:
+        return self.id
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, KRS) and self.id == other.id
+
+
 @ducktable(name="people_krs")
 @dataclass
 class KrsPerson:
@@ -13,6 +36,7 @@ class KrsPerson:
     first_name: str
     last_name: str
     full_name: str
+    krs: str
     birth_date: str | None = None
     second_names: str | None = None
     sex: str | None = None
@@ -59,6 +83,7 @@ def extract_people():
                             birth_date=identity.get("data_urodzenia"),
                             second_names=identity.get("drugie_imiona"),
                             sex=identity.get("plec"),
+                            krs=KRS.from_blob_name(blob_name).id,
                         ).insert_into()
             except KeyError as e:
                 print(f"  [ERROR] Could not process {blob_name}: {e}")

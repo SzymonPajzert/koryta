@@ -152,7 +152,7 @@ def find_all_matches(con, limit: int | None = 20):
                 jaro_winkler_similarity(k.full_name, p.full_name)
             ) / 4.0 as pkw_score
         FROM krs_people k
-        FULL JOIN pkw_people p ON k.birth_year = p.birth_year AND k.metaphone = p.metaphone
+        FULL JOIN pkw_people p ON ABS(k.birth_year - p.birth_year) <= 1 AND k.metaphone = p.metaphone
             AND jaro_winkler_similarity(k.last_name, p.last_name) > 0.95
             AND jaro_winkler_similarity(k.first_name, p.first_name) > 0.95
     ),
@@ -167,7 +167,7 @@ def find_all_matches(con, limit: int | None = 20):
                 jaro_winkler_similarity(kp.base_full_name, w.full_name)
             ) / 4.0 as wiki_score
         FROM krs_pkw kp
-        LEFT JOIN wiki_people w ON kp.birth_year = w.birth_year AND kp.metaphone = w.metaphone
+        LEFT JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1 AND kp.metaphone = w.metaphone
             AND jaro_winkler_similarity(kp.base_last_name, w.last_name) > 0.95
             AND jaro_winkler_similarity(kp.base_first_name, w.first_name) > 0.95
     ),
@@ -228,7 +228,7 @@ def main():
         print(f"Reading memoized {df_path}")
         df = pd.read_parquet(df_path)
     else:
-        df = find_all_matches(con, limit=4000)
+        df = find_all_matches(con, limit=10000)
         print(f"Got results, saving to {df_path}")
         df.to_parquet(df_path)
     print(df)
