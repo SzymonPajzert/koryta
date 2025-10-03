@@ -114,7 +114,8 @@ dependencies = [
     "pandas (>=2.3.2,<3.0.0)",
     "matplotlib (>=3.10.6,<4.0.0)",
     "xlrd (>=2.0.2,<3.0.0)",
-    "pyarrow (>=21.0.0,<22.0.0)"
+    "pyarrow (>=21.0.0,<22.0.0)",
+    "openpyxl (>=3.1.5,<4.0.0)"
 ]
 
 [project.scripts]

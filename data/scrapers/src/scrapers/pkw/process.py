@@ -183,9 +183,54 @@ CSV_HEADERS_2006 = {
     "Dane  L.głosów": None,
 }
 
+CSV_HEADERS_2014 = {
+    "Id kand Mandat": None,
+    "Id kom Mandat": None,
+    "TERYT Mandat": SetField("teryt_candidacy"),
+    "Gmina Mandat": None,
+    "Powiat Mandat": None,
+    "Urząd Mandat": None,
+    "Imiona Mandat": SetField("first_name"),
+    "Nazwisko Mandat": SetField("last_name"),
+    "Komitet Mandat": SetField("party"),
+    "Typ Mandat": None,
+    "Wykształcenie Mandat": None,
+    "Wiek Mandat": SetField("age"),
+    "Płeć Mandat": SetField("sex"),
+    "Miejscowość Mandat": None,
+    "Teryt  m. zam. Mandat": SetField("teryt_living"),
+    "Członek Mandat": None,
+    "Poparcie Mandat": None,
+    "I tura Gł. wazne": None,
+    "I tura Gł. na\nkand.": None,
+    "I tura Gł.\nprzeciw": None,
+    "I tura %\ngłosów": None,
+    "I tura Mandat": None,
+    "II tura Gł. wazne": None,
+    "II tura Gł. na\nkand.": None,
+    "II tura Gł.\nprzeciw": None,
+    "II tura %\ngłosów": None,
+    "II tura Mandat": None,
+    "Nazwa": None,
+    "Szczebel": None,
+    "Nr\nokr.": None,
+    "Nr\nlisty": None,
+    "Komitet": SetField("party"),
+    "Sygnatura": None,
+    "Typ kom.": None,
+    "Poz.": None,
+    "Nazwisko": SetField("last_name"),
+    "Imiona": SetField("first_name"),
+    "Głosy": None,
+    "Mandat": None,
+    "Miejsce zam.": None,
+    "Obywatelstwo": None,
+}
+
 CSV_HEADERS = {
     **CSV_HEADERS_2024,
     **CSV_HEADERS_2006,
+    **CSV_HEADERS_2014,
 }
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
@@ -294,9 +339,6 @@ class InputSource:
     source: FileSource
     extractor: Extractor
     year: int
-    config_override: dict = field(default_factory=dict)
-    position: str | None = None
-    province: str | None = None
 
 
 # These sources are from pkw website
@@ -304,11 +346,36 @@ class InputSource:
 # TODO Add previous ones
 sources = [
     InputSource(
+        FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
+        ZipExtractor(
+            "kandsejm2015-10-19-10-00.xls",
+        ),
+        2015,
+    ),
+    InputSource(
+        FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
+        ZipExtractor("kandsen2015-10-19-10-00.xls"),
+        2015,
+    ),
+    InputSource(
+        FileSource(
+            "https://pkw.gov.pl/uploaded_files/1579520736_samo2014_kandydaci_na_WBP.xls"
+        ),
+        XlsExtractor("samo2014_kandydaci_na_WBP.xls"),
+        2014,
+    ),
+    InputSource(
+        FileSource(
+            "https://pkw.gov.pl/uploaded_files/1486393038_kandydaci_do_rad_2014xlsx.xlsx"
+        ),
+        XlsExtractor("1486393038_kandydaci_do_rad_2014xlsx.xlsx", header_rows=1),
+        2014,
+    ),
+    #
+    InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/wbp-wybrani.xls"),
         XlsExtractor("wbp-wybrani.xls"),
         2006,
-        position="prezydent",
-        config_override={"TERYT": None},
     ),
     InputSource(
         FileSource(
@@ -316,7 +383,6 @@ sources = [
         ),
         XlsExtractor("dolnoslaskie.xls"),
         2006,
-        province="dolnoslaskie",
     ),
     InputSource(
         FileSource(
@@ -324,43 +390,36 @@ sources = [
         ),
         XlsExtractor("kujawsko_pomorskie.xls"),
         2006,
-        province="kujawsko-pomorskie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lubelskie.xls"),
         XlsExtractor("lubelskie.xls"),
         2006,
-        province="lubelskie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lubuskie.xls"),
         XlsExtractor("lubuskie.xls"),
         2006,
-        province="lubuskie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lodzkie.xls"),
         XlsExtractor("lodzkie.xls"),
         2006,
-        province="lodzkie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/malopolskie.xls"),
         XlsExtractor("malopolskie.xls"),
         2006,
-        province="malopolskie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/mazowieckie.xls"),
         XlsExtractor("mazowieckie.xls"),
         2006,
-        province="mazowieckie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/opolskie.xls"),
         XlsExtractor("opolskie.xls"),
         2006,
-        province="opolskie",
     ),
     InputSource(
         FileSource(
@@ -368,25 +427,21 @@ sources = [
         ),
         XlsExtractor("podkarpackie.xls"),
         2006,
-        province="podkarpackie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/podlaskie.xls"),
         XlsExtractor("podlaskie.xls"),
         2006,
-        province="podlaskie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/pomorskie.xls"),
         XlsExtractor("pomorskie.xls"),
         2006,
-        province="pomorskie",
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/slaskie.xls"),
         XlsExtractor("slaskie.xls"),
         2006,
-        province="slaskie",
     ),
     InputSource(
         FileSource(
@@ -394,7 +449,6 @@ sources = [
         ),
         XlsExtractor("swietokrzyskie.xls"),
         2006,
-        province="swietokrzyskie",
     ),
     InputSource(
         FileSource(
@@ -402,7 +456,6 @@ sources = [
         ),
         XlsExtractor("warminsko_mazurskie.xls"),
         2006,
-        province="warminsko-mazurskie",
     ),
     InputSource(
         FileSource(
@@ -410,7 +463,6 @@ sources = [
         ),
         XlsExtractor("wielkopolskie.xls"),
         2006,
-        province="wielkopolskie",
     ),
     InputSource(
         FileSource(
@@ -418,7 +470,6 @@ sources = [
         ),
         XlsExtractor("zachodniopomorskie.xls"),
         2006,
-        province="zachodniopomorskie",
     ),
     InputSource(
         FileSource(
@@ -426,7 +477,6 @@ sources = [
         ),
         ZipExtractor("kandydaci_sejmiki_wojewodztw_utf8.csv"),
         2024,
-        position="sejmik",
     ),
     InputSource(
         FileSource(
@@ -434,7 +484,6 @@ sources = [
         ),
         ZipExtractor("kandydaci_rady_powiatow_utf8.csv"),
         2024,
-        position="powiat",
     ),
     InputSource(
         FileSource(
@@ -442,7 +491,6 @@ sources = [
         ),
         ZipExtractor("kandydaci_rady_gmin_powyzej_20k_utf8.csv"),
         2024,
-        position="gmina",
     ),
     InputSource(
         FileSource(
@@ -450,7 +498,6 @@ sources = [
         ),
         ZipExtractor("kandydaci_rady_gmin_do_20k_utf8.csv"),
         2024,
-        position="gmina",
     ),
     InputSource(
         FileSource(
@@ -458,7 +505,6 @@ sources = [
         ),
         ZipExtractor("kandydaci_rady_dzielnic_utf8.csv"),
         2024,
-        position="gmina",
     ),
     InputSource(
         FileSource(
@@ -466,7 +512,6 @@ sources = [
         ),
         ZipExtractor("kandydaci_wbp_utf8.csv"),
         2024,
-        position="burmistrz",
     ),
 ]
 
@@ -490,9 +535,12 @@ def process_pkw():
         reader = config.extractor.read(config.source.downloaded_path)
 
         # TODO check the year, since it's currently hardcoded for 2024
-        headers = {**CSV_HEADERS, **config.config_override}
-        for item in process_csv(reader, config.year, headers):
-            item.insert_into()
+        headers = {**CSV_HEADERS}
+        try:
+            for item in process_csv(reader, config.year, headers):
+                item.insert_into()
+        except KeyError as e:
+            print(f"Failed processing {config.source.downloaded_path}: {e}")
 
         print("🎉 Processing complete.")
 

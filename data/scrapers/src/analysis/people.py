@@ -134,7 +134,7 @@ def find_two_way_matches(con, table1, table2, limit: int | None = 20):
 # TODO Bonus points if wiki people has polityk infobox
 
 
-def find_all_matches(con, limit: int | None = 20):
+def _find_all_matches(con, limit: int | None = 20):
     limit_str = f"LIMIT {limit}" if limit is not None else ""
     query = f"""
     WITH krs_pkw AS (
@@ -213,6 +213,19 @@ def find_all_matches(con, limit: int | None = 20):
     return df
 
 
+def find_all_matches(con, limit: int | None = 10000):
+    df_path = versioned.get_path("matched")
+    df = None  # TODO Do I need it for visibility?
+    if os.path.exists(df_path):
+        print(f"Reading memoized {df_path}")
+        df = pd.read_parquet(df_path)
+    else:
+        df = _find_all_matches(con, limit=limit)
+        print(f"Got results, saving to {df_path}")
+        df.to_parquet(df_path)
+    return df
+
+
 def main():
     print("--- Imported table sizes ---")
     for table in ["krs_people", "wiki_people", "pkw_people", "koryta_people"]:
@@ -222,15 +235,7 @@ def main():
 
     print("--- Overlaps between all three sources (KRS, Wiki, PKW) ---")
 
-    df_path = versioned.get_path("matched")
-    df = None  # TODO Do I need it for visibility?
-    if os.path.exists(df_path):
-        print(f"Reading memoized {df_path}")
-        df = pd.read_parquet(df_path)
-    else:
-        df = find_all_matches(con, limit=10000)
-        print(f"Got results, saving to {df_path}")
-        df.to_parquet(df_path)
+    df = find_all_matches(con, limit=10000)
     print(df)
     con.close()
 

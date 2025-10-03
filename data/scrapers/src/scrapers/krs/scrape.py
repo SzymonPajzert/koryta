@@ -4,6 +4,7 @@ from time import sleep
 from dataclasses import dataclass
 from pprint import pprint
 from collections import Counter
+import argparse
 
 from scrapers.krs.process import iterate_blobs, KRS
 from util.rejestr import get_rejestr_io
@@ -308,6 +309,10 @@ AMW = [
     "0000184990",
 ]
 
+UZDROWISKA = [
+    "0000444064",
+]
+
 # TODO What is a good source of them?
 # Dumped some manually from https://bip.warszawa.pl/jednostki-organizacyjne
 # https://docs.google.com/spreadsheets/d/14SM3cuO0gZ897T2mT40Pm4mUqXtY5JCvaemHMvs9AcQ
@@ -460,7 +465,14 @@ def child_companies() -> set[Company]:
 
 
 def scrape_rejestrio():
-    # TODO Find children of the mentioned companies
+    parser = argparse.ArgumentParser(description="Say hi.")
+    parser.add_argument(
+        "--only",
+        dest="only",
+        default="",
+        help="only show children of this KRS",
+    )
+    args = parser.parse_args()
 
     already_scraped = set(KRS.from_blob_name(path) for path in list_blobs("rejestr.io"))
     starters = set(
@@ -474,6 +486,9 @@ def scrape_rejestrio():
         )
     )
     graph = CompanyGraph()
+    if args.only != "":
+        starters = {KRS(args.only)}
+
     children = graph.all_descendants(starters)
     pprint(children)
     children_companies = set(
@@ -483,11 +498,11 @@ def scrape_rejestrio():
 
     print(f"Already scraped: {already_scraped}")
     print(f"To scrape: {to_scrape}")
-    # print("To scrape (children):")
-    # to_scrape_children = set(filter(lambda x: x.krs in to_scrape, children_companies))
-    # pprint(to_scrape_children)
-    # parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
-    # pprint(parent_count.most_common(100))
+    print("To scrape (children):")
+    to_scrape_children = set(filter(lambda x: x.krs in to_scrape, children_companies))
+    pprint(to_scrape_children)
+    parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
+    pprint(parent_count.most_common(100))
     print(f"Will cost: {len(to_scrape) * 0.10} PLN")
     input("Press enter to continue...")
 

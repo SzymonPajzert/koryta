@@ -1,13 +1,19 @@
-from analysis.people import find_all_matches, con
-from util.config import versioned
 import pytest
 
+from scrapers.krs.process import KRS, iterate_blobs
+from analysis.people import find_all_matches, con
+from util.config import versioned
+
+
 # TODO return to 11, so we can better tune the wiki algorithm
-SCORE_CUTOFF = 8.5
+SCORE_CUTOFF = 11
 
 
 df_all = find_all_matches(con, limit=10000)
 df = df_all[df_all["overall_score"] >= SCORE_CUTOFF]
+
+
+scraped_krs = set(KRS.from_blob_name(blob) for blob, _ in iterate_blobs())
 
 
 class Person:
@@ -113,9 +119,13 @@ def test_list_psl(person):
     assert exists_in_output(person)
 
 
-@pytest.mark.parametrize("krs", ["23302", "140528", "489456"])
+@pytest.mark.parametrize(
+    "krs",
+    ["23302", "140528", "489456", "0000512140", "271591", "0000028860", "0000025667"],
+)
 def test_krs_present(krs):
-    assert False
+    krs = KRS(krs)
+    assert krs in scraped_krs
 
 
 people = {
@@ -131,6 +141,8 @@ people = {
     ]
 }
 
+# Joanna Gepfert - https://pl.wikipedia.org/wiki/Instytut_De_Republica
+# Energa was missing - https://pl.wikipedia.org/wiki/Energa, even though it's owned by Orlen
 # Grzegorz Janik - Elections 2002, Parlimentary from 2005. Bonus points - CBA investigation - https://pl.wikipedia.org/wiki/Grzegorz_Janik.
 # Małgorzata Zarychta-Surówka - Elections 2006, probably 2018.
 # Janusz Smoliło - Elections in 2014 and 2018.
