@@ -9,7 +9,7 @@ from util.config import versioned
 SCORE_CUTOFF = 11
 
 
-df_all = find_all_matches(con, limit=10000)
+df_all = find_all_matches(con)
 df = df_all[df_all["overall_score"] >= SCORE_CUTOFF]
 
 
@@ -121,7 +121,16 @@ def test_list_psl(person):
 
 @pytest.mark.parametrize(
     "krs",
-    ["23302", "140528", "489456", "0000512140", "271591", "0000028860", "0000025667"],
+    [
+        "23302",
+        "140528",
+        "489456",
+        "0000512140",
+        "271591",
+        "0000028860",
+        "0000025667",
+        "0000204527",
+    ],
 )
 def test_krs_present(krs):
     krs = KRS(krs)
@@ -141,6 +150,9 @@ people = {
     ]
 }
 
+# Krzysztof Figat - Chyba znalazłem nowego przypadkiem - https://tygodniksiedlecki.com/artykul/antoni-jozwowicz-prezesem-n1424927
+# Zofia Paryła - Has wiki page with mentions - https://pl.wikipedia.org/wiki/Zofia_Pary%C5%82a#cite_ref-Krewni_2-1,  https://krakow.wyborcza.pl/krakow/7,44425,26834696,szkola-kariery-daniela-obajtka-bliscy-i-znajomi-prezesa-orlenu.html#s=S.embed_link-K.C-B.1-L.4.zw, friend of Obajtek, mentioned on the wiki
+# Mateusz Siepielski, wiceburmistrz Śródmieścia 2015
 # Joanna Gepfert - https://pl.wikipedia.org/wiki/Instytut_De_Republica
 # Energa was missing - https://pl.wikipedia.org/wiki/Energa, even though it's owned by Orlen
 # Grzegorz Janik - Elections 2002, Parlimentary from 2005. Bonus points - CBA investigation - https://pl.wikipedia.org/wiki/Grzegorz_Janik.

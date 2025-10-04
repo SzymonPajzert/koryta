@@ -11,44 +11,56 @@ import pandas
 import abc
 import math
 
+# TODO write years to separate files, so it's a bit faster to processles
+
 
 class Extractor:
     @abc.abstractmethod
     def read(self, file_path):
         raise NotImplementedError()
 
+    @abc.abstractmethod
+    def read_bytes(self, raw_bytes):
+        raise NotImplementedError()
+
+
+class CsvExtractor(Extractor):
+    def read_bytes(self, raw_bytes):
+        def generator():
+            for line in io.TextIOWrapper(raw_bytes, encoding="utf-8"):
+                yield line
+
+        first = True
+        for line in csv.reader(generator(), delimiter=";"):
+            if first:
+                first = False
+                line = [col.strip('\ufeff"') for col in line]
+            yield line
+
 
 class ZipExtractor(Extractor):
     inner_filename: str
+    extractor: Extractor
 
-    def __init__(self, inner_filename) -> None:
+    def __init__(self, inner_filename, extractor: Extractor = CsvExtractor()) -> None:
         self.inner_filename = inner_filename
+        self.extractor = extractor
 
     def read(self, file_path):
-        with ZipFile(file_path, "r").open(self.inner_filename, "r") as raw_bytes:
-
-            def generator():
-                for line in io.TextIOWrapper(raw_bytes, encoding="utf-8"):
-                    yield line
-
-            first = True
-            for line in csv.reader(generator(), delimiter=";"):
-                if first:
-                    first = False
-                    line = [col.strip('\ufeff"') for col in line]
-                yield line
+        raw_bytes = ZipFile(file_path, "r").open(self.inner_filename, "r")
+        return self.extractor.read_bytes(raw_bytes)
 
 
 class XlsExtractor(Extractor):
     inner_filename: str
     header_rows: int  # Row many rows to skip, e.g additional headers
 
-    def __init__(self, inner_filename, header_rows=2) -> None:
+    def __init__(self, inner_filename, header_rows) -> None:
         self.inner_filename = inner_filename
         self.header_rows = header_rows
 
-    def read(self, file_path):
-        df = pandas.read_excel(file_path, header=None)
+    def _read(self, content):
+        df = pandas.read_excel(content, header=None)
         count = 0
         header = None
         # We set index and name, to get just plain tuples
@@ -71,6 +83,12 @@ class XlsExtractor(Extractor):
                 count += 1
             else:
                 yield row
+
+    def read(self, file_path):
+        return self._read(file_path)
+
+    def read_bytes(self, raw_bytes):
+        return self._read(raw_bytes)
 
 
 @dataclass
@@ -227,10 +245,18 @@ CSV_HEADERS_2014 = {
     "Obywatelstwo": None,
 }
 
+CSV_HEADERS_2015 = {
+    "Nr okr.": None,
+    "Zawód": None,
+    "Należy do partii politycznej": None,
+}
+
+
 CSV_HEADERS = {
     **CSV_HEADERS_2024,
     **CSV_HEADERS_2006,
     **CSV_HEADERS_2014,
+    **CSV_HEADERS_2015,
 }
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
@@ -243,10 +269,10 @@ UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢ
 @dataclass
 class ExtractedData:
     election_year: str
-    age: str
-    birth_year: int = field(init=False)
     sex: str
-    teryt_candidacy: str
+    birth_year: int | None = None
+    age: str | None = None
+    teryt_candidacy: str | None = None
     teryt_living: str | None = None
     candidacy_success: str | None = None
     party: str | None = None
@@ -278,13 +304,15 @@ class ExtractedData:
             self.first_name = names[0]
             self.middle_name = names[1]
 
-        self.birth_year = int(self.election_year) - int(self.age)
+        if self.age is not None:
+            self.birth_year = int(self.election_year) - int(self.age)
 
     def insert_into(self):
         pass
 
     # TODO currently it doesn't work well, I could improve it
     def spadochroniarz(self):
+        assert self.teryt_candidacy is not None
         candidacy = self.teryt_candidacy.rstrip("0")
         assert self.teryt_living is not None
         living = self.teryt_living[: len(candidacy)]
@@ -349,19 +377,23 @@ sources = [
         FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
         ZipExtractor(
             "kandsejm2015-10-19-10-00.xls",
+            extractor=XlsExtractor("kandsejm2015-10-19-10-00.xls", header_rows=1),
         ),
         2015,
     ),
     InputSource(
         FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
-        ZipExtractor("kandsen2015-10-19-10-00.xls"),
+        ZipExtractor(
+            "kandsen2015-10-19-10-00.xls",
+            extractor=XlsExtractor("kandsen2015-10-19-10-00.xls", header_rows=1),
+        ),
         2015,
     ),
     InputSource(
         FileSource(
             "https://pkw.gov.pl/uploaded_files/1579520736_samo2014_kandydaci_na_WBP.xls"
         ),
-        XlsExtractor("samo2014_kandydaci_na_WBP.xls"),
+        XlsExtractor("samo2014_kandydaci_na_WBP.xls", header_rows=2),
         2014,
     ),
     InputSource(
@@ -374,101 +406,101 @@ sources = [
     #
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/wbp-wybrani.xls"),
-        XlsExtractor("wbp-wybrani.xls"),
+        XlsExtractor("wbp-wybrani.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource(
             "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/dolnoslaskie.xls"
         ),
-        XlsExtractor("dolnoslaskie.xls"),
+        XlsExtractor("dolnoslaskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource(
             "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/kujawsko_pomorskie.xls"
         ),
-        XlsExtractor("kujawsko_pomorskie.xls"),
+        XlsExtractor("kujawsko_pomorskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lubelskie.xls"),
-        XlsExtractor("lubelskie.xls"),
+        XlsExtractor("lubelskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lubuskie.xls"),
-        XlsExtractor("lubuskie.xls"),
+        XlsExtractor("lubuskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lodzkie.xls"),
-        XlsExtractor("lodzkie.xls"),
+        XlsExtractor("lodzkie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/malopolskie.xls"),
-        XlsExtractor("malopolskie.xls"),
+        XlsExtractor("malopolskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/mazowieckie.xls"),
-        XlsExtractor("mazowieckie.xls"),
+        XlsExtractor("mazowieckie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/opolskie.xls"),
-        XlsExtractor("opolskie.xls"),
+        XlsExtractor("opolskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource(
             "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/podkarpackie.xls"
         ),
-        XlsExtractor("podkarpackie.xls"),
+        XlsExtractor("podkarpackie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/podlaskie.xls"),
-        XlsExtractor("podlaskie.xls"),
+        XlsExtractor("podlaskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/pomorskie.xls"),
-        XlsExtractor("pomorskie.xls"),
+        XlsExtractor("pomorskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/slaskie.xls"),
-        XlsExtractor("slaskie.xls"),
+        XlsExtractor("slaskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource(
             "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/swietokrzyskie.xls"
         ),
-        XlsExtractor("swietokrzyskie.xls"),
+        XlsExtractor("swietokrzyskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource(
             "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/warminsko_mazurskie.xls"
         ),
-        XlsExtractor("warminsko_mazurskie.xls"),
+        XlsExtractor("warminsko_mazurskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource(
             "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/wielkopolskie.xls"
         ),
-        XlsExtractor("wielkopolskie.xls"),
+        XlsExtractor("wielkopolskie.xls", header_rows=2),
         2006,
     ),
     InputSource(
         FileSource(
             "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/zachodniopomorskie.xls"
         ),
-        XlsExtractor("zachodniopomorskie.xls"),
+        XlsExtractor("zachodniopomorskie.xls", header_rows=2),
         2006,
     ),
     InputSource(

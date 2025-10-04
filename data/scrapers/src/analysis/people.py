@@ -134,8 +134,7 @@ def find_two_way_matches(con, table1, table2, limit: int | None = 20):
 # TODO Bonus points if wiki people has polityk infobox
 
 
-def _find_all_matches(con, limit: int | None = 20):
-    limit_str = f"LIMIT {limit}" if limit is not None else ""
+def _find_all_matches(con):
     query = f"""
     WITH krs_pkw AS (
         SELECT
@@ -152,7 +151,8 @@ def _find_all_matches(con, limit: int | None = 20):
                 jaro_winkler_similarity(k.full_name, p.full_name)
             ) / 4.0 as pkw_score
         FROM krs_people k
-        FULL JOIN pkw_people p ON ABS(k.birth_year - p.birth_year) <= 1 AND k.metaphone = p.metaphone
+        FULL JOIN pkw_people p ON (ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
+            AND k.metaphone = p.metaphone
             AND jaro_winkler_similarity(k.last_name, p.last_name) > 0.95
             AND jaro_winkler_similarity(k.first_name, p.first_name) > 0.95
     ),
@@ -203,8 +203,8 @@ def _find_all_matches(con, limit: int | None = 20):
             END)
         ) as overall_score
     FROM all_sources
+    WHERE overall_score >= 8
     ORDER BY overall_score DESC
-    {limit_str};
     """
     print("\n--- Overlaps between Koryta, KRS, PKW, and Wiki ---")
     df = con.execute(query).df()
@@ -213,14 +213,14 @@ def _find_all_matches(con, limit: int | None = 20):
     return df
 
 
-def find_all_matches(con, limit: int | None = 10000):
+def find_all_matches(con):
     df_path = versioned.get_path("matched")
     df = None  # TODO Do I need it for visibility?
     if os.path.exists(df_path):
         print(f"Reading memoized {df_path}")
         df = pd.read_parquet(df_path)
     else:
-        df = _find_all_matches(con, limit=limit)
+        df = _find_all_matches(con)
         print(f"Got results, saving to {df_path}")
         df.to_parquet(df_path)
     return df
@@ -235,7 +235,7 @@ def main():
 
     print("--- Overlaps between all three sources (KRS, Wiki, PKW) ---")
 
-    df = find_all_matches(con, limit=10000)
+    df = find_all_matches(con)
     print(df)
     con.close()
 
