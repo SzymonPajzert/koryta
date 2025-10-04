@@ -107,14 +107,20 @@ def test_lawyers():
     # TODO Find another lawyer and ignore them if they have a specialty
 
 
-def generate_person_names():
-    with open(versioned.get_path("psl_lista.txt")) as people_list:
+def file_lines(filename):
+    with open(versioned.get_path(filename)) as people_list:
         for line in people_list:
             yield line.strip()
 
 
-@pytest.mark.parametrize("person", generate_person_names())
+@pytest.mark.parametrize("person", file_lines("psl_lista.txt"))
 def test_list_psl(person):
+    person = Person(any=person)
+    assert exists_in_output(person)
+
+
+@pytest.mark.parametrize("person", file_lines("stop_pato_lista.txt"))
+def test_list_stop_pato(person):
     person = Person(any=person)
     assert exists_in_output(person)
 
@@ -150,8 +156,14 @@ people = {
     ]
 }
 
+# Kazimierz Chroma https://www.dziennikwschodni.pl/lublin/nowi-szefowie-w-agencjach-dwaj-dyrektorzy-z-pis,n,1000175691.html
+# Piotr Breś https://www.dziennikwschodni.pl/polityka/nasze-tluste-koty,n,1000292595.html - dyrektor totalizator sportowy
+# Jan Szewczak https://www.dziennikwschodni.pl/polityka/nasze-tluste-koty,n,1000292595.html
+# Renata Stefaniuk https://www.dziennikwschodni.pl/polityka/nasze-tluste-koty,n,1000292595.html
+# Leszek Daniewski https://www.dziennikwschodni.pl/lubelskie/zmiany-w-agencjach-rolniczych-w-lubelskiem-kto-moze-zostac-dyrektorem,n,1000172597.html
 # Krzysztof Figat - Chyba znalazłem nowego przypadkiem - https://tygodniksiedlecki.com/artykul/antoni-jozwowicz-prezesem-n1424927
 # Zofia Paryła - Has wiki page with mentions - https://pl.wikipedia.org/wiki/Zofia_Pary%C5%82a#cite_ref-Krewni_2-1,  https://krakow.wyborcza.pl/krakow/7,44425,26834696,szkola-kariery-daniela-obajtka-bliscy-i-znajomi-prezesa-orlenu.html#s=S.embed_link-K.C-B.1-L.4.zw, friend of Obajtek, mentioned on the wiki
+# Parse refs from people's page's, e.g Zofia's so you can feed them to the crawler.
 # Mateusz Siepielski, wiceburmistrz Śródmieścia 2015
 # Joanna Gepfert - https://pl.wikipedia.org/wiki/Instytut_De_Republica
 # Energa was missing - https://pl.wikipedia.org/wiki/Energa, even though it's owned by Orlen
