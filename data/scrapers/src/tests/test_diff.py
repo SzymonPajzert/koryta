@@ -1,5 +1,6 @@
 from util.dict import diff_maybe_dict, single_value_diff, something_removed
 
+
 def test_single_value_diff():
     assert single_value_diff("a", "b") == "  current: a\n  new: b"
 
@@ -25,9 +26,7 @@ def test_something_removed_removed():
 def test_something_removed_changed():
     prev = {"a": 1}
     after = {"a": 2}
-    assert something_removed(prev, after) == [
-        ("a", "changed\n  current: 1\n  new: 2")
-    ]
+    assert something_removed(prev, after) == [("a", "changed\n  current: 1\n  new: 2")]
 
 
 def test_something_removed_nested_added():
