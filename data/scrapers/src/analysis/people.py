@@ -153,8 +153,8 @@ def _find_all_matches(con):
         FROM krs_people k
         FULL JOIN pkw_people p ON (ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
             AND k.metaphone = p.metaphone
-            AND jaro_winkler_similarity(k.last_name, p.last_name) > 0.95
-            AND jaro_winkler_similarity(k.first_name, p.first_name) > 0.95
+            AND k.last_name = p.last_name
+            AND k.first_name = p.first_name
     ),
     krs_pkw_wiki AS (
         SELECT

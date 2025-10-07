@@ -298,6 +298,8 @@ FAILED src/tests/test_analysis.py::test_list_psl[Honorata Krysiewicz] - assert F
 FAILED src/tests/test_analysis.py::test_list_psl[Pawe\u0142 Przychodze\u0144] - assert False
 FAILED src/tests/test_analysis.py::test_list_psl[Piotr Chylicki] - assert False
 FAILED src/tests/test_analysis.py::test_list_psl[Mateusz Siepielski] - assert False
+FAILED src/tests/test_analysis.py::test_list_psl[Jacek Goli\u0144ski] - assert False
+FAILED src/tests/test_analysis.py::test_list_psl[Wies\u0142aw Jasi\u0144ski] - assert False
 FAILED src/tests/test_analysis.py::test_list_stop_pato[Przemys\u0142aw Aksiuczyc] - assert False
 FAILED src/tests/test_analysis.py::test_list_stop_pato[\u0141ukasz Ba\u0142ajewicz] - assert False
 FAILED src/tests/test_analysis.py::test_list_stop_pato[Jaros\u0142aw Berger] - assert False
