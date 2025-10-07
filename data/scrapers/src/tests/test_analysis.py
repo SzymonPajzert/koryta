@@ -51,11 +51,19 @@ def exists_in_output(person: Person):
     )
 
 
-@pytest.mark.parametrize("column", ["krs_name", "pkw_name", "wiki_name"])
-def test_not_duplicated(column):
+def list_values(cols):
+    for col in cols:
+        for val in df[col].unique():
+            yield col, val
+
+
+@pytest.mark.parametrize(
+    ["column", "value"], list_values(["krs_name", "pkw_name", "wiki_name"])
+)
+def test_not_duplicated(column, value):
     # Make sure that peeple are not duplicated in the output
     # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
-    assert len(df[column].unique()) == len(df[column].dropna())
+    assert len(df[df[column] == value]) == 1
 
 
 def get_words(name):

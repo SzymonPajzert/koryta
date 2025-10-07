@@ -31,12 +31,16 @@ CREATE OR REPLACE TABLE krs_people AS
 SELECT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
+    trim(replace(
+        replace(lower(full_name), lower(first_name), ''),
+        lower(last_name),
+        '')) as second_name,
     double_metaphone(last_name) as metaphone,
     CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
     MAX(employed_end) AS employed_end,
     ANY_VALUE(employed_krs) AS employed_krs,
-    id as rejestrio_id,
-    full_name
+    ANY_VALUE(id) as rejestrio_id,
+    ANY_VALUE(full_name) as full_name
 FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
 GROUP BY ALL
@@ -51,6 +55,10 @@ CREATE OR REPLACE TABLE wiki_people AS
 SELECT DISTINCT
     lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
     lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
+    trim(regexp_replace(
+        regexp_replace(lower(full_name), lower(first_name), ''),
+        lower(last_name),
+        '')) as second_name,
     double_metaphone(last_name) as metaphone,
     birth_year,
     CASE
@@ -72,6 +80,10 @@ CREATE OR REPLACE TABLE pkw_people AS
 SELECT DISTINCT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
+    trim(regexp_replace(
+        regexp_replace(lower(pkw_name), lower(first_name), ''),
+        lower(last_name),
+        '')) as second_name,
     double_metaphone(last_name) as metaphone,
     birth_year,
     pkw_name as full_name
@@ -160,6 +172,7 @@ def _find_all_matches(con):
             AND k.metaphone = p.metaphone
             AND k.last_name = p.last_name
             AND k.first_name = p.first_name
+            AND (k.second_name = p.second_name OR k.second_name IS NULL OR p.second_name IS NULL OR k.second_name = '' OR p.second_name = '')
     ),
     krs_pkw_wiki AS (
         SELECT
@@ -172,7 +185,7 @@ def _find_all_matches(con):
                 jaro_winkler_similarity(kp.base_full_name, w.full_name)
             ) / 4.0 as wiki_score
         FROM krs_pkw kp
-        LEFT JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1 AND kp.metaphone = w.metaphone
+        FULL JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1 AND kp.metaphone = w.metaphone
             AND kp.base_last_name = w.last_name
             AND kp.base_first_name = w.first_name
     ),
