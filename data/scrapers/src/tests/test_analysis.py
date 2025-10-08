@@ -195,6 +195,8 @@ PEOPLE_ANNOTATED = {
     "Sławomir Zawadzki": "should not be in koryta",
     "Wiesław Urbański": "match on exact birth date",
     "Andrzej Osiadacz": "wiki extract second name, should not be in koryta, is an expert",
+    "Grzegorz Kotowicz": "year is off, duplicate person from a different place, second name doubles rows",
+    "Józef Śliwa": "wiki extract second name",
 }
 
 # TODO Ignore failures could be marked only for some tests

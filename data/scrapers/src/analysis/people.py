@@ -105,6 +105,7 @@ CREATE OR REPLACE TABLE pkw_people_raw AS
 SELECT DISTINCT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
+    lower(middle_name) as second_name,
     double_metaphone(last_name) as metaphone,
     birth_year,
     pkw_name as full_name
@@ -151,6 +152,8 @@ def _find_all_matches(con):
             k.birth_date as birth_date,
             k.employed_end,
             k.employed_krs,
+            k.birth_year = p.birth_year as kp_same_birth_year,
+            *,
         FROM krs_people k
         FULL JOIN pkw_people p ON (ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
             AND k.metaphone = p.metaphone
@@ -178,29 +181,54 @@ def _find_all_matches(con):
         FROM krs_pkw_wiki kpw
         FULL JOIN koryta_people ko ON jaro_winkler_similarity(kpw.base_last_name, ko.last_name) > 0.95
             AND jaro_winkler_similarity(kpw.base_first_name, ko.first_name) > 0.95
+    ),
+    scored AS (
+        SELECT
+            (
+                (CASE WHEN kp_same_birth_year THEN 2 ELSE 0 END) + 
+                (CASE WHEN krs_name IS NOT NULL THEN 8 ELSE 0 END) +
+                (CASE WHEN pkw_name IS NOT NULL THEN 4 ELSE 0 END) +
+                (CASE WHEN koryta_name IS NOT NULL THEN 16 ELSE 0 END) +
+                (CASE WHEN wiki_name IS NOT NULL THEN 2 ELSE 0 END) +
+                (CASE
+                    WHEN is_polityk = 'Polityk' THEN 1
+                    WHEN is_polityk IS NOT NULL THEN 0.5
+                    ELSE 0
+                END) + COALESCE(wiki_score, 0)
+            ) as overall_score,
+            *,
+        FROM all_sources
+    ),
+    max_scores AS (
+        SELECT
+            base_first_name,
+            base_last_name,
+            birth_date,
+            metaphone,
+            MAX(overall_score) as max_score
+        FROM scored
+        GROUP BY base_first_name, base_last_name, metaphone, birth_date
     )
+    
     SELECT
+        overall_score,
         koryta_name,
         krs_name,
         pkw_name,
         wiki_name,
         birth_year,
-        birth_date,
+        max_scores.birth_date,
         employed_end,
         employed_krs,
         is_polityk,
-        (
-            (CASE WHEN krs_name IS NOT NULL THEN 8 ELSE 0 END) +
-            (CASE WHEN pkw_name IS NOT NULL THEN 4 ELSE 0 END) +
-            (CASE WHEN koryta_name IS NOT NULL THEN 16 ELSE 0 END) +
-            (CASE WHEN wiki_name IS NOT NULL THEN 2 ELSE 0 END) +
-            (CASE
-                WHEN is_polityk = 'Polityk' THEN 1
-                WHEN is_polityk IS NOT NULL THEN 0.5
-                ELSE 0
-            END) + COALESCE(wiki_score, 0)
-        ) as overall_score
-    FROM all_sources
+        *  -- TODO remove 
+    FROM max_scores LEFT JOIN scored ON (
+        max_scores.base_first_name = scored.base_first_name
+        AND max_scores.base_last_name = scored.base_last_name
+        AND max_scores.metaphone = scored.metaphone
+        AND max_scores.birth_date = scored.birth_date
+        AND max_scores.max_score = scored.overall_score
+    )
     WHERE overall_score >= 8
     ORDER BY overall_score DESC, koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """
