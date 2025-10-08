@@ -9,6 +9,11 @@ _project_root = os.path.dirname(os.path.dirname(_current_dir))
 VERSIONED_DIR = os.path.join(_project_root, "versioned")
 DOWNLOADED_DIR = os.path.join(_project_root, "downloaded")
 
+HINTS = {
+    "people_wiki.jsonl": "poetry run scrape_wiki",
+    "people_krs.jsonl": "poetry run scrape_krs  # requires access to Google bucket koryta-pl-crawled",
+}
+
 
 class Accessor:
     path: str
@@ -20,10 +25,15 @@ class Accessor:
         return os.path.join(VERSIONED_DIR, filename)
 
     def assert_path(self, filename):
-        try:
-            return glob.glob(self.get_path(filename))[0]
-        except IndexError:
+        p = self.get_path(filename)
+        if os.path.exists(p):
+            return p
+        else:
             print(f"{filename} is missing.")
+            if filename in HINTS:
+                print(HINTS[filename])
+            else:
+                print("No hint found for this filename, add it in the config.py")
             sys.exit(1)
 
     def exists(self, filename):

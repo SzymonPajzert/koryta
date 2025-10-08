@@ -38,6 +38,7 @@ class People:
     birth_year: int | None
     infobox: str
     content_score: int
+    links: list[str]
 
 
 @ducktable()
@@ -422,6 +423,8 @@ def process_wikipedia_dump():
                         birth_year=article.polityk_infobox.birth_year,
                         infobox=article.polityk_infobox.inf_type,
                         content_score=article.content_score,
+                        links=[],  # TODO print links, so we can train an algorithm which page is a political person
+                        # links=list(article.normalized_links),
                     ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
                 # Crucial step for memory management: clear the element
                 # after processing to free up memory.

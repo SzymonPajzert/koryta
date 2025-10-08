@@ -15,8 +15,8 @@ def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
         file_path = os.path.join(VERSIONED_DIR, f"{db}.jsonl")
         if len(sort) == 0:
             duckdb.execute(f"COPY {db} TO '{file_path}'")
-        q = f"SELECT * FROM {db} ORDER BY {sort[1]}"
-        duckdb.execute(f"COPY {q} TO '{file_path}'")
+        q = f"SELECT * FROM {db} ORDER BY {sort[0]}"
+        duckdb.execute(f"COPY ({q}) TO '{file_path}'")
 
 
 def ducktable(read=False, name=None):
@@ -30,6 +30,7 @@ def ducktable(read=False, name=None):
             bool | None: "BOOLEAN",
             datetime: "TIMESTAMP",
             datetime | None: "TIMESTAMP",
+            list[str]: "VARCHAR[]",
         }
 
         table_name = name

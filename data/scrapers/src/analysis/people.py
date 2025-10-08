@@ -9,10 +9,10 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 
 
-krs_file = versioned.get_path("people_krs.jsonl")
-wiki_file = versioned.get_path("people_wiki.jsonl")
-pkw_file = versioned.get_path("people_pkw.jsonl")
-koryta_file = versioned.get_path("people_koryta.jsonl")
+krs_file = versioned.assert_path("people_krs.jsonl")
+wiki_file = versioned.assert_path("people_wiki.jsonl")
+pkw_file = versioned.assert_path("people_pkw.jsonl")
+koryta_file = versioned.assert_path("people_koryta.jsonl")
 
 con = duckdb.connect(database=":memory:")
 
@@ -72,7 +72,7 @@ create_people_table(
 con.execute(
     f"""
 CREATE OR REPLACE TABLE wiki_people_raw AS
-SELECT DISTINCT
+SELECT
     lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
     lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
     birth_year,
@@ -82,6 +82,7 @@ SELECT DISTINCT
         WHEN infobox = 'Naukowiec' THEN 'Naukowiec'
         ELSE NULL    
     END as is_polityk,
+    atan(content_score) AS wiki_score,
     full_name
 FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
@@ -89,7 +90,7 @@ WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
 """
 )
 
-create_people_table("wiki_people", any_vals=["is_polityk", "full_name"])
+create_people_table("wiki_people", any_vals=["is_polityk", "full_name", "wiki_score"])
 
 con.execute(
     f"""
@@ -154,6 +155,7 @@ def _find_all_matches(con):
             kp.*,
             w.full_name as wiki_name,
             w.is_polityk,
+            w.wiki_score,
         FROM krs_pkw kp
         FULL JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1 AND kp.metaphone = w.metaphone
             AND kp.base_last_name = w.last_name
@@ -185,7 +187,7 @@ def _find_all_matches(con):
                 WHEN is_polityk = 'Polityk' THEN 1
                 WHEN is_polityk IS NOT NULL THEN 0.5
                 ELSE 0
-            END)
+            END) + COALESCE(wiki_score, 0)
         ) as overall_score
     FROM all_sources
     WHERE overall_score >= 8
