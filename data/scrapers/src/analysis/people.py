@@ -25,41 +25,56 @@ con.execute(
 
 read_limit = ""
 
+
+def create_people_table(tbl_name, to_list: list[str] = [], any_vals: list[str] = []):
+    con.execute(
+        f"""
+        CREATE OR REPLACE TABLE {tbl_name} AS
+        SELECT
+            first_name,
+            last_name,
+            trim(replace(
+                replace(lower(full_name), lower(first_name), ''),
+                lower(last_name),
+                '')) as second_name,
+            double_metaphone(last_name) as metaphone,
+            birth_year,
+            {'\n'.join([f"list({col}) as {col}," for col in to_list])}
+            {'\n'.join([f"any_value({col}) as {col}," for col in any_vals])}
+        FROM {tbl_name}_raw
+        GROUP BY ALL
+        """
+    )
+
+
 con.execute(
     f"""
-CREATE OR REPLACE TABLE krs_people AS
+CREATE OR REPLACE TABLE krs_people_raw AS
 SELECT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
-    trim(replace(
-        replace(lower(full_name), lower(first_name), ''),
-        lower(last_name),
-        '')) as second_name,
-    double_metaphone(last_name) as metaphone,
     CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
-    MAX(employed_end) AS employed_end,
-    ANY_VALUE(employed_krs) AS employed_krs,
-    ANY_VALUE(id) as rejestrio_id,
-    ANY_VALUE(full_name) as full_name
+    employed_end,
+    employed_krs,
+    id as rejestrio_id,
+    full_name
 FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
-GROUP BY ALL
-{read_limit}
+{read_limit};
 """
+)
+
+create_people_table(
+    "krs_people", to_list=["employed_krs", "employed_end", "rejestrio_id", "full_name"]
 )
 
 # TODO the name logic is wrong for wiki, try matching on the full name
 con.execute(
     f"""
-CREATE OR REPLACE TABLE wiki_people AS
+CREATE OR REPLACE TABLE wiki_people_raw AS
 SELECT DISTINCT
     lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
     lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
-    trim(regexp_replace(
-        regexp_replace(lower(full_name), lower(first_name), ''),
-        lower(last_name),
-        '')) as second_name,
-    double_metaphone(last_name) as metaphone,
     birth_year,
     CASE
         WHEN infobox = 'Polityk' THEN 'Polityk'
@@ -74,16 +89,14 @@ WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
 """
 )
 
+create_people_table("wiki_people", any_vals=["is_polityk", "full_name"])
+
 con.execute(
     f"""
-CREATE OR REPLACE TABLE pkw_people AS
+CREATE OR REPLACE TABLE pkw_people_raw AS
 SELECT DISTINCT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
-    trim(regexp_replace(
-        regexp_replace(lower(pkw_name), lower(first_name), ''),
-        lower(last_name),
-        '')) as second_name,
     double_metaphone(last_name) as metaphone,
     birth_year,
     pkw_name as full_name
@@ -92,6 +105,8 @@ WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NUL
 {read_limit}
 """
 )
+
+create_people_table("pkw_people", to_list=["full_name"])
 
 con.execute(
     f"""
@@ -111,41 +126,6 @@ WHERE full_name IS NOT NULL
 )
 
 
-def find_two_way_matches(con, table1, table2, limit: int | None = 20):
-    name1 = table1.split("_")[0]
-    name2 = table2.split("_")[0]
-    limit_str = ""
-    if limit is not None:
-        limit_str = f"LIMIT {limit}"
-    query = f"""
-    WITH matches AS (
-        SELECT
-            t1.full_name as {name1}_name,
-            t2.full_name as {name2}_name,
-            t1.birth_year as {name1}_year,
-            t2.birth_year as {name2}_year,
-            jaro_winkler_similarity(t1.first_name, t2.first_name) as first_name_sim,
-            jaro_winkler_similarity(t1.last_name, t2.last_name) as last_name_sim
-        FROM {table1} t1
-        JOIN {table2} t2 ON ABS(t1.birth_year - t2.birth_year) <= 1
-        WHERE last_name_sim > 0.97 AND first_name_sim > 0.97
-    )
-    SELECT
-        *,
-        (first_name_sim + last_name_sim * 2) / 3 as score
-    FROM matches
-    WHERE score > 0.95
-    ORDER BY score DESC
-    {limit_str};
-    """
-    print(f"\n--- Overlaps between {name1.upper()} and {name2.upper()} ---")
-    df = con.execute(query).df()
-    if df.empty:
-        print("No matches found with the current criteria.")
-    else:
-        print(df)
-
-
 # TODO Bonus points if wiki people has polityk infobox
 
 
@@ -154,19 +134,14 @@ def _find_all_matches(con):
     WITH krs_pkw AS (
         SELECT
             k.metaphone as metaphone,
-            k.full_name as krs_name,
-            p.full_name as pkw_name,
+            k.full_name[1] as krs_name,
+            p.full_name[1] as pkw_name,
             k.birth_year as birth_year,
             k.first_name as base_first_name, -- Carry forward base names for subsequent joins
             k.last_name as base_last_name,
             k.full_name as base_full_name,
-            employed_end,
-            employed_krs,
-            (
-                jaro_winkler_similarity(k.first_name, p.first_name) +
-                jaro_winkler_similarity(k.last_name, p.last_name) * 2 +
-                jaro_winkler_similarity(k.full_name, p.full_name)
-            ) / 4.0 as pkw_score
+            k.employed_end,
+            k.employed_krs,
         FROM krs_people k
         FULL JOIN pkw_people p ON (ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
             AND k.metaphone = p.metaphone
@@ -179,11 +154,6 @@ def _find_all_matches(con):
             kp.*,
             w.full_name as wiki_name,
             w.is_polityk,
-            (
-                jaro_winkler_similarity(kp.base_first_name, w.first_name) +
-                jaro_winkler_similarity(kp.base_last_name, w.last_name) * 2 +
-                jaro_winkler_similarity(kp.base_full_name, w.full_name)
-            ) / 4.0 as wiki_score
         FROM krs_pkw kp
         FULL JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1 AND kp.metaphone = w.metaphone
             AND kp.base_last_name = w.last_name
@@ -193,11 +163,6 @@ def _find_all_matches(con):
         SELECT
             kpw.*,
             ko.full_name as koryta_name,
-            (
-                jaro_winkler_similarity(kpw.base_first_name, ko.first_name) +
-                jaro_winkler_similarity(kpw.base_last_name, ko.last_name) * 2 +
-                jaro_winkler_similarity(kpw.base_full_name, ko.full_name)
-            ) / 4.0 as koryta_score
         FROM krs_pkw_wiki kpw
         FULL JOIN koryta_people ko ON jaro_winkler_similarity(kpw.base_last_name, ko.last_name) > 0.95
             AND jaro_winkler_similarity(kpw.base_first_name, ko.first_name) > 0.95
@@ -224,7 +189,7 @@ def _find_all_matches(con):
         ) as overall_score
     FROM all_sources
     WHERE overall_score >= 8
-    ORDER BY overall_score DESC
+    ORDER BY overall_score DESC, koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """
     print("\n--- Overlaps between Koryta, KRS, PKW, and Wiki ---")
     df = con.execute(query).df()

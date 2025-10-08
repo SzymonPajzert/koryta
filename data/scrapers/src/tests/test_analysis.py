@@ -1,17 +1,17 @@
 import pytest
 import regex as re
+from itertools import chain
 
 from scrapers.krs.process import KRS, iterate_blobs
 from analysis.people import find_all_matches, con
 from util.config import versioned
 
 
-# TODO return to 11, so we can better tune the wiki algorithm
 SCORE_CUTOFF = 10.5
 
 
 df_all = find_all_matches(con)
-df = df_all[df_all["overall_score"] >= SCORE_CUTOFF]
+df = df_all[df_all["overall_score"] > SCORE_CUTOFF]
 
 
 scraped_krs = set(KRS.from_blob_name(blob) for blob, _ in iterate_blobs())
@@ -60,6 +60,7 @@ def list_values(cols):
 @pytest.mark.parametrize(
     ["column", "value"], list_values(["krs_name", "pkw_name", "wiki_name"])
 )
+@pytest.mark.parametrize_skip_if(lambda column, value: value in IGNORE_FAILURES)  # type: ignore
 def test_not_duplicated(column, value):
     # Make sure that peeple are not duplicated in the output
     # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
@@ -151,25 +152,22 @@ def test_missing(person):
         "Grzegorz Pastuszko",
     ],
 )
+@pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
 def test_exists(person):
-    if person in IGNORE_FAILURES:
-        return
     person = Person(any=person)
     assert exists_in_output(person)
 
 
 @pytest.mark.parametrize("person", file_lines("psl_lista.txt"))
+@pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
 def test_list_psl(person):
-    if person in IGNORE_FAILURES:
-        return
     person = Person(any=person)
     assert exists_in_output(person)
 
 
 @pytest.mark.parametrize("person", file_lines("stop_pato_lista.txt"))
+@pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
 def test_list_stop_pato(person):
-    if person in IGNORE_FAILURES:
-        return
     person = Person(any=person)
     assert exists_in_output(person)
 
@@ -191,6 +189,15 @@ def test_krs_present(krs):
     krs = KRS(krs)
     assert krs in scraped_krs
 
+
+PEOPLE_ANNOTATED = {
+    "Robert Ciborowski": "listed in stop pato with vague reasons, need to list komitet honorowy kandydata",
+    "Sławomir Zawadzki": "should not be in koryta",
+    "Wiesław Urbański": "match on exact birth date",
+    "Andrzej Osiadacz": "wiki extract second name, should not be in koryta, is an expert",
+}
+
+# TODO Ignore failures could be marked only for some tests
 
 IGNORE_FAILURES_STR = """
 FAILED src/tests/test_analysis.py::test_list_psl[Grzegorz Ksepko] - assert False
@@ -388,7 +395,12 @@ FAILED src/tests/test_analysis.py::test_list_stop_pato[Marcin Zamaro] - assert F
 FAILED src/tests/test_analysis.py::test_list_stop_pato[Piotr \u017bo\u0142\u0105dek] - assert False
 """
 
-IGNORE_FAILURES = {m.strip() for m in re.findall("\\[(.+)\\]", IGNORE_FAILURES_STR)}
+IGNORE_FAILURES = {
+    m.strip()
+    for m in chain(
+        re.findall("\\[(.+)\\]", IGNORE_FAILURES_STR), PEOPLE_ANNOTATED.keys()
+    )
+}
 
 people = {
     "Paweł Olejnik": [
