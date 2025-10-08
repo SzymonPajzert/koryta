@@ -2,7 +2,7 @@ import os
 import itertools
 from dataclasses import dataclass
 import regex as re
-from regex import findall, match
+from regex import findall, match, search
 from collections import Counter
 
 import bz2
@@ -10,10 +10,12 @@ import xml.etree.ElementTree as ET
 from google.cloud import storage
 from tqdm import tqdm
 
+from util.config import tests
 from stores.duckdb import ducktable, dump_dbs
 from util.download import FileSource
 from util.config import DOWNLOADED_DIR
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
+from util.polish import UPPER, LOWER
 
 
 # URL for the latest Polish Wikipedia articles dump
@@ -59,6 +61,11 @@ def upload_to_gcs(bucket_name, destination_blob_name, data):
     except Exception as e:
         print(f"❌ Failed to upload {destination_blob_name}. Error: {e}")
 
+
+TEST_FILES = {
+    "Józef Śliwa",
+    "Bronisław Geremek",
+}
 
 POLITICAL = {
     "Kancelaria Prezesa Rady Ministrów",
@@ -358,11 +365,19 @@ class WikiArticle:
             print(f"Failed to find text in {title}")
             return None
 
+        polityk_infobox = PolitykInfobox.parse(wikitext)
+        if polityk_infobox is not None:
+            pattern = f"'''({title.replace(' ', f'[ {UPPER}{LOWER}]*')})'''"
+            full_name = search(pattern, wikitext)
+            if full_name is not None and full_name.group(1) != title:
+                # print(f"Changing title from {title} to {full_name.group(1)}")
+                title = full_name.group(1)
+
         return WikiArticle(
             title=title,
             categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
             links=findall("\\[\\[[^\\]]+\\]\\]", wikitext),
-            polityk_infobox=PolitykInfobox.parse(wikitext),
+            polityk_infobox=polityk_infobox,
             osoba_imie="imię i nazwisko" in wikitext,
         )
 
@@ -406,6 +421,11 @@ def process_wikipedia_dump():
                 article = WikiArticle.parse(elem)
                 if article is None:
                     continue
+                if article.title in TEST_FILES:
+                    path = tests.get_path(f"{article.title}.xml")
+                    print(f"Saving {article.title} to test file: {path}")
+                    with open(path, "w") as test_file:
+                        test_file.write(ET.tostring(elem, encoding="unicode").strip())
                 if article.interesting():
                     if article.content_score > 0:
                         for cat in article.normalized_links:

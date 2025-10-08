@@ -77,7 +77,7 @@ con.execute(
 CREATE OR REPLACE TABLE wiki_people_raw AS
 SELECT
     lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
-    lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
+    lower(trim(regexp_extract(full_name, '(\\S+)$', 1))) as last_name,
     birth_year,
     birth_iso8601 AS birth_date,
     CASE
