@@ -1,12 +1,15 @@
-import bz2
 import os
-import xml.etree.ElementTree as ET
-from google.cloud import storage
+import itertools
 from dataclasses import dataclass
 import regex as re
 from regex import findall, match
-from tqdm import tqdm
 from collections import Counter
+
+import bz2
+import xml.etree.ElementTree as ET
+from google.cloud import storage
+from tqdm import tqdm
+
 from stores.duckdb import ducktable, dump_dbs
 from util.download import FileSource
 from util.config import DOWNLOADED_DIR
@@ -34,6 +37,7 @@ class People:
     birth_iso8601: str | None
     birth_year: int | None
     infobox: str
+    content_score: int
 
 
 @ducktable()
@@ -55,12 +59,144 @@ def upload_to_gcs(bucket_name, destination_blob_name, data):
         print(f"❌ Failed to upload {destination_blob_name}. Error: {e}")
 
 
-CATEGORY_SCORE = {
-    "Kategoria:Polscy politycy": 5,
-    "Kategoria:Prezydenci Polski": 3,
-    "Kategoria:Premierzy Polski": 3,
-    "Kategoria:Posłowie na Sejm": 3,
-    "Kategoria:Polscy senatorowie": 5,
+POLITICAL = {
+    "Kancelaria Prezesa Rady Ministrów",
+    "Sejm Rzeczypospolitej Polskiej",
+    "Ministerstwo Skarbu Państwa",
+    "wojewoda",
+    "polityk",
+    "gmina wiejska",
+    "marszałek województwa",
+    "Wybory parlamentarne w Polsce w 2007 roku",
+    "Prawo i Sprawiedliwość",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej V kadencji (2005–2007)",
+    "Polska Rzeczpospolita Ludowa",
+    "Senat Rzeczypospolitej Polskiej",
+    "Wybory parlamentarne w Polsce w 2005 roku",
+    "Platforma Obywatelska",
+    "Parlament Europejski",
+    "Polska Zjednoczona Partia Robotnicza",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej IV kadencji (2001–2005)",
+    "Wybory parlamentarne w Polsce w 2011 roku",
+    "Sojusz Lewicy Demokratycznej",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej VI kadencji",
+    "Niezależny Samorządny Związek Zawodowy „Solidarność”",
+    "Wybory parlamentarne w Polsce w 2001 roku",
+    "Wybory parlamentarne w Polsce w 2015 roku",
+    "Kategoria:Posłowie na Sejm Rzeczypospolitej Polskiej VI kadencji",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej VII kadencji",
+    "Prezydent Rzeczypospolitej Polskiej",
+    "Polskie Stronnictwo Ludowe",
+    "Akcja Wyborcza Solidarność",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej III kadencji (1997–2001)",
+    "Kategoria:Politycy Prawa i Sprawiedliwości",
+    "Wybory parlamentarne w Polsce w 2023 roku",
+    "Kategoria:Posłowie na Sejm Rzeczypospolitej Polskiej VII kadencji",
+    "Kategoria:Politycy Akcji Wyborczej Solidarność",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej II kadencji (1993–1997)",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej VIII kadencji",
+    "Kategoria:Polscy politycy",
+    "Kategoria:Prezydenci Polski",
+    "Kategoria:Premierzy Polski",
+    "Kategoria:Posłowie na Sejm",
+    "Kategoria:Polscy senatorowie",
+    "gromada (podział administracyjny)",
+    "Gromada (podział administracyjny)",
+    "Kategoria:Politycy Platformy Obywatelskiej",
+    "Wybory parlamentarne w Polsce w 2019 roku",
+    "Koalicja Obywatelska",
+    "poseł do Parlamentu Europejskiego",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej IX kadencji",
+    "wybory parlamentarne w Polsce w 2019 roku",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej X kadencji",
+    "Kategoria:Posłowie na Sejm Rzeczypospolitej Polskiej VIII kadencji",
+    "Kategoria:Politycy SdRP i SLD",
+    "Kategoria:Polscy radni rad gmin",
+    "samorząd terytorialny",
+    "Kategoria:Posłowie na Sejm Rzeczypospolitej Polskiej IX kadencji",
+    "Unia Wolności",
+    "Andrzej Duda",
+    "Wybory parlamentarne w Polsce w 1997 roku",
+    "Lech Kaczyński",
+    "Kategoria:Posłowie na Sejm Rzeczypospolitej Polskiej X kadencji",
+    "Kategoria:Polscy radni rad powiatów",
+    "poseł",
+    "Samoobrona Rzeczpospolitej Polskiej",
+    "Wybory parlamentarne w Polsce w 1993 roku",
+    "Bronisław Komorowski",
+    "Liga Polskich Rodzin",
+    "Wybory samorządowe w Polsce w 2018 roku",
+    "Kategoria:Politycy Polskiego Stronnictwa Ludowego",
+    "Wybory samorządowe w Polsce w 2010 roku",
+    "Posłowie na Sejm Rzeczypospolitej Polskiej I kadencji (1991–1993)",
+    "Sejm PRL",
+    "wybory parlamentarne w Polsce w 2011 roku",
+    "Lewica i Demokraci",
+    "Wybory samorządowe w Polsce w 2014 roku",
+    "Sojusz Lewicy Demokratycznej – Unia Pracy",
+    "Wybory do Parlamentu Europejskiego w Polsce w 2014 roku",
+    "Kategoria:Działacze PZPR",
+    "Wybory samorządowe w Polsce w 2006 roku",
+    "Jarosław Kaczyński",
+    "Kategoria:Posłowie na Sejm III Rzeczypospolitej Polskiej",
+    "Zjednoczone Stronnictwo Ludowe",
+    "Kategoria:Posłowie na Sejm Rzeczypospolitej Polskiej II kadencji (1993–1997)",
+    "Lech Wałęsa",
+    "Donald Tusk",
+    "Aleksander Kwaśniewski",
+    "Kategoria:Politycy Unii Wolności",
+    "Wybory samorządowe w Polsce w 1998 roku",
+    "Wybory do Parlamentu Europejskiego w Polsce w 2024 roku",
+    "Wybory samorządowe w Polsce w 2002 roku",
+    "Kategoria:Posłowie na Sejm Rzeczypospolitej Polskiej I kadencji (1991–1993)",
+    "Trzecia Droga (Polska)",
+    "wybory parlamentarne w Polsce w 2015 roku",
+    "Wybory parlamentarne w Polsce w 1989 roku",
+    "Poseł",
+    "Wybory samorządowe w Polsce w 2024 roku",
+    "Unia Pracy",
+    "prezydent miasta",
+    "Wybory parlamentarne w Polsce w 1991 roku",
+    "Posłowie na Sejm Polskiej Rzeczypospolitej Ludowej X kadencji",
+    "Unia Demokratyczna",
+    "Sekretarz stanu (Polska)",
+    "Porozumienie Centrum",
+    "Kategoria:Polscy posłowie do Parlamentu Europejskiego",
+    "burmistrz",
+    "Wybory do Parlamentu Europejskiego w Polsce w 2019 roku",
+    "Nowa Lewica",
+    "Stronnictwo Demokratyczne",
+    "Ruch Społeczny (partia polityczna)",
+    "Wybory do Parlamentu Europejskiego w Polsce w 2009 roku",
+    "senator",
+    "Prezydent miasta",
+    "Socjaldemokracja Rzeczypospolitej Polskiej",
+    "Ministerstwo Spraw Zagranicznych (Polska)",
+    "Zjednoczenie Chrześcijańsko-Narodowe",
+    "rada gminy",
+    "Prezes Rady Ministrów",
+    "Kategoria:Posłowie na Sejm kontraktowy",
+    "Kategoria:Działacze Zjednoczonego Stronnictwa Ludowego",
+    "Stronnictwo Konserwatywno-Ludowe",
+    "wybory samorządowe w Polsce w 2006 roku",
+    "Kategoria:Polscy urzędnicy samorządowi",
+    "Poseł do Parlamentu Europejskiego",
+    "Rada Ministrów w Polsce",
+    "Nowoczesna",
+    "radny",
+    "Mateusz Morawiecki",
+    "Niezależne Zrzeszenie Studentów",
+    "Ministerstwo Spraw Wewnętrznych i Administracji",
+    "Ministerstwo Obrony Narodowej",
+    "Katastrofa polskiego Tu-154 w Smoleńsku",
+    "Marszałek Sejmu Rzeczypospolitej Polskiej",
+    "Ministerstwo Kultury i Dziedzictwa Narodowego",
+    "Wybory do Parlamentu Europejskiego w Polsce w 2004 roku",
+    "Konfederacja Wolność i Niepodległość",
+    "Socjaldemokracja Polska",
+    "Polska Partia Socjalistyczna",
+    "Posłowie do Parlamentu Europejskiego VIII kadencji",
+    "wybory samorządowe w Polsce w 2010 roku",
 }
 
 INFOBOXES = {"Polityk"}
@@ -190,8 +326,20 @@ class PolitykInfobox:
 class WikiArticle:
     title: str
     categories: list[str]
+    links: list[str]
     polityk_infobox: PolitykInfobox | None
     osoba_imie: bool
+
+    def __post_init__(self):
+        def normalized():
+            for entry in itertools.chain(self.categories, self.links):
+                n = entry.rstrip("]").lstrip("[").split("|")[0]
+                if n.isdigit():
+                    continue
+                yield n
+
+        self.normalized_links = set(normalized())
+        self.content_score = len(self.normalized_links.intersection(POLITICAL))
 
     @staticmethod
     def parse(elem: ET.Element):
@@ -209,38 +357,20 @@ class WikiArticle:
             print(f"Failed to find text in {title}")
             return None
 
-        article = WikiArticle(
+        return WikiArticle(
             title=title,
             categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
+            links=findall("\\[\\[[^\\]]+\\]\\]", wikitext),
             polityk_infobox=PolitykInfobox.parse(wikitext),
             osoba_imie="imię i nazwisko" in wikitext,
         )
 
-        if article.interesting():
-            for cat in article.categories:
-                category_stats[cat] += 1
-            if article.polityk_infobox is None:
-                article.polityk_infobox = PolitykInfobox("", {})
-            global interesting_count
-            interesting_count += 1
-            People(
-                source=f"https://pl.wikipedia.org/wiki/{article.title}",
-                full_name=article.title,
-                party=article.polityk_infobox.fields.get("partia", ""),
-                birth_iso8601=article.polityk_infobox.birth_iso,
-                birth_year=article.polityk_infobox.birth_year,
-                infobox=article.polityk_infobox.inf_type,
-            ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
-
-        # if article.polityk_infobox is not None:
-        #     print(article.title)
-
-        return article
-
     def interesting(self):
-        return self.polityk_infobox is not None or any(
-            cat in self.categories for cat in CATEGORY_SCORE
-        )
+        if self.polityk_infobox is not None:
+            year = self.polityk_infobox.birth_year
+            if year and year < 1930:
+                return False
+        return (self.polityk_infobox is not None) or self.content_score > 0
 
 
 def process_wikipedia_dump():
@@ -273,12 +403,29 @@ def process_wikipedia_dump():
             # The XML has a namespace, so we check if the tag name ends with 'page'
             if elem.tag.endswith("page"):
                 article = WikiArticle.parse(elem)
+                if article is None:
+                    continue
+                if article.interesting():
+                    if article.content_score > 0:
+                        for cat in article.normalized_links:
+                            if cat in POLITICAL:
+                                continue
+                            category_stats[cat] += 1 + article.content_score
+                    if article.polityk_infobox is None:
+                        article.polityk_infobox = PolitykInfobox("", {})
+                    interesting_count += 1
+                    People(
+                        source=f"https://pl.wikipedia.org/wiki/{article.title}",
+                        full_name=article.title,
+                        party=article.polityk_infobox.fields.get("partia", ""),
+                        birth_iso8601=article.polityk_infobox.birth_iso,
+                        birth_year=article.polityk_infobox.birth_year,
+                        infobox=article.polityk_infobox.inf_type,
+                        content_score=article.content_score,
+                    ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
                 # Crucial step for memory management: clear the element
                 # after processing to free up memory.
                 elem.clear()
-
-        print(f.tell())
-        print(f.read(10000))
 
     print("🎉 Processing complete.")
 
@@ -290,8 +437,8 @@ def main():
         print(f"An error occurred: {e}")
         raise
     finally:
-        dump_dbs()
+        dump_dbs({"people_wiki": ["content_score DESC"]})
 
-        print("\n".join([str(t) for t in category_stats.most_common(200)]))
-        print("\n".join([str(t) for t in infobox_types.most_common(50)]))
-        print("\n".join([str(t) for t in polityk_infobox_stats.most_common(30)]))
+        print("\n".join([str(t) for t in category_stats.most_common(500)]))
+        # print("\n".join([str(t) for t in infobox_types.most_common(50)]))
+        # print("\n".join([str(t) for t in polityk_infobox_stats.most_common(30)]))

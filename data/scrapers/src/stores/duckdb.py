@@ -8,12 +8,15 @@ from datetime import datetime
 dbs = []
 
 
-def dump_dbs(tables_to_dump=None):
+def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
     if tables_to_dump is None:
-        tables_to_dump = dbs
-    for db in tables_to_dump:
+        tables_to_dump = {db: [] for db in dbs}
+    for db, sort in tables_to_dump.items():
         file_path = os.path.join(VERSIONED_DIR, f"{db}.jsonl")
-        duckdb.execute(f"COPY {db} TO '{file_path}'")
+        if len(sort) == 0:
+            duckdb.execute(f"COPY {db} TO '{file_path}'")
+        q = f"SELECT * FROM {db} ORDER BY {sort[1]}"
+        duckdb.execute(f"COPY {q} TO '{file_path}'")
 
 
 def ducktable(read=False, name=None):
