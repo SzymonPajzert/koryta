@@ -54,6 +54,7 @@ SELECT
     lower(first_name) as first_name,
     lower(last_name) as last_name,
     CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
+    CAST(birth_date AS VARCHAR) as birth_date,
     employed_end,
     employed_krs,
     id as rejestrio_id,
@@ -65,7 +66,9 @@ WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NUL
 )
 
 create_people_table(
-    "krs_people", to_list=["employed_krs", "employed_end", "rejestrio_id", "full_name"]
+    "krs_people",
+    to_list=["employed_krs", "employed_end", "rejestrio_id", "full_name"],
+    any_vals=["birth_date"],
 )
 
 # TODO the name logic is wrong for wiki, try matching on the full name
@@ -76,6 +79,7 @@ SELECT
     lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
     lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
     birth_year,
+    birth_iso8601 AS birth_date,
     CASE
         WHEN infobox = 'Polityk' THEN 'Polityk'
         WHEN infobox = 'Biogram' THEN 'Biogram'
@@ -90,7 +94,10 @@ WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
 """
 )
 
-create_people_table("wiki_people", any_vals=["is_polityk", "full_name", "wiki_score"])
+create_people_table(
+    "wiki_people",
+    any_vals=["is_polityk", "full_name", "wiki_score", "birth_date"],
+)
 
 con.execute(
     f"""
@@ -141,6 +148,7 @@ def _find_all_matches(con):
             k.first_name as base_first_name, -- Carry forward base names for subsequent joins
             k.last_name as base_last_name,
             k.full_name as base_full_name,
+            k.birth_date as birth_date,
             k.employed_end,
             k.employed_krs,
         FROM krs_people k
@@ -157,7 +165,9 @@ def _find_all_matches(con):
             w.is_polityk,
             w.wiki_score,
         FROM krs_pkw kp
-        FULL JOIN wiki_people w ON ABS(kp.birth_year - w.birth_year) <= 1 AND kp.metaphone = w.metaphone
+        FULL JOIN wiki_people w
+            ON (kp.birth_date = w.birth_date OR w.birth_date IS NULL)
+            AND kp.metaphone = w.metaphone
             AND kp.base_last_name = w.last_name
             AND kp.base_first_name = w.first_name
     ),
@@ -175,6 +185,7 @@ def _find_all_matches(con):
         pkw_name,
         wiki_name,
         birth_year,
+        birth_date,
         employed_end,
         employed_krs,
         is_polityk,
