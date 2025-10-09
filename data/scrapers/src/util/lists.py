@@ -1,9 +1,8 @@
-import regex as re
-from itertools import chain
-
 # Which wiki files should be saved locally for easier testing
 TEST_FILES = {
     "Józef Śliwa",
+    "Paweł Gruza",
+    "Marcin Chludziński",
     "PERN",
     "Telewizja Polska",
 }
@@ -17,6 +16,7 @@ WIKI_PUBLIC_COMPANY_LINKS = {
 
 # Which categories/links are marking a wiki page as political
 WIKI_POLITICAL_LINKS = {
+    "Fundacja Republikańska",
     "Kancelaria Prezesa Rady Ministrów",
     "Sejm Rzeczypospolitej Polskiej",
     "Ministerstwo Skarbu Państwa",
@@ -196,8 +196,5 @@ PEOPLE_ANNOTATED = {
     # Andrzej Kisielewicz - EU parliment elections are missing
     # https://pl.wikipedia.org/wiki/Pawe%C5%82_Gruza, 2002 election, present in wiki non politician but it mentions the page.
 }
-
-# TODO Ignore failures could be marked only for some tests
-# This is a placeholder, because so many people don't match
 
 IGNORE_FAILURES = {m.strip() for m in PEOPLE_ANNOTATED.keys()}

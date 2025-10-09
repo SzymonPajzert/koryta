@@ -265,8 +265,15 @@ class WikiArticle:
             return True
         return False
 
+    def about_company(self):
+        if self.infobox is None:
+            return False
+        if self.infobox.company_related:
+            return True
+        return False
 
-def extract(elem: ET.Element) -> People | None:
+
+def extract(elem: ET.Element) -> People | Company | None:
     article = WikiArticle.parse(elem)
     if article is None:
         return None
@@ -293,6 +300,14 @@ def extract(elem: ET.Element) -> People | None:
             content_score=article.content_score,
             links=[],  # TODO print links, so we can train an algorithm which page is a political person
             # links=list(article.normalized_links),
+        )
+
+    if article.about_company():
+        if article.infobox is None:
+            article.infobox = Infobox("", {})
+        return Company(
+            name=article.title,
+            krs_number=article.infobox.fields.get("krs", ""),
         )
 
     return None
