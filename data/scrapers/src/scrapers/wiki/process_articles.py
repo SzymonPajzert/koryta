@@ -44,6 +44,13 @@ class People:
     links: list[str]
 
 
+@ducktable(name="companies_wiki")
+@dataclass
+class Company:
+    name: str
+    krs_number: str
+
+
 @ducktable()
 @dataclass
 class IgnoredDates:
@@ -71,20 +78,24 @@ class InfoboxStats:
 
 interesting_count = 0
 infobox_types = Counter()
-polityk_infobox_stats = Counter()
+infobox_stats = Counter()
 category_stats = Counter()
 
 
-class PolitykInfobox:
+class Infobox:
     inf_type: str
     fields: dict[str, str]
+    person_related: bool
+    company_related: bool
 
     def __init__(self, inf_type, fields) -> None:
         self.inf_type = inf_type
         self.fields = fields
         infobox_types[inf_type] += 1
         for field in fields:
-            polityk_infobox_stats[field] += 1
+            infobox_stats[field] += 1
+        self.person_related = "imię i nazwisko" in fields
+        self.company_related = False
 
     @property
     def birth_iso(self):
@@ -166,13 +177,12 @@ class PolitykInfobox:
                 if "=" in field_str:
                     key, value = field_str.split("=", 1)
                     fields[key.strip()] = value.strip()
-            if "imię i nazwisko" in fields:
-                result.append(
-                    PolitykInfobox(
-                        inf_type,
-                        fields,
-                    )
+            result.append(
+                Infobox(
+                    inf_type,
+                    fields,
                 )
+            )
 
         if len(result) == 0:
             return None
@@ -188,7 +198,7 @@ class WikiArticle:
     title: str
     categories: list[str]
     links: list[str]
-    polityk_infobox: PolitykInfobox | None
+    infobox: Infobox | None
     osoba_imie: bool
 
     def __post_init__(self):
@@ -220,8 +230,8 @@ class WikiArticle:
             print(f"Failed to find text in {title}")
             return None
 
-        polityk_infobox = PolitykInfobox.parse(wikitext)
-        if polityk_infobox is not None:
+        infobox = Infobox.parse(wikitext)
+        if infobox is not None:
             pattern = f"'''({title.replace(' ', f'[ {UPPER}{LOWER}]*')})'''"
             full_name = search(pattern, wikitext)
             if full_name is not None and full_name.group(1) != title:
@@ -232,16 +242,60 @@ class WikiArticle:
             title=title,
             categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
             links=findall("\\[\\[[^\\]]+\\]\\]", wikitext),
-            polityk_infobox=polityk_infobox,
+            infobox=infobox,
             osoba_imie="imię i nazwisko" in wikitext,
         )
 
-    def interesting(self):
-        if self.polityk_infobox is not None:
-            year = self.polityk_infobox.birth_year
+    def write_to_test(self, elem: ET.Element):
+        if self.title in TEST_FILES:
+            path = tests.get_path(f"{self.title}.xml")
+            print(f"Saving {self.title} to test file: {path}")
+            with open(path, "w") as test_file:
+                test_file.write(ET.tostring(elem, encoding="unicode").strip())
+
+    def about_person(self):
+        if self.content_score > 0:
+            return True
+        if self.infobox is None:
+            return False
+        if self.infobox.person_related:
+            year = self.infobox.birth_year
             if year and year < 1930:
                 return False
-        return (self.polityk_infobox is not None) or self.content_score > 0
+            return True
+        return False
+
+
+def extract(elem: ET.Element) -> People | None:
+    article = WikiArticle.parse(elem)
+    if article is None:
+        return None
+
+    article.write_to_test(elem)
+    global interesting_count
+
+    if article.about_person():
+        if article.content_score > 0:
+            for cat in article.normalized_links:
+                if cat in WIKI_POLITICAL_LINKS:
+                    continue
+                category_stats[cat] += 1 + article.content_score
+        if article.infobox is None:
+            article.infobox = Infobox("", {})
+        interesting_count += 1
+        return People(
+            source=f"https://pl.wikipedia.org/wiki/{article.title}",
+            full_name=article.title,
+            party=article.infobox.fields.get("partia", ""),
+            birth_iso8601=article.infobox.birth_iso,
+            birth_year=article.infobox.birth_year,
+            infobox=article.infobox.inf_type,
+            content_score=article.content_score,
+            links=[],  # TODO print links, so we can train an algorithm which page is a political person
+            # links=list(article.normalized_links),
+        )
+
+    return None
 
 
 def process_wikipedia_dump():
@@ -273,34 +327,9 @@ def process_wikipedia_dump():
             prev = f.tell()
             # The XML has a namespace, so we check if the tag name ends with 'page'
             if elem.tag.endswith("page"):
-                article = WikiArticle.parse(elem)
-                if article is None:
-                    continue
-                if article.title in TEST_FILES:
-                    path = tests.get_path(f"{article.title}.xml")
-                    print(f"Saving {article.title} to test file: {path}")
-                    with open(path, "w") as test_file:
-                        test_file.write(ET.tostring(elem, encoding="unicode").strip())
-                if article.interesting():
-                    if article.content_score > 0:
-                        for cat in article.normalized_links:
-                            if cat in WIKI_POLITICAL_LINKS:
-                                continue
-                            category_stats[cat] += 1 + article.content_score
-                    if article.polityk_infobox is None:
-                        article.polityk_infobox = PolitykInfobox("", {})
-                    interesting_count += 1
-                    People(
-                        source=f"https://pl.wikipedia.org/wiki/{article.title}",
-                        full_name=article.title,
-                        party=article.polityk_infobox.fields.get("partia", ""),
-                        birth_iso8601=article.polityk_infobox.birth_iso,
-                        birth_year=article.polityk_infobox.birth_year,
-                        infobox=article.polityk_infobox.inf_type,
-                        content_score=article.content_score,
-                        links=[],  # TODO print links, so we can train an algorithm which page is a political person
-                        # links=list(article.normalized_links),
-                    ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
+                entity = extract(elem)
+                if entity is not None:
+                    entity.insert_into()  # pyright: ignore[reportAttributeAccessIssue]
                 # Crucial step for memory management: clear the element
                 # after processing to free up memory.
                 elem.clear()
@@ -319,4 +348,4 @@ def main():
 
         print("\n".join([str(t) for t in category_stats.most_common(500)]))
         # print("\n".join([str(t) for t in infobox_types.most_common(50)]))
-        # print("\n".join([str(t) for t in polityk_infobox_stats.most_common(30)]))
+        # print("\n".join([str(t) for t in infobox_stats.most_common(30)]))
