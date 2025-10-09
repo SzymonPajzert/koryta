@@ -16,7 +16,7 @@ from util.download import FileSource
 from util.config import DOWNLOADED_DIR
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 from util.polish import UPPER, LOWER
-from util.lists import POLITICAL, TEST_FILES
+from util.lists import WIKI_POLITICAL_LINKS, TEST_FILES
 
 
 # URL for the latest Polish Wikipedia articles dump
@@ -200,7 +200,9 @@ class WikiArticle:
                 yield n
 
         self.normalized_links = set(normalized())
-        self.content_score = len(self.normalized_links.intersection(POLITICAL))
+        self.content_score = len(
+            self.normalized_links.intersection(WIKI_POLITICAL_LINKS)
+        )
 
     @staticmethod
     def parse(elem: ET.Element):
@@ -282,7 +284,7 @@ def process_wikipedia_dump():
                 if article.interesting():
                     if article.content_score > 0:
                         for cat in article.normalized_links:
-                            if cat in POLITICAL:
+                            if cat in WIKI_POLITICAL_LINKS:
                                 continue
                             category_stats[cat] += 1 + article.content_score
                     if article.polityk_infobox is None:

@@ -4,10 +4,19 @@ from itertools import chain
 # Which wiki files should be saved locally for easier testing
 TEST_FILES = {
     "Józef Śliwa",
+    "PERN",
+    "Telewizja Polska",
+}
+
+# TODO match upper/lower case automatically?
+WIKI_PUBLIC_COMPANY_LINKS = {
+    "jednoosobowa spółka Skarbu Państwa",
+    "Jednoosobowa spółka Skarbu Państwa",
+    "Skarb państwa",
 }
 
 # Which categories/links are marking a wiki page as political
-POLITICAL = {
+WIKI_POLITICAL_LINKS = {
     "Kancelaria Prezesa Rady Ministrów",
     "Sejm Rzeczypospolitej Polskiej",
     "Ministerstwo Skarbu Państwa",
