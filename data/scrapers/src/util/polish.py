@@ -1,3 +1,8 @@
+# TODO Is there any better way to list upper case characters?
+UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
+
+LOWER = UPPER.lower()
+
 MONTH_NUMBER = {
     "styczeń": 1,
     "luty": 2,

@@ -11,6 +11,8 @@ import pandas
 import abc
 import math
 
+from util.polish import UPPER
+
 # TODO write years to separate files, so it's a bit faster to processles
 
 
@@ -260,9 +262,6 @@ CSV_HEADERS = {
 }
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
-
-# TODO Is there any better way to list upper case characters?
-UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
 
 
 @ducktable(name="people_pkw")

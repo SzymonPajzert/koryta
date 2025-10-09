@@ -1,16 +1,22 @@
-import bz2
 import os
-import xml.etree.ElementTree as ET
-from google.cloud import storage
+import itertools
 from dataclasses import dataclass
 import regex as re
-from regex import findall, match
-from tqdm import tqdm
+from regex import findall, match, search
 from collections import Counter
+
+import bz2
+import xml.etree.ElementTree as ET
+from google.cloud import storage
+from tqdm import tqdm
+
+from util.config import tests
 from stores.duckdb import ducktable, dump_dbs
 from util.download import FileSource
 from util.config import DOWNLOADED_DIR
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
+from util.polish import UPPER, LOWER
+from util.lists import POLITICAL, TEST_FILES
 
 
 # URL for the latest Polish Wikipedia articles dump
@@ -34,6 +40,8 @@ class People:
     birth_iso8601: str | None
     birth_year: int | None
     infobox: str
+    content_score: int
+    links: list[str]
 
 
 @ducktable()
@@ -53,17 +61,6 @@ def upload_to_gcs(bucket_name, destination_blob_name, data):
         print(f"✅ Successfully uploaded {destination_blob_name} to {bucket_name}")
     except Exception as e:
         print(f"❌ Failed to upload {destination_blob_name}. Error: {e}")
-
-
-CATEGORY_SCORE = {
-    "Kategoria:Polscy politycy": 5,
-    "Kategoria:Prezydenci Polski": 3,
-    "Kategoria:Premierzy Polski": 3,
-    "Kategoria:Posłowie na Sejm": 3,
-    "Kategoria:Polscy senatorowie": 5,
-}
-
-INFOBOXES = {"Polityk"}
 
 
 @dataclass
@@ -169,7 +166,7 @@ class PolitykInfobox:
                 if "=" in field_str:
                     key, value = field_str.split("=", 1)
                     fields[key.strip()] = value.strip()
-            if "imię i nazwisko" in fields or inf_type in INFOBOXES:
+            if "imię i nazwisko" in fields:
                 result.append(
                     PolitykInfobox(
                         inf_type,
@@ -190,8 +187,20 @@ class PolitykInfobox:
 class WikiArticle:
     title: str
     categories: list[str]
+    links: list[str]
     polityk_infobox: PolitykInfobox | None
     osoba_imie: bool
+
+    def __post_init__(self):
+        def normalized():
+            for entry in itertools.chain(self.categories, self.links):
+                n = entry.rstrip("]").lstrip("[").split("|")[0]
+                if n.isdigit():
+                    continue
+                yield n
+
+        self.normalized_links = set(normalized())
+        self.content_score = len(self.normalized_links.intersection(POLITICAL))
 
     @staticmethod
     def parse(elem: ET.Element):
@@ -209,38 +218,28 @@ class WikiArticle:
             print(f"Failed to find text in {title}")
             return None
 
-        article = WikiArticle(
+        polityk_infobox = PolitykInfobox.parse(wikitext)
+        if polityk_infobox is not None:
+            pattern = f"'''({title.replace(' ', f'[ {UPPER}{LOWER}]*')})'''"
+            full_name = search(pattern, wikitext)
+            if full_name is not None and full_name.group(1) != title:
+                # print(f"Changing title from {title} to {full_name.group(1)}")
+                title = full_name.group(1)
+
+        return WikiArticle(
             title=title,
             categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
-            polityk_infobox=PolitykInfobox.parse(wikitext),
+            links=findall("\\[\\[[^\\]]+\\]\\]", wikitext),
+            polityk_infobox=polityk_infobox,
             osoba_imie="imię i nazwisko" in wikitext,
         )
 
-        if article.interesting():
-            for cat in article.categories:
-                category_stats[cat] += 1
-            if article.polityk_infobox is None:
-                article.polityk_infobox = PolitykInfobox("", {})
-            global interesting_count
-            interesting_count += 1
-            People(
-                source=f"https://pl.wikipedia.org/wiki/{article.title}",
-                full_name=article.title,
-                party=article.polityk_infobox.fields.get("partia", ""),
-                birth_iso8601=article.polityk_infobox.birth_iso,
-                birth_year=article.polityk_infobox.birth_year,
-                infobox=article.polityk_infobox.inf_type,
-            ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
-
-        # if article.polityk_infobox is not None:
-        #     print(article.title)
-
-        return article
-
     def interesting(self):
-        return self.polityk_infobox is not None or any(
-            cat in self.categories for cat in CATEGORY_SCORE
-        )
+        if self.polityk_infobox is not None:
+            year = self.polityk_infobox.birth_year
+            if year and year < 1930:
+                return False
+        return (self.polityk_infobox is not None) or self.content_score > 0
 
 
 def process_wikipedia_dump():
@@ -273,12 +272,36 @@ def process_wikipedia_dump():
             # The XML has a namespace, so we check if the tag name ends with 'page'
             if elem.tag.endswith("page"):
                 article = WikiArticle.parse(elem)
+                if article is None:
+                    continue
+                if article.title in TEST_FILES:
+                    path = tests.get_path(f"{article.title}.xml")
+                    print(f"Saving {article.title} to test file: {path}")
+                    with open(path, "w") as test_file:
+                        test_file.write(ET.tostring(elem, encoding="unicode").strip())
+                if article.interesting():
+                    if article.content_score > 0:
+                        for cat in article.normalized_links:
+                            if cat in POLITICAL:
+                                continue
+                            category_stats[cat] += 1 + article.content_score
+                    if article.polityk_infobox is None:
+                        article.polityk_infobox = PolitykInfobox("", {})
+                    interesting_count += 1
+                    People(
+                        source=f"https://pl.wikipedia.org/wiki/{article.title}",
+                        full_name=article.title,
+                        party=article.polityk_infobox.fields.get("partia", ""),
+                        birth_iso8601=article.polityk_infobox.birth_iso,
+                        birth_year=article.polityk_infobox.birth_year,
+                        infobox=article.polityk_infobox.inf_type,
+                        content_score=article.content_score,
+                        links=[],  # TODO print links, so we can train an algorithm which page is a political person
+                        # links=list(article.normalized_links),
+                    ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
                 # Crucial step for memory management: clear the element
                 # after processing to free up memory.
                 elem.clear()
-
-        print(f.tell())
-        print(f.read(10000))
 
     print("🎉 Processing complete.")
 
@@ -290,8 +313,8 @@ def main():
         print(f"An error occurred: {e}")
         raise
     finally:
-        dump_dbs()
+        dump_dbs({"people_wiki": ["content_score DESC"]})
 
-        print("\n".join([str(t) for t in category_stats.most_common(200)]))
-        print("\n".join([str(t) for t in infobox_types.most_common(50)]))
-        print("\n".join([str(t) for t in polityk_infobox_stats.most_common(30)]))
+        print("\n".join([str(t) for t in category_stats.most_common(500)]))
+        # print("\n".join([str(t) for t in infobox_types.most_common(50)]))
+        # print("\n".join([str(t) for t in polityk_infobox_stats.most_common(30)]))

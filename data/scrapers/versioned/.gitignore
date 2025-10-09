@@ -1,3 +1,5 @@
 *.jsonl
 *.duckdb
 *.zip
+*.parquet
+analysis.txt
