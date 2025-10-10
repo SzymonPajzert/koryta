@@ -120,6 +120,7 @@ dependencies = [
 
 [project.scripts]
 scrape_articles = "scrapers.article.crawler:crawl"
+scrape_articles_example = "scrapers.article.extract_example:extract"
 scrape_wiki = "scrapers.wiki.process_articles:main"
 scrape_pkw = "scrapers.pkw.process:main"
 scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
