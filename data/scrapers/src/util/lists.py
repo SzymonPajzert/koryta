@@ -1,10 +1,31 @@
 # Which wiki files should be saved locally for easier testing
 TEST_FILES = {
+    # People
     "Józef Śliwa",
-    "Paweł Gruza",
     "Marcin Chludziński",
+    "Paweł Gruza",
+    # Companies
+    "Agata (przedsiębiorstwo)",
+    "Agencja Mienia Wojskowego",
+    "Biuro Maklerskie PKO Banku Polskiego",
+    "Grupa kapitałowa PWN",
+    "Kopalnia Węgla Kamiennego „Śląsk”",
+    "Miejski Zakład Komunikacji w Koninie",
+    "Miejskie Przedsiębiorstwo Komunikacyjne we Wrocławiu",
+    "Orange Polska",
     "PERN",
+    "Pesa Mińsk Mazowiecki",
+    "PGE Polska Grupa Energetyczna",
+    "Pojazdy Szynowe Pesa Bydgoszcz",
+    "Polbus-PKS",
+    "Polfa Warszawa",
+    "Polski Holding Obronny",
+    "Port lotniczy Warszawa-Modlin",
+    "Stadion Narodowy im. Kazimierza Górskiego w Warszawie",
     "Telewizja Polska",
+    "Totalizator Sportowy",
+    "Warel",
+    "ZE PAK",
 }
 
 # TODO match upper/lower case automatically?
@@ -12,6 +33,10 @@ WIKI_PUBLIC_COMPANY_LINKS = {
     "jednoosobowa spółka Skarbu Państwa",
     "Jednoosobowa spółka Skarbu Państwa",
     "Skarb państwa",
+    "Agencja wykonawcza",
+    "Ministerstwo Aktywów Państwowych",
+    "Spółka Restrukturyzacji Kopalń",
+    "Polski Fundusz Rozwoju",
 }
 
 # Which categories/links are marking a wiki page as political
