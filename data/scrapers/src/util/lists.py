@@ -1,13 +1,22 @@
-import regex as re
-from itertools import chain
-
 # Which wiki files should be saved locally for easier testing
 TEST_FILES = {
     "Józef Śliwa",
+    "Paweł Gruza",
+    "Marcin Chludziński",
+    "PERN",
+    "Telewizja Polska",
+}
+
+# TODO match upper/lower case automatically?
+WIKI_PUBLIC_COMPANY_LINKS = {
+    "jednoosobowa spółka Skarbu Państwa",
+    "Jednoosobowa spółka Skarbu Państwa",
+    "Skarb państwa",
 }
 
 # Which categories/links are marking a wiki page as political
-POLITICAL = {
+WIKI_POLITICAL_LINKS = {
+    "Fundacja Republikańska",
     "Kancelaria Prezesa Rady Ministrów",
     "Sejm Rzeczypospolitej Polskiej",
     "Ministerstwo Skarbu Państwa",
@@ -147,6 +156,13 @@ POLITICAL = {
     "wybory samorządowe w Polsce w 2010 roku",
 }
 
+# Whenever we encounter an interesting person, we have a space to put notes about them
+# and exclude them from our failing tests.
+# The goal is to get to zero test failures, either through
+#  - solving the problems
+#  - idenfitying issues with them and putthing them here
+# TODO The notes are more structured, so common issues, like BIP parsing are identified
+# This will allow us to prioritize upgrades the data scraping algorithms.
 PEOPLE_ANNOTATED = {
     "Robert Ciborowski": "listed in stop pato with vague reasons, need to list komitet honorowy kandydata",
     "Sławomir Zawadzki": "should not be in koryta",
@@ -187,8 +203,5 @@ PEOPLE_ANNOTATED = {
     # Andrzej Kisielewicz - EU parliment elections are missing
     # https://pl.wikipedia.org/wiki/Pawe%C5%82_Gruza, 2002 election, present in wiki non politician but it mentions the page.
 }
-
-# TODO Ignore failures could be marked only for some tests
-# This is a placeholder, because so many people don't match
 
 IGNORE_FAILURES = {m.strip() for m in PEOPLE_ANNOTATED.keys()}
