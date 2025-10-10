@@ -156,6 +156,13 @@ WIKI_POLITICAL_LINKS = {
     "wybory samorządowe w Polsce w 2010 roku",
 }
 
+# Whenever we encounter an interesting person, we have a space to put notes about them
+# and exclude them from our failing tests.
+# The goal is to get to zero test failures, either through
+#  - solving the problems
+#  - idenfitying issues with them and putthing them here
+# TODO The notes are more structured, so common issues, like BIP parsing are identified
+# This will allow us to prioritize upgrades the data scraping algorithms.
 PEOPLE_ANNOTATED = {
     "Robert Ciborowski": "listed in stop pato with vague reasons, need to list komitet honorowy kandydata",
     "Sławomir Zawadzki": "should not be in koryta",
