@@ -124,7 +124,8 @@ scrape_wiki = "scrapers.wiki.process_articles:main"
 scrape_pkw = "scrapers.pkw.process:main"
 scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
 scrape_krs = "scrapers.krs.process:extract_people"
-scrape_koryta = "scrapers.koryta.download:process"
+scrape_koryta_people = "scrapers.koryta.download:process_people"
+scrape_koryta_articles = "scrapers.koryta.download:process_articles"
 analyze_people = "analysis.people:main"
 # jupyter lab is available as well for analysis
 
