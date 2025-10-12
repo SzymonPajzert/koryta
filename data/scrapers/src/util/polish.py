@@ -1,5 +1,7 @@
 import regex as re
 from enum import Enum
+import io
+import csv
 
 # TODO Is there any better way to list upper case characters?
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
@@ -35,6 +37,62 @@ MONTH_NUMBER_GENITIVE = {
     "listopada": 11,
     "grudnia": 12,
 }
+
+
+def csv_to_freq_map(url: str, file_path: str):
+    def generator():
+        f = open(file_path, "r", encoding="utf-8")
+        for line in f.readlines():
+            yield line
+
+    first = True
+    for line in csv.reader(generator()):
+        if first:
+            first = False
+            continue
+        woj = line[0]
+        name = line[1]
+        count = int(line[2])
+
+
+class OverlapCalculator:
+    def __init__(self) -> None:
+        self.male_surnames_by_woj = "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table"
+        self.female_surnames_by_woj = "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65090/table"
+
+    def chance(
+        self,
+        birthdate: str,
+        first_name: str | None = None,
+        second_name: str | None = None,
+        last_name: str | None = None,
+        teryt_code: str | None = None,
+    ):
+        n = self._sample(birthdate, teryt_code)
+        overlap_chance = 1
+        if first_name is not None:
+            overlap_chance *= self._first_name_freq(first_name)
+        if second_name is not None:
+            overlap_chance *= self._second_name_freq(second_name)
+        if last_name is not None:
+            overlap_chance *= self._last_name_freq(last_name)
+
+        return pow(1 - overlap_chance, n)
+
+    def _sample(self, birthdate: str, teryt_code: str | None = None):
+        if teryt_code is None:
+            raise NotImplementedError(
+                "Version without teryt is not supported right now"
+            )
+
+    def _first_name_freq(self, first_name: str):
+        raise NotImplementedError()
+
+    def _second_name_freq(self, second_name: str):
+        raise NotImplementedError()
+
+    def _last_name_freq(self, last_name: str):
+        raise NotImplementedError()
 
 
 class PkwFormat(Enum):

@@ -2,7 +2,8 @@ import duckdb
 import pandas as pd
 import os
 
-from util.config import versioned
+from util.download import FileSource
+from util.config import versioned, downloaded
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -14,6 +15,7 @@ wiki_file = versioned.assert_path("people_wiki.jsonl")
 pkw_file = versioned.assert_path("people_pkw.jsonl")
 koryta_file = versioned.assert_path("people_koryta.jsonl")
 
+
 con = duckdb.connect(database=":memory:")
 
 con.execute(
@@ -23,7 +25,51 @@ con.execute(
     """
 )
 
-read_limit = ""
+sources = [
+    FileSource(
+        "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table",
+        "nazwiska_męskie-osoby_żyjące_w_podziale_na_województwo_zameldowania.csv",
+    ),
+    FileSource(
+        "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65090/table",
+        "nazwiska_żeńskie-osoby_żyjące_w_podziale_na_województwo_zameldowania.csv",
+    ),
+]
+# This doesn't work, because dane.gov.pl sucks, you need to download manually
+# for source in sources:
+#     if not source.downloaded():
+#         source.download()
+
+con.execute(
+    f"""CREATE TABLE names_count_by_region AS
+        SELECT *
+        FROM (SELECT *, 'M' as sex
+            FROM read_csv('{downloaded.assert_path(sources[0].filename)}')
+            UNION ALL
+            SELECT *, 'F' as sex
+            FROM read_csv('{downloaded.assert_path(sources[1].filename)}'))
+        LEFT JOIN (
+            SELECT * FROM (VALUES
+                ('DOLNOŚLĄSKIE', '02'),
+                ('KUJAWSKO-POMORSKIE', '04'),
+                ('LUBELSKIE', '06'),
+                ('LUBUSKIE', '08'),
+                ('ŁÓDZKIE', '10'),
+                ('MAŁOPOLSKIE', '12'),
+                ('MAZOWIECKIE', '14'),
+                ('OPOLSKIE', '16'),
+                ('PODKARPACKIE', '18'),
+                ('PODLASKIE', '20'),
+                ('POMORSKIE', '22'),
+                ('ŚLĄSKIE', '24'),
+                ('ŚWIĘTOKRZYSKIE', '26'),
+                ('WARMIŃSKO-MAZURSKIE', '28'),
+                ('WIELKOPOLSKIE', '30'),
+                ('ZACHODNIOPOMORSKIE', '32')
+            ) AS t(wojewodztwo, teryt))
+        ) WHERE "Województwo zameldowania na pobyt stały" = wojewodztwo
+    """
+)
 
 
 def create_people_table(
@@ -67,7 +113,6 @@ SELECT
     full_name
 FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
-{read_limit};
 """
 )
 
@@ -96,7 +141,6 @@ SELECT
     full_name
 FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
-{read_limit}
 """
 )
 
@@ -125,7 +169,6 @@ SELECT DISTINCT
     pkw_name as full_name
 FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
-{read_limit}
 """
 )
 
@@ -148,7 +191,6 @@ SELECT DISTINCT
     full_name
 FROM read_json_auto('{koryta_file}', format='newline_delimited', auto_detect=true)
 WHERE full_name IS NOT NULL
-{read_limit}
 """
 )
 
@@ -272,7 +314,13 @@ def find_all_matches(con):
 
 def main():
     print("--- Imported table sizes ---")
-    for table in ["krs_people", "wiki_people", "pkw_people", "koryta_people"]:
+    for table in [
+        "krs_people",
+        "wiki_people",
+        "pkw_people",
+        "koryta_people",
+        "names_count_by_region",
+    ]:
         print(f"{table}: {con.sql(f"SELECT COUNT(*) FROM {table}").fetchall()}")
         print(con.sql(f"SELECT * FROM {table} LIMIT 10").df())
         print("\n\n")
