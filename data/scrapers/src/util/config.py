@@ -2,6 +2,10 @@ import os
 import glob
 import os
 import sys
+import json
+
+import pandas as pd
+
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _project_root = os.path.dirname(os.path.dirname(_current_dir))
@@ -39,6 +43,14 @@ class Accessor:
 
     def exists(self, filename):
         return len(glob.glob(os.path.join(self.path, filename))) > 0
+
+    def read_jsonl(self, filename):
+        with open(self.assert_path(filename), "r") as f:
+            for line in f:
+                yield json.loads(line)
+
+    def read_parquet(self, filename):
+        return pd.read_parquet(self.assert_path(filename))
 
 
 versioned = Accessor(VERSIONED_DIR)
