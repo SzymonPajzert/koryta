@@ -102,7 +102,44 @@ class InputSource:
 # These sources are from pkw website
 # TODO Add 2023 parliment elections
 # TODO Add previous ones
-sources = [
+sources = []
+teryt_codes = ["020000", "040000", "060000", "080000", "100000", "120000", "140000", "160000", "180000", "200000", "220000", "240000", "260000", "280000", "300000", "320000"]
+for code in teryt_codes:
+    sources.append(
+        InputSource(
+            FileSource(f"https://wybory2010.pkw.gov.pl/geo/pl/{code}/{code}-kandydaci_rady.zip", f"2010_rady_{code[:2]}.zip"),
+            ZipExtractor(f"{code}-kandydaci_rady.csv"),
+            2010,
+        )
+    )
+    sources.append(
+        InputSource(
+            FileSource(f"https://wybory2010.pkw.gov.pl/geo/pl/{code}/{code}-kandydaci_urzad.zip", f"2010_urzad_{code[:2]}.zip"),
+            ZipExtractor(f"{code}-kandydaci_urzad.csv"),
+            2010,
+        )
+    )
+sources.extend([
+    InputSource(
+        FileSource("https://wybory2007.pkw.gov.pl/SJM/pliki/DOKUMENTY/dane_w_arkuszach/kandydaci_SJM.xls", "2007_sejm_kandydaci.xls"),
+        XlsExtractor("kandydaci_SJM.xls", header_rows=1),
+        2007,
+    ),
+    InputSource(
+        FileSource("https://wybory2007.pkw.gov.pl/SNT/pliki/DOKUMENTY/dane_w_arkuszach/kandydaci_SNT.xls", "2007_senat_kandydaci.xls"),
+        XlsExtractor("kandydaci_SNT.xls", header_rows=1),
+        2007,
+    ),
+    InputSource(
+        FileSource("https://wybory2011.pkw.gov.pl/geo/pl/kandydaci_sejm.zip", "2011_sejm_kandydaci.zip"),
+        ZipExtractor("kandydaci_sejm.csv"),
+        2011,
+    ),
+    InputSource(
+        FileSource("https://wybory2011.pkw.gov.pl/geo/pl/kandydaci_senat.zip", "2011_senat_kandydaci.zip"),
+        ZipExtractor("kandydaci_senat.csv"),
+        2011,
+    ),
     InputSource(
         FileSource("https://wybory.gov.pl/sejmsenat2023/data/csv/kandydaci_sejm_csv.zip", "2023_sejm_kandydaci.zip"),
         ZipExtractor("kandydaci_sejm_utf8.csv"),
@@ -317,4 +354,4 @@ sources = [
         ZipExtractor("kandydaci_wbp_utf8.csv"),
         2024,
     ),
-]
+])

@@ -34,7 +34,7 @@ class ExtractedData:
 
     def __post_init__(self):
         if self.pkw_name is not None:
-            words = self.pkw_name.split(' ')
+            words = self.pkw_name.split(" ")
             if words[-1].isupper() and any(c.islower() for w in words[:-1] for c in w):
                 # Assume "First Middle LAST"
                 self.last_name = words[-1]
@@ -47,7 +47,7 @@ class ExtractedData:
                 if not m:
                     raise ValueError(f"Invalid name: {self.pkw_name}")
                 self.last_name = m.group(1).strip()
-                rest = self.pkw_name[len(m.group(0)):].strip()
+                rest = self.pkw_name[len(m.group(0)) :].strip()
                 if rest:
                     names = rest.split(" ")
                     self.first_name = names[0]
@@ -144,7 +144,7 @@ def process_pkw():
             for item in process_csv(reader, config.year, headers):
                 item.insert_into()
         except KeyError as e:
-            print(f"Failed processing {config.source.downloaded_path}: {e}")
+            raise ValueError(f"Failed processing {config.source.downloaded_path}: {e}")
 
         print("🎉 Processing complete.")
 

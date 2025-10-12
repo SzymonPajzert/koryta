@@ -171,11 +171,61 @@ CSV_HEADERS_2018 = {
     "Imię": SetField("first_name"),
     "Drugie imię": SetField("middle_name"),
     "Tura": None,
-    "Wybrany": SetField("candidacy_success", lambda x: "TRUE" if x == "Tak" else "FALSE"),
-    "Członek\\npartii": SetField("party_member"),
+    "Wybrany": SetField(
+        "candidacy_success", lambda x: "TRUE" if x == "Tak" else "FALSE"
+    ),
+    "Członek\npartii": SetField("party_member"),
     "Typ": None,
-    "Liczba\\ngłosów": None,
-    "Rodzaj\\ngminy": None,
+    "Liczba\ngłosów": None,
+    "Rodzaj\ngminy": None,
+    "TERYT\nm. zam.": SetField("teryt_living"),
+    "Gł. ważne": None,
+    "Gmina\nzam.": None,
+    'Głosy\n"za"': None,
+    "Miejsce\nzam.": None,
+    "%": None,
+}
+
+CSV_HEADERS_2011 = {
+    "Siedziba OKW": None,
+    "Nr kandydata na liście": None,
+    "Partia polityczna": SetField("party_member"),
+    "Treść oświadczenia lustracyjnego": None,
+    "Numer_na_karcie": None,
+    "Typ komitetu": None,
+    "% głosów w okręgu": None,
+    "% głosów na listę": None,
+}
+
+CSV_HEADERS_2019 = {
+    "Siedziba OKW": None,
+    "Nr listy (po nadaniu)": None,
+    "Sygnatura": None,
+    "Gmina m.z.": None,
+    "Numer okręgu": None,
+    "Numer listy": None,
+    "Nazwa": None,
+    "Typ": None,
+    "Numer na liście": None,
+    "Kod TERYT": SetField("teryt_candidacy"),
+    "Gmina miejsca zamieszkania": None,
+    "Miejscowość zamieszkania": None,
+}
+
+CSV_HEADERS_2010 = {
+    "Okręg": None,
+    "Pozycja": None,
+    "Płeć": SetField("sex", parse_sex),
+    "Płec": SetField("sex", parse_sex),
+    "Plec": SetField("sex", parse_sex),
+    "Partia": SetField("party_member"),
+    "Teryt m. z.": SetField("teryt_living"),
+    "Gmina zam.": None,
+    "Oświadczenie": None,
+    "L. głosów": None,
+    "% gł. w okręgu": None,
+    "Lista": None,
+    "% głosów": None,
 }
 
 
@@ -185,4 +235,7 @@ CSV_HEADERS = {
     **CSV_HEADERS_2014,
     **CSV_HEADERS_2015,
     **CSV_HEADERS_2018,
+    **CSV_HEADERS_2011,
+    **CSV_HEADERS_2019,
+    **CSV_HEADERS_2010,
 }
