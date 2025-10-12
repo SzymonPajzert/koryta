@@ -1,3 +1,6 @@
+import regex as re
+from enum import Enum
+
 # TODO Is there any better way to list upper case characters?
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
 
@@ -32,3 +35,47 @@ MONTH_NUMBER_GENITIVE = {
     "listopada": 11,
     "grudnia": 12,
 }
+
+
+class PkwFormat(Enum):
+    First_Last = 1
+    Last_First = 2
+    First_LAST = 3
+    LAST_First = 4
+
+
+def parse_name(pkw_name: str, format: PkwFormat):
+    words = pkw_name.split(" ")
+    first_name, middle_name, last_name = "", "", ""
+    match format:
+        case PkwFormat.First_Last:
+            last_name = words[-1]
+            first_name = words[0]
+            if len(words) > 2:
+                middle_name = " ".join(words[1:-1])
+        case PkwFormat.First_LAST:
+            m = re.search(f"((?: [-{UPPER}]+)+)$", pkw_name)
+            if not m:
+                raise ValueError(f"Invalid name: '{pkw_name}'")
+            last_name = m.group(1).strip()
+            rest = pkw_name[: -len(m.group(0))].strip()
+            if rest:
+                names = rest.split(" ")
+                first_name = names[0]
+                if len(names) > 1:
+                    middle_name = " ".join(names[1:])
+        case PkwFormat.LAST_First:
+            m = re.match(f"((?:[-{UPPER}]+ )+)", pkw_name)
+            if not m:
+                raise ValueError(f"Invalid name: '{pkw_name}'")
+            last_name = m.group(1).strip()
+            rest = pkw_name[len(m.group(0)) :].strip()
+            if rest:
+                names = rest.split(" ")
+                first_name = names[0]
+                if len(names) > 1:
+                    middle_name = " ".join(names[1:])
+        case _:
+            raise ValueError(f"Unsupported format: {pkw_name}")
+
+    return first_name, middle_name, last_name

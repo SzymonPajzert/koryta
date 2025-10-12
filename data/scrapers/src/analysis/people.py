@@ -280,6 +280,16 @@ def main():
     print("--- Overlaps between all three sources (KRS, Wiki, PKW) ---")
 
     df = find_all_matches(con)
+
+    non_duplicates = len(
+        df[df["overall_score"] > 10.5].drop_duplicates(
+            ["krs_name", "pkw_name", "wiki_name"]
+        )
+    )
+    print(
+        f"Rows with no duplicates in krs_name, pkw_name, and wiki_name: {non_duplicates}"
+    )
+
     print(df)
     con.close()
 

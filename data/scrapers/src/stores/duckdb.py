@@ -1,6 +1,9 @@
-import duckdb
 from dataclasses import fields
 import os
+
+import duckdb
+
+from util.polish import PkwFormat
 from util.config import VERSIONED_DIR
 from datetime import datetime
 
@@ -20,7 +23,7 @@ def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
             duckdb.execute(f"COPY ({q}) TO '{file_path}'")
 
 
-def ducktable(read=False, name=None):
+def ducktable(read=False, name=None, excluded_fields=set()):
     def wrapper(cls):
         sql_type = {
             int: "INTEGER",
@@ -32,13 +35,18 @@ def ducktable(read=False, name=None):
             datetime: "TIMESTAMP",
             datetime | None: "TIMESTAMP",
             list[str]: "VARCHAR[]",
+            PkwFormat: "VARCHAR",
         }
+
+        clsfields = [
+            field for field in fields(cls) if field.name not in excluded_fields
+        ]
 
         table_name = name
         if table_name is None:
             table_name = cls.__name__.lower()
         dbs.append(table_name)
-        table_fields = [f"{field.name} {sql_type[field.type]}" for field in fields(cls)]
+        table_fields = [f"{field.name} {sql_type[field.type]}" for field in clsfields]
         if read:
             print(f"Reading table {table_name}...")
             duckdb.execute(
@@ -52,7 +60,7 @@ def ducktable(read=False, name=None):
 
         def insert_into(arg):
             assert isinstance(arg, cls), "arg must be an instance of cls"
-            field_values = [getattr(arg, field.name) for field in fields(cls)]
+            field_values = [getattr(arg, field.name) for field in clsfields]
             duckdb.execute(
                 f"INSERT INTO {table_name} VALUES ({', '.join(['?'] * len(field_values))})",
                 field_values,

@@ -1,24 +1,22 @@
 from dataclasses import dataclass
-import regex as re
 from collections import Counter
+import argparse
 
 from stores.duckdb import dump_dbs, ducktable
-from util.polish import UPPER
+from util.polish import UPPER, parse_name, PkwFormat
 from scrapers.pkw.sources import sources
 from scrapers.pkw.headers import CSV_HEADERS
-
-# TODO write years to separate files, so it's a bit faster to processles
-# TODO compare teryt_candidacy and teryt_living and find people who are too far
 
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
 
 
-@ducktable(name="people_pkw")
+@ducktable(name="people_pkw", excluded_fields={"name_format"})
 @dataclass
 class ExtractedData:
     election_year: str
-    sex: str
+    name_format: PkwFormat
+    sex: str | None = None
     birth_year: int | None = None
     age: str | None = None
     teryt_candidacy: str | None = None
@@ -34,18 +32,10 @@ class ExtractedData:
 
     def __post_init__(self):
         if self.pkw_name is not None:
-            m = re.match(f"(?:[-{UPPER}]+ )+", self.pkw_name)
-            if not m:
-                raise ValueError(f"Invalid name: {self.pkw_name}")
-            self.last_name = m.group().strip()
-            names = self.pkw_name[len(self.last_name) :].strip().split(" ")
-            self.first_name = names[0]
-            if len(names) == 2:
-                self.middle_name = " ".join(names[1:])
-            if len(names) > 2:
-                print(f"Skipping setting middle name: {self.pkw_name}")
+            self.first_name, self.middle_name, self.last_name = parse_name(
+                self.pkw_name, self.name_format
+            )
         else:
-            # TODO why I can't use upper here
             self.pkw_name = f"{self.last_name} {self.first_name}"
 
         if self.first_name is not None and " " in self.first_name:
@@ -97,13 +87,15 @@ def process_csv(reader, election_year, csv_headers):
             mapped[csv_headers[k].name] = csv_headers[k].processor(v)
 
         try:
-            yield ExtractedData(election_year=election_year, **mapped)
+            yield ExtractedData(
+                election_year=election_year, name_format=PkwFormat.First_Last, **mapped
+            )
         except TypeError:
             print(row_dict)
             raise
 
 
-def process_pkw():
+def process_pkw(limit: int | None):
     print("Downloading files...")
     for config in sources:
         source = config.source
@@ -124,17 +116,31 @@ def process_pkw():
         # TODO check the year, since it's currently hardcoded for 2024
         headers = {**CSV_HEADERS}
         try:
+            count = 0
             for item in process_csv(reader, config.year, headers):
+                count += 1
+                if limit is not None and count > limit:
+                    break
                 item.insert_into()
         except KeyError as e:
-            print(f"Failed processing {config.source.downloaded_path}: {e}")
+            raise ValueError(f"Failed processing {config.source.downloaded_path}: {e}")
 
         print("🎉 Processing complete.")
 
 
 def main():
+    parser = argparse.ArgumentParser(description="I'll add docs here")
+    parser.add_argument(
+        "--limit",
+        dest="limit",
+        type=int,
+        default=None,
+        help="for each file, only process LIMIT elements",
+    )
+    args = parser.parse_args()
+
     try:
-        process_pkw()
+        process_pkw(args.limit)
 
         print("\n\n")
 

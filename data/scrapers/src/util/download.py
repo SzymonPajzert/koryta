@@ -8,13 +8,17 @@ base_dir = Path(DOWNLOADED_DIR)
 
 class FileSource:
     url: str
+    _filename: str | None
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, filename: str | None = None) -> None:
         self.url = url
+        self._filename = filename
 
     @property
     def filename(self) -> str:
-        return self.url.split("/")[-1]
+        if self._filename is None:
+            return self.url.split("/")[-1]
+        return self._filename
 
     @property
     def downloaded_path(self) -> Path:
