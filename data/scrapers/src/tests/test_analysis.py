@@ -14,9 +14,6 @@ df_all = find_all_matches(con)
 df = df_all[df_all["overall_score"] > SCORE_CUTOFF]
 
 
-scraped_krs = set(KRS.from_blob_name(blob) for blob, _ in iterate_blobs())
-
-
 class Person:
     krs_name: str
     pkw_name: str
@@ -175,6 +172,16 @@ def test_list_stop_pato(person):
     assert exists_in_output(person)
 
 
+scraped_krs = []
+
+
+def find_krs():
+    global scraped_krs
+    scraped_krs = set(
+        KRS.from_blob_name(blob) for blob, _ in iterate_blobs("rejestr.io")
+    )
+
+
 @pytest.mark.parametrize(
     "krs",
     [
@@ -189,5 +196,7 @@ def test_list_stop_pato(person):
     ],
 )
 def test_krs_present(krs):
+    if len(scraped_krs) == 0:
+        find_krs()
     krs = KRS(krs)
     assert krs in scraped_krs
