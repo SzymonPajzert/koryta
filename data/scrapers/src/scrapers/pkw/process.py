@@ -1,13 +1,11 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections import Counter
+import argparse
 
 from stores.duckdb import dump_dbs, ducktable
 from util.polish import UPPER, parse_name, PkwFormat
 from scrapers.pkw.sources import sources
 from scrapers.pkw.headers import CSV_HEADERS
-
-# TODO write years to separate files, so it's a bit faster to processles
-# TODO compare teryt_candidacy and teryt_living and find people who are too far
 
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
@@ -97,7 +95,7 @@ def process_csv(reader, election_year, csv_headers):
             raise
 
 
-def process_pkw():
+def process_pkw(limit: int | None):
     print("Downloading files...")
     for config in sources:
         source = config.source
@@ -118,7 +116,11 @@ def process_pkw():
         # TODO check the year, since it's currently hardcoded for 2024
         headers = {**CSV_HEADERS}
         try:
+            count = 0
             for item in process_csv(reader, config.year, headers):
+                count += 1
+                if limit is not None and count > limit:
+                    break
                 item.insert_into()
         except KeyError as e:
             raise ValueError(f"Failed processing {config.source.downloaded_path}: {e}")
@@ -127,8 +129,18 @@ def process_pkw():
 
 
 def main():
+    parser = argparse.ArgumentParser(description="I'll add docs here")
+    parser.add_argument(
+        "--limit",
+        dest="limit",
+        type=int,
+        default=None,
+        help="for each file, only process LIMIT elements",
+    )
+    args = parser.parse_args()
+
     try:
-        process_pkw()
+        process_pkw(args.limit)
 
         print("\n\n")
 

@@ -127,7 +127,7 @@ def child_companies() -> set[Company]:
 
 
 def scrape_rejestrio():
-    parser = argparse.ArgumentParser(description="Say hi.")
+    parser = argparse.ArgumentParser(description="I'll add docs here")
     parser.add_argument(
         "--only",
         dest="only",
