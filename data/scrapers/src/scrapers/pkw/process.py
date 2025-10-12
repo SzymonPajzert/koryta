@@ -34,18 +34,35 @@ class ExtractedData:
 
     def __post_init__(self):
         if self.pkw_name is not None:
-            m = re.match(f"(?:[-{UPPER}]+ )+", self.pkw_name)
-            if not m:
-                raise ValueError(f"Invalid name: {self.pkw_name}")
-            self.last_name = m.group().strip()
-            names = self.pkw_name[len(self.last_name) :].strip().split(" ")
-            self.first_name = names[0]
-            if len(names) == 2:
-                self.middle_name = " ".join(names[1:])
-            if len(names) > 2:
-                print(f"Skipping setting middle name: {self.pkw_name}")
+            words = self.pkw_name.split(' ')
+            if words[-1].isupper() and any(c.islower() for w in words[:-1] for c in w):
+                # Assume "First Middle LAST"
+                self.last_name = words[-1]
+                self.first_name = words[0]
+                if len(words) > 2:
+                    self.middle_name = " ".join(words[1:-1])
+            else:
+                # Assume "LAST First Middle"
+                m = re.match(f"((?:[-{UPPER}]+ ?)+)", self.pkw_name)
+                if not m:
+                    raise ValueError(f"Invalid name: {self.pkw_name}")
+                self.last_name = m.group(1).strip()
+                rest = self.pkw_name[len(m.group(0)):].strip()
+                if rest:
+                    names = rest.split(" ")
+                    self.first_name = names[0]
+                    if len(names) > 1:
+                        self.middle_name = " ".join(names[1:])
+                else:
+                    # This can happen if the whole name is uppercase and considered a last name.
+                    # Try to split it.
+                    name_parts = self.last_name.split(" ")
+                    if len(name_parts) > 1:
+                        self.last_name = " ".join(name_parts[:-1])
+                        self.first_name = name_parts[-1]
+                    else:
+                        self.first_name = ""
         else:
-            # TODO why I can't use upper here
             self.pkw_name = f"{self.last_name} {self.first_name}"
 
         if self.first_name is not None and " " in self.first_name:

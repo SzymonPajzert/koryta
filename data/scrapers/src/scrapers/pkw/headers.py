@@ -45,15 +45,18 @@ CSV_HEADERS_2024 = {
     "Nazwa komitetu": None,
     # Office
     "Dzielnica": SetField("position", processor=lambda x: "Rada dzielnicy"),
-    "Gmina": SetField("position", processor=lambda x: "Rada gminy"),
+    "Gmina": None,
     "Województwo": None,
     "Urząd": SetField("position"),
-    "Powiat": SetField("position", processor=lambda x: "Rada powiatu"),
+    "Powiat": None,
     "Rada": None,
     "Sejmik": SetField("position", processor=lambda x: "Rada sejmiku"),
     # Success, position in the party
     # TODO Capture the success
     "Czy uzyskał mandat": SetField(
+        "candidacy_success", lambda x: "TRUE" if x == "Tak" else "FALSE"
+    ),
+    "Czy przyznano mandat": SetField(
         "candidacy_success", lambda x: "TRUE" if x == "Tak" else "FALSE"
     ),
     "Czy uzyskał prawo kandydowania w drugiej turze": None,  # TODO check if this field is useful
@@ -162,10 +165,24 @@ CSV_HEADERS_2015 = {
     "Należy do partii politycznej": None,
 }
 
+CSV_HEADERS_2018 = {
+    "Jednostka": None,
+    "Szczebel": None,
+    "Imię": SetField("first_name"),
+    "Drugie imię": SetField("middle_name"),
+    "Tura": None,
+    "Wybrany": SetField("candidacy_success", lambda x: "TRUE" if x == "Tak" else "FALSE"),
+    "Członek\\npartii": SetField("party_member"),
+    "Typ": None,
+    "Liczba\\ngłosów": None,
+    "Rodzaj\\ngminy": None,
+}
+
 
 CSV_HEADERS = {
     **CSV_HEADERS_2024,
     **CSV_HEADERS_2006,
     **CSV_HEADERS_2014,
     **CSV_HEADERS_2015,
+    **CSV_HEADERS_2018,
 }

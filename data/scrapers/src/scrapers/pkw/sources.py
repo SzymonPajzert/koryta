@@ -21,6 +21,11 @@ class Extractor:
 
 
 class CsvExtractor(Extractor):
+    def read(self, file_path):
+        with open(file_path, "rb") as f:
+            content = f.read()
+        return self.read_bytes(io.BytesIO(content))
+
     def read_bytes(self, raw_bytes):
         def generator():
             for line in io.TextIOWrapper(raw_bytes, encoding="utf-8"):
@@ -98,6 +103,48 @@ class InputSource:
 # TODO Add 2023 parliment elections
 # TODO Add previous ones
 sources = [
+    InputSource(
+        FileSource("https://wybory.gov.pl/sejmsenat2023/data/csv/kandydaci_sejm_csv.zip", "2023_sejm_kandydaci.zip"),
+        ZipExtractor("kandydaci_sejm_utf8.csv"),
+        2023,
+    ),
+    InputSource(
+        FileSource("https://wybory.gov.pl/sejmsenat2023/data/csv/kandydaci_senat_csv.zip", "2023_senat_kandydaci.zip"),
+        ZipExtractor("kandydaci_senat_utf8.csv"),
+        2023,
+    ),
+    InputSource(
+        FileSource("https://wybory2018.pkw.gov.pl/xls/2018-wyniki-wybor%C3%B3w-do-rad.zip", "2018_rady_kandydaci.zip"),
+        ZipExtractor(
+            "2018-kand-rady.xlsx",
+            extractor=XlsExtractor("2018-kand-rady.xlsx", header_rows=1),
+        ),
+        2018,
+    ),
+    InputSource(
+        FileSource("https://wybory2018.pkw.gov.pl/xls/2018-wybbp.zip", "2018_wbp_kandydaci.zip"),
+        ZipExtractor(
+            "2018-kand-wbp.xlsx",
+            extractor=XlsExtractor("2018-kand-wbp.xlsx", header_rows=1),
+        ),
+        2018,
+    ),
+    InputSource(
+        FileSource("https://sejmsenat2019.pkw.gov.pl/sejmsenat2019/data/csv/kandydaci_sejm_csv.zip", "2019_sejm_kandydaci.zip"),
+        ZipExtractor("kandydaci_sejm.csv"),
+        2019,
+    ),
+    InputSource(
+        FileSource("https://sejmsenat2019.pkw.gov.pl/sejmsenat2019/data/csv/kandydaci_senat_csv.zip", "2019_senat_kandydaci.zip"),
+        ZipExtractor("kandydaci_senat.csv"),
+        2019,
+    ),
+    InputSource(
+        FileSource("https://pe2019.pkw.gov.pl/pe2019/data/csv/kandydaci_csv.zip", "2019_pe_kandydaci.zip"),
+        ZipExtractor("kandydaci.csv"),
+        2019,
+    ),
+
     InputSource(
         FileSource(
             "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_sejmiki_wojewodztw_csv.zip"
