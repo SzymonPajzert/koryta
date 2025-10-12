@@ -2,7 +2,9 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
+from typing import Generator
 
+from tqdm import tqdm
 from google.cloud import storage
 
 from util.url import NormalizedParse
@@ -17,6 +19,17 @@ warsaw_tz = ZoneInfo("Europe/Warsaw")
 now = datetime.now(warsaw_tz)
 
 storage_client = storage.Client()
+
+
+def iterate_blobs(hostname):
+    """List blobs for a given hostname and yield their path and JSON data."""
+    blobs = list_blobs(hostname)
+    for blob_name in tqdm(blobs):
+        content = download_from_gcs(blob_name)
+        if not content:
+            print(f"  [ERROR] Could not download {blob_name}")
+            continue
+        yield blob_name, content
 
 
 # TODO why are we discarding query params
@@ -51,7 +64,7 @@ def upload_to_gcs(
         return None
 
 
-def list_blobs(hostname):
+def list_blobs(hostname) -> Generator[str]:
     """Lists blobs in a GCS bucket with a given prefix."""
     bucket = storage_client.bucket(BUCKET)
     blobs = bucket.list_blobs(prefix=f"hostname={hostname}/")
@@ -86,7 +99,6 @@ def download_from_gcs(blob_name: str) -> str | None:
     bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(blob_name)
     try:
-        print(f"Downloading gs://{BUCKET}/{blob_name} to {cached.downloaded_path}...")
         text = blob.download_as_text()
         open(cached.downloaded_path, "w").write(text)
         return text

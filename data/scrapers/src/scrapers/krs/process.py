@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass
 from tqdm import tqdm
 
-from stores.storage import list_blobs, download_from_gcs
+from stores.storage import iterate_blobs
 from stores.duckdb import ducktable, dump_dbs
 
 
@@ -56,22 +56,6 @@ class KrsCompany:
     name: str
 
 
-def iterate_blobs():
-    blobs = list_blobs("rejestr.io")
-    for blob_name in tqdm(blobs):
-        if "krs-powiazania" not in blob_name:
-            continue
-        content = download_from_gcs(blob_name)
-        if not content:
-            print(f"  [ERROR] Could not download {blob_name}")
-            continue
-        try:
-            data = json.loads(content)
-            yield blob_name, data
-        except json.JSONDecodeError as e:
-            print(f"  [ERROR] Could not process {blob_name}: {e}")
-
-
 def end_time(item):
     max_end = "1900-01-01"
     for conn in item["krs_powiazania_kwerendowane"]:
@@ -89,7 +73,13 @@ def extract_people():
     and extracts information about people.
     """
     try:
-        for blob_name, data in iterate_blobs():
+        for blob_name, content in iterate_blobs("rejestr.io"):
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError as e:
+                print(f"  [ERROR] Could not process {blob_name}: {e}")
+                # TODO handle failures better
+                continue
             try:
                 for item in data:
                     if item.get("typ") == "osoba":
