@@ -26,7 +26,12 @@ con.execute(
 read_limit = ""
 
 
-def create_people_table(tbl_name, to_list: list[str] = [], any_vals: list[str] = []):
+def create_people_table(
+    tbl_name,
+    to_list: list[str] = [],
+    any_vals: list[str] = [],
+    flatten_list: list[str] = [],
+):
     con.execute(
         f"""
         CREATE OR REPLACE TABLE {tbl_name} AS
@@ -39,7 +44,8 @@ def create_people_table(tbl_name, to_list: list[str] = [], any_vals: list[str] =
                 '')) as second_name,
             double_metaphone(last_name) as metaphone,
             birth_year,
-            {'\n'.join([f"list({col}) as {col}," for col in to_list])}
+            {'\n'.join([f"list_distinct(list({col})) as {col}," for col in to_list])}
+            {'\n'.join([f"list_distinct(flatten(list({col}))) as {col}," for col in flatten_list])}
             {'\n'.join([f"any_value({col}) as {col}," for col in any_vals])}
         FROM {tbl_name}_raw
         GROUP BY ALL
@@ -107,6 +113,14 @@ SELECT DISTINCT
     lower(last_name) as last_name,
     lower(middle_name) as second_name,
     double_metaphone(last_name) as metaphone,
+    list_distinct([
+        teryt_candidacy[:2],
+        teryt_living[:2],
+    ]) as teryt_wojewodztwo,
+    list_distinct([
+        teryt_candidacy[:4],
+        teryt_living[:4],
+    ]) as teryt_powiat,
     birth_year,
     pkw_name as full_name
 FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
@@ -115,7 +129,11 @@ WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NUL
 """
 )
 
-create_people_table("pkw_people", to_list=["full_name"])
+create_people_table(
+    "pkw_people",
+    to_list=["full_name"],
+    flatten_list=["teryt_wojewodztwo", "teryt_powiat"],
+)
 
 con.execute(
     f"""
