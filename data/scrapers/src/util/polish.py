@@ -1,4 +1,5 @@
 import regex as re
+from enum import Enum
 
 # TODO Is there any better way to list upper case characters?
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
@@ -36,35 +37,45 @@ MONTH_NUMBER_GENITIVE = {
 }
 
 
-def parse_name(pkw_name: str):
+class PkwFormat(Enum):
+    First_Last = 1
+    Last_First = 2
+    First_LAST = 3
+    LAST_First = 4
+
+
+def parse_name(pkw_name: str, format: PkwFormat):
     words = pkw_name.split(" ")
     first_name, middle_name, last_name = "", "", ""
-    if words[-1].isupper() and any(c.islower() for w in words[:-1] for c in w):
-        # Assume "First Middle LAST"
-        last_name = words[-1]
-        first_name = words[0]
-        if len(words) > 2:
-            middle_name = " ".join(words[1:-1])
-    else:
-        # Assume "LAST First Middle"
-        m = re.match(f"((?:[-{UPPER}]+ ?)+)", pkw_name)
-        if not m:
-            raise ValueError(f"Invalid name: {pkw_name}")
-        last_name = m.group(1).strip()
-        rest = pkw_name[len(m.group(0)) :].strip()
-        if rest:
-            names = rest.split(" ")
-            first_name = names[0]
-            if len(names) > 1:
-                middle_name = " ".join(names[1:])
-        else:
-            # This can happen if the whole name is uppercase and considered a last name.
-            # Try to split it.
-            name_parts = last_name.split(" ")
-            if len(name_parts) > 1:
-                last_name = " ".join(name_parts[:-1])
-                first_name = name_parts[-1]
-            else:
-                first_name = ""
+    match format:
+        case PkwFormat.First_Last:
+            last_name = words[-1]
+            first_name = words[0]
+            if len(words) > 2:
+                middle_name = " ".join(words[1:-1])
+        case PkwFormat.First_LAST:
+            m = re.search(f"((?: [-{UPPER}]+)+)$", pkw_name)
+            if not m:
+                raise ValueError(f"Invalid name: '{pkw_name}'")
+            last_name = m.group(1).strip()
+            rest = pkw_name[: -len(m.group(0))].strip()
+            if rest:
+                names = rest.split(" ")
+                first_name = names[0]
+                if len(names) > 1:
+                    middle_name = " ".join(names[1:])
+        case PkwFormat.LAST_First:
+            m = re.match(f"((?:[-{UPPER}]+ )+)", pkw_name)
+            if not m:
+                raise ValueError(f"Invalid name: '{pkw_name}'")
+            last_name = m.group(1).strip()
+            rest = pkw_name[len(m.group(0)) :].strip()
+            if rest:
+                names = rest.split(" ")
+                first_name = names[0]
+                if len(names) > 1:
+                    middle_name = " ".join(names[1:])
+        case _:
+            raise ValueError(f"Unsupported format: {pkw_name}")
 
     return first_name, middle_name, last_name

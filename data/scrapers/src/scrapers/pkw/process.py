@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import Counter
 
 from stores.duckdb import dump_dbs, ducktable
-from util.polish import UPPER, parse_name
+from util.polish import UPPER, parse_name, PkwFormat
 from scrapers.pkw.sources import sources
 from scrapers.pkw.headers import CSV_HEADERS
 
@@ -13,10 +13,11 @@ from scrapers.pkw.headers import CSV_HEADERS
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
 
 
-@ducktable(name="people_pkw")
+@ducktable(name="people_pkw", excluded_fields={"name_format"})
 @dataclass
 class ExtractedData:
     election_year: str
+    name_format: PkwFormat
     sex: str | None = None
     birth_year: int | None = None
     age: str | None = None
@@ -34,7 +35,7 @@ class ExtractedData:
     def __post_init__(self):
         if self.pkw_name is not None:
             self.first_name, self.middle_name, self.last_name = parse_name(
-                self.pkw_name
+                self.pkw_name, self.name_format
             )
         else:
             self.pkw_name = f"{self.last_name} {self.first_name}"
@@ -88,7 +89,9 @@ def process_csv(reader, election_year, csv_headers):
             mapped[csv_headers[k].name] = csv_headers[k].processor(v)
 
         try:
-            yield ExtractedData(election_year=election_year, **mapped)
+            yield ExtractedData(
+                election_year=election_year, name_format=PkwFormat.First_Last, **mapped
+            )
         except TypeError:
             print(row_dict)
             raise
