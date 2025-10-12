@@ -18,7 +18,7 @@ counters = {k: Counter() for k in CSV_HEADERS.keys()}
 @dataclass
 class ExtractedData:
     election_year: str
-    sex: str
+    sex: str | None = None
     birth_year: int | None = None
     age: str | None = None
     teryt_candidacy: str | None = None

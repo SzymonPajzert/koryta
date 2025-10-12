@@ -181,8 +181,12 @@ CSV_HEADERS_2018 = {
     "TERYT\nm. zam.": SetField("teryt_living"),
     "Gł. ważne": None,
     "Gmina\nzam.": None,
+    "Gm. zam.": None,
+    'Głosy\n"za"\'': None,
     'Głosy\n"za"': None,
+    'Głosy\n"przeciw"': None,
     "Miejsce\nzam.": None,
+    "Miejsce\nzamieszkania": None,
     "%": None,
 }
 
@@ -216,8 +220,6 @@ CSV_HEADERS_2010 = {
     "Okręg": None,
     "Pozycja": None,
     "Płeć": SetField("sex", parse_sex),
-    "Płec": SetField("sex", parse_sex),
-    "Plec": SetField("sex", parse_sex),
     "Partia": SetField("party_member"),
     "Teryt m. z.": SetField("teryt_living"),
     "Gmina zam.": None,
@@ -226,6 +228,19 @@ CSV_HEADERS_2010 = {
     "% gł. w okręgu": None,
     "Lista": None,
     "% głosów": None,
+}
+
+CSV_HEADERS_2007 = {
+    "Nr\nokregu": None,
+    "Siedziba \nOKW": None,
+    "Numer \nlisty": None,
+    "Nazwa \nkomitetu": None,
+    "Numer \nna liscie": None,
+    "Imię (imiona)": SetField("first_name"),
+    "miejscowość \nzamieszkania": None,
+    "Nr \nokregu": None,
+    "Siedziba\nOKW": None,
+    "Miejscowość \nzamieszkania": None,
 }
 
 
@@ -238,4 +253,5 @@ CSV_HEADERS = {
     **CSV_HEADERS_2011,
     **CSV_HEADERS_2019,
     **CSV_HEADERS_2010,
+    **CSV_HEADERS_2007,
 }

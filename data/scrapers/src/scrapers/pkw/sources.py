@@ -109,6 +109,17 @@ sources.extend(
     [
         InputSource(
             FileSource(
+                "https://wybory2018.pkw.gov.pl/xls/2018-wybbp.zip",
+                "2018_wbp_kandydaci.zip",
+            ),
+            ZipExtractor(
+                "2018-kand-wbp.xlsx",
+                extractor=XlsExtractor("2018-kand-wbp.xlsx", header_rows=1),
+            ),
+            2018,
+        ),
+        InputSource(
+            FileSource(
                 "https://wybory2007.pkw.gov.pl/SJM/pliki/DOKUMENTY/dane_w_arkuszach/kandydaci_SJM.xls",
                 "2007_sejm_kandydaci.xls",
             ),
@@ -120,7 +131,7 @@ sources.extend(
                 "https://wybory2007.pkw.gov.pl/SNT/pliki/DOKUMENTY/dane_w_arkuszach/kandydaci_SNT.xls",
                 "2007_senat_kandydaci.xls",
             ),
-            XlsExtractor("kandydaci_SNT.xls", header_rows=1),
+            XlsExtractor("kandydaci_SNT.xls", header_rows=1, skip_rows=1),
             2007,
         ),
         InputSource(
@@ -163,17 +174,6 @@ sources.extend(
             ZipExtractor(
                 "2018-kand-rady.xlsx",
                 extractor=XlsExtractor("2018-kand-rady.xlsx", header_rows=1),
-            ),
-            2018,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2018.pkw.gov.pl/xls/2018-wybbp.zip",
-                "2018_wbp_kandydaci.zip",
-            ),
-            ZipExtractor(
-                "2018-kand-wbp.xlsx",
-                extractor=XlsExtractor("2018-kand-wbp.xlsx", header_rows=1),
             ),
             2018,
         ),
