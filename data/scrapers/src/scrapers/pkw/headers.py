@@ -224,6 +224,8 @@ CSV_HEADERS_2010 = {
     "Teryt m. z.": SetField("teryt_living"),
     "Gmina zam.": None,
     "Oświadczenie": None,
+    "Płec": None,
+    "Plec": None,
     "L. głosów": None,
     "% gł. w okręgu": None,
     "Lista": None,

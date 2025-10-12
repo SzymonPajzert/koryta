@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-import regex as re
 from collections import Counter
 
 from stores.duckdb import dump_dbs, ducktable
-from util.polish import UPPER
+from util.polish import UPPER, parse_name
 from scrapers.pkw.sources import sources
 from scrapers.pkw.headers import CSV_HEADERS
 
@@ -34,34 +33,9 @@ class ExtractedData:
 
     def __post_init__(self):
         if self.pkw_name is not None:
-            words = self.pkw_name.split(" ")
-            if words[-1].isupper() and any(c.islower() for w in words[:-1] for c in w):
-                # Assume "First Middle LAST"
-                self.last_name = words[-1]
-                self.first_name = words[0]
-                if len(words) > 2:
-                    self.middle_name = " ".join(words[1:-1])
-            else:
-                # Assume "LAST First Middle"
-                m = re.match(f"((?:[-{UPPER}]+ ?)+)", self.pkw_name)
-                if not m:
-                    raise ValueError(f"Invalid name: {self.pkw_name}")
-                self.last_name = m.group(1).strip()
-                rest = self.pkw_name[len(m.group(0)) :].strip()
-                if rest:
-                    names = rest.split(" ")
-                    self.first_name = names[0]
-                    if len(names) > 1:
-                        self.middle_name = " ".join(names[1:])
-                else:
-                    # This can happen if the whole name is uppercase and considered a last name.
-                    # Try to split it.
-                    name_parts = self.last_name.split(" ")
-                    if len(name_parts) > 1:
-                        self.last_name = " ".join(name_parts[:-1])
-                        self.first_name = name_parts[-1]
-                    else:
-                        self.first_name = ""
+            self.first_name, self.middle_name, self.last_name = parse_name(
+                self.pkw_name
+            )
         else:
             self.pkw_name = f"{self.last_name} {self.first_name}"
 

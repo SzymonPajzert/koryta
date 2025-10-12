@@ -102,9 +102,46 @@ class InputSource:
 
 
 # These sources are from pkw website
-# TODO Add 2023 parliment elections
-# TODO Add previous ones
 sources = []
+teryt_codes = [
+    "020000",
+    "040000",
+    "060000",
+    "080000",
+    "100000",
+    "120000",
+    "140000",
+    "160000",
+    "180000",
+    "200000",
+    "220000",
+    "240000",
+    "260000",
+    "280000",
+    "300000",
+    "320000",
+]
+for code in teryt_codes:
+    sources.append(
+        InputSource(
+            FileSource(
+                f"https://wybory2010.pkw.gov.pl/geo/pl/{code}/{code}-kandydaci_rady.zip",
+                f"2010_rady_{code[:2]}.zip",
+            ),
+            ZipExtractor(f"{code}-kandydaci_rady.csv"),
+            2010,
+        )
+    )
+    sources.append(
+        InputSource(
+            FileSource(
+                f"https://wybory2010.pkw.gov.pl/geo/pl/{code}/{code}-kandydaci_urzad.zip",
+                f"2010_urzad_{code[:2]}.zip",
+            ),
+            ZipExtractor(f"{code}-kandydaci_urzad.csv"),
+            2010,
+        )
+    )
 sources.extend(
     [
         InputSource(
@@ -391,42 +428,3 @@ sources.extend(
         ),
     ]
 )
-teryt_codes = [
-    "020000",
-    "040000",
-    "060000",
-    "080000",
-    "100000",
-    "120000",
-    "140000",
-    "160000",
-    "180000",
-    "200000",
-    "220000",
-    "240000",
-    "260000",
-    "280000",
-    "300000",
-    "320000",
-]
-for code in teryt_codes:
-    sources.append(
-        InputSource(
-            FileSource(
-                f"https://wybory2010.pkw.gov.pl/geo/pl/{code}/{code}-kandydaci_rady.zip",
-                f"2010_rady_{code[:2]}.zip",
-            ),
-            ZipExtractor(f"{code}-kandydaci_rady.csv"),
-            2010,
-        )
-    )
-    sources.append(
-        InputSource(
-            FileSource(
-                f"https://wybory2010.pkw.gov.pl/geo/pl/{code}/{code}-kandydaci_urzad.zip",
-                f"2010_urzad_{code[:2]}.zip",
-            ),
-            ZipExtractor(f"{code}-kandydaci_urzad.csv"),
-            2010,
-        )
-    )
