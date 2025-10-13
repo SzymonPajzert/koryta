@@ -42,32 +42,32 @@ sources = [
 
 con.execute(
     f"""CREATE TABLE names_count_by_region AS
-        SELECT *
-        FROM (SELECT *, 'M' as sex
-            FROM read_csv('{downloaded.assert_path(sources[0].filename)}')
-            UNION ALL
-            SELECT *, 'F' as sex
-            FROM read_csv('{downloaded.assert_path(sources[1].filename)}'))
-        LEFT JOIN (
-            SELECT * FROM (VALUES
-                ('DOLNOŚLĄSKIE', '02'),
-                ('KUJAWSKO-POMORSKIE', '04'),
-                ('LUBELSKIE', '06'),
-                ('LUBUSKIE', '08'),
-                ('ŁÓDZKIE', '10'),
-                ('MAŁOPOLSKIE', '12'),
-                ('MAZOWIECKIE', '14'),
-                ('OPOLSKIE', '16'),
-                ('PODKARPACKIE', '18'),
-                ('PODLASKIE', '20'),
-                ('POMORSKIE', '22'),
-                ('ŚLĄSKIE', '24'),
-                ('ŚWIĘTOKRZYSKIE', '26'),
-                ('WARMIŃSKO-MAZURSKIE', '28'),
-                ('WIELKOPOLSKIE', '30'),
-                ('ZACHODNIOPOMORSKIE', '32')
-            ) AS t(wojewodztwo, teryt))
-        ) WHERE "Województwo zameldowania na pobyt stały" = wojewodztwo
+    SELECT *
+    FROM (
+        SELECT *, 'M' as sex FROM read_csv('{downloaded.assert_path(sources[0].filename)}')
+        UNION ALL
+        SELECT *, 'F' as sex FROM read_csv('{downloaded.assert_path(sources[1].filename)}')
+    ) AS names
+    LEFT JOIN (
+        SELECT * FROM (VALUES
+            ('DOLNOŚLĄSKIE', '02'),
+            ('KUJAWSKO-POMORSKIE', '04'),
+            ('LUBELSKIE', '06'),
+            ('LUBUSKIE', '08'),
+            ('ŁÓDZKIE', '10'),
+            ('MAŁOPOLSKIE', '12'),
+            ('MAZOWIECKIE', '14'),
+            ('OPOLSKIE', '16'),
+            ('PODKARPACKIE', '18'),
+            ('PODLASKIE', '20'),
+            ('POMORSKIE', '22'),
+            ('ŚLĄSKIE', '24'),
+            ('ŚWIĘTOKRZYSKIE', '26'),
+            ('WARMIŃSKO-MAZURSKIE', '28'),
+            ('WIELKOPOLSKIE', '30'),
+            ('ZACHODNIOPOMORSKIE', '32')
+        ) AS t(wojewodztwo, teryt)
+    ) AS regions ON names."Województwo zameldowania na pobyt stały" = regions.wojewodztwo
     """
 )
 
