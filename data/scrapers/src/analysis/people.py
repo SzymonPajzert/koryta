@@ -318,6 +318,7 @@ def _find_all_matches(con):
         LEFT JOIN names_count_by_region names_count
             ON k.last_name = names_count.last_name
             -- We need to pick one teryt, let's use the first one from pkw_people if available
+            # TODO - make sure that the teryt is the same as the company's location
             AND list_extract(p.teryt_wojewodztwo, 1) = names_count.teryt
 
     ),
