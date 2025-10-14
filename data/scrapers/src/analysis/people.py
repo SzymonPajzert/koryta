@@ -99,6 +99,8 @@ def create_people_table(
     )
 
 
+SAMPLE_FILTER = "AND last_name LIKE 'A%'"
+
 con.execute(
     f"""
 CREATE OR REPLACE TABLE krs_people_raw AS
@@ -113,6 +115,7 @@ SELECT
     full_name
 FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
+{SAMPLE_FILTER}
 """
 )
 
@@ -141,6 +144,7 @@ SELECT
     full_name
 FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
+{SAMPLE_FILTER}
 """
 )
 
@@ -169,6 +173,7 @@ SELECT DISTINCT
     pkw_name as full_name
 FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
+{SAMPLE_FILTER}
 """
 )
 
