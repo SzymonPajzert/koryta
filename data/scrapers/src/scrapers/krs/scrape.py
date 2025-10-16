@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pprint import pprint
 from collections import Counter
 import argparse
+import json
 
 from scrapers.krs import data
 from scrapers.krs.process import iterate_blobs, KRS
@@ -19,10 +20,14 @@ class Company:
     parent: KRS
 
 
-def save_org_connections(krss: typing.Iterable[KRS]):
-    for krs in krss:
-        # Remember to increase the estimated price below when uncommenting
+def save_org_connections(
+    connections: typing.Iterable[KRS],
+    names: typing.Iterable[KRS],
+):
+    for krs in names:
+        yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json"
         # yield f"https://rejestr.io/api/v2/org/{krs}"
+    for krs in connections:
         yield f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=aktualne"
         yield f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne"
 
@@ -76,7 +81,10 @@ class CompanyGraph:
         self.companies = dict()
         self.children: dict[KRS, list[KRS]] = dict()
 
-        for blob_name, data in iterate_blobs():
+        for blob_name, content in iterate_blobs("rejestr.io"):
+            if "aktualnosc_" not in blob_name:
+                continue
+            data = json.loads(content)
             for item in data:
                 if item.get("typ") != "organizacja":
                     continue
@@ -110,7 +118,10 @@ class CompanyGraph:
 
 def child_companies() -> set[Company]:
     result: set[Company] = set()
-    for blob_name, data in iterate_blobs():
+    for blob_name, content in iterate_blobs("rejestr.io"):
+        if "aktualnosc_" not in blob_name:
+            continue
+        data = json.loads(content)
         try:
             for item in data:
                 if item.get("typ") == "organizacja":
@@ -145,6 +156,7 @@ def scrape_rejestrio():
             data.SPOLKI_SKARBU_PANSTWA,
             data.AMW,
             data.KRAKOW,
+            data.LODZKIE,
         )
     )
     graph = CompanyGraph()
@@ -164,12 +176,13 @@ def scrape_rejestrio():
     to_scrape_children = set(filter(lambda x: x.krs in to_scrape, children_companies))
     pprint(to_scrape_children)
     parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
-    pprint(parent_count.most_common(100))
-    print(f"Will cost: {len(to_scrape) * 0.10} PLN")
+    pprint(parent_count.most_common(30))
+    urls = list(save_org_connections(to_scrape, map(KRS, data.NAME_MISSING)))
+    print(f"Will cost: {len(urls) * 0.05} PLN")
     input("Press enter to continue...")
     rejestr = Rejestr()
 
-    for url in save_org_connections(to_scrape):
+    for url in urls:
         result = rejestr.get_rejestr_io(url)
         sleep(0.3)
 

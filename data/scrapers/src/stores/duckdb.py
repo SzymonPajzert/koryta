@@ -9,18 +9,31 @@ from datetime import datetime
 
 
 dbs = []
+used = dict()
 
 
 def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
     if tables_to_dump is None:
         tables_to_dump = {db: [] for db in dbs}
     for db, sort in tables_to_dump.items():
+        if not used.get(db, False):
+            continue
         file_path = os.path.join(VERSIONED_DIR, f"{db}.jsonl")
         if len(sort) == 0:
             duckdb.execute(f"COPY {db} TO '{file_path}'")
         else:
             q = f"SELECT * FROM {db} ORDER BY {sort[0]}"
             duckdb.execute(f"COPY ({q}) TO '{file_path}'")
+
+
+def always_export(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        finally:
+            dump_dbs()
+
+    return wrapper
 
 
 def ducktable(read=False, name=None, excluded_fields=set()):
@@ -65,6 +78,7 @@ def ducktable(read=False, name=None, excluded_fields=set()):
                 f"INSERT INTO {table_name} VALUES ({', '.join(['?'] * len(field_values))})",
                 field_values,
             )
+            used[table_name] = True
 
         setattr(cls, "insert_into", insert_into)
         return cls

@@ -50,7 +50,7 @@ class ExtractedData:
         pass
 
 
-def process_csv(reader, election_year, csv_headers):
+def process_csv(reader, election_year, name_format, csv_headers):
     header = None
 
     for row in reader:
@@ -88,7 +88,7 @@ def process_csv(reader, election_year, csv_headers):
 
         try:
             yield ExtractedData(
-                election_year=election_year, name_format=PkwFormat.First_Last, **mapped
+                election_year=election_year, name_format=name_format, **mapped
             )
         except TypeError:
             print(row_dict)
@@ -117,7 +117,7 @@ def process_pkw(limit: int | None):
         headers = {**CSV_HEADERS}
         try:
             count = 0
-            for item in process_csv(reader, config.year, headers):
+            for item in process_csv(reader, config.year, config.name_format, headers):
                 count += 1
                 if limit is not None and count > limit:
                     break
