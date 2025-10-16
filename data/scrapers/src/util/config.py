@@ -15,8 +15,9 @@ DOWNLOADED_DIR = os.path.join(_project_root, "downloaded")
 TESTS_DIR = os.path.join(_project_root, "tests")
 
 HINTS = {
-    "people_wiki.jsonl": "poetry run scrape_wiki",
-    "people_krs.jsonl": "poetry run scrape_krs  # requires access to Google bucket koryta-pl-crawled",
+    "versioned/people_wiki.jsonl": "poetry run scrape_wiki",
+    "versioned/people_krs.jsonl": "poetry run scrape_krs  # requires access to Google bucket koryta-pl-crawled",
+    "downloaded/": "go to https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table and download manually",
 }
 
 
@@ -34,9 +35,9 @@ class Accessor:
         if os.path.exists(p):
             return p
         else:
-            print(f"{filename} is missing.")
-            if filename in HINTS:
-                print(HINTS[filename])
+            print(f"{p} is missing.")
+            if p in HINTS:
+                print(HINTS[p])
             else:
                 print("No hint found for this filename, add it in the config.py")
             sys.exit(1)
