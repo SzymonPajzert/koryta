@@ -1,4 +1,5 @@
 # Which wiki files should be saved locally for easier testing
+# You can run scrape_wiki and it will save them locally.
 TEST_FILES = {
     # People
     "Józef Śliwa",
