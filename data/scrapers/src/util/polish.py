@@ -38,6 +38,34 @@ MONTH_NUMBER_GENITIVE = {
     "grudnia": 12,
 }
 
+TERYT = {
+    "1000": "łódzkie",
+    "1001": "powiat bełchatowski",
+    "1021": "powiat brzeziński",
+    "1002": "powiat kutnowski",
+    "1003": "powiat łaski",
+    "1004": "powiat łęczycki",
+    "1005": "powiat łowicki",
+    "1006": "powiat łódzki wschodni",
+    "1007": "powiat opoczyński",
+    "1008": "powiat pabianicki",
+    "1009": "powiat pajęczański",
+    "1010": "powiat piotrkowski",
+    "1011": "powiat poddębicki",
+    "1012": "powiat radomszczański",
+    "1013": "powiat rawski",
+    "1014": "powiat sieradzki",
+    "1015": "powiat skierniewicki",
+    "1016": "powiat tomaszowski",
+    "1017": "powiat wieluński",
+    "1018": "powiat wieruszowski",
+    "1019": "powiat zduńskowolski",
+    "1020": "powiat zgierski",
+    "1061": "Łódź",
+    "1062": "Piotrków Trybunalski",
+    "1063": "Skierniewice",
+}
+
 
 def csv_to_freq_map(url: str, file_path: str):
     def generator():
