@@ -124,6 +124,7 @@ class OverlapCalculator:
 
 
 class PkwFormat(Enum):
+    UNKNOWN = 0
     First_Last = 1
     Last_First = 2
     First_LAST = 3

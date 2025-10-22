@@ -152,12 +152,20 @@ con.create_function(
 )
 
 
+def struct_pack(struct: dict[str, str]) -> str:
+    return ", ".join(f"{k} := {v}" for k, v in struct.items())
+
+
 def create_people_table(
     tbl_name,
     to_list: list[str] = [],
     any_vals: list[str] = [],
     flatten_list: list[str] = [],
+    **kwargs: dict[str, str],
 ):
+    """
+    Pass kwargs to struct_pack each argument according to the passed dict
+    """
     con.execute(
         f"""
         CREATE OR REPLACE TABLE {tbl_name} AS
@@ -170,6 +178,7 @@ def create_people_table(
                 '')) as second_name,
             double_metaphone(last_name) as metaphone,
             birth_year,
+            {'\n'.join([f"list(struct_pack({struct_pack(struct)})) as {col}," for col, struct in kwargs.items()])}
             {'\n'.join([f"list_distinct(list({col})) as {col}," for col in to_list])}
             {'\n'.join([f"list_distinct(flatten(list({col}))) as {col}," for col in flatten_list])}
             {'\n'.join([f"any_value({col}) as {col}," for col in any_vals])}
@@ -189,6 +198,7 @@ SELECT
     CAST(birth_date AS VARCHAR) as birth_date,
     employed_end,
     employed_krs,
+    employed_for,
     id as rejestrio_id,
     full_name
 FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
@@ -199,8 +209,13 @@ WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NUL
 
 create_people_table(
     "krs_people",
-    to_list=["employed_krs", "employed_end", "rejestrio_id", "full_name"],
+    to_list=["rejestrio_id", "full_name"],
     any_vals=["birth_date"],
+    employment={
+        "employed_krs": "employed_krs",
+        "employed_end": "employed_end",
+        "employed_for": "employed_for",
+    },
 )
 
 # TODO the name logic is wrong for wiki, try matching on the full name
@@ -248,7 +263,9 @@ SELECT DISTINCT
         teryt_living[:4],
     ]) as teryt_powiat,
     birth_year,
-    pkw_name as full_name
+    pkw_name as full_name,
+    party,
+    election_year
 FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
 WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
 {SAMPLE_FILTER}
@@ -259,6 +276,12 @@ create_people_table(
     "pkw_people",
     to_list=["full_name"],
     flatten_list=["teryt_wojewodztwo", "teryt_powiat"],
+    elections={
+        "party": "party",
+        "election_year": "election_year",
+        "teryt_wojewodztwo": "teryt_wojewodztwo",
+        "teryt_powiat": "teryt_powiat",
+    },
 )
 
 con.execute(
@@ -293,9 +316,9 @@ def _find_all_matches(con):
             k.last_name as base_last_name,
             k.full_name as base_full_name,
             k.birth_date as birth_date,
-            k.employed_end,
-            k.employed_krs,
+            k.employment,
             k.birth_year = p.birth_year as kp_same_birth_year,
+            p.elections,
             CASE
                 WHEN p.full_name IS NOT NULL THEN
                     unique_probability(
@@ -318,7 +341,7 @@ def _find_all_matches(con):
         LEFT JOIN names_count_by_region names_count
             ON k.last_name = names_count.last_name
             -- We need to pick one teryt, let's use the first one from pkw_people if available
-            # TODO - make sure that the teryt is the same as the company's location
+            -- TODO - make sure that the teryt is the same as the company's location
             AND list_extract(p.teryt_wojewodztwo, 1) = names_count.teryt
 
     ),
@@ -381,8 +404,7 @@ def _find_all_matches(con):
         wiki_name,
         birth_year,
         max_scores.birth_date,
-        employed_end,
-        employed_krs,
+        employment,
         is_polityk,
         *  -- TODO remove 
     FROM max_scores LEFT JOIN scored ON (

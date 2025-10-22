@@ -3,7 +3,7 @@ from tqdm import tqdm
 from collections import Counter
 
 from stores.firestore import firestore_db
-from stores.duckdb import ducktable, dump_dbs
+from stores.duckdb import ducktable, always_export
 from util.url import NormalizedParse
 
 
@@ -28,16 +28,6 @@ class Article:
 
     def insert_into(self):
         pass
-
-
-def always_export(func):
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        finally:
-            dump_dbs()
-
-    return wrapper
 
 
 def list_people():
