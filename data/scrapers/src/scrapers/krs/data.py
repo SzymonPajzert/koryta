@@ -113,6 +113,36 @@ MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs = [
     "0000955885",
 ]
 
+# https://bip.mkidn.gov.pl/media/docs/ogloszenia_spolek/2022/20220112_Wykaz_spolek_z_udzialem_Skarbu_Panstwa.pdf
+# TODO search this whole website - https://bip.mkidn.gov.pl/pages/rejestry-ewidencje-archiwa-wykazy/rejestry-fundacji-i-instytucji-kultury.php
+# TODO scrape from https://bip.mkidn.gov.pl/modules/download_gallery/dlc.php?id=02D791AD5
+#                  https://bip.mkidn.gov.pl/modules/download_gallery/dlc.php?id=0E0990CB5
+#                  https://bip.mkidn.gov.pl/modules/download_gallery/dlc.php?id=08108AAD5
+#                  https://bip.mkidn.gov.pl/modules/download_gallery/dlc.php?id=045189CB5
+MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO = [
+    # TVP was missing
+    "0000940597",
+    "0000067663",
+    "0000078704",
+    "0000075953",
+    "0000144370",
+    "0000121087",
+    "0000037873",
+    "0000195933",
+    "0000139719",
+    "0000124925",
+    "0000167073",
+    "0000049387",
+    "0000130672",
+    "0000183992",
+    "0000097316",
+    "0000089881",
+    "0000082137",
+    "0000120619",
+    "0000100679",
+    "0000375982",  # Warszawa specific
+]
+
 # https://docs.google.com/spreadsheets/d/1Y9G14keoAgwI9VWkW766d9sLH9LD84UcCqpGdo4ndZ8
 # https://docs.google.com/spreadsheets/d/1tl6GBq2lnSajoWHbTLsTmXpUdYi6fdyJKxahgH73bF4
 SPOLKI_SKARBU_PANSTWA = [
@@ -707,4 +737,39 @@ NAME_MISSING = [
     "0000520849",
     "0000521021",
     "0000995845",
+]
+
+# https://bip.um.wroc.pl/artykul/160/2895/spolki-gminy-wroclaw
+WROCLAW = [
+    "0000004202",
+    "0000027173",
+    "0000051000",
+    "0000070008",
+    "0000086071",
+    "0000117724",
+    "0000222251",
+    "0000242837",
+    "0000248319",
+    "0000285920",
+    "0000291108",
+    "0000297354",
+    "0000297448",
+    "0000350789",
+    "0000391028",
+    "0000426169",
+    "0000953679",
+]
+
+KONIN = [
+    "0000105179",
+]
+
+LESZNO = [
+    "0000012980",
+    "0000016985",
+    "0000080126",
+    "0000628618",
+    "0000637255",
+    "0000770243",
+    "0000770481",
 ]
