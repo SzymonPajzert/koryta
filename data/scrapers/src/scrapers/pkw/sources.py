@@ -69,13 +69,21 @@ class MultiXlsZipExtractor(Extractor):
 
     def read(self, file_path):
         with ZipFile(file_path, "r") as z:
+            first = True
+            header = self.header_rows
+            skip = self.skip_rows
             for filename in z.namelist():
+                print(f"Checking {filename}")
+                if not first:
+                    header = 0
+                    skip = self.header_rows
                 if fnmatch.fnmatch(filename, self.inner_filename_pattern):
                     raw_bytes = z.open(filename, "r")
-                    xls_extractor = XlsExtractor(
-                        filename, self.header_rows, self.skip_rows
-                    )
+
+                    xls_extractor = XlsExtractor(filename, header, skip)
                     yield from xls_extractor.read_bytes(raw_bytes)
+
+                first = False
 
     def read_bytes(self, raw_bytes):
         raise NotImplementedError(
@@ -85,8 +93,8 @@ class MultiXlsZipExtractor(Extractor):
 
 class XlsExtractor(Extractor):
     inner_filename: str
-    header_rows: int  # Row many rows to skip, e.g additional headers
-    skip_rows: int
+    header_rows: int
+    skip_rows: int  # Row many rows to skip, e.g additional headers
 
     def __init__(self, inner_filename, header_rows, skip_rows=0) -> None:
         self.inner_filename = inner_filename
@@ -112,7 +120,7 @@ class XlsExtractor(Extractor):
                 else:
                     header = [f"{p} {c}" for p, c in zip(header, current)]
                 count += 1
-            elif count == self.header_rows:
+            elif count == self.header_rows and header is not None:
                 # Process the aggregated header to handle duplicates
                 for col_name in header:
                     original_col_name = col_name

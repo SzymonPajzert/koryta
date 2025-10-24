@@ -23,18 +23,33 @@ def parse_sex(s: str) -> str:
 
 
 def parse_yes_no(s: str) -> str:
+    if s != s:
+        return "FALSE"
+
     match s:
         case "Tak":
             return "TRUE"
         case "Nie":
             return "FALSE"
-    raise ValueError(f"Unknown value: {s}")
+        case "N":
+            return "FALSE"
+        case "T":
+            return "TRUE"
+        case "2":
+            return "FALSE"  # TODO handle second turn
+        case "nan":
+            return "FALSE"
+        case "2 tura":
+            return "FALSE"
+
+    raise ValueError(f"Unknown bool: {s}")
 
 
 CSV_HEADERS = {
     'Głosy\n"przeciw"': None,
     'Głosy\n"za"': None,
     'Głosy\n"za"\'': None,
+    'Zero "x"': None,
     "% gł. odd. na listę": None,
     "% gł. w okręgu": None,
     "% gł. w okręgu": None,
@@ -180,6 +195,7 @@ CSV_HEADERS = {
     "Nazwisko i imiona": SetField("pkw_name"),
     "Nazwisko Mandat": SetField("last_name"),
     "Nazwisko": SetField("last_name"),
+    "Nieważne": None,
     "Nr \nokregu": None,
     "Nr kandydata na liście": None,
     "Nr listy (po nadaniu)": None,
@@ -223,7 +239,6 @@ CSV_HEADERS = {
     "Plec": SetField("sex", parse_sex),
     "Płec": None,
     "Płeć Mandat": SetField("sex"),
-    "Płeć": SetField("sex", parse_sex),
     "Płeć": SetField("sex", parse_sex),
     "Poparcie Mandat": None,
     "Poparcie TERYT": None,
