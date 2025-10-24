@@ -1,0 +1,4 @@
+- wejście do spółki to odpowiedzialność
+- [https://x.com/S_Potapowicz/status/1948792420079943720?ref_src=twsrc%5Egoogle%7Ctwcamp%5Eserp%7Ctwgr%5Etweet](https://x.com/S_Potapowicz/status/1948792420079943720?ref_src=twsrc%5Egoogle%7Ctwcamp%5Eserp%7Ctwgr%5Etweet)
+- A sam wszedł do 10 i nie ma z tym problemu #tweet
+-

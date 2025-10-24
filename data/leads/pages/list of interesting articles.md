@@ -1,0 +1,13 @@
+- Format
+	- URL
+	- Note - why is it interesting
+- List of the articles - https://docs.google.com/spreadsheets/d/164YrVJhOvmOZoWIAFmE63pWtO4N1-pKxUBP2aQbxX-U/edit?gid=0#gid=0
+-
+- #Lewica https://polityka.se.pl/wiadomosci/desant-dzialaczy-lewicy-na-pfron-z-partia-zwiazanych-jest-6-na-8-nowych-dyrektoro-aa-xeFK-kvKt-7x49.html
+- #PSL [https://wiadomosci.onet.pl/krakow/ze-szklarni-do-urzedu-czyli-jak-starosta-zatrudnil-corke-nepotyzm-w-podhalanskim-pis/z3d5xpn](https://wiadomosci.onet.pl/krakow/ze-szklarni-do-urzedu-czyli-jak-starosta-zatrudnil-corke-nepotyzm-w-podhalanskim-pis/z3d5xpn)
+- #PSL [https://wiadomosci.onet.pl/kraj/burza-po-tekscie-onetu-wrze-w-obozie-wladzy-nie-na-to-sie-umawialismy/rdh5p8r](https://wiadomosci.onet.pl/kraj/burza-po-tekscie-onetu-wrze-w-obozie-wladzy-nie-na-to-sie-umawialismy/rdh5p8r)
+- #PSL [https://wiadomosci.onet.pl/kraj/zielona-fala-nakryla-polska-kolej-ponad-20-ludzi-zwiazanych-z-psl-we-wladzach-spolek/mjc1n25](https://wiadomosci.onet.pl/kraj/zielona-fala-nakryla-polska-kolej-ponad-20-ludzi-zwiazanych-z-psl-we-wladzach-spolek/mjc1n25)
+- #PSL [https://wiadomosci.onet.pl/kraj/trzesienie-ziemi-na-czele-totalizatora-sportowego-w-sieci-fala-komentarzy/zygln36](https://wiadomosci.onet.pl/kraj/trzesienie-ziemi-na-czele-totalizatora-sportowego-w-sieci-fala-komentarzy/zygln36)
+- https://wiadomosci.onet.pl/tylko-w-onecie/prokuratura-analizuje-role-mateusza-morawieckiego-w-aferze-rars-beda-zarzuty/6v4hj4w
+- https://www.pb.pl/zasady-przyznawania-miliardow-z-kpo-na-zbrojeniowke-sa-niejasne-1247245
+- https://www.pb.pl/zlagodzono-wymagania-dla-nadzorcy-nad-budowa-lotniska-1247244

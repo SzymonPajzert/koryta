@@ -1,0 +1,2 @@
+- Brakuje wyborów z 2006
+- Ale ciekawa osoba, ma powiązania z wieloma partiami

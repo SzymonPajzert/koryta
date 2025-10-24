@@ -3,13 +3,5 @@
 - TODO Full data to import - https://drive.google.com/drive/folders/1Quf-3EHImdD82au3qFNHH-KvVSsGDXK0?hl=pl
 -
 - All the cases are:
-	- [[list of KRS numbers]]
-	- [[list of interesting articles]]
-	- Some places I tried to do research - [[poszlaki]]
-		- [[AMW Sineva]]
-		- [[Agencja Mienia Wojskowego]]
-		- [[Urząd Mazowiecki]]
-		- [[Łódź]]
--
-- TODO clean up each case
-- TODO Import each case
+	- TODO [[cuj/quick add]] #import Quickly add a KRS number
+	- TODO [[cuj/quick add]] #import You can quickly add one or multiple, either raw link or a bracket, parenthesis format

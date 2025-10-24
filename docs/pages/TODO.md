@@ -2,5 +2,6 @@
 -
 -
 - {{query (and (and [[TODO]] (not [[LATER]])) (not [[iteration/25W38]]))}}
+  collapsed:: true
 -
 -

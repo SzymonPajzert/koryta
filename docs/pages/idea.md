@@ -8,3 +8,9 @@
 	- https://dziennikpolski24.pl/krakow-nie-ma-jak-w-spolkach-miejskich-czyli-rekordowe-zarobki-prezesow/gh/c3-13346714/2
 -
 - #view/graph - Right click graph to filter to the specified node
+-
+- Warto jeszcze powiedzieć, że oni idą do tamtych miejsc bo w sumie słabo płacą politykom. Więc lepiej iść do dużej partii, ona Ci rozda stanowiska, jak przegrasz wybory albo nie to będzie dobrze
+- Nie rozdzielaj ludzi na kompetencje, bo to jest slippery slope - ciężko postawić granicę i to nie jest nasza rola.
+- Pokazuj gęby tych ludzi, więc są ich wizytówki na gminie powiatu miasta można stamtąd i nikt nie może nic powiedzieć. [[entity/person]]
+- Dodaj do disclaimera o źródłach że dla osób pełniących funkcje publiczne są oświadczenia podatkowe
+	- Oświadczenia majątkowe dla każdej osoby wyskakuje
