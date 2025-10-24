@@ -494,5 +494,14 @@ sources.extend(
             2014,
             PkwFormat.UNKNOWN,
         ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2009/parlament_eu/kandpe2009.xls",
+                "2009_pe_kandydaci.xls",
+            ),
+            XlsExtractor("kandpe2009.xls", header_rows=1),
+            2009,
+            PkwFormat.UNKNOWN,
+        ),
     ]
 )

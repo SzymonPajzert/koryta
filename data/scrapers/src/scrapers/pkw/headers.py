@@ -253,6 +253,14 @@ CSV_HEADERS_2014_PE = {
     "Nr listy": None,
 }
 
+CSV_HEADERS_2009_PE = {
+    "Nr": None,
+    "Nawisko": SetField("last_name"),
+    "Członek": None,
+    "% głosów\nna listę": None,
+    "% głosów\nw okręgu": None,
+}
+
 
 CSV_HEADERS = {
     **CSV_HEADERS_2024,
@@ -265,4 +273,5 @@ CSV_HEADERS = {
     **CSV_HEADERS_2010,
     **CSV_HEADERS_2007,
     **CSV_HEADERS_2014_PE,
+    **CSV_HEADERS_2009_PE,
 }
