@@ -476,5 +476,14 @@ sources.extend(
             2024,
             PkwFormat.LAST_First,
         ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2024/parlament_eu/kandydaci_csv.zip",
+                "2024_pe_kandydaci.zip",
+            ),
+            ZipExtractor("kandydaci_utf8.csv"),
+            2024,
+            PkwFormat.LAST_First,
+        ),
     ]
 )
