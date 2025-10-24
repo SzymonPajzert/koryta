@@ -1,4 +1,34 @@
-from scrapers.wiki.process_articles import Infobox
+from regex import search
+
+from scrapers.wiki.process_articles import Infobox, safe_middle_name_pattern
+
+
+problematic_titles = """
+? (album Hey)
+** ****** (album)
++ (album)
++ + +
++ piekło + niebo +
++18
+5 * Stunna
+Animal (F**k Like a Beast)
+Do * w sztambuch
+Do ***
+Kopalnia Węgla Kamiennego „Śląsk”
+Sunn O)))
+The End of the F***ing World
+"""
+
+
+def test_title_parsed():
+    for title in problematic_titles.split("\n"):
+        title = title.strip()
+        pattern = safe_middle_name_pattern(title)
+        # Make sure, that all the special characters are expected
+        try:
+            search(pattern, title)
+        except Exception:
+            assert False, f"Failing to parse '{title}'"
 
 
 def test_polityk_infobox():

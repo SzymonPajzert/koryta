@@ -1,3 +1,5 @@
+!.jj/repo/config.toml
+
 .DS_Store
 node_modules
 /dist

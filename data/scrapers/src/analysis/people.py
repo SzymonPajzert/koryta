@@ -83,7 +83,6 @@ con.execute(
             ('ZACHODNIOPOMORSKIE', '32')
         ) AS t(wojewodztwo, teryt)
     ) AS regions ON names."Województwo zameldowania na pobyt stały" = regions.wojewodztwo
-    WHERE TRUE {SAMPLE_FILTER}
     GROUP BY ALL
     """
 )
@@ -335,7 +334,7 @@ def _find_all_matches(con):
             AND k.metaphone = p.metaphone
             AND k.last_name = p.last_name
             AND k.first_name = p.first_name
-            AND (k.second_name = p.second_name OR k.second_name IS NULL OR p.second_name IS NULL OR k.second_name = '' OR p.second_name = '')
+            AND (k.second_name = p.second_name OR ((k.second_name IS NULL OR k.second_name = '') AND (p.second_name IS NULL OR p.second_name = '')))
         LEFT JOIN first_name_freq p_fn ON k.first_name = p_fn.first_name
         LEFT JOIN first_name_freq p_sn ON k.second_name = p_sn.first_name
         LEFT JOIN names_count_by_region names_count
@@ -352,7 +351,7 @@ def _find_all_matches(con):
             w.is_polityk,
             w.wiki_score,
         FROM krs_pkw kp
-        FULL JOIN wiki_people w
+        LEFT JOIN wiki_people w
             ON (kp.birth_date = w.birth_date OR w.birth_date IS NULL)
             AND kp.metaphone = w.metaphone
             AND kp.base_last_name = w.last_name
@@ -363,7 +362,7 @@ def _find_all_matches(con):
             kpw.*,
             ko.full_name as koryta_name,
         FROM krs_pkw_wiki kpw
-        FULL JOIN koryta_people ko ON jaro_winkler_similarity(kpw.base_last_name, ko.last_name) > 0.95
+        LEFT JOIN koryta_people ko ON jaro_winkler_similarity(kpw.base_last_name, ko.last_name) > 0.95
             AND jaro_winkler_similarity(kpw.base_first_name, ko.first_name) > 0.95
     ),
     scored AS (
