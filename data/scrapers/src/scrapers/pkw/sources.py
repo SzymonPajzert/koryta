@@ -483,7 +483,16 @@ sources.extend(
             ),
             ZipExtractor("kandydaci_utf8.csv"),
             2024,
-            PkwFormat.LAST_First,
+            PkwFormat.First_LAST,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2014/parlament_eu/pe2014kand.xls",
+                "2014_pe_kandydaci.xls",
+            ),
+            XlsExtractor("pe2014kand.xls", header_rows=1),
+            2014,
+            PkwFormat.UNKNOWN,
         ),
     ]
 )

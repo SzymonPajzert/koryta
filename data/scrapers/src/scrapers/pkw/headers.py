@@ -245,6 +245,14 @@ CSV_HEADERS_2007 = {
     "Miejscowość \nzamieszkania": None,
 }
 
+CSV_HEADERS_2014_PE = {
+    "Gł. w okr.": None,
+    "Gł. na listę": None,
+    "Gł. na kand.": None,
+    "Nr okr.": None,
+    "Nr listy": None,
+}
+
 
 CSV_HEADERS = {
     **CSV_HEADERS_2024,
@@ -256,4 +264,5 @@ CSV_HEADERS = {
     **CSV_HEADERS_2019,
     **CSV_HEADERS_2010,
     **CSV_HEADERS_2007,
+    **CSV_HEADERS_2014_PE,
 }
