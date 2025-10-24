@@ -95,9 +95,14 @@ def process_csv(reader, election_year, name_format, csv_headers):
             raise
 
 
-def process_pkw(limit: int | None):
+def process_pkw(limit: int | None, year: str | None):
     print("Downloading files...")
-    for config in sources:
+
+    filtered_sources = sources
+    if year:
+        filtered_sources = [s for s in sources if str(s.year) == year]
+
+    for config in filtered_sources:
         source = config.source
         if not source.downloaded():
             source.download()
@@ -108,7 +113,7 @@ def process_pkw(limit: int | None):
             raise Exception(f"File {source.filename} is not present")
     print("Files downloaded")
 
-    for config in sources:
+    for config in filtered_sources:
         # TODO Correctly open zip file
         print(f"🗂️  Starts processing CSV file: {config.source.filename}")
         reader = config.extractor.read(config.source.downloaded_path)
@@ -137,10 +142,17 @@ def main():
         default=None,
         help="for each file, only process LIMIT elements",
     )
+    parser.add_argument(
+        "--year",
+        dest="year",
+        type=str,
+        default=None,
+        help="for each file, only process LIMIT elements",
+    )
     args = parser.parse_args()
 
     try:
-        process_pkw(args.limit)
+        process_pkw(args.limit, args.year)
 
         print("\n\n")
 

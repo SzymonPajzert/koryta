@@ -12,6 +12,9 @@ from util.polish import PkwFormat
 from util.download import FileSource
 
 
+import fnmatch
+
+
 class Extractor:
     @abc.abstractmethod
     def read(self, file_path):
@@ -54,10 +57,44 @@ class ZipExtractor(Extractor):
         return self.extractor.read_bytes(raw_bytes)
 
 
+class MultiXlsZipExtractor(Extractor):
+    inner_filename_pattern: str
+    header_rows: int
+    skip_rows: int
+
+    def __init__(self, inner_filename_pattern, header_rows, skip_rows=0) -> None:
+        self.inner_filename_pattern = inner_filename_pattern
+        self.header_rows = header_rows
+        self.skip_rows = skip_rows
+
+    def read(self, file_path):
+        with ZipFile(file_path, "r") as z:
+            first = True
+            header = self.header_rows
+            skip = self.skip_rows
+            for filename in z.namelist():
+                print(f"Checking {filename}")
+                if not first:
+                    header = 0
+                    skip = self.header_rows
+                if fnmatch.fnmatch(filename, self.inner_filename_pattern):
+                    raw_bytes = z.open(filename, "r")
+
+                    xls_extractor = XlsExtractor(filename, header, skip)
+                    yield from xls_extractor.read_bytes(raw_bytes)
+
+                first = False
+
+    def read_bytes(self, raw_bytes):
+        raise NotImplementedError(
+            "MultiXlsZipExtractor does not support read_bytes directly"
+        )
+
+
 class XlsExtractor(Extractor):
     inner_filename: str
-    header_rows: int  # Row many rows to skip, e.g additional headers
-    skip_rows: int
+    header_rows: int
+    skip_rows: int  # Row many rows to skip, e.g additional headers
 
     def __init__(self, inner_filename, header_rows, skip_rows=0) -> None:
         self.inner_filename = inner_filename
@@ -68,23 +105,32 @@ class XlsExtractor(Extractor):
         df = pandas.read_excel(content, header=None, skiprows=self.skip_rows)
         count = 0
         header = None
-        # We set index and name, to get just plain tuples
+        processed_header = []
+        header_counts = {}
+
         for row in df.itertuples(index=False, name=None):
             if count < self.header_rows:
-                count += 1
                 current = list(row)
                 for idx, _ in enumerate(current):
                     if not isinstance(current[idx], str) and math.isnan(current[idx]):
-                        # Nan means that the cell is merged, carry over the value
                         current[idx] = current[idx - 1]
 
                 if header is None:
                     header = current
                 else:
                     header = [f"{p} {c}" for p, c in zip(header, current)]
-            elif count == self.header_rows:
-                # Return aggregated header
-                yield header
+                count += 1
+            elif count == self.header_rows and header is not None:
+                # Process the aggregated header to handle duplicates
+                for col_name in header:
+                    original_col_name = col_name
+                    suffix = 0
+                    while col_name in header_counts:
+                        suffix += 1
+                        col_name = f"{original_col_name}_{suffix}"
+                    header_counts[col_name] = 1
+                    processed_header.append(col_name)
+                yield processed_header
                 count += 1
             else:
                 yield row
@@ -111,6 +157,12 @@ election_date = {
     "2014": date(year=2014, month=11, day=21),
     "2018": date(year=2018, month=10, day=21),
 }
+
+# https://github.com/SzymonPajzert/koryta/issues/123
+# TODO add missing 2002_sejmik_kandydaci.zip
+# TODO add missing 2002_powiat_kandydaci.xls
+# TODO add missing 1998_powiat_kandydaci.zip
+# TODO add missing 1998_sejmik_mazowieckie.xls
 
 # These sources are from pkw website
 sources: list[InputSource] = []
@@ -475,6 +527,180 @@ sources.extend(
             ZipExtractor("kandydaci_wbp_utf8.csv"),
             2024,
             PkwFormat.LAST_First,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2024/parlament_eu/kandydaci_csv.zip",
+                "2024_pe_kandydaci.zip",
+            ),
+            ZipExtractor("kandydaci_utf8.csv"),
+            2024,
+            PkwFormat.First_LAST,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2014/parlament_eu/pe2014kand.xls",
+                "2014_pe_kandydaci.xls",
+            ),
+            XlsExtractor("pe2014kand.xls", header_rows=1),
+            2014,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2009/parlament_eu/kandpe2009.xls",
+                "2009_pe_kandydaci.xls",
+            ),
+            XlsExtractor("kandpe2009.xls", header_rows=1),
+            2009,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2004/parlament_eu/pe2004-kand.xls",
+                "2004_pe_kandydaci.xls",
+            ),
+            XlsExtractor("pe2004-kand.xls", header_rows=1),
+            2004,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1991/sejm/kandsejm1991kom.xls",
+                "1991_sejm_kandydaci.xls",
+            ),
+            XlsExtractor("kandsejm1991kom.xls", header_rows=1),
+            1991,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1991/senat/KANSEN1991.xls",
+                "1991_senat_kandydaci.xls",
+            ),
+            XlsExtractor("KANSEN1991.xls", header_rows=1),
+            1991,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1993/sejm/kandsejm1993kom.xls",
+                "1993_sejm_kandydaci.xls",
+            ),
+            XlsExtractor("kandsejm1993kom.xls", header_rows=1),
+            1993,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1993/senat/KANSEN1993.xls",
+                "1993_senat_kandydaci.xls",
+            ),
+            XlsExtractor("KANSEN1993.xls", header_rows=1),
+            1993,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1997/sejm/kandsejm1997kom.xls",
+                "1997_sejm_kandydaci.xls",
+            ),
+            XlsExtractor("kandsejm1997kom.xls", header_rows=1),
+            1997,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1997/senat/ksenat1997.xls",
+                "1997_senat_kandydaci.xls",
+            ),
+            XlsExtractor("ksenat1997.xls", header_rows=1),
+            1997,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2001/sejm/kandsejm2001kom.xls",
+                "2001_sejm_kandydaci.xls",
+            ),
+            XlsExtractor("kandsejm2001kom.xls", header_rows=1),
+            2001,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2001/senat/2001-kan-sen.xls",
+                "2001_senat_kandydaci.xls",
+            ),
+            XlsExtractor("2001-kan-sen.xls", header_rows=1),
+            2001,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2005/sejm/kandsejm2005kom.xls",
+                "2005_sejm_kandydaci.xls",
+            ),
+            XlsExtractor("kandsejm2005kom.xls", header_rows=1),
+            2005,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2005/senat/kandsen2005.xls",
+                "2005_senat_kandydaci.xls",
+            ),
+            XlsExtractor("kandsen2005.xls", header_rows=1),
+            2005,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2002/2002-kand-rady.xlsx",
+                "2002_rady_kandydaci.xlsx",
+            ),
+            XlsExtractor("2002-kand-rady.xlsx", header_rows=1),
+            2002,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/2002/wbp/wbp2002.zip",
+                "2002_wbp_kandydaci.zip",
+            ),
+            ZipExtractor(
+                "wojt2002.xls",
+                extractor=XlsExtractor("wojt2002.xls", header_rows=1),
+            ),
+            2002,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1998/1998-kand-rady.xlsx",
+                "1998_rady_kandydaci.xlsx",
+            ),
+            XlsExtractor("1998-kand-rady.xlsx", header_rows=1),
+            1998,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1998/rada_gminy/1998_rady_gmin.zip",
+                "1998_rady_gmin.zip",
+            ),
+            MultiXlsZipExtractor("*.xls", header_rows=1),
+            1998,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1994/samo1994/samo1994kand.zip",
+                "1994_samorzad_kandydaci.zip",
+            ),
+            MultiXlsZipExtractor("*.xls", header_rows=1),
+            1994,
+            PkwFormat.UNKNOWN,
         ),
     ]
 )
