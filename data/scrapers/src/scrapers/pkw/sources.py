@@ -72,11 +72,15 @@ class MultiXlsZipExtractor(Extractor):
             for filename in z.namelist():
                 if fnmatch.fnmatch(filename, self.inner_filename_pattern):
                     raw_bytes = z.open(filename, "r")
-                    xls_extractor = XlsExtractor(filename, self.header_rows, self.skip_rows)
+                    xls_extractor = XlsExtractor(
+                        filename, self.header_rows, self.skip_rows
+                    )
                     yield from xls_extractor.read_bytes(raw_bytes)
 
     def read_bytes(self, raw_bytes):
-        raise NotImplementedError("MultiXlsZipExtractor does not support read_bytes directly")
+        raise NotImplementedError(
+            "MultiXlsZipExtractor does not support read_bytes directly"
+        )
 
 
 class XlsExtractor(Extractor):
@@ -145,6 +149,12 @@ election_date = {
     "2014": date(year=2014, month=11, day=21),
     "2018": date(year=2018, month=10, day=21),
 }
+
+# https://github.com/SzymonPajzert/koryta/issues/123
+# TODO add missing 2002_sejmik_kandydaci.zip
+# TODO add missing 2002_powiat_kandydaci.xls
+# TODO add missing 1998_powiat_kandydaci.zip
+# TODO add missing 1998_sejmik_mazowieckie.xls
 
 # These sources are from pkw website
 sources: list[InputSource] = []

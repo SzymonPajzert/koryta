@@ -269,6 +269,7 @@ CSV_HEADERS_2004_PE = {
 
 CSV_HEADERS_1991 = {
     "Komitet wyborczy": SetField("party"),
+    "Wiek_1": None,
     "Nr\nkand.": None,
     "Nr\nna liście\noglnp.": None,
     "Umiona": SetField("first_name"),
@@ -339,11 +340,20 @@ CSV_HEADERS_1998 = {
     "Gł. kand.": None,
     "Gł. ważne": None,
     "Mand.": None,
-    "Kod gminy": None,
+    "Kod gminy": SetField("teryt_candidacy"),
     "Obwód": None,
     "Adres": None,
-    "Nieważne": None,
-    "Zero \"x\"": None,
+}
+
+CSV_HEADERS_1994 = {
+    "L. mand.": None,
+    "L. kand.": None,
+    "Gł. ważn.": None,
+    "Gł. bez wyb.": None,
+    "Oznaczenie": None,
+    "L. kand._1": None,
+    "L. mand._1": None,
+    "Gł.": None,
 }
 
 
@@ -367,4 +377,5 @@ CSV_HEADERS = {
     **CSV_HEADERS_2005,
     **CSV_HEADERS_2002,
     **CSV_HEADERS_1998,
+    **CSV_HEADERS_1994,
 }
