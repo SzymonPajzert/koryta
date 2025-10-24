@@ -1,4 +1,3 @@
-- TODO #dump
 -
 - Przemysław Szymański - [https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/kancelaria-sejmiku.html](https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/kancelaria-sejmiku.html)
 	- [https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-rolnictwa-i-rozwoju-obszarow-wiejskich.html](https://mazovia.pl/pl/bip/urzad-marszalkowski/departamenty/departament-rolnictwa-i-rozwoju-obszarow-wiejskich.html)

@@ -1,0 +1,1 @@
+- To nie jest jego pierwsza spółka, to co było w ostatnich wiadomościach - [[2025-10-24]]

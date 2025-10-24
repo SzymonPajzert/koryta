@@ -277,7 +277,7 @@
  ;; With the default value of level 2, block b will be collapsed.
  ;; If the level's value is set to 3, block c will be collapsed.
  ;; Default value: 2
- :ref/default-open-blocks-level 0
+ :ref/default-open-blocks-level 2
 
  ;; Configure the threshold for linked references before collapsing.
  ;; Default value: 100
@@ -299,7 +299,7 @@
  ;;  :charge-range    600}   ; Default value: 600
 
  ;; Favorites to list on the left sidebar
- :favorites ["List estimates" "data lake" "import" "iteration/25w38" "ludzie działają na stronie" "todo" "api"]
+ :favorites []
 
  ;; Set flashcards interval.
  ;; Expected value:
@@ -334,11 +334,11 @@
  ;; :ignored-page-references-keywords #{:author :website}
 
  ;; logbook configuration.
- :logbook/settings {
+ ;; :logbook/settings
  ;; {:with-second-support? false ;limit logbook to minutes, seconds will be eliminated
-   :enabled-in-all-blocks false ;display logbook in all blocks after timetracking
-   :enabled-in-timestamped-blocks false ;don't display logbook at all
- }
+ ;;  :enabled-in-all-blocks true ;display logbook in all blocks after timetracking
+ ;;  :enabled-in-timestamped-blocks false ;don't display logbook at all
+ ;; }
 
  ;; Mobile photo upload configuration.
  ;; :mobile/photo
@@ -420,7 +420,4 @@
  ;;      ;use Percent-encoding for other invalid characters
  :file/name-format :triple-lowbar
  :journal/page-title-format "yyyy-MM-dd"
- :graph/forcesettings {:link-dist 120
- :charge-strength -1000
- :charge-range 2500}
- :feature/enable-timetracking? false}
+ :ui/show-brackets? false}

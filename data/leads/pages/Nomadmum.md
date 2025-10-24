@@ -1,0 +1,12 @@
+type:: source
+
+-
+- Influencerka, na X w ostatnim czasie [[2025-10-24]] wrzucała pytania na temat podejrzanych ludzi i braku konkursów
+	- [Nomadmum on X: "Odkąd zaczęłam zadawać pytania o konkursy w spółkach skarbu państwa listonosz przychodzi do mojego domu z wezwaniami, bo jak się okazało uraziłam uczucia biznesowe, polityczne i prezesowskie 🙃 Ponieważ nie każdy działający w interesie obywatelskim ma możliwości bycia https://t.co/jwOUitiHOW" / X](https://x.com/nomadmum81/status/1978083567922970928)
+	- [Nomadmum on X: "@BGrucela akurat czasami aż żal ze to straszaki bo jednak wzywanie ministrów czy kluczowych polityków czy pracowników SSP na świadków aby pod przysięgą opisali jak wygadał proces zatrudnienia albo ich wzajemne relacje byłby ciekawy" / X](https://x.com/nomadmum81/status/1978097899092292073)
+	- [Nomadmum on X: "tyle było przez 8 lat gadania, że PiS dziala niezgodnie z ustawą o zarządzaniu miniem państwowym i w radach nadzorach spółek skarbu państwa są zbyt wysokie wynagrodzenia. To ja mam dzisiaj pytanie do @MAPGOVPL @wbalczun i @Kpelczynska czy to zostało wdrożone we wszystkich ssp i" / X](https://x.com/nomadmum81/status/1979049911434842174)
+	- [Nomadmum on X: "Odkąd zaczęłam zadawać pytania o konkursy w spółkach skarbu państwa listonosz przychodzi do mojego domu z wezwaniami, bo jak się okazało uraziłam uczucia biznesowe, polityczne i prezesowskie 🙃 Ponieważ nie każdy działający w interesie obywatelskim ma możliwości bycia https://t.co/jwOUitiHOW" / X](https://x.com/nomadmum81/status/1978083567922970928)
+	- [x.com/nomadmum81/status/1972222849411584384](https://x.com/nomadmum81/status/1972222849411584384)
+	- [(21) Nomadmum on X: "jak mają już mnie wypchnąć przez okno za kłapnie dziobem to lecimy Rada Nadzorcza jednej z największych firm chwilówkowych Soonly (stary Vivus) 1. pan Wróblewski wiadomo / omawiany post wcześniej / obstawia pzu 2. Pan Rapacki / komendant policji!!! zawsze tam gdzie Pan https://t.co/VKIJeo8iuZ" / X](https://x.com/nomadmum81/status/1971854474613243950)
+	- [(21) Nomadmum on X: "@K_Stanowski nie może ktoś od Was z mniejszym poziomem lambadziarstwa od mojego tego posprawdzać?" / X](https://x.com/nomadmum81/status/1971855140630983094)
+	- [(21) Nomadmum on X: "nie będziemy mieli żadnego zakazu chwilówek, bo ten Vivus to obecnie Soonly i np. ta sama osoba, która jest w organach instytucji finansowych skarbu państwa jest i tam. Mój ulubiony Wojciech Wróblewski ex ambasador PL w Estonii, kariera zawsze w rozkwicie jak PO u władzy," / X](https://x.com/nomadmum81/status/1971822800156463151)
