@@ -1,0 +1,2 @@
+- https://www.fakt.pl/polityka/matka-pawlaka-o-synu-podrywaczu-ma-kobiety-ale-zadnej/rdszpd4
+-

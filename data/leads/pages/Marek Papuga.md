@@ -1,0 +1,1 @@
+- Członek Rady Nadzorczej Narodowego Funduszu Ochrony Środowiska i Gospodarki Wodnej	kandydat na posła		SLD	https://wiadomosci.wp.pl/odpartyjnienie-rad-nadzorczych-nie-tak-mialo-byc-wyglada-to-bardzo-zle-6996280410176160a

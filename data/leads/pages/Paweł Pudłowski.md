@@ -1,0 +1,1 @@
+- Przewodniczący Rady Nadzorczej Narodowego Funduszu Ochrony Środowiska i Gospodarki Wodnej	były poseł i były szef klubu		Nowoczesna	https://wiadomosci.wp.pl/odpartyjnienie-rad-nadzorczych-nie-tak-mialo-byc-wyglada-to-bardzo-zle-6996280410176160a
