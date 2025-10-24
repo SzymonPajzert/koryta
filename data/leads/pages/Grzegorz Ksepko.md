@@ -1,0 +1,24 @@
+blocked:: crawler
+
+- https://wyborcza.pl/7,75248,19571322,muzykalny-adwokat-z-pis-wiceprezesem-energi-ds-korporacyjnych.html
+- https://wyborcza.pl/7,87647,21340755,szatan-wiara-i-gitara.html
+- https://tvn24.pl/biznes/z-kraju/energa-ma-nowy-zarzad-grzegorz-ksepko-pelniacym-obowiazki-prezesa-ra941542-ls4507845
+- https://natemat.pl/201059,liczy-na-boski-prad-a-kiedys-namawial-czcijcie-zlotego-cielca-wiceprezes-energi-ma-interesujaca-przeszlosc
+- https://wyborcza.pl/0,128956.html?tag=Grzegorz+Ksepko
+- https://trojmiasto.wyborcza.pl/trojmiasto/7,35612,30670826,emaile-obajtka-wiceprezes-energi-pisal-do-obajtka-i-kaczynskiej.html
+- https://trojmiasto.wyborcza.pl/trojmiasto/7,35612,29430556,obajtek-dostal-email-ws-detoksu-osobowego-w-radiu-gdansk.html
+- https://trojmiasto.wyborcza.pl/trojmiasto/7,35612,29243905,cv-w-mailu-do-obajtka-dzieki-z-gory-z-panem-bogiem.html
+- https://trojmiasto.wyborcza.pl/trojmiasto/7,35612,24451010,energa-zwleka-z-wyborem-prezesow-pis-nie-podjal-decyzji.html
+- https://wybrzeze24.pl/aktualnosci/grzegorz-ksepko-interes-suwerennej-polski-jest-najwazniejszy
+- https://www.facebook.com/photo.php?fbid=10236748886523628&id=1281204498&set=a.4635360683625
+- https://oko.press/tag/grzegorz-ksepko
+- https://oko.press/84-osoby-pis-zarobily-162-mln
+- https://oko.press/95-mln-zl-zarobili-ludzie-pis-w-14-spolkach-z-udzialem-panstwa-rekordzista-69-mln-zl-ranking-oko-press
+- https://oko.press/pis-energa-czyli-zasilanie
+- https://media.energa.pl/pr/442924/grzegorz-ksepko-p-o-prezesa-zarzadu-energa-sa
+- https://wyborcza.biz/biznes/7,177151,21559791,teraz-kur-my-dobra-zmiana-w-spolkach-skarbu-panstwa.html
+- https://www.trojmiasto.pl/biznes/Grzegorz-Ksepko-odwolany-z-zarzadu-Energi-n143280.html
+- https://www.fakt.pl/polityka/skrywana-przeszlosc-prawnika-kaczynskiej/vr4vqsr
+- https://trojmiasto.wyborcza.pl/trojmiasto/7,35612,20812810,ile-kosztowal-festiwal-energia-wolnosci-marzenie-wiceprezesa.html
+- https://trojmiasto.wyborcza.pl/trojmiasto/7,35612,24406344,jeszcze-wiecej-pis-u-w-enerdze-caly-zarzad-w-partii.html
+- https://trojmiasto.wyborcza.pl/trojmiasto/7,35612,24451010,energa-zwleka-z-wyborem-prezesow-pis-nie-podjal-decyzji.html

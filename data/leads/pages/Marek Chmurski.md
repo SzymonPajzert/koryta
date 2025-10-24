@@ -1,0 +1,2 @@
+- pełnomocniki prezydenta miasta ds. rozowju struktury kolejowej
+- To wygląda jak jakieś sztuczne stanowisko żeby mu pensję dołożyć
