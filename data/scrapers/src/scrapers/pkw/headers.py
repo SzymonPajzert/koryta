@@ -261,6 +261,69 @@ CSV_HEADERS_2009_PE = {
     "% głosów\nw okręgu": None,
 }
 
+CSV_HEADERS_2004_PE = {
+    "Miejce\n zam.": None,
+    "Miejce zam.": None,
+    "Ob.": None,
+}
+
+CSV_HEADERS_1991 = {
+    "Komitet wyborczy": SetField("party"),
+    "Nr\nkand.": None,
+    "Nr\nna liście\noglnp.": None,
+    "Umiona": SetField("first_name"),
+    "Nazwa partii/organizacji popierającej kandydata": SetField("party_member"),
+    "Gł. ważne\nw okręgu": None,
+    "Nr\nwoj.": None,
+    "Siedziba": None,
+    "Wiek.1": None,
+}
+
+CSV_HEADERS_1993 = {
+    "Nr\nna liście": None,
+    "Nazwa partii.organizacji popierającej kandydata": SetField("party_member"),
+    "L. gł.": None,
+}
+
+CSV_HEADERS_1997 = {
+    "Lp": None,
+    "1. imię": SetField("first_name"),
+    "2. Imię": SetField("middle_name"),
+    "Id partii": SetField("party_member"),
+    "Głosy na listę": None,
+    "Głosy w okręgu": None,
+    "Nr na liście\noglnp.": None,
+    "Nr woj.": None,
+    "1. imie": SetField("first_name"),
+    "2. imie": SetField("middle_name"),
+    "Plec": SetField("sex", parse_sex),
+    "Zawod": None,
+    "Mieszka": None,
+    "Glosy": None,
+    "Wazne w okr.": None,
+}
+
+CSV_HEADERS_2001 = {
+    "2. imię": SetField("middle_name"),
+    "Gł.\nna listę": None,
+    "Gł.\nw okręgu": None,
+    "1. Imię": SetField("first_name"),
+    "2. Imię": SetField("middle_name"),
+    "Afiliacja": SetField("party_member"),
+}
+
+CSV_HEADERS_2005 = {
+    "Komitet  wyborczy": SetField("party"),
+    "Nr poz.": None,
+    "Głos w okr.": None,
+}
+
+CSV_HEADERS_2002 = {
+    "Nr pozycji": None,
+    "% gł. odd. na listę": None,
+    "% gł. w okręgu": None,
+}
+
 
 CSV_HEADERS = {
     **CSV_HEADERS_2024,
@@ -274,4 +337,11 @@ CSV_HEADERS = {
     **CSV_HEADERS_2007,
     **CSV_HEADERS_2014_PE,
     **CSV_HEADERS_2009_PE,
+    **CSV_HEADERS_2004_PE,
+    **CSV_HEADERS_1991,
+    **CSV_HEADERS_1993,
+    **CSV_HEADERS_1997,
+    **CSV_HEADERS_2001,
+    **CSV_HEADERS_2005,
+    **CSV_HEADERS_2002,
 }
