@@ -650,8 +650,38 @@ sources.extend(
                 "https://danewyborcze.kbw.gov.pl/dane/2002/wbp/wbp2002.zip",
                 "2002_wbp_kandydaci.zip",
             ),
-            XlsExtractor("wojt2002.xls", header_rows=1),
+            ZipExtractor(
+                "wojt2002.xls",
+                extractor=XlsExtractor("wojt2002.xls", header_rows=1),
+            ),
             2002,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1998/1998-kand-rady.xlsx",
+                "1998_rady_kandydaci.xlsx",
+            ),
+            XlsExtractor("1998-kand-rady.xlsx", header_rows=1),
+            1998,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1998/rada_gminy/1998_rady_gmin.zip",
+                "1998_rady_gmin.zip",
+            ),
+            MultiXlsZipExtractor("*.xls", header_rows=1),
+            1998,
+            PkwFormat.UNKNOWN,
+        ),
+        InputSource(
+            FileSource(
+                "https://danewyborcze.kbw.gov.pl/dane/1994/samo1994/samo1994kand.zip",
+                "1994_samorzad_kandydaci.zip",
+            ),
+            MultiXlsZipExtractor("*.xls", header_rows=1),
+            1994,
             PkwFormat.UNKNOWN,
         ),
     ]

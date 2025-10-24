@@ -322,6 +322,28 @@ CSV_HEADERS_2002 = {
     "Nr pozycji": None,
     "% gł. odd. na listę": None,
     "% gł. w okręgu": None,
+    "1. Imie": SetField("first_name"),
+    "2. Imie": SetField("middle_name"),
+    "Typ_1": None,
+    "Upr.": None,
+    "Frekw.": None,
+    "Odd.": None,
+    "Ważne": None,
+    "Opis": None,
+}
+
+CSV_HEADERS_1998 = {
+    "ID kand.": None,
+    "Id listy": None,
+    "Id okr.": None,
+    "Gł. kand.": None,
+    "Gł. ważne": None,
+    "Mand.": None,
+    "Kod gminy": None,
+    "Obwód": None,
+    "Adres": None,
+    "Nieważne": None,
+    "Zero \"x\"": None,
 }
 
 
@@ -344,4 +366,5 @@ CSV_HEADERS = {
     **CSV_HEADERS_2001,
     **CSV_HEADERS_2005,
     **CSV_HEADERS_2002,
+    **CSV_HEADERS_1998,
 }
