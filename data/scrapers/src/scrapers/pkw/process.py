@@ -3,9 +3,10 @@ from collections import Counter
 import argparse
 
 from stores.duckdb import dump_dbs, ducktable
-from util.polish import UPPER, parse_name, PkwFormat
-from scrapers.pkw.sources import sources
-from scrapers.pkw.headers import CSV_HEADERS
+from util.polish import parse_name, PkwFormat
+from scrapers.pkw.elections import ElectionType
+from scrapers.pkw.sources import sources, InputSource
+from scrapers.pkw.headers import CSV_HEADERS, SetField, ElectionContext
 
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
@@ -15,6 +16,7 @@ counters = {k: Counter() for k in CSV_HEADERS.keys()}
 @dataclass
 class ExtractedData:
     election_year: str
+    election_type: str
     name_format: PkwFormat
     sex: str | None = None
     birth_year: int | None = None
@@ -46,11 +48,30 @@ class ExtractedData:
         if self.age is not None:
             self.birth_year = int(self.election_year) - int(self.age)
 
+        try:
+            self.first_name = strip_if_not_none(self.first_name)
+            self.middle_name = strip_if_not_none(self.middle_name)
+            self.last_name = strip_if_not_none(self.last_name)
+            self.party = strip_if_not_none(self.party)
+            self.position = strip_if_not_none(self.position)
+            self.pkw_name = strip_if_not_none(self.pkw_name)
+        except AttributeError:
+            raise ValueError(f"field has incorrect type: {self}")
+
     def insert_into(self):
         pass
 
 
-def process_csv(reader, election_year, name_format, csv_headers):
+def strip_if_not_none(s: str | None):
+    if s is None or s != s:  # check if s is nan
+        return None
+    # TODO Agnieszka True is giving us some issues
+    if isinstance(s, bool):
+        s = str(s)
+    return s.strip()
+
+
+def process_csv(reader, config: InputSource, csv_headers: dict[str, SetField | None]):
     header = None
 
     for row in reader:
@@ -62,14 +83,21 @@ def process_csv(reader, election_year, name_format, csv_headers):
                 if col != col or col == float("nan"):
                     # It's NaN
                     header[idx] = ""
-                if csv_headers[col] == "" or csv_headers[col] is None:
+                processor = csv_headers[col]
+                if processor is None:
                     continue
 
-                if csv_headers[col].name not in replacements:
-                    replacements[csv_headers[col].name] = col
+                if processor.name not in replacements:
+                    replacements[processor.name] = (col, processor.skippable)
+                elif processor.skippable:
+                    # This processor is optional
+                    continue
+                elif replacements[processor.name][1]:
+                    # The previous is skippable, so replace with the new one
+                    replacements[processor.name] = (col, processor.skippable)
                 else:
                     raise ValueError(
-                        f"Duplicate column name: {col} and {replacements[csv_headers[col].name]} map to {csv_headers[col].name}"
+                        f"Duplicate column name: {col} and {replacements[processor.name]} map to {processor.name} during {config}"
                     )
 
             continue
@@ -77,18 +105,24 @@ def process_csv(reader, election_year, name_format, csv_headers):
         row_dict = dict(zip(header, row))
 
         for k, v in row_dict.items():
-            if csv_headers[k] == "":
+            if csv_headers[k] is None:
                 counters[k].update([v])
 
         mapped = dict()
         for k, v in row_dict.items():
-            if csv_headers[k] == "" or csv_headers[k] is None:
+            p = csv_headers[k]
+            if p is None:
                 continue
-            mapped[csv_headers[k].name] = csv_headers[k].processor(v)
+            mapped[p.name] = p.processor(
+                v, ElectionContext(config.year, config.election_type)
+            )
 
         try:
             yield ExtractedData(
-                election_year=election_year, name_format=name_format, **mapped
+                election_year=str(config.year),
+                election_type=str(config.election_type),
+                name_format=config.name_format,
+                **mapped,
             )
         except TypeError:
             print(row_dict)
@@ -118,11 +152,9 @@ def process_pkw(limit: int | None, year: str | None):
         print(f"🗂️  Starts processing CSV file: {config.source.filename}")
         reader = config.extractor.read(config.source.downloaded_path)
 
-        # TODO check the year, since it's currently hardcoded for 2024
-        headers = {**CSV_HEADERS}
         try:
             count = 0
-            for item in process_csv(reader, config.year, config.name_format, headers):
+            for item in process_csv(reader, config, CSV_HEADERS):
                 count += 1
                 if limit is not None and count > limit:
                     break
