@@ -21,7 +21,7 @@ def extract_companies(df):
             krs[e["employed_krs"]] += 1
 
     return [
-        (krs, company_names[krs], count)
+        (krs, company_names.get(krs, krs), count)
         for krs, count in krs.most_common()
         if count > 3
     ]
@@ -33,12 +33,18 @@ def append_nice_history(df):
 
         first_work: date | None = None
         latest_election: date | None = None
+        last_employed: date | None = None
+        employed_total = timedelta(days=0)
 
         for emp in row["employment"]:
             duration = timedelta(days=365 * float(emp["employed_for"]))
             start_employed: date = emp["employed_end"] - duration
             if first_work is None or start_employed < first_work:
                 first_work = start_employed
+            if last_employed is None or emp["employed_end"] > last_employed:
+                last_employed = emp["employed_end"]
+            employed_total += duration
+
             emp["employment_start"] = start_employed
             text = f"Pracuje od {start_employed} do {emp["employed_end"]} w {company_names.get(emp["employed_krs"], emp["employed_krs"])}"
             actions.append((start_employed, text))
@@ -72,11 +78,11 @@ def append_nice_history(df):
             first_work - latest_election
         )  # if latest_election < first_work else None
 
-        return pd.Series([history, election_before_work])
+        return pd.Series([history, election_before_work, last_employed, employed_total])
 
-    df[["history", "election_before_work"]] = df[["employment", "elections"]].apply(
-        nice_history, axis=1
-    )
+    df[["history", "election_before_work", "last_employed", "employed_total"]] = df[
+        ["employment", "elections"]
+    ].apply(nice_history, axis=1)
     return df
 
 
