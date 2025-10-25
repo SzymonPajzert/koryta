@@ -54,14 +54,11 @@ def list_values(cols):
             yield col, val
 
 
-@pytest.mark.parametrize(
-    ["column", "value"], list_values(["krs_name", "pkw_name", "wiki_name"])
-)
-@pytest.mark.parametrize_skip_if(lambda column, value: value in IGNORE_FAILURES)  # type: ignore
 def test_not_duplicated(column, value):
-    # Make sure that peeple are not duplicated in the output
-    # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
-    assert len(df[df[column] == value]) == 1
+    for column, value in list_values(["krs_name", "pkw_name", "wiki_name"]):
+        # Make sure that peeple are not duplicated in the output
+        # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
+        assert len(df[df[column] == value]) == 1
 
 
 def get_words(name):
@@ -136,6 +133,8 @@ def file_lines(filename):
         Person(krs_name="Sławomir Kamiński", pkw_name="Kamińska Sławomira Maria"),
         Person(any="Łukasz Krawiec"),
         Person(any="Jerzy Skrzypek"),
+        Person(any="Sławomir Zawadzki"),
+        Person(any="Andrzej Osiadacz"),
     ],
 )
 def test_missing(person):
@@ -148,7 +147,7 @@ def test_missing(person):
         "Wojciech Bartelski",
         "Tomasz Mencina",
         # is a lawyer in wiki, but also connected to PiS
-        "Grzegorz Pastuszko",
+        "Grzegorz Michał Pastuszko",
         "Krzysztof Czeszejko-Sochacki",
     ],
 )

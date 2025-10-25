@@ -185,7 +185,7 @@ class Infobox:
             )
 
         if len(result) == 0:
-            return None
+            return Infobox("unknown", {})
 
         if len(result) > 1:
             print(result)
@@ -193,12 +193,18 @@ class Infobox:
         return result[0]
 
 
+def safe_middle_name_pattern(title):
+    for escapable in ["(", ")", "?", "*", "[", "]", "+"]:
+        title = title.replace(escapable, f"\\{escapable}")
+    return f"'''({title.replace(' ', f'[ {UPPER}{LOWER}]*')})'''"
+
+
 @dataclass
 class WikiArticle:
     title: str
     categories: list[str]
     links: list[str]
-    infobox: Infobox | None
+    infobox: Infobox
     osoba_imie: bool
 
     def __post_init__(self):
@@ -232,38 +238,59 @@ class WikiArticle:
 
         infobox = Infobox.parse(wikitext)
         if infobox is not None:
-            pattern = f"'''({title.replace(' ', f'[ {UPPER}{LOWER}]*')})'''"
-            full_name = search(pattern, wikitext)
-            if full_name is not None and full_name.group(1) != title:
-                # print(f"Changing title from {title} to {full_name.group(1)}")
-                title = full_name.group(1)
+            pattern = safe_middle_name_pattern(title)
+            try:
+                full_name = search(pattern, wikitext)
+                if full_name is not None and full_name.group(1) != title:
+                    # print(f"Changing title from {title} to {full_name.group(1)}")
+                    title = full_name.group(1)
+            except Exception as e:
+                print(pattern, title, "writing to tests")
+                WikiArticle(
+                    title=title,
+                    categories=[],
+                    links=[],
+                    infobox=infobox,
+                    osoba_imie=False,
+                ).write_to_test(elem, force=True)
+                # TODO raise e
 
         return WikiArticle(
             title=title,
             categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
             links=findall("\\[\\[[^\\]]+\\]\\]", wikitext),
-            infobox=infobox,
+            infobox=infobox if infobox is not None else Infobox("unknown", {}),
             osoba_imie="imię i nazwisko" in wikitext,
         )
 
-    def write_to_test(self, elem: ET.Element):
-        if self.title in TEST_FILES:
+    def write_to_test(self, elem: ET.Element, force=False):
+        if self.title in TEST_FILES or force:
             path = tests.get_path(f"{self.title}.xml")
             print(f"Saving {self.title} to test file: {path}")
             with open(path, "w") as test_file:
                 test_file.write(ET.tostring(elem, encoding="unicode").strip())
 
     def about_person(self):
-        if self.content_score > 0:
-            return True
-        if self.infobox is None:
-            return False
-        if self.infobox.person_related:
-            year = self.infobox.birth_year
-            if year and year < 1930:
+        def check():
+            if self.content_score > 0:
+                return True
+            if self.infobox is None:
                 return False
-            return True
-        return False
+            if self.infobox.person_related:
+                year = self.infobox.birth_year
+                if year and year < 1930:
+                    return False
+                return True
+            return False
+
+        about_person = check() and self.content_score > 0
+        # TODO move into another function
+        if about_person:
+            for cat in self.normalized_links:
+                if cat in WIKI_POLITICAL_LINKS:
+                    continue
+                category_stats[cat] += 1 + self.content_score
+        return about_person
 
     def about_company(self):
         if self.infobox is None:
@@ -282,13 +309,6 @@ def extract(elem: ET.Element) -> People | Company | None:
     global interesting_count
 
     if article.about_person():
-        if article.content_score > 0:
-            for cat in article.normalized_links:
-                if cat in WIKI_POLITICAL_LINKS:
-                    continue
-                category_stats[cat] += 1 + article.content_score
-        if article.infobox is None:
-            article.infobox = Infobox("", {})
         interesting_count += 1
         return People(
             source=f"https://pl.wikipedia.org/wiki/{article.title}",
@@ -303,8 +323,6 @@ def extract(elem: ET.Element) -> People | Company | None:
         )
 
     if article.about_company():
-        if article.infobox is None:
-            article.infobox = Infobox("", {})
         return Company(
             name=article.title,
             krs_number=article.infobox.fields.get("krs", ""),

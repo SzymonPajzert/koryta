@@ -8,7 +8,7 @@ from scrapers.wiki.process_articles import (
     TEST_FILES,
     extract,
     Company,
-    # People, TODO Migrate PEOPLE_EXPECTED to list People row as well
+    People,
 )
 
 PEOPLE_EXPECTED = {
@@ -16,7 +16,14 @@ PEOPLE_EXPECTED = {
         "title": "Józef Andrzej Śliwa",  # We extract middle name from the page
         "infobox_type": "Biogram",
         "birth_date": "1954-11-17",
-    }
+        "about_person": True,
+    },
+    "Grzegorz Michał Pastuszko": {
+        "title": "Grzegorz Michał Pastuszko",
+        "infobox_type": "Naukowiec",
+        "birth_date": "1981-09-17",
+        "about_person": True,
+    },
 }
 
 COMPANIES_EXPECTED = {
@@ -39,12 +46,20 @@ def test_people(filename):
         assert article is not None
         assert article.infobox is not None
 
-        assert article.title == PEOPLE_EXPECTED[filename]["title"]
-        assert article.infobox.inf_type == PEOPLE_EXPECTED[filename]["infobox_type"]
-        assert article.infobox.birth_iso == PEOPLE_EXPECTED[filename]["birth_date"]
+        assert article.title == PEOPLE_EXPECTED[filename]["title"], "title"
+        assert (
+            article.infobox.inf_type == PEOPLE_EXPECTED[filename]["infobox_type"]
+        ), "infobox_type"
+        assert (
+            article.infobox.birth_iso == PEOPLE_EXPECTED[filename]["birth_date"]
+        ), "birth_date"
+        assert (
+            article.about_person() == PEOPLE_EXPECTED[filename]["about_person"]
+        ), "about_person()"
 
         person = extract(elem)
-        assert person is not None
+        assert person is not None, "Person extracted successfully"
+        assert isinstance(person, People)
         assert person.full_name == article.title
 
 
