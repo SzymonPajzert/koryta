@@ -16,6 +16,7 @@ def people_koryta_merged(con):
         SELECT DISTINCT
             lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
             lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
+            CAST(NULL AS VARCHAR) as second_name,
             double_metaphone(last_name) as metaphone,
             id as koryta_id,
             full_name

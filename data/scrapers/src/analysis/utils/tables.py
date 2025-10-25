@@ -28,12 +28,12 @@ def create_people_table(
         SELECT
             first_name,
             last_name,
-            list_distinct(list(coalesce(
+            coalesce(
                 second_name,
                 trim(replace(
                     replace(lower(full_name), lower(first_name), ''),
                     lower(last_name),
-                    ''))))) as second_name,
+                    ''))) as second_name,
             double_metaphone(last_name) as metaphone,
             birth_year,
             {'\n'.join([f"list(struct_pack({struct_pack(struct)})) as {col}," for col, struct in kwargs.items()])}

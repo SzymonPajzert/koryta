@@ -5,11 +5,12 @@ import os
 
 from analysis.utils import read_enriched
 from util.config import versioned
-from analysis.utils.tables import create_people_table
+from analysis.utils.tables import init_tables
 from analysis.people_krs_merged import people_krs_merged
 from analysis.people_wiki_merged import people_wiki_merged
 from analysis.people_koryta_merged import people_koryta_merged
 from analysis.people_pkw_merged import people_pkw_merged
+from analysis.utils.names import names_count_by_region, first_name_freq
 from util.conductor import pipeline
 
 
@@ -65,15 +66,19 @@ def unique_probability(
 
 @pipeline(init_duckdb=True)
 def people_merged(con):
+    init_tables(con)
     con.create_function(
         "unique_probability", unique_probability, null_handling="special"  # type: ignore
     )
 
     # TODO this should be automatically called as a source of the pipeline function
     # Note passing by name, to reuse the duckdb connection
+    names_count_by_region(con=con)
+    first_name_freq(con=con)
     people_krs_merged(con=con)
     people_wiki_merged(con=con)
-    people_pkw_merged(con=con)
+    # This is a good shit - TODO reuse the outputs here and around
+    pkw_people = people_pkw_merged(con=con, force=True)
     people_koryta_merged(con=con)
 
     print("--- Imported table sizes ---")

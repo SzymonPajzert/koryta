@@ -8,7 +8,7 @@ import argparse
 import json
 
 from scrapers.krs import data
-from scrapers.krs.process import iterate_blobs, KRS
+from scrapers.krs.process import iterate_blobs, KRS, CompanyType
 from util.rejestr import Rejestr
 from stores.storage import upload_to_gcs, list_blobs
 
@@ -150,6 +150,11 @@ def child_companies() -> set[Company]:
     return result
 
 
+def append_type(krss: list[str], com_type: CompanyType):
+    for krs in krss:
+        yield KRS(krs, com_type)
+
+
 def scrape_rejestrio():
     parser = argparse.ArgumentParser(description="I'll add docs here")
     parser.add_argument(
@@ -162,15 +167,15 @@ def scrape_rejestrio():
 
     already_scraped = set(KRS.from_blob_name(path) for path in list_blobs("rejestr.io"))
     starters = set(
-        KRS(krs)
+        krs
         for krs in itertools.chain(
-            # data.MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs,
-            # data.SPOLKI_SKARBU_PANSTWA,
-            # data.AMW,
-            data.WARSZAWA,
-            data.MALOPOLSKIE,
-            data.LODZKIE,
-            data.LUBELSKIE,
+            append_type(data.MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs, CompanyType.PUBLIC),
+            append_type(data.SPOLKI_SKARBU_PANSTWA, CompanyType.PUBLIC),
+            append_type(data.AMW, CompanyType.PUBLIC),
+            append_type(data.WARSZAWA, CompanyType.LOCAL),
+            append_type(data.MALOPOLSKIE, CompanyType.LOCAL),
+            append_type(data.LODZKIE, CompanyType.LOCAL),
+            append_type(data.LUBELSKIE, CompanyType.LOCAL),
         )
     )
     graph = CompanyGraph()

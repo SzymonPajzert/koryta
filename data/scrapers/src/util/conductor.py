@@ -46,8 +46,11 @@ def pipeline(
 
             if not os.path.exists(matched_file) or force:
                 result = func(*args, **kwargs)
-                print(f"Got results, saving to {matched_file}")
-                result.to_parquet(matched_file)
+                if result is not None:
+                    print(f"Got results, saving to {matched_file}")
+                    result.to_parquet(matched_file)
+                else:
+                    print(f"Pipeline {output} not saving anything")
             else:
                 print(f"Reading memoized {matched_file}")
                 result = pd.read_parquet(matched_file)

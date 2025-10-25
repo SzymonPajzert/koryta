@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 
 from stores.storage import iterate_blobs
 from stores.duckdb import ducktable, always_export
@@ -9,11 +10,19 @@ from stores.duckdb import ducktable, always_export
 curr_date = datetime.now().strftime("%Y-%m-%d")
 
 
+class CompanyType(Enum):
+    UNKNOWN = 0
+    PUBLIC = 1
+    LOCAL = 2
+
+
 class KRS:
     id: str
+    com_type: CompanyType = CompanyType.UNKNOWN
 
-    def __init__(self, id: int | str) -> None:
+    def __init__(self, id: int | str, com_type=CompanyType.UNKNOWN) -> None:
         self.id = str(id).zfill(10)
+        self.com_type = com_type
 
     @staticmethod
     def from_blob_name(blob_name: str) -> "KRS":
@@ -59,6 +68,7 @@ class KrsPerson:
 class KrsCompany:
     krs: str
     name: str
+    company_type: CompanyType
     city: str
 
 
