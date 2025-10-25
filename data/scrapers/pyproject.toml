@@ -117,7 +117,8 @@ dependencies = [
     "pyarrow (>=21.0.0,<22.0.0)",
     "openpyxl (>=3.1.5,<4.0.0)",
     "nbconvert (>=7.16.6,<8.0.0)",
-    "seaborn (>=0.13.2,<0.14.0)"
+    "seaborn (>=0.13.2,<0.14.0)",
+    "hide-code (>=0.7.0,<0.8.0)"
 ]
 
 [project.scripts]
