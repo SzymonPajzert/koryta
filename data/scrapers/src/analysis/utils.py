@@ -11,7 +11,100 @@ MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental m
 EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
 
 krs_companies = versioned.read_jsonl("companies_krs.jsonl")
-company_names = {elt["krs"]: f"{elt["name"]} w {elt["city"]}" for elt in krs_companies}
+company_names_krs = {
+    elt["krs"]: f"{elt["name"]} w {elt["city"]}" for elt in krs_companies
+}
+company_names = {
+    **company_names_krs,
+    # TODO fix the name retrieval
+    "0000017728": "MIEJSKIE PRZEDSIĘBIORSTWO WODOCIĄGÓW I KANALIZACJI W LUBLINIE",
+    "0000025601": "Towarzystwo Budownictwa Społecznego Lublin",
+    "0000045743": "MIEJSKIE PRZEDSIĘBIORSTWO ROBÓT DROGOWYCH Chełm",
+    "0000047164": "Miejskie Przedsiębiorstwo Energetyki Cieplnej Chełm",
+    "0000054479": "Zakład Gospodarki Lokalowej W Zamościu",
+    "0000064144": "Stowarzyszenie Samorządów Powiatu Tomaszowskiego",
+    "0000092480": "PORT LOTNICZY LUBLIN",
+    "0000123412": "Chełmski Park Wodny",
+    "0000147068": "CHEŁMSKIE TOWARZYSTWO BUDOWNICTWA SPOŁECZNEGO",
+    "0000182220": "Chełmskie Linie Autobusowe",
+    "0000218698": "Lubelskie Przedsiębiorstwo Gospodarki Komunalnej",
+    "0000302534": "PRZEDSIĘBIORSTWO KOMUNIKACJI SAMOCHODOWEJ W MIĘDZYRZECU PODLASKIM",
+    "0000335852": "Przedsiębiorstwo Komunikacji Samochodowej W Biłgoraju",
+    "0000359854": "MOTOR LUBLIN",
+}
+
+komitet_to_party = {
+    "komitet wyborczy prawo i sprawiedliwość": "PiS",
+    "komitet wyborczy platforma obywatelska rp": "PO",
+    "komitet wyborczy akcja wyborcza solidarność": "AWS",
+    "komitet wyborczy polskie stronnictwo ludowe": "PSL",
+    "koalicyjny kw sojusz lewicy demokratycznej - unia pracy": "SLD",
+    "kw samoobrona rzeczypospolitej polskiej": "Samoobrona",
+    "krajowy komitet wyborczy przymierze społeczne: psl-up-kpeir": "PSL",
+    "komitet wyborczy wyborców plus": "KWW Plus",
+    "kw polskiego stronnictwa ludowego": "PSL",
+    "komitet wyborczy sojusz lewicy demokratycznej": "SLD",
+    "kw prawo i sprawiedliwość": "PiS",
+    "komitet wyborczy stowarzyszenia razem dla skierniewic": "Razem dla Skierniewic",
+    "krajowy komitet wyborczy sojuszu lewicy demokratycznej": "SLD",
+    "zarząd unii wolności": "UW",
+    "komitet wyborczy stowarzyszenia ziemia bełchatowska": "Ziemia Bełchatowska",
+    "koalicyjny komitet wyborczy sld lewica razem": "SLD",
+    "naczelny komitet wykonawczy polskiego stronnictwa ludowego": "PSL",
+    "komitet wyborczy wyborców blok samorządowy razem": "Blok Samorządowy Razem",
+    "kww plus": "KWW Plus",
+    "kkw koalicja obywatelska": "KO",
+    "komitet wyborczy polskiego stronnictwa ludowego": "PSL",
+    "komitet wyborczy wyborców zbigniewa burzyńskiego": "Zbigniew Burzyński",
+    'komitet wyborczy "razem dla radomska"': "Razem dla Radomska",
+    "koalicyjny kw platforma obywatelska - prawo i sprawiedliwość": "PO+PiS",
+    "koalicyjny komitet wyborczy platforma.nowoczesna koalicja obywatelska": "KO",
+    "komitet wyborczy wyborców edwarda pietrzyka": "Edward Pietrzyk",
+    "kkw trzecia droga psl-pl2050 szymona hołowni": "PSL",
+    "koalicyjny komitet wyborczy sld+sdpl+pd+up lewica i demokraci": "SLD",
+    # "kww łódzkie porozumienie obywatelskie": 4,
+    # "kww marcina witko": 3,
+    # "komitet wyborczy wyborców budziszewice razem": 3,
+    # "komitet wyborczy konstantynowskie porozumienie samorządowe": 3,
+    # "kww inicjatywa społeczna wspólnota samorządowa": 3,
+    # "komitet wyborczy komitet obywatelski.pl": 3,
+    # "komitet wyborczy wyborców komitet obywatelski": 3,
+    # "kww porozumienie platforma sprawiedliwości": 3,
+    # "kww porozumienie samorządowe perspektywa": 3,
+    # "kww porozumienie samorządowe": 3,
+    # "komitet wyborczy wyborców forum dobrej woli": 3,
+    # "kww porozumienie samorządowe prawicy": 2,
+    # "komitet wyborczy wyborców blok prawica razem": 2,
+    # "komitet wyborczy wyborców koalicja dla pabianic grzegorza mackiewicza": 2,
+    # "kww razem dla powiatu": 2,
+    # "kww budziszewice razem": 2,
+    # "kww prawo i rodzina": 2,
+    # "kongres liberalno-demokratyczny": 2,
+    # "kww łaskie bezpartyjne porozumienie samorządowe": 2,
+    # "kw komitet obywatelski.pl": 2,
+    # "kw platforma obywatelska rzeczypospolitej polskiej": 2,
+    # "komitet wyborczy wyborców anny milczanowskiej": 2,
+    # "kww centrum": 2,
+    # "komitet wyborczy wyborców dariusza kubusa": 2,
+    # 'kww "obywatelski konwent samorządowy"': 2,
+    # "komitet wyborczy stowarzyszenia przyjaciół ziemi w makowie": 2,
+    # "komitet wyborczy wyborców hanny zdanowskiej": 2,
+    # 'komiete wyborczy "piętnastka"': 2,
+    # "komitet wyborczy tomasza kołodziejczyka": 2,
+    # 'komitet wyborczy "truskawka"': 2,
+    # "komitet wyborczy przyszłość": 2,
+    # "kww chrześcijańskie porozumienie obywatelskie": 2,
+    # "kww liga-sprawiedliwość": 2,
+    # "komitet wyborczy wyborców mirosława kuklińskiego": 2,
+    # 'komitet wyborczy"samorządność"': 2,
+    # "komitet wyborczy obywatelski komitet samorządowy": 2,
+    # "komitet wyborczy sulmierzyce 2000": 2,
+    # "kww przymierze rodzin skierniewickich": 2,
+    # "komitet wyborczy wyborców leszka trębskiego forum": 2,
+    # "komitet wyborczy wyborców marek królik": 2,
+    # 'komitet wyborczy "niezależni"': 2,
+    # "komitet wyborczy wyborców krzysztofa chojniaka razem dla piotrkowa": 2,
+}
 
 
 def extract_companies(df):
@@ -21,45 +114,61 @@ def extract_companies(df):
             krs[e["employed_krs"]] += 1
 
     return [
-        (krs, company_names[krs], count)
+        (krs, company_names.get(krs, krs), count)
         for krs, count in krs.most_common()
         if count > 3
     ]
 
 
 def append_nice_history(df):
+    missing_teryt = set()
+
     def nice_history(row):
         actions = []
 
         first_work: date | None = None
-        latest_election: date | None = None
+        last_employed: date | None = None
+        employed_total = timedelta(days=0)
+        parties_simplified = set()
 
         for emp in row["employment"]:
             duration = timedelta(days=365 * float(emp["employed_for"]))
             start_employed: date = emp["employed_end"] - duration
             if first_work is None or start_employed < first_work:
                 first_work = start_employed
+            if last_employed is None or emp["employed_end"] > last_employed:
+                last_employed = emp["employed_end"]
+            employed_total += duration
+
             emp["employment_start"] = start_employed
             text = f"Pracuje od {start_employed} do {emp["employed_end"]} w {company_names.get(emp["employed_krs"], emp["employed_krs"])}"
             actions.append((start_employed, text))
 
         assert first_work is not None
 
+        elections = []
         for el in row["elections"]:
-            start_election: date | None = election_date.get(el["election_year"], None)
-            if start_election is None:
-                start_election = date(year=int(el["election_year"]), month=1, day=1)
-            if latest_election is None or (
-                start_election > latest_election and start_election < first_work
-            ):
-                latest_election = start_election
+            if el["party"] is not None:
+                party = komitet_to_party.get(el["party"].lower().strip(), None)
+                if party is not None:
+                    parties_simplified.add(party)
+
+            start_election: date = election_date.get(
+                el["election_year"], date(year=int(el["election_year"]), month=1, day=1)
+            )
+            elections.append(start_election)
             region_name = "nieznane"
             for e in el["teryt_powiat"]:
                 if e in TERYT:
                     region_name = TERYT[e]
-            text = f"Kandyduje w {el["election_year"]} z list {el["party"]} w {region_name}"
+                else:
+                    missing_teryt.add(e)
+
+            text = f"Kandyduje w {el["election_year"]} z list {(el["party"] or "").strip()} w {region_name}"
             actions.append((start_election, text))
 
+        before_work = [e for e in elections if e < first_work]
+        latest_election = max(before_work, default=min(elections, default=None))
         assert latest_election is not None
 
         actions.sort(key=lambda x: x[0])
@@ -72,11 +181,28 @@ def append_nice_history(df):
             first_work - latest_election
         )  # if latest_election < first_work else None
 
-        return pd.Series([history, election_before_work])
+        return pd.Series(
+            [
+                history,
+                election_before_work,
+                last_employed,
+                employed_total,
+                parties_simplified,
+            ]
+        )
 
-    df[["history", "election_before_work"]] = df[["employment", "elections"]].apply(
-        nice_history, axis=1
-    )
+    df[
+        [
+            "history",
+            "election_before_work",
+            "last_employed",
+            "employed_total",
+            "parties_simplified",
+        ]
+    ] = df[["employment", "elections"]].apply(nice_history, axis=1)
+
+    print(f"Missing teryt: {missing_teryt}")
+
     return df
 
 

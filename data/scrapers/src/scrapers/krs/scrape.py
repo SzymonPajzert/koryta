@@ -25,11 +25,24 @@ def save_org_connections(
     names: typing.Iterable[KRS],
 ):
     for krs in names:
-        yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json"
-        # yield f"https://rejestr.io/api/v2/org/{krs}"
+        yield (
+            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
+            0,
+        )
+        # yield (f"https://rejestr.io/api/v2/org/{krs}", 0.05)
     for krs in connections:
-        yield f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=aktualne"
-        yield f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne"
+        yield (
+            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
+            0,
+        )
+        yield (
+            f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=aktualne",
+            0.05,
+        )
+        yield (
+            f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne",
+            0.05,
+        )
 
 
 # If relation is passive and one of this type, it's a child.
@@ -179,12 +192,11 @@ def scrape_rejestrio():
     parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
     pprint(parent_count.most_common(30))
     urls = list(save_org_connections(to_scrape, map(KRS, data.NAME_MISSING)))
-    pprint(urls)
     print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
     input("Press enter to continue...")
     rejestr = Rejestr()
 
-    for url in urls:
+    for url, _ in urls:
         result = rejestr.get_rejestr_io(url)
         sleep(0.3)
 
