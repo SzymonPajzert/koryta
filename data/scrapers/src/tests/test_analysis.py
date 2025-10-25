@@ -3,6 +3,7 @@ import regex as re
 
 from scrapers.krs.process import KRS, iterate_blobs
 from analysis.people import find_all_matches, con
+from analysis.utils import read_enriched
 from util.config import versioned
 from util.lists import IGNORE_FAILURES
 
@@ -11,7 +12,8 @@ SCORE_CUTOFF = 10.5
 
 
 df_all = find_all_matches(con)
-df = df_all[df_all["overall_score"] > SCORE_CUTOFF]
+# TODO split it already as another column
+df_matched = df_all[df_all["overall_score"] > SCORE_CUTOFF]
 
 
 class Person:
@@ -31,34 +33,40 @@ class Person:
         return str(self)
 
 
-def find_column_match(column, name):
+def find_column_match(use_all: bool, column, name):
     name = name.replace(" ", " .*")
-    return len(df[df[column].str.match(name, na=False)]) > 0
+    if use_all:
+        return df_all[df_all[column].str.match(name, na=False)]
+    else:
+        return df_matched[df_matched[column].str.match(name, na=False)]
 
 
-def exists_in_output(person: Person):
+def has_column_match(use_all: bool, column, name):
+    return len(find_column_match(use_all, column, name)) > 0
+
+
+def exists_in_output(use_all: bool, person: Person):
     if person.any != "":
-        krs_match = find_column_match("krs_name", person.any)
-        pkw_match = find_column_match("pkw_name", person.any)
-        wiki_match = find_column_match("wiki_name", person.any)
+        krs_match = has_column_match(use_all, "krs_name", person.any)
+        pkw_match = has_column_match(use_all, "pkw_name", person.any)
+        wiki_match = has_column_match(use_all, "wiki_name", person.any)
         return krs_match or pkw_match or wiki_match
 
-    return find_column_match("krs_name", person.krs_name) and find_column_match(
-        "pkw_name", person.pkw_name
-    )
+    matches_krs = has_column_match(use_all, "krs_name", person.krs_name)
+    matches_pkw = has_column_match(use_all, "pkw_name", person.pkw_name)
+    return matches_krs or matches_pkw
 
 
-def list_values(cols):
-    for col in cols:
-        for val in df[col].unique():
-            yield col, val
+def test_not_duplicated():
+    def list_values(cols):
+        for col in cols:
+            for val in df_all[col].unique():
+                yield col, val
 
-
-def test_not_duplicated(column, value):
     for column, value in list_values(["krs_name", "pkw_name", "wiki_name"]):
         # Make sure that peeple are not duplicated in the output
         # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
-        assert len(df[df[column] == value]) == 1
+        assert len(df_all[df_all[column] == value]) == 1
 
 
 def get_words(name):
@@ -77,7 +85,7 @@ def no_diff_sets(a, b):
 
 
 @pytest.mark.parametrize(
-    "row", (row for _, row in df.iterrows()), ids=lambda row: f"{row["krs_name"]}"
+    "row", (row for _, row in df_all.iterrows()), ids=lambda row: f"{row["krs_name"]}"
 )
 def test_second_names_match(row):
     # Split each row and each _name column into single words.
@@ -138,7 +146,7 @@ def file_lines(filename):
     ],
 )
 def test_missing(person):
-    assert not exists_in_output(person)
+    assert not exists_in_output(False, person)
 
 
 @pytest.mark.parametrize(
@@ -154,21 +162,33 @@ def test_missing(person):
 @pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
 def test_exists(person):
     person = Person(any=person)
-    assert exists_in_output(person)
+    assert exists_in_output(False, person)
 
 
 @pytest.mark.parametrize("person", file_lines("psl_lista.txt"))
 @pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
 def test_list_psl(person):
     person = Person(any=person)
-    assert exists_in_output(person)
+    assert exists_in_output(False, person)
 
 
 @pytest.mark.parametrize("person", file_lines("stop_pato_lista.txt"))
 @pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
 def test_list_stop_pato(person):
     person = Person(any=person)
-    assert exists_in_output(person)
+    assert exists_in_output(False, person)
+
+
+def test_enrichment():
+    # TODO
+    name = "Adam Borysiewicz"
+    birth = "1977-12-08"
+    first_work = "2015-03-04"
+    rows = find_column_match(True, "krs_name", name)
+    assert len(rows) == 1, rows["birth_date"]
+    row = rows.iloc[0]
+    assert row["birth_date"] == birth
+    assert row["employed_start"] == first_work
 
 
 scraped_krs = []
