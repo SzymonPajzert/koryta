@@ -1,3 +1,8 @@
+import glob
+import os
+
+from util.config import PROJECT_ROOT
+
 # Which wiki files should be saved locally for easier testing
 # You can run scrape_wiki and it will save them locally.
 TEST_FILES = {
@@ -5,6 +10,8 @@ TEST_FILES = {
     "Józef Śliwa",
     "Marcin Chludziński",
     "Paweł Gruza",
+    "Grzegorz Pastuszko",
+    "Grzegorz Michał Pastuszko",
     # Companies
     "Agata (przedsiębiorstwo)",
     "Agencja Mienia Wojskowego",
@@ -182,52 +189,38 @@ WIKI_POLITICAL_LINKS = {
     "wybory samorządowe w Polsce w 2010 roku",
 }
 
+# TODO get a counter of how often we have blockers
+blockers = {
+    "krs scrape": True,
+    "crawler": True,
+    "wiki extracting people": True,
+}
+
 # Whenever we encounter an interesting person, we have a space to put notes about them
 # and exclude them from our failing tests.
 # The goal is to get to zero test failures, either through
 #  - solving the problems
 #  - idenfitying issues with them and putthing them here
-# TODO The notes are more structured, so common issues, like BIP parsing are identified
-# This will allow us to prioritize upgrades the data scraping algorithms.
-PEOPLE_ANNOTATED = {
-    "Robert Ciborowski": "listed in stop pato with vague reasons, need to list komitet honorowy kandydata",
-    "Sławomir Zawadzki": "should not be in koryta",
-    "Andrzej Osiadacz": "should not be in koryta, is an expert",
-    "Paweł Olejnik": [
-        "https://pl.wikipedia.org/w/index.php?title=Zak%C5%82ad_Emerytalno-Rentowy_Ministerstwa_Spraw_Wewn%C4%99trznych_i_Administracji&oldid=48854108 - I could go through the wiki entries and historical and extract that he worked there in 2016",
-        "He's also present in a few local companies, so it's a good thing we could check as well",
-        "https://www.polityka.pl/tygodnikpolityka/kraj/1742066,1,uzbrojenie-polskiej-armii-w-rekach-fana-fantasy.read"
-        "He is in KRS",
-        "No entries in PKW nor Wiki",
-        " W latach 2016-2018 pracował w Ministerstwie Spraw Wewnętrznych i Administracji jako szef Centrum Personalizacji Dokumentów i dyrektor Zakładu Emerytalno-Rentowego MSWiA.",
-        "https://radar.rp.pl/przemysl-obronny/art18571951-zmiana-w-skladzie-zarzadu-polskiej-grupy-zbrojeniowej",
-        "Found an article - https://tygodnikits.pl/z-miasta-do-miasta/ar/9080494.",
-    ],
-    "Agata Marciniak-Różak": "BIP Warszawa",
-    "Agnelika Rybak Gawkowska": "WKD, żona Gawkowskiego - NEPO_SURNAME",
-    "Jacek Pużuk": "mąż, Szpital Grochowski - NEPO_SURNAME",
-    "Marek Chmurski": [
-        "pełnomocniki prezydenta miasta ds. rozowju struktury kolejowej",
-        "To wygląda jak jakieś sztuczne stanowisko żeby mu pensję dołożyć",
-    ],
-    # Kazimierz Chroma https://www.dziennikwschodni.pl/lublin/nowi-szefowie-w-agencjach-dwaj-dyrektorzy-z-pis,n,1000175691.html
-    # Piotr Breś https://www.dziennikwschodni.pl/polityka/nasze-tluste-koty,n,1000292595.html - dyrektor totalizator sportowy
-    # Jan Szewczak https://www.dziennikwschodni.pl/polityka/nasze-tluste-koty,n,1000292595.html
-    # Renata Stefaniuk https://www.dziennikwschodni.pl/polityka/nasze-tluste-koty,n,1000292595.html
-    # Leszek Daniewski https://www.dziennikwschodni.pl/lubelskie/zmiany-w-agencjach-rolniczych-w-lubelskiem-kto-moze-zostac-dyrektorem,n,1000172597.html
-    # Krzysztof Figat - Chyba znalazłem nowego przypadkiem - https://tygodniksiedlecki.com/artykul/antoni-jozwowicz-prezesem-n1424927
-    # Zofia Paryła - Has wiki page with mentions - https://pl.wikipedia.org/wiki/Zofia_Pary%C5%82a#cite_ref-Krewni_2-1,  https://krakow.wyborcza.pl/krakow/7,44425,26834696,szkola-kariery-daniela-obajtka-bliscy-i-znajomi-prezesa-orlenu.html#s=S.embed_link-K.C-B.1-L.4.zw, friend of Obajtek, mentioned on the wiki
-    # Parse refs from people's page's, e.g Zofia's so you can feed them to the crawler.
-    # Mateusz Siepielski, wiceburmistrz Śródmieścia 2015
-    # Joanna Gepfert - https://pl.wikipedia.org/wiki/Instytut_De_Republica
-    # Energa was missing - https://pl.wikipedia.org/wiki/Energa, even though it's owned by Orlen
-    # Grzegorz Janik - Elections 2002, Parlimentary from 2005. Bonus points - CBA investigation - https://pl.wikipedia.org/wiki/Grzegorz_Janik.
-    # Małgorzata Zarychta-Surówka - Elections 2006, probably 2018.
-    # Janusz Smoliło - Elections in 2014 and 2018.
-    # Anna Adamczyk - 140528 needs to be scraped from krs
-    # Marcin Chludziński - not in wiki, but there are articles about him that he's somehow connected. Actually, it mentions Fundacja Republikańska
-    # Andrzej Kisielewicz - EU parliment elections are missing
-    # https://pl.wikipedia.org/wiki/Pawe%C5%82_Gruza, 2002 election, present in wiki non politician but it mentions the page.
-}
+# Open logseq in data/leads to see the content of these files
 
-IGNORE_FAILURES = {m.strip() for m in PEOPLE_ANNOTATED.keys()}
+IGNORE_FAILURES = set()
+
+path_format = os.path.join(os.path.dirname(PROJECT_ROOT), "leads/pages/*.md")
+
+# TODO fail the test if it's ingored but it's actually passing
+
+
+def get_blockers(content):
+    for line in content.split("\n"):
+        if "blocked" in line:
+            yield line.split(":: ")
+
+
+for file in glob.glob(path_format):
+    person = os.path.basename(file).replace(".md", "")
+    with open(file, "r") as f:
+        content = f.read()
+        print(content)
+        for f in get_blockers(content):
+            if blockers[f[1]]:
+                IGNORE_FAILURES.add(person)

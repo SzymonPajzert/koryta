@@ -8,11 +8,11 @@ import pandas as pd
 
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
-_project_root = os.path.dirname(os.path.dirname(_current_dir))
 
-VERSIONED_DIR = os.path.join(_project_root, "versioned")
-DOWNLOADED_DIR = os.path.join(_project_root, "downloaded")
-TESTS_DIR = os.path.join(_project_root, "tests")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(_current_dir))
+VERSIONED_DIR = os.path.join(PROJECT_ROOT, "versioned")
+DOWNLOADED_DIR = os.path.join(PROJECT_ROOT, "downloaded")
+TESTS_DIR = os.path.join(PROJECT_ROOT, "tests")
 
 HINTS = {
     "versioned/people_wiki.jsonl": "poetry run scrape_wiki",
