@@ -160,12 +160,13 @@ def scrape_rejestrio():
     starters = set(
         KRS(krs)
         for krs in itertools.chain(
-            data.MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs,
+            # data.MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs,
+            # data.SPOLKI_SKARBU_PANSTWA,
+            # data.AMW,
             data.WARSZAWA,
-            data.SPOLKI_SKARBU_PANSTWA,
-            data.AMW,
             data.MALOPOLSKIE,
             data.LODZKIE,
+            data.LUBELSKIE,
         )
     )
     graph = CompanyGraph()
@@ -187,7 +188,8 @@ def scrape_rejestrio():
     parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
     pprint(parent_count.most_common(30))
     urls = list(save_org_connections(to_scrape, map(KRS, data.NAME_MISSING)))
-    print(f"Will cost: {sum(map(lambda x: x[1], urls)) * 0.05} PLN")
+    pprint(urls)
+    print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
     input("Press enter to continue...")
     rejestr = Rejestr()
 
