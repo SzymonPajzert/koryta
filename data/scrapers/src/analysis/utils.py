@@ -101,6 +101,8 @@ def extract_companies(df):
 
 
 def append_nice_history(df):
+    missing_teryt = set()
+
     def nice_history(row):
         actions = []
 
@@ -139,6 +141,9 @@ def append_nice_history(df):
             for e in el["teryt_powiat"]:
                 if e in TERYT:
                     region_name = TERYT[e]
+                else:
+                    missing_teryt.add(e)
+
             text = f"Kandyduje w {el["election_year"]} z list {(el["party"] or "").strip()} w {region_name}"
             actions.append((start_election, text))
 
@@ -175,6 +180,9 @@ def append_nice_history(df):
             "parties_simplified",
         ]
     ] = df[["employment", "elections"]].apply(nice_history, axis=1)
+
+    print(f"Missing teryt: {missing_teryt}")
+
     return df
 
 

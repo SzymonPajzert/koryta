@@ -155,7 +155,7 @@ def scrape_rejestrio():
             data.WARSZAWA,
             data.SPOLKI_SKARBU_PANSTWA,
             data.AMW,
-            data.KRAKOW,
+            data.MALOPOLSKIE,
             data.LODZKIE,
         )
     )
