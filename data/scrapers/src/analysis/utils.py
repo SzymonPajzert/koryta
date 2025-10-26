@@ -105,7 +105,6 @@ def append_nice_history(df):
         actions = []
 
         first_work: date | None = None
-        latest_election: date | None = None
         last_employed: date | None = None
         employed_total = timedelta(days=0)
         parties_simplified = set()
@@ -125,19 +124,17 @@ def append_nice_history(df):
 
         assert first_work is not None
 
+        elections = []
         for el in row["elections"]:
             if el["party"] is not None:
                 party = komitet_to_party.get(el["party"].lower().strip(), None)
                 if party is not None:
                     parties_simplified.add(party)
 
-            start_election: date | None = election_date.get(el["election_year"], None)
-            if start_election is None:
-                start_election = date(year=int(el["election_year"]), month=1, day=1)
-            if latest_election is None or (
-                start_election > latest_election and start_election < first_work
-            ):
-                latest_election = start_election
+            start_election: date = election_date.get(
+                el["election_year"], date(year=int(el["election_year"]), month=1, day=1)
+            )
+            elections.append(start_election)
             region_name = "nieznane"
             for e in el["teryt_powiat"]:
                 if e in TERYT:
@@ -145,6 +142,8 @@ def append_nice_history(df):
             text = f"Kandyduje w {el["election_year"]} z list {(el["party"] or "").strip()} w {region_name}"
             actions.append((start_election, text))
 
+        before_work = [e for e in elections if e < first_work]
+        latest_election = max(before_work, default=min(elections, default=None))
         assert latest_election is not None
 
         actions.sort(key=lambda x: x[0])
