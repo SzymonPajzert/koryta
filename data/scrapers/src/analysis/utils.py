@@ -185,6 +185,7 @@ def append_nice_history(df):
             [
                 history,
                 election_before_work,
+                first_work,
                 last_employed,
                 employed_total,
                 parties_simplified,
@@ -195,6 +196,7 @@ def append_nice_history(df):
         [
             "history",
             "election_before_work",
+            "first_employed",
             "last_employed",
             "employed_total",
             "parties_simplified",
