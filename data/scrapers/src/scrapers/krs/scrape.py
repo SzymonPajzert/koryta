@@ -32,6 +32,10 @@ def save_org_connections(
         # yield (f"https://rejestr.io/api/v2/org/{krs}", 0.05)
     for krs in connections:
         yield (
+            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
+            0,
+        )
+        yield (
             f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=aktualne",
             0.05,
         )
