@@ -11,7 +11,27 @@ MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental m
 EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
 
 krs_companies = versioned.read_jsonl("companies_krs.jsonl")
-company_names = {elt["krs"]: f"{elt["name"]} w {elt["city"]}" for elt in krs_companies}
+company_names_krs = {
+    elt["krs"]: f"{elt["name"]} w {elt["city"]}" for elt in krs_companies
+}
+company_names = {
+    **company_names_krs,
+    # TODO fix the name retrieval
+    "0000017728": "MIEJSKIE PRZEDSIĘBIORSTWO WODOCIĄGÓW I KANALIZACJI W LUBLINIE",
+    "0000025601": "Towarzystwo Budownictwa Społecznego Lublin",
+    "0000045743": "MIEJSKIE PRZEDSIĘBIORSTWO ROBÓT DROGOWYCH Chełm",
+    "0000047164": "Miejskie Przedsiębiorstwo Energetyki Cieplnej Chełm",
+    "0000054479": "Zakład Gospodarki Lokalowej W Zamościu",
+    "0000064144": "Stowarzyszenie Samorządów Powiatu Tomaszowskiego",
+    "0000092480": "PORT LOTNICZY LUBLIN",
+    "0000123412": "Chełmski Park Wodny",
+    "0000147068": "CHEŁMSKIE TOWARZYSTWO BUDOWNICTWA SPOŁECZNEGO",
+    "0000182220": "Chełmskie Linie Autobusowe",
+    "0000218698": "Lubelskie Przedsiębiorstwo Gospodarki Komunalnej",
+    "0000302534": "PRZEDSIĘBIORSTWO KOMUNIKACJI SAMOCHODOWEJ W MIĘDZYRZECU PODLASKIM",
+    "0000335852": "Przedsiębiorstwo Komunikacji Samochodowej W Biłgoraju",
+    "0000359854": "MOTOR LUBLIN",
+}
 
 komitet_to_party = {
     "komitet wyborczy prawo i sprawiedliwość": "PiS",
