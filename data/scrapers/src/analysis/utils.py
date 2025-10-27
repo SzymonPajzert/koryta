@@ -214,7 +214,7 @@ def drop_duplicates(df, *cols):
     return df
 
 
-def read_enriched(filter_region):
+def read_enriched(filter_region: str | None):
     """
     :param: filter_region - region in TERYT 10 code, to filter to
     """
@@ -222,7 +222,7 @@ def read_enriched(filter_region):
 
     # Get people for the given region
     local = matched_all["teryt_wojewodztwo"].apply(
-        lambda row: row is not None and filter_region in row
+        lambda row: row is not None and (filter_region is None or filter_region in row)
     )
 
     # Get people with high enough scores
