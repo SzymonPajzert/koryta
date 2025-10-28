@@ -1,0 +1,22 @@
+- #spółka
+-
+- Źródła:
+	- https://wiadomosci.onet.pl/totalizator-sportowy
+-
+- Dlaczego jest spółką państwową - powstał w 1955 roku by pomóc odbudować nasze stadiony
+  collapsed:: true
+	- Szkoda że teraz pomaga politykom wypchać swoje kieszenie
+	- #video
+	- https://kultura.onet.pl/wiadomosci/totalizator-sportowy-blisko-kultury-narodowej/pedhvss
+	- Ale niby wspiera kulturę
+-
+- Historia
+	- Pierwszy artykuł od Onetu w 2021 roku - https://wiadomosci.onet.pl/lublin/radny-pis-z-dyrektorska-posada-w-panstwowej-spolce/kn4kr9p
+	- Połączone z #R4S w 2023 roku
+	- Wielkie zamieszanie w 2024 - https://wiadomosci.onet.pl/tylko-w-onecie/burza-wokol-totalizatora-sportowego-kazdy-przypadek-jest-analizowany-przez-premiera/fpqv3d4
+		- doświadczeni pracownicy, którzy ubiegali się o te stanowiska, nie zostali nawet zaproszeni na rozmowy
+			- https://wiadomosci.onet.pl/kraj/afera-w-totalizatorze-sportowym-partyjni-dzialacze-nie-zostali-odwolani/m73p2e1
+		- Pozwali dziennikarzy - https://www.onet.pl/informacje/onetwiadomosci/totalizator-sportowy-chce-ukarania-dziennikarzy-onetu-za-pisanie-o-spolce/0857lc2,79cfc278
+-
+- Pablo Morales
+- Pozwali Onet

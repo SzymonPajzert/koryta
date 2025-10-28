@@ -1,0 +1,5 @@
+- Założona przez byłych polityków PiS — byłego rzecznika tej partii Adama Hofmana i Michała Wiórkiewicza, który był asystentem premierów Kazimierza Marcinkiewicza i Jarosława Kaczyńskiego — oraz byłego rzecznika Komendy Głównej Policji Mariusza Sokołowskiego agencja R4S to jeden z niechlubnych symboli rządów Prawa i Sprawiedliwości. A także bezpośredni dowód na zjawisko kapitalizmu politycznego, w którym byli prominentni działacze partii postanowili się urządzić, spieniężając przy okazji swoje polityczne wpływy i kontakty.
+- https://wiadomosci.onet.pl/tylko-w-onecie/ujawniamy-czego-agenci-cba-szukali-w-totalizatorze-sportowym-trop-wiedzie-do-dawnej/832w5pz
+- https://oko.press/hofman-r4-uklad-wroclawski-cba-pis
+-
+- TODO to samo w sobie zasługuje na mapę
