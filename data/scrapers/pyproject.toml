@@ -118,10 +118,14 @@ dependencies = [
     "openpyxl (>=3.1.5,<4.0.0)",
     "nbconvert (>=7.16.6,<8.0.0)",
     "seaborn (>=0.13.2,<0.14.0)",
-    "hide-code (>=0.7.0,<0.8.0)"
+    "hide-code (>=0.7.0,<0.8.0)",
+    "streamlit (>=1.50.0,<2.0.0)",
+    "plotly (>=6.3.1,<7.0.0)",
+    "redis (>=7.0.1,<8.0.0)"
 ]
 
 [project.scripts]
+monitor_scrape_articles = "scrapers.article.crawl_main:monitor"
 scrape_articles = "scrapers.article.crawler:crawl"
 scrape_articles_example = "scrapers.article.extract_example:extract"
 scrape_wiki = "scrapers.wiki.process_articles:main"
