@@ -1,0 +1,8 @@
+services:
+  monitor:
+    enabled: true
+    entrypoint: streamlit run src/scrapers/article/crawl_main.py
+  worker:
+    enabled: true
+  redis:
+    image: "redis:alpine"

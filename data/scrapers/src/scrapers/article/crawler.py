@@ -1,83 +1,43 @@
 import requests
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from dataclasses import dataclass, asdict
+import json
+
 from urllib.parse import urljoin
 from urllib.robotparser import RobotFileParser
 from bs4 import BeautifulSoup
-from zoneinfo import ZoneInfo
 from google.cloud import storage
-import sys, select
-from uuid_extensions import uuid7str
-import copy
-from dataclasses import dataclass
-import duckdb
-from duckdb.typing import VARCHAR
-from stores.duckdb import ducktable, dump_dbs
+
 from util.url import NormalizedParse
 from stores.storage import upload_to_gcs
+from stores.redis import get_redis_client, LOG_KEY, URL_SET_KEY, DOMAIN_TIMES_KEY
 
 
-@ducktable(read=True, name="hostname_config")
-@dataclass
-class HostnameConfig:
-    hostname: str
-    allowed: bool
-    quality: str
-
-    def insert_into(self):
-        pass
-
-
-@ducktable(read=True, name="request_logs")
 @dataclass
 class RequestLog:
-    id: str
-    website_id: str
-    domain: str
     url: str
     time: datetime
     response_code: int
     payload_size_bytes: int
     duration: str
 
-    def insert_into(self):
-        pass
 
-
-@ducktable(read=True, name="website_index")
 @dataclass
 class WebsiteIndex:
     id: str
     url: str
     interesting: bool | None
 
-    def insert_into(self):
-        pass
-
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 storage_client = storage.Client()
-
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
 CRAWL_DELAY_SECONDS = 20
-
-
-def config_from_row(allowed, quality):
-    if allowed:
-        if quality == "good":
-            return "good"
-        return "approved"
-    return "block"
-
-
-hostname_config = {
-    row[0]: config_from_row(row[1], row[2])
-    for row in duckdb.sql("SELECT * FROM hostname_config").fetchall()
-}
-next_request_time = {}
 robot_parsers = {}
-url_to_update = set()
-page_score = dict()
+
+r = get_redis_client()
 
 
 def robot_txt_allowed(url, parsed_url):
@@ -100,105 +60,92 @@ def robot_txt_allowed(url, parsed_url):
     return robot_parsers[parsed_url.domain].can_fetch(HEADERS["User-Agent"], url)
 
 
-def add_crawl_record(uid, parsed, url, response_code, payload_size_bytes, duration):
+def add_crawl_record(url, response_code, payload_size_bytes, duration):
     """Updates the timestamp for a successfully crawled URL in the sites file."""
-    RequestLog(
-        uuid7str(),
-        uid,
-        parsed.hostname_normalized,
+    log_record = RequestLog(
         url,
         datetime.now(warsaw_tz),
         response_code,
         payload_size_bytes,
         duration,
-    ).insert_into()
+    )
+    json_log = json.dumps(asdict(log_record))
+    # Log to Redis List using RPUSH
+    r.rpush(LOG_KEY, json_log)
 
 
-def input_with_timeout(msg, timeout=10):
-    print(msg)
-    sys.stdout.flush()
-    i, o, e = select.select([sys.stdin], [], [], timeout)
-
-    if i:
-        return sys.stdin.readline().strip()
-    else:
+async def get_next_url():
+    all_urls = r.smembers(URL_SET_KEY)
+    if not all_urls:
         return None
 
+    current_time = time.time()
+    assert isinstance(all_urls, set)
+    for url in all_urls:
+        domain = NormalizedParse.parse(url).domain
+        # ZSCORE retrieves the last visited time (score) for the domain
+        last_visit_time_str = await r.zscore(DOMAIN_TIMES_KEY, domain)
 
-def ready_to_crawl(parsed):
-    domain = parsed.hostname_normalized
-    result = True
-    if domain in next_request_time:
-        result = time.time() > next_request_time[domain]
+        # If domain has never been visited (last_visit_time is None) OR
+        # If the cool-down period has elapsed
+        if (last_visit_time_str is None) or (
+            current_time - float(last_visit_time_str) > CRAWL_DELAY_SECONDS
+        ):
 
-    if result:
-        next_request_time[domain] = time.time() + CRAWL_DELAY_SECONDS
-    return result
+            # Found a valid URL
+            # Prevent other processes, from getting this domain
+            r.zadd(DOMAIN_TIMES_KEY, {domain: current_time})
+            # Remove the URL from the set and return
+            r.srem(URL_SET_KEY, url)
+            return url
 
-
-def parse_hostname(url: str) -> str:
-    return NormalizedParse.parse(url).hostname_normalized
-
-
-def uuid7():
-    return uuid7str()
+    return None
 
 
-duckdb.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore
-duckdb.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
+def find_links(soup):
+    for link in soup.find_all("a", href=True):
+        absolute_link = urljoin(current_url, link["href"])  # type: ignore
+        absolute_link = absolute_link.split("#")[0]  # Remove fragment
+        stop = False
+        for prefix in ["javascript", "mailto", "tel"]:
+            if absolute_link.startswith(prefix):
+                stop = True
+        if stop:
+            continue
+        absolute_link = absolute_link.rstrip("/")
+        if not robot_txt_allowed(absolute_link, NormalizedParse.parse(absolute_link)):
+            continue
+        yield
 
 
-# --- Main Crawler Logic ---
-def crawl_website(uid, current_url):
-    parsed = NormalizedParse.parse(current_url)
-    if not robot_txt_allowed(current_url, parsed):
-        print(f"Skipping (disallowed by robots.txt): {current_url}")
-        return
-    if not ready_to_crawl(parsed):
-        return
-
+def crawl_website(url: NormalizedParse):
     try:
-        print(f"Crawling: {current_url}")
+        print(f"Crawling: {url}")
         started = datetime.now(warsaw_tz)
-        response = requests.get(current_url, headers=HEADERS, timeout=10)
+        response = requests.get(url.url, headers=HEADERS, timeout=10)
 
         # Check if the request was successful (status code 200)
         if response.status_code == 200:
             pages_to_visit = set()
-            upload_to_gcs(parsed, response.text, "text/html")
+            upload_to_gcs(url.extend("scraped.html"), response.text, "text/html")
 
             for parser in ["html.parser", "lxml", "html5lib"]:
-                copy_parsed = copy.deepcopy(parsed)
                 soup = BeautifulSoup(response.text, parser)
-                copy_parsed.path += f".{parser}.txt"
-                upload_to_gcs(copy_parsed, soup.get_text(), "text/plain")
+                upload_to_gcs(
+                    url.extend(f"{parser}.txt"), soup.get_text(), "text/plain"
+                )
 
-                for link in soup.find_all("a", href=True):
-                    absolute_link = urljoin(current_url, link["href"])  # type: ignore
-                    absolute_link = absolute_link.split("#")[0]  # Remove fragment
-                    stop = False
-                    for prefix in ["javascript", "mailto", "tel"]:
-                        if absolute_link.startswith(prefix):
-                            stop = True
-                    if stop:
-                        continue
-                    absolute_link = absolute_link.rstrip("/")
-                    pages_to_visit.add(absolute_link)
+                pages_to_visit.update(find_links(soup))
 
-            pages_to_visit.difference_update(
-                row[0] for row in duckdb.sql("SELECT url FROM website_index").fetchall()
-            )
             if len(pages_to_visit) > 0:
                 for url in pages_to_visit:
-                    WebsiteIndex(uuid7str(), current_url, None).insert_into()
+                    r.sadd(URL_SET_KEY, url.url)
 
         else:
             print(f"  -> Failed to retrieve page: Status code {response.status_code}")
 
         add_crawl_record(
-            uid,
-            parsed,
-            current_url,
+            url,
             response.status_code,
             len(response.content),
             str(datetime.now(warsaw_tz) - started),
@@ -208,28 +155,10 @@ def crawl_website(uid, current_url):
         print(f"  -> An error occurred: {e}")
 
 
-def crawl():
-    try:
-        pages_to_visit_query = duckdb.sql(
-            """
-            SELECT id, url, interesting
-            FROM website_index JOIN hostname_config
-                ON hostname_config.hostname == parse_hostname(website_index.url)
-            WHERE
-                id NOT IN (SELECT website_id FROM request_logs)
-                AND url NOT IN (SELECT url FROM request_logs)
-                AND quality == 'good'
-            ORDER BY (case when interesting then 1 when interesting is null then 2 else 3 end) asc
-            """
-        )
-
-        pages_to_visit_list = pages_to_visit_query.fetchall()
-
-        print(len(pages_to_visit_list))
-        last_save = datetime.now(warsaw_tz)
-        for row in pages_to_visit_list:
-            crawl_website(row[0], row[1])
-            if datetime.now(warsaw_tz) - last_save > timedelta(minutes=2):
-                dump_dbs()
-    finally:
-        dump_dbs()
+async def crawl():
+    while True:
+        url = await get_next_url()
+        if not url:
+            time.sleep(CRAWL_DELAY_SECONDS)
+            continue
+        crawl_website(url)
