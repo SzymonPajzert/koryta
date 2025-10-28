@@ -125,9 +125,12 @@ dependencies = [
 ]
 
 [project.scripts]
-monitor_scrape_articles = "scrapers.article.crawl_main:monitor"
+articles_scraper_manage = "scrapers.article.crawl_main:monitor"
+articles_hostnames = "scrapers.article.hostnames:get_domains"
 scrape_articles = "scrapers.article.crawler:crawl"
 scrape_articles_example = "scrapers.article.extract_example:extract"
+
+
 scrape_wiki = "scrapers.wiki.process_articles:main"
 scrape_pkw = "scrapers.pkw.process:main"
 scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
