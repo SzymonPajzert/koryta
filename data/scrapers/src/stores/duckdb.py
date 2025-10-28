@@ -11,6 +11,19 @@ from datetime import datetime
 dbs = []
 used = dict()
 
+sql_type = {
+    int: "INTEGER",
+    str: "VARCHAR",
+    str | None: "VARCHAR",
+    int | None: "INTEGER",
+    bool: "BOOLEAN",
+    bool | None: "BOOLEAN",
+    datetime: "TIMESTAMP",
+    datetime | None: "TIMESTAMP",
+    list[str]: "VARCHAR[]",
+    PkwFormat: "VARCHAR",
+}
+
 
 def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
     if tables_to_dump is None:
@@ -36,21 +49,16 @@ def always_export(func):
     return wrapper
 
 
+def read_table(table_name: str):
+    duckdb.execute(
+        f"""CREATE TABLE {table_name} AS
+        SELECT *
+        FROM read_json('{os.path.join(VERSIONED_DIR, table_name +'.jsonl')}')"""
+    )
+
+
 def ducktable(read=False, name=None, excluded_fields=set()):
     def wrapper(cls):
-        sql_type = {
-            int: "INTEGER",
-            str: "VARCHAR",
-            str | None: "VARCHAR",
-            int | None: "INTEGER",
-            bool: "BOOLEAN",
-            bool | None: "BOOLEAN",
-            datetime: "TIMESTAMP",
-            datetime | None: "TIMESTAMP",
-            list[str]: "VARCHAR[]",
-            PkwFormat: "VARCHAR",
-        }
-
         clsfields = [
             field for field in fields(cls) if field.name not in excluded_fields
         ]
@@ -62,11 +70,7 @@ def ducktable(read=False, name=None, excluded_fields=set()):
         table_fields = [f"{field.name} {sql_type[field.type]}" for field in clsfields]
         if read:
             print(f"Reading table {table_name}...")
-            duckdb.execute(
-                f"""CREATE TABLE {table_name} AS
-                SELECT *
-                FROM read_json('{os.path.join(VERSIONED_DIR, table_name +'.jsonl')}')"""
-            )
+            read_table(table_name)
             print(f"Table {table_name} read.")
         else:
             duckdb.execute(f"CREATE TABLE {table_name} ({", ".join(table_fields)})")
