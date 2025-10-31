@@ -10,6 +10,15 @@ from util.lists import IGNORE_FAILURES
 SCORE_CUTOFF = 10.5
 
 
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_setup(item):
+    skip_funcs = [
+        mark.args[0] for mark in item.iter_markers(name="parametrize_skip_if")
+    ]
+    if any(f(**item.callspec.params) for f in skip_funcs):
+        pytest.skip()
+
+
 df_all = find_all_matches(con)
 df = df_all[df_all["overall_score"] > SCORE_CUTOFF]
 

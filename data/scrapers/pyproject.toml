@@ -149,3 +149,8 @@ build-backend = "poetry.core.masonry.api"
 dev = [
     "jupyterlab (>=4.4.9,<5.0.0)"
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "parametrize_skip_if",
+]
