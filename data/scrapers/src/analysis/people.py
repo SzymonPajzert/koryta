@@ -4,6 +4,7 @@ import math
 import os
 
 from util.download import FileSource
+from analysis.utils import read_enriched
 from util.config import versioned, downloaded
 
 pd.set_option("display.max_rows", None)
@@ -15,18 +16,19 @@ krs_file = versioned.assert_path("people_krs.jsonl")
 wiki_file = versioned.assert_path("people_wiki.jsonl")
 pkw_file = versioned.assert_path("people_pkw.jsonl")
 koryta_file = versioned.assert_path("people_koryta.jsonl")
+matched_file = versioned.get_path("people_matched.parquet")
 
 
-def find_all_matches(con):
-    df_path = versioned.get_path("matched.parquet")
+def find_all_matches(con, force=False):
     df = None  # TODO Do I need it for visibility?
-    if os.path.exists(df_path):
-        print(f"Reading memoized {df_path}")
-        df = pd.read_parquet(df_path)
-    else:
+    if not os.path.exists(matched_file) or force:
         df = _find_all_matches(con)
-        print(f"Got results, saving to {df_path}")
-        df.to_parquet(df_path)
+        df = read_enriched(df)
+        print(f"Got results, saving to {matched_file}")
+        df.to_parquet(matched_file)
+    else:
+        print(f"Reading memoized {matched_file}")
+        df = pd.read_parquet(matched_file)
     return df
 
 
@@ -102,7 +104,7 @@ con.execute(
 
 con.execute(
     f"""CREATE TABLE first_name_freq AS
-    WITH raw_names AS (
+    WITH raw_names_split AS (
         SELECT
             lower("IMIĘ_PIERWSZE") as first_name,
             "LICZBA_WYSTĄPIEŃ" as count
@@ -112,6 +114,13 @@ con.execute(
             lower("IMIĘ_PIERWSZE") as first_name,
             "LICZBA_WYSTĄPIEŃ" as count
         FROM read_csv('{downloaded.assert_path(sources[3].filename)}')
+    ),
+    raw_names AS (
+        SELECT
+            first_name,
+            SUM(count) as count
+        FROM raw_names_split
+        GROUP BY first_name
     ),
     total AS (
         SELECT SUM(count) as total_count FROM raw_names
@@ -200,7 +209,15 @@ def create_people_table(
     )
 
 
+initialized_tables = False
+
+
 def init_tables():
+    global initialized_tables
+    if initialized_tables:
+        return
+    initialized_tables = True
+
     con.execute(
         f"""
     CREATE OR REPLACE TABLE krs_people_raw AS
@@ -442,6 +459,7 @@ def _find_all_matches(con):
 
 
 def main():
+    init_tables()
     print("--- Imported table sizes ---")
     for table in [
         "krs_people",
@@ -457,7 +475,7 @@ def main():
 
     print("--- Overlaps between all three sources (KRS, Wiki, PKW) ---")
 
-    df = find_all_matches(con)
+    df = find_all_matches(con, force=True)
 
     non_duplicates = len(
         df[df["overall_score"] > 10.5].drop_duplicates(
@@ -468,9 +486,7 @@ def main():
         f"Rows with no duplicates in krs_name, pkw_name, and wiki_name: {non_duplicates}"
     )
 
-    print(df)
+    with open(versioned.get_path("analysis.txt"), "w") as f:
+        f.write(df.to_string())
+
     con.close()
-
-
-if __name__ == "__main__":
-    main()

@@ -2,6 +2,7 @@ from collections import Counter
 from datetime import timedelta, date
 
 import pandas as pd
+import numpy as np
 
 from util.config import versioned
 from util.polish import TERYT
@@ -120,6 +121,12 @@ def extract_companies(df):
     ]
 
 
+def empty_list_if_nan(value):
+    if isinstance(value, np.ndarray):
+        return value
+    return []
+
+
 def append_nice_history(df):
     missing_teryt = set()
 
@@ -131,7 +138,7 @@ def append_nice_history(df):
         employed_total = timedelta(days=0)
         parties_simplified = set()
 
-        for emp in row["employment"]:
+        for emp in empty_list_if_nan(row["employment"]):
             duration = timedelta(days=365 * float(emp["employed_for"]))
             start_employed: date = emp["employed_end"] - duration
             if first_work is None or start_employed < first_work:
@@ -144,10 +151,8 @@ def append_nice_history(df):
             text = f"Pracuje od {start_employed} do {emp["employed_end"]} w {company_names.get(emp["employed_krs"], emp["employed_krs"])}"
             actions.append((start_employed, text))
 
-        assert first_work is not None
-
         elections = []
-        for el in row["elections"]:
+        for el in empty_list_if_nan(row["elections"]):
             if el["party"] is not None:
                 party = komitet_to_party.get(el["party"].lower().strip(), None)
                 if party is not None:
@@ -169,7 +174,6 @@ def append_nice_history(df):
 
         before_work = [e for e in elections if e < first_work]
         latest_election = max(before_work, default=min(elections, default=None))
-        assert latest_election is not None
 
         actions.sort(key=lambda x: x[0])
         history = ""
@@ -177,9 +181,9 @@ def append_nice_history(df):
             action = a[1]
             history += f"{action}" + "\n"
 
-        election_before_work = (
-            first_work - latest_election
-        )  # if latest_election < first_work else None
+        election_before_work = None
+        if first_work is not None and latest_election is not None:
+            election_before_work = first_work - latest_election
 
         return pd.Series(
             [
@@ -214,16 +218,14 @@ def drop_duplicates(df, *cols):
     return df
 
 
-def read_enriched(filter_region: str | None):
-    """
-    :param: filter_region - region in TERYT 10 code, to filter to
-    """
-    matched_all = versioned.read_parquet("matched.parquet")
+def filter_local_good(matched_all, filter_region: str | None):
+    def check_region(row_regions):
+        if filter_region is None:
+            return True
+        return row_regions is not None and filter_region in row_regions
 
     # Get people for the given region
-    local = matched_all["teryt_wojewodztwo"].apply(
-        lambda row: row is not None and (filter_region is None or filter_region in row)
-    )
+    local = matched_all["teryt_wojewodztwo"].apply(check_region)
 
     # Get people with high enough scores
     good_score = matched_all["overall_score"] > EXPECTED_SCORE
@@ -237,10 +239,16 @@ def read_enriched(filter_region: str | None):
     local_good = matched_all[good_score & local & (high_probability | has_wiki)]
 
     # Filter out duplicates
-    local_good = drop_duplicates(local_good, "krs_name", "pkw_name", "wiki_name")
+    return drop_duplicates(local_good, "krs_name", "pkw_name", "wiki_name")
+
+
+def read_enriched(matched_all):
+    """
+    :param: filter_region - region in TERYT 10 code, to filter to
+    """
 
     # Add derived fields
-    local_good = append_nice_history(local_good)
+    local_good = append_nice_history(matched_all)
 
     local_good = local_good.sort_values(by="election_before_work").reset_index()
 
