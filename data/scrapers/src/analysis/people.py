@@ -17,6 +17,19 @@ pkw_file = versioned.assert_path("people_pkw.jsonl")
 koryta_file = versioned.assert_path("people_koryta.jsonl")
 
 
+def find_all_matches(con):
+    df_path = versioned.get_path("matched.parquet")
+    df = None  # TODO Do I need it for visibility?
+    if os.path.exists(df_path):
+        print(f"Reading memoized {df_path}")
+        df = pd.read_parquet(df_path)
+    else:
+        df = _find_all_matches(con)
+        print(f"Got results, saving to {df_path}")
+        df.to_parquet(df_path)
+    return df
+
+
 con = duckdb.connect(database=":memory:")
 
 con.execute(
@@ -187,123 +200,128 @@ def create_people_table(
     )
 
 
-con.execute(
-    f"""
-CREATE OR REPLACE TABLE krs_people_raw AS
-SELECT
-    lower(first_name) as first_name,
-    lower(last_name) as last_name,
-    CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
-    CAST(birth_date AS VARCHAR) as birth_date,
-    employed_end,
-    employed_krs,
-    employed_for,
-    id as rejestrio_id,
-    full_name
-FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
-WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
-{SAMPLE_FILTER}
-"""
-)
+def init_tables():
+    con.execute(
+        f"""
+    CREATE OR REPLACE TABLE krs_people_raw AS
+    SELECT
+        lower(first_name) as first_name,
+        lower(last_name) as last_name,
+        CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
+        CAST(birth_date AS VARCHAR) as birth_date,
+        employed_start,
+        employed_end,
+        employed_krs,
+        employed_for,
+        id as rejestrio_id,
+        full_name
+    FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
+    WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
+    {SAMPLE_FILTER}
+    """
+    )
 
-create_people_table(
-    "krs_people",
-    to_list=["rejestrio_id", "full_name"],
-    any_vals=["birth_date"],
-    employment={
-        "employed_krs": "employed_krs",
-        "employed_end": "employed_end",
-        "employed_for": "employed_for",
-    },
-)
+    create_people_table(
+        "krs_people",
+        to_list=["rejestrio_id", "full_name"],
+        any_vals=["birth_date"],
+        employment={
+            "employed_krs": "employed_krs",
+            "employed_end": "employed_end",
+            "employed_for": "employed_for",
+            "employed_start": "employed_start",
+        },
+    )
 
-# TODO the name logic is wrong for wiki, try matching on the full name
-con.execute(
-    f"""
-CREATE OR REPLACE TABLE wiki_people_raw AS
-SELECT
-    lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
-    lower(trim(regexp_extract(full_name, '(\\S+)$', 1))) as last_name,
-    birth_year,
-    birth_iso8601 AS birth_date,
-    CASE
-        WHEN infobox = 'Polityk' THEN 'Polityk'
-        WHEN infobox = 'Biogram' THEN 'Biogram'
-        WHEN infobox = 'Naukowiec' THEN 'Naukowiec'
-        ELSE NULL    
-    END as is_polityk,
-    atan(content_score) AS wiki_score,
-    full_name
-FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
-WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
-{SAMPLE_FILTER}
-"""
-)
+    # TODO the name logic is wrong for wiki, try matching on the full name
+    con.execute(
+        f"""
+    CREATE OR REPLACE TABLE wiki_people_raw AS
+    SELECT
+        lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
+        lower(trim(regexp_extract(full_name, '(\\S+)$', 1))) as last_name,
+        birth_year,
+        birth_iso8601 AS birth_date,
+        CASE
+            WHEN infobox = 'Polityk' THEN 'Polityk'
+            WHEN infobox = 'Biogram' THEN 'Biogram'
+            WHEN infobox = 'Naukowiec' THEN 'Naukowiec'
+            ELSE NULL    
+        END as is_polityk,
+        atan(content_score) AS wiki_score,
+        full_name
+    FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
+    WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
+    {SAMPLE_FILTER}
+    """
+    )
 
-create_people_table(
-    "wiki_people",
-    any_vals=["is_polityk", "full_name", "wiki_score", "birth_date"],
-)
+    create_people_table(
+        "wiki_people",
+        any_vals=["is_polityk", "full_name", "wiki_score", "birth_date"],
+    )
 
-con.execute(
-    f"""
-CREATE OR REPLACE TABLE pkw_people_raw AS
-SELECT DISTINCT
-    lower(first_name) as first_name,
-    lower(last_name) as last_name,
-    lower(middle_name) as second_name,
-    double_metaphone(last_name) as metaphone,
-    list_distinct([
-        teryt_candidacy[:2],
-        teryt_living[:2],
-    ]) as teryt_wojewodztwo,
-    list_distinct([
-        teryt_candidacy[:4],
-        teryt_living[:4],
-    ]) as teryt_powiat,
-    birth_year,
-    pkw_name as full_name,
-    party,
-    election_year
-FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
-WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
-{SAMPLE_FILTER}
-"""
-)
+    con.execute(
+        f"""
+    CREATE OR REPLACE TABLE pkw_people_raw AS
+    SELECT DISTINCT
+        lower(first_name) as first_name,
+        lower(last_name) as last_name,
+        lower(middle_name) as second_name,
+        double_metaphone(last_name) as metaphone,
+        list_distinct([
+            teryt_candidacy[:2],
+            teryt_living[:2],
+        ]) as teryt_wojewodztwo,
+        list_distinct([
+            teryt_candidacy[:4],
+            teryt_living[:4],
+        ]) as teryt_powiat,
+        birth_year,
+        pkw_name as full_name,
+        party,
+        election_year
+    FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
+    WHERE birth_year IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
+    {SAMPLE_FILTER}
+    """
+    )
 
-create_people_table(
-    "pkw_people",
-    to_list=["full_name"],
-    flatten_list=["teryt_wojewodztwo", "teryt_powiat"],
-    elections={
-        "party": "party",
-        "election_year": "election_year",
-        "teryt_wojewodztwo": "teryt_wojewodztwo",
-        "teryt_powiat": "teryt_powiat",
-    },
-)
+    create_people_table(
+        "pkw_people",
+        to_list=["full_name"],
+        flatten_list=["teryt_wojewodztwo", "teryt_powiat"],
+        elections={
+            "party": "party",
+            "election_year": "election_year",
+            "teryt_wojewodztwo": "teryt_wojewodztwo",
+            "teryt_powiat": "teryt_powiat",
+        },
+    )
 
-con.execute(
-    f"""
-CREATE OR REPLACE TABLE koryta_people AS
--- koryta_people lacks birth_year, so we can't use it as a base for joining with others on birth_year.
--- We will use it for enrichment if we can parse first/last names.
-SELECT DISTINCT
-    lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
-    lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
-    double_metaphone(last_name) as metaphone,
-    id as koryta_id,
-    full_name
-FROM read_json_auto('{koryta_file}', format='newline_delimited', auto_detect=true)
-WHERE full_name IS NOT NULL
-"""
-)
+    con.execute(
+        f"""
+    CREATE OR REPLACE TABLE koryta_people AS
+    -- koryta_people lacks birth_year, so we can't use it as a base for joining with others on birth_year.
+    -- We will use it for enrichment if we can parse first/last names.
+    SELECT DISTINCT
+        lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
+        lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as last_name,
+        double_metaphone(last_name) as metaphone,
+        id as koryta_id,
+        full_name
+    FROM read_json_auto('{koryta_file}', format='newline_delimited', auto_detect=true)
+    WHERE full_name IS NOT NULL
+    """
+    )
 
 
 # TODO Bonus points if wiki people has polityk infobox
 
 
 def _find_all_matches(con):
+    init_tables()
+
     query = f"""
     WITH krs_pkw AS (
         SELECT
@@ -420,19 +438,6 @@ def _find_all_matches(con):
     df = con.execute(query).df()
     if df.empty:
         raise Exception("No matches found with the current criteria.")
-    return df
-
-
-def find_all_matches(con):
-    df_path = versioned.get_path("matched.parquet")
-    df = None  # TODO Do I need it for visibility?
-    if os.path.exists(df_path):
-        print(f"Reading memoized {df_path}")
-        df = pd.read_parquet(df_path)
-    else:
-        df = _find_all_matches(con)
-        print(f"Got results, saving to {df_path}")
-        df.to_parquet(df_path)
     return df
 
 
