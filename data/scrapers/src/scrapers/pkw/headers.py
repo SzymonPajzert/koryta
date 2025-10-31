@@ -1,14 +1,30 @@
 from dataclasses import dataclass
 import typing
+from typing import Any, Never
+
+from util.polish import cities_to_teryt
+from scrapers.pkw.elections import ElectionType
+from scrapers.pkw.okregi import voting_district_to_city
 
 
 @dataclass
 class SetField:
     name: str
-    processor: typing.Callable[[str], str] = lambda x: x
+    processor: typing.Callable[[str, Any], str] = lambda x, _: x
+    skippable: bool = False
 
 
-def parse_sex(s: str) -> str:
+@dataclass
+class ElectionContext:
+    year: int
+    election_type: ElectionType
+
+
+def const_processor(value: str) -> typing.Callable[[str, Any], str]:
+    return lambda _0, _1: value
+
+
+def parse_sex(s: str, _: Never) -> str:
     match s:
         case "K":
             return "F"
@@ -22,7 +38,7 @@ def parse_sex(s: str) -> str:
     raise ValueError(f"Unknown sex: {s}")
 
 
-def parse_yes_no(s: str) -> str:
+def parse_yes_no(s: str, _: Never) -> str:
     if s != s:
         return "FALSE"
 
@@ -45,7 +61,33 @@ def parse_yes_no(s: str) -> str:
     raise ValueError(f"Unknown bool: {s}")
 
 
-CSV_HEADERS = {
+def lookup_teryt_from_city(city: str, _: None) -> str:
+    # Remove trailing roman numerals, e.g. Warszawa II
+    city = city.rstrip("I").rstrip()
+    try:
+        return cities_to_teryt[city][:2]
+    except KeyError:
+        raise ValueError(f"Unknown voting district: {city}")
+
+
+def lookup_teryt(s: str, context: ElectionContext) -> str:
+    if context.election_type in [ElectionType.SAMORZADOWE, ElectionType.EUROPARLAMENT]:
+        return ""  # We don't support looking up for samorządowe
+    year = context.year
+    if year < 2000:
+        return ""  # Bigger than wojs
+    if year == 2005:
+        # TODO probably they can be set once after 2001
+        # https://pl.wikipedia.org/wiki/Okr%C4%99g_wyborczy_nr_1_do_Sejmu_Rzeczypospolitej_Polskiej
+        year = 2007
+    try:
+        mapping = voting_district_to_city[year, context.election_type]
+    except KeyError:
+        raise ValueError(f"Unknown election: {context.year} {context.election_type}")
+    return lookup_teryt_from_city(str(mapping[int(s)]), None)
+
+
+CSV_HEADERS: dict[str, SetField | None] = {
     'Głosy\n"przeciw"': None,
     'Głosy\n"za"': None,
     'Głosy\n"za"\'': None,
@@ -89,7 +131,7 @@ CSV_HEADERS = {
     "Dane Wiek": SetField("age"),
     "Data\nwyboru II tura": None,
     "Drugie imię": SetField("middle_name"),
-    "Dzielnica": SetField("position", processor=lambda x: "Rada dzielnicy"),
+    "Dzielnica": SetField("position", const_processor("Rada dzielnicy")),
     "Frekw.": None,
     "Glosy": None,
     "Gł. bez wyb.": None,
@@ -202,9 +244,9 @@ CSV_HEADERS = {
     "Nr listy": None,
     "Nr listy": None,
     "Nr na liście\noglnp.": None,
-    "Nr okr.": None,
-    "Nr okr.": None,
-    "Nr okręgu": None,
+    "Nr okr.": SetField("teryt_candidacy", lookup_teryt, True),
+    "Nr okr.": SetField("teryt_candidacy", lookup_teryt, True),
+    "Nr okręgu": SetField("teryt_candidacy", lookup_teryt, True),
     "Nr poz.": None,
     "Nr pozycji": None,
     "Nr woj.": None,
@@ -259,12 +301,12 @@ CSV_HEADERS = {
     "Rada TERYT": SetField("teryt_candidacy"),
     "Rada": None,
     "Rodzaj\ngminy": None,
-    "Sejmik": SetField("position", processor=lambda x: "Rada sejmiku"),
-    "Siedziba \nOKW": None,
-    "Siedziba OKW": None,
-    "Siedziba OKW": None,
-    "Siedziba": None,
-    "Siedziba\nOKW": None,
+    "Sejmik": SetField("position", const_processor("Rada sejmiku")),
+    # We're skipping Siedziba, because for some of them, TERYT is set instead
+    "Siedziba \nOKW": SetField("teryt_candidacy", lookup_teryt_from_city, True),
+    "Siedziba OKW": SetField("teryt_candidacy", lookup_teryt_from_city, True),
+    "Siedziba": SetField("teryt_candidacy", lookup_teryt_from_city, True),
+    "Siedziba\nOKW": SetField("teryt_candidacy", lookup_teryt_from_city, True),
     "Skrót nazwy komitetu": SetField("party"),
     "Sygnatura": None,
     "Sygnatura": None,

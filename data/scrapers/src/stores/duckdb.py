@@ -29,6 +29,7 @@ def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
     if tables_to_dump is None:
         tables_to_dump = {db: [] for db in dbs}
     for db, sort in tables_to_dump.items():
+        print(f"Dumping {db}...")
         if not used.get(db, False):
             continue
         file_path = os.path.join(VERSIONED_DIR, f"{db}.jsonl")

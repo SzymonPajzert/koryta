@@ -10,6 +10,7 @@ from zipfile import ZipFile
 
 from util.polish import PkwFormat
 from util.download import FileSource
+from scrapers.pkw.elections import ElectionType
 
 
 import fnmatch
@@ -148,6 +149,10 @@ class InputSource:
     extractor: Extractor
     year: int
     name_format: PkwFormat
+    election_type: ElectionType
+
+    def __str__(self) -> str:
+        return f"{self.year} {self.election_type}"
 
 
 election_date = {
@@ -194,6 +199,7 @@ for code in teryt_codes:
             ZipExtractor(f"{code}-kandydaci_rady.csv"),
             2010,
             PkwFormat.Last_First,
+            ElectionType.SAMORZADOWE,
         )
     )
     sources.append(
@@ -205,6 +211,7 @@ for code in teryt_codes:
             ZipExtractor(f"{code}-kandydaci_urzad.csv"),
             2010,
             PkwFormat.Last_First,
+            ElectionType.SAMORZADOWE,
         )
     )
 sources.extend(
@@ -220,6 +227,7 @@ sources.extend(
             ),
             2018,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -229,6 +237,7 @@ sources.extend(
             XlsExtractor("kandydaci_SJM.xls", header_rows=1, skip_rows=1),
             2007,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -238,6 +247,7 @@ sources.extend(
             XlsExtractor("kandydaci_SNT.xls", header_rows=1, skip_rows=1),
             2007,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -247,6 +257,7 @@ sources.extend(
             ZipExtractor("kandydaci_sejm.csv"),
             2011,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -256,6 +267,7 @@ sources.extend(
             ZipExtractor("kandydaci_senat.csv"),
             2011,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -265,6 +277,7 @@ sources.extend(
             ZipExtractor("kandydaci_sejm_utf8.csv"),
             2023,
             PkwFormat.First_LAST,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -274,6 +287,7 @@ sources.extend(
             ZipExtractor("kandydaci_senat_utf8.csv"),
             2023,
             PkwFormat.First_LAST,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -286,6 +300,7 @@ sources.extend(
             ),
             2018,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -295,6 +310,7 @@ sources.extend(
             ZipExtractor("kandydaci_sejm.csv"),
             2019,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -304,6 +320,7 @@ sources.extend(
             ZipExtractor("kandydaci_senat.csv"),
             2019,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -313,6 +330,7 @@ sources.extend(
             ZipExtractor("kandydaci.csv"),
             2019,
             PkwFormat.UNKNOWN,
+            ElectionType.EUROPARLAMENT,
         ),
         InputSource(
             FileSource(
@@ -321,6 +339,7 @@ sources.extend(
             ZipExtractor("kandydaci_sejmiki_wojewodztw_utf8.csv"),
             2024,
             PkwFormat.LAST_First,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
@@ -330,6 +349,7 @@ sources.extend(
             ),
             2015,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource("https://parlament2015.pkw.gov.pl/kandydaci.zip"),
@@ -339,6 +359,7 @@ sources.extend(
             ),
             2015,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -347,6 +368,7 @@ sources.extend(
             XlsExtractor("samo2014_kandydaci_na_WBP.xls", header_rows=2),
             2014,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -355,6 +377,7 @@ sources.extend(
             XlsExtractor("1486393038_kandydaci_do_rad_2014xlsx.xlsx", header_rows=1),
             2014,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -363,131 +386,41 @@ sources.extend(
             XlsExtractor("wbp-wybrani.xls", header_rows=2),
             2006,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
+    ]
+)
+
+for woj in [
+    "dolnoslaskie",
+    "kujawsko_pomorskie",
+    "lubelskie",
+    "lubuskie",
+    "lodzkie",
+    "malopolskie",
+    "mazowieckie",
+    "opolskie",
+    "podkarpackie",
+    "podlaskie",
+    "pomorskie",
+    "slaskie",
+    "swietokrzyskie",
+    "warminsko_mazurskie",
+    "wielkopolskie",
+    "zachodniopomorskie",
+]:
+    sources.append(
         InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/dolnoslaskie.xls"
-            ),
-            XlsExtractor("dolnoslaskie.xls", header_rows=2),
+            FileSource(f"https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/{woj}.xls"),
+            XlsExtractor(f"{woj}.xls", header_rows=2),
             2006,
             PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/kujawsko_pomorskie.xls"
-            ),
-            XlsExtractor("kujawsko_pomorskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lubelskie.xls"
-            ),
-            XlsExtractor("lubelskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lubuskie.xls"
-            ),
-            XlsExtractor("lubuskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/lodzkie.xls"),
-            XlsExtractor("lodzkie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/malopolskie.xls"
-            ),
-            XlsExtractor("malopolskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/mazowieckie.xls"
-            ),
-            XlsExtractor("mazowieckie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/opolskie.xls"
-            ),
-            XlsExtractor("opolskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/podkarpackie.xls"
-            ),
-            XlsExtractor("podkarpackie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/podlaskie.xls"
-            ),
-            XlsExtractor("podlaskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/pomorskie.xls"
-            ),
-            XlsExtractor("pomorskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource("https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/slaskie.xls"),
-            XlsExtractor("slaskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/swietokrzyskie.xls"
-            ),
-            XlsExtractor("swietokrzyskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/warminsko_mazurskie.xls"
-            ),
-            XlsExtractor("warminsko_mazurskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/wielkopolskie.xls"
-            ),
-            XlsExtractor("wielkopolskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
-        InputSource(
-            FileSource(
-                "https://wybory2006.pkw.gov.pl/kbw/cache/doc/d/ark/zachodniopomorskie.xls"
-            ),
-            XlsExtractor("zachodniopomorskie.xls", header_rows=2),
-            2006,
-            PkwFormat.UNKNOWN,
-        ),
+            ElectionType.SAMORZADOWE,
+        )
+    )
+
+sources.extend(
+    [
         InputSource(
             FileSource(
                 "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_rady_powiatow_csv.zip"
@@ -495,6 +428,7 @@ sources.extend(
             ZipExtractor("kandydaci_rady_powiatow_utf8.csv"),
             2024,
             PkwFormat.LAST_First,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -503,6 +437,7 @@ sources.extend(
             ZipExtractor("kandydaci_rady_gmin_powyzej_20k_utf8.csv"),
             2024,
             PkwFormat.LAST_First,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -511,6 +446,7 @@ sources.extend(
             ZipExtractor("kandydaci_rady_gmin_do_20k_utf8.csv"),
             2024,
             PkwFormat.LAST_First,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -519,6 +455,7 @@ sources.extend(
             ZipExtractor("kandydaci_rady_dzielnic_utf8.csv"),
             2024,
             PkwFormat.LAST_First,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -527,6 +464,7 @@ sources.extend(
             ZipExtractor("kandydaci_wbp_utf8.csv"),
             2024,
             PkwFormat.LAST_First,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -536,6 +474,7 @@ sources.extend(
             ZipExtractor("kandydaci_utf8.csv"),
             2024,
             PkwFormat.First_LAST,
+            ElectionType.EUROPARLAMENT,
         ),
         InputSource(
             FileSource(
@@ -545,6 +484,7 @@ sources.extend(
             XlsExtractor("pe2014kand.xls", header_rows=1),
             2014,
             PkwFormat.UNKNOWN,
+            ElectionType.EUROPARLAMENT,
         ),
         InputSource(
             FileSource(
@@ -554,6 +494,7 @@ sources.extend(
             XlsExtractor("kandpe2009.xls", header_rows=1),
             2009,
             PkwFormat.UNKNOWN,
+            ElectionType.EUROPARLAMENT,
         ),
         InputSource(
             FileSource(
@@ -563,6 +504,7 @@ sources.extend(
             XlsExtractor("pe2004-kand.xls", header_rows=1),
             2004,
             PkwFormat.UNKNOWN,
+            ElectionType.EUROPARLAMENT,
         ),
         InputSource(
             FileSource(
@@ -572,6 +514,7 @@ sources.extend(
             XlsExtractor("kandsejm1991kom.xls", header_rows=1),
             1991,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -581,6 +524,7 @@ sources.extend(
             XlsExtractor("KANSEN1991.xls", header_rows=1),
             1991,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -590,6 +534,7 @@ sources.extend(
             XlsExtractor("kandsejm1993kom.xls", header_rows=1),
             1993,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -599,6 +544,7 @@ sources.extend(
             XlsExtractor("KANSEN1993.xls", header_rows=1),
             1993,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -608,6 +554,7 @@ sources.extend(
             XlsExtractor("kandsejm1997kom.xls", header_rows=1),
             1997,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -617,6 +564,7 @@ sources.extend(
             XlsExtractor("ksenat1997.xls", header_rows=1),
             1997,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -626,6 +574,7 @@ sources.extend(
             XlsExtractor("kandsejm2001kom.xls", header_rows=1),
             2001,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -635,6 +584,7 @@ sources.extend(
             XlsExtractor("2001-kan-sen.xls", header_rows=1),
             2001,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -644,6 +594,7 @@ sources.extend(
             XlsExtractor("kandsejm2005kom.xls", header_rows=1),
             2005,
             PkwFormat.UNKNOWN,
+            ElectionType.SEJM,
         ),
         InputSource(
             FileSource(
@@ -653,6 +604,7 @@ sources.extend(
             XlsExtractor("kandsen2005.xls", header_rows=1),
             2005,
             PkwFormat.UNKNOWN,
+            ElectionType.SENAT,
         ),
         InputSource(
             FileSource(
@@ -662,6 +614,7 @@ sources.extend(
             XlsExtractor("2002-kand-rady.xlsx", header_rows=1),
             2002,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -674,6 +627,7 @@ sources.extend(
             ),
             2002,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -683,6 +637,7 @@ sources.extend(
             XlsExtractor("1998-kand-rady.xlsx", header_rows=1),
             1998,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -692,6 +647,7 @@ sources.extend(
             MultiXlsZipExtractor("*.xls", header_rows=1),
             1998,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
         InputSource(
             FileSource(
@@ -701,6 +657,7 @@ sources.extend(
             MultiXlsZipExtractor("*.xls", header_rows=1),
             1994,
             PkwFormat.UNKNOWN,
+            ElectionType.SAMORZADOWE,
         ),
     ]
 )
