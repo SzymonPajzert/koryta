@@ -3,12 +3,14 @@ def struct_pack(struct: dict[str, str]) -> str:
 
 
 def init_tables(con):
-    con.execute(
-        """
-        INSTALL splink_udfs FROM community;
-        LOAD splink_udfs;
-        """
-    )
+    pass
+    # we actually don't need it
+    # con.execute(
+    #     """
+    #     INSTALL splink_udfs FROM community;
+    #     LOAD splink_udfs;
+    #     """
+    # )
 
 
 def create_people_table(
@@ -34,7 +36,6 @@ def create_people_table(
                     replace(lower(full_name), lower(first_name), ''),
                     lower(last_name),
                     ''))) as second_name,
-            double_metaphone(last_name) as metaphone,
             birth_year,
             {'\n'.join([f"list(struct_pack({struct_pack(struct)})) as {col}," for col, struct in kwargs.items()])}
             {'\n'.join([f"list_distinct(list({col})) as {col}," for col in to_list])}

@@ -2,8 +2,7 @@ import pytest
 import regex as re
 
 from scrapers.krs.process import KRS, iterate_blobs
-from analysis.people import find_all_matches, con
-from analysis.utils import read_enriched
+from analysis.people import people_merged
 from util.config import versioned
 from util.lists import IGNORE_FAILURES
 
@@ -11,7 +10,7 @@ from util.lists import IGNORE_FAILURES
 SCORE_CUTOFF = 10.5
 
 
-df_all = find_all_matches(con)
+df_all = people_merged()
 # TODO split it already as another column
 df_matched = df_all[df_all["overall_score"] > SCORE_CUTOFF]
 

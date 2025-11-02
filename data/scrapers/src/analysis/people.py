@@ -65,7 +65,8 @@ def unique_probability(
 
 
 @pipeline(init_duckdb=True)
-def people_merged(con):
+def people_merged(**kwargs):
+    con = kwargs["con"]
     init_tables(con)
     con.create_function(
         "unique_probability", unique_probability, null_handling="special"  # type: ignore

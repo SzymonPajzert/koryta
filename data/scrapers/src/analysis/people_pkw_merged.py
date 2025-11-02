@@ -11,7 +11,7 @@ pkw_file = versioned.get_path("people_pkw.jsonl")
 
 
 @pipeline(init_duckdb=True)
-def people_pkw_merged(con: duckdb.DuckDBPyConnection | None = None):
+def people_pkw_merged(con: duckdb.DuckDBPyConnection | None = None, **kwargs):
     assert con is not None
 
     init_tables(con)

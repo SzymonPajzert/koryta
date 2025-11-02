@@ -1,5 +1,6 @@
 from dataclasses import fields
 import os
+from enum import Enum
 
 import duckdb
 
@@ -37,21 +38,36 @@ def always_export(func):
     return wrapper
 
 
+def get_type(t):
+    if str(t) == "object":
+        return None
+    if t in sql_type:
+        return sql_type[t]
+    for b in t.__bases__:
+        r = get_type(b)
+        if r is not None:
+            return r
+    raise ValueError("Unsupported case")
+
+
+sql_type = {
+    int: "INTEGER",
+    str: "VARCHAR",
+    str | None: "VARCHAR",
+    int | None: "INTEGER",
+    bool: "BOOLEAN",
+    bool | None: "BOOLEAN",
+    datetime: "TIMESTAMP",
+    datetime | None: "TIMESTAMP",
+    list[str]: "VARCHAR[]",
+    PkwFormat: "VARCHAR",
+    Enum: "VARCHAR",
+}
+
+
 def ducktable(read=False, name=None, excluded_fields=set()):
     def wrapper(cls):
-        sql_type = {
-            int: "INTEGER",
-            str: "VARCHAR",
-            str | None: "VARCHAR",
-            int | None: "INTEGER",
-            bool: "BOOLEAN",
-            bool | None: "BOOLEAN",
-            datetime: "TIMESTAMP",
-            datetime | None: "TIMESTAMP",
-            list[str]: "VARCHAR[]",
-            PkwFormat: "VARCHAR",
-        }
-
+        create = True
         clsfields = [
             field for field in fields(cls) if field.name not in excluded_fields
         ]
@@ -59,8 +75,10 @@ def ducktable(read=False, name=None, excluded_fields=set()):
         table_name = name
         if table_name is None:
             table_name = cls.__name__.lower()
+        if table_name in dbs:
+            create = False
         dbs.append(table_name)
-        table_fields = [f"{field.name} {sql_type[field.type]}" for field in clsfields]
+        table_fields = [f"{field.name} {get_type(field.type)}" for field in clsfields]
         if read:
             print(f"Reading table {table_name}...")
             duckdb.execute(
@@ -69,7 +87,7 @@ def ducktable(read=False, name=None, excluded_fields=set()):
                 FROM read_json('{os.path.join(VERSIONED_DIR, table_name +'.jsonl')}')"""
             )
             print(f"Table {table_name} read.")
-        else:
+        elif create:
             duckdb.execute(f"CREATE TABLE {table_name} ({", ".join(table_fields)})")
 
         def insert_into(arg):
