@@ -2,7 +2,7 @@ import pandas as pd
 import networkx as nx
 
 from analysis.people_pkw_merged import people_pkw_merged
-from analysis.utils import komitet_to_party
+from scrapers.pkw.elections import committee_to_party
 
 
 def flatten_parties(df):
@@ -34,7 +34,7 @@ def calculate_people_parties():
     print(df[:10])
 
     committes_to_parties = pd.DataFrame.from_records(
-        [(committee, party) for committee, party in komitet_to_party.items()],
+        [(committee, party) for committee, party in committee_to_party.items()],
         columns=["subgroup_id", "group_id"],
     )
     print(committes_to_parties[:10])
