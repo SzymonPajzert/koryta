@@ -40,6 +40,7 @@ class KrsPerson:
     last_name: str
     full_name: str
     employed_krs: str
+    employed_start: str | None
     employed_end: str | None
     employed_for: str | None
     birth_date: str | None = None
@@ -59,6 +60,17 @@ class KrsCompany:
     krs: str
     name: str
     city: str
+
+
+def start_time(item):
+    min_start = "2100-01-01"
+    for conn in item["krs_powiazania_kwerendowane"]:
+        assert isinstance(conn, dict)
+        v = conn.get("data_start", curr_date)
+        if v is None:
+            v = curr_date
+        min_start = min(min_start, v)
+    return min_start
 
 
 def end_time(item):
@@ -114,6 +126,7 @@ def extract_people():
                         second_names=identity.get("drugie_imiona"),
                         sex=identity.get("plec"),
                         employed_krs=KRS.from_blob_name(blob_name).id,
+                        employed_start=start_time(item),
                         employed_end=end_time(item),
                         employed_for=employment_duration(item),
                     ).insert_into()
