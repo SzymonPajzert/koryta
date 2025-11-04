@@ -117,7 +117,9 @@ dependencies = [
     "pyarrow (>=21.0.0,<22.0.0)",
     "openpyxl (>=3.1.5,<4.0.0)",
     "nbconvert (>=7.16.6,<8.0.0)",
-    "seaborn (>=0.13.2,<0.14.0)"
+    "seaborn (>=0.13.2,<0.14.0)",
+    "scipy (>=1.16.3,<2.0.0)",
+    "pytest-check (>=2.6.0,<3.0.0)"
 ]
 
 [project.scripts]
@@ -140,4 +142,9 @@ build-backend = "poetry.core.masonry.api"
 [dependency-groups]
 dev = [
     "jupyterlab (>=4.4.9,<5.0.0)"
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "parametrize_skip_if",
 ]
