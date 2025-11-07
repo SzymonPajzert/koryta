@@ -5,23 +5,7 @@
         <v-img position="center" height="300" src="@/assets/logo.png" />
       </v-col>
       <v-col cols="12" sm="9" class="text-center">
-        <PeopleProgress />
-      </v-col>
-      <v-col cols="12" md="6" class="text-center">
-        <v-btn
-          variant="elevated"
-          color="primary"
-          class="ma-2"
-          href="https://www.guidedtrack.com/programs/9fk0fj2/run"
-          target="_none"
-        >
-          <v-icon>mdi-hand</v-icon> Zgłoś się do pomocy
-        </v-btn>
-      </v-col>
-      <v-col cols="12" md="6" class="text-center">
-        <v-btn variant="elevated" color="primary" class="ma-2" to="/pomoc">
-          Albo zacznij działać
-        </v-btn>
+        <CallToAction />
       </v-col>
       <v-col cols="12"> Wyszukaj swojego polityka. </v-col>
       <v-col cols="12" md="6">
@@ -93,7 +77,7 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
-import PeopleProgress from "~/components/chart/PeopleProgress.vue";
+import CallToAction from "~/components/card/CallToAction.vue";
 const { entities: people } = await useEntity("person");
 const { koryciarz } = useFeminatyw();
 </script>

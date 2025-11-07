@@ -28,9 +28,9 @@ interface Segment {
 }
 
 const segments: Segment[] = [
-  { value: 200, color: "#4caf50", label: "Segment 1" },
-  { value: 100, color: "#2196f3", label: "Segment 2" },
-  { value: 1000, color: "#f44336", label: "Segment 3" },
+  { value: 200, color: "#4caf50", label: "Dodane" },
+  { value: 100, color: "#2196f3", label: "Do sprawdzenia" },
+  { value: 431, color: "#f44336", label: "Znalezione" },
 ];
 
 // Calculate the total value of all segments
