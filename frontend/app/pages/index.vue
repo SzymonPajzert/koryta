@@ -8,6 +8,7 @@
           color="primary"
           class="ma-2"
           href="https://www.guidedtrack.com/programs/9fk0fj2/run"
+          target="_none"
         >
           <v-icon>mdi-hand</v-icon> Zgłoś się do pomocy
         </v-btn>
