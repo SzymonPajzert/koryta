@@ -1,8 +1,13 @@
 <template>
   <div>
     <v-row>
-      <v-col cols="12" md="5" class="text-center">
+      <v-col cols="12" sm="3" class="text-center">
         <v-img position="center" height="300" src="@/assets/logo.png" />
+      </v-col>
+      <v-col cols="12" sm="9" class="text-center">
+        <PeopleProgress />
+      </v-col>
+      <v-col cols="12" md="6" class="text-center">
         <v-btn
           variant="elevated"
           color="primary"
@@ -13,7 +18,13 @@
           <v-icon>mdi-hand</v-icon> Zgłoś się do pomocy
         </v-btn>
       </v-col>
-      <v-col cols="12" md="7">
+      <v-col cols="12" md="6" class="text-center">
+        <v-btn variant="elevated" color="primary" class="ma-2" to="/pomoc">
+          Albo zacznij działać
+        </v-btn>
+      </v-col>
+      <v-col cols="12"> Wyszukaj swojego polityka. </v-col>
+      <v-col cols="12" md="6">
         <v-card
           class="py-4"
           color="surface-variant"
@@ -82,6 +93,7 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
+import PeopleProgress from "~/components/chart/PeopleProgress.vue";
 const { entities: people } = await useEntity("person");
 const { koryciarz } = useFeminatyw();
 </script>
