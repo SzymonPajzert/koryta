@@ -1,6 +1,5 @@
 <template>
   <div class="chart-container">
-    <div class="bar-label">Przed nami jeszcze dużo pracy</div>
     <div class="stack-bar-container">
       <div
         v-for="(segment, index) in segments"
@@ -44,13 +43,6 @@ const total = computed(() =>
   font-family: "Inter", sans-serif;
   width: 100%;
   max-width: 800px;
-}
-
-.bar-label {
-  font-size: 0.875rem;
-  color: #555;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
 }
 
 .stack-bar-container {

@@ -1,11 +1,66 @@
 <template>
   <div>
     <v-row>
+      <v-col cols="12" md="8">
+        <HomeCard height="100%">
+          <template #header> Co tutaj robimy? </template>
+          Polskie partie oskarżają się od lat o koryciarstwo - ale kto robi go
+          najwięcej? Koryta.pl to pierwsza baza danych, w której znajdziesz
+          polityków i ich bliskich, którzy pracują w publicznych spółkach.
+          Największy, ogólnopolski i bezpartyjny agregator informacji o
+          politycznych układach.
+          <!-- TODO VSCode is autoadding breaks here, I don't know why -->
+          <br /><br />
+          Te dane są oficjalnie publiczne i dostępne, jednak trzeba wiedzieć,
+          czego szukać. My wiemy i szukamy.
+        </HomeCard>
+      </v-col>
+      <v-col cols="12" md="4">
+        <HomeCard height="100%">
+          ❤️ Robimy ten projekt z miłości do przejrzystej i publicznej
+          informacji. Nie mamy sponsorów albo partyjnego wsparcia.
+          <br />
+          <br />
+          <strong>
+            Jeśli chcesz pomóc w rozbiciu politycznego betonu, wesprzyj nas:
+          </strong>
+          <br />
+          <v-btn
+            href="https://zrzutka.pl/z/koryta-pl/pay"
+            target="_none"
+            color="#E64164"
+          >
+            <v-img
+              :width="30"
+              aspect-ratio="16/9"
+              cover
+              src="@/assets/zrzutka.png"
+            />
+          </v-btn>
+          <v-btn
+            href="https://patronite.pl/romb.me?podglad-autora"
+            target="_none"
+            color="white"
+          >
+            <v-img
+              :width="30"
+              aspect-ratio="16/9"
+              cover
+              src="@/assets/patronite.png"
+            />
+          </v-btn>
+        </HomeCard>
+      </v-col>
       <v-col cols="12" sm="3" class="text-center">
-        <v-img position="center" height="300" src="@/assets/logo.png" />
+        <a
+          href="https://zrzutka.pl/rd7ssx/award/g3z29z/przypinka-z-podziekowaniami"
+          target="_none"
+        >
+          <v-img position="center" height="300" src="@/assets/logo.png" />
+        </a>
       </v-col>
       <v-col cols="12" sm="9" class="text-center">
-        <CallToAction />
+        <CardCallToAction />
       </v-col>
       <v-col cols="12"> Wyszukaj swojego polityka. </v-col>
       <v-col cols="12" md="6">
@@ -77,7 +132,7 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
-import CallToAction from "~/components/card/CallToAction.vue";
+
 const { entities: people } = await useEntity("person");
 const { koryciarz } = useFeminatyw();
 </script>
