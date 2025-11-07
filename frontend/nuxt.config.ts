@@ -3,6 +3,27 @@ import { isDev } from "@nuxt/test-utils";
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const isTest = !!process.env.VITEST;
 export default defineNuxtConfig({
+  app: {
+    head: {
+      meta: [
+        {
+          name: "viewport",
+          content: "width=device-width, initial-scale=1",
+        },
+        {
+          charset: "utf-8",
+        },
+      ],
+      htmlAttrs: {
+        lang: "pl",
+      },
+      link: [],
+      style: [],
+      script: [],
+      noscript: [],
+    },
+  },
+
   compatibilityDate: "2025-07-15",
 
   // TODO Enable strict
