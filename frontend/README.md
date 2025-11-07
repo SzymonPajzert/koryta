@@ -73,3 +73,19 @@ bun run preview
 ```
 
 Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+
+## Testing
+
+You can run everything with:
+
+```bash
+npm run import-db && npm run dev:emulate
+```
+
+And then access either a Vite build on `localhost:3000` or Firebase emulated at `localhost:5002`
+
+Run tests through
+
+```bash
+npx cypress run
+```
