@@ -8,7 +8,7 @@
     item-title="title"
     return-object
     autocomplete="off"
-    class="ma-2 v-input--focused"
+    class="ma-2"
     bg-color="white"
     :rounded="true"
     :width

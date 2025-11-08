@@ -1,14 +1,14 @@
 <template>
   <v-container class=".align-center">
     <h3>Zostało nam jeszcze dużo osób</h3>
-    <PeopleProgress class="ma-2" />
+    <ChartPeopleProgress class="ma-2" />
     <v-row>
       <v-col cols="12">
         <v-card class="">
           <v-card-text>
             Nasza baza cały czas rośnie. Dołącz do grona wolontariuszy,
-            analizujących dane i promujących projekt. Dzięki osobom jak Ty,
-            znaleźliśmy już 200 osób.
+            analizujących dane lub promujących projekt. Dzięki osobom jak Ty,
+            znaleźliśmy już {{ user ? "(nieoficjalnie) 4,500" : "200" }} osób.
           </v-card-text>
         </v-card>
       </v-col>
@@ -33,6 +33,5 @@
 </template>
 
 <script setup lang="ts">
-// TODO why do I need to import it?
-import PeopleProgress from "../chart/PeopleProgress.vue";
+const { user } = useAuthState();
 </script>
