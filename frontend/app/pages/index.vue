@@ -27,7 +27,7 @@
           <v-container align="center">
             <v-btn
               href="https://zrzutka.pl/z/koryta-pl/pay"
-              target="_none"
+              target="_blank"
               color="#E64164"
             >
               <v-img
@@ -39,7 +39,7 @@
             </v-btn>
             <v-btn
               href="https://patronite.pl/romb.me?podglad-autora"
-              target="_none"
+              target="_blank"
               color="white"
             >
               <v-img
@@ -55,7 +55,7 @@
       <v-col cols="12" sm="3" class="text-center">
         <a
           href="https://zrzutka.pl/rd7ssx/award/g3z29z/przypinka-z-podziekowaniami"
-          target="_none"
+          target="_blank"
         >
           <v-img position="center" height="300" src="@/assets/logo.png" />
         </a>

@@ -1,6 +1,6 @@
 <template>
   <v-container class=".align-center">
-    <h3>Przed nami jeszcze dużo pracy</h3>
+    <h3>Zostało nam jeszcze dużo osób</h3>
     <PeopleProgress />
     <v-row>
       <v-col cols="12">
@@ -18,7 +18,7 @@
           color="primary"
           class="ma-2"
           href="https://www.guidedtrack.com/programs/9fk0fj2/run"
-          target="_none"
+          target="_blank"
         >
           <v-icon>mdi-pencil-plus</v-icon> Wypełnij ankietę
         </v-btn>

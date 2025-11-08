@@ -1,18 +1,25 @@
 <template>
   <div class="chart-container">
     <div class="stack-bar-container">
-      <div
+      <v-tooltip
         v-for="(segment, index) in segments"
         :key="index"
-        class="stack-bar-segment"
-        :style="{
-          width: (segment.value / total) * 100 + '%',
-          backgroundColor: segment.color,
-        }"
-        :title="`${segment.label}: ${segment.value}`"
+        :text="segment.label"
+        location="bottom"
       >
-        {{ segment.value }}
-      </div>
+        <template #activator="{ props }">
+          <div
+            v-bind="props"
+            class="stack-bar-segment"
+            :style="{
+              width: (segment.value / total) * 100 + '%',
+              backgroundColor: segment.color,
+            }"
+          >
+            {{ segment.value }}
+          </div>
+        </template>
+      </v-tooltip>
     </div>
   </div>
 </template>
