@@ -18,7 +18,7 @@
       <v-btn
         color="grey-lighten-1"
         :href="formData.sourceURL"
-        target="_none"
+        target="_blank"
         icon="mdi-open-in-new"
         variant="text"
       />

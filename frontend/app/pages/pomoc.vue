@@ -1,16 +1,24 @@
 <template>
-  <v-alert type="info" closable>
-  Jeśli masz pytania,
-  <a href="https://discord.gg/pnyPh7zXxS" target="_blank" class="text-white">
-    dołącz do serwera Discord
-  </a>
-  - mamy kanał specjalnie dla koryta.pl
-  </v-alert>
-  <v-btn to="/pomoc/zadania">Zadania</v-btn>
-  <v-btn to="/pomoc/artykuly">Artykuły</v-btn>
-  <v-btn to="/pomoc/poszlaki">Poszlaki</v-btn>
-  <v-btn to="/pomoc/statystyki">Statystyki</v-btn>
-  <router-view :allowed-issues="allowedIssues" />
+  <v-row>
+    <v-col cols="12" md="6">
+      <iframe
+        src="https://discord.com/widget?id=1338546021319315468&theme=dark"
+        width="400"
+        height="300"
+        allowtransparency="true"
+        frameborder="0"
+        sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+      />
+    </v-col>
+    <v-col cols="12" md="6">
+      <iframe
+        src="https://widgets.sociablekit.com/facebook-group-posts/iframe/25619702"
+        frameborder="0"
+        width="400px"
+        height="300px"
+      />
+    </v-col>
+  </v-row>
 </template>
 
 <script lang="ts" setup>
@@ -19,6 +27,4 @@ definePageMeta({
   isHelp: true,
   middleware: "auth",
 });
-
-const { allowedIssues } = defineProps<{ allowedIssues: string[] }>();
 </script>
