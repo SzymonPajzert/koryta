@@ -11,7 +11,8 @@
           <!-- TODO VSCode is autoadding breaks here, I don't know why -->
           <br /><br />
           Te dane są oficjalnie publiczne i dostępne, jednak trzeba wiedzieć,
-          czego szukać. My wiemy i szukamy.
+          czego szukać. My wiemy i szukamy. Zobacz film o projekcie na
+          <a href="https://youtu.be/x20MFMDUAuk">YouTube</a>.
         </HomeCard>
       </v-col>
       <v-col cols="12" md="4">
@@ -69,8 +70,8 @@
       </v-col>
       <v-col cols="12" sm="5">
         <HomeCard>
-          Wyszukaj na górze znanych Ci polityków, miasta albo publiczne spółki.
-          Kliknij po lewej, by sprawdzić zaproponowanych.
+          Wyszukaj na górze znanych Ci polityków, miasta albo publiczne spółki -
+          albo kliknij nasze propozyce po lewej stronie.
         </HomeCard>
       </v-col>
       <v-col cols="12" md="6">
