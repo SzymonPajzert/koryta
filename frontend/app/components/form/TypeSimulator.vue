@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 
+interface Line {
+  text: string;
+  link: string;
+}
+
 interface Config {
-  lines: string[];
+  lines: Line[];
   typingSpeed?: number;
   deletingSpeed?: number;
   // how long to wait after it's done
@@ -18,6 +23,7 @@ const {
 
 // --- State ---
 const currentText = ref(""); // This is the ref we will expose
+const currentLink = ref("");
 const lineIndex = ref(0);
 const charIndex = ref(0);
 const isDeleting = ref(false);
@@ -33,7 +39,9 @@ function runSimulation() {
   // Stop if no lines are provided
   if (!lines || lines.length === 0) return;
 
-  const currentLine = lines[lineIndex.value];
+  const currentLine = lines[lineIndex.value].text;
+  currentLink.value = lines[lineIndex.value].link;
+
   let delay = typingSpeed;
 
   if (isDeleting.value) {
@@ -88,5 +96,6 @@ onUnmounted(() => {
  */
 defineExpose({
   currentText,
+  currentLink,
 });
 </script>

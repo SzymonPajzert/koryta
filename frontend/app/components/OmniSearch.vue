@@ -1,4 +1,4 @@
-<template id="omni-search">
+<template :id="`omni-search${fake ? '-fake' : ''}`">
   <v-autocomplete
     v-model="nodeGroupPicked"
     v-model:focused="autocompleteFocus"
@@ -8,10 +8,10 @@
     item-title="title"
     return-object
     autocomplete="off"
-    class="ma-2"
+    class="ma-2 v-input--focused"
     bg-color="white"
     :rounded="true"
-    width="200px"
+    :width
     density="comfortable"
     :hide-details="true"
     menu-icon="mdi-magnify"
@@ -39,13 +39,34 @@
 <script setup lang="ts">
 import { getAnalytics, logEvent } from "firebase/analytics";
 
-const search = ref("");
+const props = defineProps<{
+  searchText?: string;
+  fake?: boolean;
+  width?: string;
+}>();
+
+const { width = "300px" } = props;
+
+const search = ref(props.searchText);
+
+watch(
+  () => props.searchText,
+  (newValue) => {
+    search.value = newValue;
+    nodeGroupPicked.value = {
+      title: newValue,
+      icon: "mdi-account",
+      logEventKey: { content_id: "", content_type: "" },
+    };
+    autocompleteFocus.value = true;
+  },
+);
 
 type ListItem = {
   title: string;
   subtitle?: string;
   icon: string;
-  logEventKey: {content_id: string; content_type: string};
+  logEventKey: { content_id: string; content_type: string };
   path?: string;
   query?: Record<string, string>;
 };
@@ -113,22 +134,29 @@ const { push, currentRoute } = useRouter();
 const analytics = getAnalytics();
 
 const nodeGroupPicked = ref<ListItem | null>();
-const autocompleteFocus = ref(false);
-watch(nodeGroupPicked, (value) => {
-  if (!value) push("/");
-  let path = value.path ?? currentRoute.value.path;
-  const allowedPath = path == "/lista" || path == "/graf" || path.startsWith("/entity/employed/");
-  if (!allowedPath) {
-    path = "/lista";
-  }
-  push({
-    path: path,
-    query: {
-      ...currentRoute.value.query,
-      ...value.query,
-    },
+const autocompleteFocus = ref(props.searchText ? true : false);
+
+// Monitor the state only if the bar is not fake
+if (!props.fake) {
+  watch(nodeGroupPicked, (value) => {
+    if (!value) push("/");
+    let path = value.path ?? currentRoute.value.path;
+    const allowedPath =
+      path == "/lista" ||
+      path == "/graf" ||
+      path.startsWith("/entity/employed/");
+    if (!allowedPath) {
+      path = "/lista";
+    }
+    push({
+      path: path,
+      query: {
+        ...currentRoute.value.query,
+        ...value.query,
+      },
+    });
+    logEvent(analytics, "select_content", value.logEventKey);
+    autocompleteFocus.value = false;
   });
-  logEvent(analytics, "select_content", value.logEventKey);
-  autocompleteFocus.value = false;
-});
+}
 </script>

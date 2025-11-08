@@ -24,31 +24,32 @@
           <strong>
             Jeśli chcesz pomóc w rozbiciu politycznego betonu, wesprzyj nas:
           </strong>
-          <br />
-          <v-btn
-            href="https://zrzutka.pl/z/koryta-pl/pay"
-            target="_none"
-            color="#E64164"
-          >
-            <v-img
-              :width="30"
-              aspect-ratio="16/9"
-              cover
-              src="@/assets/zrzutka.png"
-            />
-          </v-btn>
-          <v-btn
-            href="https://patronite.pl/romb.me?podglad-autora"
-            target="_none"
-            color="white"
-          >
-            <v-img
-              :width="30"
-              aspect-ratio="16/9"
-              cover
-              src="@/assets/patronite.png"
-            />
-          </v-btn>
+          <v-container align="center">
+            <v-btn
+              href="https://zrzutka.pl/z/koryta-pl/pay"
+              target="_none"
+              color="#E64164"
+            >
+              <v-img
+                :width="30"
+                aspect-ratio="16/9"
+                cover
+                src="@/assets/zrzutka.png"
+              />
+            </v-btn>
+            <v-btn
+              href="https://patronite.pl/romb.me?podglad-autora"
+              target="_none"
+              color="white"
+            >
+              <v-img
+                :width="30"
+                aspect-ratio="16/9"
+                cover
+                src="@/assets/patronite.png"
+              />
+            </v-btn>
+          </v-container>
         </HomeCard>
       </v-col>
       <v-col cols="12" sm="3" class="text-center">
@@ -62,12 +63,14 @@
       <v-col cols="12" sm="9" class="text-center">
         <CardCallToAction />
       </v-col>
-      <v-col cols="12">
-        <FormTypeSimulator
-          ref="simulator"
-          :lines="['Andrzej Sebastian Duda', 'Rafał Trzaskowski']"
-        />
-        <p>{{ simulator?.currentText }}</p>
+      <v-col cols="12" sm="7">
+        <omni-search-fake />
+      </v-col>
+      <v-col cols="12" sm="5">
+        <HomeCard>
+          Wyszukaj na górze znanych Ci polityków, miasta albo publiczne spółki.
+          Kliknij po lewej, by sprawdzić zaproponowanych.
+        </HomeCard>
       </v-col>
       <v-col cols="12" md="6">
         <v-card
@@ -141,6 +144,4 @@ import { useFeminatyw } from "@/composables/feminatyw";
 
 const { entities: people } = await useEntity("person");
 const { koryciarz } = useFeminatyw();
-
-const simulator = ref(null);
 </script>
