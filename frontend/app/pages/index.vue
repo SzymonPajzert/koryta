@@ -62,7 +62,13 @@
       <v-col cols="12" sm="9" class="text-center">
         <CardCallToAction />
       </v-col>
-      <v-col cols="12"> Wyszukaj swojego polityka. </v-col>
+      <v-col cols="12">
+        <FormTypeSimulator
+          ref="simulator"
+          :lines="['Andrzej Sebastian Duda', 'Rafał Trzaskowski']"
+        />
+        <p>{{ simulator?.currentText }}</p>
+      </v-col>
       <v-col cols="12" md="6">
         <v-card
           class="py-4"
@@ -135,4 +141,6 @@ import { useFeminatyw } from "@/composables/feminatyw";
 
 const { entities: people } = await useEntity("person");
 const { koryciarz } = useFeminatyw();
+
+const simulator = ref(null);
 </script>
