@@ -18,15 +18,16 @@
       <v-col cols="12" md="4">
         <HomeCard height="100%">
           ❤️ Robimy ten projekt z miłości do przejrzystej i publicznej
-          informacji. Nie mamy sponsorów albo partyjnego wsparcia.
+          informacji. Nie mamy sponsorów ani partyjnego wsparcia.
           <br />
           <br />
           <strong>
             Jeśli chcesz pomóc w rozbiciu politycznego betonu, wesprzyj nas:
           </strong>
-          <v-container align="center">
+          <v-container class="d-flex flex-wrap ga-2 pa-2">
+            <v-spacer />
             <v-btn
-              href="https://zrzutka.pl/z/koryta-pl/pay"
+              href="https://zrzutka.pl/z/rd7ssx/pay"
               target="_blank"
               color="#E64164"
             >
@@ -49,6 +50,7 @@
                 src="@/assets/patronite.png"
               />
             </v-btn>
+            <v-spacer />
           </v-container>
         </HomeCard>
       </v-col>

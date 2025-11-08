@@ -1,7 +1,7 @@
 <template>
   <v-container class=".align-center">
     <h3>Zostało nam jeszcze dużo osób</h3>
-    <PeopleProgress />
+    <PeopleProgress class="ma-2" />
     <v-row>
       <v-col cols="12">
         <v-card class="">
@@ -25,7 +25,7 @@
       </v-col>
       <v-col cols="12" md="6" class="text-center">
         <v-btn variant="elevated" color="primary" class="ma-2" to="/pomoc">
-          <v-icon>mdi-hand</v-icon> Albo zacznij działać
+          Albo zacznij działać
         </v-btn>
       </v-col>
     </v-row>
