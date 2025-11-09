@@ -39,28 +39,33 @@
 <script setup lang="ts">
 import { getAnalytics, logEvent } from "firebase/analytics";
 
+const { push, currentRoute } = useRouter();
+const analytics = getAnalytics();
+
 const props = defineProps<{
   searchText?: string;
   fake?: boolean;
   width?: string;
 }>();
-
 const { width = "300px" } = props;
 
 const search = ref(props.searchText);
+const nodeGroupPicked = ref<ListItem | null>();
+const autocompleteFocus = ref(false);
 
-watch(
-  () => props.searchText,
-  (newValue) => {
-    search.value = newValue;
-    nodeGroupPicked.value = {
-      title: newValue,
-      icon: "mdi-account",
-      logEventKey: { content_id: "", content_type: "" },
-    };
-    autocompleteFocus.value = true;
-  },
-);
+if (props.fake) {
+  watch(
+    () => props.searchText,
+    (newValue) => {
+      search.value = newValue;
+      nodeGroupPicked.value = {
+        title: newValue,
+        icon: "mdi-account",
+        logEventKey: { content_id: "", content_type: "" },
+      };
+    },
+  );
+}
 
 type ListItem = {
   title: string;
@@ -123,18 +128,12 @@ const items = computed<ListItem[]>(() => {
           content_id: key,
           content_type: "person",
         },
-        path: "/entity/employed/" + key,
+        path: "/entity/person/" + key,
       });
     }
   });
   return result;
 });
-
-const { push, currentRoute } = useRouter();
-const analytics = getAnalytics();
-
-const nodeGroupPicked = ref<ListItem | null>();
-const autocompleteFocus = ref(props.searchText ? true : false);
 
 // Monitor the state only if the bar is not fake
 if (!props.fake) {
@@ -142,9 +141,7 @@ if (!props.fake) {
     if (!value) push("/");
     let path = value?.path ?? currentRoute.value.path;
     const allowedPath =
-      path == "/lista" ||
-      path == "/graf" ||
-      path.startsWith("/entity/employed/");
+      path == "/lista" || path == "/graf" || path.startsWith("/entity/person/");
     if (!allowedPath) {
       path = "/lista";
     }
