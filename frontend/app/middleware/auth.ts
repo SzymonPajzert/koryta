@@ -1,7 +1,14 @@
-import type { User } from "firebase/auth"
+import type { User } from "firebase/auth";
 
-export default defineNuxtRouteMiddleware(async () => {
-  const user: User = await getCurrentUser()
-  if (!user)
-    return navigateTo('/login', { replace: true })
-})
+export default defineNuxtRouteMiddleware(async (to) => {
+  const user: User = await getCurrentUser();
+  if (!user) {
+    return navigateTo({
+      path: "/login",
+      query: {
+        redirect: to.fullPath,
+        reason: "unauthorized",
+      },
+    });
+  }
+});

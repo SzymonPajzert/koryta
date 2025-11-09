@@ -9,6 +9,9 @@
     </div>
   </main>
   <main v-if="!user">
+    <v-alert v-if="reason === 'unauthorized'" type="info" class="mb-4">
+      Musisz być zalogowany, aby uzyskać dostęp do tej strony.
+    </v-alert>
     <h2 class="blue">{{ isLogin ? "Zaloguj się" : "Rejestracja" }}</h2>
     <div>
       <a href="#" @click.prevent="isLogin = !isLogin">
@@ -84,6 +87,9 @@ const isLogin = ref(true);
 const auth = useFirebaseAuth()!;
 const db = useDatabase();
 const router = useRouter();
+const route = useRoute();
+
+const { redirect, reason } = route.query;
 
 const user = ref<User | null>();
 onAuthStateChanged(auth, (userIn) => {
@@ -100,7 +106,7 @@ const login = async () => {
     await signInWithEmailAndPassword(auth, email.value, password.value);
     // User is signed in.
     console.debug("User logged in successfully!");
-    router.push("/");
+    router.push((redirect as string) || "/");
   } catch (err) {
     console.error("Login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
@@ -116,7 +122,7 @@ const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
     console.debug("User logged in with Google successfully!");
-    router.push("/");
+    router.push((redirect as string) || "/");
   } catch (err) {
     console.error("Google login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
@@ -136,7 +142,7 @@ const register = async () => {
     );
     await sendEmailVerification(userCredential.user);
     alert("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
-    router.push("/");
+    router.push((redirect as string) || "/");
   } catch (err) {
     console.error("Registration error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
