@@ -1,6 +1,6 @@
 <template>
   <div class="display-wrapper">
-    <router-link :to="simulator?.currentLink">
+    <router-link :to="simulator?.currentLink ?? '/'">
       <div class="blocker-overlay" />
     </router-link>
 

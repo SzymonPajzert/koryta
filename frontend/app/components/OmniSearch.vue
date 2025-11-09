@@ -140,7 +140,7 @@ const autocompleteFocus = ref(props.searchText ? true : false);
 if (!props.fake) {
   watch(nodeGroupPicked, (value) => {
     if (!value) push("/");
-    let path = value.path ?? currentRoute.value.path;
+    let path = value?.path ?? currentRoute.value.path;
     const allowedPath =
       path == "/lista" ||
       path == "/graf" ||
