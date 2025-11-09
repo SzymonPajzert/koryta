@@ -1,9 +1,5 @@
 <template>
   <div class="display-wrapper">
-    <router-link :to="simulator?.currentLink ?? '/'">
-      <div class="blocker-overlay" />
-    </router-link>
-
     <FormTypeSimulator
       ref="simulator"
       :lines="[
@@ -27,26 +23,3 @@
 <script setup lang="ts">
 const simulator = ref(null);
 </script>
-
-<style scoped>
-.display-wrapper {
-  position: relative;
-}
-
-.blocker-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-
-  /* Sit on top of everything else inside the wrapper */
-  z-index: 10;
-  /* Make it transparent */
-  background-color: transparent;
-}
-
-.blocker-overlay:hover {
-  cursor: pointer;
-}
-</style>
