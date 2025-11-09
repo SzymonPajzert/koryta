@@ -95,10 +95,6 @@ defineExpose({
 </script>
 
 <style scoped>
-.display-wrapper {
-  position: relative;
-}
-
 .blocker-overlay {
   position: absolute;
   top: 0;
