@@ -16,7 +16,24 @@
       "port": 8080,
       "database": "koryta-pl"
     },
-    "singleProjectMode": true
+    "singleProjectMode": true,
+    "apphosting": {
+      "port": 5002,
+      "rootDirectory": "frontend",
+      "startCommand": "npm run dev"
+    },
+    "functions": {
+      "port": 5001
+    },
+    "database": {
+      "port": 9000
+    },
+    "hosting": {
+      "port": 5003
+    },
+    "ui": {
+      "enabled": true
+    }
   },
   "database": {
     "rules": "database.rules.json"
