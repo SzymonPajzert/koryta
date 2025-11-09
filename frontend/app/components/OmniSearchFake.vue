@@ -23,3 +23,9 @@
 <script setup lang="ts">
 const simulator = ref(null);
 </script>
+
+<style scoped>
+.display-wrapper {
+  position: relative;
+}
+</style>
