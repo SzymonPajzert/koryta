@@ -1,3 +1,15 @@
+<!-- TypeSimulator simulates typing some values and creates an overlay to link to their URLs.
+
+This is a bit of coupling, but it's simpler than the alternative imo.
+
+The type simulator could be a composable and the overlay with the links its own component.
+We would still need to pass the current link, exposing the state with a bit more complexity. -->
+<template>
+  <router-link :to="currentLink ?? '/'">
+    <div class="blocker-overlay" />
+  </router-link>
+</template>
+
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 
@@ -29,15 +41,8 @@ const charIndex = ref(0);
 const isDeleting = ref(false);
 let timeoutId = null;
 
-// --- Logic ---
-
-/**
- * The main simulation loop.
- * It calls itself recursively with setTimeout to create the typing effect.
- */
 function runSimulation() {
-  // Stop if no lines are provided
-  if (!lines || lines.length === 0) return;
+  if (!lines || lines.length === 0) throw new Error("No lines provided");
 
   const currentLine = lines[lineIndex.value].text;
   currentLink.value = lines[lineIndex.value].link;
@@ -45,12 +50,10 @@ function runSimulation() {
   let delay = typingSpeed;
 
   if (isDeleting.value) {
-    // --- Deleting ---
     currentText.value = currentLine.substring(0, charIndex.value - 1);
     charIndex.value--;
     delay = deletingSpeed;
 
-    // Check if line is fully deleted
     if (charIndex.value === 0) {
       isDeleting.value = false;
       // Move to the next line, loop back to start if at the end
@@ -58,14 +61,12 @@ function runSimulation() {
       delay = typingSpeed;
     }
   } else {
-    // --- Typing ---
     currentText.value = currentLine.substring(0, charIndex.value + 1);
     charIndex.value++;
 
-    // Check if line is fully typed
     if (charIndex.value === currentLine.length) {
       isDeleting.value = true;
-      // Set delay to the long pause duration
+      // Set delay to the long pause duration if the line is fully typed.
       delay = pauseDuration;
     }
   }
@@ -74,28 +75,44 @@ function runSimulation() {
   timeoutId = setTimeout(runSimulation, delay);
 }
 
-// --- Lifecycle Hooks ---
-
 onMounted(() => {
-  // Start the simulation when the component is mounted
   runSimulation();
 });
 
 onUnmounted(() => {
-  // Clean up the timeout when the component is destroyed
   if (timeoutId) {
     clearTimeout(timeoutId);
   }
 });
 
-// --- Expose ---
-
 /**
  * Expose the currentText ref so the parent component can access it.
- * This is the "exposed prop" you mentioned.
  */
 defineExpose({
   currentText,
   currentLink,
 });
 </script>
+
+<style scoped>
+.display-wrapper {
+  position: relative;
+}
+
+.blocker-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+
+  /* Sit on top of everything else inside the wrapper */
+  z-index: 10;
+  /* Make it transparent */
+  background-color: transparent;
+}
+
+.blocker-overlay:hover {
+  cursor: pointer;
+}
+</style>

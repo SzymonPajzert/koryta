@@ -20,7 +20,7 @@
           href="https://www.guidedtrack.com/programs/9fk0fj2/run"
           target="_blank"
         >
-          <v-icon>mdi-pencil-plus</v-icon> Wypełnij ankietę
+          <v-icon>mdi-pencil-plus</v-icon> Chcę pomóc! (ankieta)
         </v-btn>
       </v-col>
       <v-col cols="12" md="6" class="text-center">
