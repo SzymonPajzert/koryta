@@ -8,16 +8,18 @@
         location="bottom"
       >
         <template #activator="{ props }">
-          <div
+          <NuxtLink
             v-bind="props"
+            :to="segment.link"
             class="stack-bar-segment"
             :style="{
               width: (segment.value / total) * 100 + '%',
               backgroundColor: segment.color,
             }"
+            tag="div"
           >
             {{ segment.value }}
-          </div>
+          </NuxtLink>
         </template>
       </v-tooltip>
     </div>
@@ -31,12 +33,18 @@ interface Segment {
   value: number;
   color: string;
   label: string;
+  link: string;
 }
 
 const segments: Segment[] = [
-  { value: 200, color: "#4caf50", label: "Dodane" },
-  { value: 100, color: "#2196f3", label: "Do sprawdzenia" },
-  { value: 431, color: "#f44336", label: "Znalezione" },
+  { value: 200, color: "#4caf50", label: "Dodane", link: "/lista" },
+  {
+    value: 100,
+    color: "#2196f3",
+    label: "Do sprawdzenia",
+    link: "/pomoc/sprawdz",
+  },
+  { value: 431, color: "#f44336", label: "Znalezione", link: "/dołącz" },
 ];
 
 // Calculate the total value of all segments
@@ -71,6 +79,7 @@ const total = computed(() =>
   font-weight: 500;
   font-size: 0.875rem;
   transition: all 0.3s ease;
+  text-decoration: none;
 }
 
 .stack-bar-segment:not(:last-child) {
