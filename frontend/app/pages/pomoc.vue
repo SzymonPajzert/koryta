@@ -10,10 +10,25 @@
       <h2>Dołącz do społeczności</h2>
     </v-col>
     <v-col cols="12" md="6">
-      <HomeCard height="100px">Wypełnij formularz zgłoszeniowy</HomeCard>
+      <nuxt-link
+        to="https://www.guidedtrack.com/programs/9fk0fj2/run"
+        tag="div"
+        class="clickable-card"
+      >
+        <HomeCard height="100px"
+          ><template #header>Wypełnij formularz zgłoszeniowy</template>
+          A my odpiszemy Ci z podprojektami, w których możesz wziąć udział.
+        </HomeCard>
+      </nuxt-link>
     </v-col>
     <v-col cols="12" md="6">
-      <HomeCard height="100px">forum.koryta.pl</HomeCard>
+      <nuxt-link to="https://forum.koryta.pl" tag="div" class="clickable-card">
+        <HomeCard height="100px"
+          ><template #header>Dołącz do forum.koryta.pl</template> I dyskutuj z
+          resztą użytkowników nad kolejnymi użytczenościami na
+          stronie.</HomeCard
+        >
+      </nuxt-link>
     </v-col>
 
     <v-col cols="12" md="6" align="center">
@@ -46,3 +61,10 @@ definePageMeta({
   middleware: "auth",
 });
 </script>
+
+<style scoped>
+.clickable-card {
+  cursor: pointer;
+  text-decoration: none;
+}
+</style>

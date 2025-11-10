@@ -6,7 +6,7 @@
         // TODO { text: 'Andrzej Sebastian Duda', link: '/pomoc' },
         {
           text: 'Rafał Trzaskowski',
-          link: '/entity/employed/8rg6MrDfdiRR7YaAvE5O',
+          link: '/entity/person/8rg6MrDfdiRR7YaAvE5O',
         },
         { text: 'Warszawa', link: '/lista?miejsce=90LglYsGKu7JLEPGAmoD' },
         { text: 'PKP', link: '/lista?miejsce=0qGH8AL9bwUCQvrLNwiO' },

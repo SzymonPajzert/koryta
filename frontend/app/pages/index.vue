@@ -27,7 +27,7 @@
           <v-container class="d-flex flex-wrap ga-2 pa-2">
             <v-spacer />
             <v-btn
-              href="https://zrzutka.pl/z/rd7ssx/pay"
+              href="https://zrzutka.pl/rd7ssx/pay"
               target="_blank"
               color="#E64164"
             >
@@ -39,7 +39,7 @@
               />
             </v-btn>
             <v-btn
-              href="https://patronite.pl/romb.me?podglad-autora"
+              href="https://patronite.pl/romb.me"
               target="_blank"
               color="white"
             >

@@ -42,9 +42,14 @@ const segments: Segment[] = [
     value: 100,
     color: "#2196f3",
     label: "Do sprawdzenia",
-    link: "/pomoc/sprawdz",
+    link: "/pomoc",
   },
-  { value: 431, color: "#f44336", label: "Znalezione", link: "/dołącz" },
+  {
+    value: 431,
+    color: "#f44336",
+    label: "Znalezione",
+    link: "https://www.guidedtrack.com/programs/9fk0fj2/run",
+  },
 ];
 
 // Calculate the total value of all segments
