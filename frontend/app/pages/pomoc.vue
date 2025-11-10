@@ -1,19 +1,57 @@
 <template>
+  <v-alert
+    type="info"
+    variant="tonal"
+    class="mb-4"
+    border="start"
+    density="compact"
+    closable
+  >
+    <span class="text-caption"
+      >Aktywnie pracujemy nad możliwością edycji wpisów. Damy Ci znać mailem,
+      kiedy to naprawimy.</span
+    >
+  </v-alert>
   <v-row>
-    <v-col cols="12" sm="4"><HomeCard>Dodaj artykuł</HomeCard> </v-col>
-    <v-col cols="12" sm="4"><HomeCard>Dodaj spółkę (KRS)</HomeCard> </v-col>
-    <v-col cols="12" sm="4"><HomeCard>Wyślij informację</HomeCard> </v-col>
-    <v-col cols="12" md="6"><HomeCard>Przejrzyj osoby</HomeCard></v-col>
-    <v-col cols="12" md="6"><HomeCard>Wyślij informację</HomeCard></v-col>
+    <v-col cols="12" sm="4"
+      ><HomeCard disabled="true">Dodaj artykuł</HomeCard>
+    </v-col>
+    <v-col cols="12" sm="4"
+      ><HomeCard disabled="true">Dodaj spółkę (KRS)</HomeCard>
+    </v-col>
+    <v-col cols="12" sm="4"
+      ><HomeCard disabled="true">Wyślij informację</HomeCard>
+    </v-col>
+    <v-col cols="12" md="6"
+      ><HomeCard disabled="true">Przejrzyj osoby</HomeCard></v-col
+    >
+    <v-col cols="12" md="6"
+      ><HomeCard disabled="true">Wyślij informację</HomeCard></v-col
+    >
 
     <v-col cols="12">
       <h2>Dołącz do społeczności</h2>
     </v-col>
     <v-col cols="12" md="6">
-      <HomeCard height="100px">Wypełnij formularz zgłoszeniowy</HomeCard>
+      <nuxt-link
+        to="https://www.guidedtrack.com/programs/9fk0fj2/run"
+        tag="div"
+        class="clickable-card"
+      >
+        <HomeCard height="100px"
+          ><template #header>Wypełnij formularz zgłoszeniowy</template>
+          A my odpiszemy Ci z podprojektami, w których możesz wziąć udział.
+        </HomeCard>
+      </nuxt-link>
     </v-col>
     <v-col cols="12" md="6">
-      <HomeCard height="100px">forum.koryta.pl</HomeCard>
+      <nuxt-link to="https://forum.koryta.pl" tag="div" class="clickable-card">
+        <HomeCard height="100px"
+          ><template #header>Dołącz do forum.koryta.pl</template> I dyskutuj z
+          resztą użytkowników nad kolejnymi użytecznościami na
+          stronie.</HomeCard
+        >
+      </nuxt-link>
     </v-col>
 
     <v-col cols="12" md="6" align="center">
@@ -46,3 +84,10 @@ definePageMeta({
   middleware: "auth",
 });
 </script>
+
+<style scoped>
+.clickable-card {
+  cursor: pointer;
+  text-decoration: none;
+}
+</style>
