@@ -1,43 +1,19 @@
-import type { GraphLayout } from "~~/shared/graph/util";
-
-export function useParams(title: string) {
+export function useParams() {
   const route = useRoute();
-  const { data } = useAsyncData("graph", () => $fetch("/api/graph"));
-  const nodeGroupsMap = computed(
-    () =>
-      data.value?.nodeGroups.reduce(
-        (acc, curr) => {
-          acc[curr.id] = curr;
-          return acc;
-        },
-        {} as Record<string, GraphLayout["nodeGroups"][number]>,
-      ) ?? {},
-  );
-  const nodes = computed(() => data.value?.nodes ?? {});
 
-  // Identifiers of the nodes, that should be returned
-  // TODO move the query to the server
-  const filtered = computed(() => {
-    let keys = Object.keys(nodes.value);
+  const filterName = () => {
+    const place =
+      route.query.miejsce && typeof route.query.miejsce === "string"
+        ? nodeGroupsMap.value[route.query.miejsce]?.name
+        : "";
 
-    if (route.query.miejsce && typeof route.query.miejsce === "string") {
-      document.title = title + nodeGroupsMap.value[route.query.miejsce]?.name;
-      keys = nodeGroupsMap.value[route.query.miejsce]?.connected ?? [];
-    }
+    const party =
+      route.query.partia && typeof route.query.partia === "string"
+        ? route.query.partia
+        : "";
 
-    if (route.query.partia && typeof route.query.partia === "string") {
-      document.title = title + route.query.partia
-      keys = Object.keys(nodes.value).filter((key) => {
-        nodes.value[key].parties.includes(route.query.partia as string);
-      });
-    }
-
-    return keys;
-  });
-
-  const allowEntity = (key: string) => {
-    return filtered.value.includes(key);
+    return `${place} ${party}`.trim();
   };
 
-  return { filtered, allowEntity };
+  return { filterName };
 }
