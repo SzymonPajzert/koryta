@@ -38,18 +38,26 @@
                 src="@/assets/zrzutka.png"
               />
             </v-btn>
-            <v-btn
-              href="https://patronite.pl/romb.me"
-              target="_blank"
-              color="white"
-            >
-              <v-img
-                :width="30"
-                aspect-ratio="16/9"
-                cover
-                src="@/assets/patronite.png"
-              />
-            </v-btn>
+            <v-tooltip :disabled="!disablePatronite" right>
+              <template #activator="{ props }">
+                <div v-bind="props">
+                  <v-btn
+                    href="https://patronite.pl/romb.me"
+                    target="_blank"
+                    color="white"
+                    :disabled="disablePatronite"
+                  >
+                    <v-img
+                      :width="30"
+                      aspect-ratio="16/9"
+                      cover
+                      src="@/assets/patronite.png"
+                    />
+                  </v-btn>
+                </div>
+              </template>
+              <span>Czekamy na akceptację patronita</span>
+            </v-tooltip>
             <v-spacer />
           </v-container>
         </HomeCard>
@@ -143,6 +151,8 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
+
+const disablePatronite = ref(new Date() < new Date("2025-11-14"));
 
 const { entities: people } = await useEntity("person");
 const { koryciarz } = useFeminatyw();
