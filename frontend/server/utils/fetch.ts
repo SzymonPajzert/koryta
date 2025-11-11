@@ -9,11 +9,34 @@ interface nodeData {
   record: unknown;
 }
 
+interface QueryParams extends Record<string, unknown> {
+  party?: string;
+  place?: string;
+  id?: string;
+}
+
 export async function fetchNodes<N extends NodeType>(
   path: N,
+  query?: QueryParams,
 ): Promise<Record<string, nodeData[N]>> {
   const db = getFirestore("koryta-pl");
-  const nodes = await db.collection("nodes").where("type", "==", path).get();
+  let q = db.collection("nodes").where("type", "==", path);
+  if (query?.id) {
+    q = q.where("id", "==", query.id);
+    delete query.id;
+  }
+  if (query?.party) {
+    q = q.where("parties", "array-contains", query.party);
+    delete query.party;
+  }
+
+  // TODO filter by place somehow
+
+  for (const [key, value] of Object.entries(query ?? {})) {
+    q = q.where(key, "==", value);
+  }
+  console.debug(q);
+  const nodes = await q.get();
   return (
     Object.fromEntries(
       nodes.docs.map((doc) => [doc.id, doc.data() as nodeData[N]]),

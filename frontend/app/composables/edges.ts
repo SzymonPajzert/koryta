@@ -10,24 +10,19 @@ export type EdgeNode = {
   traverse?: TraversePolicy;
 };
 
-export async function useEdges(nodeID: string) {
-  const { data: edges } = await useFetch("/api/graph/edges");
-  const { data: nodes } = await useFetch<Record<string, Node>>("/api/nodes");
+export async function useEdges(nodeID: Ref<string>, lazy: boolean) {
+  // TODO this should be a query for a local graph of a person
+  const { data: edges } = await useFetch("/api/graph/edges", { lazy: lazy });
+  const { data: nodes } = await useFetch<Record<string, Node>>("/api/nodes", {
+    lazy: lazy,
+  });
 
   const sources: EdgeNode[] = edges.value
-    .filter((e) => e.target == nodeID)
+    .filter((e) => e.target == nodeID.value)
     .map((e) => ({ ...e, richNode: nodes.value.nodes[e.source] }));
   const targets = edges.value
-    .filter((e) => e.source == nodeID)
+    .filter((e) => e.source == nodeID.value)
     .map((e) => ({ ...e, richNode: nodes.value.nodes[e.target] }));
 
   return { sources, targets };
 }
-
-// function connectionText<D extends Destination>(connection: Connection<D>) {
-//   if (connection.text != "") return connection.text;
-//   if (connection.connection?.text && connection.relation != "") {
-//     return connection.relation + " " + connection.connection?.text;
-//   }
-//   return "";
-// }

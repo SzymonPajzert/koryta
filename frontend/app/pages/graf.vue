@@ -8,7 +8,6 @@ import { useParams } from "@/composables/params";
 import type { NodeType } from "~~/shared/model";
 
 definePageMeta({
-  title: "Graf",
   isGraph: true,
   fullWidth: true,
 });

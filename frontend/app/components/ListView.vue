@@ -30,7 +30,7 @@
               prepend-icon="mdi-pencil-outline"
               @click.stop="
                 dialogStore.open({
-                  type: 'employed',
+                  type: 'person',
                   edit: { value: person, key: key },
                 })
               "

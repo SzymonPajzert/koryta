@@ -78,8 +78,10 @@
 <script lang="ts" setup>
 import { HomeCard } from "#components";
 
-definePageMeta({
+useHead({
   title: "Działaj z nami",
+});
+definePageMeta({
   isHelp: true,
   middleware: "auth",
 });

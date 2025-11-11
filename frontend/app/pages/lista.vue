@@ -1,26 +1,16 @@
 <template>
-  <ListView :people="people" />
+  <ListView :people="people.entities" />
 </template>
 
 <script lang="ts" setup>
 import { useParams } from "@/composables/params";
 
-definePageMeta({
-  title: "Lista",
-});
-
-const { entities: peopleUnfiltered } = await useEntity("person");
-
-const { filterName } = useParams();
+const { filterName, queryParams } = useParams();
 useHead({
-  title: `Lista ${filterName}}`,
+  title: `Lista ${filterName.value}`,
 });
 
-const people = computed(() => {
-  return Object.fromEntries(
-    Object.entries(peopleUnfiltered.value).filter((person) =>
-      filtered.value.includes(person[0]),
-    ),
-  );
+const { data: people } = await useFetch("/api/nodes/person", {
+  query: queryParams,
 });
 </script>

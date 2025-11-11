@@ -54,26 +54,24 @@
 </template>
 
 <script setup lang="ts">
-import { getFirestore, doc } from "firebase/firestore";
 import { useEdges } from "~/composables/edges";
 import type { Person } from "~~/shared/model";
 import { declination } from "~/composables/polish";
 
 const route = useRoute<"/entity/[destination]/[id]">();
+const node = computed(() => route.params.id as string);
+const type = computed(() => route.params.destination);
 
-const node = route.params.id as string;
-const type = route.params.destination;
-
-const db = getFirestore(useFirebaseApp(), "koryta-pl");
-const person = useDocument<Person>(doc(db, "nodes", node));
-
-const { sources, targets } = await useEdges(node);
+const { sources, targets } = await useEdges(node, true);
+const { data: person } = await useFetch<Person>("/api/nodes/person", {
+  query: { id: node },
+});
 
 const edges = computed(() => [...sources, ...targets]);
 
 useHead({
   title: computed(() => {
-    const name = person.data.value?.name ?? "Nieznane";
+    const name = person.value?.name ?? "Nieznane";
     const connections =
       edges.value.length > 0
         ? `ma ${edges.value.length} ${declination(
