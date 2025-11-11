@@ -5,9 +5,11 @@ Sentry.init({
   // dsn: useRuntimeConfig().public.sentry.dsn,
   dsn: "https://bd99c377832328230cfd5519914b9984@o4510028768870400.ingest.de.sentry.io/4510028773392464",
 
+  enabled: process.env.NODE_ENV === "production",
+
   // We recommend adjusting this value in production, or using tracesSampler
   // for finer control
-  tracesSampleRate: 1.0,
+  tracesSampleRate: 0.01,
 
   // This sets the sample rate to be 10%. You may want this to be 100% while
   // in development and sample at a lower rate in production
@@ -15,7 +17,7 @@ Sentry.init({
 
   // If the entire session is not sampled, use the below sample rate to sample
   // sessions when an error occurs.
-  replaysOnErrorSampleRate: 1.0,
+  replaysOnErrorSampleRate: 0.3,
 
   // If you don't want to use Session Replay, just remove the line below:
   integrations: [Sentry.replayIntegration()],
