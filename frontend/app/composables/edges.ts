@@ -12,15 +12,18 @@ export type EdgeNode = {
 
 export async function useEdges(nodeID: Ref<string>, lazy: boolean) {
   // TODO this should be a query for a local graph of a person
-  const { data: edges } = await useFetch("/api/graph/edges", { lazy: lazy });
+  const { data: graph } = await useFetch("/api/graph/", {
+    lazy: lazy,
+    pick: ["edges"],
+  });
   const { data: nodes } = await useFetch<Record<string, Node>>("/api/nodes", {
     lazy: lazy,
   });
 
-  const sources: EdgeNode[] = edges.value
+  const sources: EdgeNode[] = graph.value.edges
     .filter((e) => e.target == nodeID.value)
     .map((e) => ({ ...e, richNode: nodes.value.nodes[e.source] }));
-  const targets = edges.value
+  const targets = graph.value.edges
     .filter((e) => e.source == nodeID.value)
     .map((e) => ({ ...e, richNode: nodes.value.nodes[e.target] }));
 
