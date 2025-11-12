@@ -46,7 +46,6 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { prerender: true },
     // Cached for 6 hours
-    "/api/**": { swr: 60 * 60 * 6 },
   },
 
   modules: [
