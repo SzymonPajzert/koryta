@@ -114,6 +114,15 @@ import { useFeminatyw } from "@/composables/feminatyw";
 
 const { entities: people } = useEntity("person");
 const { koryciarz } = useFeminatyw();
+
+useSeoMeta({
+  title: "Koryta.pl - Największy agregator informacji o politycznych układach",
+  ogTitle: "Koryta.pl - Największy agregator informacji o politycznych układach",
+  description:
+    "Koryta.pl to największy, ogólnopolski i bezpartyjny agregator informacji o politycznych układach. Znajdziesz w nim polityków i ich bliskich, którzy pracują w publicznych spółkach.",
+  ogDescription:
+    "Koryta.pl to największy, ogólnopolski i bezpartyjny agregator informacji o politycznych układach. Znajdziesz w nim polityków i ich bliskich, którzy pracują w publicznych spółkach.",
+});
 </script>
 
 <style scoped>

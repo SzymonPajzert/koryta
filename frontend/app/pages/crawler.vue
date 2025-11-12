@@ -1,3 +1,9 @@
+<script setup lang="ts">
+useHead({
+  title: "Crawler",
+});
+</script>
+
 <template>
   <p>
     Cześć! Zbieram artykuły na temat koryciarstwa w polskiej polityce. Jeśli mój

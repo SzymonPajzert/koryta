@@ -110,18 +110,18 @@ async function seedAuth() {
       await auth.createUser(user);
       if (user.uid === "test-admin") {
         await auth.setCustomUserClaims(user.uid, { admin: true });
-        console.log(`Set admin claim for ${user.email}`);
       }
       console.log(`User created: ${user.email} / ${user.password}`);
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    if (
-      error.code === "auth/email-already-exists" ||
-      error.code === "auth/uid-already-exists"
-    ) {
-      console.log("User already exists", error);
-    } else {
+      if (
+        error.code === "auth/email-already-exists" ||
+        error.code === "auth/uid-already-exists"
+      ) {
+        console.log("User already exists, setting claims anyway");
+        await auth.setCustomUserClaims("test-admin", { admin: true });
+      } else {
       throw error;
     }
   }

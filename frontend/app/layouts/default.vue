@@ -123,6 +123,14 @@ import { getAnalytics, logEvent } from "firebase/analytics";
 import { useAuthState } from "@/composables/auth";
 import { useDisplay } from "vuetify";
 
+useHead({
+  titleTemplate: (titleChunk) => {
+    return titleChunk
+      ? `${titleChunk} - koryta.pl`
+      : "koryta.pl - największy, bezpartyjny agregator koryciarstwa";
+  },
+});
+
 if (import.meta.client) {
   onMounted(() => {
     const analytics = getAnalytics();

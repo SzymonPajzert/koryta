@@ -83,6 +83,10 @@ definePageMeta({
   middleware: "admin",
 });
 
+useHead({
+  title: "Firmy",
+});
+
 interface CompanyScoredEditable {
   // DB name takes precedence
   name: string;

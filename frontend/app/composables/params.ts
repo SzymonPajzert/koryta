@@ -1,6 +1,6 @@
 import type { GraphLayout } from "~~/shared/graph/util";
 
-export function useParams(title: string) {
+export function useParams() {
   const route = useRoute();
   const { data } = useAsyncData<GraphLayout>("graph", () =>
     $fetch("/api/graph"),
@@ -23,12 +23,10 @@ export function useParams(title: string) {
     let keys = Object.keys(nodes.value);
 
     if (route.query.miejsce && typeof route.query.miejsce === "string") {
-      document.title = title + nodeGroupsMap.value[route.query.miejsce]?.name;
       keys = nodeGroupsMap.value[route.query.miejsce]?.connected ?? [];
     }
 
     if (route.query.partia && typeof route.query.partia === "string") {
-      document.title = title + route.query.partia;
       keys = Object.keys(nodes.value).filter((key) => {
         const node = nodes.value[key];
         return node?.parties?.includes(route.query.partia as string);
@@ -42,5 +40,19 @@ export function useParams(title: string) {
     return filtered.value.includes(key);
   };
 
-  return { filtered, allowEntity };
+  const filterName = () => {
+    const place =
+      route.query.miejsce && typeof route.query.miejsce === "string"
+        ? nodeGroupsMap.value[route.query.miejsce]?.name
+        : "";
+
+    const party =
+      route.query.partia && typeof route.query.partia === "string"
+        ? route.query.partia
+        : "";
+
+    return `${place} ${party}`.trim();
+  };
+
+  return { filtered, allowEntity, filterName };
 }

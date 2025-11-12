@@ -11,7 +11,10 @@ definePageMeta({
 
 const { entities: peopleUnfiltered } = await useEntity("person");
 
-const { filtered } = useParams("Lista ");
+const { filterName, filtered } = useParams();
+useHead({
+  title: computed(() => `Lista ${filterName()}`.trim()),
+});
 
 const people = computed(() => {
   return Object.fromEntries(
@@ -19,5 +22,11 @@ const people = computed(() => {
       filtered.value.includes(person[0]),
     ),
   );
+});
+
+useSeoMeta({
+  title: "Lista osób i spółek - Koryta.pl",
+  description:
+    "Przejrzyj pełną listę osób i spółek powiązanych z układami politycznymi w Polsce.",
 });
 </script>
