@@ -76,11 +76,10 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { data: graph } = await useAsyncData(
-  "graph",
-  () => $fetch("/api/graph"),
-  { lazy: true },
-);
+const { data: graph } = useFetch("/api/graph", {
+  lazy: true,
+  pick: ["nodes", "nodeGroups"],
+});
 
 const items = computed<ListItem[]>(() => {
   if (!graph.value) return [];

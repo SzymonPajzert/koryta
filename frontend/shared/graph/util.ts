@@ -1,11 +1,9 @@
 import type { TraversePolicy, Edge, Node, NodeStats } from "./model";
 import { SPLIT } from "./model";
 import type {
-  Connection,
   Person,
   Company,
   Article,
-  Destination,
   Edge as DBEdge,
   EdgeType,
 } from "@/../shared/model";
@@ -192,132 +190,4 @@ export function getEdges(edgesFromDB: DBEdge[]) {
     };
     return result;
   });
-}
-
-type Closure<A> = (a: A) => void;
-
-export function relationFrom<A>(
-  relations: Record<string, A>,
-  include: boolean = true,
-): HalfEdgeMaker<A> {
-  return new HalfEdgeMaker<A>((closure: Closure<[string, A]>) => {
-    if (include) {
-      Object.entries(relations).forEach(([key, relation]) => {
-        closure([key, relation]);
-      });
-    }
-  });
-}
-
-export class HalfEdgeMaker<A> {
-  readonly outer: Closure<Closure<[string, A]>>;
-  filter?: (elt: A) => boolean;
-
-  constructor(outer: Closure<Closure<[string, A]>>) {
-    this.outer = outer;
-  }
-
-  extractIf(predicate: (elt: A) => boolean) {
-    this.filter = predicate;
-    return this;
-  }
-
-  forEach<B>(
-    extractor: (elt: A) => Record<string, B> | undefined,
-  ): EdgeMaker<A, B> {
-    return new EdgeMaker<A, B>(([result, mapper]) => {
-      this.outer(([key, relation]) => {
-        Object.values(extractor(relation) ?? {}).forEach((subRelation) => {
-          const mapped = mapper(subRelation);
-          if (mapped && (!this.filter || this.filter(relation))) {
-            result.push({
-              source: key,
-              ...mapped,
-            });
-          }
-        });
-      });
-    });
-  }
-
-  forField<B>(extractor: (elt: A) => B | undefined): EdgeMaker<A, B> {
-    return new EdgeMaker<A, B>(([result, mapper]) => {
-      this.outer(([key, relation]) => {
-        const field = extractor(relation);
-        if (field) {
-          const mapped = mapper(field);
-          if (mapped) {
-            result.push({
-              source: key,
-              ...mapped,
-            });
-          }
-        }
-      });
-    });
-  }
-}
-
-type EdgeMissing = { target: string; label: string; traverse?: TraversePolicy };
-
-class EdgeMaker<A, B> {
-  traversePolicy?: TraversePolicy;
-
-  readonly outer: Closure<[Edge[], (b: B) => EdgeMissing | undefined]>;
-
-  constructor(outer: Closure<[Edge[], (b: B) => EdgeMissing | undefined]>) {
-    this.outer = outer;
-  }
-
-  setTraverse(policy: TraversePolicy): EdgeMaker<A, B> {
-    this.traversePolicy = policy;
-    return this;
-  }
-
-  edgeFromConnection<D extends Destination>(): (results: Edge[]) => void {
-    const policy = this.traversePolicy;
-    return (results: Edge[]) => {
-      this.outer([
-        results,
-        (b: B) => {
-          const connection = b as Connection<D>;
-
-          if (!connection.connection) {
-            return undefined;
-          }
-
-          return {
-            target: connection.connection!.id,
-            label: connection.relation,
-            traverse: policy,
-          };
-        },
-      ]);
-    };
-  }
-
-  edgeFrom(extractor: (b: B) => [string, string]): (results: Edge[]) => void {
-    const policy = this.traversePolicy;
-    return (results: Edge[]) => {
-      this.outer([
-        results,
-        (b: B) => {
-          const [id, label] = extractor(b);
-          return {
-            target: id,
-            label: label,
-            traverse: policy,
-          };
-        },
-      ]);
-    };
-  }
-}
-
-export function executeGraph(makers: ((results: Edge[]) => void)[]): Edge[] {
-  const results: Edge[] = [];
-  makers.forEach((maker) => {
-    maker(results);
-  });
-  return results;
 }

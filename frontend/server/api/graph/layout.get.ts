@@ -1,6 +1,5 @@
 import { simulation } from "~~/shared/graph/simulation";
 import * as d3 from "d3-force";
-import { fetchRTDB, setRTDB } from "~~/server/utils/fetch";
 
 type NodeLocation = {
   id: string;
@@ -9,21 +8,7 @@ type NodeLocation = {
 };
 
 export default defineEventHandler(async (event) => {
-  const [graph, layout] = await Promise.all([
-    event.$fetch("/api/graph"),
-    fetchRTDB<typeof result>("layout"),
-  ]);
-  if (
-    layout.nodes &&
-    Object.keys(graph.nodes).length === Object.keys(layout.nodes).length
-  ) {
-    console.log("reading saved from DB");
-    return layout;
-  } else {
-    console.log(
-      `Diff ${Object.keys(graph.nodes).length} != ${Object.keys(layout).length}`,
-    );
-  }
+  const graph = await event.$fetch("/api/graph");
 
   // Hotfix add missing nodes (maybe some of them are removed from DB)
   const edges = graph.edges.filter((edge) => {
@@ -49,6 +34,5 @@ export default defineEventHandler(async (event) => {
   const result: { nodes: Record<string, { x: number; y: number }> } = {
     nodes: layouts,
   };
-  await setRTDB("layout", result);
   return result;
 });

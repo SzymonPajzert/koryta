@@ -12,48 +12,30 @@ definePageMeta({
   fullWidth: true,
 });
 
-const dialogStore = useDialogStore();
-const simulationStore = useSimulationStore();
-const { data: graph } = await useAsyncData(
-  "graph",
-  () => $fetch("/api/graph"),
-  { lazy: true },
-);
-const { data: layout } = await useAsyncData(
-  "layout",
-  () => $fetch("/api/graph/layout"),
-  { lazy: true },
-);
+const route = useRoute();
+const { data: graph } = await useFetch("/api/graph", {
+  query: {
+    subgraph: (route.query.miejsce ?? "") as string,
+  },
+  lazy: true,
+});
+const { data: layout } = await useFetch("/api/graph/layout", { lazy: true });
 
 const nodes = computed(() => graph.value?.nodes);
 const edges = computed(() => graph.value?.edges);
 
 const router = useRouter();
-
-const interestingNodes = computed(() => {
-  return Object.fromEntries(
-    Object.entries(nodes.value ?? {}).filter(
-      ([_, node]) => node.type !== "rect" || node.stats.people > 0,
-    ),
-  );
-});
-
 const { filterName } = useParams();
 useHead({
-  title: `Graf ${filterName}}`,
+  title: `Graf ${filterName.value}}`,
 });
 
-const nodesFiltered = computed(() => {
-  return Object.fromEntries(
-    Object.entries(interestingNodes.value).filter(([key, _]) =>
-      filtered.value.includes(key),
-    ),
-  );
-});
+const dialogStore = useDialogStore();
+const simulationStore = useSimulationStore();
 
 const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
   console.log(event.detail);
-  const nodeWhole = nodesFiltered.value[node];
+  const nodeWhole = nodes.value[node];
   let destination: NodeType | undefined = undefined;
   switch (nodeWhole.type) {
     case "rect":
@@ -70,7 +52,7 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
   if (event.detail !== 2) {
     router.push({ path: `/entity/${destination}/${node}` });
   } else {
-    if (nodesFiltered.value[node].type === "rect") {
+    if (nodes.value[node].type === "rect") {
       router.push({ query: { miejsce: node } });
     }
   }
@@ -113,10 +95,11 @@ const configs = reactive(
   }),
 );
 
-watch(filtered, () => {
-  if (filtered.value.length > 200) {
+watch(nodes, () => {
+  if (nodes.value && Object.entries(nodes.value).length > 200) {
     // Don't run the simulation if it's the whole graph
     configs.view.layoutHandler = new SimpleLayout();
+    // TODO show popup that the simulation stopped due to size
   } else configs.view.layoutHandler = simulationStore.newForceLayout();
 });
 </script>
@@ -124,7 +107,7 @@ watch(filtered, () => {
 <template>
   <v-network-graph
     v-if="graph && layout"
-    :nodes="nodesFiltered"
+    :nodes="nodes"
     :edges="shallowRef(edges)"
     :configs="configs"
     :layouts="layout"

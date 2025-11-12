@@ -50,7 +50,6 @@ const chartOptions = computed(() => ({
         _chartContext: unknown,
         opts: { dataPointIndex: number },
       ) {
-        console.log(opts.dataPointIndex);
         router.push({
           path: "/lista",
           query: { partia: parties.value[opts.dataPointIndex] },
