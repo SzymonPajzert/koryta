@@ -338,4 +338,8 @@ const {
   edgeType,
   availableEdgeTypes,
 } = await useNodeEdit();
+
+useHead({
+  title: computed(() => (isNew.value ? "Utwórz" : "Edytuj")),
+});
 </script>
