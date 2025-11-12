@@ -37,6 +37,10 @@ definePageMeta({
   middleware: "auth",
 });
 
+useHead({
+  title: "Lista rewizji",
+});
+
 const { idToken } = useAuthState();
 const headers = computed(() => {
   const h: Record<string, string> = {};

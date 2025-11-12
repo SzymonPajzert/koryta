@@ -39,7 +39,10 @@ const interestingNodes = computed(() => {
   );
 });
 
-const { filtered } = useParams("Graf ");
+const { filterName, filtered } = useParams();
+useHead({
+  title: computed(() => `Graf ${filterName()}`.trim()),
+});
 
 const nodesFiltered = computed(() => {
   return Object.fromEntries(
