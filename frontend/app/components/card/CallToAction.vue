@@ -17,7 +17,7 @@
           variant="elevated"
           color="primary"
           class="ma-2"
-          href="https://www.guidedtrack.com/programs/9fk0fj2/run"
+          href="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
           target="_blank"
         >
           <v-icon>mdi-pencil-plus</v-icon> Chcę pomóc! (ankieta)
