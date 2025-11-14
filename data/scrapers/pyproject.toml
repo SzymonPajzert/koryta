@@ -132,7 +132,7 @@ scrape_krs_people = "scrapers.krs.process:extract_people"
 scrape_krs_companies = "scrapers.krs.process:extract_companies"
 scrape_koryta_people = "scrapers.koryta.download:process_people"
 scrape_koryta_articles = "scrapers.koryta.download:process_articles"
-analyze_people = "analysis.people:main"
+analyze_people = "analysis.people:people_merged"
 # jupyter lab is available as well for analysis
 
 [build-system]
