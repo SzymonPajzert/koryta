@@ -1,7 +1,7 @@
 import pandas as pd
 from zipfile import ZipFile
 
-from util.download import download_teryt, FileSource
+from stores.download import download_teryt, FileSource
 
 teryt_data = FileSource(
     "https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx",

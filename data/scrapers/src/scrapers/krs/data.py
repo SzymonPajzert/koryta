@@ -2,7 +2,7 @@ from typing import Callable
 
 import pandas as pd
 
-from util.download import FileSource
+from stores.download import FileSource
 from util.config import downloaded
 from util.teryt import parse_teryt
 

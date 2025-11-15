@@ -9,7 +9,7 @@ import pandas
 from zipfile import ZipFile
 
 from util.polish import PkwFormat
-from util.download import FileSource
+from stores.download import FileSource
 from scrapers.pkw.elections import ElectionType
 
 

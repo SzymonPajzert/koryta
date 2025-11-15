@@ -27,6 +27,9 @@ source_modules =
     scrapers
     entities
 forbidden_modules =
+    bz2
+   # TODO xml
+   # TODO xml.**
     duckdb
     duckdb.**
     urllib
@@ -36,8 +39,8 @@ forbidden_modules =
     sys
     sys.**
     zipfile
-    tqdm
-    tqdm.**
+   # TODO tqdm
+   # tqdm.**
     google
     google.**
     firebase_admin

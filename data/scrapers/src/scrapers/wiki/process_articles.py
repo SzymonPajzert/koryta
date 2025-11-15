@@ -5,18 +5,18 @@ import regex as re
 from regex import findall, match, search
 from collections import Counter
 
-import bz2
 import xml.etree.ElementTree as ET
-from google.cloud import storage
 from tqdm import tqdm
 
 from util.config import tests
 from scrapers.stores import dump_dbs
-from util.download import FileSource
+from stores.download import FileSource
 from util.config import DOWNLOADED_DIR
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 from util.polish import UPPER, LOWER
 from util.lists import WIKI_POLITICAL_LINKS, TEST_FILES
+
+from scrapers.stores import Context
 
 from entities.person import Wikipedia as People
 from entities.company import KRS as Company
@@ -33,19 +33,6 @@ if __name__ == "__main__":
 
 DUMP_FILENAME = os.path.join(DOWNLOADED_DIR, "plwiki-latest-articles.xml.bz2")
 DUMP_SIZE = 12314670146
-
-
-def upload_to_gcs(bucket_name, destination_blob_name, data):
-    """Uploads data to a GCS bucket."""
-    try:
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(destination_blob_name)
-
-        blob.upload_from_string(data, content_type="application/xml")
-        print(f"✅ Successfully uploaded {destination_blob_name} to {bucket_name}")
-    except Exception as e:
-        print(f"❌ Failed to upload {destination_blob_name}. Error: {e}")
 
 
 @dataclass
@@ -309,7 +296,7 @@ def extract(elem: ET.Element) -> People | Company | None:
     return None
 
 
-def process_wikipedia_dump():
+def process_wikipedia_dump(ctx: Context):
     """
     Parses the Wikipedia dump, filters for target categories,
     and uploads individual XML files to GCS.
@@ -321,7 +308,7 @@ def process_wikipedia_dump():
         return
 
     # Use bz2 to decompress the file on the fly
-    with bz2.open(DUMP_FILENAME, "rt", encoding="utf-8") as f:
+    with ctx.zip_reader.open(DUMP_FILENAME, "rt", encoding="utf-8") as f:
         # Use iterparse for memory-efficient XML parsing
         # We only care about the 'end' event of a 'page' tag
         print(f"🗂️  Starts processing dump file: {DUMP_FILENAME}")
