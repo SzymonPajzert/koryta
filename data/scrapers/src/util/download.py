@@ -13,6 +13,13 @@ base_dir = Path(DOWNLOADED_DIR)
 
 
 class FileSource:
+    """
+    A class to represent a file that can be downloaded.
+
+    It handles checking if the file is already downloaded and downloading it if not.
+    It allows downloading from URL or a more complex actions.
+    """
+
     downloader: Callable
     filename: str
 
@@ -30,7 +37,7 @@ class FileSource:
         else:
             self.downloader = download_from_url(url)
 
-        # Either save to the default path or
+        # Either save to the default path or pick it from the URL
         if filename is None:
             self.filename = url.split("/")[-1]
         else:
@@ -73,8 +80,8 @@ def download_from_url(url):
 
 def download_teryt(destination_path):
     """
-    This script replicates the provided cURL command to post data to an ASPX page
-    and download the resulting file.
+    The data for TERYT is provided behind the ASPX script.
+    We need to perform a more complex call for it, so it's provided as a lambda.
     """
     url = "https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default"
 
