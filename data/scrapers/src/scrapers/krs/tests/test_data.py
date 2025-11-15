@@ -30,18 +30,18 @@ def test_public_companies_list():
 
 
 def test_migration_to_single_list():
-    all_krs = set(
-        itertools.chain(
-            data.MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs,
-            data.SPOLKI_SKARBU_PANSTWA,
-            data.AMW,
-            data.WARSZAWA,
-            data.MALOPOLSKIE,
-            data.LODZKIE,
-            data.LUBELSKIE,
-            data.PUBLIC_COMPANIES_KRS,
-        )
+    iterator = itertools.chain(
+        data.MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs,
+        data.SPOLKI_SKARBU_PANSTWA,
+        data.AMW,
+        data.WARSZAWA,
+        data.MALOPOLSKIE,
+        data.LODZKIE,
+        data.LUBELSKIE,
+        data.PUBLIC_COMPANIES_KRS,
     )
+
+    all_krs = set(iterator)
 
     if not os.path.exists(versioned.get_path("all_krs.txt")):
         with open(versioned.get_path("all_krs.txt"), "w") as f:

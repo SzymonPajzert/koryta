@@ -47,10 +47,5 @@ voj_lower_to_teryt = {
 
 
 def parse_teryt(voj: str, pow: str, gmin: str, city: str):
-    try:
-        voj = voj.lower()
-        return voj_lower_to_teryt[voj]
-    except KeyError:
-        print(voj_lower_to_teryt)
-        print(voj, pow, gmin, city)
-        raise
+    voj = voj.lower()
+    return voj_lower_to_teryt[voj]

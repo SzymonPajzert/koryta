@@ -1,5 +1,4 @@
 import typing
-import itertools
 from time import sleep
 from dataclasses import dataclass
 from pprint import pprint
@@ -168,19 +167,7 @@ def scrape_rejestrio():
 
     already_scraped = set(KRS.from_blob_name(path) for path in list_blobs("rejestr.io"))
 
-    starters = set(
-        KRS(krs)
-        for krs in itertools.chain(
-            # data.MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs,
-            # data.SPOLKI_SKARBU_PANSTWA,
-            # data.AMW,
-            data.WARSZAWA,
-            data.MALOPOLSKIE,
-            data.LODZKIE,
-            data.LUBELSKIE,
-            data.PUBLIC_COMPANIES_KRS,
-        )
-    )
+    starters = set(KRS(krs) for krs in data.ALL_COMPANIES_KRS)
     if args.only != "":
         # Narrow down starters to only specified companies
         starters = {KRS(args.only)}

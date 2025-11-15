@@ -20,9 +20,20 @@ if not public_companies.downloaded():
 df = pd.read_csv(
     downloaded.get_path(public_companies.filename), sep=";", low_memory=False
 )
-df["teryt"] = df[
-    ["Województwo siedziby", "Powiat siedziby", "Gmina siedziby", "Miasto siedziby"]
-].apply(lambda row: parse_teryt(row.iloc[0], row.iloc[1], row.iloc[2], row.iloc[3]))
+
+
+def parse_teryt_from_row(row: pd.Series) -> str:
+    try:
+        if pd.isna(row.loc["Województwo siedziby"]):
+            return ""
+        return parse_teryt(row.loc["Województwo siedziby"], "", "", "")
+    except:
+        print(row)
+        print(row.loc["Województwo siedziby"])
+        raise
+
+
+df["teryt"] = df.apply(parse_teryt_from_row, axis=1)
 
 
 ALL_COMPANIES_KRS: dict[str, KRS] = dict()
