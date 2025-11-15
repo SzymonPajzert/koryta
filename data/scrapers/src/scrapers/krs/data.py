@@ -1,8 +1,13 @@
+from typing import Callable
+
 import pandas as pd
 
 from util.download import FileSource
 from util.config import downloaded
 from util.teryt import parse_teryt
+
+from scrapers.krs.model import KRS
+
 
 # Public companies, from data.gov.pl:
 _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
@@ -15,10 +20,20 @@ if not public_companies.downloaded():
 df = pd.read_csv(
     downloaded.get_path(public_companies.filename), sep=";", low_memory=False
 )
-# TODO enrich the data to parse the teryt code
-# df["teryt"] = df[
-#     ["Województwo siedziby", "Powiat siedziby", "Gmina siedziby", "Miasto siedziby"]
-# ].apply(lambda row: parse_teryt(row.iloc[0], row.iloc[1], row.iloc[2], row.iloc[3]))
+df["teryt"] = df[
+    ["Województwo siedziby", "Powiat siedziby", "Gmina siedziby", "Miasto siedziby"]
+].apply(lambda row: parse_teryt(row.iloc[0], row.iloc[1], row.iloc[2], row.iloc[3]))
+
+
+ALL_COMPANIES_KRS: dict[str, KRS] = dict()
+
+
+def register_partials(static: dict, map: Callable, data: pd.DataFrame):
+    for d in data.itertuples():
+        krs = KRS(**static, **map(d))
+        if krs.id in ALL_COMPANIES_KRS:
+            ALL_COMPANIES_KRS[krs.id] = ALL_COMPANIES_KRS[krs.id].merge(krs)
+
 
 PUBLIC_COMPANIES_KRS = (
     df["KRS"].dropna().astype(int).astype(str).str.zfill(10).to_list()

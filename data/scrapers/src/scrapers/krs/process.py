@@ -2,34 +2,12 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from scrapers.krs.model import KRS
 from stores.storage import iterate_blobs
 from stores.duckdb import ducktable, always_export
 
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
-
-
-class KRS:
-    id: str
-
-    def __init__(self, id: int | str) -> None:
-        self.id = str(id).zfill(10)
-
-    @staticmethod
-    def from_blob_name(blob_name: str) -> "KRS":
-        return KRS(blob_name.split("org/")[1].split("/")[0])
-
-    def __str__(self) -> str:
-        return self.id
-
-    def __repr__(self) -> str:
-        return self.id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, KRS) and self.id == other.id
 
 
 @ducktable(name="people_krs")
