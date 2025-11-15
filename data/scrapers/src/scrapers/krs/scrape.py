@@ -158,9 +158,16 @@ def scrape_rejestrio():
         default="",
         help="only show children of this KRS",
     )
+    parser.add_argument(
+        "--children",
+        dest="children",
+        default=True,
+        help="If False, don't scrape children of the companies",
+    )
     args = parser.parse_args()
 
     already_scraped = set(KRS.from_blob_name(path) for path in list_blobs("rejestr.io"))
+
     starters = set(
         KRS(krs)
         for krs in itertools.chain(
@@ -171,13 +178,19 @@ def scrape_rejestrio():
             data.MALOPOLSKIE,
             data.LODZKIE,
             data.LUBELSKIE,
+            data.PUBLIC_COMPANIES_KRS,
         )
     )
-    graph = CompanyGraph()
     if args.only != "":
+        # Narrow down starters to only specified companies
         starters = {KRS(args.only)}
 
-    children = graph.all_descendants(starters)
+    graph = CompanyGraph()
+
+    if args.children:
+        children = graph.all_descendants(starters)
+    else:
+        children = starters
     pprint(children)
     children_companies = set(
         company for krs, company in graph.companies.items() if krs in children
