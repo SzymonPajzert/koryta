@@ -1,4 +1,4 @@
-from stores.download import FileSource
+from scrapers.stores import FileSource
 from util.config import downloaded
 from frameworks.conductor import pipeline
 

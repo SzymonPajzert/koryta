@@ -1,5 +1,6 @@
 """This file contains abstract definition of store functionality, to use in the scrapers"""
 
+from typing import Any
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
@@ -22,9 +23,32 @@ class ZipReader(ABC):
         pass
 
 
+# TODO maybe even to entities?
+@dataclass
+class FileSource:
+    """
+    It corresponds to stores.download.FileSource which executes its configuration
+    """
+
+    url: str
+    filename: str | None = None
+    complex_download: str | None = None
+
+
+class Conductor(ABC):
+    """
+    Conductor manages relations between pipelines
+    """
+
+    @abstractmethod
+    def check_input(self, input: Any):  # TODO type this better
+        pass
+
+
 @dataclass
 class Context:
     zip_reader: ZipReader
+    conductor: Conductor
 
 
 def insert_into(v):

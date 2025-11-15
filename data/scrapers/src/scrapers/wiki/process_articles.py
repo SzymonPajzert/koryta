@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from util.config import tests
 from scrapers.stores import dump_dbs
-from stores.download import FileSource
+from scrapers.stores import FileSource
 from util.config import DOWNLOADED_DIR
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 from util.polish import UPPER, LOWER
@@ -23,13 +23,10 @@ from entities.company import KRS as Company
 from entities.util import IgnoredDates
 
 
-# URL for the latest Polish Wikipedia articles dump
-DUMP_URL = "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2"
-
-OUTPUT_FILE = "plwiki-latest-articles.xml.bz2"
-
-if __name__ == "__main__":
-    FileSource(DUMP_URL).download()
+WIKI_DUMP = FileSource(
+    "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2",
+    "plwiki-latest-articles.xml.bz2",
+)
 
 DUMP_FILENAME = os.path.join(DOWNLOADED_DIR, "plwiki-latest-articles.xml.bz2")
 DUMP_SIZE = 12314670146
@@ -301,11 +298,14 @@ def process_wikipedia_dump(ctx: Context):
     Parses the Wikipedia dump, filters for target categories,
     and uploads individual XML files to GCS.
     """
-    if not os.path.exists(DUMP_FILENAME):
-        print(
-            f"Error: Dump file '{DUMP_FILENAME}' not found. Please run the download script first."
-        )
-        return
+    ctx.conductor.check_input(WIKI_DUMP)
+
+    # TODO move to implementation
+    # if not os.path.exists(DUMP_FILENAME):
+    #     print(
+    #         f"Error: Dump file '{DUMP_FILENAME}' not found. Please run the download script first."
+    #     )
+    #     return
 
     # Use bz2 to decompress the file on the fly
     with ctx.zip_reader.open(DUMP_FILENAME, "rt", encoding="utf-8") as f:
@@ -335,9 +335,10 @@ def process_wikipedia_dump(ctx: Context):
     print("🎉 Processing complete.")
 
 
-def main():
+# TODO remove this method and move to a cleaner one
+def main(ctx: Context):
     try:
-        process_wikipedia_dump()
+        process_wikipedia_dump(ctx)
     except Exception as e:
         print(f"An error occurred: {e}")
         raise

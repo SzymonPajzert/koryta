@@ -8,8 +8,11 @@ from tqdm import tqdm
 import urllib.request
 
 from util.config import DOWNLOADED_DIR
+from scrapers.stores import FileSource as FileSourceConfig
 
 base_dir = Path(DOWNLOADED_DIR)
+
+downloads: dict[str, Callable] = dict()
 
 
 class FileSource:
@@ -23,25 +26,19 @@ class FileSource:
     downloader: Callable
     filename: str
 
-    def __init__(
-        self,
-        # Split into separate lines
-        url: str,
-        filename: str | None = None,
-        downloader: Callable | None = None,
-    ) -> None:
+    def __init__(self, config: FileSourceConfig) -> None:
 
         # Define the downloader or use the default download from the URL
-        if downloader is not None:
-            self.downloader = downloader
+        if config.complex_download is not None:
+            self.downloader = downloads[config.complex_download]
         else:
-            self.downloader = download_from_url(url)
+            self.downloader = download_from_url(config.url)
 
         # Either save to the default path or pick it from the URL
-        if filename is None:
-            self.filename = url.split("/")[-1]
+        if config.filename is None:
+            self.filename = config.url.split("/")[-1]
         else:
-            self.filename = filename
+            self.filename = config.filename
 
     @property
     def downloaded_path(self) -> Path:
@@ -131,3 +128,6 @@ def download_teryt(destination_path):
         f.write(response.content)
 
     print(f"✅ Success! File saved as: {destination_path}")
+
+
+downloads["download_teryt"] = download_teryt
