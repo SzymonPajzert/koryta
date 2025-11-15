@@ -1,0 +1,20 @@
+[importlinter]
+root_packages =
+    analysis
+    scrapers
+    stores
+    util
+
+include_external_packages = True
+exclude_type_checking_imports = True
+
+[importlinter:contract:clean-architecture]
+name = Clean architecture
+type = layers
+layers =
+    analysis
+    scrapers
+    stores
+    util
+
+    
