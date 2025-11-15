@@ -49,5 +49,6 @@ forbidden_modules =
     bs4.**
     zipfile
     zipfile.**
+    io
 
     

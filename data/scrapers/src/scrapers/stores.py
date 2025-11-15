@@ -86,10 +86,17 @@ class Conductor(ABC):
         pass
 
 
+class RejestIO(ABC):
+    @abstractmethod
+    def get_rejestr_io(self, url: str) -> str | None:
+        pass
+
+
 @dataclass
 class Context:
     zip_reader: ZipReader
     conductor: Conductor
+    rejestr_io: RejestIO
 
 
 def get_context() -> Context:
