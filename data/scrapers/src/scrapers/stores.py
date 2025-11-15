@@ -1,5 +1,6 @@
 """This file contains abstract definition of store functionality, to use in the scrapers"""
 
+import typing
 from typing import Any
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
@@ -13,6 +14,16 @@ class Enterable(ABC):
     @abstractmethod
     def __exit__(self, exc_type, exc_value, traceback):
         pass
+
+
+class Extractor(ABC):
+    @abstractmethod
+    def read(self, file_path):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def read_bytes(self, raw_bytes):
+        raise NotImplementedError()
 
 
 class File(ABC):
@@ -32,6 +43,9 @@ class File(ABC):
     def read_parquet(self):
         pass
 
+    def read_zip(self, path: str | None = None):
+        raise NotImplementedError()
+
 
 class ZipReader(ABC):
     # import bz2
@@ -43,25 +57,40 @@ class ZipReader(ABC):
         mode: str,
         encoding: str | None = None,
         subfile: str | None = None,
-    ) -> Enterable:
+    ) -> typing.BinaryIO | typing.TextIO:
         pass
 
 
+class Filename(ABC):
+    pass
+
+
 @dataclass
-class VersionedFile:
+class LocalFile(Filename):
+    filename: str
+
+
+@dataclass
+class VersionedFile(Filename):
     filename: str
 
 
 # TODO maybe even to entities?
 @dataclass
-class DownloadableFile:
+class DownloadableFile(Filename):
     """
     It corresponds to stores.download.FileSource which executes its configuration
     """
 
     url: str
-    filename: str | None = None
+    filename_fallback: str | None = None
     complex_download: str | None = None
+
+    @property
+    def filename(self):
+        if self.filename_fallback is not None:
+            return self.filename_fallback
+        return self.url.split("/")[-1]
 
 
 class Conductor(ABC):
@@ -78,11 +107,11 @@ class Conductor(ABC):
         pass
 
     @abstractmethod
-    def get_path(self, fs: FileSource) -> str:
+    def get_path(self, fs: Filename) -> str:
         pass
 
     @abstractmethod
-    def read_file(self, fs: FileSource) -> File:
+    def read_file(self, fs: Filename) -> File:
         pass
 
 
@@ -94,7 +123,6 @@ class RejestIO(ABC):
 
 @dataclass
 class Context:
-    zip_reader: ZipReader
     conductor: Conductor
     rejestr_io: RejestIO
 

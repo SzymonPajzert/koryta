@@ -12,12 +12,14 @@ from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 from util.polish import UPPER, LOWER
 from util.lists import WIKI_POLITICAL_LINKS, TEST_FILES
 
-from scrapers.stores import Context
+from scrapers.stores import Context, LocalFile
+from scrapers.stores import insert_into, dump_dbs, get_context
 
 from entities.person import Wikipedia as People
 from entities.company import KRS as Company
 from entities.util import IgnoredDates
 
+ctx = get_context()
 
 WIKI_DUMP = FileSource(
     "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2",
@@ -222,7 +224,7 @@ class WikiArticle:
 
     def write_to_test(self, elem: ET.Element, force=False):
         if self.title in TEST_FILES or force:
-            path = tests.get_path(f"{self.title}.xml")
+            path = ctx.conductor.get_path(LocalFile(f"{self.title}.xml"))
             print(f"Saving {self.title} to test file: {path}")
             with open(path, "w") as test_file:
                 test_file.write(ET.tostring(elem, encoding="unicode").strip())
@@ -303,10 +305,10 @@ def process_wikipedia_dump(ctx: Context):
     #     return
 
     # Use bz2 to decompress the file on the fly
-    with ctx.zip_reader.open(DUMP_FILENAME, "rt", encoding="utf-8") as f:
+    with ctx.conductor.read_file(WIKI_DUMP).read_zip() as f:
         # Use iterparse for memory-efficient XML parsing
         # We only care about the 'end' event of a 'page' tag
-        print(f"🗂️  Starts processing dump file: {DUMP_FILENAME}")
+        print(f"🗂️  Starts processing dump file: {WIKI_DUMP.filename}")
 
         tq = tqdm(total=DUMP_SIZE, unit_scale=True, smoothing=0.1)
         prev = 0
@@ -322,7 +324,7 @@ def process_wikipedia_dump(ctx: Context):
             if elem.tag.endswith("page"):
                 entity = extract(elem)
                 if entity is not None:
-                    entity.insert_into()  # pyright: ignore[reportAttributeAccessIssue]
+                    insert_into(entity)
                 # Crucial step for memory management: clear the element
                 # after processing to free up memory.
                 elem.clear()

@@ -14,10 +14,13 @@ name = Clean architecture
 type = layers
 layers =
     analysis
-    stores
-    scrapers
-    util
-    entities
+    # corresponds to adapters
+    stores 
+    # corresponds to use_cases
+    scrapers 
+    util       
+    # core logic
+    entities  
 
 [importlinter:contract:only-details-can-import-external]
 name = Do not import external packages
@@ -50,5 +53,9 @@ forbidden_modules =
     zipfile
     zipfile.**
     io
+    fnmatch
+    csv
+ignore_imports=
+    entities.util -> urllib
 
     

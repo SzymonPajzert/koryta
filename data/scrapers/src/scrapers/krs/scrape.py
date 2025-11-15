@@ -191,7 +191,9 @@ def scrape_rejestrio(ctx: Context):
     pprint(to_scrape_children)
     parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
     pprint(parent_count.most_common(30))
-    urls = list(save_org_connections(to_scrape, map(KRS, data.NAME_MISSING)))
+    urls = list(
+        save_org_connections(to_scrape, map(KRS, data.from_source("NAME_MISSING")))
+    )
     print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
     input("Press enter to continue...")
 

@@ -1,7 +1,5 @@
 import regex as re
 from enum import Enum
-import io
-import csv
 
 # TODO Is there any better way to list upper case characters?
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
@@ -37,22 +35,6 @@ MONTH_NUMBER_GENITIVE = {
     "listopada": 11,
     "grudnia": 12,
 }
-
-
-def csv_to_freq_map(url: str, file_path: str):
-    def generator():
-        f = open(file_path, "r", encoding="utf-8")
-        for line in f.readlines():
-            yield line
-
-    first = True
-    for line in csv.reader(generator()):
-        if first:
-            first = False
-            continue
-        woj = line[0]
-        name = line[1]
-        count = int(line[2])
 
 
 class PkwFormat(Enum):
