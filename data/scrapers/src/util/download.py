@@ -1,7 +1,13 @@
-import urllib.request
-from pathlib import Path
-from util.config import DOWNLOADED_DIR
 import os
+import requests
+import re
+import sys
+from pathlib import Path
+
+from tqdm import tqdm
+import urllib.request
+
+from util.config import DOWNLOADED_DIR
 
 base_dir = Path(DOWNLOADED_DIR)
 
@@ -31,9 +37,17 @@ class FileSource:
         destination_path = base_dir / self.filename
         print(f"Downloading {self.url} to {destination_path}...")
 
+        p = tqdm()
+
+        def reporthook(_block_number, read_size, total_file_size):
+            p.total = total_file_size
+            p.update(read_size)
+
         try:
             # 4. Download the file and save it to the destination path
-            urllib.request.urlretrieve(self.url, destination_path)
+            urllib.request.urlretrieve(
+                self.url, destination_path, reporthook=reporthook
+            )
             print("Download complete!")
             return destination_path
         except Exception as e:
