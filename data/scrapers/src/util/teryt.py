@@ -21,18 +21,19 @@ raw_bytes = ZipFile(teryt_data.downloaded_path, "r").open(
 data = pd.read_csv(
     raw_bytes, sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str}
 )
+
+wojewodztwa_df = data[data["POW"].isna() & data["GMI"].isna()]
+wojewodztwa = {row[1] + "00": row[5] for row in wojewodztwa_df.itertuples()}
+
 powiaty_df = data[data["GMI"].isna() & ~data["POW"].isna()]
 powiaty = {row[1] + row[2]: row[5] for row in powiaty_df.itertuples()}
-print(powiaty_df)
-print(powiaty["0261"])
-
 
 TERYT = {
+    **wojewodztwa,
     **powiaty,
     "0261": "Jelenia Góra",
     "0262": "Legnica",
     "0264": "Wrocław",
-    "0265": "Wałbrzych",
     "0265": "Wałbrzych",
     "0461": "Bydgoszcz",
     "0462": "Grudziądz",
@@ -111,10 +112,7 @@ TERYT = {
     "1218": "powiat wadowicki",
     "1219": "powiat wielicki",
     "1261": "Kraków",
-    "1261": "Kraków",
     "1262": "Nowy Sącz",
-    "1262": "Nowy Sącz",
-    "1263": "Tarnów",
     "1263": "Tarnów",
     "1461": "Ostrołęka",
     "1462": "Płock",
@@ -173,10 +171,15 @@ cities_to_teryt["Ciechanów"] = "1402"
 
 
 voj_lower_to_teryt = {
-    voj.lower(): teryt[:2] for teryt, voj in TERYT.items() if teryt[2:] == ["00"]
+    voj.lower(): teryt[:2] for teryt, voj in TERYT.items() if teryt[2:] == "00"
 }
 
 
 def parse_teryt(voj: str, pow: str, gmin: str, city: str):
-    voj = voj.lower()
-    return voj_lower_to_teryt[voj]
+    try:
+        voj = voj.lower()
+        return voj_lower_to_teryt[voj]
+    except KeyError:
+        print(voj_lower_to_teryt)
+        print(voj, pow, gmin, city)
+        raise

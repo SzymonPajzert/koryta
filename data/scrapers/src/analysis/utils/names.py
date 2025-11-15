@@ -5,23 +5,26 @@ from util.conductor import pipeline
 
 surnames = [
     FileSource(
-        # "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table",
-        "https://api.dane.gov.pl/1.4/resources/65049/file",  # TODO
+        # https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table
+        "https://api.dane.gov.pl/resources/65049,nazwiska-meskie-wg-zameldowania-na-pobyt-stay-stan-na-2025-02-24/csv",
         "nazwiska_męskie-osoby_żyjące_w_podziale_na_województwo_zameldowania.csv",
     ),
     FileSource(
-        "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65090/file",
+        # "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65090/file",
+        "https://api.dane.gov.pl/resources/65090,nazwiska-zenskie-wg-zameldowania-na-pobyt-stay-stan-na-2025-02-24/csv",
         "nazwiska_żeńskie-osoby_żyjące_w_podziale_na_województwo_zameldowania.csv",
     ),
 ]
 
 firstnames = [
     FileSource(
-        "https://dane.gov.pl/pl/dataset/1667,lista-imion-wystepujacych-w-rejestrze-pesel-osoby-zyjace/resource/63929/table",
+        # https://dane.gov.pl/pl/dataset/1667,lista-imion-wystepujacych-w-rejestrze-pesel-osoby-zyjace/resource/63929/table
+        "https://api.dane.gov.pl/resources/63929,lista-imion-meskich-w-rejestrze-pesel-stan-na-22012025-imie-pierwsze/csv",
         "8_-_Wykaz_imion_męskich_osób_żyjących_wg_pola_imię_pierwsze_występujących_w_rejestrze_PESEL_bez_zgonów.csv",
     ),
     FileSource(
-        "https://dane.gov.pl/pl/dataset/1667,lista-imion-wystepujacych-w-rejestrze-pesel-osoby-zyjace/resource/63924/table",
+        # https://dane.gov.pl/pl/dataset/1667,lista-imion-wystepujacych-w-rejestrze-pesel-osoby-zyjace/resource/63924/table
+        "https://api.dane.gov.pl/resources/63924,lista-imion-zenskich-w-rejestrze-pesel-stan-na-22012025-imie-pierwsze/csv",
         "8_-_Wykaz_imion_żeńskich__osób_żyjących_wg_pola_imię_pierwsze_występujących_w_rejestrze_PESEL_bez_zgonów.csv",
     ),
 ]

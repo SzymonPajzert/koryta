@@ -168,9 +168,6 @@ def scrape_rejestrio():
 
     already_scraped = set(KRS.from_blob_name(path) for path in list_blobs("rejestr.io"))
 
-    print(data.PUBLIC_COMPANIES_KRS)
-    print(len(data.PUBLIC_COMPANIES_KRS))
-
     starters = set(
         KRS(krs)
         for krs in itertools.chain(

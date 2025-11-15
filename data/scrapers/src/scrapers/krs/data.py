@@ -2,7 +2,7 @@ import pandas as pd
 
 from util.download import FileSource
 from util.config import downloaded
-from util.polish import parse_teryt
+from util.teryt import parse_teryt
 
 # Public companies, from data.gov.pl:
 _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
@@ -12,14 +12,13 @@ public_companies = FileSource(
 if not public_companies.downloaded():
     public_companies.download()
 
-df = pd.read_csv(downloaded.get_path(public_companies.filename), sep=";")
-df["teryt"] = df[
-    ["Województwo siedziby", "Powiat siedziby", "Gmina siedziby", "Miasto siedziby"]
-].apply(lambda row: parse_teryt(row.iloc[0], row.iloc[1], row.iloc[2], row.iloc[3]))
-
-print(df["teryt"])
-print(df["KRS"].dropna().astype(int).astype(str).str.zfill(10).to_list())
-
+df = pd.read_csv(
+    downloaded.get_path(public_companies.filename), sep=";", low_memory=False
+)
+# TODO enrich the data to parse the teryt code
+# df["teryt"] = df[
+#     ["Województwo siedziby", "Powiat siedziby", "Gmina siedziby", "Miasto siedziby"]
+# ].apply(lambda row: parse_teryt(row.iloc[0], row.iloc[1], row.iloc[2], row.iloc[3]))
 
 PUBLIC_COMPANIES_KRS = (
     df["KRS"].dropna().astype(int).astype(str).str.zfill(10).to_list()
