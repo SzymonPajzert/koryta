@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import typing
 from typing import Any, Never
 
-from util.polish import cities_to_teryt
+from util.teryt import cities_to_teryt
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.okregi import voting_district_to_city
 

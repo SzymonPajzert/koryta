@@ -8,7 +8,7 @@ import numpy as np
 from scrapers.krs.companies import company_names, lodzkie_companies
 from scrapers.pkw.elections import committee_to_party
 from util.config import versioned
-from util.polish import TERYT
+from util.teryt import TERYT
 from scrapers.pkw.sources import election_date
 
 MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
