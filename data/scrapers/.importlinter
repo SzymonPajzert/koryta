@@ -47,5 +47,7 @@ forbidden_modules =
     firebase_admin.**
     bs4
     bs4.**
+    zipfile
+    zipfile.**
 
     

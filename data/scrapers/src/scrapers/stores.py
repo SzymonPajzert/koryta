@@ -19,7 +19,13 @@ class ZipReader(ABC):
     # import bz2
     # with bz2.open(DUMP_FILENAME, "rt", encoding="utf-8") as f:
     @abstractmethod
-    def open(self, filename: str, mode: str, encoding: str) -> Enterable:
+    def open(
+        self,
+        filename: str,
+        mode: str,
+        encoding: str | None = None,
+        subfile: str | None = None,
+    ) -> Enterable:
         pass
 
 
@@ -49,6 +55,10 @@ class Conductor(ABC):
 class Context:
     zip_reader: ZipReader
     conductor: Conductor
+
+
+def get_context() -> Context:
+    raise NotImplementedError()
 
 
 def insert_into(v):

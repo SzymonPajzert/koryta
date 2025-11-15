@@ -2,9 +2,12 @@ from dataclasses import dataclass
 import typing
 from typing import Any, Never
 
-from util.teryt import cities_to_teryt
+from scrapers.stores import get_context
+from scrapers.teryt import Teryt
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.okregi import voting_district_to_city
+
+teryt = Teryt(get_context())
 
 
 @dataclass
@@ -65,7 +68,7 @@ def lookup_teryt_from_city(city: str, _: None) -> str:
     # Remove trailing roman numerals, e.g. Warszawa II
     city = city.rstrip("I").rstrip()
     try:
-        return cities_to_teryt[city][:2]
+        return teryt.cities_to_teryt[city][:2]
     except KeyError:
         raise ValueError(f"Unknown voting district: {city}")
 
