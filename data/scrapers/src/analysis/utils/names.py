@@ -5,11 +5,12 @@ from util.conductor import pipeline
 
 surnames = [
     FileSource(
-        "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table",
+        # "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table",
+        "https://api.dane.gov.pl/1.4/resources/65049/file",  # TODO
         "nazwiska_męskie-osoby_żyjące_w_podziale_na_województwo_zameldowania.csv",
     ),
     FileSource(
-        "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65090/table",
+        "https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65090/file",
         "nazwiska_żeńskie-osoby_żyjące_w_podziale_na_województwo_zameldowania.csv",
     ),
 ]
