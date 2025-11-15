@@ -14,6 +14,11 @@ VERSIONED_DIR = os.path.join(PROJECT_ROOT, "versioned")
 DOWNLOADED_DIR = os.path.join(PROJECT_ROOT, "downloaded")
 TESTS_DIR = os.path.join(PROJECT_ROOT, "tests")
 
+if not os.path.exists(VERSIONED_DIR):
+    os.makedirs(VERSIONED_DIR)
+if not os.path.exists(DOWNLOADED_DIR):
+    os.makedirs(DOWNLOADED_DIR)
+
 HINTS = {
     "versioned/people_wiki.jsonl": "poetry run scrape_wiki",
     "versioned/people_krs.jsonl": "poetry run scrape_krs  # requires access to Google bucket koryta-pl-crawled",
