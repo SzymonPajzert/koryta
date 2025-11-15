@@ -1,33 +1,15 @@
-from dataclasses import dataclass
 from tqdm import tqdm
 from collections import Counter
 
 from stores.firestore import firestore_db
-from stores.duckdb import ducktable, always_export
+from stores.duckdb import always_export, register_table, insert_into
 from util.url import NormalizedParse
 
+from entities.article import Article
+from entities.person import Koryta as Person
 
-@ducktable(name="people_koryta")
-@dataclass
-class Person:
-    id: str
-    full_name: str
-    party: str
-
-    def insert_into(self):
-        pass
-
-
-@ducktable(name="articles_koryta")
-@dataclass
-class Article:
-    id: str
-    title: str
-    url: str
-    mentioned_person: str
-
-    def insert_into(self):
-        pass
+register_table(Person)
+register_table(Article)
 
 
 def list_people():
@@ -78,12 +60,13 @@ def process_articles():
         website_popularity[domain] += 1
 
         for person in article.get("mentioned", []):
-            art = Article(
-                id=key,
-                title=article.get("name", ""),
-                url=article.get("sourceURL", ""),
-                mentioned_person=person.full_name,
+            insert_into(
+                Article(
+                    id=key,
+                    title=article.get("name", ""),
+                    url=article.get("sourceURL", ""),
+                    mentioned_person=person.full_name,
+                )
             )
-            art.insert_into()
 
     print(website_popularity.most_common(None))

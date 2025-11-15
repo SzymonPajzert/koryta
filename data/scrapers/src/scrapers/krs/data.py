@@ -6,7 +6,7 @@ from util.download import FileSource
 from util.config import downloaded
 from util.teryt import parse_teryt
 
-from scrapers.krs.model import KRS
+from entities.company import ManualKRS as KRS
 
 
 # Public companies, from data.gov.pl:

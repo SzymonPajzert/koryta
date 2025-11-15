@@ -11,12 +11,16 @@ from google.cloud import storage
 from tqdm import tqdm
 
 from util.config import tests
-from stores.duckdb import ducktable, dump_dbs
+from stores.duckdb import dump_dbs
 from util.download import FileSource
 from util.config import DOWNLOADED_DIR
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 from util.polish import UPPER, LOWER
 from util.lists import WIKI_POLITICAL_LINKS, TEST_FILES
+
+from entities.person import Wikipedia as People
+from entities.company import KRS as Company
+from entities.util import IgnoredDates
 
 
 # URL for the latest Polish Wikipedia articles dump
@@ -29,32 +33,6 @@ if __name__ == "__main__":
 
 DUMP_FILENAME = os.path.join(DOWNLOADED_DIR, "plwiki-latest-articles.xml.bz2")
 DUMP_SIZE = 12314670146
-
-
-@ducktable(name="people_wiki")
-@dataclass
-class People:
-    source: str
-    full_name: str
-    party: str
-    birth_iso8601: str | None
-    birth_year: int | None
-    infobox: str
-    content_score: int
-    links: list[str]
-
-
-@ducktable(name="companies_wiki")
-@dataclass
-class Company:
-    name: str
-    krs_number: str
-
-
-@ducktable()
-@dataclass
-class IgnoredDates:
-    date: str
 
 
 def upload_to_gcs(bucket_name, destination_blob_name, data):
@@ -325,7 +303,7 @@ def extract(elem: ET.Element) -> People | Company | None:
     if article.about_company():
         return Company(
             name=article.title,
-            krs_number=article.infobox.fields.get("krs", ""),
+            krs=article.infobox.fields.get("krs", ""),
         )
 
     return None

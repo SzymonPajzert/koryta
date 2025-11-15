@@ -1,6 +1,4 @@
-from dataclasses import dataclass
-
-from stores.duckdb import ducktable, dump_dbs
+from stores.duckdb import dump_dbs, insert_into, register_table
 from stores.storage import iterate_blobs
 from util.config import downloaded
 
@@ -23,15 +21,9 @@ from util.config import downloaded
 # and it comes with out-of-the box JSONL support, that can be sent to GCP Storage.
 # This decorator instantiates insert_into() method,
 # and sets the output table to versioned/articles_mentions.jsonl directory.
-@ducktable(name="articles_mentions")
-@dataclass
-class Mention:
-    text: str  # text detected
-    url: str  # URL of the source
+from entities.article import Mention
 
-    def insert_into(self):
-        # Added to satisfy static analysis
-        pass
+register_table(Mention)
 
 
 # Start by running poetry install.
@@ -63,9 +55,9 @@ def extract():
 
         for keyword in ["Jarosław Stawiarski", "Radosławem Piesiewiczem"]:
             if keyword in content:
-                Mention(
-                    text=keyword, url=f"https://jawnylublin.pl/{blob_name}"
-                ).insert_into()
+                insert_into(
+                    Mention(text=keyword, url=f"https://jawnylublin.pl/{blob_name}")
+                )
 
     # Save the data of all registered in-memory tables to the disk
     # Usually it's in a finally clause, to make sure we don't lose data.

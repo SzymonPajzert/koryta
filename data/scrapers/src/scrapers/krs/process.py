@@ -2,42 +2,15 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from scrapers.krs.model import KRS
 from stores.storage import iterate_blobs
-from stores.duckdb import ducktable, always_export
+from stores.duckdb import register_table, always_export
+
+from entities.person import KRS as KrsPerson
+from entities.company import KRS as KrsCompany
+from entities.company import ManualKRS as KRS
 
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
-
-
-@ducktable(name="people_krs")
-@dataclass
-class KrsPerson:
-    id: str
-    first_name: str
-    last_name: str
-    full_name: str
-    employed_krs: str
-    employed_start: str | None
-    employed_end: str | None
-    employed_for: str | None
-    birth_date: str | None = None
-    second_names: str | None = None
-    sex: str | None = None
-
-    def __post_init__(self):
-        self.id = str(self.id)
-
-    def insert_into(self):
-        pass
-
-
-@ducktable(name="companies_krs")
-@dataclass
-class KrsCompany:
-    krs: str
-    name: str
-    city: str
 
 
 def start_time(item):
@@ -82,6 +55,8 @@ def extract_people():
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about people.
     """
+    register_table(KrsPerson)
+
     for blob_name, content in iterate_blobs("rejestr.io"):
         try:
             if "aktualnosc_" not in blob_name:
@@ -118,6 +93,8 @@ def extract_companies():
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about companies.
     """
+    register_table(KrsCompany)
+
     companies = {}
     for blob_name, content in iterate_blobs("rejestr.io"):
         try:
