@@ -7,19 +7,19 @@ import numpy as np
 # TODO remove this dependence
 from scrapers.krs.companies import company_names, lodzkie_companies
 from scrapers.pkw.elections import committee_to_party
-from util.config import versioned
 from scrapers.stores import get_context
 from scrapers.teryt import Teryt
 from scrapers.pkw.sources import election_date
 
-teryt = Teryt(get_context())
+ctx = get_context()
+teryt = Teryt(ctx)
 
 MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
 EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
 RECENT_EMPLOYMENT_START = date.fromisoformat("2024-10-01")
 OLD_EMPLOYMENT_END = date.fromisoformat("2020-10-01")
 
-krs_companies = versioned.read_jsonl("companies_krs.jsonl")
+krs_companies = ctx.conductor.read_file("companies_krs.jsonl").read_jsonl()
 company_names_krs = {
     elt["krs"]: f"{elt["name"]} w {elt["city"]}" for elt in krs_companies
 }

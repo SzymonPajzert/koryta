@@ -1,7 +1,7 @@
-import glob
-import os
+from scrapers.stores import get_context
 
-from util.config import PROJECT_ROOT
+ctx = get_context()
+
 
 # Which wiki files should be saved locally for easier testing
 # You can run scrape_wiki and it will save them locally.
@@ -205,7 +205,6 @@ blockers = {
 
 IGNORE_FAILURES = set()
 
-path_format = os.path.join(os.path.dirname(PROJECT_ROOT), "leads/pages/*.md")
 
 # TODO fail the test if it's ingored but it's actually passing
 
@@ -216,8 +215,11 @@ def get_blockers(content):
             yield line.split(":: ")
 
 
-for file in glob.glob(path_format):
-    person = os.path.basename(file).replace(".md", "")
+# TODO implement the functionality
+# path_format = os.path.join(os.path.dirname(PROJECT_ROOT), "leads/pages/*.md")
+# for file in glob.glob(path_format):
+for file in ctx.conductor.list_files("~/leads/pages/*.md"):
+    person = file.split("/")[-1].replace(".md", "")
     with open(file, "r") as f:
         content = f.read()
         print(content)

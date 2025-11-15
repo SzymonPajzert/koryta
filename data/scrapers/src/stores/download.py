@@ -7,8 +7,8 @@ from typing import Callable
 from tqdm import tqdm
 import urllib.request
 
-from util.config import DOWNLOADED_DIR
-from scrapers.stores import FileSource as FileSourceConfig
+from stores.config import DOWNLOADED_DIR
+from scrapers.stores import DownloadableFile as FileSourceConfig
 
 base_dir = Path(DOWNLOADED_DIR)
 

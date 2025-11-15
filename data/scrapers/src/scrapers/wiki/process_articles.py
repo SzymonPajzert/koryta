@@ -1,4 +1,3 @@
-import os
 import itertools
 from dataclasses import dataclass
 import regex as re
@@ -8,10 +7,7 @@ from collections import Counter
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
 
-from util.config import tests
-from scrapers.stores import dump_dbs
-from scrapers.stores import FileSource
-from util.config import DOWNLOADED_DIR
+from scrapers.stores import DownloadableFile as FileSource
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 from util.polish import UPPER, LOWER
 from util.lists import WIKI_POLITICAL_LINKS, TEST_FILES
@@ -28,7 +24,6 @@ WIKI_DUMP = FileSource(
     "plwiki-latest-articles.xml.bz2",
 )
 
-DUMP_FILENAME = os.path.join(DOWNLOADED_DIR, "plwiki-latest-articles.xml.bz2")
 DUMP_SIZE = 12314670146
 
 

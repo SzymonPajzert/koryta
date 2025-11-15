@@ -1,6 +1,7 @@
 import pandas as pd
 
-from scrapers.stores import FileSource, Context
+from scrapers.stores import DownloadableFile as FileSource
+from scrapers.stores import Context
 
 teryt_data = FileSource(
     "https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx",

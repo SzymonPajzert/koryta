@@ -2,8 +2,7 @@ from typing import Callable
 
 import pandas as pd
 
-from scrapers.stores import FileSource
-from util.config import downloaded
+from scrapers.stores import DownloadableFile as FileSource
 from scrapers.stores import get_context
 from scrapers.teryt import Teryt
 from entities.company import ManualKRS as KRS
@@ -18,11 +17,7 @@ public_companies = FileSource(
 )
 
 ctx.conductor.check_input(public_companies)
-
-
-df = pd.read_csv(
-    downloaded.get_path(public_companies.filename), sep=";", low_memory=False
-)
+df = ctx.conductor.read_file(public_companies).read_csv(sep=";", low_memory=False)
 
 
 def parse_teryt_from_row(row: pd.Series) -> str:

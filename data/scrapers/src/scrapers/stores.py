@@ -15,6 +15,24 @@ class Enterable(ABC):
         pass
 
 
+class File(ABC):
+    @abstractmethod
+    def read_jsonl(self):
+        pass
+
+    @abstractmethod
+    def read_csv(self):
+        pass
+
+    @abstractmethod
+    def read_excel(self):
+        pass
+
+    @abstractmethod
+    def read_parquet(self):
+        pass
+
+
 class ZipReader(ABC):
     # import bz2
     # with bz2.open(DUMP_FILENAME, "rt", encoding="utf-8") as f:
@@ -29,9 +47,14 @@ class ZipReader(ABC):
         pass
 
 
+@dataclass
+class VersionedFile:
+    filename: str
+
+
 # TODO maybe even to entities?
 @dataclass
-class FileSource:
+class DownloadableFile:
     """
     It corresponds to stores.download.FileSource which executes its configuration
     """
@@ -48,6 +71,18 @@ class Conductor(ABC):
 
     @abstractmethod
     def check_input(self, input: Any):  # TODO type this better
+        pass
+
+    @abstractmethod
+    def list_files(self, path: str) -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_path(self, fs: FileSource) -> str:
+        pass
+
+    @abstractmethod
+    def read_file(self, fs: FileSource) -> File:
         pass
 
 
