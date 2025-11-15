@@ -33,21 +33,47 @@ def parse_teryt_from_row(row: pd.Series) -> str:
         raise
 
 
-df["teryt"] = df.apply(parse_teryt_from_row, axis=1)
-
-
 ALL_COMPANIES_KRS: dict[str, KRS] = dict()
 
 
-def register_partials(static: dict, map: Callable, data: pd.DataFrame):
-    for d in data.itertuples():
-        krs = KRS(**static, **map(d))
+def from_source(source: str) -> set[str]:
+    """
+    Extracts a previously variable by its name.
+
+    TODO: Remove this function longterm
+    """
+    return {k for k, krs in ALL_COMPANIES_KRS.items() if source in krs.sources}
+
+
+def register_partials(
+    source: str, static: dict = {}, map: Callable = lambda x: x, data=None
+):
+    assert data is not None
+
+    def process(d):
+        krs = KRS(sources={source}, **static, **map(d))
         if krs.id in ALL_COMPANIES_KRS:
             ALL_COMPANIES_KRS[krs.id] = ALL_COMPANIES_KRS[krs.id].merge(krs)
+        else:
+            ALL_COMPANIES_KRS[krs.id] = krs
+
+    if isinstance(data, pd.DataFrame):
+        for d in data.itertuples():
+            process(d)
+
+    if isinstance(data, list):
+        for d in data:
+            process(d)
 
 
-PUBLIC_COMPANIES_KRS = (
-    df["KRS"].dropna().astype(int).astype(str).str.zfill(10).to_list()
+df = df[~df["KRS"].isna()]
+df["teryt"] = df.apply(parse_teryt_from_row, axis=1)
+df["KRS"] = df["KRS"].astype(int).astype(str).str.zfill(10).to_list()
+
+print("Companies: ", df)
+
+register_partials(
+    "PUBLIC_COMPANIES_KRS", data=df, map=lambda x: {"id": x.KRS, "teryts": {x.teryt}}
 )
 
 

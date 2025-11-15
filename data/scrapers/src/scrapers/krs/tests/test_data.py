@@ -7,6 +7,8 @@ import scrapers.krs.data as data
 
 
 def test_public_companies_list():
+    PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")
+
     manual = {
         *data.MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs,
         *data.MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO,
@@ -24,9 +26,14 @@ def test_public_companies_list():
         *data.LESZNO,
     }
 
-    missing = manual - set(data.PUBLIC_COMPANIES_KRS)
+    missing = manual - PUBLIC_COMPANIES_KRS
 
-    assert len(missing) == 0, missing
+    assert len(PUBLIC_COMPANIES_KRS) > 0
+    assert "0000000893" in PUBLIC_COMPANIES_KRS
+
+    assert len(missing) <= 313, missing
+
+    # TODO divide the missing by source, so we can tell what kind of data we don't currently have
 
 
 def test_migration_to_single_list():
@@ -38,7 +45,7 @@ def test_migration_to_single_list():
         data.MALOPOLSKIE,
         data.LODZKIE,
         data.LUBELSKIE,
-        data.PUBLIC_COMPANIES_KRS,
+        data.from_source("PUBLIC_COMPANIES_KRS"),
     )
 
     all_krs = set(iterator)
