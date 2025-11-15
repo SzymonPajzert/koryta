@@ -10,7 +10,7 @@ from analysis.people_krs_merged import people_krs_merged
 from analysis.people_wiki_merged import people_wiki_merged
 from analysis.people_koryta_merged import people_koryta_merged
 from analysis.people_pkw_merged import people_pkw_merged
-from util.conductor import pipeline
+from frameworks.conductor import pipeline
 
 
 pd.set_option("display.max_rows", None)

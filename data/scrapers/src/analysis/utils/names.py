@@ -1,6 +1,6 @@
 from util.download import FileSource
 from util.config import downloaded
-from util.conductor import pipeline
+from frameworks.conductor import pipeline
 
 
 surnames = [

@@ -1,6 +1,6 @@
 import duckdb
 
-from util.conductor import pipeline
+from frameworks.conductor import pipeline
 from util.config import versioned
 from analysis.utils.tables import create_people_table, init_tables
 
