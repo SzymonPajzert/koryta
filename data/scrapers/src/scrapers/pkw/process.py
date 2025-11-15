@@ -1,7 +1,7 @@
 from collections import Counter
 import argparse
 
-from stores.duckdb import dump_dbs, insert_into
+from scrapers.stores import dump_dbs, insert_into
 from util.polish import parse_name, PkwFormat
 from scrapers.pkw.sources import sources, InputSource
 from scrapers.pkw.headers import CSV_HEADERS, SetField, ElectionContext

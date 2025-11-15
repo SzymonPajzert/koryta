@@ -11,7 +11,7 @@ from google.cloud import storage
 from tqdm import tqdm
 
 from util.config import tests
-from stores.duckdb import dump_dbs
+from scrapers.stores import dump_dbs
 from util.download import FileSource
 from util.config import DOWNLOADED_DIR
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE

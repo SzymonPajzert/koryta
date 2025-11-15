@@ -13,24 +13,36 @@ exclude_type_checking_imports = True
 name = Clean architecture
 type = layers
 layers =
-    # TODO extractors
-
     analysis
-    scrapers
     stores
+    scrapers
     util
     entities
 
 [importlinter:contract:only-details-can-import-external]
-name = Clean architecture
-type = layers
-layers =
-    # TODO extractors
-
-    analysis
-    scrapers
-    stores
+name = Do not import external packages
+type = forbidden
+source_modules =
     util
-    entities    
+    scrapers
+    entities
+forbidden_modules =
+    duckdb
+    duckdb.**
+    urllib
+    urllib.**
+    os
+    os.**
+    sys
+    sys.**
+    zipfile
+    tqdm
+    tqdm.**
+    google
+    google.**
+    firebase_admin
+    firebase_admin.**
+    bs4
+    bs4.**
 
     
