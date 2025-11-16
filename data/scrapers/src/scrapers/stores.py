@@ -3,20 +3,20 @@
 import typing
 from typing import Any
 from dataclasses import dataclass
-from abc import ABC, abstractmethod
+from abc import ABCMeta, ABC, abstractmethod
 
 
-class Enterable(ABC):
+class Enterable(metaclass=ABCMeta):
     @abstractmethod
     def __enter__(self):
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def __exit__(self, exc_type, exc_value, traceback):
-        pass
+        raise NotImplementedError()
 
 
-class Extractor(ABC):
+class Extractor(metaclass=ABCMeta):
     @abstractmethod
     def read(self, file_path):
         raise NotImplementedError()
@@ -26,28 +26,28 @@ class Extractor(ABC):
         raise NotImplementedError()
 
 
-class File(ABC):
+class File(metaclass=ABCMeta):
     @abstractmethod
     def read_jsonl(self):
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def read_csv(self):
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def read_excel(self):
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def read_parquet(self):
-        pass
+        raise NotImplementedError()
 
     def read_zip(self, path: str | None = None):
         raise NotImplementedError()
 
 
-class ZipReader(ABC):
+class ZipReader(metaclass=ABCMeta):
     # import bz2
     # with bz2.open(DUMP_FILENAME, "rt", encoding="utf-8") as f:
     @abstractmethod
@@ -58,10 +58,10 @@ class ZipReader(ABC):
         encoding: str | None = None,
         subfile: str | None = None,
     ) -> typing.BinaryIO | typing.TextIO:
-        pass
+        raise NotImplementedError()
 
 
-class Filename(ABC):
+class Filename(metaclass=ABCMeta):
     pass
 
 
@@ -93,37 +93,54 @@ class DownloadableFile(Filename):
         return self.url.split("/")[-1]
 
 
-class Conductor(ABC):
+class Conductor(metaclass=ABCMeta):
     """
     Conductor manages relations between pipelines
     """
 
     @abstractmethod
     def check_input(self, input: Any):  # TODO type this better
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def list_files(self, path: str) -> list[str]:
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def get_path(self, fs: Filename) -> str:
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def read_file(self, fs: Filename) -> File:
-        pass
+        raise NotImplementedError()
 
 
-class RejestIO(ABC):
+class RejestIO(metaclass=ABCMeta):
     @abstractmethod
     def get_rejestr_io(self, url: str) -> str | None:
-        pass
+        raise NotImplementedError()
+
+
+class IO(metaclass=ABCMeta):
+    @abstractmethod
+    def read_collection(
+        self, collection: str, stream=False, filters: list[tuple[str, str, Any]] = []
+    ) -> typing.Iterator:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def dump_memory(self, tables_to_dump: None | dict[str, list[str]] = None):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def output_entity(self, entity):
+        raise NotImplementedError()
 
 
 @dataclass
 class Context:
     conductor: Conductor
+    io: IO
     rejestr_io: RejestIO
 
 
@@ -132,7 +149,7 @@ def get_context() -> Context:
 
 
 def insert_into(v):
-    raise NotImplementedError
+    raise NotImplementedError()
 
 
 def always_export(func):
@@ -140,10 +157,20 @@ def always_export(func):
         try:
             return func(*args, **kwargs)
         finally:
-            dump_dbs()
+            ctx = get_context()
+            ctx.io.dump_memory()
 
     return wrapper
 
 
-def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
-    raise NotImplementedError()
+# pipeline decorator
+class Pipeline:
+    def __init__(self, io: str | None = None):
+        """
+        :param: io - specifies the input type of the io to be run in the pipeline
+        """
+        self.io = io
+
+    def __call__(self, func):
+        self.process = func
+        return self

@@ -1,19 +1,17 @@
 from tqdm import tqdm
 from collections import Counter
 
-from stores.firestore import firestore_db
-from stores.duckdb import always_export, register_table, insert_into
-from util.url import NormalizedParse
+from scrapers.stores import Context, Pipeline
+from entities.util import NormalizedParse
 
 from entities.article import Article
 from entities.person import Koryta as Person
 
-register_table(Person)
-register_table(Article)
 
-
-def list_people():
-    people = firestore_db.collection("nodes").where("type", "==", "person").stream()
+def list_people(ctx: Context):
+    people = ctx.io.read_collection(
+        "nodes", stream=True, filters=[("type", "==", "person")]
+    )
     for person in tqdm(people):
         id = person.id
         person = person.to_dict()
@@ -25,22 +23,22 @@ def list_people():
         )
 
 
-@always_export
-def process_people():
-    for person in list_people():
+@Pipeline(io="firestore")
+def process_people(ctx: Context):
+    for person in list_people(ctx):
         person.insert_into()
 
 
-@always_export
-def process_articles():
-    people = {person.id: person for person in list_people()}
+@Pipeline(io="firestore")
+def process_articles(ctx: Context):
+    people = {person.id: person for person in list_people(ctx)}
     articles = {
         article.id: article.to_dict()
-        for article in firestore_db.collection("nodes")
-        .where("type", "==", "article")
-        .stream()
+        for article in ctx.io.read_collection(
+            "nodes", stream=True, filters=[("type", "==", "article")]
+        )
     }
-    for edge in tqdm(firestore_db.collection("edges").stream()):
+    for edge in tqdm(ctx.io.read_collection("edges", stream=True)):
         edge = edge.to_dict()
         assert edge is not None
         if (
@@ -60,7 +58,7 @@ def process_articles():
         website_popularity[domain] += 1
 
         for person in article.get("mentioned", []):
-            insert_into(
+            ctx.io.output_entity(
                 Article(
                     id=key,
                     title=article.get("name", ""),

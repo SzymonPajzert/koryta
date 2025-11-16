@@ -3,7 +3,12 @@ import os
 import duckdb
 import pandas as pd
 
-from util.config import versioned
+from stores.config import versioned
+from stores.firestore import FirestoreIO
+
+from scrapers.stores import Context
+from scrapers.koryta.download import process_people as scrape_koryta_people_func
+from scrapers.koryta.download import process_articles as scrape_koryta_articles_func
 
 
 def get_path(output: str, jsonl: bool, parquet: bool):
@@ -59,3 +64,28 @@ def pipeline(
         return wrapper
 
     return decorator
+
+
+def setup_pipeline(pipeline_object):
+    def func():
+        print(f"Setting io: {pipeline_object.io}")
+        io = None
+        match pipeline_object.io:
+            case "firestore":
+                io = FirestoreIO()
+            case _:
+                raise NotImplementedError("Unknown io type " + pipeline_object.io)
+
+        ctx = Context(
+            conductor=None,
+            io=io,
+            rejestr_io=None,
+        )
+        pipeline_object.process(ctx)
+
+    return func
+
+
+scrape_koryta_people = setup_pipeline(scrape_koryta_people_func)
+
+# scrape_koryta_articles = pipeline()(scrape_koryta_articles_func)

@@ -4,7 +4,7 @@ import os
 import duckdb
 
 from util.polish import PkwFormat
-from util.config import VERSIONED_DIR
+from stores.config import VERSIONED_DIR
 from datetime import datetime
 
 
