@@ -14,12 +14,15 @@ teryt_data = FileSource(
 # Or should it just be a store, available through dep injection?
 class Teryt:
     def __init__(self, ctx: Context):
-        ctx.conductor.check_input(teryt_data)
+        print("Creating Teryt object")
+        ctx.io.read_data(teryt_data)
 
         # TODO the date is hardcoded now, how to get it updated
         # disposition dead code in download_teryt seems a good way
-        raw_bytes = ctx.zip_reader.open(
-            teryt_data.downloaded_path, "r", subfile="TERC_Urzedowy_2025-11-15.csv"
+        raw_bytes = (
+            ctx.io.read_data(teryt_data)
+            .read_zip("TERC_Urzedowy_2025-11-15.csv")
+            .read_file()
         )
         data = pd.read_csv(
             raw_bytes, sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str}

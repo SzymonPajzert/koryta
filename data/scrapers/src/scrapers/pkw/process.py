@@ -158,8 +158,6 @@ def process_pkw(ctx: Context, limit: int | None, year: str | None):
     print("Files downloaded")
 
     for config in filtered_sources:
-        # TODO Correctly open zip file
-        print(f"🗂️  Starts processing CSV file: {config.source.filename}")
         reader = config.extractor.read(ctx, config.source)
 
         try:

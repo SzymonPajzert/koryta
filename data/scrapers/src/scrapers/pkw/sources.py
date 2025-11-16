@@ -1,5 +1,5 @@
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 import typing
 
@@ -28,35 +28,27 @@ class CsvExtractor(Extractor):
 
 @dataclass
 class ZipExtractor(Extractor):
-    inner_filename: str
-    extractor: Extractor = CsvExtractor()
+    inner_filename: str | None
+    extractor: Extractor
+    index: int | None = None
 
     def read(self, ctx: Context, source: FileSource | File):
         print("🗂️  Starts processing ZIP file:")
-        return self.extractor.read(
-            ctx, self.read_source(ctx, source).read_zip(self.inner_filename)
+        unzipped = self.read_source(ctx, source).read_zip(
+            self.inner_filename, self.index
         )
-
-
-@dataclass
-class MultiXlsZipExtractor(Extractor):
-    inner_filename_pattern: str
-    header_rows: int
-    skip_rows: int = 0
-
-    def read(self, ctx: Context, source: FileSource | File):
-        raise NotImplementedError()
+        return self.extractor.read(ctx, unzipped)
 
 
 @dataclass
 class XlsExtractor(Extractor):
-    inner_filename: str
+    inner_filename: str  # TODO remove, not used
     header_rows: int
     # Row many rows to skip, e.g additional headers
     skip_rows: int = 0
 
     def read(self, ctx: Context, source: FileSource | File):
-        raise NotImplementedError()
+        return self.read_source(ctx, source).read_xls(self.header_rows, self.skip_rows)
 
 
 @dataclass
@@ -112,7 +104,7 @@ for code in teryt_codes:
                 f"https://wybory2010.pkw.gov.pl/geo/pl/{code}/{code}-kandydaci_rady.zip",
                 f"2010_rady_{code[:2]}.zip",
             ),
-            ZipExtractor(f"{code}-kandydaci_rady.csv"),
+            ZipExtractor(f"{code}-kandydaci_rady.csv", CsvExtractor()),
             2010,
             PkwFormat.Last_First,
             ElectionType.SAMORZADOWE,
@@ -124,7 +116,7 @@ for code in teryt_codes:
                 f"https://wybory2010.pkw.gov.pl/geo/pl/{code}/{code}-kandydaci_urzad.zip",
                 f"2010_urzad_{code[:2]}.zip",
             ),
-            ZipExtractor(f"{code}-kandydaci_urzad.csv"),
+            ZipExtractor(f"{code}-kandydaci_urzad.csv", CsvExtractor()),
             2010,
             PkwFormat.Last_First,
             ElectionType.SAMORZADOWE,
@@ -170,7 +162,7 @@ sources.extend(
                 "https://wybory2011.pkw.gov.pl/geo/pl/kandydaci_sejm.zip",
                 "2011_sejm_kandydaci.zip",
             ),
-            ZipExtractor("kandydaci_sejm.csv"),
+            ZipExtractor("kandydaci_sejm.csv", CsvExtractor()),
             2011,
             PkwFormat.UNKNOWN,
             ElectionType.SEJM,
@@ -180,7 +172,7 @@ sources.extend(
                 "https://wybory2011.pkw.gov.pl/geo/pl/kandydaci_senat.zip",
                 "2011_senat_kandydaci.zip",
             ),
-            ZipExtractor("kandydaci_senat.csv"),
+            ZipExtractor("kandydaci_senat.csv", CsvExtractor()),
             2011,
             PkwFormat.UNKNOWN,
             ElectionType.SENAT,
@@ -190,7 +182,7 @@ sources.extend(
                 "https://wybory.gov.pl/sejmsenat2023/data/csv/kandydaci_sejm_csv.zip",
                 "2023_sejm_kandydaci.zip",
             ),
-            ZipExtractor("kandydaci_sejm_utf8.csv"),
+            ZipExtractor("kandydaci_sejm_utf8.csv", CsvExtractor()),
             2023,
             PkwFormat.First_LAST,
             ElectionType.SEJM,
@@ -200,7 +192,7 @@ sources.extend(
                 "https://wybory.gov.pl/sejmsenat2023/data/csv/kandydaci_senat_csv.zip",
                 "2023_senat_kandydaci.zip",
             ),
-            ZipExtractor("kandydaci_senat_utf8.csv"),
+            ZipExtractor("kandydaci_senat_utf8.csv", CsvExtractor()),
             2023,
             PkwFormat.First_LAST,
             ElectionType.SENAT,
@@ -223,7 +215,7 @@ sources.extend(
                 "https://sejmsenat2019.pkw.gov.pl/sejmsenat2019/data/csv/kandydaci_sejm_csv.zip",
                 "2019_sejm_kandydaci.zip",
             ),
-            ZipExtractor("kandydaci_sejm.csv"),
+            ZipExtractor("kandydaci_sejm.csv", CsvExtractor()),
             2019,
             PkwFormat.UNKNOWN,
             ElectionType.SEJM,
@@ -233,7 +225,7 @@ sources.extend(
                 "https://sejmsenat2019.pkw.gov.pl/sejmsenat2019/data/csv/kandydaci_senat_csv.zip",
                 "2019_senat_kandydaci.zip",
             ),
-            ZipExtractor("kandydaci_senat.csv"),
+            ZipExtractor("kandydaci_senat.csv", CsvExtractor()),
             2019,
             PkwFormat.UNKNOWN,
             ElectionType.SENAT,
@@ -243,7 +235,7 @@ sources.extend(
                 "https://pe2019.pkw.gov.pl/pe2019/data/csv/kandydaci_csv.zip",
                 "2019_pe_kandydaci.zip",
             ),
-            ZipExtractor("kandydaci.csv"),
+            ZipExtractor("kandydaci.csv", CsvExtractor()),
             2019,
             PkwFormat.UNKNOWN,
             ElectionType.EUROPARLAMENT,
@@ -252,7 +244,7 @@ sources.extend(
             FileSource(
                 "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_sejmiki_wojewodztw_csv.zip"
             ),
-            ZipExtractor("kandydaci_sejmiki_wojewodztw_utf8.csv"),
+            ZipExtractor("kandydaci_sejmiki_wojewodztw_utf8.csv", CsvExtractor()),
             2024,
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
@@ -341,7 +333,7 @@ sources.extend(
             FileSource(
                 "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_rady_powiatow_csv.zip"
             ),
-            ZipExtractor("kandydaci_rady_powiatow_utf8.csv"),
+            ZipExtractor("kandydaci_rady_powiatow_utf8.csv", CsvExtractor()),
             2024,
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
@@ -350,7 +342,7 @@ sources.extend(
             FileSource(
                 "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_rady_gmin_powyzej_20k_csv.zip"
             ),
-            ZipExtractor("kandydaci_rady_gmin_powyzej_20k_utf8.csv"),
+            ZipExtractor("kandydaci_rady_gmin_powyzej_20k_utf8.csv", CsvExtractor()),
             2024,
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
@@ -359,7 +351,7 @@ sources.extend(
             FileSource(
                 "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_rady_gmin_do_20k_csv.zip"
             ),
-            ZipExtractor("kandydaci_rady_gmin_do_20k_utf8.csv"),
+            ZipExtractor("kandydaci_rady_gmin_do_20k_utf8.csv", CsvExtractor()),
             2024,
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
@@ -368,7 +360,7 @@ sources.extend(
             FileSource(
                 "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_rady_dzielnic_csv.zip"
             ),
-            ZipExtractor("kandydaci_rady_dzielnic_utf8.csv"),
+            ZipExtractor("kandydaci_rady_dzielnic_utf8.csv", CsvExtractor()),
             2024,
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
@@ -377,7 +369,7 @@ sources.extend(
             FileSource(
                 "https://samorzad2024.pkw.gov.pl/samorzad2024/data/csv/kandydaci_wbp_csv.zip"
             ),
-            ZipExtractor("kandydaci_wbp_utf8.csv"),
+            ZipExtractor("kandydaci_wbp_utf8.csv", CsvExtractor()),
             2024,
             PkwFormat.LAST_First,
             ElectionType.SAMORZADOWE,
@@ -387,7 +379,7 @@ sources.extend(
                 "https://danewyborcze.kbw.gov.pl/dane/2024/parlament_eu/kandydaci_csv.zip",
                 "2024_pe_kandydaci.zip",
             ),
-            ZipExtractor("kandydaci_utf8.csv"),
+            ZipExtractor("kandydaci_utf8.csv", CsvExtractor()),
             2024,
             PkwFormat.First_LAST,
             ElectionType.EUROPARLAMENT,
@@ -555,25 +547,35 @@ sources.extend(
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
         ),
+    ]
+)
+
+for index in range(0, 16):
+    sources.append(
         InputSource(
             FileSource(
                 "https://danewyborcze.kbw.gov.pl/dane/1998/rada_gminy/1998_rady_gmin.zip",
                 "1998_rady_gmin.zip",
             ),
-            MultiXlsZipExtractor("*.xls", header_rows=1),
+            ZipExtractor(None, XlsExtractor("", header_rows=1), index=0),
             1998,
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
-        ),
+        )
+    )
+
+for old_woj in range(1, 50):
+    sources.append(
         InputSource(
             FileSource(
                 "https://danewyborcze.kbw.gov.pl/dane/1994/samo1994/samo1994kand.zip",
                 "1994_samorzad_kandydaci.zip",
             ),
-            MultiXlsZipExtractor("*.xls", header_rows=1),
+            ZipExtractor(
+                f"{old_woj:02d}.xls", XlsExtractor(f"{old_woj:02d}.xls", header_rows=1)
+            ),
             1994,
             PkwFormat.UNKNOWN,
             ElectionType.SAMORZADOWE,
-        ),
-    ]
-)
+        )
+    )

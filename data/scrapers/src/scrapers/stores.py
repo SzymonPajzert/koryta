@@ -30,7 +30,7 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_excel(self):
+    def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
         raise NotImplementedError()
 
     @abstractmethod
@@ -38,7 +38,7 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_zip(self, inner_path: str | None = None) -> "File":
+    def read_zip(self, inner_path: str | None = None, idx: int | None = None) -> "File":
         raise NotImplementedError()
 
     @abstractmethod
