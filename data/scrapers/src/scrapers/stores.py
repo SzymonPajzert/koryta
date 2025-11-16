@@ -125,7 +125,7 @@ class IO(metaclass=ABCMeta):
     @abstractmethod
     def read_collection(
         self, collection: str, stream=False, filters: list[tuple[str, str, Any]] = []
-    ) -> typing.Iterator:
+    ) -> typing.Iterable:
         raise NotImplementedError()
 
     @abstractmethod

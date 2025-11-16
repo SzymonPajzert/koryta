@@ -9,10 +9,9 @@ from entities.person import Koryta as Person
 
 
 def list_people(ctx: Context):
-    people = ctx.io.read_collection(
-        "nodes", stream=True, filters=[("type", "==", "person")]
-    )
-    for person in tqdm(people):
+    for person in tqdm(
+        ctx.io.read_collection("nodes", stream=True, filters=[("type", "==", "person")])
+    ):
         id = person.id
         person = person.to_dict()
         assert person is not None

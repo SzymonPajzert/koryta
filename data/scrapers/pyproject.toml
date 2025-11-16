@@ -2,10 +2,8 @@
 name = "scrapers"
 version = "0.1.0"
 description = "Scrapers used for koryta.pl"
-authors = [
-    {name = "Szymon Pajzert",email = "szymonpajzert@gmail.com"}
-]
-license = {text = "MIT"}
+authors = [{ name = "Szymon Pajzert", email = "szymonpajzert@gmail.com" }]
+license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
@@ -119,19 +117,19 @@ dependencies = [
     "nbconvert (>=7.16.6,<8.0.0)",
     "seaborn (>=0.13.2,<0.14.0)",
     "scipy (>=1.16.3,<2.0.0)",
-    "pytest-check (>=2.6.0,<3.0.0)"
+    "pytest-check (>=2.6.0,<3.0.0)",
 ]
 
 [project.scripts]
-scrape_articles = "scrapers.article.crawler:crawl"
-scrape_articles_example = "scrapers.article.extract_example:extract"
-scrape_wiki = "scrapers.wiki.process_articles:main"
-scrape_pkw = "scrapers.pkw.process:main"
-scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
-scrape_krs_people = "scrapers.krs.process:extract_people"
-scrape_krs_companies = "scrapers.krs.process:extract_companies"
+# scrape_articles = "scrapers.article.crawler:crawl"
+# scrape_articles_example = "scrapers.article.extract_example:extract"
+# scrape_wiki = "scrapers.wiki.process_articles:main"
+# scrape_pkw = "scrapers.pkw.process:main"
+# scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
+# scrape_krs_people = "scrapers.krs.process:extract_people"
+# scrape_krs_companies = "scrapers.krs.process:extract_companies"
 scrape_koryta_people = "stores.conductor:scrape_koryta_people"
-scrape_koryta_articles = "stores.conductor:scrape_koryta_articles"
+# scrape_koryta_articles = "stores.conductor:scrape_koryta_articles"
 analyze_people = "analysis.people:people_merged"
 # jupyter lab is available as well for analysis
 
@@ -140,12 +138,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = [
-    "jupyterlab (>=4.4.9,<5.0.0)",
-    "import-linter (>=2.6,<3.0)"
-]
+dev = ["jupyterlab (>=4.4.9,<5.0.0)", "import-linter (>=2.6,<3.0)"]
 
 [tool.pytest.ini_options]
-markers = [
-    "parametrize_skip_if",
-]
+markers = ["parametrize_skip_if"]

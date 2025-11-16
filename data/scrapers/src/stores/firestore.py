@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Iterator, Iterable
 
 from time import sleep
 from google.cloud import firestore
@@ -21,7 +21,6 @@ class FirestoreIO(IO):
         try:
             self.db = firestore.Client(project="koryta-pl", database="koryta-pl")
             print("Successfully connected to Firestore.")
-            sleep(5)
         except Exception as e:
             print(f"Failed to connect to Firestore: {e}")
             print("Please ensure you have authenticated correctly.")
@@ -29,16 +28,17 @@ class FirestoreIO(IO):
 
     def read_collection(
         self, collection: str, stream=True, filters: list[tuple[str, str, Any]] = []
-    ):
-        print(collection)
-        print(filters)
+    ) -> Iterable:
+        print(f"Reading collection {collection} with {filters}")
+
         collection_ref = self.db.collection(collection)
         for field, op, value in filters:
             collection_ref = collection_ref.where(
                 filter=firestore.FieldFilter(field, op, value)
             )
         if stream:
-            return collection_ref.stream()
+            for elt in collection_ref.stream():
+                yield elt
         else:
             for doc in collection_ref.get():
                 yield doc
