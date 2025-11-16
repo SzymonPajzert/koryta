@@ -26,7 +26,7 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_csv(self):
+    def read_csv(self, sep=","):
         raise NotImplementedError()
 
     @abstractmethod
@@ -38,7 +38,7 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_zip(self, path: str | None = None) -> "File":
+    def read_zip(self, inner_path: str | None = None) -> "File":
         raise NotImplementedError()
 
     @abstractmethod
@@ -140,10 +140,23 @@ class Context:
     rejestr_io: RejestrIO
 
 
+GLOBAL_CONTEXT: None | Context = None
+
+
+def set_context(ctx: Context):
+    global GLOBAL_CONTEXT
+    GLOBAL_CONTEXT = ctx
+
+
 def get_context() -> Context:
-    raise NotImplementedError(
-        "This pipeline needs to be migrated to the @Pipeline wrapper"
-    )
+    global GLOBAL_CONTEXT
+
+    if not GLOBAL_CONTEXT:
+        raise NotImplementedError(
+            "This pipeline needs to be migrated to the @Pipeline wrapper"
+        )
+
+    return GLOBAL_CONTEXT
 
 
 # pipeline decorator
@@ -158,7 +171,8 @@ class Pipeline:
         self.output_order = output_order
         self.rejestr_io = use_rejestr_io
         # TODO clean it up
-        print(f"Uknown kwargs: {kwargs}")
+        if len(kwargs) > 0:
+            print(f"Unknown kwargs: {kwargs}")
 
     def __call__(self, func):
         self.process = func

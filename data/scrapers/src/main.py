@@ -3,6 +3,8 @@
 from scrapers.stores import Context
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
+from scrapers.pkw.process import main as scrape_pkw_func
+
 
 from stores.download import FileSource
 from stores.firestore import FirestoreIO
@@ -12,7 +14,7 @@ from stores.duckdb import EntityDumper
 import stores.file as file
 
 
-from scrapers.stores import IO, File, DataRef, Pipeline
+from scrapers.stores import IO, File, DataRef, Pipeline, set_context
 from scrapers.stores import FirestoreCollection
 from scrapers.stores import DownloadableFile
 
@@ -25,6 +27,7 @@ class Conductor(IO):
         self.dumper = dumper
 
     def read_data(self, fs: DataRef, process_if_missing=None) -> File:
+        print(f"Reading {fs}")
         if process_if_missing is not None:
             raise NotImplementedError()
 
@@ -63,6 +66,7 @@ def setup_pipeline(pipeline_object: Pipeline):
             io=conductor,
             rejestr_io=rejestr_io,  # type: ignore
         )
+        set_context(ctx)
         try:
             pipeline_object.process(ctx)
             print("Finished processing")
@@ -81,4 +85,9 @@ def scrape_koryta_people():
 
 def scrape_wiki():
     f = setup_pipeline(scrape_wiki_func)
+    f()
+
+
+def scrape_pkw():
+    f = setup_pipeline(scrape_pkw_func)
     f()

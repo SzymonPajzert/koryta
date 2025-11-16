@@ -24,13 +24,13 @@ def list_people(ctx: Context):
         )
 
 
-@Pipeline(io="firestore")
+@Pipeline()
 def process_people(ctx: Context):
     for person in list_people(ctx):
         ctx.io.output_entity(person)
 
 
-@Pipeline(io="firestore")
+@Pipeline()
 def process_articles(ctx: Context):
     people = {person.id: person for person in list_people(ctx)}
     articles = {

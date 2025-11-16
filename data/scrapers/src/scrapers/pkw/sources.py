@@ -1,28 +1,41 @@
 import abc
 from dataclasses import dataclass
 from datetime import date
-
+import typing
 
 from util.polish import PkwFormat
-from scrapers.stores import DownloadableFile as FileSource, get_context
+from scrapers.stores import DownloadableFile as FileSource, Context, File
 from scrapers.pkw.elections import ElectionType
 
 
-ctx = get_context()
+class Extractor(abc.ABC):
+    @abc.abstractmethod
+    def read(self, ctx: Context, source: FileSource | File) -> typing.Iterable:
+        pass
 
-
-class Extractor:
-    pass
+    def read_source(self, ctx: Context, source: FileSource | File) -> File:
+        if isinstance(source, FileSource):
+            return ctx.io.read_data(source)
+        else:
+            return source
 
 
 class CsvExtractor(Extractor):
-    pass
+    def read(self, ctx: Context, source: FileSource | File):
+        print("🗂️  Starts processing CSV file:")
+        return self.read_source(ctx, source).read_csv(sep=";")
 
 
 @dataclass
 class ZipExtractor(Extractor):
     inner_filename: str
     extractor: Extractor = CsvExtractor()
+
+    def read(self, ctx: Context, source: FileSource | File):
+        print("🗂️  Starts processing ZIP file:")
+        return self.extractor.read(
+            ctx, self.read_source(ctx, source).read_zip(self.inner_filename)
+        )
 
 
 @dataclass
@@ -31,6 +44,9 @@ class MultiXlsZipExtractor(Extractor):
     header_rows: int
     skip_rows: int = 0
 
+    def read(self, ctx: Context, source: FileSource | File):
+        raise NotImplementedError()
+
 
 @dataclass
 class XlsExtractor(Extractor):
@@ -38,6 +54,9 @@ class XlsExtractor(Extractor):
     header_rows: int
     # Row many rows to skip, e.g additional headers
     skip_rows: int = 0
+
+    def read(self, ctx: Context, source: FileSource | File):
+        raise NotImplementedError()
 
 
 @dataclass
