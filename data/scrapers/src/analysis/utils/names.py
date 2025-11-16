@@ -38,6 +38,9 @@ def names_count_by_region(ctx: Context, con):
     for source in surnames:
         ctx.conductor.check_input(source)
 
+    # TODO Instead of get_path, just read them as df
+    # Duckdb can access it
+
     con.execute(
         f"""CREATE TABLE names_count_by_region AS
         SELECT

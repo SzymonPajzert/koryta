@@ -1,7 +1,7 @@
 from tqdm import tqdm
 from collections import Counter
 
-from scrapers.stores import Context, Pipeline
+from scrapers.stores import Context, Pipeline, FirestoreCollection
 from entities.util import NormalizedParse
 
 from entities.article import Article
@@ -10,7 +10,9 @@ from entities.person import Koryta as Person
 
 def list_people(ctx: Context):
     for person in tqdm(
-        ctx.io.read_collection("nodes", stream=True, filters=[("type", "==", "person")])
+        ctx.io.read_data(
+            FirestoreCollection("nodes", filters=[("type", "==", "person")])
+        ).read_iterable()
     ):
         id = person.id
         person = person.to_dict()
@@ -25,7 +27,7 @@ def list_people(ctx: Context):
 @Pipeline(io="firestore")
 def process_people(ctx: Context):
     for person in list_people(ctx):
-        person.insert_into()
+        ctx.io.output_entity(person)
 
 
 @Pipeline(io="firestore")
@@ -33,11 +35,13 @@ def process_articles(ctx: Context):
     people = {person.id: person for person in list_people(ctx)}
     articles = {
         article.id: article.to_dict()
-        for article in ctx.io.read_collection(
-            "nodes", stream=True, filters=[("type", "==", "article")]
-        )
+        for article in ctx.io.read_data(
+            FirestoreCollection("nodes", filters=[("type", "==", "article")])
+        ).read_iterable()
     }
-    for edge in tqdm(ctx.io.read_collection("edges", stream=True)):
+    for edge in tqdm(
+        ctx.io.read_data(FirestoreCollection("edges", stream=True)).read_iterable()
+    ):
         edge = edge.to_dict()
         assert edge is not None
         if (

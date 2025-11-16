@@ -2,18 +2,8 @@
 
 import typing
 from typing import Any
-from dataclasses import dataclass
-from abc import ABCMeta, ABC, abstractmethod
-
-
-class Enterable(metaclass=ABCMeta):
-    @abstractmethod
-    def __enter__(self):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def __exit__(self, exc_type, exc_value, traceback):
-        raise NotImplementedError()
+from dataclasses import dataclass, field
+from abc import ABCMeta, abstractmethod
 
 
 class Extractor(metaclass=ABCMeta):
@@ -27,6 +17,10 @@ class Extractor(metaclass=ABCMeta):
 
 
 class File(metaclass=ABCMeta):
+    @abstractmethod
+    def read_iterable(self) -> typing.Iterable:
+        raise NotImplementedError()
+
     @abstractmethod
     def read_jsonl(self):
         raise NotImplementedError()
@@ -43,7 +37,12 @@ class File(metaclass=ABCMeta):
     def read_parquet(self):
         raise NotImplementedError()
 
-    def read_zip(self, path: str | None = None):
+    @abstractmethod
+    def read_zip(self, path: str | None = None) -> "File":
+        raise NotImplementedError()
+
+    @abstractmethod
+    def read_file(self) -> typing.BinaryIO | typing.TextIO:
         raise NotImplementedError()
 
 
@@ -61,23 +60,30 @@ class ZipReader(metaclass=ABCMeta):
         raise NotImplementedError()
 
 
-class Filename(metaclass=ABCMeta):
+class DataRef(metaclass=ABCMeta):
     pass
 
 
 @dataclass
-class LocalFile(Filename):
+class FirestoreCollection(DataRef):
+    collection: str
+    stream: bool = True
+    filters: list[tuple[str, str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class LocalFile(DataRef):
     filename: str
 
 
 @dataclass
-class VersionedFile(Filename):
+class VersionedFile(DataRef):
     filename: str
 
 
 # TODO maybe even to entities?
 @dataclass
-class DownloadableFile(Filename):
+class DownloadableFile(DataRef):
     """
     It corresponds to stores.download.FileSource which executes its configuration
     """
@@ -93,83 +99,66 @@ class DownloadableFile(Filename):
         return self.url.split("/")[-1]
 
 
-class Conductor(metaclass=ABCMeta):
-    """
-    Conductor manages relations between pipelines
-    """
+"""
+Just a note of difference between Conductor and IO, because it can be a bit
+confusing or is currently badly designed:
 
+Conductor takes care of the dependence and processing.
+    If you ask for an input, it will reprocess necessary data to get it.
+    It 
+
+
+"""
+
+
+class IO(metaclass=ABCMeta):
     @abstractmethod
-    def check_input(self, input: Any):  # TODO type this better
+    def read_data(self, fs: DataRef, process_if_missing=True) -> File:
         raise NotImplementedError()
 
     @abstractmethod
-    def list_files(self, path: str) -> list[str]:
+    def list_data(self, path: DataRef) -> list[str]:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_path(self, fs: Filename) -> str:
+    def output_entity(self, entity):
+        """
+        Write a single entity of the core type to the specified output.
+        """
         raise NotImplementedError()
 
-    @abstractmethod
-    def read_file(self, fs: Filename) -> File:
-        raise NotImplementedError()
 
-
-class RejestIO(metaclass=ABCMeta):
+class RejestrIO(metaclass=ABCMeta):
     @abstractmethod
     def get_rejestr_io(self, url: str) -> str | None:
         raise NotImplementedError()
 
 
-class IO(metaclass=ABCMeta):
-    @abstractmethod
-    def read_collection(
-        self, collection: str, stream=False, filters: list[tuple[str, str, Any]] = []
-    ) -> typing.Iterable:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def dump_memory(self, tables_to_dump: None | dict[str, list[str]] = None):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def output_entity(self, entity):
-        raise NotImplementedError()
-
-
 @dataclass
 class Context:
-    conductor: Conductor
     io: IO
-    rejestr_io: RejestIO
+    rejestr_io: RejestrIO
 
 
 def get_context() -> Context:
-    raise NotImplementedError()
-
-
-def insert_into(v):
-    raise NotImplementedError()
-
-
-def always_export(func):
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        finally:
-            ctx = get_context()
-            ctx.io.dump_memory()
-
-    return wrapper
+    raise NotImplementedError(
+        "This pipeline needs to be migrated to the @Pipeline wrapper"
+    )
 
 
 # pipeline decorator
 class Pipeline:
-    def __init__(self, io: str | None = None):
+    def __init__(
+        self, output_order: dict[str, list[str]] = {}, use_rejestr_io=False, **kwargs
+    ):
         """
-        :param: io - specifies the input type of the io to be run in the pipeline
+        :param: output_order - specifies order in the produced collection
         """
-        self.io = io
+        # TODO implement it
+        self.output_order = output_order
+        self.rejestr_io = use_rejestr_io
+        # TODO clean it up
+        print(f"Uknown kwargs: {kwargs}")
 
     def __call__(self, func):
         self.process = func

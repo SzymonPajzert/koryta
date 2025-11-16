@@ -10,7 +10,7 @@ import functools
 from scrapers.stores import IO
 
 
-class FirestoreIO(IO):
+class FirestoreIO:
     db: firestore.Client
 
     def __init__(self):
@@ -42,10 +42,6 @@ class FirestoreIO(IO):
         else:
             for doc in collection_ref.get():
                 yield doc
-
-    def dump_memory(self, tables_to_dump: None | dict[str, list[str]] = None):
-        # FirestoreIO does not manage in-memory tables, so this is a no-op
-        raise NotImplementedError()
 
     def output_entity(self, entity):
         raise NotImplementedError()

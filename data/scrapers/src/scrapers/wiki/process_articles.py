@@ -7,21 +7,18 @@ from collections import Counter
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
 
-from scrapers.stores import DownloadableFile as FileSource
+from scrapers.stores import DownloadableFile
 from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 from util.polish import UPPER, LOWER
-from util.lists import WIKI_POLITICAL_LINKS, TEST_FILES
+from util.lists import WIKI_POLITICAL_LINKS
 
-from scrapers.stores import Context, LocalFile
-from scrapers.stores import insert_into, dump_dbs, get_context
+from scrapers.stores import Context, Pipeline
 
 from entities.person import Wikipedia as People
 from entities.company import KRS as Company
 from entities.util import IgnoredDates
 
-ctx = get_context()
-
-WIKI_DUMP = FileSource(
+WIKI_DUMP = DownloadableFile(
     "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2",
     "plwiki-latest-articles.xml.bz2",
 )
@@ -112,9 +109,8 @@ class Infobox:
 
         self._birth_iso = get()
         if self._birth_iso is None and human_readable != "":
-            IgnoredDates(
-                date=human_readable
-            ).insert_into()  # pyright: ignore[reportAttributeAccessIssue]
+            pass
+            # TODO write IgnoredDates(date=human_readable)
         return self._birth_iso
 
     @property
@@ -211,7 +207,7 @@ class WikiArticle:
                     links=[],
                     infobox=infobox,
                     osoba_imie=False,
-                ).write_to_test(elem, force=True)
+                )  # .write_to_test(elem, force=True)
                 # TODO raise e
 
         return WikiArticle(
@@ -222,12 +218,13 @@ class WikiArticle:
             osoba_imie="imię i nazwisko" in wikitext,
         )
 
-    def write_to_test(self, elem: ET.Element, force=False):
-        if self.title in TEST_FILES or force:
-            path = ctx.conductor.get_path(LocalFile(f"{self.title}.xml"))
-            print(f"Saving {self.title} to test file: {path}")
-            with open(path, "w") as test_file:
-                test_file.write(ET.tostring(elem, encoding="unicode").strip())
+    # TODO maybe reenable
+    # def write_to_test(self, elem: ET.Element, force=False):
+    #     if self.title in TEST_FILES or force:
+    #         path = ctx.conductor.get_path(LocalFile(f"{self.title}.xml"))
+    #         print(f"Saving {self.title} to test file: {path}")
+    #         with open(path, "w") as test_file:
+    #             test_file.write(ET.tostring(elem, encoding="unicode").strip())
 
     def about_person(self):
         def check():
@@ -264,7 +261,7 @@ def extract(elem: ET.Element) -> People | Company | None:
     if article is None:
         return None
 
-    article.write_to_test(elem)
+    # article.write_to_test(elem)
     global interesting_count
 
     if article.about_person():
@@ -290,12 +287,12 @@ def extract(elem: ET.Element) -> People | Company | None:
     return None
 
 
-def process_wikipedia_dump(ctx: Context):
+@Pipeline(output_order={"people_wiki": ["content_score DESC"]})
+def scrape_wiki(ctx: Context):
     """
     Parses the Wikipedia dump, filters for target categories,
     and uploads individual XML files to GCS.
     """
-    ctx.conductor.check_input(WIKI_DUMP)
 
     # TODO move to implementation
     # if not os.path.exists(DUMP_FILENAME):
@@ -305,7 +302,7 @@ def process_wikipedia_dump(ctx: Context):
     #     return
 
     # Use bz2 to decompress the file on the fly
-    with ctx.conductor.read_file(WIKI_DUMP).read_zip() as f:
+    with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f:
         # Use iterparse for memory-efficient XML parsing
         # We only care about the 'end' event of a 'page' tag
         print(f"🗂️  Starts processing dump file: {WIKI_DUMP.filename}")
@@ -324,24 +321,13 @@ def process_wikipedia_dump(ctx: Context):
             if elem.tag.endswith("page"):
                 entity = extract(elem)
                 if entity is not None:
-                    insert_into(entity)
+                    ctx.io.output_entity(entity)
                 # Crucial step for memory management: clear the element
                 # after processing to free up memory.
                 elem.clear()
 
+    print("Stats:")
+    print("\n".join([str(t) for t in category_stats.most_common(30)]))
+    # print("\n".join([str(t) for t in infobox_types.most_common(50)]))
+    # print("\n".join([str(t) for t in infobox_stats.most_common(30)]))
     print("🎉 Processing complete.")
-
-
-# TODO remove this method and move to a cleaner one
-def main(ctx: Context):
-    try:
-        process_wikipedia_dump(ctx)
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        raise
-    finally:
-        dump_dbs({"people_wiki": ["content_score DESC"]})
-
-        print("\n".join([str(t) for t in category_stats.most_common(500)]))
-        # print("\n".join([str(t) for t in infobox_types.most_common(50)]))
-        # print("\n".join([str(t) for t in infobox_stats.most_common(30)]))

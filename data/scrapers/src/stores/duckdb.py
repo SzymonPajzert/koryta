@@ -1,6 +1,7 @@
-from dataclasses import fields
+from dataclasses import fields, asdict
 import os
 
+import pandas as pd
 import duckdb
 
 from util.polish import PkwFormat
@@ -8,8 +9,28 @@ from stores.config import VERSIONED_DIR
 from datetime import datetime
 
 
-dbs = []
-used = dict()
+class EntityDumper:
+    dbs = []
+    used = dict()
+    inmemory = dict()
+
+    def insert_into(self, v):
+        n = type(v).__name__
+        if n not in self.inmemory:
+            self.inmemory[n] = []
+        self.inmemory[n].append(v)
+
+    def dump_pandas(self):
+        for k, v in self.inmemory.items():
+            name = k.lower()
+            print(f"Writing {name}...")
+            df = pd.DataFrame.from_records([asdict(i) for i in v])
+            df.to_json(
+                os.path.join(VERSIONED_DIR, f"{name}.jsonl"),
+                index=False,
+                lines=True,
+                orient="records",
+            )
 
 
 def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
@@ -35,10 +56,6 @@ def always_export(func):
             dump_dbs()
 
     return wrapper
-
-
-def insert_into(v):
-    raise NotImplementedError
 
 
 def register_table(cls):

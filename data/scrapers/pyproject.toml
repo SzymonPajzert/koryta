@@ -123,12 +123,12 @@ dependencies = [
 [project.scripts]
 # scrape_articles = "scrapers.article.crawler:crawl"
 # scrape_articles_example = "scrapers.article.extract_example:extract"
-# scrape_wiki = "scrapers.wiki.process_articles:main"
+scrape_wiki = "main:scrape_wiki"
 # scrape_pkw = "scrapers.pkw.process:main"
 # scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
 # scrape_krs_people = "scrapers.krs.process:extract_people"
 # scrape_krs_companies = "scrapers.krs.process:extract_companies"
-scrape_koryta_people = "stores.conductor:scrape_koryta_people"
+scrape_koryta_people = "main:scrape_koryta_people"
 # scrape_koryta_articles = "stores.conductor:scrape_koryta_articles"
 analyze_people = "analysis.people:people_merged"
 # jupyter lab is available as well for analysis
