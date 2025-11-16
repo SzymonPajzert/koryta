@@ -22,6 +22,10 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    def read_content(self) -> str | bytes:
+        pass
+
+    @abstractmethod
     def read_jsonl(self):
         raise NotImplementedError()
 
@@ -91,12 +95,18 @@ class DownloadableFile(DataRef):
     url: str
     filename_fallback: str | None = None
     complex_download: str | None = None
+    download_lambda: typing.Callable | None = None
 
     @property
     def filename(self):
         if self.filename_fallback is not None:
             return self.filename_fallback
         return self.url.split("/")[-1]
+
+
+@dataclass
+class CloudStorage(DataRef):
+    hostname: str
 
 
 """

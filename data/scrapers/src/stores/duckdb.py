@@ -48,16 +48,6 @@ def dump_dbs(tables_to_dump: None | dict[str, list[str]] = None):
             duckdb.execute(f"COPY ({q}) TO '{file_path}'")
 
 
-def always_export(func):
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        finally:
-            dump_dbs()
-
-    return wrapper
-
-
 def register_table(cls):
     # read=False, name=None, excluded_fields=set()
     def wrapper(cls):

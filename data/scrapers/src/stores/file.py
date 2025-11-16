@@ -17,6 +17,9 @@ class FromIterable(File):
     def read_iterable(self):
         return self.iterable
 
+    def read_content(self) -> str | bytes:
+        return "\n".join(self.iterable)
+
     def read_jsonl(self):
         raise NotImplementedError()
 
@@ -42,6 +45,9 @@ class FromBytesIO(File):
 
     def read_iterable(self):
         raise NotImplementedError()
+
+    def read_content(self) -> str | bytes:
+        return self.raw_bytes
 
     def read_jsonl(self):
         raise NotImplementedError()

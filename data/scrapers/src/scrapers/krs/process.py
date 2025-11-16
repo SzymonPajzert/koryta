@@ -1,9 +1,7 @@
 import json
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from stores.storage import iterate_blobs
-from stores.duckdb import register_table, always_export
+from scrapers.stores import Pipeline, Context, CloudStorage
 
 from entities.person import KRS as KrsPerson
 from entities.company import KRS as KrsCompany
@@ -49,15 +47,15 @@ def employment_duration(item) -> str:
     return f"{days/365:.2f}"
 
 
-@always_export
-def extract_people():
+@Pipeline()
+def extract_people(ctx: Context):
     """
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about people.
     """
-    register_table(KrsPerson)
-
-    for blob_name, content in iterate_blobs("rejestr.io"):
+    for blob_name, content in ctx.io.read_data(
+        CloudStorage(hostname="rejestr.io")
+    ).read_iterable():
         try:
             if "aktualnosc_" not in blob_name:
                 continue
@@ -87,16 +85,16 @@ def extract_people():
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
 
-@always_export
-def extract_companies():
+@Pipeline()
+def extract_companies(ctx: Context):
     """
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about companies.
     """
-    register_table(KrsCompany)
-
     companies = {}
-    for blob_name, content in iterate_blobs("rejestr.io"):
+    for blob_name, content in ctx.io.read_data(
+        CloudStorage(hostname="rejestr.io")
+    ).read_iterable():
         try:
             data = json.loads(content)
         except json.JSONDecodeError as e:

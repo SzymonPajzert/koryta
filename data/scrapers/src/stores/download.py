@@ -31,6 +31,8 @@ class FileSource:
         # Define the downloader or use the default download from the URL
         if config.complex_download is not None:
             self.downloader = downloads[config.complex_download]
+        elif config.download_lambda is not None:
+            self.downloader = config.download_lambda
         else:
             self.downloader = download_from_url(config.url)
 

@@ -4,19 +4,22 @@ from scrapers.stores import Context
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
 from scrapers.pkw.process import main as scrape_pkw_func
+from scrapers.krs.process import extract_people as scrape_krs_people_func
+from scrapers.krs.process import extract_companies as scrape_krs_companies_func
 
 
 from stores.download import FileSource
 from stores.firestore import FirestoreIO
 from stores.rejestr import Rejestr
 from stores.duckdb import EntityDumper
+from stores.storage import Client as CloudStorageClient
 
 import stores.file as file
 
 
 from scrapers.stores import IO, File, DataRef, Pipeline, set_context
 from scrapers.stores import FirestoreCollection
-from scrapers.stores import DownloadableFile
+from scrapers.stores import DownloadableFile, CloudStorage
 
 
 class Conductor(IO):
@@ -25,6 +28,7 @@ class Conductor(IO):
         # So currently, let's just instantiate everything
         self.firestore = FirestoreIO()
         self.dumper = dumper
+        self.storage = CloudStorageClient()
 
     def read_data(self, fs: DataRef, process_if_missing=None) -> File:
         print(f"Reading {fs}")
@@ -44,6 +48,9 @@ class Conductor(IO):
             if not dfs.downloaded():
                 dfs.download()
             return file.FromPath(dfs.downloaded_path)
+
+        if isinstance(fs, CloudStorage):
+            return file.FromIterable(self.storage.iterate_blobs(self, fs.hostname))
 
         raise NotImplementedError()
 
@@ -90,4 +97,14 @@ def scrape_wiki():
 
 def scrape_pkw():
     f = setup_pipeline(scrape_pkw_func)
+    f()
+
+
+def scrape_krs_people():
+    f = setup_pipeline(scrape_krs_people_func)
+    f()
+
+
+def scrape_krs_companies():
+    f = setup_pipeline(scrape_krs_companies_func)
     f()
