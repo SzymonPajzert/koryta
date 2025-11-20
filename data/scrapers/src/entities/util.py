@@ -1,32 +1,66 @@
+"""Utility data classes and functions for data processing."""
 from dataclasses import dataclass
-from urllib.parse import urlparse, ParseResult
+from urllib.parse import urlparse
 
 
 @dataclass
 class IgnoredDates:
+    """Represents dates that were ignored during parsing, for later analysis."""
+
     date: str
 
 
-# TODO make it a nicer class, that contains all the string handling on its own
-# Test how we create these paths etc
+@dataclass(frozen=True)
 class NormalizedParse:
-    def __init__(self, arg: ParseResult):
-        self.scheme = arg.scheme
-        self.netloc = arg.netloc
-        self.path = arg.path
-        self.hostname = arg.hostname
-        if not self.hostname:
-            self.hostname = arg.netloc
-        self.hostname_normalized = self.hostname.lower()
-        if self.hostname_normalized.startswith("www."):
-            self.hostname_normalized = self.hostname_normalized[4:]
-        self.domain = f"{self.scheme}://{self.hostname}"
+    """
+    A utility class to parse and normalize URLs.
 
+    Provides a standardized representation of a URL, breaking it down into
+    its constituent parts and normalizing the hostname.
+    """
+
+    scheme: str
+    netloc: str
+    path: str
+    hostname: str
     hostname_normalized: str
     domain: str
 
     @staticmethod
-    def parse(url):
+    def parse(url: str) -> "NormalizedParse":
+        """
+        Parses a URL string into a NormalizedParse object.
+
+        - Removes trailing slashes.
+        - Normalizes the hostname (lowercase, removes 'www.').
+        """
+        if not isinstance(url, str):
+            raise TypeError("URL must be a string.")
+
+        # Handle scheme-less URLs by assuming http
+        if not url.startswith(("http://", "https://")):
+            url = "http://" + url
+            
         if url.endswith("/"):
             url = url[:-1]
-        return NormalizedParse(urlparse(url))
+
+        parsed = urlparse(url)
+
+        hostname = parsed.hostname
+        if not hostname:
+            hostname = parsed.netloc
+
+        hostname_normalized = hostname.lower()
+        if hostname_normalized.startswith("www."):
+            hostname_normalized = hostname_normalized[4:]
+
+        domain = f"{parsed.scheme}://{hostname}"
+
+        return NormalizedParse(
+            scheme=parsed.scheme,
+            netloc=parsed.netloc,
+            path=parsed.path,
+            hostname=hostname,
+            hostname_normalized=hostname_normalized,
+            domain=domain,
+        )
