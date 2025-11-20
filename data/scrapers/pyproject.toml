@@ -142,3 +142,42 @@ dev = ["jupyterlab (>=4.4.9,<5.0.0)", "import-linter (>=2.6,<3.0)"]
 
 [tool.pytest.ini_options]
 markers = ["parametrize_skip_if"]
+
+[tool.importlinter]
+root_packages = ["analysis", "stores", "scrapers", "util", "entities"]
+
+exclude_type_checking_imports = true
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Clean architecture"
+type = "layers"
+layers = ["analysis", "stores", "scrapers", "util", "entities"]
+
+[[tool.importlinter.contracts]]
+name = "Do not import external packages"
+type = "forbidden"
+source_modules = ["scrapers", "util", "entities"]
+
+forbidden_modules = [
+    "bz2",
+    "duckdb",
+    "duckdb.**",
+    "urllib",
+    "urllib.**",
+    "os",
+    "os.**",
+    "sys",
+    "sys.**",
+    "zipfile",
+    "google",
+    "google.**",
+    "firebase_admin",
+    "firebase_admin.**",
+    "zipfile",
+    "zipfile.**",
+    "io",
+    "fnmatch",
+    "csv",
+]
+ignore_imports = ["entities.util -> urllib"]
