@@ -74,7 +74,7 @@ dependencies = [
     "pydantic_core==2.33.2",
     "Pygments==2.19.2",
     "PyJWT==2.10.1",
-    "pytest==8.4.1",
+    "pytest==9.0.1",
     "python-dotenv==1.1.1",
     "PyYAML==6.0.2",
     "regex==2025.9.18",
@@ -141,10 +141,42 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = ["jupyterlab (>=4.4.9,<5.0.0)", "import-linter (>=2.6,<3.0)"]
+dev = [
+    "jupyterlab (>=4.4.9,<5.0.0)",
+    "import-linter (>=2.6,<3.0)",
+    "ruff (>=0.14.5,<0.15.0)",
+    "pre-commit (>=4.4.0,<5.0.0)",
+]
+test = ["pytest (>=9.0.1,<10.0.0)", "pytest-cov (>=7.0.0,<8.0.0)"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+# Add "PL" (Pylint) and "C90" (Complexity) to default rules
+select = ["E", "F", "I", "PL", "C90"]
+
+# Specific rules for "Big Classes" and "God Objects"
+# PLR0904 - Too many public methods
+# PLR0902 - Too many instance attributes
+# PLR0913 - Too many arguments in function definition
+# C901    - Complex functions (McCabe complexity)
+ignore = []
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-public-methods = 20
+max-statements = 50
 
 [tool.pytest.ini_options]
 markers = ["parametrize_skip_if"]
+addopts = "--cov=src --cov-report=term-missing"
+
+testpaths = ["tests"]
 
 [tool.importlinter]
 root_packages = ["analysis", "stores", "scrapers", "util", "entities"]
