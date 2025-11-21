@@ -8,7 +8,9 @@ It defines two main pipelines:
 - `process_articles`: Extracts `Article` entities and identifies mentioned people
   within them by processing 'edges' data from Firestore.
 """
+
 from tqdm import tqdm
+import typing
 from collections import Counter
 
 from scrapers.stores import Context, Pipeline, FirestoreCollection
@@ -70,12 +72,12 @@ def process_articles(ctx: Context):
     print("Processing articles and mentions from Firestore...")
     people = {person.id: person for person in list_people(ctx)}
     articles = {
-        article.doc_id: article.to_dict() # Assuming doc_id exists on the returned object
+        article.doc_id: article.to_dict()  # Assuming doc_id exists on the returned object
         for article in ctx.io.read_data(
             FirestoreCollection("nodes", filters=[("type", "==", "article")])
         ).read_iterable()
     }
-    
+
     # Enrich articles with mentioned people
     for edge_doc in tqdm(
         ctx.io.read_data(FirestoreCollection("edges", stream=True)).read_iterable()

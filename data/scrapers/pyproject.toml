@@ -145,6 +145,8 @@ dev = ["jupyterlab (>=4.4.9,<5.0.0)", "import-linter (>=2.6,<3.0)"]
 
 [tool.pytest.ini_options]
 markers = ["parametrize_skip_if"]
+addopts = "--cov=src/my_pipeline --cov-report=term-missing"
+testpaths = ["tests"]
 
 [tool.importlinter]
 root_packages = ["analysis", "stores", "scrapers", "util", "entities"]
