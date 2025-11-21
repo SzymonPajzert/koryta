@@ -1,5 +1,5 @@
 from analysis.utils.tables import create_people_table
-from scrapers.stores import Pipeline, LocalFile
+from scrapers.stores import Pipeline, LocalFile, Context
 
 
 # TODO mark it as an output of scrape_wiki - to be named people_wiki
@@ -7,7 +7,7 @@ wiki_file = LocalFile("people_wiki.jsonl", "versioned")
 
 
 @Pipeline()
-def people_wiki_merged(con):
+def people_wiki_merged(ctx: Context):
     # TODO the name logic is wrong for wiki, try matching on the full name
     con.execute(
         f"""

@@ -174,9 +174,7 @@ max-statements = 50
 
 [tool.pytest.ini_options]
 markers = ["parametrize_skip_if"]
-addopts = "--cov=src --cov-report=term-missing"
-
-testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term:skip-covered"
 
 [tool.importlinter]
 root_packages = ["analysis", "stores", "scrapers", "util", "entities"]

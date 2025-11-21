@@ -59,7 +59,7 @@ def unique_probability(
 
 
 @Pipeline()
-def people_merged(ctx: Context, con):
+def people_merged(ctx: Context):
     con.create_function(
         "unique_probability", unique_probability, null_handling="special"  # type: ignore
     )

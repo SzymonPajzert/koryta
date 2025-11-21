@@ -1,11 +1,11 @@
-from scrapers.stores import Pipeline, LocalFile
+from scrapers.stores import Pipeline, LocalFile, Context
 
 # TODO mark it as an output of scrape_koryta - to be named people_koryta
 koryta_file = LocalFile("people_koryta.jsonl", "versioned")
 
 
 @Pipeline()
-def people_koryta_merged(con):
+def people_koryta_merged(ctx: Context):
     con.execute(
         f"""
         CREATE OR REPLACE TABLE koryta_people AS

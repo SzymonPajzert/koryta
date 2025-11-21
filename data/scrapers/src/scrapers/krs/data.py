@@ -16,8 +16,9 @@ public_companies = FileSource(
     _PUBLIC_COMPANIES_SOURCE, "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv"
 )
 
-ctx.io.check_input(public_companies)
-df = ctx.io.read_file(public_companies).read_csv(sep=";", low_memory=False)
+df = pd.read_csv(
+    ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
+)
 
 
 def parse_teryt_from_row(row: pd.Series) -> str:
@@ -71,6 +72,8 @@ def register_partials(
         for d in data:
             process(d)
 
+
+print(df)
 
 df = df[~df["KRS"].isna()]
 df["teryt"] = df.apply(parse_teryt_from_row, axis=1)

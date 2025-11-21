@@ -1,14 +1,21 @@
 import pytest
 
+from main import setup_context
+
+ctx, _ = setup_context(False)
+
 from analysis.people_pkw_merged import people_pkw_merged
 
-pkw = people_pkw_merged()
+
+@pytest.fixture(scope="module")
+def pkw():
+    return people_pkw_merged.process(ctx)
 
 
 @pytest.mark.parametrize(
     "first_name,last_name", [("donald", "tusk"), ("achilles", "baron")]
 )
-def test_unique(first_name, last_name):
+def test_unique(pkw, first_name, last_name):
     first = pkw["first_name"] == first_name
     last = pkw["last_name"] == last_name
     m = pkw[first & last]
@@ -16,7 +23,7 @@ def test_unique(first_name, last_name):
 
 
 @pytest.mark.parametrize("first_name,last_name,year", [("donald", "tusk", "2001")])
-def test_election_exists(first_name, last_name, year):
+def test_election_exists(pkw, first_name, last_name, year):
     first = pkw["first_name"] == first_name
     last = pkw["last_name"] == last_name
     elections = pkw[first & last]["elections"]

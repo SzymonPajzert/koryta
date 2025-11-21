@@ -1,6 +1,6 @@
 import duckdb
 
-from scrapers.stores import Pipeline, LocalFile
+from scrapers.stores import Pipeline, LocalFile, Context
 from analysis.utils.tables import create_people_table, init_tables
 
 # TODO mark it as an output of scrape_pkw - to be named people_pkw
@@ -9,8 +9,7 @@ pkw_file = LocalFile("people_pkw.jsonl", "versioned")
 
 
 @Pipeline()
-def people_pkw_merged(con: duckdb.DuckDBPyConnection | None = None):
-    assert con is not None
+def people_pkw_merged(ctx: Context):
 
     init_tables(con)
 
