@@ -1,6 +1,7 @@
 import io
 import csv
 import typing
+import json
 from typing import BinaryIO, TextIO
 
 from zipfile import ZipFile
@@ -21,7 +22,8 @@ class FromIterable(File):
         return "\n".join(self.iterable)
 
     def read_jsonl(self):
-        raise NotImplementedError()
+        for line in self.iterable:
+            yield json.loads(line)
 
     def read_csv(self, sep=","):
         return csv.reader(self.iterable, delimiter=sep)

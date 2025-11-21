@@ -1,9 +1,8 @@
 import pytest
 import regex as re
 
-from scrapers.krs.process import KRS, iterate_blobs
+from scrapers.krs.process import KRS
 from analysis.people import find_all_matches, con
-from analysis.utils import read_enriched
 from util.lists import IGNORE_FAILURES
 
 
