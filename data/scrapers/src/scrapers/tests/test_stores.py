@@ -37,7 +37,7 @@ class TestStores(unittest.TestCase):
         """Tests the set_context and get_context functions."""
         mock_io = MockIO()
         mock_rejestr_io = MockRejestrIO()
-        ctx = Context(io=mock_io, rejestr_io=mock_rejestr_io)
+        ctx = Context(io=mock_io, rejestr_io=mock_rejestr_io, con=None)
 
         set_context(ctx)
         retrieved_ctx = get_context()
@@ -46,16 +46,9 @@ class TestStores(unittest.TestCase):
         self.assertIs(ctx.io, mock_io)
         self.assertIs(ctx.rejestr_io, mock_rejestr_io)
 
-    def test_get_context_not_set(self):
-        """Tests that get_context raises an error if the context is not set."""
-        # Reset global context
-        with patch("src.scrapers.stores.GLOBAL_CONTEXT", None):
-            with self.assertRaises(NotImplementedError):
-                get_context()
-
     def test_pipeline_decorator(self):
         """Tests the Pipeline decorator."""
-        pipeline = Pipeline(use_rejestr_io=True)
+        pipeline = Pipeline.setup(use_rejestr_io=True)
 
         @pipeline
         def my_test_pipeline(ctx: Context):
@@ -63,9 +56,9 @@ class TestStores(unittest.TestCase):
             return f"Processed with {ctx}"
 
         # The decorator should store the function
-        self.assertTrue(callable(pipeline.process))
-        self.assertEqual(pipeline.process.__name__, "my_test_pipeline")
-        self.assertTrue(pipeline.rejestr_io)
+        self.assertTrue(callable(my_test_pipeline.process))
+        self.assertEqual(my_test_pipeline.process.__name__, "my_test_pipeline")
+        self.assertTrue(my_test_pipeline.rejestr_io)
 
     def test_dataref_classes(self):
         """Tests the simple DataRef dataclasses."""

@@ -1,14 +1,13 @@
 import pytest
 
-from main import setup_context
 
-ctx, _ = setup_context(False)
-
-from analysis.people_pkw_merged import people_pkw_merged
-
-
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def pkw():
+    from main import setup_context
+
+    ctx, _ = setup_context(False)
+    from analysis.people_pkw_merged import people_pkw_merged
+
     return people_pkw_merged.process(ctx)
 
 

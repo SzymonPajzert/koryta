@@ -106,7 +106,7 @@ class TestKorytaDownload(unittest.TestCase):
                 Person("person2_id", "Anna Nowak", "PartyB"),
             ],
         ):
-            process_people(self.ctx)
+            process_people.process(self.ctx)
 
         self.assertEqual(len(self.mock_io.output_entities), 2)
         self.assertEqual(self.mock_io.output_entities[0].full_name, "Jan Kowalski")
@@ -133,16 +133,16 @@ class TestKorytaDownload(unittest.TestCase):
 
         self.mock_io.read_data.side_effect = mock_read_data_side_effect
 
-        process_articles(self.ctx)
+        process_articles.process(self.ctx)
 
         # Check output entities (Articles)
         self.assertEqual(
-            len(self.ctx.io.output_entities), 2
+            len(self.mock_io.output_entities), 2
         )  # article1_id should have 2 mentions, article2_id 0
 
         # Verify article1_id output
         article1_output = next(
-            e for e in self.ctx.io.output_entities if e.id == "article1_id"
+            e for e in self.mock_io.output_entities if e.id == "article1_id"
         )
         self.assertIsInstance(article1_output, Article)
         self.assertEqual(article1_output.title, "Article One")
@@ -153,7 +153,7 @@ class TestKorytaDownload(unittest.TestCase):
 
         # Verify article2_id output (no mentions recorded)
         article2_output = next(
-            e for e in self.ctx.io.output_entities if e.id == "article2_id"
+            e for e in self.mock_io.output_entities if e.id == "article2_id"
         )
         self.assertIsInstance(article2_output, Article)
         self.assertEqual(article2_output.title, "Article Two")

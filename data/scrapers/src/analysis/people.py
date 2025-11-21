@@ -58,7 +58,7 @@ def unique_probability(
     return math.exp(-n * p_combined)
 
 
-@Pipeline()
+@Pipeline.cached_dataframe
 def people_merged(ctx: Context):
     con = ctx.con
     con.create_function(

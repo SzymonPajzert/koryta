@@ -3,26 +3,23 @@
 import os
 import duckdb
 
+from stores.download import FileSource
+from stores.firestore import FirestoreIO
+from stores.rejestr import Rejestr
+from stores.duckdb import EntityDumper
+from stores.storage import Client as CloudStorageClient
+import stores.file as file
+from scrapers.stores import IO, File, DataRef, LocalFile, set_context
+from scrapers.stores import FirestoreCollection, Pipeline
+from scrapers.stores import DownloadableFile, CloudStorage
+
 from scrapers.stores import Context
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
 from scrapers.pkw.process import main as scrape_pkw_func
 from scrapers.krs.process import extract_people as scrape_krs_people_func
 from scrapers.krs.process import extract_companies as scrape_krs_companies_func
-
-
-from stores.download import FileSource
-from stores.firestore import FirestoreIO
-from stores.rejestr import Rejestr
-from stores.duckdb import EntityDumper
-from stores.storage import Client as CloudStorageClient
-
-import stores.file as file
-
-
-from scrapers.stores import IO, File, DataRef, LocalFile, set_context
-from scrapers.stores import FirestoreCollection, Pipeline
-from scrapers.stores import DownloadableFile, CloudStorage
+from analysis.people import people_merged as people_merged_func
 
 
 class Conductor(IO):
@@ -128,6 +125,11 @@ def scrape_krs_companies():
     f()
 
 
+def people_merged():
+    f = setup_pipeline(people_merged_func)
+    f()
+
+
 def main():
     ctx, dumper = setup_context(False)
 
@@ -137,6 +139,7 @@ def main():
         scrape_pkw_func.process(ctx)
         scrape_krs_people_func.process(ctx)
         scrape_krs_companies_func.process(ctx)
+        people_merged_func.process(ctx)
         print("Finished processing")
     finally:
         print("Dumping...")

@@ -47,7 +47,7 @@ def employment_duration(item) -> str:
     return f"{days/365:.2f}"
 
 
-@Pipeline()
+@Pipeline.setup()
 def extract_people(ctx: Context):
     """
     Iterates through GCS files from rejestr.io, parses them,
@@ -87,7 +87,7 @@ def extract_people(ctx: Context):
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
 
-@Pipeline()
+@Pipeline.setup()
 def extract_companies(ctx: Context):
     """
     Iterates through GCS files from rejestr.io, parses them,

@@ -240,7 +240,11 @@ class Pipeline:
     """
 
     def __init__(
-        self, output_order: dict[str, list[str]] = {}, use_rejestr_io=False, **kwargs
+        self,
+        process,
+        filename: str | None = None,
+        output_order: dict[str, list[str]] = {},
+        use_rejestr_io=False,
     ):
         """
         Initializes the Pipeline decorator.
@@ -249,22 +253,33 @@ class Pipeline:
             output_order: Specifies the sorting order for the output collection.
             use_rejestr_io: If True, the pipeline requires access to the RejestrIO interface.
         """
+        self.process = process
+        self.filename = filename
         # TODO implement it
         self.output_order = output_order
         self.rejestr_io = use_rejestr_io
-        # TODO clean it up
-        if len(kwargs) > 0:
-            print(f"Unknown kwargs: {kwargs}")
 
-    def __call__(self, func):
-        """Wraps the decorated function."""
-        self.process = func
-        return self
+    @staticmethod
+    def setup(
+        output_order: dict[str, list[str]] = {},
+        use_rejestr_io=False,
+    ):
+        if len(output_order) > 0:
+            print("Missing implementation")
+
+        def wrapper(func):
+            pipeline = Pipeline(
+                func, output_order=output_order, use_rejestr_io=use_rejestr_io
+            )
+            pipeline.process = func
+            return pipeline
+
+        return wrapper
 
     @staticmethod
     def cached_dataframe(func):
-        name = func.__name__
-        pipeline = Pipeline()
+        name: str = func.__name__
+        pipeline = Pipeline(func, filename=name)
         # TODO check if name is set
         pipeline.process = func
         return pipeline

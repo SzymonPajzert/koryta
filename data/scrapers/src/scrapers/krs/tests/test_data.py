@@ -1,10 +1,11 @@
 from main import setup_context
-import scrapers.krs.data as data
 
 KRS_STARTERS_ALL = "krs_starters.csv"
 COMMON_ROW = 7
 
 ctx, _ = setup_context(False)
+
+import scrapers.krs.data as data
 
 
 def test_public_companies_list():
