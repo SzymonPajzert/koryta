@@ -1,5 +1,7 @@
 # This file registers all conductor pipelines in this package
 
+import os
+
 from scrapers.stores import Context
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
@@ -17,8 +19,8 @@ from stores.storage import Client as CloudStorageClient
 import stores.file as file
 
 
-from scrapers.stores import IO, File, DataRef, Pipeline, set_context
-from scrapers.stores import FirestoreCollection
+from scrapers.stores import IO, File, DataRef, LocalFile, set_context
+from scrapers.stores import FirestoreCollection, Pipeline
 from scrapers.stores import DownloadableFile, CloudStorage
 
 
@@ -52,9 +54,18 @@ class Conductor(IO):
         if isinstance(fs, CloudStorage):
             return file.FromIterable(self.storage.iterate_blobs(self, fs.hostname))
 
+        if isinstance(fs, LocalFile):
+            return file.FromPath(os.path.join(fs.folder, fs.filename))
+
         raise NotImplementedError()
 
     def list_data(self, path: DataRef) -> list[str]:
+        if isinstance(path, LocalFile):
+            p = os.path.join(path.folder, path.filename)
+            if os.path.exists(p):
+                return [p]
+            return []
+
         raise NotImplementedError()
 
     def output_entity(self, entity):

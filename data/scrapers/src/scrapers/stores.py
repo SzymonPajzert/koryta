@@ -5,7 +5,7 @@ file operations, data references, and pipeline execution contexts.
 """
 
 import typing
-from typing import Any
+from typing import Any, Literal
 from dataclasses import dataclass, field
 from abc import ABCMeta, abstractmethod
 
@@ -105,13 +105,7 @@ class LocalFile(DataRef):
     """A reference to a file on the local filesystem."""
 
     filename: str
-
-
-@dataclass
-class VersionedFile(DataRef):
-    """A reference to a versioned file."""
-
-    filename: str
+    folder: Literal["downloaded", "tests", "versioned"]
 
 
 @dataclass
@@ -234,6 +228,7 @@ class Pipeline:
     """
     A decorator for defining and configuring a data processing pipeline.
     """
+
     def __init__(
         self, output_order: dict[str, list[str]] = {}, use_rejestr_io=False, **kwargs
     ):

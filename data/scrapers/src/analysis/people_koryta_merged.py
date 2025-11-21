@@ -1,8 +1,7 @@
 from scrapers.stores import Pipeline, LocalFile
-from analysis.utils.tables import create_people_table
 
 # TODO mark it as an output of scrape_koryta - to be named people_koryta
-koryta_file = LocalFile("people_koryta.jsonl")
+koryta_file = LocalFile("people_koryta.jsonl", "versioned")
 
 
 @Pipeline()

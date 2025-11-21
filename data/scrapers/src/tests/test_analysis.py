@@ -4,7 +4,6 @@ import regex as re
 from scrapers.krs.process import KRS, iterate_blobs
 from analysis.people import find_all_matches, con
 from analysis.utils import read_enriched
-from util.config import versioned
 from util.lists import IGNORE_FAILURES
 
 

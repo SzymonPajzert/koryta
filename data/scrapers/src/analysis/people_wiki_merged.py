@@ -3,7 +3,7 @@ from scrapers.stores import Pipeline, LocalFile
 
 
 # TODO mark it as an output of scrape_wiki - to be named people_wiki
-wiki_file = LocalFile("people_wiki.jsonl")
+wiki_file = LocalFile("people_wiki.jsonl", "versioned")
 
 
 @Pipeline()

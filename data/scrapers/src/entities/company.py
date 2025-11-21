@@ -1,4 +1,5 @@
 """Data classes for representing companies and KRS entities."""
+
 from dataclasses import dataclass, field
 
 

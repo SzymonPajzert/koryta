@@ -37,6 +37,25 @@ COMPANIES_EXPECTED = {
         name="PERN S.A.",
         krs="0000069559",
     ),
+    "Agata (przedsiębiorstwo)": None,
+    "Agencja Mienia Wojskowego": None,
+    "Biuro Maklerskie PKO Banku Polskiego": None,
+    "Grupa kapitałowa PWN": None,
+    "Kopalnia Węgla Kamiennego „Śląsk”": None,
+    "Miejski Zakład Komunikacji w Koninie": None,
+    "Miejskie Przedsiębiorstwo Komunikacyjne we Wrocławiu": None,
+    "Orange Polska": None,
+    "Pesa Mińsk Mazowiecki": None,
+    "PGE Polska Grupa Energetyczna": None,
+    "Pojazdy Szynowe Pesa Bydgoszcz": None,
+    "Polbus-PKS": None,
+    "Polfa Warszawa": None,
+    "Polski Holding Obronny": None,
+    "Port lotniczy Warszawa-Modlin": None,
+    "Stadion Narodowy im. Kazimierza Górskiego w Warszawie": None,
+    "Totalizator Sportowy": None,
+    "Warel": None,
+    "ZE PAK": None,
 }
 
 ctx, _ = setup_context(False)
@@ -44,7 +63,7 @@ ctx, _ = setup_context(False)
 
 @pytest.mark.parametrize("filename", PEOPLE_EXPECTED.keys())
 def test_people(filename):
-    with ctx.io.read_data(LocalFile(f"{filename}.xml")).read_file() as f:
+    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
         assert article is not None
@@ -69,7 +88,7 @@ def test_people(filename):
 
 @pytest.mark.parametrize("filename", COMPANIES_EXPECTED.keys())
 def test_companies(filename):
-    with ctx.io.read_data(LocalFile(f"{filename}.xml")).read_file() as f:
+    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
         assert article is not None
@@ -82,7 +101,7 @@ def test_companies(filename):
 
 @pytest.mark.parametrize("filename", TEST_FILES)
 def test_all_tested(filename):
-    path = ctx.io.list_data(LocalFile(f"{filename}.xml"))[0]
+    path = ctx.io.list_data(LocalFile(f"{filename}.xml", "tests"))[0]
     assert os.path.exists(path)
 
     if filename in PEOPLE_EXPECTED:

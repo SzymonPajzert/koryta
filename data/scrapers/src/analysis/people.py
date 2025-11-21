@@ -13,10 +13,10 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 
 
-krs_file = LocalFile("people_krs.jsonl")
-wiki_file = LocalFile("people_wiki.jsonl")
-koryta_file = LocalFile("people_koryta.jsonl")
-matched_file = LocalFile("people_matched.parquet")
+krs_file = LocalFile("people_krs.jsonl", "versioned")
+wiki_file = LocalFile("people_wiki.jsonl", "versioned")
+koryta_file = LocalFile("people_koryta.jsonl", "versioned")
+matched_file = LocalFile("people_matched.parquet", "versioned")
 
 
 SAMPLE_FILTER = ""

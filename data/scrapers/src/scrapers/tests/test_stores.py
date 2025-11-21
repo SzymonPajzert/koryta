@@ -69,7 +69,7 @@ class TestStores(unittest.TestCase):
 
     def test_dataref_classes(self):
         """Tests the simple DataRef dataclasses."""
-        local = LocalFile("file.txt")
+        local = LocalFile("file.txt", "tests")
         self.assertEqual(local.filename, "file.txt")
 
         firestore = FirestoreCollection("users", filters=[("age", ">", 18)])
