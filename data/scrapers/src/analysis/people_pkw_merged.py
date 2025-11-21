@@ -15,7 +15,6 @@ def people_pkw_merged(ctx: Context):
     init_tables(con)
 
     pkw_data = ctx.io.read_data(pkw_file).read_dataframe("jsonl")
-    print(pkw_data)
 
     con.execute(
         f"""

@@ -40,3 +40,5 @@ def people_wiki_merged(ctx: Context):
         "wiki_people",
         any_vals=["is_polityk", "full_name", "wiki_score", "birth_date"],
     )
+
+    return con.sql("SELECT * FROM wiki_people").df()

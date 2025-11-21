@@ -28,7 +28,12 @@ class FromIterable(File):
     def read_dataframe(
         self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
     ) -> pd.DataFrame:
-        return pd.DataFrame.from_records([json.loads(line) for line in self.iterable])
+        if fmt == "jsonl":
+            return pd.DataFrame.from_records(
+                [json.loads(line) for line in self.iterable]
+            )
+        else:
+            raise NotImplementedError()
 
     def read_csv(self, sep=","):
         return csv.reader(self.iterable, delimiter=sep)
@@ -124,6 +129,18 @@ class FromPath(FromTextIO):
 
     def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
         return read_xls(self.path, header_rows, skip_rows)
+
+    def read_dataframe(
+        self, fmt: Literal["jsonl"] | Literal["csv"] | Literal["parquet"], csv_sep=","
+    ) -> pd.DataFrame:
+        if fmt == "jsonl":
+            return pd.read_json(self.path, lines=True)
+        elif fmt == "csv":
+            return pd.read_csv(self.path, sep=csv_sep)
+        elif fmt == "parquet":
+            return pd.read_parquet(self.path)
+
+        return super().read_dataframe(fmt, csv_sep)
 
 
 def read_xls(raw_bytes_or_path: bytes | str, header_rows: int = 0, skip_rows: int = 0):

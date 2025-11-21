@@ -253,11 +253,35 @@ class Pipeline:
             output_order: Specifies the sorting order for the output collection.
             use_rejestr_io: If True, the pipeline requires access to the RejestrIO interface.
         """
-        self.process = process
+        self._process = process
         self.filename = filename
         # TODO implement it
         self.output_order = output_order
         self.rejestr_io = use_rejestr_io
+
+    def process(self, ctx: Context):
+        json_path: str | None = None
+        df: pd.DataFrame | None = None
+        if self.filename is not None:
+            json_path = self.filename + ".jsonl"
+            try:
+                df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe(
+                    "jsonl"
+                )
+            except FileNotFoundError:
+                print("File doesn't exist, continuing")
+
+        if df is None:
+            print("No df file, processing")
+            df = self._process(ctx)
+            print("Processing done")
+            if json_path is not None:
+                # TODO make it more abstract
+                json_path = "versioned/" + json_path
+                print(f"Writing to {json_path}")
+                df.to_json(json_path, orient="records", lines=True)
+
+        return df
 
     @staticmethod
     def setup(
@@ -271,7 +295,6 @@ class Pipeline:
             pipeline = Pipeline(
                 func, output_order=output_order, use_rejestr_io=use_rejestr_io
             )
-            pipeline.process = func
             return pipeline
 
         return wrapper
@@ -281,5 +304,4 @@ class Pipeline:
         name: str = func.__name__
         pipeline = Pipeline(func, filename=name)
         # TODO check if name is set
-        pipeline.process = func
         return pipeline

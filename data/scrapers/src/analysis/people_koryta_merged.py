@@ -25,3 +25,5 @@ def people_koryta_merged(ctx: Context):
         WHERE full_name IS NOT NULL
         """
     )
+
+    return con.sql("SELECT * FROM koryta_people").df()

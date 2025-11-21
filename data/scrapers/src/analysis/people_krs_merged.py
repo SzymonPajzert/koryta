@@ -43,3 +43,5 @@ def people_krs_merged(ctx: Context):
             "employed_start": "employed_start",
         },
     )
+
+    return con.sql("SELECT * FROM krs_people").df()
