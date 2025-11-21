@@ -5,6 +5,7 @@ file operations, data references, and pipeline execution contexts.
 """
 
 import typing
+from collections.abc import Callable
 from typing import Any, Literal
 from dataclasses import dataclass, field
 from abc import ABCMeta, abstractmethod
@@ -241,7 +242,7 @@ class Pipeline:
 
     def __init__(
         self,
-        process,
+        process: Callable[[Context], pd.DataFrame],
         filename: str | None = None,
         output_order: dict[str, list[str]] = {},
         use_rejestr_io=False,
@@ -253,6 +254,10 @@ class Pipeline:
             output_order: Specifies the sorting order for the output collection.
             use_rejestr_io: If True, the pipeline requires access to the RejestrIO interface.
         """
+        # Ensure, that the function that is decorated is a pipeline.
+        assert len(process.__annotations__) == 1
+        assert "ctx" in process.__annotations__
+
         self._process = process
         self.filename = filename
         # TODO implement it
