@@ -7,7 +7,7 @@ ctx, _ = setup_context(False)
 from analysis.people_pkw_merged import people_pkw_merged
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def pkw():
     return people_pkw_merged.process(ctx)
 

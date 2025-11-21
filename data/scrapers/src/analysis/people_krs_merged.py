@@ -5,7 +5,7 @@ from analysis.utils.tables import create_people_table
 krs_file = LocalFile("person_krs.jsonl", "versioned")
 
 
-@Pipeline()
+@Pipeline.cached_dataframe
 def people_krs_merged(ctx: Context):
     con = ctx.con
 

@@ -4,7 +4,7 @@ from scrapers.stores import Pipeline, LocalFile, Context
 koryta_file = LocalFile("person_koryta.jsonl", "versioned")
 
 
-@Pipeline()
+@Pipeline.cached_dataframe
 def people_koryta_merged(ctx: Context):
     con = ctx.con
 

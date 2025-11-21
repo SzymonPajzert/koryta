@@ -8,7 +8,7 @@ from analysis.utils.tables import create_people_table, init_tables
 pkw_file = LocalFile("person_pkw.jsonl", "versioned")
 
 
-@Pipeline()
+@Pipeline.cached_dataframe
 def people_pkw_merged(ctx: Context):
     con = ctx.con
 

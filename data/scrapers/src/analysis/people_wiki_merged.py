@@ -6,7 +6,7 @@ from scrapers.stores import Pipeline, LocalFile, Context
 wiki_file = LocalFile("person_wiki.jsonl", "versioned")
 
 
-@Pipeline()
+@Pipeline.cached_dataframe
 def people_wiki_merged(ctx: Context):
     con = ctx.con
     # TODO the name logic is wrong for wiki, try matching on the full name

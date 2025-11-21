@@ -260,3 +260,11 @@ class Pipeline:
         """Wraps the decorated function."""
         self.process = func
         return self
+
+    @staticmethod
+    def cached_dataframe(func):
+        name = func.__name__
+        pipeline = Pipeline()
+        # TODO check if name is set
+        pipeline.process = func
+        return pipeline
