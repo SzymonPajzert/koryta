@@ -19,6 +19,9 @@ def create_people_table(
     flatten_list: list[str] = [],
     **kwargs: dict[str, str],
 ):
+
+    init_tables(con)
+
     """
     Pass kwargs to struct_pack each argument according to the passed dict
     """

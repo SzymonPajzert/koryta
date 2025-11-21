@@ -7,21 +7,15 @@ from scrapers.stores import get_context
 from scrapers.teryt import Teryt
 from entities.company import ManualKRS as KRS
 
-ctx = get_context()
-teryt = Teryt(ctx)
-
-# Public companies, from data.gov.pl:
-_PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
-public_companies = FileSource(
-    _PUBLIC_COMPANIES_SOURCE, "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv"
-)
-
-df = pd.read_csv(
-    ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
-)
+teryt: Teryt | None = None
 
 
 def parse_teryt_from_row(row: pd.Series) -> str:
+    global teryt
+    if not teryt:
+        ctx = get_context()
+        teryt = Teryt(ctx)
+
     try:
         if pd.isna(row.loc["Województwo siedziby"]):
             return ""
@@ -73,16 +67,26 @@ def register_partials(
             process(d)
 
 
-print(df)
+def read_public_companies():  # Public companies, from data.gov.pl:
+    ctx = get_context()
+    _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
+    public_companies = FileSource(
+        _PUBLIC_COMPANIES_SOURCE, "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv"
+    )
 
-df = df[~df["KRS"].isna()]
-df["teryt"] = df.apply(parse_teryt_from_row, axis=1)
-df["KRS"] = df["KRS"].astype(int).astype(str).str.zfill(10).to_list()
+    df = pd.read_csv(
+        ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
+    )
+    df = df[~df["KRS"].isna()]
+    df["teryt"] = df.apply(parse_teryt_from_row, axis=1)
+    df["KRS"] = df["KRS"].astype(int).astype(str).str.zfill(10).to_list()
+    return df
 
-print("Companies: ", df)
 
 register_partials(
-    "PUBLIC_COMPANIES_KRS", data=df, map=lambda x: {"id": x.KRS, "teryts": {x.teryt}}
+    "PUBLIC_COMPANIES_KRS",
+    data=read_public_companies(),
+    map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
 )
 
 

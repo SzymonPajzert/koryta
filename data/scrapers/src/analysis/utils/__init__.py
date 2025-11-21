@@ -5,33 +5,43 @@ import pandas as pd
 import numpy as np
 
 # TODO remove this dependence
-from scrapers.krs.companies import company_names, lodzkie_companies
+from scrapers.krs.companies import (
+    company_names as company_names_harcoded,
+    lodzkie_companies,
+)
 from scrapers.pkw.elections import committee_to_party
-from scrapers.stores import get_context, LocalFile
+from scrapers.stores import Context, LocalFile
 from scrapers.teryt import Teryt
 from scrapers.pkw.sources import election_date
-
-ctx = get_context()
-teryt = Teryt(ctx)
 
 MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
 EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
 RECENT_EMPLOYMENT_START = date.fromisoformat("2024-10-01")
 OLD_EMPLOYMENT_END = date.fromisoformat("2020-10-01")
 
-krs_companies = ctx.io.read_data(
-    LocalFile("company_krs.jsonl", "versioned")
-).read_jsonl()
-company_names_krs = {
-    elt["krs"]: f"{elt["name"]} w {elt["city"]}" for elt in krs_companies
-}
-company_names = {
-    **company_names_krs,
-    **company_names,
-}
+
+def read_enriched(ctx: Context, matched_all):
+    # Add derived fields
+    enriched = append_nice_history(ctx, matched_all)
+    enriched = enriched.sort_values(by="election_before_work").reset_index()
+    return enriched
 
 
-def extract_companies(df):
+def get_company_names(ctx: Context):
+    krs_companies = ctx.io.read_data(
+        LocalFile("company_krs.jsonl", "versioned")
+    ).read_jsonl()
+    company_names_krs = {
+        elt["krs"]: f"{elt["name"]} w {elt["city"]}" for elt in krs_companies
+    }
+    return {
+        **company_names_krs,
+        **company_names_harcoded,
+    }
+
+
+def extract_companies(ctx: Context, df):
+    company_names = get_company_names(ctx)
     krs = Counter()
     for es in df["employment"].to_list():
         for e in es:
@@ -44,14 +54,10 @@ def extract_companies(df):
     ]
 
 
-def empty_list_if_nan(value):
-    if isinstance(value, np.ndarray):
-        return value
-    return []
-
-
-def append_nice_history(df):
+def append_nice_history(ctx: Context, df):
     missing_teryt = set()
+    company_names = get_company_names(ctx)
+    teryt = Teryt(ctx)
 
     def nice_history(row):
         actions = []
@@ -183,8 +189,7 @@ def filter_local_good(matched_all, filter_region: str | None):
     return local_good
 
 
-def read_enriched(matched_all):
-    # Add derived fields
-    enriched = append_nice_history(matched_all)
-    enriched = enriched.sort_values(by="election_before_work").reset_index()
-    return enriched
+def empty_list_if_nan(value):
+    if isinstance(value, np.ndarray):
+        return value
+    return []

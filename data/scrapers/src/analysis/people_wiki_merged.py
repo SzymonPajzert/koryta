@@ -3,7 +3,7 @@ from scrapers.stores import Pipeline, LocalFile, Context
 
 
 # TODO mark it as an output of scrape_wiki - to be named people_wiki
-wiki_file = LocalFile("person_wiki.jsonl", "versioned")
+wiki_file = LocalFile("person_wikipedia.jsonl", "versioned")
 
 
 @Pipeline.cached_dataframe
@@ -19,6 +19,7 @@ def people_wiki_merged(ctx: Context):
     SELECT
         lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
         lower(trim(regexp_extract(full_name, '(\\S+)$', 1))) as last_name,
+        CAST(NULL AS VARCHAR) as second_name,
         birth_year,
         birth_iso8601 AS birth_date,
         CASE

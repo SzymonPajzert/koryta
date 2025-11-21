@@ -202,7 +202,7 @@ def people_merged(ctx: Context):
     if df.empty:
         raise Exception("No matches found with the current criteria.")
 
-    df = read_enriched(df)
+    df = read_enriched(ctx, df)
 
     non_duplicates = len(
         df[df["overall_score"] > 10.5].drop_duplicates(

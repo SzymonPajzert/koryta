@@ -17,6 +17,7 @@ def people_krs_merged(ctx: Context):
         SELECT
             lower(first_name) as first_name,
             lower(last_name) as last_name,
+            CAST(NULL AS VARCHAR) as second_name,
             CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
             CAST(birth_date AS VARCHAR) as birth_date,
             employed_start,
