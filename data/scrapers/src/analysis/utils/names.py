@@ -45,7 +45,7 @@ def names_count_by_region(ctx: Context):
         SELECT
             lower("Nazwisko aktualne") as last_name,
             AVG("Liczba") as count,
-            teryt
+            CAST(teryt as VARCHAR) as teryt,
         FROM (
             SELECT *, 'M' as sex FROM surnames0
             UNION ALL
