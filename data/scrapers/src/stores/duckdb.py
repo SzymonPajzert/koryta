@@ -37,7 +37,12 @@ def always_export(func):
     return wrapper
 
 
-def ducktable(read=False, name=None, excluded_fields=set()):
+def insert_into(v):
+    raise NotImplementedError
+
+
+def register_table(cls):
+    # read=False, name=None, excluded_fields=set()
     def wrapper(cls):
         sql_type = {
             int: "INTEGER",

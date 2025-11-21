@@ -9,50 +9,15 @@ from google.cloud import storage
 import sys, select
 from uuid_extensions import uuid7str
 import copy
-from dataclasses import dataclass
 import duckdb
 from duckdb.typing import VARCHAR
-from stores.duckdb import ducktable, dump_dbs
+from stores.duckdb import dump_dbs
+
 from util.url import NormalizedParse
 from stores.storage import upload_to_gcs
 
 
-@ducktable(read=True, name="hostname_config")
-@dataclass
-class HostnameConfig:
-    hostname: str
-    allowed: bool
-    quality: str
-
-    def insert_into(self):
-        pass
-
-
-@ducktable(read=True, name="request_logs")
-@dataclass
-class RequestLog:
-    id: str
-    website_id: str
-    domain: str
-    url: str
-    time: datetime
-    response_code: int
-    payload_size_bytes: int
-    duration: str
-
-    def insert_into(self):
-        pass
-
-
-@ducktable(read=True, name="website_index")
-@dataclass
-class WebsiteIndex:
-    id: str
-    url: str
-    interesting: bool | None
-
-    def insert_into(self):
-        pass
+from entities.crawler import RequestLog, WebsiteIndex, HostnameConfig
 
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")

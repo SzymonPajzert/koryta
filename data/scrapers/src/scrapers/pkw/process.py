@@ -1,65 +1,75 @@
-from dataclasses import dataclass
 from collections import Counter
 import argparse
 
-from stores.duckdb import dump_dbs, ducktable
+from stores.duckdb import dump_dbs, insert_into
 from util.polish import parse_name, PkwFormat
-from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.sources import sources, InputSource
 from scrapers.pkw.headers import CSV_HEADERS, SetField, ElectionContext
+
+from entities.person import PKW as Person
 
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
 
 
-@ducktable(name="people_pkw", excluded_fields={"name_format"})
-@dataclass
-class ExtractedData:
-    election_year: str
-    election_type: str
-    name_format: PkwFormat
-    sex: str | None = None
-    birth_year: int | None = None
-    age: str | None = None
-    teryt_candidacy: str | None = None
-    teryt_living: str | None = None
-    candidacy_success: str | None = None
-    party: str | None = None
-    position: str | None = None
-    pkw_name: str | None = None
-    first_name: str | None = None
-    middle_name: str | None = None
-    last_name: str | None = None
-    party_member: str | None = None
+def extract_data(
+    election_year: str,
+    election_type: str,
+    name_format: PkwFormat,
+    sex: str | None = None,
+    birth_year: int | None = None,
+    age: str | None = None,
+    teryt_candidacy: str | None = None,
+    teryt_living: str | None = None,
+    candidacy_success: str | None = None,
+    party: str | None = None,
+    position: str | None = None,
+    pkw_name: str | None = None,
+    first_name: str | None = None,
+    middle_name: str | None = None,
+    last_name: str | None = None,
+    party_member: str | None = None,
+):
+    if pkw_name is not None:
+        first_name, middle_name, last_name = parse_name(pkw_name, name_format)
+    else:
+        pkw_name = f"{last_name} {first_name}"
 
-    def __post_init__(self):
-        if self.pkw_name is not None:
-            self.first_name, self.middle_name, self.last_name = parse_name(
-                self.pkw_name, self.name_format
-            )
-        else:
-            self.pkw_name = f"{self.last_name} {self.first_name}"
+    if first_name is not None and " " in first_name:
+        names = first_name.split(" ", 1)
+        first_name = names[0]
+        middle_name = names[1]
 
-        if self.first_name is not None and " " in self.first_name:
-            names = self.first_name.split(" ", 1)
-            self.first_name = names[0]
-            self.middle_name = names[1]
+    if age is not None:
+        birth_year = int(election_year) - int(age)
 
-        if self.age is not None:
-            self.birth_year = int(self.election_year) - int(self.age)
+    try:
+        first_name = strip_if_not_none(first_name)
+        middle_name = strip_if_not_none(middle_name)
+        last_name = strip_if_not_none(last_name)
+        party = strip_if_not_none(party)
+        position = strip_if_not_none(position)
+        pkw_name = strip_if_not_none(pkw_name)
+    except AttributeError as e:
+        raise ValueError(f"field has incorrect type: {e}")
 
-        try:
-            self.first_name = strip_if_not_none(self.first_name)
-            self.middle_name = strip_if_not_none(self.middle_name)
-            self.last_name = strip_if_not_none(self.last_name)
-            self.party = strip_if_not_none(self.party)
-            self.position = strip_if_not_none(self.position)
-            self.pkw_name = strip_if_not_none(self.pkw_name)
-        except AttributeError:
-            raise ValueError(f"field has incorrect type: {self}")
-
-    def insert_into(self):
-        pass
+    return Person(
+        election_year=election_year,
+        election_type=election_type,
+        sex=sex,
+        birth_year=birth_year,
+        age=age,
+        teryt_candidacy=teryt_candidacy,
+        teryt_living=teryt_living,
+        candidacy_success=candidacy_success,
+        party=party,
+        position=position,
+        pkw_name=pkw_name,
+        first_name=first_name,
+        middle_name=middle_name,
+        last_name=last_name,
+        party_member=party_member,
+    )
 
 
 def strip_if_not_none(s: str | None):
@@ -118,7 +128,7 @@ def process_csv(reader, config: InputSource, csv_headers: dict[str, SetField | N
             )
 
         try:
-            yield ExtractedData(
+            yield extract_data(
                 election_year=str(config.year),
                 election_type=str(config.election_type),
                 name_format=config.name_format,
@@ -158,7 +168,7 @@ def process_pkw(limit: int | None, year: str | None):
                 count += 1
                 if limit is not None and count > limit:
                     break
-                item.insert_into()
+                insert_into(item)
         except KeyError as e:
             raise ValueError(f"Failed processing {config.source.downloaded_path}: {e}")
 

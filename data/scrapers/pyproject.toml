@@ -141,7 +141,8 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 dev = [
-    "jupyterlab (>=4.4.9,<5.0.0)"
+    "jupyterlab (>=4.4.9,<5.0.0)",
+    "import-linter (>=2.6,<3.0)"
 ]
 
 [tool.pytest.ini_options]
