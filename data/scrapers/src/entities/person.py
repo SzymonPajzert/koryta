@@ -1,8 +1,12 @@
+"""Data classes representing individuals from various data sources."""
+
 from dataclasses import dataclass
 
 
 @dataclass
 class Koryta:
+    """Represents a person from the main 'koryta.pl' dataset."""
+
     id: str
     full_name: str
     party: str
@@ -10,6 +14,8 @@ class Koryta:
 
 @dataclass
 class KRS:
+    """Represents a person associated with a KRS (National Court Register) entry."""
+
     id: str
     first_name: str
     last_name: str
@@ -23,11 +29,14 @@ class KRS:
     sex: str | None = None
 
     def __post_init__(self):
+        """Ensures the person's ID is a string."""
         self.id = str(self.id)
 
 
 @dataclass
 class PKW:
+    """Represents a person from a PKW (National Electoral Commission) dataset."""
+
     election_year: str
     election_type: str
     sex: str | None = None
@@ -47,6 +56,8 @@ class PKW:
 
 @dataclass
 class Wikipedia:
+    """Represents a person from a Wikipedia article."""
+
     source: str
     full_name: str
     party: str
