@@ -2,6 +2,7 @@
 
 import unittest
 from unittest.mock import MagicMock
+from io import StringIO, BytesIO
 
 from scrapers.tests.mocks import MockIO
 from scrapers.teryt import Teryt, teryt_data
@@ -34,7 +35,7 @@ class TestTeryt(unittest.TestCase):
 
         # Create a mock file with fake CSV content
         mock_zip_content = MagicMock()
-        mock_zip_content.read_zip.return_value.read_file.return_value = (
+        mock_zip_content.read_zip.return_value.read_file.return_value = BytesIO(
             FAKE_TERYT_CSV.encode("utf-8")
         )
 
