@@ -2,31 +2,29 @@ from typing import Callable
 
 import pandas as pd
 
-from util.download import FileSource
-from util.config import downloaded
-from util.teryt import parse_teryt
-
+from scrapers.stores import DownloadableFile as FileSource
+from scrapers.stores import get_context
+from scrapers.teryt import Teryt
 from entities.company import ManualKRS as KRS
 
+ctx = get_context()
+teryt = Teryt(ctx)
 
 # Public companies, from data.gov.pl:
 _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
 public_companies = FileSource(
     _PUBLIC_COMPANIES_SOURCE, "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv"
 )
-if not public_companies.downloaded():
-    public_companies.download()
 
-df = pd.read_csv(
-    downloaded.get_path(public_companies.filename), sep=";", low_memory=False
-)
+ctx.conductor.check_input(public_companies)
+df = ctx.conductor.read_file(public_companies).read_csv(sep=";", low_memory=False)
 
 
 def parse_teryt_from_row(row: pd.Series) -> str:
     try:
         if pd.isna(row.loc["Województwo siedziby"]):
             return ""
-        return parse_teryt(row.loc["Województwo siedziby"], "", "", "")
+        return teryt.parse_teryt(row.loc["Województwo siedziby"], "", "", "")
     except:
         print(row)
         print(row.loc["Województwo siedziby"])

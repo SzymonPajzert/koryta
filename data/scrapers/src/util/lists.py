@@ -1,7 +1,7 @@
-import glob
-import os
+from typing import TYPE_CHECKING
 
-from util.config import PROJECT_ROOT
+if TYPE_CHECKING:
+    from scrapers.stores import Context
 
 # Which wiki files should be saved locally for easier testing
 # You can run scrape_wiki and it will save them locally.
@@ -203,24 +203,28 @@ blockers = {
 #  - idenfitying issues with them and putthing them here
 # Open logseq in data/leads to see the content of these files
 
-IGNORE_FAILURES = set()
 
-path_format = os.path.join(os.path.dirname(PROJECT_ROOT), "leads/pages/*.md")
+# TODO reenable it
+# def ignore_failures(ctx: Context) -> set[str]:
+#     result = set()
 
-# TODO fail the test if it's ingored but it's actually passing
+#     # TODO fail the test if it's ingored but it's actually passing
 
+#     def get_blockers(content):
+#         for line in content.split("\n"):
+#             if "blocked" in line:
+#                 yield line.split(":: ")
 
-def get_blockers(content):
-    for line in content.split("\n"):
-        if "blocked" in line:
-            yield line.split(":: ")
+#     # TODO implement the functionality
+#     # path_format = os.path.join(os.path.dirname(PROJECT_ROOT), "leads/pages/*.md")
+#     # for file in glob.glob(path_format):
+#     for file in ctx.conductor.list_files("~/leads/pages/*.md"):
+#         person = file.split("/")[-1].replace(".md", "")
+#         with open(file, "r") as f:
+#             content = f.read()
+#             print(content)
+#             for f in get_blockers(content):
+#                 if blockers[f[1]]:
+#                     result.add(person)
 
-
-for file in glob.glob(path_format):
-    person = os.path.basename(file).replace(".md", "")
-    with open(file, "r") as f:
-        content = f.read()
-        print(content)
-        for f in get_blockers(content):
-            if blockers[f[1]]:
-                IGNORE_FAILURES.add(person)
+#     return result

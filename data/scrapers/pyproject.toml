@@ -2,10 +2,8 @@
 name = "scrapers"
 version = "0.1.0"
 description = "Scrapers used for koryta.pl"
-authors = [
-    {name = "Szymon Pajzert",email = "szymonpajzert@gmail.com"}
-]
-license = {text = "MIT"}
+authors = [{ name = "Szymon Pajzert", email = "szymonpajzert@gmail.com" }]
+license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
@@ -119,33 +117,70 @@ dependencies = [
     "nbconvert (>=7.16.6,<8.0.0)",
     "seaborn (>=0.13.2,<0.14.0)",
     "scipy (>=1.16.3,<2.0.0)",
-    "pytest-check (>=2.6.0,<3.0.0)"
+    "pytest-check (>=2.6.0,<3.0.0)",
 ]
 
 [project.scripts]
-scrape_articles = "scrapers.article.crawler:crawl"
-scrape_articles_example = "scrapers.article.extract_example:extract"
-scrape_wiki = "scrapers.wiki.process_articles:main"
-scrape_pkw = "scrapers.pkw.process:main"
-scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
-scrape_krs_people = "scrapers.krs.process:extract_people"
-scrape_krs_companies = "scrapers.krs.process:extract_companies"
-scrape_koryta_people = "scrapers.koryta.download:process_people"
-scrape_koryta_articles = "scrapers.koryta.download:process_articles"
+# scrape_articles = "scrapers.article.crawler:crawl"
+# scrape_articles_example = "scrapers.article.extract_example:extract"
+scrape_wiki = "main:scrape_wiki"
+scrape_pkw = "main:scrape_pkw"
+# scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
+scrape_krs_people = "main:scrape_krs_people"
+scrape_krs_companies = "main:scrape_krs_companies"
+scrape_koryta_people = "main:scrape_koryta_people"
+# scrape_koryta_articles = "stores.conductor:scrape_koryta_articles"
 analyze_people = "analysis.people:people_merged"
 # jupyter lab is available as well for analysis
+
+run_all = "main:main"
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = [
-    "jupyterlab (>=4.4.9,<5.0.0)",
-    "import-linter (>=2.6,<3.0)"
-]
+dev = ["jupyterlab (>=4.4.9,<5.0.0)", "import-linter (>=2.6,<3.0)"]
 
 [tool.pytest.ini_options]
-markers = [
-    "parametrize_skip_if",
+markers = ["parametrize_skip_if"]
+
+[tool.importlinter]
+root_packages = ["analysis", "stores", "scrapers", "util", "entities"]
+
+exclude_type_checking_imports = true
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Clean architecture"
+type = "layers"
+layers = ["analysis", "stores", "scrapers", "util", "entities"]
+
+[[tool.importlinter.contracts]]
+name = "Do not import external packages"
+type = "forbidden"
+source_modules = ["scrapers", "util", "entities"]
+
+forbidden_modules = [
+    "bz2",
+    "duckdb",
+    "duckdb.**",
+    "urllib",
+    "urllib.**",
+    "os",
+    "os.**",
+    "sys",
+    "sys.**",
+    "zipfile",
+    "google",
+    "google.**",
+    "firebase_admin",
+    "firebase_admin.**",
+    "zipfile",
+    "zipfile.**",
+    "io",
+    "fnmatch",
+    "csv",
 ]
+ignore_imports = ["entities.util -> urllib"]

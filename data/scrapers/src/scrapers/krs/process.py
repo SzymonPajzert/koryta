@@ -1,9 +1,7 @@
 import json
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from stores.storage import iterate_blobs
-from stores.duckdb import register_table, always_export
+from scrapers.stores import Pipeline, Context, CloudStorage
 
 from entities.person import KRS as KrsPerson
 from entities.company import KRS as KrsCompany
@@ -49,15 +47,15 @@ def employment_duration(item) -> str:
     return f"{days/365:.2f}"
 
 
-@always_export
-def extract_people():
+@Pipeline()
+def extract_people(ctx: Context):
     """
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about people.
     """
-    register_table(KrsPerson)
-
-    for blob_name, content in iterate_blobs("rejestr.io"):
+    for blob_name, content in ctx.io.read_data(
+        CloudStorage(hostname="rejestr.io")
+    ).read_iterable():
         try:
             if "aktualnosc_" not in blob_name:
                 continue
@@ -70,33 +68,35 @@ def extract_people():
             for item in data:
                 if item.get("typ") == "osoba":
                     identity = item.get("tozsamosc", {})
-                    KrsPerson(
-                        id=item["id"],
-                        first_name=identity.get("imie"),
-                        last_name=identity.get("nazwisko"),
-                        full_name=identity.get("imiona_i_nazwisko"),
-                        birth_date=identity.get("data_urodzenia"),
-                        second_names=identity.get("drugie_imiona"),
-                        sex=identity.get("plec"),
-                        employed_krs=KRS.from_blob_name(blob_name).id,
-                        employed_start=start_time(item),
-                        employed_end=end_time(item),
-                        employed_for=employment_duration(item),
-                    ).insert_into()
+                    ctx.io.output_entity(
+                        KrsPerson(
+                            id=item["id"],
+                            first_name=identity.get("imie"),
+                            last_name=identity.get("nazwisko"),
+                            full_name=identity.get("imiona_i_nazwisko"),
+                            birth_date=identity.get("data_urodzenia"),
+                            second_names=identity.get("drugie_imiona"),
+                            sex=identity.get("plec"),
+                            employed_krs=KRS.from_blob_name(blob_name).id,
+                            employed_start=start_time(item),
+                            employed_end=end_time(item),
+                            employed_for=employment_duration(item),
+                        )
+                    )
         except KeyError as e:
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
 
-@always_export
-def extract_companies():
+@Pipeline()
+def extract_companies(ctx: Context):
     """
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about companies.
     """
-    register_table(KrsCompany)
-
     companies = {}
-    for blob_name, content in iterate_blobs("rejestr.io"):
+    for blob_name, content in ctx.io.read_data(
+        CloudStorage(hostname="rejestr.io")
+    ).read_iterable():
         try:
             data = json.loads(content)
         except json.JSONDecodeError as e:
@@ -120,4 +120,4 @@ def extract_companies():
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
     for company in companies.values():
-        company.insert_into()
+        ctx.io.output_entity(company)

@@ -6,9 +6,9 @@ from collections import Counter
 import argparse
 import json
 
+from scrapers.stores import Context
 from scrapers.krs import data
 from scrapers.krs.process import iterate_blobs, KRS
-from util.rejestr import Rejestr
 from stores.storage import upload_to_gcs, list_blobs
 
 
@@ -149,7 +149,7 @@ def child_companies() -> set[Company]:
     return result
 
 
-def scrape_rejestrio():
+def scrape_rejestrio(ctx: Context):
     parser = argparse.ArgumentParser(description="I'll add docs here")
     parser.add_argument(
         "--only",
@@ -191,13 +191,14 @@ def scrape_rejestrio():
     pprint(to_scrape_children)
     parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
     pprint(parent_count.most_common(30))
-    urls = list(save_org_connections(to_scrape, map(KRS, data.NAME_MISSING)))
+    urls = list(
+        save_org_connections(to_scrape, map(KRS, data.from_source("NAME_MISSING")))
+    )
     print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
     input("Press enter to continue...")
-    rejestr = Rejestr()
 
     for url, _ in urls:
-        result = rejestr.get_rejestr_io(url)
+        result = ctx.rejestr_io.get_rejestr_io(url)
         sleep(0.3)
 
         if result is None:

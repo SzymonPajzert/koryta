@@ -1,6 +1,7 @@
-from util.download import FileSource
-from util.config import downloaded
-from util.conductor import pipeline
+from scrapers.stores import DownloadableFile as FileSource
+from frameworks.conductor import pipeline
+
+from scrapers.stores import Context
 
 
 surnames = [
@@ -32,9 +33,14 @@ firstnames = [
 
 @pipeline(
     "names_count_by_region",
-    [downloaded.get_path(source.filename) for source in surnames],
 )
-def names_count_by_region(con):
+def names_count_by_region(ctx: Context, con):
+    for source in surnames:
+        ctx.conductor.check_input(source)
+
+    # TODO Instead of get_path, just read them as df
+    # Duckdb can access it
+
     con.execute(
         f"""CREATE TABLE names_count_by_region AS
         SELECT
@@ -42,9 +48,9 @@ def names_count_by_region(con):
             AVG("Liczba") as count,
             teryt
         FROM (
-            SELECT *, 'M' as sex FROM read_csv('{downloaded.assert_path(surnames[0].filename)}')
+            SELECT *, 'M' as sex FROM read_csv('{ctx.conductor.get_path(surnames[0])}')
             UNION ALL
-            SELECT *, 'F' as sex FROM read_csv('{downloaded.assert_path(surnames[1].filename)}')
+            SELECT *, 'F' as sex FROM read_csv('{ctx.conductor.get_path(surnames[1])}')
         ) AS names
         LEFT JOIN (
             SELECT * FROM (VALUES
@@ -72,21 +78,24 @@ def names_count_by_region(con):
 
 
 @pipeline(
-    "first_name_freq", [downloaded.get_path(source.filename) for source in firstnames]
+    "first_name_freq",
 )
-def first_name_freq(con):
+def first_name_freq(ctx: Context, con):
+    for source in firstnames:
+        ctx.conductor.check_input(source)
+
     con.execute(
         f"""CREATE TABLE first_name_freq AS
         WITH raw_names_split AS (
             SELECT
                 lower("IMIĘ_PIERWSZE") as first_name,
                 "LICZBA_WYSTĄPIEŃ" as count
-            FROM read_csv('{downloaded.assert_path(firstnames[0].filename)}')
+            FROM read_csv('{ctx.conductor.get_path(firstnames[0])}')
             UNION ALL
             SELECT
                 lower("IMIĘ_PIERWSZE") as first_name,
                 "LICZBA_WYSTĄPIEŃ" as count
-            FROM read_csv('{downloaded.assert_path(firstnames[1].filename)}')
+            FROM read_csv('{ctx.conductor.get_path(firstnames[1])}')
         ),
         raw_names AS (
             SELECT

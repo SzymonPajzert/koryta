@@ -1,7 +1,8 @@
 from collections import Counter
 import argparse
+import typing
 
-from stores.duckdb import dump_dbs, insert_into
+from scrapers.stores import Context, Pipeline
 from util.polish import parse_name, PkwFormat
 from scrapers.pkw.sources import sources, InputSource
 from scrapers.pkw.headers import CSV_HEADERS, SetField, ElectionContext
@@ -81,7 +82,11 @@ def strip_if_not_none(s: str | None):
     return s.strip()
 
 
-def process_csv(reader, config: InputSource, csv_headers: dict[str, SetField | None]):
+def process_csv(
+    reader: typing.Iterable,
+    config: InputSource,
+    csv_headers: dict[str, SetField | None],
+):
     header = None
 
     for row in reader:
@@ -139,28 +144,21 @@ def process_csv(reader, config: InputSource, csv_headers: dict[str, SetField | N
             raise
 
 
-def process_pkw(limit: int | None, year: str | None):
+def process_pkw(ctx: Context, limit: int | None, year: str | None):
     print("Downloading files...")
 
     filtered_sources = sources
     if year:
         filtered_sources = [s for s in sources if str(s.year) == year]
 
+    print("Downloading input files...")
     for config in filtered_sources:
         source = config.source
-        if not source.downloaded():
-            source.download()
-        if source.downloaded():
-            # Double check that everything is good
-            print(f"File {source.filename} is present")
-        else:
-            raise Exception(f"File {source.filename} is not present")
+        ctx.io.read_data(source)  # Access it, so it's downloaded already
     print("Files downloaded")
 
     for config in filtered_sources:
-        # TODO Correctly open zip file
-        print(f"🗂️  Starts processing CSV file: {config.source.filename}")
-        reader = config.extractor.read(config.source.downloaded_path)
+        reader = config.extractor.read(ctx, config.source)
 
         try:
             count = 0
@@ -168,14 +166,15 @@ def process_pkw(limit: int | None, year: str | None):
                 count += 1
                 if limit is not None and count > limit:
                     break
-                insert_into(item)
-        except KeyError as e:
-            raise ValueError(f"Failed processing {config.source.downloaded_path}: {e}")
+                ctx.io.output_entity(item)
+        except Exception as e:
+            raise ValueError(f"Failed processing {config.source}: {e}")
 
         print("🎉 Processing complete.")
 
 
-def main():
+@Pipeline()
+def main(ctx: Context):
     parser = argparse.ArgumentParser(description="I'll add docs here")
     parser.add_argument(
         "--limit",
@@ -193,18 +192,12 @@ def main():
     )
     args = parser.parse_args()
 
-    try:
-        process_pkw(args.limit, args.year)
+    process_pkw(ctx, args.limit, args.year)
 
-        print("\n\n")
+    print("\n\n")
 
-        for column, counter in counters.items():
-            if len(counter) == 0:
-                continue
-            print(column)
-            print(counter.most_common(10))
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        raise
-    finally:
-        dump_dbs()
+    for column, counter in counters.items():
+        if len(counter) == 0:
+            continue
+        print(column)
+        print(counter.most_common(10))

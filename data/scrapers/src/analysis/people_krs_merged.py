@@ -1,12 +1,11 @@
-from util.conductor import pipeline
-from util.config import versioned
+from scrapers.stores import Pipeline, LocalFile
 from analysis.utils.tables import create_people_table
 
 # TODO mark it as an output of scrape_krs - to be named people_krs
-krs_file = versioned.get_path("people_krs.jsonl")
+krs_file = LocalFile("people_krs.jsonl")
 
 
-@pipeline(sources=[krs_file])
+@Pipeline()
 def people_krs_merged(con):
     con.execute(
         f"""
