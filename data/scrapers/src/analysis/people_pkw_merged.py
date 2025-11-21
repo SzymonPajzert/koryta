@@ -1,16 +1,14 @@
 import duckdb
 
-from frameworks.conductor import pipeline
-from util.config import versioned
+from scrapers.stores import Pipeline, LocalFile
 from analysis.utils.tables import create_people_table, init_tables
-
 
 # TODO mark it as an output of scrape_pkw - to be named people_pkw
 
-pkw_file = versioned.get_path("people_pkw.jsonl")
+pkw_file = LocalFile("people_pkw.jsonl")
 
 
-@pipeline(init_duckdb=True)
+@Pipeline()
 def people_pkw_merged(con: duckdb.DuckDBPyConnection | None = None):
     assert con is not None
 

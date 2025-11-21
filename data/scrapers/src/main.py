@@ -78,7 +78,7 @@ def setup_context(use_rejestr_io: bool):
 
 def setup_pipeline(pipeline_object: Pipeline):
     def func():
-        ctx, dumper = setup_context(pipeline_object.rejestr_io is not None)
+        ctx, dumper = setup_context(pipeline_object.rejestr_io)
         try:
             pipeline_object.process(ctx)
             print("Finished processing")

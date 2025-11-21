@@ -1,12 +1,11 @@
-from frameworks.conductor import pipeline
-from util.config import versioned
+from scrapers.stores import Pipeline, LocalFile
 from analysis.utils.tables import create_people_table
 
 # TODO mark it as an output of scrape_koryta - to be named people_koryta
-koryta_file = versioned.get_path("people_koryta.jsonl")
+koryta_file = LocalFile("people_koryta.jsonl")
 
 
-@pipeline(sources=[koryta_file])
+@Pipeline()
 def people_koryta_merged(con):
     con.execute(
         f"""

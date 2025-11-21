@@ -1,12 +1,12 @@
-from frameworks.conductor import pipeline
-from util.config import versioned
 from analysis.utils.tables import create_people_table
+from scrapers.stores import Pipeline, LocalFile
+
 
 # TODO mark it as an output of scrape_wiki - to be named people_wiki
-wiki_file = versioned.get_path("people_wiki.jsonl")
+wiki_file = LocalFile("people_wiki.jsonl")
 
 
-@pipeline(sources=[wiki_file])
+@Pipeline()
 def people_wiki_merged(con):
     # TODO the name logic is wrong for wiki, try matching on the full name
     con.execute(

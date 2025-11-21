@@ -1,27 +1,22 @@
-import duckdb
 import pandas as pd
 import math
-import os
 
 from analysis.utils import read_enriched
-from util.config import versioned
-from analysis.utils.tables import create_people_table
+from scrapers.stores import Pipeline, LocalFile, Context
 from analysis.people_krs_merged import people_krs_merged
 from analysis.people_wiki_merged import people_wiki_merged
 from analysis.people_koryta_merged import people_koryta_merged
 from analysis.people_pkw_merged import people_pkw_merged
-from frameworks.conductor import pipeline
-
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 
 
-krs_file = versioned.assert_path("people_krs.jsonl")
-wiki_file = versioned.assert_path("people_wiki.jsonl")
-koryta_file = versioned.assert_path("people_koryta.jsonl")
-matched_file = versioned.get_path("people_matched.parquet")
+krs_file = LocalFile("people_krs.jsonl")
+wiki_file = LocalFile("people_wiki.jsonl")
+koryta_file = LocalFile("people_koryta.jsonl")
+matched_file = LocalFile("people_matched.parquet")
 
 
 SAMPLE_FILTER = ""
@@ -63,18 +58,16 @@ def unique_probability(
     return math.exp(-n * p_combined)
 
 
-@pipeline(init_duckdb=True)
-def people_merged(con):
+@Pipeline()
+def people_merged(ctx: Context, con):
     con.create_function(
         "unique_probability", unique_probability, null_handling="special"  # type: ignore
     )
 
-    # TODO this should be automatically called as a source of the pipeline function
-    # Note passing by name, to reuse the duckdb connection
-    people_krs_merged(con=con)
-    people_wiki_merged(con=con)
-    people_pkw_merged(con=con)
-    people_koryta_merged(con=con)
+    people_krs_merged.process(ctx)
+    people_wiki_merged.process(ctx)
+    people_pkw_merged.process(ctx)
+    people_koryta_merged.process(ctx)
 
     print("--- Imported table sizes ---")
     for table in [

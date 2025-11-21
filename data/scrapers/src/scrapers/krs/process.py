@@ -68,19 +68,21 @@ def extract_people(ctx: Context):
             for item in data:
                 if item.get("typ") == "osoba":
                     identity = item.get("tozsamosc", {})
-                    KrsPerson(
-                        id=item["id"],
-                        first_name=identity.get("imie"),
-                        last_name=identity.get("nazwisko"),
-                        full_name=identity.get("imiona_i_nazwisko"),
-                        birth_date=identity.get("data_urodzenia"),
-                        second_names=identity.get("drugie_imiona"),
-                        sex=identity.get("plec"),
-                        employed_krs=KRS.from_blob_name(blob_name).id,
-                        employed_start=start_time(item),
-                        employed_end=end_time(item),
-                        employed_for=employment_duration(item),
-                    ).insert_into()
+                    ctx.io.output_entity(
+                        KrsPerson(
+                            id=item["id"],
+                            first_name=identity.get("imie"),
+                            last_name=identity.get("nazwisko"),
+                            full_name=identity.get("imiona_i_nazwisko"),
+                            birth_date=identity.get("data_urodzenia"),
+                            second_names=identity.get("drugie_imiona"),
+                            sex=identity.get("plec"),
+                            employed_krs=KRS.from_blob_name(blob_name).id,
+                            employed_start=start_time(item),
+                            employed_end=end_time(item),
+                            employed_for=employment_duration(item),
+                        )
+                    )
         except KeyError as e:
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
@@ -118,4 +120,4 @@ def extract_companies(ctx: Context):
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
     for company in companies.values():
-        company.insert_into()
+        ctx.io.output_entity(company)
