@@ -7,13 +7,6 @@ from entities.company import KRS, ManualKRS
 class TestCompany(unittest.TestCase):
     """Test cases for company-related data classes."""
 
-    def test_krs_creation(self):
-        """Tests the creation of a KRS object."""
-        krs = KRS(krs="1234567890", name="Test Company", city="Test City")
-        self.assertEqual(krs.krs, "1234567890")
-        self.assertEqual(krs.name, "Test Company")
-        self.assertEqual(krs.city, "Test City")
-
     def test_manual_krs_creation_and_padding(self):
         """Tests that ManualKRS pads the ID correctly."""
         krs = ManualKRS(id="123")

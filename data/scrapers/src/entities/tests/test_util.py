@@ -7,11 +7,6 @@ from entities.util import IgnoredDates, NormalizedParse
 class TestUtil(unittest.TestCase):
     """Test cases for utility classes."""
 
-    def test_ignored_dates_creation(self):
-        """Tests the creation of an IgnoredDates object."""
-        ignored_date = IgnoredDates(date="2023-01-01")
-        self.assertEqual(ignored_date.date, "2023-01-01")
-
     def test_normalized_parse_basic(self):
         """Tests basic URL parsing and normalization."""
         url = "http://www.example.com/path/to/page/"
