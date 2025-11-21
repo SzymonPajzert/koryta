@@ -61,19 +61,24 @@ class Conductor(IO):
         self.dumper.insert_into(entity)
 
 
+def setup_context(use_rejestr_io: bool):
+    dumper = EntityDumper()
+    conductor = Conductor(dumper)
+    rejestr_io = None
+    if use_rejestr_io:
+        rejestr_io = Rejestr()
+
+    ctx = Context(
+        io=conductor,
+        rejestr_io=rejestr_io,  # type: ignore
+    )
+    set_context(ctx)
+    return ctx, dumper
+
+
 def setup_pipeline(pipeline_object: Pipeline):
     def func():
-        dumper = EntityDumper()
-        conductor = Conductor(dumper)
-        rejestr_io = None
-        if pipeline_object.rejestr_io:
-            rejestr_io = Rejestr()
-
-        ctx = Context(
-            io=conductor,
-            rejestr_io=rejestr_io,  # type: ignore
-        )
-        set_context(ctx)
+        ctx, dumper = setup_context(pipeline_object.rejestr_io is not None)
         try:
             pipeline_object.process(ctx)
             print("Finished processing")
@@ -108,3 +113,19 @@ def scrape_krs_people():
 def scrape_krs_companies():
     f = setup_pipeline(scrape_krs_companies_func)
     f()
+
+
+def main():
+    ctx, dumper = setup_context(False)
+
+    try:
+        scrape_koryta_people_func.process(ctx)
+        scrape_wiki_func.process(ctx)
+        scrape_pkw_func.process(ctx)
+        scrape_krs_people_func.process(ctx)
+        scrape_krs_companies_func.process(ctx)
+        print("Finished processing")
+    finally:
+        print("Dumping...")
+        dumper.dump_pandas()
+        print("Done")

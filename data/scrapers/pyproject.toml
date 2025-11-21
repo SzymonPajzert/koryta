@@ -133,6 +133,9 @@ scrape_koryta_people = "main:scrape_koryta_people"
 analyze_people = "analysis.people:people_merged"
 # jupyter lab is available as well for analysis
 
+run_all = "main:main"
+
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
