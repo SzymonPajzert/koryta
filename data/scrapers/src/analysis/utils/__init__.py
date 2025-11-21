@@ -69,7 +69,7 @@ def append_nice_history(ctx: Context, df):
 
         for emp in empty_list_if_nan(row["employment"]):
             duration = timedelta(days=365 * float(emp["employed_for"]))
-            start_employed: date = emp["employed_end"] - duration
+            start_employed: date = date.fromisoformat(emp["employed_end"]) - duration
             if first_work is None or start_employed < first_work:
                 first_work = start_employed
             if last_employed is None or emp["employed_end"] > last_employed:
