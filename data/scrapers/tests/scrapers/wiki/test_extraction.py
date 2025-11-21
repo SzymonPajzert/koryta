@@ -2,14 +2,16 @@ import pytest
 import xml.etree.ElementTree as ET
 import os
 
-from util.config import tests
+from scrapers.stores import LocalFile
+from main import setup_context
 from scrapers.wiki.process_articles import (
     WikiArticle,
-    TEST_FILES,
     extract,
     Company,
     People,
 )
+from util.lists import TEST_FILES
+
 
 PEOPLE_EXPECTED = {
     "Józef Śliwa": {
@@ -29,18 +31,20 @@ PEOPLE_EXPECTED = {
 COMPANIES_EXPECTED = {
     "Telewizja Polska": Company(
         name="Telewizja Polska S.A. w likwidacji",
-        krs_number="0000100679",
+        krs="0000100679",
     ),
     "PERN": Company(
         name="PERN S.A.",
-        krs_number="0000069559",
+        krs="0000069559",
     ),
 }
+
+ctx, _ = setup_context(False)
 
 
 @pytest.mark.parametrize("filename", PEOPLE_EXPECTED.keys())
 def test_people(filename):
-    with open(tests.get_path(f"{filename}.xml"), "r") as f:
+    with ctx.io.read_data(LocalFile(f"{filename}.xml")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
         assert article is not None
@@ -65,7 +69,7 @@ def test_people(filename):
 
 @pytest.mark.parametrize("filename", COMPANIES_EXPECTED.keys())
 def test_companies(filename):
-    with open(tests.get_path(f"{filename}.xml"), "r") as f:
+    with ctx.io.read_data(LocalFile(f"{filename}.xml")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
         assert article is not None
@@ -78,7 +82,8 @@ def test_companies(filename):
 
 @pytest.mark.parametrize("filename", TEST_FILES)
 def test_all_tested(filename):
-    assert os.path.exists(tests.get_path(f"{filename}.xml"))
+    path = ctx.io.list_data(LocalFile(f"{filename}.xml"))[0]
+    assert os.path.exists(path)
 
     if filename in PEOPLE_EXPECTED:
         return
