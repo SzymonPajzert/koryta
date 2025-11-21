@@ -1,7 +1,7 @@
 """Tests for the Article and Mention data classes."""
 
 import unittest
-from src.entities.article import Article, Mention
+from entities.article import Article, Mention
 
 
 class TestArticle(unittest.TestCase):

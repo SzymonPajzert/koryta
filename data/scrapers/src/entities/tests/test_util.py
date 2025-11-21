@@ -1,7 +1,7 @@
 """Tests for the utility classes and functions."""
 
 import unittest
-from src.entities.util import IgnoredDates, NormalizedParse
+from entities.util import IgnoredDates, NormalizedParse
 
 
 class TestUtil(unittest.TestCase):
@@ -66,7 +66,8 @@ class TestUtil(unittest.TestCase):
     def test_normalized_parse_type_error(self):
         """Tests that a TypeError is raised for non-string input."""
         with self.assertRaises(TypeError):
-            NormalizedParse.parse(123)
+            NormalizedParse.parse(123)  # type: ignore
+
 
 if __name__ == "__main__":
     unittest.main()

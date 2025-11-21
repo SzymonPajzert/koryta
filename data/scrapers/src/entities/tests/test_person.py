@@ -1,7 +1,7 @@
 """Tests for the person data classes."""
 
 import unittest
-from src.entities.person import Koryta, KRS, PKW, Wikipedia
+from entities.person import Koryta, KRS, PKW, Wikipedia
 
 
 class TestPersonEntities(unittest.TestCase):
@@ -13,12 +13,11 @@ class TestPersonEntities(unittest.TestCase):
         self.assertEqual(person.id, "p1")
         self.assertEqual(person.full_name, "Jan Kowalski")
         self.assertEqual(person.party, "ABC")
-        person.insert_into()
 
     def test_krs_creation(self):
         """Tests creation of a KRS person object."""
         person = KRS(
-            id=123,
+            id="0000000123",
             first_name="Anna",
             last_name="Nowak",
             full_name="Anna Nowak",
@@ -29,7 +28,7 @@ class TestPersonEntities(unittest.TestCase):
             birth_date="1990-05-15",
             sex="F",
         )
-        self.assertEqual(person.id, "123")
+        self.assertEqual(person.id, "0000000123")
         self.assertEqual(person.first_name, "Anna")
         self.assertEqual(person.last_name, "Nowak")
         self.assertEqual(person.full_name, "Anna Nowak")
@@ -39,7 +38,6 @@ class TestPersonEntities(unittest.TestCase):
         self.assertEqual(person.employed_for, "1.5")
         self.assertEqual(person.birth_date, "1990-05-15")
         self.assertEqual(person.sex, "F")
-        person.insert_into()
 
     def test_pkw_creation(self):
         """Tests creation of a PKW person object."""

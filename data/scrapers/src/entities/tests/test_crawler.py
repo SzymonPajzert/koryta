@@ -2,7 +2,7 @@
 
 import unittest
 from datetime import datetime
-from src.entities.crawler import HostnameConfig, RequestLog, WebsiteIndex
+from entities.crawler import HostnameConfig, RequestLog, WebsiteIndex
 
 
 class TestCrawlerEntities(unittest.TestCase):
@@ -10,14 +10,10 @@ class TestCrawlerEntities(unittest.TestCase):
 
     def test_hostname_config_creation(self):
         """Tests the creation of a HostnameConfig object."""
-        config = HostnameConfig(
-            hostname="example.com", allowed=True, quality="good"
-        )
+        config = HostnameConfig(hostname="example.com", allowed=True, quality="good")
         self.assertEqual(config.hostname, "example.com")
         self.assertTrue(config.allowed)
         self.assertEqual(config.quality, "good")
-        # Test placeholder method
-        config.insert_into()
 
     def test_request_log_creation(self):
         """Tests the creation of a RequestLog object."""
@@ -40,8 +36,6 @@ class TestCrawlerEntities(unittest.TestCase):
         self.assertEqual(log.response_code, 200)
         self.assertEqual(log.payload_size_bytes, 1024)
         self.assertEqual(log.duration, "0.1s")
-        # Test placeholder method
-        log.insert_into()
 
     def test_website_index_creation(self):
         """Tests the creation of a WebsiteIndex object."""
@@ -50,10 +44,10 @@ class TestCrawlerEntities(unittest.TestCase):
         self.assertEqual(index.url, "http://example.com/page")
         self.assertTrue(index.interesting)
 
-        index_none = WebsiteIndex(id="idx2", url="http://example.com/other", interesting=None)
+        index_none = WebsiteIndex(
+            id="idx2", url="http://example.com/other", interesting=None
+        )
         self.assertIsNone(index_none.interesting)
-        # Test placeholder method
-        index.insert_into()
 
 
 if __name__ == "__main__":
