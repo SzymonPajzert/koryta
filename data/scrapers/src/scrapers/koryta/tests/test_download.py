@@ -38,7 +38,9 @@ class TestKorytaDownload(unittest.TestCase):
         """Set up mock context for each test."""
         self.mock_io = MagicMock()
         self.mock_rejestr_io = MagicMock()
-        self.ctx = Context(io=self.mock_io, rejestr_io=self.mock_rejestr_io)
+        self.ctx = Context(
+            io=self.mock_io, rejestr_io=self.mock_rejestr_io, con=MagicMock()
+        )
 
         self.people_data = [
             (

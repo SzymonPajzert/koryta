@@ -1,6 +1,7 @@
 # This file registers all conductor pipelines in this package
 
 import os
+import duckdb
 
 from scrapers.stores import Context
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
@@ -82,6 +83,7 @@ def setup_context(use_rejestr_io: bool):
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
+        con=duckdb.connect(),
     )
     set_context(ctx)
     return ctx, dumper

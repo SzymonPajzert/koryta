@@ -2,7 +2,7 @@ import io
 import csv
 import typing
 import json
-from typing import BinaryIO, TextIO
+from typing import BinaryIO, TextIO, Literal
 
 from zipfile import ZipFile
 import bz2
@@ -24,6 +24,11 @@ class FromIterable(File):
     def read_jsonl(self):
         for line in self.iterable:
             yield json.loads(line)
+
+    def read_dataframe(
+        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+    ) -> pd.DataFrame:
+        return pd.DataFrame.from_records([json.loads(line) for line in self.iterable])
 
     def read_csv(self, sep=","):
         return csv.reader(self.iterable, delimiter=sep)
@@ -50,6 +55,11 @@ class FromBytesIO(File):
 
     def read_content(self) -> str | bytes:
         return self.raw_bytes
+
+    def read_dataframe(
+        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+    ) -> pd.DataFrame:
+        raise NotImplementedError()
 
     def read_jsonl(self):
         raise NotImplementedError()

@@ -3,12 +3,16 @@ from scrapers.stores import Pipeline, LocalFile, Context
 
 
 # TODO mark it as an output of scrape_wiki - to be named people_wiki
-wiki_file = LocalFile("people_wiki.jsonl", "versioned")
+wiki_file = LocalFile("person_wiki.jsonl", "versioned")
 
 
 @Pipeline()
 def people_wiki_merged(ctx: Context):
+    con = ctx.con
     # TODO the name logic is wrong for wiki, try matching on the full name
+
+    wiki_data = ctx.io.read_data(wiki_file).read_dataframe("jsonl")
+
     con.execute(
         f"""
     CREATE OR REPLACE TABLE wiki_people_raw AS
@@ -25,7 +29,7 @@ def people_wiki_merged(ctx: Context):
         END as is_polityk,
         atan(content_score) AS wiki_score,
         full_name
-    FROM read_json_auto('{wiki_file}', format='newline_delimited', auto_detect=true)
+    FROM wiki_data
     WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
     """
     )

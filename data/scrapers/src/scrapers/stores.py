@@ -9,6 +9,9 @@ from typing import Any, Literal
 from dataclasses import dataclass, field
 from abc import ABCMeta, abstractmethod
 
+import pandas as pd
+from duckdb import DuckDBPyConnection  # TODO remove
+
 
 class Extractor(metaclass=ABCMeta):
     """Abstract base class for data extraction logic from a file."""
@@ -35,6 +38,12 @@ class File(metaclass=ABCMeta):
     @abstractmethod
     def read_content(self) -> str | bytes:
         """Reads the entire content of the file into a string or bytes."""
+        pass
+
+    @abstractmethod
+    def read_dataframe(
+        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+    ) -> pd.DataFrame:
         pass
 
     @abstractmethod
@@ -196,6 +205,7 @@ class Context:
 
     io: IO
     rejestr_io: RejestrIO
+    con: DuckDBPyConnection
 
 
 GLOBAL_CONTEXT: None | Context = None

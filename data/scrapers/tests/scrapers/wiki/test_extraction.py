@@ -95,7 +95,6 @@ def test_companies(filename):
         assert article.infobox is not None
 
         company = extract(elem)
-        assert company is not None
         assert company == COMPANIES_EXPECTED[filename]
 
 
