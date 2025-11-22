@@ -55,7 +55,7 @@ def parse_yes_no(s: str, _: Never) -> str:
         case "T":
             return "TRUE"
         case "2":
-            return "FALSE"  # TODO handle second turn
+            return "FALSE"
         case "nan":
             return "FALSE"
         case "2 tura":
@@ -83,7 +83,6 @@ def lookup_teryt(s: str, context: ElectionContext) -> str:
     if year < 2000:
         return ""  # Bigger than wojs
     if year == 2005:
-        # TODO probably they can be set once after 2001
         # https://pl.wikipedia.org/wiki/Okr%C4%99g_wyborczy_nr_1_do_Sejmu_Rzeczypospolitej_Polskiej
         year = 2007
     try:
@@ -123,7 +122,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Członek\npartii": SetField("party_member"),
     "Czy przyznano mandat": SetField("candidacy_success", parse_yes_no),
     "Czy uzyskał mandat": SetField("candidacy_success", parse_yes_no),
-    "Czy uzyskał prawo kandydowania w drugiej turze": None,  # TODO check if this field is useful
+    "Czy uzyskał prawo kandydowania w drugiej turze": None,
     "Dane  Imona": SetField("first_name"),
     "Dane  L.głosów": None,
     "Dane  Nazwisko": SetField("last_name"),
@@ -229,7 +228,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Miejscowość \nzamieszkania": None,
     "Miejscowość Mandat": None,
     "Miejscowość zamieszkania": None,
-    "Miejscowość": None,  # TODO watch out, for wbp we have double TERYT and we skip Miejscowość for the Miejsce Zamieszkania
+    "Miejscowość": None,
     "Mieszka": None,
     "Należy do partii politycznej": None,
     "Nawisko": SetField("last_name"),

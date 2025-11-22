@@ -108,9 +108,6 @@ class Infobox:
                 return f"{m.group(1)}-00-00"
 
         self._birth_iso = get()
-        if self._birth_iso is None and human_readable != "":
-            pass
-            # TODO write IgnoredDates(date=human_readable)
         return self._birth_iso
 
     @property
@@ -200,15 +197,8 @@ class WikiArticle:
                     # print(f"Changing title from {title} to {full_name.group(1)}")
                     title = full_name.group(1)
             except Exception as e:
-                print(pattern, title, "writing to tests")
-                WikiArticle(
-                    title=title,
-                    categories=[],
-                    links=[],
-                    infobox=infobox,
-                    osoba_imie=False,
-                )  # .write_to_test(elem, force=True)
-                # TODO raise e
+                print(pattern, title, "exception while processing")
+                raise e
 
         return WikiArticle(
             title=title,
@@ -217,14 +207,6 @@ class WikiArticle:
             infobox=infobox if infobox is not None else Infobox("unknown", {}),
             osoba_imie="imię i nazwisko" in wikitext,
         )
-
-    # TODO maybe reenable
-    # def write_to_test(self, elem: ET.Element, force=False):
-    #     if self.title in TEST_FILES or force:
-    #         path = ctx.conductor.get_path(LocalFile(f"{self.title}.xml"))
-    #         print(f"Saving {self.title} to test file: {path}")
-    #         with open(path, "w") as test_file:
-    #             test_file.write(ET.tostring(elem, encoding="unicode").strip())
 
     def about_person(self):
         def check():
@@ -294,13 +276,6 @@ def scrape_wiki(ctx: Context):
     and uploads individual XML files to GCS.
     """
 
-    # TODO move to implementation
-    # if not os.path.exists(DUMP_FILENAME):
-    #     print(
-    #         f"Error: Dump file '{DUMP_FILENAME}' not found. Please run the download script first."
-    #     )
-    #     return
-
     # Use bz2 to decompress the file on the fly
     with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f:
         # Use iterparse for memory-efficient XML parsing
@@ -328,6 +303,4 @@ def scrape_wiki(ctx: Context):
 
     print("Stats:")
     print("\n".join([str(t) for t in category_stats.most_common(30)]))
-    # print("\n".join([str(t) for t in infobox_types.most_common(50)]))
-    # print("\n".join([str(t) for t in infobox_stats.most_common(30)]))
     print("🎉 Processing complete.")

@@ -1,0 +1,81 @@
+# Analysis of TODOs in the Codebase
+
+This document provides a categorized list of all the `TODO` comments found in the `src` directory.
+
+## 1. Data Quality & Parsing
+
+### TERYT is still meh
+
+- This should become some kind of Pipeline object, so it can be initialized and integrated nicely.
+- **[`src/scrapers/teryt.py`](src/scrapers/teryt.py)**: The date is hardcoded and needs to be updated dynamically to avoid stale data.
+- There are type error issues
+
+### Wikipedia
+
+- Add some tests firsts, to make sure the processing works
+- Add parallel processing of the XML, because it's currently slow
+- We removed writing to tests, we should probably restore it
+- There are global counters that need to be refactored
+
+### PKW
+
+- **[`src/scrapers/pkw/okregi.py`](src/scrapers/pkw/okregi.py)** - we need to add missing okregi
+- Missing teryt for some of them
+- Who won - capture that information
+
+  - Handle second turn information for the info about the wins
+
+- **[`src/scrapers/pkw/sources.py`](src/scrapers/pkw/sources.py)**: Several TODOs about missing data files.
+- **[`src/scrapers/pkw/test/test_pkw_process.py`](src/scrapers/pkw/test/test_pkw_process.py)**: A test should be added to ensure that string data is properly stripped of whitespace.
+- **[`src/analysis/people.py`](src/analysis/people.py)**: Several TODOs related to improving data quality and calculations.
+- **[`src/util/polish.py`](src/util/polish.py)**: The method for listing upper case characters can be improved.
+
+## 2. Refactoring & Cleanup
+
+- **[`src/main.py`](src/main.py)**: General architectural concern about dependency injection or registration of components.
+- **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: A function should be moved for better code organization.
+- **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: Code needs to be moved to its implementation.
+- **[`src/scrapers/stores.py`](src/scrapers/stores.py)**: A `duckdb` import should be removed.
+- **[`src/scrapers/stores.py`](src/scrapers/stores.py)**: A piece of code should be made more abstract.
+- **[`src/scrapers/pkw/sources.py`](src/scrapers/pkw/sources.py)**: An unused variable should be removed.
+- **[`src/scrapers/krs/data.py`](src/scrapers/krs/data.py)**: A function should be removed in the long term.
+- **[`src/scrapers/krs/companies.py`](src/scrapers/krs/companies.py)**: The entire file should be removed.
+- **[`src/scripts/update_references.py`](src/scripts/update_references.py)**: Fluke fields in the database should be removed.
+- **[`src/stores/file.py`](src/stores/file.py)**: A hardcoded fix should be removed.
+- **[`src/analysis/utils/names.py`](src/analysis/utils/names.py)**: Refactor to read dataframes directly.
+- **[`src/analysis/utils/__init__.py`](src/analysis/utils/__init__.py)**: A dependency should be removed.
+
+## 3. Bug Fixes
+
+- **[`src/scrapers/pkw/process.py`](src/scrapers/pkw/process.py)**: A bug related to the name "Agnieszka" needs to be fixed.
+- **[`src/analysis/people_wiki_merged.py`](src/analysis/people_wiki_merged.py)**: The name parsing logic for Wikipedia data is incorrect.
+- **[`src/analysis/utils/__init__.py`](src/analysis/utils/__init__.py)**: There is an issue with a probability calculation.
+
+## 4. Feature Enhancements
+
+- **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: A feature to print links to train a model.
+- **[`src/scrapers/krs/data.py`](src/scrapers/krs/data.py)**: Several TODOs about scraping more data from government websites.
+- **[`src/util/lists.py`](src/util/lists.py)**: Several TODOs about reenabling code and implementing new features.
+
+## 5. Database & Migrations
+
+- **[`src/scripts/firestore_stats.py`](src/scripts/firestore_stats.py)**: A validation check for Firestore data.
+- **[`src/scripts/firestore_migrate_fields.py`](src/scripts/firestore_migrate_fields.py)**: Several TODOs related to a database migration.
+- **[`src/stores/firestore.py`](src/stores/firestore.py)**: A TODO to update Firestore key matching.
+
+## 6. Configuration & CI/CD
+
+- **[`src/analysis/people_koryta_merged.py`](src/analysis/people_koryta_merged.py)**: Mark file as an output of a script.
+- **[`src/analysis/people_pkw_merged.py`](src/analysis/people_pkw_merged.py)**: Mark file as an output of a script.
+- **[`src/analysis/people_krs_merged.py`](src/analysis/people_krs_merged.py)**: Mark file as an output of a script.
+
+## 7. Vague or Uncategorized
+
+- **[`src/scrapers/teryt.py`](src/scrapers/teryt.py)**: "Extend this as well." - Needs more context.
+- **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: "raise e" - Incomplete error handling.
+- **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: "maybe reenable" - Commented-out code.
+- **[`src/scrapers/stores.py`](src/scrapers/stores.py)**: "implement it" - Vague.
+- **[`src/scrapers/stores.py`](src/scrapers/stores.py)**: "check if name is set" - A validation check.
+- **[`src/scrapers/krs/scrape.py-127`](src/scrapers/krs/scrape.py-127)**: A block of `todo` comments that look like they are part of an algorithm.
+- **[`src/scrapers/krs/process.py`](src/scrapers/krs/process.py)**: "handle failures better" - Vague.
+- **[`src/tests/test_analysis.py`](src/tests/test_analysis.py)**: Several TODOs related to reenabling tests and adding more assertions.
