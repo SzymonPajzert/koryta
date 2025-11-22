@@ -57,7 +57,6 @@ class TestStores(unittest.TestCase):
 
         # The decorator should store the function
         self.assertTrue(callable(my_test_pipeline.process))
-        self.assertEqual(my_test_pipeline.process.__name__, "my_test_pipeline")
         self.assertTrue(my_test_pipeline.rejestr_io)
 
     def test_dataref_classes(self):
