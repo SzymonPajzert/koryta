@@ -1,18 +1,20 @@
 import duckdb
 
-from scrapers.stores import Pipeline, LocalFile
+from scrapers.stores import Pipeline, LocalFile, Context
 from analysis.utils.tables import create_people_table, init_tables
 
 # TODO mark it as an output of scrape_pkw - to be named people_pkw
 
-pkw_file = LocalFile("people_pkw.jsonl")
+pkw_file = LocalFile("person_pkw.jsonl", "versioned")
 
 
-@Pipeline()
-def people_pkw_merged(con: duckdb.DuckDBPyConnection | None = None):
-    assert con is not None
+@Pipeline.cached_dataframe
+def people_pkw_merged(ctx: Context):
+    con = ctx.con
 
     init_tables(con)
+
+    pkw_data = ctx.io.read_data(pkw_file).read_dataframe("jsonl")
 
     con.execute(
         f"""
@@ -35,7 +37,7 @@ def people_pkw_merged(con: duckdb.DuckDBPyConnection | None = None):
         party,
         election_year,
         election_type,
-    FROM read_json_auto('{pkw_file}', format='newline_delimited', auto_detect=true)
+    FROM pkw_data
     WHERE first_name IS NOT NULL AND last_name IS NOT NULL
     """
     )

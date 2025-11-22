@@ -173,7 +173,7 @@ def process_pkw(ctx: Context, limit: int | None, year: str | None):
         print("🎉 Processing complete.")
 
 
-@Pipeline()
+@Pipeline.setup()
 def main(ctx: Context):
     parser = argparse.ArgumentParser(description="I'll add docs here")
     parser.add_argument(

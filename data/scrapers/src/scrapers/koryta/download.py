@@ -45,7 +45,7 @@ def list_people(ctx: Context) -> typing.Generator[Person, None, None]:
         )
 
 
-@Pipeline()
+@Pipeline.setup()
 def process_people(ctx: Context):
     """
     Pipeline to process and output `Person` entities.
@@ -59,7 +59,7 @@ def process_people(ctx: Context):
     print("Finished processing people.")
 
 
-@Pipeline()
+@Pipeline.setup()
 def process_articles(ctx: Context):
     """
     Pipeline to process `Article` entities and link them to mentioned people.

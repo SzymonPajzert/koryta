@@ -1,7 +1,6 @@
 from scrapers.stores import DownloadableFile as FileSource
-from frameworks.conductor import pipeline
 
-from scrapers.stores import Context
+from scrapers.stores import Context, Pipeline
 
 
 surnames = [
@@ -31,26 +30,26 @@ firstnames = [
 ]
 
 
-@pipeline(
-    "names_count_by_region",
-)
-def names_count_by_region(ctx: Context, con):
-    for source in surnames:
-        ctx.conductor.check_input(source)
+@Pipeline.cached_dataframe
+def names_count_by_region(ctx: Context):
+    con = ctx.con
 
     # TODO Instead of get_path, just read them as df
     # Duckdb can access it
+
+    surnames0 = ctx.io.read_data(surnames[0]).read_dataframe("csv")
+    surnames1 = ctx.io.read_data(surnames[1]).read_dataframe("csv")
 
     con.execute(
         f"""CREATE TABLE names_count_by_region AS
         SELECT
             lower("Nazwisko aktualne") as last_name,
             AVG("Liczba") as count,
-            teryt
+            CAST(teryt as VARCHAR) as teryt,
         FROM (
-            SELECT *, 'M' as sex FROM read_csv('{ctx.conductor.get_path(surnames[0])}')
+            SELECT *, 'M' as sex FROM surnames0
             UNION ALL
-            SELECT *, 'F' as sex FROM read_csv('{ctx.conductor.get_path(surnames[1])}')
+            SELECT *, 'F' as sex FROM surnames1
         ) AS names
         LEFT JOIN (
             SELECT * FROM (VALUES
@@ -76,13 +75,15 @@ def names_count_by_region(ctx: Context, con):
         """
     )
 
+    return con.sql("SELECT * FROM names_count_by_region").df()
 
-@pipeline(
-    "first_name_freq",
-)
-def first_name_freq(ctx: Context, con):
-    for source in firstnames:
-        ctx.conductor.check_input(source)
+
+@Pipeline.cached_dataframe
+def first_name_freq(ctx: Context):
+    con = ctx.con
+
+    firstnames0 = ctx.io.read_data(firstnames[0]).read_dataframe("csv")
+    firstnames1 = ctx.io.read_data(firstnames[1]).read_dataframe("csv")
 
     con.execute(
         f"""CREATE TABLE first_name_freq AS
@@ -90,12 +91,12 @@ def first_name_freq(ctx: Context, con):
             SELECT
                 lower("IMIĘ_PIERWSZE") as first_name,
                 "LICZBA_WYSTĄPIEŃ" as count
-            FROM read_csv('{ctx.conductor.get_path(firstnames[0])}')
+            FROM firstnames0
             UNION ALL
             SELECT
                 lower("IMIĘ_PIERWSZE") as first_name,
                 "LICZBA_WYSTĄPIEŃ" as count
-            FROM read_csv('{ctx.conductor.get_path(firstnames[1])}')
+            FROM firstnames1
         ),
         raw_names AS (
             SELECT
@@ -114,3 +115,5 @@ def first_name_freq(ctx: Context, con):
         FROM raw_names, total
     """
     )
+
+    return con.sql("SELECT * FROM first_name_freq").df()

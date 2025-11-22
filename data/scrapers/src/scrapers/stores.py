@@ -5,9 +5,13 @@ file operations, data references, and pipeline execution contexts.
 """
 
 import typing
-from typing import Any
+from collections.abc import Callable
+from typing import Any, Literal
 from dataclasses import dataclass, field
 from abc import ABCMeta, abstractmethod
+
+import pandas as pd
+from duckdb import DuckDBPyConnection  # TODO remove
 
 
 class Extractor(metaclass=ABCMeta):
@@ -35,6 +39,12 @@ class File(metaclass=ABCMeta):
     @abstractmethod
     def read_content(self) -> str | bytes:
         """Reads the entire content of the file into a string or bytes."""
+        pass
+
+    @abstractmethod
+    def read_dataframe(
+        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+    ) -> pd.DataFrame:
         pass
 
     @abstractmethod
@@ -105,13 +115,7 @@ class LocalFile(DataRef):
     """A reference to a file on the local filesystem."""
 
     filename: str
-
-
-@dataclass
-class VersionedFile(DataRef):
-    """A reference to a versioned file."""
-
-    filename: str
+    folder: Literal["downloaded", "tests", "versioned"]
 
 
 @dataclass
@@ -202,6 +206,7 @@ class Context:
 
     io: IO
     rejestr_io: RejestrIO
+    con: DuckDBPyConnection
 
 
 GLOBAL_CONTEXT: None | Context = None
@@ -234,8 +239,13 @@ class Pipeline:
     """
     A decorator for defining and configuring a data processing pipeline.
     """
+
     def __init__(
-        self, output_order: dict[str, list[str]] = {}, use_rejestr_io=False, **kwargs
+        self,
+        process: Callable[[Context], pd.DataFrame],
+        filename: str | None = None,
+        output_order: dict[str, list[str]] = {},
+        use_rejestr_io=False,
     ):
         """
         Initializes the Pipeline decorator.
@@ -244,14 +254,59 @@ class Pipeline:
             output_order: Specifies the sorting order for the output collection.
             use_rejestr_io: If True, the pipeline requires access to the RejestrIO interface.
         """
+        # Ensure, that the function that is decorated is a pipeline.
+        assert len(process.__annotations__) == 1
+        assert "ctx" in process.__annotations__
+
+        self._process = process
+        self.filename = filename
         # TODO implement it
         self.output_order = output_order
         self.rejestr_io = use_rejestr_io
-        # TODO clean it up
-        if len(kwargs) > 0:
-            print(f"Unknown kwargs: {kwargs}")
 
-    def __call__(self, func):
-        """Wraps the decorated function."""
-        self.process = func
-        return self
+    def process(self, ctx: Context):
+        json_path: str | None = None
+        df: pd.DataFrame | None = None
+        if self.filename is not None:
+            json_path = self.filename + ".jsonl"
+            try:
+                df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe(
+                    "jsonl"
+                )
+            except FileNotFoundError:
+                print("File doesn't exist, continuing")
+
+        if df is None:
+            print("No df file, processing")
+            df = self._process(ctx)
+            print("Processing done")
+            if json_path is not None:
+                # TODO make it more abstract
+                json_path = "versioned/" + json_path
+                print(f"Writing to {json_path}")
+                df.to_json(json_path, orient="records", lines=True)
+
+        return df
+
+    @staticmethod
+    def setup(
+        output_order: dict[str, list[str]] = {},
+        use_rejestr_io=False,
+    ):
+        if len(output_order) > 0:
+            print("Missing implementation")
+
+        def wrapper(func):
+            pipeline = Pipeline(
+                func, output_order=output_order, use_rejestr_io=use_rejestr_io
+            )
+            return pipeline
+
+        return wrapper
+
+    @staticmethod
+    def cached_dataframe(func):
+        name: str = func.__name__
+        pipeline = Pipeline(func, filename=name)
+        # TODO check if name is set
+        return pipeline

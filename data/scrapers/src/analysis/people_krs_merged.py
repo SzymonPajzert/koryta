@@ -1,18 +1,23 @@
-from scrapers.stores import Pipeline, LocalFile
+from scrapers.stores import Pipeline, LocalFile, Context
 from analysis.utils.tables import create_people_table
 
 # TODO mark it as an output of scrape_krs - to be named people_krs
-krs_file = LocalFile("people_krs.jsonl")
+krs_file = LocalFile("person_krs.jsonl", "versioned")
 
 
-@Pipeline()
-def people_krs_merged(con):
+@Pipeline.cached_dataframe
+def people_krs_merged(ctx: Context):
+    con = ctx.con
+
+    krs_data = ctx.io.read_data(krs_file).read_dataframe("jsonl")
+
     con.execute(
         f"""
         CREATE OR REPLACE TABLE krs_people_raw AS
         SELECT
             lower(first_name) as first_name,
             lower(last_name) as last_name,
+            CAST(NULL AS VARCHAR) as second_name,
             CAST(SUBSTRING(CAST(birth_date AS VARCHAR), 1, 4) AS INTEGER) as birth_year,
             CAST(birth_date AS VARCHAR) as birth_date,
             employed_start,
@@ -21,7 +26,7 @@ def people_krs_merged(con):
             employed_for,
             id as rejestrio_id,
             full_name
-        FROM read_json_auto('{krs_file}', format='newline_delimited', auto_detect=true)
+        FROM krs_data
         WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
         """
     )
@@ -38,3 +43,5 @@ def people_krs_merged(con):
             "employed_start": "employed_start",
         },
     )
+
+    return con.sql("SELECT * FROM krs_people").df()

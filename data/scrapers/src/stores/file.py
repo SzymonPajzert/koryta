@@ -1,7 +1,8 @@
 import io
 import csv
 import typing
-from typing import BinaryIO, TextIO
+import json
+from typing import BinaryIO, TextIO, Literal
 
 from zipfile import ZipFile
 import bz2
@@ -21,7 +22,18 @@ class FromIterable(File):
         return "\n".join(self.iterable)
 
     def read_jsonl(self):
-        raise NotImplementedError()
+        for line in self.iterable:
+            yield json.loads(line)
+
+    def read_dataframe(
+        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+    ) -> pd.DataFrame:
+        if fmt == "jsonl":
+            return pd.DataFrame.from_records(
+                [json.loads(line) for line in self.iterable]
+            )
+        else:
+            raise NotImplementedError()
 
     def read_csv(self, sep=","):
         return csv.reader(self.iterable, delimiter=sep)
@@ -48,6 +60,11 @@ class FromBytesIO(File):
 
     def read_content(self) -> str | bytes:
         return self.raw_bytes
+
+    def read_dataframe(
+        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+    ) -> pd.DataFrame:
+        raise NotImplementedError()
 
     def read_jsonl(self):
         raise NotImplementedError()
@@ -112,6 +129,22 @@ class FromPath(FromTextIO):
 
     def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
         return read_xls(self.path, header_rows, skip_rows)
+
+    def read_dataframe(
+        self, fmt: Literal["jsonl"] | Literal["csv"] | Literal["parquet"], csv_sep=","
+    ) -> pd.DataFrame:
+        if fmt == "jsonl":
+            # TODO remove this hardcodeFix
+            dtype = None
+            if self.path.endswith("names_count_by_region.jsonl"):
+                dtype = {"teryt": str}
+            return pd.read_json(self.path, lines=True, dtype=dtype)
+        elif fmt == "csv":
+            return pd.read_csv(self.path, sep=csv_sep)
+        elif fmt == "parquet":
+            return pd.read_parquet(self.path)
+
+        return super().read_dataframe(fmt, csv_sep)
 
 
 def read_xls(raw_bytes_or_path: bytes | str, header_rows: int = 0, skip_rows: int = 0):

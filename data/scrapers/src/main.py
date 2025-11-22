@@ -1,25 +1,25 @@
 # This file registers all conductor pipelines in this package
 
-from scrapers.stores import Context
-from scrapers.koryta.download import process_people as scrape_koryta_people_func
-from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
-from scrapers.pkw.process import main as scrape_pkw_func
-from scrapers.krs.process import extract_people as scrape_krs_people_func
-from scrapers.krs.process import extract_companies as scrape_krs_companies_func
-
+import os
+import duckdb
 
 from stores.download import FileSource
 from stores.firestore import FirestoreIO
 from stores.rejestr import Rejestr
 from stores.duckdb import EntityDumper
 from stores.storage import Client as CloudStorageClient
-
 import stores.file as file
-
-
-from scrapers.stores import IO, File, DataRef, Pipeline, set_context
-from scrapers.stores import FirestoreCollection
+from scrapers.stores import IO, File, DataRef, LocalFile, set_context
+from scrapers.stores import FirestoreCollection, Pipeline
 from scrapers.stores import DownloadableFile, CloudStorage
+
+from scrapers.stores import Context
+from scrapers.koryta.download import process_people as scrape_koryta_people_func
+from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
+from scrapers.pkw.process import main as scrape_pkw_func
+from scrapers.krs.process import extract_people as scrape_krs_people_func
+from scrapers.krs.process import extract_companies as scrape_krs_companies_func
+from analysis.people import people_merged as people_merged_func
 
 
 class Conductor(IO):
@@ -52,9 +52,18 @@ class Conductor(IO):
         if isinstance(fs, CloudStorage):
             return file.FromIterable(self.storage.iterate_blobs(self, fs.hostname))
 
+        if isinstance(fs, LocalFile):
+            return file.FromPath(os.path.join(fs.folder, fs.filename))
+
         raise NotImplementedError()
 
     def list_data(self, path: DataRef) -> list[str]:
+        if isinstance(path, LocalFile):
+            p = os.path.join(path.folder, path.filename)
+            if os.path.exists(p):
+                return [p]
+            return []
+
         raise NotImplementedError()
 
     def output_entity(self, entity):
@@ -71,6 +80,7 @@ def setup_context(use_rejestr_io: bool):
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
+        con=duckdb.connect(),
     )
     set_context(ctx)
     return ctx, dumper
@@ -115,6 +125,11 @@ def scrape_krs_companies():
     f()
 
 
+def people_merged():
+    f = setup_pipeline(people_merged_func)
+    f()
+
+
 def main():
     ctx, dumper = setup_context(False)
 
@@ -124,6 +139,7 @@ def main():
         scrape_pkw_func.process(ctx)
         scrape_krs_people_func.process(ctx)
         scrape_krs_companies_func.process(ctx)
+        people_merged_func.process(ctx)
         print("Finished processing")
     finally:
         print("Dumping...")

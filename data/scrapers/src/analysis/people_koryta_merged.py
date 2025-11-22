@@ -1,12 +1,15 @@
-from scrapers.stores import Pipeline, LocalFile
-from analysis.utils.tables import create_people_table
+from scrapers.stores import Pipeline, LocalFile, Context
 
 # TODO mark it as an output of scrape_koryta - to be named people_koryta
-koryta_file = LocalFile("people_koryta.jsonl")
+koryta_file = LocalFile("person_koryta.jsonl", "versioned")
 
 
-@Pipeline()
-def people_koryta_merged(con):
+@Pipeline.cached_dataframe
+def people_koryta_merged(ctx: Context):
+    con = ctx.con
+
+    koryta_data = ctx.io.read_data(koryta_file).read_dataframe("jsonl")
+
     con.execute(
         f"""
         CREATE OR REPLACE TABLE koryta_people AS
@@ -18,7 +21,9 @@ def people_koryta_merged(con):
             double_metaphone(last_name) as metaphone,
             id as koryta_id,
             full_name
-        FROM read_json_auto('{koryta_file}', format='newline_delimited', auto_detect=true)
+        FROM koryta_data
         WHERE full_name IS NOT NULL
         """
     )
+
+    return con.sql("SELECT * FROM koryta_people").df()

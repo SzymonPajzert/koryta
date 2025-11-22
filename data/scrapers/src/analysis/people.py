@@ -2,6 +2,7 @@ import pandas as pd
 import math
 
 from analysis.utils import read_enriched
+from analysis.utils.names import names_count_by_region, first_name_freq
 from scrapers.stores import Pipeline, LocalFile, Context
 from analysis.people_krs_merged import people_krs_merged
 from analysis.people_wiki_merged import people_wiki_merged
@@ -13,10 +14,10 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 
 
-krs_file = LocalFile("people_krs.jsonl")
-wiki_file = LocalFile("people_wiki.jsonl")
-koryta_file = LocalFile("people_koryta.jsonl")
-matched_file = LocalFile("people_matched.parquet")
+krs_file = LocalFile("people_krs.jsonl", "versioned")
+wiki_file = LocalFile("people_wiki.jsonl", "versioned")
+koryta_file = LocalFile("people_koryta.jsonl", "versioned")
+matched_file = LocalFile("people_matched.parquet", "versioned")
 
 
 SAMPLE_FILTER = ""
@@ -58,16 +59,19 @@ def unique_probability(
     return math.exp(-n * p_combined)
 
 
-@Pipeline()
-def people_merged(ctx: Context, con):
+@Pipeline.cached_dataframe
+def people_merged(ctx: Context):
+    con = ctx.con
     con.create_function(
         "unique_probability", unique_probability, null_handling="special"  # type: ignore
     )
 
-    people_krs_merged.process(ctx)
-    people_wiki_merged.process(ctx)
-    people_pkw_merged.process(ctx)
-    people_koryta_merged.process(ctx)
+    krs_people = people_krs_merged.process(ctx)
+    wiki_people = people_wiki_merged.process(ctx)
+    pkw_people = people_pkw_merged.process(ctx)
+    koryta_people = people_koryta_merged.process(ctx)
+    names_count_by_region_table = names_count_by_region.process(ctx)
+    first_name_freq_table = first_name_freq.process(ctx)
 
     print("--- Imported table sizes ---")
     for table in [
@@ -75,8 +79,8 @@ def people_merged(ctx: Context, con):
         "wiki_people",
         "pkw_people",
         "koryta_people",
-        "names_count_by_region",
-        "first_name_freq",
+        "names_count_by_region_table",
+        "first_name_freq_table",
     ]:
         print(f"{table}: {con.sql(f"SELECT COUNT(*) FROM {table}").fetchall()}")
         print(con.sql(f"SELECT * FROM {table} LIMIT 10").df())
@@ -115,9 +119,9 @@ def people_merged(ctx: Context, con):
             AND k.last_name = p.last_name
             AND k.first_name = p.first_name
             AND (k.second_name = p.second_name OR ((k.second_name IS NULL OR k.second_name = '') AND (p.second_name IS NULL OR p.second_name = '')))
-        LEFT JOIN first_name_freq p_fn ON k.first_name = p_fn.first_name
-        LEFT JOIN first_name_freq p_sn ON k.second_name = p_sn.first_name
-        LEFT JOIN names_count_by_region names_count
+        LEFT JOIN first_name_freq_table p_fn ON k.first_name = p_fn.first_name
+        LEFT JOIN first_name_freq_table p_sn ON k.second_name = p_sn.first_name
+        LEFT JOIN names_count_by_region_table names_count
             ON k.last_name = names_count.last_name
             -- We need to pick one teryt, let's use the first one from pkw_people if available
             -- TODO - make sure that the teryt is the same as the company's location
@@ -201,7 +205,7 @@ def people_merged(ctx: Context, con):
     if df.empty:
         raise Exception("No matches found with the current criteria.")
 
-    df = read_enriched(df)
+    df = read_enriched(ctx, df)
 
     non_duplicates = len(
         df[df["overall_score"] > 10.5].drop_duplicates(

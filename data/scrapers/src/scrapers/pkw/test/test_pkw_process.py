@@ -1,12 +1,18 @@
 import pytest
 
+from main import setup_context
+from scrapers.stores import LocalFile
 import pandas as pd
 from pytest_check.context_manager import check
 
-from util.config import versioned
+ctx, _ = setup_context(False)
 
 
-df = pd.DataFrame.from_records(versioned.read_jsonl("people_pkw.jsonl"))
+def people_rows():
+    yield from ctx.io.read_data(LocalFile("person_pkw.jsonl", "versioned")).read_jsonl()
+
+
+df = pd.DataFrame(people_rows())
 
 
 @pytest.mark.parametrize(
@@ -35,7 +41,7 @@ def test_check_no_nulls(column):
 )
 def test_check_no_whitespaces(column):
     # TODO check that strings like name and party are stripped
-    for row in versioned.read_jsonl("people_pkw.jsonl"):
+    for row in people_rows():
         if row[column] is None:
             continue
         assert row[column].strip() == row[column], f"whitespaces in {row}"

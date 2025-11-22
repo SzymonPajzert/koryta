@@ -287,7 +287,7 @@ def extract(elem: ET.Element) -> People | Company | None:
     return None
 
 
-@Pipeline(output_order={"people_wiki": ["content_score DESC"]})
+@Pipeline.setup(output_order={"people_wiki": ["content_score DESC"]})
 def scrape_wiki(ctx: Context):
     """
     Parses the Wikipedia dump, filters for target categories,
