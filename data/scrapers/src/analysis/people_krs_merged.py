@@ -1,7 +1,6 @@
 from scrapers.stores import Pipeline, LocalFile, Context
 from analysis.utils.tables import create_people_table
 
-# TODO mark it as an output of scrape_krs - to be named people_krs
 krs_file = LocalFile("person_krs.jsonl", "versioned")
 
 

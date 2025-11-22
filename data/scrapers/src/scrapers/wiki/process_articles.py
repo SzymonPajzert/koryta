@@ -173,7 +173,6 @@ class WikiArticle:
             return False
 
         about_person = check() and self.content_score > 0
-        # TODO move into another function
         if about_person:
             for cat in self.normalized_links:
                 if cat in WIKI_POLITICAL_LINKS:
@@ -207,8 +206,7 @@ def extract(elem: ET.Element) -> People | Company | None:
             birth_year=article.infobox.birth_year,
             infobox=article.infobox.inf_type,
             content_score=article.content_score,
-            links=[],  # TODO print links, so we can train an algorithm which page is a political person
-            # links=list(article.normalized_links),
+            links=[],
         )
 
     if article.about_company():

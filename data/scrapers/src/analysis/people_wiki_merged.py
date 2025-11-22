@@ -2,14 +2,12 @@ from analysis.utils.tables import create_people_table
 from scrapers.stores import Pipeline, LocalFile, Context
 
 
-# TODO mark it as an output of scrape_wiki - to be named people_wiki
 wiki_file = LocalFile("person_wikipedia.jsonl", "versioned")
 
 
 @Pipeline.cached_dataframe
 def people_wiki_merged(ctx: Context):
     con = ctx.con
-    # TODO the name logic is wrong for wiki, try matching on the full name
 
     wiki_data = ctx.io.read_data(wiki_file).read_dataframe("jsonl")
 

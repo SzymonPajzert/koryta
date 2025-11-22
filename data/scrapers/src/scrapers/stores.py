@@ -260,7 +260,6 @@ class Pipeline:
 
         self._process = process
         self.filename = filename
-        # TODO implement it
         self.output_order = output_order
         self.rejestr_io = use_rejestr_io
 
@@ -281,7 +280,6 @@ class Pipeline:
             df = self._process(ctx)
             print("Processing done")
             if json_path is not None:
-                # TODO make it more abstract
                 json_path = "versioned/" + json_path
                 print(f"Writing to {json_path}")
                 df.to_json(json_path, orient="records", lines=True)

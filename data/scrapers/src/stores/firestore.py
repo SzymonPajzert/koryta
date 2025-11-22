@@ -1,10 +1,6 @@
-from typing import Any, Iterator, Iterable
+from typing import Any, Iterable
 
-from time import sleep
 from google.cloud import firestore
-from tqdm import tqdm
-from dataclasses import dataclass
-import functools
 
 
 from scrapers.stores import IO

@@ -1,9 +1,6 @@
-import duckdb
-
 from scrapers.stores import Pipeline, LocalFile, Context
 from analysis.utils.tables import create_people_table, init_tables
 
-# TODO mark it as an output of scrape_pkw - to be named people_pkw
 
 pkw_file = LocalFile("person_pkw.jsonl", "versioned")
 

@@ -1,6 +1,5 @@
 from scrapers.stores import Pipeline, LocalFile, Context
 
-# TODO mark it as an output of scrape_koryta - to be named people_koryta
 koryta_file = LocalFile("person_koryta.jsonl", "versioned")
 
 
