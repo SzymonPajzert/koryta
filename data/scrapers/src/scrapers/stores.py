@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from abc import ABCMeta, abstractmethod
 
 import pandas as pd
-from duckdb import DuckDBPyConnection  # TODO remove
+from duckdb import DuckDBPyConnection
 
 
 class Extractor(metaclass=ABCMeta):
@@ -308,5 +308,4 @@ class Pipeline:
     def cached_dataframe(func):
         name: str = func.__name__
         pipeline = Pipeline(func, filename=name)
-        # TODO check if name is set
         return pipeline

@@ -17,6 +17,13 @@ This document provides a categorized list of all the `TODO` comments found in th
 - We removed writing to tests, we should probably restore it
 - There are global counters that need to be refactored
 - Check data urodzenia is set for interesting people
+- about_person has a weird format, this should be cleaned up as well
+
+### KRS
+
+- Remove `data.from_source` method and its usage - **[`src/scrapers/krs/data.py`](src/scrapers/krs/data.py)**
+- Move **[`src/scrapers/krs/companies.py`](src/scrapers/krs/companies.py)** to tests and make sure they're set
+- Be able to query for KRS by the specified location.
 
 ### PKW
 
@@ -38,15 +45,10 @@ This document provides a categorized list of all the `TODO` comments found in th
 ### Main - conductor
 
 - **[`src/main.py`](src/main.py)**: General architectural concern about dependency injection or registration of components.
-
-- **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: A function should be moved for better code organization.
-- **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: Code needs to be moved to its implementation.
-- **[`src/scrapers/stores.py`](src/scrapers/stores.py)**: A `duckdb` import should be removed.
-- **[`src/scrapers/stores.py`](src/scrapers/stores.py)**: A piece of code should be made more abstract.
-- **[`src/scrapers/pkw/sources.py`](src/scrapers/pkw/sources.py)**: An unused variable should be removed.
-- **[`src/scrapers/krs/data.py`](src/scrapers/krs/data.py)**: A function should be removed in the long term.
-- **[`src/scrapers/krs/companies.py`](src/scrapers/krs/companies.py)**: The entire file should be removed.
-- **[`src/scripts/update_references.py`](src/scripts/update_references.py)**: Fluke fields in the database should be removed.
+- Implement output order writing
+- **[`src/scrapers/stores.py`](src/scrapers/stores.py)**:
+  - Pipeline set up should use the abstracted logic of io
+  - Check output order when writing the pipeline
 - **[`src/stores/file.py`](src/stores/file.py)**: A hardcoded fix should be removed.
 - **[`src/analysis/utils/names.py`](src/analysis/utils/names.py)**: Refactor to read dataframes directly.
 - **[`src/analysis/utils/__init__.py`](src/analysis/utils/__init__.py)**: A dependency should be removed.
@@ -65,8 +67,6 @@ This document provides a categorized list of all the `TODO` comments found in th
 
 ## 5. Database & Migrations
 
-- **[`src/scripts/firestore_stats.py`](src/scripts/firestore_stats.py)**: A validation check for Firestore data.
-- **[`src/scripts/firestore_migrate_fields.py`](src/scripts/firestore_migrate_fields.py)**: Several TODOs related to a database migration.
 - **[`src/stores/firestore.py`](src/stores/firestore.py)**: A TODO to update Firestore key matching.
 
 ## 6. Configuration & CI/CD
