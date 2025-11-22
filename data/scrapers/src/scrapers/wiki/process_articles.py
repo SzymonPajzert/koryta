@@ -15,7 +15,7 @@ from scrapers.wiki.util import parse_date
 from scrapers.stores import Context, Pipeline
 
 from entities.person import Wikipedia as People
-from entities.company import KRS as Company
+from entities.company import Wikipedia as Company
 
 WIKI_DUMP = DownloadableFile(
     "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2",
@@ -41,7 +41,6 @@ class Infobox:
     inf_type: str
     fields: dict[str, str]
     person_related: bool
-    company_related: bool
 
     def __init__(self, inf_type, fields) -> None:
         self.inf_type = inf_type
@@ -50,7 +49,10 @@ class Infobox:
         for field in fields:
             infobox_stats[field] += 1
         self.person_related = "imię i nazwisko" in fields
-        self.company_related = False
+
+    @property
+    def company_related(self) -> bool:
+        return "rejestr" in self.fields
 
     @property
     def birth_iso(self):
@@ -109,6 +111,7 @@ class WikiArticle:
     links: list[str]
     infobox: Infobox
     osoba_imie: bool
+    _content_score: int | None = None
 
     def __post_init__(self):
         def normalized():
@@ -119,9 +122,6 @@ class WikiArticle:
                 yield n
 
         self.normalized_links = set(normalized())
-        self.content_score = len(
-            self.normalized_links.intersection(WIKI_POLITICAL_LINKS)
-        )
 
     @staticmethod
     def parse(elem: ET.Element):
@@ -159,27 +159,40 @@ class WikiArticle:
             osoba_imie="imię i nazwisko" in wikitext,
         )
 
-    def about_person(self):
-        def check():
-            if self.content_score > 0:
-                return True
-            if self.infobox is None:
-                return False
-            if self.infobox.person_related:
-                year = self.infobox.birth_year
-                if year and year < 1930:
-                    return False
-                return True
-            return False
+    @property
+    def content_score(self) -> int:
+        """
+        When higher than 0, it indicates that this article has political conotations
+        """
+        if self._content_score is not None:
+            return self._content_score
 
-        about_person = check() and self.content_score > 0
-        if about_person:
+        self._content_score = len(
+            self.normalized_links.intersection(WIKI_POLITICAL_LINKS)
+        )
+
+        if self._content_score > 0:
+            global interesting_count
+            interesting_count += 1
             for cat in self.normalized_links:
                 if cat in WIKI_POLITICAL_LINKS:
                     continue
                 category_stats[cat] += 1 + self.content_score
-        return about_person
 
+        return self._content_score
+
+    @property
+    def about_person(self):
+        if self.infobox is None:
+            return False
+        if self.infobox.person_related:
+            year = self.infobox.birth_year
+            if year and year < 1930:
+                return False
+            return True
+        return False
+
+    @property
     def about_company(self):
         if self.infobox is None:
             return False
@@ -193,11 +206,12 @@ def extract(elem: ET.Element) -> People | Company | None:
     if article is None:
         return None
 
-    # article.write_to_test(elem)
-    global interesting_count
+    person = article.about_person
+    company = article.about_company
 
-    if article.about_person():
-        interesting_count += 1
+    if person and company:
+        raise ValueError("Conflict of mapping to both person and company")
+    elif person:
         return People(
             source=f"https://pl.wikipedia.org/wiki/{article.title}",
             full_name=article.title,
@@ -208,11 +222,11 @@ def extract(elem: ET.Element) -> People | Company | None:
             content_score=article.content_score,
             links=[],
         )
-
-    if article.about_company():
+    elif company:
         return Company(
             name=article.title,
-            krs=article.infobox.fields.get("krs", ""),
+            krs=article.infobox.fields.get("numer rejestru", ""),
+            content_score=article.content_score,
         )
 
     return None

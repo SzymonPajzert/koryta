@@ -13,6 +13,14 @@ class KRS:
 
 
 @dataclass
+class Wikipedia:
+    krs: str
+    name: str
+    content_score: int
+    city: str | None = None
+
+
+@dataclass
 class ManualKRS:
     """
     Represents a manually curated KRS entry, often from multiple sources.
