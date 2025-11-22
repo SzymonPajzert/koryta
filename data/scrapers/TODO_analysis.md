@@ -16,6 +16,7 @@ This document provides a categorized list of all the `TODO` comments found in th
 - Add parallel processing of the XML, because it's currently slow
 - We removed writing to tests, we should probably restore it
 - There are global counters that need to be refactored
+- Check data urodzenia is set for interesting people
 
 ### PKW
 
@@ -30,13 +31,14 @@ This document provides a categorized list of all the `TODO` comments found in th
     - add missing 1998_powiat_kandydaci.zip
     - add missing 1998_sejmik_mazowieckie.xls
 
-# Merge
+### Merge
 
 - Make sure, that people's TERYT is close to their location
 
-## 2. Refactoring & Cleanup
+### Main - conductor
 
 - **[`src/main.py`](src/main.py)**: General architectural concern about dependency injection or registration of components.
+
 - **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: A function should be moved for better code organization.
 - **[`src/scrapers/wiki/process_articles.py`](src/scrapers/wiki/process_articles.py)**: Code needs to be moved to its implementation.
 - **[`src/scrapers/stores.py`](src/scrapers/stores.py)**: A `duckdb` import should be removed.
