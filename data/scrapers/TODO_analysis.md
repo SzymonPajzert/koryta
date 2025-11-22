@@ -4,7 +4,7 @@ This document provides a categorized list of all the `TODO` comments found in th
 
 ## 1. Data Quality & Parsing
 
-### TERYT is still meh
+### TERYT
 
 - This should become some kind of Pipeline object, so it can be initialized and integrated nicely.
 - **[`src/scrapers/teryt.py`](src/scrapers/teryt.py)**: The date is hardcoded and needs to be updated dynamically to avoid stale data.
@@ -22,13 +22,17 @@ This document provides a categorized list of all the `TODO` comments found in th
 - **[`src/scrapers/pkw/okregi.py`](src/scrapers/pkw/okregi.py)** - we need to add missing okregi
 - Missing teryt for some of them
 - Who won - capture that information
-
   - Handle second turn information for the info about the wins
+- **[`src/scrapers/pkw/sources.py`](src/scrapers/pkw/sources.py)**
+  - Missing sources
+    - add missing 2002_sejmik_kandydaci.zip
+    - add missing 2002_powiat_kandydaci.xls
+    - add missing 1998_powiat_kandydaci.zip
+    - add missing 1998_sejmik_mazowieckie.xls
 
-- **[`src/scrapers/pkw/sources.py`](src/scrapers/pkw/sources.py)**: Several TODOs about missing data files.
-- **[`src/scrapers/pkw/test/test_pkw_process.py`](src/scrapers/pkw/test/test_pkw_process.py)**: A test should be added to ensure that string data is properly stripped of whitespace.
-- **[`src/analysis/people.py`](src/analysis/people.py)**: Several TODOs related to improving data quality and calculations.
-- **[`src/util/polish.py`](src/util/polish.py)**: The method for listing upper case characters can be improved.
+# Merge
+
+- Make sure, that people's TERYT is close to their location
 
 ## 2. Refactoring & Cleanup
 

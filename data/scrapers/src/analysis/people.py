@@ -44,8 +44,8 @@ def unique_probability(
 
     p_combined = p1 * p2
     if n is None:
-        n = 50000  # TODO check
-    n = n / 40  # TODO calculate demographic data
+        n = 50000
+    n = n / 40
     if p_combined is None or p_combined == 1:
         return 0
     # Using Poisson approximation for (1-p)^n ~= exp(-n*p) to avoid floating point issues
@@ -124,7 +124,6 @@ def people_merged(ctx: Context):
         LEFT JOIN names_count_by_region_table names_count
             ON k.last_name = names_count.last_name
             -- We need to pick one teryt, let's use the first one from pkw_people if available
-            -- TODO - make sure that the teryt is the same as the company's location
             AND list_extract(p.teryt_wojewodztwo, 1) = names_count.teryt
 
     ),
@@ -189,7 +188,7 @@ def people_merged(ctx: Context):
         max_scores.birth_date,
         employment,
         is_polityk,
-        *  -- TODO remove 
+        *
     FROM max_scores LEFT JOIN scored ON (
         max_scores.base_first_name = scored.base_first_name
         AND max_scores.base_last_name = scored.base_last_name
