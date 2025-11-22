@@ -1,7 +1,6 @@
 import regex as re
 from enum import Enum
 
-# TODO Is there any better way to list upper case characters?
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
 
 LOWER = UPPER.lower()

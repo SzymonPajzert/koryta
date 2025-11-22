@@ -24,8 +24,6 @@ from analysis.people import people_merged as people_merged_func
 
 class Conductor(IO):
     def __init__(self, dumper: EntityDumper):
-        # TODO We should probably know what to register here
-        # So currently, let's just instantiate everything
         self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()

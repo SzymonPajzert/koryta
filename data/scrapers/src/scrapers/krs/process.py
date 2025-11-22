@@ -62,8 +62,7 @@ def extract_people(ctx: Context):
             data = json.loads(content)
         except json.JSONDecodeError as e:
             print(f"  [ERROR] Could not process {blob_name}: {e}")
-            # TODO handle failures better
-            continue
+            raise e
         try:
             for item in data:
                 if item.get("typ") == "osoba":

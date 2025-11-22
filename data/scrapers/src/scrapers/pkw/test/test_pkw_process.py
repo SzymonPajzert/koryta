@@ -21,7 +21,6 @@ df = pd.DataFrame(people_rows())
         "party",
         "election_year",
         "teryt_candidacy",
-        # "teryt_living", I don't think we'll be able to get this info in sejm, senat
         "sex",
         "birth_year",
     ],
@@ -40,7 +39,6 @@ def test_check_no_nulls(column):
     ["pkw_name", "first_name", "middle_name", "last_name", "party", "party_member"],
 )
 def test_check_no_whitespaces(column):
-    # TODO check that strings like name and party are stripped
     for row in people_rows():
         if row[column] is None:
             continue

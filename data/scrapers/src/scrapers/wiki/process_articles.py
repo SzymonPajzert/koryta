@@ -1,22 +1,21 @@
 import itertools
 from dataclasses import dataclass
 import regex as re
-from regex import findall, match, search
+from regex import findall, search
 from collections import Counter
 
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
 
 from scrapers.stores import DownloadableFile
-from util.polish import MONTH_NUMBER, MONTH_NUMBER_GENITIVE
 from util.polish import UPPER, LOWER
 from util.lists import WIKI_POLITICAL_LINKS
+from scrapers.wiki.util import parse_date
 
 from scrapers.stores import Context, Pipeline
 
 from entities.person import Wikipedia as People
 from entities.company import KRS as Company
-from entities.util import IgnoredDates
 
 WIKI_DUMP = DownloadableFile(
     "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2",
@@ -59,58 +58,7 @@ class Infobox:
         if v is not None:
             return v
 
-        human_readable = self.fields.get("data urodzenia", "")
-
-        def get():
-            human_readable = self.fields.get("data urodzenia", "")
-            human_readable = human_readable.replace("[", "")
-            human_readable = human_readable.replace("]", "")
-            human_readable = human_readable.replace("{{data|", "")
-            human_readable = human_readable.replace("}}", "")
-            human_readable = human_readable.split("<ref")[0]
-            human_readable = human_readable.split(" r.")[0]
-            if human_readable == "":
-                return None
-
-            for ignorable in [
-                "n.e",
-                "(",
-                "ok.",
-                "lub",
-                "/",
-                "przed",
-                "ochrz.",
-                "między",
-            ]:
-                if ignorable in human_readable:
-                    return None
-
-            m = match("^\\d{4}-\\d{2}-\\d{2}$", human_readable)
-            if m is not None:
-                return human_readable
-
-            try:
-                m = match("^(\\d+) (\\w+) (\\d{4})$", human_readable)
-                if m is not None:
-                    days = int(m.group(1))
-                    month = MONTH_NUMBER_GENITIVE[m.group(2)]
-                    return f"{m.group(3)}-{month:02d}-{days:02d}"
-
-                m = match("^(\\w+) (\\d{4})$", human_readable)
-                if m is not None:
-                    month = MONTH_NUMBER[m.group(1)]
-                    return f"{m.group(2)}-{month:02d}-00"
-            except KeyError:
-                return None
-
-            m = match("^(\\d+)$", human_readable)
-            if m is not None:
-                return f"{m.group(1)}-00-00"
-
-        self._birth_iso = get()
-        if self._birth_iso is None and human_readable != "":
-            pass
-            # TODO write IgnoredDates(date=human_readable)
+        self._birth_iso = parse_date(self.fields.get("data urodzenia", ""))
         return self._birth_iso
 
     @property
@@ -200,15 +148,8 @@ class WikiArticle:
                     # print(f"Changing title from {title} to {full_name.group(1)}")
                     title = full_name.group(1)
             except Exception as e:
-                print(pattern, title, "writing to tests")
-                WikiArticle(
-                    title=title,
-                    categories=[],
-                    links=[],
-                    infobox=infobox,
-                    osoba_imie=False,
-                )  # .write_to_test(elem, force=True)
-                # TODO raise e
+                print(pattern, title, "exception while processing")
+                raise e
 
         return WikiArticle(
             title=title,
@@ -217,14 +158,6 @@ class WikiArticle:
             infobox=infobox if infobox is not None else Infobox("unknown", {}),
             osoba_imie="imię i nazwisko" in wikitext,
         )
-
-    # TODO maybe reenable
-    # def write_to_test(self, elem: ET.Element, force=False):
-    #     if self.title in TEST_FILES or force:
-    #         path = ctx.conductor.get_path(LocalFile(f"{self.title}.xml"))
-    #         print(f"Saving {self.title} to test file: {path}")
-    #         with open(path, "w") as test_file:
-    #             test_file.write(ET.tostring(elem, encoding="unicode").strip())
 
     def about_person(self):
         def check():
@@ -240,7 +173,6 @@ class WikiArticle:
             return False
 
         about_person = check() and self.content_score > 0
-        # TODO move into another function
         if about_person:
             for cat in self.normalized_links:
                 if cat in WIKI_POLITICAL_LINKS:
@@ -274,8 +206,7 @@ def extract(elem: ET.Element) -> People | Company | None:
             birth_year=article.infobox.birth_year,
             infobox=article.infobox.inf_type,
             content_score=article.content_score,
-            links=[],  # TODO print links, so we can train an algorithm which page is a political person
-            # links=list(article.normalized_links),
+            links=[],
         )
 
     if article.about_company():
@@ -293,13 +224,6 @@ def scrape_wiki(ctx: Context):
     Parses the Wikipedia dump, filters for target categories,
     and uploads individual XML files to GCS.
     """
-
-    # TODO move to implementation
-    # if not os.path.exists(DUMP_FILENAME):
-    #     print(
-    #         f"Error: Dump file '{DUMP_FILENAME}' not found. Please run the download script first."
-    #     )
-    #     return
 
     # Use bz2 to decompress the file on the fly
     with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f:
@@ -328,6 +252,4 @@ def scrape_wiki(ctx: Context):
 
     print("Stats:")
     print("\n".join([str(t) for t in category_stats.most_common(30)]))
-    # print("\n".join([str(t) for t in infobox_types.most_common(50)]))
-    # print("\n".join([str(t) for t in infobox_stats.most_common(30)]))
     print("🎉 Processing complete.")
