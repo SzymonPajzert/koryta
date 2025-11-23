@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import regex as re
 from regex import findall, search
 from collections import Counter
+from memoized_property import memoized_property
 
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
@@ -50,24 +51,17 @@ class Infobox:
             infobox_stats[field] += 1
         self.person_related = "imię i nazwisko" in fields
 
-    @property
+    @memoized_property
     def company_related(self) -> bool:
         return "rejestr" in self.fields
 
-    @property
+    @memoized_property
     def birth_iso(self):
-        v = getattr(self, "_birth_iso", None)
-        if v is not None:
-            return v
+        return parse_date(self.fields.get("data urodzenia", ""))
 
-        self._birth_iso = parse_date(self.fields.get("data urodzenia", ""))
-        return self._birth_iso
-
-    @property
+    @memoized_property
     def birth_year(self):
-        ba = self.birth_iso
-        if ba is not None:
-            return int(ba.split("-")[0])
+        return int(self.birth_iso.split("-")[0]) if self.birth_iso else None
 
     @staticmethod
     def parse(wikitext):
@@ -104,24 +98,17 @@ def safe_middle_name_pattern(title):
     return f"'''({title.replace(' ', f'[ {UPPER}{LOWER}]*')})'''"
 
 
-@dataclass
 class WikiArticle:
     title: str
     categories: list[str]
     links: list[str]
     infobox: Infobox
-    osoba_imie: bool
-    _content_score: int | None = None
 
-    def __post_init__(self):
-        def normalized():
-            for entry in itertools.chain(self.categories, self.links):
-                n = entry.rstrip("]").lstrip("[").split("|")[0]
-                if n.isdigit():
-                    continue
-                yield n
-
-        self.normalized_links = set(normalized())
+    def __init__(self, title, categories, links, infobox):
+        self.title = title
+        self.categories = categories
+        self.links = links
+        self.infobox = infobox
 
     @staticmethod
     def parse(elem: ET.Element):
@@ -156,22 +143,27 @@ class WikiArticle:
             categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
             links=findall("\\[\\[[^\\]]+\\]\\]", wikitext),
             infobox=infobox if infobox is not None else Infobox("unknown", {}),
-            osoba_imie="imię i nazwisko" in wikitext,
         )
 
-    @property
+    @memoized_property
+    def normalized_links(self):
+        def generate():
+            for entry in itertools.chain(self.categories, self.links):
+                n = entry.rstrip("]").lstrip("[").split("|")[0]
+                if n.isdigit():
+                    continue
+                yield n
+
+        return set(generate())
+
+    @memoized_property
     def content_score(self) -> int:
         """
         When higher than 0, it indicates that this article has political conotations
         """
-        if self._content_score is not None:
-            return self._content_score
+        score = len(self.normalized_links.intersection(WIKI_POLITICAL_LINKS))
 
-        self._content_score = len(
-            self.normalized_links.intersection(WIKI_POLITICAL_LINKS)
-        )
-
-        if self._content_score > 0:
+        if score > 0:
             global interesting_count
             interesting_count += 1
             for cat in self.normalized_links:
@@ -179,9 +171,9 @@ class WikiArticle:
                     continue
                 category_stats[cat] += 1 + self.content_score
 
-        return self._content_score
+        return score
 
-    @property
+    @memoized_property
     def about_person(self):
         if self.infobox is None:
             return False
@@ -192,7 +184,7 @@ class WikiArticle:
             return True
         return False
 
-    @property
+    @memoized_property
     def about_company(self):
         if self.infobox is None:
             return False

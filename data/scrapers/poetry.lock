@@ -2924,6 +2924,17 @@ files = [
 ]
 
 [[package]]
+name = "memoized-property"
+version = "1.0.3"
+description = "A simple python decorator for defining properties that only run their fget function once"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "memoized-property-1.0.3.tar.gz", hash = "sha256:4be4d0209944b9b9b678dae9d7e312249fe2e6fb8bdc9bdaa1da4de324f0fcf5"},
+]
+
+[[package]]
 name = "mistune"
 version = "3.1.4"
 description = "A sane and fast Markdown parser with useful plugins and renderers"
@@ -6261,4 +6272,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "d5676740006a08d779817b3cdad6e28597b539c30919483089571a6a931ad435"
+content-hash = "22885bbf5b97dc9bf9ea86bfb35e197fba1e0d50443bfe1fcb801138988f50d7"
