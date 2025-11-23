@@ -15,19 +15,36 @@ from util.lists import TEST_FILES
 
 
 PEOPLE_EXPECTED = {
-    "Józef Śliwa": {
-        "title": "Józef Andrzej Śliwa",  # We extract middle name from the page
-        "infobox_type": "Biogram",
-        "birth_date": "1954-11-17",
-        "about_person": True,
-    },
-    "Grzegorz Michał Pastuszko": {
-        "title": "Grzegorz Michał Pastuszko",
-        "infobox_type": "Naukowiec",
-        "birth_date": "1981-09-17",
-        "about_person": True,
-    },
-    "Marcin Chludziński": None,
+    "Józef Śliwa": People(
+        source=("https://pl.wikipedia.org/wiki/Józef Andrzej Śliwa"),
+        full_name="Józef Andrzej Śliwa",
+        party="Sojusz Lewicy Demokratycznej",
+        birth_iso8601="1954-11-17",
+        birth_year=1954,
+        infoboxes=["Biogram"],
+        content_score=1,
+        links=[],
+    ),
+    "Grzegorz Michał Pastuszko": People(
+        source=("https://pl.wikipedia.org/wiki/Grzegorz Michał Pastuszko"),
+        full_name="Grzegorz Michał Pastuszko",
+        party="",
+        birth_iso8601="1981-09-17",
+        birth_year=1981,
+        infoboxes=["Naukowiec"],
+        content_score=1,
+        links=[],
+    ),
+    "Marcin Chludziński": People(
+        source=("https://pl.wikipedia.org/wiki/Marcin Chludziński"),
+        full_name="Marcin Chludziński",
+        party="",
+        birth_iso8601="1979-00-00",
+        birth_year=1979,
+        infoboxes=["Biogram"],
+        content_score=1,
+        links=[],
+    ),
 }
 
 COMPANIES_EXPECTED = {
@@ -139,26 +156,24 @@ def test_people(filename):
         assert article is not None
         assert len(article.infoboxes) > 0
 
-        if PEOPLE_EXPECTED[filename] is None:
+        person = extract(elem)
+        expected = PEOPLE_EXPECTED[filename]
+
+        if expected is None:
+            assert person is None
             return
 
-        assert article.title == PEOPLE_EXPECTED[filename]["title"], "title"
-        assert (
-            article.get_infobox(lambda i: i.inf_type)
-            == PEOPLE_EXPECTED[filename]["infobox_type"]
-        ), "infobox_type"
-        assert (
-            article.get_infobox(lambda i: i.birth_iso)
-            == PEOPLE_EXPECTED[filename]["birth_date"]
-        ), "birth_date"
-        assert (
-            article.about_person == PEOPLE_EXPECTED[filename]["about_person"]
-        ), "about_person()"
-
-        person = extract(elem)
+        assert len(article.infoboxes) > 0
         assert person is not None, "Person extracted successfully"
         assert isinstance(person, People)
-        assert person.full_name == article.title
+
+        if expected.content_score > 0:
+            assert person.content_score > 0, "content_score should be positive"
+
+        # Setting to disregard exact score
+        person.content_score = 0
+        expected.content_score = 0
+        assert dataclasses.asdict(person) == dataclasses.asdict(expected)
 
 
 @pytest.mark.parametrize("filename", COMPANIES_EXPECTED.keys())

@@ -49,7 +49,6 @@ class Infobox:
     def __init__(self, inf_type: str, fields: dict[str, str]) -> None:
         self.inf_type = inf_type
         self.fields = fields
-        print(fields)
         infobox_types[inf_type] += 1
         for field in fields:
             infobox_stats[field] += 1
@@ -79,8 +78,7 @@ class Infobox:
 
         result = []
         for infobox in all_infoboxes:
-            print(infobox.name)
-            inf_type = infobox.name.lower()
+            inf_type = infobox.name.split("infobox")[0].strip()
             fields = {}
             for param in infobox.params:
                 fields[param.name.strip_code().strip()] = (
