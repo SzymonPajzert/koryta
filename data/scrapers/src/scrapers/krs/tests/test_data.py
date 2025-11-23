@@ -9,6 +9,7 @@ import scrapers.krs.data as data
 
 
 def test_public_companies_list():
+    data.init_data()
     PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")
 
     manual = {
