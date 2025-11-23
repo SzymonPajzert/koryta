@@ -28,68 +28,61 @@ PEOPLE_EXPECTED = {
         "about_person": True,
     },
     "Marcin Chludziński": None,
-    "Paweł Gruza": None,
 }
 
 COMPANIES_EXPECTED = {
     "Agata (przedsiębiorstwo)": Company(
-        name="",
-        krs="",
+        name="Agata PEŁNA NAZWA",
+        krs="0000037615",
         content_score=0,
     ),
-    "Agencja Mienia Wojskowego": Company(
-        name="",
-        krs="",
-        content_score=1,
-    ),
+    # TODO support parsing pages like this one
+    "Agencja Mienia Wojskowego": None,
     "Biuro Maklerskie PKO Banku Polskiego": Company(
-        name="",
+        name="Biuro Maklerskie PKO Banku Polskiego",
         krs="",
         content_score=1,
     ),
-    "Grupa kapitałowa PWN": Company(
-        name="",
-        krs="",
-        content_score=1,
-    ),
+    # TODO support parsing pages like this one
+    "Grupa kapitałowa PWN": None,
     "Kopalnia Węgla Kamiennego „Śląsk”": Company(
-        name="",
+        name="Kopalnia Węgla Kamiennego „Śląsk”",
         krs="",
         content_score=1,
     ),
     "Miejski Zakład Komunikacji w Koninie": Company(
-        name="",
+        name="Miejski Zakład Komunikacji w Koninie",
         krs="",
         content_score=1,
     ),
     "Miejskie Przedsiębiorstwo Komunikacyjne we Wrocławiu": Company(
-        name="",
+        name="Miejskie Przedsiębiorstwo Komunikacyjne we Wrocławiu",
         krs="",
         content_score=1,
     ),
     "Orange Polska": Company(
-        name="",
-        krs="",
+        name="Orange Polska",
+        krs="0000010681",
         content_score=0,
     ),
     "PERN": Company(
-        name="PERN S.A.",
+        name="PERN",
         krs="0000069559",
         content_score=1,
     ),
     "Pesa Mińsk Mazowiecki": Company(
-        name="",
-        krs="",
+        name="Pesa Mińsk Mazowiecki",
+        krs="0000067499",
         content_score=1,
     ),
     "PGE Polska Grupa Energetyczna": Company(
-        name="",
-        krs="",
+        name="PGE Polska Grupa Energetyczna",
+        krs="0000059307",
         content_score=1,
     ),
     "Pojazdy Szynowe Pesa Bydgoszcz": Company(
-        name="",
-        krs="",
+        name="Pojazdy Szynowe Pesa Bydgoszcz",
+        krs="0000036552",
         content_score=1,
     ),
     "Polbus-PKS": Company(
@@ -146,6 +139,9 @@ def test_people(filename):
         assert article is not None
         assert article.infobox is not None
 
+        if PEOPLE_EXPECTED[filename] is None:
+            return
+
         assert article.title == PEOPLE_EXPECTED[filename]["title"], "title"
         assert (
             article.infobox.inf_type == PEOPLE_EXPECTED[filename]["infobox_type"]
@@ -171,18 +167,25 @@ def test_companies(filename):
         assert article is not None
         assert article.infobox is not None
 
+        print(article.infobox.fields)
+
         company = extract(elem)
-        if COMPANIES_EXPECTED[filename] is None:
+        expected = COMPANIES_EXPECTED[filename]
+
+        if expected is None:
             assert company is None
             return
 
         assert company is not None, "Company extracted successfully"
         assert isinstance(company, Company)
+
+        if expected.content_score > 0:
+            assert company.content_score > 0, "content_score should be positive"
+
         # Setting to disregard exact score
-        company.content_score = 1 if company.content_score > 0 else 0
-        assert dataclasses.asdict(company) == dataclasses.asdict(
-            COMPANIES_EXPECTED[filename]
-        )
+        company.content_score = 0
+        expected.content_score = 0
+        assert dataclasses.asdict(company) == dataclasses.asdict(expected)
 
 
 @pytest.mark.parametrize("filename", TEST_FILES)

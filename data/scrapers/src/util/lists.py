@@ -37,17 +37,6 @@ TEST_FILES = {
     "ZE PAK",
 }
 
-# TODO match upper/lower case automatically?
-WIKI_PUBLIC_COMPANY_LINKS = {
-    "jednoosobowa spółka Skarbu Państwa",
-    "Jednoosobowa spółka Skarbu Państwa",
-    "Skarb państwa",
-    "Agencja wykonawcza",
-    "Ministerstwo Aktywów Państwowych",
-    "Spółka Restrukturyzacji Kopalń",
-    "Polski Fundusz Rozwoju",
-}
-
 # Which categories/links are marking a wiki page as political
 WIKI_POLITICAL_LINKS = {
     "Fundacja Republikańska",
@@ -188,6 +177,14 @@ WIKI_POLITICAL_LINKS = {
     "Polska Partia Socjalistyczna",
     "Posłowie do Parlamentu Europejskiego VIII kadencji",
     "wybory samorządowe w Polsce w 2010 roku",
+    "jednoosobowa spółka Skarbu Państwa",
+    "Jednoosobowa spółka Skarbu Państwa",
+    "Skarb państwa",
+    "Skarb Państwa",
+    "Agencja wykonawcza",
+    "Ministerstwo Aktywów Państwowych",
+    "Spółka Restrukturyzacji Kopalń",
+    "Polski Fundusz Rozwoju",
 }
 
 # TODO get a counter of how often we have blockers

@@ -42,14 +42,20 @@ class Infobox:
     inf_type: str
     fields: dict[str, str]
     person_related: bool
+    links: list[str]
 
-    def __init__(self, inf_type, fields) -> None:
+    def __init__(self, inf_type: str, fields: dict[str, str]) -> None:
         self.inf_type = inf_type
         self.fields = fields
         infobox_types[inf_type] += 1
         for field in fields:
             infobox_stats[field] += 1
         self.person_related = "imię i nazwisko" in fields
+        self.links = [
+            link
+            for value in fields.values()
+            for link in findall("\\[\\[[^\\]]+\\]\\]", value)
+        ]
 
     @memoized_property
     def company_related(self) -> bool:
@@ -90,6 +96,10 @@ class Infobox:
             print(result)
 
         return result[0]
+
+
+def get_links(wikitext, prefix=""):
+    return findall("\\[\\[" + prefix + "[^\\]]+\\]\\]", wikitext)
 
 
 def safe_middle_name_pattern(title):
@@ -140,15 +150,20 @@ class WikiArticle:
 
         return WikiArticle(
             title=title,
-            categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
-            links=findall("\\[\\[[^\\]]+\\]\\]", wikitext),
+            categories=get_links(wikitext, prefix="Kategoria:"),
+            links=get_links(wikitext),
             infobox=infobox if infobox is not None else Infobox("unknown", {}),
         )
 
     @memoized_property
     def normalized_links(self):
         def generate():
-            for entry in itertools.chain(self.categories, self.links):
+            for entry in itertools.chain(
+                self.categories,
+                self.links,
+                # Extract links from infobox if they exist
+                self.infobox.links if self.infobox else [],
+            ):
                 n = entry.rstrip("]").lstrip("[").split("|")[0]
                 if n.isdigit():
                     continue
@@ -163,13 +178,17 @@ class WikiArticle:
         """
         score = len(self.normalized_links.intersection(WIKI_POLITICAL_LINKS))
 
+        for public_region in ["miasto", "województwo", "gmina"]:
+            if public_region in self.infobox.fields.get("udziałowcy", "").lower():
+                score += 1
+
         if score > 0:
             global interesting_count
             interesting_count += 1
             for cat in self.normalized_links:
                 if cat in WIKI_POLITICAL_LINKS:
                     continue
-                category_stats[cat] += 1 + self.content_score
+                category_stats[cat] += 1 + score
 
         return score
 
