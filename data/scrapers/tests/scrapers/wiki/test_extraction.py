@@ -32,7 +32,7 @@ PEOPLE_EXPECTED = {
 
 COMPANIES_EXPECTED = {
     "Agata (przedsiębiorstwo)": Company(
-        name="Agata PEŁNA NAZWA",
+        name="Agata",
         krs="0000037615",
         content_score=0,
     ),
@@ -46,27 +46,27 @@ COMPANIES_EXPECTED = {
     # TODO support parsing pages like this one
     "Grupa kapitałowa PWN": None,
     "Kopalnia Węgla Kamiennego „Śląsk”": Company(
-        name="Kopalnia Węgla Kamiennego „Śląsk”",
+        name="Kopalnia Węgla Kamiennego Śląsk",
         krs="",
         content_score=1,
     ),
     "Miejski Zakład Komunikacji w Koninie": Company(
-        name="Miejski Zakład Komunikacji w Koninie",
+        name="Miejski Zakład Komunikacji w Koninie Sp. z o.o.",
         krs="",
         content_score=1,
     ),
     "Miejskie Przedsiębiorstwo Komunikacyjne we Wrocławiu": Company(
-        name="Miejskie Przedsiębiorstwo Komunikacyjne we Wrocławiu",
+        name="Miejskie Przedsiębiorstwo Komunikacyjne sp. z o.o. we Wrocławiu",
         krs="",
         content_score=1,
     ),
     "Orange Polska": Company(
-        name="Orange Polska",
+        name="Orange Polska S.A.",
         krs="0000010681",
         content_score=0,
     ),
     "PERN": Company(
-        name="PERN",
+        name="PERN S.A.",
         krs="0000069559",
         content_score=1,
     ),
@@ -76,7 +76,7 @@ COMPANIES_EXPECTED = {
         content_score=1,
     ),
     "PGE Polska Grupa Energetyczna": Company(
-        name="PGE Polska Grupa Energetyczna",
+        name="PGE Polska Grupa Energetyczna Spółka Akcyjna",
         krs="0000059307",
         content_score=1,
     ),
@@ -101,13 +101,13 @@ COMPANIES_EXPECTED = {
         content_score=1,
     ),
     "Port lotniczy Warszawa-Modlin": Company(
-        name="Port lotniczy Warszawa-Modlin",
+        name="Port Lotniczy Warszawa-Modlin",
         krs="0000184990",
         content_score=1,
     ),
     "Stadion Narodowy im. Kazimierza Górskiego w Warszawie": None,
     "Telewizja Polska": Company(
-        name="Telewizja Polska",
+        name="Telewizja Polska S.A. w likwidacji",
         krs="0000100679",
         content_score=1,
     ),
@@ -117,12 +117,12 @@ COMPANIES_EXPECTED = {
         content_score=1,
     ),
     "Warel": Company(
-        name="Warel",
+        name="Zakłady Elektroniczne WAREL S.A.",
         krs="0000100750",
         content_score=1,
     ),
     "ZE PAK": Company(
-        name="ZE PAK",
+        name="ZE PAK SPÓŁKA AKCYJNA",
         krs="0000021374",
         content_score=0,
     ),
@@ -137,17 +137,19 @@ def test_people(filename):
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
         assert article is not None
-        assert article.infobox is not None
+        assert len(article.infoboxes) > 0
 
         if PEOPLE_EXPECTED[filename] is None:
             return
 
         assert article.title == PEOPLE_EXPECTED[filename]["title"], "title"
         assert (
-            article.infobox.inf_type == PEOPLE_EXPECTED[filename]["infobox_type"]
+            article.get_infobox(lambda i: i.inf_type)
+            == PEOPLE_EXPECTED[filename]["infobox_type"]
         ), "infobox_type"
         assert (
-            article.infobox.birth_iso == PEOPLE_EXPECTED[filename]["birth_date"]
+            article.get_infobox(lambda i: i.birth_iso)
+            == PEOPLE_EXPECTED[filename]["birth_date"]
         ), "birth_date"
         assert (
             article.about_person == PEOPLE_EXPECTED[filename]["about_person"]
@@ -165,9 +167,6 @@ def test_companies(filename):
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
         assert article is not None
-        assert article.infobox is not None
-
-        print(article.infobox.fields)
 
         company = extract(elem)
         expected = COMPANIES_EXPECTED[filename]
@@ -176,6 +175,7 @@ def test_companies(filename):
             assert company is None
             return
 
+        assert len(article.infoboxes) > 0
         assert company is not None, "Company extracted successfully"
         assert isinstance(company, Company)
 
