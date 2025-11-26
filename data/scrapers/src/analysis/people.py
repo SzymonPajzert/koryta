@@ -69,7 +69,11 @@ def people_merged(ctx: Context):
     krs_people = people_krs_merged.process(ctx)
     wiki_people = people_wiki_merged.process(ctx)
     pkw_people = people_pkw_merged.process(ctx)
-    koryta_people = people_koryta_merged.process(ctx)
+    # TODO koryta_people = people_koryta_merged.process(ctx)
+    koryta_people = pd.DataFrame(
+        data=[{"first_name": "empty", "last_name": "empty", "full_name": "empty"}]
+    )
+
     names_count_by_region_table = names_count_by_region.process(ctx)
     first_name_freq_table = first_name_freq.process(ctx)
 
