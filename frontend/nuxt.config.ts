@@ -2,6 +2,9 @@ import { isDev } from "@nuxt/test-utils";
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const isTest = !!process.env.VITEST;
+const isLocal = isTest || isDev || process.env.USE_EMULATORS === "true";
+
+
 export default defineNuxtConfig({
   app: {
     head: {
@@ -46,7 +49,7 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { prerender: true },
     // Cached for 6 hours
-    "/api/**": { swr: 60 * 60 * 6 },
+    "/api/**": isLocal ? undefined : { swr: 60 * 60 * 6 },
   },
 
   modules: [
@@ -97,14 +100,14 @@ export default defineNuxtConfig({
       authDomain: "koryta-pl.firebaseapp.com",
       databaseURL:
         "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "koryta-pl",
+      projectId: isLocal ? "demo-koryta-pl" : "koryta-pl",
       storageBucket: "koryta-pl.firebasestorage.app",
       messagingSenderId: "735903577811",
       appId: "1:735903577811:web:53e6461c641b947a4e8626",
       measurementId: "G-KRYVKQ4T7T",
     },
     emulators: {
-      enabled: isTest || isDev,
+      enabled: isLocal,
       auth: {
         host: "localhost",
         port: 9099,
