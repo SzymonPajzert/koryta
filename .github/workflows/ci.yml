@@ -1,0 +1,79 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test-and-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Java (for Emulators)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Start Emulators & Run Tests
+        working-directory: frontend
+        env:
+          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
+        run: |
+          # Start emulators in background and run tests
+          # We use concurrently or just run them sequentially if we can detach emulators
+          # But for CI, it's often easier to use the firebase-tools action or just run them in background
+          
+          # Install firebase tools globally
+          npm install -g firebase-tools
+          
+          # Start emulators
+          firebase emulators:start --project demo-koryta-pl --import=../database/current_firestore --only auth,firestore,database,functions &
+          EMULATOR_PID=$!
+          
+          # Wait for emulators to be ready (simple sleep or wait-on)
+          sleep 20
+          
+          # Run Unit Tests
+          npm run test:ci
+          
+          # Run E2E Tests with Percy
+          # Note: We need the app running too. 
+          # npm run dev starts Nuxt. 
+          # In CI, we usually build and start.
+          npm run build
+          npm run preview &
+          PREVIEW_PID=$!
+          
+          # Wait for app
+          npx wait-on http://localhost:3000
+          
+          # Run Cypress
+          npx percy exec -- npm run test:e2e -- --config baseUrl=http://localhost:3000
+          
+          # Cleanup
+          kill $PREVIEW_PID
+          kill $EMULATOR_PID
+
+      - name: Deploy Preview to Firebase Hosting
+        if: github.event_name == 'pull_request'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KORYTA_PL }}
+          projectId: koryta-pl
+          entryPoint: frontend
