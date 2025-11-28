@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+      - "4000:4000"
+      - "9099:9099"
+      - "8080:8080"
+      - "9000:9000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      # Mount rules from parent directory
+      - ../database.rules.json:/app/database.rules.json
+      - ../firestore.rules:/app/firestore.rules
+      # Mount database data
+      - ../database:/database
+    environment:
+      - HOST=0.0.0.0
+      # Ensure emulators listen on all interfaces
+      - FIREBASE_AUTH_EMULATOR_HOST=0.0.0.0:9099
+      - FIRESTORE_EMULATOR_HOST=0.0.0.0:8080
+      - FIREBASE_DATABASE_EMULATOR_HOST=0.0.0.0:9000
+      - GCLOUD_PROJECT=demo-koryta-pl
+    command: sh -c "npm run dev:local"
