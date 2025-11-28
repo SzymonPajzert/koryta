@@ -6,10 +6,12 @@
     "build": "nuxt build",
     "emulators": "firebase emulators:start --import=../database/current_firestore",
     "dev": "nuxt dev",
+    "dev:local": "concurrently \"npm run emulators\" \"npm run dev\"",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "cypress open"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.3",
@@ -45,6 +47,8 @@
     "@types/d3-force": "^3.0.10",
     "@vitest/coverage-v8": "^3.2.4",
     "@vue/test-utils": "^2.4.6",
+    "concurrently": "^9.2.1",
+    "cypress": "^15.7.0",
     "eslint-config-prettier": "^10.1.8",
     "happy-dom": "^18.0.1",
     "vitest": "^3.2.4"
