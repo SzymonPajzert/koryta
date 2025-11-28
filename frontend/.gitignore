@@ -5,7 +5,10 @@
 .nitro
 .cache
 dist
+
+# Logs
 logs*.txt
+cypress_debug_*.txt
 
 # Node dependencies
 node_modules

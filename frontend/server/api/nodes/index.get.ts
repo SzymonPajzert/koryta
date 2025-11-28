@@ -1,7 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 
 export default defineEventHandler(async () => {
-  const db = getFirestore("koryta-pl");
+  const db = getFirestore();
 
   const list = await db.collection("nodes").where("type", "!=", "record").get();
   const nodes = Object.fromEntries(

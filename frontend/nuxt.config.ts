@@ -97,7 +97,7 @@ export default defineNuxtConfig({
       authDomain: "koryta-pl.firebaseapp.com",
       databaseURL:
         "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "koryta-pl",
+      projectId: "demo-koryta-pl",
       storageBucket: "koryta-pl.firebasestorage.app",
       messagingSenderId: "735903577811",
       appId: "1:735903577811:web:53e6461c641b947a4e8626",
@@ -115,7 +115,6 @@ export default defineNuxtConfig({
       },
       firestore: {
         host: "localhost",
-        database: "koryta-pl",
         port: 8080,
       },
       storage: {
@@ -123,6 +122,12 @@ export default defineNuxtConfig({
         port: 9199,
       },
     },
+    options: {
+      firestore: {
+        experimentalForceLongPolling: true,
+      },
+    },
+
   },
 
   css: ["v-network-graph/lib/style.css"],

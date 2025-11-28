@@ -89,6 +89,7 @@
             type="submit"
             :loading="saving"
             block
+            @click="console.log('Submit button clicked')"
           >
             Zapisz
           </v-btn>
@@ -99,6 +100,8 @@
     <v-snackbar v-model="snackbar" :color="snackbarColor">
       {{ snackbarText }}
     </v-snackbar>
+    <div id="debug-saving" v-if="saving">SAVING...</div>
+    <div id="debug-connectivity">{{ connectivityResult }}</div>
   </v-container>
 </template>
 
@@ -107,13 +110,25 @@ import { getFirestore, doc, setDoc, getDoc, collection } from "firebase/firestor
 import type { NodeType, Person, Company, Article } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 
+onMounted(async () => {
+  console.log("Edit page mounted");
+  try {
+    const testDoc = await getDoc(doc(db, "nodes", "test-connectivity"));
+    console.log("Connectivity test result:", testDoc.exists());
+    connectivityResult.value = "Connected: " + testDoc.exists();
+  } catch (e) {
+    console.error("Connectivity test failed:", e);
+    connectivityResult.value = "Error: " + e;
+  }
+});
+
 definePageMeta({
   middleware: "auth",
 });
 
 const route = useRoute();
 const router = useRouter();
-const db = getFirestore(useFirebaseApp());
+const db = getFirestore(useFirebaseApp(), "koryta-pl");
 
 const nodeId = route.params.id as string | undefined;
 const isNew = !nodeId;
@@ -123,6 +138,7 @@ const saving = ref(false);
 const snackbar = ref(false);
 const snackbarText = ref("");
 const snackbarColor = ref("success");
+const connectivityResult = ref("Checking...");
 
 // Unified form state
 const form = ref<any>({
@@ -156,8 +172,10 @@ if (!isNew && nodeId) {
 
 async function save() {
   saving.value = true;
+  console.log("Starting save process...");
   try {
     const id = nodeId || doc(collection(db, "nodes")).id;
+    console.log("Generated ID:", id);
     const docRef = doc(db, "nodes", id);
     
     const data: any = {
@@ -179,7 +197,9 @@ async function save() {
       }
     }
 
+    console.log("Data prepared, calling setDoc...", data);
     await setDoc(docRef, data, { merge: true });
+    console.log("setDoc finished successfully");
     
     snackbarText.value = "Zapisano pomyślnie";
     snackbarColor.value = "success";
