@@ -7,7 +7,7 @@ vi.mock('vuefire', () => ({
 }));
 
 vi.mock('firebase/firestore', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import('firebase/firestore')>();
   return {
     ...actual,
     collection: vi.fn(),
@@ -18,4 +18,9 @@ vi.mock('firebase/firestore', async (importOriginal) => {
 
 vi.mock('nuxt-vuefire', () => ({
   useCurrentUser: vi.fn(),
+}));
+
+vi.mock('@sentry/nuxt', () => ({
+  init: vi.fn(),
+  replayIntegration: vi.fn(),
 }));
