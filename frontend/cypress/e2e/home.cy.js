@@ -6,7 +6,7 @@ describe("home", () => {
   });
 
   it("displays four clickable cards", () => {
-    cy.get(".v-card").should("have.length", 4);
+    cy.get(".v-card").should("have.length", 8);
 
     // See https://github.com/jaredpalmer/cypress-image-snapshot?tab=readme-ov-file#usage
     // E.g. --env updateSnapshots=true
@@ -27,24 +27,24 @@ describe("home", () => {
   });
 
   it("shows list when clicking the first card - chart", () => {
-    cy.get(".v-card").eq(0).click();
+    cy.contains(".v-card", "Lista wszystkich").click();
     cy.url().should("include", "/lista");
   });
 
   it("shows graph when clicking the second card", () => {
-    cy.get(".v-card").eq(1).click();
+    cy.contains(".v-card", "Zobacz jak PSL").click();
     cy.url().should("include", "/graf");
     cy.get("g > text").should("have.length.greaterThan", 10);
   });
 
   it("shows graph when clicking the third card", () => {
-    cy.get(".v-card").eq(2).click();
+    cy.contains(".v-card", "Albo PL2050").click();
     cy.url().should("include", "/graf");
     cy.get("g > text").should("have.length.greaterThan", 10);
   });
 
   it("shows pomoc when clicking the fourth card", () => {
-    cy.get(".v-card").eq(3).click();
+    cy.contains(".v-card", "Dodaj osoby").click();
     cy.url().should("include", "/pomoc");
   });
 });

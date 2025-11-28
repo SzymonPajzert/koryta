@@ -83,7 +83,7 @@ const { data: graph } = await useAsyncData(
 );
 
 const items = computed<ListItem[]>(() => {
-  if (!graph.value) return [];
+  if (!graph.value || !graph.value.nodeGroups || graph.value.nodeGroups.length === 0) return [];
   const result: ListItem[] = [];
   result.push({
     title: "Lista wszystkich osób",
