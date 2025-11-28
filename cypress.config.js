@@ -7,6 +7,6 @@ export default defineConfig({
     setupNodeEvents(on) {
       addMatchImageSnapshotPlugin(on);
     },
-    baseUrl: "http://localhost:3000",
+    baseUrl: "http://localhost:5003",
   },
 });

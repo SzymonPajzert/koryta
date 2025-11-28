@@ -14,7 +14,7 @@
     "postinstall": "nuxt prepare",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:e2e": "cypress open"
+    "test:e2e": "cypress run"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.3",
