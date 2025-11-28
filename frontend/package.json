@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "nuxt build",
-    "emulators": "firebase emulators:start --import=../database/current_firestore",
+    "emulators": "firebase emulators:start --project koryta-pl --import=../database/current_firestore",
     "dev": "nuxt dev",
     "dev:local": "concurrently \"npm run emulators\" \"npm run dev\"",
     "generate": "nuxt generate",

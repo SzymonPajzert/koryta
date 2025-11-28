@@ -46,7 +46,7 @@
         <v-icon>mdi-account</v-icon>
       </v-btn>
       <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
-      <v-btn text to="/edit">Edytuj</v-btn>
+      <v-btn v-if="user && mdAndUp" text to="/edit">Edytuj</v-btn>
     </template>
   </v-app-bar>
   <v-main>
