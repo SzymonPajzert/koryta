@@ -11,6 +11,7 @@ describe("home", () => {
     // See https://github.com/jaredpalmer/cypress-image-snapshot?tab=readme-ov-file#usage
     // E.g. --env updateSnapshots=true
     cy.wait(1500).get("body").matchImageSnapshot();
+    cy.percySnapshot("home-page");
   });
 
   it("displays image with a pig", () => {
@@ -24,6 +25,7 @@ describe("home", () => {
     cy.wait(2000)
       .get(".vue-apexcharts")
       .matchImageSnapshot("loaded-graph", { padding: 50 });
+    cy.percySnapshot("home-dashboard");
   });
 
   it("shows list when clicking the first card - chart", () => {

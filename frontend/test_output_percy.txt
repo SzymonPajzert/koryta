@@ -1,0 +1,368 @@
+
+> test:e2e
+> cypress run
+
+
+DevTools listening on ws://127.0.0.1:53454/devtools/browser/de0683cc-0876-4e1b-b2f6-fd6c8d2742af
+
+=====================================================================
+
+  (Run Starting)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Cypress:        15.7.0                                                                         │
+  │ Browser:        Electron 138 (headless)                                                        │
+  │ Node Version:   v22.16.0 (/Users/szymonpajzert/.nvm/versions/node/v22.16.0/bin/node)           │
+  │ Specs:          6 found (edit_entity.cy.ts, graph.cy.js, home.cy.js, list.cy.js, pomoc.cy.js,  │
+  │                 zrodla.cy.js)                                                                  │
+  │ Searched:       cypress/e2e/**/*.cy.{js,jsx,ts,tsx}                                            │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  edit_entity.cy.ts                                                               (1 of 6)
+
+
+  Entity Editing
+Starting test: redirects to login when not authenticated
+Visiting /edit
+    ✓ redirects to login when not authenticated (534ms)
+Starting test: allows registering, creating and editing an entity
+Firestore emulator reachable: 200
+    1) allows registering, creating and editing an entity
+
+
+  1 passing (14s)
+  1 failing
+
+  1) Entity Editing
+       allows registering, creating and editing an entity:
+     AssertionError: Timed out retrying after 10000ms: expected '<div#debug-connectivity>' not to contain 'Checking...'
+      at Context.eval (webpack://nuxt-app/./cypress/e2e/edit_entity.cy.ts:50:54)
+
+
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        2                                                                                │
+  │ Passing:      1                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     14 seconds                                                                       │
+  │ Spec Ran:     edit_entity.cy.ts                                                                │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/screenshots/edit_entity     (1280x720)
+     .cy.ts/Entity Editing -- allows registering, creating and editing an entity (fai               
+     led).png                                                                                       
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  graph.cy.js                                                                     (2 of 6)
+
+
+  graph
+    ✓ displays a lot of nodes (637ms)
+    shows dialog for each node
+      1) "before each" hook for "normally doesn't see a dialog"
+    NFOŚiGW
+      2) shows subgraph on button
+      3) shows subgraph by URL
+    Miasto Kraków
+      4) shows subgraph on button
+    Miasto Warszawa
+      5) "before each" hook for "pokazuje tylko interesującą część Polimex-Mostostal"
+    Wodny Park Warszawianka
+      6) shows subgraph on button
+
+
+  1 passing (7s)
+  6 failing
+
+  1) graph
+       shows dialog for each node
+         "before each" hook for "normally doesn't see a dialog":
+     TypeError: cy.filterPlace is not a function
+
+Because this error occurred during a `before each` hook we are skipping the remaining tests in the current suite: `shows dialog for each node`
+      at Context.eval (webpack://nuxt-app/./cypress/e2e/graph.cy.js:19:9)
+      at runnable.fn (http://localhost:3000/__cypress/runner/cypress_runner.js:146081:19)
+      at callFn (http://localhost:3000/__cypress/runner/cypress_runner.js:165175:21)
+      at Runnable.run (http://localhost:3000/__cypress/runner/cypress_runner.js:165162:7)
+      at <unknown> (http://localhost:3000/__cypress/runner/cypress_runner.js:171257:30)
+      at PassThroughHandlerContext.finallyHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:4042:23)
+      at PassThroughHandlerContext.tryCatcher (http://localhost:3000/__cypress/runner/cypress_runner.js:1777:23)
+      at Promise._settlePromiseFromHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:1489:31)
+      at Promise._settlePromise (http://localhost:3000/__cypress/runner/cypress_runner.js:1546:18)
+
+  2) graph
+       NFOŚiGW
+         shows subgraph on button:
+     TypeError: cy.filterPlace is not a function
+      at Context.eval (webpack://nuxt-app/./cypress/e2e/graph.cy.js:49:9)
+      at runnable.fn (http://localhost:3000/__cypress/runner/cypress_runner.js:146081:19)
+      at callFn (http://localhost:3000/__cypress/runner/cypress_runner.js:165175:21)
+      at Runnable.run (http://localhost:3000/__cypress/runner/cypress_runner.js:165162:7)
+      at <unknown> (http://localhost:3000/__cypress/runner/cypress_runner.js:171257:30)
+      at PassThroughHandlerContext.finallyHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:4042:23)
+      at PassThroughHandlerContext.tryCatcher (http://localhost:3000/__cypress/runner/cypress_runner.js:1777:23)
+      at Promise._settlePromiseFromHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:1489:31)
+      at Promise._settlePromise (http://localhost:3000/__cypress/runner/cypress_runner.js:1546:18)
+
+  3) graph
+       NFOŚiGW
+         shows subgraph by URL:
+     AssertionError: Timed out retrying after 4000ms: Expected to find element: `g > text`, but never found it.
+      at Context.eval (webpack://nuxt-app/./cypress/e2e/graph.cy.js:62:9)
+
+  4) graph
+       Miasto Kraków
+         shows subgraph on button:
+     TypeError: cy.filterPlace is not a function
+      at Context.eval (webpack://nuxt-app/./cypress/e2e/graph.cy.js:70:9)
+      at runnable.fn (http://localhost:3000/__cypress/runner/cypress_runner.js:146081:19)
+      at callFn (http://localhost:3000/__cypress/runner/cypress_runner.js:165175:21)
+      at Runnable.run (http://localhost:3000/__cypress/runner/cypress_runner.js:165162:7)
+      at <unknown> (http://localhost:3000/__cypress/runner/cypress_runner.js:171257:30)
+      at PassThroughHandlerContext.finallyHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:4042:23)
+      at PassThroughHandlerContext.tryCatcher (http://localhost:3000/__cypress/runner/cypress_runner.js:1777:23)
+      at Promise._settlePromiseFromHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:1489:31)
+      at Promise._settlePromise (http://localhost:3000/__cypress/runner/cypress_runner.js:1546:18)
+
+  5) graph
+       Miasto Warszawa
+         "before each" hook for "pokazuje tylko interesującą część Polimex-Mostostal":
+     TypeError: cy.filterPlace is not a function
+
+Because this error occurred during a `before each` hook we are skipping the remaining tests in the current suite: `Miasto Warszawa`
+      at Context.eval (webpack://nuxt-app/./cypress/e2e/graph.cy.js:82:9)
+      at runnable.fn (http://localhost:3000/__cypress/runner/cypress_runner.js:146081:19)
+      at callFn (http://localhost:3000/__cypress/runner/cypress_runner.js:165175:21)
+      at Runnable.run (http://localhost:3000/__cypress/runner/cypress_runner.js:165162:7)
+      at <unknown> (http://localhost:3000/__cypress/runner/cypress_runner.js:171257:30)
+      at PassThroughHandlerContext.finallyHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:4042:23)
+      at PassThroughHandlerContext.tryCatcher (http://localhost:3000/__cypress/runner/cypress_runner.js:1777:23)
+      at Promise._settlePromiseFromHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:1489:31)
+      at Promise._settlePromise (http://localhost:3000/__cypress/runner/cypress_runner.js:1546:18)
+
+  6) graph
+       Wodny Park Warszawianka
+         shows subgraph on button:
+     TypeError: cy.filterPlace is not a function
+      at Context.eval (webpack://nuxt-app/./cypress/e2e/graph.cy.js:96:9)
+      at runnable.fn (http://localhost:3000/__cypress/runner/cypress_runner.js:146081:19)
+      at callFn (http://localhost:3000/__cypress/runner/cypress_runner.js:165175:21)
+      at Runnable.run (http://localhost:3000/__cypress/runner/cypress_runner.js:165162:7)
+      at <unknown> (http://localhost:3000/__cypress/runner/cypress_runner.js:171257:30)
+      at PassThroughHandlerContext.finallyHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:4042:23)
+      at PassThroughHandlerContext.tryCatcher (http://localhost:3000/__cypress/runner/cypress_runner.js:1777:23)
+      at Promise._settlePromiseFromHandler (http://localhost:3000/__cypress/runner/cypress_runner.js:1489:31)
+      at Promise._settlePromise (http://localhost:3000/__cypress/runner/cypress_runner.js:1546:18)
+
+
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        10                                                                               │
+  │ Passing:      1                                                                                │
+  │ Failing:      6                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      3                                                                                │
+  │ Screenshots:  6                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     6 seconds                                                                        │
+  │ Spec Ran:     graph.cy.js                                                                      │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/screenshots/graph.cy.js     (1280x720)
+     /graph -- shows dialog for each node -- normally doesn't see a dialog -- before                
+     each hook (failed).png                                                                         
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/screenshots/graph.cy.js     (1280x720)
+     /graph -- NFOŚiGW -- shows subgraph on button (failed).png                                     
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/screenshots/graph.cy.js     (1280x720)
+     /graph -- NFOŚiGW -- shows subgraph by URL (failed).png                                        
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/screenshots/graph.cy.js     (1280x720)
+     /graph -- Miasto Kraków -- shows subgraph on button (failed).png                               
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/screenshots/graph.cy.js     (1280x720)
+     /graph -- Miasto Warszawa -- pokazuje tylko interesującą część Polimex-Mostostal               
+      -- before each hook (failed).png                                                              
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/screenshots/graph.cy.js     (1280x720)
+     /graph -- Wodny Park Warszawianka -- shows subgraph on button (failed).png                     
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  home.cy.js                                                                      (3 of 6)
+
+
+  home
+    ✓ displays four clickable cards (2387ms)
+    ✓ displays image with a pig (164ms)
+    ✓ displays dashboard (2171ms)
+    ✓ shows list when clicking the first card - chart (326ms)
+    ✓ shows graph when clicking the second card (289ms)
+    ✓ shows graph when clicking the third card (246ms)
+    ✓ shows pomoc when clicking the fourth card (202ms)
+
+
+  7 passing (6s)
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        7                                                                                │
+  │ Passing:      7                                                                                │
+  │ Failing:      0                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  2                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     5 seconds                                                                        │
+  │ Spec Ran:     home.cy.js                                                                       │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/snapshots/home.cy.js/ho    (1000x1671)
+     me -- displays four clickable cards.snap.png                                                   
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/snapshots/home.cy.js/lo      (490x365)
+     aded-graph.snap.png                                                                            
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  list.cy.js                                                                      (4 of 6)
+
+
+  list
+    ✓ screenshots (4434ms)
+
+
+  1 passing (4s)
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        1                                                                                │
+  │ Passing:      1                                                                                │
+  │ Failing:      0                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     4 seconds                                                                        │
+  │ Spec Ran:     list.cy.js                                                                       │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/snapshots/list.cy.js/li   (1000x13738)
+     st -- screenshots.snap.png                                                                     
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  pomoc.cy.js                                                                     (5 of 6)
+
+
+  list
+    ✓ screenshots (1964ms)
+
+
+  1 passing (2s)
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        1                                                                                │
+  │ Passing:      1                                                                                │
+  │ Failing:      0                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     1 second                                                                         │
+  │ Spec Ran:     pomoc.cy.js                                                                      │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/snapshots/pomoc.cy.js/l     (1000x660)
+     ist -- screenshots.snap.png                                                                    
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  zrodla.cy.js                                                                    (6 of 6)
+
+
+  list
+    ✓ screenshots (3423ms)
+
+
+  1 passing (3s)
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        1                                                                                │
+  │ Passing:      1                                                                                │
+  │ Failing:      0                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     3 seconds                                                                        │
+  │ Spec Ran:     zrodla.cy.js                                                                     │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/snapshots/zrodla.cy.js/    (1000x8023)
+     list -- screenshots.snap.png                                                                   
+
+
+=====================================================================
+
+  (Run Finished)
+
+
+       Spec                                              Tests  Passing  Failing  Pending  Skipped  
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ ✖  edit_entity.cy.ts                        00:14        2        1        1        -        - │
+  ├────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✖  graph.cy.js                              00:06       10        1        6        -        3 │
+  ├────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✔  home.cy.js                               00:05        7        7        -        -        - │
+  ├────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✔  list.cy.js                               00:04        1        1        -        -        - │
+  ├────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✔  pomoc.cy.js                              00:01        1        1        -        -        - │
+  ├────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✔  zrodla.cy.js                             00:03        1        1        -        -        - │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ✖  2 of 6 failed (33%)                      00:36       22       12        7        -        3  
+
