@@ -2,6 +2,12 @@ describe('Entity Editing', () => {
   const testEmail = `test${Date.now()}@example.com`;
   const testPassword = 'password123';
 
+  beforeEach(() => {
+    cy.on('window:console', (msg) => {
+      console.log('Browser console:', msg);
+    });
+  });
+
   it('redirects to login when not authenticated', () => {
     cy.visit('/edit');
     cy.url().should('include', '/login');
@@ -29,7 +35,7 @@ describe('Entity Editing', () => {
     
     // Select type Person (default)
     // Fill name
-    cy.get('input').eq(1).type('Test Person'); // Assuming second input is name (first is type hidden or select)
+
     // Actually, let's be more specific if possible, but Vuetify inputs are tricky.
     // Using contains for label is safer.
     cy.contains('label', 'Nazwa').parent().find('input').type('Test Person');

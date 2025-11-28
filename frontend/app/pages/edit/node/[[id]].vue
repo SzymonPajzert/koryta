@@ -113,7 +113,7 @@ definePageMeta({
 
 const route = useRoute();
 const router = useRouter();
-const db = getFirestore(useFirebaseApp(), "koryta-pl");
+const db = getFirestore(useFirebaseApp());
 
 const nodeId = route.params.id as string | undefined;
 const isNew = !nodeId;
