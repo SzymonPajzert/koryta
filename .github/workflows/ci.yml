@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Start Emulators & Run Tests
         working-directory: frontend
@@ -66,7 +66,7 @@ jobs:
           npx wait-on http://localhost:3000
           
           # Run Cypress
-          npx percy exec -- npm run test:ci -- --config baseUrl=http://localhost:3000
+          npx percy exec -- npm run test:ci
           
           # Cleanup
           kill $PREVIEW_PID
