@@ -137,6 +137,7 @@ export default defineNuxtConfig({
       org: "romb",
       project: "koryta-pl",
     },
+    telemetry: !isTest,
   },
 
   sourcemap: {
