@@ -1,7 +1,7 @@
 rules_version = '2';
 
 service cloud.firestore {
-  match /databases/koryta-pl/documents {
+  match /databases/{database}/documents {
     match /nodes/{nodeId} {
       allow read: if resource.data.type == "article" || resource.data.type == "person" || resource.data.type == "place";
     }

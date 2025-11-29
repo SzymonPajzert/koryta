@@ -94,9 +94,12 @@ const { redirect, reason } = route.query;
 const user = ref<User | null>();
 onAuthStateChanged(auth, (userIn) => {
   user.value = userIn;
-  set(dbRef(db, `user/${userIn?.uid}/displayName`), userIn?.displayName);
-  set(dbRef(db, `user/${userIn?.uid}/email`), userIn?.email);
-  set(dbRef(db, `user/${userIn?.uid}/photoURL`), userIn?.photoURL);
+  if (userIn) {
+    console.debug("User logged in:", userIn.uid, userIn.email);
+    set(dbRef(db, `user/${userIn.uid}/displayName`), userIn.displayName);
+    set(dbRef(db, `user/${userIn.uid}/email`), userIn.email);
+    set(dbRef(db, `user/${userIn.uid}/photoURL`), userIn.photoURL);
+  }
 });
 
 const login = async () => {

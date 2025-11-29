@@ -4,11 +4,10 @@
   "type": "module",
   "scripts": {
     "build": "nuxt build",
-    "emulators": "firebase emulators:start --project demo-koryta-pl --import=../database/current_firestore",
-    "emulators:test": "firebase emulators:start --project demo-koryta-pl",
+    "emulators": "firebase emulators:start --project demo-koryta-pl",
     "seed": "npx tsx scripts/seed-emulator.ts",
     "dev": "nuxt dev",
-    "dev:local": "concurrently \"npm run emulators\" \"npm run dev\"",
+    "dev:local": "concurrently \"npm run emulators\" \"USE_EMULATORS=true npm run dev\"",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
