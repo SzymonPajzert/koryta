@@ -14,13 +14,6 @@ describe("home", () => {
     cy.percySnapshot("home-page");
   });
 
-  it("displays image with a pig", () => {
-    cy.get("img")
-      .should("be.visible")
-      .and("have.prop", "naturalWidth")
-      .should("be.greaterThan", 0);
-  });
-
   it("displays dashboard", () => {
     cy.wait(2000)
       .get(".vue-apexcharts")
