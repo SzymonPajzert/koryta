@@ -1,0 +1,1 @@
+- Warto sprawdzić, czy nasze algorytmy mogą rozpoznać go jako osobę powiązaną z PiS.

@@ -18,6 +18,8 @@ class Wikipedia:
     name: str
     content_score: int
     city: str | None = None
+    owner_articles: list[str] = field(default_factory=list)
+    owner_text: str | None = None
 
 
 @dataclass

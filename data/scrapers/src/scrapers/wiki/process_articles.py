@@ -43,12 +43,16 @@ category_stats = Counter()
 class Infobox:
     inf_type: str
     fields: dict[str, str]
+    field_links: dict[str, list[str]]
     person_related: bool
     links: list[str]
 
-    def __init__(self, inf_type: str, fields: dict[str, str]) -> None:
+    def __init__(
+        self, inf_type: str, fields: dict[str, str], field_links: dict[str, list[str]]
+    ) -> None:
         self.inf_type = inf_type
         self.fields = fields
+        self.field_links = field_links
         infobox_types[inf_type] += 1
         for field in fields:
             infobox_stats[field] += 1
@@ -56,6 +60,7 @@ class Infobox:
         self.links = [
             link
             for value in fields.values()
+            # TODO replace with parser
             for link in findall("\\[\\[[^\\]]+\\]\\]", value)
         ]
 
@@ -80,14 +85,19 @@ class Infobox:
         for infobox in all_infoboxes:
             inf_type = infobox.name.split("infobox")[0].strip()
             fields = {}
+            field_links = {}
             for param in infobox.params:
                 fields[param.name.strip_code().strip()] = (
                     param.value.strip_code().strip()
                 )
+                field_links[param.name.strip_code().strip()] = [
+                    link.title for link in param.value.filter_wikilinks()
+                ]
             result.append(
                 Infobox(
                     inf_type,
                     fields,
+                    field_links,
                 )
             )
 
@@ -95,6 +105,7 @@ class Infobox:
 
 
 def get_links(wikitext, prefix=""):
+    # TODO replace this with wikiparser
     return findall("\\[\\[" + prefix + "[^\\]]+\\]\\]", wikitext)
 
 
@@ -187,6 +198,8 @@ class WikiArticle:
         score = len(self.normalized_links.intersection(WIKI_POLITICAL_LINKS))
 
         for infobox in self.infoboxes:
+            # TODO extend content score to a better logic
+            # https://github.com/SzymonPajzert/koryta/issues/170 #170
             for public_region in ["miasto", "województwo", "gmina"]:
                 if public_region in infobox.fields.get("udziałowcy", "").lower():
                     score += 1
@@ -246,11 +259,21 @@ def extract(elem: ET.Element) -> People | Company | None:
         )
     elif company:
         name = article.get_infobox(lambda i: i.fields.get("nazwa", None))
+        owner_links = article.get_infobox(
+            lambda i: i.field_links.get("udziałowcy", None)
+        )
+        owner_text = None
+        if owner_links is None or len(owner_links) == 0:
+            owner_text = article.get_infobox(lambda i: i.fields.get("udziałowcy", None))
+            if owner_text == "":
+                owner_text = None
 
         return Company(
             name=name if name is not None else article.title,
             krs=article.get_infobox(lambda i: i.fields.get("numer rejestru", None)),
             content_score=article.content_score,
+            owner_articles=owner_links,
+            owner_text=owner_text,
         )
 
     return None
