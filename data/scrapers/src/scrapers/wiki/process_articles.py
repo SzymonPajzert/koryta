@@ -1,14 +1,11 @@
 import itertools
-import json
 from dataclasses import dataclass
-import regex as re
 import typing
-from regex import findall, search
+from regex import findall, search  # TODO remove
 from collections import Counter
 from memoized_property import memoized_property
 
 import multiprocessing
-
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
 import mwparserfromhell
@@ -17,9 +14,7 @@ from scrapers.stores import DownloadableFile
 from util.polish import UPPER, LOWER
 from util.lists import WIKI_POLITICAL_LINKS
 from scrapers.wiki.util import parse_date
-
 from scrapers.stores import Context, Pipeline
-
 from entities.person import Wikipedia as People
 from entities.company import Wikipedia as Company
 
@@ -36,7 +31,6 @@ class InfoboxStats:
     count: int
     values: list[str]
 
-from scrapers.stores import LocalFile
 
 interesting_count = 0
 infobox_types = Counter()
@@ -268,7 +262,9 @@ def extract_from_article(article: WikiArticle) -> People | Company | None:
             lambda i: i.field_links.get("udziałowcy", None)
         )
         owner_text = None
-        if owner_links is None or len(owner_links) == 0:
+        if owner_links is None:
+            owner_links = []
+        if len(owner_links) == 0:
             owner_text = article.get_infobox(lambda i: i.fields.get("udziałowcy", None))
             if owner_text == "":
                 owner_text = None
@@ -317,19 +313,25 @@ def scrape_wiki(ctx: Context):
 
         tq = tqdm(total=DUMP_SIZE, unit_scale=True, smoothing=0.1)
         prev = 0
-        
+
         def article_generator():
             nonlocal prev
             for event, elem in ET.iterparse(f, events=("end",)):
                 current_pos = f.tell()
                 tq.update(current_pos - prev)
                 prev = current_pos
-                
+
                 if elem.tag.endswith("page"):
-                    title = elem.findtext("{http://www.mediawiki.org/xml/export-0.11/}title")
-                    revision = elem.find("{http://www.mediawiki.org/xml/export-0.11/}revision")
+                    title = elem.findtext(
+                        "{http://www.mediawiki.org/xml/export-0.11/}title"
+                    )
+                    revision = elem.find(
+                        "{http://www.mediawiki.org/xml/export-0.11/}revision"
+                    )
                     if title and revision:
-                        wikitext = revision.findtext("{http://www.mediawiki.org/xml/export-0.11/}text")
+                        wikitext = revision.findtext(
+                            "{http://www.mediawiki.org/xml/export-0.11/}text"
+                        )
                         if wikitext:
                             yield (title, wikitext)
                     elem.clear()
@@ -337,15 +339,17 @@ def scrape_wiki(ctx: Context):
         # Use multiprocessing to speed up parsing
         # We use a pool of workers to process articles in parallel
         # imap_unordered is used to keep memory usage low and process as we go
-        with multiprocessing.Pool(processes=10) as pool:
-             for entity in pool.imap_unordered(process_article_worker, article_generator(), chunksize=20):
-                 if entity:
-                     ctx.io.output_entity(entity)
-                     
-                     # Update stats (approximate since we don't have access to global counters in workers)
-                     # If we really need stats, we should return them from worker and aggregate here.
-                     # For now, we skip detailed stats update to avoid complexity or use a callback if needed.
-                     # But since we are iterating, we can just count here if the entity has info.
-                     pass
+        with multiprocessing.Pool(processes=8) as pool:
+            for entity in pool.imap_unordered(
+                process_article_worker, article_generator(), chunksize=1000
+            ):
+                if entity:
+                    ctx.io.output_entity(entity)
+
+                    # Update stats (approximate since we don't have access to global counters in workers)
+                    # If we really need stats, we should return them from worker and aggregate here.
+                    # For now, we skip detailed stats update to avoid complexity or use a callback if needed.
+                    # But since we are iterating, we can just count here if the entity has info.
+                    pass
 
     print("🎉 Processing complete.")

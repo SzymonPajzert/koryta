@@ -14,9 +14,9 @@ class KRS:
 
 @dataclass
 class Wikipedia:
-    krs: str
     name: str
     content_score: int
+    krs: str | None
     city: str | None = None
     owner_articles: list[str] = field(default_factory=list)
     owner_text: str | None = None
