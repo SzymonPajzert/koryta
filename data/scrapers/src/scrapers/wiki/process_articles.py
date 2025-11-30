@@ -298,7 +298,7 @@ def process_article_worker(args):
         return None
 
 
-@Pipeline.setup(output_order={"people_wiki": ["content_score DESC"]})
+@Pipeline.setup()
 def scrape_wiki(ctx: Context):
     """
     Parses the Wikipedia dump, filters for target categories,
@@ -344,7 +344,7 @@ def scrape_wiki(ctx: Context):
                 process_article_worker, article_generator(), chunksize=1000
             ):
                 if entity:
-                    ctx.io.output_entity(entity)
+                    ctx.io.output_entity(entity, sort_by=["content_score"])
 
                     # Update stats (approximate since we don't have access to global counters in workers)
                     # If we really need stats, we should return them from worker and aggregate here.

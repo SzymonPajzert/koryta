@@ -176,7 +176,7 @@ class IO(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def output_entity(self, entity):
+    def output_entity(self, entity, sort_by=[]):
         """
         Writes a single entity of the core type to the configured output.
         """
@@ -244,14 +244,12 @@ class Pipeline:
         self,
         process: Callable[[Context], pd.DataFrame],
         filename: str | None = None,
-        output_order: dict[str, list[str]] = {},
         use_rejestr_io=False,
     ):
         """
         Initializes the Pipeline decorator.
 
         Args:
-            output_order: Specifies the sorting order for the output collection.
             use_rejestr_io: If True, the pipeline requires access to the RejestrIO interface.
         """
         # Ensure, that the function that is decorated is a pipeline.
@@ -260,7 +258,6 @@ class Pipeline:
 
         self._process = process
         self.filename = filename
-        self.output_order = output_order
         self.rejestr_io = use_rejestr_io
 
     def process(self, ctx: Context):
@@ -288,16 +285,11 @@ class Pipeline:
 
     @staticmethod
     def setup(
-        output_order: dict[str, list[str]] = {},
         use_rejestr_io=False,
     ):
-        if len(output_order) > 0:
-            print("Missing implementation")
 
         def wrapper(func):
-            pipeline = Pipeline(
-                func, output_order=output_order, use_rejestr_io=use_rejestr_io
-            )
+            pipeline = Pipeline(func, use_rejestr_io=use_rejestr_io)
             return pipeline
 
         return wrapper
