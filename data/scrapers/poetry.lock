@@ -2924,6 +2924,17 @@ files = [
 ]
 
 [[package]]
+name = "memoized-property"
+version = "1.0.3"
+description = "A simple python decorator for defining properties that only run their fget function once"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "memoized-property-1.0.3.tar.gz", hash = "sha256:4be4d0209944b9b9b678dae9d7e312249fe2e6fb8bdc9bdaa1da4de324f0fcf5"},
+]
+
+[[package]]
 name = "mistune"
 version = "3.1.4"
 description = "A sane and fast Markdown parser with useful plugins and renderers"
@@ -3066,6 +3077,57 @@ files = [
     {file = "murmurhash-1.0.13-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:6e7250c095592ab9fc62a6d95728a15c33010f9347d9b3263dcffb33a89d3b7a"},
     {file = "murmurhash-1.0.13-cp39-cp39-win_amd64.whl", hash = "sha256:3fff9b252b7abb737a7e9baf5a466a2abecb21be3a86a3d452a5696ee054bfcc"},
     {file = "murmurhash-1.0.13.tar.gz", hash = "sha256:737246d41ee00ff74b07b0bd1f0888be304d203ce668e642c86aa64ede30f8b7"},
+]
+
+[[package]]
+name = "mwparserfromhell"
+version = "0.7.2"
+description = "MWParserFromHell is a parser for MediaWiki wikicode"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "mwparserfromhell-0.7.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:09ba9480b5714d0016610bc16d714f919b1600f7d605a9f0cfee008618d380ea"},
+    {file = "mwparserfromhell-0.7.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:95281cada10011728f0203c7306ec903959e7b18d39b4b65af9f4071ffe5b312"},
+    {file = "mwparserfromhell-0.7.2-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:2cfa66c619cf91867c96581ab7bb5e39553bf5895020369a6eada1368a6e4443"},
+    {file = "mwparserfromhell-0.7.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:60e4d7f307ad093626ab81c65b28c403561c5f9bd68c9fa183e75aa0e7d11de7"},
+    {file = "mwparserfromhell-0.7.2-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:6cdcc5f54a8cc86d507a678ac408975fce74b11320d0b31ab3c3691b99e38711"},
+    {file = "mwparserfromhell-0.7.2-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:355d792992447f348c8a5573a89cdc62d4f58f33608d9bd7403fec83e384cecf"},
+    {file = "mwparserfromhell-0.7.2-cp310-cp310-win32.whl", hash = "sha256:ef17d069ccbaecc830c30e8ac6a27d51576a36e6829bac19af0c347f2d2ed495"},
+    {file = "mwparserfromhell-0.7.2-cp310-cp310-win_amd64.whl", hash = "sha256:a9cf2da9d50823f10212bc2a05bb0bba201625a7bce317d003fe4cf34d22e312"},
+    {file = "mwparserfromhell-0.7.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:def35318e734e684cf28d20bf81d586514463bb01c6946bd8a5ec3a2ffc28660"},
+    {file = "mwparserfromhell-0.7.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:ba3dabf3145a45f4cf8419735018e4e84101b72df0aa045eca7ca5529f3d0f5f"},
+    {file = "mwparserfromhell-0.7.2-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d51c59fa0c994d5df78fa72cb57107f6e8bac919cdcfd6b0e3c23203e0272038"},
+    {file = "mwparserfromhell-0.7.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b31789c4d255c027d3075b935a5020efde547dbfbc57ea20abb16d842c52411a"},
+    {file = "mwparserfromhell-0.7.2-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:beaf750c25d0d2fc0de8f6b301e96c6723630a9f6b2ba02ce65d642021bfbf28"},
+    {file = "mwparserfromhell-0.7.2-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:cd8549a2250959a3a2570e24783bfe682d170b02d06ad7727f29e29f4e672f65"},
+    {file = "mwparserfromhell-0.7.2-cp311-cp311-win32.whl", hash = "sha256:7713a695a64ca71e627ccc7b2a393a8aadf9b94f83600b4874ee80fbe834fbfd"},
+    {file = "mwparserfromhell-0.7.2-cp311-cp311-win_amd64.whl", hash = "sha256:b9715e7d62adf80e7df80526b6eda873eca55826d16d1c6e197fe0ca506d31fc"},
+    {file = "mwparserfromhell-0.7.2-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:bc75b1de65ce5b05823942398f77265650a29e13cff6495a15d3c3573cbf7b1a"},
+    {file = "mwparserfromhell-0.7.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:efe6e5255379ff66a08d2102004b26a456692dafbab0cb1e52bed275a43f1c4c"},
+    {file = "mwparserfromhell-0.7.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:680c96019a62d6f815dad4e7c921383284485ba1f69353ed7ead02d3f232edfc"},
+    {file = "mwparserfromhell-0.7.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1c992003d7a053963006c94ce7eeaf509575c02bf132181da8130086c18ad5df"},
+    {file = "mwparserfromhell-0.7.2-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:2a387532607b4d381baba5c8079f75e5a0201da2506ecd0657034c6b40c8d1e1"},
+    {file = "mwparserfromhell-0.7.2-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:b34e5bcd5d7c1c80066abe601e39043f86bd43a581b7c6b46299e84e045e1c83"},
+    {file = "mwparserfromhell-0.7.2-cp312-cp312-win32.whl", hash = "sha256:33115b533e789935c1efd4f32a4b6082b597198499b176a05dd73a94a37232be"},
+    {file = "mwparserfromhell-0.7.2-cp312-cp312-win_amd64.whl", hash = "sha256:4bd6e388b5e0f247c3b2484acb2a4bec4f7ba81598fa25956ec93b7abbd17fbe"},
+    {file = "mwparserfromhell-0.7.2-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:6032df04279c38b9eaaa332a608dd8241aa31f6f034d6ecdba1b4582fbb548b9"},
+    {file = "mwparserfromhell-0.7.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:6316f6bd1ca8451b312399b44b0b75096981f0fe92fbea108bade29af66bea9b"},
+    {file = "mwparserfromhell-0.7.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:535c2e8b9aedf3b00fbbb9942df4a659bc66dfb8feb6fca114e97cef48d64680"},
+    {file = "mwparserfromhell-0.7.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b5345e6b42db45d48162c7bad9b2ce71b6a5ba2e2dea3987eb82b991e5cb9918"},
+    {file = "mwparserfromhell-0.7.2-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:fef24a97b0b08f02646be2e018284884f8e6cb9740eea60a10404b5369c04ef6"},
+    {file = "mwparserfromhell-0.7.2-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:4ed1d61927d0ad618352732dc2a2218f3b14e19a6ee6e490b42a6ed535acc301"},
+    {file = "mwparserfromhell-0.7.2-cp313-cp313-win32.whl", hash = "sha256:0661642c78f8d13369d09401a5c4240f4c91b5af1317e66d7f6270b8b0aecd85"},
+    {file = "mwparserfromhell-0.7.2-cp313-cp313-win_amd64.whl", hash = "sha256:52f193b59c1b6109b210ad85536ce3c569861c3bb9da7b1875618d8ba54c396f"},
+    {file = "mwparserfromhell-0.7.2-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:e7b1fef77217efc2d23fb683a17c1042ba9c8a071af751fafea8e5464ffdeca5"},
+    {file = "mwparserfromhell-0.7.2-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:2d7efeeb636e7363964586b6a960bc24a387fa27910d6f919e2f75b9365872cd"},
+    {file = "mwparserfromhell-0.7.2-cp39-cp39-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:15baa2be5610a48f33d018b4c0fbcd2040a4e9450393ffec54bc4fbfb5e75521"},
+    {file = "mwparserfromhell-0.7.2-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:2b9549824664f92bdbb4aaff65379c5bc455a4c2bfe2cef2ba2f1cb01a24d643"},
+    {file = "mwparserfromhell-0.7.2-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:e54b03e04adf908c930a0038d036f9b182952821f211a325920a46d6720f695d"},
+    {file = "mwparserfromhell-0.7.2-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:17165898020db7333a71d222cc434f8f5ade893374425b51954f53268466c832"},
+    {file = "mwparserfromhell-0.7.2-cp39-cp39-win32.whl", hash = "sha256:eefbb248976d61db29ff3f34fe6c0556b3b7e70ac145cbd2d75c7fd16f9bb4d5"},
+    {file = "mwparserfromhell-0.7.2-cp39-cp39-win_amd64.whl", hash = "sha256:8797fd2891df1d35d057fe9c93eb834d21d5c90036dcaccf993db3de5a876c9f"},
+    {file = "mwparserfromhell-0.7.2.tar.gz", hash = "sha256:f4193072e9ea93b9e88f772f60a02125c0602d32890d0bbdcb275ed58c8b3763"},
 ]
 
 [[package]]
@@ -6261,4 +6323,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "d5676740006a08d779817b3cdad6e28597b539c30919483089571a6a931ad435"
+content-hash = "d10bdab970c263ca793fd72b4d012b628de6a86ed3f768ac79d567247648102a"

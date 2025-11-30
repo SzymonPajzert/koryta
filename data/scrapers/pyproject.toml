@@ -118,6 +118,8 @@ dependencies = [
     "seaborn (>=0.13.2,<0.14.0)",
     "scipy (>=1.16.3,<2.0.0)",
     "pytest-check (>=2.6.0,<3.0.0)",
+    "memoized-property (>=1.0.3,<2.0.0)",
+    "mwparserfromhell (>=0.7.2,<0.8.0)",
 ]
 
 [project.scripts]

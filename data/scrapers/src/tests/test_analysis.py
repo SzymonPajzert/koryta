@@ -78,7 +78,7 @@ def test_not_duplicated(df_all):
     for column, value in list_values(["krs_name", "pkw_name", "wiki_name"]):
         # Make sure that peeple are not duplicated in the output
         # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
-        assert len(df_all[df_all[column] == value]) == 1
+        assert len(df_all[df_all[column] == value]) == 1, f"{column} == {value}"
 
 
 def get_words(name):

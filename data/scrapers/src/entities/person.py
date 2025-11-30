@@ -63,6 +63,6 @@ class Wikipedia:
     party: str
     birth_iso8601: str | None
     birth_year: int | None
-    infobox: str
+    infoboxes: list[str]
     content_score: int
     links: list[str]

@@ -1,11 +1,14 @@
 import itertools
 from dataclasses import dataclass
 import regex as re
+import typing
 from regex import findall, search
 from collections import Counter
+from memoized_property import memoized_property
 
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
+import mwparserfromhell
 
 from scrapers.stores import DownloadableFile
 from util.polish import UPPER, LOWER
@@ -15,7 +18,7 @@ from scrapers.wiki.util import parse_date
 from scrapers.stores import Context, Pipeline
 
 from entities.person import Wikipedia as People
-from entities.company import KRS as Company
+from entities.company import Wikipedia as Company
 
 WIKI_DUMP = DownloadableFile(
     "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2",
@@ -40,60 +43,70 @@ category_stats = Counter()
 class Infobox:
     inf_type: str
     fields: dict[str, str]
+    field_links: dict[str, list[str]]
     person_related: bool
-    company_related: bool
+    links: list[str]
 
-    def __init__(self, inf_type, fields) -> None:
+    def __init__(
+        self, inf_type: str, fields: dict[str, str], field_links: dict[str, list[str]]
+    ) -> None:
         self.inf_type = inf_type
         self.fields = fields
+        self.field_links = field_links
         infobox_types[inf_type] += 1
         for field in fields:
             infobox_stats[field] += 1
         self.person_related = "imię i nazwisko" in fields
-        self.company_related = False
+        self.links = [
+            link
+            for value in fields.values()
+            # TODO replace with parser
+            for link in findall("\\[\\[[^\\]]+\\]\\]", value)
+        ]
 
-    @property
+    @memoized_property
+    def company_related(self) -> bool:
+        return "rejestr" in self.fields
+
+    @memoized_property
     def birth_iso(self):
-        v = getattr(self, "_birth_iso", None)
-        if v is not None:
-            return v
+        return parse_date(self.fields.get("data urodzenia", ""))
 
-        self._birth_iso = parse_date(self.fields.get("data urodzenia", ""))
-        return self._birth_iso
-
-    @property
+    @memoized_property
     def birth_year(self):
-        ba = self.birth_iso
-        if ba is not None:
-            return int(ba.split("-")[0])
+        return int(self.birth_iso.split("-")[0]) if self.birth_iso else None
 
     @staticmethod
-    def parse(wikitext):
-        all_infoboxes = findall("{{([^{{]+) infobox(.*)}}+", wikitext, re.DOTALL)
-        if len(all_infoboxes) == 0:
-            return None
+    def parse(wikitext) -> list["Infobox"]:
+        parsed = mwparserfromhell.parse(wikitext)
+        all_infoboxes = parsed.filter_templates(matches=lambda t: "infobox" in t.name)
+
         result = []
-        for inf_type, infobox in all_infoboxes:
-            fields_list = infobox.strip().split("|")
+        for infobox in all_infoboxes:
+            inf_type = infobox.name.split("infobox")[0].strip()
             fields = {}
-            for field_str in fields_list:
-                if "=" in field_str:
-                    key, value = field_str.split("=", 1)
-                    fields[key.strip()] = value.strip()
+            field_links = {}
+            for param in infobox.params:
+                fields[param.name.strip_code().strip()] = (
+                    param.value.strip_code().strip()
+                )
+                field_links[param.name.strip_code().strip()] = [
+                    link.title for link in param.value.filter_wikilinks()
+                ]
             result.append(
                 Infobox(
                     inf_type,
                     fields,
+                    field_links,
                 )
             )
 
-        if len(result) == 0:
-            return Infobox("unknown", {})
+        return result
 
-        if len(result) > 1:
-            print(result)
 
-        return result[0]
+def get_links(wikitext, prefix=""):
+    # TODO replace this with wikiparser
+    return findall("\\[\\[" + prefix + "[^\\]]+\\]\\]", wikitext)
 
 
 def safe_middle_name_pattern(title):
@@ -102,26 +115,30 @@ def safe_middle_name_pattern(title):
     return f"'''({title.replace(' ', f'[ {UPPER}{LOWER}]*')})'''"
 
 
-@dataclass
 class WikiArticle:
     title: str
     categories: list[str]
     links: list[str]
-    infobox: Infobox
-    osoba_imie: bool
+    infoboxes: list[Infobox]
 
-    def __post_init__(self):
-        def normalized():
-            for entry in itertools.chain(self.categories, self.links):
-                n = entry.rstrip("]").lstrip("[").split("|")[0]
-                if n.isdigit():
-                    continue
-                yield n
+    def __init__(self, title, categories, links, infoboxes):
+        self.title = title
+        self.categories = categories
+        self.links = links
+        self.infoboxes = infoboxes
 
-        self.normalized_links = set(normalized())
-        self.content_score = len(
-            self.normalized_links.intersection(WIKI_POLITICAL_LINKS)
-        )
+    @staticmethod
+    def extend_name(title, wikitext):
+        pattern = safe_middle_name_pattern(title)
+        try:
+            full_name = search(pattern, wikitext)
+            if full_name is not None and full_name.group(1) != title:
+                # print(f"Changing title from {title} to {full_name.group(1)}")
+                title = full_name.group(1)
+        except Exception as e:
+            print(pattern, title, "exception while processing")
+            raise e
+        return title
 
     @staticmethod
     def parse(elem: ET.Element):
@@ -139,52 +156,83 @@ class WikiArticle:
             print(f"Failed to find text in {title}")
             return None
 
-        infobox = Infobox.parse(wikitext)
-        if infobox is not None:
-            pattern = safe_middle_name_pattern(title)
-            try:
-                full_name = search(pattern, wikitext)
-                if full_name is not None and full_name.group(1) != title:
-                    # print(f"Changing title from {title} to {full_name.group(1)}")
-                    title = full_name.group(1)
-            except Exception as e:
-                print(pattern, title, "exception while processing")
-                raise e
+        infoboxes = Infobox.parse(wikitext)
+        # Perform search for second name or a full name of the company
+        title = WikiArticle.extend_name(title, wikitext)
 
         return WikiArticle(
             title=title,
-            categories=findall("\\[\\[Kategoria:[^\\]]+\\]\\]", wikitext),
-            links=findall("\\[\\[[^\\]]+\\]\\]", wikitext),
-            infobox=infobox if infobox is not None else Infobox("unknown", {}),
-            osoba_imie="imię i nazwisko" in wikitext,
+            categories=get_links(wikitext, prefix="Kategoria:"),
+            links=get_links(wikitext),
+            infoboxes=infoboxes,
         )
 
-    def about_person(self):
-        def check():
-            if self.content_score > 0:
-                return True
-            if self.infobox is None:
-                return False
-            if self.infobox.person_related:
-                year = self.infobox.birth_year
-                if year and year < 1930:
-                    return False
-                return True
-            return False
+    def get_infobox[T](self, extractor: typing.Callable[[Infobox], T | None]):
+        for infobox in self.infoboxes:
+            result = extractor(infobox)
+            if result is not None:
+                return result
+        raise ValueError("No infobox found")
 
-        about_person = check() and self.content_score > 0
-        if about_person:
+    @memoized_property
+    def normalized_links(self):
+        def generate():
+            for entry in itertools.chain(
+                self.categories,
+                self.links,
+                # Extract links from infobox if they exist
+                *[infobox.links for infobox in self.infoboxes],
+            ):
+                n = entry.rstrip("]").lstrip("[").split("|")[0]
+                if n.isdigit():
+                    continue
+                yield n
+
+        return set(generate())
+
+    @memoized_property
+    def content_score(self) -> int:
+        """
+        When higher than 0, it indicates that this article has political conotations
+        """
+        score = len(self.normalized_links.intersection(WIKI_POLITICAL_LINKS))
+
+        for infobox in self.infoboxes:
+            # TODO extend content score to a better logic
+            # https://github.com/SzymonPajzert/koryta/issues/170 #170
+            for public_region in ["miasto", "województwo", "gmina"]:
+                if public_region in infobox.fields.get("udziałowcy", "").lower():
+                    score += 1
+
+        if score > 0:
+            global interesting_count
+            interesting_count += 1
             for cat in self.normalized_links:
                 if cat in WIKI_POLITICAL_LINKS:
                     continue
-                category_stats[cat] += 1 + self.content_score
-        return about_person
+                category_stats[cat] += 1 + score
 
-    def about_company(self):
-        if self.infobox is None:
+        return score
+
+    @memoized_property
+    def about_person(self):
+        if len(self.infoboxes) == 0:
             return False
-        if self.infobox.company_related:
-            return True
+        for infobox in self.infoboxes:
+            if infobox.person_related:
+                year = infobox.birth_year
+                if year and year < 1930:
+                    return False
+                return True
+        return False
+
+    @memoized_property
+    def about_company(self):
+        if len(self.infoboxes) == 0:
+            return False
+        for infobox in self.infoboxes:
+            if infobox.company_related:
+                return True
         return False
 
 
@@ -193,26 +241,39 @@ def extract(elem: ET.Element) -> People | Company | None:
     if article is None:
         return None
 
-    # article.write_to_test(elem)
-    global interesting_count
+    person = article.about_person
+    company = article.about_company
 
-    if article.about_person():
-        interesting_count += 1
+    if person and company:
+        raise ValueError("Conflict of mapping to both person and company")
+    elif person:
         return People(
             source=f"https://pl.wikipedia.org/wiki/{article.title}",
             full_name=article.title,
-            party=article.infobox.fields.get("partia", ""),
-            birth_iso8601=article.infobox.birth_iso,
-            birth_year=article.infobox.birth_year,
-            infobox=article.infobox.inf_type,
+            party=article.get_infobox(lambda i: i.fields.get("partia", "")),
+            birth_iso8601=article.get_infobox(lambda i: i.birth_iso),
+            birth_year=article.get_infobox(lambda i: i.birth_year),
+            infoboxes=[i.inf_type for i in article.infoboxes],
             content_score=article.content_score,
             links=[],
         )
+    elif company:
+        name = article.get_infobox(lambda i: i.fields.get("nazwa", None))
+        owner_links = article.get_infobox(
+            lambda i: i.field_links.get("udziałowcy", None)
+        )
+        owner_text = None
+        if owner_links is None or len(owner_links) == 0:
+            owner_text = article.get_infobox(lambda i: i.fields.get("udziałowcy", None))
+            if owner_text == "":
+                owner_text = None
 
-    if article.about_company():
         return Company(
-            name=article.title,
-            krs=article.infobox.fields.get("krs", ""),
+            name=name if name is not None else article.title,
+            krs=article.get_infobox(lambda i: i.fields.get("numer rejestru", None)),
+            content_score=article.content_score,
+            owner_articles=owner_links,
+            owner_text=owner_text,
         )
 
     return None
