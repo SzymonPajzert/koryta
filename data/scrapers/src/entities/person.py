@@ -60,7 +60,7 @@ class Wikipedia:
 
     source: str
     full_name: str
-    party: str
+    party: str | None
     birth_iso8601: str | None
     birth_year: int | None
     infoboxes: list[str]

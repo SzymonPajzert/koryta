@@ -12,13 +12,15 @@ class EntityDumper:
     dbs = []
     used = dict()
     inmemory = dict()
+    sort_keys = dict()
 
-    def insert_into(self, v):
+    def insert_into(self, v, sort_by):
         mod = type(v).__module__.removeprefix("entities.")
         n = mod + "." + type(v).__name__
         n = n.replace(".", "_")
         if n not in self.inmemory:
             self.inmemory[n] = []
+            self.sort_keys[n] = sort_by
         self.inmemory[n].append(v)
 
     def dump_pandas(self):
@@ -26,6 +28,13 @@ class EntityDumper:
             name = k.lower()
             print(f"Writing {name}...")
             df = pd.DataFrame.from_records([asdict(i) for i in v])
+            if len(self.sort_keys[k]) > 0:
+                df.sort_values(
+                    by=self.sort_keys[k],
+                    inplace=True,
+                    ignore_index=True,
+                    ascending=False,
+                )
             df.to_json(
                 os.path.join(VERSIONED_DIR, f"{name}.jsonl"),
                 index=False,

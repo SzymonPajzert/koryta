@@ -64,8 +64,8 @@ class Conductor(IO):
 
         raise NotImplementedError()
 
-    def output_entity(self, entity):
-        self.dumper.insert_into(entity)
+    def output_entity(self, entity, sort_by=[]):
+        self.dumper.insert_into(entity, sort_by)
 
 
 def setup_context(use_rejestr_io: bool):
