@@ -172,7 +172,7 @@ class WikiArticle:
             result = extractor(infobox)
             if result is not None:
                 return result
-        raise ValueError("No infobox found")
+        return None
 
     @memoized_property
     def normalized_links(self):
