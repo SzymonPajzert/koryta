@@ -27,6 +27,7 @@ df = pd.DataFrame(people_rows())
 )
 def test_check_no_nulls(column):
     # Known data gaps that we accept for now.
+    # TODO resolve them
     known_failures = {
         ("1994", "samorząd", "party"),
         ("2019", "europarlament", "party"),

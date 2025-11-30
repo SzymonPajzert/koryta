@@ -117,6 +117,19 @@ class WikiArticle:
         self.infoboxes = infoboxes
 
     @staticmethod
+    def extend_name(title, wikitext):
+        pattern = safe_middle_name_pattern(title)
+        try:
+            full_name = search(pattern, wikitext)
+            if full_name is not None and full_name.group(1) != title:
+                # print(f"Changing title from {title} to {full_name.group(1)}")
+                title = full_name.group(1)
+        except Exception as e:
+            print(pattern, title, "exception while processing")
+            raise e
+        return title
+
+    @staticmethod
     def parse(elem: ET.Element):
         title = elem.findtext("{http://www.mediawiki.org/xml/export-0.11/}title")
         revision = elem.find("{http://www.mediawiki.org/xml/export-0.11/}revision")
@@ -133,17 +146,8 @@ class WikiArticle:
             return None
 
         infoboxes = Infobox.parse(wikitext)
-
-        # TODO side function
-        pattern = safe_middle_name_pattern(title)
-        try:
-            full_name = search(pattern, wikitext)
-            if full_name is not None and full_name.group(1) != title:
-                # print(f"Changing title from {title} to {full_name.group(1)}")
-                title = full_name.group(1)
-        except Exception as e:
-            print(pattern, title, "exception while processing")
-            raise e
+        # Perform search for second name or a full name of the company
+        title = WikiArticle.extend_name(title, wikitext)
 
         return WikiArticle(
             title=title,
