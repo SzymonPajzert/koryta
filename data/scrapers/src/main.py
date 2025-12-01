@@ -2,6 +2,7 @@
 
 import os
 import duckdb
+import inspect
 
 from stores.download import FileSource
 from stores.firestore import FirestoreIO
@@ -9,16 +10,25 @@ from stores.rejestr import Rejestr
 from stores.duckdb import EntityDumper
 from stores.storage import Client as CloudStorageClient
 import stores.file as file
-from scrapers.stores import IO, File, DataRef, LocalFile, set_context
-from scrapers.stores import FirestoreCollection, Pipeline
-from scrapers.stores import DownloadableFile, CloudStorage
 
-from scrapers.stores import Context
+from scrapers.stores import (
+    IO,
+    File,
+    DataRef,
+    LocalFile,
+    set_context,
+    FirestoreCollection,
+    Pipeline,
+    DownloadableFile,
+    CloudStorage,
+)
+
+from scrapers.stores import Context, Pipeline, PipelineModel
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
 from scrapers.pkw.process import main as scrape_pkw_func
 from scrapers.krs.process import extract_people as scrape_krs_people_func
-from scrapers.krs.process import extract_companies as scrape_krs_companies_func
+from scrapers.krs.process import extract_companies as CompaniesKRS
 from analysis.people import people_merged as people_merged_func
 
 
@@ -84,6 +94,15 @@ def setup_context(use_rejestr_io: bool):
     return ctx, dumper
 
 
+def create_model(pipeline_model: PipelineModel) -> Pipeline:
+    for annotation, pipeline_type in pipeline_model.__annotations__.items():
+        if issubclass(pipeline_type, PipelineModel):
+            print(annotation, pipeline_type)
+            pipeline_model.__dict__[annotation] = pipeline_type()
+
+    return Pipeline(pipeline_model.process)
+
+
 def setup_pipeline(pipeline_object: Pipeline):
     def func():
         ctx, dumper = setup_context(pipeline_object.rejestr_io)
@@ -119,7 +138,9 @@ def scrape_krs_people():
 
 
 def scrape_krs_companies():
-    f = setup_pipeline(scrape_krs_companies_func)
+    ctx, dumper = setup_context(False)
+    pipeline = create_model(CompaniesKRS())
+    f = setup_pipeline(pipeline)
     f()
 
 
@@ -136,7 +157,7 @@ def main():
         scrape_wiki_func.process(ctx)
         scrape_pkw_func.process(ctx)
         scrape_krs_people_func.process(ctx)
-        scrape_krs_companies_func.process(ctx)
+        create_model(CompaniesKRS()).process(ctx)
         people_merged_func.process(ctx)
         print("Finished processing")
     finally:
