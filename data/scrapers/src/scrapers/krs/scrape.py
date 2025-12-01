@@ -8,15 +8,9 @@ import json
 
 from scrapers.stores import Context
 from scrapers.krs import data
-from scrapers.krs.process import iterate_blobs, KRS
+from scrapers.krs.list import iterate_blobs, KRS
+from scrapers.krs.graph import CompanyGraph
 from stores.storage import upload_to_gcs, list_blobs
-
-
-@dataclass(frozen=True)
-class Company:
-    krs: KRS
-    name: str
-    parent: KRS
 
 
 def save_org_connections(
@@ -42,111 +36,6 @@ def save_org_connections(
             f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne",
             0.05,
         )
-
-
-# If relation is passive and one of this type, it's a child.
-PARENT_RELATION = {
-    "KRS_ONLY_SHAREHOLDER",
-    "KRS_SHAREHOLDER",
-    "KRS_SUPERVISION",
-    "KRS_FOUNDER",
-}
-
-# If relation is passive and one of this type, it's not a child.
-IGNORED_PARENT = {
-    "KRS_BOARD",  # The company itself is the board member
-    "KRS_MEMBER",  # The company is a member of a group, not interesting
-    "KRS_COMMISSIONER",  # The company is probably liquidated
-    "KRS_RECEIVER",  # The company is probably liquidated
-    "KRS_GENERAL_PARTNER",  # The company is probably liquidated
-    "KRS_RESTRUCTURIZATOR",  # The company is probably liquidated
-}
-
-
-@dataclass(frozen=True)
-class QueryRelation:
-    relation: str
-    direction: str
-
-    @staticmethod
-    def from_rejestrio(dict):
-        return QueryRelation(
-            relation=dict["typ"],
-            direction=dict["kierunek"],
-        )
-
-    def is_child(self):
-        if self.direction == "AKTYWNY":
-            return False
-
-        if self.relation in IGNORED_PARENT:
-            return False
-
-        if self.relation not in PARENT_RELATION:
-            raise ValueError(f"Unknown type: {self.relation} {self.direction}")
-
-        return self.direction == "PASYWNY" and self.relation in PARENT_RELATION
-
-
-class CompanyGraph:
-    def __init__(self):
-        self.companies = dict()
-        self.children: dict[KRS, list[KRS]] = dict()
-
-        for blob_name, content in iterate_blobs("rejestr.io"):
-            if "aktualnosc_" not in blob_name:
-                continue
-            data = json.loads(content)
-            for item in data:
-                if item.get("typ") != "organizacja":
-                    continue
-
-                krs = KRS(item["numery"]["krs"])
-                parent = KRS.from_blob_name(blob_name)
-                conn_type = QueryRelation.from_rejestrio(
-                    item["krs_powiazania_kwerendowane"][0]
-                )
-
-                if not conn_type.is_child():
-                    continue
-
-                self.companies[krs] = Company(
-                    krs=krs,
-                    name=item["nazwy"]["pelna"],
-                    parent=parent,
-                )
-                self.children[parent] = self.children.get(parent, []) + [krs]
-
-    def all_descendants(self, krss: typing.Iterable[KRS]):
-        descendants: set[KRS] = set()
-        todo = set(krss)
-        while todo:
-            krs = todo.pop()
-            descendants.add(krs)
-            if krs in self.children:
-                todo.update(set(self.children[krs]) - descendants)
-        return descendants
-
-
-def child_companies() -> set[Company]:
-    result: set[Company] = set()
-    for blob_name, content in iterate_blobs("rejestr.io"):
-        if "aktualnosc_" not in blob_name:
-            continue
-        data = json.loads(content)
-        try:
-            for item in data:
-                if item.get("typ") == "organizacja":
-                    result.add(
-                        Company(
-                            krs=KRS(item["numery"]["krs"]),
-                            name=item["nazwy"]["pelna"],
-                            parent=KRS.from_blob_name(blob_name),
-                        )
-                    )
-        except KeyError as e:
-            print(f"  [ERROR] Could not process {blob_name}: {e}")
-    return result
 
 
 def scrape_rejestrio(ctx: Context):

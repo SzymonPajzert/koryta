@@ -2,7 +2,7 @@ import pytest
 import regex as re
 
 from main import setup_context
-from scrapers.krs.process import KRS
+from scrapers.krs.list import KRS
 from analysis.people import people_merged
 
 # TODO from util.lists import IGNORE_FAILURES
