@@ -1,8 +1,9 @@
 import json
 from datetime import datetime, timedelta
 
-from scrapers.stores import Pipeline, Context, CloudStorage
+from scrapers.stores import Pipeline, PipelineModel, Context, CloudStorage
 
+from scrapers.krs.graph import QueryRelation
 from entities.person import KRS as KrsPerson
 from entities.company import KRS as KrsCompany
 from entities.company import ManualKRS as KRS
@@ -86,37 +87,73 @@ def extract_people(ctx: Context):
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
 
-@Pipeline.setup()
-def extract_companies(ctx: Context):
-    """
-    Iterates through GCS files from rejestr.io, parses them,
-    and extracts information about companies.
-    """
-    companies = {}
-    for blob_name, content in ctx.io.read_data(
-        CloudStorage(hostname="rejestr.io")
-    ).read_iterable():
-        try:
+class CompaniesKRS(PipelineModel[KrsCompany]):
+    filename = "company_krs"  # TODO calculate it
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.companies = {}
+        self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
+
+    def add_company(self, item):
+        krs_id = item["numery"]["krs"]
+        if krs_id in self.companies:
+            company = self.companies[krs_id]
+        else:
+            name = item["nazwy"]["skrocona"]
+            city = item["adres"]["miejscowosc"]
+            company = KrsCompany(krs=krs_id, name=name, city=city)
+            self.companies[company.krs] = company
+
+        if krs_id in self.awaiting_relations:
+            for parent, child in self.awaiting_relations[krs_id]:
+                self.add_relation(parent, child)
+            del self.awaiting_relations[krs_id]
+
+        return company
+
+    def add_awaiting(self, company: str, relation: tuple[str, str]):
+        print("Adding awaiting")
+        self.awaiting_relations[company] = self.awaiting_relations.get(company, []) + [
+            relation
+        ]
+
+    def add_relation(self, parent: str, child: str):
+        if parent in self.companies and child in self.companies:
+            self.companies[parent].children.add(child)
+            self.companies[child].parents.add(parent)
+        elif child not in self.companies:
+            self.add_awaiting(child, (parent, child))
+        elif parent not in self.companies:
+            self.add_awaiting(parent, (parent, child))
+
+    def process(self, ctx: Context):
+        """
+        Iterates through GCS files from rejestr.io, parses them,
+        and extracts information about companies.
+        """
+        for blob_name, content in ctx.io.read_data(
+            CloudStorage(hostname="rejestr.io")
+        ).read_iterable():
             data = json.loads(content)
-        except json.JSONDecodeError as e:
-            print(f"  [ERROR] Could not process {blob_name}: {e}")
-            continue
-        try:
             if "aktualnosc_" in blob_name:
                 for item in data:
-                    if item.get("typ") == "organizacja":
-                        krs_id = item["numery"]["krs"]
-                        name = item["nazwy"]["skrocona"]
-                        city = item["adres"]["miejscowosc"]
-                        companies[krs_id] = KrsCompany(krs=krs_id, name=name, city=city)
-            else:
-                companies[data["numery"]["krs"]] = KrsCompany(
-                    krs=data["numery"]["krs"],
-                    name=data["nazwy"]["skrocona"],
-                    city=data["adres"]["miejscowosc"],
-                )
-        except KeyError as e:
-            print(f"  [ERROR] Could not process {blob_name}: {e}")
+                    if item.get("typ") != "organizacja":
+                        continue
+                    c = self.add_company(item)
 
-    for company in companies.values():
-        ctx.io.output_entity(company)
+                    # Add it to the parent of the company
+                    parent = KRS.from_blob_name(blob_name)
+                    conn_type = QueryRelation.from_rejestrio(
+                        item["krs_powiazania_kwerendowane"][0]
+                    )
+                    if conn_type.is_child():
+                        self.add_relation(parent.id, c.krs)
+
+            else:
+                self.add_company(data)
+
+        for company in self.companies.values():
+            ctx.io.output_entity(company)
+
+        print(f"Awaiting relations: {len(self.awaiting_relations)}")

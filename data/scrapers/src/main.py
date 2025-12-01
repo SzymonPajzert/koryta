@@ -27,8 +27,8 @@ from scrapers.stores import Context, Pipeline, PipelineModel
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
 from scrapers.pkw.process import main as scrape_pkw_func
-from scrapers.krs.process import extract_people as scrape_krs_people_func
-from scrapers.krs.process import extract_companies as CompaniesKRS
+from scrapers.krs.list import extract_people as scrape_krs_people_func
+from scrapers.krs.list import CompaniesKRS
 from analysis.people import people_merged as people_merged_func
 
 
