@@ -261,27 +261,7 @@ class Pipeline:
         self.rejestr_io = use_rejestr_io
 
     def process(self, ctx: Context):
-        json_path: str | None = None
-        df: pd.DataFrame | None = None
-        if self.filename is not None:
-            json_path = self.filename + ".jsonl"
-            try:
-                df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe(
-                    "jsonl"
-                )
-            except FileNotFoundError:
-                print("File doesn't exist, continuing")
-
-        if df is None:
-            print("No df file, processing")
-            df = self._process(ctx)
-            print("Processing done")
-            if json_path is not None:
-                json_path = "versioned/" + json_path
-                print(f"Writing to {json_path}")
-                df.to_json(json_path, orient="records", lines=True)
-
-        return df
+        return Pipeline.read_or_process(ctx, self.filename, self._process)
 
     @staticmethod
     def setup(
@@ -299,3 +279,65 @@ class Pipeline:
         name: str = func.__name__
         pipeline = Pipeline(func, filename=name)
         return pipeline
+
+    @staticmethod
+    def read(ctx: Context, filename: str):
+        df = None
+        json_path = filename + ".jsonl"
+        try:
+            df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe(
+                "jsonl"
+            )
+        except FileNotFoundError:
+            print("File doesn't exist, continuing")
+
+        return df, json_path
+
+    @staticmethod
+    def read_or_process(
+        ctx: Context, filename: str | None, process: Callable[[Context], pd.DataFrame]
+    ):
+        json_path: str | None = None
+        df: pd.DataFrame | None = None
+        if filename is not None:
+            df, json_path = Pipeline.read(ctx, filename)
+
+        if df is None:
+            print("No df file, processing")
+            df = process(ctx)
+            print("Processing done")
+
+        if df is not None and json_path is not None:
+            json_path = "versioned/" + json_path
+            print(f"Writing to {json_path}")
+            df.to_json(json_path, orient="records", lines=True)
+
+        if df is None:
+            if filename is None:
+                return None
+            df, _ = Pipeline.read(ctx, filename)
+
+        assert df is not None
+        return df
+
+
+class PipelineModel[Output]:
+    """If you implement it, the pipeline output can be just passed as an input"""
+
+    filename: str
+
+    @abstractmethod
+    def process(self, ctx: Context):
+        raise NotImplementedError()
+
+    def output(
+        self, ctx: Context, constructor: Callable[[dict], Output]
+    ) -> typing.Iterable[Output]:
+        try:
+            assert self.filename is not None
+            df = Pipeline.read_or_process(ctx, self.filename, self.process)
+            for row in df.itertuples(index=False):
+                yield constructor(row.asdict())
+        except:
+            print("Failed to process pipeline", self)
+            raise
