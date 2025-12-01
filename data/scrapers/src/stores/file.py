@@ -138,6 +138,8 @@ class FromPath(FromTextIO):
             dtype = None
             if self.path.endswith("names_count_by_region.jsonl"):
                 dtype = {"teryt": str}
+            if "company_" in self.path:
+                dtype = {"krs": str}
             return pd.read_json(self.path, lines=True, dtype=dtype)
         elif fmt == "csv":
             return pd.read_csv(self.path, sep=csv_sep)

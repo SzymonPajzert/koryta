@@ -105,7 +105,7 @@ def run_pipeline(
     print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
 
     for annotation, pipeline_type in pipeline_model.__annotations__.items():
-        if issubclass(pipeline_type, PipelineModel):
+        if pipeline_type is type and issubclass(pipeline_type, PipelineModel):
             print("Initializing", annotation, pipeline_type.__name__)
             pipeline_model.__dict__[annotation] = run_pipeline(
                 pipeline_type, ctx, nested + 1
@@ -162,6 +162,10 @@ def scrape_krs_companies():
 
 def people_merged():
     run_pipeline(PeopleMerged)
+
+
+def companies_merged():
+    run_pipeline(CompaniesMerged)
 
 
 def main():
