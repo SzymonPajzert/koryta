@@ -130,7 +130,7 @@ scrape_pkw = "main:scrape_pkw"
 # scrape_rejestrio = "scrapers.krs.scrape:scrape_rejestrio"
 scrape_krs_people = "main:scrape_krs_people"
 scrape_krs_companies = "main:scrape_krs_companies"
-scrape_koryta_people = "main:scrape_koryta_people"
+# scrape_koryta_people = "main:scrape_koryta_people"
 # scrape_koryta_articles = "stores.conductor:scrape_koryta_articles"
 analyze_people = "main:people_merged"
 # jupyter lab is available as well for analysis

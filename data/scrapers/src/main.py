@@ -24,7 +24,6 @@ from scrapers.stores import (
 )
 
 from scrapers.stores import Context, Pipeline, PipelineModel
-from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
 from scrapers.pkw.process import main as scrape_pkw_func
 from scrapers.krs.list import extract_people as scrape_krs_people_func
@@ -34,7 +33,7 @@ from analysis.people import people_merged as people_merged_func
 
 class Conductor(IO):
     def __init__(self, dumper: EntityDumper):
-        self.firestore = FirestoreIO()
+        # TODO reenable self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
 
@@ -44,12 +43,13 @@ class Conductor(IO):
             raise NotImplementedError()
 
         if isinstance(fs, FirestoreCollection):
-            collection = self.firestore.read_collection(
-                fs.collection,
-                stream=fs.stream,
-                filters=fs.filters,
-            )
-            return file.FromIterable(collection)
+            raise NotImplementedError("Firestore reading is not implemented")
+            # collection = self.firestore.read_collection(
+            #     fs.collection,
+            #     stream=fs.stream,
+            #     filters=fs.filters,
+            # )
+            # return file.FromIterable(collection)
 
         if isinstance(fs, DownloadableFile):
             dfs = FileSource(fs)
@@ -117,9 +117,10 @@ def setup_pipeline(pipeline_object: Pipeline):
     return func
 
 
-def scrape_koryta_people():
-    f = setup_pipeline(scrape_koryta_people_func)
-    f()
+# TODO reenable reading from koryta, maybe without firestore
+# def scrape_koryta_people():
+#     f = setup_pipeline(scrape_koryta_people_func)
+#     f()
 
 
 def scrape_wiki():
@@ -153,7 +154,6 @@ def main():
     ctx, dumper = setup_context(False)
 
     try:
-        scrape_koryta_people_func.process(ctx)
         scrape_wiki_func.process(ctx)
         scrape_pkw_func.process(ctx)
         scrape_krs_people_func.process(ctx)
