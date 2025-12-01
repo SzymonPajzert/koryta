@@ -1,15 +1,16 @@
 from main import setup_context
+from scrapers.krs.data import CompaniesHardcoded
+
 
 KRS_STARTERS_ALL = "krs_starters.csv"
 COMMON_ROW = 7
 
-ctx, _ = setup_context(False)
-
-import scrapers.krs.data as data
-
 
 def test_public_companies_list():
-    data.init_data()
+    ctx, _ = setup_context(False)
+    data = CompaniesHardcoded()
+    data.process(ctx)
+
     PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")
 
     manual = {

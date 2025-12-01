@@ -24,11 +24,12 @@ from scrapers.stores import (
 )
 
 from scrapers.stores import Context, Pipeline, PipelineModel
-from scrapers.wiki.process_articles import scrape_wiki as scrape_wiki_func
-from scrapers.pkw.process import main as scrape_pkw_func
-from scrapers.krs.list import extract_people as scrape_krs_people_func
-from scrapers.krs.list import CompaniesKRS
-from analysis.people import people_merged as people_merged_func
+from scrapers.koryta.download import process_people as scrape_koryta_people_func
+from scrapers.wiki.process_articles import ProcessWiki
+from scrapers.pkw.process import PeoplePKW
+from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from analysis.people import PeopleMerged
+from analysis.interesting import CompaniesMerged
 
 
 class Conductor(IO):
@@ -94,20 +95,40 @@ def setup_context(use_rejestr_io: bool):
     return ctx, dumper
 
 
-def create_model(pipeline_model: PipelineModel) -> Pipeline:
+def run_pipeline(
+    pipeline_type: type[PipelineModel], ctx: Context | None = None, nested=0
+) -> Pipeline:
+    pipeline_name = pipeline_type.__name__
+    pipeline_model = pipeline_type()
+
+    # TODO restore nester here?
+    print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
+
     for annotation, pipeline_type in pipeline_model.__annotations__.items():
         if issubclass(pipeline_type, PipelineModel):
-            print(annotation, pipeline_type)
-            pipeline_model.__dict__[annotation] = pipeline_type()
+            print("Initializing", annotation, pipeline_type.__name__)
+            pipeline_model.__dict__[annotation] = run_pipeline(
+                pipeline_type, ctx, nested + 1
+            )
 
-    return Pipeline(pipeline_model.process)
+    pipeline = Pipeline(pipeline_model.process, pipeline_model.filename)
+    f = setup_pipeline(pipeline, ctx)
+    f()
+    print(f"{'  ' * nested}====== Finished pipeline {pipeline_name} =====\n\n")
+    return pipeline
 
 
-def setup_pipeline(pipeline_object: Pipeline):
+def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
     def func():
-        ctx, dumper = setup_context(pipeline_object.rejestr_io)
+        ctx_var = ctx
+        if ctx_var is None:
+            ctx_var, dumper = setup_context(pipeline_object.rejestr_io)
+        else:
+            dumper = (  # TODO fix it
+                ctx_var.io.dumper  # pyright: ignore[reportAttributeAccessIssue]
+            )
         try:
-            pipeline_object.process(ctx)
+            pipeline_object.process(ctx_var)
             print("Finished processing")
         finally:
             print("Dumping...")
@@ -124,41 +145,35 @@ def setup_pipeline(pipeline_object: Pipeline):
 
 
 def scrape_wiki():
-    f = setup_pipeline(scrape_wiki_func)
-    f()
+    run_pipeline(ProcessWiki)
 
 
 def scrape_pkw():
-    f = setup_pipeline(scrape_pkw_func)
-    f()
+    run_pipeline(PeoplePKW)
 
 
 def scrape_krs_people():
-    f = setup_pipeline(scrape_krs_people_func)
-    f()
+    run_pipeline(PeopleKRS)
 
 
 def scrape_krs_companies():
-    ctx, dumper = setup_context(False)
-    pipeline = create_model(CompaniesKRS())
-    f = setup_pipeline(pipeline)
-    f()
+    run_pipeline(CompaniesKRS)
 
 
 def people_merged():
-    f = setup_pipeline(people_merged_func)
-    f()
+    run_pipeline(PeopleMerged)
 
 
 def main():
     ctx, dumper = setup_context(False)
 
     try:
-        scrape_wiki_func.process(ctx)
-        scrape_pkw_func.process(ctx)
-        scrape_krs_people_func.process(ctx)
-        create_model(CompaniesKRS()).process(ctx)
-        people_merged_func.process(ctx)
+        run_pipeline(ProcessWiki, ctx)
+        run_pipeline(PeoplePKW, ctx)
+        run_pipeline(PeopleKRS, ctx)
+        run_pipeline(CompaniesKRS, ctx)
+        run_pipeline(PeopleMerged, ctx)
+        run_pipeline(CompaniesMerged, ctx)
         print("Finished processing")
     finally:
         print("Dumping...")

@@ -2,7 +2,7 @@ from collections import Counter
 import argparse
 import typing
 
-from scrapers.stores import Context, Pipeline
+from scrapers.stores import Context, PipelineModel
 from util.polish import parse_name, PkwFormat
 from scrapers.pkw.sources import sources, InputSource
 from scrapers.pkw.headers import CSV_HEADERS, SetField, ElectionContext
@@ -173,7 +173,13 @@ def process_pkw(ctx: Context, limit: int | None, year: str | None):
         print("🎉 Processing complete.")
 
 
-@Pipeline.setup()
+class PeoplePKW(PipelineModel):
+    filename = "person_pkw"
+
+    def process(self, ctx: Context):
+        main(ctx)
+
+
 def main(ctx: Context):
     parser = argparse.ArgumentParser(description="I'll add docs here")
     parser.add_argument(

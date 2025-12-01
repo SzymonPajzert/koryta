@@ -288,8 +288,8 @@ class Pipeline:
             df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe(
                 "jsonl"
             )
-        except FileNotFoundError:
-            print("File doesn't exist, continuing")
+        except FileNotFoundError as e:
+            print("File doesn't exist, continuing: ", e)
 
         return df, json_path
 
@@ -313,8 +313,7 @@ class Pipeline:
             df.to_json(json_path, orient="records", lines=True)
 
         if df is None:
-            if filename is None:
-                return None
+            assert filename is not None
             df, _ = Pipeline.read(ctx, filename)
 
         assert df is not None

@@ -3,8 +3,8 @@ import math
 
 from analysis.utils import read_enriched
 from analysis.utils.names import names_count_by_region, first_name_freq
-from scrapers.stores import Pipeline, LocalFile, Context
-from analysis.people_krs_merged import people_krs_merged
+from scrapers.stores import PipelineModel, LocalFile, Context
+from analysis.people_krs_merged import PeopleKRSMerged
 from analysis.people_wiki_merged import people_wiki_merged
 from analysis.people_koryta_merged import people_koryta_merged
 from analysis.people_pkw_merged import people_pkw_merged
@@ -59,14 +59,20 @@ def unique_probability(
     return math.exp(-n * p_combined)
 
 
-@Pipeline.cached_dataframe
-def people_merged(ctx: Context):
+class PeopleMerged(PipelineModel):
+    filename: str = "people_merged"
+    people_krs: PeopleKRSMerged
+
+    def process(self, ctx: Context):
+        return people_merged(ctx, self.people_krs.process(ctx))
+
+
+def people_merged(ctx: Context, krs_people):
     con = ctx.con
     con.create_function(
         "unique_probability", unique_probability, null_handling="special"  # type: ignore
     )
 
-    krs_people = people_krs_merged.process(ctx)
     wiki_people = people_wiki_merged.process(ctx)
     pkw_people = people_pkw_merged.process(ctx)
     # TODO koryta_people = people_koryta_merged.process(ctx)

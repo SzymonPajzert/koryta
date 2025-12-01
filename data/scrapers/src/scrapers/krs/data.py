@@ -1,104 +1,108 @@
 from typing import Callable
+import dataclasses
 
 import pandas as pd
 
 from scrapers.stores import DownloadableFile as FileSource
-from scrapers.stores import get_context
+from scrapers.stores import PipelineModel, Context
 from scrapers.teryt import Teryt
 from entities.company import ManualKRS as KRS
 
-teryt: Teryt | None = None
+
+class CompaniesHardcoded(PipelineModel):
+    filename = "companies_hardcoded"
+
+    all_companies_krs: dict[str, KRS] = dict()
+    teryt: Teryt | None = None
+
+    def parse_teryt_from_row(self, row: pd.Series) -> str:
+        try:
+            assert self.teryt is not None  # TODO initialize teryt somewhere else
+            if pd.isna(row.loc["Województwo siedziby"]):
+                return ""
+            return self.teryt.parse_teryt(row.loc["Województwo siedziby"], "", "", "")
+        except:
+            print(row)
+            print(row.loc["Województwo siedziby"])
+            raise
+
+    def from_source(self, source: str) -> set[str]:
+        """
+        Extracts a previously variable by its name.
+
+        TODO: Remove this function longterm
+        """
+        return {k for k, krs in self.all_companies_krs.items() if source in krs.sources}
+
+    def register_partials(
+        self,
+        # We always expect to see the source, added to the static
+        source: str,
+        # static fields are always added
+        static: dict = {},
+        # map provides values to be extracted, if it's only a string, you can skip it
+        map: Callable = lambda x: {"id": x},
+        # data can be either a dataframe or a list of strings
+        data: pd.DataFrame | list[str] | None = None,
+    ):
+        assert data is not None
+        static["sources"] = {source}
+
+        def process(d):
+            krs = KRS(**static, **map(d))
+            if krs.id in self.all_companies_krs:
+                self.all_companies_krs[krs.id] = self.all_companies_krs[krs.id].merge(
+                    krs
+                )
+            else:
+                self.all_companies_krs[krs.id] = krs
+
+        if isinstance(data, pd.DataFrame):
+            for d in data.itertuples():
+                process(d)
+
+        if isinstance(data, list):
+            for d in data:
+                process(d)
+
+    def read_public_companies(
+        self, ctx: Context
+    ):  # Public companies, from data.gov.pl:
+        _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
+        public_companies = FileSource(
+            _PUBLIC_COMPANIES_SOURCE,
+            "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv",
+        )
+
+        df = pd.read_csv(
+            ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
+        )
+        df = df[~df["KRS"].isna()]
+        df["teryt"] = df.apply(self.parse_teryt_from_row, axis=1)
+        df["KRS"] = df["KRS"].astype(int).astype(str).str.zfill(10).to_list()
+        return df
+
+    def process(self, ctx: Context):
+        self.teryt = Teryt(ctx)
+        self.register_partials(
+            "PUBLIC_COMPANIES_KRS",
+            data=self.read_public_companies(ctx),
+            map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
+        )
+        a_lot_of_code(self)
+        df = pd.DataFrame.from_dict(
+            {k: dataclasses.asdict(v) for k, v in self.all_companies_krs.items()},
+            orient="index",  # Each key is a separate entry
+        )
+
+        print(df)
+        return df
 
 
-def parse_teryt_from_row(row: pd.Series) -> str:
-    global teryt
-    if not teryt:
-        ctx = get_context()
-        teryt = Teryt(ctx)
-
-    try:
-        if pd.isna(row.loc["Województwo siedziby"]):
-            return ""
-        return teryt.parse_teryt(row.loc["Województwo siedziby"], "", "", "")
-    except:
-        print(row)
-        print(row.loc["Województwo siedziby"])
-        raise
-
-
-ALL_COMPANIES_KRS: dict[str, KRS] = dict()
-
-
-def from_source(source: str) -> set[str]:
-    """
-    Extracts a previously variable by its name.
-
-    TODO: Remove this function longterm
-    """
-    return {k for k, krs in ALL_COMPANIES_KRS.items() if source in krs.sources}
-
-
-def register_partials(
-    # We always expect to see the source, added to the static
-    source: str,
-    # static fields are always added
-    static: dict = {},
-    # map provides values to be extracted, if it's only a string, you can skip it
-    map: Callable = lambda x: {"id": x},
-    # data can be either a dataframe or a list of strings
-    data: pd.DataFrame | list[str] | None = None,
-):
-    assert data is not None
-    static["sources"] = {source}
-
-    def process(d):
-        krs = KRS(**static, **map(d))
-        if krs.id in ALL_COMPANIES_KRS:
-            ALL_COMPANIES_KRS[krs.id] = ALL_COMPANIES_KRS[krs.id].merge(krs)
-        else:
-            ALL_COMPANIES_KRS[krs.id] = krs
-
-    if isinstance(data, pd.DataFrame):
-        for d in data.itertuples():
-            process(d)
-
-    if isinstance(data, list):
-        for d in data:
-            process(d)
-
-
-def read_public_companies():  # Public companies, from data.gov.pl:
-    ctx = get_context()
-    _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
-    public_companies = FileSource(
-        _PUBLIC_COMPANIES_SOURCE, "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv"
-    )
-
-    df = pd.read_csv(
-        ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
-    )
-    df = df[~df["KRS"].isna()]
-    df["teryt"] = df.apply(parse_teryt_from_row, axis=1)
-    df["KRS"] = df["KRS"].astype(int).astype(str).str.zfill(10).to_list()
-    return df
-
-
-initialized = False
-
-
-def init_data():
-    global initialized
-    if initialized:
-        return
-    register_partials(
-        "PUBLIC_COMPANIES_KRS",
-        data=read_public_companies(),
-        map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
-    )
-
+def a_lot_of_code(self: CompaniesHardcoded):
     # https://www.gov.pl/attachment/55892deb-efa3-44ba-87ed-7653034ee00f from
     # https://www.gov.pl/web/aktywa-panstwowe/spolki-objete-nadzorem-wlascicielskim-ministra-aktywow-panstwowych
-    register_partials(
+    self.register_partials(
         "MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs",
         data=[
             "0000002710",
@@ -220,7 +224,7 @@ def init_data():
     #                  https://bip.mkidn.gov.pl/modules/download_gallery/dlc.php?id=0E0990CB5
     #                  https://bip.mkidn.gov.pl/modules/download_gallery/dlc.php?id=08108AAD5
     #                  https://bip.mkidn.gov.pl/modules/download_gallery/dlc.php?id=045189CB5
-    register_partials(
+    self.register_partials(
         "MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO_KRSs",
         data=[
             # TVP was missing
@@ -249,7 +253,7 @@ def init_data():
 
     # https://docs.google.com/spreadsheets/d/1Y9G14keoAgwI9VWkW766d9sLH9LD84UcCqpGdo4ndZ8
     # https://docs.google.com/spreadsheets/d/1tl6GBq2lnSajoWHbTLsTmXpUdYi6fdyJKxahgH73bF4
-    register_partials(
+    self.register_partials(
         "SPOLKI_SKARBU_PANSTWA",
         data=[
             "0000000893",
@@ -606,7 +610,7 @@ def init_data():
     )
 
     # SKARB PAŃSTWA REPREZENTOWANY PRZEZ AGENCJĘ MIENIA WOJSKOWEGO
-    register_partials(
+    self.register_partials(
         "AMW",
         data=[
             "0000392868",
@@ -617,7 +621,7 @@ def init_data():
         ],
     )
 
-    register_partials(
+    self.register_partials(
         "UZDROWISKA",
         data=[
             "0000444064",
@@ -627,7 +631,7 @@ def init_data():
     # TODO What is a good source of them?
     # Dumped some manually from https://bip.warszawa.pl/jednostki-organizacyjne
     # https://docs.google.com/spreadsheets/d/14SM3cuO0gZ897T2mT40Pm4mUqXtY5JCvaemHMvs9AcQ
-    register_partials(
+    self.register_partials(
         "WARSZAWA",
         data=[
             "0000019230",
@@ -664,7 +668,7 @@ def init_data():
     )
 
     # https://docs.google.com/spreadsheets/d/1ma8_TuPoALo_SI3glb1v6SoXgeLREZACF2Rxj5zbEUQ
-    register_partials(
+    self.register_partials(
         "MALOPOLSKIE",
         data=[
             "0000006301",
@@ -714,7 +718,7 @@ def init_data():
         ],
     )
 
-    register_partials(
+    self.register_partials(
         "LUBELSKIE",
         data=[
             "0000013941",
@@ -753,7 +757,7 @@ def init_data():
     )
 
     # https://docs.google.com/spreadsheets/d/1PRydm5XqJ7GemayyyrHtk2KD1LedOr8eDegS3iatrUg
-    register_partials(
+    self.register_partials(
         "LODZKIE",
         data=[
             "0000004385",
@@ -851,7 +855,7 @@ def init_data():
         ],
     )
 
-    register_partials(
+    self.register_partials(
         "NAME_MISSING",
         data=[
             "0000064144",
@@ -942,7 +946,7 @@ def init_data():
     )
 
     # https://bip.um.wroc.pl/artykul/160/2895/spolki-gminy-wroclaw
-    register_partials(
+    self.register_partials(
         "WROCLAW",
         data=[
             "0000004202",
@@ -965,14 +969,14 @@ def init_data():
         ],
     )
 
-    register_partials(
+    self.register_partials(
         "KONIN",
         data=[
             "0000105179",
         ],
     )
 
-    register_partials(
+    self.register_partials(
         "LESZNO",
         data=[
             "0000012980",
@@ -984,5 +988,3 @@ def init_data():
             "0000770481",
         ],
     )
-
-    initialized = True

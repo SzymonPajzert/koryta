@@ -41,3 +41,6 @@ class EntityDumper:
                 lines=True,
                 orient="records",
             )
+
+        # Clean up the dict
+        self.inmemory = dict()

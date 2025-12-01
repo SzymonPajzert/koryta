@@ -14,7 +14,7 @@ from scrapers.stores import DownloadableFile
 from util.polish import UPPER, LOWER
 from util.lists import WIKI_POLITICAL_LINKS
 from scrapers.wiki.util import parse_date
-from scrapers.stores import Context, Pipeline
+from scrapers.stores import Context, PipelineModel
 from entities.person import Wikipedia as People
 from entities.company import Wikipedia as Company
 
@@ -298,7 +298,13 @@ def process_article_worker(args):
         return None
 
 
-@Pipeline.setup()
+class ProcessWiki(PipelineModel):
+    filename = "person_wikipedia"  # TODO support two filenames
+
+    def process(self, ctx: Context):
+        scrape_wiki(ctx)
+
+
 def scrape_wiki(ctx: Context):
     """
     Parses the Wikipedia dump, filters for target categories,
