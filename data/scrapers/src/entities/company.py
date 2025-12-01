@@ -10,6 +10,9 @@ class KRS:
     krs: str
     name: str
     city: str | None = None
+    is_interesting: bool = False
+    children: set[str] = field(default_factory=set)
+    parents: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -20,6 +23,20 @@ class Wikipedia:
     city: str | None = None
     owner_articles: list[str] = field(default_factory=list)
     owner_text: str | None = None
+
+
+@dataclass
+class InterestingReason:
+    reason: str
+    details: str | None = None
+
+
+@dataclass
+class InterestingEntity:
+    name: str
+    krs: str | None
+    reasons: list[InterestingReason] = field(default_factory=list)
+    sources: list[str] = field(default_factory=list)
 
 
 @dataclass

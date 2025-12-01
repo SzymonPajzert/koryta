@@ -133,6 +133,7 @@ scrape_krs_companies = "main:scrape_krs_companies"
 # scrape_koryta_people = "main:scrape_koryta_people"
 # scrape_koryta_articles = "stores.conductor:scrape_koryta_articles"
 analyze_people = "main:people_merged"
+analyze_companies = "main:companies_merged"
 # jupyter lab is available as well for analysis
 
 run_all = "main:main"

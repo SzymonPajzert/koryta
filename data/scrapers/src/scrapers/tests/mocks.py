@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 from io import StringIO, BytesIO
-from scrapers.stores import File, IO, RejestrIO, DataRef
+from scrapers.stores import File, IO, RejestrIO, DataRef, LocalFile
 import typing
 
 
@@ -72,6 +72,27 @@ class MockIO(IO):
 
     def output_entity(self, entity):
         self.output.append(entity)
+
+class DictMockIO(IO):
+    def __init__(self, files):
+        self.files = files
+        self.output = []
+
+    def read_data(self, fs, process_if_missing=None):
+        if isinstance(fs, LocalFile):
+            if fs.filename in self.files:
+                from stores.file import FromPath
+                return FromPath(self.files[fs.filename])
+        raise FileNotFoundError(f"File {fs} not found in mock")
+
+    def output_entity(self, entity):
+        self.output.append(entity)
+
+    def list_data(self, fs):
+        if isinstance(fs, LocalFile):
+            if fs.filename in self.files:
+                return [fs.filename]
+        return []
 
 
 class MockRejestrIO(RejestrIO):
