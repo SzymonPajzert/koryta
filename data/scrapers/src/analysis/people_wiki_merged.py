@@ -21,9 +21,9 @@ def people_wiki_merged(ctx: Context):
         birth_year,
         birth_iso8601 AS birth_date,
         CASE
-            WHEN infobox = 'Polityk' THEN 'Polityk'
-            WHEN infobox = 'Biogram' THEN 'Biogram'
-            WHEN infobox = 'Naukowiec' THEN 'Naukowiec'
+            WHEN 'Polityk' in infoboxes THEN 'Polityk'
+            WHEN 'Biogram' in infoboxes THEN 'Biogram'
+            WHEN 'Naukowiec' in infoboxes THEN 'Naukowiec'
             ELSE NULL    
         END as is_polityk,
         atan(content_score) AS wiki_score,

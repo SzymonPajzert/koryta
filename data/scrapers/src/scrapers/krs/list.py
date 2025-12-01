@@ -48,7 +48,13 @@ def employment_duration(item) -> str:
     return f"{days/365:.2f}"
 
 
-@Pipeline.setup()
+class PeopleKRS(PipelineModel[KrsPerson]):
+    filename = "person_krs"
+
+    def process(self, ctx: Context):
+        extract_people(ctx)
+
+
 def extract_people(ctx: Context):
     """
     Iterates through GCS files from rejestr.io, parses them,

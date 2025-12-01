@@ -1,14 +1,23 @@
-from scrapers.stores import Pipeline, LocalFile, Context
+import pandas as pd
+
+from scrapers.stores import PipelineModel, LocalFile, Context
+from scrapers.krs.list import PeopleKRS
 from analysis.utils.tables import create_people_table
 
 krs_file = LocalFile("person_krs.jsonl", "versioned")
 
 
-@Pipeline.cached_dataframe
-def people_krs_merged(ctx: Context):
-    con = ctx.con
+class PeopleKRSMerged(PipelineModel):
+    filename: str = "people_krs_merged"
+    people_krs: PeopleKRS
 
-    krs_data = ctx.io.read_data(krs_file).read_dataframe("jsonl")
+    def process(self, ctx: Context):
+        krs_data = self.people_krs.process(ctx)
+        return people_krs_merged(ctx, krs_data)
+
+
+def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
+    con = ctx.con
 
     con.execute(
         f"""
