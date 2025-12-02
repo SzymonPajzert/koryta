@@ -38,10 +38,8 @@ class Conductor(IO):
         self.dumper = dumper
         self.storage = CloudStorageClient()
 
-    def read_data(self, fs: DataRef, process_if_missing=None) -> File:
+    def read_data(self, fs: DataRef) -> File:
         print(f"Reading {fs}")
-        if process_if_missing is not None:
-            raise NotImplementedError()
 
         if isinstance(fs, FirestoreCollection):
             raise NotImplementedError("Firestore reading is not implemented")

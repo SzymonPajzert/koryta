@@ -156,14 +156,12 @@ class IO(metaclass=ABCMeta):
     """Abstract interface for data input/output operations within a pipeline."""
 
     @abstractmethod
-    def read_data(self, fs: DataRef, process_if_missing=True) -> File:
+    def read_data(self, fs: DataRef) -> File:
         """
         Reads data from a given data reference.
 
         Args:
             fs: The DataRef pointing to the data source.
-            process_if_missing: If True, trigger processing to generate the data
-                                if it doesn't exist.
 
         Returns:
             A File object for accessing the data.
