@@ -2,10 +2,9 @@
 
 import os
 import duckdb
-import inspect
+from tqdm import tqdm
 
 from stores.download import FileSource
-from stores.firestore import FirestoreIO
 from stores.rejestr import Rejestr
 from stores.duckdb import EntityDumper
 from stores.storage import Client as CloudStorageClient
@@ -37,10 +36,10 @@ class Conductor(IO):
         # TODO reenable self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
+        self.progress_bar = None
+        self.continous_download = False
 
     def read_data(self, fs: DataRef) -> File:
-        print(f"Reading {fs}")
-
         if isinstance(fs, FirestoreCollection):
             raise NotImplementedError("Firestore reading is not implemented")
             # collection = self.firestore.read_collection(
@@ -53,8 +52,18 @@ class Conductor(IO):
         if isinstance(fs, DownloadableFile):
             dfs = FileSource(fs)
             if not dfs.downloaded():
+                if self.progress_bar is None or not self.continous_download:
+                    self.progress_bar = tqdm(desc="Downloading files")
+                    self.continous_download = True
+                self.progress_bar.update(1)
                 dfs.download()
             return file.FromPath(dfs.downloaded_path)
+
+        # Stop progress bar
+        self.continous_download = False
+        self.progress_bar = None
+        # Print what we're reading instead
+        print(f"Reading {fs}")
 
         if isinstance(fs, CloudStorage):
             return file.FromIterable(self.storage.iterate_blobs(self, fs.hostname))
