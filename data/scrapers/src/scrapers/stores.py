@@ -4,6 +4,7 @@ to be used across all scrapers. It provides a common interface for handling
 file operations, data references, and pipeline execution contexts.
 """
 
+import os
 import typing
 from collections.abc import Callable
 from typing import Any, Literal
@@ -12,6 +13,10 @@ from abc import ABCMeta, abstractmethod
 
 import pandas as pd
 from duckdb import DuckDBPyConnection
+
+PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
 
 class Extractor(metaclass=ABCMeta):
@@ -325,7 +330,7 @@ class Pipeline:
             print("Processing done")
 
         if df is not None and json_path is not None:
-            json_path = "versioned/" + json_path
+            json_path = os.path.join(PROJECT_ROOT, "versioned", json_path)
             print(f"Writing to {json_path}")
             df.to_json(json_path, orient="records", lines=True)
 

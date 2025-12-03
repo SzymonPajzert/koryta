@@ -22,7 +22,7 @@ from scrapers.stores import (
     CloudStorage,
 )
 
-from scrapers.stores import Context, Pipeline, PipelineModel
+from scrapers.stores import Context, Pipeline, PipelineModel, PROJECT_ROOT
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import ProcessWiki
 from scrapers.pkw.process import PeoplePKW
@@ -69,13 +69,13 @@ class Conductor(IO):
             return file.FromIterable(self.storage.iterate_blobs(self, fs.hostname))
 
         if isinstance(fs, LocalFile):
-            return file.FromPath(os.path.join(fs.folder, fs.filename))
+            return file.FromPath(os.path.join(PROJECT_ROOT, fs.folder, fs.filename))
 
         raise NotImplementedError()
 
     def list_data(self, path: DataRef) -> list[str]:
         if isinstance(path, LocalFile):
-            p = os.path.join(path.folder, path.filename)
+            p = os.path.join(PROJECT_ROOT, path.folder, path.filename)
             if os.path.exists(p):
                 return [p]
             return []
