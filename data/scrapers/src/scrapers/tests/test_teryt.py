@@ -35,15 +35,25 @@ class TestTeryt(unittest.TestCase):
 
         # Create a mock file with fake CSV content
         mock_zip_content = MagicMock()
-        mock_zip_content.read_zip.return_value.read_file.return_value = BytesIO(
-            FAKE_TERYT_CSV.encode("utf-8")
-        )
+        
+        # Create a DataFrame from the fake CSV
+        import pandas as pd
+        from io import StringIO
+        df = pd.read_csv(StringIO(FAKE_TERYT_CSV), sep=";", dtype=str)
+        
+        mock_zip_content.read_zip.return_value.read_dataframe.return_value = df
 
         # When read_data is called with the teryt_data source, return our mock file
         mock_io.read_data = MagicMock(return_value=mock_zip_content)
 
         # Create a context with the mock IO
-        mock_context = Context(io=mock_io, rejestr_io=None, con=None)  # type: ignore
+        mock_context = Context(
+            io=mock_io,
+            rejestr_io=None,
+            con=None,  # type: ignore
+            utils=MagicMock(),
+            web=MagicMock(),
+        )
 
         # Initialize Teryt with the mocked context
         cls.teryt = Teryt(mock_context)
