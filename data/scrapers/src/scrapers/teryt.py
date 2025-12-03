@@ -6,7 +6,6 @@ division codes (województwo, powiat, gmina) from the official TERYT database.
 """
 
 import pandas as pd
-from io import StringIO
 
 from scrapers.stores import DownloadableFile as FileSource
 from scrapers.stores import Context
@@ -38,14 +37,11 @@ class Teryt:
 
         # TODO: The date is hardcoded now; find a way to get it updated.
         # The disposition dead code in download_teryt seems like a good way.
-        raw_bytes = StringIO(
+        data = (
             teryt_file.read_zip("TERC_Urzedowy_2025-11-15.csv")
-            .read_file()
-            .read()
-            .decode("utf-8")
-        )
-        data = pd.read_csv(
-            raw_bytes, sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str}
+            .read_dataframe(
+                "csv", csv_sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str}
+            )
         )
 
         wojewodztwa_df = data[data["POW"].isna() & data["GMI"].isna()]

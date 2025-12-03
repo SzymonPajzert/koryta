@@ -1,6 +1,5 @@
-from stores.duckdb import dump_dbs, insert_into, register_table
-from stores.storage import iterate_blobs
-from util.config import downloaded
+from scrapers.stores import Context, CloudStorage
+from entities.article import Mention
 
 
 # Welcome to koryta.pl data science team!
@@ -21,9 +20,6 @@ from util.config import downloaded
 # and it comes with out-of-the box JSONL support, that can be sent to GCP Storage.
 # This decorator instantiates insert_into() method,
 # and sets the output table to versioned/articles_mentions.jsonl directory.
-from entities.article import Mention
-
-register_table(Mention)
 
 
 # Start by running poetry install.
@@ -31,8 +27,10 @@ register_table(Mention)
 # You can run it in CLI with either:
 #  - poetry run scrape_articles_example
 #  - scrape_articles_example from a .venv
-def extract():
-    for blob_name, content in iterate_blobs("jawnylublin.pl"):
+def extract(ctx: Context):
+    for blob_name, content in ctx.io.read_data(
+        CloudStorage(hostname="jawnylublin.pl")
+    ).read_iterable():
         # We iterate blobs from the koryta-pl-crawled bucket.
         # The blob names are following the format:
         # koryta-pl-crawled/hostname=/date=/path-to-the-article, e.g.:
@@ -55,11 +53,11 @@ def extract():
 
         for keyword in ["Jarosław Stawiarski", "Radosławem Piesiewiczem"]:
             if keyword in content:
-                insert_into(
+                ctx.io.output_entity(
                     Mention(text=keyword, url=f"https://jawnylublin.pl/{blob_name}")
                 )
 
     # Save the data of all registered in-memory tables to the disk
     # Usually it's in a finally clause, to make sure we don't lose data.
     # You can find all the matches there.
-    dump_dbs()
+    # dump_dbs() # Handled by pipeline wrapper

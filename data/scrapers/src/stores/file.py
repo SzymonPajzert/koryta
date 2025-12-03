@@ -2,7 +2,7 @@ import io
 import csv
 import typing
 import json
-from typing import BinaryIO, TextIO, Literal
+from typing import BinaryIO, TextIO, Literal, Any
 
 from zipfile import ZipFile
 import bz2
@@ -26,7 +26,10 @@ class FromIterable(File):
             yield json.loads(line)
 
     def read_dataframe(
-        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+        self,
+        fmt: Literal["jsonl", "csv", "parquet"],
+        csv_sep=",",
+        dtype: dict[str, Any] | None = None,
     ) -> pd.DataFrame:
         if fmt == "jsonl":
             return pd.DataFrame.from_records(
@@ -62,9 +65,19 @@ class FromBytesIO(File):
         return self.raw_bytes
 
     def read_dataframe(
-        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+        self,
+        fmt: Literal["jsonl", "csv", "parquet"],
+        csv_sep=",",
+        dtype: dict[str, Any] | None = None,
     ) -> pd.DataFrame:
-        raise NotImplementedError()
+        if fmt == "csv":
+            return pd.read_csv(self.raw_bytes, sep=csv_sep, dtype=dtype)
+        elif fmt == "jsonl":
+            return pd.read_json(self.raw_bytes, lines=True, dtype=dtype)
+        elif fmt == "parquet":
+            return pd.read_parquet(self.raw_bytes)
+        else:
+            raise NotImplementedError(f"Format {fmt} not supported for FromBytesIO")
 
     def read_jsonl(self):
         raise NotImplementedError()
@@ -131,7 +144,10 @@ class FromPath(FromTextIO):
         return read_xls(self.path, header_rows, skip_rows)
 
     def read_dataframe(
-        self, fmt: Literal["jsonl"] | Literal["csv"] | Literal["parquet"], csv_sep=","
+        self,
+        fmt: Literal["jsonl", "csv", "parquet"],
+        csv_sep=",",
+        dtype: dict[str, Any] | None = None,
     ) -> pd.DataFrame:
         if fmt == "jsonl":
             # TODO remove this hardcodeFix

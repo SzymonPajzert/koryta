@@ -1,9 +1,9 @@
 import pytest
 import regex as re
 
-from main import setup_context
+from main import setup_context, run_pipeline
 from scrapers.krs.list import KRS
-from analysis.people import people_merged
+from analysis.people import PeopleMerged
 
 # TODO from util.lists import IGNORE_FAILURES
 IGNORE_FAILURES = []
@@ -15,7 +15,7 @@ SCORE_CUTOFF = 10.5
 @pytest.fixture(scope="module")
 def df_all():
     ctx, _ = setup_context(False)
-    return people_merged.process(ctx)
+    return run_pipeline(PeopleMerged, ctx)[1]
 
 
 # TODO split it already as another column

@@ -66,8 +66,17 @@ class MockIO(IO):
         key = str(path)
         return self.listed_data.get(key, [])
 
-    def output_entity(self, entity):
+    def output_entity(self, entity, sort_by=[]):
         self.output.append(entity)
+
+    def write_dataframe(self, df, filename: str):
+        self.output.append((filename, df))
+
+    def upload(self, source, data, content_type):
+        self.output.append((source, data, content_type))
+
+    def list_blobs(self, hostname: str):
+        return []
 
 
 class DictMockIO(IO):
@@ -90,6 +99,15 @@ class DictMockIO(IO):
         if isinstance(fs, LocalFile):
             if fs.filename in self.files:
                 return [fs.filename]
+        return []
+
+    def write_dataframe(self, df, filename: str):
+        self.output.append((filename, df))
+
+    def upload(self, source, data, content_type):
+        self.output.append((source, data, content_type))
+
+    def list_blobs(self, hostname: str):
         return []
 
 
