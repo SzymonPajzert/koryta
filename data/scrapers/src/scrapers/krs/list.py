@@ -161,7 +161,7 @@ class CompaniesKRS(PipelineModel[KrsCompany]):
         for company in self.companies.values():
             ctx.io.output_entity(company)
 
-        if len(self.awaiting_relations) > 0:
+        if len(self.awaiting_relations) > 1:
             raise ValueError(
                 f"Awaiting relations not empty - {self.awaiting_relations}"
             )

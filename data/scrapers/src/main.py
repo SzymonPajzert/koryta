@@ -3,6 +3,7 @@
 import os
 import duckdb
 from tqdm import tqdm
+import pandas as pd
 
 from stores.download import FileSource
 from stores.rejestr import Rejestr
@@ -104,7 +105,7 @@ def setup_context(use_rejestr_io: bool):
 
 def run_pipeline(
     pipeline_type: type[PipelineModel], ctx: Context | None = None, nested=0
-) -> Pipeline:
+) -> tuple[Pipeline, pd.DataFrame]:
     pipeline_name = pipeline_type.__name__
     pipeline_model = pipeline_type()
 
@@ -114,16 +115,16 @@ def run_pipeline(
     for annotation, pipeline_type in pipeline_model.__annotations__.items():
         if isinstance(pipeline_type, type) and issubclass(pipeline_type, PipelineModel):
             print("Initializing", annotation, pipeline_type.__name__)
-            pipeline_model.__dict__[annotation] = run_pipeline(
+            pipeline_model.__dict__[annotation], _ = run_pipeline(
                 pipeline_type, ctx, nested + 1
             )
     print("Finished initialization")
 
     pipeline = Pipeline(pipeline_model.process, pipeline_model.filename)
     f = setup_pipeline(pipeline, ctx)
-    f()
+    df = f()
     print(f"{'  ' * nested}====== Finished pipeline {pipeline_name} =====\n\n")
-    return pipeline
+    return pipeline, df
 
 
 def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
@@ -136,8 +137,9 @@ def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
                 ctx_var.io.dumper  # pyright: ignore[reportAttributeAccessIssue]
             )
         try:
-            pipeline_object.process(ctx_var)
+            result = pipeline_object.process(ctx_var)
             print("Finished processing")
+            return result
         finally:
             print("Dumping...")
             dumper.dump_pandas()
@@ -153,27 +155,27 @@ def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
 
 
 def scrape_wiki():
-    run_pipeline(ProcessWiki)
+    return run_pipeline(ProcessWiki)[1]
 
 
 def scrape_pkw():
-    run_pipeline(PeoplePKW)
+    return run_pipeline(PeoplePKW)[1]
 
 
 def scrape_krs_people():
-    run_pipeline(PeopleKRS)
+    return run_pipeline(PeopleKRS)[1]
 
 
 def scrape_krs_companies():
-    run_pipeline(CompaniesKRS)
+    return run_pipeline(CompaniesKRS)[1]
 
 
 def people_merged():
-    run_pipeline(PeopleMerged)
+    return run_pipeline(PeopleMerged)[1]
 
 
 def companies_merged():
-    run_pipeline(CompaniesMerged)
+    return run_pipeline(CompaniesMerged)[1]
 
 
 def main():
