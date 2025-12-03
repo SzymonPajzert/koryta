@@ -7,7 +7,7 @@ file operations, data references, and pipeline execution contexts.
 import typing
 from collections.abc import Callable
 from typing import Any, Literal
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from abc import ABCMeta, abstractmethod
 
 import pandas as pd
@@ -303,6 +303,25 @@ class Pipeline:
         if df is None:
             print("No df file, processing")
             df = process(ctx)
+            
+            if df is None:
+                # Try to recover from dumper
+                try:
+                    # We assume ctx.io.dumper exists and is an EntityDumper
+                    # This is a bit hacky but requested by user
+                    dumper = ctx.io.dumper # type: ignore
+                    last_written = dumper.get_last_written()
+                    if last_written:
+                        name, data = last_written
+                        print(f"Recovered {name} from dumper")
+                        df = pd.DataFrame.from_records([asdict(i) for i in data])
+                        
+                        # If filename was None, maybe we can infer it from the entity name?
+                        # But filename is passed to read_or_process.
+                        # If filename is provided, we should probably use it.
+                except AttributeError:
+                    pass
+            
             print("Processing done")
 
         if df is not None and json_path is not None:

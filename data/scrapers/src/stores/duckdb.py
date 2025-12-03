@@ -44,3 +44,11 @@ class EntityDumper:
 
         # Clean up the dict
         self.inmemory = dict()
+
+    def get_last_written(self) -> tuple[str, list] | None:
+        """Returns the name and data of the last written entity type."""
+        if not self.inmemory:
+            return None
+        # Since dict preserves insertion order in Python 3.7+, the last item is the last written
+        name, data = list(self.inmemory.items())[-1]
+        return name, data
