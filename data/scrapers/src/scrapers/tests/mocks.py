@@ -56,13 +56,9 @@ class MockIO(IO):
         self.output: list[typing.Any] = []
         self.listed_data: dict[str, list[str]] = {}
 
-    def read_data(self, fs: DataRef, process_if_missing=True) -> File:
+    def read_data(self, fs: DataRef) -> File:
         key = str(fs)
         if key not in self.files:
-            if process_if_missing:
-                # In a real scenario, this might trigger a pipeline
-                print(f"MockIO: Data for {key} not found, returning empty MockFile.")
-                return MockFile()
             raise FileNotFoundError(f"No mock data for {key}")
         return self.files[key]
 
@@ -73,15 +69,17 @@ class MockIO(IO):
     def output_entity(self, entity):
         self.output.append(entity)
 
+
 class DictMockIO(IO):
     def __init__(self, files):
         self.files = files
         self.output = []
 
-    def read_data(self, fs, process_if_missing=None):
+    def read_data(self, fs):
         if isinstance(fs, LocalFile):
             if fs.filename in self.files:
                 from stores.file import FromPath
+
                 return FromPath(self.files[fs.filename])
         raise FileNotFoundError(f"File {fs} not found in mock")
 

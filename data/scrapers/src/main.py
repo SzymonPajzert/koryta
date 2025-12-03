@@ -2,10 +2,10 @@
 
 import os
 import duckdb
-import inspect
+from tqdm import tqdm
+import pandas as pd
 
 from stores.download import FileSource
-from stores.firestore import FirestoreIO
 from stores.rejestr import Rejestr
 from stores.duckdb import EntityDumper
 from stores.storage import Client as CloudStorageClient
@@ -23,7 +23,7 @@ from scrapers.stores import (
     CloudStorage,
 )
 
-from scrapers.stores import Context, Pipeline, PipelineModel
+from scrapers.stores import Context, Pipeline, PipelineModel, PROJECT_ROOT
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import ProcessWiki
 from scrapers.pkw.process import PeoplePKW
@@ -37,12 +37,10 @@ class Conductor(IO):
         # TODO reenable self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
+        self.progress_bar = None
+        self.continous_download = False
 
-    def read_data(self, fs: DataRef, process_if_missing=None) -> File:
-        print(f"Reading {fs}")
-        if process_if_missing is not None:
-            raise NotImplementedError()
-
+    def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, FirestoreCollection):
             raise NotImplementedError("Firestore reading is not implemented")
             # collection = self.firestore.read_collection(
@@ -55,20 +53,30 @@ class Conductor(IO):
         if isinstance(fs, DownloadableFile):
             dfs = FileSource(fs)
             if not dfs.downloaded():
+                if self.progress_bar is None or not self.continous_download:
+                    self.progress_bar = tqdm(desc="Downloading files")
+                    self.continous_download = True
+                self.progress_bar.update(1)
                 dfs.download()
             return file.FromPath(dfs.downloaded_path)
+
+        # Stop progress bar
+        self.continous_download = False
+        self.progress_bar = None
+        # Print what we're reading instead
+        print(f"Reading {fs}")
 
         if isinstance(fs, CloudStorage):
             return file.FromIterable(self.storage.iterate_blobs(self, fs.hostname))
 
         if isinstance(fs, LocalFile):
-            return file.FromPath(os.path.join(fs.folder, fs.filename))
+            return file.FromPath(os.path.join(PROJECT_ROOT, fs.folder, fs.filename))
 
         raise NotImplementedError()
 
     def list_data(self, path: DataRef) -> list[str]:
         if isinstance(path, LocalFile):
-            p = os.path.join(path.folder, path.filename)
+            p = os.path.join(PROJECT_ROOT, path.folder, path.filename)
             if os.path.exists(p):
                 return [p]
             return []
@@ -97,7 +105,7 @@ def setup_context(use_rejestr_io: bool):
 
 def run_pipeline(
     pipeline_type: type[PipelineModel], ctx: Context | None = None, nested=0
-) -> Pipeline:
+) -> tuple[Pipeline, pd.DataFrame]:
     pipeline_name = pipeline_type.__name__
     pipeline_model = pipeline_type()
 
@@ -105,17 +113,18 @@ def run_pipeline(
     print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
 
     for annotation, pipeline_type in pipeline_model.__annotations__.items():
-        if pipeline_type is type and issubclass(pipeline_type, PipelineModel):
+        if isinstance(pipeline_type, type) and issubclass(pipeline_type, PipelineModel):
             print("Initializing", annotation, pipeline_type.__name__)
-            pipeline_model.__dict__[annotation] = run_pipeline(
+            pipeline_model.__dict__[annotation], _ = run_pipeline(
                 pipeline_type, ctx, nested + 1
             )
+    print("Finished initialization")
 
     pipeline = Pipeline(pipeline_model.process, pipeline_model.filename)
     f = setup_pipeline(pipeline, ctx)
-    f()
+    df = f()
     print(f"{'  ' * nested}====== Finished pipeline {pipeline_name} =====\n\n")
-    return pipeline
+    return pipeline, df
 
 
 def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
@@ -128,8 +137,9 @@ def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
                 ctx_var.io.dumper  # pyright: ignore[reportAttributeAccessIssue]
             )
         try:
-            pipeline_object.process(ctx_var)
+            result = pipeline_object.process(ctx_var)
             print("Finished processing")
+            return result
         finally:
             print("Dumping...")
             dumper.dump_pandas()
@@ -145,27 +155,27 @@ def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
 
 
 def scrape_wiki():
-    run_pipeline(ProcessWiki)
+    return run_pipeline(ProcessWiki)[1]
 
 
 def scrape_pkw():
-    run_pipeline(PeoplePKW)
+    return run_pipeline(PeoplePKW)[1]
 
 
 def scrape_krs_people():
-    run_pipeline(PeopleKRS)
+    return run_pipeline(PeopleKRS)[1]
 
 
 def scrape_krs_companies():
-    run_pipeline(CompaniesKRS)
+    return run_pipeline(CompaniesKRS)[1]
 
 
 def people_merged():
-    run_pipeline(PeopleMerged)
+    return run_pipeline(PeopleMerged)[1]
 
 
 def companies_merged():
-    run_pipeline(CompaniesMerged)
+    return run_pipeline(CompaniesMerged)[1]
 
 
 def main():

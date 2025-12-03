@@ -4,14 +4,19 @@ to be used across all scrapers. It provides a common interface for handling
 file operations, data references, and pipeline execution contexts.
 """
 
+import os
 import typing
 from collections.abc import Callable
 from typing import Any, Literal
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from abc import ABCMeta, abstractmethod
 
 import pandas as pd
 from duckdb import DuckDBPyConnection
+
+PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
 
 class Extractor(metaclass=ABCMeta):
@@ -156,14 +161,12 @@ class IO(metaclass=ABCMeta):
     """Abstract interface for data input/output operations within a pipeline."""
 
     @abstractmethod
-    def read_data(self, fs: DataRef, process_if_missing=True) -> File:
+    def read_data(self, fs: DataRef) -> File:
         """
         Reads data from a given data reference.
 
         Args:
             fs: The DataRef pointing to the data source.
-            process_if_missing: If True, trigger processing to generate the data
-                                if it doesn't exist.
 
         Returns:
             A File object for accessing the data.
@@ -305,10 +308,29 @@ class Pipeline:
         if df is None:
             print("No df file, processing")
             df = process(ctx)
+
+            if df is None:
+                # Try to recover from dumper
+                try:
+                    # We assume ctx.io.dumper exists and is an EntityDumper
+                    # This is a bit hacky but requested by user
+                    dumper = ctx.io.dumper  # type: ignore
+                    last_written = dumper.get_last_written()
+                    if last_written:
+                        name, data = last_written
+                        print(f"Recovered {name} from dumper")
+                        df = pd.DataFrame.from_records([asdict(i) for i in data])
+
+                        # If filename was None, maybe we can infer it from the entity name?
+                        # But filename is passed to read_or_process.
+                        # If filename is provided, we should probably use it.
+                except AttributeError:
+                    pass
+
             print("Processing done")
 
         if df is not None and json_path is not None:
-            json_path = "versioned/" + json_path
+            json_path = os.path.join(PROJECT_ROOT, "versioned", json_path)
             print(f"Writing to {json_path}")
             df.to_json(json_path, orient="records", lines=True)
 
@@ -328,15 +350,3 @@ class PipelineModel[Output]:
     @abstractmethod
     def process(self, ctx: Context):
         raise NotImplementedError()
-
-    def output(
-        self, ctx: Context, constructor: Callable[[dict], Output]
-    ) -> typing.Iterable[Output]:
-        try:
-            assert self.filename is not None
-            df = Pipeline.read_or_process(ctx, self.filename, self.process)
-            for row in df.itertuples(index=False):
-                yield constructor(row.asdict())
-        except:
-            print("Failed to process pipeline", self)
-            raise
