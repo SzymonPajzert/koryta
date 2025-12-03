@@ -119,7 +119,6 @@ class CompaniesKRS(PipelineModel[KrsCompany]):
         return company
 
     def add_awaiting(self, company: str, relation: tuple[str, str]):
-        print("Adding awaiting")
         self.awaiting_relations[company] = self.awaiting_relations.get(company, []) + [
             relation
         ]
@@ -162,4 +161,7 @@ class CompaniesKRS(PipelineModel[KrsCompany]):
         for company in self.companies.values():
             ctx.io.output_entity(company)
 
-        print(f"Awaiting relations: {len(self.awaiting_relations)}")
+        if len(self.awaiting_relations) > 0:
+            raise ValueError(
+                f"Awaiting relations not empty - {self.awaiting_relations}"
+            )

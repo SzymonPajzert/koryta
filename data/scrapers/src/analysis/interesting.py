@@ -12,6 +12,18 @@ from scrapers.krs.list import CompaniesKRS
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.companies import company_names
 from entities.company import KRS as KrsCompany, ManualKRS
+from scrapers.stores import Pipeline
+
+
+def iterate(ctx, pipeline, constructor):
+    try:
+        assert pipeline.filename is not None
+        df = Pipeline.read_or_process(ctx, pipeline.filename, pipeline.process)
+        for row in df.itertuples(index=False):
+            yield constructor(row)
+    except:
+        print("Failed to process pipeline", pipeline)
+        raise
 
 
 class CompaniesMerged(PipelineModel[InterestingEntity]):
@@ -27,14 +39,14 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
         con = ctx.con
 
         graph = CompanyGraph()
-        for company in self.scraped_companies.output(ctx, lambda d: KrsCompany(**d)):
+        for company in iterate(ctx, self.scraped_companies, lambda d: KrsCompany(*d)):
             for child in company.children:
                 graph.add_parent(company.krs, child)
             for parent in company.parents:
                 graph.add_parent(parent, company.krs)
 
         children_of_hardcoded_set = graph.all_descendants(
-            self.hardcoded_companies.output(ctx, lambda d: ManualKRS(**d))
+            iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id)
         )
         children_of_hardcoded = pd.DataFrame({"krs": list(children_of_hardcoded_set)})
 

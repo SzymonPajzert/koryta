@@ -112,8 +112,7 @@ def run_pipeline(
     print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
 
     for annotation, pipeline_type in pipeline_model.__annotations__.items():
-        print("Found item", annotation, pipeline_type.__name__)
-        if issubclass(pipeline_type, PipelineModel):
+        if isinstance(pipeline_type, type) and issubclass(pipeline_type, PipelineModel):
             print("Initializing", annotation, pipeline_type.__name__)
             pipeline_model.__dict__[annotation] = run_pipeline(
                 pipeline_type, ctx, nested + 1

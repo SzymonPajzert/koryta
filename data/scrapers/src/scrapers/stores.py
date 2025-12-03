@@ -303,25 +303,25 @@ class Pipeline:
         if df is None:
             print("No df file, processing")
             df = process(ctx)
-            
+
             if df is None:
                 # Try to recover from dumper
                 try:
                     # We assume ctx.io.dumper exists and is an EntityDumper
                     # This is a bit hacky but requested by user
-                    dumper = ctx.io.dumper # type: ignore
+                    dumper = ctx.io.dumper  # type: ignore
                     last_written = dumper.get_last_written()
                     if last_written:
                         name, data = last_written
                         print(f"Recovered {name} from dumper")
                         df = pd.DataFrame.from_records([asdict(i) for i in data])
-                        
+
                         # If filename was None, maybe we can infer it from the entity name?
                         # But filename is passed to read_or_process.
                         # If filename is provided, we should probably use it.
                 except AttributeError:
                     pass
-            
+
             print("Processing done")
 
         if df is not None and json_path is not None:
@@ -345,15 +345,3 @@ class PipelineModel[Output]:
     @abstractmethod
     def process(self, ctx: Context):
         raise NotImplementedError()
-
-    def output(
-        self, ctx: Context, constructor: Callable[[dict], Output]
-    ) -> typing.Iterable[Output]:
-        try:
-            assert self.filename is not None
-            df = Pipeline.read_or_process(ctx, self.filename, self.process)
-            for row in df.itertuples(index=False):
-                yield constructor(row.asdict())
-        except:
-            print("Failed to process pipeline", self)
-            raise
