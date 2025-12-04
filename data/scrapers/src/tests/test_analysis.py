@@ -90,7 +90,23 @@ def test_not_duplicated(df_all):
     for column, value in list_values(["krs_name", "pkw_name", "wiki_name"]):
         # Make sure that peeple are not duplicated in the output
         # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
-        assert len(df_all[df_all[column] == value]) == 1, f"{column} == {value}"
+        matches = df_all[df_all[column] == value]
+        if column == "krs_name" and len(matches) > 1:
+            # Check if they are distinct entities based on rejestrio_id
+            # If all sets of rejestrio_id are disjoint, they are distinct people
+            ids_list = matches["rejestrio_id"].tolist()
+            # Flatten and check for duplicates
+            all_ids = []
+            for ids in ids_list:
+                if isinstance(ids, list) or hasattr(ids, "__iter__"):
+                    all_ids.extend(ids)
+                else:
+                    all_ids.append(ids)
+            
+            if len(all_ids) == len(set(all_ids)):
+                continue # All distinct source records
+        
+        assert len(matches) == 1, f"{column} == {value}"
 
 
 def get_words(name):

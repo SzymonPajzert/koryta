@@ -208,9 +208,17 @@ def people_merged(ctx: Context, krs_people):
             AND max_scores.max_score = scored.overall_score
         )
         WHERE overall_score >= 8
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY krs_name ORDER BY overall_score DESC, ABS(birth_year - pkw_birth_year) ASC NULLS LAST) = 1
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY krs_name, birth_year ORDER BY overall_score DESC, ABS(birth_year - pkw_birth_year) ASC NULLS LAST) = 1
+    ),
+    unique_pkw AS (
+        SELECT * FROM unique_krs
+        QUALIFY pkw_name IS NULL OR ROW_NUMBER() OVER (PARTITION BY pkw_name ORDER BY overall_score DESC, mistake_odds DESC) = 1
+    ),
+    unique_wiki AS (
+        SELECT * FROM unique_pkw
+        QUALIFY wiki_name IS NULL OR ROW_NUMBER() OVER (PARTITION BY wiki_name ORDER BY overall_score DESC, mistake_odds DESC) = 1
     )
-    SELECT * FROM unique_krs
+    SELECT * FROM unique_wiki
     ORDER BY mistake_odds DESC, overall_score DESC, koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """
     df = con.execute(query).df()
@@ -235,7 +243,7 @@ def people_merged(ctx: Context, krs_people):
         if not dupes.empty:
             smaller = dupes[["krs_name", "pkw_name", "wiki_name", "overall_score", "mistake_odds", "birth_year", "elections"]].sort_values("krs_name")
             print(f"Found {len(dupes)} duplicates")
-            ctx.io.write_dataframe("people_duplicated", smaller)
+            ctx.io.write_dataframe(smaller, "people_duplicated.jsonl")
 
 
     non_duplicates = len(
