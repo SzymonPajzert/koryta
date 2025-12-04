@@ -89,3 +89,29 @@ def test_pkw_merging_donald_tusk(con):
     elections = row['elections']
     assert len(elections) >= 3 # 1991, 2007, 2011, 2019 -> 4 records.
     # If 1991 (NULL birth_year) didn't merge, we might have fewer.
+
+
+def test_teresa_zieba_merging(con):
+    # Create a table with Teresa Zięba records having close birth years
+    con.execute(
+        """
+        CREATE OR REPLACE TABLE people_pkw_merged_raw AS
+        SELECT * FROM (VALUES
+            ('teresa', 'zięba', 'teresa', 'zięba', 1958, 'ZIĘBA Teresa', 'teresa', 'zięba'),
+            ('teresa', 'zięba', 'teresa', 'zięba', 1959, 'ZIĘBA Teresa', 'teresa', 'zięba')
+        ) AS t(first_name, last_name, full_name, second_name, birth_year, source_name, base_first_name, base_last_name)
+        """
+    )
+
+    # Run the merging logic
+    create_people_table(con, "people_pkw_merged", any_vals=["source_name"])
+
+    # Check the result
+    df = con.execute("SELECT * FROM people_pkw_merged").df()
+    print(df)
+
+    # Verify that we have exactly one record for Teresa Zięba
+    assert len(df) == 1, f"Expected 1 record, found {len(df)}"
+    # The birth year should be one of them (likely the MAX, 1959)
+    assert df.iloc[0]["birth_year"] in [1958, 1959]
+
