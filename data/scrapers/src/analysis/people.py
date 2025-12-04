@@ -219,8 +219,25 @@ def people_merged(ctx: Context, krs_people):
     
     dupes = df[df.duplicated(subset=["krs_name"], keep=False)]
     if not dupes.empty:
-        print("\n--- DUPLICATES FOUND IN KRS_NAME ---")
-        print(dupes[["krs_name", "pkw_name", "wiki_name", "overall_score", "mistake_odds"]].sort_values("krs_name"))
+        # Filter out duplicates where birth years differ by more than 1
+        def has_conflicting_birth_years(group):
+            years = group["birth_year"].dropna().unique()
+            if len(years) <= 1:
+                return False
+            return (years.max() - years.min()) > 1
+
+        conflicting_mask = dupes.groupby("krs_name").transform(has_conflicting_birth_years)["birth_year"]
+        # We want to keep groups that do NOT have conflicting birth years
+        # But wait, transform returns a series aligned with dupes.
+        # If has_conflicting_birth_years returns True, we want to exclude those rows.
+        
+        # Let's do it more explicitly
+        conflicting_names = dupes.groupby("krs_name").filter(has_conflicting_birth_years)["krs_name"].unique()
+        dupes = dupes[~dupes["krs_name"].isin(conflicting_names)]
+
+        if not dupes.empty:
+            print("\n--- DUPLICATES FOUND IN KRS_NAME ---")
+            print(dupes[["krs_name", "pkw_name", "wiki_name", "overall_score", "mistake_odds", "birth_year", "elections"]].sort_values("krs_name"))
 
 
     non_duplicates = len(
