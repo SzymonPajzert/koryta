@@ -91,7 +91,7 @@ def test_not_duplicated(df_all):
         # Make sure that peeple are not duplicated in the output
         # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
         matches = df_all[df_all[column] == value]
-        if column == "krs_name" and len(matches) > 1:
+        if len(matches) > 1:
             # Check if they are distinct entities based on rejestrio_id
             # If all sets of rejestrio_id are disjoint, they are distinct people
             ids_list = matches["rejestrio_id"].tolist()

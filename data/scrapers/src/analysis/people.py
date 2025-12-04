@@ -209,16 +209,8 @@ def people_merged(ctx: Context, krs_people):
         )
         WHERE overall_score >= 8
         QUALIFY ROW_NUMBER() OVER (PARTITION BY krs_name, birth_year ORDER BY overall_score DESC, ABS(birth_year - pkw_birth_year) ASC NULLS LAST) = 1
-    ),
-    unique_pkw AS (
-        SELECT * FROM unique_krs
-        QUALIFY pkw_name IS NULL OR ROW_NUMBER() OVER (PARTITION BY pkw_name ORDER BY overall_score DESC, mistake_odds DESC) = 1
-    ),
-    unique_wiki AS (
-        SELECT * FROM unique_pkw
-        QUALIFY wiki_name IS NULL OR ROW_NUMBER() OVER (PARTITION BY wiki_name ORDER BY overall_score DESC, mistake_odds DESC) = 1
     )
-    SELECT * FROM unique_wiki
+    SELECT * FROM unique_krs
     ORDER BY mistake_odds DESC, overall_score DESC, koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """
     df = con.execute(query).df()
