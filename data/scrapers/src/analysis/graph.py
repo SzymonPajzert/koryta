@@ -121,6 +121,9 @@ def calculate_ppr_scores(df_people_subgroups, df_subgroups_groups, alpha=0.85):
 
     # Create the (Person x Group) score matrix
     df_scores = pd.DataFrame(all_scores)
+    
+    # Zero out small scores (noise from PageRank on disconnected components)
+    df_scores[df_scores < 1e-5] = 0
 
     # Clean up the index and column names (remove 'p_' and 'g_')
     df_scores.index = df_scores.index.map(lambda x: x[2:])

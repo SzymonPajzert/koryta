@@ -1,7 +1,11 @@
 import pytest
 import regex as re
+import os
+from unittest.mock import patch
 
+import pandas as pd
 from main import setup_context, run_pipeline
+from stores.config import PROJECT_ROOT
 from scrapers.krs.list import KRS
 from analysis.people import PeopleMerged
 
@@ -14,7 +18,13 @@ SCORE_CUTOFF = 10.5
 
 @pytest.fixture(scope="module")
 def df_all():
-    ctx, _ = setup_context(False)
+    # Force re-computation by deleting the cached file
+    cache_path = os.path.join(PROJECT_ROOT, "versioned", "people_merged.jsonl")
+    if os.path.exists(cache_path):
+        os.remove(cache_path)
+
+    with patch("builtins.input", return_value="n"):
+        ctx, _ = setup_context(True)
     return run_pipeline(PeopleMerged, ctx)[1]
 
 
@@ -73,6 +83,8 @@ def test_not_duplicated(df_all):
     def list_values(cols):
         for col in cols:
             for val in df_all[col].unique():
+                if val is None or (isinstance(val, float) and pd.isna(val)):
+                    continue
                 yield col, val
 
     for column, value in list_values(["krs_name", "pkw_name", "wiki_name"]):
