@@ -259,3 +259,31 @@ def test_andrzej_jan_sikora_duplicated(df_all):
     # Assert that the birth years are 1946 and 1950
     assert birth_years == [1946, 1950], f"Expected birth years [1946, 1950], found {birth_years}"
 
+
+def test_adam_smoter_deduplication(df_all):
+    # Filter for Adam Smoter
+    smoter_records = df_all[df_all["krs_name"] == "Adam Smoter"]
+    
+    # Assert that there is exactly 1 record
+    assert len(smoter_records) == 1, f"Expected 1 record for Adam Smoter, found {len(smoter_records)}"
+    
+    # Optional: Check birth year is 1947 (from KRS) or 1948 (from PKW match) or merged?
+    # The output birth_year comes from `coalesce(non_null.birth_year, nulls.birth_year)` in create_people_table?
+    # No, people_merged output `birth_year` comes from `k.birth_year` (line 107 in people.py).
+    # So it should be 1947.
+    assert smoter_records.iloc[0]["birth_year"] == 1947
+
+
+def test_teresa_zieba_deduplication(df_all):
+    # Filter for Teresa Zięba
+    zieba_records = df_all[df_all["krs_name"] == "Teresa Zięba"]
+    
+    # Assert that there is exactly 1 record
+    assert len(zieba_records) == 1, f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
+    
+    # Check birth year is 1959 (or 1958, but we expect one)
+    # Based on previous investigation, 1959 was the MAX.
+    assert zieba_records.iloc[0]["birth_year"] in [1958, 1959]
+
+
+
