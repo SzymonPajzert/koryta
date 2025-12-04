@@ -10,7 +10,6 @@ from scrapers.stores import Context
 from scrapers.krs import data
 from scrapers.krs.list import iterate_blobs, KRS
 from scrapers.krs.graph import CompanyGraph
-from stores.storage import upload_to_gcs, list_blobs
 
 
 def save_org_connections(
@@ -54,7 +53,9 @@ def scrape_rejestrio(ctx: Context):
     )
     args = parser.parse_args()
 
-    already_scraped = set(KRS.from_blob_name(path) for path in list_blobs("rejestr.io"))
+    already_scraped = set(
+        KRS.from_blob_name(path) for path in ctx.io.list_blobs("rejestr.io")
+    )
 
     starters = set(KRS(krs) for krs in data.ALL_COMPANIES_KRS)
     if args.only != "":
@@ -96,4 +97,5 @@ def scrape_rejestrio(ctx: Context):
 
         # We're discarding query params, so it's a hotfix for this
         url = url.replace("?aktualnosc=", "/aktualnosc_")
-        upload_to_gcs(url, result, "application/json")
+        ctx.io.upload(url, result, "application/json")
+

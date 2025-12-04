@@ -66,7 +66,25 @@ def ctx(tmp_path):
     }
 
     mock_io = DictMockIO(files)
-    return Context(io=mock_io, rejestr_io=None, con=duckdb.connect())
+    mock_io.dumper = MagicMock()
+    
+    def get_last_written():
+        if mock_io.output:
+            # Filter out non-entity outputs (like write_dataframe tuples)
+            entities = [i for i in mock_io.output if isinstance(i, InterestingEntity)]
+            if entities:
+                return "companies_merged", entities
+        return None
+        
+    mock_io.dumper.get_last_written.side_effect = get_last_written
+
+    return Context(
+        io=mock_io,
+        rejestr_io=None,
+        con=duckdb.connect(),
+        utils=MagicMock(),
+        web=MagicMock(),
+    )
 
 
 def test_find_interesting_entities_e2e(ctx):
@@ -74,10 +92,12 @@ def test_find_interesting_entities_e2e(ctx):
     pipeline = create_model(model)
     model.hardcoded_companies = MagicMock()
     model.hardcoded_companies.output.return_value = []
+    model.scraped_companies = MagicMock()
+    model.scraped_companies.filename = "company_krs" # Mock filename for iterate
     pipeline.process(ctx)
 
-    results = ctx.io.output
-
+    results = [e for e in ctx.io.output if isinstance(e, InterestingEntity)]
+    
     # Verify results
     # We expect:
     # 1. Wiki Company A (merged with KRS Company A) -> Interesting (owner Skarb Państwa + content_score > 0)

@@ -1,7 +1,8 @@
 """Tests for the abstract store interfaces and data structures."""
 
 import unittest
-from unittest.mock import patch
+import unittest
+from unittest.mock import patch, MagicMock
 from scrapers.tests.mocks import MockIO, MockRejestrIO
 
 from scrapers.stores import (
@@ -37,7 +38,13 @@ class TestStores(unittest.TestCase):
         """Tests the set_context and get_context functions."""
         mock_io = MockIO()
         mock_rejestr_io = MockRejestrIO()
-        ctx = Context(io=mock_io, rejestr_io=mock_rejestr_io, con=None)
+        ctx = Context(
+            io=mock_io,
+            rejestr_io=mock_rejestr_io,
+            con=None,
+            utils=MagicMock(),
+            web=MagicMock(),
+        )
 
         set_context(ctx)
         retrieved_ctx = get_context()

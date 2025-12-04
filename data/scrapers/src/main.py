@@ -9,6 +9,7 @@ from stores.download import FileSource
 from stores.rejestr import Rejestr
 from stores.duckdb import EntityDumper
 from stores.storage import Client as CloudStorageClient
+from stores.config import PROJECT_ROOT
 import stores.file as file
 
 from scrapers.stores import (
@@ -23,7 +24,7 @@ from scrapers.stores import (
     CloudStorage,
 )
 
-from scrapers.stores import Context, Pipeline, PipelineModel, PROJECT_ROOT
+from scrapers.stores import Context, Pipeline, PipelineModel
 from scrapers.koryta.download import process_people as scrape_koryta_people_func
 from scrapers.wiki.process_articles import ProcessWiki
 from scrapers.pkw.process import PeoplePKW
@@ -86,6 +87,21 @@ class Conductor(IO):
     def output_entity(self, entity, sort_by=[]):
         self.dumper.insert_into(entity, sort_by)
 
+    def write_dataframe(self, df: pd.DataFrame, filename: str):
+        # We assume filename is relative to versioned dir if it doesn't have absolute path
+        # The filename passed from Pipeline is "something.jsonl"
+        path = os.path.join(PROJECT_ROOT, "versioned", filename)
+        df.to_json(path, orient="records", lines=True)
+
+    def upload(self, source, data, content_type):
+        self.storage.upload(source, data, content_type)
+
+    def list_blobs(self, hostname: str):
+        return self.storage.list_blobs(hostname)
+
+
+from stores.utils import UtilsImpl
+from stores.web import WebImpl
 
 def setup_context(use_rejestr_io: bool):
     dumper = EntityDumper()
@@ -98,9 +114,22 @@ def setup_context(use_rejestr_io: bool):
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
         con=duckdb.connect(),
+        utils=UtilsImpl(),
+        web=WebImpl(),
     )
+    
+    # Register DuckDB functions
+    from scrapers.article.crawler import parse_hostname, uuid7
+    from duckdb.typing import VARCHAR
+    ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)
+    ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)
+
     set_context(ctx)
     return ctx, dumper
+
+
+def create_model(model: PipelineModel) -> Pipeline:
+    return Pipeline(model.process, model.filename)
 
 
 def run_pipeline(
@@ -193,3 +222,4 @@ def main():
         print("Dumping...")
         dumper.dump_pandas()
         print("Done")
+

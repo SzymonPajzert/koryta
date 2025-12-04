@@ -4,19 +4,16 @@ to be used across all scrapers. It provides a common interface for handling
 file operations, data references, and pipeline execution contexts.
 """
 
-import os
 import typing
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 from dataclasses import dataclass, field, asdict
 from abc import ABCMeta, abstractmethod
 
 import pandas as pd
-from duckdb import DuckDBPyConnection
 
-PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
+if TYPE_CHECKING:
+    from duckdb import DuckDBPyConnection
 
 
 class Extractor(metaclass=ABCMeta):
@@ -48,7 +45,10 @@ class File(metaclass=ABCMeta):
 
     @abstractmethod
     def read_dataframe(
-        self, fmt: Literal["jsonl", "csv", "parquet"], csv_sep=","
+        self,
+        fmt: Literal["jsonl", "csv", "parquet"],
+        csv_sep=",",
+        dtype: dict[str, Any] | None = None,
     ) -> pd.DataFrame:
         pass
 
@@ -185,6 +185,21 @@ class IO(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def write_dataframe(self, df: pd.DataFrame, filename: str):
+        """Writes a DataFrame to storage."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def upload(self, source: Any, data: Any, content_type: str):
+        """Uploads data to storage (e.g. GCS)."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def list_blobs(self, hostname: str) -> typing.Generator[DownloadableFile, None, None]:
+        """Lists blobs in storage for a given hostname."""
+        raise NotImplementedError()
+
 
 class RejestrIO(metaclass=ABCMeta):
     """Abstract interface for interacting with the rejestr.io API."""
@@ -203,13 +218,38 @@ class RejestrIO(metaclass=ABCMeta):
         raise NotImplementedError()
 
 
+class Utils(metaclass=ABCMeta):
+    """Abstract interface for utility functions."""
+
+    @abstractmethod
+    def input_with_timeout(self, msg: str, timeout: int = 10) -> str | None:
+        """Reads input from stdin with a timeout."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def join_url(self, base: str, url: str) -> str:
+        """Joins a base URL with a relative URL."""
+        raise NotImplementedError()
+
+
+class Web(metaclass=ABCMeta):
+    """Abstract interface for web related operations."""
+
+    @abstractmethod
+    def robot_txt_allowed(self, ctx: "Context", url: str, parsed_url: Any, user_agent: str) -> bool:
+        """Checks if robots.txt allows fetching the URL."""
+        raise NotImplementedError()
+
+
 @dataclass
 class Context:
     """Execution context for a scraper pipeline, providing access to I/O interfaces."""
 
     io: IO
     rejestr_io: RejestrIO
-    con: DuckDBPyConnection
+    con: "DuckDBPyConnection"
+    utils: Utils
+    web: Web
 
 
 GLOBAL_CONTEXT: None | Context = None
@@ -330,9 +370,8 @@ class Pipeline:
             print("Processing done")
 
         if df is not None and json_path is not None:
-            json_path = os.path.join(PROJECT_ROOT, "versioned", json_path)
             print(f"Writing to {json_path}")
-            df.to_json(json_path, orient="records", lines=True)
+            ctx.io.write_dataframe(df, json_path)
 
         if df is None:
             assert filename is not None
