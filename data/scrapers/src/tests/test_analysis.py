@@ -244,3 +244,18 @@ def no_diff_sets(a, b):
 #         find_krs()
 #     krs = KRS(krs)
 #     assert krs in scraped_krs
+
+
+def test_andrzej_jan_sikora_duplicated(df_all):
+    # Filter for Andrzej Jan Sikora
+    sikora_records = df_all[df_all["krs_name"] == "Andrzej Jan Sikora"]
+    
+    # Assert that there are exactly 2 records
+    assert len(sikora_records) == 2, f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
+    
+    # Get the birth years
+    birth_years = sorted(sikora_records["birth_year"].dropna().astype(int).tolist())
+    
+    # Assert that the birth years are 1946 and 1950
+    assert birth_years == [1946, 1950], f"Expected birth years [1946, 1950], found {birth_years}"
+
