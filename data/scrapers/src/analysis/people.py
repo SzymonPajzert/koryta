@@ -184,44 +184,51 @@ def people_merged(ctx: Context, krs_people):
             MAX(overall_score) as max_score
         FROM scored
         GROUP BY base_first_name, base_last_name, metaphone, birth_date
+    ),
+    unique_krs AS (
+        SELECT
+            1 / (1 - unique_chance) as mistake_odds,
+            unique_chance,
+            overall_score,
+            koryta_name,
+            krs_name,
+            pkw_name,
+            wiki_name,
+            birth_year,
+            max_scores.birth_date,
+            employment,
+            is_polityk,
+            *
+        FROM max_scores LEFT JOIN scored ON (
+            max_scores.base_first_name = scored.base_first_name
+            AND max_scores.base_last_name = scored.base_last_name
+            AND max_scores.metaphone = scored.metaphone
+            AND max_scores.birth_date = scored.birth_date
+            AND max_scores.max_score = scored.overall_score
+        )
+        WHERE overall_score >= 8
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY krs_name ORDER BY mistake_odds DESC, overall_score DESC) = 1
+    ),
+    unique_pkw AS (
+        SELECT * FROM unique_krs
+        QUALIFY pkw_name IS NULL OR ROW_NUMBER() OVER (PARTITION BY pkw_name ORDER BY mistake_odds DESC, overall_score DESC) = 1
     )
-    
-    SELECT
-        1 / (1 - unique_chance) as mistake_odds,
-        unique_chance,
-        overall_score,
-        koryta_name,
-        krs_name,
-        pkw_name,
-        wiki_name,
-        birth_year,
-        max_scores.birth_date,
-        employment,
-        is_polityk,
-        *
-    FROM max_scores LEFT JOIN scored ON (
-        max_scores.base_first_name = scored.base_first_name
-        AND max_scores.base_last_name = scored.base_last_name
-        AND max_scores.metaphone = scored.metaphone
-        AND max_scores.birth_date = scored.birth_date
-        AND max_scores.max_score = scored.overall_score
-    )
-    WHERE overall_score >= 8
+    SELECT * FROM unique_pkw
+    QUALIFY wiki_name IS NULL OR ROW_NUMBER() OVER (PARTITION BY wiki_name ORDER BY mistake_odds DESC, overall_score DESC) = 1
     ORDER BY mistake_odds DESC, overall_score DESC, koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """
-    print("\n--- Overlaps between Koryta, KRS, PKW, and Wiki ---")
     df = con.execute(query).df()
     if df.empty:
         raise Exception("No matches found with the current criteria.")
 
     df = read_enriched(ctx, df)
+    
+    dupes = df[df.duplicated(subset=["krs_name"], keep=False)]
+
 
     non_duplicates = len(
         df[df["overall_score"] > 10.5].drop_duplicates(
             ["krs_name", "pkw_name", "wiki_name"]
         )
-    )
-    print(
-        f"Rows with no duplicates in krs_name, pkw_name, and wiki_name: {non_duplicates}"
     )
     return df
