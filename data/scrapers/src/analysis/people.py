@@ -233,8 +233,9 @@ def people_merged(ctx: Context, krs_people):
         dupes = dupes[~dupes["krs_name"].isin(conflicting_names)]
 
         if not dupes.empty:
-            print("\n--- DUPLICATES FOUND IN KRS_NAME ---")
-            print(dupes[["krs_name", "pkw_name", "wiki_name", "overall_score", "mistake_odds", "birth_year", "elections"]].sort_values("krs_name"))
+            smaller = dupes[["krs_name", "pkw_name", "wiki_name", "overall_score", "mistake_odds", "birth_year", "elections"]].sort_values("krs_name")
+            print(f"Found {len(dupes)} duplicates")
+            ctx.io.write_dataframe("people_duplicated", smaller)
 
 
     non_duplicates = len(
