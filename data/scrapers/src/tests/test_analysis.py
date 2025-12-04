@@ -102,10 +102,10 @@ def test_not_duplicated(df_all):
                     all_ids.extend(ids)
                 else:
                     all_ids.append(ids)
-            
+
             if len(all_ids) == len(set(all_ids)):
-                continue # All distinct source records
-        
+                continue  # All distinct source records
+
         assert len(matches) == 1, f"{column} == {value}"
 
 
@@ -263,43 +263,33 @@ def no_diff_sets(a, b):
 
 
 def test_andrzej_jan_sikora_duplicated(df_all):
-    # Filter for Andrzej Jan Sikora
+    # Filter for Andrzej Jan Sikora - we expect two people
     sikora_records = df_all[df_all["krs_name"] == "Andrzej Jan Sikora"]
-    
-    # Assert that there are exactly 2 records
-    assert len(sikora_records) == 2, f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
-    
-    # Get the birth years
+    assert (
+        len(sikora_records) == 2
+    ), f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
+
     birth_years = sorted(sikora_records["birth_year"].dropna().astype(int).tolist())
-    
-    # Assert that the birth years are 1946 and 1950
-    assert birth_years == [1946, 1950], f"Expected birth years [1946, 1950], found {birth_years}"
+
+    assert birth_years == [
+        1946,
+        1950,
+    ], f"Expected birth years [1946, 1950], found {birth_years}"
 
 
 def test_adam_smoter_deduplication(df_all):
-    # Filter for Adam Smoter
+    # Adam Smoter should be found only once born in 1947
     smoter_records = df_all[df_all["krs_name"] == "Adam Smoter"]
-    
-    # Assert that there is exactly 1 record
-    assert len(smoter_records) == 1, f"Expected 1 record for Adam Smoter, found {len(smoter_records)}"
-    
-    # Optional: Check birth year is 1947 (from KRS) or 1948 (from PKW match) or merged?
-    # The output birth_year comes from `coalesce(non_null.birth_year, nulls.birth_year)` in create_people_table?
-    # No, people_merged output `birth_year` comes from `k.birth_year` (line 107 in people.py).
-    # So it should be 1947.
+    assert (
+        len(smoter_records) == 1
+    ), f"Expected 1 record for Adam Smoter, found {len(smoter_records)}"
     assert smoter_records.iloc[0]["birth_year"] == 1947
 
 
 def test_teresa_zieba_deduplication(df_all):
-    # Filter for Teresa Zięba
     zieba_records = df_all[df_all["krs_name"] == "Teresa Zięba"]
-    
-    # Assert that there is exactly 1 record
-    assert len(zieba_records) == 1, f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
-    
+    assert (
+        len(zieba_records) == 1
+    ), f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
     # Check birth year is 1959 (or 1958, but we expect one)
-    # Based on previous investigation, 1959 was the MAX.
     assert zieba_records.iloc[0]["birth_year"] in [1958, 1959]
-
-
-
