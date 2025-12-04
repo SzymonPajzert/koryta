@@ -93,7 +93,13 @@ def create_people_table(
         raw_filled_birth_year AS (
             SELECT
                 *,
-                COALESCE(birth_year, MAX(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name)) as effective_birth_year
+                CASE
+                    WHEN (MAX(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name) - 
+                          MIN(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name)) <= 1 THEN
+                        COALESCE(birth_year, MAX(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name))
+                    ELSE
+                        birth_year
+                END as effective_birth_year
             FROM raw_with_second_name
         ),
         null_second_names AS (
