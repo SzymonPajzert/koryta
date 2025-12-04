@@ -207,14 +207,8 @@ def people_merged(ctx: Context, krs_people):
             AND max_scores.max_score = scored.overall_score
         )
         WHERE overall_score >= 8
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY krs_name ORDER BY mistake_odds DESC, overall_score DESC) = 1
-    ),
-    unique_pkw AS (
-        SELECT * FROM unique_krs
-        QUALIFY pkw_name IS NULL OR ROW_NUMBER() OVER (PARTITION BY pkw_name ORDER BY mistake_odds DESC, overall_score DESC) = 1
     )
-    SELECT * FROM unique_pkw
-    QUALIFY wiki_name IS NULL OR ROW_NUMBER() OVER (PARTITION BY wiki_name ORDER BY mistake_odds DESC, overall_score DESC) = 1
+    SELECT * FROM unique_krs
     ORDER BY mistake_odds DESC, overall_score DESC, koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """
     df = con.execute(query).df()
@@ -224,6 +218,9 @@ def people_merged(ctx: Context, krs_people):
     df = read_enriched(ctx, df)
     
     dupes = df[df.duplicated(subset=["krs_name"], keep=False)]
+    if not dupes.empty:
+        print("\n--- DUPLICATES FOUND IN KRS_NAME ---")
+        print(dupes[["krs_name", "pkw_name", "wiki_name", "overall_score", "mistake_odds"]].sort_values("krs_name"))
 
 
     non_duplicates = len(
