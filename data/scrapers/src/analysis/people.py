@@ -226,11 +226,6 @@ def people_merged(ctx: Context, krs_people):
                 return False
             return (years.max() - years.min()) > 1
 
-        conflicting_mask = dupes.groupby("krs_name").transform(has_conflicting_birth_years)["birth_year"]
-        # We want to keep groups that do NOT have conflicting birth years
-        # But wait, transform returns a series aligned with dupes.
-        # If has_conflicting_birth_years returns True, we want to exclude those rows.
-        
         # Let's do it more explicitly
         conflicting_names = dupes.groupby("krs_name").filter(has_conflicting_birth_years)["krs_name"].unique()
         dupes = dupes[~dupes["krs_name"].isin(conflicting_names)]
