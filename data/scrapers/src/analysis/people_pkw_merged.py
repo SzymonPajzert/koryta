@@ -19,7 +19,6 @@ class PeoplePKWMerged(PipelineModel):
             lower(first_name) as first_name,
             lower(last_name) as last_name,
             lower(middle_name) as second_name,
-            double_metaphone(last_name) as metaphone,
             list_distinct([
                 teryt_candidacy[:2],
                 teryt_living[:2],
