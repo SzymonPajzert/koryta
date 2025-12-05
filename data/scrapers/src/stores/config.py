@@ -1,10 +1,9 @@
-import os
 import glob
-import sys
 import json
+import os
+import sys
 
 import pandas as pd
-
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 

@@ -2,7 +2,6 @@ from regex import search
 
 from scrapers.wiki.process_articles import Infobox, safe_middle_name_pattern
 
-
 problematic_titles = """
 ? (album Hey)
 ** ****** (album)

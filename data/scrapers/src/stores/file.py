@@ -1,11 +1,11 @@
-import io
-import csv
-import typing
-import json
-from typing import BinaryIO, TextIO, Literal, Any
-
-from zipfile import ZipFile
 import bz2
+import csv
+import io
+import json
+import typing
+from typing import Any, BinaryIO, Literal, TextIO
+from zipfile import ZipFile
+
 import pandas as pd
 
 from scrapers.stores import File

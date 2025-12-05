@@ -1,5 +1,6 @@
 from typing import Any
 from urllib.robotparser import RobotFileParser
+
 from scrapers.stores import Context, DownloadableFile, Web
 
 robot_parsers = {}

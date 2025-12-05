@@ -1,7 +1,8 @@
 import os
 import sys
-from dotenv import load_dotenv
+
 import requests
+from dotenv import load_dotenv
 
 
 class Rejestr:
@@ -26,7 +27,7 @@ class Rejestr:
         allowed = self.ALWAYS_ALLOW
         print(f"Querying {url}")
         if not self.ALWAYS_ALLOW:
-            print(f"Should I query? [yN]")
+            print("Should I query? [yN]")
             allowed = input() == "y"
         if not allowed:
             print("Not allowed")

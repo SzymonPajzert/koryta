@@ -1,14 +1,14 @@
-import pandas as pd
 import math
 
-from analysis.utils import read_enriched
-from analysis.utils.names import NamesCountByRegion, FirstNameFreq
-from scrapers.stores import PipelineModel, LocalFile, Context
+import pandas as pd
+
 from analysis.people_krs_merged import PeopleKRSMerged
-from analysis.people_wiki_merged import PeopleWikiMerged
-from analysis.people_koryta_merged import PeopleKorytaMerged
 from analysis.people_pkw_merged import PeoplePKWMerged
+from analysis.people_wiki_merged import PeopleWikiMerged
+from analysis.utils import read_enriched
+from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
+from scrapers.stores import Context, LocalFile, PipelineModel
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -116,7 +116,7 @@ def people_merged(
 
     print("--- Running the long running query ---")
 
-    query = f"""
+    query = """
     WITH krs_pkw AS (
         SELECT
             k.metaphone as metaphone,

@@ -1,6 +1,6 @@
 
-from scrapers.stores import PipelineModel, Context
 from scrapers.koryta.download import KorytaPeople
+from scrapers.stores import Context, PipelineModel
 
 
 class PeopleKorytaMerged(PipelineModel):
@@ -13,7 +13,7 @@ class PeopleKorytaMerged(PipelineModel):
         koryta_data = self.koryta_pipeline.process(ctx)
 
         con.execute(
-            f"""
+            """
             CREATE OR REPLACE TABLE koryta_people AS
             -- koryta_people lacks birth_year, so we can't use it as a base for joining with others on birth_year.
             -- We will use it for enrichment if we can parse first/last names.

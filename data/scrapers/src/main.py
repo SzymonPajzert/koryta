@@ -1,36 +1,35 @@
 # This file registers all conductor pipelines in this package
 
 import os
+
 import duckdb
-from tqdm import tqdm
 import pandas as pd
+from tqdm import tqdm
 
-from stores.download import FileSource
-from stores.rejestr import Rejestr
-from stores.duckdb import EntityDumper
-from stores.storage import Client as CloudStorageClient
-from stores.config import PROJECT_ROOT
-import stores.file as file
-
+from analysis.interesting import CompaniesMerged
+from analysis.people import PeopleMerged
+from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import (
     IO,
-    File,
-    DataRef,
-    LocalFile,
-    set_context,
-    FirestoreCollection,
-    Pipeline,
-    DownloadableFile,
     CloudStorage,
+    Context,
+    DataRef,
+    DownloadableFile,
+    File,
+    FirestoreCollection,
+    LocalFile,
+    Pipeline,
+    PipelineModel,
+    set_context,
 )
-
-from scrapers.stores import Context, Pipeline, PipelineModel
-from scrapers.koryta.download import KorytaPeople
 from scrapers.wiki.process_articles import ProcessWiki
-from scrapers.pkw.process import PeoplePKW
-from scrapers.krs.list import CompaniesKRS, PeopleKRS
-from analysis.people import PeopleMerged
-from analysis.interesting import CompaniesMerged
+from stores import file
+from stores.config import PROJECT_ROOT
+from stores.download import FileSource
+from stores.duckdb import EntityDumper
+from stores.rejestr import Rejestr
+from stores.storage import Client as CloudStorageClient
 
 
 class Conductor(IO):
@@ -103,6 +102,7 @@ class Conductor(IO):
 from stores.utils import UtilsImpl
 from stores.web import WebImpl
 
+
 def setup_context(use_rejestr_io: bool):
     dumper = EntityDumper()
     conductor = Conductor(dumper)
@@ -119,8 +119,9 @@ def setup_context(use_rejestr_io: bool):
     )
     
     # Register DuckDB functions
-    from scrapers.article.crawler import parse_hostname, uuid7
     from duckdb.typing import VARCHAR
+
+    from scrapers.article.crawler import parse_hostname, uuid7
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)
     ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)
 

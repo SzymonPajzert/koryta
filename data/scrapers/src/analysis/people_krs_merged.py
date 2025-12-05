@@ -1,8 +1,8 @@
 import pandas as pd
 
-from scrapers.stores import PipelineModel, LocalFile, Context
-from scrapers.krs.list import PeopleKRS
 from analysis.utils.tables import create_people_table
+from scrapers.krs.list import PeopleKRS
+from scrapers.stores import Context, LocalFile, PipelineModel
 
 krs_file = LocalFile("person_krs.jsonl", "versioned")
 
@@ -20,7 +20,7 @@ def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
     con = ctx.con
 
     con.execute(
-        f"""
+        """
         CREATE OR REPLACE TABLE krs_people_raw AS
         SELECT
             lower(first_name) as first_name,

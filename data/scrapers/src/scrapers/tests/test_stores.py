@@ -1,24 +1,19 @@
 """Tests for the abstract store interfaces and data structures."""
 
 import unittest
-import unittest
-from unittest.mock import patch, MagicMock
-from scrapers.tests.mocks import MockIO, MockRejestrIO
+from unittest.mock import MagicMock
 
 from scrapers.stores import (
-    File,
-    IO,
-    RejestrIO,
-    Context,
-    DataRef,
-    DownloadableFile,
-    LocalFile,
-    FirestoreCollection,
     CloudStorage,
-    set_context,
-    get_context,
+    Context,
+    DownloadableFile,
+    FirestoreCollection,
+    LocalFile,
     Pipeline,
+    get_context,
+    set_context,
 )
+from scrapers.tests.mocks import MockIO, MockRejestrIO
 
 
 class TestStores(unittest.TestCase):

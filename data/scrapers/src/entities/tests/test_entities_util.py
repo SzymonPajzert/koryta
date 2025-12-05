@@ -1,7 +1,8 @@
 """Tests for the utility classes and functions."""
 
 import unittest
-from entities.util import IgnoredDates, NormalizedParse
+
+from entities.util import NormalizedParse
 
 
 class TestUtil(unittest.TestCase):

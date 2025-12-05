@@ -1,7 +1,7 @@
-from unittest.mock import MagicMock, patch
-from io import StringIO, BytesIO
-from scrapers.stores import File, IO, RejestrIO, DataRef, LocalFile
 import typing
+from io import BytesIO, StringIO
+
+from scrapers.stores import IO, DataRef, File, LocalFile, RejestrIO
 
 
 # Fake/Mock Implementations for testing

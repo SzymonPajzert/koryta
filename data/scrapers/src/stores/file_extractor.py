@@ -1,8 +1,9 @@
-import io
 import csv
 import fnmatch
-import pandas
+import io
 import math
+
+import pandas
 
 from scrapers.stores import Extractor, get_context
 

@@ -1,14 +1,14 @@
 import os
-import requests
 import re
-from pathlib import Path
-
-from typing import Callable
-from tqdm import tqdm
 import urllib.request
+from pathlib import Path
+from typing import Callable
 
-from stores.config import DOWNLOADED_DIR
+import requests
+from tqdm import tqdm
+
 from scrapers.stores import DownloadableFile as FileSourceConfig
+from stores.config import DOWNLOADED_DIR
 
 base_dir = Path(DOWNLOADED_DIR)
 

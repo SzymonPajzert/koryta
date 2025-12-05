@@ -1,19 +1,17 @@
-from pprint import pprint
-from collections import Counter
 
 import numpy as np
 import pandas as pd
 
-from util.lists import WIKI_POLITICAL_LINKS, TEST_FILES
-from scrapers.stores import PipelineModel, Context, LocalFile
-from entities.company import InterestingEntity, InterestingReason
-from scrapers.krs.data import CompaniesHardcoded
-from scrapers.krs.list import CompaniesKRS
-from scrapers.krs.graph import CompanyGraph
+from entities.company import KRS as KrsCompany
+from entities.company import InterestingEntity, InterestingReason, ManualKRS
 from scrapers.krs.companies import company_names
-from entities.company import KRS as KrsCompany, ManualKRS
-from scrapers.stores import Pipeline
+from scrapers.krs.data import CompaniesHardcoded
+from scrapers.krs.graph import CompanyGraph
+from scrapers.krs.list import CompaniesKRS
+from scrapers.stores import Context, LocalFile, Pipeline, PipelineModel
 from scrapers.wiki.process_articles import ProcessWiki
+from util.lists import TEST_FILES, WIKI_POLITICAL_LINKS
+
 
 def iterate(ctx, pipeline, constructor):
     try:

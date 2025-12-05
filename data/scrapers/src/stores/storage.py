@@ -1,14 +1,12 @@
-import os
 from datetime import datetime
-from zoneinfo import ZoneInfo
-from pathlib import Path
 from typing import Generator
+from zoneinfo import ZoneInfo
 
-from tqdm import tqdm
 from google.cloud import storage
+from tqdm import tqdm
 
-from scrapers.stores import DownloadableFile, IO
 from entities.util import NormalizedParse
+from scrapers.stores import IO, DownloadableFile
 
 BUCKET = "koryta-pl-crawled"
 warsaw_tz = ZoneInfo("Europe/Warsaw")

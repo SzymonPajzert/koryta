@@ -1,14 +1,14 @@
-import pytest
 import json
-import os
-import duckdb
 from unittest.mock import MagicMock
 
-from main import create_model
-from scrapers.tests.mocks import DictMockIO
-from scrapers.stores import Context, LocalFile, IO
+import duckdb
+import pytest
+
 from analysis.interesting import CompaniesMerged
-from entities.company import InterestingEntity, InterestingReason
+from entities.company import InterestingEntity
+from main import create_model
+from scrapers.stores import Context
+from scrapers.tests.mocks import DictMockIO
 
 
 @pytest.fixture

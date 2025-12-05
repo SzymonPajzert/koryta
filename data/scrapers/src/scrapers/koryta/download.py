@@ -9,16 +9,15 @@ It defines two main pipelines:
   within them by processing 'edges' data from Firestore.
 """
 
-from tqdm import tqdm
 import typing
 from collections import Counter
 
-
-from scrapers.stores import Context, PipelineModel, FirestoreCollection
-from entities.util import NormalizedParse
+from tqdm import tqdm
 
 from entities.article import Article
 from entities.person import Koryta as Person
+from entities.util import NormalizedParse
+from scrapers.stores import Context, FirestoreCollection, PipelineModel
 
 
 def list_people(ctx: Context) -> typing.Generator[Person, None, None]:

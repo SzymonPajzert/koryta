@@ -1,8 +1,6 @@
 """Tests for the crawler data classes."""
 
 import unittest
-from datetime import datetime
-from entities.crawler import HostnameConfig, RequestLog, WebsiteIndex
 
 
 class TestCrawlerEntities(unittest.TestCase):

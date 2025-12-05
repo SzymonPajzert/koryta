@@ -1,12 +1,12 @@
-from typing import Callable
 import dataclasses
+from typing import Callable
 
 import pandas as pd
 
-from scrapers.stores import DownloadableFile as FileSource
-from scrapers.stores import PipelineModel, Context
-from scrapers.teryt import Teryt
 from entities.company import ManualKRS as KRS
+from scrapers.stores import Context, PipelineModel
+from scrapers.stores import DownloadableFile as FileSource
+from scrapers.teryt import Teryt
 
 
 class CompaniesHardcoded(PipelineModel):

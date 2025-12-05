@@ -1,6 +1,7 @@
-import pytest
 import duckdb
 import pandas as pd
+import pytest
+
 from analysis.utils.tables import create_people_table, init_tables
 
 

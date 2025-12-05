@@ -1,11 +1,12 @@
 import abc
-from dataclasses import dataclass, field
-from datetime import date
 import typing
+from dataclasses import dataclass
+from datetime import date
 
-from util.polish import PkwFormat
-from scrapers.stores import DownloadableFile as FileSource, Context, File
 from scrapers.pkw.elections import ElectionType
+from scrapers.stores import Context, File
+from scrapers.stores import DownloadableFile as FileSource
+from util.polish import PkwFormat
 
 
 class Extractor(abc.ABC):

@@ -1,22 +1,21 @@
 import itertools
-from dataclasses import dataclass
-import typing
-from regex import findall, search  # TODO remove
-from collections import Counter
-from memoized_property import memoized_property
-
 import multiprocessing
+import typing
 import xml.etree.ElementTree as ET
-from tqdm import tqdm
-import mwparserfromhell
+from collections import Counter
+from dataclasses import dataclass
 
-from scrapers.stores import DownloadableFile
-from util.polish import UPPER, LOWER
-from util.lists import WIKI_POLITICAL_LINKS
-from scrapers.wiki.util import parse_date
-from scrapers.stores import Context, PipelineModel
-from entities.person import Wikipedia as People
+import mwparserfromhell
+from memoized_property import memoized_property
+from regex import findall, search  # TODO remove
+from tqdm import tqdm
+
 from entities.company import Wikipedia as Company
+from entities.person import Wikipedia as People
+from scrapers.stores import Context, DownloadableFile, PipelineModel
+from scrapers.wiki.util import parse_date
+from util.lists import WIKI_POLITICAL_LINKS
+from util.polish import LOWER, UPPER
 
 WIKI_DUMP = DownloadableFile(
     "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2",

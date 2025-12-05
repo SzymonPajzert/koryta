@@ -1,8 +1,6 @@
 # TODO move to entities?
 import typing
 from dataclasses import dataclass
-from entities.company import ManualKRS as KRS
-
 
 # If relation is passive and one of this type, it's a child.
 PARENT_RELATION = {

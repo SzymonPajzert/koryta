@@ -1,17 +1,15 @@
-import requests
+import copy
 import time
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
 from zoneinfo import ZoneInfo
+
+import requests
+from bs4 import BeautifulSoup
 from uuid_extensions import uuid7str
-import copy
 
-
+from entities.crawler import RequestLog, WebsiteIndex
 from entities.util import NormalizedParse
 from scrapers.stores import Context
-
-from entities.crawler import RequestLog, WebsiteIndex, HostnameConfig
-
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 

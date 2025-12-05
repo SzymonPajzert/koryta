@@ -1,14 +1,12 @@
-from collections import Counter
 import argparse
 import typing
-
-from scrapers.stores import Context, PipelineModel
-from util.polish import parse_name, PkwFormat
-from scrapers.pkw.sources import sources, InputSource
-from scrapers.pkw.headers import CSV_HEADERS, SetField, ElectionContext
+from collections import Counter
 
 from entities.person import PKW as Person
-
+from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
+from scrapers.pkw.sources import InputSource, sources
+from scrapers.stores import Context, PipelineModel
+from util.polish import PkwFormat, parse_name
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
 

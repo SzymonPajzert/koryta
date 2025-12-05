@@ -1,6 +1,5 @@
-from scrapers.stores import Context, CloudStorage
 from entities.article import Mention
-
+from scrapers.stores import CloudStorage, Context
 
 # Welcome to koryta.pl data science team!
 # Sorry for writing in English, but that's how I usually code and there's a chance

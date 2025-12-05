@@ -1,11 +1,11 @@
-from dataclasses import dataclass
 import typing
+from dataclasses import dataclass
 from typing import Any, Never
 
-from scrapers.stores import get_context
-from scrapers.teryt import Teryt
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.okregi import voting_district_to_city
+from scrapers.stores import get_context
+from scrapers.teryt import Teryt
 
 teryt: None | Teryt = None
 

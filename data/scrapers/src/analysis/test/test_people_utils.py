@@ -1,6 +1,5 @@
-import math
-import pytest
 from analysis.people import unique_probability
+
 
 def test_unique_probability_defaults():
     # p1=None, p2=None, second_name_match=False, n=None

@@ -3,9 +3,6 @@ from typing import Any, Iterable
 from google.cloud import firestore
 
 
-from scrapers.stores import IO
-
-
 class FirestoreIO:
     db: firestore.Client
 
