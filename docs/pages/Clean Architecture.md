@@ -1,5 +1,0 @@
-- I've watched a video {{video https://www.youtube.com/watch?v=XRzRGNPaGt8}} and it convinced me to take a look
--
-- https://agorism.dev/book/software-architecture/%28Robert%20C.%20Martin%20Series%29%20Robert%20C.%20Martin%20-%20Clean%20Architecture_%20A%20Craftsman%E2%80%99s%20Guide%20to%20Software%20Structure%20and%20Design-Prentice%20Hall%20%282017%29.pdf has it
--
--

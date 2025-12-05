@@ -1,5 +1,0 @@
-- A good source of #entity/person for the website
--
-- TODO [[Extract public companies from wikipedia]]
-- TODO [[Find people mentioned on wiki pages]]
--

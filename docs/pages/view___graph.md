@@ -1,7 +1,0 @@
-- Show #entity/task in the graph, so we get an overview what is needed
--
-- LATER right click to see a filtered view
-	- Actually, just doing something with right-click seems right
-- LATER Fix the location when running the simulation on a big graph
--
-- TODO api/graph.ts - set cache https://firebase.google.com/docs/hosting/manage-cache#set_cache-control

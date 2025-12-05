@@ -1,3 +1,5 @@
+- #ui #firebase
+-
 - TODO Changes are visible differently in [[api/graph]] and [[api/graphLayout]]
 	- PUBLIC - visible by unauthorized
 	- CURRENT_USER - if logged in, show updated version of the graph

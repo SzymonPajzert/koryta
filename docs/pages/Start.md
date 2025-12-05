@@ -12,9 +12,4 @@
 	- [[Informatycy mogą pracować]]
 - ## [[promocja]]
 	- [[SSR + SEO]]
-- ## Technical
-	- [[Migrate to firestore]]
-- ## [[Kolejne źródła danych]] - [[dane]]
--
--
-- [[Małe zadania]]
+- ## [[dane]]

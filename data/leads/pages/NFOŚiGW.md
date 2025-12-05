@@ -2,3 +2,9 @@ type:: company
 
 -
 - [NFOŚiGW](https://docs.google.com/document/u/0/d/1HKZyy3VWkmIRdzwZxjoHjQDCXxmf_XbjM4wzwJu3eJI/edit)
+-
+- Ja jakie to jest proste jak znaleźć kolejne osoby
+	- Wchodzę sobie na https://www.gov.pl/web/nfosigw/nfosigw-pomaga-zapewnic-niezawodne-i-ekologiczne-ogrzewanie-w-siedlcach
+	- Wyszukuję dowolne nazwiska
+	- Okazuje się że z oboma osobami w tym artykule jest chryja
+	- Dowolne nazwisko to albo osoba która się zna albo jeśli podają jej nazwisko to jest jakiś koleś od nich

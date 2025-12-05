@@ -1,1 +1,0 @@
-- The website for koryta.pl

@@ -1,10 +1,9 @@
+- I think this is just a proto note for #Crawler, but let's see later
+-
 - Usecases
 	- [[Prasa do siana]] ingests an article, tags some people. People can vote if the connection is legit
 -
 - TODO think about it, because it looks like a needed part for #aktywizacja
--
-- TODO What do we need
-	- Connections are first class elements in #entity?
 -
 - The page auto suggests connections
 	- A name of two entities are similar?

@@ -1,7 +1,0 @@
-- TODO add a #Firestore #entity/connection
-	- DB - connect to actual entries
-		- entity_type
-		- id of the entity
-	- #entity/record
-		- id
-		- data_source - corresponds to [[dane]]
