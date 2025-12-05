@@ -90,26 +90,38 @@ def create_people_table(
                 ) as derived_second_name
             FROM {tbl_name}_raw
         ),
+        raw_filled_birth_year AS (
+            SELECT
+                *,
+                CASE
+                    WHEN (MAX(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name) - 
+                          MIN(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name)) <= 1 THEN
+                        MAX(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name)
+                    ELSE
+                        birth_year
+                END as effective_birth_year
+            FROM raw_with_second_name
+        ),
         null_second_names AS (
             SELECT
                 first_name,
                 last_name,
-                birth_year
+                effective_birth_year as birth_year
                 {agg_select_str}
-            FROM raw_with_second_name
+            FROM raw_filled_birth_year
             WHERE derived_second_name IS NULL OR derived_second_name = ''
-            GROUP BY first_name, last_name, birth_year
+            GROUP BY first_name, last_name, effective_birth_year
         ),
         non_null_second_names AS (
             SELECT
                 first_name,
                 last_name,
-                birth_year,
+                effective_birth_year as birth_year,
                 derived_second_name
                 {agg_select_str}
-            FROM raw_with_second_name
+            FROM raw_filled_birth_year
             WHERE derived_second_name IS NOT NULL AND derived_second_name != ''
-            GROUP BY first_name, last_name, birth_year, derived_second_name
+            GROUP BY first_name, last_name, effective_birth_year, derived_second_name
         )
         SELECT
             coalesce(non_null.first_name, nulls.first_name) as first_name,
@@ -122,6 +134,6 @@ def create_people_table(
         FULL OUTER JOIN null_second_names as nulls
         ON non_null.first_name = nulls.first_name
         AND non_null.last_name = nulls.last_name
-        AND non_null.birth_year = nulls.birth_year
+        AND (non_null.birth_year = nulls.birth_year OR (non_null.birth_year IS NULL AND nulls.birth_year IS NULL))
         """
     )

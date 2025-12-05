@@ -111,6 +111,7 @@ def people_merged(ctx: Context, krs_people):
             k.birth_date as birth_date,
             k.employment,
             k.birth_year = p.birth_year as kp_same_birth_year,
+            p.birth_year as pkw_birth_year,
             p.elections,
             CASE
                 WHEN p.full_name IS NOT NULL THEN
@@ -184,44 +185,62 @@ def people_merged(ctx: Context, krs_people):
             MAX(overall_score) as max_score
         FROM scored
         GROUP BY base_first_name, base_last_name, metaphone, birth_date
+    ),
+    unique_krs AS (
+        SELECT
+            1 / (1 - unique_chance) as mistake_odds,
+            unique_chance,
+            overall_score,
+            koryta_name,
+            krs_name,
+            pkw_name,
+            wiki_name,
+            birth_year,
+            max_scores.birth_date,
+            employment,
+            is_polityk,
+            *
+        FROM max_scores LEFT JOIN scored ON (
+            max_scores.base_first_name = scored.base_first_name
+            AND max_scores.base_last_name = scored.base_last_name
+            AND max_scores.metaphone = scored.metaphone
+            AND max_scores.birth_date = scored.birth_date
+            AND max_scores.max_score = scored.overall_score
+        )
+        WHERE overall_score >= 8
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY krs_name, birth_year ORDER BY overall_score DESC, ABS(birth_year - pkw_birth_year) ASC NULLS LAST) = 1
     )
-    
-    SELECT
-        1 / (1 - unique_chance) as mistake_odds,
-        unique_chance,
-        overall_score,
-        koryta_name,
-        krs_name,
-        pkw_name,
-        wiki_name,
-        birth_year,
-        max_scores.birth_date,
-        employment,
-        is_polityk,
-        *
-    FROM max_scores LEFT JOIN scored ON (
-        max_scores.base_first_name = scored.base_first_name
-        AND max_scores.base_last_name = scored.base_last_name
-        AND max_scores.metaphone = scored.metaphone
-        AND max_scores.birth_date = scored.birth_date
-        AND max_scores.max_score = scored.overall_score
-    )
-    WHERE overall_score >= 8
+    SELECT * FROM unique_krs
     ORDER BY mistake_odds DESC, overall_score DESC, koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """
-    print("\n--- Overlaps between Koryta, KRS, PKW, and Wiki ---")
     df = con.execute(query).df()
     if df.empty:
         raise Exception("No matches found with the current criteria.")
 
     df = read_enriched(ctx, df)
+    
+    dupes = df[df.duplicated(subset=["krs_name"], keep=False)]
+    if not dupes.empty:
+        # Filter out duplicates where birth years differ by more than 1
+        def has_conflicting_birth_years(group):
+            years = group["birth_year"].dropna().unique()
+            if len(years) <= 1:
+                return False
+            return (years.max() - years.min()) > 1
+
+        # Let's do it more explicitly
+        conflicting_names = dupes.groupby("krs_name").filter(has_conflicting_birth_years)["krs_name"].unique()
+        dupes = dupes[~dupes["krs_name"].isin(conflicting_names)]
+
+        if not dupes.empty:
+            smaller = dupes[["krs_name", "pkw_name", "wiki_name", "overall_score", "mistake_odds", "birth_year", "elections"]].sort_values("krs_name")
+            print(f"Found {len(dupes)} duplicates")
+            ctx.io.write_dataframe(smaller, "people_duplicated.jsonl")
+
 
     non_duplicates = len(
         df[df["overall_score"] > 10.5].drop_duplicates(
             ["krs_name", "pkw_name", "wiki_name"]
         )
-    )
-    print(
-        f"Rows with no duplicates in krs_name, pkw_name, and wiki_name: {non_duplicates}"
     )
     return df

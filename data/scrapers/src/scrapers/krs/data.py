@@ -95,7 +95,6 @@ class CompaniesHardcoded(PipelineModel):
             orient="index",  # Each key is a separate entry
         )
 
-        print(df)
         return df
 
 

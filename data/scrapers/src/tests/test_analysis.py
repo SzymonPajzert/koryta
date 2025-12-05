@@ -90,7 +90,23 @@ def test_not_duplicated(df_all):
     for column, value in list_values(["krs_name", "pkw_name", "wiki_name"]):
         # Make sure that peeple are not duplicated in the output
         # I.e each value occurs only once in the krs_name, pkw_name or wiki_name in df
-        assert len(df_all[df_all[column] == value]) == 1, f"{column} == {value}"
+        matches = df_all[df_all[column] == value]
+        if len(matches) > 1:
+            # Check if they are distinct entities based on rejestrio_id
+            # If all sets of rejestrio_id are disjoint, they are distinct people
+            ids_list = matches["rejestrio_id"].tolist()
+            # Flatten and check for duplicates
+            all_ids = []
+            for ids in ids_list:
+                if isinstance(ids, list) or hasattr(ids, "__iter__"):
+                    all_ids.extend(ids)
+                else:
+                    all_ids.append(ids)
+
+            if len(all_ids) == len(set(all_ids)):
+                continue  # All distinct source records
+
+        assert len(matches) == 1, f"{column} == {value}"
 
 
 def get_words(name):
@@ -244,3 +260,36 @@ def no_diff_sets(a, b):
 #         find_krs()
 #     krs = KRS(krs)
 #     assert krs in scraped_krs
+
+
+def test_andrzej_jan_sikora_duplicated(df_all):
+    # Filter for Andrzej Jan Sikora - we expect two people
+    sikora_records = df_all[df_all["krs_name"] == "Andrzej Jan Sikora"]
+    assert (
+        len(sikora_records) == 2
+    ), f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
+
+    birth_years = sorted(sikora_records["birth_year"].dropna().astype(int).tolist())
+
+    assert birth_years == [
+        1946,
+        1950,
+    ], f"Expected birth years [1946, 1950], found {birth_years}"
+
+
+def test_adam_smoter_deduplication(df_all):
+    # Adam Smoter should be found only once born in 1947
+    smoter_records = df_all[df_all["krs_name"] == "Adam Smoter"]
+    assert (
+        len(smoter_records) == 1
+    ), f"Expected 1 record for Adam Smoter, found {len(smoter_records)}"
+    assert smoter_records.iloc[0]["birth_year"] == 1947
+
+
+def test_teresa_zieba_deduplication(df_all):
+    zieba_records = df_all[df_all["krs_name"] == "Teresa Zięba"]
+    assert (
+        len(zieba_records) == 1
+    ), f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
+    # Check birth year is 1959 (or 1958, but we expect one)
+    assert zieba_records.iloc[0]["birth_year"] in [1958, 1959]
