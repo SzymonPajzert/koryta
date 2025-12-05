@@ -1,15 +1,16 @@
 from analysis.utils.tables import create_people_table
-from scrapers.stores import PipelineModel, LocalFile, Context
+from scrapers.stores import PipelineModel, Context
+from scrapers.wiki.process_articles import ProcessWiki
 
 
 class PeopleWikiMerged(PipelineModel):
     filename: str = "people_wiki_merged"
-    wiki_file: LocalFile = LocalFile("person_wikipedia.jsonl", "versioned")
+    wiki_pipeline: ProcessWiki
 
     def process(self, ctx: Context):
         con = ctx.con
 
-        wiki_data = ctx.io.read_data(self.wiki_file).read_dataframe("jsonl")
+        wiki_data = self.wiki_pipeline.process(ctx)
 
         con.execute(
             f"""

@@ -47,7 +47,7 @@ def list_people(ctx: Context) -> typing.Generator[Person, None, None]:
 
 
 class KorytaPeople(PipelineModel):
-    filename: str = "process_people"
+    filename: str = "person_koryta"
     nodes_collection: FirestoreCollection = FirestoreCollection(
         "nodes", filters=[("type", "==", "person")]
     )
@@ -66,7 +66,7 @@ class KorytaPeople(PipelineModel):
 
 
 class KorytaArticles(PipelineModel):
-    filename: str = "process_articles"
+    filename: str = "article_article"
     nodes_collection: FirestoreCollection = FirestoreCollection(
         "nodes", filters=[("type", "==", "article")]
     )

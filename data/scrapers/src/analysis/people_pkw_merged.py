@@ -1,18 +1,16 @@
-
-from scrapers.stores import PipelineModel, LocalFile, Context
-from analysis.utils.tables import create_people_table, init_tables
+from scrapers.stores import PipelineModel, Context
+from analysis.utils.tables import create_people_table
+from scrapers.pkw.process import PeoplePKW
 
 
 class PeoplePKWMerged(PipelineModel):
     filename: str = "people_pkw_merged"
-    pkw_file: LocalFile = LocalFile("person_pkw.jsonl", "versioned")
+    pkw_pipeline: PeoplePKW
 
     def process(self, ctx: Context):
         con = ctx.con
 
-        init_tables(con)
-
-        pkw_data = ctx.io.read_data(self.pkw_file).read_dataframe("jsonl")
+        pkw_data = self.pkw_pipeline.process(ctx)
 
         con.execute(
             f"""

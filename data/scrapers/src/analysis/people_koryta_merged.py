@@ -1,15 +1,16 @@
 
-from scrapers.stores import PipelineModel, LocalFile, Context
+from scrapers.stores import PipelineModel, Context
+from scrapers.koryta.download import KorytaPeople
 
 
 class PeopleKorytaMerged(PipelineModel):
     filename: str = "people_koryta_merged"
-    koryta_file: LocalFile = LocalFile("person_koryta.jsonl", "versioned")
+    koryta_pipeline: KorytaPeople
 
     def process(self, ctx: Context):
         con = ctx.con
 
-        koryta_data = ctx.io.read_data(self.koryta_file).read_dataframe("jsonl")
+        koryta_data = self.koryta_pipeline.process(ctx)
 
         con.execute(
             f"""
