@@ -296,7 +296,15 @@ class Pipeline[PM]:
 
     model: PM | None
 
-    def __init__(self, process: Callable[[Context], pd.DataFrame], filename: str | None = None, use_rejestr_io=False, model: PM | None = None):
+    def __init__(
+        self,
+        process: Callable[[Context], pd.DataFrame],
+        filename: str | None = None,
+        use_rejestr_io=False,
+        model: PM | None = None,
+        use_rejestr_io=False,
+        force_refresh=False,
+    ):
         """
         Initializes the Pipeline decorator.
 
@@ -311,9 +319,10 @@ class Pipeline[PM]:
         self.filename = filename
         self.rejestr_io = use_rejestr_io
         self.model = model
+        self.force_refresh = force_refresh
 
     def process(self, ctx: Context):
-        return Pipeline.read_or_process(ctx, self.filename, self._process)
+        return Pipeline.read_or_process(ctx, self.filename, self._process, self.force_refresh)
 
     @staticmethod
     def from_model(model: PipelineModel) -> "Pipeline":
@@ -331,10 +340,15 @@ class Pipeline[PM]:
         return df, json_path
 
     @staticmethod
-    def read_or_process(ctx: Context, filename: str | None, process: Callable[[Context], pd.DataFrame]):
+    def read_or_process(
+        ctx: Context,
+        filename: str | None,
+        process: Callable[[Context], pd.DataFrame],
+        force_refresh=False,
+    ):
         json_path: str | None = None
         df: pd.DataFrame | None = None
-        if filename is not None:
+        if filename is not None and not force_refresh:
             df, json_path = Pipeline.read(ctx, filename)
 
         if df is None:
