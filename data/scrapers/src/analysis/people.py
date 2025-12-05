@@ -2,12 +2,12 @@ import pandas as pd
 import math
 
 from analysis.utils import read_enriched
-from analysis.utils.names import names_count_by_region, first_name_freq
+from analysis.utils.names import NamesCountByRegion, FirstNameFreq
 from scrapers.stores import PipelineModel, LocalFile, Context
 from analysis.people_krs_merged import PeopleKRSMerged
-from analysis.people_wiki_merged import people_wiki_merged
-from analysis.people_koryta_merged import people_koryta_merged
-from analysis.people_pkw_merged import people_pkw_merged
+from analysis.people_wiki_merged import PeopleWikiMerged
+from analysis.people_koryta_merged import PeopleKorytaMerged
+from analysis.people_pkw_merged import PeoplePKWMerged
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -62,26 +62,40 @@ def unique_probability(
 class PeopleMerged(PipelineModel):
     filename: str = "people_merged"
     people_krs: PeopleKRSMerged
+    people_wiki: PeopleWikiMerged
+    people_pkw: PeoplePKWMerged
+    # people_koryta: PeopleKorytaMerged
+    names_count_by_region: NamesCountByRegion
+    first_name_freq: FirstNameFreq
 
     def process(self, ctx: Context):
-        return people_merged(ctx, self.people_krs.process(ctx))
+        return people_merged(
+            ctx,
+            self.people_krs.process(ctx),
+            self.people_wiki.process(ctx),
+            self.people_pkw.process(ctx),
+            self.names_count_by_region.process(ctx),
+            self.first_name_freq.process(ctx),
+        )
 
 
-def people_merged(ctx: Context, krs_people):
+def people_merged(
+    ctx: Context,
+    krs_people,
+    wiki_people,
+    pkw_people,
+    names_count_by_region_table,
+    first_name_freq_table,
+):
     con = ctx.con
     con.create_function(
         "unique_probability", unique_probability, null_handling="special"  # type: ignore
     )
 
-    wiki_people = people_wiki_merged.process(ctx)
-    pkw_people = people_pkw_merged.process(ctx)
     # TODO koryta_people = people_koryta_merged.process(ctx)
     koryta_people = pd.DataFrame(
         data=[{"first_name": "empty", "last_name": "empty", "full_name": "empty"}]
     )
-
-    names_count_by_region_table = names_count_by_region.process(ctx)
-    first_name_freq_table = first_name_freq.process(ctx)
 
     print("--- Imported table sizes ---")
     for table in [
