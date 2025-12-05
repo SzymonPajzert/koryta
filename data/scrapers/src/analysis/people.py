@@ -8,6 +8,7 @@ from analysis.people_krs_merged import PeopleKRSMerged
 from analysis.people_wiki_merged import PeopleWikiMerged
 from analysis.people_koryta_merged import PeopleKorytaMerged
 from analysis.people_pkw_merged import PeoplePKWMerged
+from scrapers.krs.list import CompaniesKRS
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -67,6 +68,7 @@ class PeopleMerged(PipelineModel):
     # people_koryta: PeopleKorytaMerged
     names_count_by_region: NamesCountByRegion
     first_name_freq: FirstNameFreq
+    companies_krs: CompaniesKRS
 
     def process(self, ctx: Context):
         return people_merged(
@@ -76,6 +78,7 @@ class PeopleMerged(PipelineModel):
             self.people_pkw.process(ctx),
             self.names_count_by_region.process(ctx),
             self.first_name_freq.process(ctx),
+            self.companies_krs.process(ctx),
         )
 
 
@@ -86,6 +89,7 @@ def people_merged(
     pkw_people,
     names_count_by_region_table,
     first_name_freq_table,
+    companies_df,
 ):
     con = ctx.con
     con.create_function(
@@ -231,8 +235,8 @@ def people_merged(
     if df.empty:
         raise Exception("No matches found with the current criteria.")
 
-    df = read_enriched(ctx, df)
-    
+    df = read_enriched(ctx, df, companies_df)
+
     dupes = df[df.duplicated(subset=["krs_name"], keep=False)]
     if not dupes.empty:
         # Filter out duplicates where birth years differ by more than 1
@@ -243,14 +247,27 @@ def people_merged(
             return (years.max() - years.min()) > 1
 
         # Let's do it more explicitly
-        conflicting_names = dupes.groupby("krs_name").filter(has_conflicting_birth_years)["krs_name"].unique()
+        conflicting_names = (
+            dupes.groupby("krs_name")
+            .filter(has_conflicting_birth_years)["krs_name"]
+            .unique()
+        )
         dupes = dupes[~dupes["krs_name"].isin(conflicting_names)]
 
         if not dupes.empty:
-            smaller = dupes[["krs_name", "pkw_name", "wiki_name", "overall_score", "mistake_odds", "birth_year", "elections"]].sort_values("krs_name")
+            smaller = dupes[
+                [
+                    "krs_name",
+                    "pkw_name",
+                    "wiki_name",
+                    "overall_score",
+                    "mistake_odds",
+                    "birth_year",
+                    "elections",
+                ]
+            ].sort_values("krs_name")
             print(f"Found {len(dupes)} duplicates")
             ctx.io.write_dataframe(smaller, "people_duplicated.jsonl")
-
 
     non_duplicates = len(
         df[df["overall_score"] > 10.5].drop_duplicates(

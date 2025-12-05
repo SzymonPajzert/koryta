@@ -10,7 +10,7 @@ from scrapers.krs.companies import (
     lodzkie_companies,
 )
 from scrapers.pkw.elections import committee_to_party
-from scrapers.stores import Context, LocalFile
+from scrapers.stores import Context
 from scrapers.teryt import Teryt
 from scrapers.pkw.sources import election_date
 
@@ -20,17 +20,16 @@ RECENT_EMPLOYMENT_START = date.fromisoformat("2024-10-01")
 OLD_EMPLOYMENT_END = date.fromisoformat("2020-10-01")
 
 
-def read_enriched(ctx: Context, matched_all):
+def read_enriched(ctx: Context, matched_all, companies_df):
     # Add derived fields
-    enriched = append_nice_history(ctx, matched_all)
+    company_names = get_company_names(companies_df)
+    enriched = append_nice_history(ctx, matched_all, company_names)
     enriched = enriched.sort_values(by="election_before_work").reset_index()
     return enriched
 
 
-def get_company_names(ctx: Context):
-    krs_companies = ctx.io.read_data(
-        LocalFile("company_krs.jsonl", "versioned")
-    ).read_jsonl()
+def get_company_names(companies_df):
+    krs_companies = companies_df.to_dict("records")
     company_names_krs = {
         elt["krs"]: f"{elt["name"]} w {elt["city"]}" for elt in krs_companies
     }
@@ -40,8 +39,7 @@ def get_company_names(ctx: Context):
     }
 
 
-def extract_companies(ctx: Context, df):
-    company_names = get_company_names(ctx)
+def extract_companies(ctx: Context, df, company_names):
     krs = Counter()
     for es in df["employment"].to_list():
         for e in es:
@@ -54,9 +52,8 @@ def extract_companies(ctx: Context, df):
     ]
 
 
-def append_nice_history(ctx: Context, df):
+def append_nice_history(ctx: Context, df, company_names):
     missing_teryt = set()
-    company_names = get_company_names(ctx)
     teryt = Teryt(ctx)
 
     def nice_history(row):
