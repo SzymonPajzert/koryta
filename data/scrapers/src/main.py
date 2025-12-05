@@ -25,7 +25,7 @@ from scrapers.stores import (
 )
 
 from scrapers.stores import Context, Pipeline, PipelineModel
-from scrapers.koryta.download import process_people as scrape_koryta_people_func
+from scrapers.koryta.download import KorytaPeople
 from scrapers.wiki.process_articles import ProcessWiki
 from scrapers.pkw.process import PeoplePKW
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -179,8 +179,7 @@ def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
 
 # TODO reenable reading from koryta, maybe without firestore
 # def scrape_koryta_people():
-#     f = setup_pipeline(scrape_koryta_people_func)
-#     f()
+#     return run_pipeline(KorytaPeople)[1]
 
 
 def scrape_wiki():

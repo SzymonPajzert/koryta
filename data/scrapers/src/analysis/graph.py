@@ -1,7 +1,7 @@
 import pandas as pd
 import networkx as nx
 
-from analysis.people_pkw_merged import people_pkw_merged
+
 from analysis.utils import committee_to_party
 
 
@@ -27,7 +27,11 @@ def flatten_parties(df):
 
 
 def calculate_people_parties():
-    df = people_pkw_merged()
+    from analysis.people_pkw_merged import PeoplePKWMerged
+    # TODO: This needs a proper Context to run
+    # df = PeoplePKWMerged().process(ctx)
+    raise NotImplementedError("This function needs to be updated to use PeoplePKWMerged pipeline")
+    # df = people_pkw_merged()
     # Standardize the name, so we can use it as an identifier
     df = flatten_parties(df)
 

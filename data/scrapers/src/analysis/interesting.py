@@ -13,7 +13,7 @@ from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.companies import company_names
 from entities.company import KRS as KrsCompany, ManualKRS
 from scrapers.stores import Pipeline
-
+from scrapers.wiki.process_articles import ProcessWiki
 
 def iterate(ctx, pipeline, constructor):
     try:
@@ -31,6 +31,7 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
 
     scraped_companies: CompaniesKRS
     hardcoded_companies: CompaniesHardcoded
+    wiki_pipeline: ProcessWiki
 
     def process(self, ctx: Context):
         """
@@ -50,9 +51,12 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
         )
         children_of_hardcoded = pd.DataFrame({"krs": list(children_of_hardcoded_set)})
 
+        self.wiki_pipeline.process(ctx)
         wiki_companies = ctx.io.read_data(
             LocalFile("company_wikipedia.jsonl", "versioned")
         ).read_dataframe("jsonl")
+        
+        # company_krs is already processed by scraped_companies
         krs_companies = ctx.io.read_data(
             LocalFile("company_krs.jsonl", "versioned")
         ).read_dataframe("jsonl")

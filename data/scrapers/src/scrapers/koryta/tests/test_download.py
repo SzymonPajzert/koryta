@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from scrapers.koryta.download import list_people, process_people, process_articles
+from scrapers.koryta.download import list_people, KorytaPeople, KorytaArticles
 from scrapers.stores import Context, FirestoreCollection
 from entities.person import Koryta as Person
 from entities.article import Article

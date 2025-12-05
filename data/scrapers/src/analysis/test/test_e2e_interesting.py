@@ -94,6 +94,7 @@ def test_find_interesting_entities_e2e(ctx):
     model.hardcoded_companies.output.return_value = []
     model.scraped_companies = MagicMock()
     model.scraped_companies.filename = "company_krs" # Mock filename for iterate
+    model.wiki_pipeline = MagicMock()
     pipeline.process(ctx)
 
     results = [e for e in ctx.io.output if isinstance(e, InterestingEntity)]
