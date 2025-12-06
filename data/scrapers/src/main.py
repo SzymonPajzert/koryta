@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from analysis.interesting import CompaniesMerged
 from analysis.people import PeopleMerged
+from analysis.stats import Statistics
 from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
@@ -130,12 +131,13 @@ def run_pipeline(
     nested=0,
     refresh_target: str | None = None,
     only_target: str | None = None,
-) -> tuple[Pipeline, pd.DataFrame] | None:
+) -> tuple[Pipeline, pd.DataFrame]:
     pipeline_name = pipeline_type.__name__
 
     # Filter execution if "only" is specified
     requested_other_target = only_target and only_target not in {"all", pipeline_name}
     if nested == 0 and requested_other_target:
+        # TODO implement lazy loading so there's always output
         return None
 
     pipeline_model = pipeline_type()
@@ -192,33 +194,41 @@ def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
     return func
 
 
+def info_exception(pipeline_name: str) -> NotImplementedError:
+    return NotImplementedError(f"""Removed. Run instead:
+$ koryta --only {pipeline_name}
+python> from main import run_pipeline
+python> run_pipeline({pipeline_name})[1]
+""")
+
+
 # TODO reenable reading from koryta, maybe without firestore
 # def scrape_koryta_people():
 #     return run_pipeline(KorytaPeople)[1]
 
 
 def scrape_wiki():
-    raise NotImplementedError("Removed: run instead: koryta --only ProcessWiki")
+    raise info_exception("ProcessWiki")
 
 
 def scrape_pkw():
-    raise NotImplementedError("Removed: run instead: koryta --only PeoplePKW")
+    raise info_exception("PeoplePKW")
 
 
 def scrape_krs_people():
-    raise NotImplementedError("Removed: run instead: koryta --only PeopleKRS")
+    raise info_exception("PeopleKRS")
 
 
 def scrape_krs_companies():
-    raise NotImplementedError("Removed: run instead: koryta --only CompaniesKRS")
+    raise info_exception("CompaniesKRS")
 
 
 def people_merged():
-    raise NotImplementedError("Removed: run instead: koryta --only PeopleMerged")
+    raise info_exception("PeopleMerged")
 
 
 def companies_merged():
-    raise NotImplementedError("Removed: run instead: koryta --only CompaniesMerged")
+    raise info_exception("CompaniesMerged")
 
 
 def main():
@@ -236,6 +246,7 @@ def main():
         CompaniesKRS,
         PeopleMerged,
         CompaniesMerged,
+        Statistics,
     ]
 
     try:
