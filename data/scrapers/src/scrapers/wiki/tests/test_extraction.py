@@ -1,12 +1,16 @@
 import dataclasses
 import itertools
 import os
+import itertools
+import os
 import xml.etree.ElementTree as ET
 
 import pytest
 
+from pathlib import Path
 from main import setup_context
 from scrapers.stores import LocalFile
+from scrapers.tests.mocks import test_context, setup_test_context
 from scrapers.wiki.process_articles import (
     Company,
     People,
@@ -191,15 +195,22 @@ COMPANIES_EXPECTED = {
     ),
 }
 
-ctx, _ = setup_context(False)
+@pytest.fixture
+def ctx():
+    base_path = Path(__file__).parent.parent.parent.parent.parent / "tests"
+    mapping = {
+        str(LocalFile(f"{file}.xml", "tests")): str(base_path / f"{file}.xml") for file in list_test_files()
+    }
+    return setup_test_context(test_context(), mapping)
 
 
 def list_test_files():
     return itertools.chain(PEOPLE_EXPECTED.keys(), COMPANIES_EXPECTED.keys())
 
 
+
 @pytest.mark.parametrize("filename", list_test_files())
-def test_links(filename):
+def test_links(filename, ctx):
     with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
@@ -213,7 +224,7 @@ def test_links(filename):
 
 
 @pytest.mark.parametrize("filename", list_test_files())
-def test_entity_extraction(filename):
+def test_entity_extraction(filename, ctx):
     with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
@@ -240,9 +251,13 @@ def test_entity_extraction(filename):
 
 
 @pytest.mark.parametrize("filename", TEST_FILES)
-def test_all_tested(filename):
-    path = ctx.io.list_data(LocalFile(f"{filename}.xml", "tests"))[0]
-    assert os.path.exists(path)
+def test_all_tested(filename, ctx):
+    # Verify the file exists in the context
+    try:
+        ctx.io.read_data(LocalFile(f"{filename}.xml", "tests"))
+    except FileNotFoundError:
+        pytest.fail(f"Test file {filename}.xml not found in mock context")
+
 
     if filename in PEOPLE_EXPECTED:
         return

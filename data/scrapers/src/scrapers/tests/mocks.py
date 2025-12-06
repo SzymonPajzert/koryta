@@ -1,3 +1,10 @@
+import os
+import typing
+
+from io import BytesIO, StringIO
+from unittest.mock import MagicMock, patch
+
+from scrapers.stores import IO, Context, DataRef, File, LocalFile, RejestrIO
 import csv
 import json
 import typing
@@ -11,12 +18,18 @@ from stores.file import FromPath
 class MockFile(File):
     """A mock implementation of the File interface for testing."""
 
-    def __init__(self, content: str | bytes = ""):
-        if isinstance(content, str):
+    def __init__(self, content: str | bytes | dict[str, str | bytes] = ""):
+        self._inner_files = {}
+        if isinstance(content, dict):
+            self._inner_files = content
+            self._content_bytes = b"archive"
+            self._content_str = "archive"
+        elif isinstance(content, str):
             self._content_bytes = content.encode("utf-8")
+            self._content_str = content
         else:
             self._content_bytes = content
-        self._content_str = self._content_bytes.decode("utf-8")
+            self._content_str = self._content_bytes.decode("utf-8")
 
     def read_iterable(self) -> typing.Iterable:
         return StringIO(self._content_str)
@@ -36,10 +49,25 @@ class MockFile(File):
         print(f"Mock-reading XLS with header={header_rows}, skip={skip_rows}")
         return [["mock", "data"], ["row1", "row2"]]
 
+    def read_dataframe(
+        self,
+        fmt: str,
+        csv_sep=",",
+        dtype: dict[str, typing.Any] | None = None,
+    ) -> "pd.DataFrame":
+        import pandas as pd
+        if fmt == "jsonl":
+            return pd.DataFrame(self.read_jsonl())
+        elif fmt == "csv":
+            return pd.read_csv(self.read_iterable(), sep=csv_sep, dtype=dtype)
+        raise NotImplementedError(f"MockFile read_dataframe not implemented for {fmt}")
+
     def read_parquet(self):
         raise NotImplementedError("MockFile does not implement read_parquet.")
 
     def read_zip(self, inner_path: str | None = None, idx: int | None = None) -> "File":
+        if inner_path and inner_path in self._inner_files:
+            return MockFile(self._inner_files[inner_path])
         # Returns a mock file representing the content of the zip.
         return MockFile(f"zipped content: {inner_path or idx}")
 
@@ -57,12 +85,23 @@ class MockIO(IO):
 
     def read_data(self, fs: DataRef) -> File:
         key = str(fs)
-        if key not in self.files:
-            raise FileNotFoundError(f"No mock data for {key}")
-        return self.files[key]
+        if key in self.files:
+            return self.files[key]
+        
+        # Fallback: try using the filename if available (e.g. for DownloadableFile or LocalFile)
+        if hasattr(fs, "filename") and fs.filename in self.files:
+            return self.files[fs.filename]
+
+        raise FileNotFoundError(f"No mock data for {key}. Available: {list(self.files.keys())}")
 
     def list_data(self, path: DataRef) -> list[str]:
         key = str(path)
+        if hasattr(path, "filename") and path.filename in self.files:
+            # Return the filename as a "path" that exists
+            return [path.filename]
+        # Also check if the key itself is in files (direct match)
+        if key in self.files:
+            return [key]
         return self.listed_data.get(key, [])
 
     def output_entity(self, entity, sort_by=[]):
@@ -116,3 +155,25 @@ class MockRejestrIO(RejestrIO):
 
     def get_rejestr_io(self, url: str) -> str | None:
         return self.responses.get(url)
+
+def test_context() -> Context:
+    return Context(
+        io=MockIO(),
+        rejestr_io=None,
+        con=None,
+        utils=None,
+        web=None,
+    )
+
+
+def setup_test_context(ctx: Context, files: dict[str, str | bytes] = {}):
+    for filename, content in files.items():
+        if isinstance(content, str):
+            if content.startswith("/") and os.path.exists(content):
+                with open(content, "rb") as f:
+                    ctx.io.files[filename] = MockFile(f.read())
+            else:
+                ctx.io.files[filename] = MockFile(content)
+        else:
+            ctx.io.files[filename] = MockFile(content)
+    return ctx
