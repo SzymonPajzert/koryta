@@ -1,11 +1,9 @@
-name: Import Linter
+name: Python - scrapers checks
 
 on:
   pull_request:
     paths:
       - "data/scrapers/src/**"
-    
-  
 
 jobs:
   lint-imports:
@@ -32,3 +30,30 @@ jobs:
         working-directory: data/scrapers
         run: |
           poetry run lint-imports
+
+  pytest:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+
+      - name: Install dependencies
+        working-directory: data/scrapers
+        run: |
+          poetry install --without ml
+
+      - name: Run pytest
+        working-directory: data/scrapers
+        run: |
+          poetry run pytest --ignore tests
+
+  
