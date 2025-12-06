@@ -1,18 +1,60 @@
+import json
+
 import pandas as pd
 import pytest
 from pytest_check.context_manager import check
 
-from main import setup_context
 from scrapers.stores import LocalFile
+from scrapers.tests.mocks import setup_test_context, test_context
 
-ctx, _ = setup_context(False)
+
+@pytest.fixture
+def ctx():
+    return setup_test_context(
+        test_context(),
+        {
+            "person_pkw.jsonl": "\n".join(
+                json.dumps(j)
+                for j in [
+                    {
+                        "party": "A",
+                        "election_year": "2023",
+                        "election_type": "sejm",
+                        "teryt_candidacy": "123",
+                        "sex": "M",
+                        "birth_year": "1980",
+                        "pkw_name": "Jan Kowalski",
+                        "first_name": "Jan",
+                        "middle_name": "Adam",
+                        "last_name": "Kowalski",
+                        "party_member": "T",
+                    },
+                    {
+                        "party": "B",
+                        "election_year": "2023",
+                        "election_type": "sejm",
+                        "teryt_candidacy": "123",
+                        "sex": "M",
+                        "birth_year": "1980",
+                        "pkw_name": "Jan Kowalski",
+                        "first_name": "Jan",
+                        "middle_name": "Adam",
+                        "last_name": "Kowalski",
+                        "party_member": "T",
+                    },
+                ]
+            )
+        },
+    )
 
 
-def people_rows():
+def people_rows(ctx):
     yield from ctx.io.read_data(LocalFile("person_pkw.jsonl", "versioned")).read_jsonl()
 
 
-df = pd.DataFrame(people_rows())
+@pytest.fixture
+def df(ctx):
+    return pd.DataFrame(people_rows(ctx))
 
 
 @pytest.mark.parametrize(
@@ -25,7 +67,7 @@ df = pd.DataFrame(people_rows())
         "birth_year",
     ],
 )
-def test_check_no_nulls(column):
+def test_check_no_nulls(column, df):
     # Known data gaps that we accept for now.
     # TODO resolve them
     known_failures = {
@@ -61,9 +103,7 @@ def test_check_no_nulls(column):
         ("2023", "senat", "birth_year"),
         ("2024", "europarlament", "birth_year"),
     }
-    grouped = df.groupby(["election_year", "election_type"]).apply(
-        lambda x: x[column].notnull().all()
-    )
+    grouped = df.groupby(["election_year", "election_type"]).apply(lambda x: x[column].notnull().all())
     for (year, election), passing in grouped.items():
         if passing:
             continue
@@ -79,8 +119,8 @@ def test_check_no_nulls(column):
     "column",
     ["pkw_name", "first_name", "middle_name", "last_name", "party", "party_member"],
 )
-def test_check_no_whitespaces(column):
-    for row in people_rows():
+def test_check_no_whitespaces(column, df):
+    for _, row in df.iterrows():
         value = row[column]
         if value is None:
             continue
