@@ -124,10 +124,6 @@ def setup_context(use_rejestr_io: bool):
     return ctx, dumper
 
 
-def create_model(model: PipelineModel) -> Pipeline:
-    return Pipeline(model.process, model.filename)
-
-
 def run_pipeline(
     pipeline_type: type[PipelineModel],
     ctx: Context | None = None,
@@ -138,7 +134,8 @@ def run_pipeline(
     pipeline_name = pipeline_type.__name__
 
     # Filter execution if "only" is specified
-    if nested == 0 and only_target and only_target != "all" and only_target != pipeline_name:
+    requested_other_target = only_target and only_target not in {"all", pipeline_name}
+    if nested == 0 and requested_other_target:
         return None
 
     pipeline_model = pipeline_type()
@@ -164,7 +161,7 @@ def run_pipeline(
 
     print("Finished initialization")
 
-    should_refresh = refresh_target == "all" or refresh_target == pipeline_name
+    should_refresh = refresh_target in {"all", pipeline_name}
 
     pipeline = Pipeline.from_model(pipeline_model, force_refresh=should_refresh)
 
