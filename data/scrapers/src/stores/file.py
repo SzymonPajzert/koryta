@@ -189,7 +189,7 @@ def read_xls(raw_bytes_or_path: bytes | str, header_rows: int = 0, skip_rows: in
             for col_name in header:
                 original_col_name = col_name
                 suffix = 0
-                while True:
+                while col_name in header_counts:
                     suffix += 1
                     col_name = f"{original_col_name}_{suffix}"
                 header_counts[col_name] = 1

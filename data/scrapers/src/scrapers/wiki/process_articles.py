@@ -31,12 +31,6 @@ class InfoboxStats:
     values: list[str]
 
 
-interesting_count = 0
-infobox_types = Counter()
-infobox_stats = Counter()
-category_stats = Counter()
-
-
 class Infobox:
     inf_type: str
     fields: dict[str, str]
@@ -50,9 +44,6 @@ class Infobox:
         self.inf_type = inf_type
         self.fields = fields
         self.field_links = field_links
-        infobox_types[inf_type] += 1
-        for field in fields:
-            infobox_stats[field] += 1
         self.person_related = "imię i nazwisko" in fields
         self.links = [
             link
@@ -74,7 +65,7 @@ class Infobox:
         return int(self.birth_iso.split("-")[0]) if self.birth_iso else None
 
     @staticmethod
-    def parse(wikitext) -> list["Infobox"]:
+    def parse(wikitext: str) -> list["Infobox"]:
         parsed = mwparserfromhell.parse(wikitext)
         all_infoboxes = parsed.filter_templates(matches=lambda t: "infobox" in t.name)
 
@@ -117,7 +108,7 @@ class WikiArticle:
     categories: list[str]
     links: list[str]
     infoboxes: list[Infobox]
-
+    
     def __init__(self, title, categories, links, infoboxes):
         self.title = title
         self.categories = categories
@@ -205,14 +196,6 @@ class WikiArticle:
                 if public_region in infobox.fields.get("udziałowcy", "").lower():
                     score += 1
 
-        if score > 0:
-            global interesting_count
-            interesting_count += 1
-            for cat in self.normalized_links:
-                if cat in WIKI_POLITICAL_LINKS:
-                    continue
-                category_stats[cat] += 1 + score
-
         return score
 
     @memoized_property
@@ -235,6 +218,30 @@ class WikiArticle:
             if infobox.company_related:
                 return True
         return False
+    
+class Stats:
+    interesting_counter = 0
+    infobox_types = Counter()
+    infobox_stats = Counter()
+    category_stats = Counter()
+    
+    def ingest_infobox(self, infobox: Infobox):
+        self.infobox_types[infobox.inf_type] += 1
+        for field in infobox.fields:
+            self.infobox_stats[field] += 1
+            
+    def ingest_article(self, article: WikiArticle):
+        score = article.content_score
+        if score > 0:
+            self.interesting_counter += 1
+            
+            for cat in article.normalized_links:
+                if cat in WIKI_POLITICAL_LINKS:
+                    continue
+                self.category_stats[cat] += 1 + score
+
+            for infobox in article.infoboxes:
+                self.ingest_infobox(infobox)
 
 
 def extract_from_article(article: WikiArticle) -> People | Company | None:
@@ -292,7 +299,7 @@ def process_article_worker(args):
         article = WikiArticle.parse_text(title, wikitext)
         if article is None:
             return None
-        return extract_from_article(article)
+        return extract_from_article(article), article
     except Exception:
         return None
 
@@ -340,21 +347,21 @@ def scrape_wiki(ctx: Context):
                         if wikitext:
                             yield (title, wikitext)
                     elem.clear()
+                    
+        stats = Stats()
 
         # Use multiprocessing to speed up parsing
         # We use a pool of workers to process articles in parallel
         # imap_unordered is used to keep memory usage low and process as we go
         with multiprocessing.Pool(processes=8) as pool:
-            for entity in pool.imap_unordered(
+            for pair in pool.imap_unordered(
                 process_article_worker, article_generator(), chunksize=1000
             ):
-                if entity:
-                    ctx.io.output_entity(entity, sort_by=["content_score"])
-
-                    # Update stats (approximate since we don't have access to global counters in workers)
-                    # If we really need stats, we should return them from worker and aggregate here.
-                    # For now, we skip detailed stats update to avoid complexity or use a callback if needed.
-                    # But since we are iterating, we can just count here if the entity has info.
-                    pass
+                if pair:
+                    entity, article = pair
+                    if entity:
+                        ctx.io.output_entity(entity, sort_by=["content_score"])
+                        stats.ingest_article(article)
 
     print("🎉 Processing complete.")
+    print(stats)
