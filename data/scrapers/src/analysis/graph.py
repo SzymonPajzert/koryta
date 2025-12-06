@@ -1,8 +1,9 @@
 import networkx as nx
 import pandas as pd
 
-from analysis.utils import committee_to_party
 from analysis.people_pkw_merged import PeoplePKWMerged
+from analysis.utils import committee_to_party
+from scrapers.stores import Context
 
 
 def flatten_parties(df):

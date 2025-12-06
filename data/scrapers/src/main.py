@@ -4,12 +4,12 @@ import os
 
 import duckdb
 import pandas as pd
-from tqdm import tqdm
 from duckdb.typing import VARCHAR
+from tqdm import tqdm
 
-from scrapers.article.crawler import parse_hostname, uuid7
 from analysis.interesting import CompaniesMerged
 from analysis.people import PeopleMerged
+from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import (
@@ -32,6 +32,8 @@ from stores.download import FileSource
 from stores.duckdb import EntityDumper
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
+from stores.utils import UtilsImpl
+from stores.web import WebImpl
 
 
 class Conductor(IO):
@@ -101,8 +103,7 @@ class Conductor(IO):
         return self.storage.list_blobs(hostname)
 
 
-from stores.utils import UtilsImpl
-from stores.web import WebImpl
+
 
 
 def setup_context(use_rejestr_io: bool):

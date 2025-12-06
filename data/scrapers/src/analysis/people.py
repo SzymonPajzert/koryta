@@ -84,11 +84,11 @@ class PeopleMerged(PipelineModel):
 
 def people_merged(
     ctx: Context,
-    krs_people,
-    wiki_people,
-    pkw_people,
-    names_count_by_region_table,
-    first_name_freq_table,
+    krs_people,  # noqa: F841
+    wiki_people,  # noqa: F841
+    pkw_people,  # noqa: F841
+    names_count_by_region_table,  # noqa: F841
+    first_name_freq_table,  # noqa: F841
     companies_df,
 ):
     con = ctx.con
@@ -97,7 +97,7 @@ def people_merged(
     )
 
     # TODO koryta_people = people_koryta_merged.process(ctx)
-    koryta_people = pd.DataFrame(
+    koryta_people = pd.DataFrame(  # noqa: F841
         data=[{"first_name": "empty", "last_name": "empty", "full_name": "empty"}]
     )
 
@@ -269,9 +269,4 @@ def people_merged(
             print(f"Found {len(dupes)} duplicates")
             ctx.io.write_dataframe(smaller, "people_duplicated.jsonl")
 
-    non_duplicates = len(
-        df[df["overall_score"] > 10.5].drop_duplicates(
-            ["krs_name", "pkw_name", "wiki_name"]
-        )
-    )
     return df

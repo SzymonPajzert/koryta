@@ -124,6 +124,7 @@ def download_teryt(destination_path):
         matches = re.findall('filename="(.+?)"', disposition)
         if matches:
             filename = matches[0]
+            print(f"Saving to {filename}")
 
     # Save the file. response.content holds the raw file bytes.
     with open(destination_path, "wb") as f:

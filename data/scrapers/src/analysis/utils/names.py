@@ -23,8 +23,8 @@ class NamesCountByRegion(PipelineModel):
         # TODO Instead of get_path, just read them as df
         # Duckdb can access it
 
-        surnames0 = ctx.io.read_data(self.surnames[0]).read_dataframe("csv")
-        surnames1 = ctx.io.read_data(self.surnames[1]).read_dataframe("csv")
+        surnames0 = ctx.io.read_data(self.surnames[0]).read_dataframe("csv")  # noqa: F841
+        surnames1 = ctx.io.read_data(self.surnames[1]).read_dataframe("csv")  # noqa: F841
 
         con.execute(
             """CREATE TABLE names_count_by_region AS
@@ -82,8 +82,8 @@ class FirstNameFreq(PipelineModel):
     def process(self, ctx: Context):
         con = ctx.con
 
-        firstnames0 = ctx.io.read_data(self.firstnames[0]).read_dataframe("csv")
-        firstnames1 = ctx.io.read_data(self.firstnames[1]).read_dataframe("csv")
+        firstnames0 = ctx.io.read_data(self.firstnames[0]).read_dataframe("csv")  # noqa: F841
+        firstnames1 = ctx.io.read_data(self.firstnames[1]).read_dataframe("csv")  # noqa: F841
 
         con.execute(
             """CREATE TABLE first_name_freq AS

@@ -1,10 +1,10 @@
-import typing
-from io import BytesIO, StringIO
 import csv
 import json
+import typing
+from io import BytesIO, StringIO
 
-from stores.file import FromPath
 from scrapers.stores import IO, DataRef, File, LocalFile, RejestrIO
+from stores.file import FromPath
 
 
 # Fake/Mock Implementations for testing

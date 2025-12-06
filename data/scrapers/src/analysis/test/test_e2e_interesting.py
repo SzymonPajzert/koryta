@@ -118,7 +118,7 @@ def test_find_interesting_entities_e2e(ctx):
 
     # Check details for Wiki Company A
     entity_a = next(
-        e for e in results if e.name == "Wiki Company A" or e.name == "KRS Company A"
+        e for e in results if e.name in {"Wiki Company A", "KRS Company A"}
     )
     assert entity_a.krs == "0000123456"
     reasons = [r.reason for r in entity_a.reasons]

@@ -125,7 +125,7 @@ def crawl_website(ctx: Context, uid, current_url):
 
 def crawl(ctx: Context):
     # Initialize hostname_config using ctx.con
-    hostname_config = {
+    hostname_config = {  # noqa: F841
         row[0]: config_from_row(row[1], row[2])
         for row in ctx.con.sql("SELECT * FROM hostname_config").fetchall()
     }
