@@ -2,6 +2,12 @@
 
 This document provides a categorized list of all the `TODO` comments found in the `src` directory.
 
+## Busy work
+
+- Remove set_content and get_content from scrapers.stores
+  - Need to make Teryt actual PipelineModel
+  - Use it in the pkw.headers and allow initialization with ctx later
+
 ## Split by package
 
 ### TERYT

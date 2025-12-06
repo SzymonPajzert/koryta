@@ -88,6 +88,9 @@ def ctx(tmp_path):
     )
 
 
+def create_model(model: PipelineModel) -> Pipeline:
+    return Pipeline(model.process, model.filename)
+
 def test_find_interesting_entities_e2e(ctx):
     model = CompaniesMerged()
     pipeline = create_model(model)

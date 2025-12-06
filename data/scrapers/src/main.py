@@ -23,7 +23,6 @@ from scrapers.stores import (
     LocalFile,
     Pipeline,
     PipelineModel,
-    set_context,
 )
 from scrapers.wiki.process_articles import ProcessWiki
 from stores import file
@@ -103,9 +102,6 @@ class Conductor(IO):
         return self.storage.list_blobs(hostname)
 
 
-
-
-
 def setup_context(use_rejestr_io: bool):
     dumper = EntityDumper()
     conductor = Conductor(dumper)
@@ -121,20 +117,13 @@ def setup_context(use_rejestr_io: bool):
         web=WebImpl(),
     )
 
-    ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)
-    ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)
+    ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore
+    ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
 
-    set_context(ctx)
     return ctx, dumper
 
 
-def create_model(model: PipelineModel) -> Pipeline:
-    return Pipeline(model.process, model.filename)
-
-
-def run_pipeline(
-    pipeline_type: type[PipelineModel], ctx: Context | None = None, nested=0
-) -> tuple[Pipeline, pd.DataFrame]:
+def run_pipeline(pipeline_type: type[PipelineModel], ctx: Context | None = None, nested=0) -> tuple[Pipeline, pd.DataFrame]:
     pipeline_name = pipeline_type.__name__
     pipeline_model = pipeline_type()
 
@@ -144,12 +133,10 @@ def run_pipeline(
     for annotation, pipeline_type_sub in pipeline_model.__annotations__.items():
         if isinstance(pipeline_type_sub, type) and issubclass(pipeline_type_sub, PipelineModel):
             print("Initializing", annotation, pipeline_type_sub.__name__)
-            pipeline_model.__dict__[annotation], _ = run_pipeline(
-                pipeline_type_sub, ctx, nested + 1
-            )
+            pipeline_model.__dict__[annotation] = run_pipeline(pipeline_type_sub, ctx, nested + 1)[0]
     print("Finished initialization")
 
-    pipeline = Pipeline(pipeline_model.process, pipeline_model.filename)
+    pipeline = Pipeline.from_model(pipeline_model)
     f = setup_pipeline(pipeline, ctx)
     df = f()
     print(f"{'  ' * nested}====== Finished pipeline {pipeline_name} =====\n\n")

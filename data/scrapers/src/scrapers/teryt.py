@@ -4,9 +4,9 @@ This module provides a utility class for working with TERYT territorial codes.
 It fetches, parses, and provides lookup capabilities for Polish administrative
 division codes (województwo, powiat, gmina) from the official TERYT database.
 """
+import pandas as pd
 
-
-from scrapers.stores import Context
+from scrapers.stores import Context, PipelineModel
 from scrapers.stores import DownloadableFile as FileSource
 
 teryt_data = FileSource(
@@ -16,7 +16,9 @@ teryt_data = FileSource(
 )
 
 
-class Teryt:
+class Teryt(PipelineModel):
+    filename = None  # Never cache
+    
     """
     A handler for TERYT (The National Official Register of the Territorial Division of the Country) data.
 
@@ -24,7 +26,7 @@ class Teryt:
     dictionaries for mapping between names and codes of administrative divisions.
     """
 
-    def __init__(self, ctx: Context):
+    def process(self, ctx: Context):
         """
         Initializes the Teryt object by downloading and processing TERYT data.
 
@@ -56,6 +58,7 @@ class Teryt:
             **self.powiaty,
         }
 
+        print("Setting cities_to_teryt")
         # TODO: Extend this as well.
         self.cities_to_teryt = {
             city: teryt
@@ -73,6 +76,8 @@ class Teryt:
             for teryt, voj in self.TERYT.items()
             if teryt.endswith("00")
         }
+        
+        return pd.DataFrame([{"col": "empty"}])
 
     def parse_teryt(self, voj: str, pow: str, gmin: str, city: str) -> str:
         """

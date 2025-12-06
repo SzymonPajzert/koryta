@@ -175,4 +175,5 @@ def setup_test_context(ctx: Context, files: nested_dict = {}):
                 ctx.io.files[filename] = MockFile(content)
         else:
             ctx.io.files[filename] = MockFile(content)
+
     return ctx

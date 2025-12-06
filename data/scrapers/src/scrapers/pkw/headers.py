@@ -4,10 +4,7 @@ from typing import Any, Never
 
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.okregi import voting_district_to_city
-from scrapers.stores import get_context
 from scrapers.teryt import Teryt
-
-teryt: None | Teryt = None
 
 
 @dataclass
@@ -15,7 +12,15 @@ class SetField:
     name: str
     processor: typing.Callable[[str, Any], str] = lambda x, _: x
     skippable: bool = False
-
+    
+    def set_teryt(self, teryt: Teryt):
+        self.teryt = teryt
+        return self
+        
+    def from_teryt(self, func) -> "SetField":
+        self.processor = lambda x, y: func(self.teryt, x, y)
+        return self
+        
 
 @dataclass
 class ElectionContext:
@@ -64,19 +69,16 @@ def parse_yes_no(s: str, _: Never) -> str:
     raise ValueError(f"Unknown bool: {s}")
 
 
-def lookup_teryt_from_city(city: str, _: None) -> str:
+def lookup_teryt_from_city(teryt, city: str, _: None) -> str:
     # Remove trailing roman numerals, e.g. Warszawa II
     city = city.rstrip("I").rstrip()
     try:
-        global teryt
-        if teryt is None:
-            teryt = Teryt(get_context())
         return teryt.cities_to_teryt[city][:2]
     except KeyError:
         raise ValueError(f"Unknown voting district: {city}")
 
 
-def lookup_teryt(s: str, context: ElectionContext) -> str:
+def lookup_teryt(teryt: Teryt, s: str, context: ElectionContext) -> str:
     if context.election_type in [ElectionType.SAMORZADOWE, ElectionType.EUROPARLAMENT]:
         return ""  # We don't support looking up for samorządowe
     year = context.year
@@ -89,7 +91,7 @@ def lookup_teryt(s: str, context: ElectionContext) -> str:
         mapping = voting_district_to_city[year, context.election_type]
     except KeyError:
         raise ValueError(f"Unknown election: {context.year} {context.election_type}")
-    return lookup_teryt_from_city(str(mapping[int(s)]), None)
+    return lookup_teryt_from_city(teryt, str(mapping[int(s)]), None)
 
 
 CSV_HEADERS: dict[str, SetField | None] = {
@@ -244,8 +246,8 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Nr listy (po nadaniu)": None,
     "Nr listy": None,
     "Nr na liście\noglnp.": None,
-    "Nr okr.": SetField("teryt_candidacy", lookup_teryt, True),
-    "Nr okręgu": SetField("teryt_candidacy", lookup_teryt, True),
+    "Nr okr.": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt),
+    "Nr okręgu": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt),
     "Nr poz.": None,
     "Nr pozycji": None,
     "Nr woj.": None,
@@ -301,10 +303,10 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Rodzaj\ngminy": None,
     "Sejmik": SetField("position", const_processor("Rada sejmiku")),
     # We're skipping Siedziba, because for some of them, TERYT is set instead
-    "Siedziba \nOKW": SetField("teryt_candidacy", lookup_teryt_from_city, True),
-    "Siedziba OKW": SetField("teryt_candidacy", lookup_teryt_from_city, True),
-    "Siedziba": SetField("teryt_candidacy", lookup_teryt_from_city, True),
-    "Siedziba\nOKW": SetField("teryt_candidacy", lookup_teryt_from_city, True),
+    "Siedziba \nOKW": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt_from_city),
+    "Siedziba OKW": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt_from_city),
+    "Siedziba": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt_from_city),
+    "Siedziba\nOKW": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt_from_city),
     "Skrót nazwy komitetu": SetField("party", skippable=True),
     "Sygnatura": None,
     "Syn": None,
