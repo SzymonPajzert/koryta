@@ -6,7 +6,7 @@ from collections import Counter
 from entities.person import PKW as Person
 from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
 from scrapers.pkw.sources import InputSource, sources
-from scrapers.stores import Context, Pipeline, PipelineModel
+from scrapers.stores import Context, PipelineModel
 from scrapers.teryt import Teryt
 from util.polish import PkwFormat, parse_name
 

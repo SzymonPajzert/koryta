@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from scrapers.stores import LocalFile
-from scrapers.tests.mocks import setup_test_context, test_context
+from scrapers.tests.mocks import get_test_context, setup_test_context
 from scrapers.wiki.process_articles import (
     Company,
     People,
@@ -191,18 +191,16 @@ COMPANIES_EXPECTED = {
     ),
 }
 
+
 @pytest.fixture
 def ctx():
     base_path = Path(__file__).parent.parent.parent.parent.parent / "tests"
-    mapping = {
-        str(LocalFile(f"{file}.xml", "tests")): str(base_path / f"{file}.xml") for file in list_test_files()
-    }
-    return setup_test_context(test_context(), mapping)
+    mapping = {str(LocalFile(f"{file}.xml", "tests")): str(base_path / f"{file}.xml") for file in list_test_files()}
+    return setup_test_context(get_test_context(), mapping)
 
 
 def list_test_files():
     return itertools.chain(PEOPLE_EXPECTED.keys(), COMPANIES_EXPECTED.keys())
-
 
 
 @pytest.mark.parametrize("filename", list_test_files())
@@ -253,7 +251,6 @@ def test_all_tested(filename, ctx):
         ctx.io.read_data(LocalFile(f"{filename}.xml", "tests"))
     except FileNotFoundError:
         pytest.fail(f"Test file {filename}.xml not found in mock context")
-
 
     if filename in PEOPLE_EXPECTED:
         return

@@ -5,13 +5,13 @@ import pytest
 from pytest_check.context_manager import check
 
 from scrapers.stores import LocalFile
-from scrapers.tests.mocks import setup_test_context, test_context
+from scrapers.tests.mocks import get_test_context, setup_test_context
 
 
 @pytest.fixture
 def ctx():
     return setup_test_context(
-        test_context(),
+        get_test_context(),
         {
             "person_pkw.jsonl": "\n".join(
                 json.dumps(j)

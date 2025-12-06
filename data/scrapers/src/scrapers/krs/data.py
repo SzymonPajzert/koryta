@@ -13,14 +13,13 @@ class CompaniesHardcoded(PipelineModel):
     filename = "companies_hardcoded"
 
     all_companies_krs: dict[str, KRS] = dict()
-    teryt: Teryt | None = None
+    teryt: Teryt
 
     def parse_teryt_from_row(self, row: pd.Series) -> str:
         try:
-            assert self.teryt is not None  # TODO initialize teryt somewhere else
             if pd.isna(row.loc["Województwo siedziby"]):
                 return ""
-            return self.teryt.parse_teryt(row.loc["Województwo siedziby"], "", "", "")
+            return self.teryt.model.parse_teryt(row.loc["Województwo siedziby"], "", "", "")
         except:
             print(row)
             print(row.loc["Województwo siedziby"])
@@ -51,9 +50,7 @@ class CompaniesHardcoded(PipelineModel):
         def process(d):
             krs = KRS(**static, **map(d))
             if krs.id in self.all_companies_krs:
-                self.all_companies_krs[krs.id] = self.all_companies_krs[krs.id].merge(
-                    krs
-                )
+                self.all_companies_krs[krs.id] = self.all_companies_krs[krs.id].merge(krs)
             else:
                 self.all_companies_krs[krs.id] = krs
 
@@ -65,25 +62,20 @@ class CompaniesHardcoded(PipelineModel):
             for d in data:
                 process(d)
 
-    def read_public_companies(
-        self, ctx: Context
-    ):  # Public companies, from data.gov.pl:
+    def read_public_companies(self, ctx: Context):  # Public companies, from data.gov.pl:
         _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
         public_companies = FileSource(
             _PUBLIC_COMPANIES_SOURCE,
             "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv",
         )
 
-        df = pd.read_csv(
-            ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
-        )
+        df = pd.read_csv(ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False)
         df = df[~df["KRS"].isna()]
         df["teryt"] = df.apply(self.parse_teryt_from_row, axis=1)
         df["KRS"] = df["KRS"].astype(int).astype(str).str.zfill(10).to_list()
         return df
 
     def process(self, ctx: Context):
-        self.teryt = Teryt(ctx)
         self.register_partials(
             "PUBLIC_COMPANIES_KRS",
             data=self.read_public_companies(ctx),
