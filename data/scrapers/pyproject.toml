@@ -127,7 +127,7 @@ people_merged = "main:people_merged"
 companies_merged = "main:companies_merged"
 # jupyter lab is available as well for analysis
 
-run_all = "main:main"
+koryta = "main:main"
 
 
 [build-system]

@@ -1,5 +1,6 @@
 # This file registers all conductor pipelines in this package
 
+import argparse
 import os
 
 import duckdb
@@ -123,20 +124,47 @@ def setup_context(use_rejestr_io: bool):
     return ctx, dumper
 
 
-def run_pipeline(pipeline_type: type[PipelineModel], ctx: Context | None = None, nested=0) -> tuple[Pipeline, pd.DataFrame]:
+def run_pipeline(
+    pipeline_type: type[PipelineModel],
+    ctx: Context | None = None,
+    nested=0,
+    refresh_target: str | None = None,
+    only_target: str | None = None,
+) -> tuple[Pipeline, pd.DataFrame] | None:
     pipeline_name = pipeline_type.__name__
+
+    # Filter execution if "only" is specified
+    requested_other_target = only_target and only_target not in {"all", pipeline_name}
+    if nested == 0 and requested_other_target:
+        return None
+
     pipeline_model = pipeline_type()
 
     # TODO restore nester here?
     print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
 
-    for annotation, pipeline_type_sub in pipeline_model.__annotations__.items():
-        if isinstance(pipeline_type_sub, type) and issubclass(pipeline_type_sub, PipelineModel):
-            print("Initializing", annotation, pipeline_type_sub.__name__)
-            pipeline_model.__dict__[annotation] = run_pipeline(pipeline_type_sub, ctx, nested + 1)[0]
+    for annotation, pipeline_type_dep in pipeline_model.__annotations__.items():
+        if isinstance(pipeline_type_dep, type) and issubclass(pipeline_type_dep, PipelineModel):
+            print("Initializing", annotation, pipeline_type_dep.__name__)
+            # Dependencies are not subject to 'only' filter (nested > 0),
+            # but they might be subject to 'refresh' if we wanted recursive refresh (logic below)
+            # For now, 'refresh' only targets the specific pipeline name or 'all'
+            res = run_pipeline(pipeline_type_dep, ctx, nested + 1, refresh_target=refresh_target, only_target=only_target)
+            if res:
+                pipeline_model.__dict__[annotation], _ = res
+            else:
+                # This should effectively not happen if valid pipelines are passed
+                # because we only skip at nested=0.
+                # However, if a dependency was somehow skipped, we might have an issue.
+                # But nested > 0 check prevents skipping dependencies.
+                pass
+
     print("Finished initialization")
 
-    pipeline = Pipeline.from_model(pipeline_model)
+    should_refresh = refresh_target in {"all", pipeline_name}
+
+    pipeline = Pipeline.from_model(pipeline_model, force_refresh=should_refresh)
+
     f = setup_pipeline(pipeline, ctx)
     df = f()
     print(f"{'  ' * nested}====== Finished pipeline {pipeline_name} =====\n\n")
@@ -170,39 +198,49 @@ def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
 
 
 def scrape_wiki():
-    return run_pipeline(ProcessWiki)[1]
+    raise NotImplementedError("Removed: run instead: koryta --only ProcessWiki")
 
 
 def scrape_pkw():
-    return run_pipeline(PeoplePKW)[1]
+    raise NotImplementedError("Removed: run instead: koryta --only PeoplePKW")
 
 
 def scrape_krs_people():
-    return run_pipeline(PeopleKRS)[1]
+    raise NotImplementedError("Removed: run instead: koryta --only PeopleKRS")
 
 
 def scrape_krs_companies():
-    return run_pipeline(CompaniesKRS)[1]
+    raise NotImplementedError("Removed: run instead: koryta --only CompaniesKRS")
 
 
 def people_merged():
-    return run_pipeline(PeopleMerged)[1]
+    raise NotImplementedError("Removed: run instead: koryta --only PeopleMerged")
 
 
 def companies_merged():
-    return run_pipeline(CompaniesMerged)[1]
+    raise NotImplementedError("Removed: run instead: koryta --only CompaniesMerged")
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--refresh", help="Pipeline name to refresh or 'all'", default=None)
+    parser.add_argument("--only", help="Pipeline name to run or 'all'", default=None)
+    args = parser.parse_args()
+
     ctx, dumper = setup_context(False)
 
+    pipelines = [
+        ProcessWiki,
+        PeoplePKW,
+        PeopleKRS,
+        CompaniesKRS,
+        PeopleMerged,
+        CompaniesMerged,
+    ]
+
     try:
-        run_pipeline(ProcessWiki, ctx)
-        run_pipeline(PeoplePKW, ctx)
-        run_pipeline(PeopleKRS, ctx)
-        run_pipeline(CompaniesKRS, ctx)
-        run_pipeline(PeopleMerged, ctx)
-        run_pipeline(CompaniesMerged, ctx)
+        for p in pipelines:
+            run_pipeline(p, ctx, refresh_target=args.refresh, only_target=args.only)
         print("Finished processing")
     finally:
         print("Dumping...")
