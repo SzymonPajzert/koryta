@@ -1,12 +1,20 @@
 import pytest
 
 from analysis.stats import Statistics
-from main import run_pipeline
+from main import _setup_context
+from scrapers.stores import ProcessPolicy
 
 
-@pytest.fixture(scope="module")
-def stats():
-    return run_pipeline(Statistics, refresh_target="Statistics")[1]
+@pytest.fixture
+def ctx():
+    return _setup_context(False)[0]
+
+
+@pytest.fixture
+def stats(ctx):
+    stats = Statistics()
+    stats.read_or_process(ctx, ProcessPolicy({"Statistics"}, set()))
+    return stats
 
 
 def test_expected_people(stats):

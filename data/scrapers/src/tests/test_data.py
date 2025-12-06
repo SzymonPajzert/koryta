@@ -1,4 +1,3 @@
-from main import run_pipeline
 from scrapers.krs.data import CompaniesHardcoded
 
 KRS_STARTERS_ALL = "krs_starters.csv"

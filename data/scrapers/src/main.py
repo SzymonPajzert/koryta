@@ -24,7 +24,7 @@ from scrapers.stores import (
     FirestoreCollection,
     LocalFile,
     Pipeline,
-    PipelineModel,
+    ProcessPolicy,
 )
 from scrapers.wiki.process_articles import ProcessWiki
 from stores import file
@@ -164,25 +164,26 @@ def companies_merged():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--refresh", help="Pipeline name to refresh or 'all'", default=None)
-    parser.add_argument("--only", help="Pipeline name to run or 'all'", default=None)
+    parser.add_argument("--refresh", help="Pipeline name to refresh or 'all'", action="append", default=[])
+    parser.add_argument("--only", help="Pipeline name to run or 'all'", action="append", default=[])
     args = parser.parse_args()
 
     ctx, dumper = _setup_context(False)
 
     pipelines = [
-        ProcessWiki,
         PeoplePKW,
         PeopleKRS,
         CompaniesKRS,
+        ProcessWiki,
         PeopleMerged,
         CompaniesMerged,
         Statistics,
     ]
 
     try:
-        for p in pipelines:
-            run_pipeline(p, ctx, refresh_target=args.refresh, only_target=args.only)
+        for p_type in pipelines:
+            p = Pipeline.create(p_type)
+            p.read_or_process(ctx, ProcessPolicy(set(args.refresh), set(args.only)))
         print("Finished processing")
     finally:
         print("Dumping...")

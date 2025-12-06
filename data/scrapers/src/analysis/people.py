@@ -8,7 +8,7 @@ from analysis.people_wiki_merged import PeopleWikiMerged
 from analysis.utils import read_enriched
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
-from scrapers.stores import Context, LocalFile, PipelineModel
+from scrapers.stores import Context, LocalFile, Pipeline, PipelineModel
 from scrapers.teryt import Teryt
 
 pd.set_option("display.max_rows", None)
@@ -72,6 +72,7 @@ class PeopleMerged(PipelineModel):
     teryt: Teryt
 
     def process(self, ctx: Context):
+        assert self.teryt is not None
         return people_merged(
             ctx,
             self.people_krs.process(ctx),
@@ -80,7 +81,7 @@ class PeopleMerged(PipelineModel):
             self.names_count_by_region.process(ctx),
             self.first_name_freq.process(ctx),
             self.companies_krs.process(ctx),
-            self.teryt.model,
+            self.teryt,
         )
 
 

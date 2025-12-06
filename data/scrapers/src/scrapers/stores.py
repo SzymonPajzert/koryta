@@ -6,7 +6,6 @@ file operations, data references, and pipeline execution contexts.
 
 import typing
 from abc import ABCMeta, abstractmethod
-from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -252,28 +251,19 @@ class Context:
     web: Web
 
 
-GLOBAL_CONTEXT: None | Context = None
+@dataclass
+class ProcessPolicy:
+    refresh_pipelines: set[str]
+    run_pipelines: set[str]
 
+    def check_set(self, s: set[str], pipeline_name: str):
+        return "all" in s or pipeline_name in s
 
-def set_context(ctx: Context):
-    """Sets the global pipeline context."""
-    global GLOBAL_CONTEXT
-    GLOBAL_CONTEXT = ctx
+    def should_refresh(self, pipeline_name: str):
+        return self.check_set(self.refresh_pipelines, pipeline_name)
 
-
-def get_context() -> Context:
-    """
-    Retrieves the global pipeline context.
-
-    Raises:
-        NotImplementedError: If the context has not been set.
-    """
-    global GLOBAL_CONTEXT
-
-    if not GLOBAL_CONTEXT:
-        raise NotImplementedError("This pipeline needs to be migrated to the @Pipeline wrapper")
-
-    return GLOBAL_CONTEXT
+    def should_run(self, pipeline_name: str):
+        return self.check_set(self.refresh_pipelines | self.run_pipelines, pipeline_name)
 
 
 class Pipeline:
@@ -284,127 +274,109 @@ class Pipeline:
     """
 
     filename: str | None
+    nested: int
 
     @abstractmethod
     def process(self, ctx: Context):
         raise NotImplementedError()
 
-    # TODO remove
-    @property
-    def model(self):
-        return self
+    @staticmethod
+    def create(pipeline_type, nested=0):
+        result = pipeline_type()
+        Pipeline.__init__(result, nested)
+        return result
 
-    def read(self, ctx: Context):
-        if not self.filename:
-            raise ValueError("Filename not set")
-        df = None
-        json_path = self.filename + ".jsonl"
-        try:
-            df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe("jsonl")
-        except FileNotFoundError as e:
-            print("File doesn't exist, continuing: ", e)
-
-        return df, json_path
+    def __init__(self, nested=0) -> None:
+        self.nested = nested
+        for annotation, pipeline_type_dep in self.list_sources():
+            self.__dict__[annotation] = Pipeline.create(pipeline_type_dep, self.nested + 1)
 
     def read_or_process(
         self,
         ctx: Context,
-        force_refresh=False,
+        policy: ProcessPolicy,
     ):
-        json_path: str | None = None
+        # TODO restore nester here?
+        print(f"{'  ' * self.nested}====== Running pipeline {self.pipeline_name} =====")
+
         df: pd.DataFrame | None = None
-        if self.filename is not None and not force_refresh:
-            df, json_path = self.read(ctx)
+        if self.filename is not None and not policy.should_refresh(self.pipeline_name):
+            df = self.read(ctx)
 
-        if df is None:
+        empty_should_run = df is None and policy.should_run(self.pipeline_name)
+        if empty_should_run or policy.should_refresh(self.pipeline_name):
             print("No df file, processing")
-            df = self.run_pipeline(ctx)
+            df = self.run_pipeline(ctx, policy)
 
-            if df is None:
-                # Try to recover from dumper
-                try:
-                    # We assume ctx.io.dumper exists and is an EntityDumper
-                    # This is a bit hacky but requested by user
-                    dumper = ctx.io.dumper  # type: ignore
-                    last_written = dumper.get_last_written()
-                    if last_written:
-                        name, data = last_written
-                        print(f"Recovered {name} from dumper")
-                        df = pd.DataFrame.from_records([asdict(i) for i in data])
-
-                        # If filename was None, maybe we can infer it from the entity name?
-                        # But filename is passed to read_or_process.
-                        # If filename is provided, we should probably use it.
-                except AttributeError:
-                    pass
-
-            print("Processing done")
-
-        if df is not None and json_path is not None:
-            print(f"Writing to {json_path}")
-            ctx.io.write_dataframe(df, json_path)
+        if df is not None and self.json_path != "":
+            print(f"Writing to {self.json_path}")
+            ctx.io.write_dataframe(df, self.json_path)
 
         if df is None:
+            # TODO remove?
             assert self.filename is not None
-            df, _ = self.read(ctx, filename)
+            df = self.read(ctx)
 
         assert df is not None
         return df
 
-    def initialize_fields(self, ctx: Context):
-        for annotation, pipeline_type_dep in self.__annotations__.items():
-            if isinstance(pipeline_type_dep, type) and issubclass(pipeline_type_dep, PipelineModel):
-                print("Initializing", annotation, pipeline_type_dep.__name__)
-                # Dependencies are not subject to 'only' filter (nested > 0),
-                # but they might be subject to 'refresh' if we wanted recursive refresh (logic below)
-                # For now, 'refresh' only targets the specific pipeline name or 'all'
-                res = run_pipeline(pipeline_type_dep, ctx, nested + 1, refresh_target=refresh_target, only_target=only_target)
-                if res:
-                    pipeline_model.__dict__[annotation], _ = res
-                else:
-                    # This should effectively not happen if valid pipelines are passed
-                    # because we only skip at nested=0.
-                    # However, if a dependency was somehow skipped, we might have an issue.
-                    # But nested > 0 check prevents skipping dependencies.
-                    pass
+    def read(self, ctx: Context):
+        assert self.filename
+        df = None
+        try:
+            df = ctx.io.read_data(LocalFile(self.json_path, "versioned")).read_dataframe("jsonl")
+        except FileNotFoundError as e:
+            print("File doesn't exist, continuing: ", e)
+        return df
+
+    def preprocess_sources(self, ctx: Context, policy: ProcessPolicy):
+        for annotation, pipeline_type_dep in self.list_sources():
+            print("Initializing", annotation, pipeline_type_dep.__name__)
+            # Dependencies are not subject to 'only' filter, so we pass "all"
+            self.__dict__[annotation].read_or_process(ctx, policy)
 
         print("Finished initialization")
 
     def run_pipeline(
         self,
         ctx: Context,
-        nested=0,
-        refresh_target: str | None = None,
-        only_target: str | None = None,
-    ) -> tuple["Pipeline", pd.DataFrame]:
-        pipeline_type = type(self)
-        pipeline_name = pipeline_type.__name__
-
-        # Filter execution if "only" is specified
-        requested_other_target = only_target and only_target not in {"all", pipeline_name}
-        if nested == 0 and requested_other_target:
-            # TODO implement lazy loading so there's always output
-            return None
-
-        # TODO restore nester here?
-        print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
-
-        should_refresh = refresh_target in {"all", pipeline_name}
-
-        self.initialize_fields(ctx)
-        setup_pipeline(pipeline, ctx)
-        print(f"{'  ' * nested}====== Finished pipeline {pipeline_name} =====\n\n")
-        return pipeline, df
-
-    def setup_pipeline(self, ctx: Context):
-        dumper = ctx.io.dumper  # pyright: ignore[reportAttributeAccessIssue] # TODO fix it
+        policy: ProcessPolicy,
+    ) -> pd.DataFrame:
+        self.preprocess_sources(ctx, policy)
+        dumper = ctx.io.dumper  # type:ignore # TODO fix it
         try:
-            result = self.process(ctx)
-            return result
+            # Call the abstract method
+            df = self.process(ctx)
         finally:
             print("Dumping...")
             dumper.dump_pandas()
             print("Done")
+        if df is None:
+            last_written = dumper.get_last_written()
+            if last_written:
+                name, data = last_written
+                print(f"Recovered {name} from dumper")
+                df = pd.DataFrame.from_records([asdict(i) for i in data])
+            else:
+                print("Not found last_written")
+        print(f"{'  ' * self.nested}====== Finished pipeline {self.pipeline_name} =====\n\n")
+        return df
+
+    def list_sources(self):
+        for annotation, pipeline_type_dep in self.__annotations__.items():
+            if isinstance(pipeline_type_dep, type) and issubclass(pipeline_type_dep, PipelineModel):
+                yield annotation, pipeline_type_dep
+
+    @property
+    def json_path(self) -> str:
+        if self.filename:
+            return self.filename + ".jsonl"
+        return ""
+
+    @property
+    def pipeline_name(self) -> str:
+        pipeline_type = type(self)
+        return pipeline_type.__name__
 
 
 PipelineModel = Pipeline

@@ -87,15 +87,14 @@ def ctx(tmp_path):
 
 
 def test_find_interesting_entities_e2e(ctx):
-    model = CompaniesMerged()
-    pipeline = Pipeline.from_model(model, True)
+    model = Pipeline.create(CompaniesMerged)
     model.hardcoded_companies = MagicMock()
     model.hardcoded_companies.filename = "hardcoded_companies"
     model.hardcoded_companies.process = MagicMock(return_value=pd.DataFrame(columns=["id"]))
     model.scraped_companies = MagicMock()
     model.scraped_companies.filename = "company_krs"  # Mock filename for iterate
     model.wiki_pipeline = MagicMock()
-    pipeline.process(ctx)
+    model.process(ctx)
 
     results = [e for e in ctx.io.output if isinstance(e, InterestingEntity)]
 

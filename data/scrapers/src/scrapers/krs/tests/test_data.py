@@ -1,5 +1,5 @@
-from main import run_pipeline
 from scrapers.krs.data import CompaniesHardcoded
+from scrapers.stores import Pipeline, ProcessPolicy
 from scrapers.tests.mocks import get_test_context, setup_test_context
 
 KRS_STARTERS_ALL = "krs_starters.csv"
@@ -43,9 +43,9 @@ def test_public_companies_list():
             },
         },
     )
-    pipeline, _ = run_pipeline(CompaniesHardcoded, ctx)
-
-    data: CompaniesHardcoded = pipeline.model
+    data: CompaniesHardcoded = Pipeline.create(CompaniesHardcoded)
+    data.preprocess_sources(ctx, ProcessPolicy({"all"}, {"all"}))
+    data.process(ctx)
 
     PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")
 
