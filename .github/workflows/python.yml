@@ -1,4 +1,4 @@
-name: Python - scrapers checks
+name: Python
 
 on:
   pull_request:
@@ -53,6 +53,7 @@ jobs:
 
       - name: Run pytest
         working-directory: data/scrapers
+        # TODO https://github.com/SzymonPajzert/koryta/issues/196
         run: |
           poetry run pytest --ignore src/tests --ignore src/scrapers/pkw/test/test_pkw_process.py --ignore src/scrapers/wiki/tests/test_extraction.py --ignore src/scrapers/krs/tests/test_data.py
 
