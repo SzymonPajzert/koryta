@@ -10,7 +10,7 @@ from scrapers.teryt import Teryt
 
 
 class CompaniesHardcoded(PipelineModel):
-    filename = "companies_hardcoded"
+    filename = None
 
     all_companies_krs: dict[str, KRS] = dict()
     teryt: Teryt
