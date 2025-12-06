@@ -1,9 +1,9 @@
+import pandas as pd
 import pytest
+from pytest_check.context_manager import check
 
 from main import setup_context
 from scrapers.stores import LocalFile
-import pandas as pd
-from pytest_check.context_manager import check
 
 ctx, _ = setup_context(False)
 

@@ -1,13 +1,13 @@
-import pytest
-import regex as re
 import os
 from unittest.mock import patch
 
 import pandas as pd
-from main import setup_context, run_pipeline
-from stores.config import PROJECT_ROOT
-from scrapers.krs.list import KRS
+import pytest
+import regex as re
+
 from analysis.people import PeopleMerged
+from main import run_pipeline, setup_context
+from stores.config import PROJECT_ROOT
 
 # TODO from util.lists import IGNORE_FAILURES
 IGNORE_FAILURES = []

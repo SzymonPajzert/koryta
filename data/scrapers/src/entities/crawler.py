@@ -1,7 +1,6 @@
 """Data classes for logging and managing web crawling activities."""
 
 from dataclasses import dataclass
-
 from datetime import datetime
 
 
