@@ -141,11 +141,11 @@ def run_pipeline(
     # TODO restore nester here?
     print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
 
-    for annotation, pipeline_type in pipeline_model.__annotations__.items():
-        if isinstance(pipeline_type, type) and issubclass(pipeline_type, PipelineModel):
-            print("Initializing", annotation, pipeline_type.__name__)
+    for annotation, pipeline_type_sub in pipeline_model.__annotations__.items():
+        if isinstance(pipeline_type_sub, type) and issubclass(pipeline_type_sub, PipelineModel):
+            print("Initializing", annotation, pipeline_type_sub.__name__)
             pipeline_model.__dict__[annotation], _ = run_pipeline(
-                pipeline_type, ctx, nested + 1
+                pipeline_type_sub, ctx, nested + 1
             )
     print("Finished initialization")
 

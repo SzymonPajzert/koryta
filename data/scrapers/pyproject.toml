@@ -175,6 +175,7 @@ max-complexity = 20
 max-args = 5
 max-public-methods = 20
 max-statements = 50
+max-branches = 15
 
 [tool.pytest.ini_options]
 markers = ["parametrize_skip_if"]
