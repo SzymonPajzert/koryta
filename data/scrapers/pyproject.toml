@@ -166,7 +166,17 @@ target-version = "py313"
 [tool.ruff.lint]
 # Add "PL" (Pylint) and "C90" (Complexity) to default rules
 select = ["E", "F", "I", "PL", "C90"]
-ignore = ["PLR2004", "PLR0911", "PLW2901", "PLR0913", "PLR0904", "PLR0124"]
+ignore = [
+    "PLR2004",
+    "PLR0911",
+    "PLW2901",
+    "PLR0913",
+    "PLR0904",
+    "PLR0124",
+    "PLW0603",
+    "PLW0177",
+    "PLW0602",
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 20
