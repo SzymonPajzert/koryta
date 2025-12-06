@@ -5,7 +5,9 @@ import os
 import duckdb
 import pandas as pd
 from tqdm import tqdm
+from duckdb.typing import VARCHAR
 
+from scrapers.article.crawler import parse_hostname, uuid7
 from analysis.interesting import CompaniesMerged
 from analysis.people import PeopleMerged
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -117,11 +119,7 @@ def setup_context(use_rejestr_io: bool):
         utils=UtilsImpl(),
         web=WebImpl(),
     )
-    
-    # Register DuckDB functions
-    from duckdb.typing import VARCHAR
 
-    from scrapers.article.crawler import parse_hostname, uuid7
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)
     ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)
 
@@ -222,4 +220,3 @@ def main():
         print("Dumping...")
         dumper.dump_pandas()
         print("Done")
-

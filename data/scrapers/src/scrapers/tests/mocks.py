@@ -1,6 +1,9 @@
 import typing
 from io import BytesIO, StringIO
+import csv
+import json
 
+from stores.file import FromPath
 from scrapers.stores import IO, DataRef, File, LocalFile, RejestrIO
 
 
@@ -22,13 +25,9 @@ class MockFile(File):
         return self._content_bytes
 
     def read_jsonl(self):
-        import json
-
         return [json.loads(line) for line in self.read_iterable() if line.strip()]
 
     def read_csv(self, sep=","):
-        import csv
-
         return list(csv.reader(self.read_iterable(), delimiter=sep))
 
     def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
@@ -87,8 +86,6 @@ class DictMockIO(IO):
     def read_data(self, fs):
         if isinstance(fs, LocalFile):
             if fs.filename in self.files:
-                from stores.file import FromPath
-
                 return FromPath(self.files[fs.filename])
         raise FileNotFoundError(f"File {fs} not found in mock")
 
