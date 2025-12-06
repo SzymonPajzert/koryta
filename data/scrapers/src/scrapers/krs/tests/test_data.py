@@ -1,5 +1,5 @@
 from scrapers.krs.data import CompaniesHardcoded
-from scrapers.tests.mocks import test_context, setup_test_context
+from scrapers.tests.mocks import setup_test_context, test_context
 
 KRS_STARTERS_ALL = "krs_starters.csv"
 COMMON_ROW = 7
@@ -9,13 +9,37 @@ def test_public_companies_list():
     ctx = setup_test_context(
         test_context(),
         {
-            "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv": "Nazwa podmiotu;KRS;Województwo siedziby;Powiat siedziby;Gmina siedziby;Miejscowość siedziby;Ulica siedziby;Numer budynku siedziby;Numer lokalu siedziby;Kod pocztowy siedziby;Miejscowość poczty\nTest;0000000893;MAZOWIECKIE;Warszawa;M.st. Warszawa;Warszawa;ul. Wiejska;4/6/8;;00-902;Warszawa",
+            "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv": ";".join(
+                [
+                    "Nazwa podmiotu",
+                    "KRS",
+                    "Województwo siedziby",
+                    "Powiat siedziby",
+                    "Gmina siedziby",
+                    "Miejscowość siedziby",
+                    "Ulica siedziby",
+                    "Numer budynku siedziby",
+                    "Numer lokalu siedziby",
+                    "Kod pocztowy siedziby",
+                    "Miejscowość poczty\nTest",
+                    "0000000893",
+                    "MAZOWIECKIE",
+                    "Warszawa",
+                    "M.st. Warszawa",
+                    "Warszawa",
+                    "ul. Wiejska",
+                    "4/6/8",
+                    "",
+                    "00-902",
+                    "Warszawa",
+                ]
+            ),
             "teryt_codes.zip": {
                 "TERC_Urzedowy_2025-11-15.csv": """WOJ;POW;GMI;RODZ;NAZWA;NAZWA_DOD
 02;;;;DOLNOŚLĄSKIE;województwo
 14;;;;MAZOWIECKIE;województwo
 """
-            }
+            },
         },
     )
     data = CompaniesHardcoded()

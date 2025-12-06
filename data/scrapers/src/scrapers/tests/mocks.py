@@ -1,16 +1,12 @@
-import os
-import typing
-
-from io import BytesIO, StringIO
-from unittest.mock import MagicMock, patch
-
-from scrapers.stores import IO, Context, DataRef, File, LocalFile, RejestrIO
 import csv
 import json
+import os
 import typing
 from io import BytesIO, StringIO
 
-from scrapers.stores import IO, DataRef, File, LocalFile, RejestrIO
+import pandas as pd
+
+from scrapers.stores import IO, Context, DataRef, File, LocalFile, RejestrIO
 from stores.file import FromPath
 
 
@@ -55,7 +51,6 @@ class MockFile(File):
         csv_sep=",",
         dtype: dict[str, typing.Any] | None = None,
     ) -> "pd.DataFrame":
-        import pandas as pd
         if fmt == "jsonl":
             return pd.DataFrame(self.read_jsonl())
         elif fmt == "csv":
@@ -87,7 +82,7 @@ class MockIO(IO):
         key = str(fs)
         if key in self.files:
             return self.files[key]
-        
+
         # Fallback: try using the filename if available (e.g. for DownloadableFile or LocalFile)
         if hasattr(fs, "filename") and fs.filename in self.files:
             return self.files[fs.filename]
@@ -156,6 +151,7 @@ class MockRejestrIO(RejestrIO):
     def get_rejestr_io(self, url: str) -> str | None:
         return self.responses.get(url)
 
+
 def test_context() -> Context:
     return Context(
         io=MockIO(),
@@ -166,7 +162,10 @@ def test_context() -> Context:
     )
 
 
-def setup_test_context(ctx: Context, files: dict[str, str | bytes] = {}):
+type nested_dict = dict[str, str | bytes | nested_dict]
+
+
+def setup_test_context(ctx: Context, files: nested_dict = {}):
     for filename, content in files.items():
         if isinstance(content, str):
             if content.startswith("/") and os.path.exists(content):

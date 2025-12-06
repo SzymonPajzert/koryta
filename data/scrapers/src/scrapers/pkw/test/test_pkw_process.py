@@ -1,21 +1,49 @@
+import json
+
 import pandas as pd
 import pytest
 from pytest_check.context_manager import check
 
 from scrapers.stores import LocalFile
-from scrapers.tests.mocks import test_context, setup_test_context
+from scrapers.tests.mocks import setup_test_context, test_context
 
 
 @pytest.fixture
 def ctx():
     return setup_test_context(
-
         test_context(),
         {
-            "person_pkw.jsonl": """
-{"party": "A", "election_year": "2023", "election_type": "sejm", "teryt_candidacy": "123", "sex": "M", "birth_year": "1980", "pkw_name": "Jan Kowalski", "first_name": "Jan", "middle_name": "Adam", "last_name": "Kowalski", "party_member": "T"}
-{"party": "B", "election_year": "2023", "election_type": "sejm", "teryt_candidacy": "123", "sex": "M", "birth_year": "1980", "pkw_name": "Jan Kowalski", "first_name": "Jan", "middle_name": "Adam", "last_name": "Kowalski", "party_member": "T"}
-"""
+            "person_pkw.jsonl": "\n".join(
+                json.dumps(j)
+                for j in [
+                    {
+                        "party": "A",
+                        "election_year": "2023",
+                        "election_type": "sejm",
+                        "teryt_candidacy": "123",
+                        "sex": "M",
+                        "birth_year": "1980",
+                        "pkw_name": "Jan Kowalski",
+                        "first_name": "Jan",
+                        "middle_name": "Adam",
+                        "last_name": "Kowalski",
+                        "party_member": "T",
+                    },
+                    {
+                        "party": "B",
+                        "election_year": "2023",
+                        "election_type": "sejm",
+                        "teryt_candidacy": "123",
+                        "sex": "M",
+                        "birth_year": "1980",
+                        "pkw_name": "Jan Kowalski",
+                        "first_name": "Jan",
+                        "middle_name": "Adam",
+                        "last_name": "Kowalski",
+                        "party_member": "T",
+                    },
+                ]
+            )
         },
     )
 
@@ -27,6 +55,7 @@ def people_rows(ctx):
 @pytest.fixture
 def df(ctx):
     return pd.DataFrame(people_rows(ctx))
+
 
 @pytest.mark.parametrize(
     "column",
@@ -74,9 +103,7 @@ def test_check_no_nulls(column, df):
         ("2023", "senat", "birth_year"),
         ("2024", "europarlament", "birth_year"),
     }
-    grouped = df.groupby(["election_year", "election_type"]).apply(
-        lambda x: x[column].notnull().all()
-    )
+    grouped = df.groupby(["election_year", "election_type"]).apply(lambda x: x[column].notnull().all())
     for (year, election), passing in grouped.items():
         if passing:
             continue

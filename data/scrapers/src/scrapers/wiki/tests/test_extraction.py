@@ -1,16 +1,12 @@
 import dataclasses
 import itertools
-import os
-import itertools
-import os
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import pytest
 
-from pathlib import Path
-from main import setup_context
 from scrapers.stores import LocalFile
-from scrapers.tests.mocks import test_context, setup_test_context
+from scrapers.tests.mocks import setup_test_context, test_context
 from scrapers.wiki.process_articles import (
     Company,
     People,
