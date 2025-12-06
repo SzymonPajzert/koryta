@@ -276,8 +276,12 @@ def get_context() -> Context:
     return GLOBAL_CONTEXT
 
 
-class PipelineModel[Output]:
-    """If you implement it, the pipeline output can be just passed as an input"""
+class Pipeline:
+    """
+    A decorator for defining and configuring a data processing pipeline.
+
+    If you implement it, the pipeline output can be just passed as an input.
+    """
 
     filename: str | None
 
@@ -285,52 +289,16 @@ class PipelineModel[Output]:
     def process(self, ctx: Context):
         raise NotImplementedError()
 
+    # TODO remove
+    @property
+    def model(self):
+        return self
 
-PM = typing.TypeVar("PM", bound=PipelineModel)
-
-
-class Pipeline[PM]:
-    """
-    A decorator for defining and configuring a data processing pipeline.
-    """
-
-    model: PM | None
-
-    def __init__(
-        self,
-        process: Callable[[Context], pd.DataFrame],
-        filename: str | None = None,
-        use_rejestr_io=False,
-        model: PM | None = None,
-        force_refresh=False,
-    ):
-        """
-        Initializes the Pipeline decorator.
-
-        Args:
-            use_rejestr_io: If True, the pipeline requires access to the RejestrIO interface.
-        """
-        # Ensure, that the function that is decorated is a pipeline.
-        assert len(process.__annotations__) == 1
-        assert "ctx" in process.__annotations__
-
-        self._process = process
-        self.filename = filename
-        self.rejestr_io = use_rejestr_io
-        self.model = model
-        self.force_refresh = force_refresh
-
-    def process(self, ctx: Context):
-        return Pipeline.read_or_process(ctx, self.filename, self._process, self.force_refresh)
-
-    @staticmethod
-    def from_model(model: PipelineModel, force_refresh: bool) -> "Pipeline":
-        return Pipeline(model.process, model.filename, model=model, force_refresh=force_refresh)
-
-    @staticmethod
-    def read(ctx: Context, filename: str):
+    def read(self, ctx: Context):
+        if not self.filename:
+            raise ValueError("Filename not set")
         df = None
-        json_path = filename + ".jsonl"
+        json_path = self.filename + ".jsonl"
         try:
             df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe("jsonl")
         except FileNotFoundError as e:
@@ -338,21 +306,19 @@ class Pipeline[PM]:
 
         return df, json_path
 
-    @staticmethod
     def read_or_process(
+        self,
         ctx: Context,
-        filename: str | None,
-        process: Callable[[Context], pd.DataFrame],
         force_refresh=False,
     ):
         json_path: str | None = None
         df: pd.DataFrame | None = None
-        if filename is not None and not force_refresh:
-            df, json_path = Pipeline.read(ctx, filename)
+        if self.filename is not None and not force_refresh:
+            df, json_path = self.read(ctx)
 
         if df is None:
             print("No df file, processing")
-            df = process(ctx)
+            df = self.run_pipeline(ctx)
 
             if df is None:
                 # Try to recover from dumper
@@ -379,8 +345,66 @@ class Pipeline[PM]:
             ctx.io.write_dataframe(df, json_path)
 
         if df is None:
-            assert filename is not None
-            df, _ = Pipeline.read(ctx, filename)
+            assert self.filename is not None
+            df, _ = self.read(ctx, filename)
 
         assert df is not None
         return df
+
+    def initialize_fields(self, ctx: Context):
+        for annotation, pipeline_type_dep in self.__annotations__.items():
+            if isinstance(pipeline_type_dep, type) and issubclass(pipeline_type_dep, PipelineModel):
+                print("Initializing", annotation, pipeline_type_dep.__name__)
+                # Dependencies are not subject to 'only' filter (nested > 0),
+                # but they might be subject to 'refresh' if we wanted recursive refresh (logic below)
+                # For now, 'refresh' only targets the specific pipeline name or 'all'
+                res = run_pipeline(pipeline_type_dep, ctx, nested + 1, refresh_target=refresh_target, only_target=only_target)
+                if res:
+                    pipeline_model.__dict__[annotation], _ = res
+                else:
+                    # This should effectively not happen if valid pipelines are passed
+                    # because we only skip at nested=0.
+                    # However, if a dependency was somehow skipped, we might have an issue.
+                    # But nested > 0 check prevents skipping dependencies.
+                    pass
+
+        print("Finished initialization")
+
+    def run_pipeline(
+        self,
+        ctx: Context,
+        nested=0,
+        refresh_target: str | None = None,
+        only_target: str | None = None,
+    ) -> tuple["Pipeline", pd.DataFrame]:
+        pipeline_type = type(self)
+        pipeline_name = pipeline_type.__name__
+
+        # Filter execution if "only" is specified
+        requested_other_target = only_target and only_target not in {"all", pipeline_name}
+        if nested == 0 and requested_other_target:
+            # TODO implement lazy loading so there's always output
+            return None
+
+        # TODO restore nester here?
+        print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
+
+        should_refresh = refresh_target in {"all", pipeline_name}
+
+        self.initialize_fields(ctx)
+        setup_pipeline(pipeline, ctx)
+        print(f"{'  ' * nested}====== Finished pipeline {pipeline_name} =====\n\n")
+        return pipeline, df
+
+    def setup_pipeline(self, ctx: Context):
+        dumper = ctx.io.dumper  # pyright: ignore[reportAttributeAccessIssue] # TODO fix it
+        try:
+            result = self.process(ctx)
+            return result
+        finally:
+            print("Dumping...")
+            dumper.dump_pandas()
+            print("Done")
+
+
+PipelineModel = Pipeline
