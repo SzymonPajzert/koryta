@@ -1,5 +1,0 @@
-- TO-DO workflow, actions coming up for the users, this is a crucial part, so people can start adding and collaborating
-- You can just add some data
-- Or a person
-- Anonymous or log in
-- You can give contact to yourself (so we can call you or sth the way you prefer)

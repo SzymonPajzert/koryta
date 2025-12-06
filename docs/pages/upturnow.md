@@ -1,3 +1,0 @@
-- #[[Informatycy mogą pracować]]
--
-- Knows how to do entity extraction

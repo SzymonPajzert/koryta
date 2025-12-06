@@ -1,2 +1,0 @@
-- TODO Implement the view
-- TODO It can be easily used on the phone

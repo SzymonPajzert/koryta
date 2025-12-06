@@ -1,5 +1,0 @@
-- TODO You can read a suggested article
-	- There's a list of articles they could read
-	- They can pick what interests them - place, category
-- TODO Add more articles to be read
-- [[Data lake]] - model it

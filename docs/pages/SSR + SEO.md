@@ -1,11 +1,1 @@
-- TODO Pretty URLs
-- TODO You mark if you want to make it a node
-- TODO Maybe integrate with nuxt content
-- Google console
-	- TODO Sitemap generated
-	- TODO Migrated and shown at Google
-- TODO Set up hybrid rendering for the #koryta pages
-- LATER Everything on the page is shareable for future interactions
-- TODO Enable cookies for #auth - https://vuefire.vuejs.org/nuxt/auth.html#Session-Cookie
--
-- TODO - Fix title - https://nuxt.com/docs/4.x/getting-started/seo-meta#dynamic-title
+- Everything on the page is shareable for future interactions [[share findings]]

@@ -1,8 +1,2 @@
-- TODO All the children are autoingested
-	- [[Finish migration to Storage]] #blocker
-- TODO Read the python hardcoded list from the DB
-- TODO Uncomment the listed KRS numbers in the ingest file
-- TODO Also ingest confirmed people's companies
-- TODO [[Finish migration to Storage]]
-	- Modify references to nested basic, external_basic fields to those fields that are still in the #Firestore
-	- KRSCompany and PersonRejestr #entity
+- Also ingest confirmed people's companies
+	- Companies that we found are interesting that aren't really public companies

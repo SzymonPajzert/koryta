@@ -299,7 +299,7 @@
  ;;  :charge-range    600}   ; Default value: 600
 
  ;; Favorites to list on the left sidebar
- :favorites ["List estimates" "data lake" "import" "iteration/25w38" "ludzie działają na stronie" "todo" "api"]
+ :favorites ["ui" "data lake" "import" "iteration/25w38" "ludzie działają na stronie" "todo" "api"]
 
  ;; Set flashcards interval.
  ;; Expected value:

@@ -1,0 +1,5 @@
+- Ciekawe notatki Wojciech Bartelski
+	- https://pl.wikipedia.org/wiki/Wojciech_Bartelski
+	- https://pl.wikipedia.org/wiki/Instytut_Rozwoju_Swob%C3%B3d_Obywatelskich_im._Ronalda_Reagana
+	- Unikatowe identyfikatory osoby?
+		- https://dbn.bn.org.pl/descriptor-details/9810624086205606

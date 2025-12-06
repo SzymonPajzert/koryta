@@ -1,0 +1,3 @@
+- Znalazłem go przy losowym wyszukaniu artykułów z crawlera
+	- https://www.facebook.com/cieszynski.p/
+	- Dobre, warto szukać dalej

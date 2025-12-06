@@ -1,0 +1,3 @@
+- [[Improve birth date calculation for PKW people]]
+- [[Use company location and person's location history]]
+-
