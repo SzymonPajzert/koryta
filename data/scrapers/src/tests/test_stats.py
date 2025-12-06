@@ -11,3 +11,5 @@ def stats():
 
 def test_expected_people(stats):
     assert stats[stats["good"]]["count"].sum() > 7000
+
+    assert stats[stats["good"] & stats["wiki_name"]]["count"].sum() > 500

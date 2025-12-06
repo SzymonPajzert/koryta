@@ -14,4 +14,7 @@ class Statistics(PipelineModel):
         combination_counts = combination_counts.sort_values(ascending=False)
         combination_counts = combination_counts.reset_index(name="count")
         combination_counts["good"] = combination_counts["krs_name"] & (combination_counts["pkw_name"] | combination_counts["wiki_name"])
+
+        print(combination_counts)
+
         return combination_counts
