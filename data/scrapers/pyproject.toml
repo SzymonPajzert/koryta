@@ -108,9 +108,9 @@ dependencies = [
     "pyarrow (>=21.0.0,<22.0.0)",
     "openpyxl (>=3.1.5,<4.0.0)",
     "nbconvert (>=7.16.6,<8.0.0)",
-    "pytest-check (>=2.6.0,<3.0.0)",
     "memoized-property (>=1.0.3,<2.0.0)",
     "mwparserfromhell (>=0.7.2,<0.8.0)",
+    "scipy (>=1.16.3,<2.0.0)",
 ]
 
 [project.scripts]
@@ -139,7 +139,6 @@ ml = [
     '''pl_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl#sha256=3bc7296cd4d67fa9ee0904b25401b0e9a9a772d5c4756edf54143a2ff4c9dcc0''',
     "beautifulsoup4==4.13.5",
     "seaborn (>=0.13.2,<0.14.0)",
-    "scipy (>=1.16.3,<2.0.0)",
     "tokenizers==0.22.0",
     "torch==2.8.0",
     "spacy==3.8.7",
@@ -154,7 +153,11 @@ dev = [
     "ruff (>=0.14.5,<0.15.0)",
     "pre-commit (>=4.4.0,<5.0.0)",
 ]
-test = ["pytest (>=9.0.1,<10.0.0)", "pytest-cov (>=7.0.0,<8.0.0)"]
+test = [
+    "pytest (>=9.0.1,<10.0.0)",
+    "pytest-cov (>=7.0.0,<8.0.0)",
+    "pytest-check (>=2.6.0,<3.0.0)",
+]
 
 [tool.ruff]
 line-length = 88
