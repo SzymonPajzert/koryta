@@ -1,6 +1,6 @@
-from scrapers.stores import PipelineModel, Context
 from analysis.utils.tables import create_people_table
 from scrapers.pkw.process import PeoplePKW
+from scrapers.stores import Context, PipelineModel
 
 
 class PeoplePKWMerged(PipelineModel):
@@ -13,7 +13,7 @@ class PeoplePKWMerged(PipelineModel):
         pkw_data = self.pkw_pipeline.process(ctx)
 
         con.execute(
-            f"""
+            """
         CREATE OR REPLACE TABLE people_pkw_merged_raw AS
         SELECT
             lower(first_name) as first_name,
