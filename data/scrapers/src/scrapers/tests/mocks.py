@@ -118,6 +118,7 @@ class DictMockIO(IO):
     def __init__(self, files):
         self.files = files
         self.output = []
+        self.dumper = MagicMock()
 
     def read_data(self, fs):
         if isinstance(fs, LocalFile):

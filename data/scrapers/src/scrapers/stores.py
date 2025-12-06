@@ -302,7 +302,6 @@ class Pipeline[PM]:
         filename: str | None = None,
         use_rejestr_io=False,
         model: PM | None = None,
-        use_rejestr_io=False,
         force_refresh=False,
     ):
         """
@@ -325,8 +324,8 @@ class Pipeline[PM]:
         return Pipeline.read_or_process(ctx, self.filename, self._process, self.force_refresh)
 
     @staticmethod
-    def from_model(model: PipelineModel) -> "Pipeline":
-        return Pipeline(model.process, model.filename, model=model)
+    def from_model(model: PipelineModel, force_refresh: bool) -> "Pipeline":
+        return Pipeline(model.process, model.filename, model=model, force_refresh=force_refresh)
 
     @staticmethod
     def read(ctx: Context, filename: str):

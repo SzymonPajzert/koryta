@@ -66,7 +66,6 @@ def ctx(tmp_path):
     }
 
     mock_io = DictMockIO(files)
-    mock_io.dumper = MagicMock()
 
     def get_last_written():
         if mock_io.output:
@@ -89,7 +88,7 @@ def ctx(tmp_path):
 
 def test_find_interesting_entities_e2e(ctx):
     model = CompaniesMerged()
-    pipeline = Pipeline.from_model(model)
+    pipeline = Pipeline.from_model(model, True)
     model.hardcoded_companies = MagicMock()
     model.hardcoded_companies.filename = "hardcoded_companies"
     model.hardcoded_companies.process = MagicMock(return_value=pd.DataFrame(columns=["id"]))
