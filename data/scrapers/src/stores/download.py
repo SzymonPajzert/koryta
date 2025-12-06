@@ -1,14 +1,14 @@
 import os
-import requests
 import re
-from pathlib import Path
-
-from typing import Callable
-from tqdm import tqdm
 import urllib.request
+from pathlib import Path
+from typing import Callable
 
-from stores.config import DOWNLOADED_DIR
+import requests
+from tqdm import tqdm
+
 from scrapers.stores import DownloadableFile as FileSourceConfig
+from stores.config import DOWNLOADED_DIR
 
 base_dir = Path(DOWNLOADED_DIR)
 
@@ -124,6 +124,7 @@ def download_teryt(destination_path):
         matches = re.findall('filename="(.+?)"', disposition)
         if matches:
             filename = matches[0]
+            print(f"Saving to {filename}")
 
     # Save the file. response.content holds the raw file bytes.
     with open(destination_path, "wb") as f:

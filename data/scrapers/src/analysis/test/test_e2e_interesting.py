@@ -1,14 +1,15 @@
-import pytest
 import json
-import os
-import duckdb
 from unittest.mock import MagicMock
 
-from main import create_model
-from scrapers.tests.mocks import DictMockIO
-from scrapers.stores import Context, LocalFile, IO
+import duckdb
+import pandas as pd
+import pytest
+
 from analysis.interesting import CompaniesMerged
-from entities.company import InterestingEntity, InterestingReason
+from entities.company import InterestingEntity
+from main import create_model
+from scrapers.stores import Context
+from scrapers.tests.mocks import DictMockIO
 
 
 @pytest.fixture
@@ -91,7 +92,8 @@ def test_find_interesting_entities_e2e(ctx):
     model = CompaniesMerged()
     pipeline = create_model(model)
     model.hardcoded_companies = MagicMock()
-    model.hardcoded_companies.output.return_value = []
+    model.hardcoded_companies.filename = "hardcoded_companies"
+    model.hardcoded_companies.process = MagicMock(return_value=pd.DataFrame(columns=["id"]))
     model.scraped_companies = MagicMock()
     model.scraped_companies.filename = "company_krs" # Mock filename for iterate
     model.wiki_pipeline = MagicMock()
@@ -118,7 +120,7 @@ def test_find_interesting_entities_e2e(ctx):
 
     # Check details for Wiki Company A
     entity_a = next(
-        e for e in results if e.name == "Wiki Company A" or e.name == "KRS Company A"
+        e for e in results if e.name in {"Wiki Company A", "KRS Company A"}
     )
     assert entity_a.krs == "0000123456"
     reasons = [r.reason for r in entity_a.reasons]

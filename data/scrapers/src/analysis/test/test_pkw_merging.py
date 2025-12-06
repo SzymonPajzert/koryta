@@ -1,6 +1,7 @@
-import pytest
 import duckdb
 import pandas as pd
+import pytest
+
 from analysis.utils.tables import create_people_table, init_tables
 
 
@@ -26,7 +27,7 @@ def test_pkw_merging_donald_tusk(con):
         ("donald", "tusk", None, "donald tusk", None, "KLD", 1991),
     ]
 
-    df = pd.DataFrame(
+    df = pd.DataFrame(  # noqa: F841
         data,
         columns=[
             "first_name",

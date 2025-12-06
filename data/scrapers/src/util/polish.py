@@ -1,5 +1,6 @@
-import regex as re
 from enum import Enum
+
+import regex as re
 
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
 

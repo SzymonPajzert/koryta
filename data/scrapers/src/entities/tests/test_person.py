@@ -1,7 +1,6 @@
 """Tests for the person data classes."""
 
 import unittest
-from entities.person import Koryta, KRS, PKW, Wikipedia
 
 
 class TestPersonEntities(unittest.TestCase):

@@ -1,16 +1,17 @@
 import dataclasses
-import pytest
-import xml.etree.ElementTree as ET
-import os
 import itertools
+import os
+import xml.etree.ElementTree as ET
 
-from scrapers.stores import LocalFile
+import pytest
+
 from main import setup_context
+from scrapers.stores import LocalFile
 from scrapers.wiki.process_articles import (
-    WikiArticle,
-    extract,
     Company,
     People,
+    WikiArticle,
+    extract,
 )
 from util.lists import TEST_FILES
 

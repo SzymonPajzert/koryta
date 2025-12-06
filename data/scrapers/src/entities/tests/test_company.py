@@ -1,7 +1,8 @@
 """Tests for the company data classes."""
 
 import unittest
-from entities.company import KRS, ManualKRS
+
+from entities.company import ManualKRS
 
 
 class TestCompany(unittest.TestCase):

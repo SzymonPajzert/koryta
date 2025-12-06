@@ -1,7 +1,9 @@
-import sys
 import select
+import sys
 from urllib.parse import urljoin
+
 from scrapers.stores import Utils
+
 
 class UtilsImpl(Utils):
     def input_with_timeout(self, msg: str, timeout: int = 10) -> str | None:

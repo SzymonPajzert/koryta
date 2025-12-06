@@ -1,7 +1,9 @@
+
 import pandas as pd
 import pytest
-from unittest.mock import MagicMock, patch
+
 from analysis.graph import calculate_ppr_scores, flatten_parties
+
 
 def test_flatten_parties():
     data = {

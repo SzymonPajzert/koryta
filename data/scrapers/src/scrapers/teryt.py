@@ -5,10 +5,9 @@ It fetches, parses, and provides lookup capabilities for Polish administrative
 division codes (województwo, powiat, gmina) from the official TERYT database.
 """
 
-import pandas as pd
 
-from scrapers.stores import DownloadableFile as FileSource
 from scrapers.stores import Context
+from scrapers.stores import DownloadableFile as FileSource
 
 teryt_data = FileSource(
     "https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx",

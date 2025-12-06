@@ -54,7 +54,6 @@ def trim_object(source: dict, keys: list[str]):
 
             if merged and len(merged) > 0:
                 result[nested_keys[0]] = merged
-        else:
-            if key in source:
-                result[key] = source[key]
+        elif key in source:
+            result[key] = source[key]
     return result

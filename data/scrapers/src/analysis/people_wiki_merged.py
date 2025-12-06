@@ -1,5 +1,5 @@
 from analysis.utils.tables import create_people_table
-from scrapers.stores import PipelineModel, Context
+from scrapers.stores import Context, PipelineModel
 from scrapers.wiki.process_articles import ProcessWiki
 
 
@@ -10,10 +10,10 @@ class PeopleWikiMerged(PipelineModel):
     def process(self, ctx: Context):
         con = ctx.con
 
-        wiki_data = self.wiki_pipeline.process(ctx)
+        wiki_data = self.wiki_pipeline.process(ctx)  # noqa: F841
 
         con.execute(
-            f"""
+            """
         CREATE OR REPLACE TABLE wiki_people_raw AS
         SELECT
             lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,

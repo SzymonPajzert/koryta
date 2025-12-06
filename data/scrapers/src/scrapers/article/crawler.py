@@ -1,17 +1,15 @@
-import requests
+import copy
 import time
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
 from zoneinfo import ZoneInfo
+
+import requests
+from bs4 import BeautifulSoup
 from uuid_extensions import uuid7str
-import copy
 
-
+from entities.crawler import RequestLog, WebsiteIndex
 from entities.util import NormalizedParse
 from scrapers.stores import Context
-
-from entities.crawler import RequestLog, WebsiteIndex, HostnameConfig
-
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
@@ -127,7 +125,7 @@ def crawl_website(ctx: Context, uid, current_url):
 
 def crawl(ctx: Context):
     # Initialize hostname_config using ctx.con
-    hostname_config = {
+    hostname_config = {  # noqa: F841
         row[0]: config_from_row(row[1], row[2])
         for row in ctx.con.sql("SELECT * FROM hostname_config").fetchall()
     }

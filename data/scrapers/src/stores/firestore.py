@@ -1,9 +1,7 @@
+import sys
 from typing import Any, Iterable
 
 from google.cloud import firestore
-
-
-from scrapers.stores import IO
 
 
 class FirestoreIO:
@@ -20,7 +18,7 @@ class FirestoreIO:
         except Exception as e:
             print(f"Failed to connect to Firestore: {e}")
             print("Please ensure you have authenticated correctly.")
-            exit(1)
+            sys.exit(1)
 
     def read_collection(
         self, collection: str, stream=True, filters: list[tuple[str, str, Any]] = []

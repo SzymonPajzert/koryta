@@ -1,7 +1,6 @@
 from main import setup_context
 from scrapers.krs.data import CompaniesHardcoded
 
-
 KRS_STARTERS_ALL = "krs_starters.csv"
 COMMON_ROW = 7
 

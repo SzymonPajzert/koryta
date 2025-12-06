@@ -1,13 +1,14 @@
 """Tests for the Teryt class."""
 
 import unittest
+from io import StringIO
 from unittest.mock import MagicMock
-from io import StringIO, BytesIO
 
-from scrapers.tests.mocks import MockIO
-from scrapers.teryt import Teryt, teryt_data
+import pandas as pd
+
 from scrapers.stores import Context
-
+from scrapers.teryt import Teryt
+from scrapers.tests.mocks import MockIO
 
 # Sample CSV data for testing, including voivodeships, powiats, and other data
 FAKE_TERYT_CSV = """WOJ;POW;GMI;RODZ;NAZWA;NAZWA_DOD;STAN_NA
@@ -35,12 +36,10 @@ class TestTeryt(unittest.TestCase):
 
         # Create a mock file with fake CSV content
         mock_zip_content = MagicMock()
-        
+
         # Create a DataFrame from the fake CSV
-        import pandas as pd
-        from io import StringIO
         df = pd.read_csv(StringIO(FAKE_TERYT_CSV), sep=";", dtype=str)
-        
+
         mock_zip_content.read_zip.return_value.read_dataframe.return_value = df
 
         # When read_data is called with the teryt_data source, return our mock file

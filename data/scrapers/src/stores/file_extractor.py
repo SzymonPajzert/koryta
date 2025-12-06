@@ -1,8 +1,9 @@
-import io
 import csv
 import fnmatch
-import pandas
+import io
 import math
+
+import pandas
 
 from scrapers.stores import Extractor, get_context
 
@@ -24,8 +25,9 @@ class CsvExtractor(Extractor):
         for line in csv.reader(generator(), delimiter=";"):
             if first:
                 first = False
-                line = [col.strip('\ufeff"') for col in line]
-            yield line
+                yield [col.strip('\ufeff"') for col in line]
+            else:
+                yield line
 
 
 class ZipExtractor(Extractor):
@@ -106,8 +108,8 @@ class XlsExtractor(Extractor):
                 count += 1
             elif count == self.header_rows and header is not None:
                 # Process the aggregated header to handle duplicates
-                for col_name in header:
-                    original_col_name = col_name
+                for original_col_name in header:
+                    col_name = original_col_name
                     suffix = 0
                     while col_name in header_counts:
                         suffix += 1

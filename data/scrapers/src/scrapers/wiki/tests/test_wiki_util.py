@@ -1,4 +1,5 @@
 import pytest
+
 from scrapers.wiki.util import parse_date
 
 

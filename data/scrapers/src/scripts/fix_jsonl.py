@@ -1,5 +1,7 @@
 import json
+
 from google.cloud import storage
+
 
 def fix_name(name: str) -> str:
     # Fixes names with badly escaped front slash characters between suorce and method

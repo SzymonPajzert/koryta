@@ -1,13 +1,11 @@
 import json
 from datetime import datetime, timedelta
 
-from scrapers.stores import Pipeline, PipelineModel, Context, CloudStorage
-
-from scrapers.krs.graph import QueryRelation
-from entities.person import KRS as KrsPerson
 from entities.company import KRS as KrsCompany
 from entities.company import ManualKRS as KRS
-
+from entities.person import KRS as KrsPerson
+from scrapers.krs.graph import QueryRelation
+from scrapers.stores import CloudStorage, Context, PipelineModel
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 

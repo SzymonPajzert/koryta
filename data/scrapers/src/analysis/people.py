@@ -1,14 +1,14 @@
-import pandas as pd
 import math
 
-from analysis.utils import read_enriched
-from analysis.utils.names import NamesCountByRegion, FirstNameFreq
-from scrapers.stores import PipelineModel, LocalFile, Context
+import pandas as pd
+
 from analysis.people_krs_merged import PeopleKRSMerged
-from analysis.people_wiki_merged import PeopleWikiMerged
-from analysis.people_koryta_merged import PeopleKorytaMerged
 from analysis.people_pkw_merged import PeoplePKWMerged
+from analysis.people_wiki_merged import PeopleWikiMerged
+from analysis.utils import read_enriched
+from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
+from scrapers.stores import Context, LocalFile, PipelineModel
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -84,11 +84,11 @@ class PeopleMerged(PipelineModel):
 
 def people_merged(
     ctx: Context,
-    krs_people,
-    wiki_people,
-    pkw_people,
-    names_count_by_region_table,
-    first_name_freq_table,
+    krs_people,  # noqa: F841
+    wiki_people,  # noqa: F841
+    pkw_people,  # noqa: F841
+    names_count_by_region_table,  # noqa: F841
+    first_name_freq_table,  # noqa: F841
     companies_df,
 ):
     con = ctx.con
@@ -97,7 +97,7 @@ def people_merged(
     )
 
     # TODO koryta_people = people_koryta_merged.process(ctx)
-    koryta_people = pd.DataFrame(
+    koryta_people = pd.DataFrame(  # noqa: F841
         data=[{"first_name": "empty", "last_name": "empty", "full_name": "empty"}]
     )
 
@@ -116,7 +116,7 @@ def people_merged(
 
     print("--- Running the long running query ---")
 
-    query = f"""
+    query = """
     WITH krs_pkw AS (
         SELECT
             k.metaphone as metaphone,
@@ -269,9 +269,4 @@ def people_merged(
             print(f"Found {len(dupes)} duplicates")
             ctx.io.write_dataframe(smaller, "people_duplicated.jsonl")
 
-    non_duplicates = len(
-        df[df["overall_score"] > 10.5].drop_duplicates(
-            ["krs_name", "pkw_name", "wiki_name"]
-        )
-    )
     return df

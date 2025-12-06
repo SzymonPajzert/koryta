@@ -1,5 +1,6 @@
 import pytest
-from util.polish import parse_name, PkwFormat
+
+from util.polish import PkwFormat, parse_name
 
 
 def all_configurations(first_name, middle_name, last_name):

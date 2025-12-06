@@ -1,18 +1,20 @@
 from collections import Counter
-from datetime import timedelta, date
+from datetime import date, timedelta
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 # TODO remove this dependence
 from scrapers.krs.companies import (
     company_names as company_names_harcoded,
+)
+from scrapers.krs.companies import (
     lodzkie_companies,
 )
 from scrapers.pkw.elections import committee_to_party
+from scrapers.pkw.sources import election_date
 from scrapers.stores import Context
 from scrapers.teryt import Teryt
-from scrapers.pkw.sources import election_date
 
 MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
 EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
