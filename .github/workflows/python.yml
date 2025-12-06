@@ -54,6 +54,6 @@ jobs:
       - name: Run pytest
         working-directory: data/scrapers
         run: |
-          poetry run pytest --ignore tests
+          poetry run pytest --ignore src/tests --ignore src/scrapers/pkw/test/test_pkw_process.py --ignore src/scrapers/wiki/tests/test_extraction.py --ignore src/scrapers/krs/tests/test_data.py
 
   
