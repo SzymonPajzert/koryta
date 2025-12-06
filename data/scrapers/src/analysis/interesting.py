@@ -59,6 +59,8 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
             LocalFile("company_krs.jsonl", "versioned")
         ).read_dataframe("jsonl")
 
+
+
         hardcoded_names = pd.DataFrame(  # noqa: F841
             {"name": list(company_names.values()) + list(TEST_FILES)}
         )
@@ -83,7 +85,7 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
         df = con.execute(query).df()
 
         for _, row in df.iterrows():
-            reasons = []
+            reasons = self.get_reasons(row)
             sources = []
 
             if pd.notna(row["krs"]):
@@ -94,7 +96,7 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
                 entity = InterestingEntity(
                     name=row["name"],
                     krs=row["krs"] if pd.notna(row["krs"]) else None,
-                    reasons=self.get_reasons(row),
+                    reasons=reasons,
                     sources=sources,
                 )
                 ctx.io.output_entity(entity)
@@ -116,7 +118,6 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
                 )
             )
 
-        # Wiki based reasons
         if pd.notna(row["content_score"]) and row["content_score"] > 0:
             reasons.append(
                 InterestingReason(
