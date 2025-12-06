@@ -1,5 +1,6 @@
+from main import run_pipeline
 from scrapers.krs.data import CompaniesHardcoded
-from scrapers.tests.mocks import setup_test_context, test_context
+from scrapers.tests.mocks import get_test_context, setup_test_context
 
 KRS_STARTERS_ALL = "krs_starters.csv"
 COMMON_ROW = 7
@@ -7,7 +8,7 @@ COMMON_ROW = 7
 
 def test_public_companies_list():
     ctx = setup_test_context(
-        test_context(),
+        get_test_context(),
         {
             "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv": ";".join(
                 [
@@ -42,8 +43,9 @@ def test_public_companies_list():
             },
         },
     )
-    data = CompaniesHardcoded()
-    data.process(ctx)
+    pipeline, _ = run_pipeline(CompaniesHardcoded, ctx)
+
+    data: CompaniesHardcoded = pipeline.model
 
     PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")
 

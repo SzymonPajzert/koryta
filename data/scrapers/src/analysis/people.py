@@ -9,6 +9,7 @@ from analysis.utils import read_enriched
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
 from scrapers.stores import Context, LocalFile, PipelineModel
+from scrapers.teryt import Teryt
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -28,9 +29,7 @@ SAMPLE_FILTER = ""
 LN_10 = math.log(10)
 
 
-def unique_probability(
-    p1: float, p2: float | None, second_name_match: bool, n: float
-) -> float:
+def unique_probability(p1: float, p2: float | None, second_name_match: bool, n: float) -> float:
     """
     Calculates the probability of no accidental match.
     p1: probability of the first name.
@@ -61,7 +60,8 @@ def unique_probability(
 
 
 class PeopleMerged(PipelineModel):
-    filename: str = "people_merged"
+    filename = "people_merged"
+
     people_krs: PeopleKRSMerged
     people_wiki: PeopleWikiMerged
     people_pkw: PeoplePKWMerged
@@ -69,6 +69,7 @@ class PeopleMerged(PipelineModel):
     names_count_by_region: NamesCountByRegion
     first_name_freq: FirstNameFreq
     companies_krs: CompaniesKRS
+    teryt: Teryt
 
     def process(self, ctx: Context):
         return people_merged(
@@ -79,6 +80,7 @@ class PeopleMerged(PipelineModel):
             self.names_count_by_region.process(ctx),
             self.first_name_freq.process(ctx),
             self.companies_krs.process(ctx),
+            self.teryt.model,
         )
 
 
@@ -90,10 +92,13 @@ def people_merged(
     names_count_by_region_table,  # noqa: F841
     first_name_freq_table,  # noqa: F841
     companies_df,
+    teryt: Teryt,
 ):
     con = ctx.con
     con.create_function(
-        "unique_probability", unique_probability, null_handling="special"  # type: ignore
+        "unique_probability",
+        unique_probability,
+        null_handling="special",  # type: ignore
     )
 
     # TODO koryta_people = people_koryta_merged.process(ctx)
@@ -110,7 +115,7 @@ def people_merged(
         "names_count_by_region_table",
         "first_name_freq_table",
     ]:
-        print(f"{table}: {con.sql(f"SELECT COUNT(*) FROM {table}").fetchall()}")
+        print(f"{table}: {con.sql(f'SELECT COUNT(*) FROM {table}').fetchall()}")
         print(con.sql(f"SELECT * FROM {table} LIMIT 10").df())
         print("\n\n")
 
@@ -235,7 +240,7 @@ def people_merged(
     if df.empty:
         raise Exception("No matches found with the current criteria.")
 
-    df = read_enriched(ctx, df, companies_df)
+    df = read_enriched(ctx, df, companies_df, teryt)
 
     dupes = df[df.duplicated(subset=["krs_name"], keep=False)]
     if not dupes.empty:
@@ -247,11 +252,7 @@ def people_merged(
             return (years.max() - years.min()) > 1
 
         # Let's do it more explicitly
-        conflicting_names = (
-            dupes.groupby("krs_name")
-            .filter(has_conflicting_birth_years)["krs_name"]
-            .unique()
-        )
+        conflicting_names = dupes.groupby("krs_name").filter(has_conflicting_birth_years)["krs_name"].unique()
         dupes = dupes[~dupes["krs_name"].isin(conflicting_names)]
 
         if not dupes.empty:

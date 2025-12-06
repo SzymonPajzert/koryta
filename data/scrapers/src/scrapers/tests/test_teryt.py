@@ -55,7 +55,8 @@ class TestTeryt(unittest.TestCase):
         )
 
         # Initialize Teryt with the mocked context
-        cls.teryt = Teryt(mock_context)
+        cls.teryt = Teryt()
+        cls.teryt.process(mock_context)
 
     def test_wojewodztwa_loading(self):
         """Tests if the voivodeship data is loaded correctly."""

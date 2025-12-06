@@ -271,24 +271,32 @@ def get_context() -> Context:
     global GLOBAL_CONTEXT
 
     if not GLOBAL_CONTEXT:
-        raise NotImplementedError(
-            "This pipeline needs to be migrated to the @Pipeline wrapper"
-        )
+        raise NotImplementedError("This pipeline needs to be migrated to the @Pipeline wrapper")
 
     return GLOBAL_CONTEXT
 
 
-class Pipeline:
+class PipelineModel[Output]:
+    """If you implement it, the pipeline output can be just passed as an input"""
+
+    filename: str | None
+
+    @abstractmethod
+    def process(self, ctx: Context):
+        raise NotImplementedError()
+
+
+PM = typing.TypeVar("PM", bound=PipelineModel)
+
+
+class Pipeline[PM]:
     """
     A decorator for defining and configuring a data processing pipeline.
     """
 
-    def __init__(
-        self,
-        process: Callable[[Context], pd.DataFrame],
-        filename: str | None = None,
-        use_rejestr_io=False,
-    ):
+    model: PM | None
+
+    def __init__(self, process: Callable[[Context], pd.DataFrame], filename: str | None = None, use_rejestr_io=False, model: PM | None = None):
         """
         Initializes the Pipeline decorator.
 
@@ -302,44 +310,28 @@ class Pipeline:
         self._process = process
         self.filename = filename
         self.rejestr_io = use_rejestr_io
+        self.model = model
 
     def process(self, ctx: Context):
         return Pipeline.read_or_process(ctx, self.filename, self._process)
 
     @staticmethod
-    def setup(
-        use_rejestr_io=False,
-    ):
-
-        def wrapper(func):
-            pipeline = Pipeline(func, use_rejestr_io=use_rejestr_io)
-            return pipeline
-
-        return wrapper
-
-    @staticmethod
-    def cached_dataframe(func):
-        name: str = func.__name__
-        pipeline = Pipeline(func, filename=name)
-        return pipeline
+    def from_model(model: PipelineModel) -> "Pipeline":
+        return Pipeline(model.process, model.filename, model=model)
 
     @staticmethod
     def read(ctx: Context, filename: str):
         df = None
         json_path = filename + ".jsonl"
         try:
-            df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe(
-                "jsonl"
-            )
+            df = ctx.io.read_data(LocalFile(json_path, "versioned")).read_dataframe("jsonl")
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
 
         return df, json_path
 
     @staticmethod
-    def read_or_process(
-        ctx: Context, filename: str | None, process: Callable[[Context], pd.DataFrame]
-    ):
+    def read_or_process(ctx: Context, filename: str | None, process: Callable[[Context], pd.DataFrame]):
         json_path: str | None = None
         df: pd.DataFrame | None = None
         if filename is not None:
@@ -379,13 +371,3 @@ class Pipeline:
 
         assert df is not None
         return df
-
-
-class PipelineModel[Output]:
-    """If you implement it, the pipeline output can be just passed as an input"""
-
-    filename: str
-
-    @abstractmethod
-    def process(self, ctx: Context):
-        raise NotImplementedError()

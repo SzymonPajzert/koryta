@@ -4,7 +4,7 @@ from scrapers.stores import Context, PipelineModel
 
 
 class PeoplePKWMerged(PipelineModel):
-    filename: str = "people_pkw_merged"
+    filename = "people_pkw_merged"
     pkw_pipeline: PeoplePKW
 
     def process(self, ctx: Context):

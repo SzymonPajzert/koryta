@@ -1,4 +1,5 @@
 import argparse
+import math
 import typing
 from collections import Counter
 
@@ -6,6 +7,7 @@ from entities.person import PKW as Person
 from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
 from scrapers.pkw.sources import InputSource, sources
 from scrapers.stores import Context, PipelineModel
+from scrapers.teryt import Teryt
 from util.polish import PkwFormat, parse_name
 
 counters = {k: Counter() for k in CSV_HEADERS.keys()}
@@ -93,7 +95,7 @@ def process_csv(
             replacements = dict()
             print(header)
             for idx, col in enumerate(header):
-                if col != col or col == float("nan"):
+                if col != col or (isinstance(col, float) and math.isnan(col)):
                     # It's NaN
                     header[idx] = ""
                 processor = csv_headers[col]
@@ -109,9 +111,7 @@ def process_csv(
                     # The previous is skippable, so replace with the new one
                     replacements[processor.name] = (col, processor.skippable)
                 else:
-                    raise ValueError(
-                        f"Duplicate column name: {col} and {replacements[processor.name]} map to {processor.name} during {config}"
-                    )
+                    raise ValueError(f"Duplicate column name: {col} and {replacements[processor.name]} map to {processor.name} during {config}")
 
             continue
 
@@ -126,9 +126,7 @@ def process_csv(
             p = csv_headers[k]
             if p is None:
                 continue
-            mapped[p.name] = p.processor(
-                v, ElectionContext(config.year, config.election_type)
-            )
+            mapped[p.name] = p.processor(v, ElectionContext(config.year, config.election_type))
 
         try:
             yield extract_data(
@@ -142,7 +140,7 @@ def process_csv(
             raise
 
 
-def process_pkw(ctx: Context, limit: int | None, year: str | None):
+def process_pkw(ctx: Context, csv_headers, limit: int | None, year: str | None):
     print("Downloading files...")
 
     filtered_sources = sources
@@ -160,7 +158,7 @@ def process_pkw(ctx: Context, limit: int | None, year: str | None):
 
         try:
             count = 0
-            for item in process_csv(reader, config, CSV_HEADERS):
+            for item in process_csv(reader, config, csv_headers):
                 count += 1
                 if limit is not None and count > limit:
                     break
@@ -173,12 +171,13 @@ def process_pkw(ctx: Context, limit: int | None, year: str | None):
 
 class PeoplePKW(PipelineModel):
     filename = "person_pkw"
+    teryt: Teryt  # TODO mark it as Pipeline[Teryt]
 
     def process(self, ctx: Context):
-        main(ctx)
+        main(ctx, self.teryt.model)
 
 
-def main(ctx: Context):
+def main(ctx: Context, teryt: Teryt):
     parser = argparse.ArgumentParser(description="I'll add docs here")
     parser.add_argument(
         "--limit",
@@ -196,7 +195,10 @@ def main(ctx: Context):
     )
     args = parser.parse_args()
 
-    process_pkw(ctx, args.limit, args.year)
+    # Initiate headers parsers with ctx dependent variables
+    csv_headers = {k: v.set_teryt(teryt) if v else None for k, v in CSV_HEADERS.items()}
+
+    process_pkw(ctx, csv_headers, args.limit, args.year)
 
     print("\n\n")
 

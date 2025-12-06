@@ -3,6 +3,7 @@ import json
 import os
 import typing
 from io import BytesIO, StringIO
+from unittest.mock import MagicMock
 
 import pandas as pd
 
@@ -77,6 +78,7 @@ class MockIO(IO):
         self.files: dict[str, File] = {}
         self.output: list[typing.Any] = []
         self.listed_data: dict[str, list[str]] = {}
+        self.dumper = MagicMock()
 
     def read_data(self, fs: DataRef) -> File:
         key = str(fs)
@@ -152,7 +154,7 @@ class MockRejestrIO(RejestrIO):
         return self.responses.get(url)
 
 
-def test_context() -> Context:
+def get_test_context() -> Context:
     return Context(
         io=MockIO(),
         rejestr_io=None,
@@ -175,4 +177,5 @@ def setup_test_context(ctx: Context, files: nested_dict = {}):
                 ctx.io.files[filename] = MockFile(content)
         else:
             ctx.io.files[filename] = MockFile(content)
+
     return ctx
