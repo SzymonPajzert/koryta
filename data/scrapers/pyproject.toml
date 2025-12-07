@@ -157,7 +157,33 @@ test = [
     "pytest (>=9.0.1,<10.0.0)",
     "pytest-cov (>=7.0.0,<8.0.0)",
     "pytest-check (>=2.6.0,<3.0.0)",
+    "mypy (>=1.19.0,<2.0.0)",
+    "pandas-stubs (>=2.3.3.251201,<3.0.0.0)",
+    "types-regex (>=2025.11.3.20251106,<2026.0.0.0)",
+    "types-requests (>=2.32.4.20250913,<3.0.0.0)",
+    "types-pyyaml (>=6.0.12.20250915,<7.0.0.0)",
+    "types-tqdm (>=4.67.0.20250809,<5.0.0.0)",
+    "types-networkx (>=3.6.0.20251127,<4.0.0.0)",
 ]
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = [
+    "duckdb",
+    "firebase_admin.*",
+    "google.*",
+    "scipy.*",
+    "mwparserfromhell.*",
+    "sklearn.*",
+    "spacy.*",
+    "cloudpathlib.*",
+    "pymodulon.*",
+    "adjustText.*"
+]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 200

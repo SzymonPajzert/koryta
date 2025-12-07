@@ -5,7 +5,7 @@ import os
 
 import duckdb
 import pandas as pd
-from duckdb.typing import VARCHAR
+from duckdb.typing import VARCHAR  # type: ignore
 from tqdm import tqdm
 
 from analysis.interesting import CompaniesMerged
@@ -42,7 +42,7 @@ class Conductor(IO):
         # TODO reenable self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
-        self.progress_bar = None
+        self.progress_bar: tqdm | None = None
         self.continous_download = False
 
     def read_data(self, fs: DataRef) -> File:
@@ -61,6 +61,7 @@ class Conductor(IO):
                 if self.progress_bar is None or not self.continous_download:
                     self.progress_bar = tqdm(desc="Downloading files")
                     self.continous_download = True
+                assert self.progress_bar is not None
                 self.progress_bar.update(1)
                 dfs.download()
             return file.FromPath(dfs.downloaded_path)

@@ -89,7 +89,7 @@ class KorytaArticles(Pipeline):
                 mentions.append(people[edge["target"]])
                 article["mentioned"] = mentions
 
-        website_popularity = Counter()
+        website_popularity: typing.Counter[str] = Counter()
         for key, article in articles.items():
             if "sourceURL" in article:
                 domain = NormalizedParse.parse(article["sourceURL"]).hostname_normalized

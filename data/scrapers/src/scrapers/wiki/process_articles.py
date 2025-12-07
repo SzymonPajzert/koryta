@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 import mwparserfromhell
-from memoized_property import memoized_property
+from memoized_property import memoized_property  # type: ignore
 from regex import findall, search  # TODO remove
 from tqdm import tqdm
 
@@ -103,7 +103,7 @@ class Infobox:
             field_links = {}
             for param in infobox.params:
                 fields[param.name.strip_code().strip()] = param.value.strip_code().strip()
-                field_links[param.name.strip_code().strip()] = [link.title for link in param.value.filter_wikilinks()]
+                field_links[param.name.strip_code().strip()] = [str(link.title) for link in param.value.filter_wikilinks()]
             result.append(
                 Infobox(
                     inf_type,
@@ -248,9 +248,9 @@ class WikiArticle:
 
 class Stats:
     interesting_counter = 0
-    infobox_types = Counter()
-    infobox_stats = Counter()
-    category_stats = Counter()
+    infobox_types: Counter[str] = Counter()
+    infobox_stats: Counter[str] = Counter()
+    category_stats: Counter[str] = Counter()
 
     def ingest_infobox(self, infobox: Infobox):
         self.infobox_types[infobox.inf_type] += 1

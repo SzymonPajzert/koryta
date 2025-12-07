@@ -6,6 +6,7 @@ from io import BytesIO, StringIO
 from typing import TypeAlias, Union
 from unittest.mock import MagicMock
 
+import duckdb
 import pandas as pd
 
 from scrapers.stores import IO, Context, DataRef, File, LocalFile, RejestrIO
@@ -18,10 +19,10 @@ nested_dict: TypeAlias = dict[str, Union[str, bytes, "nested_dict"]]
 class MockFile(File):
     """A mock implementation of the File interface for testing."""
 
-    def __init__(self, content: str | bytes | dict[str, str | bytes] = ""):
-        self._inner_files = {}
+    def __init__(self, content: str | bytes | dict[str, str | bytes] | nested_dict = ""):
+        self._inner_files: nested_dict = {}
         if isinstance(content, dict):
-            self._inner_files = content
+            self._inner_files = content  # type: ignore
             self._content_bytes = b"archive"
             self._content_str = "archive"
         elif isinstance(content, str):
@@ -58,7 +59,7 @@ class MockFile(File):
         if fmt == "jsonl":
             return pd.DataFrame(self.read_jsonl())
         elif fmt == "csv":
-            return pd.read_csv(self.read_iterable(), sep=csv_sep, dtype=dtype)
+            return pd.read_csv(self.read_iterable(), sep=csv_sep, dtype=dtype)  # type: ignore
         raise NotImplementedError(f"MockFile read_dataframe not implemented for {fmt}")
 
     def read_parquet(self):
@@ -161,10 +162,10 @@ class MockRejestrIO(RejestrIO):
 def get_test_context() -> Context:
     return Context(
         io=MockIO(),
-        rejestr_io=None,
-        con=None,
-        utils=None,
-        web=None,
+        rejestr_io=typing.cast(RejestrIO, None),
+        con=typing.cast(duckdb.DuckDBPyConnection, None),
+        utils=typing.cast(typing.Any, None),
+        web=typing.cast(typing.Any, None),
     )
 
 
@@ -173,10 +174,15 @@ def setup_test_context(ctx: Context, files: nested_dict = {}):
         if isinstance(content, str):
             if content.startswith("/") and os.path.exists(content):
                 with open(content, "rb") as f:
-                    ctx.io.files[filename] = MockFile(f.read())
-            else:
+                    if isinstance(ctx.io, MockIO):
+                        ctx.io.files[filename] = MockFile(f.read())
+                    else:
+                        raise ValueError("Context IO must be MockIO")
+            elif isinstance(ctx.io, MockIO):
                 ctx.io.files[filename] = MockFile(content)
-        else:
+            else:
+                raise ValueError("Context IO must be MockIO")
+        elif isinstance(ctx.io, MockIO):
             ctx.io.files[filename] = MockFile(content)
 
     return ctx

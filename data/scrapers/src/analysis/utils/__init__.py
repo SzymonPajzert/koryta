@@ -40,7 +40,7 @@ def get_company_names(companies_df):
 
 
 def extract_companies(ctx: Context, df, company_names):
-    krs = Counter()
+    krs: Counter[str] = Counter()
     for es in df["employment"].to_list():
         for e in es:
             krs[e["employed_krs"]] += 1

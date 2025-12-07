@@ -81,5 +81,28 @@ jobs:
         # TODO https://github.com/SzymonPajzert/koryta/issues/196
         run: |
           poetry run pytest --ignore src/tests 
+  
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+
+      - name: Install dependencies
+        working-directory: data/scrapers
+        run: |
+          poetry install --without ml
+
+      - name: Run mypy
+        working-directory: data/scrapers
+        run: poetry run mypy src
 
   

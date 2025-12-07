@@ -94,7 +94,7 @@ class CompaniesKRS(Pipeline):
 
     def __init__(self) -> None:
         super().__init__()
-        self.companies = {}
+        self.companies: dict[str, KrsCompany] = {}
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
 
     def add_company(self, item):

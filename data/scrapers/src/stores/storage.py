@@ -64,7 +64,7 @@ class Client:
         try:
             now = datetime.now(warsaw_tz)
             if source.path == "":
-                source.path = "index"
+                source.path = "index"  # type: ignore
             destination_blob_name = (
                 f"hostname={source.hostname}/"
                 f"{source.path}/"
