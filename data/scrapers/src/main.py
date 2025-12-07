@@ -183,7 +183,7 @@ def main():
     try:
         for p_type in pipelines:
             p = Pipeline.create(p_type)
-            p.read_or_process(ctx, ProcessPolicy(set(args.refresh), set(args.only)))
+            p.read_or_process(ctx, ProcessPolicy.with_default(args.refresh, args.only))
         print("Finished processing")
     finally:
         print("Dumping...")

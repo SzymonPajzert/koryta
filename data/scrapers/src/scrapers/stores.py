@@ -256,6 +256,12 @@ class ProcessPolicy:
     refresh_pipelines: set[str]
     run_pipelines: set[str]
 
+    @staticmethod
+    def with_default(refresh: list[str] = [], only: list[str] = []):
+        refresh_pipelines = set() if len(refresh) == 0 else set(refresh)
+        run_pipelines = {"all"} if len(only) == 0 else set(only)
+        return ProcessPolicy(refresh_pipelines, run_pipelines)
+
     def check_set(self, s: set[str], pipeline_name: str):
         return "all" in s or pipeline_name in s
 
@@ -294,28 +300,28 @@ class Pipeline:
     def read_or_process(
         self,
         ctx: Context,
-        policy: ProcessPolicy = ProcessPolicy({"all"}, {"all"}),
+        policy: ProcessPolicy = ProcessPolicy.with_default(),
     ):
         # TODO restore nester here?
         print(f"{'  ' * self.nested}====== Running pipeline {self.pipeline_name} =====")
 
+        read_input = False
         df: pd.DataFrame | None = None
         if self.filename is not None and not policy.should_refresh(self.pipeline_name):
             df = self.read(ctx)
+            read_input = True
 
         empty_should_run = df is None and policy.should_run(self.pipeline_name)
-        if empty_should_run or policy.should_refresh(self.pipeline_name):
+        if empty_should_run:
             print("No df file, processing")
             df = self.run_pipeline(ctx, policy)
+        elif policy.should_refresh(self.pipeline_name):
+            print(f"Requested a refesh of {self.pipeline_name} - {policy}")
+            df = self.run_pipeline(ctx, policy)
 
-        if df is not None and self.json_path != "":
+        if df is not None and self.json_path != "" and not read_input:
             print(f"Writing to {self.json_path}")
             ctx.io.write_dataframe(df, self.json_path)
-
-        if df is None:
-            # TODO remove?
-            assert self.filename is not None
-            df = self.read(ctx)
 
         assert df is not None
         return df
@@ -344,13 +350,24 @@ class Pipeline:
     ) -> pd.DataFrame:
         self.preprocess_sources(ctx, policy)
         dumper = ctx.io.dumper  # type:ignore # TODO fix it
+        gracefull = True
+
+        df: pd.DataFrame | None = None
         try:
             # Call the abstract method
             df = self.process(ctx)
+        except InterruptedError:
+            print("Caught interrupt signal, will save the data")
+        except Exception as e:
+            print("Not handling this exception", e)
+            gracefull = False
+            raise e
         finally:
-            print("Dumping...")
-            dumper.dump_pandas()
-            print("Done")
+            if gracefull:
+                print("Dumping...")
+                dumper.dump_pandas()
+                print("Done")
+
         if df is None:
             last_written = dumper.get_last_written()
             if last_written:
@@ -358,7 +375,8 @@ class Pipeline:
                 print(f"Recovered {name} from dumper")
                 df = pd.DataFrame.from_records([asdict(i) for i in data])
             else:
-                print("Not found last_written")
+                raise ValueError("Not found last_written")
+
         print(f"{'  ' * self.nested}====== Finished pipeline {self.pipeline_name} =====\n\n")
         return df
 
