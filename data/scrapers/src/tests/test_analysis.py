@@ -3,8 +3,7 @@ import pytest
 import regex as re
 
 from analysis.people import PeopleMerged
-from main import _setup_context
-from stores.config import PROJECT_ROOT
+from main import Pipeline, _setup_context
 
 # TODO from util.lists import IGNORE_FAILURES
 IGNORE_FAILURES: list[str] = []
@@ -20,7 +19,8 @@ def ctx():
 
 @pytest.fixture(scope="module")
 def df_all(ctx):
-    return run_pipeline(PeopleMerged, ctx)[1]
+    p: PeopleMerged = Pipeline.create(PeopleMerged)
+    return p.read_or_process(ctx)
 
 
 # TODO split it already as another column

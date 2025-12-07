@@ -294,7 +294,7 @@ class Pipeline:
     def read_or_process(
         self,
         ctx: Context,
-        policy: ProcessPolicy,
+        policy: ProcessPolicy = ProcessPolicy({"all"}, {"all"}),
     ):
         # TODO restore nester here?
         print(f"{'  ' * self.nested}====== Running pipeline {self.pipeline_name} =====")

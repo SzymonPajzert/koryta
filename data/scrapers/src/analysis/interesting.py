@@ -7,7 +7,7 @@ from scrapers.krs.companies import company_names
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
-from scrapers.stores import Context, LocalFile, Pipeline, PipelineModel
+from scrapers.stores import Context, LocalFile, PipelineModel
 from scrapers.wiki.process_articles import ProcessWiki
 from util.lists import TEST_FILES, WIKI_POLITICAL_LINKS
 
