@@ -24,6 +24,33 @@ WIKI_DUMP = DownloadableFile(
 
 DUMP_SIZE = 12314670146
 
+REQUIRED_WORDS = [
+    "Naukowiec",
+    "Duchowny",
+    "Artysta",
+    "Biogram",
+    "Polityk",
+    "Koszykarz",
+    "Piłkarz",
+    "Sportowiec",
+    "Filmowiec",
+    "Harcerz",
+    "Żołnierz",
+    "Tenisista",
+    "Wrestler",
+    "Rugbysta",
+    "Architekt",
+    "Astronauta",
+    "MedalistaKierowca",
+    "Osoba publiczna",
+    "Zawodnik",
+    "sportowy",
+    "Szachista",
+    "Brydż",
+    "Przedsiębiorstwo",
+    "Instytucja państwowa",
+]
+
 
 @dataclass
 class InfoboxStats:
@@ -38,9 +65,7 @@ class Infobox:
     person_related: bool
     links: list[str]
 
-    def __init__(
-        self, inf_type: str, fields: dict[str, str], field_links: dict[str, list[str]]
-    ) -> None:
+    def __init__(self, inf_type: str, fields: dict[str, str], field_links: dict[str, list[str]]) -> None:
         self.inf_type = inf_type
         self.fields = fields
         self.field_links = field_links
@@ -75,12 +100,8 @@ class Infobox:
             fields = {}
             field_links = {}
             for param in infobox.params:
-                fields[param.name.strip_code().strip()] = (
-                    param.value.strip_code().strip()
-                )
-                field_links[param.name.strip_code().strip()] = [
-                    link.title for link in param.value.filter_wikilinks()
-                ]
+                fields[param.name.strip_code().strip()] = param.value.strip_code().strip()
+                field_links[param.name.strip_code().strip()] = [link.title for link in param.value.filter_wikilinks()]
             result.append(
                 Infobox(
                     inf_type,
@@ -108,7 +129,7 @@ class WikiArticle:
     categories: list[str]
     links: list[str]
     infoboxes: list[Infobox]
-    
+
     def __init__(self, title, categories, links, infoboxes):
         self.title = title
         self.categories = categories
@@ -130,6 +151,9 @@ class WikiArticle:
 
     @staticmethod
     def parse_text(title, wikitext):
+        if not any(word in wikitext for word in REQUIRED_WORDS):
+            return None
+
         infoboxes = Infobox.parse(wikitext)
         # Perform search for second name or a full name of the company
         title = WikiArticle.extend_name(title, wikitext)
@@ -218,23 +242,24 @@ class WikiArticle:
             if infobox.company_related:
                 return True
         return False
-    
+
+
 class Stats:
     interesting_counter = 0
     infobox_types = Counter()
     infobox_stats = Counter()
     category_stats = Counter()
-    
+
     def ingest_infobox(self, infobox: Infobox):
         self.infobox_types[infobox.inf_type] += 1
         for field in infobox.fields:
             self.infobox_stats[field] += 1
-            
+
     def ingest_article(self, article: WikiArticle):
         score = article.content_score
         if score > 0:
             self.interesting_counter += 1
-            
+
             for cat in article.normalized_links:
                 if cat in WIKI_POLITICAL_LINKS:
                     continue
@@ -264,9 +289,7 @@ def extract_from_article(article: WikiArticle) -> People | Company | None:
         )
     elif company:
         name = article.get_infobox(lambda i: i.fields.get("nazwa", None))
-        owner_links = article.get_infobox(
-            lambda i: i.field_links.get("udziałowcy", None)
-        )
+        owner_links = article.get_infobox(lambda i: i.field_links.get("udziałowcy", None))
         owner_text = None
         if owner_links is None:
             owner_links = []
@@ -334,29 +357,21 @@ def scrape_wiki(ctx: Context):
                 prev = current_pos
 
                 if elem.tag.endswith("page"):
-                    title = elem.findtext(
-                        "{http://www.mediawiki.org/xml/export-0.11/}title"
-                    )
-                    revision = elem.find(
-                        "{http://www.mediawiki.org/xml/export-0.11/}revision"
-                    )
+                    title = elem.findtext("{http://www.mediawiki.org/xml/export-0.11/}title")
+                    revision = elem.find("{http://www.mediawiki.org/xml/export-0.11/}revision")
                     if title and revision:
-                        wikitext = revision.findtext(
-                            "{http://www.mediawiki.org/xml/export-0.11/}text"
-                        )
+                        wikitext = revision.findtext("{http://www.mediawiki.org/xml/export-0.11/}text")
                         if wikitext:
                             yield (title, wikitext)
                     elem.clear()
-                    
+
         stats = Stats()
 
         # Use multiprocessing to speed up parsing
         # We use a pool of workers to process articles in parallel
         # imap_unordered is used to keep memory usage low and process as we go
         with multiprocessing.Pool(processes=8) as pool:
-            for pair in pool.imap_unordered(
-                process_article_worker, article_generator(), chunksize=1000
-            ):
+            for pair in pool.imap_unordered(process_article_worker, article_generator(), chunksize=1000):
                 if pair:
                     entity, article = pair
                     if entity:
