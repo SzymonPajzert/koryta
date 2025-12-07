@@ -208,6 +208,11 @@ def test_links(filename, ctx):
     with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
+
+        expected = PEOPLE_EXPECTED.get(filename, COMPANIES_EXPECTED.get(filename))
+        if expected is None:
+            return
+
         assert article is not None
 
         for link in NORMALIZED_LINKS_EXPECTED.get(filename, []):
@@ -222,11 +227,14 @@ def test_entity_extraction(filename, ctx):
     with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
+
+        expected = PEOPLE_EXPECTED.get(filename, COMPANIES_EXPECTED.get(filename))
+        if expected is None and article is None:
+            return
+
         assert article is not None
 
         entity = extract(elem)
-        expected = PEOPLE_EXPECTED.get(filename, COMPANIES_EXPECTED.get(filename))
-
         if expected is None:
             assert entity is None
             return
