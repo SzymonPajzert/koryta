@@ -10,7 +10,7 @@ class PeoplePKWMerged(PipelineModel):
     def process(self, ctx: Context):
         con = ctx.con
 
-        pkw_data = self.pkw_pipeline.process(ctx)  # noqa: F841
+        pkw_data = self.pkw_pipeline.read_or_process(ctx)  # noqa: F841
 
         con.execute(
             """

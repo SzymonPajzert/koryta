@@ -86,7 +86,7 @@ class DummyPipeline(Pipeline):
     dep: DummyDep
 
     def process(self, ctx: Context):
-        return self.dep.process(ctx)
+        return self.dep.read_or_process(ctx)
 
 class TestPipeline(unittest.TestCase):
     def setUp(self):

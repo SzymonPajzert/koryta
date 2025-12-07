@@ -75,12 +75,12 @@ class PeopleMerged(PipelineModel):
         assert self.teryt is not None
         return people_merged(
             ctx,
-            self.people_krs.process(ctx),
-            self.people_wiki.process(ctx),
-            self.people_pkw.process(ctx),
-            self.names_count_by_region.process(ctx),
-            self.first_name_freq.process(ctx),
-            self.companies_krs.process(ctx),
+            self.people_krs.read_or_process(ctx),
+            self.people_wiki.read_or_process(ctx),
+            self.people_pkw.read_or_process(ctx),
+            self.names_count_by_region.read_or_process(ctx),
+            self.first_name_freq.read_or_process(ctx),
+            self.companies_krs.read_or_process(ctx),
             self.teryt,
         )
 

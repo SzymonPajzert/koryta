@@ -28,7 +28,7 @@ def flatten_parties(df):
 
 
 def calculate_people_parties(ctx: Context):
-    df = PeoplePKWMerged().process(ctx)
+    df = PeoplePKWMerged().read_or_process(ctx)
     df = flatten_parties(df)
 
     print(df[:10])

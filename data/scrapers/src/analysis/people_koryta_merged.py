@@ -10,7 +10,7 @@ class PeopleKorytaMerged(PipelineModel):
     def process(self, ctx: Context):
         con = ctx.con
 
-        koryta_data = self.koryta_pipeline.process(ctx)  # noqa: F841
+        koryta_data = self.koryta_pipeline.read_or_process(ctx)  # noqa: F841
 
         con.execute(
             """

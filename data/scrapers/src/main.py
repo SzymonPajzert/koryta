@@ -180,10 +180,14 @@ def main():
         Statistics,
     ]
 
+    policy = ProcessPolicy.with_default(args.refresh, args.only)
+
     try:
         for p_type in pipelines:
+            if not policy.should_run(p_type.__name__):
+                continue
             p = Pipeline.create(p_type)
-            p.read_or_process(ctx, ProcessPolicy.with_default(args.refresh, args.only))
+            p.read_or_process(ctx, policy)
         print("Finished processing")
     finally:
         print("Dumping...")

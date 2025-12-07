@@ -46,7 +46,7 @@ class CompaniesMerged(PipelineModel):
         children_of_hardcoded_set = graph.all_descendants(iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id))
         children_of_hardcoded = pd.DataFrame({"krs": list(children_of_hardcoded_set)})  # noqa: F841
 
-        self.wiki_pipeline.process(ctx)
+        self.wiki_pipeline.read_or_process(ctx)
         wiki_companies = ctx.io.read_data(  # noqa: F841
             LocalFile("company_wikipedia.jsonl", "versioned")
         ).read_dataframe("jsonl")
