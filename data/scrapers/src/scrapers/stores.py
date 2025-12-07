@@ -339,7 +339,8 @@ class Pipeline:
         for annotation, pipeline_type_dep in self.list_sources():
             print("Initializing", annotation, pipeline_type_dep.__name__)
             # Dependencies are not subject to 'only' filter, so we pass "all"
-            self.__dict__[annotation].read_or_process(ctx, policy)
+            dep_policy = ProcessPolicy(policy.refresh_pipelines, {"all"})
+            self.__dict__[annotation].read_or_process(ctx, dep_policy)
 
         print("Finished initialization")
 
