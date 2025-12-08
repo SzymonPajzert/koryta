@@ -7,15 +7,15 @@ from scrapers.krs.companies import company_names
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
-from scrapers.stores import Context, LocalFile, PipelineModel
+from scrapers.stores import Context, LocalFile, Pipeline
 from scrapers.wiki.process_articles import ProcessWiki
 from util.lists import TEST_FILES, WIKI_POLITICAL_LINKS
 
 
-def iterate(ctx, pipeline, constructor):
+def iterate(ctx, pipeline: Pipeline, constructor):
     try:
         assert pipeline.filename is not None
-        df = pipeline.read_or_process(ctx, pipeline.filename, pipeline.process)
+        df = pipeline.read_or_process(ctx)
         for row in df.itertuples(index=False):
             yield constructor(row)
     except:
@@ -23,7 +23,7 @@ def iterate(ctx, pipeline, constructor):
         raise
 
 
-class CompaniesMerged(PipelineModel):
+class CompaniesMerged(Pipeline):
     filename = "companies_merged"
 
     scraped_companies: CompaniesKRS

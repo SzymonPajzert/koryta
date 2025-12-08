@@ -3,7 +3,7 @@ from scrapers.stores import DownloadableFile as FileSource
 
 
 class NamesCountByRegion(PipelineModel):
-    filename: str = "names_count_by_region"
+    filename = "names_count_by_region"
     surnames: list[FileSource] = [
         FileSource(
             # https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table
@@ -26,9 +26,8 @@ class NamesCountByRegion(PipelineModel):
         surnames0 = ctx.io.read_data(self.surnames[0]).read_dataframe("csv")  # noqa: F841
         surnames1 = ctx.io.read_data(self.surnames[1]).read_dataframe("csv")  # noqa: F841
 
-        con.execute(
-            """CREATE TABLE names_count_by_region AS
-            SELECT
+        return con.sql(
+            """SELECT
                 lower("Nazwisko aktualne") as last_name,
                 AVG("Liczba") as count,
                 CAST(teryt as VARCHAR) as teryt,
@@ -59,13 +58,11 @@ class NamesCountByRegion(PipelineModel):
             ) AS regions ON names."Województwo zameldowania na pobyt stały" = regions.wojewodztwo
             GROUP BY ALL
             """
-        )
-
-        return con.sql("SELECT * FROM names_count_by_region").df()
+        ).to_df()
 
 
 class FirstNameFreq(PipelineModel):
-    filename: str = "first_name_freq"
+    filename = "first_name_freq"
     firstnames: list[FileSource] = [
         FileSource(
             # https://dane.gov.pl/pl/dataset/1667,lista-imion-wystepujacych-w-rejestrze-pesel-osoby-zyjace/resource/63929/table
@@ -85,8 +82,8 @@ class FirstNameFreq(PipelineModel):
         firstnames0 = ctx.io.read_data(self.firstnames[0]).read_dataframe("csv")  # noqa: F841
         firstnames1 = ctx.io.read_data(self.firstnames[1]).read_dataframe("csv")  # noqa: F841
 
-        con.execute(
-            """CREATE TABLE first_name_freq AS
+        return con.sql(
+            """
             WITH raw_names_split AS (
                 SELECT
                     lower("IMIĘ_PIERWSZE") as first_name,
@@ -114,6 +111,4 @@ class FirstNameFreq(PipelineModel):
                 CAST(count AS DOUBLE) / total.total_count as p
             FROM raw_names, total
         """
-        )
-
-        return con.sql("SELECT * FROM first_name_freq").df()
+        ).to_df()

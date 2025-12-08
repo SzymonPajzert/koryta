@@ -1,18 +1,19 @@
 """Tests for the abstract store interfaces and data structures."""
 
 import unittest
+from unittest.mock import Mock, patch
+
+import pandas as pd
 
 from scrapers.stores import (
     CloudStorage,
+    Context,
     DownloadableFile,
     FirestoreCollection,
     LocalFile,
-    ProcessPolicy,
     Pipeline,
-    Context,
+    ProcessPolicy,
 )
-from unittest.mock import Mock, patch
-import pandas as pd
 
 
 class TestStores(unittest.TestCase):

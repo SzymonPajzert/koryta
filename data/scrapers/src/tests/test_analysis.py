@@ -12,7 +12,7 @@ IGNORE_FAILURES: list[str] = []
 SCORE_CUTOFF = 10.5
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def ctx():
     return _setup_context(False)[0]
 
