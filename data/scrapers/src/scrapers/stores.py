@@ -309,6 +309,7 @@ class Pipeline:
         df: pd.DataFrame | None = None
         if self.filename is not None and not policy.should_refresh(self.pipeline_name):
             df = self.read(ctx)
+        if df is not None and len(df) > 0:
             read_input = True
 
         empty_should_run = df is None and policy.should_run(self.pipeline_name)
@@ -337,7 +338,7 @@ class Pipeline:
 
     def preprocess_sources(self, ctx: Context, policy: ProcessPolicy):
         for annotation, pipeline_type_dep in self.list_sources():
-            print("Initializing", annotation, pipeline_type_dep.__name__)
+            print(f"Initializing field {annotation}:{pipeline_type_dep.__name__} for {self.pipeline_name}")
             # Dependencies are not subject to 'only' filter, so we pass "all"
             dep_policy = ProcessPolicy(policy.refresh_pipelines, {"all"})
             self.__dict__[annotation].read_or_process(ctx, dep_policy)
@@ -383,7 +384,7 @@ class Pipeline:
 
     def list_sources(self):
         for annotation, pipeline_type_dep in self.__annotations__.items():
-            if isinstance(pipeline_type_dep, type) and issubclass(pipeline_type_dep, PipelineModel):
+            if isinstance(pipeline_type_dep, type) and issubclass(pipeline_type_dep, Pipeline):
                 yield annotation, pipeline_type_dep
 
     @property
@@ -396,6 +397,3 @@ class Pipeline:
     def pipeline_name(self) -> str:
         pipeline_type = type(self)
         return pipeline_type.__name__
-
-
-PipelineModel = Pipeline

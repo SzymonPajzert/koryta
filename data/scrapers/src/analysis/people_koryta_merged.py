@@ -1,10 +1,9 @@
-
 from scrapers.koryta.download import KorytaPeople
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 
 
-class PeopleKorytaMerged(PipelineModel):
-    filename: str = "people_koryta_merged"
+class PeopleKorytaMerged(Pipeline):
+    filename = "people_koryta_merged"
     koryta_pipeline: KorytaPeople
 
     def process(self, ctx: Context):

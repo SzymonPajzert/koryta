@@ -5,7 +5,7 @@ from entities.company import KRS as KrsCompany
 from entities.company import ManualKRS as KRS
 from entities.person import KRS as KrsPerson
 from scrapers.krs.graph import QueryRelation
-from scrapers.stores import CloudStorage, Context, PipelineModel
+from scrapers.stores import CloudStorage, Context, Pipeline
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -46,7 +46,7 @@ def employment_duration(item) -> str:
     return f"{days / 365:.2f}"
 
 
-class PeopleKRS(PipelineModel):
+class PeopleKRS(Pipeline):
     filename = "person_krs"
 
     def process(self, ctx: Context):
@@ -89,7 +89,7 @@ def extract_people(ctx: Context):
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
 
-class CompaniesKRS(PipelineModel):
+class CompaniesKRS(Pipeline):
     filename = "company_krs"
 
     def __init__(self) -> None:

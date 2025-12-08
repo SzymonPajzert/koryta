@@ -1,10 +1,10 @@
 from analysis.people import PeopleMerged
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 
 PEOPLE_COLUMNS_TO_CHECK = ["koryta_name", "krs_name", "pkw_name", "wiki_name"]
 
 
-class Statistics(PipelineModel):
+class Statistics(Pipeline):
     filename = "statistics"
     people: PeopleMerged
 

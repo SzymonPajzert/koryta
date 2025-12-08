@@ -1,9 +1,9 @@
 from analysis.utils.tables import create_people_table
 from scrapers.pkw.process import PeoplePKW
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 
 
-class PeoplePKWMerged(PipelineModel):
+class PeoplePKWMerged(Pipeline):
     filename = "people_pkw_merged"
     pkw_pipeline: PeoplePKW
 
@@ -37,9 +37,7 @@ class PeoplePKWMerged(PipelineModel):
         """
         )
 
-        print(
-            f"people_pkw_merged_raw has {len(con.sql('select * from people_pkw_merged_raw').df())} rows"
-        )
+        print(f"people_pkw_merged_raw has {len(con.sql('select * from people_pkw_merged_raw').df())} rows")
 
         create_people_table(
             con,

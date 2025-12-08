@@ -17,7 +17,7 @@ from tqdm import tqdm
 from entities.article import Article
 from entities.person import Koryta as Person
 from entities.util import NormalizedParse
-from scrapers.stores import Context, FirestoreCollection, PipelineModel
+from scrapers.stores import Context, FirestoreCollection, Pipeline
 
 
 def list_people(ctx: Context) -> typing.Generator[Person, None, None]:
@@ -30,11 +30,7 @@ def list_people(ctx: Context) -> typing.Generator[Person, None, None]:
     Yields:
         `Person` objects, representing individuals with their full name, party, and ID.
     """
-    for person_doc in tqdm(
-        ctx.io.read_data(
-            FirestoreCollection("nodes", filters=[("type", "==", "person")])
-        ).read_iterable()
-    ):
+    for person_doc in tqdm(ctx.io.read_data(FirestoreCollection("nodes", filters=[("type", "==", "person")])).read_iterable()):
         id = person_doc.id
         person_data = person_doc.to_dict()
         assert person_data is not None
@@ -45,11 +41,9 @@ def list_people(ctx: Context) -> typing.Generator[Person, None, None]:
         )
 
 
-class KorytaPeople(PipelineModel):
+class KorytaPeople(Pipeline):
     filename: str = "person_koryta"
-    nodes_collection: FirestoreCollection = FirestoreCollection(
-        "nodes", filters=[("type", "==", "person")]
-    )
+    nodes_collection: FirestoreCollection = FirestoreCollection("nodes", filters=[("type", "==", "person")])
 
     def process(self, ctx: Context):
         """
@@ -64,11 +58,9 @@ class KorytaPeople(PipelineModel):
         print("Finished processing people.")
 
 
-class KorytaArticles(PipelineModel):
+class KorytaArticles(Pipeline):
     filename: str = "article_article"
-    nodes_collection: FirestoreCollection = FirestoreCollection(
-        "nodes", filters=[("type", "==", "article")]
-    )
+    nodes_collection: FirestoreCollection = FirestoreCollection("nodes", filters=[("type", "==", "article")])
     edges_collection: FirestoreCollection = FirestoreCollection("edges", stream=True)
 
     def process(self, ctx: Context):
@@ -84,22 +76,14 @@ class KorytaArticles(PipelineModel):
         people = {person.id: person for person in list_people(ctx)}
         articles = {
             article.doc_id: article.to_dict()  # Assuming doc_id exists on the returned object
-            for article in ctx.io.read_data(
-                self.nodes_collection
-            ).read_iterable()
+            for article in ctx.io.read_data(self.nodes_collection).read_iterable()
         }
 
         # Enrich articles with mentioned people
-        for edge_doc in tqdm(
-            ctx.io.read_data(self.edges_collection).read_iterable()
-        ):
+        for edge_doc in tqdm(ctx.io.read_data(self.edges_collection).read_iterable()):
             edge = edge_doc.to_dict()
             assert edge is not None
-            if (
-                edge["type"] == "mentions"
-                and edge["source"] in articles
-                and edge["target"] in people
-            ):
+            if edge["type"] == "mentions" and edge["source"] in articles and edge["target"] in people:
                 article = articles[edge["source"]]
                 mentions = article.get("mentioned", [])
                 mentions.append(people[edge["target"]])

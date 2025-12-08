@@ -1,10 +1,10 @@
 from analysis.utils.tables import create_people_table
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 from scrapers.wiki.process_articles import ProcessWiki
 
 
-class PeopleWikiMerged(PipelineModel):
-    filename: str = "people_wiki_merged"
+class PeopleWikiMerged(Pipeline):
+    filename = "people_wiki_merged"
     wiki_pipeline: ProcessWiki
 
     def process(self, ctx: Context):

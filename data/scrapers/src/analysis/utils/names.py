@@ -1,8 +1,8 @@
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 from scrapers.stores import DownloadableFile as FileSource
 
 
-class NamesCountByRegion(PipelineModel):
+class NamesCountByRegion(Pipeline):
     filename = "names_count_by_region"
     surnames: list[FileSource] = [
         FileSource(
@@ -61,7 +61,7 @@ class NamesCountByRegion(PipelineModel):
         ).to_df()
 
 
-class FirstNameFreq(PipelineModel):
+class FirstNameFreq(Pipeline):
     filename = "first_name_freq"
     firstnames: list[FileSource] = [
         FileSource(

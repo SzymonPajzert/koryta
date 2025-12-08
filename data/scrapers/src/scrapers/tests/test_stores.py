@@ -83,11 +83,38 @@ class DummyDep(Pipeline):
     def process(self, ctx: Context):
         return pd.DataFrame({"col": [1, 2]})
 
+
 class DummyPipeline(Pipeline):
     dep: DummyDep
 
     def process(self, ctx: Context):
         return self.dep.read_or_process(ctx)
+
+
+class Level3(Pipeline):
+    filename = "level3"
+
+    def process(self, ctx: Context):
+        return pd.DataFrame({"l3": [3]})
+
+
+class Level2(Pipeline):
+    filename = "level2"
+    l3: Level3
+
+    def process(self, ctx: Context):
+        self.l3.read_or_process(ctx)
+        return pd.DataFrame({"l2": [2]})
+
+
+class Level1(Pipeline):
+    filename = "level1"
+    l2: Level2
+
+    def process(self, ctx: Context):
+        self.l2.read_or_process(ctx)
+        return pd.DataFrame({"l1": [1]})
+
 
 class TestPipeline(unittest.TestCase):
     def setUp(self):
@@ -104,21 +131,21 @@ class TestPipeline(unittest.TestCase):
         # Setup: Pipeline file exists
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        
+
         # Mock IO to return data so it looks like file exists
         self.mock_ctx.io.read_data.return_value.read_dataframe.return_value = self.dummy_df
-        
+
         # Mock dependency
         pipeline.dep = Mock(spec=DummyDep)
         # Verify read_or_process on dependency is NOT called
-        
+
         policy = ProcessPolicy.with_default(refresh=[], only=[])
-        
+
         result = pipeline.read_or_process(self.mock_ctx, policy)
-        
+
         # Should return cached result
         pd.testing.assert_frame_equal(result, self.dummy_df)
-        
+
         # Dependency should NOT be touched
         pipeline.dep.read_or_process.assert_not_called()
 
@@ -129,10 +156,10 @@ class TestPipeline(unittest.TestCase):
         """
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        
+
         # Mock existing file (though we shouldn't read it if refreshing)
         self.mock_ctx.io.read_data.return_value.read_dataframe.return_value = self.dummy_df
-        
+
         # Mock dependency instance that will be replaced in params
         # Note: Pipeline constructor initializes dep. We need to spy on it or mock it.
         # But here we manually injected a Mock into pipeline.dep in previous test.
@@ -141,12 +168,12 @@ class TestPipeline(unittest.TestCase):
         dep_mock.pipeline_name = "DummyDep"
         dep_mock.read_or_process.return_value = self.dummy_df
         pipeline.dep = dep_mock
-        
+
         policy = ProcessPolicy.with_default(refresh=["DummyPipeline"], only=[])
-        
-        with patch.object(pipeline, 'process', return_value=self.dummy_df) as mock_process:
+
+        with patch.object(pipeline, "process", return_value=self.dummy_df) as mock_process:
             pipeline.read_or_process(self.mock_ctx, policy)
-            
+
             # Verify dependency was triggered
             dep_mock.read_or_process.assert_called_once()
             mock_process.assert_called_once()
@@ -163,16 +190,14 @@ class TestPipeline(unittest.TestCase):
         dep = DummyDep()
         dep.filename = "dep_file"
         pipeline.dep = dep
-        
+
         # Mock IO to throw FileNotFoundError for both
         self.mock_ctx.io.read_data.side_effect = FileNotFoundError
-        
+
         # Mock process methods
-        with patch.object(pipeline, 'process', return_value=self.dummy_df), \
-             patch.object(dep, 'process', return_value=self.dummy_df):
-            
+        with patch.object(pipeline, "process", return_value=self.dummy_df), patch.object(dep, "process", return_value=self.dummy_df):
             policy = ProcessPolicy.with_default(refresh=[], only=["DummyPipeline"])
-            
+
             # This should fail if the bug exists (dep not in run causing read_or_process to return None)
             # Or if it asserts df is not None
             try:
@@ -190,18 +215,83 @@ class TestPipeline(unittest.TestCase):
         pipeline.dep = Mock(spec=DummyDep)
         pipeline.dep.pipeline_name = "DummyDep"
         pipeline.dep.read_or_process.return_value = self.dummy_df
-        
+
         # Missing file for current pipeline
         self.mock_ctx.io.read_data.side_effect = FileNotFoundError
-        
+
         # Policy: run all
         policy = ProcessPolicy.with_default()
-        
-        with patch.object(pipeline, 'process', return_value=self.dummy_df):
+
+        with patch.object(pipeline, "process", return_value=self.dummy_df):
             pipeline.read_or_process(self.mock_ctx, policy)
-            
+
             # Dependency check should happen
             pipeline.dep.read_or_process.assert_called_once()
+
+    def test_nested_pipelines_execution(self):
+        """
+        Verify correct propagation of execution in a 3-level nested pipeline.
+        L1 -> L2 -> L3
+        """
+        pipeline = Level1()
+
+        # Stateful mock for IO
+        written_files = {}
+
+        def read_data_se(ref):
+            # We assume ref is LocalFile and has .filename
+            # The pipeline writes to filename.jsonl
+            fname = ref.filename
+            if fname in written_files:
+                m = Mock()
+                # Return cached DF
+                m.read_dataframe.return_value = written_files[fname]
+                return m
+            raise FileNotFoundError(f"File {fname} not found in {written_files.keys()}")
+
+        def write_df_se(df, filename):
+            written_files[filename] = df
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
+        self.mock_ctx.io.write_dataframe.side_effect = write_df_se
+
+        policy = ProcessPolicy.with_default()
+
+        # We need to spy on process calls to verify execution order/count
+        with (
+            patch.object(Level3, "process", wraps=Level3().process) as mock_l3_proc,
+            patch.object(Level2, "process", wraps=Level2().process) as mock_l2_proc,
+            patch.object(Level1, "process", wraps=Level1().process) as mock_l1_proc,
+        ):
+            pipeline.read_or_process(self.mock_ctx, policy)
+
+            mock_l1_proc.assert_called_once()
+            mock_l2_proc.assert_called_once()
+            mock_l3_proc.assert_called_once()
+
+    def test_missing_input_writes_output(self):
+        """
+        Verify that when input is missing, the pipeline runs and WRITES the result.
+        Addressing the TODO.
+        """
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy_writes"
+        pipeline.dep = Mock(spec=DummyDep)
+        pipeline.dep.read_or_process.return_value = self.dummy_df
+
+        # Input missing
+        self.mock_ctx.io.read_data.side_effect = FileNotFoundError
+
+        policy = ProcessPolicy.with_default()
+
+        with patch.object(pipeline, "process", return_value=self.dummy_df):
+            pipeline.read_or_process(self.mock_ctx, policy)
+
+            # Verify write was called
+            # stores.py: ctx.io.write_dataframe(df, self.json_path)
+            self.mock_ctx.io.write_dataframe.assert_called_once()
+            args, _ = self.mock_ctx.io.write_dataframe.call_args
+            self.assertTrue(args[1].endswith(".jsonl"))
 
 
 if __name__ == "__main__":
