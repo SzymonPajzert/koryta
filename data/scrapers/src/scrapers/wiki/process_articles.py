@@ -41,13 +41,15 @@ REQUIRED_WORDS = [
     "Rugbysta",
     "Architekt",
     "Astronauta",
-    "MedalistaKierowca",
+    "Medalista",
+    "Kierowca",
     "Osoba publiczna",
     "Zawodnik",
     "sportowy",
     "Szachista",
     "Brydż",
     "Przedsiębiorstwo",
+    "przedsiębiorstwo",
     "Instytucja państwowa",
 ]
 

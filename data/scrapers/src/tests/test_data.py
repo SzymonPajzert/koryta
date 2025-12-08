@@ -14,7 +14,7 @@ def ctx():
 
 def test_public_companies_list(ctx):
     data: CompaniesHardcoded = Pipeline.create(CompaniesHardcoded)
-    data.process(ctx)
+    data.read_or_process(ctx)
 
     PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")
 
