@@ -42,7 +42,7 @@ class FromIterable(File):
         return csv.reader(self.iterable, delimiter=sep)
 
     def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
-        raise NotImplementedError(self.__name__)
+        raise NotImplementedError(type(self).__name__)
 
     def read_parquet(self):
         raise NotImplementedError()
@@ -71,7 +71,7 @@ class FromBytesIO(File):
         dtype: dict[str, Any] | None = None,
     ) -> pd.DataFrame:
         if fmt == "csv":
-            return pd.read_csv(self.raw_bytes, sep=csv_sep, dtype=dtype)
+            return pd.read_csv(self.raw_bytes, sep=csv_sep, dtype=dtype)  # type: ignore
         elif fmt == "jsonl":
             return pd.read_json(self.raw_bytes, lines=True, dtype=dtype)
         elif fmt == "parquet":

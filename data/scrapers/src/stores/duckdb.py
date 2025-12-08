@@ -1,5 +1,6 @@
 import os
 from dataclasses import asdict
+from typing import Any
 
 import pandas as pd
 
@@ -7,10 +8,10 @@ from stores.config import VERSIONED_DIR
 
 
 class EntityDumper:
-    dbs = []
-    used = dict()
-    inmemory = dict()
-    sort_keys = dict()
+    dbs: list[Any] = []
+    used: dict[str, Any] = dict()
+    inmemory: dict[str, list[Any]] = dict()
+    sort_keys: dict[str, list[str]] = dict()
 
     def insert_into(self, v, sort_by):
         mod = type(v).__module__.removeprefix("entities.")

@@ -13,8 +13,7 @@ def ctx():
 @pytest.fixture
 def stats(ctx):
     stats = Statistics()
-    stats.read_or_process(ctx, ProcessPolicy({"Statistics"}, set()))
-    return stats
+    return stats.read_or_process(ctx, ProcessPolicy({"Statistics"}, set()))
 
 
 def test_expected_people(stats):

@@ -1,11 +1,11 @@
-import copy
+import dataclasses
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
-from uuid_extensions import uuid7str
+from uuid_extensions import uuid7str  # type: ignore
 
 from entities.crawler import RequestLog, WebsiteIndex
 from entities.util import NormalizedParse
@@ -25,23 +25,25 @@ def config_from_row(allowed, quality):
     return "block"
 
 
-next_request_time = {}
-url_to_update = set()
-page_score = dict()
+next_request_time: dict[str, float] = {}
+url_to_update: set[str] = set()
+page_score: dict[str, int] = dict()
 
 
-def add_crawl_record(uid, parsed, url, response_code, payload_size_bytes, duration):
+def add_crawl_record(ctx: Context, uid, parsed, url, response_code, payload_size_bytes, duration):
     """Updates the timestamp for a successfully crawled URL in the sites file."""
-    RequestLog(
-        uuid7str(),
-        uid,
-        parsed.hostname_normalized,
-        url,
-        datetime.now(warsaw_tz),
-        response_code,
-        payload_size_bytes,
-        duration,
-    ).insert_into()
+    ctx.io.output_entity(
+        RequestLog(
+            uuid7str(),
+            uid,
+            parsed.hostname_normalized,
+            url,
+            datetime.now(warsaw_tz),
+            response_code,
+            payload_size_bytes,
+            duration,
+        )
+    )
 
 
 def ready_to_crawl(parsed):
@@ -83,9 +85,8 @@ def crawl_website(ctx: Context, uid, current_url):
             ctx.io.upload(parsed, response.text, "text/html")
 
             for parser in ["html.parser", "lxml", "html5lib"]:
-                copy_parsed = copy.deepcopy(parsed)
                 soup = BeautifulSoup(response.text, parser)
-                copy_parsed.path += f".{parser}.txt"
+                copy_parsed = dataclasses.replace(parsed, path=parsed.path + f".{parser}.txt")
                 ctx.io.upload(copy_parsed, soup.get_text(), "text/plain")
 
                 for link in soup.find_all("a", href=True):
@@ -105,12 +106,13 @@ def crawl_website(ctx: Context, uid, current_url):
             )
             if len(pages_to_visit) > 0:
                 for url in pages_to_visit:
-                    WebsiteIndex(uuid7str(), current_url, None).insert_into()
+                    ctx.io.output_entity(WebsiteIndex(uuid7str(), current_url, None))
 
         else:
             print(f"  -> Failed to retrieve page: Status code {response.status_code}")
 
         add_crawl_record(
+            ctx,
             uid,
             parsed,
             current_url,

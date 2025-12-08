@@ -1,6 +1,5 @@
 import argparse
 import typing
-from collections import Counter
 from pprint import pprint
 from time import sleep
 
@@ -51,11 +50,9 @@ def scrape_rejestrio(ctx: Context):
     )
     args = parser.parse_args()
 
-    already_scraped = set(
-        KRS.from_blob_name(path) for path in ctx.io.list_blobs("rejestr.io")
-    )
+    already_scraped = set(KRS.from_blob_name(path.url) for path in ctx.io.list_blobs("rejestr.io"))
 
-    starters = set(KRS(krs) for krs in data.ALL_COMPANIES_KRS)
+    starters = set(KRS(krs) for krs in data.CompaniesHardcoded.all_companies_krs)
     if args.only != "":
         # Narrow down starters to only specified companies
         starters = {KRS(args.only)}
@@ -63,25 +60,25 @@ def scrape_rejestrio(ctx: Context):
     graph = CompanyGraph()
 
     if args.children:
-        children = graph.all_descendants(starters)
+        children = graph.all_descendants(set(s.id for s in starters))
     else:
         children = starters
     pprint(children)
-    children_companies = set(
-        company for krs, company in graph.companies.items() if krs in children
-    )
+    # graph.companies does not exist. Logic is broken.
+    # children_companies: set = set()
+    # children_companies = set(
+    #    company for krs, company in graph.companies.items() if krs in children
+    # )
     to_scrape = (starters | children) - already_scraped
 
     print(f"Already scraped: {already_scraped}")
     print(f"To scrape: {to_scrape}")
     print("To scrape (children):")
-    to_scrape_children = set(filter(lambda x: x.krs in to_scrape, children_companies))
-    pprint(to_scrape_children)
-    parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
-    pprint(parent_count.most_common(30))
-    urls = list(
-        save_org_connections(to_scrape, map(KRS, data.from_source("NAME_MISSING")))
-    )
+    # to_scrape_children = set(filter(lambda x: x.krs in to_scrape, children_companies))
+    # pprint(to_scrape_children)
+    # parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
+    # pprint(parent_count.most_common(30))
+    urls = list(save_org_connections(to_scrape, map(KRS, data.CompaniesHardcoded().from_source("NAME_MISSING"))))
     print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
     input("Press enter to continue...")
 
@@ -96,4 +93,3 @@ def scrape_rejestrio(ctx: Context):
         # We're discarding query params, so it's a hotfix for this
         url = url.replace("?aktualnosc=", "/aktualnosc_")
         ctx.io.upload(url, result, "application/json")
-
