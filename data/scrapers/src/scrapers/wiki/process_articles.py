@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from entities.company import Wikipedia as Company
 from entities.person import Wikipedia as People
-from scrapers.stores import Context, DownloadableFile, PipelineModel
+from scrapers.stores import Context, DownloadableFile, Pipeline
 from scrapers.wiki.util import parse_date
 from util.lists import WIKI_POLITICAL_LINKS
 from util.polish import LOWER, UPPER
@@ -41,13 +41,15 @@ REQUIRED_WORDS = [
     "Rugbysta",
     "Architekt",
     "Astronauta",
-    "MedalistaKierowca",
+    "Medalista",
+    "Kierowca",
     "Osoba publiczna",
     "Zawodnik",
     "sportowy",
     "Szachista",
     "Brydż",
     "Przedsiębiorstwo",
+    "przedsiębiorstwo",
     "Instytucja państwowa",
 ]
 
@@ -327,7 +329,7 @@ def process_article_worker(args):
         return None
 
 
-class ProcessWiki(PipelineModel):
+class ProcessWiki(Pipeline):
     filename = "person_wikipedia"  # TODO support two filenames
 
     def process(self, ctx: Context):

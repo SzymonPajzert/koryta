@@ -3,12 +3,15 @@ import json
 import os
 import typing
 from io import BytesIO, StringIO
+from typing import TypeAlias, Union
 from unittest.mock import MagicMock
 
 import pandas as pd
 
 from scrapers.stores import IO, Context, DataRef, File, LocalFile, RejestrIO
 from stores.file import FromPath
+
+nested_dict: TypeAlias = dict[str, Union[str, bytes, "nested_dict"]]
 
 
 # Fake/Mock Implementations for testing
@@ -163,9 +166,6 @@ def get_test_context() -> Context:
         utils=None,
         web=None,
     )
-
-
-type nested_dict = dict[str, str | bytes | nested_dict]
 
 
 def setup_test_context(ctx: Context, files: nested_dict = {}):

@@ -1,16 +1,16 @@
 from analysis.utils.tables import create_people_table
 from scrapers.pkw.process import PeoplePKW
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 
 
-class PeoplePKWMerged(PipelineModel):
+class PeoplePKWMerged(Pipeline):
     filename = "people_pkw_merged"
     pkw_pipeline: PeoplePKW
 
     def process(self, ctx: Context):
         con = ctx.con
 
-        pkw_data = self.pkw_pipeline.process(ctx)  # noqa: F841
+        pkw_data = self.pkw_pipeline.read_or_process(ctx)  # noqa: F841
 
         con.execute(
             """
@@ -37,9 +37,7 @@ class PeoplePKWMerged(PipelineModel):
         """
         )
 
-        print(
-            f"people_pkw_merged_raw has {len(con.sql('select * from people_pkw_merged_raw').df())} rows"
-        )
+        print(f"people_pkw_merged_raw has {len(con.sql('select * from people_pkw_merged_raw').df())} rows")
 
         create_people_table(
             con,

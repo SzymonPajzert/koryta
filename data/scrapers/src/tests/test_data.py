@@ -1,13 +1,20 @@
-from main import run_pipeline
-from scrapers.krs.data import CompaniesHardcoded
+import pytest
+
+from main import _setup_context
+from scrapers.krs.data import CompaniesHardcoded, Pipeline
 
 KRS_STARTERS_ALL = "krs_starters.csv"
 COMMON_ROW = 7
 
 
-def test_public_companies_list():
-    pipeline = run_pipeline(CompaniesHardcoded)[0]
-    data: CompaniesHardcoded = pipeline.model
+@pytest.fixture
+def ctx():
+    return _setup_context(False)[0]
+
+
+def test_public_companies_list(ctx):
+    data: CompaniesHardcoded = Pipeline.create(CompaniesHardcoded)
+    data.read_or_process(ctx)
 
     PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")
 

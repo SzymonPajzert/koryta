@@ -35,7 +35,7 @@ def trim_object(source: dict, keys: list[str]):
     Ignores missing fields.
     Nested fields can be specified using a forward slash, e.g., "a/b/c".
     """
-    result = {}
+    result: dict[str, Any] = {}
     if not isinstance(source, dict):
         # We're reading a nested value of a non-dict, skip
         return None

@@ -1,31 +1,26 @@
-import os
-from unittest.mock import patch
-
 import pandas as pd
 import pytest
 import regex as re
 
 from analysis.people import PeopleMerged
-from main import run_pipeline, setup_context
-from stores.config import PROJECT_ROOT
+from main import Pipeline, _setup_context
 
 # TODO from util.lists import IGNORE_FAILURES
-IGNORE_FAILURES = []
+IGNORE_FAILURES: list[str] = []
 
 
 SCORE_CUTOFF = 10.5
 
 
 @pytest.fixture(scope="module")
-def df_all():
-    # Force re-computation by deleting the cached file
-    cache_path = os.path.join(PROJECT_ROOT, "versioned", "people_merged.jsonl")
-    if os.path.exists(cache_path):
-        os.remove(cache_path)
+def ctx():
+    return _setup_context(False)[0]
 
-    with patch("builtins.input", return_value="n"):
-        ctx, _ = setup_context(True)
-    return run_pipeline(PeopleMerged, ctx)[1]
+
+@pytest.fixture(scope="module")
+def df_all(ctx):
+    p: PeopleMerged = Pipeline.create(PeopleMerged)
+    return p.read_or_process(ctx)
 
 
 # TODO split it already as another column
@@ -265,9 +260,7 @@ def no_diff_sets(a, b):
 def test_andrzej_jan_sikora_duplicated(df_all):
     # Filter for Andrzej Jan Sikora - we expect two people
     sikora_records = df_all[df_all["krs_name"] == "Andrzej Jan Sikora"]
-    assert (
-        len(sikora_records) == 2
-    ), f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
+    assert len(sikora_records) == 2, f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
 
     birth_years = sorted(sikora_records["birth_year"].dropna().astype(int).tolist())
 
@@ -280,16 +273,12 @@ def test_andrzej_jan_sikora_duplicated(df_all):
 def test_adam_smoter_deduplication(df_all):
     # Adam Smoter should be found only once born in 1947
     smoter_records = df_all[df_all["krs_name"] == "Adam Smoter"]
-    assert (
-        len(smoter_records) == 1
-    ), f"Expected 1 record for Adam Smoter, found {len(smoter_records)}"
+    assert len(smoter_records) == 1, f"Expected 1 record for Adam Smoter, found {len(smoter_records)}"
     assert smoter_records.iloc[0]["birth_year"] == 1947
 
 
 def test_teresa_zieba_deduplication(df_all):
     zieba_records = df_all[df_all["krs_name"] == "Teresa Zięba"]
-    assert (
-        len(zieba_records) == 1
-    ), f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
+    assert len(zieba_records) == 1, f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
     # Check birth year is 1959 (or 1958, but we expect one)
     assert zieba_records.iloc[0]["birth_year"] in [1958, 1959]

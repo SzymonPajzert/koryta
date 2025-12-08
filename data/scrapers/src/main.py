@@ -24,7 +24,7 @@ from scrapers.stores import (
     FirestoreCollection,
     LocalFile,
     Pipeline,
-    PipelineModel,
+    ProcessPolicy,
 )
 from scrapers.wiki.process_articles import ProcessWiki
 from stores import file
@@ -104,7 +104,7 @@ class Conductor(IO):
         return self.storage.list_blobs(hostname)
 
 
-def setup_context(use_rejestr_io: bool):
+def _setup_context(use_rejestr_io: bool) -> tuple[Context, EntityDumper]:
     dumper = EntityDumper()
     conductor = Conductor(dumper)
     rejestr_io = None
@@ -123,75 +123,6 @@ def setup_context(use_rejestr_io: bool):
     ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
 
     return ctx, dumper
-
-
-def run_pipeline(
-    pipeline_type: type[PipelineModel],
-    ctx: Context | None = None,
-    nested=0,
-    refresh_target: str | None = None,
-    only_target: str | None = None,
-) -> tuple[Pipeline, pd.DataFrame]:
-    pipeline_name = pipeline_type.__name__
-
-    # Filter execution if "only" is specified
-    requested_other_target = only_target and only_target not in {"all", pipeline_name}
-    if nested == 0 and requested_other_target:
-        # TODO implement lazy loading so there's always output
-        return None
-
-    pipeline_model = pipeline_type()
-
-    # TODO restore nester here?
-    print(f"{'  ' * nested}====== Running pipeline {pipeline_name} =====")
-
-    for annotation, pipeline_type_dep in pipeline_model.__annotations__.items():
-        if isinstance(pipeline_type_dep, type) and issubclass(pipeline_type_dep, PipelineModel):
-            print("Initializing", annotation, pipeline_type_dep.__name__)
-            # Dependencies are not subject to 'only' filter (nested > 0),
-            # but they might be subject to 'refresh' if we wanted recursive refresh (logic below)
-            # For now, 'refresh' only targets the specific pipeline name or 'all'
-            res = run_pipeline(pipeline_type_dep, ctx, nested + 1, refresh_target=refresh_target, only_target=only_target)
-            if res:
-                pipeline_model.__dict__[annotation], _ = res
-            else:
-                # This should effectively not happen if valid pipelines are passed
-                # because we only skip at nested=0.
-                # However, if a dependency was somehow skipped, we might have an issue.
-                # But nested > 0 check prevents skipping dependencies.
-                pass
-
-    print("Finished initialization")
-
-    should_refresh = refresh_target in {"all", pipeline_name}
-
-    pipeline = Pipeline.from_model(pipeline_model, force_refresh=should_refresh)
-
-    f = setup_pipeline(pipeline, ctx)
-    df = f()
-    print(f"{'  ' * nested}====== Finished pipeline {pipeline_name} =====\n\n")
-    return pipeline, df
-
-
-def setup_pipeline(pipeline_object: Pipeline, ctx: Context | None = None):
-    def func():
-        ctx_var = ctx
-        if ctx_var is None:
-            ctx_var, dumper = setup_context(pipeline_object.rejestr_io)
-        else:
-            dumper = (  # TODO fix it
-                ctx_var.io.dumper  # pyright: ignore[reportAttributeAccessIssue]
-            )
-        try:
-            result = pipeline_object.process(ctx_var)
-            print("Finished processing")
-            return result
-        finally:
-            print("Dumping...")
-            dumper.dump_pandas()
-            print("Done")
-
-    return func
 
 
 def info_exception(pipeline_name: str) -> NotImplementedError:
@@ -233,25 +164,30 @@ def companies_merged():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--refresh", help="Pipeline name to refresh or 'all'", default=None)
-    parser.add_argument("--only", help="Pipeline name to run or 'all'", default=None)
+    parser.add_argument("--refresh", help="Pipeline name to refresh or 'all'", action="append", default=[])
+    parser.add_argument("--only", help="Pipeline name to run or 'all'", action="append", default=[])
     args = parser.parse_args()
 
-    ctx, dumper = setup_context(False)
+    ctx, dumper = _setup_context(False)
 
     pipelines = [
-        ProcessWiki,
         PeoplePKW,
         PeopleKRS,
         CompaniesKRS,
+        ProcessWiki,
         PeopleMerged,
         CompaniesMerged,
         Statistics,
     ]
 
+    policy = ProcessPolicy.with_default(args.refresh, args.only)
+
     try:
-        for p in pipelines:
-            run_pipeline(p, ctx, refresh_target=args.refresh, only_target=args.only)
+        for p_type in pipelines:
+            if not policy.should_run(p_type.__name__):
+                continue
+            p: Pipeline = Pipeline.create(p_type)
+            p.read_or_process(ctx, policy)
         print("Finished processing")
     finally:
         print("Dumping...")

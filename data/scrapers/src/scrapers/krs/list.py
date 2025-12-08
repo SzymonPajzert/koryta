@@ -5,7 +5,7 @@ from entities.company import KRS as KrsCompany
 from entities.company import ManualKRS as KRS
 from entities.person import KRS as KrsPerson
 from scrapers.krs.graph import QueryRelation
-from scrapers.stores import CloudStorage, Context, PipelineModel
+from scrapers.stores import CloudStorage, Context, Pipeline
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -43,10 +43,10 @@ def employment_duration(item) -> str:
         result = result + (datetime.fromisoformat(end) - datetime.fromisoformat(start))
     days = result.days
 
-    return f"{days/365:.2f}"
+    return f"{days / 365:.2f}"
 
 
-class PeopleKRS(PipelineModel[KrsPerson]):
+class PeopleKRS(Pipeline):
     filename = "person_krs"
 
     def process(self, ctx: Context):
@@ -58,9 +58,7 @@ def extract_people(ctx: Context):
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about people.
     """
-    for blob_name, content in ctx.io.read_data(
-        CloudStorage(hostname="rejestr.io")
-    ).read_iterable():
+    for blob_name, content in ctx.io.read_data(CloudStorage(hostname="rejestr.io")).read_iterable():
         try:
             if "aktualnosc_" not in blob_name:
                 continue
@@ -91,8 +89,8 @@ def extract_people(ctx: Context):
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
 
-class CompaniesKRS(PipelineModel[KrsCompany]):
-    filename = "company_krs"  # TODO calculate it
+class CompaniesKRS(Pipeline):
+    filename = "company_krs"
 
     def __init__(self) -> None:
         super().__init__()
@@ -117,9 +115,7 @@ class CompaniesKRS(PipelineModel[KrsCompany]):
         return company
 
     def add_awaiting(self, company: str, relation: tuple[str, str]):
-        self.awaiting_relations[company] = self.awaiting_relations.get(company, []) + [
-            relation
-        ]
+        self.awaiting_relations[company] = self.awaiting_relations.get(company, []) + [relation]
 
     def add_relation(self, parent: str, child: str):
         if parent in self.companies and child in self.companies:
@@ -135,9 +131,7 @@ class CompaniesKRS(PipelineModel[KrsCompany]):
         Iterates through GCS files from rejestr.io, parses them,
         and extracts information about companies.
         """
-        for blob_name, content in ctx.io.read_data(
-            CloudStorage(hostname="rejestr.io")
-        ).read_iterable():
+        for blob_name, content in ctx.io.read_data(CloudStorage(hostname="rejestr.io")).read_iterable():
             data = json.loads(content)
             if "aktualnosc_" in blob_name:
                 for item in data:
@@ -147,9 +141,7 @@ class CompaniesKRS(PipelineModel[KrsCompany]):
 
                     # Add it to the parent of the company
                     parent = KRS.from_blob_name(blob_name)
-                    conn_type = QueryRelation.from_rejestrio(
-                        item["krs_powiazania_kwerendowane"][0]
-                    )
+                    conn_type = QueryRelation.from_rejestrio(item["krs_powiazania_kwerendowane"][0])
                     if conn_type.is_child():
                         self.add_relation(parent.id, c.krs)
 
@@ -160,6 +152,4 @@ class CompaniesKRS(PipelineModel[KrsCompany]):
             ctx.io.output_entity(company)
 
         if len(self.awaiting_relations) > 1:
-            raise ValueError(
-                f"Awaiting relations not empty - {self.awaiting_relations}"
-            )
+            raise ValueError(f"Awaiting relations not empty - {self.awaiting_relations}")

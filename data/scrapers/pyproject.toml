@@ -189,7 +189,7 @@ max-branches = 15
 
 [tool.pytest.ini_options]
 markers = ["parametrize_skip_if"]
-addopts = "--cov=src --cov-report=term:skip-covered"
+addopts = "--cov=src --cov-report=term:skip-covered --durations=5"
 
 [tool.importlinter]
 root_packages = ["analysis", "stores", "scrapers", "util", "entities"]

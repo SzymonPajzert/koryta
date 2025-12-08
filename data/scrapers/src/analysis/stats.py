@@ -1,15 +1,15 @@
 from analysis.people import PeopleMerged
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 
 PEOPLE_COLUMNS_TO_CHECK = ["koryta_name", "krs_name", "pkw_name", "wiki_name"]
 
 
-class Statistics(PipelineModel):
+class Statistics(Pipeline):
     filename = "statistics"
     people: PeopleMerged
 
     def process(self, ctx: Context):
-        df = self.people.process(ctx)
+        df = self.people.read_or_process(ctx)
         combination_counts = df[PEOPLE_COLUMNS_TO_CHECK].notnull().groupby(PEOPLE_COLUMNS_TO_CHECK).size()
         combination_counts = combination_counts.sort_values(ascending=False)
         combination_counts = combination_counts.reset_index(name="count")

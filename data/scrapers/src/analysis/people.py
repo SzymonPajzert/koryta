@@ -8,7 +8,7 @@ from analysis.people_wiki_merged import PeopleWikiMerged
 from analysis.utils import read_enriched
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
-from scrapers.stores import Context, LocalFile, PipelineModel
+from scrapers.stores import Context, LocalFile, Pipeline
 from scrapers.teryt import Teryt
 
 pd.set_option("display.max_rows", None)
@@ -59,7 +59,7 @@ def unique_probability(p1: float, p2: float | None, second_name_match: bool, n: 
     return math.exp(-n * p_combined)
 
 
-class PeopleMerged(PipelineModel):
+class PeopleMerged(Pipeline):
     filename = "people_merged"
 
     people_krs: PeopleKRSMerged
@@ -72,15 +72,16 @@ class PeopleMerged(PipelineModel):
     teryt: Teryt
 
     def process(self, ctx: Context):
+        assert self.teryt is not None
         return people_merged(
             ctx,
-            self.people_krs.process(ctx),
-            self.people_wiki.process(ctx),
-            self.people_pkw.process(ctx),
-            self.names_count_by_region.process(ctx),
-            self.first_name_freq.process(ctx),
-            self.companies_krs.process(ctx),
-            self.teryt.model,
+            self.people_krs.read_or_process(ctx),
+            self.people_wiki.read_or_process(ctx),
+            self.people_pkw.read_or_process(ctx),
+            self.names_count_by_region.read_or_process(ctx),
+            self.first_name_freq.read_or_process(ctx),
+            self.companies_krs.read_or_process(ctx),
+            self.teryt,
         )
 
 

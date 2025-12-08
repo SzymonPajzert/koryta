@@ -1,4 +1,3 @@
-
 import numpy as np
 import pandas as pd
 
@@ -8,15 +7,15 @@ from scrapers.krs.companies import company_names
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
-from scrapers.stores import Context, LocalFile, Pipeline, PipelineModel
+from scrapers.stores import Context, LocalFile, Pipeline
 from scrapers.wiki.process_articles import ProcessWiki
 from util.lists import TEST_FILES, WIKI_POLITICAL_LINKS
 
 
-def iterate(ctx, pipeline, constructor):
+def iterate(ctx, pipeline: Pipeline, constructor):
     try:
         assert pipeline.filename is not None
-        df = Pipeline.read_or_process(ctx, pipeline.filename, pipeline.process)
+        df = pipeline.read_or_process(ctx)
         for row in df.itertuples(index=False):
             yield constructor(row)
     except:
@@ -24,7 +23,7 @@ def iterate(ctx, pipeline, constructor):
         raise
 
 
-class CompaniesMerged(PipelineModel[InterestingEntity]):
+class CompaniesMerged(Pipeline):
     filename = "companies_merged"
 
     scraped_companies: CompaniesKRS
@@ -44,22 +43,18 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
             for parent in company.parents:
                 graph.add_parent(parent, company.krs)
 
-        children_of_hardcoded_set = graph.all_descendants(
-            iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id)
-        )
+        children_of_hardcoded_set = graph.all_descendants(iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id))
         children_of_hardcoded = pd.DataFrame({"krs": list(children_of_hardcoded_set)})  # noqa: F841
 
-        self.wiki_pipeline.process(ctx)
+        self.wiki_pipeline.read_or_process(ctx)
         wiki_companies = ctx.io.read_data(  # noqa: F841
             LocalFile("company_wikipedia.jsonl", "versioned")
         ).read_dataframe("jsonl")
-        
+
         # company_krs is already processed by scraped_companies
         krs_companies = ctx.io.read_data(  # noqa: F841
             LocalFile("company_krs.jsonl", "versioned")
         ).read_dataframe("jsonl")
-
-
 
         hardcoded_names = pd.DataFrame(  # noqa: F841
             {"name": list(company_names.values()) + list(TEST_FILES)}
@@ -100,7 +95,7 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
                     sources=sources,
                 )
                 ctx.io.output_entity(entity)
-                
+
     def get_reasons(self, row):
         reasons = []
         # Check reasons
@@ -112,11 +107,7 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
                 )
             )
         if row["is_hardcoded_name"]:
-            reasons.append(
-                InterestingReason(
-                    reason="hardcoded_name", details="In company_names list"
-                )
-            )
+            reasons.append(InterestingReason(reason="hardcoded_name", details="In company_names list"))
 
         if pd.notna(row["content_score"]) and row["content_score"] > 0:
             reasons.append(
@@ -129,22 +120,10 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
         # Check owners (simple string check for now, can be improved)
         if pd.notna(row["owner_text"]) and row["owner_text"]:
             lower_owner = row["owner_text"].lower()
-            if (
-                "skarb państwa" in lower_owner
-                or "miasto" in lower_owner
-                or "województwo" in lower_owner
-                or "gmina" in lower_owner
-            ):
-                reasons.append(
-                    InterestingReason(
-                        reason="owner_text", details=row["owner_text"]
-                    )
-                )
+            if "skarb państwa" in lower_owner or "miasto" in lower_owner or "województwo" in lower_owner or "gmina" in lower_owner:
+                reasons.append(InterestingReason(reason="owner_text", details=row["owner_text"]))
 
-        if (
-            isinstance(row["owner_articles"], (list, np.ndarray))
-            and len(row["owner_articles"]) > 0
-        ):
+        if isinstance(row["owner_articles"], (list, np.ndarray)) and len(row["owner_articles"]) > 0:
             # owner_articles is a list (numpy array or list in pandas)
             for article in row["owner_articles"]:
                 if isinstance(article, dict):
@@ -155,22 +134,9 @@ class CompaniesMerged(PipelineModel[InterestingEntity]):
 
                 lower_article = article_str.lower()
 
-                if (
-                    "skarb państwa" in lower_article
-                    or "miasto" in lower_article
-                    or "województwo" in lower_article
-                    or "gmina" in lower_article
-                ):
-                    reasons.append(
-                        InterestingReason(
-                            reason="owner_article", details=article_str
-                        )
-                    )
+                if "skarb państwa" in lower_article or "miasto" in lower_article or "województwo" in lower_article or "gmina" in lower_article:
+                    reasons.append(InterestingReason(reason="owner_article", details=article_str))
                 if article_str in WIKI_POLITICAL_LINKS:
-                    reasons.append(
-                        InterestingReason(
-                            reason="political_link", details=article_str
-                        )
-                    )
+                    reasons.append(InterestingReason(reason="political_link", details=article_str))
 
         return reasons

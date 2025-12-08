@@ -4,12 +4,12 @@ from typing import Callable
 import pandas as pd
 
 from entities.company import ManualKRS as KRS
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 from scrapers.stores import DownloadableFile as FileSource
 from scrapers.teryt import Teryt
 
 
-class CompaniesHardcoded(PipelineModel):
+class CompaniesHardcoded(Pipeline):
     filename = None
 
     all_companies_krs: dict[str, KRS] = dict()
@@ -19,7 +19,8 @@ class CompaniesHardcoded(PipelineModel):
         try:
             if pd.isna(row.loc["Województwo siedziby"]):
                 return ""
-            return self.teryt.model.parse_teryt(row.loc["Województwo siedziby"], "", "", "")
+            assert self.teryt is not None
+            return self.teryt.parse_teryt(row.loc["Województwo siedziby"], "", "", "")
         except:
             print(row)
             print(row.loc["Województwo siedziby"])
@@ -59,8 +60,8 @@ class CompaniesHardcoded(PipelineModel):
                 process(d)
 
         if isinstance(data, list):
-            for d in data:
-                process(d)
+            for item in data:
+                process(item)
 
     def read_public_companies(self, ctx: Context):  # Public companies, from data.gov.pl:
         _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"

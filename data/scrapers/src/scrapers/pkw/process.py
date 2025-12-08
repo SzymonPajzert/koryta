@@ -6,11 +6,11 @@ from collections import Counter
 from entities.person import PKW as Person
 from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
 from scrapers.pkw.sources import InputSource, sources
-from scrapers.stores import Context, PipelineModel
+from scrapers.stores import Context, Pipeline
 from scrapers.teryt import Teryt
 from util.polish import PkwFormat, parse_name
 
-counters = {k: Counter() for k in CSV_HEADERS.keys()}
+counters: dict[str, Counter[str]] = {k: Counter() for k in CSV_HEADERS.keys()}
 
 
 def extract_data(
@@ -133,7 +133,7 @@ def process_csv(
                 election_year=str(config.year),
                 election_type=str(config.election_type),
                 name_format=config.name_format,
-                **mapped,
+                **mapped,  # type: ignore
             )
         except TypeError:
             print(row_dict)
@@ -169,12 +169,13 @@ def process_pkw(ctx: Context, csv_headers, limit: int | None, year: str | None):
         print("🎉 Processing complete.")
 
 
-class PeoplePKW(PipelineModel):
+class PeoplePKW(Pipeline):
     filename = "person_pkw"
-    teryt: Teryt  # TODO mark it as Pipeline[Teryt]
+    teryt: Teryt
 
     def process(self, ctx: Context):
-        main(ctx, self.teryt.model)
+        assert self.teryt is not None
+        main(ctx, self.teryt)
 
 
 def main(ctx: Context, teryt: Teryt):
@@ -193,7 +194,7 @@ def main(ctx: Context, teryt: Teryt):
         default=None,
         help="for each file, only process LIMIT elements",
     )
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # Initiate headers parsers with ctx dependent variables
     csv_headers = {k: v.set_teryt(teryt) if v else None for k, v in CSV_HEADERS.items()}
