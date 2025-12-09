@@ -48,6 +48,7 @@ def employment_duration(item) -> str:
 
 class PeopleKRS(Pipeline):
     filename = "person_krs"
+    dtype = {"employed_krs": str}
 
     def process(self, ctx: Context):
         extract_people(ctx)
@@ -91,6 +92,7 @@ def extract_people(ctx: Context):
 
 class CompaniesKRS(Pipeline):
     filename = "company_krs"
+    dtype = {"krs": str}
 
     def __init__(self) -> None:
         super().__init__()
