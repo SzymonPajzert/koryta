@@ -77,6 +77,7 @@ class CompaniesHardcoded(Pipeline):
         return df
 
     def process(self, ctx: Context):
+        self.teryt.process(ctx)
         self.register_partials(
             "PUBLIC_COMPANIES_KRS",
             data=self.read_public_companies(ctx),

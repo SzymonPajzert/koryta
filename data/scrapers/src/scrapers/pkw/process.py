@@ -175,6 +175,7 @@ class PeoplePKW(Pipeline):
 
     def process(self, ctx: Context):
         assert self.teryt is not None
+        self.teryt.process(ctx)  # TODO mark teryt as autoinitializing
         main(ctx, self.teryt)
 
 

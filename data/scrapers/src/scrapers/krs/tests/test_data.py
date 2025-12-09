@@ -44,7 +44,7 @@ def test_public_companies_list():
         },
     )
     data: CompaniesHardcoded = Pipeline.create(CompaniesHardcoded)
-    data.preprocess_sources(ctx, ProcessPolicy({"all"}, {"all"}))
+    data.preprocess_sources(ctx, ProcessPolicy({"all"}))
     data.process(ctx)
 
     PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")

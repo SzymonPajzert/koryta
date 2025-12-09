@@ -4,6 +4,7 @@ to be used across all scrapers. It provides a common interface for handling
 file operations, data references, and pipeline execution contexts.
 """
 
+import os.path
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
@@ -29,6 +30,9 @@ class Extractor(metaclass=ABCMeta):
         raise NotImplementedError()
 
 
+type Formats = Literal["jsonl", "csv", "parquet"]
+
+
 class File(metaclass=ABCMeta):
     """Abstract representation of a file, providing methods to read its content."""
 
@@ -45,7 +49,7 @@ class File(metaclass=ABCMeta):
     @abstractmethod
     def read_dataframe(
         self,
-        fmt: Literal["jsonl", "csv", "parquet"],
+        fmt: Formats,
         csv_sep=",",
         dtype: dict[str, Any] | None = None,
     ) -> pd.DataFrame:
@@ -185,7 +189,7 @@ class IO(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def write_dataframe(self, df: pd.DataFrame, filename: str):
+    def write_dataframe(self, df: pd.DataFrame, filename: str, format: Formats):
         """Writes a DataFrame to storage."""
         raise NotImplementedError()
 
@@ -197,6 +201,11 @@ class IO(metaclass=ABCMeta):
     @abstractmethod
     def list_blobs(self, hostname: str) -> typing.Generator[DownloadableFile, None, None]:
         """Lists blobs in storage for a given hostname."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_mtime(self, fs: DataRef) -> float | None:
+        """Returns the modification time of the data reference, or None if not found/applicable."""
         raise NotImplementedError()
 
 
@@ -249,27 +258,30 @@ class Context:
     con: "DuckDBPyConnection"
     utils: Utils
     web: Web
+    refreshed_pipelines: set[str] = field(default_factory=set)
 
 
 @dataclass
 class ProcessPolicy:
     refresh_pipelines: set[str]
-    run_pipelines: set[str]
+    exclude_refresh: set[str] = field(default_factory=set)
 
     @staticmethod
-    def with_default(refresh: list[str] = [], only: list[str] = []):
+    def with_default(
+        refresh: list[str] = [],
+        exclude_refresh: list[str] = [],
+    ):
         refresh_pipelines = set() if len(refresh) == 0 else set(refresh)
-        run_pipelines = {"all"} if len(only) == 0 else set(only)
-        return ProcessPolicy(refresh_pipelines, run_pipelines)
+        exclude_refresh_set = set(exclude_refresh)
+        return ProcessPolicy(refresh_pipelines, exclude_refresh_set)
 
     def check_set(self, s: set[str], pipeline_name: str):
         return "all" in s or pipeline_name in s
 
     def should_refresh(self, pipeline_name: str):
+        if pipeline_name in self.exclude_refresh:
+            return False
         return self.check_set(self.refresh_pipelines, pipeline_name)
-
-    def should_run(self, pipeline_name: str):
-        return self.check_set(self.refresh_pipelines | self.run_pipelines, pipeline_name)
 
 
 class Pipeline:
@@ -279,8 +291,11 @@ class Pipeline:
     If you implement it, the pipeline output can be just passed as an input.
     """
 
-    filename: str | None
+    filename: str | None | property
     nested: int
+    format: Formats = "jsonl"
+    _cached_result: pd.DataFrame | None = None
+    _refreshed_execution: bool = False
 
     @abstractmethod
     def process(self, ctx: Context):
@@ -294,56 +309,107 @@ class Pipeline:
 
     def __init__(self, nested=0) -> None:
         self.nested = nested
+        self._cached_result = None
+        self._refreshed_execution = False
+        self.dependencies = {}
         for annotation, pipeline_type_dep in self.list_sources():
-            self.__dict__[annotation] = Pipeline.create(pipeline_type_dep, self.nested + 1)
-
-    def read_or_process(
-        self,
-        ctx: Context,
-        policy: ProcessPolicy = ProcessPolicy.with_default(),
-    ):
-        # TODO restore nester here?
-        print(f"{'  ' * self.nested}====== Running pipeline {self.pipeline_name} =====")
-
-        read_input = False
-        df: pd.DataFrame | None = None
-        if self.filename is not None and not policy.should_refresh(self.pipeline_name):
-            df = self.read(ctx)
-        if df is not None and len(df) > 0:
-            read_input = True
-
-        empty_should_run = df is None and policy.should_run(self.pipeline_name)
-        if empty_should_run:
-            print("No df file, processing")
-            df = self.run_pipeline(ctx, policy)
-        elif policy.should_refresh(self.pipeline_name):
-            print(f"Requested a refesh of {self.pipeline_name} - {policy}")
-            df = self.run_pipeline(ctx, policy)
-
-        if df is not None and self.json_path != "" and not read_input:
-            print(f"Writing to {self.json_path}")
-            ctx.io.write_dataframe(df, self.json_path)
-
-        assert df is not None
-        return df
+            dep = Pipeline.create(pipeline_type_dep, self.nested + 1)
+            self.__dict__[annotation] = dep
+            self.dependencies[annotation] = dep
 
     def read(self, ctx: Context):
         assert self.filename
         df = None
         try:
-            df = ctx.io.read_data(LocalFile(self.json_path, "versioned")).read_dataframe("jsonl")
+            df = ctx.io.read_data(LocalFile(self.output_path, "versioned")).read_dataframe(self.format)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
         return df
 
-    def preprocess_sources(self, ctx: Context, policy: ProcessPolicy):
-        for annotation, pipeline_type_dep in self.list_sources():
-            print(f"Initializing field {annotation}:{pipeline_type_dep.__name__} for {self.pipeline_name}")
-            # Dependencies are not subject to 'only' filter, so we pass "all"
-            dep_policy = ProcessPolicy(policy.refresh_pipelines, {"all"})
-            self.__dict__[annotation].read_or_process(ctx, dep_policy)
+    def output_time(self, ctx: Context):
+        self_ref = LocalFile(self.output_path, "versioned") if self.filename else None
+        return ctx.io.get_mtime(self_ref) if self_ref else None
 
-        print("Finished initialization")
+    def should_refresh_with_logic(self, ctx: Context, policy: ProcessPolicy) -> bool:
+        """
+        Determines if the pipeline should refresh based on:
+        1. Explicit policy.
+        2. Missing output of the dependency.
+        3. Refresh upstream (policy or newer timestamp).
+        """
+        if policy.should_refresh(self.pipeline_name):
+            print(f"Refreshing {self.pipeline_name} because of policy")
+            return True
+
+        self_mtime = self.output_time(ctx)
+        if self_mtime is None:
+            print(f"Refreshing {self.pipeline_name} because of missing output")
+            return True
+
+        for dep_name, dep in self.dependencies.items():
+            if dep.filename is None:
+                print(f"Dependency {self.pipeline_name} is volatile, skipping")
+                continue
+
+            if dep.should_refresh_with_logic(ctx, policy):
+                print(f"Refreshing {self.pipeline_name} because of dependency {dep_name}")
+                return True
+
+            dep_output_time = dep.output_time(ctx)
+            if dep_output_time is None or dep_output_time > self_mtime:
+                print(f"Refreshing {self.pipeline_name} because of dependency {dep_name}")
+                return True
+
+        return False
+
+    def read_or_process(
+        self,
+        ctx: Context,
+        policy: ProcessPolicy = ProcessPolicy.with_default(),
+    ) -> pd.DataFrame:
+        if self._cached_result is not None:
+            return self._cached_result
+
+        should_refresh = self.should_refresh_with_logic(ctx, policy)
+
+        if self.filename is not None and self.pipeline_name in ctx.refreshed_pipelines:
+            # Already refreshed
+            should_refresh = False
+
+        if not should_refresh and self.filename is not None:
+            try:
+                df = self.read(ctx)
+                self._cached_result = df
+                # If read successfully, we don't need to write (it matches disk).
+                assert df is not None
+                return df
+            except FileNotFoundError:
+                # We'll try to process
+                pass
+
+        df = self.run_pipeline(ctx, policy)
+
+        if df is not None and self.output_path != "":
+            print(f"Writing to {self.output_path}")
+            ctx.io.write_dataframe(df, self.output_path, self.format)
+
+        if df is not None:
+            ctx.refreshed_pipelines.add(self.pipeline_name)
+            self._cached_result = df
+
+        return df
+
+    def preprocess_sources(self, ctx: Context, policy: ProcessPolicy) -> bool:
+        """
+        Runs read_or_process on all dependencies.
+        Returns True if any dependency was refreshed.
+        """
+        any_refreshed = False
+        for _, dep in self.dependencies.items():
+            dep.read_or_process(ctx, policy)
+            if dep._refreshed_execution:
+                any_refreshed = True
+        return any_refreshed
 
     def run_pipeline(
         self,
@@ -351,13 +417,14 @@ class Pipeline:
         policy: ProcessPolicy,
     ) -> pd.DataFrame:
         self.preprocess_sources(ctx, policy)
+
         dumper = ctx.io.dumper  # type:ignore # TODO fix it
         gracefull = True
 
         df: pd.DataFrame | None = None
         try:
-            # Call the abstract method
             df = self.process(ctx)
+            self._refreshed_execution = True
         except InterruptedError:
             print("Caught interrupt signal, will save the data")
         except Exception as e:
@@ -376,8 +443,9 @@ class Pipeline:
                 name, data = last_written
                 print(f"Recovered {name} from dumper")
                 df = pd.DataFrame.from_records([asdict(i) for i in data])
+                self._refreshed_execution = True
             else:
-                raise ValueError("Not found last_written")
+                raise ValueError(f"Not found last_written for {self.pipeline_name}")
 
         print(f"{'  ' * self.nested}====== Finished pipeline {self.pipeline_name} =====\n\n")
         return df
@@ -388,9 +456,9 @@ class Pipeline:
                 yield annotation, pipeline_type_dep
 
     @property
-    def json_path(self) -> str:
+    def output_path(self) -> str:
         if self.filename:
-            return self.filename + ".jsonl"
+            return os.path.join(self.filename, self.filename + "." + self.format)
         return ""
 
     @property

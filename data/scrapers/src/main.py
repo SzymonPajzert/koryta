@@ -1,5 +1,3 @@
-# This file registers all conductor pipelines in this package
-
 import argparse
 import os
 
@@ -14,18 +12,7 @@ from analysis.stats import Statistics
 from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
-from scrapers.stores import (
-    IO,
-    CloudStorage,
-    Context,
-    DataRef,
-    DownloadableFile,
-    File,
-    FirestoreCollection,
-    LocalFile,
-    Pipeline,
-    ProcessPolicy,
-)
+from scrapers.stores import IO, CloudStorage, Context, DataRef, DownloadableFile, File, FirestoreCollection, Formats, LocalFile, Pipeline, ProcessPolicy
 from scrapers.wiki.process_articles import ProcessWiki
 from stores import file
 from stores.config import PROJECT_ROOT
@@ -92,17 +79,32 @@ class Conductor(IO):
     def output_entity(self, entity, sort_by=[]):
         self.dumper.insert_into(entity, sort_by)
 
-    def write_dataframe(self, df: pd.DataFrame, filename: str):
+    def write_dataframe(self, df: pd.DataFrame, filename: str, format: Formats):
         # We assume filename is relative to versioned dir if it doesn't have absolute path
         # The filename passed from Pipeline is "something.jsonl"
         path = os.path.join(PROJECT_ROOT, "versioned", filename)
-        df.to_json(path, orient="records", lines=True)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        match format:
+            case "jsonl":
+                df.to_json(path, orient="records", lines=True)
+            case "csv":
+                df.to_csv(path, index=False)
+            case _:
+                raise ValueError(f"Not supported export format - {format}")
 
     def upload(self, source, data, content_type):
         self.storage.upload(source, data, content_type)
 
     def list_blobs(self, hostname: str):
         return self.storage.list_blobs(hostname)
+
+    def get_mtime(self, fs: DataRef) -> float | None:
+        if isinstance(fs, LocalFile):
+            p = os.path.join(PROJECT_ROOT, fs.folder, fs.filename)
+            if os.path.exists(p):
+                return os.path.getmtime(p)
+            return None
+        return None
 
 
 def _setup_context(use_rejestr_io: bool) -> tuple[Context, EntityDumper]:
@@ -163,32 +165,44 @@ def companies_merged():
     raise info_exception("CompaniesMerged")
 
 
+PIPELINES = [
+    PeoplePKW,
+    PeopleKRS,
+    CompaniesKRS,
+    ProcessWiki,
+    PeopleMerged,
+    CompaniesMerged,
+    Statistics,
+]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--refresh", help="Pipeline name to refresh or 'all'", action="append", default=[])
-    parser.add_argument("--only", help="Pipeline name to run or 'all'", action="append", default=[])
-    args = parser.parse_args()
+    parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
+    args, _ = parser.parse_known_args()  # TODO handle remaining flags
+
+    print(args)
 
     ctx, dumper = _setup_context(False)
 
-    pipelines = [
-        PeoplePKW,
-        PeopleKRS,
-        CompaniesKRS,
-        ProcessWiki,
-        PeopleMerged,
-        CompaniesMerged,
-        Statistics,
-    ]
+    refresh = []
+    exclude_refresh = []
+    if args.refresh:
+        for r in args.refresh:
+            if r.startswith("!"):
+                exclude_refresh.append(r[1:])
+            else:
+                refresh.append(r)
 
-    policy = ProcessPolicy.with_default(args.refresh, args.only)
+    policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
 
     try:
-        for p_type in pipelines:
-            if not policy.should_run(p_type.__name__):
-                continue
-            p: Pipeline = Pipeline.create(p_type)
-            p.read_or_process(ctx, policy)
+        for p_type in PIPELINES:
+            if len(args.pipeline) == 0 or p_type.__name__ in args.pipeline:
+                print(f"Processing {p_type.__name__}")
+                p: Pipeline = Pipeline.create(p_type)
+                p.read_or_process(ctx, policy)
         print("Finished processing")
     finally:
         print("Dumping...")
