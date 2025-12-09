@@ -14,6 +14,10 @@ class KRS:
     children: set[str] = field(default_factory=set)
     parents: set[str] = field(default_factory=set)
 
+    def __post_init__(self):
+        """Ensures the KRS ID is zero-padded to 10 digits."""
+        self.krs = str(self.krs).zfill(10)
+
 
 @dataclass
 class Wikipedia:

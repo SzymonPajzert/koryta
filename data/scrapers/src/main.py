@@ -6,6 +6,7 @@ import pandas as pd
 from duckdb.typing import VARCHAR  # type: ignore
 from tqdm import tqdm
 
+from analysis.extract import Extract
 from analysis.interesting import CompaniesMerged
 from analysis.people import PeopleMerged
 from analysis.stats import Statistics
@@ -173,6 +174,7 @@ PIPELINES = [
     PeopleMerged,
     CompaniesMerged,
     Statistics,
+    Extract,
 ]
 
 
@@ -181,8 +183,6 @@ def main():
     parser.add_argument("--refresh", help="Pipeline name to refresh or 'all'", action="append", default=[])
     parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
     args, _ = parser.parse_known_args()  # TODO handle remaining flags
-
-    print(args)
 
     ctx, dumper = _setup_context(False)
 

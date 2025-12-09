@@ -294,6 +294,7 @@ class Pipeline:
     filename: str | None | property
     nested: int
     format: Formats = "jsonl"
+    dtype: dict[str, Any] | None = None
     _cached_result: pd.DataFrame | None = None
     _refreshed_execution: bool = False
 
@@ -321,7 +322,7 @@ class Pipeline:
         assert self.filename
         df = None
         try:
-            df = ctx.io.read_data(LocalFile(self.output_path, "versioned")).read_dataframe(self.format)
+            df = ctx.io.read_data(LocalFile(self.output_path, "versioned")).read_dataframe(self.format, dtype=self.dtype)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
         return df

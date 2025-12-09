@@ -145,7 +145,9 @@ def filter_local_good(matched_all, filter_region: str | None):
     def check_teryt_wojewodztwo(row_regions):
         if filter_region is None:
             return True
-        return row_regions is not None and filter_region in row_regions
+        if row_regions is None or isinstance(row_regions, float):
+            return False
+        return filter_region in row_regions
 
     def check_employed(employed):
         for emp in empty_list_if_nan(employed):
@@ -153,10 +155,20 @@ def filter_local_good(matched_all, filter_region: str | None):
                 return True
         return False
 
+    def to_dt(series):
+        if pd.api.types.is_numeric_dtype(series):
+            return pd.to_datetime(series, unit="ms")
+        return pd.to_datetime(series)
+
     # Get people with high enough scores
     good_score = matched_all["overall_score"] > EXPECTED_SCORE
-    recent = matched_all["first_employed"] > RECENT_EMPLOYMENT_START
-    not_too_old = matched_all["last_employed"] > OLD_EMPLOYMENT_END
+
+    first_employed_dt = to_dt(matched_all["first_employed"])
+    last_employed_dt = to_dt(matched_all["last_employed"])
+
+    recent = first_employed_dt > pd.Timestamp(RECENT_EMPLOYMENT_START)
+    not_too_old = last_employed_dt > pd.Timestamp(OLD_EMPLOYMENT_END)
+
     interesting = (good_score | recent) & not_too_old
 
     # Get people for the given region
@@ -180,6 +192,6 @@ def filter_local_good(matched_all, filter_region: str | None):
 
 
 def empty_list_if_nan(value):
-    if isinstance(value, np.ndarray):
+    if isinstance(value, (np.ndarray, list)):
         return value
     return []
