@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import duckdb
 import pandas as pd
 
-from scrapers.stores import IO, Context, DataRef, File, LocalFile, RejestrIO
+from scrapers.stores import IO, Context, DataRef, File, Formats, LocalFile, RejestrIO
 from stores.file import FromPath
 
 nested_dict: TypeAlias = dict[str, Union[str, bytes, "nested_dict"]]
@@ -19,8 +19,9 @@ nested_dict: TypeAlias = dict[str, Union[str, bytes, "nested_dict"]]
 class MockFile(File):
     """A mock implementation of the File interface for testing."""
 
-    def __init__(self, content: str | bytes | dict[str, str | bytes] | nested_dict = ""):
+    def __init__(self, content: str | bytes | dict[str, str | bytes] | nested_dict = "", mtime: float = 0.0):
         self._inner_files: nested_dict = {}
+        self.mtime = mtime
         if isinstance(content, dict):
             self._inner_files = content  # type: ignore
             self._content_bytes = b"archive"
@@ -88,8 +89,8 @@ class MockIO(IO):
         key = str(fs)
         if key in self.files:
             return self.files[key]
-
-        # Fallback: try using the filename if available (e.g. for DownloadableFile or LocalFile)
+        
+        # Fallback: try using the filename if available
         if hasattr(fs, "filename") and fs.filename in self.files:
             return self.files[fs.filename]
 
@@ -108,14 +109,32 @@ class MockIO(IO):
     def output_entity(self, entity, sort_by=[]):
         self.output.append(entity)
 
-    def write_dataframe(self, df, filename: str):
+    def write_dataframe(self, df, filename: str, format: Formats):
         self.output.append((filename, df))
+        # Update/Create file entry so it "exists" for subsequent reads
+        # For simplicity, just empty content or simple str, but we need to support read_dataframe...
+        # So maybe just store the DF? But MockFile expects bytes/str.
+        # Let's just create a MockFile with jsonl repr?
+        content = df.to_json(orient="records", lines=True)
+        self.files[filename] = MockFile(content, mtime=9999999999.0) # Newest
 
     def upload(self, source, data, content_type):
         self.output.append((source, data, content_type))
 
     def list_blobs(self, hostname: str):
         return []
+
+    def get_mtime(self, fs: DataRef) -> float | None:
+        key = str(fs)
+        if key in self.files:
+            f = self.files[key]
+            if isinstance(f, MockFile):
+                return f.mtime
+        if hasattr(fs, "filename") and fs.filename in self.files:
+            f = self.files[fs.filename]
+            if isinstance(f, MockFile):
+                return f.mtime
+        return None
 
 
 class DictMockIO(IO):
@@ -139,7 +158,7 @@ class DictMockIO(IO):
                 return [fs.filename]
         return []
 
-    def write_dataframe(self, df, filename: str):
+    def write_dataframe(self, df, filename: str, format: Formats):
         self.output.append((filename, df))
 
     def upload(self, source, data, content_type):
@@ -147,6 +166,14 @@ class DictMockIO(IO):
 
     def list_blobs(self, hostname: str):
         return []
+    
+    def get_mtime(self, fs: DataRef) -> float | None:
+        if isinstance(fs, LocalFile):
+            if fs.filename in self.files:
+                p = self.files[fs.filename]
+                if os.path.exists(p):
+                    return os.path.getmtime(p)
+        return None
 
 
 class MockRejestrIO(RejestrIO):

@@ -73,6 +73,7 @@ class PeopleMerged(Pipeline):
 
     def process(self, ctx: Context):
         assert self.teryt is not None
+        self.teryt.process(ctx)
         return people_merged(
             ctx,
             self.people_krs.read_or_process(ctx),
@@ -269,6 +270,6 @@ def people_merged(
                 ]
             ].sort_values("krs_name")
             print(f"Found {len(dupes)} duplicates")
-            ctx.io.write_dataframe(smaller, "people_duplicated.jsonl")
+            ctx.io.write_dataframe(smaller, "people_duplicated.jsonl", "jsonl")
 
     return df

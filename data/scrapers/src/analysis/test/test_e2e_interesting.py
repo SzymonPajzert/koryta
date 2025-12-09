@@ -61,8 +61,8 @@ def ctx(tmp_path):
             f.write(json.dumps(item) + "\n")
 
     files = {
-        "company_wikipedia.jsonl": str(wiki_file),
-        "company_krs.jsonl": str(krs_file),
+        "company_wikipedia/company_wikipedia.jsonl": str(wiki_file),
+        "company_krs/company_krs.jsonl": str(krs_file),
     }
 
     mock_io = DictMockIO(files)

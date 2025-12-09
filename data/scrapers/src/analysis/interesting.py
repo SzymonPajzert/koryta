@@ -14,7 +14,6 @@ from util.lists import TEST_FILES, WIKI_POLITICAL_LINKS
 
 def iterate(ctx, pipeline: Pipeline, constructor):
     try:
-        assert pipeline.filename is not None
         df = pipeline.read_or_process(ctx)
         for row in df.itertuples(index=False):
             yield constructor(row)
@@ -48,12 +47,12 @@ class CompaniesMerged(Pipeline):
 
         self.wiki_pipeline.read_or_process(ctx)
         wiki_companies = ctx.io.read_data(  # noqa: F841
-            LocalFile("company_wikipedia.jsonl", "versioned")
+            LocalFile("company_wikipedia/company_wikipedia.jsonl", "versioned")  # TODO fix
         ).read_dataframe("jsonl")
 
         # company_krs is already processed by scraped_companies
         krs_companies = ctx.io.read_data(  # noqa: F841
-            LocalFile("company_krs.jsonl", "versioned")
+            LocalFile("company_krs/company_krs.jsonl", "versioned")
         ).read_dataframe("jsonl")
 
         hardcoded_names = pd.DataFrame(  # noqa: F841

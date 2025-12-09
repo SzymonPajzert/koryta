@@ -181,7 +181,7 @@ module = [
     "spacy.*",
     "cloudpathlib.*",
     "pymodulon.*",
-    "adjustText.*"
+    "adjustText.*",
 ]
 ignore_missing_imports = true
 
@@ -254,4 +254,4 @@ forbidden_modules = [
     "fnmatch",
     "csv",
 ]
-ignore_imports = ["entities.util -> urllib"]
+ignore_imports = ["entities.util -> urllib", "scrapers.stores -> os"]

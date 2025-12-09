@@ -12,7 +12,7 @@ def ctx():
 
 
 def people_rows(ctx):
-    yield from ctx.io.read_data(LocalFile("person_pkw.jsonl", "versioned")).read_jsonl()
+    yield from ctx.io.read_data(LocalFile("person_pkw/person_pkw.jsonl", "versioned")).read_jsonl()
 
 
 @pytest.fixture
