@@ -42,4 +42,13 @@ describe("home", () => {
     cy.contains(".v-card", "Dodaj osoby").click();
     cy.url().should("include", "/pomoc");
   });
+
+  it("displays seeded data (Test Node 1)", () => {
+    // We expect the seed script to have run and created "Test Node 1"
+    // This assumes we are running against the local emulator environment
+    if (Cypress.env('USE_EMULATORS')) {
+        cy.visit("/lista"); 
+        cy.contains('Test Node 1').should('exist');
+    }
+  });
 });
