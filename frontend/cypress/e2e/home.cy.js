@@ -10,7 +10,8 @@ describe("home", () => {
 
     // See https://github.com/jaredpalmer/cypress-image-snapshot?tab=readme-ov-file#usage
     // E.g. --env updateSnapshots=true
-    cy.wait(1500).get("body").matchImageSnapshot();
+    // E.g. --env updateSnapshots=true
+    cy.document().matchImageSnapshot();
     cy.percySnapshot("home-page");
   });
 
@@ -48,7 +49,7 @@ describe("home", () => {
     // This assumes we are running against the local emulator environment
     if (Cypress.env('USE_EMULATORS')) {
         cy.visit("/lista"); 
-        cy.contains('Test Node 1').should('exist');
+        cy.contains('Jan Kowalski').should('exist');
     }
   });
 });

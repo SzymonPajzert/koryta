@@ -4,7 +4,9 @@ describe("list", () => {
   });
 
   it("screenshots", () => {
-    cy.wait(1500).get("body").matchImageSnapshot();
+    cy.get("body").should("be.visible");
+    // Snapshot the entire document to avoid zero-height body issues
+    cy.document().matchImageSnapshot();
     cy.percySnapshot("pomoc-page");
   });
 });
