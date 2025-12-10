@@ -28,7 +28,7 @@ export function useParams(title: string) {
     if (route.query.partia && typeof route.query.partia === "string") {
       document.title = title + route.query.partia
       keys = Object.keys(nodes.value).filter((key) => {
-        nodes.value[key].parties.includes(route.query.partia as string);
+        return nodes.value[key].parties?.includes(route.query.partia as string);
       });
     }
 
