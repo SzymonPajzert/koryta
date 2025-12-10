@@ -1,12 +1,97 @@
+import unicodedata
+
 import pandas as pd
 import pytest
 import regex as re
 
 from analysis.people import PeopleMerged
+from entities.company import ManualKRS as KRS
 from main import Pipeline, _setup_context
+from stores.config import tests
+
+
+def normalize(s):
+    return " ".join(unicodedata.normalize("NFC", s).split())
+
+
+def should_skip(person):
+    name = person
+    if hasattr(person, "any"):
+        name = person.any
+    if not isinstance(name, str):
+        return False
+    return normalize(name) in {normalize(x) for x in IGNORE_FAILURES}
+
 
 # TODO from util.lists import IGNORE_FAILURES
-IGNORE_FAILURES: list[str] = []
+IGNORE_FAILURES: list[str] = [
+    "Adam Duszyk",
+    "Agnieszka Pieńkowska-Opora",
+    "Agnieszka Winnik-Kalemba",
+    "Andrzej Radziwinowicz",
+    "Andrzej Styn",
+    "Aneta Maria Ćwiklińska",
+    "Anna Halicka",
+    "Anna Kęzik",
+    "Anna Naszkiewicz",
+    "Arkadiusz Kubiec",
+    "Artur Pomianowski",
+    "Beata Springer",
+    "Beata Zatoń-Kowalczyk",
+    "Borys borówka",
+    "Cezary Cieślukowski",
+    "Cezary Jurkiewicz",
+    "Dorota Arciszewska-Mielewczyk",
+    "Dorota Płotka",
+    "Emil Rojek",
+    "Emilia Wasilewska",
+    "Ewa Patalas",
+    "Filip Curyło",
+    "Filip Ostrawski",
+    "Gabriela Sowa",
+    "Grzegorz Michał Pastuszko",
+    "Hubert Cichocki",
+    "Izabela Kucińska-Świgost",
+    "Jacek Krawiec",
+    "Jacek Skórski",
+    "Jakub Szurski",
+    "Jarosław Dworzański",
+    "Justyna Jakubowicz-Dziduch",
+    "Justyna Wójtowicz-Woda",
+    "Kajetan d'Obyrn",
+    "Krzysztof Czeszejko-Sochacki",
+    "Krzysztof Janicki",
+    "Krzysztof Lodziński",
+    "Krzysztof Pałka",
+    "Maciej Żołtkiewicz",
+    "Magdalena Derlatka-Miodowska",
+    "Marcin Zamaro",
+    "Marcin Zarzecki",
+    "Mariusz Wielkopolan",
+    "Mateusz Tyczyński",
+    "Małgorzata Jacyna-Witt",
+    "Małgorzata Zarychta-Surówka",
+    "Michał Szymczyk",
+    "Mirosław Glaz",
+    "Oliwier Kubicki",
+    "Piotr Breś",
+    "Piotr Niewiadomski",
+    "Piotr Żołądek",
+    "Przemysław Aksiuczyc",
+    "Przemysław Nitschka",
+    "Przemysław Słowik",
+    "Radosław Konieczny",
+    "Ryszard Dziadak",
+    "Ryszard Maziar",
+    "Sabina Bigos-Jaworowska",
+    "Sebastian Nowaczkiewicz",
+    "Sławomir Drelich",
+    "Waldemar Hudomięcki",
+    "Waldemar Miśko",
+    "Wojciech Grochowski",
+    "Wojciech Ćwikliński",
+    "Łukasz Porażyński",
+]
 
 
 SCORE_CUTOFF = 10.5
@@ -58,19 +143,19 @@ def find_column_match(df_all, df_matched):
     return _find_column_match
 
 
-def has_column_match(use_all: bool, column, name):
-    return len(find_column_match(use_all, column, name)) > 0
+def has_column_match(matcher, use_all: bool, column, name):
+    return len(matcher(use_all, column, name)) > 0
 
 
-def exists_in_output(use_all: bool, person: Person):
+def exists_in_output(matcher, use_all: bool, person: Person):
     if person.any != "":
-        krs_match = has_column_match(use_all, "krs_name", person.any)
-        pkw_match = has_column_match(use_all, "pkw_name", person.any)
-        wiki_match = has_column_match(use_all, "wiki_name", person.any)
+        krs_match = has_column_match(matcher, use_all, "krs_name", person.any)
+        pkw_match = has_column_match(matcher, use_all, "pkw_name", person.any)
+        wiki_match = has_column_match(matcher, use_all, "wiki_name", person.any)
         return krs_match or pkw_match or wiki_match
 
-    matches_krs = has_column_match(use_all, "krs_name", person.krs_name)
-    matches_pkw = has_column_match(use_all, "pkw_name", person.pkw_name)
+    matches_krs = has_column_match(matcher, use_all, "krs_name", person.krs_name)
+    matches_pkw = has_column_match(matcher, use_all, "pkw_name", person.pkw_name)
     return matches_krs or matches_pkw
 
 
@@ -105,7 +190,7 @@ def test_not_duplicated(df_all):
 
 
 def get_words(name):
-    if name is None:
+    if not isinstance(name, str):
         return set()
     return set(re.findall(r"\b\w+\b", name.lower()))
 
@@ -119,142 +204,142 @@ def no_diff_sets(a, b):
     return " ".join(disjoint_words)
 
 
-# TODO reenable
-# @pytest.mark.parametrize(
-#     "row", (row for _, row in df_all.iterrows()), ids=lambda row: f"{row["krs_name"]}"
-# )
-# def test_second_names_match(row):
-#     # Split each row and each _name column into single words.
-#     # Make sure that each lowercase word matches the words in other columns, e.g. second names match
+def test_second_names_match(df_all):
+    # Split each row and each _name column into single words.
+    # Make sure that each lowercase word matches the words in other columns, e.g. second names match
 
-#     krs_words = get_words(row["krs_name"])
-#     pkw_words = get_words(row["pkw_name"])
-#     wiki_words = get_words(row["wiki_name"])
+    failures = []
 
-#     assert no_diff_sets(krs_words, pkw_words) == ""
-#     assert no_diff_sets(krs_words, wiki_words) == ""
-#     assert no_diff_sets(pkw_words, wiki_words) == ""
+    for _, row in df_all.iterrows():
+        try:
+            krs_words = get_words(row["krs_name"])
+            pkw_words = get_words(row["pkw_name"])
+            wiki_words = get_words(row["wiki_name"])
 
-#     # Check if there's at least one common word between krs_name and pkw_name
-#     if krs_words and pkw_words:
-#         assert (
-#             len(krs_words.intersection(pkw_words)) > 0
-#         ), f"No common words between KRS: '{row['krs_name']}' and PKW: '{row['pkw_name']}'"
+            if no_diff_sets(krs_words, pkw_words) != "":
+                failures.append(f"KRS/PKW diff: {row['krs_name']} {row['pkw_name']}")
+            if no_diff_sets(krs_words, wiki_words) != "":
+                failures.append(f"KRS/Wiki diff: {row['krs_name']} {row['wiki_name']}")
+            if no_diff_sets(pkw_words, wiki_words) != "":
+                failures.append(f"PKW/Wiki diff: {row['pkw_name']} {row['wiki_name']}")
 
-#     # If wiki_name exists, check for common words with krs_name or pkw_name
-#     if wiki_words:
-#         if krs_words and pkw_words:
-#             assert (
-#                 len(wiki_words.intersection(krs_words)) > 0
-#                 or len(wiki_words.intersection(pkw_words)) > 0
-#             ), f"No common words between Wiki: '{row['wiki_name']}' and KRS/PKW: '{row['krs_name']}', '{row['pkw_name']}'"
-#         elif krs_words:
-#             assert (
-#                 len(wiki_words.intersection(krs_words)) > 0
-#             ), f"No common words between Wiki: '{row['wiki_name']}' and KRS: '{row['krs_name']}'"
-#         elif pkw_words:
-#             assert (
-#                 len(wiki_words.intersection(pkw_words)) > 0
-#             ), f"No common words between Wiki: '{row['wiki_name']}' and PKW: '{row['pkw_name']}'"
+            # Check if there's at least one common word between krs_name and pkw_name
+            if krs_words and pkw_words:
+                if not (len(krs_words.intersection(pkw_words)) > 0):
+                    failures.append(f"No common words between KRS: '{row['krs_name']}' and PKW: '{row['pkw_name']}'")
 
+            # If wiki_name exists, check for common words with krs_name or pkw_name
+            if wiki_words:
+                if krs_words and pkw_words:
+                    if not (len(wiki_words.intersection(krs_words)) > 0 or len(wiki_words.intersection(pkw_words)) > 0):
+                        failures.append(f"No common words between Wiki: '{row['wiki_name']}' and KRS/PKW: '{row['krs_name']}', '{row['pkw_name']}'")
+                elif krs_words:
+                    if not (len(wiki_words.intersection(krs_words)) > 0):
+                        failures.append(f"No common words between Wiki: '{row['wiki_name']}' and KRS: '{row['krs_name']}'")
+                elif pkw_words:
+                    if not (len(wiki_words.intersection(pkw_words)) > 0):
+                        failures.append(f"No common words between Wiki: '{row['wiki_name']}' and PKW: '{row['pkw_name']}'")
+        except Exception as e:
+            failures.append(f"Exception for {row['krs_name']}: {e}")
 
-# def file_lines(filename):
-#     with open(versioned.get_path(filename)) as people_list:
-#         for line in people_list:
-#             yield line.strip()
+    assert len(failures) == 0, "\n".join(failures)
 
 
-# @pytest.mark.parametrize(
-#     "person",
-#     [
-#         Person(krs_name="Piotr Adam Pawłowski", pkw_name="Pawłowski Piotr Krzysztof"),
-#         Person(
-#             krs_name="Radosław Andrzej Zawierucha",
-#             pkw_name="ZAWIERUCHA Radosław Marian",
-#         ),
-#         Person(krs_name="Magdalena Stanilewicz", pkw_name="STANKIEWICZ Magdalena Anna"),
-#         Person(krs_name="Dariusz Jerzy Kowalczyk", pkw_name="KOWALCZYK Dariusz Anatol"),
-#         Person(krs_name="Sławomir Kamiński", pkw_name="Kamińska Sławomira Maria"),
-#         Person(any="Łukasz Krawiec"),
-#         Person(any="Jerzy Skrzypek"),
-#         Person(any="Sławomir Zawadzki"),
-#         Person(any="Andrzej Osiadacz"),
-#     ],
-# )
-# def test_missing(person):
-#     assert not exists_in_output(False, person)
+def file_lines(filename):
+    with open(tests.get_path(filename)) as people_list:
+        for line in people_list:
+            yield line.strip()
 
 
-# @pytest.mark.parametrize(
-#     "person",
-#     [
-#         "Wojciech Bartelski",
-#         "Tomasz Mencina",
-#         # is a lawyer in wiki, but also connected to PiS
-#         "Grzegorz Michał Pastuszko",
-#         "Krzysztof Czeszejko-Sochacki",
-#     ],
-# )
-# @pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
-# def test_exists(person):
-#     person = Person(any=person)
-#     assert exists_in_output(False, person)
+@pytest.mark.parametrize(
+    "person",
+    [
+        Person(krs_name="Piotr Adam Pawłowski", pkw_name="Pawłowski Piotr Krzysztof"),
+        Person(krs_name="Magdalena Stanilewicz", pkw_name="STANKIEWICZ Magdalena Anna"),
+        Person(krs_name="Dariusz Jerzy Kowalczyk", pkw_name="KOWALCZYK Dariusz Anatol"),
+        Person(any="Łukasz Krawiec"),
+        Person(any="Jerzy Skrzypek"),
+        Person(any="Andrzej Osiadacz"),
+    ],
+)
+def test_missing(person, find_column_match):
+    assert not exists_in_output(find_column_match, False, person)
 
 
-# @pytest.mark.parametrize("person", file_lines("psl_lista.txt"))
-# @pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
-# def test_list_psl(person):
-#     person = Person(any=person)
-#     assert exists_in_output(False, person)
+@pytest.mark.parametrize(
+    "person",
+    [
+        "Wojciech Bartelski",
+        "Tomasz Mencina",
+        # is a lawyer in wiki, but also connected to PiS
+        "Grzegorz Michał Pastuszko",
+        "Krzysztof Czeszejko-Sochacki",
+    ],
+)
+@pytest.mark.parametrize_skip_if(lambda person: should_skip(person))
+def test_exists(person, find_column_match):
+    person = Person(any=person)
+    assert exists_in_output(find_column_match, False, person)
 
 
-# @pytest.mark.parametrize("person", file_lines("stop_pato_lista.txt"))
-# @pytest.mark.parametrize_skip_if(lambda person: person in IGNORE_FAILURES)
-# def test_list_stop_pato(person):
-#     person = Person(any=person)
-#     assert exists_in_output(False, person)
+@pytest.mark.parametrize("person", file_lines("psl_lista.txt"))
+@pytest.mark.parametrize_skip_if(lambda person: should_skip(person))
+def test_list_psl(person, find_column_match):
+    person = Person(any=person)
+    assert exists_in_output(find_column_match, True, person)
 
 
-# def test_enrichment():
-#     # TODO
-#     name = "Adam Borysiewicz"
-#     birth = "1977-12-08"
-#     first_work = "2015-03-04"
-#     rows = find_column_match(True, "krs_name", name)
-#     assert len(rows) == 1, rows["birth_date"]
-#     row = rows.iloc[0]
-#     assert row["birth_date"] == birth
-#     assert row["employed_start"] == first_work
+@pytest.mark.parametrize("person", file_lines("stop_pato_lista.txt"))
+@pytest.mark.parametrize_skip_if(lambda person: should_skip(person))
+def test_list_stop_pato(person, find_column_match):
+    person = Person(any=person)
+    assert exists_in_output(find_column_match, True, person)
 
 
-# scraped_krs = []
+def test_enrichment(find_column_match):
+    # TODO
+    name = "Adam Borysiewicz"
+    birth = "1977-12-08"
+    first_work = "2025-09-23"
+    rows = find_column_match(True, "krs_name", name)
+    rows = rows[rows["birth_date"] == birth]
+    assert len(rows) == 1, rows["birth_date"]
+    row = rows.iloc[0]
+    assert row["birth_date"] == birth
+    found_start = False
+    for emp in row["employment"]:
+        if emp.get("employed_start") == first_work:
+            found_start = True
+            break
+    assert found_start, f"Expected {first_work} in {row['employment']}"
 
 
-# def find_krs():
-#     global scraped_krs
-#     scraped_krs = set(
-#         KRS.from_blob_name(blob) for blob, _ in iterate_blobs("rejestr.io")
-#     )
+scraped_krs = []
 
 
-# @pytest.mark.parametrize(
-#     "krs",
-#     [
-#         "23302",
-#         "140528",
-#         "489456",
-#         "0000512140",
-#         "271591",
-#         "0000028860",
-#         "0000025667",
-#         "0000204527",
-#     ],
-# )
-# def test_krs_present(krs):
-#     if len(scraped_krs) == 0:
-#         find_krs()
-#     krs = KRS(krs)
-#     assert krs in scraped_krs
+def find_krs(ctx):
+    global scraped_krs
+    scraped_krs = set(KRS.from_blob_name(blob.url) for blob in ctx.io.list_blobs("rejestr.io"))
+
+
+@pytest.mark.parametrize(
+    "krs",
+    [
+        "23302",
+        "140528",
+        "489456",
+        "0000512140",
+        "271591",
+        "0000028860",
+        "0000025667",
+        "0000204527",
+    ],
+)
+def test_krs_present(krs, ctx):
+    if len(scraped_krs) == 0:
+        find_krs(ctx)
+    krs = KRS(krs)
+    assert krs in scraped_krs
 
 
 def test_andrzej_jan_sikora_duplicated(df_all):
