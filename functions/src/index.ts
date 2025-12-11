@@ -109,13 +109,14 @@ export const scheduledFirestoreExport = onSchedule(
     }
 
     const databaseName = adminClient.databasePath(projectId, "koryta-pl");
-    const bucketPrefix =
-      "gs://koryta-pl-crawled/hostname=koryta.pl/date={{YYYY-MM-DD}}T{{HH}}";
+    const bucketPrefix = "gs://koryta-pl-crawled/hostname=koryta.pl";
+    const timestamp = new Date().toISOString();
+    const outputUriPrefix = `${bucketPrefix}/date=${timestamp}`;
 
     try {
       const [response] = await adminClient.exportDocuments({
         name: databaseName,
-        outputUriPrefix: bucketPrefix,
+        outputUriPrefix: outputUriPrefix,
         collectionIds: ["nodes", "edges"],
       });
 
