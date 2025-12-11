@@ -11,9 +11,8 @@ import * as logger from "firebase-functions/logger";
 import * as functions from "firebase-functions";
 import axios from "axios";
 import * as cheerio from "cheerio";
-
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+import { v1 } from "@google-cloud/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
 interface incomingUrl {
   url: string;
@@ -28,7 +27,7 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
     if (!url) {
       throw new functions.https.HttpsError(
         "invalid-argument",
-        `The function must be called with one argument 'url ' that is a string: ${request}`,
+        `The function must be called with one argument 'url ' that is a string: ${request}`
       );
     }
     logger.warn(url);
@@ -61,7 +60,7 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
     } catch (error: any) {
       functions.logger.error(
         `Error fetching page title for URL: ${url}`,
-        error,
+        error
       );
 
       // Rzucanie bardziej szczegółowych błędów w zależności od przyczyny
@@ -70,27 +69,58 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
           // Serwer odpowiedział statusem błędu (4xx, 5xx)
           throw new functions.https.HttpsError(
             "unavailable",
-            `Failed to fetch the page. Status: ${error.response.status}`,
+            `Failed to fetch the page. Status: ${error.response.status}`
           );
         } else if (error.request) {
           // Żądanie zostało wysłane, ale nie otrzymano odpowiedzi
           throw new functions.https.HttpsError(
             "deadline-exceeded",
-            "No response received from the server.",
+            "No response received from the server."
           );
         } else {
           // Coś poszło nie tak przy konfiguracji żądania
           throw new functions.https.HttpsError(
             "internal",
-            "Error setting up the request.",
+            "Error setting up the request."
           );
         }
       }
       // Inne błędy (np. błąd parsowania, błąd sieciowy nieobsłużony przez axios)
       throw new functions.https.HttpsError(
         "internal",
-        "An unexpected error occurred while fetching the page title.",
+        "An unexpected error occurred while fetching the page title."
       );
     }
-  },
+  }
 );
+
+const adminClient = new v1.FirestoreAdminClient();
+
+export const scheduledFirestoreExport = onSchedule(
+  {
+    schedule: "every 12 hours",
+    region: "europe-west1",
+  },
+  async (event: any) => {
+  const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
+  if (!projectId) {
+    logger.error("No project ID found");
+    throw new Error("No project ID found");
+  }
+
+  const databaseName = adminClient.databasePath(projectId, "(koryta-pl)");
+  const bucketPrefix = "gs://koryta-pl-crawled/hostname=koryta.pl";
+
+  try {
+    const [response] = await adminClient.exportDocuments({
+      name: databaseName,
+      outputUriPrefix: bucketPrefix,
+      collectionIds: ["nodes", "edges"],
+    });
+    
+    logger.info(`Operation Name: ${response.name}`);
+  } catch (err) {
+    logger.error(err);
+    throw new Error("Export operation failed");
+  }
+});
