@@ -19,6 +19,7 @@ from stores import file
 from stores.config import PROJECT_ROOT
 from stores.download import FileSource
 from stores.duckdb import EntityDumper
+from stores.firestore import FirestoreIO
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
 from stores.utils import UtilsImpl
@@ -27,7 +28,7 @@ from stores.web import WebImpl
 
 class Conductor(IO):
     def __init__(self, dumper: EntityDumper):
-        # TODO reenable self.firestore = FirestoreIO()
+        self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
         self.progress_bar: tqdm | None = None
