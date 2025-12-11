@@ -102,25 +102,27 @@ export const scheduledFirestoreExport = onSchedule(
     region: "europe-west1",
   },
   async (event: any) => {
-  const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
-  if (!projectId) {
-    logger.error("No project ID found");
-    throw new Error("No project ID found");
-  }
+    const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
+    if (!projectId) {
+      logger.error("No project ID found");
+      throw new Error("No project ID found");
+    }
 
-  const databaseName = adminClient.databasePath(projectId, "(koryta-pl)");
-  const bucketPrefix = "gs://koryta-pl-crawled/hostname=koryta.pl";
+    const databaseName = adminClient.databasePath(projectId, "koryta-pl");
+    const bucketPrefix =
+      "gs://koryta-pl-crawled/hostname=koryta.pl/date={{YYYY-MM-DD}}T{{HH}}";
 
-  try {
-    const [response] = await adminClient.exportDocuments({
-      name: databaseName,
-      outputUriPrefix: bucketPrefix,
-      collectionIds: ["nodes", "edges"],
-    });
-    
-    logger.info(`Operation Name: ${response.name}`);
-  } catch (err) {
-    logger.error(err);
-    throw new Error("Export operation failed");
+    try {
+      const [response] = await adminClient.exportDocuments({
+        name: databaseName,
+        outputUriPrefix: bucketPrefix,
+        collectionIds: ["nodes", "edges"],
+      });
+
+      logger.info(`Operation Name: ${response.name}`);
+    } catch (err) {
+      logger.error(err);
+      throw new Error("Export operation failed");
+    }
   }
-});
+);
