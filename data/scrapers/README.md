@@ -2,9 +2,16 @@ To run the binaries in this directory, you need to [install poetry](https://pypi
 
 ```bash
 gcloud auth login # this is needed for buckets - https://docs.google.com/document/d/1bGrtID-mIFFitvfR_cEmmbV8hvTLDIWFQhnRiSwDlyY
+gcloud auth application-default set-quota-project koryta-pl  # To access Google cloud resources.
+
+# pip + venv
 python3.13 -m venv ./.venv
 . ./.venv/bin/activate
 pip install poetry
+poetry install
+
+# pipx
+pix install poetry
 poetry install
 ```
 

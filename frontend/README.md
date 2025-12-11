@@ -10,14 +10,11 @@ To start, run:
 # set up
 npm install
 
-# run emulators
-npm run emulators
-
-# in another terminal
-npm run dev
+# It initiates the emulators, seeds the data and creates an endpoint.
+npm run dev:local
 ```
 
-Then access either a Vite build on `localhost:3000` or Firebase emulated at hosting at `localhost:5002`
+Then access Firebase emulated at hosting at `localhost:5002`
 
 ## Testing
 
