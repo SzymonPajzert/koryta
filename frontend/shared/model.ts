@@ -61,3 +61,10 @@ export interface NodeTypeMap {
   article: Article;
   record: never;
 }
+
+export type Destination = Person | Company | Article;
+
+export interface Connection<D extends Destination> {
+    connection?: D & { id: string };
+    relation: string;
+}

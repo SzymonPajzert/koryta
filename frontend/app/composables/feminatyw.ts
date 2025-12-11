@@ -25,8 +25,8 @@ function toNoun(input: InputNoun): PolishNoun {
   };
 }
 
-export function useFeminatyw() {
-  const useFemale: boolean = Math.random() > 0.5 || import.meta.test;
+export function useFeminatyw(options?: { forceFemale?: boolean }) {
+  const useFemale: boolean = options?.forceFemale ?? (Math.random() > 0.5);
 
   function createNoun(
     femaleSingular: InputNoun,

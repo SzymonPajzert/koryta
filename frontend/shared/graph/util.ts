@@ -258,7 +258,7 @@ export class HalfEdgeMaker<A> {
   }
 }
 
-type EdgeMissing = { target: string; label: string; traverse?: TraversePolicy };
+type EdgeMissing = { target: string; label: string; traverse?: TraversePolicy; type: EdgeType };
 
 class EdgeMaker<A, B> {
   traversePolicy?: TraversePolicy;
@@ -289,6 +289,7 @@ class EdgeMaker<A, B> {
           return {
             target: connection.connection!.id,
             label: connection.relation,
+            type: connection.relation as EdgeType, // Assuming relation maps to EdgeType
             traverse: policy,
           };
         },
@@ -296,16 +297,17 @@ class EdgeMaker<A, B> {
     };
   }
 
-  edgeFrom(extractor: (b: B) => [string, string]): (results: Edge[]) => void {
+  edgeFrom(extractor: (b: B) => [string, string, EdgeType]): (results: Edge[]) => void {
     const policy = this.traversePolicy;
     return (results: Edge[]) => {
       this.outer([
         results,
         (b: B) => {
-          const [id, label] = extractor(b);
+          const [id, label, type] = extractor(b);
           return {
             target: id,
             label: label,
+            type: type,
             traverse: policy,
           };
         },

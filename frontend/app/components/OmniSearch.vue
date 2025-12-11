@@ -37,10 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { getAnalytics, logEvent } from "firebase/analytics";
-
-const { push, currentRoute } = useRouter();
-const analytics = getAnalytics();
+import { useOmniSearch } from "@/composables/omniSearch";
 
 const props = defineProps<{
   searchText?: string;
@@ -49,111 +46,10 @@ const props = defineProps<{
 }>();
 const { width = "300px" } = props;
 
-const search = ref(props.searchText);
-const nodeGroupPicked = ref<ListItem | null>();
-const autocompleteFocus = ref(false);
-
-if (props.fake) {
-  watch(
-    () => props.searchText,
-    (newValue) => {
-      search.value = newValue;
-      nodeGroupPicked.value = {
-        title: newValue,
-        icon: "mdi-account",
-        logEventKey: { content_id: "", content_type: "" },
-      };
-    },
-  );
-}
-
-type ListItem = {
-  title: string;
-  subtitle?: string;
-  icon: string;
-  logEventKey: { content_id: string; content_type: string };
-  path?: string;
-  query?: Record<string, string>;
-};
-
-const { data: graph } = await useAsyncData(
-  "graph",
-  () => $fetch("/api/graph"),
-  { lazy: true },
-);
-
-const items = computed<ListItem[]>(() => {
-  if (!graph.value || !graph.value.nodeGroups || graph.value.nodeGroups.length === 0) return [];
-  const result: ListItem[] = [];
-  result.push({
-    title: "Lista wszystkich osób",
-    subtitle: `${graph.value.nodeGroups[0].stats.people} powiązanych osób`,
-    icon: "mdi-format-list-bulleted-type",
-    path: "/lista",
-    logEventKey: {
-      content_id: graph.value.nodeGroups[0].id,
-      content_type: "nodeGroup",
-    },
-  });
-  result.push({
-    title: "Graf wszystkich osób",
-    subtitle: `${graph.value.nodeGroups[0].stats.people} powiązanych osób`,
-    icon: "mdi-graph-outline",
-    path: "/graf",
-    logEventKey: {
-      content_id: graph.value.nodeGroups[0].id,
-      content_type: "nodeGroup",
-    },
-  });
-  graph.value.nodeGroups.slice(1).forEach((item) =>
-    result.push({
-      title: item.name,
-      subtitle: `${item.stats.people} powiązanych osób`,
-      icon: "mdi-domain",
-      logEventKey: {
-        content_id: item.id,
-        content_type: "nodeGroup",
-      },
-      query: {
-        miejsce: item.id,
-      },
-    }),
-  );
-  Object.entries(graph.value.nodes).forEach(([key, value]) => {
-    if (value.type == "circle") {
-      result.push({
-        title: value.name,
-        icon: "mdi-account",
-        logEventKey: {
-          content_id: key,
-          content_type: "person",
-        },
-        path: "/entity/person/" + key,
-      });
-    }
-  });
-  return result;
-});
-
-// Monitor the state only if the bar is not fake
-if (!props.fake) {
-  watch(nodeGroupPicked, (value) => {
-    if (!value) push("/");
-    let path = value?.path ?? currentRoute.value.path;
-    const allowedPath =
-      path == "/lista" || path == "/graf" || path.startsWith("/entity/person/");
-    if (!allowedPath) {
-      path = "/lista";
-    }
-    push({
-      path: path,
-      query: {
-        ...currentRoute.value.query,
-        ...value.query,
-      },
-    });
-    logEvent(analytics, "select_content", value.logEventKey);
-    autocompleteFocus.value = false;
-  });
-}
+const {
+    search,
+    nodeGroupPicked,
+    autocompleteFocus,
+    items
+} = useOmniSearch(props);
 </script>

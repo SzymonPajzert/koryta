@@ -90,41 +90,51 @@ export const useDialogStore = defineStore("dialog", () => {
   }
 
   function openExisting(node: string) {
-    if (node in people.value) {
+    const person = people.value[node];
+    if (person) {
       console.debug("opening user dialog");
       open({
         type: "person",
-        edit: { value: people.value[node], key: node },
+        edit: { value: person, key: node },
       });
       return;
     }
-    if (companies.value && node in companies.value) {
+    const company = companies.value?.[node];
+    if (company) {
       open({
         type: "place",
-        edit: { value: companies.value[node], key: node },
+        edit: { value: company, key: node },
       });
       return;
     }
-    if (articles.value && node in articles.value) {
+    const article = articles.value?.[node];
+    if (article) {
       open({
         type: "article",
-        edit: { value: articles.value[node], key: node },
+        edit: { value: article, key: node },
       });
     }
   }
 
-  function close(idx: Idx, shouldSubmit: boolean) {
-    let key = dialogs.value[idx].editKey;
+  async function close(idx: Idx, shouldSubmit: boolean) { // Added async
+    const dialog = dialogs.value[idx];
+    if (!dialog) return; // Guard
+    
+    let key = dialog.editKey;
+
     if (shouldSubmit) {
-      const submit = lookupSubmit(dialogs.value[idx].type);
-      key = submit(
-        dialogs.value[idx].value,
-        dialogs.value[idx].type,
-        dialogs.value[idx].editKey,
-      ).key;
+      const submit = lookupSubmit(dialog.type);
+      
+      const result = await submit?.(
+        dialog.value as any,
+        dialog.type,
+        dialog.editKey,
+      );
+      if (result) key = result.key;
     }
-    if (dialogs.value[idx].callback) {
-      dialogs.value[idx].callback(dialogs.value[idx].value.name, key);
+
+    if (dialog.callback) {
+      dialog.callback(dialog.value.name || "", key || "");
     }
     remove(idx);
   }

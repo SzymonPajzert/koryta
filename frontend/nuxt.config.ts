@@ -31,7 +31,7 @@ export default defineNuxtConfig({
 
   // TODO Enable strict
   typescript: {
-    strict: false,
+    strict: true,
   },
 
   devtools: { enabled: true },

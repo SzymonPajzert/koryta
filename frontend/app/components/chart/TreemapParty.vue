@@ -9,31 +9,12 @@
 </template>
 
 <script lang="ts" setup>
-import { usePartyStatistics } from "@/composables/party";
+import { usePartyChartData } from "@/composables/chart";
 import { computed } from "vue";
-import {
-  parties as partiesUnfiltered,
-  partyColors as partyColorsUnfiltered,
-} from "~~/shared/misc";
 
-const { results: resultsUnfiltered } = await usePartyStatistics();
+const { parties, partyColors, series } = await usePartyChartData();
 const router = useRouter();
 
-const nonZeroIndices = computed(() =>
-  resultsUnfiltered.value.map((x, i) => (x > 0 ? i : -1)).filter((i) => i >= 0),
-);
-const parties = computed(
-  () =>
-    partiesUnfiltered.filter((_, i) => nonZeroIndices.value.includes(i)) ?? [],
-);
-const partyColors = computed(() =>
-  Object.values(partyColorsUnfiltered).filter((_, i) =>
-    nonZeroIndices.value.includes(i),
-  ),
-);
-const results = computed(() =>
-  resultsUnfiltered.value.filter((_, i) => nonZeroIndices.value.includes(i)),
-);
 const chartOptions = computed(() => ({
   legend: {
     show: false,
@@ -66,18 +47,4 @@ const chartOptions = computed(() => ({
     },
   },
 }));
-
-const series = computed(() => {
-  if (!parties.value || !results.value) return [];
-  if (parties.value.length !== results.value.length) return [];
-
-  return [
-    {
-      data: parties.value.map((party, index) => ({
-        x: party,
-        y: results.value[index],
-      })),
-    },
-  ];
-});
 </script>

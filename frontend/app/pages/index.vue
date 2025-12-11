@@ -150,10 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { useFeminatyw } from "@/composables/feminatyw";
+import { useHome } from "@/composables/home";
 
-const disablePatronite = ref(new Date() < new Date("2025-11-14"));
-
-const { entities: people } = await useEntity("person");
-const { koryciarz } = useFeminatyw();
+const { disablePatronite, people, koryciarz } = useHome();
 </script>
