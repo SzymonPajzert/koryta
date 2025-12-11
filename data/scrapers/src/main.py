@@ -13,7 +13,7 @@ from analysis.stats import Statistics
 from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
-from scrapers.stores import IO, CloudStorage, Context, DataRef, DownloadableFile, File, FirestoreCollection, Formats, LocalFile, Pipeline, ProcessPolicy
+from scrapers.stores import IO, CloudStorage, Context, DataRef, DownloadableFile, File, Formats, LocalFile, Pipeline, ProcessPolicy
 from scrapers.wiki.process_articles import ProcessWiki
 from stores import file
 from stores.config import PROJECT_ROOT
@@ -35,15 +35,6 @@ class Conductor(IO):
         self.continous_download = False
 
     def read_data(self, fs: DataRef) -> File:
-        if isinstance(fs, FirestoreCollection):
-            raise NotImplementedError("Firestore reading is not implemented")
-            # collection = self.firestore.read_collection(
-            #     fs.collection,
-            #     stream=fs.stream,
-            #     filters=fs.filters,
-            # )
-            # return file.FromIterable(collection)
-
         if isinstance(fs, DownloadableFile):
             dfs = FileSource(fs)
             if not dfs.downloaded():
@@ -128,43 +119,6 @@ def _setup_context(use_rejestr_io: bool) -> tuple[Context, EntityDumper]:
     ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
 
     return ctx, dumper
-
-
-def info_exception(pipeline_name: str) -> NotImplementedError:
-    return NotImplementedError(f"""Removed. Run instead:
-$ koryta --only {pipeline_name}
-python> from main import run_pipeline
-python> run_pipeline({pipeline_name})[1]
-""")
-
-
-# TODO reenable reading from koryta, maybe without firestore
-# def scrape_koryta_people():
-#     return run_pipeline(KorytaPeople)[1]
-
-
-def scrape_wiki():
-    raise info_exception("ProcessWiki")
-
-
-def scrape_pkw():
-    raise info_exception("PeoplePKW")
-
-
-def scrape_krs_people():
-    raise info_exception("PeopleKRS")
-
-
-def scrape_krs_companies():
-    raise info_exception("CompaniesKRS")
-
-
-def people_merged():
-    raise info_exception("PeopleMerged")
-
-
-def companies_merged():
-    raise info_exception("CompaniesMerged")
 
 
 PIPELINES = [

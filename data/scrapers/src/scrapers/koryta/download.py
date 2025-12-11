@@ -17,7 +17,12 @@ from tqdm import tqdm
 from entities.article import Article
 from entities.person import Koryta as Person
 from entities.util import NormalizedParse
-from scrapers.stores import Context, FirestoreCollection, Pipeline
+from scrapers.stores import Context, DataRef, Pipeline
+
+
+class FirestoreCollection(DataRef):
+    def __init__(self, *args, **kwargs):
+        pass
 
 
 def list_people(ctx: Context) -> typing.Generator[Person, None, None]:

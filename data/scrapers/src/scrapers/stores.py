@@ -108,16 +108,6 @@ class DataRef(metaclass=ABCMeta):
 
     pass
 
-
-@dataclass
-class FirestoreCollection(DataRef):
-    """A reference to a Google Firestore collection."""
-
-    collection: str
-    stream: bool = True
-    filters: list[tuple[str, str, Any]] = field(default_factory=list)
-
-
 @dataclass
 class LocalFile(DataRef):
     """A reference to a file on the local filesystem."""

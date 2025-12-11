@@ -6,10 +6,8 @@ from unittest.mock import Mock, patch
 import pandas as pd
 
 from scrapers.stores import (
-    CloudStorage,
     Context,
     DownloadableFile,
-    FirestoreCollection,
     LocalFile,
     Pipeline,
     ProcessPolicy,
@@ -26,18 +24,6 @@ class TestStores(unittest.TestCase):
 
         df_fallback = DownloadableFile(url="http://example.com/download?id=123", filename_fallback="data.csv")
         self.assertEqual(df_fallback.filename, "data.csv")
-
-    def test_dataref_classes(self):
-        """Tests the simple DataRef dataclasses."""
-        local = LocalFile("file.txt", "tests")
-        self.assertEqual(local.filename, "file.txt")
-
-        firestore = FirestoreCollection("users", filters=[("age", ">", 18)])
-        self.assertEqual(firestore.collection, "users")
-        self.assertEqual(firestore.filters, [("age", ">", 18)])
-
-        gcs = CloudStorage("my-bucket")
-        self.assertEqual(gcs.hostname, "my-bucket")
 
 
 class TestProcessPolicy(unittest.TestCase):
