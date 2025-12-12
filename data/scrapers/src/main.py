@@ -1,5 +1,6 @@
 import argparse
 import os
+from typing import Any
 
 import duckdb
 import pandas as pd
@@ -98,6 +99,12 @@ class Conductor(IO):
                 return os.path.getmtime(p)
             return None
         return None
+
+    def get_output(self, entity_type: type) -> list[Any] | None:
+        mod = entity_type.__module__.removeprefix("entities.")
+        n = mod + "." + entity_type.__name__
+        n = n.replace(".", "_")
+        return self.dumper.get_output(n)
 
 
 def _setup_context(use_rejestr_io: bool) -> tuple[Context, EntityDumper]:

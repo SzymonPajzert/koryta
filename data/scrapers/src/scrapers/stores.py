@@ -198,6 +198,13 @@ class IO(metaclass=ABCMeta):
         """Returns the modification time of the data reference, or None if not found/applicable."""
         raise NotImplementedError()
 
+    @abstractmethod
+    def get_output(self, entity_type: type) -> list[Any] | None:
+        """
+        Retrieves the output list for a specific entity type from the current execution context.
+        """
+        raise NotImplementedError()
+
 
 class RejestrIO(metaclass=ABCMeta):
     """Abstract interface for interacting with the rejestr.io API."""

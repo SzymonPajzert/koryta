@@ -136,12 +136,18 @@ class MockIO(IO):
                 return f.mtime
         return None
 
+    def get_output(self, entity_type: type) -> list[typing.Any] | None:
+        return [e for e in self.output if isinstance(e, entity_type)]
+
 
 class DictMockIO(IO):
     def __init__(self, files):
         self.files = files
         self.output = []
         self.dumper = MagicMock()
+
+    def get_output(self, entity_type: type) -> list[typing.Any] | None:
+        return [e for e in self.output if isinstance(e, entity_type)]
 
     def read_data(self, fs):
         if isinstance(fs, LocalFile):

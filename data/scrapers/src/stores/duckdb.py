@@ -15,6 +15,19 @@ class EntityDumper:
 
     _last_written_cache: tuple[str, list] | None = None
 
+    def get_output(self, name: str) -> list[Any] | None:
+        """Returns the in-memory output for a given entity name."""
+        # Normalizing name as done in insert_into
+        if name in self.inmemory:
+            return self.inmemory[name]
+        
+        # Try normalizing the name
+        normalized = name.replace(".", "_")
+        if normalized in self.inmemory:
+            return self.inmemory[normalized]
+            
+        raise ValueError(f"No output for {name} in EntityDumper")
+
     def insert_into(self, v, sort_by):
         mod = type(v).__module__.removeprefix("entities.")
         n = mod + "." + type(v).__name__

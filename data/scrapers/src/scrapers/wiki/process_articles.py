@@ -3,9 +3,10 @@ import multiprocessing
 import typing
 import xml.etree.ElementTree as ET
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import mwparserfromhell
+import pandas as pd
 from memoized_property import memoized_property  # type: ignore
 from regex import findall, search  # TODO remove
 from tqdm import tqdm
@@ -334,6 +335,10 @@ class ProcessWiki(Pipeline):
 
     def process(self, ctx: Context):
         scrape_wiki(ctx)
+        # TODO #205 - https://github.com/SzymonPajzert/koryta/issues/205 - support multiple output entities
+        # Return People entities as the primary result of this pipeline, cached in person_wikipedia.jsonl
+        # Companies are also written to versioned/company_wikipedia via ctx.io.output_entity
+        return pd.DataFrame([asdict(p) for p in (ctx.io.get_output(People) or [])])
 
 
 def scrape_wiki(ctx: Context):
