@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from analysis.extract import Extract
 from analysis.interesting import CompaniesMerged
-from analysis.people import PeopleMerged
+from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
 from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -134,6 +134,7 @@ PIPELINES = [
     CompaniesKRS,
     ProcessWiki,
     PeopleMerged,
+    PeopleEnriched,
     CompaniesMerged,
     Statistics,
     Extract,
@@ -159,9 +160,12 @@ def main():
 
     policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
 
+    if len(args.pipeline) == 0 or args.pipeline is None:
+        raise ValueError("No pipeline specified")
+
     try:
         for p_type in PIPELINES:
-            if len(args.pipeline) == 0 or p_type.__name__ in args.pipeline:
+            if p_type.__name__ in args.pipeline:
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)
                 p.read_or_process(ctx, policy)
