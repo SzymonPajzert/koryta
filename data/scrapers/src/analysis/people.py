@@ -68,12 +68,8 @@ class PeopleMerged(Pipeline):
     # people_koryta: PeopleKorytaMerged
     names_count_by_region: NamesCountByRegion
     first_name_freq: FirstNameFreq
-    companies_krs: CompaniesKRS
-    teryt: Teryt
 
     def process(self, ctx: Context):
-        assert self.teryt is not None
-        self.teryt.process(ctx)
         return people_merged(
             ctx,
             self.people_krs.read_or_process(ctx),
@@ -81,8 +77,6 @@ class PeopleMerged(Pipeline):
             self.people_pkw.read_or_process(ctx),
             self.names_count_by_region.read_or_process(ctx),
             self.first_name_freq.read_or_process(ctx),
-            self.companies_krs.read_or_process(ctx),
-            self.teryt,
         )
 
 
@@ -93,8 +87,6 @@ def people_merged(
     pkw_people,  # noqa: F841
     names_count_by_region_table,  # noqa: F841
     first_name_freq_table,  # noqa: F841
-    companies_df,
-    teryt: Teryt,
 ):
     con = ctx.con
     con.create_function(
@@ -241,9 +233,10 @@ def people_merged(
     df = con.execute(query).df()
     if df.empty:
         raise Exception("No matches found with the current criteria.")
+    return df
 
-    df = read_enriched(ctx, df, companies_df, teryt)
 
+def remove_duplicates(ctx: Context, df):
     dupes = df[df.duplicated(subset=["krs_name"], keep=False)]
     if not dupes.empty:
         # Filter out duplicates where birth years differ by more than 1
@@ -273,3 +266,21 @@ def people_merged(
             ctx.io.write_dataframe(smaller, "people_duplicated.jsonl", "jsonl")
 
     return df
+
+
+class PeopleEnriched(Pipeline):
+    filename = "people_enriched"
+
+    people_merged: PeopleMerged
+    companies_krs: CompaniesKRS
+    teryt: Teryt
+
+    def process(self, ctx):
+        df = self.people_merged.read_or_process(ctx)
+        companies_df = self.companies_krs.read_or_process(ctx)
+
+        # Initialize the object no matter what.
+        self.teryt.process(ctx)
+
+        df = remove_duplicates(ctx, df)
+        return read_enriched(ctx, df, companies_df, self.teryt)

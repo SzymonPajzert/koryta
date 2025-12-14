@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 import regex as re
 
-from analysis.people import PeopleMerged
+from analysis.people import PeopleEnriched
 from entities.company import ManualKRS as KRS
 from main import Pipeline, _setup_context
 from stores.config import tests
@@ -104,7 +104,7 @@ def ctx():
 
 @pytest.fixture(scope="module")
 def df_all(ctx):
-    p: PeopleMerged = Pipeline.create(PeopleMerged)
+    p: PeopleEnriched = Pipeline.create(PeopleEnriched)
     return p.read_or_process(ctx)
 
 
