@@ -1,4 +1,4 @@
-This directory contain projects that manage data shown on the website.
+This directory contains projects that manage data shown on the website.
 
 ## Project description
 
@@ -17,9 +17,7 @@ For each project (e.g. scrapers), create an isolated environment for development
 1.  Navigate to the project directory (e.g., ./koryta/data/scrapers).
 1.  Create and activate a virtual environment as `.venv`
 1.  Activate it with `source .venv/bin/activate`
-1.  Install the project with `pip install -e .`
-    - This single command will install all the dependencies listed in pyproject.toml and make
-      your local source code importable everywhere in this environment.
+1.  Install the project with `poetry install` - You can refer to the documentation in `./data/scrapers/README.md`.
 
 ### Day-to-day Development
 

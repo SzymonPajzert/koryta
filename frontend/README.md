@@ -1,75 +1,25 @@
-# Nuxt Minimal Starter
+# NUXT server documentation
 
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 
 ## Setup
 
-Make sure to install dependencies:
+To start, run:
 
 ```bash
-# npm
+# set up
 npm install
 
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
+# It initiates the emulators, seeds the data and creates an endpoint.
+npm run dev:local
 ```
 
-## Development Server
+Then access Firebase emulated at hosting at `localhost:5002`
 
-Start the development server on `http://localhost:3000`:
+## Testing
+
+Run tests through
 
 ```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
+npx cypress run
 ```
-
-## Production
-
-Build the application for production:
-
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
