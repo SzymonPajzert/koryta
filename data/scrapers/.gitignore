@@ -13,3 +13,6 @@ versioned*
 koryta-pl*.json
 
 .ipynb_checkpoints
+
+# Except
+!data/scrapers/src/scrapers/article/huggingface_models/herbert-base-ner/**
