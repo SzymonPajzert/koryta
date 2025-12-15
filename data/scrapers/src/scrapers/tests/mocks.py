@@ -1,4 +1,5 @@
 import csv
+import io
 import json
 import os
 import typing
@@ -139,6 +140,20 @@ class MockIO(IO):
     def get_output(self, entity_type: type) -> list[typing.Any] | None:
         return [e for e in self.output if isinstance(e, entity_type)]
 
+    def write_file(self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]):
+        filename = getattr(fs, "filename", "unknown")
+        if isinstance(content, str):
+            self.files[filename] = MockFile(content)
+        else:
+            f = BytesIO()
+            # The callable expects a BufferedWriter, but BytesIO is BinaryIO.
+            # In many cases it might work if the callable just does .write(bytes).
+            # If it expects text wrapper, it's more complex. 
+            # Given write_dataframe in stores.py uses to_json(f), which needs text or binary depending...
+            content(f)  # type: ignore
+            self.files[filename] = MockFile(f.getvalue())
+
+
 
 class DictMockIO(IO):
     def __init__(self, files):
@@ -164,9 +179,6 @@ class DictMockIO(IO):
                 return [fs.filename]
         return []
 
-    def write_dataframe(self, df, filename: str, format: Formats):
-        self.output.append((filename, df))
-
     def upload(self, source, data, content_type):
         self.output.append((source, data, content_type))
 
@@ -180,6 +192,17 @@ class DictMockIO(IO):
                 if os.path.exists(p):
                     return os.path.getmtime(p)
         return None
+
+    def write_file(self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]):
+        # For DictMockIO we probably just want to store it in files if possible, 
+        # or maybe we don't support it fully since it seems to be read-only mostly?
+        # But for completeness let's store.
+        if isinstance(content, str):
+            # DictMockIO files are paths to strings usually or nested dicts?
+            # looking at setup_test_context, it handles dicts.
+            pass # TODO: DictMockIO structure is a bit complex (path -> content), maybe just pass for now or raise
+        raise NotImplementedError("write_file not implemented for DictMockIO yet")
+
 
 
 class MockRejestrIO(RejestrIO):

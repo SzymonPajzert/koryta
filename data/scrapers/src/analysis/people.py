@@ -8,7 +8,7 @@ from analysis.people_wiki_merged import PeopleWikiMerged
 from analysis.utils import read_enriched
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
-from scrapers.stores import Context, LocalFile, Pipeline
+from scrapers.stores import Context, LocalFile, Pipeline, write_dataframe
 from scrapers.teryt import Teryt
 
 pd.set_option("display.max_rows", None)
@@ -263,7 +263,7 @@ def remove_duplicates(ctx: Context, df):
                 ]
             ].sort_values("krs_name")
             print(f"Found {len(dupes)} duplicates")
-            ctx.io.write_dataframe(smaller, "people_duplicated.jsonl", "jsonl")
+            write_dataframe(ctx, smaller, "people_duplicated.jsonl", "jsonl")
 
     return df
 

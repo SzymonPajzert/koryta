@@ -1,5 +1,6 @@
 """Tests for the abstract store interfaces and data structures."""
 
+import io
 import unittest
 from unittest.mock import Mock, patch
 
@@ -223,16 +224,36 @@ class TestPipeline(unittest.TestCase):
                 return m
             raise FileNotFoundError(f"File {fname} not found in {written_files.keys()}")
 
-        def write_df_se(df, filename, *args):
-            written_files[filename] = df
+        def write_file_se(fs, content):
+            if hasattr(fs, "filename"):
+                written_files[fs.filename] = pd.DataFrame() # Mock content
+            pass
 
-        self.mock_ctx.io.read_data.side_effect = read_data_se
-        self.mock_ctx.io.write_dataframe.side_effect = write_df_se
+        # Helper to capture written dataframes
+        def capture_written_df(fs, content):
+            if hasattr(fs, "filename"):
+                # We need to extract the dataframe. The content is a callable calling df.to_json(f)
+                # We can execute it with a BytesIO buffer
+                buf = io.BytesIO()
+                content(buf) # type: ignore
+                # Reset buffer position
+                buf.seek(0)
+                # Read it back into a DataFrame
+                # Assuming jsonl format as default for these tests
+                try:
+                    df = pd.read_json(buf, lines=True)
+                    written_files[fs.filename] = df
+                except Exception as e:
+                    print(f"Failed to capture written DF for {fs.filename}: {e}")
+
+        # Use side_effect on mock
+        self.mock_ctx.io.write_file.side_effect = capture_written_df  # type: ignore
 
         policy = ProcessPolicy.with_default()
 
         # We need to spy on process calls to verify execution order/count
         with (
+            # No need to patch write_dataframe anymore as we mock context.io.write_file
             patch.object(Level3, "process", side_effect=Level3.process, autospec=True) as mock_l3_proc,
             patch.object(Level2, "process", side_effect=Level2.process, autospec=True) as mock_l2_proc,
             patch.object(Level1, "process", side_effect=Level1.process, autospec=True) as mock_l1_proc,
@@ -264,9 +285,12 @@ class TestPipeline(unittest.TestCase):
             pipeline.read_or_process(self.mock_ctx, policy)
 
             # Verify write was called
-            self.mock_ctx.io.write_dataframe.assert_called_once()
-            args, _ = self.mock_ctx.io.write_dataframe.call_args
-            self.assertTrue(args[1].endswith(".jsonl"))
+            self.mock_ctx.io.write_file.assert_called_once()
+            args, _ = self.mock_ctx.io.write_file.call_args
+            # args: (fs, content_callback)
+            self.assertTrue(args[0].filename.endswith(".jsonl"))
+
+
 
     def test_deep_dependency_refresh(self):
         """
@@ -292,17 +316,23 @@ class TestPipeline(unittest.TestCase):
                 return m
             raise FileNotFoundError(f"File {ref.filename} not found")
 
-        def write_df_se(df, filename, fmt=None):
-            # Track what was re-written
-            base_name = filename.split(".")[0]  # remove extension
-            reprocessed.add(base_name)
-            # Store it so it can be read by subsequent steps
-            written_files[filename] = df
-
         self.mock_ctx.io.read_data.side_effect = read_data_se
-        # Need to mock write to track reprocessing
-        # Note: write_dataframe args are (df, "name.jsonl", "jsonl")
-        self.mock_ctx.io.write_dataframe.side_effect = lambda df, fname, fmt: write_df_se(df, fname, fmt)
+
+        def capture_written_df(fs, content):
+            if hasattr(fs, "filename"):
+                buf = io.BytesIO()
+                content(buf) # type: ignore
+                buf.seek(0)
+                try:
+                    df = pd.read_json(buf, lines=True)
+                    written_files[fs.filename] = df
+                    base_name = fs.filename.split(".")[0]
+                    reprocessed.add(base_name)
+                except Exception as e:
+                    print(f"Failed to capture written DF for {fs.filename}: {e}")
+
+        self.mock_ctx.io.write_file.side_effect = capture_written_df
+
 
         # Policy: Only refresh Level3
         # Use preprocess_sources=True because we need to check deps -> Now automated
@@ -437,9 +467,12 @@ class TestPipeline(unittest.TestCase):
         
         written_files = set()
         
-        def write_se(df, filename, fmt):
-             written_files.add(filename)
-        self.mock_ctx.io.write_dataframe.side_effect = write_se
+        def capture_written_df(fs, content):
+             if hasattr(fs, "filename"):
+                 written_files.add(fs.filename)
+
+        self.mock_ctx.io.write_file.side_effect = capture_written_df
+
 
         def read_se(ref):
              if isinstance(ref, LocalFile) and ref.filename in written_files:

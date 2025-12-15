@@ -4,6 +4,7 @@ to be used across all scrapers. It provides a common interface for handling
 file operations, data references, and pipeline execution contexts.
 """
 
+import io
 import os.path
 import typing
 from abc import ABCMeta, abstractmethod
@@ -108,6 +109,7 @@ class DataRef(metaclass=ABCMeta):
 
     pass
 
+
 @dataclass
 class LocalFile(DataRef):
     """A reference to a file on the local filesystem."""
@@ -179,7 +181,7 @@ class IO(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def write_dataframe(self, df: pd.DataFrame, filename: str, format: Formats):
+    def write_file(self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]):
         """Writes a DataFrame to storage."""
         raise NotImplementedError()
 
@@ -256,6 +258,21 @@ class Context:
     utils: Utils
     web: Web
     refreshed_pipelines: set[str] = field(default_factory=set)
+
+
+def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):
+    """Writes a DataFrame to storage."""
+
+    def writer(f: io.BufferedWriter):
+        match format:
+            case "jsonl":
+                df.to_json(f, orient="records", lines=True)
+            case "csv":
+                df.to_csv(f, index=False)
+            case _:
+                raise ValueError(f"Not supported export format - {format}")
+
+    ctx.io.write_file(LocalFile(filename, "versioned"), writer)
 
 
 @dataclass
@@ -389,7 +406,7 @@ class Pipeline:
 
         if df is not None and self.output_path != "":
             print(f"Writing to {self.output_path}")
-            ctx.io.write_dataframe(df, self.output_path, self.format)
+            write_dataframe(ctx, df, self.output_path, self.format)
 
         if df is not None:
             ctx.refreshed_pipelines.add(self.pipeline_name)
