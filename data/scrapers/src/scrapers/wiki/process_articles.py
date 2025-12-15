@@ -25,6 +25,7 @@ WIKI_DUMP = DownloadableFile(
 
 DUMP_SIZE = 12314670146
 
+# Heurisic used to ignore some articles without parsing (expensive operation)
 REQUIRED_WORDS = [
     "Naukowiec",
     "Duchowny",

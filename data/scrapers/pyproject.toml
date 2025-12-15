@@ -254,4 +254,4 @@ forbidden_modules = [
     "fnmatch",
     "csv",
 ]
-ignore_imports = ["entities.util -> urllib", "scrapers.stores -> os"]
+ignore_imports = ["entities.util -> urllib", "scrapers.stores -> os", "scrapers.stores -> io"]

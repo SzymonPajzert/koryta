@@ -6,42 +6,42 @@ import pytest
 from stores.config import VERSIONED_DIR
 
 COLUMNS_IN_FILE = {
-    "person_wikipedia": [
+    "person_wikipedia.jsonl": [
         "full_name",
         "birth_year",
         "-krs",
     ],
-    "company_wikipedia": [
+    "company_wikipedia.jsonl": [
         "name",
         "krs",
         "-full_name",
     ],
-    "person_krs": [
+    "person_krs.jsonl": [
         "full_name",
         "birth_date",
         "employed_krs",
     ],
-    "company_krs": [
+    "company_krs.jsonl": [
         "krs",
         "name",
         "city",
     ],
-    "person_pkw": [
+    "person_pkw.jsonl": [
         "election_year",
         "party",
         "pkw_name",
     ],
-    "people_merged": [
+    "people_merged.jsonl": [
         "overall_score",
         "krs_name",
     ],
-    "companies_merged": [
+    "companies_merged.jsonl": [
         "name",
         "krs",
         "reasons",
     ],
     # TODO support region wildcard
-    "people_extracted_10": [
+    "people_extracted_10.csv": [
         "name",
         "history",
         "has_wikipedia",
@@ -58,7 +58,7 @@ def test_pipeline_output(filename, column):
     """
     Verifies that {filename}.jsonl contains entities with the expected columns.
     """
-    path = os.path.join(VERSIONED_DIR, filename, filename + ".jsonl")
+    path = os.path.join(VERSIONED_DIR, filename.split(".")[0], filename)
     assert os.path.exists(path), f"File {path} not found"
 
     should_exist = not column.startswith("-")
