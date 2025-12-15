@@ -1,7 +1,6 @@
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 import spacy
 import re
-nlp_spacy = spacy.load("pl_core_news_lg")
 
 class HerbertNERClient:
     
