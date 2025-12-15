@@ -4,6 +4,7 @@ import typing
 import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import asdict, dataclass
+from random import random
 
 import mwparserfromhell
 import pandas as pd
@@ -13,7 +14,7 @@ from tqdm import tqdm
 
 from entities.company import Wikipedia as Company
 from entities.person import Wikipedia as People
-from scrapers.stores import Context, DownloadableFile, Pipeline
+from scrapers.stores import Context, DownloadableFile, LocalFile, Pipeline
 from scrapers.wiki.util import parse_date
 from util.lists import WIKI_POLITICAL_LINKS
 from util.polish import LOWER, UPPER
@@ -24,6 +25,7 @@ WIKI_DUMP = DownloadableFile(
 )
 
 DUMP_SIZE = 12314670146
+SAMPLING_RATE = 1000  # We extract around 200k people, so this should yield 200 samples
 
 # Heurisic used to ignore some articles without parsing (expensive operation)
 REQUIRED_WORDS = [
@@ -320,15 +322,24 @@ def extract(elem: ET.Element) -> People | Company | None:
     return extract_from_article(article)
 
 
-def process_article_worker(args):
-    title, wikitext = args
-    try:
-        article = WikiArticle.parse_text(title, wikitext)
-        if article is None:
+def process_article_worker(ctx: Context):
+    def helper(args):
+        title, wikitext = args
+        try:
+            article = WikiArticle.parse_text(title, wikitext)
+            if article is None:
+                return None
+            person_or_company = extract_from_article(article)
+
+            if person_or_company is not None and isinstance(person_or_company, People):
+                if random() < 1 / SAMPLING_RATE:
+                    ctx.io.write_file(LocalFile(article.title + ".txt", "tests"), wikitext)
+
+            return person_or_company, article
+        except Exception:
             return None
-        return extract_from_article(article), article
-    except Exception:
-        return None
+
+    return helper
 
 
 class ProcessWiki(Pipeline):
@@ -379,7 +390,7 @@ def scrape_wiki(ctx: Context):
         # We use a pool of workers to process articles in parallel
         # imap_unordered is used to keep memory usage low and process as we go
         with multiprocessing.Pool(processes=8) as pool:
-            for pair in pool.imap_unordered(process_article_worker, article_generator(), chunksize=1000):
+            for pair in pool.imap_unordered(process_article_worker(ctx), article_generator(), chunksize=1000):
                 if pair:
                     entity, article = pair
                     if entity:
