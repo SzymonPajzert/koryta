@@ -6,7 +6,7 @@ from google.cloud import storage
 from tqdm import tqdm
 
 from entities.util import NormalizedParse
-from scrapers.stores import IO, DownloadableFile
+from scrapers.stores import IO, CloudStorage, DownloadableFile
 
 BUCKET = "koryta-pl-crawled"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
@@ -33,19 +33,41 @@ class Client:
         return DownloadableFile(
             f"gs://{BUCKET}/{blob_name}",
             filename,
-            download_lambda=lambda: self.download_from_gcs(blob_name, filename),
+            download_lambda=lambda path: self.download_from_gcs(blob_name, path),
         )
 
-    def list_blobs(self, hostname) -> Generator[DownloadableFile]:
+    def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
         """Lists blobs in a GCS bucket with a given prefix."""
         bucket = self.storage_client.bucket(BUCKET)
-        blobs = bucket.list_blobs(prefix=f"hostname={hostname}/")
+        prefix = ref.prefix
+        glob = "**"
+
+        if len(ref.max_namespaces) > 0:
+            # Split blobs and extract max value for each namespace
+            blobs = bucket.list_blobs(prefix=ref.prefix, delimiter="/")
+            max_namespace_values: dict[str, str] = dict()
+            for blob in blobs:
+                parts = blob.name.split("/")
+                for ns in parts:
+                    if "=" in ns:
+                        ns_name, ns_value = ns.split("=", 1)
+                        if ns_name in ref.max_namespaces:
+                            max_namespace_values[ns_name] = max(max_namespace_values.get(ns_name, ""), ns_value)
+
+            if len(max_namespace_values) > 1:
+                raise NotImplementedError("Need to implement ordering of the namespace elements")
+
+            glob = "*" + "*".join(f"{k}={v}" for k, v in max_namespace_values.items()) + "*"
+
+        # Now list all blobs recursively under the chosen prefix
+        print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
+        blobs = bucket.list_blobs(prefix=prefix, match_glob=glob)
         for blob in blobs:
             yield self.cached_storage(blob.name)
 
-    def iterate_blobs(self, io: IO, hostname: str):
+    def iterate_blobs(self, io: IO, ref: CloudStorage):
         """List blobs for a given hostname and yield their path and JSON data."""
-        blobs = self.list_blobs(hostname)
+        blobs = self.list_blobs(ref)
         for blob in tqdm(blobs):
             content = io.read_data(blob).read_content()
             if not content:
@@ -65,11 +87,7 @@ class Client:
             now = datetime.now(warsaw_tz)
             if source.path == "":
                 source.path = "index"  # type: ignore
-            destination_blob_name = (
-                f"hostname={source.hostname}/"
-                f"{source.path}/"
-                f"date={now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}"
-            )
+            destination_blob_name = f"hostname={source.hostname}/{source.path}/date={now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}"
             destination_blob_name = destination_blob_name.replace("//", "/")
             destination_blob_name = destination_blob_name.rstrip("/")
             bucket = self.storage_client.bucket(BUCKET)

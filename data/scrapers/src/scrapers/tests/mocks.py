@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import duckdb
 import pandas as pd
 
-from scrapers.stores import IO, Context, DataRef, File, Formats, LocalFile, RejestrIO
+from scrapers.stores import IO, CloudStorage, Context, DataRef, File, Formats, LocalFile, RejestrIO
 from stores.file import FromPath
 
 nested_dict: TypeAlias = dict[str, Union[str, bytes, "nested_dict"]]
@@ -122,7 +122,7 @@ class MockIO(IO):
     def upload(self, source, data, content_type):
         self.output.append((source, data, content_type))
 
-    def list_blobs(self, hostname: str):
+    def list_blobs(self, ref: CloudStorage):
         return []
 
     def get_mtime(self, fs: DataRef) -> float | None:
@@ -182,7 +182,7 @@ class DictMockIO(IO):
     def upload(self, source, data, content_type):
         self.output.append((source, data, content_type))
 
-    def list_blobs(self, hostname: str):
+    def list_blobs(self, ref: CloudStorage):
         return []
     
     def get_mtime(self, fs: DataRef) -> float | None:
