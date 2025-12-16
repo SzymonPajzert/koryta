@@ -69,13 +69,19 @@ class Infobox:
     person_related: bool
     links: list[str]
 
-    def __init__(self, infobox: mwparserfromhell.nodes.template.Template) -> None:
+    def __init__(
+        self, infobox: mwparserfromhell.nodes.template.Template
+    ) -> None:
         self.inf_type = infobox.name.split("infobox")[0].strip()
         self.fields = {}
         self.field_links = {}
         for param in infobox.params:
-            self.fields[param.name.strip_code().strip()] = param.value.strip_code().strip()
-            self.field_links[param.name.strip_code().strip()] = [str(link.title) for link in param.value.filter_wikilinks()]
+            self.fields[param.name.strip_code().strip()] = (
+                param.value.strip_code().strip()
+            )
+            self.field_links[param.name.strip_code().strip()] = [
+                str(link.title) for link in param.value.filter_wikilinks()
+            ]
 
         self.person_related = "imię i nazwisko" in self.fields
         self.links = [v for vs in self.field_links.values() for v in vs]
@@ -94,7 +100,9 @@ class Infobox:
 
     @staticmethod
     def parse(parsed: mwparserfromhell.wikicode.Wikicode) -> list["Infobox"]:
-        all_infoboxes = parsed.filter_templates(matches=lambda t: "infobox" in t.name)
+        all_infoboxes = parsed.filter_templates(
+            matches=lambda t: "infobox" in t.name
+        )
         result = []
         for infobox in all_infoboxes:
             result.append(Infobox(infobox))
@@ -142,7 +150,9 @@ class WikiArticle:
 
     @staticmethod
     def parse_text(title, wikitext, filter_required_words=True):
-        if filter_required_words and not any(word in wikitext for word in REQUIRED_WORDS):
+        if filter_required_words and not any(
+            word in wikitext for word in REQUIRED_WORDS
+        ):
             return None
 
         parsed = mwparserfromhell.parse(wikitext)
@@ -158,8 +168,12 @@ class WikiArticle:
 
     @staticmethod
     def parse(elem: ET.Element):
-        title = elem.findtext("{http://www.mediawiki.org/xml/export-0.11/}title")
-        revision = elem.find("{http://www.mediawiki.org/xml/export-0.11/}revision")
+        title = elem.findtext(
+            "{http://www.mediawiki.org/xml/export-0.11/}title"
+        )
+        revision = elem.find(
+            "{http://www.mediawiki.org/xml/export-0.11/}revision"
+        )
 
         if not title:
             print(f"Failed to find title in {elem.tag}")
@@ -167,14 +181,18 @@ class WikiArticle:
         if revision is None:
             print(f"Failed to find revision in {title}")
             return None
-        wikitext = revision.findtext("{http://www.mediawiki.org/xml/export-0.11/}text")
+        wikitext = revision.findtext(
+            "{http://www.mediawiki.org/xml/export-0.11/}text"
+        )
         if not wikitext:
             print(f"Failed to find text in {title}")
             return None
 
         return WikiArticle.parse_text(title, wikitext)
 
-    def get_infobox(self, extractor: typing.Callable[["Infobox"], typing.Any | None]):
+    def get_infobox(
+        self, extractor: typing.Callable[["Infobox"], typing.Any | None]
+    ):
         for infobox in self.infoboxes:
             result = extractor(infobox)
             if result is not None:
@@ -200,7 +218,7 @@ class WikiArticle:
     @memoized_property
     def content_score(self) -> int:
         """
-        When higher than 0, it indicates that this article has political conotations
+        If higher than 0, this article has political conotations
         """
         score = len(self.normalized_links.intersection(WIKI_POLITICAL_LINKS))
 
@@ -208,7 +226,10 @@ class WikiArticle:
             # TODO extend content score to a better logic
             # https://github.com/SzymonPajzert/koryta/issues/170 #170
             for public_region in ["miasto", "województwo", "gmina"]:
-                if public_region in infobox.fields.get("udziałowcy", "").lower():
+                if (
+                    public_region
+                    in infobox.fields.get("udziałowcy", "").lower()
+                ):
                     score += 1
 
         return score
@@ -280,18 +301,24 @@ def extract_from_article(article: WikiArticle) -> People | Company | None:
         )
     elif company:
         name = article.get_infobox(lambda i: i.fields.get("nazwa", None))
-        owner_links = article.get_infobox(lambda i: i.field_links.get("udziałowcy", None))
+        owner_links = article.get_infobox(
+            lambda i: i.field_links.get("udziałowcy", None)
+        )
         owner_text = None
         if owner_links is None:
             owner_links = []
         if len(owner_links) == 0:
-            owner_text = article.get_infobox(lambda i: i.fields.get("udziałowcy", None))
+            owner_text = article.get_infobox(
+                lambda i: i.fields.get("udziałowcy", None)
+            )
             if owner_text == "":
                 owner_text = None
 
         return Company(
             name=name if name is not None else article.title,
-            krs=article.get_infobox(lambda i: i.fields.get("numer rejestru", None)),
+            krs=article.get_infobox(
+                lambda i: i.fields.get("numer rejestru", None)
+            ),
             content_score=article.content_score,
             owner_articles=owner_links,
             owner_text=owner_text,
@@ -318,18 +345,13 @@ def process_article_worker(args):
         return None
 
 
-class ProcessWiki(Pipeline):
-    filename = "person_wikipedia"  # TODO support two filenames
-
-    def process(self, ctx: Context):
-        scrape_wiki(ctx)
-        # TODO #205 - https://github.com/SzymonPajzert/koryta/issues/205 - support multiple output entities
-        # Return People entities as the primary result of this pipeline, cached in person_wikipedia.jsonl
-        # Companies are also written to versioned/company_wikipedia via ctx.io.output_entity
-        return pd.DataFrame([asdict(p) for p in (ctx.io.get_output(People) or [])])
-
-
-def scrape_wiki(ctx: Context):
+def scrape_wiki(
+    ctx: Context,
+    stats: Stats,
+    start_offset: int = 0,
+    end_offset: int = DUMP_SIZE,
+    processes=8,
+):
     """
     Parses the Wikipedia dump, filters for target categories,
     and uploads individual XML files to GCS.
@@ -337,41 +359,95 @@ def scrape_wiki(ctx: Context):
 
     # Use bz2 to decompress the file on the fly
     with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f:
+        f.seek(start_offset)
         # Use iterparse for memory-efficient XML parsing
         # We only care about the 'end' event of a 'page' tag
         print(f"🗂️  Starts processing dump file: {WIKI_DUMP.filename}")
+        parser = ET.iterparse(f, events=("end",))
+        # Advance the parser to the first complete <page> tag within the chunk
+        for event, elem in parser:
+            if elem.tag.endswith("page"):
+                break
+            elem.clear()
 
-        tq = tqdm(total=DUMP_SIZE, unit_scale=True, smoothing=0.1)
-        prev = 0
+        tq = tqdm(
+            total=end_offset - start_offset,
+            unit_scale=True,
+            smoothing=0.1,
+            desc=f"Chunk {start_offset}-{end_offset}",
+        )
+        prev = start_offset
 
         def article_generator():
             nonlocal prev
-            for event, elem in ET.iterparse(f, events=("end",)):
+            for event, elem in parser:
                 current_pos = f.tell()
                 tq.update(current_pos - prev)
                 prev = current_pos
 
+                if current_pos > end_offset:
+                    break
+
                 if elem.tag.endswith("page"):
-                    title = elem.findtext("{http://www.mediawiki.org/xml/export-0.11/}title")
-                    revision = elem.find("{http://www.mediawiki.org/xml/export-0.11/}revision")
+                    title = elem.findtext(
+                        "{http://www.mediawiki.org/xml/export-0.11/}title"
+                    )
+                    revision = elem.find(
+                        "{http://www.mediawiki.org/xml/export-0.11/}revision"
+                    )
                     if title and revision:
-                        wikitext = revision.findtext("{http://www.mediawiki.org/xml/export-0.11/}text")
+                        wikitext = revision.findtext(
+                            "{http://www.mediawiki.org/xml/export-0.11/}text"
+                        )
                         if wikitext:
                             yield (title, wikitext)
                     elem.clear()
 
-        stats = Stats()
-
         # Use multiprocessing to speed up parsing
         # We use a pool of workers to process articles in parallel
         # imap_unordered is used to keep memory usage low and process as we go
-        with multiprocessing.Pool(processes=8) as pool:
-            for pair in pool.imap_unordered(process_article_worker, article_generator(), chunksize=1000):
+        with multiprocessing.Pool(processes=processes) as pool:
+            for pair in pool.imap_unordered(
+                process_article_worker, article_generator(), chunksize=10
+            ):
                 if pair:
                     entity, article = pair
                     if entity:
                         ctx.io.output_entity(entity, sort_by=["content_score"])
                         stats.ingest_article(article)
 
-    print("🎉 Processing complete.")
-    print(stats)
+
+class ProcessWiki(Pipeline):
+    filename = "person_wikipedia"  # TODO support two filenames
+
+    def subprocesses(
+        self, ctx: Context, stats: Stats, split: int, subprocesses: int
+    ):
+        for i in range(split):
+            yield (
+                ctx,
+                stats,
+                i * DUMP_SIZE // split,
+                (i + 1) * DUMP_SIZE // split,
+                subprocesses,
+            )
+
+    def process(self, ctx: Context):
+        stats = Stats()
+
+        with multiprocessing.Pool(processes=3) as pool:
+            pool.apply_async(
+                scrape_wiki,
+                self.subprocesses(ctx, stats, 3, 4),
+            )
+
+        print("🎉 Processing complete.")
+        print(stats)
+
+        # TODO #205 - https://github.com/SzymonPajzert/koryta/issues/205
+        # support multiple output entities. Return People entities as
+        # the primary result of this pipeline, cached in person_wikipedia.jsonl
+        # Companies saved to versioned/company_wikipedia with io.output_entity
+        return pd.DataFrame(
+            [asdict(p) for p in (ctx.io.get_output(People) or [])]
+        )
