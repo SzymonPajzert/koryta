@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 import mwparserfromhell
 import pandas as pd
 from memoized_property import memoized_property  # type: ignore
-from regex import findall, search  # TODO remove
+from regex import search
 from tqdm import tqdm
 
 from entities.company import Wikipedia as Company
@@ -23,7 +23,7 @@ WIKI_DUMP = DownloadableFile(
     "plwiki-latest-articles.xml.bz2",
 )
 
-DUMP_SIZE = 12314670146
+DUMP_SIZE = 12314670146  # TODO remove it and look it up
 
 # Heurisic used to ignore some articles without parsing (expensive operation)
 REQUIRED_WORDS = [
@@ -69,17 +69,16 @@ class Infobox:
     person_related: bool
     links: list[str]
 
-    def __init__(self, inf_type: str, fields: dict[str, str], field_links: dict[str, list[str]]) -> None:
-        self.inf_type = inf_type
-        self.fields = fields
-        self.field_links = field_links
-        self.person_related = "imię i nazwisko" in fields
-        self.links = [
-            link
-            for value in fields.values()
-            # TODO replace with parser
-            for link in findall("\\[\\[[^\\]]+\\]\\]", value)
-        ]
+    def __init__(self, infobox: mwparserfromhell.nodes.template.Template) -> None:
+        self.inf_type = infobox.name.split("infobox")[0].strip()
+        self.fields = {}
+        self.field_links = {}
+        for param in infobox.params:
+            self.fields[param.name.strip_code().strip()] = param.value.strip_code().strip()
+            self.field_links[param.name.strip_code().strip()] = [str(link.title) for link in param.value.filter_wikilinks()]
+
+        self.person_related = "imię i nazwisko" in self.fields
+        self.links = [v for vs in self.field_links.values() for v in vs]
 
     @memoized_property
     def company_related(self) -> bool:
@@ -94,32 +93,20 @@ class Infobox:
         return int(self.birth_iso.split("-")[0]) if self.birth_iso else None
 
     @staticmethod
-    def parse(wikitext: str) -> list["Infobox"]:
-        parsed = mwparserfromhell.parse(wikitext)
+    def parse(parsed: mwparserfromhell.wikicode.Wikicode) -> list["Infobox"]:
         all_infoboxes = parsed.filter_templates(matches=lambda t: "infobox" in t.name)
-
         result = []
         for infobox in all_infoboxes:
-            inf_type = infobox.name.split("infobox")[0].strip()
-            fields = {}
-            field_links = {}
-            for param in infobox.params:
-                fields[param.name.strip_code().strip()] = param.value.strip_code().strip()
-                field_links[param.name.strip_code().strip()] = [str(link.title) for link in param.value.filter_wikilinks()]
-            result.append(
-                Infobox(
-                    inf_type,
-                    fields,
-                    field_links,
-                )
-            )
+            result.append(Infobox(infobox))
 
         return result
 
 
-def get_links(wikitext, prefix=""):
-    # TODO replace this with wikiparser
-    return findall("\\[\\[" + prefix + "[^\\]]+\\]\\]", wikitext)
+def get_links(parsed: mwparserfromhell.wikicode.Wikicode, prefix=""):
+    links = [str(link.title) for link in parsed.filter_wikilinks()]
+    if prefix:
+        return [link for link in links if link.startswith(prefix)]
+    return links
 
 
 def safe_middle_name_pattern(title):
@@ -154,18 +141,18 @@ class WikiArticle:
         return title
 
     @staticmethod
-    def parse_text(title, wikitext):
-        if not any(word in wikitext for word in REQUIRED_WORDS):
+    def parse_text(title, wikitext, filter_required_words=True):
+        if filter_required_words and not any(word in wikitext for word in REQUIRED_WORDS):
             return None
 
-        infoboxes = Infobox.parse(wikitext)
-        # Perform search for second name or a full name of the company
+        parsed = mwparserfromhell.parse(wikitext)
+        infoboxes = Infobox.parse(parsed)
         title = WikiArticle.extend_name(title, wikitext)
 
         return WikiArticle(
             title=title,
-            categories=get_links(wikitext, prefix="Kategoria:"),
-            links=get_links(wikitext),
+            categories=get_links(parsed, prefix="Kategoria:"),
+            links=get_links(parsed),
             infoboxes=infoboxes,
         )
 
