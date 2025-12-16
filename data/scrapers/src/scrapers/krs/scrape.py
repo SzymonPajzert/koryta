@@ -6,7 +6,7 @@ from time import sleep
 from scrapers.krs import data
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import KRS
-from scrapers.stores import Context
+from scrapers.stores import CloudStorage, Context
 
 
 def save_org_connections(
@@ -50,7 +50,7 @@ def scrape_rejestrio(ctx: Context):
     )
     args = parser.parse_args()
 
-    already_scraped = set(KRS.from_blob_name(path.url) for path in ctx.io.list_blobs("rejestr.io"))
+    already_scraped = set(KRS.from_blob_name(path.url) for path in ctx.io.list_blobs(CloudStorage("hostname=rejestr.io")))
 
     starters = set(KRS(krs) for krs in data.CompaniesHardcoded.all_companies_krs)
     if args.only != "":

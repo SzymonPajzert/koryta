@@ -12,6 +12,7 @@ from analysis.interesting import CompaniesMerged
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
 from scrapers.article.crawler import parse_hostname, uuid7
+from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import IO, CloudStorage, Context, DataRef, DownloadableFile, File, LocalFile, Pipeline, ProcessPolicy
@@ -54,7 +55,7 @@ class Conductor(IO):
         print(f"Reading {fs}")
 
         if isinstance(fs, CloudStorage):
-            return file.FromIterable(self.storage.iterate_blobs(self, fs.hostname))
+            return file.FromIterable(self.storage.iterate_blobs(self, fs))
 
         if isinstance(fs, LocalFile):
             return file.FromPath(os.path.join(PROJECT_ROOT, fs.folder, fs.filename))
@@ -92,8 +93,8 @@ class Conductor(IO):
     def upload(self, source, data, content_type):
         self.storage.upload(source, data, content_type)
 
-    def list_blobs(self, hostname: str):
-        return self.storage.list_blobs(hostname)
+    def list_blobs(self, ref: CloudStorage):
+        return self.storage.list_blobs(ref)
 
     def get_mtime(self, fs: DataRef) -> float | None:
         if isinstance(fs, LocalFile):
@@ -132,6 +133,7 @@ def _setup_context(use_rejestr_io: bool) -> tuple[Context, EntityDumper]:
 
 
 PIPELINES = [
+    KorytaPeople,
     PeoplePKW,
     PeopleKRS,
     CompaniesKRS,
@@ -146,7 +148,7 @@ PIPELINES = [
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--refresh", help="Pipeline name to refresh or 'all'", action="append", default=[])
+    parser.add_argument("--refresh", help="Pipeline name to refresh, : to exclude or 'all'", action="append", default=[])
     parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
     args, _ = parser.parse_known_args()  # TODO handle remaining flags
 
@@ -156,19 +158,20 @@ def main():
     exclude_refresh = []
     if args.refresh:
         for r in args.refresh:
-            if r.startswith("!"):
+            if r.startswith(":"):
                 exclude_refresh.append(r[1:])
             else:
                 refresh.append(r)
 
     policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
 
-    if len(args.pipeline) == 0 or args.pipeline is None:
-        raise ValueError("No pipeline specified")
+    no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
+    if no_pipeline:
+        print("No pipeline specified, will run all")
 
     try:
         for p_type in PIPELINES:
-            if p_type.__name__ in args.pipeline:
+            if p_type.__name__ in args.pipeline or no_pipeline:
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)
                 p.read_or_process(ctx, policy)

@@ -27,9 +27,7 @@ from scrapers.stores import CloudStorage, Context
 #  - poetry run scrape_articles_example
 #  - scrape_articles_example from a .venv
 def extract(ctx: Context):
-    for blob_name, content in ctx.io.read_data(
-        CloudStorage(hostname="jawnylublin.pl")
-    ).read_iterable():
+    for blob_name, content in ctx.io.read_data(CloudStorage(prefix="hostname=jawnylublin.pl")).read_iterable():
         # We iterate blobs from the koryta-pl-crawled bucket.
         # The blob names are following the format:
         # koryta-pl-crawled/hostname=/date=/path-to-the-article, e.g.:
@@ -52,9 +50,7 @@ def extract(ctx: Context):
 
         for keyword in ["Jarosław Stawiarski", "Radosławem Piesiewiczem"]:
             if keyword in content:
-                ctx.io.output_entity(
-                    Mention(text=keyword, url=f"https://jawnylublin.pl/{blob_name}")
-                )
+                ctx.io.output_entity(Mention(text=keyword, url=f"https://jawnylublin.pl/{blob_name}"))
 
     # Save the data of all registered in-memory tables to the disk
     # Usually it's in a finally clause, to make sure we don't lose data.

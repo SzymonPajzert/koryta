@@ -147,9 +147,10 @@ class DownloadableFile(DataRef):
 
 @dataclass
 class CloudStorage(DataRef):
-    """A reference to a collection of objects in cloud storage under a hostname."""
+    """A reference to a collection of objects in cloud storage under a series of namespaces"""
 
-    hostname: str
+    prefix: str
+    max_namespaces: list[str] = field(default_factory=list)
 
 
 class IO(metaclass=ABCMeta):
@@ -191,7 +192,7 @@ class IO(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def list_blobs(self, hostname: str) -> typing.Generator[DownloadableFile, None, None]:
+    def list_blobs(self, ref: CloudStorage) -> typing.Generator[DownloadableFile, None, None]:
         """Lists blobs in storage for a given hostname."""
         raise NotImplementedError()
 
