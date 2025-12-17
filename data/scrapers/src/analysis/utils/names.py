@@ -55,7 +55,8 @@ class NamesCountByRegion(Pipeline):
                     ('WIELKOPOLSKIE', '30'),
                     ('ZACHODNIOPOMORSKIE', '32')
                 ) AS t(wojewodztwo, teryt)
-            ) AS regions ON names."Województwo zameldowania na pobyt stały" = regions.wojewodztwo
+            ) AS regions ON names."Województwo zameldowania na pobyt stały"
+                = regions.wojewodztwo
             GROUP BY ALL
             """
         ).to_df()

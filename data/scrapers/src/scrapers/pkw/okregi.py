@@ -2,12 +2,12 @@ from scrapers.pkw.elections import ElectionType
 
 voting_district_to_city: dict[tuple[int, ElectionType], dict[int, str]] = dict()
 
-# TODO scrape_pkw.1991.log:An error occurred: Unknown election: 1991 ElectionType.SEJM
-# TODO scrape_pkw.1993.log:An error occurred: Unknown election: 1993 ElectionType.SEJM
-# TODO scrape_pkw.2005.log:An error occurred: Unknown election: 2005 ElectionType.SEJM
-# TODO scrape_pkw.2014.log:An error occurred: Unknown election: 2014 ElectionType.EUROPARLAMENT
-# TODO scrape_pkw.2015.log:An error occurred: Unknown election: 2015 ElectionType.SEJM
-# TODO scrape_pkw.2024.log:An error occurred: Unknown election: 2024 ElectionType.EUROPARLAMENT
+# TODO Unknown election: 1991 ElectionType.SEJM
+# TODO Unknown election: 1993 ElectionType.SEJM
+# TODO Unknown election: 2005 ElectionType.SEJM
+# TODO Unknown election: 2014 ElectionType.EUROPARLAMENT
+# TODO Unknown election: 2015 ElectionType.SEJM
+# TODO Unknown election: 2024 ElectionType.EUROPARLAMENT
 
 # https://wybory2007.pkw.gov.pl/SJM/PL/WYN/M/index.htm
 voting_district_to_city[2007, ElectionType.SEJM] = {

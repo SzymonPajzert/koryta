@@ -30,7 +30,9 @@ url_to_update: set[str] = set()
 page_score: dict[str, int] = dict()
 
 
-def add_crawl_record(ctx: Context, uid, parsed, url, response_code, payload_size_bytes, duration):
+def add_crawl_record(
+    ctx: Context, uid, parsed, url, response_code, payload_size_bytes, duration
+):
     """Updates the timestamp for a successfully crawled URL in the sites file."""
     ctx.io.output_entity(
         RequestLog(
@@ -86,7 +88,9 @@ def crawl_website(ctx: Context, uid, current_url):
 
             for parser in ["html.parser", "lxml", "html5lib"]:
                 soup = BeautifulSoup(response.text, parser)
-                copy_parsed = dataclasses.replace(parsed, path=parsed.path + f".{parser}.txt")
+                copy_parsed = dataclasses.replace(
+                    parsed, path=parsed.path + f".{parser}.txt"
+                )
                 ctx.io.upload(copy_parsed, soup.get_text(), "text/plain")
 
                 for link in soup.find_all("a", href=True):
@@ -102,7 +106,8 @@ def crawl_website(ctx: Context, uid, current_url):
                     pages_to_visit.add(absolute_link)
 
             pages_to_visit.difference_update(
-                row[0] for row in ctx.con.sql("SELECT url FROM website_index").fetchall()
+                row[0]
+                for row in ctx.con.sql("SELECT url FROM website_index").fetchall()
             )
             if len(pages_to_visit) > 0:
                 for url in pages_to_visit:
@@ -142,7 +147,10 @@ def crawl(ctx: Context):
                 id NOT IN (SELECT website_id FROM request_logs)
                 AND url NOT IN (SELECT url FROM request_logs)
                 AND quality == 'good'
-            ORDER BY (case when interesting then 1 when interesting is null then 2 else 3 end) asc
+            ORDER BY (case
+                when interesting then 1
+                when interesting is null then 2
+                else 3 end) asc
             """
         )
 

@@ -147,7 +147,7 @@ class DownloadableFile(DataRef):
 
 @dataclass
 class CloudStorage(DataRef):
-    """A reference to a collection of objects in cloud storage under a series of namespaces"""
+    """A reference to a collection of objects in cloud storage"""
 
     prefix: str
     max_namespaces: list[str] = field(default_factory=list)
@@ -182,7 +182,9 @@ class IO(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def write_file(self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]):
+    def write_file(
+        self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
+    ):
         """Writes a DataFrame to storage."""
         raise NotImplementedError()
 
@@ -192,19 +194,21 @@ class IO(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def list_blobs(self, ref: CloudStorage) -> typing.Generator[DownloadableFile, None, None]:
+    def list_blobs(
+        self, ref: CloudStorage
+    ) -> typing.Generator[DownloadableFile, None, None]:
         """Lists blobs in storage for a given hostname."""
         raise NotImplementedError()
 
     @abstractmethod
     def get_mtime(self, fs: DataRef) -> float | None:
-        """Returns the modification time of the data reference, or None if not found/applicable."""
+        """Returns the modification time of the data reference if aplicable."""
         raise NotImplementedError()
 
     @abstractmethod
     def get_output(self, entity_type: type) -> list[Any] | None:
         """
-        Retrieves the output list for a specific entity type from the current execution context.
+        Retrieves the output list for a specific entity type from the current context.
         """
         raise NotImplementedError()
 
@@ -244,7 +248,9 @@ class Web(metaclass=ABCMeta):
     """Abstract interface for web related operations."""
 
     @abstractmethod
-    def robot_txt_allowed(self, ctx: "Context", url: str, parsed_url: Any, user_agent: str) -> bool:
+    def robot_txt_allowed(
+        self, ctx: "Context", url: str, parsed_url: Any, user_agent: str
+    ) -> bool:
         """Checks if robots.txt allows fetching the URL."""
         raise NotImplementedError()
 
@@ -337,7 +343,9 @@ class Pipeline:
         assert self.filename
         df = None
         try:
-            df = ctx.io.read_data(LocalFile(self.output_path, "versioned")).read_dataframe(self.format, dtype=self.dtype)
+            df = ctx.io.read_data(
+                LocalFile(self.output_path, "versioned")
+            ).read_dataframe(self.format, dtype=self.dtype)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
         return df
@@ -368,12 +376,16 @@ class Pipeline:
                 continue
 
             if dep.should_refresh_with_logic(ctx, policy):
-                print(f"Refreshing {self.pipeline_name} because of dependency {dep_name}")
+                print(
+                    f"Refreshing {self.pipeline_name} because of dependency {dep_name}"
+                )
                 return True
 
             dep_output_time = dep.output_time(ctx)
             if dep_output_time is None or dep_output_time > self_mtime:
-                print(f"Refreshing {self.pipeline_name} because of dependency {dep_name}")
+                print(
+                    f"Refreshing {self.pipeline_name} because of dependency {dep_name}"
+                )
                 return True
 
         return False
@@ -463,12 +475,17 @@ class Pipeline:
             else:
                 raise ValueError(f"Not found last_written for {self.pipeline_name}")
 
-        print(f"{'  ' * self.nested}====== Finished pipeline {self.pipeline_name} =====\n\n")
+        print(
+            f"{'  ' * self.nested}====== \
+                Finished pipeline {self.pipeline_name} =====\n\n"
+        )
         return df
 
     def list_sources(self):
         for annotation, pipeline_type_dep in self.__annotations__.items():
-            if isinstance(pipeline_type_dep, type) and issubclass(pipeline_type_dep, Pipeline):
+            if isinstance(pipeline_type_dep, type) and issubclass(
+                pipeline_type_dep, Pipeline
+            ):
                 yield annotation, pipeline_type_dep
 
     @property

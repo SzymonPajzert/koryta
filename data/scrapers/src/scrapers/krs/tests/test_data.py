@@ -73,4 +73,5 @@ def test_public_companies_list():
 
     assert len(missing) == len(manual) - 1, missing
 
-    # TODO divide the missing by source, so we can tell what kind of data we don't currently have
+    # TODO divide the missing by source
+    # so we can tell what kind of data we don't currently have

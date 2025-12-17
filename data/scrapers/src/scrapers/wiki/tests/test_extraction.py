@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from scrapers.stores import LocalFile
-from scrapers.tests.mocks import get_test_context, setup_test_context
+from scrapers.tests.mocks import get_test_context, nested_dict, setup_test_context
 from scrapers.wiki.process_articles import (
     Company,
     People,
@@ -195,7 +195,10 @@ COMPANIES_EXPECTED = {
 @pytest.fixture
 def ctx():
     base_path = Path(__file__).parent.parent.parent.parent.parent / "tests"
-    mapping = {str(LocalFile(f"{file}.xml", "tests")): str(base_path / f"{file}.xml") for file in list_test_files()}
+    mapping: nested_dict = {
+        str(LocalFile(f"{file}.xml", "tests")): str(base_path / f"{file}.xml")
+        for file in list_test_files()
+    }
     return setup_test_context(get_test_context(), mapping)
 
 

@@ -14,7 +14,8 @@ class PeopleKorytaMerged(Pipeline):
         con.execute(
             """
             CREATE OR REPLACE TABLE koryta_people AS
-            -- koryta_people lacks birth_year, so we can't use it as a base for joining with others on birth_year.
+            -- koryta_people lacks birth_year, so we can't use
+            -- it as a base for joining with others on birth_year.
             -- We will use it for enrichment if we can parse first/last names.
             SELECT DISTINCT
                 lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,

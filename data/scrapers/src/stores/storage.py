@@ -52,12 +52,20 @@ class Client:
                     if "=" in ns:
                         ns_name, ns_value = ns.split("=", 1)
                         if ns_name in ref.max_namespaces:
-                            max_namespace_values[ns_name] = max(max_namespace_values.get(ns_name, ""), ns_value)
+                            max_namespace_values[ns_name] = max(
+                                max_namespace_values.get(ns_name, ""), ns_value
+                            )
 
             if len(max_namespace_values) > 1:
-                raise NotImplementedError("Need to implement ordering of the namespace elements")
+                raise NotImplementedError(
+                    "Need to implement ordering of the namespace elements"
+                )
 
-            glob = "*" + "*".join(f"{k}={v}" for k, v in max_namespace_values.items()) + "*"
+            glob = (
+                "*"
+                + "*".join(f"{k}={v}" for k, v in max_namespace_values.items())
+                + "*"
+            )
 
         # Now list all blobs recursively under the chosen prefix
         print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
@@ -87,7 +95,10 @@ class Client:
             now = datetime.now(warsaw_tz)
             if source.path == "":
                 source.path = "index"  # type: ignore
-            destination_blob_name = f"hostname={source.hostname}/{source.path}/date={now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}"
+            date = f"{now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}"
+            destination_blob_name = (
+                f"hostname={source.hostname}/{source.path}/date={date}"
+            )
             destination_blob_name = destination_blob_name.replace("//", "/")
             destination_blob_name = destination_blob_name.rstrip("/")
             bucket = self.storage_client.bucket(BUCKET)

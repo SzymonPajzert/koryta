@@ -37,7 +37,8 @@ class PeoplePKWMerged(Pipeline):
         """
         )
 
-        print(f"people_pkw_merged_raw has {len(con.sql('select * from people_pkw_merged_raw').df())} rows")
+        row_num = len(con.sql("select * from people_pkw_merged_raw").df())
+        print(f"people_pkw_merged_raw has {row_num} rows")
 
         create_people_table(
             con,

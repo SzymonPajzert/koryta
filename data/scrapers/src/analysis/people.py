@@ -29,7 +29,9 @@ SAMPLE_FILTER = ""
 LN_10 = math.log(10)
 
 
-def unique_probability(p1: float, p2: float | None, second_name_match: bool, n: float) -> float:
+def unique_probability(
+    p1: float, p2: float | None, second_name_match: bool, n: float
+) -> float:
     """
     Calculates the probability of no accidental match.
     p1: probability of the first name.
@@ -48,7 +50,7 @@ def unique_probability(p1: float, p2: float | None, second_name_match: bool, n: 
     n = n / 40
     if p_combined is None or p_combined == 1:
         return 0
-    # Using Poisson approximation for (1-p)^n ~= exp(-n*p) to avoid floating point issues
+    # Poisson approximation for (1-p)^n ~= exp(-n*p) to avoid floating point issues
     # Probability of no collision is exp(-n*p)
     # We are interested in high precision, so we're returning
     # e^(-ln 10) = 1/10, so ln 10 is the number of zeroes
@@ -122,7 +124,7 @@ def people_merged(
             k.full_name[1] as krs_name,
             p.full_name[1] as pkw_name,
             k.birth_year as birth_year,
-            k.first_name as base_first_name, -- Carry forward base names for subsequent joins
+            k.first_name as base_first_name, -- Carry base names for subsequent joins
             k.last_name as base_last_name,
             k.full_name as base_full_name,
             k.birth_date as birth_date,
@@ -135,23 +137,26 @@ def people_merged(
                     unique_probability(
                         p_fn.p,
                         p_sn.p,
-                        k.second_name = p.second_name AND k.second_name IS NOT NULL AND p.second_name IS NOT NULL,
+                        k.second_name = p.second_name
+                            AND k.second_name IS NOT NULL AND p.second_name IS NOT NULL,
                         names_count.count
                     )
                 ELSE NULL
             END as unique_chance,
             *,
         FROM krs_people k
-        LEFT JOIN pkw_people p ON (ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
+        LEFT JOIN pkw_people p ON (
+            ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
             AND k.metaphone = p.metaphone
             AND k.last_name = p.last_name
             AND k.first_name = p.first_name
-            AND (k.second_name = p.second_name OR ((k.second_name IS NULL OR k.second_name = '') AND (p.second_name IS NULL OR p.second_name = '')))
+            AND (k.second_name = p.second_name
+                OR ((k.second_name IS NULL OR k.second_name = '')
+                    AND (p.second_name IS NULL OR p.second_name = '')))
         LEFT JOIN first_name_freq_table p_fn ON k.first_name = p_fn.first_name
         LEFT JOIN first_name_freq_table p_sn ON k.second_name = p_sn.first_name
         LEFT JOIN names_count_by_region_table names_count
             ON k.last_name = names_count.last_name
-            -- We need to pick one teryt, let's use the first one from pkw_people if available
             AND list_extract(p.teryt_wojewodztwo, 1) = names_count.teryt
 
     ),
@@ -173,7 +178,8 @@ def people_merged(
             kpw.*,
             ko.full_name as koryta_name,
         FROM krs_pkw_wiki kpw
-        LEFT JOIN koryta_people ko ON jaro_winkler_similarity(kpw.base_last_name, ko.last_name) > 0.95
+        LEFT JOIN koryta_people ko
+            ON jaro_winkler_similarity(kpw.base_last_name, ko.last_name) > 0.95
             AND jaro_winkler_similarity(kpw.base_first_name, ko.first_name) > 0.95
     ),
     scored AS (
@@ -225,10 +231,15 @@ def people_merged(
             AND max_scores.max_score = scored.overall_score
         )
         WHERE overall_score >= 8
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY krs_name, birth_year ORDER BY overall_score DESC, ABS(birth_year - pkw_birth_year) ASC NULLS LAST) = 1
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY krs_name, birth_year
+            ORDER BY overall_score DESC,
+            ABS(birth_year - pkw_birth_year)
+        ASC NULLS LAST) = 1
     )
     SELECT * FROM unique_krs
-    ORDER BY mistake_odds DESC, overall_score DESC, koryta_name, krs_name, pkw_name, wiki_name, birth_year
+    ORDER BY mistake_odds DESC, overall_score DESC,
+        koryta_name, krs_name, pkw_name, wiki_name, birth_year
     """
     df = con.execute(query).df()
     if df.empty:
@@ -247,7 +258,11 @@ def remove_duplicates(ctx: Context, df):
             return (years.max() - years.min()) > 1
 
         # Let's do it more explicitly
-        conflicting_names = dupes.groupby("krs_name").filter(has_conflicting_birth_years)["krs_name"].unique()
+        conflicting_names = (
+            dupes.groupby("krs_name")
+            .filter(has_conflicting_birth_years)["krs_name"]
+            .unique()
+        )
         dupes = dupes[~dupes["krs_name"].isin(conflicting_names)]
 
         if not dupes.empty:

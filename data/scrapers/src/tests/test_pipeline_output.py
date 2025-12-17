@@ -53,7 +53,14 @@ COLUMNS_IN_FILE = {
 }
 
 
-@pytest.mark.parametrize("filename, column", [(filename, column) for filename, columns in COLUMNS_IN_FILE.items() for column in columns])
+@pytest.mark.parametrize(
+    "filename, column",
+    [
+        (filename, column)
+        for filename, columns in COLUMNS_IN_FILE.items()
+        for column in columns
+    ],
+)
 def test_pipeline_output(filename, column):
     """
     Verifies that {filename}.jsonl contains entities with the expected columns.
@@ -71,4 +78,7 @@ def test_pipeline_output(filename, column):
                 break
             record = json.loads(line)
 
-            assert (column in record) == should_exist, f"Record {i} {'should not' if not should_exist else 'should'} have '{column}': {record}"
+            should = "should not" if not should_exist else "should"
+            assert (column in record) == should_exist, (
+                f"Record {i} {should} have '{column}': {record}"
+            )

@@ -12,7 +12,9 @@ def ctx():
 
 
 def people_rows(ctx):
-    yield from ctx.io.read_data(LocalFile("person_pkw/person_pkw.jsonl", "versioned")).read_jsonl()
+    yield from ctx.io.read_data(
+        LocalFile("person_pkw/person_pkw.jsonl", "versioned")
+    ).read_jsonl()
 
 
 @pytest.fixture
@@ -66,7 +68,9 @@ def test_check_no_nulls(column, df):
         ("2023", "senat", "birth_year"),
         ("2024", "europarlament", "birth_year"),
     }
-    grouped = df.groupby(["election_year", "election_type"]).apply(lambda x: x[column].notnull().all())
+    grouped = df.groupby(["election_year", "election_type"]).apply(
+        lambda x: x[column].notnull().all()
+    )
     for (year, election), passing in grouped.items():
         if passing:
             continue

@@ -28,7 +28,8 @@ def test_successful_company_names(ctx, region):
     named_companies = 0
 
     # Regex to find company names in the history strings
-    # Pattern looks for " w " followed by the company name, until end of line or before next specific keyword if structure is complex.
+    # Pattern looks for " w " followed by the company name, until end of line
+    # or before next specific keyword if structure is complex.
     # Based on append_nice_history: f"Pracuje od {start} do {end} w {company_name}"
     company_pattern = re.compile(r" w (.+)$")
 
@@ -44,7 +45,8 @@ def test_successful_company_names(ctx, region):
                     total_companies += 1
                     company_name = match.group(1).strip()
 
-                    # Check if company_name is NOT just digits (which would mean lookup failed and returned KRS)
+                    # Check if company_name is NOT just digits
+                    # which would mean lookup failed and returned KRS
                     if not company_name.isdigit():
                         named_companies += 1
 

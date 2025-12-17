@@ -42,12 +42,16 @@ class CompaniesMerged(Pipeline):
             for parent in company.parents:
                 graph.add_parent(parent, company.krs)
 
-        children_of_hardcoded_set = graph.all_descendants(iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id))
+        children_of_hardcoded_set = graph.all_descendants(
+            iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id)
+        )
         children_of_hardcoded = pd.DataFrame({"krs": list(children_of_hardcoded_set)})  # noqa: F841
 
         self.wiki_pipeline.read_or_process(ctx)
         wiki_companies = ctx.io.read_data(  # noqa: F841
-            LocalFile("company_wikipedia/company_wikipedia.jsonl", "versioned")  # TODO fix
+            LocalFile(
+                "company_wikipedia/company_wikipedia.jsonl", "versioned"
+            )  # TODO fix
         ).read_dataframe("jsonl")
 
         # company_krs is already processed by scraped_companies
@@ -71,8 +75,10 @@ class CompaniesMerged(Pipeline):
             CASE WHEN ik.krs IS NOT NULL THEN 1 ELSE 0 END as is_interesting_krs,
             CASE WHEN hn.name IS NOT NULL THEN 1 ELSE 0 END as is_hardcoded_name
         FROM wiki_companies w
-        FULL OUTER JOIN krs_companies k ON CAST(w.krs AS VARCHAR) = CAST(k.krs AS VARCHAR)
-        LEFT JOIN children_of_hardcoded ik ON CAST(k.krs AS VARCHAR) = CAST(ik.krs AS VARCHAR)
+        FULL OUTER JOIN krs_companies k
+            ON CAST(w.krs AS VARCHAR) = CAST(k.krs AS VARCHAR)
+        LEFT JOIN children_of_hardcoded ik
+            ON CAST(k.krs AS VARCHAR) = CAST(ik.krs AS VARCHAR)
         LEFT JOIN hardcoded_names hn ON k.name = hn.name
         """
 
@@ -106,7 +112,11 @@ class CompaniesMerged(Pipeline):
                 )
             )
         if row["is_hardcoded_name"]:
-            reasons.append(InterestingReason(reason="hardcoded_name", details="In company_names list"))
+            reasons.append(
+                InterestingReason(
+                    reason="hardcoded_name", details="In company_names list"
+                )
+            )
 
         if pd.notna(row["content_score"]) and row["content_score"] > 0:
             reasons.append(
@@ -119,10 +129,20 @@ class CompaniesMerged(Pipeline):
         # Check owners (simple string check for now, can be improved)
         if pd.notna(row["owner_text"]) and row["owner_text"]:
             lower_owner = row["owner_text"].lower()
-            if "skarb państwa" in lower_owner or "miasto" in lower_owner or "województwo" in lower_owner or "gmina" in lower_owner:
-                reasons.append(InterestingReason(reason="owner_text", details=row["owner_text"]))
+            if (
+                "skarb państwa" in lower_owner
+                or "miasto" in lower_owner
+                or "województwo" in lower_owner
+                or "gmina" in lower_owner
+            ):
+                reasons.append(
+                    InterestingReason(reason="owner_text", details=row["owner_text"])
+                )
 
-        if isinstance(row["owner_articles"], (list, np.ndarray)) and len(row["owner_articles"]) > 0:
+        if (
+            isinstance(row["owner_articles"], (list, np.ndarray))
+            and len(row["owner_articles"]) > 0
+        ):
             # owner_articles is a list (numpy array or list in pandas)
             for article in row["owner_articles"]:
                 if isinstance(article, dict):
@@ -133,9 +153,18 @@ class CompaniesMerged(Pipeline):
 
                 lower_article = article_str.lower()
 
-                if "skarb państwa" in lower_article or "miasto" in lower_article or "województwo" in lower_article or "gmina" in lower_article:
-                    reasons.append(InterestingReason(reason="owner_article", details=article_str))
+                if (
+                    "skarb państwa" in lower_article
+                    or "miasto" in lower_article
+                    or "województwo" in lower_article
+                    or "gmina" in lower_article
+                ):
+                    reasons.append(
+                        InterestingReason(reason="owner_article", details=article_str)
+                    )
                 if article_str in WIKI_POLITICAL_LINKS:
-                    reasons.append(InterestingReason(reason="political_link", details=article_str))
+                    reasons.append(
+                        InterestingReason(reason="political_link", details=article_str)
+                    )
 
         return reasons

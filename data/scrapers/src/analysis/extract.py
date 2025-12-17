@@ -15,7 +15,12 @@ class Extract(Pipeline):
     @memoized_property
     def region(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument("--region", help="TERYT of the region to export the data for", default=None, required=True)
+        parser.add_argument(
+            "--region",
+            help="TERYT of the region to export the data for",
+            default=None,
+            required=True,
+        )
         args, _ = parser.parse_known_args()
         return args.region
 
@@ -35,7 +40,9 @@ class Extract(Pipeline):
         result["history"] = df["history"]
         result["has_wikipedia"] = df["wiki_name"].notna()
         result["birth_date"] = df["birth_date"]
-        result["total_employed_years"] = pd.to_timedelta(df["employed_total"], unit="ms").apply(lambda r: r.days / 365)
+        result["total_employed_years"] = pd.to_timedelta(
+            df["employed_total"], unit="ms"
+        ).apply(lambda r: r.days / 365)
         result["first_employed"] = pd.to_datetime(df["first_employed"], unit="ms")
         result["last_employed"] = df["last_employed"]
         return result

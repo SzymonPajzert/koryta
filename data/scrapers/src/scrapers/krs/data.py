@@ -51,7 +51,9 @@ class CompaniesHardcoded(Pipeline):
         def process(d):
             krs = KRS(**static, **map(d))
             if krs.id in self.all_companies_krs:
-                self.all_companies_krs[krs.id] = self.all_companies_krs[krs.id].merge(krs)
+                self.all_companies_krs[krs.id] = self.all_companies_krs[krs.id].merge(
+                    krs
+                )
             else:
                 self.all_companies_krs[krs.id] = krs
 
@@ -63,14 +65,18 @@ class CompaniesHardcoded(Pipeline):
             for item in data:
                 process(item)
 
-    def read_public_companies(self, ctx: Context):  # Public companies, from data.gov.pl:
+    def read_public_companies(
+        self, ctx: Context
+    ):  # Public companies, from data.gov.pl:
         _PUBLIC_COMPANIES_SOURCE = "https://api.dane.gov.pl/resources/276218,dane-o-podmiotach-swiadczacych-usugi-publiczne-z-katalogu-podmiotow-publicznych-sierpien-2025-r/file"
         public_companies = FileSource(
             _PUBLIC_COMPANIES_SOURCE,
             "dane-o-podmiotach-swiadczacych-usugi-publiczne.csv",
         )
 
-        df = pd.read_csv(ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False)
+        df = pd.read_csv(
+            ctx.io.read_data(public_companies).read_file(), sep=";", low_memory=False
+        )
         df = df[~df["KRS"].isna()]
         df["teryt"] = df.apply(self.parse_teryt_from_row, axis=1)
         df["KRS"] = df["KRS"].astype(int).astype(str).str.zfill(10).to_list()

@@ -33,9 +33,14 @@ def test_title_parsed():
 
 def test_polityk_infobox():
     """Should find categories"""
-    infobox_text = """{{Polityk infobox|polityk = Lilian Fowler|grafika = Lilian Fowler from Argus.jpg|opis grafiki = |data urodzenia = 7 czerwca 1886|miejsce urodzenia = [[Cooma]]
-    |data śmierci = 11 maja 1954|miejsce śmierci = [[Sydney]]|funkcja = Burmistrz Newtown|partia =
-    |od = 1938|do = 1940|poprzednik = Isidore Ryan|następca = Raymond Beaufils|commons = |quote =}}""".replace("    ", "").replace("\n", "")
+    infobox_text = """{{Polityk infobox|polityk = Lilian Fowler
+    |grafika = Lilian Fowler from Argus.jpg|opis grafiki = 
+    |data urodzenia = 7 czerwca 1886|miejsce urodzenia = [[Cooma]]
+    |data śmierci = 11 maja 1954|miejsce śmierci = [[Sydney]]
+    |funkcja = Burmistrz Newtown|partia =|od = 1938|do = 1940|poprzednik = Isidore Ryan
+    |następca = Raymond Beaufils|commons = |quote =}}""".replace("    |", "|").replace(
+        "\n", ""
+    )
     infobox = mwparserfromhell.parse(infobox_text)
     results = Infobox.parse(infobox)
     assert results is not None

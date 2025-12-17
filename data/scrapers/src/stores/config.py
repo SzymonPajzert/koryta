@@ -17,12 +17,6 @@ if not os.path.exists(VERSIONED_DIR):
 if not os.path.exists(DOWNLOADED_DIR):
     os.makedirs(DOWNLOADED_DIR)
 
-HINTS = {
-    "versioned/people_wiki.jsonl": "poetry run scrape_wiki",
-    "versioned/people_krs.jsonl": "poetry run scrape_krs  # requires access to Google bucket koryta-pl-crawled",
-    "downloaded/": "go to https://dane.gov.pl/pl/dataset/1681,nazwiska-osob-zyjacych-wystepujace-w-rejestrze-pesel/resource/65049/table and download manually",
-}
-
 
 class Accessor:
     path: str
@@ -39,10 +33,6 @@ class Accessor:
             return p
         else:
             print(f"{p} is missing.")
-            if p in HINTS:
-                print(HINTS[p])
-            else:
-                print("No hint found for this filename, add it in the config.py")
             sys.exit(1)
 
     def exists(self, filename):
