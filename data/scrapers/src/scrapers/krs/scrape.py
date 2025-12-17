@@ -83,7 +83,15 @@ def scrape_rejestrio(ctx: Context):
     # pprint(parent_count.most_common(30))
     urls = list(
         save_org_connections(
-            to_scrape, map(KRS, data.CompaniesHardcoded().from_source("NAME_MISSING"))
+            to_scrape,
+            map(
+                KRS,
+                {
+                    k
+                    for k, krs in data.CompaniesHardcoded.all_companies_krs.items()
+                    if "NAME_MISSING" in krs.sources
+                },
+            ),
         )
     )
     print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")

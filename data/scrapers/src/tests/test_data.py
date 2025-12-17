@@ -16,23 +16,26 @@ def test_public_companies_list(ctx):
     data: CompaniesHardcoded = Pipeline.create(CompaniesHardcoded)
     data.read_or_process(ctx)
 
-    PUBLIC_COMPANIES_KRS = data.from_source("PUBLIC_COMPANIES_KRS")
+    def from_source(source: str):
+        return {k for k, krs in data.all_companies_krs.items() if source in krs.sources}
+
+    PUBLIC_COMPANIES_KRS = from_source("PUBLIC_COMPANIES_KRS")
 
     manual = {
-        *data.from_source("MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs"),
-        *data.from_source("MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO"),
-        *data.from_source("MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs"),
-        *data.from_source("MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO"),
-        *data.from_source("SPOLKI_SKARBU_PANSTWA"),
-        *data.from_source("AMW"),
-        *data.from_source("UZDROWISKA"),
-        *data.from_source("WARSZAWA"),
-        *data.from_source("MALOPOLSKIE"),
-        *data.from_source("LUBELSKIE"),
-        *data.from_source("LODZKIE"),
-        *data.from_source("WROCLAW"),
-        *data.from_source("KONIN"),
-        *data.from_source("LESZNO"),
+        *from_source("MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs"),
+        *from_source("MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO"),
+        *from_source("MINISTERSTWO_AKTYWOW_PANSTWOWYCH_KRSs"),
+        *from_source("MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO"),
+        *from_source("SPOLKI_SKARBU_PANSTWA"),
+        *from_source("AMW"),
+        *from_source("UZDROWISKA"),
+        *from_source("WARSZAWA"),
+        *from_source("MALOPOLSKIE"),
+        *from_source("LUBELSKIE"),
+        *from_source("LODZKIE"),
+        *from_source("WROCLAW"),
+        *from_source("KONIN"),
+        *from_source("LESZNO"),
     }
 
     missing = manual - PUBLIC_COMPANIES_KRS

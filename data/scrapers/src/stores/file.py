@@ -53,6 +53,9 @@ class FromIterable(File):
     def read_zip(self, inner_path: str | None = None, idx: int | None = None):
         raise NotImplementedError()
 
+    def list_zip_contents(self) -> list[str]:
+        raise NotImplementedError()
+
     def read_file(self):
         raise NotImplementedError()
 
@@ -101,6 +104,10 @@ class FromBytesIO(File):
     def read_zip(self, inner_path: str | None = None, idx: int | None = None):
         raise NotImplementedError()
 
+    def list_zip_contents(self) -> list[str]:
+        with ZipFile(io.BytesIO(self.raw_bytes), "r") as zf:
+            return zf.namelist()
+
     def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
         return read_xls(self.raw_bytes, header_rows, skip_rows)
 
@@ -144,6 +151,10 @@ class FromPath(FromBytesIO):
             return FromBytesIO(raw_bytes)
         else:
             raise NotImplementedError()
+
+    def list_zip_contents(self) -> list[str]:
+        with ZipFile(self.path, "r") as zf:
+            return zf.namelist()
 
     def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
         return read_xls(self.path, header_rows, skip_rows)

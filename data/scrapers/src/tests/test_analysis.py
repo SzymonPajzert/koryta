@@ -7,6 +7,7 @@ import regex as re
 from analysis.people import PeopleEnriched
 from entities.company import ManualKRS as KRS
 from main import Pipeline, _setup_context
+from scrapers.stores import CloudStorage
 from stores.config import tests
 
 
@@ -331,7 +332,8 @@ scraped_krs = []
 def find_krs(ctx):
     global scraped_krs
     scraped_krs = set(
-        KRS.from_blob_name(blob.url) for blob in ctx.io.list_blobs("rejestr.io")
+        KRS.from_blob_name(blob.url)
+        for blob in ctx.io.list_blobs(CloudStorage(prefix="hostname=rejestr.io"))
     )
 
 

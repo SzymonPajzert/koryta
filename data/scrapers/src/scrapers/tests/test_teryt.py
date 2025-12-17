@@ -41,6 +41,7 @@ class TestTeryt(unittest.TestCase):
         df = pd.read_csv(StringIO(FAKE_TERYT_CSV), sep=";", dtype=str)
 
         mock_zip_content.read_zip.return_value.read_dataframe.return_value = df
+        mock_zip_content.list_zip_contents.return_value = ["TERC_Urzedowy_2025-11-15.csv"]
 
         # When read_data is called with the teryt_data source, return our mock file
         mock_io.read_data = MagicMock(return_value=mock_zip_content)

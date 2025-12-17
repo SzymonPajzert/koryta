@@ -26,13 +26,7 @@ class CompaniesHardcoded(Pipeline):
             print(row.loc["Województwo siedziby"])
             raise
 
-    def from_source(self, source: str) -> set[str]:
-        """
-        Extracts a previously variable by its name.
 
-        TODO: Remove this function longterm
-        """
-        return {k for k, krs in self.all_companies_krs.items() if source in krs.sources}
 
     def register_partials(
         self,

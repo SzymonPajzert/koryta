@@ -71,14 +71,25 @@ def test_pipeline_output(filename, column):
     should_exist = not column.startswith("-")
     column = column.removeprefix("-")
 
-    with open(path, "r") as f:
-        # Check first 10 lines
-        for i, line in enumerate(f):
-            if i > 10:
-                break
-            record = json.loads(line)
+    if filename.endswith(".csv"):
+        import csv
 
-            should = "should not" if not should_exist else "should"
-            assert (column in record) == should_exist, (
-                f"Record {i} {should} have '{column}': {record}"
-            )
+        with open(path, "r") as f:
+            reader = csv.DictReader(f)
+            for i, record in enumerate(reader):
+                if i > 10:
+                    break
+                assert (column in record) == should_exist, (
+                    f"Record {i} {'should not' if not should_exist else 'should'} have '{column}': {record}"
+                )
+    else:
+        with open(path, "r") as f:
+            # Check first 10 lines
+            for i, line in enumerate(f):
+                if i > 10:
+                    break
+                record = json.loads(line)
+
+                assert (column in record) == should_exist, (
+                    f"Record {i} {'should not' if not should_exist else 'should'} have '{column}': {record}"
+                )

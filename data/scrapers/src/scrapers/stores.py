@@ -82,6 +82,11 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    def list_zip_contents(self) -> list[str]:
+        """Lists contents if the file is a zip archive."""
+        raise NotImplementedError()
+
+    @abstractmethod
     def read_file(self) -> typing.BinaryIO | typing.TextIO:
         """Returns a file-like object for reading."""
         raise NotImplementedError()

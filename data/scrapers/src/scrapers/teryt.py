@@ -37,9 +37,15 @@ class Teryt(Pipeline):
         print("Creating Teryt object")
         teryt_file = ctx.io.read_data(teryt_data)
 
-        # TODO: The date is hardcoded now; find a way to get it updated.
-        # The disposition dead code in download_teryt seems like a good way.
-        data = teryt_file.read_zip("TERC_Urzedowy_2025-11-15.csv").read_dataframe(
+        # Find the correct file in the zip
+        files = teryt_file.list_zip_contents()
+        terc_file = next(
+            (f for f in files if "TERC_Urzedowy" in f and f.endswith(".csv")), None
+        )
+        if terc_file is None:
+            raise ValueError(f"Could not find TERC file in {files}")
+
+        data = teryt_file.read_zip(terc_file).read_dataframe(
             "csv", csv_sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str}
         )
 
