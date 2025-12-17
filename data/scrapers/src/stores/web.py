@@ -27,9 +27,14 @@ class WebImpl(Web):
                 # But read_data returns a File, we need content.
                 # read_content returns str or bytes.
                 # parser.parse expects list of lines.
-                content = ctx.io.read_data(DownloadableFile(robots_url)).read_content()
-                if isinstance(content, bytes):
-                    content = content.decode("utf-8")
+                content_bytes = ctx.io.read_data(
+                    DownloadableFile(robots_url)
+                ).read_content()
+                if isinstance(content_bytes, bytes):
+                    content = content_bytes.decode("utf-8")
+                else:
+                    assert isinstance(content_bytes, str)
+                    content = content_bytes
 
                 parser.parse(content.splitlines())
                 robot_parsers[parsed_url.domain] = parser
