@@ -21,7 +21,7 @@ class Teryt(Pipeline):
     filename = None  # Never cache
 
     """
-    A handler for TERYT (The National Official Register of the Territorial Division of the Country) data.
+    A handler for TERYT territorial codes data.
 
     This class downloads the official TERYT CSV file, processes it, and provides
     dictionaries for mapping between names and codes of administrative divisions.
@@ -39,13 +39,19 @@ class Teryt(Pipeline):
 
         # TODO: The date is hardcoded now; find a way to get it updated.
         # The disposition dead code in download_teryt seems like a good way.
-        data = teryt_file.read_zip("TERC_Urzedowy_2025-11-15.csv").read_dataframe("csv", csv_sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str})
+        data = teryt_file.read_zip("TERC_Urzedowy_2025-11-15.csv").read_dataframe(
+            "csv", csv_sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str}
+        )
 
         wojewodztwa_df = data[data["POW"].isna() & data["GMI"].isna()]
-        self.wojewodztwa = {str(row.WOJ) + "00": row.NAZWA for row in wojewodztwa_df.itertuples()}
+        self.wojewodztwa = {
+            str(row.WOJ) + "00": row.NAZWA for row in wojewodztwa_df.itertuples()
+        }
 
         powiaty_df = data[~data["POW"].isna() & data["GMI"].isna()]
-        self.powiaty = {str(row.WOJ) + str(row.POW): row.NAZWA for row in powiaty_df.itertuples()}
+        self.powiaty = {
+            str(row.WOJ) + str(row.POW): row.NAZWA for row in powiaty_df.itertuples()
+        }
 
         self.TERYT = {
             **self.wojewodztwa,
@@ -54,14 +60,22 @@ class Teryt(Pipeline):
 
         print("Setting cities_to_teryt")
         # TODO: Extend this as well.
-        self.cities_to_teryt = {city: teryt for teryt, city in self.TERYT.items() if isinstance(city, str) and city and city[0].isupper()}
+        self.cities_to_teryt = {
+            city: teryt
+            for teryt, city in self.TERYT.items()
+            if isinstance(city, str) and city and city[0].isupper()
+        }
         # Manual additions for specific cases
         self.cities_to_teryt["Sieradz"] = "1014"
         self.cities_to_teryt["Chrzanów"] = "1203"
         self.cities_to_teryt["Piła"] = "3019"
         self.cities_to_teryt["Ciechanów"] = "1402"
 
-        self.voj_lower_to_teryt = {str(voj).lower(): teryt[:2] for teryt, voj in self.TERYT.items() if teryt.endswith("00")}
+        self.voj_lower_to_teryt = {
+            str(voj).lower(): teryt[:2]
+            for teryt, voj in self.TERYT.items()
+            if teryt.endswith("00")
+        }
 
         return pd.DataFrame([{"col": "empty"}])
 

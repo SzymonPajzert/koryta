@@ -206,9 +206,16 @@ def no_diff_sets(a, b):
 
 def test_second_names_match(df_all):
     # Split each row and each _name column into single words.
-    # Make sure that each lowercase word matches the words in other columns, e.g. second names match
+    # Make sure that each lowercase word matches the words
+    # in other columns, e.g. second names match
 
     failures = []
+
+    def no_common_words(col_name1, col_name2, row):
+        failures.append(
+            f"""No common words between {col_name1}: '{row[col_name1]}'
+            and {col_name2}: '{row[col_name2]}'""".replace("\n", " ")
+        )
 
     for _, row in df_all.iterrows():
         try:
@@ -226,19 +233,23 @@ def test_second_names_match(df_all):
             # Check if there's at least one common word between krs_name and pkw_name
             if krs_words and pkw_words:
                 if not (len(krs_words.intersection(pkw_words)) > 0):
-                    failures.append(f"No common words between KRS: '{row['krs_name']}' and PKW: '{row['pkw_name']}'")
+                    no_common_words("krs_name", "pkw_name", row)
 
             # If wiki_name exists, check for common words with krs_name or pkw_name
             if wiki_words:
                 if krs_words and pkw_words:
-                    if not (len(wiki_words.intersection(krs_words)) > 0 or len(wiki_words.intersection(pkw_words)) > 0):
-                        failures.append(f"No common words between Wiki: '{row['wiki_name']}' and KRS/PKW: '{row['krs_name']}', '{row['pkw_name']}'")
+                    if not (
+                        len(wiki_words.intersection(krs_words)) > 0
+                        or len(wiki_words.intersection(pkw_words)) > 0
+                    ):
+                        no_common_words("krs_name", "wiki_name", row)
+                        no_common_words("krs_name", "pkw_name", row)
                 elif krs_words:
                     if not (len(wiki_words.intersection(krs_words)) > 0):
-                        failures.append(f"No common words between Wiki: '{row['wiki_name']}' and KRS: '{row['krs_name']}'")
+                        no_common_words("krs_name", "wiki_name", row)
                 elif pkw_words:
                     if not (len(wiki_words.intersection(pkw_words)) > 0):
-                        failures.append(f"No common words between Wiki: '{row['wiki_name']}' and PKW: '{row['pkw_name']}'")
+                        no_common_words("krs_name", "pkw_name", row)
         except Exception as e:
             failures.append(f"Exception for {row['krs_name']}: {e}")
 
@@ -319,7 +330,9 @@ scraped_krs = []
 
 def find_krs(ctx):
     global scraped_krs
-    scraped_krs = set(KRS.from_blob_name(blob.url) for blob in ctx.io.list_blobs("rejestr.io"))
+    scraped_krs = set(
+        KRS.from_blob_name(blob.url) for blob in ctx.io.list_blobs("rejestr.io")
+    )
 
 
 @pytest.mark.parametrize(
@@ -345,7 +358,9 @@ def test_krs_present(krs, ctx):
 def test_andrzej_jan_sikora_duplicated(df_all):
     # Filter for Andrzej Jan Sikora - we expect two people
     sikora_records = df_all[df_all["krs_name"] == "Andrzej Jan Sikora"]
-    assert len(sikora_records) == 2, f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
+    assert len(sikora_records) == 2, (
+        f"Expected 2 records for Andrzej Jan Sikora, found {len(sikora_records)}"
+    )
 
     birth_years = sorted(sikora_records["birth_year"].dropna().astype(int).tolist())
 
@@ -358,12 +373,16 @@ def test_andrzej_jan_sikora_duplicated(df_all):
 def test_adam_smoter_deduplication(df_all):
     # Adam Smoter should be found only once born in 1947
     smoter_records = df_all[df_all["krs_name"] == "Adam Smoter"]
-    assert len(smoter_records) == 1, f"Expected 1 record for Adam Smoter, found {len(smoter_records)}"
+    assert len(smoter_records) == 1, (
+        f"Expected 1 record for Adam Smoter, found {len(smoter_records)}"
+    )
     assert smoter_records.iloc[0]["birth_year"] == 1947
 
 
 def test_teresa_zieba_deduplication(df_all):
     zieba_records = df_all[df_all["krs_name"] == "Teresa Zięba"]
-    assert len(zieba_records) == 1, f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
+    assert len(zieba_records) == 1, (
+        f"Expected 1 record for Teresa Zięba, found {len(zieba_records)}"
+    )
     # Check birth year is 1959 (or 1958, but we expect one)
     assert zieba_records.iloc[0]["birth_year"] in [1958, 1959]

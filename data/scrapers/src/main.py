@@ -15,7 +15,17 @@ from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
-from scrapers.stores import IO, CloudStorage, Context, DataRef, DownloadableFile, File, LocalFile, Pipeline, ProcessPolicy
+from scrapers.stores import (
+    IO,
+    CloudStorage,
+    Context,
+    DataRef,
+    DownloadableFile,
+    File,
+    LocalFile,
+    Pipeline,
+    ProcessPolicy,
+)
 from scrapers.wiki.process_articles import ProcessWiki
 from stores import file
 from stores.config import PROJECT_ROOT
@@ -74,13 +84,16 @@ class Conductor(IO):
     def output_entity(self, entity, sort_by=[]):
         self.dumper.insert_into(entity, sort_by)
 
-    def write_file(self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]):
-        # We assume filename is relative to versioned dir if it doesn't have absolute path
+    def write_file(
+        self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
+    ):
+        # We assume filename is relative to versioned dir
+        # If it doesn't have absolute path
         # The filename passed from Pipeline is "something.jsonl"
         if hasattr(fs, "filename"):
-            path = os.path.join(PROJECT_ROOT, "versioned", fs.filename) # type: ignore
+            path = os.path.join(PROJECT_ROOT, "versioned", fs.filename)  # type: ignore
         else:
-             raise ValueError(f"Cannot write to {fs} - missing filename")
+            raise ValueError(f"Cannot write to {fs} - missing filename")
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         if isinstance(content, str):
@@ -148,7 +161,12 @@ PIPELINES = [
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--refresh", help="Pipeline name to refresh, : to exclude or 'all'", action="append", default=[])
+    parser.add_argument(
+        "--refresh",
+        help="Pipeline name to refresh, : to exclude or 'all'",
+        action="append",
+        default=[],
+    )
     parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
     args, _ = parser.parse_known_args()  # TODO handle remaining flags
 

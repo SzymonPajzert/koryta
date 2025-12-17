@@ -90,7 +90,9 @@ def test_find_interesting_entities_e2e(ctx):
     model = Pipeline.create(CompaniesMerged)
     model.hardcoded_companies = MagicMock()
     model.hardcoded_companies.filename = "hardcoded_companies"
-    model.hardcoded_companies.process = MagicMock(return_value=pd.DataFrame(columns=["id"]))
+    model.hardcoded_companies.process = MagicMock(
+        return_value=pd.DataFrame(columns=["id"])
+    )
     model.scraped_companies = MagicMock()
     model.scraped_companies.filename = "company_krs"  # Mock filename for iterate
     model.wiki_pipeline = MagicMock()
@@ -100,22 +102,17 @@ def test_find_interesting_entities_e2e(ctx):
 
     # Verify results
     # We expect:
-    # 1. Wiki Company A (merged with KRS Company A) -> Interesting (owner Skarb Państwa + content_score > 0)
-    # 2. Wiki Company B -> Interesting (political link? "Some Politician" might not be in the list, but let's check logic)
-    #    Wait, "Some Politician" is not in WIKI_POLITICAL_LINKS unless I mock that too.
-    #    But "Skarb Państwa" in owner_text should trigger it.
+    # 1. Wiki Company A (merged with KRS Company A) -> Interesting
+    #   because (owner Skarb Państwa + content_score > 0)
+    # 2. Wiki Company B -> Interesting
+    #   because (political link? "Some Politician")
 
-    # Let's check what we got
     interesting_names = {e.name for e in results}
     print(f"Found interesting entities: {interesting_names}")
 
-    # Wiki Company A should be there
     assert "Wiki Company A" in interesting_names or "KRS Company A" in interesting_names
-
-    # Boring Company shouldn't be there (unless hardcoded, but 0000999999 is not hardcoded)
     assert "Boring Company" not in interesting_names
 
-    # Check details for Wiki Company A
     entity_a = next(e for e in results if e.name in {"Wiki Company A", "KRS Company A"})
     assert entity_a.krs == "0000123456"
     reasons = [r.reason for r in entity_a.reasons]

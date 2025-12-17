@@ -12,15 +12,15 @@ class SetField:
     name: str
     processor: typing.Callable[[str, Any], str] = lambda x, _: x
     skippable: bool = False
-    
+
     def set_teryt(self, teryt: Teryt):
         self.teryt = teryt
         return self
-        
+
     def from_teryt(self, func) -> "SetField":
         self.processor = lambda x, y: func(self.teryt, x, y)
         return self
-        
+
 
 @dataclass
 class ElectionContext:
@@ -303,10 +303,18 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Rodzaj\ngminy": None,
     "Sejmik": SetField("position", const_processor("Rada sejmiku")),
     # We're skipping Siedziba, because for some of them, TERYT is set instead
-    "Siedziba \nOKW": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt_from_city),
-    "Siedziba OKW": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt_from_city),
-    "Siedziba": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt_from_city),
-    "Siedziba\nOKW": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt_from_city),
+    "Siedziba \nOKW": SetField("teryt_candidacy", skippable=True).from_teryt(
+        lookup_teryt_from_city
+    ),
+    "Siedziba OKW": SetField("teryt_candidacy", skippable=True).from_teryt(
+        lookup_teryt_from_city
+    ),
+    "Siedziba": SetField("teryt_candidacy", skippable=True).from_teryt(
+        lookup_teryt_from_city
+    ),
+    "Siedziba\nOKW": SetField("teryt_candidacy", skippable=True).from_teryt(
+        lookup_teryt_from_city
+    ),
     "Skrót nazwy komitetu": SetField("party", skippable=True),
     "Sygnatura": None,
     "Syn": None,

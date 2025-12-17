@@ -21,12 +21,16 @@ class FirestoreIO:
             print("You can also use `gcloud auth application-default login`")
             sys.exit(1)
 
-    def read_collection(self, collection: str, stream=True, filters: list[tuple[str, str, Any]] = []) -> Iterable:
+    def read_collection(
+        self, collection: str, stream=True, filters: list[tuple[str, str, Any]] = []
+    ) -> Iterable:
         print(f"Reading collection {collection} with {filters}")
 
         collection_ref = self.db_client.collection(collection)
         for field, op, value in filters:
-            collection_ref = collection_ref.where(filter=firestore.FieldFilter(field, op, value))
+            collection_ref = collection_ref.where(
+                filter=firestore.FieldFilter(field, op, value)
+            )
         if stream:
             for elt in collection_ref.stream():
                 yield elt

@@ -10,6 +10,8 @@ This document provides a categorized list of all the `TODO` comments found in th
 
 ## Split by package
 
+- **./src/analysis/utils/\_\_init\_\_.py** should be a pipline and company_names as well.
+
 ### TERYT
 
 - This should become some kind of Pipeline object, so it can be initialized and integrated nicely.

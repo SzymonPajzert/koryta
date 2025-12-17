@@ -50,7 +50,10 @@ def scrape_rejestrio(ctx: Context):
     )
     args = parser.parse_args()
 
-    already_scraped = set(KRS.from_blob_name(path.url) for path in ctx.io.list_blobs(CloudStorage("hostname=rejestr.io")))
+    already_scraped = set(
+        KRS.from_blob_name(path.url)
+        for path in ctx.io.list_blobs(CloudStorage("hostname=rejestr.io"))
+    )
 
     starters = set(KRS(krs) for krs in data.CompaniesHardcoded.all_companies_krs)
     if args.only != "":
@@ -78,7 +81,11 @@ def scrape_rejestrio(ctx: Context):
     # pprint(to_scrape_children)
     # parent_count = Counter(map(lambda x: x.parent, to_scrape_children))
     # pprint(parent_count.most_common(30))
-    urls = list(save_org_connections(to_scrape, map(KRS, data.CompaniesHardcoded().from_source("NAME_MISSING"))))
+    urls = list(
+        save_org_connections(
+            to_scrape, map(KRS, data.CompaniesHardcoded().from_source("NAME_MISSING"))
+        )
+    )
     print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
     input("Press enter to continue...")
 

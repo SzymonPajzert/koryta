@@ -74,8 +74,12 @@ class Infobox:
         self.fields = {}
         self.field_links = {}
         for param in infobox.params:
-            self.fields[param.name.strip_code().strip()] = param.value.strip_code().strip()
-            self.field_links[param.name.strip_code().strip()] = [str(link.title) for link in param.value.filter_wikilinks()]
+            self.fields[param.name.strip_code().strip()] = (
+                param.value.strip_code().strip()
+            )
+            self.field_links[param.name.strip_code().strip()] = [
+                str(link.title) for link in param.value.filter_wikilinks()
+            ]
 
         self.person_related = "imię i nazwisko" in self.fields
         self.links = [v for vs in self.field_links.values() for v in vs]
@@ -142,7 +146,9 @@ class WikiArticle:
 
     @staticmethod
     def parse_text(title, wikitext, filter_required_words=True):
-        if filter_required_words and not any(word in wikitext for word in REQUIRED_WORDS):
+        if filter_required_words and not any(
+            word in wikitext for word in REQUIRED_WORDS
+        ):
             return None
 
         parsed = mwparserfromhell.parse(wikitext)
@@ -280,7 +286,9 @@ def extract_from_article(article: WikiArticle) -> People | Company | None:
         )
     elif company:
         name = article.get_infobox(lambda i: i.fields.get("nazwa", None))
-        owner_links = article.get_infobox(lambda i: i.field_links.get("udziałowcy", None))
+        owner_links = article.get_infobox(
+            lambda i: i.field_links.get("udziałowcy", None)
+        )
         owner_text = None
         if owner_links is None:
             owner_links = []
@@ -323,9 +331,11 @@ class ProcessWiki(Pipeline):
 
     def process(self, ctx: Context):
         scrape_wiki(ctx)
-        # TODO #205 - https://github.com/SzymonPajzert/koryta/issues/205 - support multiple output entities
-        # Return People entities as the primary result of this pipeline, cached in person_wikipedia.jsonl
-        # Companies are also written to versioned/company_wikipedia via ctx.io.output_entity
+        # TODO #205 - https://github.com/SzymonPajzert/koryta/issues/205
+        # support multiple output entities
+        # Return People entities as the primary result of this pipeline,
+        # cached in person_wikipedia.jsonl
+        # Companies are written to versioned/company_wikipedia via ctx.io.output_entity
         return pd.DataFrame([asdict(p) for p in (ctx.io.get_output(People) or [])])
 
 
@@ -352,10 +362,16 @@ def scrape_wiki(ctx: Context):
                 prev = current_pos
 
                 if elem.tag.endswith("page"):
-                    title = elem.findtext("{http://www.mediawiki.org/xml/export-0.11/}title")
-                    revision = elem.find("{http://www.mediawiki.org/xml/export-0.11/}revision")
+                    title = elem.findtext(
+                        "{http://www.mediawiki.org/xml/export-0.11/}title"
+                    )
+                    revision = elem.find(
+                        "{http://www.mediawiki.org/xml/export-0.11/}revision"
+                    )
                     if title and revision:
-                        wikitext = revision.findtext("{http://www.mediawiki.org/xml/export-0.11/}text")
+                        wikitext = revision.findtext(
+                            "{http://www.mediawiki.org/xml/export-0.11/}text"
+                        )
                         if wikitext:
                             yield (title, wikitext)
                     elem.clear()
@@ -366,7 +382,9 @@ def scrape_wiki(ctx: Context):
         # We use a pool of workers to process articles in parallel
         # imap_unordered is used to keep memory usage low and process as we go
         with multiprocessing.Pool(processes=8) as pool:
-            for pair in pool.imap_unordered(process_article_worker, article_generator(), chunksize=1000):
+            for pair in pool.imap_unordered(
+                process_article_worker, article_generator(), chunksize=1000
+            ):
                 if pair:
                     entity, article = pair
                     if entity:

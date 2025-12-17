@@ -1,3 +1,6 @@
+import itertools
+
+
 def struct_pack(struct: dict[str, str]) -> str:
     return ", ".join(f"{k} := {v}" for k, v in struct.items())
 
@@ -19,7 +22,6 @@ def create_people_table(
     flatten_list: list[str] = [],
     **kwargs: dict[str, str],
 ):
-
     init_tables(con)
 
     """
@@ -48,33 +50,22 @@ def create_people_table(
         agg_select_str = ",\n" + ",\n".join(all_aggs_select_list)
 
     # For the final SELECT statement, prepare merge logic
-    kwargs_merge_list = [
-        f"list_distinct(list_concat(coalesce(non_null.{col}, []), coalesce(nulls.{col}, []))) as {col}"
-        for col in kwargs
-    ]
-    to_list_merge_list = [
-        f"list_distinct(list_concat(coalesce(non_null.{col}, []), coalesce(nulls.{col}, []))) as {col}"
-        for col in to_list
-    ]
-    flatten_list_merge_list = [
-        f"list_distinct(list_concat(coalesce(non_null.{col}, []), coalesce(nulls.{col}, []))) as {col}"
-        for col in flatten_list
+    merge_list = [
+        f"""list_distinct(list_concat(
+            coalesce(non_null.{col}, []), coalesce(nulls.{col}, []))) as {col}"""
+        for col in itertools.chain(kwargs, to_list, flatten_list)
     ]
     any_vals_merge_list = [
         f"coalesce(non_null.{col}, nulls.{col}) as {col}" for col in any_vals
     ]
 
-    all_merge_list = (
-        kwargs_merge_list
-        + to_list_merge_list
-        + flatten_list_merge_list
-        + any_vals_merge_list
-    )
+    all_merge_list = merge_list + any_vals_merge_list
 
     final_aggs_select = ""
     if all_merge_list:
         final_aggs_select = ",\n" + ",\n".join(all_merge_list)
 
+    partition_names = "PARTITION BY first_name, last_name, derived_second_name"
     con.execute(
         f"""
         CREATE OR REPLACE TABLE {tbl_name} AS
@@ -94,9 +85,9 @@ def create_people_table(
             SELECT
                 *,
                 CASE
-                    WHEN (MAX(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name) - 
-                          MIN(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name)) <= 1 THEN
-                        MAX(birth_year) OVER (PARTITION BY first_name, last_name, derived_second_name)
+                    WHEN (MAX(birth_year) OVER ({partition_names}) - 
+                          MIN(birth_year) OVER ({partition_names})) <= 1 THEN
+                        MAX(birth_year) OVER ({partition_names})
                     ELSE
                         birth_year
                 END as effective_birth_year
@@ -127,13 +118,15 @@ def create_people_table(
             coalesce(non_null.first_name, nulls.first_name) as first_name,
             coalesce(non_null.last_name, nulls.last_name) as last_name,
             non_null.derived_second_name as second_name,
-            double_metaphone(coalesce(non_null.last_name, nulls.last_name)) as metaphone,
+            double_metaphone(coalesce(
+                non_null.last_name, nulls.last_name)) as metaphone,
             coalesce(non_null.birth_year, nulls.birth_year) as birth_year
             {final_aggs_select}
         FROM non_null_second_names as non_null
         FULL OUTER JOIN null_second_names as nulls
         ON non_null.first_name = nulls.first_name
         AND non_null.last_name = nulls.last_name
-        AND (non_null.birth_year = nulls.birth_year OR (non_null.birth_year IS NULL AND nulls.birth_year IS NULL))
+        AND (non_null.birth_year = nulls.birth_year
+            OR (non_null.birth_year IS NULL AND nulls.birth_year IS NULL))
         """
     )

@@ -42,4 +42,4 @@ def test_public_companies_list(ctx):
 
     assert len(missing) <= 313, missing
 
-    # TODO divide the missing by source, so we can tell what kind of data we don't currently have
+    # TODO divide missing by source, to see what kind of data we don't currently have

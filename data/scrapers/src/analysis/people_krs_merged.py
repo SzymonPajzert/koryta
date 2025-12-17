@@ -35,7 +35,8 @@ def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
             id as rejestrio_id,
             full_name
         FROM krs_data
-        WHERE birth_date IS NOT NULL AND first_name IS NOT NULL AND last_name IS NOT NULL
+        WHERE birth_date IS NOT NULL AND first_name IS NOT NULL
+            AND last_name IS NOT NULL
         """
     )
 

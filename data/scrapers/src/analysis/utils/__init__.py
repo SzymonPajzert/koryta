@@ -4,7 +4,6 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-# TODO remove this dependence
 from scrapers.krs.companies import (
     company_names as company_names_harcoded,
 )
@@ -32,7 +31,9 @@ def read_enriched(ctx: Context, matched_all, companies_df, teryt: Teryt):
 
 def get_company_names(companies_df):
     krs_companies = companies_df.to_dict("records")
-    company_names_krs = {elt["krs"]: f"{elt['name']} w {elt['city']}" for elt in krs_companies}
+    company_names_krs = {
+        elt["krs"]: f"{elt['name']} w {elt['city']}" for elt in krs_companies
+    }
     return {
         **company_names_krs,
         **company_names_harcoded,
@@ -45,7 +46,11 @@ def extract_companies(ctx: Context, df, company_names):
         for e in es:
             krs[e["employed_krs"]] += 1
 
-    return [(krs, company_names.get(krs, krs), count) for krs, count in krs.most_common() if count > 3]
+    return [
+        (krs, company_names.get(krs, krs), count)
+        for krs, count in krs.most_common()
+        if count > 3
+    ]
 
 
 def append_nice_history(ctx: Context, df, company_names, teryt: Teryt):
@@ -69,7 +74,10 @@ def append_nice_history(ctx: Context, df, company_names, teryt: Teryt):
             employed_total += duration
 
             emp["employment_start"] = start_employed
-            text = f"Pracuje od {start_employed} do {emp['employed_end']} w {company_names.get(emp['employed_krs'], emp['employed_krs'])}"
+            company_name = company_names.get(emp["employed_krs"], emp["employed_krs"])
+            text = (
+                f"Pracuje od {start_employed} do {emp['employed_end']} w {company_name}"
+            )
             actions.append((start_employed, text))
 
         elections = []
@@ -79,7 +87,9 @@ def append_nice_history(ctx: Context, df, company_names, teryt: Teryt):
                 if party is not None:
                     parties_simplified.add(party)
 
-            start_election: date = election_date.get(el["election_year"], date(year=int(el["election_year"]), month=1, day=1))
+            start_election: date = election_date.get(
+                el["election_year"], date(year=int(el["election_year"]), month=1, day=1)
+            )
             elections.append(start_election)
             region_name = "nieznane"
             for e in el["teryt_powiat"]:
@@ -88,7 +98,12 @@ def append_nice_history(ctx: Context, df, company_names, teryt: Teryt):
                 else:
                     missing_teryt.add(e)
 
-            text = f"Kandyduje w {el['election_year']} do {el['election_type']} z list {(el['party'] or '').strip()} w {region_name}"
+            text = " ".join(
+                [
+                    f"Kandyduje w {el['election_year']} do {el['election_type']}",
+                    f"z list {(el['party'] or '').strip()} w {region_name}",
+                ]
+            )
             actions.append((start_election, text))
 
         before_work = [e for e in elections if e < first_work]

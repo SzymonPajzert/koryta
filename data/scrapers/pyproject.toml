@@ -174,7 +174,6 @@ module = [
 ignore_missing_imports = true
 
 [tool.ruff]
-line-length = 200
 target-version = "py313"
 
 [tool.ruff.lint]
@@ -242,4 +241,8 @@ forbidden_modules = [
     "fnmatch",
     "csv",
 ]
-ignore_imports = ["entities.util -> urllib", "scrapers.stores -> os", "scrapers.stores -> io"]
+ignore_imports = [
+    "entities.util -> urllib",
+    "scrapers.stores -> os",
+    "scrapers.stores -> io",
+]

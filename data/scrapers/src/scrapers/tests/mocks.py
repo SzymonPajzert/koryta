@@ -10,7 +10,16 @@ from unittest.mock import MagicMock
 import duckdb
 import pandas as pd
 
-from scrapers.stores import IO, CloudStorage, Context, DataRef, File, Formats, LocalFile, RejestrIO
+from scrapers.stores import (
+    IO,
+    CloudStorage,
+    Context,
+    DataRef,
+    File,
+    Formats,
+    LocalFile,
+    RejestrIO,
+)
 from stores.file import FromPath
 
 nested_dict: TypeAlias = dict[str, Union[str, bytes, "nested_dict"]]
@@ -20,7 +29,11 @@ nested_dict: TypeAlias = dict[str, Union[str, bytes, "nested_dict"]]
 class MockFile(File):
     """A mock implementation of the File interface for testing."""
 
-    def __init__(self, content: str | bytes | dict[str, str | bytes] | nested_dict = "", mtime: float = 0.0):
+    def __init__(
+        self,
+        content: str | bytes | dict[str, str | bytes] | nested_dict = "",
+        mtime: float = 0.0,
+    ):
         self._inner_files: nested_dict = {}
         self.mtime = mtime
         if isinstance(content, dict):
@@ -90,12 +103,14 @@ class MockIO(IO):
         key = str(fs)
         if key in self.files:
             return self.files[key]
-        
+
         # Fallback: try using the filename if available
         if hasattr(fs, "filename") and fs.filename in self.files:
             return self.files[fs.filename]
 
-        raise FileNotFoundError(f"No mock data for {key}. Available: {list(self.files.keys())}")
+        raise FileNotFoundError(
+            f"No mock data for {key}. Available: {list(self.files.keys())}"
+        )
 
     def list_data(self, path: DataRef) -> list[str]:
         key = str(path)
@@ -112,12 +127,8 @@ class MockIO(IO):
 
     def write_dataframe(self, df, filename: str, format: Formats):
         self.output.append((filename, df))
-        # Update/Create file entry so it "exists" for subsequent reads
-        # For simplicity, just empty content or simple str, but we need to support read_dataframe...
-        # So maybe just store the DF? But MockFile expects bytes/str.
-        # Let's just create a MockFile with jsonl repr?
         content = df.to_json(orient="records", lines=True)
-        self.files[filename] = MockFile(content, mtime=9999999999.0) # Newest
+        self.files[filename] = MockFile(content, mtime=9999999999.0)  # Newest
 
     def upload(self, source, data, content_type):
         self.output.append((source, data, content_type))
@@ -140,7 +151,9 @@ class MockIO(IO):
     def get_output(self, entity_type: type) -> list[typing.Any] | None:
         return [e for e in self.output if isinstance(e, entity_type)]
 
-    def write_file(self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]):
+    def write_file(
+        self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
+    ):
         filename = getattr(fs, "filename", "unknown")
         if isinstance(content, str):
             self.files[filename] = MockFile(content)
@@ -148,11 +161,8 @@ class MockIO(IO):
             f = BytesIO()
             # The callable expects a BufferedWriter, but BytesIO is BinaryIO.
             # In many cases it might work if the callable just does .write(bytes).
-            # If it expects text wrapper, it's more complex. 
-            # Given write_dataframe in stores.py uses to_json(f), which needs text or binary depending...
             content(f)  # type: ignore
             self.files[filename] = MockFile(f.getvalue())
-
 
 
 class DictMockIO(IO):
@@ -184,7 +194,7 @@ class DictMockIO(IO):
 
     def list_blobs(self, ref: CloudStorage):
         return []
-    
+
     def get_mtime(self, fs: DataRef) -> float | None:
         if isinstance(fs, LocalFile):
             if fs.filename in self.files:
@@ -193,16 +203,17 @@ class DictMockIO(IO):
                     return os.path.getmtime(p)
         return None
 
-    def write_file(self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]):
-        # For DictMockIO we probably just want to store it in files if possible, 
+    def write_file(
+        self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
+    ):
+        # For DictMockIO we probably just want to store it in files if possible,
         # or maybe we don't support it fully since it seems to be read-only mostly?
         # But for completeness let's store.
         if isinstance(content, str):
             # DictMockIO files are paths to strings usually or nested dicts?
             # looking at setup_test_context, it handles dicts.
-            pass # TODO: DictMockIO structure is a bit complex (path -> content), maybe just pass for now or raise
+            pass
         raise NotImplementedError("write_file not implemented for DictMockIO yet")
-
 
 
 class MockRejestrIO(RejestrIO):

@@ -64,9 +64,9 @@ def test_pkw_merging_donald_tusk(con):
 
     # Check if 1957s merged
     donalds_1957 = donalds[donalds["birth_year"] == 1957]
-    assert (
-        len(donalds_1957) == 1
-    ), f"Expected 1 Donald Tusk 1957, got {len(donalds_1957)}"
+    assert len(donalds_1957) == 1, (
+        f"Expected 1 Donald Tusk 1957, got {len(donalds_1957)}"
+    )
 
     row = donalds_1957.iloc[0]
     assert row["second_name"] == "franciszek"
@@ -85,9 +85,12 @@ def test_teresa_zieba_merging(con):
         """
         CREATE OR REPLACE TABLE people_pkw_merged_raw AS
         SELECT * FROM (VALUES
-            ('teresa', 'zięba', 'teresa', 'zięba', 1958, 'ZIĘBA Teresa', 'teresa', 'zięba'),
-            ('teresa', 'zięba', 'teresa', 'zięba', 1959, 'ZIĘBA Teresa', 'teresa', 'zięba')
-        ) AS t(first_name, last_name, full_name, second_name, birth_year, source_name, base_first_name, base_last_name)
+            ('teresa', 'zięba', 'teresa', 'zięba',
+                1958, 'ZIĘBA Teresa', 'teresa', 'zięba'),
+            ('teresa', 'zięba', 'teresa', 'zięba',
+                1959, 'ZIĘBA Teresa', 'teresa', 'zięba')
+        ) AS t(first_name, last_name, full_name, second_name,
+            birth_year, source_name, base_first_name, base_last_name)
         """
     )
 

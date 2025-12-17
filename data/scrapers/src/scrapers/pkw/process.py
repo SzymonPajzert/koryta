@@ -111,7 +111,11 @@ def process_csv(
                     # The previous is skippable, so replace with the new one
                     replacements[processor.name] = (col, processor.skippable)
                 else:
-                    raise ValueError(f"Duplicate column name: {col} and {replacements[processor.name]} map to {processor.name} during {config}")
+                    raise ValueError(
+                        f"Duplicate column name: {col} and \
+                            {replacements[processor.name]} map to \
+                                {processor.name} during {config}"
+                    )
 
             continue
 
@@ -126,7 +130,9 @@ def process_csv(
             p = csv_headers[k]
             if p is None:
                 continue
-            mapped[p.name] = p.processor(v, ElectionContext(config.year, config.election_type))
+            mapped[p.name] = p.processor(
+                v, ElectionContext(config.year, config.election_type)
+            )
 
         try:
             yield extract_data(

@@ -2,7 +2,12 @@ from datetime import datetime
 
 import pandas as pd
 
-from analysis.utils import EXPECTED_SCORE, OLD_EMPLOYMENT_END, RECENT_EMPLOYMENT_START, filter_local_good
+from analysis.utils import (
+    EXPECTED_SCORE,
+    OLD_EMPLOYMENT_END,
+    RECENT_EMPLOYMENT_START,
+    filter_local_good,
+)
 
 
 def test_filter_local_good_handles_timestamps():
@@ -10,8 +15,15 @@ def test_filter_local_good_handles_timestamps():
     old_ts = pd.Timestamp("2019-01-01").value // 10**6
 
     # Make sure it won't change in the meantime
-    assert recent_ts > datetime.combine(RECENT_EMPLOYMENT_START, datetime.min.time()).timestamp() * 1000
-    assert old_ts < datetime.combine(OLD_EMPLOYMENT_END, datetime.min.time()).timestamp() * 1000
+    assert (
+        recent_ts
+        > datetime.combine(RECENT_EMPLOYMENT_START, datetime.min.time()).timestamp()
+        * 1000
+    )
+    assert (
+        old_ts
+        < datetime.combine(OLD_EMPLOYMENT_END, datetime.min.time()).timestamp() * 1000
+    )
 
     # One entry that should be kept (recent enough, score high enough, not too old)
     # Another that fails one criteria.

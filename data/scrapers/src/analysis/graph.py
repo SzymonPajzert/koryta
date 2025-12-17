@@ -42,26 +42,30 @@ def calculate_people_parties(ctx: Context):
     return calculate_ppr_scores(df, committes_to_parties)
 
 
-def calculate_ppr_scores(df_people_subgroups, df_subgroups_groups, alpha=0.85):
+def calculate_ppr_scores(
+    df_people_subgroups: pd.DataFrame,
+    df_subgroups_groups: pd.DataFrame,
+    alpha: float = 0.85,
+):
     """
     Calculates the probability score for each person belonging to each group
     using Personalized PageRank.
 
     Args:
-        df_people_subgroups (pd.DataFrame): DataFrame with columns ['person_id', 'subgroup_id']
-        df_subgroups_groups (pd.DataFrame): DataFrame with columns ['subgroup_id', 'group_id']
-        alpha (float): The damping parameter for PageRank (default is 0.85).
+        df_people_subgroups: DataFrame with columns ['person_id', 'subgroup_id']
+        df_subgroups_groups: DataFrame with columns ['subgroup_id', 'group_id']
+        alpha: The damping parameter for PageRank (default is 0.85).
 
     Returns:
-        pd.DataFrame: A DataFrame where the index is 'person_id', columns are 'group_id',
-                      and values are the 0-to-1 normalized scores.
+        pd.DataFrame: A DataFrame where the index is 'person_id', columns
+                      are 'group_id', and values are the 0-to-1 normalized scores.
     """
 
     print("Building the graph...")
     # 1. Create a directed graph
-    G = nx.DiGraph()
+    G: nx.DiGraph = nx.DiGraph()
 
-    # We must add prefixes to node IDs to prevent collisions (e.g., person '1' vs. group '1')
+    # We must add prefixes to node IDs to prevent collisions
     def p_node(pid):
         return f"p_{pid}"
 
@@ -97,7 +101,7 @@ def calculate_ppr_scores(df_people_subgroups, df_subgroups_groups, alpha=0.85):
     all_scores = {}
 
     for i, group_node in enumerate(group_nodes):
-        print(f"Calculating PPR for group {i+1}/{len(group_nodes)} ({group_node})...")
+        print(f"Calculating PPR for group {i + 1}/{len(group_nodes)} ({group_node})...")
 
         # Create the personalization vector
         # This vector tells PageRank to "teleport" back to our target group
@@ -121,7 +125,7 @@ def calculate_ppr_scores(df_people_subgroups, df_subgroups_groups, alpha=0.85):
 
     # Create the (Person x Group) score matrix
     df_scores = pd.DataFrame(all_scores)
-    
+
     # Zero out small scores (noise from PageRank on disconnected components)
     df_scores[df_scores < 1e-5] = 0
 
