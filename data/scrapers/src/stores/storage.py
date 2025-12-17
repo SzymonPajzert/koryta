@@ -17,23 +17,31 @@ class Client:
         self.now = datetime.now(warsaw_tz)
         self.storage_client = storage.Client()
 
-    def download_from_gcs(self, blob_name: str, filename: str):
+    def download_from_gcs(self, blob_name: str, filename: str, binary: bool):
         """Downloads a blob from GCS as a string."""
         bucket = self.storage_client.bucket(BUCKET)
         blob = bucket.blob(blob_name)
         try:
-            text = blob.download_as_text()
-            open(filename, "w").write(text)
+            if not binary:
+                # TODO try removing it and just using download_to_filename
+                text = blob.download_as_text()
+                open(filename, "w").write(text)
+            else:
+                blob.download_to_filename(filename)
+            return filename
         except Exception as e:
             print(f"Failed to download gs://{BUCKET}/{blob_name}: {e}")
             raise
 
-    def cached_storage(self, blob_name: str) -> DownloadableFile:
+    def cached_storage(self, blob_name: str, binary: bool) -> DownloadableFile:
         filename = blob_name.replace("/", ".")
         return DownloadableFile(
             f"gs://{BUCKET}/{blob_name}",
             filename,
-            download_lambda=lambda path: self.download_from_gcs(blob_name, path),
+            download_lambda=lambda path: self.download_from_gcs(
+                blob_name, path, binary
+            ),
+            binary=binary,
         )
 
     def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
@@ -71,13 +79,13 @@ class Client:
         print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
         blobs = bucket.list_blobs(prefix=prefix, match_glob=glob)
         for blob in blobs:
-            yield self.cached_storage(blob.name)
+            yield self.cached_storage(blob.name, ref.binary)
 
     def iterate_blobs(self, io: IO, ref: CloudStorage):
         """List blobs for a given hostname and yield their path and JSON data."""
         blobs = self.list_blobs(ref)
         for blob in tqdm(blobs):
-            content = io.read_data(blob).read_content()
+            content = io.read_data(blob).read_content(ref.binary)
             if not content:
                 print(f"  [ERROR] Could not download {blob}")
                 continue

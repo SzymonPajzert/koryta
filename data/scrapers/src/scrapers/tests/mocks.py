@@ -15,6 +15,7 @@ from scrapers.stores import (
     CloudStorage,
     Context,
     DataRef,
+    DownloadableFile,
     File,
     Formats,
     LocalFile,
@@ -50,7 +51,7 @@ class MockFile(File):
     def read_iterable(self) -> typing.Iterable:
         return StringIO(self._content_str)
 
-    def read_content(self) -> str | bytes:
+    def read_content(self, bytes=False) -> str | bytes:
         return self._content_bytes
 
     def read_jsonl(self):
@@ -134,7 +135,8 @@ class MockIO(IO):
         self.output.append((source, data, content_type))
 
     def list_blobs(self, ref: CloudStorage):
-        return []
+        return
+        yield DownloadableFile("")
 
     def get_mtime(self, fs: DataRef) -> float | None:
         key = str(fs)
@@ -193,7 +195,8 @@ class DictMockIO(IO):
         self.output.append((source, data, content_type))
 
     def list_blobs(self, ref: CloudStorage):
-        return []
+        return
+        yield DownloadableFile("")
 
     def get_mtime(self, fs: DataRef) -> float | None:
         if isinstance(fs, LocalFile):
