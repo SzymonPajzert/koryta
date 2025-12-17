@@ -9,20 +9,112 @@ It defines two main pipelines:
   within them by processing 'edges' data from Firestore.
 """
 
+import shutil
+import tempfile
 import typing
-from collections import Counter
+from pathlib import Path
 
+from leveldb_export import parse_leveldb_documents
 from tqdm import tqdm
 
-from entities.article import Article
 from entities.person import Koryta as Person
-from entities.util import NormalizedParse
-from scrapers.stores import Context, DataRef, Pipeline
+from scrapers.stores import CloudStorage, Context, Pipeline
+
+KORYTA_DUMP = CloudStorage(prefix="hostname=koryta.pl", max_namespaces=["date"])
 
 
-class FirestoreCollection(DataRef):
-    def __init__(self, *args, **kwargs):
-        pass
+class KorytaDocuments:
+    def process(self, ctx: Context) -> tuple[str, str]:
+        """
+        Downloads the LevelDB files for nodes and edges to a temporary directory.
+        Returns the paths to the 'nodes' and 'edges' LevelDB directories.
+        """
+
+        # We need to find the specific blobs to download.
+        # ctx.io.list_blobs will return generators of DownloadableFile.
+        # We need to preserve the directory structure relative to the common root for LevelDB to work.
+
+        blobs = list(ctx.io.list_blobs(KORYTA_DUMP))
+
+        if not blobs:
+            raise FileNotFoundError(f"No blobs found for {KORYTA_DUMP}")
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="koryta_leveldb_"))
+        print(f"Downloading LevelDB to {temp_dir}...")
+
+        nodes_path = temp_dir / "nodes"
+        edges_path = temp_dir / "edges"
+        nodes_path.mkdir(parents=True, exist_ok=True)
+        edges_path.mkdir(parents=True, exist_ok=True)
+
+        for blob in tqdm(blobs):
+            # Inspect the URL to determine if it belongs to nodes or edges
+            if "/kind_nodes/" in blob.url:
+                target_dir = nodes_path
+                file_name = blob.url.split("/kind_nodes/")[-1]
+            elif "/kind_edges/" in blob.url:
+                target_dir = edges_path
+                file_name = blob.url.split("/kind_edges/")[-1]
+            else:
+                continue
+
+            target_file = target_dir / file_name
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Download file content to target location
+            f = ctx.io.read_data(blob)
+            with open(target_file, "wb") as out_f:
+                if hasattr(f, "path"):
+                    with open(f.path, "rb") as in_f:
+                        shutil.copyfileobj(in_f, out_f)
+                else:
+                    out_f.write(f.read_content())
+
+        return str(nodes_path), str(edges_path)
+
+
+class KorytaPeople(Pipeline):
+    filename = "person_koryta"
+    koryta_docs: KorytaDocuments
+
+    def process(self, ctx: Context):
+        """
+        Pipeline to process and output `Person` entities.
+        """
+        print("Downloading raw LevelDB data...")
+        downloader = KorytaDocuments()
+        nodes_path, _ = downloader.process(ctx)
+
+        print(f"Processing people from LevelDB files at {nodes_path}...")
+
+        files = list(Path(nodes_path).rglob("*"))
+        for file_path in tqdm(files):
+            if not file_path.is_file():
+                continue
+
+            try:
+                for data in parse_leveldb_documents(str(file_path)):
+                    key_info = data.get("_key", {})
+                    # Try to get ID from standard fields or _key metadata
+                    person_id = str(data.get("id", "") or key_info.get("name", ""))
+
+                    if not person_id and "_key" in data:
+                        person_id = str(data["_key"].get("name", ""))
+
+                    if data.get("type") == "person":
+                        ctx.io.output_entity(
+                            Person(
+                                full_name=data.get("name", ""),
+                                party=data.get("parties", [None])[0],
+                                id=person_id,
+                            )
+                        )
+            except Exception:
+                # Likely not a valid LevelDB data file (e.g. metadata)
+                # print(f"Skipping {file_path}: {e}")
+                pass
+
+        print("Finished processing people.")
 
 
 def list_people(ctx: Context) -> typing.Generator[Person, None, None]:
@@ -35,11 +127,7 @@ def list_people(ctx: Context) -> typing.Generator[Person, None, None]:
     Yields:
         `Person` objects, representing individuals with their full name, party, and ID.
     """
-    for person_doc in tqdm(
-        ctx.io.read_data(
-            FirestoreCollection("nodes", filters=[("type", "==", "person")])
-        ).read_iterable()
-    ):
+    for person_doc in tqdm(ctx.io.read_data(KORYTA_DUMP).read_iterable()):
         id = person_doc.id
         person_data = person_doc.to_dict()
         assert person_data is not None
@@ -48,81 +136,3 @@ def list_people(ctx: Context) -> typing.Generator[Person, None, None]:
             party=person_data.get("parties", [None])[0],
             id=id,
         )
-
-
-class KorytaPeople(Pipeline):
-    filename: str = "person_koryta"
-    nodes_collection: FirestoreCollection = FirestoreCollection(
-        "nodes", filters=[("type", "==", "person")]
-    )
-
-    def process(self, ctx: Context):
-        """
-        Pipeline to process and output `Person` entities.
-
-        It iterates through people listed in Firestore and outputs each as a
-        `Person` entity using the context's I/O.
-        """
-        print("Processing people from Firestore...")
-        for person in list_people(ctx):
-            ctx.io.output_entity(person)
-        print("Finished processing people.")
-
-
-class KorytaArticles(Pipeline):
-    filename: str = "article_article"
-    nodes_collection: FirestoreCollection = FirestoreCollection(
-        "nodes", filters=[("type", "==", "article")]
-    )
-    edges_collection: FirestoreCollection = FirestoreCollection("edges", stream=True)
-
-    def process(self, ctx: Context):
-        """
-        Pipeline to process `Article` entities and link them to mentioned people.
-
-        This function fetches both people and article nodes from Firestore,
-        then iterates through 'mentions' edges to enrich article data with
-        mentioned individuals. It also calculates website popularity and outputs
-        `Article` entities.
-        """
-        print("Processing articles and mentions from Firestore...")
-        people = {person.id: person for person in list_people(ctx)}
-        articles = {
-            article.doc_id: article.to_dict()
-            for article in ctx.io.read_data(self.nodes_collection).read_iterable()
-        }
-
-        # Enrich articles with mentioned people
-        for edge_doc in tqdm(ctx.io.read_data(self.edges_collection).read_iterable()):
-            edge = edge_doc.to_dict()
-            assert edge is not None
-            if (
-                edge["type"] == "mentions"
-                and edge["source"] in articles
-                and edge["target"] in people
-            ):
-                article = articles[edge["source"]]
-                mentions = article.get("mentioned", [])
-                mentions.append(people[edge["target"]])
-                article["mentioned"] = mentions
-
-        website_popularity: typing.Counter[str] = Counter()
-        for key, article in articles.items():
-            if "sourceURL" in article:
-                domain = NormalizedParse.parse(article["sourceURL"]).hostname_normalized
-                website_popularity[domain] += 1
-
-            for person in article.get("mentioned", []):
-                ctx.io.output_entity(
-                    Article(
-                        id=key,
-                        title=article.get("name", ""),
-                        url=article.get("sourceURL", ""),
-                        mentioned_person=person.full_name,
-                    )
-                )
-
-        print("\nWebsite Popularity (most common domains):")
-        for domain, count in website_popularity.most_common(5):
-            print(f"- {domain}: {count}")
-        print("Finished processing articles.")

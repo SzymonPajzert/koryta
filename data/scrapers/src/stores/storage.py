@@ -36,7 +36,9 @@ class Client:
             download_lambda=lambda path: self.download_from_gcs(blob_name, path),
         )
 
-    def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
+    def list_blobs(
+        self, ref: CloudStorage, binary=False
+    ) -> Generator[DownloadableFile, None, None]:
         """Lists blobs in a GCS bucket with a given prefix."""
         bucket = self.storage_client.bucket(BUCKET)
         prefix = ref.prefix
@@ -71,7 +73,7 @@ class Client:
         print(f"Attempting bucket.list_blobs(prefix={prefix}, match_glob={glob})")
         blobs = bucket.list_blobs(prefix=prefix, match_glob=glob)
         for blob in blobs:
-            yield self.cached_storage(blob.name)
+            yield self.cached_storage(blob.name, binary)
 
     def iterate_blobs(self, io: IO, ref: CloudStorage):
         """List blobs for a given hostname and yield their path and JSON data."""

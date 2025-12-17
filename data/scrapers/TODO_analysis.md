@@ -20,6 +20,7 @@ This document provides a categorized list of all the `TODO` comments found in th
 
 ### Wikipedia
 
+- Read index of multiprocess in wikipedia. Then we'll be able to read partially the zip file in each multiprocess, leading to a bigger speed up.
 - Add some tests firsts, to make sure the processing works
 - Add parallel processing of the XML, because it's currently slow
 - We removed writing to tests, we should probably restore it
@@ -56,6 +57,7 @@ This document provides a categorized list of all the `TODO` comments found in th
 
 ### Main - conductor
 
+- Write progress to a browser using streamlit - useful for many output paths.
 - Pipeline inputs should be marked as inputs
   - Ask to reprocess inputs if needed
   - e.g. person_koryta.jsonl in koryta_merged should run it if it's not there
@@ -74,3 +76,4 @@ This document provides a categorized list of all the `TODO` comments found in th
   - Reenable ignored cases
   - Tests are running slow
 - **[`src/util/lists.py`](src/util/lists.py)**: Several TODOs about reenabling code and implementing new features.
+- Ban imports of setup_context in unit tests. Reading any file should be a failure automatically or it should read a mocked output.
