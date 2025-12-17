@@ -43,7 +43,7 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_content(self) -> str | bytes:
+    def read_content(self, bytes=False) -> str | bytes:
         """Reads the entire content of the file into a string or bytes."""
         pass
 
@@ -130,6 +130,7 @@ class DownloadableFile(DataRef):
     filename_fallback: str | None = None
     complex_download: str | None = None
     download_lambda: typing.Callable | None = None
+    binary: bool = False
 
     @property
     def filename(self) -> str:
@@ -151,6 +152,7 @@ class CloudStorage(DataRef):
 
     prefix: str
     max_namespaces: list[str] = field(default_factory=list)
+    binary: bool = False
 
 
 class IO(metaclass=ABCMeta):
