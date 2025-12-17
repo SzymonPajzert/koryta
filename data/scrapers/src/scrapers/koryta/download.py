@@ -9,7 +9,7 @@ It defines two main pipelines:
   within them by processing 'edges' data from Firestore.
 """
 
-from leveldb_export import parse_leveldb_documents
+from leveldb_export import parse_leveldb_documents  # type: ignore
 
 from entities.person import Koryta as Person
 from scrapers.stores import CloudStorage, Context, Pipeline
@@ -38,12 +38,14 @@ class KorytaPeople(Pipeline):
                 if not person_id and "_key" in data:
                     person_id = str(data["_key"].get("name", ""))
 
+                del data["_key"]
                 if data.get("type") == "person":
                     ctx.io.output_entity(
                         Person(
                             full_name=data.get("name", ""),
                             party=data.get("parties", [None])[0],
                             id=person_id,
+                            data=data,
                         )
                     )
 

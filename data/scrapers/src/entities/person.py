@@ -10,6 +10,7 @@ class Koryta:
     id: str
     full_name: str
     party: str
+    data: dict
 
 
 @dataclass
