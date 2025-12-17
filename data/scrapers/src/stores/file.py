@@ -65,6 +65,8 @@ class FromBytesIO(File):
         raise NotImplementedError()
 
     def read_content(self, bytes=False) -> str | bytes:
+        if not bytes:
+            return self.raw_bytes.decode("utf-8")
         return self.raw_bytes
 
     def read_dataframe(
@@ -120,11 +122,11 @@ class FromTextIO(FromIterable):
         return self._wrapper
 
 
-class FromPath(FromTextIO):
+class FromPath(FromBytesIO):
     path: str
 
-    def __init__(self, path):
-        super().__init__(open(path, "r"))
+    def __init__(self, path, binary=False):
+        super().__init__(open(path, "rb"))
         self.path = path
 
     def read_parquet(self):

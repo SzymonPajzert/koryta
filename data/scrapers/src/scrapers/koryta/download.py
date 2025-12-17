@@ -9,12 +9,7 @@ It defines two main pipelines:
   within them by processing 'edges' data from Firestore.
 """
 
-import abc
-import typing
-from pathlib import Path
-
 from leveldb_export import parse_leveldb_documents
-from tqdm import tqdm
 
 from entities.person import Koryta as Person
 from scrapers.stores import CloudStorage, Context, Pipeline
@@ -32,6 +27,9 @@ class KorytaPeople(Pipeline):
         Pipeline to process and output `Person` entities.
         """
         for blob_name, content in ctx.io.read_data(KORYTA_DUMP).read_iterable():
+            if blob_name.endswith("metadata") or blob_name.endswith("log"):
+                continue
+
             for data in parse_leveldb_documents(content):
                 key_info = data.get("_key", {})
                 # Try to get ID from standard fields or _key metadata

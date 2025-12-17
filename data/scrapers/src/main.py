@@ -56,7 +56,7 @@ class Conductor(IO):
                 assert self.progress_bar is not None
                 self.progress_bar.update(1)
                 dfs.download()
-            return file.FromPath(dfs.downloaded_path)
+            return file.FromPath(dfs.downloaded_path, binary=fs.binary)
 
         # Stop progress bar
         self.continous_download = False

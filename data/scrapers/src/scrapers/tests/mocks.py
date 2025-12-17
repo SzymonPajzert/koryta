@@ -134,7 +134,8 @@ class MockIO(IO):
         self.output.append((source, data, content_type))
 
     def list_blobs(self, ref: CloudStorage):
-        return []
+        for i in []:
+            yield i
 
     def get_mtime(self, fs: DataRef) -> float | None:
         key = str(fs)
@@ -193,7 +194,8 @@ class DictMockIO(IO):
         self.output.append((source, data, content_type))
 
     def list_blobs(self, ref: CloudStorage):
-        return []
+        for i in []:
+            yield i
 
     def get_mtime(self, fs: DataRef) -> float | None:
         if isinstance(fs, LocalFile):
