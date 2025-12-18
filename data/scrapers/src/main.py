@@ -16,6 +16,7 @@ from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import IO, CloudStorage, Context, DataRef, DownloadableFile, File, Formats, LocalFile, Pipeline, ProcessPolicy
 from scrapers.wiki.process_articles import ProcessWiki
+from scrapers.wiki.process_articles_ner import ProcessWikiNer
 from stores import file
 from stores.config import PROJECT_ROOT
 from stores.download import FileSource
@@ -133,6 +134,7 @@ PIPELINES = [
     PeopleKRS,
     CompaniesKRS,
     ProcessWiki,
+    ProcessWikiNer,
     PeopleMerged,
     PeopleEnriched,
     CompaniesMerged,
