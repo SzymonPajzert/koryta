@@ -1,19 +1,14 @@
-import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-
-process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
-process.env.GCLOUD_PROJECT = 'demo-koryta-pl';
-
-const app = initializeApp({
-  projectId: 'demo-koryta-pl',
+var import_app = require("firebase-admin/app");
+var import_firestore = require("firebase-admin/firestore");
+process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
+process.env.GCLOUD_PROJECT = "demo-koryta-pl";
+const app = (0, import_app.initializeApp)({
+  projectId: "demo-koryta-pl"
 });
-
-const db = getFirestore(app);
-
+const db = (0, import_firestore.getFirestore)(app);
 async function seed() {
-  console.log('Seeding database...');
+  console.log("Seeding database...");
   const batch = db.batch();
-
   const nodes = [
     {
       id: "1",
@@ -49,7 +44,7 @@ async function seed() {
     },
     {
       id: "person_misko",
-      name: "Rafał Miśko",
+      name: "Rafa\u0142 Mi\u015Bko",
       type: "person",
       stats: { people: 1 },
       sizeMult: 1,
@@ -65,7 +60,7 @@ async function seed() {
     },
     {
       id: "person_zamaro",
-      name: "Małgorzata Zamaro",
+      name: "Ma\u0142gorzata Zamaro",
       type: "person",
       stats: { people: 1 },
       sizeMult: 1,
@@ -73,7 +68,7 @@ async function seed() {
     },
     {
       id: "person_bartelski",
-      name: "Bartłomiej Bartelski",
+      name: "Bart\u0142omiej Bartelski",
       type: "person",
       stats: { people: 1 },
       sizeMult: 1,
@@ -105,7 +100,7 @@ async function seed() {
     },
     {
       id: "place_krakow",
-      name: "Miasto Kraków",
+      name: "Miasto Krak\xF3w",
       type: "place",
       stats: { people: 1 },
       sizeMult: 1,
@@ -113,7 +108,7 @@ async function seed() {
     },
     {
       id: "place_nfosigw",
-      name: "NFOŚiGW",
+      name: "NFO\u015AiGW",
       type: "place",
       stats: { people: 1 },
       sizeMult: 1,
@@ -121,7 +116,7 @@ async function seed() {
     },
     {
       id: "place_wfosigw",
-      name: "WFOŚiGW Kraków",
+      name: "WFO\u015AiGW Krak\xF3w",
       type: "place",
       stats: { people: 1 },
       sizeMult: 1,
@@ -161,60 +156,52 @@ async function seed() {
     },
     {
       id: "place_rzad",
-      name: "Rząd",
+      name: "Rz\u0105d",
       type: "place",
       stats: { people: 1 },
       sizeMult: 1,
       color: "#000000"
     }
   ];
-
-  for(const node of nodes) {
-      batch.set(db.collection('nodes').doc(node.id), node);
+  for (const node of nodes) {
+    batch.set(db.collection("nodes").doc(node.id), node);
   }
-
-  // Create edges
   const edges = [
-      { source: "1", target: "place_krakow" },
-      { source: "person_tusk", target: "place_rzad" },
-      { source: "person_miszalski", target: "place_krakow" },
-      { source: "person_patalas", target: "place_nfosigw" },
-      { source: "person_misko", target: "place_nfosigw" },
-      { source: "person_kaczmarek", target: "place_nfosigw" },
-      { source: "person_zamaro", target: "place_nfosigw" }, 
-      { source: "place_wfosigw", target: "place_nfosigw" },
-      { source: "place_wfosigw", target: "place_nfosigw" },
-      { source: "person_bartelski", target: "place_warszawa" },
-      { source: "person_bartelski", target: "place_polimex" },
-      { source: "person_pastor", target: "place_wodny" },
-      { source: "person_pastor", target: "place_ursus" },
-      { source: "article_kanalizacja", target: "place_krakow" },
-      { source: "article_kanalizacja", target: "place_nfosigw" }
+    { source: "1", target: "place_krakow" },
+    { source: "person_tusk", target: "place_rzad" },
+    { source: "person_miszalski", target: "place_krakow" },
+    { source: "person_patalas", target: "place_nfosigw" },
+    { source: "person_misko", target: "place_nfosigw" },
+    { source: "person_kaczmarek", target: "place_nfosigw" },
+    { source: "person_zamaro", target: "place_nfosigw" },
+    { source: "place_wfosigw", target: "place_nfosigw" },
+    { source: "place_wfosigw", target: "place_nfosigw" },
+    { source: "person_bartelski", target: "place_warszawa" },
+    { source: "person_bartelski", target: "place_polimex" },
+    { source: "person_pastor", target: "place_wodny" },
+    { source: "person_pastor", target: "place_ursus" },
+    { source: "article_kanalizacja", target: "place_krakow" },
+    { source: "article_kanalizacja", target: "place_nfosigw" }
   ];
-  
-  for(const edge of edges) {
-      const id = `${edge.source}-${edge.target}`;
-      batch.set(db.collection('edges').doc(id), { ...edge, id, label: "test" });
+  for (const edge of edges) {
+    const id = `${edge.source}-${edge.target}`;
+    batch.set(db.collection("edges").doc(id), { ...edge, id, label: "test" });
   }
-
-  // Extra nodes for graph count test
   for (let i = 0; i < 110; i++) {
     const id = `extra_${i}`;
-    batch.set(db.collection('nodes').doc(id), {
-        id,
-        name: `Extra Node ${i}`,
-        type: 'person',
-        stats: { people: 1 },
-        sizeMult: 1,
-        color: "#000000"
+    batch.set(db.collection("nodes").doc(id), {
+      id,
+      name: `Extra Node ${i}`,
+      type: "person",
+      stats: { people: 1 },
+      sizeMult: 1,
+      color: "#000000"
     });
   }
-
   await batch.commit();
-  console.log('Database seeded successfully!');
+  console.log("Database seeded successfully!");
 }
-
 seed().catch((err) => {
-  console.error('Error seeding database:', err);
+  console.error("Error seeding database:", err);
   process.exit(1);
 });

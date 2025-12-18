@@ -16,7 +16,7 @@ describe("graph", () => {
 
   context("shows dialog for each node", () => {
     beforeEach(() => {
-      cy.filterPlace("Miasto Krak"); // TODO support polish letters
+      cy.filterPlace("Miasto Kraków"); // TODO support polish letters
     });
 
     it("normally doesn't see a dialog", () => {
@@ -24,6 +24,8 @@ describe("graph", () => {
     });
 
     it("shows dialog on person", () => {
+      cy.url().should("include", "miejsce=place_krakow");
+      cy.get("g > text").should("have.length.lessThan", 50);
       cy.get("g > text")
         .contains("Aleksander Miszalski")
         .should("exist")

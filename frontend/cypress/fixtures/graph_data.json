@@ -1,0 +1,809 @@
+{
+  "nodes": {
+    "1": {
+      "id": "1",
+      "name": "Jan Kowalski",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "place_krakow": {
+      "id": "place_krakow",
+      "name": "Miasto Kraków",
+      "type": "place",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "person_miszalski": {
+      "id": "person_miszalski",
+      "name": "Aleksander Miszalski",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "place_nfosigw": {
+      "id": "place_nfosigw",
+      "name": "NFOŚiGW",
+      "type": "place",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "person_patalas": {
+      "id": "person_patalas",
+      "name": "Ewa Patalas",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "person_misko": {
+      "id": "person_misko",
+      "name": "Waldemar Miśko",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "person_kaczmarek": {
+      "id": "person_kaczmarek",
+      "name": "Jerzy Kaczmarek",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "place_wfosigw": {
+      "id": "place_wfosigw",
+      "name": "WFOŚiGW Kraków",
+      "type": "place",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "person_zamaro": {
+      "id": "person_zamaro",
+      "name": "Marcin Zamaro",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "article_kanalizacja": {
+      "id": "article_kanalizacja",
+      "name": "NFOŚiGW wesprze budowę kanalizacji w Krakowie ",
+      "type": "article",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "place_warszawa": {
+      "id": "place_warszawa",
+      "name": "Miasto Warszawa",
+      "type": "place",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "person_bartelski": {
+      "id": "person_bartelski",
+      "name": "Wojciech Bartelski",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "place_polimex": {
+      "id": "place_polimex",
+      "name": "Polimex-Mostostal",
+      "type": "place",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "place_wodny": {
+      "id": "place_wodny",
+      "name": "Wodny Park Warszawianka",
+      "type": "place",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "person_pastor": {
+      "id": "person_pastor",
+      "name": "Dariusz Pastor",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "place_ursus": {
+      "id": "place_ursus",
+      "name": "Ursus (Warszawa)",
+      "type": "place",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "place_rzad": {
+      "id": "place_rzad",
+      "name": "Rząd",
+      "type": "place",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_0": {
+      "id": "extra_0",
+      "name": "Extra Node 0",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_1": {
+      "id": "extra_1",
+      "name": "Extra Node 1",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_2": {
+      "id": "extra_2",
+      "name": "Extra Node 2",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_3": {
+      "id": "extra_3",
+      "name": "Extra Node 3",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_4": {
+      "id": "extra_4",
+      "name": "Extra Node 4",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_5": {
+      "id": "extra_5",
+      "name": "Extra Node 5",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_6": {
+      "id": "extra_6",
+      "name": "Extra Node 6",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_7": {
+      "id": "extra_7",
+      "name": "Extra Node 7",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_8": {
+      "id": "extra_8",
+      "name": "Extra Node 8",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_9": {
+      "id": "extra_9",
+      "name": "Extra Node 9",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_10": {
+      "id": "extra_10",
+      "name": "Extra Node 10",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_11": {
+      "id": "extra_11",
+      "name": "Extra Node 11",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_12": {
+      "id": "extra_12",
+      "name": "Extra Node 12",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_13": {
+      "id": "extra_13",
+      "name": "Extra Node 13",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_14": {
+      "id": "extra_14",
+      "name": "Extra Node 14",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_15": {
+      "id": "extra_15",
+      "name": "Extra Node 15",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_16": {
+      "id": "extra_16",
+      "name": "Extra Node 16",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_17": {
+      "id": "extra_17",
+      "name": "Extra Node 17",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_18": {
+      "id": "extra_18",
+      "name": "Extra Node 18",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_19": {
+      "id": "extra_19",
+      "name": "Extra Node 19",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_20": {
+      "id": "extra_20",
+      "name": "Extra Node 20",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_21": {
+      "id": "extra_21",
+      "name": "Extra Node 21",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_22": {
+      "id": "extra_22",
+      "name": "Extra Node 22",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_23": {
+      "id": "extra_23",
+      "name": "Extra Node 23",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_24": {
+      "id": "extra_24",
+      "name": "Extra Node 24",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_25": {
+      "id": "extra_25",
+      "name": "Extra Node 25",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_26": {
+      "id": "extra_26",
+      "name": "Extra Node 26",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_27": {
+      "id": "extra_27",
+      "name": "Extra Node 27",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_28": {
+      "id": "extra_28",
+      "name": "Extra Node 28",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_29": {
+      "id": "extra_29",
+      "name": "Extra Node 29",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_30": {
+      "id": "extra_30",
+      "name": "Extra Node 30",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_31": {
+      "id": "extra_31",
+      "name": "Extra Node 31",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_32": {
+      "id": "extra_32",
+      "name": "Extra Node 32",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_33": {
+      "id": "extra_33",
+      "name": "Extra Node 33",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_34": {
+      "id": "extra_34",
+      "name": "Extra Node 34",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_35": {
+      "id": "extra_35",
+      "name": "Extra Node 35",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_36": {
+      "id": "extra_36",
+      "name": "Extra Node 36",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_37": {
+      "id": "extra_37",
+      "name": "Extra Node 37",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_38": {
+      "id": "extra_38",
+      "name": "Extra Node 38",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    },
+    "extra_39": {
+      "id": "extra_39",
+      "name": "Extra Node 39",
+      "type": "person",
+      "stats": {
+        "people": 1
+      },
+      "sizeMult": 1,
+      "color": "#000000"
+    }
+  },
+  "edges": [
+    {
+      "source": "person_miszalski",
+      "target": "place_krakow",
+      "id": "person_miszalski-place_krakow",
+      "label": "test"
+    },
+    {
+      "source": "person_patalas",
+      "target": "place_nfosigw",
+      "id": "person_patalas-place_nfosigw",
+      "label": "test"
+    },
+    {
+      "source": "person_misko",
+      "target": "place_nfosigw",
+      "id": "person_misko-place_nfosigw",
+      "label": "test"
+    },
+    {
+      "source": "person_kaczmarek",
+      "target": "place_nfosigw",
+      "id": "person_kaczmarek-place_nfosigw",
+      "label": "test"
+    },
+    {
+      "source": "place_wfosigw",
+      "target": "place_nfosigw",
+      "id": "place_wfosigw-place_nfosigw",
+      "label": "test"
+    },
+    {
+      "source": "person_zamaro",
+      "target": "place_nfosigw",
+      "id": "person_zamaro-place_nfosigw",
+      "label": "test"
+    },
+    {
+      "source": "article_kanalizacja",
+      "target": "place_nfosigw",
+      "id": "article_kanalizacja-place_nfosigw",
+      "label": "test"
+    },
+    {
+      "source": "article_kanalizacja",
+      "target": "place_krakow",
+      "id": "article_kanalizacja-place_krakow",
+      "label": "test"
+    },
+    {
+      "source": "person_bartelski",
+      "target": "place_warszawa",
+      "id": "person_bartelski-place_warszawa",
+      "label": "test"
+    },
+    {
+      "source": "person_bartelski",
+      "target": "place_polimex",
+      "id": "person_bartelski-place_polimex",
+      "label": "test"
+    },
+    {
+      "source": "person_pastor",
+      "target": "place_wodny",
+      "id": "person_pastor-place_wodny",
+      "label": "test"
+    },
+    {
+      "source": "person_pastor",
+      "target": "place_ursus",
+      "id": "person_pastor-place_ursus",
+      "label": "test"
+    }
+  ],
+  "nodeGroups": [
+    {
+      "id": "all",
+      "name": "Wszystkie",
+      "stats": {
+        "people": 57
+      },
+      "connected": [
+        "1",
+        "place_krakow",
+        "person_miszalski",
+        "place_nfosigw",
+        "person_patalas",
+        "person_misko",
+        "person_kaczmarek",
+        "place_wfosigw",
+        "person_zamaro",
+        "article_kanalizacja",
+        "place_warszawa",
+        "person_bartelski",
+        "place_polimex",
+        "place_wodny",
+        "person_pastor",
+        "place_ursus",
+        "place_rzad",
+        "extra_0",
+        "extra_1",
+        "extra_2",
+        "extra_3",
+        "extra_4",
+        "extra_5",
+        "extra_6",
+        "extra_7",
+        "extra_8",
+        "extra_9",
+        "extra_10",
+        "extra_11",
+        "extra_12",
+        "extra_13",
+        "extra_14",
+        "extra_15",
+        "extra_16",
+        "extra_17",
+        "extra_18",
+        "extra_19",
+        "extra_20",
+        "extra_21",
+        "extra_22",
+        "extra_23",
+        "extra_24",
+        "extra_25",
+        "extra_26",
+        "extra_27",
+        "extra_28",
+        "extra_29",
+        "extra_30",
+        "extra_31",
+        "extra_32",
+        "extra_33",
+        "extra_34",
+        "extra_35",
+        "extra_36",
+        "extra_37",
+        "extra_38",
+        "extra_39"
+      ]
+    },
+    {
+      "id": "place_krakow",
+      "name": "Miasto Kraków",
+      "stats": {
+        "people": 1
+      },
+      "connected": [
+        "place_krakow",
+        "person_miszalski",
+        "article_kanalizacja"
+      ]
+    },
+    {
+      "id": "place_nfosigw",
+      "name": "NFOŚiGW",
+      "stats": {
+        "people": 1
+      },
+      "connected": [
+        "place_nfosigw",
+        "person_patalas",
+        "person_misko",
+        "person_kaczmarek",
+        "place_wfosigw",
+        "person_zamaro",
+        "article_kanalizacja"
+      ]
+    },
+    {
+      "id": "place_wfosigw",
+      "name": "WFOŚiGW Kraków",
+      "stats": {
+        "people": 1
+      },
+      "connected": [
+        "place_wfosigw",
+        "place_nfosigw"
+      ]
+    },
+    {
+      "id": "place_warszawa",
+      "name": "Miasto Warszawa",
+      "stats": {
+        "people": 1
+      },
+      "connected": [
+        "place_warszawa",
+        "person_bartelski"
+      ]
+    },
+    {
+      "id": "place_polimex",
+      "name": "Polimex-Mostostal",
+      "stats": {
+        "people": 1
+      },
+      "connected": [
+        "place_polimex",
+        "person_bartelski"
+      ]
+    },
+    {
+      "id": "place_wodny",
+      "name": "Wodny Park Warszawianka",
+      "stats": {
+        "people": 1
+      },
+      "connected": [
+        "place_wodny",
+        "person_pastor"
+      ]
+    },
+    {
+      "id": "place_ursus",
+      "name": "Ursus (Warszawa)",
+      "stats": {
+        "people": 1
+      },
+      "connected": [
+        "place_ursus",
+        "person_pastor"
+      ]
+    },
+    {
+      "id": "place_rzad",
+      "name": "Rząd",
+      "stats": {
+        "people": 1
+      },
+      "connected": [
+        "place_rzad"
+      ]
+    }
+  ]
+}
