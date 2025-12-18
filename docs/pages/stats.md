@@ -1,2 +1,0 @@
-- LATER Re-enable stats table in `frontend/app/components/UserActivityTable.vue`
--
