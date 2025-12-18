@@ -1,6 +1,0 @@
-- We can use different sources of truth of location, to make sure that the local person actually makes sense to work in a place
-	- E.g. we expect people who candidated in łódzkie to mainly have work in łódzkie as well
--
-- #data/scrapers
--
--
