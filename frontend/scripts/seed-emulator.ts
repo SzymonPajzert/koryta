@@ -1,18 +1,36 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
+import waitOn from "wait-on";
 
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
 process.env.GCLOUD_PROJECT = "demo-koryta-pl";
 
-const app = initializeApp({
-  projectId: "demo-koryta-pl",
-});
-
-const db = getFirestore(app, "koryta-pl");
-
+/**
+ * Seed the emulators with the test data.
+ * Always populates auth (but checks that it's test directory).
+ * If --empty is passed, don't seed firestore.
+ */
 async function seed() {
+  const empty = process.argv.includes("--empty");
+  console.log("empty: ", empty);
+  if (!empty) {
+    await seedDatabase();
+  }
+  await seedAuth();
+}
+
+async function seedDatabase() {
+  await waitOn({
+    resources: ["tcp:localhost:8080"],
+    timeout: undefined,
+  });
+  const app = initializeApp({
+    projectId: "demo-koryta-pl",
+  });
+  const db = getFirestore(app, "koryta-pl");
+
   console.log("Seeding database...");
 
   const nodes = [
@@ -39,9 +57,22 @@ async function seed() {
 
   await batch.commit();
   console.log("Database seeded successfully!");
+}
 
-  // Seed Auth User
+async function seedAuth() {
+  await waitOn({
+    resources: ["tcp:localhost:9099"],
+    timeout: undefined,
+  });
+  const app = initializeApp({
+    projectId: "demo-koryta-pl",
+  });
   const auth = getAuth(app);
+
+  if (auth.app.options.projectId !== "demo-koryta-pl") {
+    throw "this is not a test environment";
+  }
+
   try {
     for (const user of [
       {
@@ -51,15 +82,16 @@ async function seed() {
         displayName: "Admin User",
       },
       {
-        uid: "test-admin",
-        email: "admin@koryta.pl",
+        uid: "test-user",
+        email: "user@koryta.pl",
         password: "password123",
-        displayName: "Admin User",
+        displayName: "Normal User",
       },
     ]) {
       await auth.createUser(user);
       console.log(`User created: ${user.email} / ${user.password}`);
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     if (error.code === "auth/email-already-exists") {
       console.log("Admin user already exists", error);
