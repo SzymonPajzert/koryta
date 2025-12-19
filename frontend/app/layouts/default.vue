@@ -84,7 +84,7 @@ const router = useRouter();
 const route = useRoute();
 const maxWidth = computed(() => (route.meta.fullWidth ? "none" : 900));
 const rootPadding = computed(() => (route.meta.fullWidth ? 0 : undefined));
-const pictureURL = computed(() => userConfig.data.value?.photoURL);
+const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 
 function pick<T>(obj: Record<string, T>, ...keys: string[]) {
   const result: Record<string, T> = {};
