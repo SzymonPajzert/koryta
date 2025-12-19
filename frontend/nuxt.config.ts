@@ -1,15 +1,7 @@
-import { isDev } from "@nuxt/test-utils";
-
 // https://nuxt.com/docs/api/configuration/nuxt-config
-const isTest = !!process.env.VITEST;
-const isLocal: boolean =
-  isTest || isDev() || process.env.USE_EMULATORS === "true";
 
-console.log({
-  msg: "isLocal config",
-  isLocal,
-  args: [isTest, isDev(), process.env.USE_EMULATORS],
-});
+const isTest = !!process.env.VITEST;
+const isLocal = isTest || process.env.USE_EMULATORS === "true";
 
 export default defineNuxtConfig({
   app: {
