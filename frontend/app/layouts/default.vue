@@ -21,10 +21,10 @@
     <v-spacer />
 
     <template #append>
-      <v-btn icon :to="{ path: '/lista', query: route.query }"
+      <v-btn icon :to="{ path: '/lista', query: safeQuery }"
         ><v-icon>mdi-format-list-bulleted-type</v-icon></v-btn
       >
-      <v-btn icon :to="{ path: '/graf', query: pick(route.query, 'miejsce') }"
+      <v-btn icon :to="{ path: '/graf', query: { miejsce: safeQuery.miejsce } }"
         ><v-icon>mdi-graph-outline</v-icon></v-btn
       >
       <v-btn :icon="!mdAndUp" to="/pomoc">
@@ -82,17 +82,10 @@ const { mdAndUp } = useDisplay();
 const { user, userConfig, logout } = useAuthState();
 const router = useRouter();
 const route = useRoute();
-const maxWidth = computed(() => (route.meta.fullWidth ? "none" : 900));
-const rootPadding = computed(() => (route.meta.fullWidth ? 0 : undefined));
+const safeQuery = computed(() => route?.query || {});
+const maxWidth = computed(() => (route?.meta?.fullWidth ? "none" : 900));
+const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 
-function pick<T>(obj: Record<string, T>, ...keys: string[]) {
-  const result: Record<string, T> = {};
-  for (const key of keys) {
-    if (obj[key] !== undefined) {
-      result[key] = obj[key];
-    }
-  }
-  return result;
-}
+
 </script>

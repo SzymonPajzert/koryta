@@ -7,6 +7,9 @@
         Wyślij ponownie
       </v-btn>
     </div>
+    <div class="mt-4">
+      <v-btn color="warning" @click="logoutForced">Wyloguj się teraz</v-btn>
+    </div>
   </main>
   <main v-if="!user">
     <v-alert v-if="reason === 'unauthorized'" type="info" class="mb-4">
@@ -66,14 +69,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import {
-  signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
   type User,
   onAuthStateChanged,
-  createUserWithEmailAndPassword,
   sendEmailVerification,
 } from "firebase/auth";
 import { set, ref as dbRef } from "firebase/database";
@@ -95,18 +96,26 @@ const user = ref<User | null>();
 onAuthStateChanged(auth, (userIn) => {
   user.value = userIn;
   if (userIn) {
-    console.debug("User logged in:", userIn.uid, userIn.email);
+    console.log("User logged in:", userIn.uid, userIn.email);
     set(dbRef(db, `user/${userIn.uid}/displayName`), userIn.displayName);
     set(dbRef(db, `user/${userIn.uid}/email`), userIn.email);
     set(dbRef(db, `user/${userIn.uid}/photoURL`), userIn.photoURL);
   }
 });
 
+const { login: authLogin, register: authRegister, logout } = useAuthState();
+
+const logoutForced = async () => {
+  await logout();
+  // Force reload or redirect to be sure
+  window.location.reload();
+};
+
 const login = async () => {
   error.value = null;
   loading.value = true;
   try {
-    await signInWithEmailAndPassword(auth, email.value, password.value);
+    await authLogin(email.value, password.value);
     // User is signed in.
     console.debug("User logged in successfully!");
     router.push((redirect as string) || "/");
@@ -138,13 +147,13 @@ const register = async () => {
   error.value = null;
   loading.value = true;
   try {
-    const userCredential = await createUserWithEmailAndPassword(
-      auth,
-      email.value,
-      password.value,
-    );
+    const userCredential = await authRegister(email.value, password.value);
     await sendEmailVerification(userCredential.user);
     alert("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
+    
+    // Add delay to allow auth state to propagate to middleware (especially for tests)
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     router.push((redirect as string) || "/");
   } catch (err: any) {
     if (err.code === "auth/user-not-found") {
