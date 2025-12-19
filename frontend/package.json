@@ -4,16 +4,19 @@
   "type": "module",
   "scripts": {
     "build": "nuxt build",
-    "emulators": "firebase emulators:start --project demo-koryta-pl",
+    "stop": "npx kill-port --port 8080,9000,9099,5001,8085,3000,5002,4000",
+    "emulators": "firebase emulators:start --project demo-koryta-pl --only auth,functions,firestore,database,storage,hosting",
     "seed": "npx tsx scripts/seed-emulator.ts",
     "dev": "nuxt dev",
-    "dev:local": "concurrently \"npm run emulators\" \"export USE_EMULATORS=true FIRESTORE_EMULATOR_HOST='127.0.0.1:8080'; nuxt dev --loglevel=verbose\"",
+    "dev:local": "npm run stop; concurrently \"npm run emulators\" \"npx wait-on tcp:9099 && npm run seed\" \"export USE_EMULATORS=true FIRESTORE_EMULATOR_HOST='127.0.0.1:8080' FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099'; nuxt dev --loglevel=verbose\"",
+    "dev:local:empty": "npm run stop; concurrently \"npm run emulators\" \"export USE_EMULATORS=true FIRESTORE_EMULATOR_HOST='127.0.0.1:8080' FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099'; nuxt dev --loglevel=verbose\"",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:e2e": "cypress run"
+    "test:e2e": "cypress run",
+    "test:e2e:empty": "export USE_EMULATORS=true FIRESTORE_EMULATOR_HOST='127.0.0.1:8080' FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099'; start-server-and-test 'npm run dev:local:empty' http://localhost:3000 'cypress run --spec \"cypress/e2e/user_edits.cy.ts\"'"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.3",

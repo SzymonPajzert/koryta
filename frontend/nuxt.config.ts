@@ -5,6 +5,7 @@ process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIREBASE_DATABASE_EMULATOR_HOST = "127.0.0.1:9000";
 const isLocal = !!process.env.VITEST || process.env.USE_EMULATORS === "true";
+console.log('Nuxt Config - isLocal:', isLocal, 'USE_EMULATORS:', process.env.USE_EMULATORS);
 
 export default defineNuxtConfig({
   app: {
@@ -50,6 +51,12 @@ export default defineNuxtConfig({
     "/": { prerender: true },
     // Cached for 6 hours
     "/api/**": isLocal ? undefined : { swr: 60 * 60 * 6 },
+  },
+
+  runtimeConfig: {
+    public: {
+      isLocal,
+    },
   },
 
   modules: [
@@ -105,7 +112,7 @@ export default defineNuxtConfig({
       apiKey: isLocal
         ? "fake-api-key"
         : "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
-      authDomain: isLocal ? undefined : "koryta-pl.firebaseapp.com",
+      authDomain: isLocal ? "demo-koryta-pl.firebaseapp.com" : "koryta-pl.firebaseapp.com",
       databaseURL: isLocal
         ? "http://localhost:9000?ns=demo-koryta-pl"
         : "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",

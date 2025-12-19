@@ -1,4 +1,4 @@
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, type User } from "firebase/auth";
 import { collection, doc } from "firebase/firestore";
 import { ref } from "vue";
 
@@ -36,5 +36,13 @@ export function useAuthState() {
     }
   };
 
-  return { user, isAdmin, idToken, userConfig, logout };
+  const login = async (email: string, pass: string) => {
+    return await signInWithEmailAndPassword(auth, email, pass);
+  };
+
+  const register = async (email: string, pass: string) => {
+    return await createUserWithEmailAndPassword(auth, email, pass);
+  };
+
+  return { user, isAdmin, idToken, userConfig, logout, login, register };
 }
