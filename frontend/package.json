@@ -7,7 +7,7 @@
     "emulators": "firebase emulators:start --project demo-koryta-pl",
     "seed": "npx tsx scripts/seed-emulator.ts",
     "dev": "nuxt dev",
-    "dev:local": "concurrently \"npm run emulators\" \"npx wait-on tcp:8080 && npm run seed && export FIRESTORE_EMULATOR_HOST=localhost:8080 && USE_EMULATORS=true npm run dev\"",
+    "dev:local": "concurrently \"npm run emulators\" \"npx wait-on tcp:8080 && npm run seed && export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 && export FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 && USE_EMULATORS=true npm run dev\"",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
