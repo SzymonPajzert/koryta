@@ -62,7 +62,7 @@ export default defineNuxtConfig({
     "@nuxt/eslint",
     "nuxt-vuefire",
     "vuetify-nuxt-module",
-    "@sentry/nuxt/module",
+    ...(!isLocal ? ["@sentry/nuxt/module"] : []),
   ],
 
   fonts: {
@@ -147,13 +147,17 @@ export default defineNuxtConfig({
 
   css: ["v-network-graph/lib/style.css"],
 
-  sentry: {
-    sourceMapsUploadOptions: {
-      org: "romb",
-      project: "koryta-pl",
-    },
-    telemetry: !isLocal,
-  },
+  ...(!isLocal
+    ? {
+        sentry: {
+          sourceMapsUploadOptions: {
+            org: "romb",
+            project: "koryta-pl",
+          },
+          telemetry: !isLocal,
+        },
+      }
+    : {}),
 
   sourcemap: {
     client: "hidden",
