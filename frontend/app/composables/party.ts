@@ -1,15 +1,15 @@
-import { computed } from "vue";
+import { computed, Ref } from "vue";
 import { partyColors } from "~~/shared/misc";
 
-export async function usePartyStatistics() {
-  const { entities: people } = await useEntity("person");
+export function usePartyStatistics(existingPeople?: Ref<Record<string, any>>) {
+  const people = existingPeople || useEntity("person").entities;
 
   const results = computed<number[]>(() => {
     if (!people.value) return [];
 
-    return Object.keys(partyColors).map((party) => {
+    return (Object.keys(partyColors) as (keyof typeof partyColors)[]).map((party) => {
       return Object.values(people.value).filter((person) => {
-        return (person.parties ?? []).findIndex((p) => p === party) != -1;
+        return (person.parties ?? []).includes(party);
       }).length;
     });
   });
