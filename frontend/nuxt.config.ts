@@ -1,7 +1,10 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 
-const isTest = !!process.env.VITEST;
-const isLocal = isTest || process.env.USE_EMULATORS === "true";
+// Force IPv4 for emulators to avoid Node 17+ IPv6 issues
+process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
+process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+process.env.FIREBASE_DATABASE_EMULATOR_HOST = "127.0.0.1:9000";
+const isLocal = !!process.env.VITEST || process.env.USE_EMULATORS === "true";
 
 export default defineNuxtConfig({
   app: {
@@ -27,9 +30,8 @@ export default defineNuxtConfig({
 
   compatibilityDate: "2025-07-15",
 
-  // TODO Enable strict
   typescript: {
-    strict: false,
+    strict: true,
   },
 
   devtools: { enabled: true },
@@ -60,7 +62,7 @@ export default defineNuxtConfig({
     "@nuxt/eslint",
     "nuxt-vuefire",
     "vuetify-nuxt-module",
-    "@sentry/nuxt/module",
+    ...(!isLocal ? ["@sentry/nuxt/module"] : []),
   ],
 
   fonts: {
@@ -92,34 +94,47 @@ export default defineNuxtConfig({
     auth: {
       enabled: true,
     },
+    analytics: {
+      enabled: !isLocal,
+    },
+    appCheck: {
+      enabled: !isLocal,
+    },
     // TODO parametrize in the env, so I can pass autopush and local test config
     config: {
-      apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
-      authDomain: "koryta-pl.firebaseapp.com",
-      databaseURL:
-        "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
+      apiKey: isLocal
+        ? "fake-api-key"
+        : "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
+      authDomain: isLocal ? undefined : "koryta-pl.firebaseapp.com",
+      databaseURL: isLocal
+        ? "http://localhost:9000?ns=demo-koryta-pl"
+        : "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
       projectId: isLocal ? "demo-koryta-pl" : "koryta-pl",
-      storageBucket: "koryta-pl.firebasestorage.app",
-      messagingSenderId: "735903577811",
+      storageBucket: isLocal ? undefined : "koryta-pl.firebasestorage.app",
+      messagingSenderId: isLocal ? undefined : "735903577811",
       appId: "1:735903577811:web:53e6461c641b947a4e8626",
-      measurementId: "G-KRYVKQ4T7T",
+      measurementId: isLocal ? undefined : "G-KRYVKQ4T7T",
     },
     emulators: {
       enabled: isLocal,
       auth: {
-        host: "localhost",
+        host: "127.0.0.1",
         port: 9099,
       },
-      database: {
-        host: "localhost",
-        port: 9000,
+      functions: {
+        host: "127.0.0.1",
+        port: 5001,
       },
       firestore: {
-        host: "localhost",
+        host: "127.0.0.1",
         port: 8080,
       },
+      database: {
+        host: "127.0.0.1",
+        port: 9000,
+      },
       storage: {
-        host: "localhost",
+        host: "127.0.0.1",
         port: 9199,
       },
     },
@@ -132,13 +147,17 @@ export default defineNuxtConfig({
 
   css: ["v-network-graph/lib/style.css"],
 
-  sentry: {
-    sourceMapsUploadOptions: {
-      org: "romb",
-      project: "koryta-pl",
-    },
-    telemetry: !isTest,
-  },
+  ...(!isLocal
+    ? {
+        sentry: {
+          sourceMapsUploadOptions: {
+            org: "romb",
+            project: "koryta-pl",
+          },
+          telemetry: !isLocal,
+        },
+      }
+    : {}),
 
   sourcemap: {
     client: "hidden",
