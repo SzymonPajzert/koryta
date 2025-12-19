@@ -5,10 +5,10 @@ on:
     branches:
       - main
     paths:
-      - 'frontend/**'
+      - "frontend/**"
   pull_request:
     paths:
-      - 'frontend/**'
+      - "frontend/**"
 
 jobs:
   test-and-preview:
@@ -23,8 +23,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Dependencies
@@ -34,8 +34,8 @@ jobs:
       - name: Install Java (for Emulators)
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          distribution: "temurin"
+          java-version: "21"
 
       - name: Start Emulators & Run Tests
         working-directory: frontend
@@ -45,37 +45,26 @@ jobs:
           # Start emulators in background and run tests
           # We use concurrently or just run them sequentially if we can detach emulators
           # But for CI, it's often easier to use the firebase-tools action or just run them in background
-          
+
           # Install firebase tools globally
           npm install -g firebase-tools
-          
+
           # Start emulators (without import)
-          npm run emulators &
+          npm run dev:local &
           EMULATOR_PID=$!
-          
+
           # Wait for emulators to be ready
           sleep 20
-          
-          # Seed Database
-          npm run seed
-          
+
           # Run Unit Tests
           npm run test:ci
-          
-          # Run E2E Tests with Percy
-          # Note: We need the app running too. 
-          # npm run dev starts Nuxt. 
-          # In CI, we usually build and start.
-          FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run build
-          FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run preview &
-          PREVIEW_PID=$!
-          
+
           # Wait for app
           npx wait-on http://localhost:3000
-          
+
           # Run Cypress
-          npx percy exec -- npm run test:e2e
-          
+          npx percy exec -- npm run test:e2e:local
+
           # Cleanup
           kill $PREVIEW_PID
           kill $EMULATOR_PID
@@ -88,4 +77,3 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KORYTA_PL }}
           projectId: koryta-pl
-          entryPoint: frontend
