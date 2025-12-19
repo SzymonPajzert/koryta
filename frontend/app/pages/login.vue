@@ -146,8 +146,11 @@ const register = async () => {
     await sendEmailVerification(userCredential.user);
     alert("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
     router.push((redirect as string) || "/");
-  } catch (err) {
-    console.error("Registration error:", err.code, err.message);
+  } catch (err: any) {
+    if (err.code === "auth/user-not-found") {
+      error.value = "Użytkownik nie istnieje";
+      return;
+    }
     error.value = getErrorMessage(err.code);
   } finally {
     loading.value = false;
