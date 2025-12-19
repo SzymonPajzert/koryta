@@ -4,6 +4,11 @@ import { isDev } from "@nuxt/test-utils";
 const isTest = !!process.env.VITEST;
 const isLocal = isTest || isDev || process.env.USE_EMULATORS === "true";
 
+console.log({
+  msg: "isLocal config",
+  isLocal,
+  args: [isTest, isDev, process.env.USE_EMULATORS],
+});
 
 export default defineNuxtConfig({
   app: {
@@ -130,7 +135,6 @@ export default defineNuxtConfig({
         experimentalForceLongPolling: true,
       },
     },
-
   },
 
   css: ["v-network-graph/lib/style.css"],
