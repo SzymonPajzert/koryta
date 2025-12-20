@@ -1,0 +1,84 @@
+[
+  {
+    "id": "rev1",
+    "nodeId": "1",
+    "data": {
+      "name": "Jan Kowalski",
+      "type": "person",
+      "content": "Politician from PO",
+      "parties": [
+        "PO"
+      ]
+    },
+    "update_time": "2023-12-01T12:00:00Z",
+    "update_user": "admin@koryta.pl"
+  },
+  {
+    "id": "rev2",
+    "nodeId": "2",
+    "data": {
+      "name": "Orlen",
+      "type": "company",
+      "content": "State oil company"
+    },
+    "update_time": "2023-12-01T12:00:00Z",
+    "update_user": "admin@koryta.pl"
+  },
+  {
+    "id": "rev3",
+    "nodeId": "3",
+    "data": {
+      "name": "Anna Nowak",
+      "type": "person",
+      "content": "Politician from PiS",
+      "parties": [
+        "PiS"
+      ]
+    },
+    "update_time": "2023-12-01T12:00:00Z",
+    "update_user": "admin@koryta.pl"
+  },
+  {
+    "id": "rev4",
+    "nodeId": "4",
+    "data": {
+      "name": "Piotr Wiśniewski",
+      "type": "person",
+      "content": "Politician from Lewica",
+      "parties": [
+        "Nowa Lewica"
+      ]
+    },
+    "update_time": "2023-12-01T12:00:00Z",
+    "update_user": "admin@koryta.pl"
+  },
+  {
+    "id": "rev5",
+    "nodeId": "5",
+    "data": {
+      "name": "Krzysztof Wójcik",
+      "type": "person",
+      "content": "Politician from Konfederacja",
+      "parties": [
+        "Konfederacja"
+      ]
+    },
+    "update_time": "2023-12-01T12:00:00Z",
+    "update_user": "admin@koryta.pl"
+  },
+  {
+    "id": "rev6",
+    "nodeId": "5",
+    "data": {
+      "name": "Krzysztof Wójcik",
+      "type": "person",
+      "content": "Politician from Konfederacja and PiS",
+      "parties": [
+        "Konfederacja",
+        "PiS"
+      ]
+    },
+    "update_time": "2024-12-01T12:00:00Z",
+    "update_user": "user@koryta.pl"
+  }
+]

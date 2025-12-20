@@ -7,6 +7,9 @@
           {{ person?.name }}
         </h2>
       </v-card-title>
+      <v-card-text>
+        {{ person?.content }}
+      </v-card-text>
     </v-card>
     <div class="mt-4">
       <v-row>
