@@ -4,7 +4,6 @@ describe("list", () => {
   });
 
   it("screenshots", () => {
-    cy.wait(1500).get("body").matchImageSnapshot();
     cy.percySnapshot("zrodla-page");
   });
 });

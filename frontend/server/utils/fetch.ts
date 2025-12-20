@@ -11,24 +11,15 @@ interface nodeData {
 
 export async function fetchNodes<N extends NodeType>(
   path: N,
-  filters: NodeFilters = {},
   isAuth: boolean = false,
   nodeId?: string
 ): Promise<Record<string, nodeData[N]>> {
   const db = getFirestore("koryta-pl");
   let query: FirebaseFirestore.Query = db.collection("nodes").where("type", "==", path);
   if (nodeId) {
-      // If querying by exact doc ID, we can't simple use where('id') because ID is the doc key.
-      // But we can fetch the specific doc directly if we refactor.
-      // Use client-side filtering or doc ref if nodeId is present.
-      // For now, let's just fetch all and filter in memory if only 'type' index exists.
-      // Wait, standard fetch is collection-wide.
-      // Let's rely on modifying the query if indices exist or fetch specific doc.
-      // Actually, if nodeId is passed, we should just get that one doc.
       const docRef = db.collection("nodes").doc(nodeId);
       const docSnap = await docRef.get();
       if (!docSnap.exists) return {};
-      // If doc exists but type mismatch?
       if (docSnap.data()?.type !== path) return {};
       
       const nodesData = [{ id: docSnap.id, ...docSnap.data() } as nodeData[N] & {
@@ -36,9 +27,6 @@ export async function fetchNodes<N extends NodeType>(
         revision_id?: string;
       }];
       
-      // Proceed to revision logic with just this one node
-      const nodeIds = nodesData.map((n) => n.id);
-      // ... rest of logic is same
       return await processRevisions(nodesData, isAuth, db);
   }
   
@@ -54,20 +42,14 @@ export async function fetchNodes<N extends NodeType>(
 
 // Helper to avoid duplication
 async function processRevisions(nodesData: any[], isAuth: boolean, db: FirebaseFirestore.Firestore) {
-
-
   const nodeIds = nodesData.map((n) => n.id);
   const revisions: Record<string, any> = {};
 
   console.log(`fetchNodes: isAuth=${isAuth}, nodeIds=${nodeIds.length}`);
 
   if (isAuth && nodeIds.length > 0) {
-    // For logged in users, find the latest revision for each node
-    // Firestore doesn't support "latest per group" easily in one query without custom indexing or client-side processing
-    // fetching all revisions for these nodes might be heavy if many revisions, but for now assuming reasonable count.
-    // Better approach: fetch all revisions matching nodeId 'in' ... (limit 30)
-    // If > 30 nodes, we need batching.
-
+    // For logged in users, find the latest revision for each node.
+    // TODO We need to use a custom index here.
     const chunks = [];
     for (let i = 0; i < nodeIds.length; i += 30) {
       chunks.push(nodeIds.slice(i, i + 30));
@@ -79,8 +61,6 @@ async function processRevisions(nodesData: any[], isAuth: boolean, db: FirebaseF
       const revsQuery = await db
         .collection("revisions")
         .where("nodeId", "in", chunk)
-        // We want to sort by update_time desc to get latest easily,
-        // but purely client side filtering is safer for simple index requirements.
         .get();
 
       revsQuery.docs.forEach((doc) => {
@@ -154,13 +134,13 @@ export async function fetchEdges(): Promise<Edge[]> {
 export async function fetchRTDB<T>(path: string): Promise<T> {
   const db = getDatabase();
   const snapshot = await db.ref(path).once("value");
-  return snapshot.val() || {}; // Ensure we always return an object
+  return snapshot.val() || {};
 }
 
 export async function fetchFirestore<T>(path: string): Promise<T> {
   const db = getDatabase();
   const snapshot = await db.ref(path).once("value");
-  return snapshot.val() || {}; // Ensure we always return an object
+  return snapshot.val() || {};
 }
 
 export async function setRTDB<T>(path: string, value: T): Promise<void> {

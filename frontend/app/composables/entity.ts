@@ -16,6 +16,7 @@ export async function useEntity<N extends NodeType>(nodeType: N) {
   const { data: response } = await useFetch<{
     entities: Record<string, NodeTypeMap[N]>;
   }>(`/api/nodes/${nodeType}`, {
+      key: `nodes-${nodeType}-${idToken.value ? 'auth' : 'anon'}`,
       headers,
       watch: [headers]
   });
