@@ -1,7 +1,12 @@
 [
   {
     "source": "1",
+    "target": "3",
+    "type": "connection"
+  },
+  {
+    "source": "1",
     "target": "2",
-    "type": "knows"
+    "type": "employed"
   }
 ]
