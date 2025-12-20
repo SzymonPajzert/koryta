@@ -20,6 +20,20 @@ vi.mock('firebase/firestore', async (importOriginal) => {
   };
 });
 
+vi.mock('firebase/auth', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('firebase/auth')>();
+    return {
+        ...actual,
+        getAuth: vi.fn(() => ({})),
+        initializeAuth: vi.fn(() => ({})),
+        connectAuthEmulator: vi.fn(),
+        onAuthStateChanged: vi.fn(),
+        signInWithEmailAndPassword: vi.fn(),
+        createUserWithEmailAndPassword: vi.fn(),
+        signOut: vi.fn(),
+    }
+});
+
 vi.mock('nuxt-vuefire', () => ({
   useCurrentUser: vi.fn(),
 }));
