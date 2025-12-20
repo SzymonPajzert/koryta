@@ -2,6 +2,7 @@ export type Node = {
   name: string;
   type: NodeType;
   text?: string;
+  revision_id?: string;
 };
 
 export type NodeType = "person" | "place" | "article" | "record";
@@ -38,6 +39,7 @@ export interface Edge {
 export interface Person {
   name: string;
   parties?: string[];
+  content?: string;
 }
 
 export interface Company {
@@ -60,4 +62,13 @@ export interface NodeTypeMap {
   place: Company;
   article: Article;
   record: never;
+}
+
+export interface Revision {
+  id: string;
+  nodeId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any;
+  update_time: string; // ISO string
+  update_user: string;
 }

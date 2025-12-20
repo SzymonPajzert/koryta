@@ -1,0 +1,32 @@
+[
+  {
+    "id": "1",
+    "type": "person",
+    "revision_id": "rev1"
+  },
+  {
+    "id": "2",
+    "type": "place",
+    "revision_id": "rev2"
+  },
+  {
+    "id": "3",
+    "type": "person",
+    "revision_id": "rev3"
+  },
+  {
+    "id": "4",
+    "type": "person",
+    "revision_id": "rev4"
+  },
+  {
+    "id": "5",
+    "type": "person",
+    "revision_id": "rev5"
+  },
+  {
+    "id": "6",
+    "type": "article",
+    "revision_id": "rev7"
+  }
+]

@@ -1,9 +1,25 @@
 import type { NodeTypeMap, NodeType } from "~~/shared/model";
 
+import { useAuthState } from "@/composables/auth";
+
 export async function useEntity<N extends NodeType>(nodeType: N) {
+  const { idToken } = useAuthState();
+  
+  const headers = computed(() => {
+     const h: Record<string, string> = {};
+     if (idToken.value) {
+         h.Authorization = `Bearer ${idToken.value}`;
+     }
+     return h;
+  });
+
   const { data: response } = await useFetch<{
     entities: Record<string, NodeTypeMap[N]>;
-  }>(`/api/nodes/${nodeType}`);
+  }>(`/api/nodes/${nodeType}`, {
+      key: `nodes-${nodeType}-${idToken.value ? 'auth' : 'anon'}`,
+      headers,
+      watch: [headers]
+  });
   const entities = computed(() => response?.value?.entities ?? {});
 
   function submit<N extends NodeType>(

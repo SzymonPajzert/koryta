@@ -7,6 +7,7 @@ import { useParams } from "@/composables/params";
 
 definePageMeta({
   title: "Lista",
+  fullWidth: true,
 });
 
 const { entities: peopleUnfiltered } = await useEntity("person");

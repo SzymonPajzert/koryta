@@ -3,6 +3,10 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import waitOn from "wait-on";
 
+import nodes from './nodes.json';
+import edges from './edges.json';
+import revisions from './revisions.json';
+
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
 process.env.GCLOUD_PROJECT = "demo-koryta-pl";
@@ -31,28 +35,23 @@ async function seedDatabase() {
   });
   const db = getFirestore(app, "koryta-pl");
 
-  console.log("Seeding database...");
-
-  const nodes = [
-    {
-      id: "1",
-      name: "Test Node 1",
-      type: "person",
-      description: "A test person",
-    },
-    {
-      id: "2",
-      name: "Test Node 2",
-      type: "organization",
-      description: "A test organization",
-    },
-  ];
+  console.log('Seeding database...');
 
   const batch = db.batch();
 
   for (const node of nodes) {
-    const ref = db.collection("nodes").doc(node.id);
+    const ref = db.collection('nodes').doc(node.id);
     batch.set(ref, node);
+  }
+
+  for (const edge of edges) {
+      const ref = db.collection('edges').doc();
+      batch.set(ref, edge);
+  }
+
+  for (const rev of revisions) {
+      const ref = db.collection('revisions').doc(rev.id);
+      batch.set(ref, rev);
   }
 
   await batch.commit();
@@ -93,8 +92,8 @@ async function seedAuth() {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    if (error.code === "auth/email-already-exists") {
-      console.log("Admin user already exists", error);
+    if (error.code === "auth/email-already-exists" || error.code === "auth/uid-already-exists") {
+      console.log("User already exists", error);
     } else {
       throw error;
     }

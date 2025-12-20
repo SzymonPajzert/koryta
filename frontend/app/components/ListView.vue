@@ -23,6 +23,10 @@
             </h2>
           </template>
 
+          <v-card-text v-if="person.content">
+            {{ person.content }}
+          </v-card-text>
+
           <v-card-actions v-if="isAdmin">
             <v-spacer />
             <v-btn
@@ -30,7 +34,7 @@
               prepend-icon="mdi-pencil-outline"
               @click.stop="
                 dialogStore.open({
-                  type: 'employed',
+                  type: 'person',
                   edit: { value: person, key: key },
                 })
               "

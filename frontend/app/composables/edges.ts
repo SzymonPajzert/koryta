@@ -12,14 +12,17 @@ export type EdgeNode = {
 
 export async function useEdges(nodeID: string) {
   const { data: edges } = await useFetch("/api/graph/edges");
-  const { data: nodes } = await useFetch<Record<string, Node>>("/api/nodes");
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const { data: response } = await useFetch<any>("/api/nodes");
+  
+  const nodes = computed(() => response.value?.nodes || {});
 
-  const sources: EdgeNode[] = edges.value
-    .filter((e) => e.target == nodeID)
-    .map((e) => ({ ...e, richNode: nodes.value.nodes[e.source] }));
-  const targets = edges.value
-    .filter((e) => e.source == nodeID)
-    .map((e) => ({ ...e, richNode: nodes.value.nodes[e.target] }));
+  const sources: EdgeNode[] = (edges.value || [])
+    .filter((e) => e.target == nodeID && nodes.value[e.source])
+    .map((e) => ({ ...e, richNode: nodes.value[e.source] as Node }));
+  const targets: EdgeNode[] = (edges.value || [])
+    .filter((e) => e.source == nodeID && nodes.value[e.target])
+    .map((e) => ({ ...e, richNode: nodes.value[e.target] as Node }));
 
   return { sources, targets };
 }
