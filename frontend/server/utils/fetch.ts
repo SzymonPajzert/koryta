@@ -13,15 +13,48 @@ export async function fetchNodes<N extends NodeType>(
   path: N,
   filters: NodeFilters = {},
   isAuth: boolean = false,
+  nodeId?: string
 ): Promise<Record<string, nodeData[N]>> {
   const db = getFirestore("koryta-pl");
-  const nodes = await db.collection("nodes").where("type", "==", path).get();
+  let query: FirebaseFirestore.Query = db.collection("nodes").where("type", "==", path);
+  if (nodeId) {
+      // If querying by exact doc ID, we can't simple use where('id') because ID is the doc key.
+      // But we can fetch the specific doc directly if we refactor.
+      // Use client-side filtering or doc ref if nodeId is present.
+      // For now, let's just fetch all and filter in memory if only 'type' index exists.
+      // Wait, standard fetch is collection-wide.
+      // Let's rely on modifying the query if indices exist or fetch specific doc.
+      // Actually, if nodeId is passed, we should just get that one doc.
+      const docRef = db.collection("nodes").doc(nodeId);
+      const docSnap = await docRef.get();
+      if (!docSnap.exists) return {};
+      // If doc exists but type mismatch?
+      if (docSnap.data()?.type !== path) return {};
+      
+      const nodesData = [{ id: docSnap.id, ...docSnap.data() } as nodeData[N] & {
+        id: string;
+        revision_id?: string;
+      }];
+      
+      // Proceed to revision logic with just this one node
+      const nodeIds = nodesData.map((n) => n.id);
+      // ... rest of logic is same
+      return await processRevisions(nodesData, isAuth, db);
+  }
+  
+  const nodes = await query.get();
   const nodesData = nodes.docs.map((doc) => {
     return { id: doc.id, ...doc.data() } as nodeData[N] & {
       id: string;
       revision_id?: string;
     };
   });
+  return await processRevisions(nodesData, isAuth, db);
+}
+
+// Helper to avoid duplication
+async function processRevisions(nodesData: any[], isAuth: boolean, db: FirebaseFirestore.Firestore) {
+
 
   const nodeIds = nodesData.map((n) => n.id);
   const revisions: Record<string, any> = {};
@@ -102,9 +135,9 @@ export async function fetchNodes<N extends NodeType>(
 
         if (revStr) {
           const revData = revStr.data || {};
-          return [node.id, { ...node, ...revData } as nodeData[N]];
+          return [node.id, { ...node, ...revData }];
         }
-        return [node.id, node as nodeData[N]];
+        return [node.id, node];
       }),
     ) || {}
   );

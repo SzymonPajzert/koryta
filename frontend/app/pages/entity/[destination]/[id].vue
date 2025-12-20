@@ -59,6 +59,7 @@
 <script setup lang="ts">
 import { getFirestore, doc } from "firebase/firestore";
 import { useEdges } from "~/composables/edges";
+import { useAuthState } from "~/composables/auth";
 import type { Person } from "~~/shared/model";
 
 const route = useRoute<"/entity/[destination]/[id]">();
@@ -67,7 +68,24 @@ const node = route.params.id as string;
 const type = route.params.destination;
 
 const db = getFirestore(useFirebaseApp(), "koryta-pl");
-const person = useDocument<Person>(doc(db, "nodes", node));
+// const person = useDocument<Person>(doc(db, "nodes", node));
+
+// Use API fetch to ensure revisions are merged correctly (auth aware)
+const { idToken } = useAuthState();
+const headers = computed(() => {
+  const h: Record<string, string> = {};
+  if (idToken.value) {
+      h.Authorization = `Bearer ${idToken.value}`;
+  }
+  return h;
+});
+
+const { data: response } = await useFetch<{ node: Person }>(`/api/nodes/entry/${node}`, {
+    query: { type },
+    headers,
+    watch: [headers]
+});
+const person = computed(() => response.value?.node);
 
 const { sources, targets } = await useEdges(node);
 
