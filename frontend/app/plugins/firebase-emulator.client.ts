@@ -24,9 +24,11 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     // Firestore
     const db = getFirestore(app);
+    const namedDb = getFirestore(app, "koryta-pl");
     try {
         connectFirestoreEmulator(db, "127.0.0.1", 8080);
-        console.log("✅ Firestore Emulator connected to 127.0.0.1:8080");
+        connectFirestoreEmulator(namedDb, "127.0.0.1", 8080);
+        console.log("✅ Firestore Emulator connected to 127.0.0.1:8080 (default & koryta-pl)");
     } catch(e) { console.log("Firestore emulator already connected/failed", e); }
 
     // Functions
