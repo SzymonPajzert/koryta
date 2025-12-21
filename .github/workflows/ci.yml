@@ -1,4 +1,4 @@
-name: CI/CD
+name: E2E & Percy
 
 on:
   push:
@@ -49,21 +49,8 @@ jobs:
           # Install firebase tools globally
           npm install -g firebase-tools
 
-          # Start emulators (without import)
-          npm run dev:local &
-          EMULATOR_PID=$!
-
-          # Wait for emulators to be ready
-          sleep 20
-
-          # Run Unit Tests
-          npm run test:ci
-
-          # Wait for app
-          npx wait-on http://localhost:3000
-
-          # Run Cypress
-          npx percy exec -- npm run test:e2e:local
+          # Run e2e test with cypress and emulators
+          npx percy exec -- npm run test:e2e
 
           # Cleanup
           kill $PREVIEW_PID

@@ -75,16 +75,18 @@ const { idToken } = useAuthState();
 const headers = computed(() => {
   const h: Record<string, string> = {};
   if (idToken.value) {
-      h.Authorization = `Bearer ${idToken.value}`;
+    h.Authorization = `Bearer ${idToken.value}`;
   }
   return h;
 });
 
-const { data: response } = await useFetch<{ node: Person }>(`/api/nodes/entry/${node}`, {
-    query: { type },
+const { data: response } = await useFetch<{ node: Person }>(
+  `/api/nodes/entry/${node}`,
+  {
     headers,
-    watch: [headers]
-});
+    watch: [headers],
+  },
+);
 const person = computed(() => response.value?.node);
 
 const { sources, targets } = await useEdges(node);

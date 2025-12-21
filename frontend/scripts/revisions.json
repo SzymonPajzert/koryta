@@ -1,32 +1,19 @@
 [
   {
     "id": "rev1",
-    "nodeId": "1",
+    "node_id": "1",
     "data": {
       "name": "Jan Kowalski",
       "type": "person",
       "content": "Politician from PO",
-      "parties": [
-        "PO"
-      ]
+      "parties": ["PO"]
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
   },
   {
     "id": "rev2",
-    "nodeId": "2",
-    "data": {
-      "name": "Orlen",
-      "type": "place",
-      "content": "State oil company"
-    },
-    "update_time": "2023-12-01T12:00:00Z",
-    "update_user": "admin@koryta.pl"
-  },
-  {
-    "id": "rev2",
-    "nodeId": "2",
+    "node_id": "2",
     "data": {
       "name": "Orlen",
       "type": "place",
@@ -37,64 +24,55 @@
   },
   {
     "id": "rev3",
-    "nodeId": "3",
+    "node_id": "3",
     "data": {
       "name": "Anna Nowak",
       "type": "person",
       "content": "Politician from PiS",
-      "parties": [
-        "PiS"
-      ]
+      "parties": ["PiS"]
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
   },
   {
     "id": "rev4",
-    "nodeId": "4",
+    "node_id": "4",
     "data": {
       "name": "Piotr Wiśniewski",
       "type": "person",
       "content": "Politician from Lewica",
-      "parties": [
-        "Nowa Lewica"
-      ]
+      "parties": ["Nowa Lewica"]
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
   },
   {
     "id": "rev5",
-    "nodeId": "5",
+    "node_id": "5",
     "data": {
       "name": "Krzysztof Wójcik",
       "type": "person",
       "content": "Politician from Konfederacja",
-      "parties": [
-        "Konfederacja"
-      ]
+      "parties": ["Konfederacja"]
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
   },
   {
     "id": "rev6",
-    "nodeId": "5",
+    "node_id": "5",
     "data": {
       "name": "Krzysztof Wójcik",
       "type": "person",
       "content": "Politician from Konfederacja and PiS",
-      "parties": [
-        "Konfederacja",
-        "PiS"
-      ]
+      "parties": ["Konfederacja", "PiS"]
     },
     "update_time": "2024-12-01T12:00:00Z",
     "update_user": "user@koryta.pl"
   },
   {
     "id": "rev7",
-    "nodeId": "6",
+    "node_id": "6",
     "data": {
       "name": "Sample Article",
       "type": "article",

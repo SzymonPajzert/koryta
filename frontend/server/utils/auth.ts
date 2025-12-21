@@ -1,5 +1,5 @@
 import { getAuth } from "firebase-admin/auth";
-import { H3Event } from "h3";
+import type { H3Event } from "h3";
 
 export async function getUser(event: H3Event) {
   const authHeader = getRequestHeader(event, "Authorization");
