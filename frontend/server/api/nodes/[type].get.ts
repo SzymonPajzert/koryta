@@ -7,6 +7,6 @@ export default defineEventHandler(async (event) => {
   if (!nodeType) return undefined;
   
   const user = await getUser(event).catch(() => null);
-  const entities = await fetchNodes(nodeType as NodeType, !!user);
+  const entities = await fetchNodes(nodeType as NodeType, { isAuth: !!user });
   return { entities };
 });

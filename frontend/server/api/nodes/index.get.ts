@@ -6,9 +6,9 @@ export default defineEventHandler(async (event) => {
   const isAuth = !!user;
   
   const [people, places, articles] = await Promise.all([
-      fetchNodes("person", isAuth),
-      fetchNodes("place", isAuth),
-      fetchNodes("article", isAuth)
+      fetchNodes("person", { isAuth }),
+      fetchNodes("place", { isAuth }),
+      fetchNodes("article", { isAuth })
   ]);
 
   const nodes = { ...people, ...places, ...articles };
