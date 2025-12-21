@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
@@ -70,15 +70,12 @@ jobs:
         env:
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
         run: |
+
           # Install firebase tools globally
           npm install -g firebase-tools
 
           # Run e2e test with cypress and emulators
           npx percy exec -- npm run test:e2e
-
-          # Cleanup
-          kill $PREVIEW_PID
-          kill $EMULATOR_PID
 
       - name: Deploy Preview to Firebase Hosting
         if: github.event_name == 'pull_request'
