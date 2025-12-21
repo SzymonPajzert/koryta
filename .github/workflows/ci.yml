@@ -71,11 +71,8 @@ jobs:
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
         run: |
 
-          # Install firebase tools globally
-          npm install -g firebase-tools
-
-          # Run e2e test with cypress and emulators
-          npx percy exec -- npm run test:e2e
+          # Run e2e test with cypress and emulators on the built server
+          npx percy exec -- npm run test:e2e:build
 
       - name: Deploy Preview to Firebase Hosting
         if: github.event_name == 'pull_request'
