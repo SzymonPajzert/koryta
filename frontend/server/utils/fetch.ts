@@ -9,21 +9,38 @@ interface nodeData {
   record: unknown;
 }
 
+
 export interface NodeFilters {
   interesting?: boolean;
   posted?: boolean;
   article?: boolean;
 }
 
+export interface FetchNodesOptions {
+  isAuth?: boolean;
+  nodeId?: string;
+  filters?: NodeFilters;
+}
+
 export async function fetchNodes<N extends NodeType>(
   path: N,
-  isAuth: boolean = false,
-  nodeId?: string,
+  options: FetchNodesOptions = {},
 ): Promise<Record<string, nodeData[N]>> {
+  const { isAuth = false, nodeId, filters } = options;
   const db = getFirestore("koryta-pl");
   let query: FirebaseFirestore.Query = db
     .collection("nodes")
     .where("type", "==", path);
+
+  if (filters?.interesting) {
+    query = query.where("interesting", "==", true);
+  }
+  if (filters?.posted) {
+    query = query.where("posted", "==", true);
+  }
+  if (filters?.article) {
+    query = query.where("article", "==", true);
+  }
 
   if (nodeId) {
     const docRef = db.collection("nodes").doc(nodeId);

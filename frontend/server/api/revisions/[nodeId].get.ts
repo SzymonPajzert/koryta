@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   // YAML said "revisions" collection.
   const snapshot = await db
     .collection("revisions")
-    .where("nodeId", "==", nodeId)
+    .where("node_id", "==", nodeId)
     .orderBy("update_time", "desc")
     .get();
 
