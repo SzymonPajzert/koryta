@@ -3,9 +3,9 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import waitOn from "wait-on";
 
-import nodes from './nodes.json';
-import edges from './edges.json';
-import revisions from './revisions.json';
+import nodes from "./nodes.json";
+import edges from "./edges.json";
+import revisions from "./revisions.json";
 
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
@@ -35,27 +35,34 @@ async function seedDatabase() {
   });
   const db = getFirestore(app, "koryta-pl");
 
-  console.log('Seeding database...');
+  console.log("Seeding database...");
 
   const batch = db.batch();
 
   for (const node of nodes) {
-    const ref = db.collection('nodes').doc(node.id);
+    const ref = db.collection("nodes").doc(node.id);
     batch.set(ref, node);
   }
 
   for (const edge of edges) {
-      const ref = db.collection('edges').doc();
-      batch.set(ref, edge);
+    const ref = db.collection("edges").doc();
+    batch.set(ref, edge);
   }
 
   for (const rev of revisions) {
-      const ref = db.collection('revisions').doc(rev.id);
-      batch.set(ref, rev);
+    const ref = db.collection("revisions").doc(rev.id);
+    batch.set(ref, rev);
   }
 
   await batch.commit();
   console.log("Database seeded successfully!");
+
+  console.log((await db.collection("nodes").get()).docs.length, "nodes");
+  console.log((await db.collection("edges").get()).docs.length, "edges");
+  console.log(
+    (await db.collection("revisions").get()).docs.length,
+    "revisions",
+  );
 }
 
 async function seedAuth() {
@@ -92,7 +99,10 @@ async function seedAuth() {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    if (error.code === "auth/email-already-exists" || error.code === "auth/uid-already-exists") {
+    if (
+      error.code === "auth/email-already-exists" ||
+      error.code === "auth/uid-already-exists"
+    ) {
       console.log("User already exists", error);
     } else {
       throw error;
