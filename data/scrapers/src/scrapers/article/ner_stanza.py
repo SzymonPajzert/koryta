@@ -1,6 +1,8 @@
-import stanza
 import os
+
 import spacy
+import stanza
+
 
 class StanzaNERClient:
     _nlp_stanza = None
@@ -52,7 +54,7 @@ class StanzaNERClient:
                     current.append(text)
                     full = ' '.join(current)
                     findings.append(full)
-                    current_name = []
+                    current = []
                 elif ner_tag == f'S-{pos_type}':
                     findings.append(text)
     

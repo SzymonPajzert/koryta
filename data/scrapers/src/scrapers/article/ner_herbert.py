@@ -1,7 +1,9 @@
 import os
 import re
-from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
+
 import spacy
+from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
+
 nlp_spacy = spacy.load("pl_core_news_lg")
 
 class HerbertNERClient:
@@ -52,7 +54,7 @@ class HerbertNERClient:
         }
     
         current_entity = []
-        # current_type = None
+        current_type = None
         
         for token in ner_output:
             tag = token['entity']
