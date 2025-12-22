@@ -1,7 +1,7 @@
 import os
 
 import spacy
-import stanza
+import stanza # type: ignore
 
 
 class StanzaNERClient:
