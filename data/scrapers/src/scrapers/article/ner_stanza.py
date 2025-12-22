@@ -14,12 +14,13 @@ class StanzaNERClient:
     def _get_model(self):
         if self._nlp_stanza is None:
             if not os.path.isdir(os.path.join(self.model_dir,'pl')):
-                print(f'Model is downloaded from external resource to location {self.model_dir}')
+                print(f'Model is downloaded from external resource to location {self.model_dir}') # noqa: E501
                 stanza.download('pl', model_dir=self.model_dir)
             else:
                 print(f'Model already exists in location: {self.model_dir}')
 
-            StanzaNERClient._nlp_stanza = stanza.Pipeline('pl', processors='tokenize,ner', dir = self.model_dir)
+            StanzaNERClient._nlp_stanza = stanza.Pipeline('pl', processors='tokenize,ner',
+                                                           dir = self.model_dir)
             print("Model has been loaded")
         
         return StanzaNERClient._nlp_stanza

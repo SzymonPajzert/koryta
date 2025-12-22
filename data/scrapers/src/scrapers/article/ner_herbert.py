@@ -21,7 +21,7 @@ class HerbertNERClient:
                 
                 print(f"Loading model from {self.model_checkpoint}...")
                 tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
-                model = AutoModelForTokenClassification.from_pretrained(self.model_checkpoint)
+                model = AutoModelForTokenClassification.from_pretrained(self.model_checkpoint) # noqa: E501
                 tokenizer.save_pretrained(self.model_dir)
                 model.save_pretrained(self.model_dir)
             else:
@@ -29,7 +29,8 @@ class HerbertNERClient:
                 tokenizer = AutoTokenizer.from_pretrained(self.model_dir)
                 model = AutoModelForTokenClassification.from_pretrained(self.model_dir)
             
-            HerbertNERClient._pipeline = pipeline("ner", model=model, tokenizer=tokenizer)
+            HerbertNERClient._pipeline = pipeline("ner", model=model, 
+                                                  tokenizer=tokenizer)
             print("Model has been loaded")
         
         return HerbertNERClient._pipeline
