@@ -3,24 +3,24 @@ import os
 import spacy
 
 class StanzaNERClient:
-    _pipeline = None
+    _nlp_stanza = None
     _nlp_spacy = None
 
     def __init__(self):
-        self.model_path = os.path.join('models','stanza')
+        self.model_dir = os.path.join('models','stanza')
 
-    def _get_pipeline(self):
+    def _get_model(self):
         if self._nlp_stanza is None:
-            if not os.path.isdir(os.path.join(self.model_path,'pl')):
-                print(f'Model is downloaded from external resources to location {self.model_path}')
-                stanza.download('pl', model_dir=self.model_path)
+            if not os.path.isdir(os.path.join(self.model_dir,'pl')):
+                print(f'Model is downloaded from external resource to location {self.model_dir}')
+                stanza.download('pl', model_dir=self.model_dir)
             else:
-                print(f'Model already exists in location: {self.model_path}')
+                print(f'Model already exists in location: {self.model_dir}')
 
-            StanzaNERClient._pipeline = stanza.Pipeline('pl', processors='tokenize,ner', dir = self.model_path)
+            StanzaNERClient._nlp_stanza = stanza.Pipeline('pl', processors='tokenize,ner', dir = self.model_dir)
             print("Model has been loaded")
         
-        return StanzaNERClient._pipeline
+        return StanzaNERClient._nlp_stanza
 
     def _get_nlp_spacy(self):
         if self._nlp_spacy is None:
@@ -30,8 +30,8 @@ class StanzaNERClient:
         return StanzaNERClient._nlp_spacy
 
     def extract_entities(self, text):
-        pipeline = self._get_pipeline()
-        return pipeline(text)
+        ner_model = self._get_model()
+        return ner_model(text)
 
 
     def filter_entities(self, document, pos_type):

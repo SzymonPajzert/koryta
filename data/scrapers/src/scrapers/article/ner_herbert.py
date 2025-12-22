@@ -1,6 +1,8 @@
+import os
+import re
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 import spacy
-import re
+nlp_spacy = spacy.load("pl_core_news_lg")
 
 class HerbertNERClient:
     
@@ -8,13 +10,22 @@ class HerbertNERClient:
     _nlp_spacy = None
 
     def __init__(self):
-        self.model_checkpoint = "huggingface_models/herbert-base-ner"
-
+        self.model_checkpoint = "pczarnik/herbert-base-ner"
+        self.model_dir = os.path.join("models","herbert-base-ner")
+        
     def _get_pipeline(self):
         if self._pipeline is None:
-            print(f"Loading model {self.model_checkpoint}...")
-            tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
-            model = AutoModelForTokenClassification.from_pretrained(self.model_checkpoint)
+            if not os.path.isdir(self.model_dir):
+                
+                print(f"Loading model from {self.model_checkpoint}...")
+                tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
+                model = AutoModelForTokenClassification.from_pretrained(self.model_checkpoint)
+                tokenizer.save_pretrained(self.model_dir)
+                model.save_pretrained(self.model_dir)
+            else:
+                print(f"Loading model from {self.model_dir}...")
+                tokenizer = AutoTokenizer.from_pretrained(self.model_dir)
+                model = AutoModelForTokenClassification.from_pretrained(self.model_dir)
             
             HerbertNERClient._pipeline = pipeline("ner", model=model, tokenizer=tokenizer)
             print("Model has been loaded")
@@ -41,7 +52,7 @@ class HerbertNERClient:
         }
     
         current_entity = []
-        current_type = None
+        # current_type = None
         
         for token in ner_output:
             tag = token['entity']
