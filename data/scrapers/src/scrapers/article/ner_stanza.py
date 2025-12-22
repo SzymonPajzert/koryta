@@ -19,7 +19,7 @@ class StanzaNERClient:
             else:
                 print(f'Model already exists in location: {self.model_dir}')
 
-            StanzaNERClient._nlp_stanza = stanza.Pipeline('pl', processors='tokenize,ner',
+            StanzaNERClient._nlp_stanza = stanza.Pipeline('pl', processors='tokenize,ner', # noqa: E501
                                                            dir = self.model_dir)
             print("Model has been loaded")
         
