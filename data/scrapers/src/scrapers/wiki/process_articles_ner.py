@@ -2,12 +2,11 @@ import itertools
 import multiprocessing
 import typing
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
 
 import mwparserfromhell
 import pandas as pd
 from memoized_property import memoized_property  # type: ignore
-from regex import findall, search  # TODO remove
+from regex import findall, search
 from tqdm import tqdm
 
 from scrapers.stores import Context, DownloadableFile, Pipeline
@@ -94,7 +93,8 @@ class Infobox:
             field_links = {}
             for param in infobox.params:
                 fields[param.name.strip_code().strip()] = param.value.strip_code().strip()
-                field_links[param.name.strip_code().strip()] = [str(link.title) for link in param.value.filter_wikilinks()]
+                field_links[param.name.strip_code().strip()] = [str(link.title) for link in
+                                                                param.value.filter_wikilinks()]
             result.append(
                 Infobox(
                     inf_type,
@@ -167,9 +167,9 @@ class WikiArticle:
     def normalized_links(self):
         def generate():
             for entry in itertools.chain(
-                self.categories,
-                self.links,
-                *[infobox.links for infobox in self.infoboxes],
+                    self.categories,
+                    self.links,
+                    *[infobox.links for infobox in self.infoboxes],
             ):
                 n = entry.rstrip("]").lstrip("[").split("|")[0]
                 if n.isdigit():
@@ -233,7 +233,7 @@ class ProcessWikiPeopleNames(Pipeline):
     def process(self, ctx: Context) -> pd.DataFrame:
         person_titles = []
         with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f, tqdm(
-            total=DUMP_SIZE, unit_scale=True, smoothing=0.1
+                total=DUMP_SIZE, unit_scale=True, smoothing=0.1
         ) as tq:
             article_gen = _article_generator(f, tq)
             with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
@@ -251,17 +251,26 @@ def _ner_worker(args):
             return None
 
         text = mwparserfromhell.parse(wikitext).strip_code().strip()
-        names = set()
+        names = []
         if article.title in people_titles:
-            names.add(article.title)
+            names.append({"name_in_text": article.title, "name_normalize": article.title})
 
-        linked_people = article.normalized_links.intersection(people_titles)
-        names.update(linked_people)
+        parsed_wikitext = mwparserfromhell.parse(wikitext)
+        for link in parsed_wikitext.filter_wikilinks():
+            normalized_name = str(link.title).split("#")[0].strip()
+            if not normalized_name or normalized_name.isdigit():
+                continue
+
+            if normalized_name in people_titles:
+                name_in_text = str(link.text).strip() if link.text else normalized_name
+                mention = {"name_in_text": name_in_text, "name_normalize": normalized_name}
+                if mention not in names:
+                    names.append(mention)
 
         if not names:
             return None
 
-        return {"text": text, "names": sorted(list(names))}
+        return {"text": text, "names": names}
     except Exception:
         return None
 
@@ -276,7 +285,7 @@ class ProcessWikiNer(Pipeline):
 
         dataset = []
         with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f, tqdm(
-            total=DUMP_SIZE, unit_scale=True, smoothing=0.1
+                total=DUMP_SIZE, unit_scale=True, smoothing=0.1
         ) as tq:
             worker_args = ((title, wikitext, people_titles) for title, wikitext in _article_generator(f, tq))
             with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
