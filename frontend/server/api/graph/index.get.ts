@@ -7,6 +7,7 @@ import {
   type GraphLayout,
 } from "~~/shared/graph/util";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
+import { getUser } from "~~/server/utils/auth";
 
 export default defineEventHandler(async (event) => {
   const user = await getUser(event).catch(() => null);
