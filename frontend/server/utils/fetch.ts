@@ -1,4 +1,4 @@
-import type { NodeType, Edge, Person, Company, Article } from "~~/shared/model";
+import { type NodeType, type Edge, type Person, type Company, type Article, nodeIsPublic } from "~~/shared/model";
 import { getDatabase } from "firebase-admin/database";
 import { getFirestore } from "firebase-admin/firestore";
 
@@ -68,7 +68,7 @@ export async function fetchNodes<N extends NodeType>(
     .filter((node) => {
       // Visibility filtering:
       if (isAuth) return true;
-      return !!node.revision_id;
+      return nodeIsPublic(node)
     });
 
   console.log(`fetchNodes(${path}, isAuth=${isAuth}): returning ${nodesData.length} nodes (total ${nodes.docs.length})`);

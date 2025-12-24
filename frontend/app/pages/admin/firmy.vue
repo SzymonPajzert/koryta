@@ -80,7 +80,6 @@ import type { Company } from "~~/shared/model";
 import { useEditIndexedField } from "~/composables/editIndexedField";
 
 definePageMeta({
-  fullWidth: true,
   middleware: "admin",
 });
 
