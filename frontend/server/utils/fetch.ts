@@ -80,8 +80,12 @@ export async function fetchEdges(options: { isAuth?: boolean } = {}): Promise<Ed
   const { isAuth = false } = options;
   const db = getFirestore("koryta-pl");
   const edges = (await db.collection("edges").get()).docs
-    .map((doc) => doc.data() as Edge);
-  return edges;
+    .map((doc) => doc.data() as Edge & { visibility?: string })
+    .filter((edge) => {
+      if (isAuth) return true;
+      return !!edge.revision_id;
+    });
+  return (edges as unknown as Edge[]) || [];
 }
 
 export async function fetchRTDB<T>(path: string): Promise<T> {
