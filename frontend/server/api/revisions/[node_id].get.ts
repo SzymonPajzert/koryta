@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const revisions = snapshot.docs
     .map((doc) => ({
       id: doc.id,
-      ...doc.data() as any,
+      ...(doc.data() as any),
     }))
     .filter((rev) => {
       if (isAuth) return true;

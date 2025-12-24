@@ -37,7 +37,10 @@ export default defineEventHandler(async (event) => {
 
   // Visibility filtering
   if (!user && node.visibility === "internal") {
-    throw createError({ statusCode: 404, statusMessage: "Node not found (internal)" });
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Node not found (internal)",
+    });
   }
 
   return { node };
@@ -45,4 +48,4 @@ export default defineEventHandler(async (event) => {
 
 async function getNode(db: FirebaseFirestore.Firestore, id: string) {
   return (await db.collection("nodes").doc(id).get()).data();
-} 
+}
