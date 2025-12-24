@@ -119,7 +119,7 @@ const login = async () => {
     // User is signed in.
     console.debug("User logged in successfully!");
     router.push((redirect as string) || "/");
-  } catch (err) {
+  } catch (err: any) {
     console.error("Login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
   } finally {
@@ -135,7 +135,7 @@ const loginWithGoogle = async () => {
     await signInWithPopup(auth, provider);
     console.debug("User logged in with Google successfully!");
     router.push((redirect as string) || "/");
-  } catch (err) {
+  } catch (err: any) {
     console.error("Google login error:", err.code, err.message);
     error.value = getErrorMessage(err.code);
   } finally {
@@ -172,7 +172,7 @@ const sendVerification = async () => {
   try {
     await sendEmailVerification(user.value);
     alert("Wysłano email weryfikacyjny.");
-  } catch (err) {
+  } catch (err: any) {
     error.value = getErrorMessage(err.code);
   } finally {
     loading.value = false;

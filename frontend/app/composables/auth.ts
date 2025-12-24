@@ -7,9 +7,9 @@ type UserConfig = {
 };
 
 export function useAuthState() {
-  const user = ref<User | null>();
-  const isAdmin = ref<boolean>(false);
-  const idToken = ref<string>("");
+  const user = useState<User | null>("user", () => null);
+  const isAdmin = useState<boolean>("isAdmin", () => false);
+  const idToken = useState<string>("idToken", () => "");
   const auth = useFirebaseAuth()!;
   const router = useRouter();
   const db = useFirestore();
@@ -18,13 +18,21 @@ export function useAuthState() {
   );
   const userConfig = useDocument<UserConfig>(userConfigRef);
 
-  onAuthStateChanged(auth, (userIn) => {
-    user.value = userIn;
-    user.value?.getIdTokenResult().then((idTokenResult) => {
-      isAdmin.value = idTokenResult.claims.admin as boolean;
-      idToken.value = idTokenResult.token;
+  // Initialize listener only once on the client
+  if (import.meta.client && !useState("authListenerInitialized").value) {
+    useState("authListenerInitialized", () => true);
+    onAuthStateChanged(auth, async (userIn) => {
+      user.value = userIn;
+      if (userIn) {
+        const idTokenResult = await userIn.getIdTokenResult();
+        isAdmin.value = !!idTokenResult.claims.admin;
+        idToken.value = idTokenResult.token;
+      } else {
+        isAdmin.value = false;
+        idToken.value = "";
+      }
     });
-  });
+  }
 
   const logout = async () => {
     try {

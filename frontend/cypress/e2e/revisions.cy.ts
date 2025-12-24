@@ -29,14 +29,7 @@ describe("Revisions Logic", () => {
   });
 
   it.skip("Displays latest revision for logged in user", () => {
-    // Mock login by visiting login page and filling form
-    cy.visit("/login");
-    cy.get('input[type="email"]').type("user@koryta.pl");
-    cy.get('input[type="password"]').type("password123");
-    cy.get('button[type="submit"]').click();
-
-    // Wait for redirect or verified state
-    cy.wait(2000); // Ensure auth state settles and token is available
+    cy.login();
 
     cy.visit("/entity/person/5");
 

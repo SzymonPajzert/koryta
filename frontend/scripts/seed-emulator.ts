@@ -11,6 +11,10 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
 process.env.GCLOUD_PROJECT = "demo-koryta-pl";
 
+const app = initializeApp({
+  projectId: "demo-koryta-pl",
+});
+
 /**
  * Seed the emulators with the test data.
  * Always populates auth (but checks that it's test directory).
@@ -29,9 +33,6 @@ async function seedDatabase() {
   await waitOn({
     resources: ["tcp:localhost:8080"],
     timeout: undefined,
-  });
-  const app = initializeApp({
-    projectId: "demo-koryta-pl",
   });
   const db = getFirestore(app, "koryta-pl");
 
@@ -69,9 +70,6 @@ async function seedAuth() {
   await waitOn({
     resources: ["tcp:localhost:9099"],
     timeout: undefined,
-  });
-  const app = initializeApp({
-    projectId: "demo-koryta-pl",
   });
   const auth = getAuth(app);
 

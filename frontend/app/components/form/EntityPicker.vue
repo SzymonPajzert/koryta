@@ -6,7 +6,7 @@
     :label="props.label"
     :hint="props.hint"
     :items="entitiesList"
-    item-title="text"
+    item-title="name"
     item-value="id"
     required
     return-object

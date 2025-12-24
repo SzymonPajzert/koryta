@@ -23,13 +23,9 @@ describe('Entity Editing', () => {
     cy.url().should('include', '/login');
   });
 
-  it.skip('allows registering, creating and editing an entity', () => {
+  it.skip('allows logging in, creating and editing an entity', () => {
     // 1. Register
-    cy.visit('/login');
-    cy.contains('Nie masz konta? Zarejestruj się').click();
-    cy.get('input[type="email"]').type(testEmail);
-    cy.get('input[type="password"]').type(testPassword);
-    cy.contains('button', 'Stwórz konto').click();
+    cy.login();
     
     // Should redirect to home or previous page, but we want to go to /edit
     // Wait for redirect
