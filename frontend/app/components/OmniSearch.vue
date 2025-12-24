@@ -58,8 +58,9 @@ if (props.fake) {
     () => props.searchText,
     (newValue) => {
       search.value = newValue;
+      search.value = newValue;
       nodeGroupPicked.value = {
-        title: newValue,
+        title: newValue || "",
         icon: "mdi-account",
         logEventKey: { content_id: "", content_type: "" },
       };
@@ -76,10 +77,17 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
+const { idToken } = useAuthState();
+
 const { data: graph } = await useAsyncData(
   "graph",
-  () => $fetch("/api/graph"),
-  { lazy: true },
+  () => $fetch("/api/graph", {
+    headers: idToken.value ? { Authorization: `Bearer ${idToken.value}` } : {}
+  }),
+  { 
+    lazy: true,
+    watch: [idToken]
+  },
 );
 
 const items = computed<ListItem[]>(() => {
@@ -87,21 +95,21 @@ const items = computed<ListItem[]>(() => {
   const result: ListItem[] = [];
   result.push({
     title: "Lista wszystkich osób",
-    subtitle: `${graph.value.nodeGroups[0].stats.people} powiązanych osób`,
+    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people} powiązanych osób`,
     icon: "mdi-format-list-bulleted-type",
     path: "/lista",
     logEventKey: {
-      content_id: graph.value.nodeGroups[0].id,
+      content_id: graph.value?.nodeGroups?.[0]?.id || "",
       content_type: "nodeGroup",
     },
   });
   result.push({
     title: "Graf wszystkich osób",
-    subtitle: `${graph.value.nodeGroups[0].stats.people} powiązanych osób`,
+    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people} powiązanych osób`,
     icon: "mdi-graph-outline",
     path: "/graf",
     logEventKey: {
-      content_id: graph.value.nodeGroups[0].id,
+      content_id: graph.value?.nodeGroups?.[0]?.id || "",
       content_type: "nodeGroup",
     },
   });
@@ -138,7 +146,10 @@ const items = computed<ListItem[]>(() => {
 // Monitor the state only if the bar is not fake
 if (!props.fake) {
   watch(nodeGroupPicked, (value) => {
-    if (!value) push("/");
+    if (!value) {
+        push("/");
+        return;
+    }
     let path = value?.path ?? currentRoute.value.path;
     const allowedPath =
       path == "/lista" || path == "/graf" || path.startsWith("/entity/person/");

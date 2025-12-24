@@ -8,11 +8,14 @@ import {
 } from "~~/shared/graph/util";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
+  const user = await getUser(event).catch(() => null);
+  const isAuth = !!user;
+
   const [people, places, articles, edgesFromDB] = await Promise.all([
-    fetchNodes("person"),
-    fetchNodes("place"),
-    fetchNodes("article"),
+    fetchNodes("person", { isAuth }),
+    fetchNodes("place", { isAuth }),
+    fetchNodes("article", { isAuth }),
     fetchEdges(),
   ]);
 
