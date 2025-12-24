@@ -9,6 +9,14 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event).catch(() => null);
   const isAuth = !!user;
 
+  // TODO should it be protected by the middleware instead?
+  if (!isAuth) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: "Unauthorized",
+    });
+  }
+
   const db = getFirestore(getApp(), "koryta-pl");
   const snapshot = await db
     .collection("revisions")
@@ -19,12 +27,8 @@ export default defineEventHandler(async (event) => {
   const revisions = snapshot.docs
     .map((doc) => ({
       id: doc.id,
-      ...doc.data() as any,
-    }))
-    .filter((rev) => {
-      if (isAuth) return true;
-      return !rev.visibility || rev.visibility === "public";
-    });
+      ...(doc.data() as any),
+    }));
 
   return { revisions };
 });

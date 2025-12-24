@@ -1,44 +1,59 @@
 describe("Revisions Logic", () => {
+  beforeEach(() => {
+    cy.window().then((win) => {
+      return new Cypress.Promise((resolve) => {
+        const req = win.indexedDB.deleteDatabase("firebaseLocalStorageDb");
+        req.onsuccess = resolve;
+        req.onerror = resolve;
+        req.onblocked = resolve;
+      });
+    });
+  });
+
   afterEach(() => {
     if (this.currentTest?.state === "failed") {
       cy.screenshot();
     }
   });
 
-  it("Displays data from approved revision", () => {
-    // Visit the list page where Node 1 is displayed
-    cy.visit("/lista?partia=PO");
+  describe("Krzysztof Wójcik", () => {
+    it("Displays approved revision for anonymous user", () => {
+      // Warm up
+      cy.visit("/");
+      cy.visit("/entity/person/5");
 
-    // Node 1 (Jan Kowalski) should be overridden by Revision 1
-    // Revision 1 content: "Politician from PO"
+      // Should NOT see the PiS part
+      cy.contains("Politician from Konfederacja").should("be.visible");
+      cy.contains("Politician from Konfederacja and PiS").should("not.exist");
 
-    // Wait for list to load
-    cy.get(".v-card").should("have.length.at.least", 1);
+      cy.percySnapshot("approved-revision");
+    });
 
-    // Check text content
-    cy.contains("Politician from PO").should("be.visible");
+    it("Displays latest revision for logged in user", () => {
+      cy.login();
+
+      cy.visit("/entity/person/5");
+
+      // Node 5 (Krzysztof Wójcik)
+      // Public (rev5): "Politician from Konfederacja"
+      // Latest (rev6): "Politician from Konfederacja and PiS"
+
+      cy.contains("Politician from Konfederacja and PiS").should("be.visible");
+
+      cy.percySnapshot("latest-revision");
+    });
   });
 
-  it("Displays approved revision for anonymous user", () => {
-    cy.visit("/entity/person/5");
-    // Should NOT see the PiS part
-    cy.contains("Politician from Konfederacja").should("be.visible");
-    cy.contains("Politician from Konfederacja and PiS").should("not.exist");
+  describe("New node added", () => {
+    it("shows correct number of people", () => {
+      const expectedPeople = 4;
 
-    cy.percySnapshot("approved-revision");
-  });
+      cy.request("/api/nodes/person").then((response) => {
+        expect(Object.values(response.body["entities"])).to.have.lengthOf(expectedPeople);
+      });
 
-  it.skip("Displays latest revision for logged in user", () => {
-    cy.login();
-
-    cy.visit("/entity/person/5");
-
-    // Node 5 (Krzysztof Wójcik)
-    // Public (rev5): "Politician from Konfederacja"
-    // Latest (rev6): "Politician from Konfederacja and PiS"
-
-    cy.contains("Politician from Konfederacja and PiS").should("be.visible");
-
-    cy.percySnapshot("latest-revision");
-  });
+      cy.visit("/");
+      cy.contains(`Lista wszystkich ${expectedPeople}`);
+    });
+  })
 });

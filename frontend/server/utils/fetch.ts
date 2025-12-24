@@ -1,4 +1,4 @@
-import type { NodeType, Edge, Person, Company, Article } from "~~/shared/model";
+import { type NodeType, type Edge, type Person, type Company, type Article, nodeIsPublic } from "~~/shared/model";
 import { getDatabase } from "firebase-admin/database";
 import { getFirestore } from "firebase-admin/firestore";
 
@@ -8,7 +8,6 @@ interface nodeData {
   article: Article;
   record: unknown;
 }
-
 
 export interface NodeFilters {
   interesting?: boolean;
@@ -59,22 +58,30 @@ export async function fetchNodes<N extends NodeType>(
   }
 
   const nodes = await query.get();
-  const nodesData = nodes.docs.map((doc) => {
-    return { id: doc.id, ...doc.data() } as nodeData[N] & {
-      id: string;
-      revision_id?: string;
-    };
-  });
+  const nodesData = nodes.docs
+    .map((doc) => {
+      return { id: doc.id, ...doc.data() } as nodeData[N] & {
+        id: string;
+        revision_id?: string;
+      };
+    })
+    .filter((node) => {
+      // Visibility filtering:
+      if (isAuth) return true;
+      return nodeIsPublic(node)
+    });
+
+  console.log(`fetchNodes(${path}, isAuth=${isAuth}): returning ${nodesData.length} nodes (total ${nodes.docs.length})`);
 
   return Object.fromEntries(nodesData.map((node) => [node.id, node]));
 }
 
-export async function fetchEdges(): Promise<Edge[]> {
+export async function fetchEdges(options: { isAuth?: boolean } = {}): Promise<Edge[]> {
+  const { isAuth = false } = options;
   const db = getFirestore("koryta-pl");
-  const edges = (await db.collection("edges").get()).docs.map(
-    (doc) => doc.data() as Edge,
-  );
-  return (edges as unknown as Edge[]) || [];
+  const edges = (await db.collection("edges").get()).docs
+    .map((doc) => doc.data() as Edge);
+  return edges;
 }
 
 export async function fetchRTDB<T>(path: string): Promise<T> {

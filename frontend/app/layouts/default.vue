@@ -51,8 +51,8 @@
   <v-main>
     <v-container
       class="fill-height position-relative"
-      :fluid="route?.meta?.fullWidth"
       :max-width="maxWidth"
+      :style="{ padding: rootPadding }"
     >
       <NuxtPage />
     </v-container>

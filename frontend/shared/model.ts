@@ -5,6 +5,10 @@ export type Node = {
   revision_id?: string;
 };
 
+export function nodeIsPublic(node: { revision_id?: string }) {
+  return !!node.revision_id;
+}
+
 export type NodeType = "person" | "place" | "article" | "record";
 
 export type EdgeType =

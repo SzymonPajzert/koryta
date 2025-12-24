@@ -1,6 +1,7 @@
 import { getUser } from "~~/server/utils/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
+import { nodeIsPublic } from "~~/shared/model";
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, "id");
@@ -36,8 +37,11 @@ export default defineEventHandler(async (event) => {
   }
 
   // Visibility filtering
-  if (!user && node.visibility === "internal") {
-    throw createError({ statusCode: 404, statusMessage: "Node not found (internal)" });
+  if (!user && !nodeIsPublic(node)) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Node not found (internal)",
+    });
   }
 
   return { node };
@@ -45,4 +49,4 @@ export default defineEventHandler(async (event) => {
 
 async function getNode(db: FirebaseFirestore.Firestore, id: string) {
   return (await db.collection("nodes").doc(id).get()).data();
-} 
+}

@@ -41,10 +41,19 @@
     ],
     "revision_id": "rev5"
   },
+  "h1": {
+    "name": "Not approved person",
+    "type": "person"
+  },
   "6": {
     "name": "Sample Article",
     "type": "article",
     "sourceURL": "http://example.com",
     "revision_id": "rev7"
+  },
+  "7": {
+    "name": "Not approved article",
+    "type": "article",
+    "sourceURL": "http://google.com"
   }
 }

@@ -19,6 +19,16 @@ describe("home", () => {
     cy.url().should("include", "/lista");
   });
 
+  it("shows correct number of people", () => {
+    const expectedPeople = 4;
+
+    cy.request("/api/nodes/person").then((response) => {
+      expect(Object.values(response.body["entities"])).to.have.lengthOf(expectedPeople);
+    });
+
+    cy.contains(`Lista wszystkich ${expectedPeople}`);
+  });
+
   // TODO
   // it("shows graph when clicking the second card", () => {
   //   cy.contains(".v-card", "Zobacz jak PSL").click();
