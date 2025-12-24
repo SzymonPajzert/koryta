@@ -1,0 +1,135 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
+import NodeEditPage from "../../../../app/pages/edit/node/[[id]].vue";
+import { createVuetify } from "vuetify";
+import * as components from "vuetify/components";
+import * as directives from "vuetify/directives";
+import { ref } from "vue";
+
+// Setup Vuetify
+const vuetify = createVuetify({
+    components,
+    directives,
+});
+
+// Mock dependencies
+const mockSaveNode = vi.fn();
+const mockAddEdge = vi.fn();
+const mockAddComment = vi.fn();
+const mockVote = vi.fn();
+const mockFetchRevisions = vi.fn();
+const mockRestoreRevision = vi.fn();
+
+const mockState = {
+    isNew: ref(true),
+    tab: ref("content"),
+    current: ref({ name: "", type: "person", parties: [], content: "" }),
+    loading: ref(false),
+    edgeTypeOptions: [{ value: "employed", label: "Zatrudniony/a w", targetType: "place" }],
+    newEdge: ref({ type: "connection", target: "", targetType: "person", name: "", text: "" }),
+    pickerTarget: ref(null),
+    newComment: ref(""),
+    revisions: ref([]),
+    allEdges: ref([]),
+    partiesDefault: ref(["partia A", "partia B"]),
+    idToken: ref("test-token"),
+};
+
+vi.mock("../../../../app/composables/useNodeEdit", () => ({
+    useNodeEdit: () => Promise.resolve({
+        ...mockState,
+        saveNode: mockSaveNode,
+        addEdge: mockAddEdge,
+        addComment: mockAddComment,
+        vote: mockVote,
+        fetchRevisions: mockFetchRevisions,
+        restoreRevision: mockRestoreRevision
+    })
+}));
+
+// Mock definePageMeta
+vi.stubGlobal("definePageMeta", vi.fn());
+
+import { defineComponent, h, Suspense } from "vue";
+
+// Helper to mount async component
+function mountAsync(component: any, options: any = {}) {
+    return mount(defineComponent({
+        render() {
+            return h(Suspense, null, {
+                default: () => h(component),
+                fallback: () => h("div", "fallback")
+            });
+        }
+    }), options);
+}
+
+describe("NodeEditPage", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        // Reset state defaults
+        mockState.isNew.value = true;
+        mockState.current.value = { name: "", type: "person", parties: [], content: "" };
+        mockState.loading.value = false;
+        mockState.allEdges.value = [];
+        mockState.idToken.value = "test-token";
+    });
+
+    it("renders 'Utwórz' title when creating new node", async () => {
+        const wrapper = mountAsync(NodeEditPage, {
+            global: {
+                plugins: [vuetify],
+                stubs: {
+                    EntityPicker: true
+                }
+            }
+        });
+        await flushPromises();
+        expect(wrapper.text()).toContain("Utwórz");
+    });
+
+    it("renders 'Edytuj' title when editing existing node", async () => {
+        mockState.isNew.value = false;
+        const wrapper = mountAsync(NodeEditPage, {
+            global: {
+                plugins: [vuetify],
+                stubs: {
+                    EntityPicker: true
+                }
+            }
+        });
+        await flushPromises();
+        expect(wrapper.text()).toContain("Edytuj");
+    });
+
+    it("disables save button when loading", async () => {
+        mockState.loading.value = true;
+        const wrapper = mountAsync(NodeEditPage, {
+            global: {
+                plugins: [vuetify],
+                stubs: {
+                    EntityPicker: true
+                }
+            }
+        });
+        await flushPromises();
+        const saveBtn = wrapper.find('button[type="submit"]');
+        expect(saveBtn.exists()).toBe(true);
+        expect(saveBtn.attributes("disabled")).toBeDefined();
+    });
+
+    it("calls saveNode on form submission", async () => {
+        const wrapper = mountAsync(NodeEditPage, {
+            global: {
+                plugins: [vuetify],
+                stubs: {
+                    EntityPicker: true
+                }
+            }
+        });
+        await flushPromises();
+        
+        await wrapper.find("form").trigger("submit");
+        expect(mockSaveNode).toHaveBeenCalled();
+    });
+});
