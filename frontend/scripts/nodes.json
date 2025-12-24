@@ -1,48 +1,50 @@
-[
-  {
-    "id": "1",
+{
+  "1": {
     "name": "Jan Kowalski",
     "type": "person",
     "content": "Politician from PO",
-    "parties": ["PO"],
+    "parties": [
+      "PO"
+    ],
     "revision_id": "rev1"
   },
-  {
-    "id": "2",
+  "2": {
     "name": "Orlen",
     "type": "place",
     "content": "State oil company",
     "revision_id": "rev2"
   },
-  {
-    "id": "3",
+  "3": {
     "name": "Anna Nowak",
     "type": "person",
     "content": "Politician from PiS",
-    "parties": ["PiS"],
+    "parties": [
+      "PiS"
+    ],
     "revision_id": "rev3"
   },
-  {
-    "id": "4",
+  "4": {
     "name": "Piotr Wiśniewski",
     "type": "person",
     "content": "Politician from Lewica",
-    "parties": ["Nowa Lewica"],
+    "parties": [
+      "Nowa Lewica"
+    ],
     "revision_id": "rev4"
   },
-  {
-    "id": "5",
+  "5": {
     "name": "Krzysztof Wójcik",
     "type": "person",
     "content": "Politician from Konfederacja",
-    "parties": ["Konfederacja"],
+    "parties": [
+      "Konfederacja"
+    ],
     "revision_id": "rev5"
   },
-  {
-    "id": "6",
+  "6": {
     "name": "Sample Article",
     "type": "article",
     "sourceURL": "http://example.com",
     "revision_id": "rev7"
   }
-]
+}

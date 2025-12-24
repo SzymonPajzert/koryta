@@ -40,8 +40,8 @@ async function seedDatabase() {
 
   const batch = db.batch();
 
-  for (const node of nodes) {
-    const ref = db.collection("nodes").doc(node.id);
+  for (const [id, node] of Object.entries(nodes)) {
+    const ref = db.collection("nodes").doc(id);
     batch.set(ref, node);
   }
 
@@ -50,8 +50,8 @@ async function seedDatabase() {
     batch.set(ref, edge);
   }
 
-  for (const rev of revisions) {
-    const ref = db.collection("revisions").doc(rev.id);
+  for (const [id, rev] of Object.entries(revisions)) {
+    const ref = db.collection("revisions").doc(id);
     batch.set(ref, rev);
   }
 
