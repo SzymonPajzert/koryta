@@ -63,13 +63,12 @@ export async function fetchNodes<N extends NodeType>(
       return { id: doc.id, ...doc.data() } as nodeData[N] & {
         id: string;
         revision_id?: string;
-        visibility?: string;
       };
     })
     .filter((node) => {
       // Visibility filtering:
       if (isAuth) return true;
-      return !node.visibility || node.visibility === "public";
+      return !!node.revision_id;
     });
 
   console.log(`fetchNodes(${path}, isAuth=${isAuth}): returning ${nodesData.length} nodes (total ${nodes.docs.length})`);
@@ -81,12 +80,8 @@ export async function fetchEdges(options: { isAuth?: boolean } = {}): Promise<Ed
   const { isAuth = false } = options;
   const db = getFirestore("koryta-pl");
   const edges = (await db.collection("edges").get()).docs
-    .map((doc) => doc.data() as Edge & { visibility?: string })
-    .filter((edge) => {
-      if (isAuth) return true;
-      return !edge.visibility || edge.visibility === "public";
-    });
-  return (edges as unknown as Edge[]) || [];
+    .map((doc) => doc.data() as Edge);
+  return edges;
 }
 
 export async function fetchRTDB<T>(path: string): Promise<T> {
