@@ -9,7 +9,6 @@ interface nodeData {
   record: unknown;
 }
 
-
 export interface NodeFilters {
   interesting?: boolean;
   posted?: boolean;
@@ -59,21 +58,34 @@ export async function fetchNodes<N extends NodeType>(
   }
 
   const nodes = await query.get();
-  const nodesData = nodes.docs.map((doc) => {
-    return { id: doc.id, ...doc.data() } as nodeData[N] & {
-      id: string;
-      revision_id?: string;
-    };
-  });
+  const nodesData = nodes.docs
+    .map((doc) => {
+      return { id: doc.id, ...doc.data() } as nodeData[N] & {
+        id: string;
+        revision_id?: string;
+        visibility?: string;
+      };
+    })
+    .filter((node) => {
+      // Visibility filtering:
+      if (isAuth) return true;
+      return !node.visibility || node.visibility === "public";
+    });
+
+  console.log(`fetchNodes(${path}, isAuth=${isAuth}): returning ${nodesData.length} nodes (total ${nodes.docs.length})`);
 
   return Object.fromEntries(nodesData.map((node) => [node.id, node]));
 }
 
-export async function fetchEdges(): Promise<Edge[]> {
+export async function fetchEdges(options: { isAuth?: boolean } = {}): Promise<Edge[]> {
+  const { isAuth = false } = options;
   const db = getFirestore("koryta-pl");
-  const edges = (await db.collection("edges").get()).docs.map(
-    (doc) => doc.data() as Edge,
-  );
+  const edges = (await db.collection("edges").get()).docs
+    .map((doc) => doc.data() as Edge & { visibility?: string })
+    .filter((edge) => {
+      if (isAuth) return true;
+      return !edge.visibility || edge.visibility === "public";
+    });
   return (edges as unknown as Edge[]) || [];
 }
 

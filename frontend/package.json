@@ -16,7 +16,8 @@
     "test:ci": "vitest run",
     "test:e2e": "start-server-and-test dev:local http://localhost:3000 'cypress run'",
     "test:e2e:open": "start-server-and-test dev:local http://localhost:3000 'cypress open'",
-    "test:e2e:build": "start-server-and-test dev:build http://localhost:3000 'cypress run'"
+    "test:e2e:build": "start-server-and-test dev:build http://localhost:3000 'cypress run'",
+    "test": "npm run test:ci && npm run test:e2e"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.3",

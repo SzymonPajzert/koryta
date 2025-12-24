@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
     fetchNodes("person", { isAuth }),
     fetchNodes("place", { isAuth }),
     fetchNodes("article", { isAuth }),
-    fetchEdges(),
+    fetchEdges({ isAuth }),
   ]);
 
   const nodesNoStats = getNodesNoStats(people, places, articles, partyColors);
