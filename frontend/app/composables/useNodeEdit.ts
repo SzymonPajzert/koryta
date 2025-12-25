@@ -1,6 +1,12 @@
 import { computed, ref, watch, onMounted, type Ref } from "vue";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
-import type { Person, Node, Revision } from "~~/shared/model";
+import type {
+  Person,
+  Node,
+  Revision,
+  Article,
+  NodeType,
+} from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 
 interface UseNodeEditOptions {
@@ -25,11 +31,13 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   // State
   // TODO this should be inferred by the set type.
-  const current = ref<Node & Person>({
+  const current = ref<Node & Person & Partial<Article>>({
     name: "",
-    type: "person",
+    type: isNew.value ? (route.query.type as NodeType) || "person" : "person",
     parties: [],
     content: "",
+    sourceURL: "",
+    shortName: "",
   });
   const lastFetchedId = ref<string | undefined>(undefined);
   const isSaving = ref(false);
@@ -89,6 +97,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
             type: (node as Node).type || "person",
             parties: Array.isArray(node.parties) ? node.parties : [],
             content: node.content || "",
+            sourceURL: (node as Article).sourceURL || "",
+            shortName: (node as Article).shortName || "",
           };
         }
       } catch (e) {
@@ -97,7 +107,15 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       await fetchRevisions();
     } else if (isNew.value && lastFetchedId.value !== undefined) {
       lastFetchedId.value = undefined;
-      current.value = { name: "", type: "person", parties: [], content: "" };
+      const initialType = (route.query.type as NodeType) || "person";
+      current.value = {
+        name: "",
+        type: initialType,
+        parties: [],
+        content: "",
+        sourceURL: "",
+        shortName: "",
+      };
       revisions.value = [];
     }
   }
@@ -107,6 +125,16 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     () => {
       if (idToken.value) {
         fetchData();
+      }
+    },
+    { immediate: true },
+  );
+
+  watch(
+    () => route.query.type,
+    (newType) => {
+      if (isNew.value && newType) {
+        current.value.type = newType as NodeType;
       }
     },
     { immediate: true },

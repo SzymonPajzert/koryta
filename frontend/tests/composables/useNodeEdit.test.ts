@@ -43,7 +43,7 @@ describe("useNodeEdit", () => {
     mockedFetch.mockReset();
 
     mockIdToken = ref("test-token");
-    mockRoute = reactive({ params: {} });
+    mockRoute = reactive({ params: {}, query: {} });
 
     mockedUseEdges.mockImplementation(async () => mockEdges);
     mockEdges.refresh.mockClear();
@@ -58,6 +58,16 @@ describe("useNodeEdit", () => {
     });
     expect(isNew.value).toBe(true);
     expect(current.value.name).toBe("");
+  });
+
+  it("initializes type from query param", async () => {
+    mockRoute.params = { id: "new" };
+    mockRoute.query = { type: "article" };
+    const { current } = await useNodeEdit({
+      route: mockRoute,
+      idToken: mockIdToken,
+    });
+    expect(current.value.type).toBe("article");
   });
 
   it("fetches data for existing node", async () => {

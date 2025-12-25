@@ -49,6 +49,39 @@
     </template>
   </v-app-bar>
   <v-main>
+    <v-toolbar v-if="user" density="compact" color="surface-variant">
+      <v-spacer />
+      <v-btn
+        prepend-icon="mdi-plus"
+        variant="text"
+        :to="{ path: '/edit/node/new', query: { type: 'article' } }"
+        :active="
+          route.path === '/edit/node/new' && route.query.type === 'article'
+        "
+        active-class="v-btn--active"
+      >
+        Dodaj artykuł
+      </v-btn>
+      <v-btn
+        prepend-icon="mdi-plus"
+        variant="text"
+        :to="{ path: '/edit/node/new', query: { type: 'person' } }"
+        :active="
+          route.path === '/edit/node/new' && route.query.type === 'person'
+        "
+        active-class="v-btn--active"
+      >
+        Dodaj osobę
+      </v-btn>
+      <v-btn
+        prepend-icon="mdi-format-list-bulleted"
+        variant="text"
+        to="/revisions"
+      >
+        Lista rewizji
+      </v-btn>
+      <v-spacer />
+    </v-toolbar>
     <v-container
       class="fill-height position-relative"
       :max-width="maxWidth"

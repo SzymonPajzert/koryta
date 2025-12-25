@@ -17,11 +17,12 @@
             <v-text-field v-model="current.name" label="Nazwa" required />
             <v-select
               v-model="current.type"
-              :items="['person', 'company', 'other']"
+              :items="['person', 'company', 'article', 'other']"
               label="Typ"
               required
             />
             <v-select
+              v-if="current.type === 'person'"
               v-model="current.parties"
               :items="partiesDefault"
               label="Partia"
@@ -29,6 +30,20 @@
               chips
               deletable-chips
             />
+            <template v-if="current.type === 'article'">
+              <v-text-field
+                v-model="current.sourceURL"
+                label="URL Źródła"
+                hint="Link do artykułu"
+                persistent-hint
+              />
+              <v-text-field
+                v-model="current.shortName"
+                label="Krótka nazwa"
+                hint="Np. Onet, WP, etc."
+                persistent-hint
+              />
+            </template>
             <v-textarea
               v-model="current.content"
               label="Treść (Markdown)"

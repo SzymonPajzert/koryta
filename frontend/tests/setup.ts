@@ -31,6 +31,9 @@ vi.mock("firebase/auth", async (importOriginal) => {
     signInWithEmailAndPassword: vi.fn(),
     createUserWithEmailAndPassword: vi.fn(),
     signOut: vi.fn(),
+    GoogleAuthProvider: class {},
+    FacebookAuthProvider: class {},
+    EmailAuthProvider: class {},
   };
 });
 

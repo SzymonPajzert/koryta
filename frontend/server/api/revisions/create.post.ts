@@ -27,6 +27,8 @@ export default defineEventHandler(async (event) => {
       type: body.type,
       parties: body.parties || [],
       content: content,
+      sourceURL: body.sourceURL || "",
+      shortName: body.shortName || "",
     },
     update_time: Timestamp.now(),
     update_user: user.uid,
