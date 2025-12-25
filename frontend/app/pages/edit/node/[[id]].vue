@@ -35,24 +35,6 @@
               <v-btn color="primary" type="submit" :disabled="!idToken || loading" :loading="loading">
                 Zapisz zmianę
               </v-btn>
-              <template v-if="!isNew">
-                <v-btn
-                  color="warning"
-                  variant="outlined"
-                  class="ml-2"
-                  @click="vote('interesting')"
-                >
-                  Ciekawe
-                </v-btn>
-                 <v-btn
-                  color="error"
-                  variant="outlined"
-                  class="ml-2"
-                  @click="vote('error')"
-                >
-                  Zgłoś błąd
-                </v-btn>
-              </template>
             </div>
           </v-form>
         </v-card>
@@ -63,7 +45,6 @@
 
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
-import EntityPicker from "~/components/form/EntityPicker.vue";
 
 definePageMeta({
   middleware: "auth",
@@ -74,19 +55,8 @@ const {
     tab,
     current,
     loading,
-    edgeTypeOptions,
-    newEdge,
-    pickerTarget,
-    newComment,
-    revisions,
-    allEdges,
     partiesDefault,
     idToken,
     saveNode,
-    addEdge,
-    addComment,
-    vote,
-    fetchRevisions,
-    restoreRevision
 } = await useNodeEdit();
 </script>
