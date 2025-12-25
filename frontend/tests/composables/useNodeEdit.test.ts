@@ -146,4 +146,36 @@ describe("useNodeEdit", () => {
       }),
     );
   });
+
+  it("adds edge", async () => {
+    mockRoute.params = { id: "123" };
+    mockedFetch.mockResolvedValueOnce({ node: { name: "Foo" } });
+    mockedFetch.mockResolvedValueOnce({ revisions: [] });
+
+    const { addEdge, newEdge, pickerTarget } = await useNodeEdit({
+      route: mockRoute,
+      idToken: mockIdToken,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockedFetch.mockClear();
+
+    newEdge.value.type = "employed";
+    pickerTarget.value = { id: "company-1" };
+
+    mockedFetch.mockResolvedValueOnce({});
+
+    await addEdge();
+
+    expect(mockedFetch).toHaveBeenCalledWith(
+      "/api/edges/create",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          source: "123",
+          target: "company-1",
+          type: "employed",
+        }),
+      }),
+    );
+    expect(mockEdges.refresh).toHaveBeenCalled();
+  });
 });
