@@ -1,75 +1,74 @@
-describe('Entity Editing', () => {
-  const testEmail = `test${Date.now()}@example.com`;
-  const testPassword = 'password123';
-
+describe("Entity Editing", () => {
   beforeEach(() => {
-    cy.task('log', 'Starting test: ' + Cypress.currentTest.title);
-    cy.window().then((win) => {
-      return new Cypress.Promise((resolve, reject) => {
-        const req = win.indexedDB.deleteDatabase('firebaseLocalStorageDb');
-        req.onsuccess = resolve;
-        req.onerror = resolve; // Ignore errors
-        req.onblocked = resolve;
-      });
-    });
-    cy.on('window:console', (msg) => {
-      cy.task('log', `Browser console: ${JSON.stringify(msg)}`);
+    cy.task("log", "Starting test: " + Cypress.currentTest.title);
+    cy.refreshAuth();
+    cy.on("window:console", (msg) => {
+      cy.task("log", `Browser console: ${JSON.stringify(msg)}`);
     });
   });
 
-  it.skip('redirects to login when not authenticated', () => {
-    cy.task('log', 'Visiting /edit');
-    cy.visit('/edit');
-    cy.url().should('include', '/login');
+  it("redirects to login when not authenticated", () => {
+    cy.task("log", "Visiting /edit/node/1");
+    cy.visit("/edit/node/1");
+    cy.url().should("include", "/login");
   });
 
-  it.skip('allows logging in, creating and editing an entity', () => {
-    // 1. Register
+  it.skip("allows creating and editing an entity", () => {
+    // 1. Login
     cy.login();
-    
-    // Should redirect to home or previous page, but we want to go to /edit
-    // Wait for redirect
-    cy.url().should('not.include', '/login');
-    
-    // 2. Go to /edit
-    cy.visit('/edit');
-    cy.contains('Edycja encji');
+
+    // Stub alert
+    const onAlert = cy.stub();
+    cy.on("window:alert", onAlert);
+
+    // 2. Go to /edit/node/new
+    cy.visit("/edit/node/new");
+
+    // Verify we are on create page
+    cy.contains("h1", "Utwórz");
 
     // 3. Create new entity
-    cy.contains('Dodaj nową').click();
-    cy.contains('Nowa encja');
+    cy.contains("label", "Nazwa")
+      .parent()
+      .find("input")
+      .type("Test Person")
+      .should("have.value", "Test Person");
 
+    cy.contains("label", "Treść (Markdown)")
+      .parent()
+      .find("textarea")
+      .click()
+      .type("Some test content");
 
-    // Select type Person (default)
-    // Fill name
+    cy.wait(500); // Wait for v-model update
+    cy.task("log", "Clicking submit button");
 
-    // Actually, let's be more specific if possible, but Vuetify inputs are tricky.
-    // Using contains for label is safer.
-    cy.contains('label', 'Nazwa').parent().find('input').type('Test Person').should('have.value', 'Test Person');
-    
-    cy.task('log', 'Clicking submit button');
-    cy.window().then(win => win.console.log('Test log from window'));
-    cy.contains('Zapisz').click({ force: true });
-    
-    // Verify save started
-    cy.get('#debug-saving').should('exist');
+    cy.wait(1000);
 
-    // Verify success message
-    cy.contains('Zapisano pomyślnie');
-    
-    // 4. Verify in list
-    cy.visit('/edit');
-    cy.contains('Test Person');
-    
-    // 5. Edit
-    cy.contains('tr', 'Test Person').find('button').click();
-    cy.contains('Edycja encji');
-    cy.get('input[value="Test Person"]').clear().type('Test Person Updated');
-    cy.contains('Zapisz').click();
-    cy.contains('Zapisano pomyślnie');
-    
-    // 6. Verify update
-    cy.visit('/edit');
-    cy.contains('Test Person Updated');
+    cy.contains("Zapisz zmianę").click({ force: true });
+
+    // Verify redirection
+    cy.url({ timeout: 10000 }).should("not.include", "/new");
+    cy.contains("h1", "Edytuj");
+
+    // 4. Update the entity
+    cy.contains("label", "Nazwa")
+      .parent()
+      .find("input")
+      .should("have.value", "Test Person") // Wait for data to load
+      .clear()
+      .type("Test Person Updated");
+
+    cy.contains("Zapisz zmianę").click();
+
+    // For update, it DOES alert "Zapisano!"
+    cy.wrap(onAlert).should("be.calledWith", "Zapisano!");
+
+    // 5. Verify update by reloading
+    cy.reload();
+    cy.contains("label", "Nazwa")
+      .parent()
+      .find("input")
+      .should("have.value", "Test Person Updated");
   });
 });
