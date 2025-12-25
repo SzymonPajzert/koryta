@@ -1,6 +1,12 @@
 import { computed, ref, watch, onMounted, type Ref } from "vue";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
-import type { Person, Node, Revision, Article } from "~~/shared/model";
+import type {
+  Person,
+  Node,
+  Revision,
+  Article,
+  NodeType,
+} from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 
 interface UseNodeEditOptions {
@@ -27,7 +33,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   // TODO this should be inferred by the set type.
   const current = ref<Node & Person & Partial<Article>>({
     name: "",
-    type: isNew.value ? ((route.query.typ as any) || "person") : "person",
+    type: isNew.value ? (route.query.type as NodeType) || "person" : "person",
     parties: [],
     content: "",
     sourceURL: "",
@@ -101,10 +107,10 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       await fetchRevisions();
     } else if (isNew.value && lastFetchedId.value !== undefined) {
       lastFetchedId.value = undefined;
-      const initialType = (route.query.typ as string) || "person";
+      const initialType = (route.query.type as NodeType) || "person";
       current.value = {
         name: "",
-        type: initialType as any, // Cast to avoid type issues if query param is invalid, though validation would be better
+        type: initialType,
         parties: [],
         content: "",
         sourceURL: "",
@@ -125,10 +131,10 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   );
 
   watch(
-    () => route.query.typ,
-    (newTyp) => {
-      if (isNew.value && newTyp) {
-        current.value.type = newTyp as any;
+    () => route.query.type,
+    (newType) => {
+      if (isNew.value && newType) {
+        current.value.type = newType as NodeType;
       }
     },
     { immediate: true },

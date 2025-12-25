@@ -8,7 +8,7 @@ describe("User Toolbar and Edit Workflow", () => {
     cy.contains("Dodaj artykuł").should("not.exist");
     // Verified that there is no toolbar when not logged in
 
-    cy.login(); 
+    cy.login();
     cy.reload();
     cy.contains("Dodaj artykuł").should("be.visible");
   });
@@ -17,10 +17,10 @@ describe("User Toolbar and Edit Workflow", () => {
     cy.login();
     cy.visit("/");
     cy.contains("Dodaj artykuł").click();
-    
+
     cy.url().should("include", "/edit/node/new");
-    cy.url().should("include", "typ=article");
-    
+    cy.url().should("include", "type=article");
+
     // Check if select has 'article'
     // Vuetify select is tricky. We check the value model if possible or the text.
     // The v-select stores value.
@@ -35,8 +35,8 @@ describe("User Toolbar and Edit Workflow", () => {
     cy.login();
     cy.visit("/");
     cy.contains("Dodaj osobę").click();
-    
-    cy.url().should("include", "typ=person");
+
+    cy.url().should("include", "type=person");
     cy.contains("Partia").should("exist");
     cy.contains("URL Źródła").should("not.exist");
   });
@@ -47,7 +47,7 @@ describe("User Toolbar and Edit Workflow", () => {
     cy.contains("Lista rewizji").click();
     cy.url().should("include", "/revisions");
     cy.contains("Lista Rewizji").should("be.visible");
-    
+
     // Check if there is at least one item and click it
     // Note: This depends on seeded data having pending revisions or created nodes.
     // In previous steps we didn't explicitly create a pending node in the test flow that guarantees appearance here unless seeded data has it.

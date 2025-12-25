@@ -62,7 +62,7 @@ describe("useNodeEdit", () => {
 
   it("initializes type from query param", async () => {
     mockRoute.params = { id: "new" };
-    mockRoute.query = { typ: "article" };
+    mockRoute.query = { type: "article" };
     const { current } = await useNodeEdit({
       route: mockRoute,
       idToken: mockIdToken,
