@@ -11,7 +11,7 @@
           <v-list-item
             v-for="node in pendingNodes"
             :key="node.id"
-            :to="`/edit/node/${node.id}`"
+            :to="`/entity/${node.type}/${node.id}`"
             :title="node.name || 'Bez nazwy'"
             :subtitle="node.type"
           >

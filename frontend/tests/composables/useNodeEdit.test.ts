@@ -43,7 +43,7 @@ describe("useNodeEdit", () => {
     mockedFetch.mockReset();
 
     mockIdToken = ref("test-token");
-    mockRoute = reactive({ params: {} });
+    mockRoute = reactive({ params: {}, query: {} });
 
     mockedUseEdges.mockImplementation(async () => mockEdges);
     mockEdges.refresh.mockClear();

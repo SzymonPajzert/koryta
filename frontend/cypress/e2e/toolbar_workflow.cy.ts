@@ -1,21 +1,13 @@
 describe("User Toolbar and Edit Workflow", () => {
   beforeEach(() => {
-    // Seed data or mock auth if possible. 
-    // Assuming development environment with emulators.
     cy.refreshAuth();
     cy.visit("/");
   });
 
   it("shows toolbar only when logged in", () => {
-    // Initially not logged in (assuming)
-    cy.get("v-toolbar").should("not.exist");
+    cy.contains("Dodaj artykuł").should("not.exist");
+    // Verified that there is no toolbar when not logged in
 
-    // Login (using a helper if available, or manual)
-    // For now assuming we can simply bypass or use a test login
-    // Leveraging existing auth patterns or just checking conditional rendering if we can mock state.
-    // Since this is E2E, we need real login.
-    // If login is complex, we might skip this part or assume seeded user.
-    // Let's assume we can login with a test user.
     cy.login(); 
     cy.reload();
     cy.contains("Dodaj artykuł").should("be.visible");
@@ -55,5 +47,12 @@ describe("User Toolbar and Edit Workflow", () => {
     cy.contains("Lista rewizji").click();
     cy.url().should("include", "/revisions");
     cy.contains("Lista Rewizji").should("be.visible");
+    
+    // Check if there is at least one item and click it
+    // Note: This depends on seeded data having pending revisions or created nodes.
+    // In previous steps we didn't explicitly create a pending node in the test flow that guarantees appearance here unless seeded data has it.
+    // Assuming seeded data or previously created node exists.
+    cy.get(".v-list-item").first().click();
+    cy.url().should("include", "/entity/");
   });
 });

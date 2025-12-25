@@ -55,6 +55,8 @@
         prepend-icon="mdi-plus"
         variant="text"
         :to="{ path: '/edit/node/new', query: { typ: 'article' } }"
+        :active="route.path === '/edit/node/new' && route.query.typ === 'article'"
+        active-class="v-btn--active"
       >
         Dodaj artykuł
       </v-btn>
@@ -62,6 +64,8 @@
         prepend-icon="mdi-plus"
         variant="text"
         :to="{ path: '/edit/node/new', query: { typ: 'person' } }"
+        :active="route.path === '/edit/node/new' && route.query.typ === 'person'"
+        active-class="v-btn--active"
       >
         Dodaj osobę
       </v-btn>
