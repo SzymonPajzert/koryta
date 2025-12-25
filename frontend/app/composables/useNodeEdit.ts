@@ -1,6 +1,6 @@
 import { computed, ref, watch, onMounted, type Ref } from "vue";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
-import type { Person, Node, Revision } from "~~/shared/model";
+import type { Person, Node, Revision, Article } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 
 interface UseNodeEditOptions {
@@ -25,11 +25,13 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   // State
   // TODO this should be inferred by the set type.
-  const current = ref<Node & Person>({
+  const current = ref<Node & Person & Partial<Article>>({
     name: "",
-    type: "person",
+    type: isNew.value ? ((route.query.typ as any) || "person") : "person",
     parties: [],
     content: "",
+    sourceURL: "",
+    shortName: "",
   });
   const lastFetchedId = ref<string | undefined>(undefined);
   const isSaving = ref(false);
@@ -89,6 +91,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
             type: (node as Node).type || "person",
             parties: Array.isArray(node.parties) ? node.parties : [],
             content: node.content || "",
+            sourceURL: (node as Article).sourceURL || "",
+            shortName: (node as Article).shortName || "",
           };
         }
       } catch (e) {
@@ -97,7 +101,15 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       await fetchRevisions();
     } else if (isNew.value && lastFetchedId.value !== undefined) {
       lastFetchedId.value = undefined;
-      current.value = { name: "", type: "person", parties: [], content: "" };
+      const initialType = (route.query.typ as string) || "person";
+      current.value = {
+        name: "",
+        type: initialType as any, // Cast to avoid type issues if query param is invalid, though validation would be better
+        parties: [],
+        content: "",
+        sourceURL: "",
+        shortName: "",
+      };
       revisions.value = [];
     }
   }
@@ -107,6 +119,16 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     () => {
       if (idToken.value) {
         fetchData();
+      }
+    },
+    { immediate: true },
+  );
+
+  watch(
+    () => route.query.typ,
+    (newTyp) => {
+      if (isNew.value && newTyp) {
+        current.value.type = newTyp as any;
       }
     },
     { immediate: true },
