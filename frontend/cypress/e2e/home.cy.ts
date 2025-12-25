@@ -23,7 +23,9 @@ describe("home", () => {
     const expectedPeople = 4;
 
     cy.request("/api/nodes/person").then((response) => {
-      expect(Object.values(response.body["entities"])).to.have.lengthOf(expectedPeople);
+      expect(Object.values(response.body["entities"])).to.have.lengthOf(
+        expectedPeople,
+      );
     });
 
     cy.contains(`Lista wszystkich ${expectedPeople}`);

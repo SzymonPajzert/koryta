@@ -3,9 +3,7 @@
     "name": "Jan Kowalski",
     "type": "person",
     "content": "Politician from PO",
-    "parties": [
-      "PO"
-    ],
+    "parties": ["PO"],
     "revision_id": "rev1"
   },
   "2": {
@@ -18,27 +16,21 @@
     "name": "Anna Nowak",
     "type": "person",
     "content": "Politician from PiS",
-    "parties": [
-      "PiS"
-    ],
+    "parties": ["PiS"],
     "revision_id": "rev3"
   },
   "4": {
     "name": "Piotr Wiśniewski",
     "type": "person",
     "content": "Politician from Lewica",
-    "parties": [
-      "Nowa Lewica"
-    ],
+    "parties": ["Nowa Lewica"],
     "revision_id": "rev4"
   },
   "5": {
     "name": "Krzysztof Wójcik",
     "type": "person",
     "content": "Politician from Konfederacja",
-    "parties": [
-      "Konfederacja"
-    ],
+    "parties": ["Konfederacja"],
     "revision_id": "rev5"
   },
   "h1": {

@@ -24,14 +24,14 @@ export function useEditIndexedField<ValueT, StructT>(
     console.debug(key.value);
     console.debug(value.value);
     if (!key.value || !value.value) {
-      console.warn("No key or value")
+      console.warn("No key or value");
       return;
     }
 
     setPaths.forEach((setter) => {
       const [path, v] = setter(key.value!, value.value!);
       console.debug(path, v);
-      throw new SyntaxError("This is not implemented")
+      throw new SyntaxError("This is not implemented");
     });
 
     stop();

@@ -24,11 +24,10 @@ export default defineEventHandler(async (event) => {
     .orderBy("update_time", "desc")
     .get();
 
-  const revisions = snapshot.docs
-    .map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as any),
-    }));
+  const revisions = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...(doc.data() as any),
+  }));
 
   return { revisions };
 });

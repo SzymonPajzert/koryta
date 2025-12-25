@@ -1,8 +1,8 @@
-import { vi } from 'vitest';
-import { ref } from 'vue';
+import { vi } from "vitest";
+import { ref } from "vue";
 
-vi.mock('vuefire', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('vuefire')>();
+vi.mock("vuefire", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("vuefire")>();
   return {
     ...actual,
     useFirestore: vi.fn(() => ({})),
@@ -10,8 +10,8 @@ vi.mock('vuefire', async (importOriginal) => {
   };
 });
 
-vi.mock('firebase/firestore', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('firebase/firestore')>();
+vi.mock("firebase/firestore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("firebase/firestore")>();
   return {
     ...actual,
     collection: vi.fn(),
@@ -20,25 +20,25 @@ vi.mock('firebase/firestore', async (importOriginal) => {
   };
 });
 
-vi.mock('firebase/auth', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('firebase/auth')>();
-    return {
-        ...actual,
-        getAuth: vi.fn(() => ({})),
-        initializeAuth: vi.fn(() => ({})),
-        connectAuthEmulator: vi.fn(),
-        onAuthStateChanged: vi.fn(),
-        signInWithEmailAndPassword: vi.fn(),
-        createUserWithEmailAndPassword: vi.fn(),
-        signOut: vi.fn(),
-    }
+vi.mock("firebase/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("firebase/auth")>();
+  return {
+    ...actual,
+    getAuth: vi.fn(() => ({})),
+    initializeAuth: vi.fn(() => ({})),
+    connectAuthEmulator: vi.fn(),
+    onAuthStateChanged: vi.fn(),
+    signInWithEmailAndPassword: vi.fn(),
+    createUserWithEmailAndPassword: vi.fn(),
+    signOut: vi.fn(),
+  };
 });
 
-vi.mock('nuxt-vuefire', () => ({
+vi.mock("nuxt-vuefire", () => ({
   useCurrentUser: vi.fn(),
 }));
 
-vi.mock('@sentry/nuxt', () => ({
+vi.mock("@sentry/nuxt", () => ({
   init: vi.fn(),
   replayIntegration: vi.fn(),
 }));

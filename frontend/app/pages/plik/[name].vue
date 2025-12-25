@@ -2,7 +2,9 @@
 const route = useRoute();
 const name = route.params.name as string;
 const { data: file } = await useAsyncData(() =>
-  queryCollection("content").path("/" + name).first(),
+  queryCollection("content")
+    .path("/" + name)
+    .first(),
 );
 
 useSeoMeta({

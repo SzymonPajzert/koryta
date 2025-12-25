@@ -23,6 +23,7 @@ npm run dev:local
 ```
 
 This command runs `concurrently`:
+
 1.  **Firebase Emulators**: Starts emulators and imports data from `../database/current_firestore`.
 2.  **Nuxt Dev Server**: Starts the frontend application.
 
@@ -58,11 +59,14 @@ This opens the Cypress interactive runner. Ensure the local development server (
 We use GitHub Actions for continuous integration.
 
 ### Automated Checks
+
 Every Pull Request triggers:
+
 - **Linting**: Ensures code style consistency.
 - **Unit Tests**: Runs Vitest.
 - **E2E Tests**: Runs Cypress tests against the emulators.
 - **Visual Regression**: Runs Percy to detect UI changes.
 
 ### Preview Deployments
+
 A temporary **Preview URL** (e.g., `https://pr-123--koryta-pl.web.app`) is automatically generated for every PR. Use this to review UI changes on a live environment.

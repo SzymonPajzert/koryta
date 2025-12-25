@@ -81,17 +81,25 @@ const { idToken } = useAuthState();
 
 const { data: graph } = await useAsyncData(
   "graph",
-  () => $fetch("/api/graph", {
-    headers: idToken.value ? { Authorization: `Bearer ${idToken.value}` } : {}
-  }),
-  { 
+  () =>
+    $fetch("/api/graph", {
+      headers: idToken.value
+        ? { Authorization: `Bearer ${idToken.value}` }
+        : {},
+    }),
+  {
     lazy: true,
-    watch: [idToken]
+    watch: [idToken],
   },
 );
 
 const items = computed<ListItem[]>(() => {
-  if (!graph.value || !graph.value.nodeGroups || graph.value.nodeGroups.length === 0) return [];
+  if (
+    !graph.value ||
+    !graph.value.nodeGroups ||
+    graph.value.nodeGroups.length === 0
+  )
+    return [];
   const result: ListItem[] = [];
   result.push({
     title: "Lista wszystkich osób",
@@ -147,8 +155,8 @@ const items = computed<ListItem[]>(() => {
 if (!props.fake) {
   watch(nodeGroupPicked, (value) => {
     if (!value) {
-        push("/");
-        return;
+      push("/");
+      return;
     }
     let path = value?.path ?? currentRoute.value.path;
     const allowedPath =

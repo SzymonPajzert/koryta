@@ -86,6 +86,4 @@ const safeQuery = computed(() => route?.query || {});
 const maxWidth = computed(() => (route?.meta?.fullWidth ? "none" : 900));
 const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
-
-
 </script>
