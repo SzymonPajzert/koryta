@@ -8,31 +8,31 @@ import * as directives from "vuetify/directives";
 const vuetify = createVuetify({ components, directives });
 
 describe("Card", () => {
-    it("renders default slot content", () => {
-        const wrapper = mount(Card, {
-            global: { plugins: [vuetify] },
-            slots: { default: "Content" }
-        });
-        expect(wrapper.text()).toContain("Content");
+  it("renders default slot content", () => {
+    const wrapper = mount(Card, {
+      global: { plugins: [vuetify] },
+      slots: { default: "Content" },
     });
+    expect(wrapper.text()).toContain("Content");
+  });
 
-    it("renders header slot content", () => {
-        const wrapper = mount(Card, {
-            global: { plugins: [vuetify] },
-            slots: { 
-                default: "Content",
-                header: "Header Title"
-            }
-        });
-        expect(wrapper.text()).toContain("Header Title");
-        expect(wrapper.find("h2").text()).toBe("Header Title");
+  it("renders header slot content", () => {
+    const wrapper = mount(Card, {
+      global: { plugins: [vuetify] },
+      slots: {
+        default: "Content",
+        header: "Header Title",
+      },
     });
+    expect(wrapper.text()).toContain("Header Title");
+    expect(wrapper.find("h2").text()).toBe("Header Title");
+  });
 
-    it("does not render header markup if slot missing", () => {
-         const wrapper = mount(Card, {
-            global: { plugins: [vuetify] },
-            slots: { default: "Content" }
-        });
-        expect(wrapper.find("h2").exists()).toBe(false);
+  it("does not render header markup if slot missing", () => {
+    const wrapper = mount(Card, {
+      global: { plugins: [vuetify] },
+      slots: { default: "Content" },
     });
+    expect(wrapper.find("h2").exists()).toBe(false);
+  });
 });

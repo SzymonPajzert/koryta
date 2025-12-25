@@ -1,12 +1,12 @@
 // @ts-check
-import withNuxt from './node_modules/.cache/nuxt/.nuxt/eslint.config.mjs'
+import withNuxt from "./node_modules/.cache/nuxt/.nuxt/eslint.config.mjs";
 
 export default withNuxt(
   // Your custom configs here
   {
     rules: {
-      'vue/no-multiple-template-root': 'off',
-      'vue/no-mutating-props': 'off', // TODO enable it again
+      "vue/no-multiple-template-root": "off",
+      "vue/no-mutating-props": "off", // TODO enable it again
     },
   },
-)
+);

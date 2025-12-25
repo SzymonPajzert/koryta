@@ -63,8 +63,6 @@ const title = computed(() => {
   return undefined;
 });
 
-
-
 const relationLabel = props.entity === "company" ? "Stanowisko" : "Relacja";
 const relationHint =
   props.entity === "company"

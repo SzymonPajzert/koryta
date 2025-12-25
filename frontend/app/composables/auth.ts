@@ -1,4 +1,10 @@
-import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, type User } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  type User,
+} from "firebase/auth";
 import { collection, doc } from "firebase/firestore";
 import { ref } from "vue";
 

@@ -26,7 +26,7 @@ function toNoun(input: InputNoun): PolishNoun {
 }
 
 export function useFeminatyw(options?: { forceFemale?: boolean }) {
-  const useFemale: boolean = options?.forceFemale ?? (Math.random() > 0.5);
+  const useFemale: boolean = options?.forceFemale ?? Math.random() > 0.5;
 
   function createNoun(
     femaleSingular: InputNoun,

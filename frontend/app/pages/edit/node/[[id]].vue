@@ -29,10 +29,19 @@
               chips
               deletable-chips
             />
-            <v-textarea v-model="current.content" label="Treść (Markdown)" rows="10" />
-            
+            <v-textarea
+              v-model="current.content"
+              label="Treść (Markdown)"
+              rows="10"
+            />
+
             <div class="d-flex gap-2 mt-4">
-              <v-btn color="primary" type="submit" :disabled="!idToken || loading" :loading="loading">
+              <v-btn
+                color="primary"
+                type="submit"
+                :disabled="!idToken || loading"
+                :loading="loading"
+              >
                 Zapisz zmianę
               </v-btn>
             </div>
@@ -50,13 +59,6 @@ definePageMeta({
   middleware: "auth",
 });
 
-const {
-  isNew,
-  tab,
-  current,
-  loading,
-  partiesDefault,
-  idToken,
-  saveNode,
-} = await useNodeEdit();
+const { isNew, tab, current, loading, partiesDefault, idToken, saveNode } =
+  await useNodeEdit();
 </script>

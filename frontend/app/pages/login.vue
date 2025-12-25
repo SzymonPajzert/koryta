@@ -41,12 +41,12 @@
 
       <div class="form-group">
         <label for="email">Email</label>
-        <input id="email"  v-model="email" type="email" required >
+        <input id="email" v-model="email" type="email" required />
       </div>
 
       <div class="form-group">
         <label for="password">Hasło</label>
-        <input id="password" v-model="password" type="password" required >
+        <input id="password" v-model="password" type="password" required />
       </div>
 
       <div class="form-group">
@@ -150,10 +150,10 @@ const register = async () => {
     const userCredential = await authRegister(email.value, password.value);
     await sendEmailVerification(userCredential.user);
     alert("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
-    
+
     // Add delay to allow auth state to propagate to middleware (especially for tests)
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     router.push((redirect as string) || "/");
   } catch (err: any) {
     if (err.code === "auth/user-not-found") {

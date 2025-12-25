@@ -5,9 +5,7 @@
       "name": "Jan Kowalski",
       "type": "person",
       "content": "Politician from PO",
-      "parties": [
-        "PO"
-      ]
+      "parties": ["PO"]
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
@@ -28,9 +26,7 @@
       "name": "Anna Nowak",
       "type": "person",
       "content": "Politician from PiS",
-      "parties": [
-        "PiS"
-      ]
+      "parties": ["PiS"]
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
@@ -41,9 +37,7 @@
       "name": "Piotr Wiśniewski",
       "type": "person",
       "content": "Politician from Lewica",
-      "parties": [
-        "Nowa Lewica"
-      ]
+      "parties": ["Nowa Lewica"]
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
@@ -54,9 +48,7 @@
       "name": "Krzysztof Wójcik",
       "type": "person",
       "content": "Politician from Konfederacja",
-      "parties": [
-        "Konfederacja"
-      ]
+      "parties": ["Konfederacja"]
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
@@ -67,10 +59,7 @@
       "name": "Krzysztof Wójcik",
       "type": "person",
       "content": "Politician from Konfederacja and PiS",
-      "parties": [
-        "Konfederacja",
-        "PiS"
-      ]
+      "parties": ["Konfederacja", "PiS"]
     },
     "update_time": "2024-12-01T12:00:00Z",
     "update_user": "user@koryta.pl"

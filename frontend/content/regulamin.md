@@ -1,4 +1,5 @@
 # Regulamin Serwisu
+
 ## § 1 Postanowienia ogólne
 
 Niniejszy regulamin (zwany dalej "Regulaminem") określa zasady korzystania z serwisu internetowego dostępnego pod adresem koryta.pl (zwanego dalej "Serwisem").
