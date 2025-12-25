@@ -1,19 +1,32 @@
 describe("Revisions Logic", () => {
   beforeEach(() => {
-    cy.window().then((win) => {
-      return new Cypress.Promise((resolve) => {
-        const req = win.indexedDB.deleteDatabase("firebaseLocalStorageDb");
-        req.onsuccess = resolve;
-        req.onerror = resolve;
-        req.onblocked = resolve;
-      });
-    });
+    cy.refreshAuth();
   });
 
   afterEach(() => {
     if (this.currentTest?.state === "failed") {
       cy.screenshot();
     }
+  });
+
+  describe("New node added", () => {
+    beforeEach(() => {
+      cy.refreshAuth();
+    });
+    it("shows correct number of people", () => {
+      const expectedPeople = 4;
+
+      cy.logout();
+
+      cy.request("/api/nodes/person").then((response) => {
+        expect(Object.values(response.body["entities"])).to.have.lengthOf(
+          expectedPeople,
+        );
+      });
+
+      cy.visit("/");
+      cy.contains(`Lista wszystkich ${expectedPeople}`);
+    });
   });
 
   describe("Krzysztof Wójcik", () => {
@@ -43,17 +56,4 @@ describe("Revisions Logic", () => {
       cy.percySnapshot("latest-revision");
     });
   });
-
-  describe("New node added", () => {
-    it("shows correct number of people", () => {
-      const expectedPeople = 4;
-
-      cy.request("/api/nodes/person").then((response) => {
-        expect(Object.values(response.body["entities"])).to.have.lengthOf(expectedPeople);
-      });
-
-      cy.visit("/");
-      cy.contains(`Lista wszystkich ${expectedPeople}`);
-    });
-  })
 });
