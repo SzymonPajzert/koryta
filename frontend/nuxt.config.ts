@@ -158,6 +158,7 @@ export default defineNuxtConfig({
     options: {
       firestore: {
         experimentalForceLongPolling: true,
+        experimentalAutoDetectLongPolling: true,
       },
     },
   },
