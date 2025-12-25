@@ -1,4 +1,4 @@
-name: E2E & Percy
+name: Frontend E2E
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
       - "frontend/**"
 
 jobs:
-  test-and-preview:
+  test-and-percy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -73,12 +73,3 @@ jobs:
 
           # Run e2e test with cypress and emulators on the built server
           npx percy exec -- npm run test:e2e:build
-
-      - name: Deploy Preview to Firebase Hosting
-        if: github.event_name == 'pull_request'
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          expires: 7d
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KORYTA_PL }}
-          projectId: koryta-pl
