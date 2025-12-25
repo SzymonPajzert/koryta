@@ -17,7 +17,20 @@
             <v-text-field v-model="current.name" label="Nazwa" required />
             <v-select
               v-model="current.type"
-              :items="['person', 'company', 'article', 'other']"
+              :items="[
+                {
+                  title: 'Osoba',
+                  value: 'person',
+                },
+                {
+                  title: 'Firma',
+                  value: 'company',
+                },
+                {
+                  title: 'Artykuł',
+                  value: 'article',
+                },
+              ]"
               label="Typ"
               required
             />
