@@ -1,5 +1,6 @@
 import { computed, ref, watch, onMounted, type Ref } from "vue";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import type {
   Person,
   Node,
@@ -284,11 +285,40 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     { immediate: true },
   );
 
+  async function fetchPageTitle() {
+    if (!current.value.sourceURL || current.value.type !== "article") return;
+    loading.value = true;
+    try {
+      const functions = getFunctions(useFirebaseApp(), "europe-west1");
+      const getPageTitle = httpsCallable<{ url: string }, { title: string }>(
+        functions,
+        "getPageTitle",
+      );
+      const result = await getPageTitle({ url: current.value.sourceURL });
+      if (result.data.title && !current.value.name) {
+        current.value.name = result.data.title;
+      }
+    } catch (e) {
+      console.error("Error fetching page title", e);
+    } finally {
+      loading.value = false;
+    }
+  }
+
   onMounted(() => {
     if (idToken.value) {
       fetchData();
     }
   });
+
+  watch(
+    () => current.value.sourceURL,
+    (newUrl) => {
+      if (newUrl && current.value.type === "article" && !current.value.name) {
+        fetchPageTitle();
+      }
+    },
+  );
 
   async function saveNode() {
     if (!idToken.value) {
