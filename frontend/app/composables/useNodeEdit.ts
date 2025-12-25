@@ -1,12 +1,12 @@
-import { computed, ref, watch, onMounted } from "vue";
+import { computed, ref, watch, onMounted, type Ref } from "vue";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
-import type { Person, NodeType } from "~~/shared/model";
+import type { Person, Node, Revision } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 
 interface UseNodeEditOptions {
-  route?: any;
-  router?: any;
-  idToken?: any;
+  route?: ReturnType<typeof useRoute>;
+  router?: ReturnType<typeof useRouter>;
+  idToken?: Ref<string>;
 }
 
 export async function useNodeEdit(options: UseNodeEditOptions = {}) {
@@ -17,12 +17,15 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const db = getFirestore(useFirebaseApp(), "koryta-pl");
 
   const paramId = computed(() => route.params.id as string | undefined);
-  const isNew = computed(() => !paramId.value || paramId.value === "new");
+  const isNew = computed(
+    () => !paramId.value || paramId.value === "new" || paramId.value === "NEW",
+  );
   const node_id = computed(() => (isNew.value ? undefined : paramId.value));
   const tab = ref("content");
 
   // State
-  const current = ref<any>({
+  // TODO this should be inferred by the set type.
+  const current = ref<Node & Person>({
     name: "",
     type: "person",
     parties: [],
@@ -31,7 +34,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const lastFetchedId = ref<string | undefined>(undefined);
   const isSaving = ref(false);
 
-  const revisions = ref<any[]>([]);
+  const revisions = ref<Revision[]>([]);
   const loading = ref(false);
 
   const partiesDefault = computed<string[]>(() => [...parties, "inne"]);
@@ -47,7 +50,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   async function fetchRevisions() {
     if (!node_id.value) return;
     try {
-      const res = await $fetch<{ revisions: any[] }>(
+      const res = await $fetch<{ revisions: Revision[] }>(
         `/api/revisions/${node_id.value}`,
         {
           headers: authHeaders.value,
@@ -83,7 +86,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
           current.value = {
             name: node.name || "",
-            type: (node as any).type || "person",
+            type: (node as Node).type || "person",
             parties: Array.isArray(node.parties) ? node.parties : [],
             content: node.content || "",
           };
@@ -146,6 +149,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
         alert("Zapisano!");
         await fetchRevisions();
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       console.error(e);
       const msg = e.data?.statusMessage || e.message || "Unknown error";
