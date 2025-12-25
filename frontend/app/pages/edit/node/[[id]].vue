@@ -51,12 +51,12 @@ definePageMeta({
 });
 
 const {
-    isNew,
-    tab,
-    current,
-    loading,
-    partiesDefault,
-    idToken,
-    saveNode,
+  isNew,
+  tab,
+  current,
+  loading,
+  partiesDefault,
+  idToken,
+  saveNode,
 } = await useNodeEdit();
 </script>

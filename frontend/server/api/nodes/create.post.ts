@@ -38,10 +38,8 @@ export default defineEventHandler(async (event) => {
 
   const node = {
     ...revisionData,
-    revision_id: revisionRef.id,
     update_time: Timestamp.now(),
     update_user: user.uid,
-    visibility: "internal",
   };
 
   batch.set(nodeRef, node);

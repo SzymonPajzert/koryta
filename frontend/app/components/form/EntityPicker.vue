@@ -1,5 +1,6 @@
 <template>
   <v-autocomplete
+    v-bind="$attrs"
     :key="model?.id"
     v-model="model"
     v-model:search="search"
@@ -11,6 +12,7 @@
     required
     return-object
     autocomplete="off"
+    data-testid="entity-picker-input"
   >
     <template #no-data>
       <v-list-item v-if="search" @click="addNewItem">
@@ -27,9 +29,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
-import { useDialogStore } from "@/stores/dialog"; // Import the new store
+import { ref, computed } from "vue";
+import { useDialogStore } from "@/stores/dialog";
 import type { NodeType } from "~~/shared/model";
+
+defineOptions({
+  inheritAttrs: false,
+});
 
 const props = defineProps<{
   label?: string;
@@ -51,15 +57,30 @@ const model = defineModel<Link<typeof props.entity>>();
 
 const search = ref("");
 
-const { entities } = await useEntity(props.entity);
+const { idToken } = useAuthState();
 
-const entitiesList = computed(() =>
-  Object.entries(entities.value ?? {}).map(([key, value]) => ({
+const { data: response, pending } = useFetch<{
+  entities: Record<string, any>;
+}>(() => `/api/nodes/${props.entity}`, {
+  key: `entities-picker-${props.entity}`,
+  headers: computed(() => {
+    const h: Record<string, string> = {};
+    if (idToken.value) {
+      h.Authorization = `Bearer ${idToken.value}`;
+    }
+    return h;
+  }),
+  lazy: true,
+});
+
+const entitiesList = computed(() => {
+  const ents = (response.value as any)?.entities ?? {};
+  return Object.entries(ents).map(([key, value]) => ({
     type: props.entity,
     id: key,
-    name: value.name,
-  })),
-);
+    name: (value as any).name,
+  }));
+});
 
 function addNewItem() {
   const newEntityName = search.value;
