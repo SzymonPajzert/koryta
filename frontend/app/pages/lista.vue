@@ -23,4 +23,10 @@ const people = computed(() => {
     ),
   );
 });
+
+useSeoMeta({
+  title: "Lista osób i spółek - Koryta.pl",
+  description:
+    "Przejrzyj pełną listę osób i spółek powiązanych z układami politycznymi w Polsce.",
+});
 </script>

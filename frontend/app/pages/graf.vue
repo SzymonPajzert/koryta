@@ -120,6 +120,12 @@ watch(filtered, () => {
     configs.view.layoutHandler = new SimpleLayout();
   } else configs.view.layoutHandler = simulationStore.newForceLayout();
 });
+
+useSeoMeta({
+  title: "Graf połączeń - Koryta.pl",
+  description:
+    "Interaktywny graf pokazujący powiązania między politykami, ich rodzinami a spółkami skarbu państwa.",
+});
 </script>
 
 <template>

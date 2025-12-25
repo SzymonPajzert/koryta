@@ -107,4 +107,21 @@ useHead({
     return `${name} ${connections}`.trim();
   }),
 });
+
+useSeoMeta({
+  title: () =>
+    person.value?.name ? `${person.value.name} - Koryta.pl` : "Koryta.pl",
+  ogTitle: () =>
+    person.value?.name ? `${person.value.name} - Koryta.pl` : "Koryta.pl",
+  description: () =>
+    person.value?.content ||
+    (person.value?.name
+      ? `Informacje o ${person.value.name} w serwisie Koryta.pl`
+      : "Koryta.pl - agregator informacji o politycznych układach"),
+  ogDescription: () =>
+    person.value?.content ||
+    (person.value?.name
+      ? `Informacje o ${person.value.name} w serwisie Koryta.pl`
+      : "Koryta.pl - agregator informacji o politycznych układach"),
+});
 </script>
