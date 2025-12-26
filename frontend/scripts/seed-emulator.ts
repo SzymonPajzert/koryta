@@ -2,6 +2,11 @@ import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import waitOn from "wait-on";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+import {
+  initializeTestEnvironment
+} from "@firebase/rules-unit-testing"
 
 import nodes from "./nodes.json";
 import edges from "./edges.json";
@@ -27,6 +32,7 @@ async function seed() {
     await seedDatabase();
   }
   await seedAuth();
+  await seedRules();
 }
 
 async function seedDatabase() {
@@ -105,6 +111,34 @@ async function seedAuth() {
     } else {
       throw error;
     }
+  }
+}
+
+async function seedRules() {
+  const rulesPath = resolve(process.cwd(), "../firestore.rules");
+  const rulesContent = readFileSync(rulesPath, "utf8");
+  const projectId = "demo-koryta-pl";
+
+  const rulesUrl = `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${projectId}:securityRules`;
+
+  const response = await fetch(rulesUrl, {
+    method: "PUT",
+    body: JSON.stringify({
+      rules: {
+        files: [
+          {
+            name: "security.rules",
+            content: rulesContent,
+          },
+        ],
+      },
+    }),
+  });
+
+  if (response.ok) {
+    console.log("Firestore rules updated.");
+  } else {
+    console.error("Failed to update firestore rules", await response.text());
   }
 }
 

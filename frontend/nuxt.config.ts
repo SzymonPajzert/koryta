@@ -174,4 +174,8 @@ export default defineNuxtConfig({
   sourcemap: {
     client: "hidden",
   },
+
+  nitro: {
+    preset: "firebase", // or 'firebase-functions'
+  },
 });
