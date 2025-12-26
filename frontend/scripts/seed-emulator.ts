@@ -4,9 +4,6 @@ import { getAuth } from "firebase-admin/auth";
 import waitOn from "wait-on";
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import {
-  initializeTestEnvironment
-} from "@firebase/rules-unit-testing"
 
 import nodes from "./nodes.json";
 import edges from "./edges.json";

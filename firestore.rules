@@ -4,10 +4,16 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /nodes/{nodeId} {
       allow read: if resource.data.type == "article" || resource.data.type == "person" || resource.data.type == "place";
+      allow create: if request.auth != null && resource.data.revision_id == null;
     }
 
     match /users/{userId} {
       allow read, write: if request.auth.uid == userId;
+    }
+
+    match /revisions/{revisionId} {
+      allow read: if true;
+      allow create: if request.auth != null;
     }
   }
 }
