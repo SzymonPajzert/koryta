@@ -11,6 +11,9 @@ describe("User Toolbar and Edit Workflow", () => {
     cy.login();
     cy.reload();
     cy.contains("Dodaj artykuł").should("be.visible");
+
+    cy.wait(500); // Wait for potential animations
+    cy.percySnapshot("toolbar-logged-in");
   });
 
   it("pre-selects Article type when clicking Dodaj artykuł", () => {
