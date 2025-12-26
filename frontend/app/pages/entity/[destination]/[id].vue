@@ -61,6 +61,7 @@ import { getFirestore, doc } from "firebase/firestore";
 import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
 import type { Person } from "~~/shared/model";
+import { declination } from "~/composables/polish";
 
 const route = useRoute<"/entity/[destination]/[id]">();
 
@@ -92,4 +93,35 @@ const person = computed(() => response.value?.node);
 
 const { sources, targets } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
+
+useHead({
+  title: computed(() => {
+    const name = person.value?.name ?? "Nieznane";
+    const connections =
+      edges.value.length > 0
+        ? `ma ${edges.value.length} ${declination(
+            edges.value.length,
+            "połączenie",
+          )}`
+        : "";
+    return `${name} ${connections}`.trim();
+  }),
+});
+
+useSeoMeta({
+  title: () =>
+    person.value?.name ? `${person.value.name} - Koryta.pl` : "Koryta.pl",
+  ogTitle: () =>
+    person.value?.name ? `${person.value.name} - Koryta.pl` : "Koryta.pl",
+  description: () =>
+    person.value?.content ||
+    (person.value?.name
+      ? `Informacje o ${person.value.name} w serwisie Koryta.pl`
+      : "Koryta.pl - agregator informacji o politycznych układach"),
+  ogDescription: () =>
+    person.value?.content ||
+    (person.value?.name
+      ? `Informacje o ${person.value.name} w serwisie Koryta.pl`
+      : "Koryta.pl - agregator informacji o politycznych układach"),
+});
 </script>

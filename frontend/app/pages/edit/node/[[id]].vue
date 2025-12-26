@@ -76,4 +76,8 @@ definePageMeta({
 
 const { isNew, tab, current, loading, partiesDefault, idToken, saveNode } =
   await useNodeEdit();
+
+useHead({
+  title: computed(() => (isNew.value ? "Utwórz" : "Edytuj")),
+});
 </script>
