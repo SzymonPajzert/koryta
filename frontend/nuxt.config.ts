@@ -56,6 +56,10 @@ export default defineNuxtConfig({
     "/": { prerender: true },
     // Cached for 6 hours
     "/api/**": isLocal ? undefined : { swr: 60 * 60 * 6 },
+    // Known issue with POST requests if cached.
+    // https://github.com/nitrojs/nitro/issues/887
+    "/api/nodes/create": { swr: false, cache: false },
+    "/api/revisions/create": { swr: false, cache: false },
   },
 
   runtimeConfig: {
