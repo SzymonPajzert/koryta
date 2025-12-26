@@ -122,7 +122,7 @@
         rounded="lg"
       >
         <v-card-title>
-          <h2 class="text-h5 font-weight-bold">
+          <h2 class="text-h6 font-weight-bold">
             Albo PL2050 ministerstwo klimatu
           </h2>
         </v-card-title>
