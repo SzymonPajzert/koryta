@@ -27,6 +27,9 @@ describe("Entity Editing", () => {
     // Verify we are on create page
     cy.contains("h1", "Utwórz");
 
+    cy.wait(500); // Wait for potential animations
+    cy.percySnapshot("create-entity-page");
+
     // 3. Create new entity
     cy.contains("label", "Nazwa")
       .parent()

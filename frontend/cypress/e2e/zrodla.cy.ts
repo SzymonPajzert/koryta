@@ -4,6 +4,7 @@ describe("list", () => {
   });
 
   it("screenshots", () => {
+    cy.wait(500); // Wait for potential animations
     cy.percySnapshot("zrodla-page");
   });
 });
