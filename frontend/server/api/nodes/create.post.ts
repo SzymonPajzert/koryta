@@ -5,7 +5,7 @@ import { getUser } from "~~/server/utils/auth";
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
 
-  if (!body.type || !body.name) {
+  if (!body || !body.type || !body.name) {
     throw createError({
       statusCode: 400,
       statusMessage: "Missing required fields (type, name)",
