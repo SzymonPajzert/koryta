@@ -176,6 +176,6 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    preset: "firebase", // or 'firebase-functions'
+    preset: "firebase_app_hosting", // or 'firebase-functions'
   },
 });
