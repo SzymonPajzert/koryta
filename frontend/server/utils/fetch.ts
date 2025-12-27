@@ -78,10 +78,6 @@ export async function fetchNodes<N extends NodeType>(
       return pageIsPublic(node);
     });
 
-  console.log(
-    `fetchNodes(${path}, isAuth=${isAuth}): returning ${nodesData.length} nodes (total ${nodes.docs.length})`,
-  );
-
   return Object.fromEntries(nodesData.map((node) => [node.id, node]));
 }
 
