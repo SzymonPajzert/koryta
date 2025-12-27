@@ -15,12 +15,37 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
-  const res = await db.collection("edges").add({
-    ...body,
+  
+  const batch = db.batch();
+  const edgeRef = db.collection("edges").doc();
+  const revisionRef = db.collection("revisions").doc();
+
+  const revisionData = {
+    source: body.source,
+    target: body.target,
+    type: body.type,
+    name: body.name || "",
+    text: body.text || "",
+  };
+
+  const revision = {
+    node_id: edgeRef.id,
+    data: revisionData,
+    update_time: Timestamp.now(),
+    update_user: user.uid,
+  };
+
+  const edge = {
+    ...revisionData,
     update_time: Timestamp.now(),
     update_user: user.uid,
     visibility: "internal",
-  });
+  };
 
-  return { id: res.id };
+  batch.set(edgeRef, edge);
+  batch.set(revisionRef, revision);
+
+  await batch.commit();
+
+  return { id: edgeRef.id };
 });
