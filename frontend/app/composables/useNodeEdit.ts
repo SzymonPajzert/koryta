@@ -7,6 +7,7 @@ import type {
   EdgeType,
   Article,
   NodeType,
+  Edge,
 } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 import { useEdges } from "~/composables/edges";
@@ -51,14 +52,17 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     { value: "mentions", label: "Wspomina o", targetType: "person" },
   ];
 
-  const newEdge = ref({
-    type: "connection" as EdgeType,
+  const newEdge = ref<Partial<Edge> & { targetType: NodeType }>({
+    type: "connection",
     target: "",
-    targetType: "person" as NodeType,
+    targetType: "person",
     name: "",
     text: "",
   });
-  const pickerTarget = ref<any>(null);
+  const pickerTarget = ref<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  const isEditingEdge = computed(() => !!newEdge.value.id);
+
   const revisions = ref<Revision[]>([]);
   const loading = ref(false);
 
@@ -76,7 +80,9 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       if (option) {
         newEdge.value.targetType = option.targetType as NodeType;
       }
-      pickerTarget.value = null;
+      if (!isEditingEdge.value) {
+        pickerTarget.value = null;
+      }
     },
   );
 
@@ -225,6 +231,38 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     }
   }
 
+  function resetEdgeForm() {
+    newEdge.value = {
+      type: "connection",
+      target: "",
+      targetType: "person",
+      name: "",
+      text: "",
+    };
+    pickerTarget.value = null;
+  }
+
+  function openEditEdge(edge: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    newEdge.value = {
+      ...edge,
+      targetType: edge.richNode?.type || "person",
+    };
+    pickerTarget.value = edge.richNode;
+    // Scroll to form if needed?
+  }
+
+  function cancelEditEdge() {
+    resetEdgeForm();
+  }
+
+  async function processEdge() {
+    if (isEditingEdge.value) {
+      await saveEdgeRevision();
+    } else {
+      await addEdge();
+    }
+  }
+
   async function addEdge() {
     if (!node_id.value || !pickerTarget.value) return;
     try {
@@ -239,14 +277,39 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           text: newEdge.value.text,
         },
       });
-      pickerTarget.value = null;
-      newEdge.value.name = "";
-      newEdge.value.text = "";
+      resetEdgeForm();
       alert("Dodano powiązanie");
       await refreshEdges();
     } catch (e) {
       console.error(e);
       alert("Błąd dodawania powiązania");
+    }
+  }
+
+  async function saveEdgeRevision() {
+    if (!newEdge.value.id || !newEdge.value.source) return;
+
+    try {
+      await $fetch<{ id: string }>("/api/revisions/create", {
+        method: "POST",
+        body: {
+          node_id: newEdge.value.id,
+          collection: "edges",
+          source: newEdge.value.source, // Keep required context
+          target: newEdge.value.target,
+          type: newEdge.value.type,
+          name: newEdge.value.name,
+          text: newEdge.value.text,
+        },
+        headers: authHeaders.value,
+      });
+      alert("Zapisano propozycję zmiany!");
+      resetEdgeForm();
+      await refreshEdges();
+    } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      console.error(e);
+      const msg = e.data?.statusMessage || e.message || "Unknown error";
+      alert("Błąd zapisu: " + msg);
     }
   }
 
@@ -263,7 +326,10 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     partiesDefault,
     idToken,
     saveNode,
-    addEdge,
+    processEdge,
+    cancelEditEdge,
+    isEditingEdge,
     fetchRevisions,
+    openEditEdge,
   };
 }

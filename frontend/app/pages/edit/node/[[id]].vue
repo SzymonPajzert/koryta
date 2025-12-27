@@ -98,14 +98,24 @@
                 <v-list-item-subtitle>{{
                   edge.label || edge.type
                 }}</v-list-item-subtitle>
+                <template #append>
+                  <v-btn
+                    icon="mdi-pencil"
+                    variant="text"
+                    size="small"
+                    @click="openEditEdge(edge)"
+                  />
+                </template>
               </v-list-item>
             </v-list>
             <div v-else class="text-caption mb-4">
               Brak istniejących powiązań.
             </div>
 
-            <h4 class="text-subtitle-1 mb-2 mt-4">Dodaj nowe powiązanie</h4>
-            <v-form @submit.prevent="addEdge">
+            <h4 class="text-subtitle-1 mb-2 mt-4">
+              {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
+            </h4>
+            <v-form @submit.prevent="processEdge">
               <v-row dense>
                 <v-col cols="12" md="6">
                   <v-select
@@ -142,14 +152,24 @@
                     hide-details
                   />
                 </v-col>
-                <v-col cols="12" class="mt-2">
+                <v-col cols="12" class="mt-2 d-flex gap-2">
+                  <v-btn
+                    v-if="isEditingEdge"
+                    variant="text"
+                    @click="cancelEditEdge"
+                    class="mr-2"
+                  >
+                    Anuluj
+                  </v-btn>
                   <v-btn
                     color="secondary"
                     type="submit"
                     block
+                    :class="{ 'flex-grow-1': isEditingEdge }"
                     :disabled="!pickerTarget"
-                    >Dodaj powiązanie</v-btn
                   >
+                    {{ isEditingEdge ? "Zapisz zmiany" : "Dodaj powiązanie" }}
+                  </v-btn>
                 </v-col>
               </v-row>
             </v-form>
@@ -196,7 +216,10 @@ const {
   partiesDefault,
   idToken,
   saveNode,
-  addEdge,
+  processEdge,
+  cancelEditEdge,
+  isEditingEdge,
   fetchRevisions,
+  openEditEdge,
 } = await useNodeEdit();
 </script>

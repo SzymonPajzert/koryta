@@ -7,6 +7,7 @@ export type EdgeNode = {
   label: string;
   source: string;
   target: string;
+  id?: string;
   traverse?: TraversePolicy;
 };
 

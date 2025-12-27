@@ -6,10 +6,10 @@ import { createRevisionTransaction } from "~~/server/utils/revisions";
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
 
-  if (!body || !body.node_id || !body.name) {
+  if (!body || !body.node_id) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Missing required fields (node_id, name)",
+      statusMessage: "Missing required fields (node_id)",
     });
   }
 
@@ -25,9 +25,12 @@ export default defineEventHandler(async (event) => {
     content: content,
     sourceURL: body.sourceURL || "",
     shortName: body.shortName || "",
+    // Edge specific fields
+    text: body.text || "",
   };
 
-  const nodeRef = db.collection("nodes").doc(body.node_id);
+  const collection = body.collection || "nodes";
+  const nodeRef = db.collection(collection).doc(body.node_id);
 
   const { batch, revisionRef } = createRevisionTransaction(
     db,
