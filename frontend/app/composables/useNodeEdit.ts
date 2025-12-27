@@ -62,9 +62,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const revisions = ref<Revision[]>([]);
   const loading = ref(false);
 
-  // Initialise edges
-  // useEdges is async, so this composable also needs to be async or we handle it differently.
-  // The original component used top-level await. We can do the same here since this function is async.
   const {
     sources,
     targets,
