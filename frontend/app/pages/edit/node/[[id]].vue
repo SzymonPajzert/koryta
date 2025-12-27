@@ -8,8 +8,6 @@
 
     <v-tabs v-model="tab">
       <v-tab value="content">Treść i Powiązania</v-tab>
-      <v-tab value="comments" :disabled="isNew">Komentarze</v-tab>
-      <v-tab value="revisions" :disabled="isNew">Historia</v-tab>
     </v-tabs>
 
     <v-window v-model="tab">
@@ -74,24 +72,6 @@
               >
                 Zapisz zmianę
               </v-btn>
-              <template v-if="!isNew">
-                <v-btn
-                  color="warning"
-                  variant="outlined"
-                  class="ml-2"
-                  @click="vote('interesting')"
-                >
-                  Ciekawe
-                </v-btn>
-                <v-btn
-                  color="error"
-                  variant="outlined"
-                  class="ml-2"
-                  @click="vote('error')"
-                >
-                  Zgłoś błąd
-                </v-btn>
-              </template>
             </div>
           </v-form>
 
@@ -177,28 +157,12 @@
         </v-card>
       </v-window-item>
 
-      <v-window-item value="comments">
-        <v-card class="mt-4 pa-4">
-          <h3 class="text-h6 mb-2">Komentarze</h3>
-          <!-- List would go here, need fetch logic -->
-          <v-timeline density="compact">
-            <!-- Placeholder for comments list -->
-          </v-timeline>
-
-          <v-divider class="my-4" />
-          <v-textarea v-model="newComment" label="Dodaj komentarz" rows="3" />
-          <v-btn color="primary" class="mt-2" @click="addComment">Wyślij</v-btn>
-        </v-card>
-      </v-window-item>
-
       <v-window-item value="revisions">
         <v-card class="mt-4 pa-4">
           <v-list>
             <v-list-item
               v-for="rev in revisions"
               :key="rev.id"
-              @click="restoreRevision(rev)"
-              style="cursor: pointer"
             >
               <v-list-item-title>{{ rev.update_time }}</v-list-item-title>
               <v-list-item-subtitle>{{ rev.update_user }}</v-list-item-subtitle>
@@ -230,16 +194,12 @@ const {
   edgeTypeOptions,
   newEdge,
   pickerTarget,
-  newComment,
   revisions,
   allEdges,
   partiesDefault,
   idToken,
   saveNode,
   addEdge,
-  addComment,
-  vote,
   fetchRevisions,
-  restoreRevision,
 } = await useNodeEdit();
 </script>

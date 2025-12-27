@@ -59,7 +59,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     text: "",
   });
   const pickerTarget = ref<any>(null);
-  const newComment = ref("");
   const revisions = ref<Revision[]>([]);
   const loading = ref(false);
 
@@ -254,47 +253,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     }
   }
 
-  async function addComment() {
-    if (!node_id.value || !newComment.value) return;
-    try {
-      await $fetch("/api/comments/create", {
-        method: "POST",
-        body: { node: node_id.value, text: newComment.value },
-        headers: authHeaders.value,
-      });
-      newComment.value = "";
-      alert("Dodano komentarz");
-    } catch (e) {
-      console.error(e);
-      alert("Błąd dodawania komentarza");
-    }
-  }
-
-  async function vote(type: string) {
-    if (!node_id.value) return;
-    try {
-      await $fetch("/api/votes/create", {
-        method: "POST",
-        body: { node: node_id.value, vote_type: type },
-        headers: authHeaders.value,
-      });
-      alert("Zagłosowano: " + type);
-    } catch (e) {
-      console.error(e);
-      alert("Błąd głosowania");
-    }
-  }
-
-  function restoreRevision(rev: any) {
-    if (confirm(`Przywrócić treść z wersji ${rev.update_time}?`)) {
-      current.value = {
-        ...current.value,
-        content: rev.content || "",
-      };
-      tab.value = "content";
-    }
-  }
-
   return {
     isNew,
     tab,
@@ -303,16 +261,12 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     edgeTypeOptions,
     newEdge,
     pickerTarget,
-    newComment,
     revisions,
     allEdges,
     partiesDefault,
     idToken,
     saveNode,
     addEdge,
-    addComment,
-    vote,
     fetchRevisions,
-    restoreRevision,
   };
 }
