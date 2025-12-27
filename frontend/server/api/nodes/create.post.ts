@@ -1,6 +1,7 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
+import { createRevisionTransaction } from "~~/server/utils/revisions";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -17,10 +18,7 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
-
-  const batch = db.batch();
   const nodeRef = db.collection("nodes").doc();
-  const revisionRef = db.collection("revisions").doc();
 
   const revisionData = {
     name: body.name,
@@ -31,21 +29,13 @@ export default defineEventHandler(async (event) => {
     shortName: body.shortName || "",
   };
 
-  const revision = {
-    node_id: nodeRef.id,
-    data: revisionData,
-    update_time: Timestamp.now(),
-    update_user: user.uid,
-  };
-
-  const node = {
-    ...revisionData,
-    update_time: Timestamp.now(),
-    update_user: user.uid,
-  };
-
-  batch.set(nodeRef, node);
-  batch.set(revisionRef, revision);
+  const { batch } = createRevisionTransaction(
+    db,
+    user,
+    nodeRef,
+    revisionData,
+    true
+  );
 
   await batch.commit();
 
