@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     user,
     nodeRef,
     revisionData,
-    false
+    false,
   );
 
   await batch.commit();

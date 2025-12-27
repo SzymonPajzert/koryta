@@ -4,7 +4,7 @@ import {
   type Person,
   type Company,
   type Article,
-  nodeIsPublic,
+  pageIsPublic,
 } from "~~/shared/model";
 import { getDatabase } from "firebase-admin/database";
 import { getFirestore } from "firebase-admin/firestore";
@@ -75,7 +75,7 @@ export async function fetchNodes<N extends NodeType>(
     .filter((node) => {
       // Visibility filtering:
       if (isAuth) return true;
-      return nodeIsPublic(node);
+      return pageIsPublic(node);
     });
 
   console.log(
@@ -91,10 +91,10 @@ export async function fetchEdges(
   const { isAuth = false } = options;
   const db = getFirestore("koryta-pl");
   const edges = (await db.collection("edges").get()).docs
-    .map((doc) => doc.data() as Edge & { visibility?: string })
+    .map((doc) => doc.data() as Edge)
     .filter((edge) => {
       if (isAuth) return true;
-      return !!edge.revision_id;
+      return pageIsPublic(edge);
     });
   return (edges as unknown as Edge[]) || [];
 }

@@ -1,4 +1,8 @@
-import { Firestore, Timestamp, DocumentReference } from "firebase-admin/firestore";
+import {
+  Firestore,
+  Timestamp,
+  DocumentReference,
+} from "firebase-admin/firestore";
 
 export interface BatchResult {
   batch: FirebaseFirestore.WriteBatch;
@@ -11,7 +15,7 @@ export function createRevisionTransaction(
   user: { uid: string },
   targetRef: DocumentReference,
   data: Record<string, any>,
-  updateHead: boolean = false
+  updateHead: boolean = false,
 ): BatchResult {
   const batch = db.batch();
   const revisionRef = db.collection("revisions").doc();

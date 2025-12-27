@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
 
   const db = getFirestore(getApp(), "koryta-pl");
-  
+
   const edgeRef = db.collection("edges").doc();
 
   const revisionData = {
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     user,
     edgeRef,
     revisionData,
-    true
+    true,
   );
 
   await batch.commit();
