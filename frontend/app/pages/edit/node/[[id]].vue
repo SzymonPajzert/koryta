@@ -160,10 +160,7 @@
       <v-window-item value="revisions">
         <v-card class="mt-4 pa-4">
           <v-list>
-            <v-list-item
-              v-for="rev in revisions"
-              :key="rev.id"
-            >
+            <v-list-item v-for="rev in revisions" :key="rev.id">
               <v-list-item-title>{{ rev.update_time }}</v-list-item-title>
               <v-list-item-subtitle>{{ rev.update_user }}</v-list-item-subtitle>
             </v-list-item>

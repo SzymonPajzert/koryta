@@ -97,9 +97,7 @@ describe("Entity Editing", () => {
 
     // Type: "Osoba" (value 'person')
     // Vuetify selects are a bit complex, we check the displayed text in the parent container
-    cy.contains("label", "Typ")
-      .parents(".v-input")
-      .should("contain", "Osoba");
+    cy.contains("label", "Typ").parents(".v-input").should("contain", "Osoba");
 
     // Parties: "PO"
     // Check if the chip exists
