@@ -4,7 +4,7 @@ import {
   type Person,
   type Company,
   type Article,
-  nodeIsPublic,
+  pageIsPublic,
 } from "~~/shared/model";
 import { getDatabase } from "firebase-admin/database";
 import { getFirestore } from "firebase-admin/firestore";
@@ -75,12 +75,8 @@ export async function fetchNodes<N extends NodeType>(
     .filter((node) => {
       // Visibility filtering:
       if (isAuth) return true;
-      return nodeIsPublic(node);
+      return pageIsPublic(node);
     });
-
-  console.log(
-    `fetchNodes(${path}, isAuth=${isAuth}): returning ${nodesData.length} nodes (total ${nodes.docs.length})`,
-  );
 
   return Object.fromEntries(nodesData.map((node) => [node.id, node]));
 }
@@ -88,11 +84,15 @@ export async function fetchNodes<N extends NodeType>(
 export async function fetchEdges(
   options: { isAuth?: boolean } = {},
 ): Promise<Edge[]> {
+  const { isAuth = false } = options;
   const db = getFirestore("koryta-pl");
-  const edges = (await db.collection("edges").get()).docs.map(
-    (doc) => doc.data() as Edge,
-  );
-  return edges;
+  const edges = (await db.collection("edges").get()).docs
+    .map((doc) => doc.data() as Edge)
+    .filter((edge) => {
+      if (isAuth) return true;
+      return pageIsPublic(edge);
+    });
+  return (edges as unknown as Edge[]) || [];
 }
 
 export async function fetchRTDB<T>(path: string): Promise<T> {

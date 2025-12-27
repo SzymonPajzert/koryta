@@ -4,10 +4,12 @@ import type {
   Person,
   Node,
   Revision,
+  EdgeType,
   Article,
   NodeType,
 } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
+import { useEdges } from "~/composables/edges";
 
 interface UseNodeEditOptions {
   route?: ReturnType<typeof useRoute>;
@@ -42,8 +44,41 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const lastFetchedId = ref<string | undefined>(undefined);
   const isSaving = ref(false);
 
+  const edgeTypeOptions = [
+    { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
+    { value: "owns", label: "Właściciel", targetType: "place" },
+    { value: "connection", label: "Powiązanie z", targetType: "person" },
+    { value: "mentions", label: "Wspomina o", targetType: "person" },
+  ];
+
+  const newEdge = ref({
+    type: "connection" as EdgeType,
+    target: "",
+    targetType: "person" as NodeType,
+    name: "",
+    text: "",
+  });
+  const pickerTarget = ref<any>(null);
   const revisions = ref<Revision[]>([]);
   const loading = ref(false);
+
+  const {
+    sources,
+    targets,
+    refresh: refreshEdges,
+  } = await useEdges(() => node_id.value);
+  const allEdges = computed(() => [...sources.value, ...targets.value]);
+
+  watch(
+    () => newEdge.value.type,
+    (newType) => {
+      const option = edgeTypeOptions.find((o) => o.value === newType);
+      if (option) {
+        newEdge.value.targetType = option.targetType as NodeType;
+      }
+      pickerTarget.value = null;
+    },
+  );
 
   const partiesDefault = computed<string[]>(() => [...parties, "inne"]);
 
@@ -190,14 +225,45 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     }
   }
 
+  async function addEdge() {
+    if (!node_id.value || !pickerTarget.value) return;
+    try {
+      await $fetch<any>("/api/edges/create", {
+        method: "POST",
+        headers: authHeaders.value,
+        body: {
+          source: node_id.value,
+          target: pickerTarget.value.id,
+          type: newEdge.value.type,
+          name: newEdge.value.name,
+          text: newEdge.value.text,
+        },
+      });
+      pickerTarget.value = null;
+      newEdge.value.name = "";
+      newEdge.value.text = "";
+      alert("Dodano powiązanie");
+      await refreshEdges();
+    } catch (e) {
+      console.error(e);
+      alert("Błąd dodawania powiązania");
+    }
+  }
+
   return {
     isNew,
     tab,
     current,
     loading,
+    edgeTypeOptions,
+    newEdge,
+    pickerTarget,
     revisions,
+    allEdges,
     partiesDefault,
     idToken,
     saveNode,
+    addEdge,
+    fetchRevisions,
   };
 }

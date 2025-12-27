@@ -2,11 +2,13 @@
   {
     "source": "1",
     "target": "3",
-    "type": "connection"
+    "type": "connection",
+    "revision_id": "rev_edge_1"
   },
   {
     "source": "1",
     "target": "2",
-    "type": "employed"
+    "type": "employed",
+    "revision_id": "rev_edge_2"
   }
 ]

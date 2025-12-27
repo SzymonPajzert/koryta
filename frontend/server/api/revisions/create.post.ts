@@ -1,6 +1,7 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
+import { createRevisionTransaction } from "~~/server/utils/revisions";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -17,30 +18,24 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const revisionRef = db.collection("revisions").doc();
-
-  // Create revision document purely linked to the node, without touching the node itself
-  const revision = {
-    node_id: body.node_id,
-    data: {
-      name: body.name,
-      type: body.type,
-      parties: body.parties || [],
-      content: content,
-      sourceURL: body.sourceURL || "",
-      shortName: body.shortName || "",
-    },
-    update_time: Timestamp.now(),
-    update_user: user.uid,
-    visibility: "internal",
+  const revisionData = {
+    name: body.name,
+    type: body.type,
+    parties: body.parties || [],
+    content: content,
+    sourceURL: body.sourceURL || "",
+    shortName: body.shortName || "",
   };
 
-  const batch = db.batch();
-  batch.set(revisionRef, revision);
-
-  // Also update the node's visibility if it's now internal (user created/edited)
   const nodeRef = db.collection("nodes").doc(body.node_id);
-  batch.update(nodeRef, { visibility: "internal" });
+
+  const { batch, revisionRef } = createRevisionTransaction(
+    db,
+    user,
+    nodeRef,
+    revisionData,
+    false,
+  );
 
   await batch.commit();
 

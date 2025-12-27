@@ -74,4 +74,42 @@ describe("Entity Editing", () => {
       .find("input")
       .should("have.value", "Test Person Updated");
   });
+
+  it("should prepopulate fields when editing an existing entity", () => {
+    // 1. Login
+    cy.login();
+
+    // 2. Visit /entity/person/1
+    cy.visit("/entity/person/1");
+
+    // 3. Click "Zaproponuj zmianę"
+    cy.contains("Zaproponuj zmianę").click();
+
+    // 4. Verify URL
+    cy.url().should("include", "/edit/node/1");
+
+    // 5. Verify inputs
+    // Name: "Jan Kowalski"
+    cy.contains("label", "Nazwa")
+      .parent()
+      .find("input")
+      .should("have.value", "Jan Kowalski");
+
+    // Type: "Osoba" (value 'person')
+    // Vuetify selects are a bit complex, we check the displayed text in the parent container
+    cy.contains("label", "Typ").parents(".v-input").should("contain", "Osoba");
+
+    // Parties: "PO"
+    // Check if the chip exists
+    cy.contains("label", "Partia")
+      .parents(".v-input")
+      .find(".v-chip")
+      .should("contain", "PO");
+
+    // Content: "Politician from PO"
+    cy.contains("label", "Treść (Markdown)")
+      .parent()
+      .find("textarea")
+      .should("have.value", "Politician from PO");
+  });
 });

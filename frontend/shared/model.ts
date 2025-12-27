@@ -5,7 +5,16 @@ export type Node = {
   revision_id?: string;
 };
 
-export function nodeIsPublic(node: { revision_id?: string }) {
+export interface Edge {
+  source: string;
+  target: string;
+  name?: string;
+  text?: string;
+  type: EdgeType;
+  revision_id?: string;
+}
+
+export function pageIsPublic(node: { revision_id?: string }) {
   return !!node.revision_id;
 }
 
@@ -31,14 +40,6 @@ export const destinationAddText: Record<NodeType, string> = {
   article: "Dodaj artykuł",
   record: "Dodaj rekord",
 };
-
-export interface Edge {
-  source: string;
-  target: string;
-  name?: string;
-  text?: string;
-  type: EdgeType;
-}
 
 export interface Person {
   name: string;

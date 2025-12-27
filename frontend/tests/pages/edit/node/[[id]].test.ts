@@ -149,4 +149,46 @@ describe("NodeEditPage", () => {
     await wrapper.find("form").trigger("submit");
     expect(mockSaveNode).toHaveBeenCalled();
   });
+
+  it("renders edges list when not new and edges exist", async () => {
+    mockState.isNew.value = false;
+    mockState.allEdges.value = [
+      { richNode: { id: "1", name: "Associated Node" }, type: "employed" },
+    ] as any;
+
+    const wrapper = mountAsync(NodeEditPage, {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Powiązania");
+    expect(wrapper.text()).toContain("Associated Node");
+  });
+
+  it("calls addEdge when adding a link", async () => {
+    mockState.isNew.value = false;
+    mockState.pickerTarget.value = { id: "target-id" };
+
+    const wrapper = mountAsync(NodeEditPage, {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    // Find the second form (add edge form)
+    const forms = wrapper.findAll("form");
+    expect(forms.length).toBeGreaterThan(1);
+    await forms[1].trigger("submit");
+
+    expect(mockAddEdge).toHaveBeenCalled();
+  });
 });
