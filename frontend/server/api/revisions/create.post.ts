@@ -37,9 +37,6 @@ export default defineEventHandler(async (event) => {
     false
   );
 
-  // Also update the node's visibility if it's now internal (user created/edited)
-  batch.update(nodeRef, { visibility: "internal" });
-
   await batch.commit();
 
   return { id: revisionRef.id };

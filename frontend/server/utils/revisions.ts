@@ -22,7 +22,6 @@ export function createRevisionTransaction(
     data,
     update_time: timestamp,
     update_user: user.uid,
-    visibility: "internal",
   };
 
   batch.set(revisionRef, revision);
@@ -32,7 +31,6 @@ export function createRevisionTransaction(
       ...data,
       update_time: timestamp,
       update_user: user.uid,
-      visibility: "internal",
     });
   }
 

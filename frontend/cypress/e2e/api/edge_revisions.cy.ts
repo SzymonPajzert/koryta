@@ -49,9 +49,10 @@ describe("Edge API", () => {
     // Ensure we have a token
     expect(authToken).to.be.ok;
 
+    const uniqueSuffix = Date.now();
     const edgeData = {
-      source: "node_1",
-      target: "node_2",
+      source: `node_source_${uniqueSuffix}`,
+      target: `node_target_${uniqueSuffix}`,
       type: "connection",
       name: "Test Connection",
       text: "Test Description",
@@ -66,8 +67,39 @@ describe("Edge API", () => {
       },
     }).then((response) => {
       expect(response.status).to.eq(200);
-      expect(response.body).to.have.property("id");
-      expect(response.body.id).to.be.a("string");
+      const edgeId = response.body.id;
+      expect(edgeId).to.be.a("string");
+
+      // Verify visibility for authenticated user
+      cy.request({
+        method: "GET",
+        url: "/api/graph/edges",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }).then((res) => {
+        expect(res.status).to.eq(200);
+        expect(res.body).to. be.an("array");
+        
+        const found = res.body.find((e: any) => 
+          e.source === edgeData.source && e.target === edgeData.target
+        );
+        expect(found, `Edge ${edgeId} (source: ${edgeData.source}) should be visible to auth user`).to.exist;
+      });
+
+      // Verify visibility for anonymous user
+      cy.request({
+        method: "GET",
+        url: "/api/graph/edges",
+        failOnStatusCode: false
+      }).then((res) => {
+        expect(res.status).to.eq(200);
+        expect(res.body).to. be.an("array");
+        const found = res.body.find((e: any) => 
+          e.source === edgeData.source && e.target === edgeData.target
+        );
+        expect(found).to.not.exist;
+      });
     });
   });
 });
