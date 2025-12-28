@@ -20,7 +20,6 @@ from util.polish import LOWER, UPPER
 
 WIKI_DUMP = DownloadableFile(
     "https://dumps.wikimedia.org/plwiki/latest/plwiki-latest-pages-articles-multistream.xml.bz2",
-    "plwiki-latest-articles.xml.bz2",
 )
 
 DUMP_SIZE = 12314670146  # TODO remove it and look it up

@@ -56,7 +56,11 @@ class Conductor(IO):
                 assert self.progress_bar is not None
                 self.progress_bar.update(1)
                 dfs.download()
-            return file.FromPath(dfs.downloaded_path, binary=fs.binary)
+            try:
+                return file.FromPath(dfs.downloaded_path, binary=fs.binary)
+            except UnicodeDecodeError:
+                print(f"[ERROR] UnicodeDecodeError, retrying as binary for file {fs}")
+                return file.FromPath(dfs.downloaded_path, binary=True)
 
         # Stop progress bar
         self.continous_download = False

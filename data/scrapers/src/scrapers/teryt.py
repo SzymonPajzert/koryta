@@ -14,6 +14,7 @@ teryt_data = FileSource(
     "https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx",
     "teryt_codes.zip",
     "download_teryt",
+    binary=True,
 )
 
 
