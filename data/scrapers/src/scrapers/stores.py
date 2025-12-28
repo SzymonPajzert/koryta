@@ -130,7 +130,7 @@ class DownloadableFile(DataRef):
     filename_fallback: str | None = None
     complex_download: str | None = None
     download_lambda: typing.Callable | None = None
-    binary: bool = False
+    binary: bool = True
 
     @property
     def filename(self) -> str:

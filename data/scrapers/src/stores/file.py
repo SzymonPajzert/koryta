@@ -65,7 +65,7 @@ class FromBytesIO(File):
         raise NotImplementedError()
 
     def read_content(self, bytes=False) -> str | bytes:
-        if not bytes:
+        if bytes:
             return self.raw_bytes.decode("utf-8")
         return self.raw_bytes
 
@@ -96,7 +96,9 @@ class FromBytesIO(File):
         raise NotImplementedError()
 
     def read_file(self) -> BinaryIO | TextIO:
-        return self.raw_bytes
+        if isinstance(self.raw_bytes, str):
+            return io.StringIO(self.raw_bytes)
+        return io.BytesIO(self.raw_bytes)
 
     def read_zip(self, inner_path: str | None = None, idx: int | None = None):
         raise NotImplementedError()
@@ -123,14 +125,29 @@ class FromTextIO(FromIterable):
 
 
 class FromPath(FromBytesIO):
+    # TODO inheritance here is incorrect.
+    # Given binary=False, we should inherit from FromTextIO
     path: str
 
     def __init__(self, path, binary=False):
-        super().__init__(open(path, "rb"))
+        super().__init__(
+            open(
+                path, "rb" if binary else "r", encoding=None if binary else "utf-8"
+            ).read()
+        )
         self.path = path
 
     def read_parquet(self):
         return pd.read_parquet(self.path)
+
+    def read_jsonl(self):
+        with open(self.path, "r", encoding="utf-8") as f:
+            for line in f:
+                yield json.loads(line)
+
+    def read_iterable(self):
+        with open(self.path, "r", encoding="utf-8") as f:
+            yield from f
 
     def read_zip(self, inner_path: str | None = None, idx: int | None = None) -> File:
         if inner_path is None and idx is None:

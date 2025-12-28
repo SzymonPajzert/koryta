@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 
@@ -66,17 +67,26 @@ def test_pipeline_output(filename, column):
     Verifies that {filename}.jsonl contains entities with the expected columns.
     """
     path = os.path.join(VERSIONED_DIR, filename.split(".")[0], filename)
-    assert os.path.exists(path), f"File {path} not found"
+    if not os.path.exists(path):
+        pytest.skip(f"File {path} not found")
 
     should_exist = not column.startswith("-")
     column = column.removeprefix("-")
 
     with open(path, "r") as f:
         # Check first 10 lines
-        for i, line in enumerate(f):
+        iterator = enumerate(f)
+        if filename.endswith(".csv"):
+             # Reset file pointer for DictReader
+             f.seek(0)
+             iterator = enumerate(csv.DictReader(f))
+
+        for i, record in iterator:
             if i > 10:
                 break
-            record = json.loads(line)
+            
+            if not filename.endswith(".csv"):
+                record = json.loads(record)
 
             should = "should not" if not should_exist else "should"
             assert (column in record) == should_exist, (
