@@ -29,13 +29,8 @@ export default defineEventHandler(async (event) => {
     shortName: body.shortName || "",
   };
 
-  const { batch } = createRevisionTransaction(
-    db,
-    user,
-    nodeRef,
-    revisionData,
-    true,
-  );
+  const batch = db.batch();
+  createRevisionTransaction(db, batch, user, nodeRef, revisionData, true);
 
   await batch.commit();
 

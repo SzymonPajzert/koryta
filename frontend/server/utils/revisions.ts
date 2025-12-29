@@ -2,22 +2,22 @@ import {
   Firestore,
   Timestamp,
   DocumentReference,
+  WriteBatch,
 } from "firebase-admin/firestore";
 
 export interface BatchResult {
-  batch: FirebaseFirestore.WriteBatch;
   revisionRef: DocumentReference;
   targetRef: DocumentReference;
 }
 
 export function createRevisionTransaction(
   db: Firestore,
+  batch: WriteBatch,
   user: { uid: string },
   targetRef: DocumentReference,
   data: Record<string, any>,
   updateHead: boolean = false,
 ): BatchResult {
-  const batch = db.batch();
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
 
@@ -38,5 +38,5 @@ export function createRevisionTransaction(
     });
   }
 
-  return { batch, revisionRef, targetRef };
+  return { revisionRef, targetRef };
 }
