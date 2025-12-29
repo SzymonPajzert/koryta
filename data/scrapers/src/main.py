@@ -14,6 +14,7 @@ from analysis.stats import Statistics
 from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople
+from scrapers.koryta.uploader import KorytaUploader
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import (
@@ -177,6 +178,7 @@ PIPELINES = [
     CompaniesMerged,
     Statistics,
     Extract,
+    KorytaUploader,
 ]
 
 
@@ -189,7 +191,13 @@ def main():
         default=[],
     )
     parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
-    args, _ = parser.parse_known_args()
+    parser.add_argument(
+        "--prod", help="Run against production environment", action="store_true"
+    )
+    args, _ = parser.parse_known_args()  # TODO handle remaining flags
+
+    ctx, dumper = _setup_context(False)
+    ctx.is_prod = args.prod
 
     refresh = []
     exclude_refresh = []
@@ -226,3 +234,7 @@ def main():
         print("Dumping...")
         dumper.dump_pandas()
         print("Done")
+
+
+if __name__ == "__main__":
+    main()
