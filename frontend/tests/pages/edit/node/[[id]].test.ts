@@ -48,11 +48,11 @@ vi.mock("../../../../app/composables/useNodeEdit", () => ({
     Promise.resolve({
       ...mockState,
       saveNode: mockSaveNode,
-      addEdge: mockAddEdge,
-      addComment: mockAddComment,
-      vote: mockVote,
+      processEdge: mockAddEdge,
+      openEditEdge: vi.fn(),
+      cancelEditEdge: vi.fn(),
+      isEditingEdge: ref(false),
       fetchRevisions: mockFetchRevisions,
-      restoreRevision: mockRestoreRevision,
     }),
 }));
 
@@ -112,6 +112,9 @@ describe("NodeEditPage", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
+          VWindowItem: {
+            template: "<div><slot /></div>",
+          },
         },
       },
     });
@@ -161,6 +164,9 @@ describe("NodeEditPage", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
+          VWindowItem: {
+            template: "<div><slot /></div>",
+          },
         },
       },
     });
@@ -179,6 +185,9 @@ describe("NodeEditPage", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
+          VWindowItem: {
+            template: "<div><slot /></div>",
+          },
         },
       },
     });

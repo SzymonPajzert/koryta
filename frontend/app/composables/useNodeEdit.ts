@@ -242,7 +242,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     pickerTarget.value = null;
   }
 
-  function openEditEdge(edge: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  function openEditEdge(edge: any) {
+    // eslint-disable-line @typescript-eslint/no-explicit-any
     newEdge.value = {
       ...edge,
       targetType: edge.richNode?.type || "person",
@@ -306,7 +307,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       alert("Zapisano propozycję zmiany!");
       resetEdgeForm();
       await refreshEdges();
-    } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    } catch (e: any) {
+      // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error(e);
       const msg = e.data?.statusMessage || e.message || "Unknown error";
       alert("Błąd zapisu: " + msg);

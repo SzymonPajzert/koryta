@@ -113,7 +113,9 @@
             </div>
 
             <h4 class="text-subtitle-1 mb-2 mt-4">
-              {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
+              {{
+                isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie"
+              }}
             </h4>
             <v-form @submit.prevent="processEdge">
               <v-row dense>

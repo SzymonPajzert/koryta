@@ -35,7 +35,7 @@ describe("Edit Edge Revision", () => {
       .find("input")
       .clear()
       .type("Updated Relation Name");
-    
+
     cy.contains("label", "Opis relacji")
       .parent()
       .find("input")
@@ -49,7 +49,7 @@ describe("Edit Edge Revision", () => {
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Zapisano propozycję zmiany!");
     });
-    
+
     // 8. Verify form reset to add mode
     cy.contains("h4", "Dodaj nowe powiązanie").should("be.visible");
   });

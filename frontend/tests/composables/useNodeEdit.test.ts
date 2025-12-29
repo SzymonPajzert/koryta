@@ -152,7 +152,7 @@ describe("useNodeEdit", () => {
     mockedFetch.mockResolvedValueOnce({ node: { name: "Foo" } });
     mockedFetch.mockResolvedValueOnce({ revisions: [] });
 
-    const { addEdge, newEdge, pickerTarget } = await useNodeEdit({
+    const { processEdge, newEdge, pickerTarget } = await useNodeEdit({
       route: mockRoute,
       idToken: mockIdToken,
     });
@@ -164,7 +164,7 @@ describe("useNodeEdit", () => {
 
     mockedFetch.mockResolvedValueOnce({});
 
-    await addEdge();
+    await processEdge();
 
     expect(mockedFetch).toHaveBeenCalledWith(
       "/api/edges/create",
