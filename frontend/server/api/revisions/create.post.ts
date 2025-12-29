@@ -32,8 +32,11 @@ export default defineEventHandler(async (event) => {
   const collection = body.collection || "nodes";
   const nodeRef = db.collection(collection).doc(body.node_id);
 
-  const { batch, revisionRef } = createRevisionTransaction(
+  const batch = db.batch();
+
+  const { revisionRef } = createRevisionTransaction(
     db,
+    batch,
     user,
     nodeRef,
     revisionData,
