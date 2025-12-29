@@ -184,6 +184,7 @@ const edgeTraverse: Record<EdgeType, TraversePolicy> = {
 export function getEdges(edgesFromDB: DBEdge[]) {
   return edgesFromDB.map((edge: DBEdge) => {
     const result: Edge = {
+      id: edge.id,
       source: edge.source,
       target: edge.target,
       label: edge.name ?? edgeLabel[edge.type],

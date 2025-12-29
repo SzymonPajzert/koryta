@@ -1,4 +1,5 @@
 export type Node = {
+  id?: string;
   name: string;
   type: NodeType;
   text?: string;
@@ -6,6 +7,7 @@ export type Node = {
 };
 
 export interface Edge {
+  id?: string;
   source: string;
   target: string;
   name?: string;
