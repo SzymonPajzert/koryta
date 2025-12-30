@@ -3,7 +3,7 @@
     <v-col cols="12" md="12">
       <AlreadyExisting
         v-model="formData.name"
-        entity="company"
+        entity="place"
         label="Nazwa"
         hint="Firma, organizacja, ministerstwo"
         autocomplete="off"
@@ -64,7 +64,7 @@
 <script lang="ts" setup>
 import type { Company } from "~~/shared/model";
 
-const formData = defineModel<Company>({ required: true });
+const formData = defineModel<Partial<Company>>({ required: true });
 const { create } = defineProps<{ id: string | undefined; create?: boolean }>();
 
 function prependZeros(value: string) {

@@ -52,6 +52,8 @@ const nodesFiltered = computed(() => {
 const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
   console.log(event.detail);
   const nodeWhole = nodesFiltered.value[node];
+  if (!nodeWhole) return;
+
   let destination: NodeType | undefined = undefined;
   switch (nodeWhole.type) {
     case "rect":
@@ -66,9 +68,12 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
   }
 
   if (event.detail !== 2) {
-    router.push({ path: `/entity/${destination}/${node}` });
+    if (destination) {
+      router.push({ path: `/entity/${destination}/${node}` });
+    }
   } else {
-    if (nodesFiltered.value[node].type === "rect") {
+    // optional chaining
+    if (nodesFiltered.value[node]?.type === "rect") {
       router.push({ query: { miejsce: node } });
     }
   }
@@ -112,6 +117,7 @@ const configs = reactive(
 );
 
 watch(filtered, () => {
+  if (!configs.view) return;
   if (filtered.value.length > 200) {
     // Don't run the simulation if it's the whole graph
     configs.view.layoutHandler = new SimpleLayout();

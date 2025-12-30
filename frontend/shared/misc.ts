@@ -10,7 +10,7 @@ export const parties = [
   "Razem",
 ];
 
-export const partyColors = {
+export const partyColors: Record<string, string> = {
   PO: "#fca241",
   PiS: "#073b76",
   PSL: "#2ed396",

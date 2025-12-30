@@ -1,9 +1,7 @@
-// src/stores/dialog.ts
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { NodeType, NodeTypeMap } from "@/../shared/model";
 
-// callback to call after the dialog was closed
 export type Callback = (name: string, key?: string) => void;
 
 // TODO this could be a class and have everything defined already
@@ -94,37 +92,38 @@ export const useDialogStore = defineStore("dialog", () => {
       console.debug("opening user dialog");
       open({
         type: "person",
-        edit: { value: people.value[node], key: node },
+        edit: { value: people.value[node] ?? {}, key: node },
       });
       return;
     }
     if (companies.value && node in companies.value) {
       open({
         type: "place",
-        edit: { value: companies.value[node], key: node },
+        edit: { value: companies.value[node] ?? {}, key: node },
       });
       return;
     }
     if (articles.value && node in articles.value) {
       open({
         type: "article",
-        edit: { value: articles.value[node], key: node },
+        edit: { value: articles.value[node] ?? {}, key: node },
       });
     }
   }
 
   function close(idx: Idx, shouldSubmit: boolean) {
-    let key = dialogs.value[idx].editKey;
+    const dialog = dialogs.value[idx];
+    if (!dialog) return;
+
+    let key = dialog.editKey;
     if (shouldSubmit) {
-      const submit = lookupSubmit(dialogs.value[idx].type);
-      key = submit(
-        dialogs.value[idx].value,
-        dialogs.value[idx].type,
-        dialogs.value[idx].editKey,
-      ).key;
+      const submit = lookupSubmit(dialog.type);
+      if (submit) {
+        key = submit(dialog.value, dialog.type, dialog.editKey).key;
+      }
     }
-    if (dialogs.value[idx].callback) {
-      dialogs.value[idx].callback(dialogs.value[idx].value.name, key);
+    if (dialog.callback) {
+      dialog.callback(dialog.value.name || "", key);
     }
     remove(idx);
   }

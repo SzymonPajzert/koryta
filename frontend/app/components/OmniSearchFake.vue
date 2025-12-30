@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-const simulator = ref(null);
+const simulator = ref<{ currentText: string } | null>(null);
 </script>
 
 <style scoped>

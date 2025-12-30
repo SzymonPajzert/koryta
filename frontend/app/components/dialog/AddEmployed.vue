@@ -32,7 +32,7 @@
     >
       <NestedConnectionField
         v-model="itemProps.value"
-        entity="company"
+        entity="place"
         hint="np. Członek rady nadzorczej XYZ sp. z o.o."
       />
     </MultiTextField>
@@ -45,7 +45,7 @@
     >
       <NestedConnectionField
         v-model="itemProps.value"
-        entity="employed"
+        entity="person"
         hint="np. Znajomy ministra"
       />
     </MultiTextField>
@@ -75,12 +75,12 @@ import { computed } from "vue";
 import NestedConnectionField from "@/components/form/NestedConnectionField.vue";
 import { parties } from "~~/shared/misc";
 
-const formData = defineModel<Person>({ required: true });
+const formData = defineModel<Partial<Person>>({ required: true });
 const { id, create } = defineProps<{
   id: string;
   create?: boolean;
 }>();
 
-const partiesDefault = computed<string[]>(() => [...parties.value, "inne"]);
+const partiesDefault = computed<string[]>(() => [...parties, "inne"]);
 const { koryciarz } = useFeminatyw();
 </script>
