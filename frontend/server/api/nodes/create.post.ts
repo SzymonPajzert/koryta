@@ -1,4 +1,4 @@
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
   };
 
   const batch = db.batch();
-  createRevisionTransaction(db, batch, user, nodeRef, revisionData, true);
+  createRevisionTransaction(db, batch, user, nodeRef, revisionData);
 
   await batch.commit();
 

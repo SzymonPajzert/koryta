@@ -39,9 +39,6 @@
         :v-model="formData.krsNumber"
       />
     </v-col>
-    <v-col cols="12" md="6">
-      <v-text-field label="Numer NIP" :v-model="formData.nipNumber" />
-    </v-col>
 
     <MultiTextField
       v-slot="itemProps"

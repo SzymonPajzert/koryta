@@ -148,7 +148,7 @@
                 </v-col>
                 <v-col cols="12" md="6">
                   <v-text-field
-                    v-model="newEdge.text"
+                    v-model="newEdge.content"
                     label="Opis relacji (opcjonalnie)"
                     density="compact"
                     hide-details

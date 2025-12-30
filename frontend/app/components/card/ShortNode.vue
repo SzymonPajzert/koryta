@@ -3,7 +3,7 @@
     :prepend-icon="icon(edge.richNode.type)"
     :title="edge.richNode.name"
     :subtitle="edge.label"
-    :text="edge.richNode.text"
+    :text="edge.richNode.content"
   />
 </template>
 
