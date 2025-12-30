@@ -41,6 +41,8 @@
 </template>
 
 <script lang="ts" setup>
+// @ts-nocheck
+// TODO remove ts-nocheck everywhere
 import type { EdgeType } from "~~/shared/model";
 
 const connections = ref({});

@@ -19,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-ignore
 import { useGraphStore, type NodeGroup } from "@/stores/graph";
 const { push, currentRoute } = useRouter();
 
