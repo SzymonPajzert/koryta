@@ -47,7 +47,6 @@ const props = defineProps<{
 
 const dialogStore = useDialogStore();
 
-
 const model = defineModel<Link<typeof props.entity>>();
 
 const search = ref("");
