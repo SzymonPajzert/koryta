@@ -10,7 +10,7 @@ export async function getUser(event: H3Event) {
     });
   }
 
-  const token = authHeader.split("Bearer ")[1];
+  const token = authHeader.substring(7);
   try {
     const decodedToken = await getAuth().verifyIdToken(token);
     return decodedToken;

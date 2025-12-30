@@ -79,3 +79,17 @@ export interface Revision {
   update_time: string; // ISO string
   update_user: string;
 }
+
+export interface Link<T extends NodeType> {
+  type: T;
+  id: string;
+  name: string;
+}
+
+export type Destination = NodeType;
+
+export interface Connection<T extends Destination> {
+  relation?: string;
+  connection?: Link<T>;
+  text?: string;
+}

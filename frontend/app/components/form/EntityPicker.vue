@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useDialogStore } from "@/stores/dialog";
-import type { NodeType } from "~~/shared/model";
+import type { NodeType, Link } from "~~/shared/model";
 
 defineOptions({
   inheritAttrs: false,
@@ -46,12 +46,6 @@ const props = defineProps<{
 }>();
 
 const dialogStore = useDialogStore();
-
-interface Link<T extends NodeType> {
-  type: T;
-  id: string;
-  name: string;
-}
 
 const model = defineModel<Link<typeof props.entity>>();
 

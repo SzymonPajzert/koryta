@@ -26,6 +26,7 @@
 <script lang="ts" setup>
 import type { Node, NodeType, Article } from "~~/shared/model";
 import { useDialogStore } from "@/stores/dialog";
+import { compareTwoStrings } from "string-similarity";
 
 const dialogStore = useDialogStore();
 const model = defineModel<string>({ required: true });
@@ -35,18 +36,21 @@ const { entity, create } = defineProps<{
 }>();
 
 const { entities } = await useEntity(entity);
+const max = 5;
+
+type Entry<T> = [string, T & { similarity: number; equal: boolean }];
 
 const closest = computed(() => {
-  if (!filter.value) return [];
+  if (!model.value) return [];
   if (!entities.value) return [];
 
   const result = Object.entries(entities.value)
-    .map(entitySimilarity(destination, filter.value))
+    .map(entitySimilarity(entity, model.value))
     .sort(entitySort());
   return result.slice(0, max);
 });
 
-function entitySimilarity<T extends Node, N extends NodeType>(
+function entitySimilarity<T extends { name: string }, N extends NodeType>(
   d: N,
   match: string,
 ): (a: [string, T]) => Entry<T> {

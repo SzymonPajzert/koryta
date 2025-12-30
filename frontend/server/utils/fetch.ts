@@ -54,14 +54,12 @@ export async function fetchNodes<N extends NodeType>(
     if (!docSnap.exists) return {};
     if (docSnap.data()?.type !== path) return {};
 
-    const nodesData = [
-      { id: docSnap.id, ...docSnap.data() } as nodeData[N] & {
-        id: string;
-        revision_id?: string;
-      },
-    ];
+    const nodeData = { id: docSnap.id, ...docSnap.data() } as nodeData[N] & {
+      id: string;
+      revision_id?: string;
+    };
 
-    return { [nodeId]: nodesData[0] };
+    return { [nodeId]: nodeData };
   }
 
   const nodes = await query.get();

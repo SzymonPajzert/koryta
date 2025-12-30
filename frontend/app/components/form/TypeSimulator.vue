@@ -39,13 +39,13 @@ const currentLink = ref("");
 const lineIndex = ref(0);
 const charIndex = ref(0);
 const isDeleting = ref(false);
-let timeoutId = null;
+let timeoutId: unknown = null;
 
 function runSimulation() {
   if (!lines || lines.length === 0) throw new Error("No lines provided");
 
-  const currentLine = lines[lineIndex.value].text;
-  currentLink.value = lines[lineIndex.value].link;
+  const currentLine = lines[lineIndex.value]?.text ?? "";
+  currentLink.value = lines[lineIndex.value]?.link ?? "";
 
   let delay = typingSpeed;
 
@@ -81,7 +81,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timeoutId) {
-    clearTimeout(timeoutId);
+    clearTimeout(timeoutId as string | number | undefined);
   }
 });
 

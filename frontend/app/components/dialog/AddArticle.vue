@@ -3,7 +3,7 @@
     <v-col cols="11">
       <AlreadyExisting
         v-model="formData.sourceURL"
-        entity="data"
+        entity="article"
         :create="create"
         label="Źródło"
         hint="Link do artykułu"
@@ -21,6 +21,7 @@
         target="_blank"
         icon="mdi-open-in-new"
         variant="text"
+        :disabled="!formData.sourceURL"
       />
     </v-col>
 
@@ -42,7 +43,7 @@
       />
     </v-col>
 
-    <v-col cols="12" md="4">
+    <v-col cols="12" md="4" v-if="formData.estimates">
       <!-- TODO how to solve this issue with the type? Estimates can't be optional -->
       <v-text-field
         v-model="formData.estimates.mentionedPeople"
@@ -68,6 +69,7 @@
       >
         <FormEntityPicker
           v-model="itemProps.value"
+          entity="person"
           hint="np. polityk Adam albo firma XYZ"
         />
       </FormMultiTextField>
@@ -101,7 +103,7 @@ interface ArticleExtended extends Article {
   isFetchingTitle?: boolean;
 }
 
-const formData = defineModel<ArticleExtended>({ required: true });
+const formData = defineModel<Partial<ArticleExtended>>({ required: true });
 const { create } = defineProps<{ create?: boolean }>();
 // TODO actually set it
 const id = "0";

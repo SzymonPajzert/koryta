@@ -9,7 +9,7 @@
           :value="id"
           variant="tonal"
         >
-          {{ dialog.value.name.slice(0, 20) }}
+          {{ dialog.value.name?.slice(0, 20) }}
         </v-tab>
       </v-tabs>
       <v-card-text class="overflow-y-auto">
@@ -95,7 +95,7 @@ const { dialogs, shown, currentDialog, showSnackbar } =
 
 function lookupComponent<N extends NodeType>(
   n: N,
-): Component<{ modelValue: NodeTypeMap[N] }>;
+): Component<{ modelValue: Partial<NodeTypeMap[N]> }>;
 function lookupComponent<N extends NodeType>(n: N) {
   if (n == "person") {
     return DialogAddEmployed;

@@ -1,4 +1,4 @@
-name: Format Typescript
+name: Format and Typecheck (TS)
 
 on:
   push:
@@ -41,4 +41,8 @@ jobs:
 
       - name: Check format
         run: npm run format:check
+        working-directory: frontend
+
+      - name: Typecheck
+        run: npm run typecheck
         working-directory: frontend

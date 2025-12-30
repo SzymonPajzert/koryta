@@ -57,20 +57,20 @@ const title = computed(() => {
   if (!modelValue.value) return undefined;
   const v = modelValue.value;
   if (v.relation && v.connection)
-    return `${v.relation} - ${v.connection?.text}`;
+    return `${v.relation} - ${v.connection?.name}`;
   if (v.relation) return v.relation;
   if (v.text) return v.text;
   return undefined;
 });
 
-const relationLabel = props.entity === "company" ? "Stanowisko" : "Relacja";
+const relationLabel = props.entity === "place" ? "Stanowisko" : "Relacja";
 const relationHint =
-  props.entity === "company"
+  props.entity === "place"
     ? "Krótko, np. prezes, dyrektor, ministra"
     : "Krótko, np. córka, sąsiad, kolega, itd.";
-const connectedLabel = props.entity === "company" ? "Firma" : "Znajomy/a";
+const connectedLabel = props.entity === "place" ? "Firma" : "Znajomy/a";
 const connectedHint =
-  props.entity === "company"
+  props.entity === "place"
     ? "Miejsce zatrudnienia"
     : "Wyżej postawiona, znana osoba";
 </script>
