@@ -29,7 +29,7 @@ class WebImpl(Web):
                 # parser.parse expects list of lines.
                 content_bytes = ctx.io.read_data(
                     DownloadableFile(robots_url)
-                ).read_content()
+                ).read_string()
                 if isinstance(content_bytes, bytes):
                     content = content_bytes.decode("utf-8")
                 else:

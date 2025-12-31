@@ -10,9 +10,10 @@ It defines two main pipelines:
 """
 
 from leveldb_export import parse_leveldb_documents  # type: ignore
+from tqdm import tqdm
 
 from entities.person import Koryta as Person
-from scrapers.stores import CloudStorage, Context, Pipeline
+from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
 
 KORYTA_DUMP = CloudStorage(
     prefix="hostname=koryta.pl", max_namespaces=["date"], binary=True
@@ -26,9 +27,12 @@ class KorytaPeople(Pipeline):
         """
         Pipeline to process and output `Person` entities.
         """
-        for blob_name, content in ctx.io.read_data(KORYTA_DUMP).read_iterable():
-            if blob_name.endswith("metadata") or blob_name.endswith("log"):
+        for blob_ref in tqdm(ctx.io.list_files(KORYTA_DUMP)):
+            blob = ctx.io.read_data(blob_ref)
+            assert isinstance(blob_ref, DownloadableFile)
+            if "output" not in blob_ref.filename:
                 continue
+            content = blob.read_file()
 
             for data in parse_leveldb_documents(content):
                 key_info = data.get("_key", {})

@@ -92,7 +92,8 @@ class Client:
         """List blobs for a given hostname and yield their path and JSON data."""
         blobs = self.list_blobs(ref)
         for blob in tqdm(blobs):
-            content = io.read_data(blob).read_content(ref.binary)
+            f = io.read_data(blob)
+            content = f.read_bytes() if ref.binary else f.read_string()
             if not content:
                 print(f"  [ERROR] Could not download {blob}")
                 continue

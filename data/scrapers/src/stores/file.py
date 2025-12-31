@@ -1,9 +1,9 @@
 import bz2
-import csv
 import io
 import json
 import typing
-from typing import Any, BinaryIO, Literal, TextIO
+from pathlib import Path
+from typing import Any, Literal
 from zipfile import ZipFile
 
 import pandas as pd
@@ -11,63 +11,21 @@ import pandas as pd
 from scrapers.stores import File
 
 
-class FromIterable(File):
-    def __init__(self, iterable: typing.Iterable):
-        self.iterable = iterable
-
-    def read_iterable(self):
-        return self.iterable
-
-    def read_content(self, bytes=False) -> str | bytes:
-        if not bytes:
-            return "\n".join(self.iterable)
-        else:
-            return b"".join(self.iterable)
-
-    def read_jsonl(self):
-        for line in self.iterable:
-            yield json.loads(line)
-
-    def read_dataframe(
-        self,
-        fmt: Literal["jsonl", "csv", "parquet"],
-        csv_sep=",",
-        dtype: dict[str, Any] | None = None,
-    ) -> pd.DataFrame:
-        if fmt == "jsonl":
-            return pd.DataFrame.from_records(
-                [json.loads(line) for line in self.iterable]
-            )
-        else:
-            raise NotImplementedError()
-
-    def read_csv(self, sep=","):
-        return csv.reader(self.iterable, delimiter=sep)
-
-    def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
-        raise NotImplementedError(type(self).__name__)
-
-    def read_parquet(self):
-        raise NotImplementedError()
-
-    def read_zip(self, inner_path: str | None = None, idx: int | None = None):
-        raise NotImplementedError()
-
-    def read_file(self):
-        raise NotImplementedError()
-
-
 class FromBytesIO(File):
-    def __init__(self, raw_bytes):
+    path: str
+    raw_bytes: bytes | typing.IO[bytes]
+
+    def __init__(self, raw_bytes: bytes | typing.IO[bytes], path: str):
         self.raw_bytes = raw_bytes
+        self.path = path
 
     def read_iterable(self):
         raise NotImplementedError()
 
-    def read_content(self, bytes=False) -> str | bytes:
-        if bytes:
-            return self.raw_bytes.decode("utf-8")
-        return self.raw_bytes
+    def read_bytes(self) -> bytes:
+        if isinstance(self.raw_bytes, bytes):
+            return self.raw_bytes
+        return self.raw_bytes.read()
 
     def read_dataframe(
         self,
@@ -75,6 +33,8 @@ class FromBytesIO(File):
         csv_sep=",",
         dtype: dict[str, Any] | None = None,
     ) -> pd.DataFrame:
+        assert not isinstance(self.raw_bytes, bytes)
+
         if fmt == "csv":
             return pd.read_csv(self.raw_bytes, sep=csv_sep, dtype=dtype)  # type: ignore
         elif fmt == "jsonl":
@@ -95,10 +55,10 @@ class FromBytesIO(File):
     def read_parquet(self):
         raise NotImplementedError()
 
-    def read_file(self) -> BinaryIO | TextIO:
-        if isinstance(self.raw_bytes, str):
-            return io.StringIO(self.raw_bytes)
-        return io.BytesIO(self.raw_bytes)
+    def read_file(self) -> typing.IO[bytes] | typing.IO[str]:
+        if isinstance(self.raw_bytes, bytes):
+            return io.BytesIO(self.raw_bytes)
+        return self.raw_bytes
 
     def read_zip(self, inner_path: str | None = None, idx: int | None = None):
         raise NotImplementedError()
@@ -107,34 +67,15 @@ class FromBytesIO(File):
         return read_xls(self.raw_bytes, header_rows, skip_rows)
 
 
-class FromTextIO(FromIterable):
-    def __init__(self, wrapper: io.TextIOWrapper):
-        self._wrapper = wrapper
-
-        def generator():
-            for line in self._wrapper:
-                yield line
-
-        super().__init__(generator())
-
-    def close(self):
-        self._wrapper.close()
-
-    def read_file(self) -> BinaryIO | TextIO:
-        return self._wrapper
-
-
 class FromPath(FromBytesIO):
     # TODO inheritance here is incorrect.
     # Given binary=False, we should inherit from FromTextIO
     path: str
 
-    def __init__(self, path, binary=False):
-        super().__init__(
-            open(
-                path, "rb" if binary else "r", encoding=None if binary else "utf-8"
-            ).read()
-        )
+    def __init__(self, path: str | Path):
+        if isinstance(path, Path):
+            path = str(path)
+        super().__init__(open(path, "rb"), path)
         self.path = path
 
     def read_parquet(self):
@@ -151,14 +92,14 @@ class FromPath(FromBytesIO):
 
     def read_zip(self, inner_path: str | None = None, idx: int | None = None) -> File:
         if inner_path is None and idx is None:
-            return FromTextIO(bz2.open(self.path, "rt", encoding="utf-8"))
+            return FromBytesIO(bz2.open(self.path, "rb"), self.path)
         elif inner_path is not None:
             raw_bytes = ZipFile(self.path, "r").open(inner_path, "r")
-            return FromBytesIO(raw_bytes)
+            return FromBytesIO(raw_bytes, self.path + "::" + inner_path)
         elif idx is not None:
             inner_path = ZipFile(self.path, "r").namelist()[idx]
             raw_bytes = ZipFile(self.path, "r").open(inner_path, "r")
-            return FromBytesIO(raw_bytes)
+            return FromBytesIO(raw_bytes, self.path + "::" + inner_path + f"@{idx}")
         else:
             raise NotImplementedError()
 
@@ -188,7 +129,11 @@ class FromPath(FromBytesIO):
         return super().read_dataframe(fmt, csv_sep)
 
 
-def read_xls(raw_bytes_or_path: bytes | str, header_rows: int = 0, skip_rows: int = 0):
+def read_xls(
+    raw_bytes_or_path: bytes | typing.IO[bytes] | str,
+    header_rows: int = 0,
+    skip_rows: int = 0,
+):
     df = pd.read_excel(raw_bytes_or_path, header=None, skiprows=skip_rows)
     count = 0
     header = None

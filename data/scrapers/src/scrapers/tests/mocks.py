@@ -51,7 +51,7 @@ class MockFile(File):
     def read_iterable(self) -> typing.Iterable:
         return StringIO(self._content_str)
 
-    def read_content(self, bytes=False) -> str | bytes:
+    def read_bytes(self) -> bytes:
         return self._content_bytes
 
     def read_jsonl(self):
@@ -87,7 +87,7 @@ class MockFile(File):
         # Returns a mock file representing the content of the zip.
         return MockFile(f"zipped content: {inner_path or idx}")
 
-    def read_file(self) -> typing.BinaryIO | typing.TextIO:
+    def read_file(self) -> typing.IO[bytes] | typing.IO[str]:
         return BytesIO(self._content_bytes)
 
 
@@ -97,7 +97,7 @@ class MockIO(IO):
     def __init__(self):
         self.files: dict[str, File] = {}
         self.output: list[typing.Any] = []
-        self.listed_data: dict[str, list[str]] = {}
+        self.listed_data: dict[str, list[DataRef]] = {}
         self.dumper = MagicMock()
 
     def read_data(self, fs: DataRef) -> File:
@@ -113,14 +113,14 @@ class MockIO(IO):
             f"No mock data for {key}. Available: {list(self.files.keys())}"
         )
 
-    def list_data(self, path: DataRef) -> list[str]:
+    def list_files(self, path: DataRef) -> typing.Iterable[DataRef]:
         key = str(path)
         if hasattr(path, "filename") and path.filename in self.files:
             # Return the filename as a "path" that exists
-            return [path.filename]
+            return [path]
         # Also check if the key itself is in files (direct match)
         if key in self.files:
-            return [key]
+            return [path]
         return self.listed_data.get(key, [])
 
     def output_entity(self, entity, sort_by=[]):
@@ -184,6 +184,12 @@ class DictMockIO(IO):
             if fs.filename in self.files:
                 return FromPath(self.files[fs.filename])
         raise FileNotFoundError(f"File {fs} not found in mock")
+
+    def list_files(self, path):
+        if isinstance(path, LocalFile):
+            if path.filename in self.files:
+                return [path]
+        return []
 
     def output_entity(self, entity):
         self.output.append(entity)
