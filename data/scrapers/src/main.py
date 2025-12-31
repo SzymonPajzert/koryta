@@ -190,6 +190,12 @@ def main():
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:
         print("No pipeline specified, will run all")
+    pipeline_names = set(pt.__name__ for pt in PIPELINES)
+    for p in args.pipeline:
+        if p not in pipeline_names:
+            print(f"Error: pipeline {p} not found")
+            raise ValueError(f"Pipeline {p} not found")
+        print(f"Will run pipeline: {p}")
 
     try:
         for p_type in PIPELINES:
