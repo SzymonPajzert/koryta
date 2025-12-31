@@ -51,7 +51,7 @@ class MockFile(File):
     def read_iterable(self) -> typing.Iterable:
         return StringIO(self._content_str)
 
-    def read_content(self, bytes=False) -> str | bytes:
+    def read_bytes(self) -> bytes:
         return self._content_bytes
 
     def read_jsonl(self):

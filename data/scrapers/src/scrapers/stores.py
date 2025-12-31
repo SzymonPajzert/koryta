@@ -43,9 +43,13 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_content(self, bytes=False) -> str | bytes:
-        """Reads the entire content of the file into a string or bytes."""
+    def read_bytes(self) -> bytes:
+        """Reads the entire content of the file as bytes."""
         pass
+
+    def read_string(self) -> str:
+        """Reads the entire content of the file as a string"""
+        return self.read_bytes().decode("utf-8")
 
     @abstractmethod
     def read_dataframe(

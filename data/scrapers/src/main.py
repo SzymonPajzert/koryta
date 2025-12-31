@@ -197,7 +197,9 @@ def main():
     for p in args.pipeline:
         if p not in pipeline_names:
             print(f"Error: pipeline {p} not found")
-            raise ValueError(f"Pipeline {p} not found")
+            raise ValueError(
+                f"Pipeline {p} not found. Available: {' '.join(pipeline_names)}"
+            )
         print(f"Will run pipeline: {p}")
 
     try:
