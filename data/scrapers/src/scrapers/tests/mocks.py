@@ -87,7 +87,7 @@ class MockFile(File):
         # Returns a mock file representing the content of the zip.
         return MockFile(f"zipped content: {inner_path or idx}")
 
-    def read_file(self) -> typing.BinaryIO | typing.TextIO:
+    def read_file(self) -> typing.IO[bytes] | typing.IO[str]:
         return BytesIO(self._content_bytes)
 
 

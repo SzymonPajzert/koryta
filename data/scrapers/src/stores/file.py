@@ -3,7 +3,7 @@ import io
 import json
 import typing
 from pathlib import Path
-from typing import Any, BinaryIO, Literal, TextIO
+from typing import Any, Literal
 from zipfile import ZipFile
 
 import pandas as pd
@@ -33,6 +33,8 @@ class FromBytesIO(File):
         csv_sep=",",
         dtype: dict[str, Any] | None = None,
     ) -> pd.DataFrame:
+        assert not isinstance(self.raw_bytes, bytes)
+
         if fmt == "csv":
             return pd.read_csv(self.raw_bytes, sep=csv_sep, dtype=dtype)  # type: ignore
         elif fmt == "jsonl":
@@ -53,7 +55,7 @@ class FromBytesIO(File):
     def read_parquet(self):
         raise NotImplementedError()
 
-    def read_file(self) -> BinaryIO | TextIO:
+    def read_file(self) -> typing.IO[bytes] | typing.IO[str]:
         if isinstance(self.raw_bytes, bytes):
             return io.BytesIO(self.raw_bytes)
         return self.raw_bytes

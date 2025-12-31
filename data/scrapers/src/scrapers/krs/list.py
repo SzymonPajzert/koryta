@@ -5,7 +5,7 @@ from entities.company import KRS as KrsCompany
 from entities.company import ManualKRS as KRS
 from entities.person import KRS as KrsPerson
 from scrapers.krs.graph import QueryRelation
-from scrapers.stores import CloudStorage, Context, Pipeline
+from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -61,6 +61,7 @@ def extract_people(ctx: Context):
     """
     for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
         blob = ctx.io.read_data(blob_ref)
+        assert isinstance(blob_ref, DownloadableFile)
         blob_name = blob_ref.url
         content = blob.read_string()
         try:
@@ -140,6 +141,7 @@ class CompaniesKRS(Pipeline):
         """
         for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
             blob = ctx.io.read_data(blob_ref)
+            assert isinstance(blob_ref, DownloadableFile)
             blob_name = blob_ref.url
             content = blob.read_string()
             data = json.loads(content)

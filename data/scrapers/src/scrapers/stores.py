@@ -83,7 +83,7 @@ class File(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_file(self) -> typing.BinaryIO | typing.TextIO:
+    def read_file(self) -> typing.IO[bytes] | typing.IO[str]:
         """Returns a file-like object for reading."""
         raise NotImplementedError()
 
