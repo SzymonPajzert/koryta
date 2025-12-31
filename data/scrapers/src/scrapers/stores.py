@@ -37,10 +37,7 @@ type Formats = Literal["jsonl", "csv", "parquet"]
 class File(metaclass=ABCMeta):
     """Abstract representation of a file, providing methods to read its content."""
 
-    @abstractmethod
-    def read_iterable(self) -> typing.Iterable:
-        """Reads the file as an iterable, suitable for large files."""
-        raise NotImplementedError()
+    path: str
 
     @abstractmethod
     def read_bytes(self) -> bytes:
@@ -177,8 +174,11 @@ class IO(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def list_data(self, path: DataRef) -> list[str]:
-        """Lists the contents of a data source, like a directory or bucket."""
+    def list_files(self, path: DataRef) -> typing.Iterable[DataRef]:
+        """Lists the contents of a data source, like a directory or bucket.
+
+        For CloudStorage lists downloadable files.
+        """
         raise NotImplementedError()
 
     @abstractmethod
@@ -195,18 +195,13 @@ class IO(metaclass=ABCMeta):
         """Writes a DataFrame to storage."""
         raise NotImplementedError()
 
+    # TODO remove this as well - it should just be a write_file
     @abstractmethod
     def upload(self, source: Any, data: Any, content_type: str):
         """Uploads data to storage (e.g. GCS)."""
         raise NotImplementedError()
 
-    @abstractmethod
-    def list_blobs(
-        self, ref: CloudStorage
-    ) -> typing.Generator[DownloadableFile, None, None]:
-        """Lists blobs in storage for a given hostname."""
-        raise NotImplementedError()
-
+    # TODO get rid of this - it should be just a library call
     @abstractmethod
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         """Lists available values for a given namespace (e.g. 'date')."""

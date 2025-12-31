@@ -57,10 +57,10 @@ class Conductor(IO):
                 self.progress_bar.update(1)
                 dfs.download()
             try:
-                return file.FromPath(dfs.downloaded_path, binary=fs.binary)
+                return file.FromPath(dfs.downloaded_path)
             except UnicodeDecodeError:
                 print(f"[ERROR] UnicodeDecodeError, retrying as binary for file {fs}")
-                return file.FromPath(dfs.downloaded_path, binary=True)
+                return file.FromPath(dfs.downloaded_path)
 
         # Stop progress bar
         self.continous_download = False
@@ -69,21 +69,33 @@ class Conductor(IO):
         print(f"Reading {fs}")
 
         if isinstance(fs, CloudStorage):
-            return file.FromIterable(self.storage.iterate_blobs(self, fs))
+            raise NotImplementedError(
+                "Use DownloadableFile for CloudStorage reads from list_files"
+            )
 
         if isinstance(fs, LocalFile):
             return file.FromPath(os.path.join(PROJECT_ROOT, fs.folder, fs.filename))
 
         raise NotImplementedError()
 
-    def list_data(self, path: DataRef) -> list[str]:
+    def list_files(self, path: DataRef) -> typing.Iterable[DataRef]:
         if isinstance(path, LocalFile):
             p = os.path.join(PROJECT_ROOT, path.folder, path.filename)
-            if os.path.exists(p):
-                return [p]
-            return []
-
-        raise NotImplementedError()
+            if not os.path.exists(p):
+                return
+            if os.path.isdir(p):
+                for root, dirs, files in os.walk(p):
+                    for file in files:
+                        yield LocalFile(os.path.join(root, file), path.folder)
+            elif os.path.isfile(p):
+                yield path
+        elif isinstance(path, CloudStorage):
+            for downloadable_file in self.storage.list_blobs(path):
+                yield downloadable_file
+        else:
+            raise NotImplementedError(
+                "list_files not implemented for " + str(type(path))
+            )
 
     def output_entity(self, entity, sort_by=[]):
         self.dumper.insert_into(entity, sort_by)
@@ -109,9 +121,6 @@ class Conductor(IO):
 
     def upload(self, source, data, content_type):
         self.storage.upload(source, data, content_type)
-
-    def list_blobs(self, ref: CloudStorage):
-        return self.storage.list_blobs(ref)
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)

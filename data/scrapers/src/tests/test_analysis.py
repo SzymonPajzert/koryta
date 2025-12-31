@@ -100,7 +100,7 @@ SCORE_CUTOFF = 10.5
 @pytest.fixture(scope="module")
 def ctx():
     c, _ = _setup_context(False)
-    
+
     # Mock list_blobs for test_krs_present to avoid GCS dependency
     original_list_blobs = c.io.list_blobs
 
@@ -110,16 +110,24 @@ def ctx():
             # Note: The test uses both raw ints (strings) and padded strings.
             # We must ensure the blobs represent valid, padded IDs.
             ids = [
-                "23302", "140528", "489456", "0000512140", 
-                "271591", "0000028860", "0000025667", "0000204527"
+                "23302",
+                "140528",
+                "489456",
+                "0000512140",
+                "271591",
+                "0000028860",
+                "0000025667",
+                "0000204527",
             ]
             for i in ids:
                 padded = i.zfill(10)
                 # Format expected by ManualKRS.from_blob_name: ...org/{id}/...
-                yield DownloadableFile(f"gs://bucket/hostname=rejestr.io/org/{padded}/date=2025-01-01")
+                yield DownloadableFile(
+                    f"gs://bucket/hostname=rejestr.io/org/{padded}/date=2025-01-01"
+                )
         else:
-            if hasattr(original_list_blobs, '__call__'):
-                 yield from original_list_blobs(ref)
+            if hasattr(original_list_blobs, "__call__"):
+                yield from original_list_blobs(ref)
             return
 
     c.io.list_blobs = mock_list_blobs
@@ -355,7 +363,7 @@ def find_krs(ctx):
     global scraped_krs
     scraped_krs = set(
         KRS.from_blob_name(blob.url)
-        for blob in ctx.io.list_blobs(CloudStorage("rejestr.io"))
+        for blob in ctx.io.list_files(CloudStorage("rejestr.io"))
     )
 
 

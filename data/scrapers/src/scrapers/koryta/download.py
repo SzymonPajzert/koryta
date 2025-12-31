@@ -26,11 +26,10 @@ class KorytaPeople(Pipeline):
         """
         Pipeline to process and output `Person` entities.
         """
-        for blob_name, content in ctx.io.read_data(KORYTA_DUMP).read_iterable():
-            if blob_name.endswith("metadata") or blob_name.endswith("log"):
-                continue
+        for blob_ref in ctx.io.list_files(KORYTA_DUMP):
+            blob = ctx.io.read_data(blob_ref)
+            content = blob.read_bytes()
 
-            print(f"Processing blob: {blob_name} with size {len(content)} bytes.")
             for data in parse_leveldb_documents(content):
                 key_info = data.get("_key", {})
                 # Try to get ID from standard fields or _key metadata

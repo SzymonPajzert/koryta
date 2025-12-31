@@ -59,9 +59,10 @@ def extract_people(ctx: Context):
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about people.
     """
-    for blob_name, content in ctx.io.read_data(
-        CloudStorage(prefix="hostname=rejestr.io")
-    ).read_iterable():
+    for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
+        blob = ctx.io.read_data(blob_ref)
+        blob_name = blob_ref.url
+        content = blob.read_string()
         try:
             if "aktualnosc_" not in blob_name:
                 continue
@@ -137,9 +138,10 @@ class CompaniesKRS(Pipeline):
         Iterates through GCS files from rejestr.io, parses them,
         and extracts information about companies.
         """
-        for blob_name, content in ctx.io.read_data(
-            CloudStorage(prefix="hostname=rejestr.io")
-        ).read_iterable():
+        for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
+            blob = ctx.io.read_data(blob_ref)
+            blob_name = blob_ref.url
+            content = blob.read_string()
             data = json.loads(content)
             if "aktualnosc_" in blob_name:
                 for item in data:

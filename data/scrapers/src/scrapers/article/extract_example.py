@@ -27,9 +27,10 @@ from scrapers.stores import CloudStorage, Context
 #  - poetry run scrape_articles_example
 #  - scrape_articles_example from a .venv
 def extract(ctx: Context):
-    for blob_name, content in ctx.io.read_data(
-        CloudStorage(prefix="hostname=jawnylublin.pl")
-    ).read_iterable():
+    for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=jawnylublin.pl")):
+        blob = ctx.io.read_data(blob_ref)
+        blob_name = blob.path.replace("gs://koryta-pl-crawled/", "")
+        content = blob.read_string()
         # We iterate blobs from the koryta-pl-crawled bucket.
         # The blob names are following the format:
         # gs://koryta-pl-crawled/hostname=/date=/path-to-the-article, e.g.:
