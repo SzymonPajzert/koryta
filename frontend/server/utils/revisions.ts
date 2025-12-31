@@ -16,7 +16,7 @@ export function createRevisionTransaction(
   user: { uid: string },
   targetRef: DocumentReference,
   data: Record<string, any>,
-  updateHead: boolean = false,
+  updateHead: boolean = true,
 ): BatchResult {
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();

@@ -188,6 +188,8 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       label: edge.name ?? edgeLabel[edge.type],
       type: edge.type,
       traverse: edgeTraverse[edge.type],
+      content: edge.content,
+      name: edge.name,
     };
     return result;
   });

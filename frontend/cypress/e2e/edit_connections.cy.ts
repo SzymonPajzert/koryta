@@ -58,7 +58,7 @@ describe("Edit Node Connections", () => {
 
     // 5. Verify the new connection appears in the list
     cy.contains("Piotr Wiśniewski").should("be.visible");
-    cy.contains("Powiązanie z").should("be.visible");
+    cy.contains("Testowa nazwa").should("be.visible");
     // Note: The UI currently displays edge.label || edge.type.
     // If edge.label is added, it should show up.
   });
