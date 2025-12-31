@@ -57,7 +57,7 @@
       :source-id="id"
     >
       <VTextarea
-        v-model="itemProps.value.text"
+        v-model="itemProps.value.content"
         auto-grow
         rows="2"
         hint="Dodatkowe informacje, np. okoliczności nominacji, wysokość wynagrodzenia"

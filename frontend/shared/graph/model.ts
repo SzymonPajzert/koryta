@@ -38,4 +38,6 @@ export interface Edge {
   type: "employed" | "connection" | "mentions" | "owns" | "comment";
 
   traverse?: TraversePolicy;
+  content?: string;
+  name?: string;
 }

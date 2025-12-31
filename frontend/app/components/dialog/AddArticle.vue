@@ -43,15 +43,6 @@
       />
     </v-col>
 
-    <v-col cols="12" md="4" v-if="formData.estimates">
-      <!-- TODO how to solve this issue with the type? Estimates can't be optional -->
-      <v-text-field
-        v-model="formData.estimates.mentionedPeople"
-        label="Liczba wspomnianych osób"
-        autocomplete="off"
-      />
-    </v-col>
-
     <v-col cols="12" md="2">
       <v-btn>Zrobione</v-btn>
     </v-col>

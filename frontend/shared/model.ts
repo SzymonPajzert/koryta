@@ -1,19 +1,20 @@
-export type Node = {
+type PageBase<PageType> = {
   id?: string;
-  name: string;
-  type: NodeType;
-  text?: string;
+  type: PageType;
+  content?: string;
   revision_id?: string;
 };
 
-export interface Edge {
-  id?: string;
+export type Node = PageBase<NodeType> & {
+  name: string;
+};
+
+export interface Edge extends PageBase<EdgeType> {
+  name?: string;
   source: string;
   target: string;
-  name?: string;
-  text?: string;
-  type: EdgeType;
-  revision_id?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 export function pageIsPublic(node: { revision_id?: string }) {
@@ -45,23 +46,24 @@ export const destinationAddText: Record<NodeType, string> = {
 
 export interface Person {
   name: string;
+  type: "person";
   parties?: string[];
   content?: string;
+  wikipedia?: string;
+  rejestrIo?: string;
 }
 
 export interface Company {
   name: string;
+  type: "place";
   krsNumber?: string;
-  nipNumber?: string;
 }
 
 export interface Article {
   name: string;
+  type: "article";
   sourceURL: string;
   shortName?: string;
-  estimates: {
-    mentionedPeople?: number;
-  };
 }
 
 export interface NodeTypeMap {
@@ -74,8 +76,7 @@ export interface NodeTypeMap {
 export interface Revision {
   id: string;
   nodeId: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any;
+  data: Omit<Node, "revision_id"> | Omit<Edge, "revision_id">;
   update_time: string; // ISO string
   update_user: string;
 }
@@ -91,5 +92,5 @@ export type Destination = NodeType;
 export interface Connection<T extends Destination> {
   relation?: string;
   connection?: Link<T>;
-  text?: string;
+  content?: string;
 }

@@ -18,6 +18,10 @@ interface UseNodeEditOptions {
   idToken?: Ref<string>;
 }
 
+type EditablePage = Partial<Node> &
+  Partial<Omit<Person, "type">> &
+  Partial<Omit<Article, "type">>;
+
 export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const route = options.route || useRoute();
   const router = options.router || useRouter();
@@ -34,7 +38,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   // State
   // TODO this should be inferred by the set type.
-  const current = ref<Node & Person & Partial<Article>>({
+  const current = ref<EditablePage>({
     name: "",
     type: isNew.value ? (route.query.type as NodeType) || "person" : "person",
     parties: [],
@@ -57,7 +61,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     target: "",
     targetType: "person",
     name: "",
-    text: "",
+    content: "",
   });
   const pickerTarget = ref<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -125,7 +129,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           const data = snap.data();
           const type = data.type || "person";
 
-          const { node } = await $fetch<{ node: Person }>(
+          const { node } = await $fetch<{ node: Node }>(
             `/api/nodes/entry/${id}`,
             {
               query: { type },
@@ -133,14 +137,19 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
             },
           );
 
-          current.value = {
+          const v: EditablePage = {
             name: node.name || "",
-            type: (node as Node).type || "person",
-            parties: Array.isArray(node.parties) ? node.parties : [],
+            type: node.type,
             content: node.content || "",
-            sourceURL: (node as Article).sourceURL || "",
-            shortName: (node as Article).shortName || "",
           };
+          if (node.type === "person") {
+            v.parties = (node as Partial<Person>).parties || [];
+          }
+          if (node.type === "article") {
+            v.sourceURL = (node as Partial<Article>).sourceURL || "";
+            v.shortName = (node as Partial<Article>).shortName || "";
+          }
+          current.value = v;
         }
       } catch (e) {
         console.error("Error fetching node data", e);
@@ -237,7 +246,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       target: "",
       targetType: "person",
       name: "",
-      text: "",
+      content: "",
     };
     pickerTarget.value = null;
   }
@@ -275,7 +284,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           target: pickerTarget.value.id,
           type: newEdge.value.type,
           name: newEdge.value.name,
-          text: newEdge.value.text,
+          content: newEdge.value.content,
         },
       });
       resetEdgeForm();
@@ -300,7 +309,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           target: newEdge.value.target,
           type: newEdge.value.type,
           name: newEdge.value.name,
-          text: newEdge.value.text,
+          // text: newEdge.value.content, // Deprecated
+          content: newEdge.value.content,
         },
         headers: authHeaders.value,
       });

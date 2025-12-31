@@ -32,7 +32,7 @@
 
         <VTextarea
           v-bind="props"
-          v-model="modelValue.text"
+          v-model="modelValue.content"
           auto-grow
           rows="3"
         />
@@ -59,7 +59,7 @@ const title = computed(() => {
   if (v.relation && v.connection)
     return `${v.relation} - ${v.connection?.name}`;
   if (v.relation) return v.relation;
-  if (v.text) return v.text;
+  if (v.content) return v.content;
   return undefined;
 });
 

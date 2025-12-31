@@ -31,6 +31,7 @@ describe("Revisions Logic", () => {
 
   describe("Krzysztof Wójcik", () => {
     it("Displays approved revision for anonymous user", () => {
+      cy.logout();
       // Warm up
       cy.visit("/");
       cy.visit("/entity/person/5");
