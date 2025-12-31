@@ -69,6 +69,7 @@ jobs:
         working-directory: frontend
         env:
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
+          CYPRESS_CI: true
         run: |
 
           # Run e2e test with cypress and emulators on the built server

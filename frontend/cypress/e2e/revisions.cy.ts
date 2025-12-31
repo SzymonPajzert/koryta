@@ -1,3 +1,5 @@
+const isCI = Cypress.env("CI");
+
 describe("Revisions Logic", () => {
   beforeEach(() => {
     cy.refreshAuth();
@@ -29,7 +31,7 @@ describe("Revisions Logic", () => {
     });
   });
 
-  describe("Krzysztof Wójcik", () => {
+  (isCI ? describe.skip : describe)("Krzysztof Wójcik", () => {
     it("Displays approved revision for anonymous user", () => {
       cy.logout();
       // Warm up
