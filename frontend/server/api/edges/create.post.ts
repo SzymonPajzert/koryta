@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     target: body.target,
     type: body.type,
     name: body.name || "",
-    text: body.text || "",
+    content: body.content || body.text || "",
   };
 
   const batch = db.batch();

@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const content = body.content || "";
+  const content = body.content || body.text || "";
 
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
@@ -25,8 +25,6 @@ export default defineEventHandler(async (event) => {
     content: content,
     sourceURL: body.sourceURL || "",
     shortName: body.shortName || "",
-    // Edge specific fields
-    text: body.text || "",
   };
 
   const collection = body.collection || "nodes";

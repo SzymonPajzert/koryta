@@ -64,7 +64,7 @@ describe("Edge API", () => {
       target: `node_target_${uniqueSuffix}`,
       type: "connection",
       name: "Test Connection",
-      text: "Test Description",
+      content: "Test Description",
     };
 
     cy.request({

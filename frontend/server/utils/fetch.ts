@@ -85,7 +85,14 @@ export async function fetchEdges(
   const { isAuth = false } = options;
   const db = getFirestore("koryta-pl");
   const edges = (await db.collection("edges").get()).docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as Edge)
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        content: data.content || data.text || "",
+      } as Edge;
+    })
     .filter((edge) => {
       if (isAuth) return true;
       return pageIsPublic(edge);

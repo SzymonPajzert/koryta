@@ -92,5 +92,5 @@ export type Destination = NodeType;
 export interface Connection<T extends Destination> {
   relation?: string;
   connection?: Link<T>;
-  text?: string;
+  content?: string;
 }

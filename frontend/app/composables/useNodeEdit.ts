@@ -284,7 +284,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           target: pickerTarget.value.id,
           type: newEdge.value.type,
           name: newEdge.value.name,
-          text: newEdge.value.content,
+          content: newEdge.value.content,
         },
       });
       resetEdgeForm();
@@ -309,6 +309,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           target: newEdge.value.target,
           type: newEdge.value.type,
           name: newEdge.value.name,
+          // text: newEdge.value.content, // Deprecated
           content: newEdge.value.content,
         },
         headers: authHeaders.value,
