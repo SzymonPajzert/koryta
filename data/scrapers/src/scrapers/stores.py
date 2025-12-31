@@ -152,6 +152,7 @@ class CloudStorage(DataRef):
 
     prefix: str
     max_namespaces: list[str] = field(default_factory=list)
+    namespace_values: dict[str, str] = field(default_factory=dict)
     binary: bool = False
 
 
@@ -200,6 +201,11 @@ class IO(metaclass=ABCMeta):
         self, ref: CloudStorage
     ) -> typing.Generator[DownloadableFile, None, None]:
         """Lists blobs in storage for a given hostname."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
+        """Lists available values for a given namespace (e.g. 'date')."""
         raise NotImplementedError()
 
     @abstractmethod

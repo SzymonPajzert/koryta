@@ -138,6 +138,9 @@ class MockIO(IO):
         return
         yield DownloadableFile("")
 
+    def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
+        return []
+
     def get_mtime(self, fs: DataRef) -> float | None:
         key = str(fs)
         if key in self.files:
@@ -197,6 +200,9 @@ class DictMockIO(IO):
     def list_blobs(self, ref: CloudStorage):
         return
         yield DownloadableFile("")
+
+    def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
+        return []
 
     def get_mtime(self, fs: DataRef) -> float | None:
         if isinstance(fs, LocalFile):

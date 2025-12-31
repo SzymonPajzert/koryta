@@ -113,6 +113,9 @@ class Conductor(IO):
     def list_blobs(self, ref: CloudStorage):
         return self.storage.list_blobs(ref)
 
+    def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
+        return self.storage.list_namespaces(ref, namespace)
+
     def get_mtime(self, fs: DataRef) -> float | None:
         if isinstance(fs, LocalFile):
             p = os.path.join(PROJECT_ROOT, fs.folder, fs.filename)

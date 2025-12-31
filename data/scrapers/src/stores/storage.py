@@ -70,9 +70,16 @@ class Client:
                 )
 
             glob = (
-                "*"
-                + "*".join(f"{k}={v}" for k, v in max_namespace_values.items())
-                + "*"
+                "**"
+                + "**".join(f"{k}={v}" for k, v in max_namespace_values.items())
+                + "**"
+            )
+
+        if len(ref.namespace_values) > 0:
+            glob = (
+                "**"
+                + "**".join(f"{k}={v}" for k, v in ref.namespace_values.items())
+                + "**"
             )
 
         # Now list all blobs recursively under the chosen prefix
@@ -120,3 +127,29 @@ class Client:
         except Exception as e:
             print(f"An error occurred: {e}")
             return None
+
+    def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
+        """Lists available values for a given namespace (e.g. 'date')."""
+        bucket = self.storage_client.bucket(BUCKET)
+        # We assume the structure is prefix/ns=val/...
+        # We list with delimiter to get folders (prefixes)
+        # The prefix should be ref.prefix + "/" if not empty
+        prefix = ref.prefix
+        if prefix and not prefix.endswith("/"):
+            prefix += "/"
+
+        blobs = bucket.list_blobs(prefix=prefix, delimiter="/")
+        # Trigger iteration to populate prefixes
+        for _ in blobs:
+            pass
+
+        values = set()
+        for p in blobs.prefixes:
+            parts = p.rstrip("/").split("/")
+            last_part = parts[-1]
+            if "=" in last_part:
+                k, v = last_part.split("=", 1)
+                if k == namespace:
+                    values.add(v)
+
+        return sorted(list(values))
