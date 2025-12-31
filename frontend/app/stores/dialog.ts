@@ -84,7 +84,7 @@ export const useDialogStore = defineStore("dialog", () => {
     };
     if (payload.name) dialog.value.name = payload.name;
     // @ts-ignore
-    const len = dialogs.value.push(dialog); 
+    const len = dialogs.value.push(dialog);
     currentDialog.value = len - 1;
   }
 

@@ -3,7 +3,7 @@ type PageBase<PageType> = {
   type: PageType;
   content?: string;
   revision_id?: string;
-}
+};
 
 export type Node = PageBase<NodeType> & {
   name: string;

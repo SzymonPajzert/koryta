@@ -18,7 +18,9 @@ interface UseNodeEditOptions {
   idToken?: Ref<string>;
 }
 
-type EditablePage = Partial<Node> & Partial<Omit<Person, "type">> & Partial<Omit<Article, "type">>;
+type EditablePage = Partial<Node> &
+  Partial<Omit<Person, "type">> &
+  Partial<Omit<Article, "type">>;
 
 export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const route = options.route || useRoute();
@@ -139,7 +141,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
             name: node.name || "",
             type: node.type,
             content: node.content || "",
-          }
+          };
           if (node.type === "person") {
             v.parties = (node as Partial<Person>).parties || [];
           }
