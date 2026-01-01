@@ -263,36 +263,10 @@ class Web(metaclass=ABCMeta):
 
 
 @dataclass
-class Context:
-    """Execution context for a scraper pipeline, providing access to I/O interfaces."""
-
-    io: IO
-    rejestr_io: RejestrIO
-    con: "DuckDBPyConnection"
-    utils: Utils
-    web: Web
-    refreshed_pipelines: set[str] = field(default_factory=set)
-
-
-def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):
-    """Writes a DataFrame to storage."""
-
-    def writer(f: io.BufferedWriter):
-        match format:
-            case "jsonl":
-                df.to_json(f, orient="records", lines=True)
-            case "csv":
-                df.to_csv(f, index=False)
-            case _:
-                raise ValueError(f"Not supported export format - {format}")
-
-    ctx.io.write_file(LocalFile(filename, "versioned"), writer)
-
-
-@dataclass
 class ProcessPolicy:
     refresh_pipelines: set[str]
     exclude_refresh: set[str] = field(default_factory=set)
+    refreshed_pipelines: set[str] = field(default_factory=set)
 
     @staticmethod
     def with_default(
@@ -310,6 +284,36 @@ class ProcessPolicy:
         if pipeline_name in self.exclude_refresh:
             return False
         return self.check_set(self.refresh_pipelines, pipeline_name)
+
+    def add_refreshed_pipeline(self, pipeline_name: str):
+        self.refreshed_pipelines.add(pipeline_name)
+
+
+@dataclass
+class Context:
+    """Execution context for a scraper pipeline, providing access to I/O interfaces."""
+
+    io: IO
+    rejestr_io: RejestrIO
+    con: "DuckDBPyConnection"
+    utils: Utils
+    web: Web
+    refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
+
+
+def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):
+    """Writes a DataFrame to storage."""
+
+    def writer(f: io.BufferedWriter):
+        match format:
+            case "jsonl":
+                df.to_json(f, orient="records", lines=True)
+            case "csv":
+                df.to_csv(f, index=False)
+            case _:
+                raise ValueError(f"Not supported export format - {format}")
+
+    ctx.io.write_file(LocalFile(filename, "versioned"), writer)
 
 
 class Pipeline:
@@ -361,14 +365,21 @@ class Pipeline:
         self_ref = LocalFile(self.output_path, "versioned") if self.filename else None
         return ctx.io.get_mtime(self_ref) if self_ref else None
 
-    def should_refresh_with_logic(self, ctx: Context, policy: ProcessPolicy) -> bool:
+    def should_refresh_with_logic(self, ctx: Context) -> bool:
         """
         Determines if the pipeline should refresh based on:
         1. Explicit policy.
         2. Missing output of the dependency.
         3. Refresh upstream (policy or newer timestamp).
         """
-        if policy.should_refresh(self.pipeline_name):
+        if (
+            self.filename is not None
+            and self.pipeline_name in ctx.refresh_policy.refreshed_pipelines
+        ):
+            # Already refreshed
+            return False
+
+        if ctx.refresh_policy.should_refresh(self.pipeline_name):
             print(f"Refreshing {self.pipeline_name} because of policy")
             return True
 
@@ -382,7 +393,7 @@ class Pipeline:
                 print(f"Dependency {self.pipeline_name} is volatile, skipping")
                 continue
 
-            if dep.should_refresh_with_logic(ctx, policy):
+            if dep.should_refresh_with_logic(ctx):
                 print(
                     f"Refreshing {self.pipeline_name} because of dependency {dep_name}"
                 )
@@ -400,17 +411,11 @@ class Pipeline:
     def read_or_process(
         self,
         ctx: Context,
-        policy: ProcessPolicy = ProcessPolicy.with_default(),
     ) -> pd.DataFrame:
         if self._cached_result is not None:
             return self._cached_result
 
-        should_refresh = self.should_refresh_with_logic(ctx, policy)
-
-        if self.filename is not None and self.pipeline_name in ctx.refreshed_pipelines:
-            # Already refreshed
-            should_refresh = False
-
+        should_refresh = self.should_refresh_with_logic(ctx)
         if not should_refresh and self.filename is not None:
             try:
                 df = self.read(ctx)
@@ -422,14 +427,14 @@ class Pipeline:
                 # We'll try to process
                 pass
 
-        df = self.run_pipeline(ctx, policy)
+        df = self.run_pipeline(ctx, ctx.refresh_policy)
 
         if df is not None and self.output_path != "":
             print(f"Writing to {self.output_path}")
             write_dataframe(ctx, df, self.output_path, self.format)
 
         if df is not None:
-            ctx.refreshed_pipelines.add(self.pipeline_name)
+            ctx.refresh_policy.add_refreshed_pipeline(self.pipeline_name)
             self._cached_result = df
 
         return df
@@ -441,7 +446,7 @@ class Pipeline:
         """
         any_refreshed = False
         for _, dep in self.dependencies.items():
-            dep.read_or_process(ctx, policy)
+            dep.read_or_process(ctx)
             if dep._refreshed_execution:
                 any_refreshed = True
         return any_refreshed

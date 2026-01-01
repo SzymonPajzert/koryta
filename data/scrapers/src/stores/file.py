@@ -38,7 +38,15 @@ class FromBytesIO(File):
         if fmt == "csv":
             return pd.read_csv(self.raw_bytes, sep=csv_sep, dtype=dtype)  # type: ignore
         elif fmt == "jsonl":
-            return pd.read_json(self.raw_bytes, lines=True, dtype=dtype)
+            try:
+                return pd.read_json(self.raw_bytes, lines=True, dtype=dtype)
+            except Exception:
+                # Seek back to start if read failed (assuming raw_bytes is seekable)
+                if hasattr(self.raw_bytes, "seek"):
+                    self.raw_bytes.seek(0)
+                return pd.read_json(
+                    self.raw_bytes, lines=True, dtype=dtype, convert_dates=False
+                )
         elif fmt == "parquet":
             return pd.read_parquet(self.raw_bytes)
         else:
@@ -120,7 +128,12 @@ class FromPath(FromBytesIO):
                 dtype["teryt"] = str
             if "company_" in self.path:
                 dtype["krs"] = str
-            return pd.read_json(self.path, lines=True, dtype=dtype)
+            try:
+                return pd.read_json(self.path, lines=True, dtype=dtype)
+            except Exception:
+                return pd.read_json(
+                    self.path, lines=True, dtype=dtype, convert_dates=False
+                )
         elif fmt == "csv":
             return pd.read_csv(self.path, sep=csv_sep)
         elif fmt == "parquet":

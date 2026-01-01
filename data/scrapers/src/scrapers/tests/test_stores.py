@@ -110,7 +110,7 @@ class TestPipeline(unittest.TestCase):
         self.mock_ctx.io = Mock()
         self.mock_ctx.io.dumper = Mock()
         self.mock_ctx.io.get_mtime.return_value = None  # Default: unknown/missing
-        self.mock_ctx.refreshed_pipelines = set()
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default()
         self.dummy_df = pd.DataFrame({"col": [1, 2]})
 
     def test_lazy_initialization_memoized(self):
@@ -135,11 +135,8 @@ class TestPipeline(unittest.TestCase):
         pipeline.dep.should_refresh_with_logic.return_value = False
         pipeline.dep.output_time.return_value = 10.0  # Older than self (100.0)
         pipeline.dependencies["dep"] = pipeline.dep
-        # Verify read_or_process on dependency is NOT called
 
-        policy = ProcessPolicy.with_default()
-
-        result = pipeline.read_or_process(self.mock_ctx, policy)
+        result = pipeline.read_or_process(self.mock_ctx)
 
         # Should return cached result
         pd.testing.assert_frame_equal(result, self.dummy_df)
@@ -171,12 +168,10 @@ class TestPipeline(unittest.TestCase):
         pipeline.dep = dep_mock
         pipeline.dependencies["dep"] = dep_mock
 
-        policy = ProcessPolicy.with_default(refresh=["DummyPipeline"])
-
         with patch.object(
             pipeline, "process", return_value=self.dummy_df
         ) as mock_process:
-            pipeline.read_or_process(self.mock_ctx, policy)
+            pipeline.read_or_process(self.mock_ctx)
 
             # Verify dependency was triggered
             dep_mock.read_or_process.assert_called_once()
@@ -198,11 +193,8 @@ class TestPipeline(unittest.TestCase):
         # Missing file for current pipeline
         self.mock_ctx.io.read_data.side_effect = FileNotFoundError
 
-        # Policy: run all
-        policy = ProcessPolicy.with_default()
-
         with patch.object(pipeline, "process", return_value=self.dummy_df):
-            pipeline.read_or_process(self.mock_ctx, policy)
+            pipeline.read_or_process(self.mock_ctx)
 
             # Dependency check should happen
             pipeline.dep.read_or_process.assert_called_once()
@@ -254,8 +246,6 @@ class TestPipeline(unittest.TestCase):
         # Use side_effect on mock
         self.mock_ctx.io.write_file.side_effect = capture_written_df  # type: ignore
 
-        policy = ProcessPolicy.with_default()
-
         # We need to spy on process calls to verify execution order/count
         with (
             # No need to patch write_dataframe anymore as we mock context.io.write_file
@@ -269,7 +259,7 @@ class TestPipeline(unittest.TestCase):
                 Level1, "process", side_effect=Level1.process, autospec=True
             ) as mock_l1_proc,
         ):
-            pipeline.read_or_process(self.mock_ctx, policy)
+            pipeline.read_or_process(self.mock_ctx)
 
             mock_l1_proc.assert_called_once()
             mock_l2_proc.assert_called_once()
@@ -290,10 +280,8 @@ class TestPipeline(unittest.TestCase):
         # Input missing
         self.mock_ctx.io.read_data.side_effect = FileNotFoundError
 
-        policy = ProcessPolicy.with_default()
-
         with patch.object(pipeline, "process", return_value=self.dummy_df):
-            pipeline.read_or_process(self.mock_ctx, policy)
+            pipeline.read_or_process(self.mock_ctx)
 
             # Verify write was called
             self.mock_ctx.io.write_file.assert_called_once()
@@ -342,10 +330,7 @@ class TestPipeline(unittest.TestCase):
                     print(f"Failed to capture written DF for {fs.filename}: {e}")
 
         self.mock_ctx.io.write_file.side_effect = capture_written_df
-
-        # Policy: Only refresh Level3
-        # Use preprocess_sources=True because we need to check deps -> Now automated
-        policy = ProcessPolicy.with_default(refresh=["Level3"])
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(refresh=["Level3"])
 
         with (
             patch.object(
@@ -358,7 +343,7 @@ class TestPipeline(unittest.TestCase):
                 Level1, "process", side_effect=Level1.process, autospec=True
             ) as mock_l1_proc,
         ):
-            pipeline.read_or_process(self.mock_ctx, policy)
+            pipeline.read_or_process(self.mock_ctx)
 
             # L3 should run (explicit refresh)
             mock_l3_proc.assert_called_once()
@@ -407,8 +392,6 @@ class TestPipeline(unittest.TestCase):
         # Level3 is newer, so it shouldn't re-run.
         # Level2 is older, so it SHOULD re-run.
 
-        policy = ProcessPolicy.with_default()  # no explicit refresh
-
         # Return dataframe for L3
         self.mock_ctx.io.read_data.return_value.read_dataframe.return_value = (
             pd.DataFrame({"l3": [3]})
@@ -422,7 +405,7 @@ class TestPipeline(unittest.TestCase):
                 Level2, "process", side_effect=Level2.process, autospec=True
             ) as mock_l2_proc,
         ):
-            pipeline.read_or_process(self.mock_ctx, policy)
+            pipeline.read_or_process(self.mock_ctx)
 
             mock_l3_proc.assert_not_called()
             # L2 depends on L3. L3 mtime(200) > L2 mtime(100).
@@ -470,10 +453,6 @@ class TestPipeline(unittest.TestCase):
 
         pipeline = Top()
 
-        # We need to simulate that files do NOT exist or need refresh.
-        # "refresh all" policy.
-        policy = ProcessPolicy.with_default(refresh=["all"])
-
         # We need to spy on Bottom.process.
         # So we need to patch Bottom.process globally (on the class).
 
@@ -502,7 +481,7 @@ class TestPipeline(unittest.TestCase):
         with patch.object(
             Bottom, "process", return_value=pd.DataFrame({"b": [1]})
         ) as mock_bottom_proc:
-            pipeline.read_or_process(self.mock_ctx, policy)
+            pipeline.read_or_process(self.mock_ctx)
 
             # With distinct instances but with refreshed_pipelines check,
             # this should be called ONCE.
@@ -535,7 +514,6 @@ class TestPipeline(unittest.TestCase):
                 return pd.DataFrame({"s": [2]})
 
         pipeline = Stable()
-        policy = ProcessPolicy.with_default()
 
         # Mock IO: Stable file exists
         self.mock_ctx.io.get_mtime.return_value = 100.0  # Old enough
@@ -555,7 +533,7 @@ class TestPipeline(unittest.TestCase):
             with patch.object(
                 Volatile, "process", return_value=pd.DataFrame({"v": [1]})
             ) as mock_volatile_proc:
-                pipeline.read_or_process(self.mock_ctx, policy)
+                pipeline.read_or_process(self.mock_ctx)
 
                 # Volatile runs
                 mock_volatile_proc.assert_not_called()

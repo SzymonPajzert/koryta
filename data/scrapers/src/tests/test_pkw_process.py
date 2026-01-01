@@ -6,7 +6,7 @@ from main import _setup_context
 from scrapers.stores import LocalFile
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def ctx():
     return _setup_context(False)[0]
 
@@ -17,7 +17,7 @@ def people_rows(ctx):
     ).read_jsonl()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def df(ctx):
     return pd.DataFrame(people_rows(ctx))
 
