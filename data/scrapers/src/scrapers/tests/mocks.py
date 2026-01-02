@@ -114,14 +114,16 @@ class MockIO(IO):
         )
 
     def list_files(self, path: DataRef) -> typing.Iterable[DataRef]:
+        if isinstance(path, CloudStorage):
+            return
+
         key = str(path)
         if hasattr(path, "filename") and path.filename in self.files:
             # Return the filename as a "path" that exists
-            return [path]
+            yield path
         # Also check if the key itself is in files (direct match)
-        if key in self.files:
-            return [path]
-        return self.listed_data.get(key, [])
+        elif key in self.files:
+            yield path
 
     def output_entity(self, entity, sort_by=[]):
         self.output.append(entity)
@@ -132,11 +134,7 @@ class MockIO(IO):
         self.files[filename] = MockFile(content, mtime=9999999999.0)  # Newest
 
     def upload(self, source, data, content_type):
-        self.output.append((source, data, content_type))
-
-    def list_blobs(self, ref: CloudStorage):
-        return
-        yield DownloadableFile("")
+        self.output.append((source, data, content_type))        
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return []
@@ -185,27 +183,19 @@ class DictMockIO(IO):
                 return FromPath(self.files[fs.filename])
         raise FileNotFoundError(f"File {fs} not found in mock")
 
-    def list_files(self, path):
-        if isinstance(path, LocalFile):
-            if path.filename in self.files:
-                return [path]
-        return []
-
     def output_entity(self, entity):
         self.output.append(entity)
-
-    def list_data(self, fs):
-        if isinstance(fs, LocalFile):
-            if fs.filename in self.files:
-                return [fs.filename]
-        return []
 
     def upload(self, source, data, content_type):
         self.output.append((source, data, content_type))
 
-    def list_blobs(self, ref: CloudStorage):
-        return
-        yield DownloadableFile("")
+    def list_files(self, ref):
+        if isinstance(ref, LocalFile):
+            if ref.filename in self.files:
+                yield ref.filename
+        if isinstance(ref, CloudStorage):
+            return
+            yield DownloadableFile("")
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return []
