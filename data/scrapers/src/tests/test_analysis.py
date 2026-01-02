@@ -101,10 +101,9 @@ SCORE_CUTOFF = 10.5
 def ctx():
     c, _ = _setup_context(False)
 
-    # Mock list_blobs for test_krs_present to avoid GCS dependency
-    original_list_blobs = c.io.list_blobs
+    original_list_files = c.io.list_files
 
-    def mock_list_blobs(ref):
+    def mock_list_files(ref):
         if isinstance(ref, CloudStorage) and ref.prefix == "rejestr.io":
             # List of KRS IDs used in test_krs_present
             # Note: The test uses both raw ints (strings) and padded strings.
@@ -126,11 +125,11 @@ def ctx():
                     f"gs://bucket/hostname=rejestr.io/org/{padded}/date=2025-01-01"
                 )
         else:
-            if hasattr(original_list_blobs, "__call__"):
-                yield from original_list_blobs(ref)
+            if hasattr(original_list_files, "__call__"):
+                yield from original_list_files(ref)
             return
 
-    c.io.list_blobs = mock_list_blobs
+    c.io.list_files = mock_list_files
     return c
 
 

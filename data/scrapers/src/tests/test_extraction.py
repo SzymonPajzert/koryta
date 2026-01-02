@@ -244,7 +244,7 @@ def test_entity_extraction(filename, ctx):
 
 @pytest.mark.parametrize("filename", TEST_FILES)
 def test_all_tested(filename, ctx):
-    path = ctx.io.list_data(LocalFile(f"{filename}.xml", "tests"))[0]
+    path = ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).path
     assert os.path.exists(path)
 
     if filename in PEOPLE_EXPECTED:
