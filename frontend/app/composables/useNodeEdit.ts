@@ -73,7 +73,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     content: "",
   });
   const edgeType = ref<string>("connection"); // Isolated ref for v-select
-  
+
   // Sync edgeType -> newEdge.type
   watch(edgeType, (t) => {
     newEdge.value.type = t as any;
@@ -98,14 +98,11 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     return (option?.targetType as NodeType) || "person";
   });
 
-  watch(
-    edgeType,
-    () => {
-      if (!isEditingEdge.value) {
-        pickerTarget.value = null;
-      }
-    },
-  );
+  watch(edgeType, () => {
+    if (!isEditingEdge.value) {
+      pickerTarget.value = null;
+    }
+  });
 
   const partiesDefault = computed<string[]>(() => [...parties, "inne"]);
 

@@ -37,7 +37,7 @@ describe("Edit Node Connections", () => {
       .find("input")
       .click()
       .type("Piotr", { delay: 100 });
-      
+
     cy.get(".v-overlay").contains(".v-list-item", "Piotr Wiśniewski").click();
 
     // Fill in name and text
@@ -73,14 +73,14 @@ describe("Edit Node Connections", () => {
     // And verify label logic just in case
     cy.contains("label", "Wyszukaj firmę").should("exist");
     cy.contains("label", "Wyszukaj osobę").should("not.exist");
-    
+
     // 5. Use EntityPicker to find Orlen (node 2)
     cy.contains("label", "Wyszukaj firmę")
       .parent()
       .find("input")
       .click()
       .type("Orlen", { delay: 100 });
-      
+
     cy.get(".v-overlay").contains(".v-list-item", "Orlen").click();
 
     // 6. Fill in details
@@ -106,16 +106,16 @@ describe("Edit Node Connections", () => {
     // 3. Select "Wspomina firmę/urząd"
     cy.contains("label", "Rodzaj relacji").parent().click();
     cy.get(".v-overlay").contains(".v-list-item", "Wspomina firmę").click();
-    
+
     // 4. Select "Orlen"
     cy.contains("label", "Wyszukaj firmę")
       .parent()
       .find("input")
       .click()
       .type("Orlen", { delay: 100 });
-      
+
     cy.get(".v-overlay").contains(".v-list-item", "Orlen").click();
-      
+
     // 6. Add
     cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();
 
