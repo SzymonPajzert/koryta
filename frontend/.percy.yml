@@ -1,0 +1,13 @@
+version: 2
+snapshot:
+  percy-css: |
+    *, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+      scroll-behavior: auto !important;
+      caret-color: transparent !important;
+    }
+    /* Hide scrollbars */
+    ::-webkit-scrollbar {
+      display: none;
+    }

@@ -6,6 +6,8 @@ declare global {
       login(email?: string, password?: string): Chainable<void>;
       logout(): Chainable<void>;
       refreshAuth(): Chainable<void>;
+      waitForImages(): Chainable<void>;
+      waitForFonts(): Chainable<void>;
     }
   }
 }
@@ -62,4 +64,26 @@ Cypress.Commands.add("refreshAuth", () => {
       req.onblocked = resolve;
     });
   });
+});
+
+Cypress.Commands.add("waitForImages", () => {
+  cy.log("Waiting for images to load");
+  cy.get("img", { log: false }).each(($img) => {
+    cy.wrap($img, { log: false }).should("have.prop", "complete", true);
+    cy.wrap($img, { log: false }).should("have.prop", "naturalWidth").and("be.gt", 0);
+  });
+});
+
+// Wait for fonts to ensure text is rendered correctly
+Cypress.Commands.add("waitForFonts", () => {
+  cy.document({ log: false }).then((doc) => {
+    return doc.fonts.ready;
+  });
+});
+
+// Overwrite percySnapshot to ensure stability
+Cypress.Commands.overwrite("percySnapshot", (originalFn, ...args) => {
+  cy.waitForFonts();
+  cy.waitForImages();
+  return originalFn(...args);
 });
