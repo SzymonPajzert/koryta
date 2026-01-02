@@ -19,6 +19,7 @@ from scrapers.stores import (
     File,
     Formats,
     LocalFile,
+    ProcessPolicy,
     RejestrIO,
 )
 from stores.file import FromPath
@@ -238,6 +239,7 @@ def get_test_context() -> Context:
         con=typing.cast(duckdb.DuckDBPyConnection, None),
         utils=typing.cast(typing.Any, None),
         web=typing.cast(typing.Any, None),
+        refresh_policy=ProcessPolicy.with_default(),
     )
 
 

@@ -140,7 +140,9 @@ class Conductor(IO):
         return self.dumper.get_output(n)
 
 
-def _setup_context(use_rejestr_io: bool) -> tuple[Context, EntityDumper]:
+def _setup_context(
+    use_rejestr_io: bool, policy: ProcessPolicy = ProcessPolicy.with_default()
+) -> tuple[Context, EntityDumper]:
     dumper = EntityDumper()
     conductor = Conductor(dumper)
     rejestr_io = None
@@ -153,6 +155,7 @@ def _setup_context(use_rejestr_io: bool) -> tuple[Context, EntityDumper]:
         con=duckdb.connect(),
         utils=UtilsImpl(),
         web=WebImpl(),
+        refresh_policy=policy,
     )
 
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore
@@ -186,8 +189,6 @@ def main():
     parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
     args, _ = parser.parse_known_args()  # TODO handle remaining flags
 
-    ctx, dumper = _setup_context(False)
-
     refresh = []
     exclude_refresh = []
     if args.refresh:
@@ -198,6 +199,7 @@ def main():
                 refresh.append(r)
 
     policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
+    ctx, dumper = _setup_context(False, policy)
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:
