@@ -4,7 +4,6 @@ import type {
   Person,
   Node,
   Revision,
-  EdgeType,
   Article,
   NodeType,
   Edge,
@@ -50,19 +49,36 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const isSaving = ref(false);
 
   const edgeTypeOptions = [
-    { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
     { value: "owns", label: "Właściciel", targetType: "place" },
     { value: "connection", label: "Powiązanie z", targetType: "person" },
-    { value: "mentions", label: "Wspomina o", targetType: "person" },
+    {
+      value: "mentions_person",
+      label: "Wspomina osobę",
+      targetType: "person",
+      realType: "mentions",
+    },
+    { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
+    {
+      value: "mentions_place",
+      label: "Wspomina firmę/urząd",
+      targetType: "place",
+      realType: "mentions",
+    },
   ];
 
-  const newEdge = ref<Partial<Edge> & { targetType: NodeType }>({
+  const newEdge = ref<Partial<Edge>>({
     type: "connection",
     target: "",
-    targetType: "person",
     name: "",
     content: "",
   });
+  const edgeType = ref<string>("connection"); // Isolated ref for v-select
+
+  // Sync edgeType -> newEdge.type
+  watch(edgeType, (t) => {
+    newEdge.value.type = t as any;
+  });
+
   const pickerTarget = ref<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const isEditingEdge = computed(() => !!newEdge.value.id);
@@ -77,18 +93,16 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   } = await useEdges(() => node_id.value);
   const allEdges = computed(() => [...sources.value, ...targets.value]);
 
-  watch(
-    () => newEdge.value.type,
-    (newType) => {
-      const option = edgeTypeOptions.find((o) => o.value === newType);
-      if (option) {
-        newEdge.value.targetType = option.targetType as NodeType;
-      }
-      if (!isEditingEdge.value) {
-        pickerTarget.value = null;
-      }
-    },
-  );
+  const edgeTargetType = computed<NodeType>(() => {
+    const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+    return (option?.targetType as NodeType) || "person";
+  });
+
+  watch(edgeType, () => {
+    if (!isEditingEdge.value) {
+      pickerTarget.value = null;
+    }
+  });
 
   const partiesDefault = computed<string[]>(() => [...parties, "inne"]);
 
@@ -244,19 +258,26 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     newEdge.value = {
       type: "connection",
       target: "",
-      targetType: "person",
       name: "",
       content: "",
     };
+    edgeType.value = "connection";
     pickerTarget.value = null;
   }
 
   function openEditEdge(edge: any) {
     // eslint-disable-line @typescript-eslint/no-explicit-any
+    let type = edge.type;
+    const targetType = edge.richNode?.type || "person";
+    if (type === "mentions") {
+      type = targetType === "place" ? "mentions_place" : "mentions_person";
+    }
+
     newEdge.value = {
       ...edge,
-      targetType: edge.richNode?.type || "person",
+      type,
     };
+    edgeType.value = type;
     pickerTarget.value = edge.richNode;
     // Scroll to form if needed?
   }
@@ -273,6 +294,11 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     }
   }
 
+  function getRealType(uiType: string | undefined): string {
+    const option = edgeTypeOptions.find((o) => o.value === uiType);
+    return (option as any)?.realType || uiType;
+  }
+
   async function addEdge() {
     if (!node_id.value || !pickerTarget.value) return;
     try {
@@ -282,7 +308,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
         body: {
           source: node_id.value,
           target: pickerTarget.value.id,
-          type: newEdge.value.type,
+          type: getRealType(newEdge.value.type),
           name: newEdge.value.name,
           content: newEdge.value.content,
         },
@@ -307,7 +333,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           collection: "edges",
           source: newEdge.value.source, // Keep required context
           target: newEdge.value.target,
-          type: newEdge.value.type,
+          type: getRealType(newEdge.value.type),
           name: newEdge.value.name,
           // text: newEdge.value.content, // Deprecated
           content: newEdge.value.content,
@@ -343,5 +369,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     isEditingEdge,
     fetchRevisions,
     openEditEdge,
+    edgeTargetType,
+    edgeType,
   };
 }

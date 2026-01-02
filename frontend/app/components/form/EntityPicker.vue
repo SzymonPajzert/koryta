@@ -1,7 +1,6 @@
 <template>
   <v-autocomplete
     v-bind="$attrs"
-    :key="model?.id"
     v-model="model"
     v-model:search="search"
     :label="props.label"
@@ -53,7 +52,7 @@ const search = ref("");
 
 const { idToken } = useAuthState();
 
-const { data: response, pending } = useFetch<{
+const { data: response } = useFetch<{
   entities: Record<string, any>;
 }>(() => `/api/nodes/${props.entity}`, {
   key: `entities-picker-${props.entity}`,

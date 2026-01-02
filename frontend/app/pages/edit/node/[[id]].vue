@@ -121,7 +121,7 @@
               <v-row dense>
                 <v-col cols="12" md="6">
                   <v-select
-                    v-model="newEdge.type"
+                    v-model="edgeType"
                     :items="edgeTypeOptions"
                     item-title="label"
                     item-value="value"
@@ -133,8 +133,9 @@
                 <v-col cols="12" md="6">
                   <EntityPicker
                     v-model="pickerTarget"
-                    :entity="newEdge.targetType"
-                    :label="`Wyszukaj ${newEdge.targetType === 'person' ? 'osobę' : newEdge.targetType === 'place' ? 'firmę' : 'obiekt'}`"
+                    :key="edgeTargetType"
+                    :entity="edgeTargetType"
+                    :label="`Wyszukaj ${edgeTargetType === 'person' ? 'osobę' : edgeTargetType === 'place' ? 'firmę' : 'obiekt'}`"
                     density="compact"
                   />
                 </v-col>
@@ -223,5 +224,7 @@ const {
   isEditingEdge,
   fetchRevisions,
   openEditEdge,
+  edgeTargetType,
+  edgeType,
 } = await useNodeEdit();
 </script>
