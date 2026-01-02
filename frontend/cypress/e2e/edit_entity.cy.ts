@@ -22,7 +22,7 @@ describe("Entity Editing", () => {
     cy.url().should("include", "/login");
   });
 
-  it.skip("allows creating and editing an entity", () => {
+  it("allows creating and editing an entity", () => {
     // 1. Login
     cy.login();
 

@@ -41,6 +41,18 @@ async function seedDatabase() {
 
   console.log("Seeding database...");
 
+  // Clear existing collections
+  const collections = ["nodes", "edges", "revisions"];
+  for (const col of collections) {
+    const docs = await db.collection(col).listDocuments();
+    if (docs.length > 0) {
+      const deleteBatch = db.batch();
+      docs.forEach((doc) => deleteBatch.delete(doc));
+      await deleteBatch.commit();
+      console.log(`Cleared ${col}`);
+    }
+  }
+
   const batch = db.batch();
 
   for (const [id, node] of Object.entries(nodes)) {
