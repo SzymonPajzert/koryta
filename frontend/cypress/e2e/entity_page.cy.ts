@@ -15,4 +15,11 @@ describe("Entity Page Data", () => {
     cy.contains("Orlen").should("be.visible");
     cy.contains("Anna Nowak").should("be.visible");
   });
+
+  it("Navigates to connected entity page when link is clicked", () => {
+    cy.visit("/entity/person/1");
+    cy.contains("Orlen").click();
+    cy.url().should("include", "/entity/place/");
+    cy.get('a[href="/edit/node/2"]').should("exist");
+  });
 });

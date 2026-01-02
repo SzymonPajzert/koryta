@@ -1,9 +1,11 @@
 <template>
   <v-card
+    :key="edge.richNode.id"
     :prepend-icon="icon(edge.richNode.type)"
     :title="edge.richNode.name"
     :subtitle="edge.label"
     :text="edge.richNode.content"
+    :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
   />
 </template>
 
