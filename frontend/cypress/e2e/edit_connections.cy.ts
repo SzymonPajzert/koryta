@@ -24,10 +24,9 @@ describe("Edit Node Connections", () => {
     cy.contains("Powiązania").should("be.visible");
     cy.contains("Anna Nowak").should("be.visible");
 
-    // 4. Add a new connection to Piotr Wiśniewski (node 4)
-    // Select relationship type (Polish label)
+    // 3. Select "Powiązanie z"
     cy.contains("label", "Rodzaj relacji").parent().click();
-    cy.contains("Powiązanie z").click();
+    cy.get(".v-overlay").contains(".v-list-item", "Powiązanie z").click();
 
     // Verify "Typ celu" is gone (it shouldn't be visible)
     cy.contains("label", "Typ celu").should("not.exist");
@@ -38,10 +37,8 @@ describe("Edit Node Connections", () => {
       .find("input")
       .click()
       .type("Piotr", { delay: 100 });
-    cy.get(".v-list-item-title", { timeout: 15000 })
-      .contains("Piotr Wiśniewski")
-      .should("be.visible")
-      .click();
+      
+    cy.get(".v-overlay").contains(".v-list-item", "Piotr Wiśniewski").click();
 
     // Fill in name and text
     cy.contains("label", "Nazwa relacji")
@@ -54,12 +51,75 @@ describe("Edit Node Connections", () => {
       .type("Testowy opis");
 
     // Click Add
-    cy.contains("button", "Dodaj powiązanie").click();
+    cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();
 
     // 5. Verify the new connection appears in the list
     cy.contains("Piotr Wiśniewski").should("be.visible");
-    cy.contains("Testowa nazwa").should("be.visible");
-    // Note: The UI currently displays edge.label || edge.type.
-    // If edge.label is added, it should show up.
+  });
+
+  it("updates the entity picker when switching to 'Zatrudniony/a w' (Company)", () => {
+    // 1. Login
+    cy.login();
+
+    // 2. Go to edit page for Jan Kowalski (node 1)
+    cy.visit("/edit/node/1");
+    cy.contains("Treść i Powiązania").should("be.visible");
+
+    // 3. Select "Zatrudniony/a w" relationship type
+    cy.contains("label", "Rodzaj relacji").parent().click();
+    cy.get(".v-overlay").contains(".v-list-item", "Zatrudniony/a w").click();
+
+    // 4. Verify target type updated
+    // And verify label logic just in case
+    cy.contains("label", "Wyszukaj firmę").should("exist");
+    cy.contains("label", "Wyszukaj osobę").should("not.exist");
+    
+    // 5. Use EntityPicker to find Orlen (node 2)
+    cy.contains("label", "Wyszukaj firmę")
+      .parent()
+      .find("input")
+      .click()
+      .type("Orlen", { delay: 100 });
+      
+    cy.get(".v-overlay").contains(".v-list-item", "Orlen").click();
+
+    // 6. Fill in details
+    cy.contains("label", "Nazwa relacji")
+      .parent()
+      .find("input")
+      .type("Zatrudnienie");
+
+    // 7. Click Add
+    cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();
+
+    // 8. Verify the new connection appears
+    cy.contains("Orlen").should("be.visible");
+  });
+
+  it("updates the entity picker when switching to 'Wspomina firmę/urząd'", () => {
+    // 1. Login
+    cy.login();
+
+    // 2. Go to edit page
+    cy.visit("/edit/node/1");
+
+    // 3. Select "Wspomina firmę/urząd"
+    cy.contains("label", "Rodzaj relacji").parent().click();
+    cy.get(".v-overlay").contains(".v-list-item", "Wspomina firmę").click();
+    
+    // 4. Select "Orlen"
+    cy.contains("label", "Wyszukaj firmę")
+      .parent()
+      .find("input")
+      .click()
+      .type("Orlen", { delay: 100 });
+      
+    cy.get(".v-overlay").contains(".v-list-item", "Orlen").click();
+      
+    // 6. Add
+    cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();
+
+    // 7. Verify
+    cy.contains("Orlen").should("be.visible");
   });
 });

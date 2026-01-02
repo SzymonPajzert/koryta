@@ -1,6 +1,15 @@
 describe("Entity Editing", () => {
   beforeEach(() => {
     cy.task("log", "Starting test: " + Cypress.currentTest.title);
+    // Clear indexedDB to avoid stale auth state
+    cy.window().then((win) => {
+      return new Cypress.Promise((resolve) => {
+        const req = win.indexedDB.deleteDatabase("firebaseLocalStorageDb");
+        req.onsuccess = resolve;
+        req.onerror = resolve;
+        req.onblocked = resolve;
+      });
+    });
     cy.refreshAuth();
     cy.on("window:console", (msg) => {
       cy.task("log", `Browser console: ${JSON.stringify(msg)}`);

@@ -1,7 +1,6 @@
 <template>
   <v-autocomplete
     v-bind="$attrs"
-    :key="model?.id"
     v-model="model"
     v-model:search="search"
     :label="props.label"
