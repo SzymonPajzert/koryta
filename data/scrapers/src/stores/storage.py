@@ -48,7 +48,7 @@ class Client:
         """Lists blobs in a GCS bucket with a given prefix."""
         bucket = self.storage_client.bucket(BUCKET)
         prefix = ref.prefix
-        glob = "**"
+        glob = None
 
         if len(ref.max_namespaces) > 0:
             # Split blobs and extract max value for each namespace
