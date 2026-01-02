@@ -13,14 +13,13 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event).catch(() => null);
   const isAuth = !!user;
 
-  const [people, places, articles, edgesFromDB] = await Promise.all([
+  const [people, places, edgesFromDB] = await Promise.all([
     fetchNodes("person", { isAuth }),
     fetchNodes("place", { isAuth }),
-    fetchNodes("article", { isAuth }),
     fetchEdges({ isAuth }),
   ]);
 
-  const nodesNoStats = getNodesNoStats(people, places, articles, partyColors);
+  const nodesNoStats = getNodesNoStats(people, places, {}, partyColors);
   const edges = getEdges(edgesFromDB);
   const nodeGroups = getNodeGroups(nodesNoStats, edges, people, places);
   const nodes = getNodes(nodeGroups, nodesNoStats);
