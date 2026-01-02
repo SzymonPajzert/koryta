@@ -4,7 +4,6 @@ import type {
   Person,
   Node,
   Revision,
-  EdgeType,
   Article,
   NodeType,
   Edge,
@@ -50,10 +49,11 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const isSaving = ref(false);
 
   const edgeTypeOptions = [
-    { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
     { value: "owns", label: "Właściciel", targetType: "place" },
     { value: "connection", label: "Powiązanie z", targetType: "person" },
-    { value: "mentions", label: "Wspomina o", targetType: "person" },
+    { value: "mentions", label: "Wspomina osobę", targetType: "person" },
+    { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
+    { value: "mentions", label: "Wspomina firmę/urząd", targetType: "place" },
   ];
 
   const newEdge = ref<Partial<Edge> & { targetType: NodeType }>({

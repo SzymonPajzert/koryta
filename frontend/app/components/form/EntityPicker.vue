@@ -53,19 +53,19 @@ const search = ref("");
 
 const { idToken } = useAuthState();
 
-const { data: response, pending } = useFetch<{
-  entities: Record<string, any>;
-}>(() => `/api/nodes/${props.entity}`, {
-  key: `entities-picker-${props.entity}`,
-  headers: computed(() => {
-    const h: Record<string, string> = {};
-    if (idToken.value) {
-      h.Authorization = `Bearer ${idToken.value}`;
-    }
-    return h;
-  }),
-  lazy: true,
-});
+const { data: response } = useFetch<{
+    entities: Record<string, any>;
+  }>(() => `/api/nodes/${props.entity}`, {
+    key: `entities-picker-${props.entity}`,
+    headers: computed(() => {
+      const h: Record<string, string> = {};
+      if (idToken.value) {
+        h.Authorization = `Bearer ${idToken.value}`;
+      }
+      return h;
+    }),
+    lazy: true,
+  });
 
 const entitiesList = computed(() => {
   const ents = (response.value as any)?.entities ?? {};
