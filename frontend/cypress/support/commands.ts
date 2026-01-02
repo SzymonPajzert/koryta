@@ -70,7 +70,9 @@ Cypress.Commands.add("waitForImages", () => {
   cy.log("Waiting for images to load");
   cy.get("img", { log: false }).each(($img) => {
     cy.wrap($img, { log: false }).should("have.prop", "complete", true);
-    cy.wrap($img, { log: false }).should("have.prop", "naturalWidth").and("be.gt", 0);
+    cy.wrap($img, { log: false })
+      .should("have.prop", "naturalWidth")
+      .and("be.gt", 0);
   });
 });
 
