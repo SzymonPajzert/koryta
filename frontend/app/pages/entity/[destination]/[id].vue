@@ -57,7 +57,6 @@
 </template>
 
 <script setup lang="ts">
-import { getFirestore, doc } from "firebase/firestore";
 import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
 import type { Person } from "~~/shared/model";
@@ -66,9 +65,6 @@ const route = useRoute<"/entity/[destination]/[id]">();
 
 const node = route.params.id as string;
 const type = route.params.destination;
-
-const db = getFirestore(useFirebaseApp(), "koryta-pl");
-// const person = useDocument<Person>(doc(db, "nodes", node));
 
 // Use API fetch to ensure revisions are merged correctly (auth aware)
 const { idToken } = useAuthState();
