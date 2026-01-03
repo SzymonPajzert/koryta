@@ -12,6 +12,7 @@ from analysis.interesting import CompaniesMerged
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
 from scrapers.article.crawler import parse_hostname, uuid7
+from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.pkw.process import PeoplePKW
@@ -166,6 +167,7 @@ def _setup_context(
 
 PIPELINES = [
     KorytaPeople,
+    KorytaDiffer,
     PeoplePKW,
     PeopleKRS,
     CompaniesKRS,
@@ -187,7 +189,7 @@ def main():
         default=[],
     )
     parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
-    args, _ = parser.parse_known_args()  # TODO handle remaining flags
+    args, _ = parser.parse_known_args()
 
     refresh = []
     exclude_refresh = []
