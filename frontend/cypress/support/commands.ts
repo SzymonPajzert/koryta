@@ -6,6 +6,9 @@ declare global {
       login(email?: string, password?: string): Chainable<void>;
       logout(): Chainable<void>;
       refreshAuth(): Chainable<void>;
+      waitForImages(): Chainable<void>;
+      waitForFonts(): Chainable<void>;
+      waitForAnimations(): Chainable<void>;
     }
   }
 }
@@ -62,4 +65,56 @@ Cypress.Commands.add("refreshAuth", () => {
       req.onblocked = resolve;
     });
   });
+});
+
+Cypress.Commands.add("waitForImages", () => {
+  cy.log("Waiting for images to load");
+  cy.get("img", { log: false }).each(($img) => {
+    cy.wrap($img, { log: false }).should("have.prop", "complete", true);
+    cy.wrap($img, { log: false })
+      .should("have.prop", "naturalWidth")
+      .and("be.gt", 0);
+});
+});
+
+Cypress.Commands.add("waitForAnimations", () => {
+  cy.log("Waiting for animations to settle");
+  cy.window({ log: false }).then((win) => {
+    return new Cypress.Promise((resolve) => {
+      const waitForAll = () => {
+        const animations = win.document.getAnimations();
+        const pending = animations.filter(
+          (a) => a.playState !== "finished" && a.playState !== "paused",
+        );
+        if (pending.length === 0) {
+          resolve(null);
+        } else {
+          Promise.all(pending.map((a) => a.finished))
+            .then(() => resolve(null))
+            .catch(() => resolve(null));
+          setTimeout(() => resolve(null), 1000);
+        }
+      };
+      waitForAll();
+    });
+  });
+});
+
+// Wait for fonts to ensure text is rendered correctly
+Cypress.Commands.add("waitForFonts", () => {
+  cy.document({ log: false }).then((doc) => {
+    return doc.fonts.ready;
+  });
+});
+
+// Overwrite percySnapshot to ensure stability
+Cypress.Commands.overwrite("percySnapshot", (originalFn, name, options) => {
+  cy.log(`Percy snapshot: ${name}`);
+
+  // 1. Wait for everything to settle
+  cy.waitForFonts();
+  cy.waitForImages();
+  cy.waitForAnimations();
+  // 5. Final snapshot
+  return originalFn(name, options);
 });

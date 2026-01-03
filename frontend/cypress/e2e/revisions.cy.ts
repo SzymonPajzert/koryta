@@ -42,7 +42,6 @@ describe("Revisions Logic", () => {
       cy.contains("Politician from Konfederacja").should("be.visible");
       cy.contains("Politician from Konfederacja and PiS").should("not.exist");
 
-      cy.wait(500); // Wait for potential animations
       cy.percySnapshot("approved-revision");
     });
 
@@ -55,7 +54,6 @@ describe("Revisions Logic", () => {
       // Public (rev5): "Politician from Konfederacja"
       // Latest (rev6): "Politician from Konfederacja and PiS"
 
-      cy.wait(500); // Wait for potential animations
       cy.percySnapshot("latest-revision");
 
       cy.contains("Politician from Konfederacja and PiS").should("be.visible");
