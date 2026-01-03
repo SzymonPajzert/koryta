@@ -68,11 +68,36 @@ Cypress.Commands.add("refreshAuth", () => {
 
 Cypress.Commands.add("waitForImages", () => {
   cy.log("Waiting for images to load");
-  cy.get("img", { log: false }).each(($img) => {
-    cy.wrap($img, { log: false }).should("have.prop", "complete", true);
-    cy.wrap($img, { log: false })
-      .should("have.prop", "naturalWidth")
-      .and("be.gt", 0);
+  // 1. Regular img tags
+  cy.get("body").then(($body) => {
+    const images = $body.find("img");
+    if (images.length > 0) {
+      cy.wrap(images, { log: false }).each(($img) => {
+        cy.wrap($img, { log: false }).should("have.prop", "complete", true);
+        cy.wrap($img, { log: false })
+          .should("have.prop", "naturalWidth")
+          .and("be.gt", 0);
+      });
+    }
+
+    // 2. Vuetify v-img components
+    const vImages = $body.find(".v-img");
+    if (vImages.length > 0) {
+      cy.wrap(vImages, { log: false }).each(($vImg) => {
+        cy.wrap($vImg, { log: false }).should(
+          "not.have.class",
+          "v-img--loading",
+        );
+      });
+    }
+
+    // 3. ApexCharts stability
+    const apexCharts = $body.find(".apexcharts-canvas");
+    if (apexCharts.length > 0) {
+      cy.wrap(apexCharts, { log: false }).each(($chart) => {
+        cy.wrap($chart, { log: false }).find("svg").should("exist");
+      });
+    }
   });
 });
 
