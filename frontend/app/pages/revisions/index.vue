@@ -19,7 +19,9 @@
               <v-icon :icon="iconMap[item.type] || 'mdi-help'" />
             </template>
             <template #append>
-              <v-chip size="small" color="warning">Oczekuje</v-chip>
+              <v-chip size="small" color="warning"
+                >{{ item.revisions.length }} Oczekuje</v-chip
+              >
             </template>
           </v-list-item>
         </v-list>
