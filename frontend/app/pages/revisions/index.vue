@@ -77,7 +77,9 @@ const iconMap: Record<string, string> = {
 
 function getDefaultTitle(item: any) {
   if (item.source && item.target) {
-    return `${item.type}: ${item.source} -> ${item.target}`;
+    const s = item.source_name || item.source;
+    const t = item.target_name || item.target;
+    return `${item.type}: ${s} -> ${t}`;
   }
   return "Bez nazwy";
 }

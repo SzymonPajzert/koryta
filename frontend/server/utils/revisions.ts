@@ -41,3 +41,37 @@ export function createRevisionTransaction(
 
   return { revisionRef, targetRef };
 }
+
+export async function getRevisionsForNodes(
+  db: Firestore,
+  nodeIds: string[],
+): Promise<Record<string, any[]>> {
+  if (nodeIds.length === 0) {
+    return {};
+  }
+
+  const chunks = [];
+  for (let i = 0; i < nodeIds.length; i += 10) {
+    chunks.push(nodeIds.slice(i, i + 10));
+  }
+
+  const revisionsMap: Record<string, any[]> = {};
+  nodeIds.forEach((id) => (revisionsMap[id] = []));
+
+  for (const chunk of chunks) {
+    const q = await db
+      .collection("revisions")
+      .where("node_id", "in", chunk)
+      .get();
+    
+    q.docs.forEach((doc) => {
+      const data = doc.data();
+      const list = revisionsMap[data.node_id];
+      if (list) {
+        list.push({ id: doc.id, ...data });
+      }
+    });
+  }
+
+  return revisionsMap;
+}

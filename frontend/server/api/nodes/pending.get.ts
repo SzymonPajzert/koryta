@@ -1,5 +1,6 @@
-import type { NodeType } from "~~/shared/model";
+import type { Node } from "~~/shared/model";
 import { getFirestore } from "firebase-admin/firestore";
+import { getRevisionsForNodes } from "~~/server/utils/revisions";
 
 export default defineEventHandler(async () => {
   const db = getFirestore("koryta-pl");
@@ -9,10 +10,18 @@ export default defineEventHandler(async () => {
     .limit(50);
   const nodes = await query.get();
   const nodesData = nodes.docs.map((doc) => {
-    return { id: doc.id, ...doc.data() } as NodeType & {
+    return { id: doc.id, ...doc.data() } as Node & {
       id: string;
     };
   });
 
-  return Object.fromEntries(nodesData.map((node) => [node.id, node]));
+  const nodeIds = nodesData.map((n) => n.id);
+  const revisions = await getRevisionsForNodes(db, nodeIds);
+
+  const nodesWithRevisions = nodesData.map((node) => ({
+    ...node,
+    revisions: revisions[node.id] || [],
+  }));
+
+  return Object.fromEntries(nodesWithRevisions.map((node) => [node.id, node]));
 });

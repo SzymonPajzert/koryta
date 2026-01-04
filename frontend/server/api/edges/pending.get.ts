@@ -1,5 +1,6 @@
 import type { Edge } from "~~/shared/model";
 import { getFirestore } from "firebase-admin/firestore";
+import { getRevisionsForNodes } from "~~/server/utils/revisions";
 
 export default defineEventHandler(async () => {
   const db = getFirestore("koryta-pl");
@@ -14,5 +15,36 @@ export default defineEventHandler(async () => {
     };
   });
 
-  return Object.fromEntries(edgesData.map((edge) => [edge.id, edge]));
+  const nodeIdsToFetch = new Set<string>();
+  edgesData.forEach((edge) => {
+    if (edge.source) nodeIdsToFetch.add(edge.source);
+    if (edge.target) nodeIdsToFetch.add(edge.target);
+  });
+
+  const nodeRefs = Array.from(nodeIdsToFetch).map((id) =>
+    db.collection("nodes").doc(id),
+  );
+  
+  const nodeDocs = nodeRefs.length > 0 ? await db.getAll(...nodeRefs) : [];
+  const nodeNames = new Map<string, string>();
+  nodeDocs.forEach((doc) => {
+    if (doc.exists) {
+      const data = doc.data();
+      if (data && data.name) {
+        nodeNames.set(doc.id, data.name);
+      }
+    }
+  });
+
+  const edgeIds = edgesData.map((e) => e.id);
+  const revisions = await getRevisionsForNodes(db, edgeIds);
+
+  const edgesWithDetails = edgesData.map((edge) => ({
+    ...edge,
+    source_name: nodeNames.get(edge.source) || edge.source,
+    target_name: nodeNames.get(edge.target) || edge.target,
+    revisions: revisions[edge.id] || [],
+  }));
+
+  return Object.fromEntries(edgesWithDetails.map((edge) => [edge.id, edge]));
 });
