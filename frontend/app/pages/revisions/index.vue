@@ -4,19 +4,19 @@
       <v-col cols="12">
         <h1 class="text-h4 mb-4">Lista Rewizji (Do Przejrzenia)</h1>
         <p v-if="loading" class="text-body-1">Ładowanie...</p>
-        <p v-else-if="pendingNodes.length === 0" class="text-body-1">
-          Brak stron oczekujących na zatwierdzenie.
+        <p v-else-if="pendingItems.length === 0" class="text-body-1">
+          Brak elementów oczekujących na zatwierdzenie.
         </p>
         <v-list v-else>
           <v-list-item
-            v-for="node in pendingNodes"
-            :key="node.id"
-            :to="`/entity/${node.type}/${node.id}`"
-            :title="node.name || 'Bez nazwy'"
-            :subtitle="node.type"
+            v-for="item in pendingItems"
+            :key="item.id"
+            :to="`/entity/${item.type}/${item.id}`"
+            :title="item.name || getDefaultTitle(item)"
+            :subtitle="item.type"
           >
             <template #prepend>
-              <v-icon :icon="iconMap[node.type] || 'mdi-help'" />
+              <v-icon :icon="iconMap[item.type] || 'mdi-help'" />
             </template>
             <template #append>
               <v-chip size="small" color="warning">Oczekuje</v-chip>
@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { useAuthState } from "@/composables/auth";
-import type { Node } from "~~/shared/model";
+import type { Node, Edge } from "~~/shared/model";
 import { nodeTypeIcon } from "~~/shared/model";
 
 definePageMeta({
@@ -46,15 +46,39 @@ const headers = computed(() => {
   return h;
 });
 
-const { data, pending: loading } = await useFetch<{
-  nodes: Record<string, Node & { id: string }>;
-}>("/api/nodes/pending", {
+const { data: nodesData, pending: nodesLoading } = await useFetch<
+  Record<string, Node & { id: string }>
+>("/api/nodes/pending", {
   headers,
 });
 
-const pendingNodes = computed(() => {
-  return data.value ? Object.values(data.value.nodes) : [];
+const { data: edgesData, pending: edgesLoading } = await useFetch<
+  Record<string, Edge & { id: string }>
+>("/api/edges/pending", {
+  headers,
 });
 
-const iconMap = nodeTypeIcon;
+const loading = computed(() => nodesLoading.value || edgesLoading.value);
+
+const pendingItems = computed(() => {
+  const nodes = nodesData.value ? Object.values(nodesData.value) : [];
+  const edges = edgesData.value ? Object.values(edgesData.value) : [];
+  return [...nodes, ...edges];
+});
+
+const iconMap: Record<string, string> = {
+  ...nodeTypeIcon,
+  employed: "mdi-briefcase-outline",
+  connection: "mdi-connection",
+  mentions: "mdi-account-voice",
+  owns: "mdi-domain",
+  comment: "mdi-comment-outline",
+};
+
+function getDefaultTitle(item: any) {
+  if (item.source && item.target) {
+    return `${item.type}: ${item.source} -> ${item.target}`;
+  }
+  return "Bez nazwy";
+}
 </script>

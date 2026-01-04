@@ -10,5 +10,11 @@
     "target": "2",
     "type": "employed",
     "revision_id": "rev_edge_2"
+  },
+  {
+    "source": "3",
+    "target": "2",
+    "type": "employed",
+    "revision_id": null
   }
 ]
