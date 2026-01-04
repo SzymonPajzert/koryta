@@ -33,6 +33,7 @@ export function createRevisionTransaction(
   if (updateHead) {
     batch.set(targetRef, {
       ...data,
+      revision_id: null,
       update_time: timestamp,
       update_user: user.uid,
     });

@@ -46,10 +46,14 @@ const headers = computed(() => {
   return h;
 });
 
-const { data: pendingNodes, pending: loading } = await useFetch<{
+const { data, pending: loading } = await useFetch<{
   nodes: Record<string, Node & { id: string }>;
 }>("/api/nodes/pending", {
   headers,
+});
+
+const pendingNodes = computed(() => {
+  return data.value ? Object.values(data.value.nodes) : [];
 });
 
 const iconMap = nodeTypeIcon;
