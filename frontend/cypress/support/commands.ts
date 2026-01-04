@@ -87,5 +87,6 @@ Cypress.Commands.add("waitForFonts", () => {
 Cypress.Commands.overwrite("percySnapshot", (originalFn, ...args) => {
   cy.waitForFonts();
   cy.waitForImages();
+  cy.wait(3000);
   return originalFn(...args);
 });
