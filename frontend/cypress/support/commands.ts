@@ -113,5 +113,6 @@ Cypress.Commands.overwrite("percySnapshot", (originalFn, ...args) => {
   cy.waitForFonts();
   cy.waitForImages();
   cy.wait(3000);
+  cy.screenshot(args[0])
   return originalFn(...args);
 });
