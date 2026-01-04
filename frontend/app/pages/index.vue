@@ -113,7 +113,7 @@
           <h2 class="text-h5 font-weight-bold">Zobacz jak PSL przejęło PKP</h2>
         </v-card-title>
         <v-card-text>
-          <v-img class="mb-4" height="250" src="@/assets/psl_pkp.png" />
+          <v-img class="mb-4" height="250"  :src="psl_pkp" />
         </v-card-text>
       </v-card>
     </v-col>
@@ -131,7 +131,7 @@
           </h2>
         </v-card-title>
         <v-card-text>
-          <v-img class="mb-4" height="250" src="@/assets/polska2050.png" />
+          <v-img class="mb-4" height="250" :src="polska2050" />
         </v-card-text>
       </v-card>
     </v-col>
@@ -146,6 +146,9 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
+import polska2050 from "@/assets/polska2050.png";
+import psl_pkp from "@/assets/psl_pkp.png";
+
 const { entities: people } = await useEntity("person");
 const { koryciarz } = useFeminatyw();
 </script>
