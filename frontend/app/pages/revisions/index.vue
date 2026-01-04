@@ -13,7 +13,7 @@
             :key="item.id"
             :to="`/entity/${item.type}/${item.id}`"
             :title="item.name || getDefaultTitle(item)"
-            :subtitle="item.type"
+            :subtitle="getSubtitle(item)"
           >
             <template #prepend>
               <v-icon :icon="iconMap[item.type] || 'mdi-help'" />
@@ -82,5 +82,14 @@ function getDefaultTitle(item: any) {
     return `${item.type}: ${s} -> ${t}`;
   }
   return "Bez nazwy";
+}
+
+function getSubtitle(item: any) {
+  if (item.source && item.target) {
+    const s = item.source_name || item.source;
+    const t = item.target_name || item.target;
+    return `${item.type} (${s} -> ${t})`;
+  }
+  return item.type;
 }
 </script>

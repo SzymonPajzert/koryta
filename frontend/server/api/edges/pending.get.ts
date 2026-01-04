@@ -17,15 +17,17 @@ export default defineEventHandler(async () => {
 
   const nodeIdsToFetch = new Set<string>();
   edgesData.forEach((edge) => {
-    if (edge.source) nodeIdsToFetch.add(edge.source);
-    if (edge.target) nodeIdsToFetch.add(edge.target);
+    if (edge.source && typeof edge.source === 'string') nodeIdsToFetch.add(edge.source);
+    if (edge.target && typeof edge.target === 'string') nodeIdsToFetch.add(edge.target);
   });
 
-  const nodeRefs = Array.from(nodeIdsToFetch).map((id) =>
-    db.collection("nodes").doc(id),
-  );
+  const nodeRefs = Array.from(nodeIdsToFetch);
   
-  const nodeDocs = nodeRefs.length > 0 ? await db.getAll(...nodeRefs) : [];
+  // Use Promise.all to avoid potential issues with getAll in some environments
+  const nodeDocs = await Promise.all(
+    nodeRefs.map(id => db.collection("nodes").doc(id).get())
+  );
+
   const nodeNames = new Map<string, string>();
   nodeDocs.forEach((doc) => {
     if (doc.exists) {
