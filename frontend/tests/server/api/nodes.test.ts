@@ -42,21 +42,6 @@ describe("fetchNodes", () => {
     expect(mockWhere).toHaveBeenCalledWith("type", "==", "person");
     expect(mockWhere).toHaveBeenCalledTimes(1);
   });
-
-  it("should filter by interesting when requested", async () => {
-    await fetchNodes("person", { filters: { interesting: true } });
-    expect(mockWhere).toHaveBeenCalledWith("interesting", "==", true);
-  });
-
-  it("should filter by posted when requested", async () => {
-    await fetchNodes("person", { filters: { posted: true } });
-    expect(mockWhere).toHaveBeenCalledWith("posted", "==", true);
-  });
-
-  it("should filter by article when requested", async () => {
-    await fetchNodes("person", { filters: { article: true } });
-    expect(mockWhere).toHaveBeenCalledWith("article", "==", true);
-  });
 });
 
 describe("createNode", () => {

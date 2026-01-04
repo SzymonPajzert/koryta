@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { useAuthState } from "@/composables/auth";
-import type { Node, NodeType } from "~~/shared/model";
+import type { Node } from "~~/shared/model";
 import { nodeTypeIcon } from "~~/shared/model";
 
 definePageMeta({
@@ -48,13 +48,12 @@ const headers = computed(() => {
 
 const { data, pending: loading } = await useFetch<{
   nodes: Record<string, Node & { id: string }>;
-}>("/api/nodes", {
+}>("/api/nodes/pending", {
   headers,
 });
 
 const pendingNodes = computed(() => {
-  if (!data.value?.nodes) return [];
-  return Object.values(data.value.nodes).filter((node) => !node.revision_id);
+  return data.value ? Object.values(data.value.nodes) : [];
 });
 
 const iconMap = nodeTypeIcon;
