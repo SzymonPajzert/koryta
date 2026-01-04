@@ -3,7 +3,8 @@ import { getUser } from "~~/server/utils/auth";
 
 export default defineEventHandler(async (event) => {
   const user = await getUser(event).catch(() => null);
-  const isAuth = !!user;
+  const query = getQuery(event);
+  const isAuth = !!user || query?.pending === "true";
 
   const [people, places, articles] = await Promise.all([
     fetchNodes("person", { isAuth }),

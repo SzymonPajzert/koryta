@@ -49,6 +49,7 @@ const headers = computed(() => {
 const { data, pending: loading } = await useFetch<{
   nodes: Record<string, Node & { id: string }>;
 }>("/api/nodes", {
+  query: { pending: "true" },
   headers,
 });
 
