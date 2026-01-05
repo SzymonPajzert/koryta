@@ -13,7 +13,7 @@
             :key="item.id"
             :value="item.id"
           >
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-list-item
                 v-bind="props"
                 :title="item.name || getDefaultTitle(item)"
@@ -37,7 +37,7 @@
               :title="`Rewizja z ${new Date(rev.update_time).toLocaleString()}`"
               :subtitle="`Autor: ${rev.update_user}`"
               prepend-icon="mdi-file-document-edit-outline"
-            ></v-list-item>
+            />
           </v-list-group>
         </v-list>
       </v-col>
@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 import { useAuthState } from "@/composables/auth";
-import type { Node, Edge } from "~~/shared/model";
+import type { Node, Edge, PageRevisioned } from "~~/shared/model";
 import { nodeTypeIcon } from "~~/shared/model";
 
 definePageMeta({
@@ -64,13 +64,13 @@ const headers = computed(() => {
 });
 
 const { data: nodesData, pending: nodesLoading } = await useFetch<
-  Record<string, Node & { id: string; revisions: any[] }>
+  Record<string, Node & PageRevisioned>
 >("/api/nodes/pending", {
   headers,
 });
 
 const { data: edgesData, pending: edgesLoading } = await useFetch<
-  Record<string, Edge & { id: string; revisions: any[] }>
+  Record<string, Edge & PageRevisioned>
 >("/api/edges/pending", {
   headers,
 });
@@ -92,7 +92,15 @@ const iconMap: Record<string, string> = {
   comment: "mdi-comment-outline",
 };
 
-function getDefaultTitle(item: any) {
+type edgeLike = {
+  type: string;
+  source?: string;
+  target?: string;
+  source_name?: string;
+  target_name?: string;
+};
+
+function getDefaultTitle(item: edgeLike) {
   if (item.source && item.target) {
     const s = item.source_name || item.source;
     const t = item.target_name || item.target;
@@ -101,7 +109,7 @@ function getDefaultTitle(item: any) {
   return "Bez nazwy";
 }
 
-function getSubtitle(item: any) {
+function getSubtitle(item: edgeLike) {
   if (item.source && item.target) {
     const s = item.source_name || item.source;
     const t = item.target_name || item.target;

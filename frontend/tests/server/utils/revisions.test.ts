@@ -3,7 +3,7 @@ import {
   getRevisionsForNodes,
   createRevisionTransaction,
 } from "../../../server/utils/revisions";
-import {
+import type {
   Firestore,
   WriteBatch,
   DocumentReference,

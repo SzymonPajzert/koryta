@@ -13,7 +13,7 @@
               Rewizja dla: {{ nodeData?.name || `ID: ${nodeId}` }}
             </v-card-title>
             <v-card-subtitle>
-              Autor: {{ revisionData.update_user }} <br />
+              Autor: {{ revisionData.update_user }} <br>
               Data: {{ new Date(revisionData.update_time).toLocaleString() }}
             </v-card-subtitle>
             <v-card-text>
@@ -56,8 +56,6 @@ definePageMeta({
 });
 
 const route = useRoute();
-const router = useRouter();
-const type = route.params.type as string; // 'person', 'place', etc.
 const nodeId = route.params.id as string;
 const revisionId = route.params.revisionId as string;
 
@@ -93,11 +91,13 @@ const error = computed(() => revError.value || nodeError.value);
 
 async function applyRevision() {
   // Placeholder for apply logic
+  // TODO https://github.com/SzymonPajzert/koryta/milestone/3
   alert("Funkcja zatwierdzania nie jest jeszcze w pełni zaimplementowana.");
 }
 
 async function rejectRevision() {
   // Placeholder for reject logic
+  // TODO https://github.com/SzymonPajzert/koryta/milestone/3
   alert("Funkcja odrzucania nie jest jeszcze zaimplementowana.");
 }
 </script>

@@ -1,5 +1,3 @@
-import { getAuthToken } from "../../support/auth";
-
 describe("Revisions Flow", () => {
   beforeEach(() => {
     // Ensure clean state handled by seed-emulator mostly, but login is key

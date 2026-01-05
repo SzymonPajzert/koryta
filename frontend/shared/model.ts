@@ -9,6 +9,15 @@ export type Node = PageBase<NodeType> & {
   name: string;
 };
 
+/**
+ * PageRevisioned adds revisions array to the base page types
+ * and makes sure the id is present.
+ *
+ * This is used for pages that have revisions pending review
+ * and were enriched during the lookup.
+ */
+export type PageRevisioned = { id: string; revisions: Revision[] };
+
 export interface Edge extends PageBase<EdgeType> {
   name?: string;
   source: string;
