@@ -13,7 +13,7 @@
               Rewizja dla: {{ nodeData?.name || `ID: ${nodeId}` }}
             </v-card-title>
             <v-card-subtitle>
-              Autor: {{ revisionData.update_user }} <br>
+              Autor: {{ revisionData.update_user }} <br />
               Data: {{ new Date(revisionData.update_time).toLocaleString() }}
             </v-card-subtitle>
             <v-card-text>

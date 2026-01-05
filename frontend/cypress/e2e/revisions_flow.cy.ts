@@ -9,24 +9,18 @@ describe("Revisions Flow", () => {
     cy.visit("/revisions");
     cy.contains("Lista Rewizji (Do Przejrzenia)");
 
-    // Verify that we have the "Not approved person" in the list
-    cy.contains("Not approved person").should("be.visible");
-
-    // Find the list item for "Not approved person" and click its parent v-list-item to unfold
-    cy.contains("Not approved person")
-      .parents(".v-list-item")
-      .click({ force: true });
-
+    // Find the list item for "Not approved person" and click it to unfold
+    // We target the text and force checking bubbling to the activator
+    cy.contains(".v-list-item", "Not approved person").click();
     // Wait for unfolding
     cy.wait(500);
+    cy.percySnapshot("Revisions List one unfolded");
 
     // Look for the specific revision link associated with this person
-    // We can assume it's visible now.
-    cy.contains("Rewizja z").should("be.visible");
-
-    // Click the revision link (it should be the one under the person)
-    // We can scope it if needed, but if only one is open, global contains works.
-    cy.contains("Rewizja z").click();
+    // Scope search to the group containing "Not approved person"
+    cy.contains(".v-list-group", "Not approved person").within(() => {
+      cy.contains("Rewizja z").click({ force: true });
+    });
 
     // Verify redirection to details page for h1
     cy.url().should("include", "/entity/person/h1/rev-h1");

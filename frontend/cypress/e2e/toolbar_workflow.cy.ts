@@ -56,6 +56,13 @@ describe("User Toolbar and Edit Workflow", () => {
     // In previous steps we didn't explicitly create a pending node in the test flow that guarantees appearance here unless seeded data has it.
     // Assuming seeded data or previously created node exists.
     cy.get(".v-list-item").first().click();
+
+    // Wait for unfolding
+    cy.wait(500);
+
+    // Click the revision link
+    cy.contains("Rewizja z").click();
+
     cy.url().should("include", "/entity/");
   });
 });
