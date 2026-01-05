@@ -8,22 +8,37 @@
           Brak elementów oczekujących na zatwierdzenie.
         </p>
         <v-list v-else>
-          <v-list-item
+          <v-list-group
             v-for="item in pendingItems"
             :key="item.id"
-            :to="`/entity/${item.type}/${item.id}`"
-            :title="item.name || getDefaultTitle(item)"
-            :subtitle="getSubtitle(item)"
+            :value="item.id"
           >
-            <template #prepend>
-              <v-icon :icon="iconMap[item.type] || 'mdi-help'" />
-            </template>
-            <template #append>
-              <v-chip size="small" color="warning"
-                >{{ item.revisions.length }} Oczekuje</v-chip
+            <template v-slot:activator="{ props }">
+              <v-list-item
+                v-bind="props"
+                :title="item.name || getDefaultTitle(item)"
+                :subtitle="getSubtitle(item)"
               >
+                <template #prepend>
+                  <v-icon :icon="iconMap[item.type] || 'mdi-help'" />
+                </template>
+                <template #append>
+                  <v-chip size="small" color="warning" class="ms-2">
+                    {{ item.revisions.length }} Oczekuje
+                  </v-chip>
+                </template>
+              </v-list-item>
             </template>
-          </v-list-item>
+
+            <v-list-item
+              v-for="rev in item.revisions"
+              :key="rev.id"
+              :to="`/entity/${item.type}/${item.id}/${rev.id}`"
+              :title="`Rewizja z ${new Date(rev.update_time).toLocaleString()}`"
+              :subtitle="`Autor: ${rev.update_user}`"
+              prepend-icon="mdi-file-document-edit-outline"
+            ></v-list-item>
+          </v-list-group>
         </v-list>
       </v-col>
     </v-row>
@@ -49,13 +64,13 @@ const headers = computed(() => {
 });
 
 const { data: nodesData, pending: nodesLoading } = await useFetch<
-  Record<string, Node & { id: string }>
+  Record<string, Node & { id: string; revisions: any[] }>
 >("/api/nodes/pending", {
   headers,
 });
 
 const { data: edgesData, pending: edgesLoading } = await useFetch<
-  Record<string, Edge & { id: string }>
+  Record<string, Edge & { id: string; revisions: any[] }>
 >("/api/edges/pending", {
   headers,
 });
