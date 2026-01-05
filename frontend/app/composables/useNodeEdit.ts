@@ -38,7 +38,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   // State
   // TODO this should be inferred by the set type.
   const current = ref<EditablePage>({
-    name: "",
+    name: isNew.value ? (route.query.name as string) || "" : "",
     type: isNew.value ? (route.query.type as NodeType) || "person" : "person",
     parties: [],
     content: "",
