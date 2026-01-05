@@ -19,7 +19,7 @@ def iou(a: list[str], b: list[str]) -> float:
 def parse_response(response: str) -> list[str]:
     l = response.index("[")
     r = response.index("]")
-    return [name.strip()[1:-1] for name in response[l + 1: r].split(",")]
+    return [name.strip()[1:-1] for name in response[l + 1 : r].split(",")]
 
 
 @memory.cache
@@ -75,18 +75,16 @@ def main():
 
     ex_df["pred_names"] = preds
     ex_df = ex_df[~ex_df["pred_names"].isna()]
-    ex_df["percent_pred_names_in_text"] = ex_df.apply(lambda r: percent_words_in_text(r["pred_names"], r["text"]),
-                                                      axis=1)
+    ex_df["percent_pred_names_in_text"] = ex_df.apply(lambda r: percent_words_in_text(r["pred_names"], r["text"]), axis=1)
     ex_df["iou"] = ex_df.apply(lambda r: iou(r["names_in_text"], r["pred_names"]), axis=1)
     ex_df["names_not_in_text"] = ex_df.apply(lambda r: words_not_in_text(r["names_in_text"], r["text"]), axis=1)
     ex_df["pred_names_not_in_text"] = ex_df.apply(lambda r: words_not_in_text(r["pred_names"], r["text"]), axis=1)
-    ex_df["recall"] = ex_df.apply(
-        lambda r: recall(r["pred_names"], r["names_in_text"], r["names_normalized"]), axis=1
-    )
+    ex_df["recall"] = ex_df.apply(lambda r: recall(r["pred_names"], r["names_in_text"], r["names_normalized"]), axis=1)
 
     print(ex_df["recall"].mean())
     print(ex_df.shape)
     import IPython
+
     IPython.embed()
 
 

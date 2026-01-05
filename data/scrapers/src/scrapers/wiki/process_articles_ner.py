@@ -93,8 +93,7 @@ class Infobox:
             field_links = {}
             for param in infobox.params:
                 fields[param.name.strip_code().strip()] = param.value.strip_code().strip()
-                field_links[param.name.strip_code().strip()] = [str(link.title) for link in
-                                                                param.value.filter_wikilinks()]
+                field_links[param.name.strip_code().strip()] = [str(link.title) for link in param.value.filter_wikilinks()]
             result.append(
                 Infobox(
                     inf_type,
@@ -167,9 +166,9 @@ class WikiArticle:
     def normalized_links(self):
         def generate():
             for entry in itertools.chain(
-                    self.categories,
-                    self.links,
-                    *[infobox.links for infobox in self.infoboxes],
+                self.categories,
+                self.links,
+                *[infobox.links for infobox in self.infoboxes],
             ):
                 n = entry.rstrip("]").lstrip("[").split("|")[0]
                 if n.isdigit():
@@ -232,9 +231,7 @@ class ProcessWikiPeopleNames(Pipeline):
 
     def process(self, ctx: Context) -> pd.DataFrame:
         person_titles = []
-        with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f, tqdm(
-                total=DUMP_SIZE, unit_scale=True, smoothing=0.1
-        ) as tq:
+        with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f, tqdm(total=DUMP_SIZE, unit_scale=True, smoothing=0.1) as tq:
             article_gen = _article_generator(f, tq)
             with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
                 for title in pool.imap_unordered(_is_person_article_worker, article_gen, chunksize=1000):
@@ -284,9 +281,7 @@ class ProcessWikiNer(Pipeline):
         people_titles = set(people_names_df["title"])
 
         dataset = []
-        with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f, tqdm(
-                total=DUMP_SIZE, unit_scale=True, smoothing=0.1
-        ) as tq:
+        with ctx.io.read_data(WIKI_DUMP).read_zip().read_file() as f, tqdm(total=DUMP_SIZE, unit_scale=True, smoothing=0.1) as tq:
             worker_args = ((title, wikitext, people_titles) for title, wikitext in _article_generator(f, tq))
             with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
                 for result in pool.imap_unordered(_ner_worker, worker_args, chunksize=100):
