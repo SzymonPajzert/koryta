@@ -252,8 +252,6 @@ def _ner_worker(args):
 
         text = mwparserfromhell.parse(wikitext).strip_code().strip()
         names = []
-        if article.title in people_titles:
-            names.append({"name_in_text": article.title, "name_normalize": article.title})
 
         parsed_wikitext = mwparserfromhell.parse(wikitext)
         for link in parsed_wikitext.filter_wikilinks():
@@ -263,6 +261,8 @@ def _ner_worker(args):
 
             if normalized_name in people_titles:
                 name_in_text = str(link.text).strip() if link.text else normalized_name
+                if name_in_text not in text:
+                    continue
                 mention = {"name_in_text": name_in_text, "name_normalize": normalized_name}
                 if mention not in names:
                     names.append(mention)
