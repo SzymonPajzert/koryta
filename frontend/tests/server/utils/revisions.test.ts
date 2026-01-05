@@ -28,32 +28,48 @@ describe("getRevisionsForNodes", () => {
     // Generate 15 IDs to force 2 chunks (since chunk size is 10)
     const ids = Array.from({ length: 15 }, (_, i) => `id-${i}`);
 
-    mockGet.mockResolvedValueOnce({
-      docs: [
-        {
-          id: "rev-1",
-          data: () => ({ node_id: "id-0", title: "Rev 1" }),
-        },
-      ],
-    }).mockResolvedValueOnce({
+    mockGet
+      .mockResolvedValueOnce({
+        docs: [
+          {
+            id: "rev-1",
+            data: () => ({ node_id: "id-0", title: "Rev 1" }),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
         docs: [],
-    });
+      });
 
     const result = await getRevisionsForNodes(mockDb, ids);
 
     // Should call collection('revisions')
     expect(mockCollection).toHaveBeenCalledWith("revisions");
-    
+
     // Should split into two calls
     expect(mockWhere).toHaveBeenCalledTimes(2);
     // First chunk
-    expect(mockWhere).toHaveBeenNthCalledWith(1, "node_id", "in", ids.slice(0, 10));
+    expect(mockWhere).toHaveBeenNthCalledWith(
+      1,
+      "node_id",
+      "in",
+      ids.slice(0, 10),
+    );
     // Second chunk
-    expect(mockWhere).toHaveBeenNthCalledWith(2, "node_id", "in", ids.slice(10));
+    expect(mockWhere).toHaveBeenNthCalledWith(
+      2,
+      "node_id",
+      "in",
+      ids.slice(10),
+    );
 
     // Check result mapping
     expect(result["id-0"]).toHaveLength(1);
-    expect(result["id-0"][0]).toEqual({ id: "rev-1", node_id: "id-0", title: "Rev 1" });
+    expect(result["id-0"][0]).toEqual({
+      id: "rev-1",
+      node_id: "id-0",
+      title: "Rev 1",
+    });
     expect(result["id-1"]).toEqual([]);
   });
 

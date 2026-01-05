@@ -67,10 +67,7 @@ function isEdge(data: any): boolean {
   return data && data.source && data.target && data.type;
 }
 
-async function resolveEdgeNames(
-  db: FirebaseFirestore.Firestore,
-  data: any,
-) {
+async function resolveEdgeNames(db: FirebaseFirestore.Firestore, data: any) {
   const sourceDoc = await db.collection("nodes").doc(data.source).get();
   const targetDoc = await db.collection("nodes").doc(data.target).get();
 

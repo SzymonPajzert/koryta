@@ -63,7 +63,7 @@ export async function getRevisionsForNodes(
       .collection("revisions")
       .where("node_id", "in", chunk)
       .get();
-    
+
     q.docs.forEach((doc) => {
       const data = doc.data();
       const list = revisionsMap[data.node_id];
