@@ -73,5 +73,25 @@
     },
     "update_time": "2023-12-01T12:00:00Z",
     "update_user": "admin@koryta.pl"
+  },
+  "rev-h1": {
+    "node_id": "h1",
+    "data": {
+      "name": "Not approved person (Updated)",
+      "type": "person",
+      "content": "Updated content for not approved person"
+    },
+    "update_time": "2024-01-01T12:00:00Z",
+    "update_user": "user@koryta.pl"
+  },
+  "rev-7": {
+    "node_id": "7",
+    "data": {
+      "name": "Not approved article (Updated)",
+      "type": "article",
+      "sourceURL": "http://google.com/updated"
+    },
+    "update_time": "2024-01-01T12:00:00Z",
+    "update_user": "user@koryta.pl"
   }
 }
