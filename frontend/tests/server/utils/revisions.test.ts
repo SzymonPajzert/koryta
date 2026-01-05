@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getRevisionsForNodes } from "../../../server/utils/revisions";
-import { Firestore } from "firebase-admin/firestore";
+import {
+  getRevisionsForNodes,
+  createRevisionTransaction,
+} from "../../../server/utils/revisions";
+import {
+  Firestore,
+  WriteBatch,
+  DocumentReference,
+} from "firebase-admin/firestore";
 
 // Mock Firestore
 const mockGet = vi.fn();
@@ -8,10 +15,67 @@ const mockWhere = vi.fn().mockReturnThis();
 const mockCollection = vi.fn().mockReturnValue({
   where: mockWhere,
   get: mockGet,
+  doc: vi.fn(),
 });
+const mockBatch = {
+  set: vi.fn(),
+} as unknown as WriteBatch;
+
 const mockDb = {
   collection: mockCollection,
+  batch: vi.fn().mockReturnValue(mockBatch),
 } as unknown as Firestore;
+
+describe("createRevisionTransaction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (mockCollection().doc as any).mockReturnValue({ id: "new-rev-id" });
+  });
+
+  it("should create a revision and NOT update head when updateHead=false", () => {
+    const user = { uid: "test-user" };
+    const targetRef = { id: "node-1" } as DocumentReference;
+    const data = { title: "New Title" };
+
+    createRevisionTransaction(mockDb, mockBatch, user, targetRef, data, false);
+
+    // Should create revision
+    expect(mockCollection).toHaveBeenCalledWith("revisions");
+    expect(mockBatch.set).toHaveBeenCalledTimes(1);
+    // Verify first call is setting revision
+    const firstCallArgs = (mockBatch.set as any).mock.calls[0];
+    expect(firstCallArgs[1]).toMatchObject({
+      node_id: "node-1",
+      data: data,
+      update_user: "test-user",
+    });
+  });
+
+  it("should create a revision AND update head when updateHead=true", () => {
+    const user = { uid: "test-user" };
+    const targetRef = { id: "node-1" } as DocumentReference;
+    const data = { title: "New Title" };
+
+    createRevisionTransaction(mockDb, mockBatch, user, targetRef, data, true);
+
+    expect(mockBatch.set).toHaveBeenCalledTimes(2);
+
+    // Revision set
+    const revCall = (mockBatch.set as any).mock.calls[0];
+    expect(revCall[1]).toMatchObject({
+      node_id: "node-1",
+    });
+
+    // Node update set
+    const nodeCall = (mockBatch.set as any).mock.calls[1];
+    expect(nodeCall[0]).toBe(targetRef);
+    expect(nodeCall[1]).toMatchObject({
+      ...data,
+      revision_id: null,
+      update_user: "test-user",
+    });
+  });
+});
 
 describe("getRevisionsForNodes", () => {
   beforeEach(() => {
