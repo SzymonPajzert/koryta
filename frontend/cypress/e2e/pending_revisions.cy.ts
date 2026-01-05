@@ -77,10 +77,20 @@ describe("Pending Revisions", () => {
     cy.contains(".v-list-item", "connection")
       .should("contain", "Jan Kowalski")
       .should("contain", "Piotr Wiśniewski")
-      .click(); // 5. Click
+      .click(); // Unfolds the group
 
-    // 6. Verify we navigate to the entity page
+    // Wait for animation
+    cy.wait(500);
+
+    // Click the actual revision - SCOPED to the opened group
+    // We find the group that contains our text
+    cy.contains(".v-list-group", "connection").within(() => {
+      cy.contains("Rewizja z").click({ force: true });
+    });
+
+    // 6. Verify we navigate to the entity page (with revision ID)
     cy.url().should("include", "/entity/connection/");
+    // URL will be like /entity/connection/[id]/[revId]
 
     cy.get("body").should("be.visible");
   });
