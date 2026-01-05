@@ -55,7 +55,10 @@ const { idToken } = useAuthState();
 const { data: response } = useFetch<{
   entities: Record<string, any>;
 }>(() => `/api/nodes/${props.entity}`, {
-  key: `entities-picker-${props.entity}`,
+  key: `entities-picker-${props.entity}-${!!idToken.value ? "auth" : "guest"}`,
+  query: {
+    search: search,
+  },
   headers: computed(() => {
     const h: Record<string, string> = {};
     if (idToken.value) {
@@ -63,6 +66,7 @@ const { data: response } = useFetch<{
     }
     return h;
   }),
+  watch: [idToken],
   lazy: true,
 });
 
@@ -79,24 +83,11 @@ function addNewItem() {
   const newEntityName = search.value;
   if (newEntityName) {
     // Clear the search input after triggering the add new item action
-    // This prevents the "Add new..." option from reappearing immediately
-    // if the dialog is closed without selecting the newly created item.
     search.value = "";
-    dialogStore.open({
-      type: props.entity,
-      name: newEntityName,
-      callback: (name, key) => {
-        if (!key) {
-          console.warn("failed to obtain key for new entity: ", name);
-          return;
-        }
-        model.value = {
-          type: props.entity,
-          id: key,
-          name,
-        };
-      },
-    });
+
+    // Open new tab with prepopulated data
+    const url = `/edit/node/new?type=${props.entity}&name=${encodeURIComponent(newEntityName)}`;
+    window.open(url, "_blank");
   }
 }
 </script>
