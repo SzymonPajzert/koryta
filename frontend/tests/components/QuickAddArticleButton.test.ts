@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import QuickAddArticleButton from "../../app/components/QuickAddArticleButton.vue";
@@ -20,13 +19,13 @@ const mockHttpsCallableFromURL = vi.fn();
 const mockConnectFunctionsEmulator = vi.fn();
 const mockGetFunctions = vi.fn();
 
-
 vi.mock("firebase/functions", async () => {
   return {
     getFunctions: (...args: any[]) => mockGetFunctions(...args),
     httpsCallable: (...args: any[]) => mockHttpsCallable(...args),
     httpsCallableFromURL: (...args: any[]) => mockHttpsCallableFromURL(...args),
-    connectFunctionsEmulator: (...args: any[]) => mockConnectFunctionsEmulator(...args),
+    connectFunctionsEmulator: (...args: any[]) =>
+      mockConnectFunctionsEmulator(...args),
   };
 });
 
@@ -37,8 +36,6 @@ vi.mock("vuefire", () => ({
   useDatabase: vi.fn(),
   useCurrentUser: vi.fn(),
 }));
-
-
 
 vi.mock("~/composables/auth", () => ({
   useAuthState: () => ({ idToken: { value: "mock-token" } }),
@@ -57,16 +54,18 @@ describe.skip("QuickAddArticleButton", () => {
   it("renders button", () => {
     const wrapper = mount(QuickAddArticleButton, {
       props: { nodeId: "123" },
-      shallow: true, 
+      shallow: true,
       global: {
         stubs: {
-           VBtn: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
-           VExpandTransition: { template: '<div><slot /></div>' },
-           VCard: { template: '<div><slot /></div>' },
-           VTextField: { template: '<input />' },
-           VIcon: true,
+          VBtn: {
+            template: "<button @click=\"$emit('click')\"><slot /></button>",
+          },
+          VExpandTransition: { template: "<div><slot /></div>" },
+          VCard: { template: "<div><slot /></div>" },
+          VTextField: { template: "<input />" },
+          VIcon: true,
         },
-      }
+      },
     });
     expect(wrapper.text()).toContain("Dodaj artykuł");
   });
@@ -76,14 +75,17 @@ describe.skip("QuickAddArticleButton", () => {
       props: { nodeId: "123" },
       shallow: true,
       global: {
-         stubs: {
-           VBtn: { template: '<button class="btn-main" @click="$emit(\'click\')"><slot /></button>' },
-           VExpandTransition: { template: '<div><slot /></div>' },
-           VCard: { template: '<div class="card-content"><slot /></div>' },
-           VTextField: { template: '<input />' },
-           VIcon: true,
+        stubs: {
+          VBtn: {
+            template:
+              '<button class="btn-main" @click="$emit(\'click\')"><slot /></button>',
+          },
+          VExpandTransition: { template: "<div><slot /></div>" },
+          VCard: { template: '<div class="card-content"><slot /></div>' },
+          VTextField: { template: "<input />" },
+          VIcon: true,
         },
-      }
+      },
     });
 
     await wrapper.find(".btn-main").trigger("click");
@@ -93,12 +95,14 @@ describe.skip("QuickAddArticleButton", () => {
 
   it("calls getPageTitle and creates article on add", async () => {
     // Setup mock response for getPageTitle
-    const mockGetPageTitleFn = vi.fn().mockResolvedValue({ data: { title: "Mock Title" } });
+    const mockGetPageTitleFn = vi
+      .fn()
+      .mockResolvedValue({ data: { title: "Mock Title" } });
 
     // Mock getPageTitle for both cases
     mockHttpsCallableFromURL.mockReturnValue(mockGetPageTitleFn);
     mockHttpsCallable.mockReturnValue(mockGetPageTitleFn);
-    
+
     // Mock API calls
     mockFetch.mockResolvedValueOnce({ id: "new-article-id" }); // /api/nodes/create
     mockFetch.mockResolvedValueOnce({}); // /api/revisions/create
@@ -107,35 +111,48 @@ describe.skip("QuickAddArticleButton", () => {
       props: { nodeId: "123" },
       shallow: true,
       global: {
-         stubs: {
-           VBtn: { template: '<button class="btn-action" @click="$emit(\'click\')" :disabled="disabled"><slot /></button>', props: ['disabled'] },
-           VExpandTransition: { template: '<div><slot /></div>' },
-           VCard: { template: '<div><slot /></div>' },
-           VTextField: { 
-             template: '<input class="input-url" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />', 
-             props: ['modelValue'] 
-           },
-           VIcon: true,
+        stubs: {
+          VBtn: {
+            template:
+              '<button class="btn-action" @click="$emit(\'click\')" :disabled="disabled"><slot /></button>',
+            props: ["disabled"],
+          },
+          VExpandTransition: { template: "<div><slot /></div>" },
+          VCard: { template: "<div><slot /></div>" },
+          VTextField: {
+            template:
+              '<input class="input-url" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+            props: ["modelValue"],
+          },
+          VIcon: true,
         },
-      }
+      },
     });
-    
+
     // Expand
-    await wrapper.findAll(".btn-action")[0].trigger("click"); 
+    await wrapper.findAll(".btn-action")[0].trigger("click");
     await wrapper.vm.$nextTick();
-    
+
     // Enter URL
     const input = wrapper.find("input.input-url");
     expect(input.exists()).toBe(true);
     await input.setValue("https://example.com");
-    
+
     // Click Add
     const addBtn = wrapper.findAll(".btn-action")[1];
     expect(addBtn.element.disabled).toBe(false);
     await addBtn.trigger("click");
 
-    expect(mockGetPageTitleFn).toHaveBeenCalledWith({ url: "https://example.com" });
-    expect(mockFetch).toHaveBeenCalledWith("/api/nodes/create", expect.anything());
-    expect(mockFetch).toHaveBeenCalledWith("/api/revisions/create", expect.anything());
+    expect(mockGetPageTitleFn).toHaveBeenCalledWith({
+      url: "https://example.com",
+    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/nodes/create",
+      expect.anything(),
+    );
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/revisions/create",
+      expect.anything(),
+    );
   });
 });

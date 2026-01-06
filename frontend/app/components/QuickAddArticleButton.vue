@@ -4,7 +4,10 @@
       variant="tonal"
       color="primary"
       prepend-icon="mdi-newspaper-plus"
-      @click="expanded = !expanded; checkLogin()"
+      @click="
+        expanded = !expanded;
+        checkLogin();
+      "
     >
       Dodaj artykuł
     </v-btn>
@@ -60,7 +63,7 @@ function checkLogin() {
       },
     });
   }
-} 
+}
 
 const handleAdd = async () => {
   loading.value = true;
@@ -75,16 +78,19 @@ const handleAdd = async () => {
       Authorization: `Bearer ${idToken.value}`,
     };
     // 2. Create Article Node
-    const { id: articleId } = await $fetch<{ id: string }>("/api/nodes/create", {
-      method: "POST",
-      body: {
-        type: "article",
-        name: title || "Nowy Artykuł",
-        sourceURL: url.value,
-        content: "",
+    const { id: articleId } = await $fetch<{ id: string }>(
+      "/api/nodes/create",
+      {
+        method: "POST",
+        body: {
+          type: "article",
+          name: title || "Nowy Artykuł",
+          sourceURL: url.value,
+          content: "",
+        },
+        headers: authHeaders,
       },
-      headers: authHeaders,
-    });
+    );
 
     // 3. Create Edge Revision (Mentions)
     // Edge: Article (Source) -> Person/Place (Target)
@@ -95,7 +101,7 @@ const handleAdd = async () => {
         source: articleId,
         target: props.nodeId,
         type: "mentions",
-        name: "", 
+        name: "",
       },
       headers: authHeaders,
     });
