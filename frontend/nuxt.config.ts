@@ -4,7 +4,10 @@
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIREBASE_DATABASE_EMULATOR_HOST = "127.0.0.1:9000";
-const isLocal = !!process.env.VITEST || process.env.USE_EMULATORS === "true";
+const isLocal =
+  !!process.env.VITEST ||
+  process.env.USE_EMULATORS === "true" ||
+  process.env.NODE_ENV === "development";
 console.log(
   "Nuxt Config - isLocal:",
   isLocal,
@@ -159,6 +162,7 @@ export default defineNuxtConfig({
     options: {
       firestore: {
         experimentalForceLongPolling: true,
+        experimentalAutoDetectLongPolling: true,
       },
     },
   },

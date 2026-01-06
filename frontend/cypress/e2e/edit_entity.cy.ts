@@ -57,7 +57,11 @@ describe("Entity Editing", () => {
 
     cy.wait(1000);
 
-    cy.contains("Zapisz zmianę").click({ force: true });
+    // Wait for button to be enabled (idToken ready, not loading)
+    cy.contains("button", "Zapisz zmianę")
+      .should("be.visible")
+      .should("not.be.disabled")
+      .click();
 
     // Verify redirection
     cy.url({ timeout: 10000 }).should("not.include", "/new");
@@ -67,7 +71,7 @@ describe("Entity Editing", () => {
     cy.contains("label", "Nazwa")
       .parent()
       .find("input")
-      .should("have.value", "Test Person") // Wait for data to load
+      .should("have.value", "Test Person", { timeout: 10000 }) // Wait for data to load
       .clear()
       .type("Test Person Updated");
 
@@ -102,7 +106,7 @@ describe("Entity Editing", () => {
     cy.contains("label", "Nazwa")
       .parent()
       .find("input")
-      .should("have.value", "Jan Kowalski");
+      .should("have.value", "Jan Kowalski", { timeout: 10000 });
 
     // Type: "Osoba" (value 'person')
     // Vuetify selects are a bit complex, we check the displayed text in the parent container
