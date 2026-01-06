@@ -1,5 +1,6 @@
 import os
 import re
+from typing import List
 
 import spacy
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
@@ -43,11 +44,15 @@ class HerbertNERClient:
         return HerbertNERClient._nlp_spacy
             
 
-    def extract_entities(self, text):
+    def extract_entities(self, text: str) -> List[dict]:
+        """extract all entities from given text"""
+        
         ner_pipeline = self._get_pipeline()
         return ner_pipeline(text)
         
-    def group_entities(self, ner_output):
+    def group_entities(self, ner_output: List[dict]) -> dict:
+        """ group NERs withing three categories: PER, LOC, ORG"""
+
         entities = {
             'PER': [],
             'LOC': [],
@@ -76,12 +81,14 @@ class HerbertNERClient:
                 current_entity = []
                 current_type = None
         
-            if current_entity and current_type:
-                entities[current_type].append(''.join(current_entity))
-        
-            return entities
+        if current_entity and current_type:
+            entities[current_type].append(''.join(current_entity))
+    
+        return entities
 
-    def fix_spacing_full_names(self, full_name):
+    def fix_spacing_full_names(self, full_name: str) -> str:
+        """remove unnecessary spacing"""
+
         # tokenize string
         tokens = re.findall(r'\b\w+\b', full_name)
     
@@ -97,7 +104,9 @@ class HerbertNERClient:
     
         return result.strip()
 
-    def lemmatize_name_spacy(self, name):
+    def lemmatize_name_spacy(self, name: str) -> str:
+        """return the basic form of given name"""
+
         nlp_spacy = self._get_nlp_spacy()
         doc = nlp_spacy(name)
         lemmatized = [token.lemma_ for token in doc]
