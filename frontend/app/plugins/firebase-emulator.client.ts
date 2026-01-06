@@ -37,9 +37,13 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     // Functions
     const functions = getFunctions(app);
+    const functionsEurope = getFunctions(app, "europe-west1");
     try {
       connectFunctionsEmulator(functions, "127.0.0.1", 5001);
-      console.log("✅ Functions Emulator connected to 127.0.0.1:5001");
+      connectFunctionsEmulator(functionsEurope, "127.0.0.1", 5001);
+      console.log(
+        "✅ Functions Emulator connected to 127.0.0.1:5001 (default & europe-west1)",
+      );
     } catch (e) {
       console.log("Functions emulator already connected/failed", e);
     }
