@@ -197,7 +197,7 @@ export function useEdgeEdit({
   }
 
   async function addEdge() {
-    if (!nodeId.value || !pickerTarget.value) return;
+    if (!nodeId || !nodeId.value || !pickerTarget.value) return;
 
     const direction = newEdge.value.direction || "outgoing";
     const source =

@@ -4,7 +4,7 @@ import NodeEditPage from "../../../../app/pages/edit/node/[[id]].vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
-import { ref } from "vue";
+import { ref, defineComponent, h, Suspense } from "vue";
 
 // Setup Vuetify
 const vuetify = createVuetify({
@@ -15,10 +15,7 @@ const vuetify = createVuetify({
 // Mock dependencies
 const mockSaveNode = vi.fn();
 const mockAddEdge = vi.fn();
-const mockAddComment = vi.fn();
-const mockVote = vi.fn();
 const mockFetchRevisions = vi.fn();
-const mockRestoreRevision = vi.fn();
 
 const mockState = {
   isNew: ref(true),
@@ -64,10 +61,8 @@ vi.mock("../../../../app/composables/useNodeEdit", () => ({
 // Mock definePageMeta
 vi.stubGlobal("definePageMeta", vi.fn());
 
-import { defineComponent, h, Suspense } from "vue";
-
 // Helper to mount async component
-function mountAsync(component: any, options: any = {}) {
+function mountAsync(component: unknown, options: unknown = {}) {
   return mount(
     defineComponent({
       render() {
@@ -162,7 +157,7 @@ describe("NodeEditPage", () => {
     mockState.isNew.value = false;
     mockState.allEdges.value = [
       { richNode: { id: "1", name: "Associated Node" }, type: "employed" },
-    ] as any;
+    ];
 
     const wrapper = mountAsync(NodeEditPage, {
       global: {
