@@ -42,7 +42,7 @@ const isDeleting = ref(false);
 let timeoutId: unknown = null;
 
 function runSimulation() {
-  if (!lines || lines.length === 0) throw new Error("No lines provided");
+  if (lines.length === 0) throw new Error("No lines provided");
 
   const currentLine = lines[lineIndex.value]?.text ?? "";
   currentLink.value = lines[lineIndex.value]?.link ?? "";

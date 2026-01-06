@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref } from "vue";
 import {
   GoogleAuthProvider,
   signInWithPopup,
@@ -119,9 +119,10 @@ const login = async () => {
     // User is signed in.
     console.debug("User logged in successfully!");
     router.push((redirect as string) || "/");
-  } catch (err: any) {
-    console.error("Login error:", err.code, err.message);
-    error.value = getErrorMessage(err.code);
+  } catch (err: unknown) {
+    const errorObj = err as { code: string; message: string };
+    console.error("Login error:", errorObj.code, errorObj.message);
+    error.value = getErrorMessage(errorObj.code);
   } finally {
     loading.value = false;
   }
@@ -135,9 +136,10 @@ const loginWithGoogle = async () => {
     await signInWithPopup(auth, provider);
     console.debug("User logged in with Google successfully!");
     router.push((redirect as string) || "/");
-  } catch (err: any) {
-    console.error("Google login error:", err.code, err.message);
-    error.value = getErrorMessage(err.code);
+  } catch (err: unknown) {
+    const errorObj = err as { code: string; message: string };
+    console.error("Google login error:", errorObj.code, errorObj.message);
+    error.value = getErrorMessage(errorObj.code);
   } finally {
     loading.value = false;
   }
@@ -155,12 +157,13 @@ const register = async () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     router.push((redirect as string) || "/");
-  } catch (err: any) {
-    if (err.code === "auth/user-not-found") {
+  } catch (err: unknown) {
+    const errorObj = err as { code: string; message: string };
+    if (errorObj.code === "auth/user-not-found") {
       error.value = "Użytkownik nie istnieje";
       return;
     }
-    error.value = getErrorMessage(err.code);
+    error.value = getErrorMessage(errorObj.code);
   } finally {
     loading.value = false;
   }
@@ -172,8 +175,9 @@ const sendVerification = async () => {
   try {
     await sendEmailVerification(user.value);
     alert("Wysłano email weryfikacyjny.");
-  } catch (err: any) {
-    error.value = getErrorMessage(err.code);
+  } catch (err: unknown) {
+    const errorObj = err as { code: string; message: string };
+    error.value = getErrorMessage(errorObj.code);
   } finally {
     loading.value = false;
   }

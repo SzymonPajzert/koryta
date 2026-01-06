@@ -20,7 +20,6 @@
 </template>
 
 <script lang="ts" setup>
-// @ts-nocheck
 import { computed } from "vue";
 import { useAuthState } from "@/composables/auth"; // Assuming auth store path
 const { user } = useAuthState();
@@ -56,7 +55,7 @@ const userActivityStats = computed<UserActivityStat[]>(() => {
   }
   const stats: UserActivityStat[] = [];
   for (const uid in allUsersData.value) {
-    const userData = allUsersData.value[uid];
+    const userData = allUsersData.value[uid]!;
     const suggestions = userData.suggestions || {};
 
     const dataCount = Object.keys(suggestions.data || {}).length;

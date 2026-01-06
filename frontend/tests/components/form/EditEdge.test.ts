@@ -38,6 +38,10 @@ vi.mock("~/composables/useNodeEdit", () => ({
     edgeTargetType: ref("person"),
     edgeType: mockEdgeType,
     availableEdgeTypes: mockAvailableEdgeTypes,
+    node_id: ref("test-node-id"),
+    authHeaders: ref({}),
+    refreshEdges: vi.fn(),
+    stateKey: ref("test-key"),
   }),
 }));
 

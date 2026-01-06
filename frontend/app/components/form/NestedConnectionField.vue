@@ -56,8 +56,7 @@ const modelValue = defineModel<Connection<D>>();
 const title = computed(() => {
   if (!modelValue.value) return undefined;
   const v = modelValue.value;
-  if (v.relation && v.connection)
-    return `${v.relation} - ${v.connection?.name}`;
+  if (v.relation && v.connection) return `${v.relation} - ${v.connection.name}`;
   if (v.relation) return v.relation;
   if (v.content) return v.content;
   return undefined;

@@ -58,12 +58,14 @@ describe("Pending Revisions", () => {
       const edges = Object.values(resp.body);
       const myEdge = edges.find(
         (e) =>
-          (e as any).source === "1" ||
-          (e as any).source_name === "Jan Kowalski",
+          (e as { source: string }).source === "1" ||
+          (e as { source_name: string }).source_name === "Jan Kowalski",
       );
       if (myEdge) {
         cy.log("Found edge:", JSON.stringify(myEdge));
-        expect((myEdge as any).source_name).to.equal("Jan Kowalski");
+        expect((myEdge as { source_name: string }).source_name).to.equal(
+          "Jan Kowalski",
+        );
         // Check target name if resolved
       } else {
         cy.log("Edge NOT found in API response");

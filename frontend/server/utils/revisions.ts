@@ -1,9 +1,9 @@
-import {
+import type {
   Firestore,
-  Timestamp,
   DocumentReference,
   WriteBatch,
 } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 
 export interface BatchResult {
   revisionRef: DocumentReference;
@@ -15,7 +15,7 @@ export function createRevisionTransaction(
   batch: WriteBatch,
   user: { uid: string },
   targetRef: DocumentReference,
-  data: Record<string, any>,
+  data: Record<string, unknown>,
   updateHead: boolean = true,
 ): BatchResult {
   const revisionRef = db.collection("revisions").doc();
@@ -45,7 +45,7 @@ export function createRevisionTransaction(
 export async function getRevisionsForNodes(
   db: Firestore,
   nodeIds: string[],
-): Promise<Record<string, any[]>> {
+): Promise<Record<string, unknown[]>> {
   if (nodeIds.length === 0) {
     return {};
   }
@@ -55,7 +55,7 @@ export async function getRevisionsForNodes(
     chunks.push(nodeIds.slice(i, i + 10));
   }
 
-  const revisionsMap: Record<string, any[]> = {};
+  const revisionsMap: Record<string, unknown[]> = {};
   nodeIds.forEach((id) => (revisionsMap[id] = []));
 
   for (const chunk of chunks) {

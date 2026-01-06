@@ -1,5 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
+import type { Revision } from "~~/shared/model";
 import { getUser } from "~~/server/utils/auth";
 
 export default defineEventHandler(async (event) => {
@@ -25,8 +26,8 @@ export default defineEventHandler(async (event) => {
     .get();
 
   const revisions = snapshot.docs.map((doc) => ({
+    ...(doc.data() as Omit<Revision, "id">),
     id: doc.id,
-    ...(doc.data() as any),
   }));
 
   return { revisions };

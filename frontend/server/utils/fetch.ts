@@ -80,7 +80,7 @@ export async function fetchEdges(
       if (isAuth) return true;
       return pageIsPublic(edge);
     });
-  return (edges as unknown as Edge[]) || [];
+  return edges as unknown as Edge[];
 }
 
 export async function fetchRTDB<T>(path: string): Promise<T> {

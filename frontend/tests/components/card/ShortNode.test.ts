@@ -22,7 +22,8 @@ describe("ShortNode", () => {
     const wrapper = mount(ShortNode, {
       global: { plugins: [vuetify] },
       props: {
-        edge: edge as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        edge: edge as unknown as any,
       },
     });
 

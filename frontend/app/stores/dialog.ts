@@ -83,7 +83,7 @@ export const useDialogStore = defineStore("dialog", () => {
       callback: payload.callback ? markRaw(payload.callback) : undefined,
     };
     if (payload.name) dialog.value.name = payload.name;
-    // @ts-ignore
+    // @ts-expect-error push returns number but sometimes TS inference is weird here
     const len = dialogs.value.push(dialog);
     currentDialog.value = len - 1;
   }

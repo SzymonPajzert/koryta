@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 vi.stubGlobal("defineEventHandler", (handler: any) => handler);
 
 vi.mock("~~/server/utils/fetch", () => ({
@@ -11,7 +12,7 @@ vi.mock("~~/server/utils/fetch", () => ({
 describe("Graph API", () => {
   it("assembles graph correctly", async () => {
     // Setup mocks
-    (fetchNodes as any).mockImplementation((type: string) => {
+    vi.mocked(fetchNodes).mockImplementation((type: string) => {
       if (type === "person")
         return Promise.resolve({ p1: { name: "Person 1", parties: ["PiS"] } });
       if (type === "place")
@@ -20,11 +21,12 @@ describe("Graph API", () => {
       return Promise.resolve({});
     });
 
-    (fetchEdges as any).mockResolvedValue([
+    vi.mocked(fetchEdges).mockResolvedValue([
       { from: "p1", to: "c1", type: "work" },
     ]);
 
     const handlerModule = await import("../../../server/api/graph/index.get");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await handlerModule.default({} as any);
 
     expect(result).toHaveProperty("nodes");

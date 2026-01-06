@@ -6,7 +6,6 @@ import {
   type User,
 } from "firebase/auth";
 import { collection, doc } from "firebase/firestore";
-import { ref } from "vue";
 
 type UserConfig = {
   photoURL?: string;

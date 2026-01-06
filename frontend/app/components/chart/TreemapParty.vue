@@ -22,9 +22,8 @@ const router = useRouter();
 const nonZeroIndices = computed(() =>
   resultsUnfiltered.value.map((x, i) => (x > 0 ? i : -1)).filter((i) => i >= 0),
 );
-const parties = computed(
-  () =>
-    partiesUnfiltered.filter((_, i) => nonZeroIndices.value.includes(i)) ?? [],
+const parties = computed(() =>
+  partiesUnfiltered.filter((_, i) => nonZeroIndices.value.includes(i)),
 );
 const partyColors = computed(() =>
   Object.values(partyColorsUnfiltered).filter((_, i) =>
@@ -68,7 +67,6 @@ const chartOptions = computed(() => ({
 }));
 
 const series = computed(() => {
-  if (!parties.value || !results.value) return [];
   if (parties.value.length !== results.value.length) return [];
 
   return [

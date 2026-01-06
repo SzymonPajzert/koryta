@@ -197,7 +197,7 @@ export function useEdgeEdit({
   }
 
   async function addEdge() {
-    if (!nodeId || !nodeId.value || !pickerTarget.value) return;
+    if (!nodeId.value || !pickerTarget.value) return;
 
     const direction = newEdge.value.direction || "outgoing";
     const source =
@@ -272,7 +272,7 @@ export function useEdgeEdit({
 function alertError(e: unknown) {
   console.error(e);
   if (!(e instanceof Error)) return;
-  const msg = e?.message || "Unknown error";
+  const msg = e.message || "Unknown error";
   alert("Błąd dodawania powiązania: " + msg);
 }
 
