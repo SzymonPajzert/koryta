@@ -27,7 +27,9 @@
               </template>
             </v-list-item>
             <v-list-item v-if="!edgesWithoutArticles.length">
-              <v-list-item-title class="text-success">Wszystkie krawędzie mają źródła!</v-list-item-title>
+              <v-list-item-title class="text-success"
+                >Wszystkie krawędzie mają źródła!</v-list-item-title
+              >
             </v-list-item>
           </v-list>
         </v-card>
@@ -53,7 +55,9 @@
               </template>
             </v-list-item>
             <v-list-item v-if="!articlesWithoutEdges.length">
-              <v-list-item-title class="text-success">Wszystkie artykuły są użyte jako źródła!</v-list-item-title>
+              <v-list-item-title class="text-success"
+                >Wszystkie artykuły są użyte jako źródła!</v-list-item-title
+              >
             </v-list-item>
           </v-list>
         </v-card>
@@ -83,12 +87,11 @@ const { data: edges } = await useFetch<Edge[]>("/api/graph/edges", {
   headers,
 });
 
-const { data: articlesResponse } = await useFetch<{ entities: Record<string, Node> }>(
-  "/api/nodes/article",
-  {
-    headers,
-  }
-);
+const { data: articlesResponse } = await useFetch<{
+  entities: Record<string, Node>;
+}>("/api/nodes/article", {
+  headers,
+});
 
 const edgesData = computed(() => edges.value || []);
 const articles = computed(() => {
@@ -97,7 +100,9 @@ const articles = computed(() => {
 });
 
 const edgesWithoutArticles = computed(() => {
-  return edgesData.value.filter((e) => !e.references || e.references.length === 0);
+  return edgesData.value.filter(
+    (e) => !e.references || e.references.length === 0,
+  );
 });
 
 const articlesWithoutEdges = computed(() => {

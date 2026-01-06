@@ -266,22 +266,32 @@ describe("useEdgeEdit - articles", () => {
     const mockFetch = vi.fn().mockResolvedValue({ id: "new-edge-id" });
     global.$fetch = mockFetch;
 
-    pickerSource.value = { id: "source-person", type: "person", name: "Source" } as any;
-    pickerTarget.value = { id: "target-place", type: "place", name: "Target" } as any;
+    pickerSource.value = {
+      id: "source-person",
+      type: "person",
+      name: "Source",
+    } as any;
+    pickerTarget.value = {
+      id: "target-place",
+      type: "place",
+      name: "Target",
+    } as any;
     newEdge.value.type = "employed";
     newEdge.value.references = ["test-article-id"];
 
     await processEdge();
 
-    expect(mockFetch).toHaveBeenCalledWith("/api/edges/create", expect.objectContaining({
-      method: "POST",
-      body: expect.objectContaining({
-        source: "source-person",
-        target: "target-place",
-        type: "employed",
-        references: ["test-article-id"],
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/edges/create",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.objectContaining({
+          source: "source-person",
+          target: "target-place",
+          type: "employed",
+          references: ["test-article-id"],
+        }),
       }),
-    }));
+    );
   });
 });
-

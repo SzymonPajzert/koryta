@@ -49,5 +49,11 @@
     "type": "article",
     "sourceURL": "http://google.com",
     "revision_id": null
+  },
+  "8": {
+    "name": "Artykuł bez krawędzi",
+    "type": "article",
+    "sourceURL": "http://lone-article.com",
+    "revision_id": "rev8"
   }
 }

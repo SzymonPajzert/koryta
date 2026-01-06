@@ -189,6 +189,7 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       traverse: edgeTraverse[edge.type],
       content: edge.content,
       name: edge.name,
+      references: edge.references,
     };
     return result;
   });

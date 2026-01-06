@@ -12,23 +12,23 @@ describe("Article Entities and Edge References", () => {
 
   it("should allow adding an edge from an article page", () => {
     cy.visit("/entity/article/6");
-    
+
     cy.contains("Zaproponuj zmianę").click();
-    
+
     // Fill source
     cy.get('[label="Wyszukaj źródło"]').type("Jan Kowalski");
     cy.contains("Jan Kowalski").click();
-    
+
     // Fill target
     cy.get('[label="Wyszukaj firmę"]').type("Orlen");
     cy.contains("Orlen").click();
-    
+
     // Select relation
     cy.get(".v-select").click();
     cy.contains("Zatrudniony/a w").click();
-    
+
     cy.contains("Dodaj powiązanie").click();
-    
+
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");
     });
@@ -37,17 +37,17 @@ describe("Article Entities and Edge References", () => {
   it("should allow adding an edge with article reference from person page", () => {
     cy.visit("/entity/person/1");
     cy.contains("Zaproponuj zmianę").click();
-    
+
     // Picker target
     cy.get('[label="Wyszukaj firmę"]').type("Orlen");
     cy.contains("Orlen").click();
-    
+
     // Picker article reference
     cy.get('[label="Źródło informacji (artykuł)"]').type("Sample Article");
     cy.contains("Sample Article").click();
-    
+
     cy.contains("Dodaj powiązanie").click();
-    
+
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");
     });

@@ -180,6 +180,7 @@ definePageMeta({
   middleware: "auth",
 });
 
+const route = useRoute();
 const { node_id, refreshEdges, current, authHeaders, stateKey } =
   await useNodeEdit();
 const {
@@ -194,7 +195,10 @@ const {
   pickerSource,
 } = useEdgeEdit({
   nodeId: node_id,
-  nodeType: computed(() => current.value.type || "person"),
+  nodeType: computed(() => {
+    if (route.query.type) return route.query.type as any;
+    return current.value.type || "person";
+  }),
   authHeaders,
   onUpdate: refreshEdges,
   stateKey,

@@ -40,4 +40,5 @@ export interface Edge {
   traverse?: TraversePolicy;
   content?: string;
   name?: string;
+  references?: string[];
 }

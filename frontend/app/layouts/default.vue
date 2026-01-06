@@ -91,7 +91,10 @@
       >
         Lista rewizji
       </v-btn>
-      <v-spacer />
+      <v-btn prepend-icon="mdi-magnify-scan" variant="text" to="/admin/audit">
+        Audyt
+      </v-btn>
+      <v-spacer icon />
     </v-toolbar>
     <v-container
       class="fill-height position-relative"
