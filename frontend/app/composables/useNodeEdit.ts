@@ -144,14 +144,14 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       // Direction change detection via checking if just triggered?
       // Watch triggers on availableEdgeTypes change too.
       // Simply enforce consistency.
-      
+
       if (!isEditingEdge.value) {
         // If direction actually changed or types changed, validate edgeType
         if (!availableEdgeTypes.value.find((o) => o.value === edgeType.value)) {
           edgeType.value = availableEdgeTypes.value[0]?.value || "";
         }
       }
-    }
+    },
   );
 
   // Watch direction specifically for clearing picker
@@ -161,7 +161,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       if (!isEditingEdge.value) {
         pickerTarget.value = null;
       }
-    }
+    },
   );
 
   const edgeTargetType = computed<NodeType>(() => {

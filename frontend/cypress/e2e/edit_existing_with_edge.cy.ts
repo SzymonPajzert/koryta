@@ -53,9 +53,11 @@ describe("Edit Existing Entity & Add Edge", () => {
       cy.get('button[title="Odwróć kierunek"]').click();
 
       // Open Edge Type - use specific label "Relacja"
-      cy.get('.v-select').filter((index, element) => {
-        return Cypress.$(element).text().includes('Relacja');
-      }).click();
+      cy.get(".v-select")
+        .filter((index, element) => {
+          return Cypress.$(element).text().includes("Relacja");
+        })
+        .click();
       cy.contains("Zatrudniony/a w").click();
 
       // Search for Person

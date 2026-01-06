@@ -121,19 +121,34 @@
               <!-- Visual Connection Editor -->
               <v-row class="align-center my-4">
                 <!-- Current Node (Left) -->
-                <v-col cols="4" class="text-center d-flex flex-column align-center">
+                <v-col
+                  cols="4"
+                  class="text-center d-flex flex-column align-center"
+                >
                   <div class="d-flex flex-column align-center w-100">
-                     <v-chip class="mb-1 text-truncate" style="max-width: 100%" color="primary" variant="outlined">
-                        {{ current.name || 'Ten węzeł' }}
-                     </v-chip>
-                     <div class="text-caption text-medium-emphasis">
-                       {{ (newEdge as any).direction === 'outgoing' ? 'Źródło' : 'Cel' }}
-                     </div>
+                    <v-chip
+                      class="mb-1 text-truncate"
+                      style="max-width: 100%"
+                      color="primary"
+                      variant="outlined"
+                    >
+                      {{ current.name || "Ten węzeł" }}
+                    </v-chip>
+                    <div class="text-caption text-medium-emphasis">
+                      {{
+                        (newEdge as any).direction === "outgoing"
+                          ? "Źródło"
+                          : "Cel"
+                      }}
+                    </div>
                   </div>
                 </v-col>
 
                 <!-- Connection (Center) -->
-                <v-col cols="4" class="text-center d-flex flex-column justify-center position-relative px-0">
+                <v-col
+                  cols="4"
+                  class="text-center d-flex flex-column justify-center position-relative px-0"
+                >
                   <v-select
                     v-model="edgeType"
                     :items="availableEdgeTypes"
@@ -145,43 +160,69 @@
                     hide-details
                     class="mb-2"
                     :disabled="!availableEdgeTypes.length"
-                    :placeholder="availableEdgeTypes.length ? undefined : 'Brak relacji'"
+                    :placeholder="
+                      availableEdgeTypes.length ? undefined : 'Brak relacji'
+                    "
                   />
-                  
+
                   <div class="d-flex align-center justify-center">
-                     <v-btn 
-                        variant="tonal" 
-                        rounded="pill" 
-                        size="small"
-                        color="secondary"
-                        class="px-4"
-                        @click="(newEdge as any).direction = (newEdge as any).direction === 'outgoing' ? 'incoming' : 'outgoing'"
-                        :title="'Odwróć kierunek'"
-                     >
-                       <span class="mr-1">
-                         {{ (newEdge as any).direction === 'outgoing' ? 'Do' : 'Od' }}
-                       </span>
-                       <v-icon :icon="(newEdge as any).direction === 'outgoing' ? 'mdi-arrow-right' : 'mdi-arrow-left'" />
-                     </v-btn>
+                    <v-btn
+                      variant="tonal"
+                      rounded="pill"
+                      size="small"
+                      color="secondary"
+                      class="px-4"
+                      @click="
+                        (newEdge as any).direction =
+                          (newEdge as any).direction === 'outgoing'
+                            ? 'incoming'
+                            : 'outgoing'
+                      "
+                      :title="'Odwróć kierunek'"
+                    >
+                      <span class="mr-1">
+                        {{
+                          (newEdge as any).direction === "outgoing"
+                            ? "Do"
+                            : "Od"
+                        }}
+                      </span>
+                      <v-icon
+                        :icon="
+                          (newEdge as any).direction === 'outgoing'
+                            ? 'mdi-arrow-right'
+                            : 'mdi-arrow-left'
+                        "
+                      />
+                    </v-btn>
                   </div>
                 </v-col>
 
                 <!-- Picker (Right) -->
-                <v-col cols="4" class="text-center d-flex flex-column align-center">
-                    <div class="w-100">
-                      <EntityPicker
-                        v-model="pickerTarget"
-                        :key="edgeTargetType"
-                        :entity="edgeTargetType"
-                        :label="`Wyszukaj ${edgeTargetType === 'person' ? 'osobę' : edgeTargetType === 'place' ? 'firmę' : 'obiekt'}`"
-                        density="compact"
-                        hide-details
-                        :disabled="!availableEdgeTypes.length"
-                      />
-                    </div>
-                    <div class="text-caption text-center mt-1 text-medium-emphasis">
-                      {{ (newEdge as any).direction === 'outgoing' ? 'Cel' : 'Źródło' }}
-                    </div>
+                <v-col
+                  cols="4"
+                  class="text-center d-flex flex-column align-center"
+                >
+                  <div class="w-100">
+                    <EntityPicker
+                      v-model="pickerTarget"
+                      :key="edgeTargetType"
+                      :entity="edgeTargetType"
+                      :label="`Wyszukaj ${edgeTargetType === 'person' ? 'osobę' : edgeTargetType === 'place' ? 'firmę' : 'obiekt'}`"
+                      density="compact"
+                      hide-details
+                      :disabled="!availableEdgeTypes.length"
+                    />
+                  </div>
+                  <div
+                    class="text-caption text-center mt-1 text-medium-emphasis"
+                  >
+                    {{
+                      (newEdge as any).direction === "outgoing"
+                        ? "Cel"
+                        : "Źródło"
+                    }}
+                  </div>
                 </v-col>
               </v-row>
 
