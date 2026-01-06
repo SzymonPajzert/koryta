@@ -43,6 +43,10 @@ const mockState = {
   availableEdgeTypes: ref([
     { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
   ]),
+  node_id: ref("test-node-id"),
+  authHeaders: ref({}),
+  refreshEdges: vi.fn(),
+  stateKey: ref("test-key"),
 };
 
 vi.mock("../../../../app/composables/useNodeEdit", () => ({
