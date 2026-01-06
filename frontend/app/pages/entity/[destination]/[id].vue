@@ -67,6 +67,7 @@
         </template>
         Zaproponuj zmianę
       </v-btn>
+      <QuickAddArticleButton :node-id="node" />
     </div>
   </div>
 </template>
