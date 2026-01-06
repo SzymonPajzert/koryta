@@ -29,10 +29,9 @@ const mockDb = {
 describe("createRevisionTransaction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(mockCollection().doc).mockReturnValue({
       id: "new-rev-id",
-    } as any);
+    } as unknown as DocumentReference);
   });
 
   it("should create a revision and NOT update head when updateHead=false", () => {

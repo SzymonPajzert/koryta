@@ -153,6 +153,7 @@
 </template>
 
 <script setup lang="ts">
+import type { Link } from "~~/shared/model";
 type EditType = "comment" | "link" | "person";
 
 interface CompanyMembership {
@@ -199,8 +200,6 @@ const person = ref<CluePerson>({
 });
 const tempComment = ref<string>();
 const tempLink = ref<string>();
-import type { Link } from "~~/shared/model";
-
 const pickedPerson = ref<Link<"person"> | undefined>();
 const companies: CompanyMembership[] = [];
 

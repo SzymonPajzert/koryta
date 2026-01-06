@@ -37,6 +37,12 @@
               src="@/assets/patronite.png"
             />
           </v-btn>
+          Dzięki niemu dowiesz się kto jest kim, kto z kim trzyma i kto kogo
+          lubi. <br />
+          Narzędzie jest w fazie testów, więc może zawierać błędy.
+          <br />
+          <br />
+          <br />
           <v-btn
             href="https://zrzutka.pl/rd7ssx/pay"
             target="_blank"

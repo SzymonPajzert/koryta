@@ -76,7 +76,7 @@
 
 <script lang="ts" setup>
 import type { VDataTable } from "vuetify/components";
-import type { Company } from "~~/shared/model";
+import type { Company, Link } from "~~/shared/model";
 import { useEditIndexedField } from "~/composables/editIndexedField";
 
 definePageMeta({
@@ -94,7 +94,7 @@ interface CompanyScoredEditable {
   entityID?: string;
 }
 
-import type { Link } from "~~/shared/model";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const toNumber = (v: any) => Number(v) || 0;
 
 const { entities } = await useEntity("place");

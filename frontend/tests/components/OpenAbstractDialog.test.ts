@@ -30,8 +30,8 @@ describe("OpenAbstractDialog", () => {
     mockUser.value = null;
     const wrapper = mount(OpenAbstractDialog, {
       global: { plugins: [vuetify] },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      props: { dialog: { type: "person" } as any },
+
+      props: { dialog: "person" },
     });
 
     const item = wrapper.findComponent(components.VListItem);
@@ -44,8 +44,7 @@ describe("OpenAbstractDialog", () => {
     mockUser.value = { uid: "123" } as unknown as any;
     const wrapper = mount(OpenAbstractDialog, {
       global: { plugins: [vuetify] },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      props: { dialog: "person" as any },
+      props: { dialog: "person" },
     });
 
     const item = wrapper.findComponent(components.VListItem);

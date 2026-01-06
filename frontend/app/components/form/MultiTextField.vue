@@ -43,6 +43,7 @@
 <script lang="ts" setup>
 import type { EdgeType } from "~~/shared/model";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const connections = ref<Record<string, any>>({});
 const keys = ref<string[]>(Object.keys(connections.value));
 
