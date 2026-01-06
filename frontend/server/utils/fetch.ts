@@ -74,6 +74,7 @@ export async function fetchEdges(
         id: doc.id,
         ...data,
         content: data.content || data.text || "",
+        references: data.references || [],
       } as Edge;
     })
     .filter((edge) => {

@@ -28,6 +28,7 @@ export default defineEventHandler(async (event) => {
     // Edge fields
     start_date: body.start_date || null,
     end_date: body.end_date || null,
+    references: body.references || [],
   };
 
   if (body.source) {

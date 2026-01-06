@@ -5,9 +5,18 @@
   <v-form @submit.prevent="processEdge">
     <!-- Visual Connection Editor -->
     <v-row class="align-center my-4">
-      <!-- Current Node (Left) -->
+      <!-- Source Picker / Current Node -->
       <v-col cols="4" class="text-center d-flex flex-column align-center">
-        <div class="d-flex flex-column align-center w-100">
+        <div v-if="current.type === 'article'" class="w-100">
+          <EntityPicker
+            v-model="pickerSource"
+            entity="person"
+            label="Wyszukaj źródło"
+            density="compact"
+            hide-details
+          />
+        </div>
+        <div v-else class="d-flex flex-column align-center w-100">
           <v-chip
             class="mb-1 text-truncate"
             style="max-width: 100%"
@@ -61,9 +70,11 @@
             </span>
             <v-icon
               :icon="
-                (newEdge as any).direction === 'outgoing'
+                current.type === 'article'
                   ? 'mdi-arrow-right'
-                  : 'mdi-arrow-left'
+                  : (newEdge as any).direction === 'outgoing'
+                    ? 'mdi-arrow-right'
+                    : 'mdi-arrow-left'
               "
             />
           </v-btn>
@@ -102,6 +113,15 @@
         <v-text-field
           v-model="newEdge.content"
           label="Opis relacji (opcjonalnie)"
+          density="compact"
+          hide-details
+        />
+      </v-col>
+      <v-col v-if="current.type !== 'article'" cols="12">
+        <EntityPicker
+          v-model="articleReference"
+          entity="article"
+          label="Źródło informacji (artykuł)"
           density="compact"
           hide-details
         />
@@ -154,6 +174,7 @@
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import EntityPicker from "~/components/form/EntityPicker.vue";
+import type { Link } from "~~/shared/model";
 
 definePageMeta({
   middleware: "auth",
@@ -170,6 +191,7 @@ const {
   edgeType,
   availableEdgeTypes,
   pickerTarget,
+  pickerSource,
 } = useEdgeEdit({
   nodeId: node_id,
   nodeType: computed(() => current.value.type || "person"),
@@ -177,4 +199,23 @@ const {
   onUpdate: refreshEdges,
   stateKey,
 });
+
+const articleReference = computed({
+  get: () => {
+    const id = newEdge.value.references?.[0];
+    if (!id) return undefined;
+    return { id, type: "article", name: "" } as Link<"article">; // Name is not strictly required by EntityPicker for display if it's just the model
+  },
+  set: (val) => {
+    if (val) {
+      newEdge.value.references = [val.id];
+    } else {
+      newEdge.value.references = [];
+    }
+  },
+});
+
+if (current.value.type === "article") {
+  newEdge.value.references = [node_id.value!];
+}
 </script>
