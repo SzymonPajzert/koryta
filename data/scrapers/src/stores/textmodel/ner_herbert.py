@@ -1,6 +1,6 @@
 import os
 import re
-from typing import List
+from typing import List, Dict
 
 import spacy
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
@@ -46,20 +46,20 @@ class HerbertNERClient:
 
     def extract_entities(self, text: str) -> List[dict]:
         """extract all entities from given text"""
-        
+
         ner_pipeline = self._get_pipeline()
         return ner_pipeline(text)
         
     def group_entities(self, ner_output: List[dict]) -> dict:
         """ group NERs withing three categories: PER, LOC, ORG"""
 
-        entities = {
+        entities: Dict[str, List[str]] = {
             'PER': [],
             'LOC': [],
             'ORG': []
         }
     
-        current_entity = []
+        current_entity: list[str] = []
         current_type = None
         
         for token in ner_output:
