@@ -32,14 +32,14 @@ class StanzaNERClient:
 
         return StanzaNERClient._nlp_spacy
 
-    def extract_entities(self, text):
+    def extract_entities(self, text: str):
         """extract all entities from given text"""
 
         ner_model = self._get_model()
         return ner_model(text)
 
 
-    def filter_entities(self, document, pos_type):
+    def filter_entities(self, document, pos_type: str):
         """filter entities with pos_type: persName, placeName or orgName"""
 
         findings = []
@@ -64,9 +64,9 @@ class StanzaNERClient:
     
         return findings
 
-    def lemmatize_name_spacy(self, name):
+    def lemmatize_name_spacy(self, name: str) -> str:
         """return the basic form of given name"""
-        
+
         nlp_spacy = self._get_nlp_spacy()
         doc = nlp_spacy(name)
         lemmatized = [token.lemma_ for token in doc]
