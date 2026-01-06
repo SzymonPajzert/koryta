@@ -1,5 +1,4 @@
-import type { EdgeType } from "v-network-graph";
-import { computed, watch, type Ref } from "vue";
+import { computed, watch, ref, toValue, type Ref } from "vue";
 import type { NodeType, Edge } from "~~/shared/model";
 
 interface UseEdgeEditOptions {
@@ -22,7 +21,7 @@ const edgeTypeOptions: edgeTypeOption[] = [
   {
     value: "owns",
     label: "Właściciel",
-    sourceType: "person",
+    sourceType: "place",
     targetType: "place",
     realType: "owns",
   },
@@ -34,14 +33,14 @@ const edgeTypeOptions: edgeTypeOption[] = [
     realType: "connection",
   },
   {
-    value: "mentions_person",
+    value: "mentioned_person",
     label: "Wspomina osobę",
     sourceType: "article",
     targetType: "person",
     realType: "mentions",
   },
   {
-    value: "mentions_place",
+    value: "mentioned_company",
     label: "Wspomina firmę/urząd",
     sourceType: "article",
     targetType: "place",
@@ -90,29 +89,30 @@ export function useEdgeEdit({
   const isEditingEdge = computed(() => !!newEdge.value.id);
 
   const availableEdgeTypes = computed(() => {
+    const dir = (newEdge.value as any).direction || "outgoing";
     return edgeTypeOptions.filter((o) => {
-      const reqSource = o.sourceType;
-      const reqTarget = o.targetType;
-
-      const canBeSource =
-        !reqSource ||
-        (Array.isArray(reqSource)
-          ? reqSource.includes(myType.value as any)
-          : reqSource === myType.value);
-      const canBeTarget =
-        !reqTarget ||
-        (Array.isArray(reqTarget)
-          ? reqTarget.includes(myType.value as any)
-          : reqTarget === myType.value);
-
-      return canBeSource || canBeTarget;
+      if (dir === "outgoing") {
+        const rs = o.sourceType;
+        return (
+          !rs ||
+          (Array.isArray(rs)
+            ? rs.includes(myType.value as any)
+            : rs === myType.value)
+        );
+      } else {
+        const rt = o.targetType;
+        return (
+          !rt ||
+          (Array.isArray(rt)
+            ? rt.includes(myType.value as any)
+            : rt === myType.value)
+        );
+      }
     });
   });
 
   // Handle type selection -> enforce direction if needed
   watch(edgeType, (t) => {
-    newEdge.value.type = t as any;
-
     if (!isEditingEdge.value) {
       const option = edgeTypeOptions.find((o) => o.value === t);
       if (option) {
@@ -147,57 +147,36 @@ export function useEdgeEdit({
       if (!isEditingEdge.value) {
         pickerTarget.value = null;
 
-        // Validate if current edgeType is valid for new direction
+        // Re-validate current edgeType
         const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+        let currentStillValid = false;
         if (option) {
-          const reqSource = option.sourceType;
-          const reqTarget = option.targetType;
-
-          let isValid = false;
+          const rs = option.sourceType;
+          const rt = option.targetType;
           if (newDir === "outgoing") {
-            if (
-              !reqSource ||
-              (Array.isArray(reqSource)
-                ? reqSource.includes(myType.value as any)
-                : reqSource === myType.value)
-            )
-              isValid = true;
+            currentStillValid =
+              !rs ||
+              (Array.isArray(rs)
+                ? rs.includes(myType.value as any)
+                : rs === myType.value);
           } else {
-            if (
-              !reqTarget ||
-              (Array.isArray(reqTarget)
-                ? reqTarget.includes(myType.value as any)
-                : reqTarget === myType.value)
-            )
-              isValid = true;
+            currentStillValid =
+              !rt ||
+              (Array.isArray(rt)
+                ? rt.includes(myType.value as any)
+                : rt === myType.value);
           }
+        }
 
-          if (!isValid) {
-            // Find a valid type for this direction
-            const validOption = availableEdgeTypes.value.find((o) => {
-              const rs = o.sourceType;
-              const rt = o.targetType;
-              if (newDir === "outgoing")
-                return (
-                  !rs ||
-                  (Array.isArray(rs)
-                    ? rs.includes(myType.value as any)
-                    : rs === myType.value)
-                );
-              return (
-                !rt ||
-                (Array.isArray(rt)
-                  ? rt.includes(myType.value as any)
-                  : rt === myType.value)
-              );
-            });
-            if (validOption) {
-              edgeType.value = validOption.value;
-            }
+        if (!currentStillValid) {
+          // Default to the first available type for the new direction
+          if (availableEdgeTypes.value.length > 0) {
+            edgeType.value = availableEdgeTypes.value[0].value;
           }
         }
       }
     },
+    { deep: true },
   );
 
   const edgeTargetType = computed<NodeType>(() => {
