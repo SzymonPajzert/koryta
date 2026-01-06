@@ -1,6 +1,6 @@
 import os
 import re
-from typing import List, Dict
+from typing import Dict, List
 
 import spacy
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
