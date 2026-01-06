@@ -19,14 +19,16 @@ export default withNuxt(
       "@typescript-eslint/no-explicit-any": "warn",
     },
   },
-).append({
-  files: ["**/*.ts", "**/*.vue"],
-  rules: {
-    "@typescript-eslint/no-unnecessary-condition": "warn",
-  },
-}).append({
-  files: ["cypress/**/*.ts", "cypress.config.ts"],
-  rules: {
-    "@typescript-eslint/no-unused-expressions": "off",
-  },
-});
+)
+  .append({
+    files: ["**/*.ts", "**/*.vue"],
+    rules: {
+      "@typescript-eslint/no-unnecessary-condition": "warn",
+    },
+  })
+  .append({
+    files: ["cypress/**/*.ts", "cypress.config.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-expressions": "off",
+    },
+  });

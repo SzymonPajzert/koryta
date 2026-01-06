@@ -124,26 +124,25 @@ export function getNodesNoStats(
     };
   });
 
-    Object.entries(companies).forEach(([key, company]) => {
-      const entry: Node = {
-        ...company,
-        type: "rect",
-        color: "gray",
-      };
+  Object.entries(companies).forEach(([key, company]) => {
+    const entry: Node = {
+      ...company,
+      type: "rect",
+      color: "gray",
+    };
 
-      result[key] = entry;
-    });
+    result[key] = entry;
+  });
 
-
-    Object.entries(articles).forEach(([articleID, article]) => {
-      const entry: Node = {
-        name: article.shortName || getHostname(article),
-        sizeMult: 1,
-        type: "document",
-        color: "pink",
-      };
-      result[articleID] = entry;
-    });
+  Object.entries(articles).forEach(([articleID, article]) => {
+    const entry: Node = {
+      name: article.shortName || getHostname(article),
+      sizeMult: 1,
+      type: "document",
+      color: "pink",
+    };
+    result[articleID] = entry;
+  });
 
   return result;
 }

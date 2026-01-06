@@ -7,7 +7,6 @@ import {
 } from "firebase/auth";
 import { collection, doc } from "firebase/firestore";
 
-
 type UserConfig = {
   photoURL?: string;
 };

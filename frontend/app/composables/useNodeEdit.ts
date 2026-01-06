@@ -134,7 +134,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       await fetchRevisions();
     } else if (isNew.value && lastFetchedId.value !== undefined) {
       lastFetchedId.value = undefined;
-      const initialType = (route.query.type as NodeType | undefined) ?? "person";
+      const initialType =
+        (route.query.type as NodeType | undefined) ?? "person";
       current.value = {
         name: "",
         type: initialType,

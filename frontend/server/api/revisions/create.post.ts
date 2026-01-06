@@ -18,7 +18,6 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-   
   const revisionData: Record<string, unknown> = {
     name: body.name,
     type: body.type,
@@ -30,7 +29,6 @@ export default defineEventHandler(async (event) => {
     start_date: body.start_date || null,
     end_date: body.end_date || null,
   };
-   
 
   if (body.source) {
     revisionData.source = body.source;

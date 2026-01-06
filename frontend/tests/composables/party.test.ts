@@ -27,7 +27,9 @@ describe("usePartyStatistics", () => {
     // Debug logic locally
     const debugResults = Object.keys(partyColors).map((party) => {
       return Object.values(mockEntities.value).filter((person: Person) => {
-        return (person.parties ?? []).findIndex((p: string) => p === party) != -1;
+        return (
+          (person.parties ?? []).findIndex((p: string) => p === party) != -1
+        );
       }).length;
     });
     console.log("Debug Results:", debugResults);

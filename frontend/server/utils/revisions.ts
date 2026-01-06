@@ -1,10 +1,9 @@
 import type {
   Firestore,
   DocumentReference,
-  WriteBatch} from "firebase-admin/firestore";
-import {
-  Timestamp
+  WriteBatch,
 } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 
 export interface BatchResult {
   revisionRef: DocumentReference;

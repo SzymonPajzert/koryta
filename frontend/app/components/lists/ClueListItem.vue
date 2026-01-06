@@ -153,7 +153,6 @@
 </template>
 
 <script setup lang="ts">
-
 type EditType = "comment" | "link" | "person";
 
 const editingItemId = ref<string | null>(null);

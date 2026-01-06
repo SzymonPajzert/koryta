@@ -27,7 +27,8 @@ vi.mock("../../app/composables/entity", async () => {
 const mockEntities = (entityModule as unknown as { _mockEntities: any })
   ._mockEntities;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockSubmit = (entityModule as unknown as { _mockSubmit: any })._mockSubmit;
+const mockSubmit = (entityModule as unknown as { _mockSubmit: any })
+  ._mockSubmit;
 
 describe("Dialog Store", () => {
   beforeEach(() => {

@@ -41,7 +41,6 @@
 </template>
 
 <script lang="ts" setup>
-
 import type { EdgeType } from "~~/shared/model";
 
 const connections = ref({});

@@ -23,7 +23,8 @@ vi.mock("firebase/functions", async () => {
   return {
     getFunctions: (...args: unknown[]) => mockGetFunctions(...args),
     httpsCallable: (...args: unknown[]) => mockHttpsCallable(...args),
-    httpsCallableFromURL: (...args: unknown[]) => mockHttpsCallableFromURL(...args),
+    httpsCallableFromURL: (...args: unknown[]) =>
+      mockHttpsCallableFromURL(...args),
     connectFunctionsEmulator: (...args: unknown[]) =>
       mockConnectFunctionsEmulator(...args),
   };

@@ -55,14 +55,11 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   );
   const { data: fetchedNodes, refresh: refreshNodes } = await useFetch<{
     nodes: Record<string, unknown>;
-  }>(
-    "/api/nodes",
-    {
-      key: "nodes-all-fetch-global",
-      headers,
-      watch: [headers],
-    },
-  );
+  }>("/api/nodes", {
+    key: "nodes-all-fetch-global",
+    headers,
+    watch: [headers],
+  });
   watch(
     fetchedNodes,
     (v) => {
