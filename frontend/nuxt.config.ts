@@ -86,6 +86,10 @@ export default defineNuxtConfig({
     ...(!isLocal ? ["@sentry/nuxt/module"] : []),
   ],
 
+  eslint: {
+    checker: true,
+  },
+
   fonts: {
     families: [{ name: "Roboto", provider: "fontsource" }],
     defaults: {

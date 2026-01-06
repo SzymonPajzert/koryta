@@ -128,7 +128,7 @@
               Brak historii zmian.
             </div>
           </v-list>
-          <v-btn @click="fetchRevisions" variant="text">Odśwież</v-btn>
+          <v-btn variant="text" @click="fetchRevisions">Odśwież</v-btn>
         </v-card>
       </v-window-item>
     </v-window>
@@ -154,6 +154,14 @@ const {
   idToken,
   saveNode,
   fetchRevisions,
-  openEditEdge,
 } = await useNodeEdit();
+
+const { node_id, refreshEdges, authHeaders, stateKey } = await useNodeEdit();
+const { openEditEdge } = useEdgeEdit({
+  nodeId: node_id,
+  nodeType: computed(() => current.value.type || "person"),
+  authHeaders,
+  onUpdate: refreshEdges,
+  stateKey,
+});
 </script>
