@@ -59,7 +59,12 @@ const handleAdd = async () => {
 
   loading.value = true;
   try {
-    const title = await getPageTitle(url.value) || "Nowy Artykuł";
+    let title = undefined;
+    try {
+      title = await getPageTitle(url.value);
+    } catch (e) {
+      console.log("Failed to fetch", e);
+    }
     const authHeaders = {
       Authorization: `Bearer ${idToken.value}`,
     };
@@ -68,7 +73,7 @@ const handleAdd = async () => {
       method: "POST",
       body: {
         type: "article",
-        name: title,
+        name: title || "Nowy Artykuł",
         sourceURL: url.value,
         content: "",
       },
@@ -78,15 +83,13 @@ const handleAdd = async () => {
     // 3. Create Edge Revision (Mentions)
     // Edge: Article (Source) -> Person/Place (Target)
     // Type: mentions
-    await $fetch("/api/revisions/create", {
+    await $fetch("/api/edges/create", {
       method: "POST",
       body: {
-        collection: "edges",
         source: articleId,
         target: props.nodeId,
         type: "mentions",
         name: "", 
-        // No explicit name needed? Or title?
       },
       headers: authHeaders,
     });
