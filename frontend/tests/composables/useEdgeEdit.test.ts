@@ -105,12 +105,12 @@ describe("useEdgeEdit", () => {
       // Initially outgoing
       expect((newEdge.value as any).direction).toBe("outgoing");
 
-      // Force incoming - this isn't a great test for "switches direction" 
+      // Force incoming - this isn't a great test for "switches direction"
       // because we don't have many strictly incoming types for specific nodes.
       // But let's test that 'mentioned_person' forces 'outgoing' for Article.
       (newEdge.value as any).direction = "incoming";
       await nextTick();
-      
+
       edgeType.value = "mentioned_person";
       await nextTick();
 

@@ -170,8 +170,9 @@ export function useEdgeEdit({
 
         if (!currentStillValid) {
           // Default to the first available type for the new direction
-          if (availableEdgeTypes.value.length > 0) {
-            edgeType.value = availableEdgeTypes.value[0].value;
+          const available = availableEdgeTypes.value;
+          if (available[0]) {
+            edgeType.value = available[0].value;
           }
         }
       }
