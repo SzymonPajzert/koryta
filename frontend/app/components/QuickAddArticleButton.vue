@@ -37,9 +37,8 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { getFunctions, httpsCallable, connectFunctionsEmulator, httpsCallableFromURL } from "firebase/functions";
-import { useFirebaseApp } from "vuefire";
 import { useAuthState } from "~/composables/auth";
+import { getPageTitle } from "~/composables/useFunctions";
 
 const props = defineProps<{
   nodeId: string;
@@ -60,35 +59,10 @@ const handleAdd = async () => {
 
   loading.value = true;
   try {
-
-    // 1. Fetch Title
-    const config = useRuntimeConfig();
-    const app = useFirebaseApp();
-    const functions = getFunctions(app, "europe-west1");
-    
-    if (config.public.isLocal) {
-       // Ensure this specific instance talks to emulator
-       // Note: connectFunctionsEmulator can be called multiple times safely? 
-       // Ideally we check if already connected but there's no public API for that.
-       // However, catching error "already connected" is common pattern.
-       try {
-         connectFunctionsEmulator(functions, "127.0.0.1", 5001);
-       } catch (e) {
-         // ignore already connected
-       }
-    }
-
-    const getPageTitle = httpsCallable<{ url: string }, { title: string }>(
-      functions,
-      "getPageTitle"
-    );
-    const titleRes = await getPageTitle({ url: url.value });
-    const title = titleRes.data.title || "Nowy Artykuł";
-
+    const title = await getPageTitle(url.value) || "Nowy Artykuł";
     const authHeaders = {
       Authorization: `Bearer ${idToken.value}`,
     };
-
     // 2. Create Article Node
     const { id: articleId } = await $fetch<{ id: string }>("/api/nodes/create", {
       method: "POST",

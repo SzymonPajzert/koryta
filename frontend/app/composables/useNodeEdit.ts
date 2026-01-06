@@ -1,6 +1,5 @@
 import { computed, ref, watch, onMounted, type Ref } from "vue";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import type {
   Person,
   Node,
@@ -10,6 +9,7 @@ import type {
 } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 import { useEdges } from "~/composables/edges";
+import { getPageTitle } from "~/composables/useFunctions";
 
 interface UseNodeEditOptions {
   route?: ReturnType<typeof useRoute>;
@@ -169,14 +169,9 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     if (!current.value.sourceURL || current.value.type !== "article") return;
     loading.value = true;
     try {
-      const functions = getFunctions(useFirebaseApp(), "europe-west1");
-      const getPageTitle = httpsCallable<{ url: string }, { title: string }>(
-        functions,
-        "getPageTitle",
-      );
-      const result = await getPageTitle({ url: current.value.sourceURL });
-      if (result.data.title && !current.value.name) {
-        current.value.name = result.data.title;
+      const title = await getPageTitle(current.value.sourceURL);
+      if (title && !current.value.name) {
+        current.value.name = title;
       }
     } catch (e) {
       console.error("Error fetching page title", e);
