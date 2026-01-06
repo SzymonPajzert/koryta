@@ -139,6 +139,18 @@
                     density="compact"
                   />
                 </v-col>
+                <v-col cols="12" md="6" v-if="!isEditingEdge">
+                  <v-radio-group
+                    v-model="(newEdge as any).direction"
+                    inline
+                    density="compact"
+                    hide-details
+                    label="Kierunek relacji"
+                  >
+                    <v-radio label="Do wybranego" value="outgoing" />
+                    <v-radio label="Od wybranego" value="incoming" />
+                  </v-radio-group>
+                </v-col>
                 <v-col cols="12" md="6">
                   <v-text-field
                     v-model="newEdge.name"
@@ -155,6 +167,28 @@
                     hide-details
                   />
                 </v-col>
+                <template v-if="edgeType === 'employed'">
+                  <v-col cols="12" md="6">
+                    <v-text-field
+                      v-model="newEdge.start_date"
+                      label="Data rozpoczęcia"
+                      type="date"
+                      density="compact"
+                      hide-details
+                      prepend-inner-icon="mdi-calendar"
+                    />
+                  </v-col>
+                  <v-col cols="12" md="6">
+                    <v-text-field
+                      v-model="newEdge.end_date"
+                      label="Data zakończenia"
+                      type="date"
+                      density="compact"
+                      hide-details
+                      prepend-inner-icon="mdi-calendar"
+                    />
+                  </v-col>
+                </template>
                 <v-col cols="12" class="mt-2 d-flex gap-2">
                   <v-btn
                     v-if="isEditingEdge"

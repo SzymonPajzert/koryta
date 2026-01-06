@@ -18,14 +18,24 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const revisionData = {
+  const revisionData: Record<string, any> = {
     name: body.name,
     type: body.type,
     parties: body.parties || [],
     content: content,
     sourceURL: body.sourceURL || "",
     shortName: body.shortName || "",
+    // Edge fields
+    start_date: body.start_date || null,
+    end_date: body.end_date || null,
   };
+
+  if (body.source) {
+    revisionData.source = body.source;
+  }
+  if (body.target) {
+    revisionData.target = body.target;
+  }
 
   const collection = body.collection || "nodes";
   const nodeRef = db.collection(collection).doc(body.node_id);

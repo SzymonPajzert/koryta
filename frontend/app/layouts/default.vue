@@ -74,6 +74,17 @@
         Dodaj osobę
       </v-btn>
       <v-btn
+        prepend-icon="mdi-plus"
+        variant="text"
+        :to="{ path: '/edit/node/new', query: { type: 'place' } }"
+        :active="
+          route.path === '/edit/node/new' && route.query.type === 'place'
+        "
+        active-class="v-btn--active"
+      >
+        Dodaj firmę
+      </v-btn>
+      <v-btn
         prepend-icon="mdi-format-list-bulleted"
         variant="text"
         to="/revisions"

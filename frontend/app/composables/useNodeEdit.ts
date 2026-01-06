@@ -48,29 +48,52 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const lastFetchedId = ref<string | undefined>(undefined);
   const isSaving = ref(false);
 
+  /* eslint-disable @typescript-eslint/naming_convention */
   const edgeTypeOptions = [
-    { value: "owns", label: "Właściciel", targetType: "place" },
-    { value: "connection", label: "Powiązanie z", targetType: "person" },
+    {
+      value: "owns",
+      label: "Właściciel",
+      sourceType: "person",
+      targetType: "place",
+    },
+    {
+      value: "connection",
+      label: "Powiązanie z",
+      sourceType: "person",
+      targetType: "person",
+    },
     {
       value: "mentions_person",
       label: "Wspomina osobę",
+      sourceType: "person", // Approximation
       targetType: "person",
       realType: "mentions",
     },
-    { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
+    {
+      value: "employed",
+      label: "Zatrudniony/a w",
+      sourceType: "person",
+      targetType: "place",
+    },
     {
       value: "mentions_place",
       label: "Wspomina firmę/urząd",
+      sourceType: "person",
       targetType: "place",
       realType: "mentions",
     },
   ];
+  /* eslint-enable @typescript-eslint/naming_convention */
 
   const newEdge = ref<Partial<Edge>>({
     type: "connection",
     target: "",
     name: "",
     content: "",
+    start_date: "",
+    end_date: "",
+    // @ts-ignore
+    direction: "outgoing",
   });
   const edgeType = ref<string>("connection"); // Isolated ref for v-select
 
@@ -95,6 +118,11 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   const edgeTargetType = computed<NodeType>(() => {
     const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+    // @ts-ignore
+    const dir = newEdge.value.direction;
+    if (dir === "incoming") {
+      return (option?.sourceType as NodeType) || "person";
+    }
     return (option?.targetType as NodeType) || "person";
   });
 
@@ -260,6 +288,10 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       target: "",
       name: "",
       content: "",
+      start_date: "",
+      end_date: "",
+      // @ts-ignore
+      direction: "outgoing",
     };
     edgeType.value = "connection";
     pickerTarget.value = null;
@@ -276,6 +308,11 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     newEdge.value = {
       ...edge,
       type,
+      // Infer direction if editing? Usually we just edit properties.
+      // If we want to allow reversing direction on edit, it's more complex.
+      // For now, let's stick to adding.
+      // But we need to initialize it to something valid.
+      direction: "outgoing",
     };
     edgeType.value = type;
     pickerTarget.value = edge.richNode;
@@ -301,16 +338,26 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   async function addEdge() {
     if (!node_id.value || !pickerTarget.value) return;
+
+    // @ts-ignore
+    const direction = newEdge.value.direction || "outgoing";
+    const source =
+      direction === "outgoing" ? node_id.value : pickerTarget.value.id;
+    const target =
+      direction === "outgoing" ? pickerTarget.value.id : node_id.value;
+
     try {
       await $fetch<any>("/api/edges/create", {
         method: "POST",
         headers: authHeaders.value,
         body: {
-          source: node_id.value,
-          target: pickerTarget.value.id,
+          source,
+          target,
           type: getRealType(newEdge.value.type),
           name: newEdge.value.name,
           content: newEdge.value.content,
+          start_date: newEdge.value.start_date,
+          end_date: newEdge.value.end_date,
         },
       });
       resetEdgeForm();
@@ -337,6 +384,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           name: newEdge.value.name,
           // text: newEdge.value.content, // Deprecated
           content: newEdge.value.content,
+          start_date: newEdge.value.start_date,
+          end_date: newEdge.value.end_date,
         },
         headers: authHeaders.value,
       });

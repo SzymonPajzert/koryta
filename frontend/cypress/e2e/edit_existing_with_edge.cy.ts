@@ -1,0 +1,103 @@
+describe("Edit Existing Entity & Add Edge", () => {
+  const generateName = (prefix: string) => `${prefix}_${Date.now()}`;
+
+  beforeEach(() => {
+    // Clear indexedDB based on previous patterns to ensure clean state
+    cy.window().then((win) => {
+      return new Cypress.Promise((resolve) => {
+        const req = win.indexedDB.deleteDatabase("firebaseLocalStorageDb");
+        req.onsuccess = resolve;
+        req.onerror = resolve;
+        req.onblocked = resolve;
+      });
+    });
+    cy.refreshAuth();
+    cy.login();
+  });
+
+  it("should edit an existing entity and add a new connection with direction", () => {
+    // 1. Create a Base Entity (Company)
+    const companyName = generateName("TestCompany");
+    cy.visit("/edit/node/new?type=place");
+    cy.contains("label", "Nazwa").parent().find("input").type(companyName);
+    cy.contains("button", "Zapisz zmianę").click();
+    cy.url({ timeout: 10000 }).should("include", "/edit/node/");
+
+    // Capture ID
+    cy.url().then((url) => {
+      const parts = url.split("/");
+      const companyId = parts[parts.length - 1]; // /edit/node/[id]
+
+      // 2. Create another entity (Person) to connect to
+      const personName = generateName("Employee");
+      cy.visit("/edit/node/new?type=person");
+      cy.contains("label", "Nazwa").parent().find("input").type(personName);
+      cy.contains("button", "Zapisz zmianę").click();
+      cy.url({ timeout: 10000 }).should("include", "/edit/node/");
+
+      // 3. Go back to Company Edit page
+      cy.visit(`/edit/node/${companyId}`);
+
+      // 4. Modify Company Name
+      const updatedName = companyName + "_Updated";
+      cy.contains("label", "Nazwa")
+        .parent()
+        .find("input")
+        .clear()
+        .type(updatedName);
+      cy.contains("button", "Zapisz zmianę").click();
+
+      // Verify name update alert or reloading
+      // Assuming alert "Zapisano!" appears or we check persistence
+      /*
+      cy.on("window:alert", (str) => {
+        expect(str).to.contain("Zapisano");
+      });
+      */
+      // Wait for alert handling is tricky with stubbing needed in beforeEach usually.
+      // cy.wait(1000);
+
+      // 5. Add a connection (Employed)
+      // Connect Person to Company ("Zatrudniony/a w").
+      // Type: employed
+      // Direction: usually Person -> Company.
+      // So if we are on Company page, and we select Person,
+      // Current(Company) should be Target.
+      // Selected(Person) should be Source.
+      // Direction: "Od wybranego" (Incoming to this node).
+
+      cy.get(".v-select").last().click(); // Open Edge Type
+      cy.contains("Zatrudniony/a w").click();
+
+      // Select Direction FIRST (Incoming: "Od wybranego")
+      // This sets the entity picker type to 'person' (source of 'employed')
+      cy.contains("label", "Od wybranego").click();
+
+      // Search for Person
+      cy.get('[data-testid="entity-picker-input"]').click();
+      cy.get('[data-testid="entity-picker-input"]').type(personName);
+
+      // Wait for results and click
+      cy.contains(".v-list-item-title", personName).click();
+
+      // Set Dates
+      // Vuetify inputs don't have label attribute on the input itself usually
+      cy.contains("label", "Data rozpoczęcia")
+        .parent()
+        .find("input")
+        .type("2024-01-01");
+
+      // Save Connection
+      cy.contains("button", "Dodaj powiązanie").click();
+
+      // Verify
+      cy.on("window:alert", (str) => {
+        expect(str).to.contain("Dodano powiązanie");
+      });
+
+      // Ensure the edge appears in the list
+      cy.contains(personName).should("exist");
+      // cy.contains("employed").should("exist"); // Label might be different/translated
+    });
+  });
+});
