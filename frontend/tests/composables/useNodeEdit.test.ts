@@ -178,4 +178,93 @@ describe("useNodeEdit", () => {
     );
     expect(mockEdges.refresh).toHaveBeenCalled();
   });
+
+  describe("Edge Logic", () => {
+    it("filters edge types for Person (outgoing)", async () => {
+      mockRoute.params = { id: "123" };
+      mockedFetch.mockResolvedValueOnce({
+        node: { name: "Person", type: "person" },
+      });
+      mockedFetch.mockResolvedValueOnce({ revisions: [] });
+
+      const { availableEdgeTypes, newEdge } = await useNodeEdit({
+        route: mockRoute,
+        idToken: mockIdToken,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Person Outgoing
+      // Should include 'owns' (Source: Person)
+      // Should include 'connection' (Source: Person)
+      // Should include 'employed' (Source: Person)
+      const types = availableEdgeTypes.value.map((o) => o.value);
+      expect(types).toContain("owns");
+      expect(types).toContain("connection");
+      expect(types).toContain("employed");
+
+      // Change to incoming
+      (newEdge.value as any).direction = "incoming";
+      await nextTick();
+      const typesIn = availableEdgeTypes.value.map((o) => o.value);
+
+      // Person Incoming
+      // 'owns' (Target: Place) -> Exclude
+      // 'connection' (Target: Person) -> Include
+      // 'employed' (Target: Place) -> Exclude
+      expect(typesIn).not.toContain("owns");
+      expect(typesIn).toContain("connection");
+      expect(typesIn).not.toContain("employed");
+    });
+
+    it("filters edge types for Place", async () => {
+      mockRoute.params = { id: "999" };
+      mockedFetch.mockResolvedValueOnce({
+        node: { name: "Corp", type: "place" },
+      });
+      mockedFetch.mockResolvedValueOnce({ revisions: [] });
+
+      const { availableEdgeTypes, newEdge } = await useNodeEdit({
+        route: mockRoute,
+        idToken: mockIdToken,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Place Outgoing
+      // 'owns' (Source: Person) -> Exclude
+      const types = availableEdgeTypes.value.map((o) => o.value);
+      expect(types).not.toContain("owns");
+
+      // Place Incoming
+      // 'owns' (Target: Place) -> Include
+      (newEdge.value as any).direction = "incoming";
+      await nextTick();
+      const typesIn = availableEdgeTypes.value.map((o) => o.value);
+      expect(typesIn).toContain("owns");
+    });
+
+    it("resets edgeType if invalid after direction switch", async () => {
+      mockRoute.params = { id: "123" };
+      mockedFetch.mockResolvedValueOnce({
+        node: { name: "Person", type: "person" },
+      });
+      mockedFetch.mockResolvedValueOnce({ revisions: [] });
+
+      const { availableEdgeTypes, newEdge, edgeType } = await useNodeEdit({
+        route: mockRoute,
+        idToken: mockIdToken,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(availableEdgeTypes.value.find((t) => t.value === "owns")).toBeTruthy();
+      edgeType.value = "owns";
+
+      // Switch to incoming -> 'owns' no longer valid
+      (newEdge.value as any).direction = "incoming";
+      await nextTick();
+
+      // Should automatically switch to first available (e.g. connection)
+      expect(edgeType.value).not.toBe("owns");
+      expect(availableEdgeTypes.value.find((t) => t.value === edgeType.value)).toBeTruthy();
+    });
+  });
 });

@@ -155,9 +155,6 @@
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import EntityPicker from "~/components/form/EntityPicker.vue";
 
-// TODO check for different edge types and switching order
-// TODO It failed to list the owner edge when the edge was reversed
-
 definePageMeta({
   middleware: "auth",
 });
