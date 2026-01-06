@@ -1,4 +1,5 @@
-import { computed, ref, watch, type Ref } from "vue";
+import type { EdgeType } from "v-network-graph";
+import { computed, watch, type Ref } from "vue";
 import type { NodeType, Edge } from "~~/shared/model";
 
 interface UseEdgeEditOptions {
@@ -6,52 +7,66 @@ interface UseEdgeEditOptions {
   nodeType: Ref<NodeType>;
   authHeaders: Ref<Record<string, string>>;
   onUpdate?: () => Promise<void>;
+  stateKey?: Ref<string>; // Optional stateKey for shared state
 }
+
+type edgeTypeOption = {
+  value: string;
+  label: string;
+  sourceType: NodeType;
+  targetType: NodeType;
+  realType: string;
+};
+
+const edgeTypeOptions: edgeTypeOption[] = [
+  {
+    value: "owns",
+    label: "Właściciel",
+    sourceType: "person",
+    targetType: "place",
+    realType: "owns",
+  },
+  {
+    value: "connection",
+    label: "Powiązanie z",
+    sourceType: "person",
+    targetType: "person",
+    realType: "connection",
+  },
+  {
+    value: "mentions_person",
+    label: "Wspomina osobę",
+    sourceType: "article",
+    targetType: "person",
+    realType: "mentions",
+  },
+  {
+    value: "mentions_place",
+    label: "Wspomina firmę/urząd",
+    sourceType: "article",
+    targetType: "place",
+    realType: "mentions",
+  },
+  {
+    value: "employed",
+    label: "Zatrudniony/a w",
+    sourceType: "person",
+    targetType: "place",
+    realType: "employed",
+  },
+];
 
 export function useEdgeEdit({
   nodeId,
   nodeType: myType,
   authHeaders,
   onUpdate,
+  stateKey = ref("global-edge-edit"),
 }: UseEdgeEditOptions) {
-  /* eslint-disable @typescript-eslint/naming_convention */
-  const edgeTypeOptions = [
-    {
-      value: "owns",
-      label: "Właściciel",
-      sourceType: "person",
-      targetType: "place",
-    },
-    {
-      value: "connection",
-      label: "Powiązanie z",
-      sourceType: "person",
-      targetType: "person",
-    },
-    {
-      value: "mentions_person",
-      label: "Wspomina osobę",
-      // sourceType: "person", // Generic source
-      targetType: "person",
-      realType: "mentions",
-    },
-    {
-      value: "employed",
-      label: "Zatrudniony/a w",
-      sourceType: "person",
-      targetType: "place",
-    },
-    {
-      value: "mentions_place",
-      label: "Wspomina firmę/urząd",
-      // sourceType: "person", // Generic source
-      targetType: "place",
-      realType: "mentions",
-    },
-  ];
-  /* eslint-enable @typescript-eslint/naming_convention */
+  // Determine the actual key string once
+  const baseKey = toValue(stateKey);
 
-  const newEdge = ref<Partial<Edge>>({
+  const newEdge = useState<Partial<Edge>>(`${baseKey}-newEdge`, () => ({
     type: "connection",
     target: "",
     name: "",
@@ -60,29 +75,35 @@ export function useEdgeEdit({
     end_date: "",
     // @ts-ignore
     direction: "outgoing",
-  });
+  }));
 
   // Isolated ref for v-select
-  const edgeType = ref<string>("connection");
+  const edgeType = useState<string>(`${baseKey}-edgeType`, () => "connection");
 
   // Sync edgeType -> newEdge.type
   watch(edgeType, (t) => {
     newEdge.value.type = t as any;
   });
 
-  const pickerTarget = ref<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const pickerTarget = useState<any>(`${baseKey}-pickerTarget`, () => null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const isEditingEdge = computed(() => !!newEdge.value.id);
 
   const availableEdgeTypes = computed(() => {
     return edgeTypeOptions.filter((o) => {
-      // @ts-ignore
       const reqSource = o.sourceType;
-      // @ts-ignore
       const reqTarget = o.targetType;
 
-      const canBeSource = !reqSource || reqSource === myType.value;
-      const canBeTarget = !reqTarget || reqTarget === myType.value;
+      const canBeSource =
+        !reqSource ||
+        (Array.isArray(reqSource)
+          ? reqSource.includes(myType.value as any)
+          : reqSource === myType.value);
+      const canBeTarget =
+        !reqTarget ||
+        (Array.isArray(reqTarget)
+          ? reqTarget.includes(myType.value as any)
+          : reqTarget === myType.value);
 
       return canBeSource || canBeTarget;
     });
@@ -95,13 +116,19 @@ export function useEdgeEdit({
     if (!isEditingEdge.value) {
       const option = edgeTypeOptions.find((o) => o.value === t);
       if (option) {
-        // @ts-ignore
         const reqSource = option.sourceType;
-        // @ts-ignore
         const reqTarget = option.targetType;
 
-        const canBeSource = !reqSource || reqSource === myType.value;
-        const canBeTarget = !reqTarget || reqTarget === myType.value;
+        const canBeSource =
+          !reqSource ||
+          (Array.isArray(reqSource)
+            ? reqSource.includes(myType.value as any)
+            : reqSource === myType.value);
+        const canBeTarget =
+          !reqTarget ||
+          (Array.isArray(reqTarget)
+            ? reqTarget.includes(myType.value as any)
+            : reqTarget === myType.value);
 
         // If strictly directional relative to me
         if (canBeSource && !canBeTarget) {
@@ -123,27 +150,46 @@ export function useEdgeEdit({
         // Validate if current edgeType is valid for new direction
         const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
         if (option) {
-          // @ts-ignore
           const reqSource = option.sourceType;
-          // @ts-ignore
           const reqTarget = option.targetType;
 
           let isValid = false;
           if (newDir === "outgoing") {
-            if (!reqSource || reqSource === myType.value) isValid = true;
+            if (
+              !reqSource ||
+              (Array.isArray(reqSource)
+                ? reqSource.includes(myType.value as any)
+                : reqSource === myType.value)
+            )
+              isValid = true;
           } else {
-            if (!reqTarget || reqTarget === myType.value) isValid = true;
+            if (
+              !reqTarget ||
+              (Array.isArray(reqTarget)
+                ? reqTarget.includes(myType.value as any)
+                : reqTarget === myType.value)
+            )
+              isValid = true;
           }
 
           if (!isValid) {
             // Find a valid type for this direction
             const validOption = availableEdgeTypes.value.find((o) => {
-              // @ts-ignore
               const rs = o.sourceType;
-              // @ts-ignore
               const rt = o.targetType;
-              if (newDir === "outgoing") return !rs || rs === myType.value;
-              return !rt || rt === myType.value;
+              if (newDir === "outgoing")
+                return (
+                  !rs ||
+                  (Array.isArray(rs)
+                    ? rs.includes(myType.value as any)
+                    : rs === myType.value)
+                );
+              return (
+                !rt ||
+                (Array.isArray(rt)
+                  ? rt.includes(myType.value as any)
+                  : rt === myType.value)
+              );
             });
             if (validOption) {
               edgeType.value = validOption.value;
@@ -160,12 +206,12 @@ export function useEdgeEdit({
     const dir = newEdge.value.direction;
     if (dir === "incoming") {
       // I am Target. Picker is Source.
-      // @ts-ignore
-      return (option?.sourceType as NodeType) || "person";
+      const st = option?.sourceType;
+      return (Array.isArray(st) ? st[0] : (st as NodeType)) || "person";
     }
     // I am Source. Picker is Target.
-    // @ts-ignore
-    return (option?.targetType as NodeType) || "person";
+    const tt = option?.targetType;
+    return (Array.isArray(tt) ? tt[0] : (tt as NodeType)) || "person";
   });
 
   watch(edgeType, () => {

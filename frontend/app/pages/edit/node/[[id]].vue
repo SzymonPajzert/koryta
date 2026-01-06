@@ -1,5 +1,5 @@
 <template>
-  <v-container>
+  <v-container :key="(route.params.id as string) || 'new'">
     <v-row>
       <v-col cols="12">
         <h1 class="text-h4 mb-4">{{ isNew ? "Utwórz" : "Edytuj" }}</h1>
@@ -142,6 +142,7 @@ definePageMeta({
   middleware: "auth",
 });
 
+const route = useRoute();
 const {
   isNew,
   tab,

@@ -38,21 +38,28 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const node_id = computed(() => (isNew.value ? undefined : paramId.value));
   const tab = ref("content");
 
-  // State
-  // TODO this should be inferred by the set type.
-  const current = ref<EditablePage>({
+  // State keys should include node_id to avoid sharing across different nodes if navigated
+  const stateKey = computed(() => `node-edit-${node_id.value || "new"}`);
+
+  const current = useState<EditablePage>(`${stateKey.value}-current`, () => ({
     name: isNew.value ? (route.query.name as string) || "" : "",
     type: isNew.value ? (route.query.type as NodeType) || "person" : "person",
     parties: [],
     content: "",
     sourceURL: "",
     shortName: "",
-  });
-  const lastFetchedId = ref<string | undefined>(undefined);
-  const isSaving = ref(false);
+  }));
 
-  const revisions = ref<Revision[]>([]);
-  const loading = ref(false);
+  const lastFetchedId = useState<string | undefined>(
+    `${stateKey.value}-lastFetchedId`,
+    () => undefined,
+  );
+  const isSaving = useState(`${stateKey.value}-isSaving`, () => false);
+  const revisions = useState<Revision[]>(
+    `${stateKey.value}-revisions`,
+    () => [],
+  );
+  const loading = useState(`${stateKey.value}-loading`, () => false);
 
   const {
     sources,
@@ -87,13 +94,14 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     nodeType: computed(() => current.value.type || "person"),
     authHeaders,
     onUpdate: refreshEdges,
+    stateKey,
   });
 
   async function fetchRevisions() {
     if (!node_id.value) return;
     try {
       const res = await $fetch<{ revisions: Revision[] }>(
-        `/api/revisions/${node_id.value}`,
+        `/api/revisions/node/${node_id.value}`,
         {
           headers: authHeaders.value,
         },
@@ -111,7 +119,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     if (id === lastFetchedId.value && id !== undefined) return;
 
     if (!isNew.value && id && idToken.value) {
-      lastFetchedId.value = id;
       try {
         const snap = await getDoc(doc(db, "nodes", id));
         if (snap.exists()) {
@@ -139,6 +146,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
             v.shortName = (node as Partial<Article>).shortName || "";
           }
           current.value = v;
+          lastFetchedId.value = id;
         }
       } catch (e) {
         console.error("Error fetching node data", e);
