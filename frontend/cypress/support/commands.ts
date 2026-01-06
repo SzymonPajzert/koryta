@@ -18,6 +18,7 @@ Cypress.Commands.add(
     cy.visit("/login");
 
     // Clear possible stale state
+    cy.refreshAuth();
     cy.clearLocalStorage();
     cy.clearCookies();
     cy.reload();
@@ -33,7 +34,7 @@ Cypress.Commands.add(
     cy.url({ timeout: 20000 }).should("not.contain", "/login");
 
     // Extra wait for auth state to settle in the app
-    cy.wait(1000);
+    cy.wait(5000);
   },
 );
 

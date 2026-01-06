@@ -156,4 +156,8 @@ const {
   fetchRevisions,
   openEditEdge,
 } = await useNodeEdit();
+
+useHead({
+  title: computed(() => (isNew.value ? "Utwórz" : "Edytuj")),
+});
 </script>
