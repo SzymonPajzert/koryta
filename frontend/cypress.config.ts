@@ -1,6 +1,6 @@
 import { defineConfig } from "cypress";
 
-export default defineConfig((_config) => ({
+export default defineConfig({
   e2e: {
     baseUrl: "http://localhost:3000",
     pageLoadTimeout: 10000,
@@ -14,4 +14,4 @@ export default defineConfig((_config) => ({
       });
     },
   },
-}));
+});
