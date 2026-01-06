@@ -136,7 +136,7 @@
                 <v-col cols="4" class="text-center d-flex flex-column justify-center position-relative px-0">
                   <v-select
                     v-model="edgeType"
-                    :items="edgeTypeOptions"
+                    :items="availableEdgeTypes"
                     item-title="label"
                     item-value="value"
                     label="Relacja"
@@ -144,6 +144,8 @@
                     variant="solo-filled"
                     hide-details
                     class="mb-2"
+                    :disabled="!availableEdgeTypes.length"
+                    :placeholder="availableEdgeTypes.length ? undefined : 'Brak relacji'"
                   />
                   
                   <div class="d-flex align-center justify-center">
@@ -174,6 +176,7 @@
                         :label="`Wyszukaj ${edgeTargetType === 'person' ? 'osobę' : edgeTargetType === 'place' ? 'firmę' : 'obiekt'}`"
                         density="compact"
                         hide-details
+                        :disabled="!availableEdgeTypes.length"
                       />
                     </div>
                     <div class="text-caption text-center mt-1 text-medium-emphasis">
@@ -292,5 +295,6 @@ const {
   openEditEdge,
   edgeTargetType,
   edgeType,
+  availableEdgeTypes,
 } = await useNodeEdit();
 </script>

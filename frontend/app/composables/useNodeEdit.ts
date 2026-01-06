@@ -65,7 +65,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     {
       value: "mentions_person",
       label: "Wspomina osobę",
-      sourceType: "person", // Approximation
+      // sourceType: "person", // Generic source
       targetType: "person",
       realType: "mentions",
     },
@@ -78,7 +78,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     {
       value: "mentions_place",
       label: "Wspomina firmę/urząd",
-      sourceType: "person",
+      // sourceType: "person", // Generic source
       targetType: "place",
       realType: "mentions",
     },
@@ -116,13 +116,65 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   } = await useEdges(() => node_id.value);
   const allEdges = computed(() => [...sources.value, ...targets.value]);
 
+  const availableEdgeTypes = computed(() => {
+    // @ts-ignore
+    const dir = newEdge.value.direction || "outgoing";
+    const myType = current.value.type;
+
+    return edgeTypeOptions.filter((o) => {
+      // @ts-ignore
+      const reqSource = o.sourceType;
+      // @ts-ignore
+      const reqTarget = o.targetType;
+
+      if (dir === "outgoing") {
+        // I am Source.
+        return !reqSource || reqSource === myType;
+      } else {
+        // I am Target.
+        return !reqTarget || reqTarget === myType;
+      }
+    });
+  });
+
+  // Handle direction switch and type validation
+  watch(
+    [() => (newEdge.value as any).direction, availableEdgeTypes],
+    ([newDir], [oldDir]) => {
+      // Direction change detection via checking if just triggered?
+      // Watch triggers on availableEdgeTypes change too.
+      // Simply enforce consistency.
+      
+      if (!isEditingEdge.value) {
+        // If direction actually changed or types changed, validate edgeType
+        if (!availableEdgeTypes.value.find((o) => o.value === edgeType.value)) {
+          edgeType.value = availableEdgeTypes.value[0]?.value || "";
+        }
+      }
+    }
+  );
+
+  // Watch direction specifically for clearing picker
+  watch(
+    () => (newEdge.value as any).direction,
+    () => {
+      if (!isEditingEdge.value) {
+        pickerTarget.value = null;
+      }
+    }
+  );
+
   const edgeTargetType = computed<NodeType>(() => {
     const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
     // @ts-ignore
     const dir = newEdge.value.direction;
     if (dir === "incoming") {
+      // I am Target. Picker is Source.
+      // @ts-ignore
       return (option?.sourceType as NodeType) || "person";
     }
+    // I am Source. Picker is Target.
+    // @ts-ignore
     return (option?.targetType as NodeType) || "person";
   });
 
@@ -420,5 +472,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     openEditEdge,
     edgeTargetType,
     edgeType,
+    availableEdgeTypes,
   };
 }
