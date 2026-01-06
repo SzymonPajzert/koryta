@@ -71,7 +71,7 @@ import { useAuthState } from "~/composables/auth";
 import type { Edge, Node } from "~~/shared/model";
 
 definePageMeta({
-  middleware: "admin",
+  middleware: "auth",
 });
 
 const { idToken } = useAuthState();
