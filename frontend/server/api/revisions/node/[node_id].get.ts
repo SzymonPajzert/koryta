@@ -26,8 +26,8 @@ export default defineEventHandler(async (event) => {
     .get();
 
   const revisions = snapshot.docs.map((doc) => ({
+    ...(doc.data() as Omit<Revision, "id">),
     id: doc.id,
-    ...(doc.data() as Revision),
   }));
 
   return { revisions };

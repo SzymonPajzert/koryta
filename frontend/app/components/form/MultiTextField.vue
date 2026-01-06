@@ -43,8 +43,8 @@
 <script lang="ts" setup>
 import type { EdgeType } from "~~/shared/model";
 
-const connections = ref({});
-const keys = ref(Object.keys(connections.value));
+const connections = ref<Record<string, any>>({});
+const keys = ref<string[]>(Object.keys(connections.value));
 
 const props = defineProps<{
   title: string;
@@ -61,7 +61,8 @@ const addItem = () => {
 
 const removeItem = (index: number) => {
   if (keys.value.length > 1) {
-    connections.value[keys.value[index]] = undefined;
+    const key = keys.value[index];
+    if (key) connections.value[key] = undefined;
     keys.value.splice(index, 1);
   }
 };

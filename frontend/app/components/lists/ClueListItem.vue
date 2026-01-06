@@ -155,20 +155,54 @@
 <script setup lang="ts">
 type EditType = "comment" | "link" | "person";
 
+interface CompanyMembership {
+  id: string;
+  name: string;
+  state: string;
+  score: {
+    score: number | string;
+  };
+}
+
+interface CluePerson {
+  name: string;
+  id: string;
+  rejestr_io_id: string; // vs rejestrIo
+  score: number;
+  external_basic: {
+    tozsamosc: { data_urodzenia: string };
+    id: string; // used in v-if
+  };
+  comment: string[];
+  link: string[];
+  status: string; // 'unknown' etc.
+  person: boolean | object; // used in v-if="person.person"
+}
+
 const editingItemId = ref<string | null>(null);
 const editingType = ref<EditType | null>(null);
 const activeItem = ref<boolean>(false);
 
-const person = ref({
+const person = ref<CluePerson>({
   name: "",
   id: "",
   rejestr_io_id: "",
   score: 0,
+  external_basic: {
+    tozsamosc: { data_urodzenia: "" },
+    id: "",
+  },
+  comment: [],
+  link: [],
+  status: "",
+  person: false,
 });
 const tempComment = ref<string>();
 const tempLink = ref<string>();
-const pickedPerson = ref<string | undefined>();
-const companies = [];
+import type { Link } from "~~/shared/model";
+
+const pickedPerson = ref<Link<"person"> | undefined>();
+const companies: CompanyMembership[] = [];
 
 function setActive() {
   activeItem.value = !activeItem.value;
@@ -235,8 +269,8 @@ function companyColors(company: CompanyMembership) {
 
   let good = "bg-green";
   if (company.score.score === "start") good += "-darken-1";
-  else if (company.score.score < 0) good += "-darken-2";
-  else if (company.score.score > 0) good += "-lighten-2";
+  else if (Number(company.score.score) < 0) good += "-darken-2";
+  else if (Number(company.score.score) > 0) good += "-lighten-2";
   return good;
 }
 

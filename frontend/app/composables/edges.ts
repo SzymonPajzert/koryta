@@ -49,7 +49,7 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
     { immediate: true },
   );
 
-  const nodesResponse = useState<{ nodes: Record<string, unknown> }>(
+  const nodesResponse = useState<{ nodes: Record<string, unknown> } | null>(
     "nodes-all-data-global",
     () => null,
   );

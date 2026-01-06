@@ -32,7 +32,7 @@
           :color="goodStatus(value)"
           size="x-small"
           :disabled="!item.krsNumber"
-          @click="editConnection.start(item.krsNumber, value)"
+          @click="editConnection.start(item.krsNumber!, value!)"
         />
       </template>
 
@@ -52,7 +52,7 @@
           :text="value ?? 'Dodaj KRS'"
           size="x-small"
           :disabled="!item.entityID || !!value"
-          @click="editKRS.start(item.entityID, value)"
+          @click="editKRS.start(item.entityID!, value!)"
         />
       </template>
 
@@ -94,7 +94,15 @@ interface CompanyScoredEditable {
   entityID?: string;
 }
 
+import type { Link } from "~~/shared/model";
+const toNumber = (v: any) => Number(v) || 0;
+
 const { entities } = await useEntity("place");
+
+// TODO: Scores logic seems to be missing source
+const scores = ref<Record<string, { name: string; score: string | number }>>(
+  {},
+);
 
 const search = ref("");
 
@@ -110,13 +118,13 @@ function setKRSOperation(
 // We make sure that the refs are unwrapped and can be used in the template.
 const editKRS = useEditIndexedField(
   (krsNumber: CompanyScoredEditable["krsNumber"]) => krsNumber,
-  (entityKey, value) => setKRSOperation(entityKey, value),
+  (entityKey, value) => setKRSOperation(entityKey, value!),
 );
 const { key: editKRSCompanyKey, value: editKRSValue } = editKRS;
 
-const editConnection = useEditIndexedField<Link<"company">, Link<"company">>(
+const editConnection = useEditIndexedField<Link<"place">, Link<"place">>(
   (linked) => linked,
-  (krsNumber, linked) => setKRSOperation(linked.id, krsNumber),
+  (krsNumber, linked) => setKRSOperation(linked.id, krsNumber!),
 );
 const { key: editConnectionKRSNumber, value: editConnectionValue } =
   editConnection;
@@ -148,7 +156,7 @@ const companies = computed(() => {
   });
 
   Object.entries(entities.value).forEach(([key, company]) => {
-    const fetched = mapped.get(company.krsNumber) ?? {};
+    const fetched = mapped.get(company.krsNumber || "") ?? {};
 
     mapped.set(key, {
       importedFromRejestr: false,
@@ -158,7 +166,7 @@ const companies = computed(() => {
       entityID: key,
     });
 
-    mapped.delete(company.krsNumber);
+    if (company.krsNumber) mapped.delete(company.krsNumber);
   });
 
   return Array.from(mapped.values());

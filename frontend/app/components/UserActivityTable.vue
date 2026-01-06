@@ -55,7 +55,7 @@ const userActivityStats = computed<UserActivityStat[]>(() => {
   }
   const stats: UserActivityStat[] = [];
   for (const uid in allUsersData.value) {
-    const userData = allUsersData.value[uid];
+    const userData = allUsersData.value[uid]!;
     const suggestions = userData.suggestions || {};
 
     const dataCount = Object.keys(suggestions.data || {}).length;

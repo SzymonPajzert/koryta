@@ -1,9 +1,10 @@
 import { computed, type Ref } from "vue";
 import { partyColors } from "~~/shared/misc";
+import type { Person } from "~~/shared/model";
 
-export async function usePartyStatistics(
+export const usePartyStatistics = async (
   existingPeople?: Ref<Record<string, Person>>,
-) {
+) => {
   const people = existingPeople || (await useEntity("person")).entities;
 
   const results = computed<number[]>(() => {
@@ -19,4 +20,4 @@ export async function usePartyStatistics(
   });
 
   return { results };
-}
+};

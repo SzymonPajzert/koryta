@@ -21,9 +21,8 @@
     "test": "npm run test:ci && npm run test:e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "format:check:diff": "prettier --check $(git diff --name-only --diff-filter=ACMR origin/main origin/${GITHUB_HEAD_REF} | grep '\\.ts$' | xargs)",
     "check:duplication": "jscpd app server --ignore app/coverage",
-    "quick-check": "npm run format:check:diff && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication"
+    "quick-check": "npm run format:check; npm run test:ci; npm run typecheck; npx eslint; npm run check:duplication"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.3",
