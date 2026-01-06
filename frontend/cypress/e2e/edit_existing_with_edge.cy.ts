@@ -47,12 +47,15 @@ describe("Edit Existing Entity & Add Edge", () => {
         .type(updatedName);
       cy.contains("button", "Zapisz zmianę").click();
 
-      cy.get(".v-select").last().click(); // Open Edge Type
+      // Open Edge Type - use specific label "Relacja"
+      cy.get('.v-select').filter((index, element) => {
+        return Cypress.$(element).text().includes('Relacja');
+      }).click();
       cy.contains("Zatrudniony/a w").click();
 
-      // Select Direction FIRST (Incoming: "Od wybranego")
-      // This sets the entity picker type to 'person' (source of 'employed')
-      cy.contains("label", "Od wybranego").click();
+      // Select Direction FIRST (Incoming: "Od")
+      // Use the new button
+      cy.get('button[title="Odwróć kierunek"]').click();
 
       // Search for Person
       cy.get('[data-testid="entity-picker-input"]').click();

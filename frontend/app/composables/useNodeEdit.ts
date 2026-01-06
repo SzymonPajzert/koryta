@@ -305,14 +305,13 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       type = targetType === "place" ? "mentions_place" : "mentions_person";
     }
 
+    // Determine direction relative to current node
+    const direction = edge.source === node_id.value ? "outgoing" : "incoming";
+
     newEdge.value = {
       ...edge,
       type,
-      // Infer direction if editing? Usually we just edit properties.
-      // If we want to allow reversing direction on edit, it's more complex.
-      // For now, let's stick to adding.
-      // But we need to initialize it to something valid.
-      direction: "outgoing",
+      direction,
     };
     edgeType.value = type;
     pickerTarget.value = edge.richNode;
@@ -363,9 +362,10 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       resetEdgeForm();
       alert("Dodano powiązanie");
       await refreshEdges();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Błąd dodawania powiązania");
+      const msg = e.data?.statusMessage || e.message || "Unknown error";
+      alert("Błąd dodawania powiązania: " + msg);
     }
   }
 
