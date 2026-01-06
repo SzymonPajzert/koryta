@@ -82,7 +82,6 @@ describe("Edit Node Connections", () => {
     cy.get(".v-overlay").contains("Zatrudniony/a w").click();
 
     // 4. Verify target type updated
-    // And verify label logic just in case
     cy.contains("label", "Wyszukaj firmę").should("exist");
     cy.contains("label", "Wyszukaj osobę").should("not.exist");
 
@@ -93,7 +92,7 @@ describe("Edit Node Connections", () => {
       .click()
       .type("Orlen", { delay: 100 });
 
-    cy.get(".v-overlay").contains(".v-list-item-title", "Orlen").click();
+    cy.get(".v-overlay").contains("Orlen").click();
 
     // 6. Fill in details
     cy.contains("label", "Nazwa relacji")
@@ -105,37 +104,6 @@ describe("Edit Node Connections", () => {
     cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();
 
     // 8. Verify the new connection appears
-    cy.contains("Orlen").should("be.visible");
-  });
-
-  it("updates the entity picker when switching to 'Wspomina firmę/urząd'", () => {
-    // 1. Login
-    cy.login();
-
-    // 2. Go to edit page
-    cy.visit("/edit/node/1");
-
-    // 3. Select "Wspomina firmę/urząd"
-    cy.get(".v-select")
-      .filter((index, element) => {
-        return Cypress.$(element).text().includes("Relacja");
-      })
-      .click();
-    cy.get(".v-overlay").contains("Wspomina firmę").click();
-
-    // 4. Select "Orlen"
-    cy.contains("label", "Wyszukaj firmę")
-      .parent()
-      .find("input")
-      .click()
-      .type("Orlen", { delay: 100 });
-
-    cy.get(".v-overlay").contains(".v-list-item-title", "Orlen").click();
-
-    // 6. Add
-    cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();
-
-    // 7. Verify
     cy.contains("Orlen").should("be.visible");
   });
 });

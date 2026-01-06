@@ -32,25 +32,42 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
     return h;
   });
 
-  const { data: edges, refresh: refreshEdges } = await useFetch<Edge[]>(
+  const edgesData = useState<Edge[] | null>("edges-data-global", () => null);
+  const { data: fetchedEdges, refresh: refreshEdges } = await useFetch<Edge[]>(
     "/api/graph/edges",
     {
-      key: `edges-${idToken.value ? "auth" : "anon"}`,
+      key: "edges-data-global",
       headers,
       watch: [headers],
     },
   );
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const { data: response, refresh: refreshNodes } = await useFetch<any>(
-    "/api/nodes",
-    {
-      key: `nodes-all-${idToken.value ? "auth" : "anon"}`,
-      headers,
-      watch: [headers],
+  watch(
+    fetchedEdges,
+    (v) => {
+      if (v) edgesData.value = v;
     },
+    { immediate: true },
   );
 
-  const nodes = computed(() => response.value?.nodes || {});
+  const nodesResponse = useState<any>("nodes-all-data-global", () => null);
+  const { data: fetchedNodes, refresh: refreshNodes } = await useFetch<any>(
+    "/api/nodes",
+    {
+      key: "nodes-all-fetch-global",
+      headers,
+      watch: [headers],
+    },
+  );
+  watch(
+    fetchedNodes,
+    (v) => {
+      if (v) nodesResponse.value = v;
+    },
+    { immediate: true },
+  );
+
+  const nodes = computed(() => nodesResponse.value?.nodes || {});
+  const edges = computed(() => edgesData.value || []);
 
   const sources = computed<EdgeNode[]>(() => {
     const id = toValue(nodeID);

@@ -73,7 +73,7 @@ const {
   data: revisionData,
   pending: revLoading,
   error: revError,
-} = await useFetch<Revision>(`/api/revisions/${revisionId}`, {
+} = await useFetch<Revision>(`/api/revisions/entry/${revisionId}`, {
   headers,
 });
 

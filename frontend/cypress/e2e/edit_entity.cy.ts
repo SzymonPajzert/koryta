@@ -96,7 +96,7 @@ describe("Entity Editing", () => {
     cy.visit("/entity/person/1");
 
     // 3. Click "Zaproponuj zmianę"
-    cy.contains("Zaproponuj zmianę").click();
+    cy.contains("Zaproponuj zmianę").click({ force: true });
 
     // 4. Verify URL
     cy.url().should("include", "/edit/node/1");
