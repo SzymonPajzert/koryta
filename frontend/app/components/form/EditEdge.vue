@@ -48,13 +48,13 @@
             size="small"
             color="secondary"
             class="px-4"
+            :title="'Odwróć kierunek'"
             @click="
               (newEdge as any).direction =
                 (newEdge as any).direction === 'outgoing'
                   ? 'incoming'
                   : 'outgoing'
             "
-            :title="'Odwróć kierunek'"
           >
             <span class="mr-1">
               {{ (newEdge as any).direction === "outgoing" ? "Do" : "Od" }}
@@ -74,8 +74,8 @@
       <v-col cols="4" class="text-center d-flex flex-column align-center">
         <div class="w-100">
           <EntityPicker
-            v-model="pickerTarget"
             :key="edgeTargetType"
+            v-model="pickerTarget"
             :entity="edgeTargetType"
             :label="`Wyszukaj ${edgeTargetType === 'person' ? 'osobę' : edgeTargetType === 'place' ? 'firmę' : 'obiekt'}`"
             density="compact"
@@ -132,8 +132,8 @@
         <v-btn
           v-if="isEditingEdge"
           variant="text"
-          @click="cancelEditEdge"
           class="mr-2"
+          @click="cancelEditEdge"
         >
           Anuluj
         </v-btn>
@@ -159,15 +159,22 @@ definePageMeta({
   middleware: "auth",
 });
 
+const { node_id, refreshEdges, current, authHeaders, stateKey } =
+  await useNodeEdit();
 const {
-  current,
   newEdge,
-  pickerTarget,
   processEdge,
   cancelEditEdge,
   isEditingEdge,
   edgeTargetType,
   edgeType,
   availableEdgeTypes,
-} = await useNodeEdit();
+  pickerTarget,
+} = useEdgeEdit({
+  nodeId: node_id,
+  nodeType: computed(() => current.value.type || "person"),
+  authHeaders,
+  onUpdate: refreshEdges,
+  stateKey,
+});
 </script>

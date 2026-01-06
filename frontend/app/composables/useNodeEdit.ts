@@ -7,7 +7,6 @@ import type {
   Revision,
   Article,
   NodeType,
-  Edge,
 } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 import { useEdges } from "~/composables/edges";
@@ -21,8 +20,6 @@ interface UseNodeEditOptions {
 type EditablePage = Partial<Node> &
   Partial<Omit<Person, "type">> &
   Partial<Omit<Article, "type">>;
-
-import { useEdgeEdit } from "~/composables/useEdgeEdit";
 
 export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const route = options.route || useRoute();
@@ -76,25 +73,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       headers.Authorization = `Bearer ${idToken.value}`;
     }
     return headers;
-  });
-
-  const {
-    newEdge,
-    edgeType,
-    pickerTarget,
-    isEditingEdge,
-    availableEdgeTypes,
-    edgeTargetType,
-    edgeTypeOptions,
-    processEdge,
-    cancelEditEdge,
-    openEditEdge,
-  } = useEdgeEdit({
-    nodeId: node_id,
-    nodeType: computed(() => current.value.type || "person"),
-    authHeaders,
-    onUpdate: refreshEdges,
-    stateKey,
   });
 
   async function fetchRevisions() {
@@ -267,25 +245,19 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   }
 
   return {
+    node_id,
+    stateKey,
     isNew,
     tab,
     current,
     loading,
-    edgeTypeOptions,
-    newEdge,
-    pickerTarget,
     revisions,
     allEdges,
+    authHeaders,
+    refreshEdges,
     partiesDefault,
     idToken,
     saveNode,
-    processEdge,
-    cancelEditEdge,
-    isEditingEdge,
     fetchRevisions,
-    openEditEdge,
-    edgeTargetType,
-    edgeType,
-    availableEdgeTypes,
   };
 }

@@ -1,5 +1,5 @@
 import { computed, watch, ref, toValue, type Ref } from "vue";
-import type { NodeType, Edge } from "~~/shared/model";
+import type { NodeType, EdgeType, Edge, Link } from "~~/shared/model";
 
 interface UseEdgeEditOptions {
   nodeId: Ref<string | undefined>;
@@ -14,7 +14,7 @@ type edgeTypeOption = {
   label: string;
   sourceType: NodeType;
   targetType: NodeType;
-  realType: string;
+  realType: EdgeType;
 };
 
 const edgeTypeOptions: edgeTypeOption[] = [
@@ -64,49 +64,35 @@ export function useEdgeEdit({
 }: UseEdgeEditOptions) {
   // Determine the actual key string once
   const baseKey = toValue(stateKey);
+  const newEdge = useState(`${baseKey}-newEdge`, emptyEdge);
 
-  const newEdge = useState<Partial<Edge>>(`${baseKey}-newEdge`, () => ({
-    type: "connection",
-    target: "",
-    name: "",
-    content: "",
-    start_date: "",
-    end_date: "",
-    // @ts-ignore
-    direction: "outgoing",
-  }));
-
-  // Isolated ref for v-select
-  const edgeType = useState<string>(`${baseKey}-edgeType`, () => "connection");
+  // TODO it shouldn't be a connection
+  const edgeType = useState<EdgeType>(
+    `${baseKey}-edgeType`,
+    () => "connection",
+  );
 
   // Sync edgeType -> newEdge.type
   watch(edgeType, (t) => {
-    newEdge.value.type = t as any;
+    newEdge.value.type = t;
   });
 
-  const pickerTarget = useState<any>(`${baseKey}-pickerTarget`, () => null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const pickerTarget = useState<Link<NodeType> | undefined>(
+    `${baseKey}-pickerTarget`,
+    () => undefined,
+  );
 
   const isEditingEdge = computed(() => !!newEdge.value.id);
 
   const availableEdgeTypes = computed(() => {
-    const dir = (newEdge.value as any).direction || "outgoing";
+    const dir = newEdge.value.direction;
     return edgeTypeOptions.filter((o) => {
       if (dir === "outgoing") {
         const rs = o.sourceType;
-        return (
-          !rs ||
-          (Array.isArray(rs)
-            ? rs.includes(myType.value as any)
-            : rs === myType.value)
-        );
+        return rs === myType.value;
       } else {
         const rt = o.targetType;
-        return (
-          !rt ||
-          (Array.isArray(rt)
-            ? rt.includes(myType.value as any)
-            : rt === myType.value)
-        );
+        return rt === myType.value;
       }
     });
   });
@@ -116,25 +102,13 @@ export function useEdgeEdit({
     if (!isEditingEdge.value) {
       const option = edgeTypeOptions.find((o) => o.value === t);
       if (option) {
-        const reqSource = option.sourceType;
-        const reqTarget = option.targetType;
+        const canBeSource = option.sourceType === myType.value;
+        const canBeTarget = option.targetType === myType.value;
 
-        const canBeSource =
-          !reqSource ||
-          (Array.isArray(reqSource)
-            ? reqSource.includes(myType.value as any)
-            : reqSource === myType.value);
-        const canBeTarget =
-          !reqTarget ||
-          (Array.isArray(reqTarget)
-            ? reqTarget.includes(myType.value as any)
-            : reqTarget === myType.value);
-
-        // If strictly directional relative to me
         if (canBeSource && !canBeTarget) {
-          (newEdge.value as any).direction = "outgoing";
+          newEdge.value.direction = "outgoing";
         } else if (!canBeSource && canBeTarget) {
-          (newEdge.value as any).direction = "incoming";
+          newEdge.value.direction = "incoming";
         }
       }
     }
@@ -142,10 +116,10 @@ export function useEdgeEdit({
 
   // Handle direction switch -> validate type
   watch(
-    () => (newEdge.value as any).direction,
+    () => newEdge.value.direction,
     (newDir) => {
       if (!isEditingEdge.value) {
-        pickerTarget.value = null;
+        pickerTarget.value = undefined;
 
         // Re-validate current edgeType
         const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
@@ -154,17 +128,9 @@ export function useEdgeEdit({
           const rs = option.sourceType;
           const rt = option.targetType;
           if (newDir === "outgoing") {
-            currentStillValid =
-              !rs ||
-              (Array.isArray(rs)
-                ? rs.includes(myType.value as any)
-                : rs === myType.value);
+            currentStillValid = rs === myType.value;
           } else {
-            currentStillValid =
-              !rt ||
-              (Array.isArray(rt)
-                ? rt.includes(myType.value as any)
-                : rt === myType.value);
+            currentStillValid = rt === myType.value;
           }
         }
 
@@ -172,7 +138,7 @@ export function useEdgeEdit({
           // Default to the first available type for the new direction
           const available = availableEdgeTypes.value;
           if (available[0]) {
-            edgeType.value = available[0].value;
+            edgeType.value = available[0].realType;
           }
         }
       }
@@ -182,57 +148,40 @@ export function useEdgeEdit({
 
   const edgeTargetType = computed<NodeType>(() => {
     const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
-    // @ts-ignore
     const dir = newEdge.value.direction;
     if (dir === "incoming") {
       // I am Target. Picker is Source.
-      const st = option?.sourceType;
-      return (Array.isArray(st) ? st[0] : (st as NodeType)) || "person";
+      return option?.sourceType || "person"; // TODO remove this fallback
     }
     // I am Source. Picker is Target.
-    const tt = option?.targetType;
-    return (Array.isArray(tt) ? tt[0] : (tt as NodeType)) || "person";
+    return option?.targetType || "person";
   });
 
   watch(edgeType, () => {
     if (!isEditingEdge.value) {
-      pickerTarget.value = null;
+      pickerTarget.value = undefined;
     }
   });
 
   function resetEdgeForm() {
-    newEdge.value = {
-      type: "connection",
-      target: "",
-      name: "",
-      content: "",
-      start_date: "",
-      end_date: "",
-      // @ts-ignore
-      direction: "outgoing",
-    };
-    edgeType.value = "connection";
-    pickerTarget.value = null;
+    newEdge.value = emptyEdge();
+    edgeType.value = "connection"; // TODO pick something else
+    pickerTarget.value = undefined;
   }
 
-  function openEditEdge(edge: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
-    let type = edge.type;
-    const targetType = edge.richNode?.type || "person";
-    if (type === "mentions") {
-      type = targetType === "place" ? "mentions_place" : "mentions_person";
-    }
-
+  function openEditEdge(edge: EdgeNode) {
     // Determine direction relative to current node
     const direction = edge.source === nodeId.value ? "outgoing" : "incoming";
 
     newEdge.value = {
       ...edge,
-      type,
       direction,
     };
-    edgeType.value = type;
-    pickerTarget.value = edge.richNode;
+    edgeType.value = edge.type;
+    pickerTarget.value = {
+      ...edge.richNode,
+      id: edge.richNode.id || "",
+    };
   }
 
   function cancelEditEdge() {
@@ -247,15 +196,9 @@ export function useEdgeEdit({
     }
   }
 
-  function getRealType(uiType: string | undefined): string {
-    const option = edgeTypeOptions.find((o) => o.value === uiType);
-    return (option as any)?.realType || uiType;
-  }
-
   async function addEdge() {
     if (!nodeId.value || !pickerTarget.value) return;
 
-    // @ts-ignore
     const direction = newEdge.value.direction || "outgoing";
     const source =
       direction === "outgoing" ? nodeId.value : pickerTarget.value.id;
@@ -263,13 +206,13 @@ export function useEdgeEdit({
       direction === "outgoing" ? pickerTarget.value.id : nodeId.value;
 
     try {
-      await $fetch<any>("/api/edges/create", {
+      await $fetch<undefined>("/api/edges/create", {
         method: "POST",
         headers: authHeaders.value,
         body: {
           source,
           target,
-          type: getRealType(newEdge.value.type),
+          type: newEdge.value.type,
           name: newEdge.value.name,
           content: newEdge.value.content,
           start_date: newEdge.value.start_date,
@@ -279,10 +222,8 @@ export function useEdgeEdit({
       resetEdgeForm();
       alert("Dodano powiązanie");
       if (onUpdate) await onUpdate();
-    } catch (e: any) {
-      console.error(e);
-      const msg = e.data?.statusMessage || e.message || "Unknown error";
-      alert("Błąd dodawania powiązania: " + msg);
+    } catch (e) {
+      alertError(e);
     }
   }
 
@@ -297,7 +238,7 @@ export function useEdgeEdit({
           collection: "edges",
           source: newEdge.value.source, // Keep required context
           target: newEdge.value.target,
-          type: getRealType(newEdge.value.type),
+          type: newEdge.value.type,
           name: newEdge.value.name,
           // text: newEdge.value.content, // Deprecated
           content: newEdge.value.content,
@@ -309,11 +250,8 @@ export function useEdgeEdit({
       alert("Zapisano propozycję zmiany!");
       resetEdgeForm();
       if (onUpdate) await onUpdate();
-    } catch (e: any) {
-      // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error(e);
-      const msg = e.data?.statusMessage || e.message || "Unknown error";
-      alert("Błąd zapisu: " + msg);
+    } catch (e) {
+      alertError(e);
     }
   }
 
@@ -328,5 +266,24 @@ export function useEdgeEdit({
     processEdge,
     cancelEditEdge,
     openEditEdge,
+  };
+}
+
+function alertError(e: unknown) {
+  console.error(e);
+  if (!(e instanceof Error)) return;
+  const msg = e?.message || "Unknown error";
+  alert("Błąd dodawania powiązania: " + msg);
+}
+
+function emptyEdge(): Partial<Edge> & { direction: "outgoing" | "incoming" } {
+  return {
+    type: "connection",
+    target: "",
+    name: "",
+    content: "",
+    start_date: "",
+    end_date: "",
+    direction: "outgoing",
   };
 }
