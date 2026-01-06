@@ -29,6 +29,6 @@ export default withNuxt(
   .append({
     files: ["cypress/**/*.ts", "cypress.config.ts"],
     rules: {
-      "@typescript-eslint/no-unused-expressions": "off",
+      "@typescript-eslint/no-unused-expressions": "warn",
     },
   });
