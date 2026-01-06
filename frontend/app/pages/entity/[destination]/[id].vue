@@ -86,7 +86,7 @@
       <v-btn
         variant="tonal"
         prepend-icon="mdi-pencil-outline"
-        :href="`/edit/node/${node}`"
+        :to="{ path: `/edit/node/${node}`, query: { type } }"
       >
         <template #prepend>
           <v-icon color="warning" />

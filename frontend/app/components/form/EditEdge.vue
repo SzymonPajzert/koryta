@@ -7,7 +7,7 @@
     <v-row class="align-center my-4">
       <!-- Source Picker / Current Node -->
       <v-col cols="4" class="text-center d-flex flex-column align-center">
-        <div v-if="current.type === 'article'" class="w-100">
+        <div v-if="effectiveNodeType === 'article'" class="w-100">
           <EntityPicker
             v-model="pickerSource"
             entity="person"
@@ -70,7 +70,7 @@
             </span>
             <v-icon
               :icon="
-                current.type === 'article'
+                effectiveNodeType === 'article'
                   ? 'mdi-arrow-right'
                   : (newEdge as any).direction === 'outgoing'
                     ? 'mdi-arrow-right'
@@ -117,7 +117,7 @@
           hide-details
         />
       </v-col>
-      <v-col v-if="current.type !== 'article'" cols="12">
+      <v-col v-if="effectiveNodeType !== 'article'" cols="12">
         <EntityPicker
           v-model="articleReference"
           entity="article"
@@ -183,6 +183,11 @@ definePageMeta({
 const route = useRoute();
 const { node_id, refreshEdges, current, authHeaders, stateKey } =
   await useNodeEdit();
+const effectiveNodeType = computed(() => {
+  if (route.query.type) return route.query.type as any;
+  return current.value.type || "person";
+});
+
 const {
   newEdge,
   processEdge,
@@ -195,10 +200,7 @@ const {
   pickerSource,
 } = useEdgeEdit({
   nodeId: node_id,
-  nodeType: computed(() => {
-    if (route.query.type) return route.query.type as any;
-    return current.value.type || "person";
-  }),
+  nodeType: effectiveNodeType,
   authHeaders,
   onUpdate: refreshEdges,
   stateKey,

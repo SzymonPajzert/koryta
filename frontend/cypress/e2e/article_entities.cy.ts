@@ -15,19 +15,20 @@ describe("Article Entities and Edge References", () => {
 
     cy.contains("Zaproponuj zmianę").click();
 
+    // Select relation first to set the target type
+    // Select relation
+    cy.contains(".v-select", "Relacja").click();
+    cy.contains("Zatrudniony/a w").click();
+
     // Fill source
     cy.get('[label="Wyszukaj źródło"]').type("Jan Kowalski");
-    cy.contains("Jan Kowalski").click();
+    cy.contains(".v-list-item-title", "Jan Kowalski").first().click();
 
     // Fill target
     cy.get('[label="Wyszukaj firmę"]').type("Orlen");
-    cy.contains("Orlen").click();
+    cy.contains(".v-list-item-title", "Orlen").first().click();
 
-    // Select relation
-    cy.get(".v-select").click();
-    cy.contains("Zatrudniony/a w").click();
-
-    cy.contains("Dodaj powiązanie").click();
+    cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
 
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");
@@ -38,15 +39,23 @@ describe("Article Entities and Edge References", () => {
     cy.visit("/entity/person/1");
     cy.contains("Zaproponuj zmianę").click();
 
-    // Picker target
+    // Select relation first to ensure target is Company (if defaulted to person)
+    // Actually "Orlen" is a place. We need a relation that points to Place.
+    // If default is "employed", target is Place.
+    // If default is not employed, we should select it.
+    // Select relation
+    cy.contains(".v-select", "Relacja").click();
+    cy.contains("Zatrudniony/a w").click();
+
+    // Picker target (Use .first() to avoid ambiguity with article reference picker)
     cy.get('[label="Wyszukaj firmę"]').type("Orlen");
-    cy.contains("Orlen").click();
+    cy.contains(".v-list-item-title", "Orlen").first().click();
 
-    // Picker article reference
+    // Picker reference
     cy.get('[label="Źródło informacji (artykuł)"]').type("Sample Article");
-    cy.contains("Sample Article").click();
+    cy.contains(".v-list-item-title", "Sample Article").first().click();
 
-    cy.contains("Dodaj powiązanie").click();
+    cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
 
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");
