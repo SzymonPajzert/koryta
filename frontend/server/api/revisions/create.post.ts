@@ -18,18 +18,19 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
+  /* eslint-disable @typescript-eslint/naming-convention */
   const revisionData: Record<string, any> = {
     name: body.name,
     type: body.type,
     content: content,
-
-    parties: body?.parties,
-    sourceURL: body?.sourceURL,
-    shortName: body?.shortName,
+    parties: body.parties || [],
+    sourceURL: body.sourceURL || "",
+    shortName: body.shortName || "",
     // Edge fields
-    start_date: body?.start_date,
-    end_date: body?.end_date,
+    start_date: body.start_date || null,
+    end_date: body.end_date || null,
   };
+  /* eslint-enable @typescript-eslint/naming-convention */
 
   if (body.source) {
     revisionData.source = body.source;
