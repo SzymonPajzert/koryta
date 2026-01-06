@@ -86,6 +86,7 @@ const { data: graph } = await useAsyncData(
       headers: idToken.value
         ? { Authorization: `Bearer ${idToken.value}` }
         : {},
+      query: { pending: !!idToken.value },
     }),
   {
     lazy: true,

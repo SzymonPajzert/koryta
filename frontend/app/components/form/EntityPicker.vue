@@ -55,7 +55,7 @@ const { data: response } = useFetch<{
 }>(() => `/api/nodes/${props.entity}`, {
   key: `entities-picker-${props.entity}-${idToken.value ? "auth" : "guest"}`,
   query: {
-    search: search,
+    pending: !!idToken.value,
   },
   headers: computed(() => {
     const h: Record<string, string> = {};
