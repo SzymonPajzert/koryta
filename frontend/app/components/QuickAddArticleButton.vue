@@ -4,7 +4,7 @@
       variant="tonal"
       color="primary"
       prepend-icon="mdi-newspaper-plus"
-      @click="expanded = !expanded"
+      @click="expanded = !expanded; checkLogin()"
     >
       Dodaj artykuł
     </v-btn>
@@ -47,16 +47,22 @@ const props = defineProps<{
 const expanded = ref(false);
 const url = ref("");
 const loading = ref(false);
+const router = useRouter();
+const route = useRoute();
 const { idToken } = useAuthState();
 
-const handleAdd = async () => {
+function checkLogin() {
   if (!idToken.value) {
-    console.warn("No idToken found");
-    alert("Musisz być zalogowany");
-    return;
+    router.push({
+      path: "/login",
+      query: {
+        redirect: route.fullPath,
+      },
+    });
   }
+} 
 
-
+const handleAdd = async () => {
   loading.value = true;
   try {
     let title = undefined;
