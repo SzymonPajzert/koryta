@@ -208,15 +208,18 @@ describe("useNodeEdit", () => {
       const typesIn = availableEdgeTypes.value.map((o) => o.value);
 
       // Person Incoming
-      // 'owns' (Target: Place) -> Exclude
+      // 'owns' (Target: Place) -> Include (because it is valid Outgoing)
       // 'connection' (Target: Person) -> Include
-      // 'employed' (Target: Place) -> Exclude
-      expect(typesIn).not.toContain("owns");
+      // 'employed' (Target: Place) -> Exclude (Person cannot be Target of employed) - Wait, employed is Person->Place. Person is Source.
+      // employed: Source=Person, Target=Place.
+      // If I am Person: canBeSource=True. canBeTarget=False.
+      // So 'employed' should be included!
+      expect(typesIn).toContain("owns");
       expect(typesIn).toContain("connection");
-      expect(typesIn).not.toContain("employed");
+      expect(typesIn).toContain("employed");
     });
 
-    it("filters edge types for Place", async () => {
+    it("shows edge types valid for ANY direction for Place", async () => {
       mockRoute.params = { id: "999" };
       mockedFetch.mockResolvedValueOnce({
         node: { name: "Corp", type: "place" },
@@ -229,17 +232,32 @@ describe("useNodeEdit", () => {
       });
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Place Outgoing
-      // 'owns' (Source: Person) -> Exclude
+      // Place Outgoing (Default)
+      // 'owns' (Target: Place) -> Should Include (because it is valid incoming)
       const types = availableEdgeTypes.value.map((o) => o.value);
-      expect(types).not.toContain("owns");
+      expect(types).toContain("owns");
+    });
 
-      // Place Incoming
-      // 'owns' (Target: Place) -> Include
-      (newEdge.value as any).direction = "incoming";
+    it("switches direction when selecting a type that requires it", async () => {
+      mockRoute.params = { id: "999" };
+      mockedFetch.mockResolvedValueOnce({
+        node: { name: "Corp", type: "place" },
+      });
+      mockedFetch.mockResolvedValueOnce({ revisions: [] });
+
+      const { availableEdgeTypes, newEdge, edgeType } = await useNodeEdit({
+        route: mockRoute,
+        idToken: mockIdToken,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect((newEdge.value as any).direction).toBe("outgoing");
+      
+      // Select 'owns' (requires Place to be Target -> Incoming)
+      edgeType.value = "owns";
       await nextTick();
-      const typesIn = availableEdgeTypes.value.map((o) => o.value);
-      expect(typesIn).toContain("owns");
+      
+      expect((newEdge.value as any).direction).toBe("incoming");
     });
 
     it("resets edgeType if invalid after direction switch", async () => {
@@ -255,16 +273,54 @@ describe("useNodeEdit", () => {
       });
       await new Promise((resolve) => setTimeout(resolve, 50));
 
+      // 'owns' is valid for Person (Source)
       expect(availableEdgeTypes.value.find((t) => t.value === "owns")).toBeTruthy();
       edgeType.value = "owns";
-
-      // Switch to incoming -> 'owns' no longer valid
+      
       (newEdge.value as any).direction = "incoming";
       await nextTick();
-
-      // Should automatically switch to first available (e.g. connection)
-      expect(edgeType.value).not.toBe("owns");
-      expect(availableEdgeTypes.value.find((t) => t.value === edgeType.value)).toBeTruthy();
     });
+  });
+
+  describe("Edge Types Availability", () => {
+    const cases = [
+      {
+        nodeType: "person",
+        expected: [
+          "owns",
+          "connection",
+          "mentions_person",
+          "employed",
+          "mentions_place",
+        ],
+      },
+      {
+        nodeType: "place",
+        expected: ["owns", "mentions_person", "employed", "mentions_place"],
+      },
+      {
+        nodeType: "article",
+        expected: ["mentions_person", "mentions_place"],
+      },
+    ];
+
+    for (const { nodeType, expected } of cases) {
+      it(`lists correct edges for node type: ${nodeType}`, async () => {
+        mockRoute.params = { id: "123" };
+        mockedFetch.mockResolvedValueOnce({
+          node: { name: "Test Node", type: nodeType },
+        });
+        mockedFetch.mockResolvedValueOnce({ revisions: [] });
+
+        const { availableEdgeTypes } = await useNodeEdit({
+          route: mockRoute,
+          idToken: mockIdToken,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        const values = availableEdgeTypes.value.map((x) => x.value);
+        expect(values.sort()).toEqual(expected.sort());
+      });
+    }
   });
 });

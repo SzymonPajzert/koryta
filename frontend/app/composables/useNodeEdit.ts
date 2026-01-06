@@ -119,7 +119,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   const availableEdgeTypes = computed(() => {
     // @ts-ignore
-    const dir = newEdge.value.direction || "outgoing";
     const myType = current.value.type;
 
     return edgeTypeOptions.filter((o) => {
@@ -128,39 +127,79 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       // @ts-ignore
       const reqTarget = o.targetType;
 
-      if (dir === "outgoing") {
-        // I am Source.
-        return !reqSource || reqSource === myType;
-      } else {
-        // I am Target.
-        return !reqTarget || reqTarget === myType;
-      }
+      const canBeSource = !reqSource || reqSource === myType;
+      const canBeTarget = !reqTarget || reqTarget === myType;
+
+      return canBeSource || canBeTarget;
     });
   });
 
-  // Handle direction switch and type validation
-  watch(
-    [() => (newEdge.value as any).direction, availableEdgeTypes],
-    ([newDir], [oldDir]) => {
-      // Direction change detection via checking if just triggered?
-      // Watch triggers on availableEdgeTypes change too.
-      // Simply enforce consistency.
+  // Handle type selection -> enforce direction if needed
+  watch(edgeType, (t) => {
+    newEdge.value.type = t as any;
 
-      if (!isEditingEdge.value) {
-        // If direction actually changed or types changed, validate edgeType
-        if (!availableEdgeTypes.value.find((o) => o.value === edgeType.value)) {
-          edgeType.value = availableEdgeTypes.value[0]?.value || "";
+    if (!isEditingEdge.value) {
+      const option = edgeTypeOptions.find((o) => o.value === t);
+      if (option) {
+        // @ts-ignore
+        const myType = current.value.type;
+        // @ts-ignore
+        const reqSource = option.sourceType;
+        // @ts-ignore
+        const reqTarget = option.targetType;
+
+        const canBeSource = !reqSource || reqSource === myType;
+        const canBeTarget = !reqTarget || reqTarget === myType;
+
+        // If strictly directional relative to me
+        if (canBeSource && !canBeTarget) {
+          (newEdge.value as any).direction = "outgoing";
+        } else if (!canBeSource && canBeTarget) {
+          (newEdge.value as any).direction = "incoming";
         }
       }
-    },
-  );
+    }
+  });
 
-  // Watch direction specifically for clearing picker
+  // Handle direction switch -> validate type
   watch(
     () => (newEdge.value as any).direction,
-    () => {
+    (newDir) => {
       if (!isEditingEdge.value) {
         pickerTarget.value = null;
+
+        // Validate if current edgeType is valid for new direction
+        const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+        if (option) {
+          // @ts-ignore
+          const myType = current.value.type;
+          // @ts-ignore
+          const reqSource = option.sourceType;
+          // @ts-ignore
+          const reqTarget = option.targetType;
+
+          let isValid = false;
+          if (newDir === "outgoing") {
+            if (!reqSource || reqSource === myType) isValid = true;
+          } else {
+            if (!reqTarget || reqTarget === myType) isValid = true;
+          }
+
+          if (!isValid) {
+            // Find a valid type for this direction
+            const validOption = availableEdgeTypes.value.find((o) => {
+              // @ts-ignore
+              const rs = o.sourceType;
+              // @ts-ignore
+              const rt = o.targetType;
+              if (newDir === "outgoing") return !rs || rs === myType;
+              return !rt || rt === myType;
+            });
+            if (validOption) {
+              edgeType.value = validOption.value;
+            }
+          }
+        }
       }
     },
   );
