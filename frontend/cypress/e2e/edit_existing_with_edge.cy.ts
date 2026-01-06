@@ -47,25 +47,6 @@ describe("Edit Existing Entity & Add Edge", () => {
         .type(updatedName);
       cy.contains("button", "Zapisz zmianę").click();
 
-      // Verify name update alert or reloading
-      // Assuming alert "Zapisano!" appears or we check persistence
-      /*
-      cy.on("window:alert", (str) => {
-        expect(str).to.contain("Zapisano");
-      });
-      */
-      // Wait for alert handling is tricky with stubbing needed in beforeEach usually.
-      // cy.wait(1000);
-
-      // 5. Add a connection (Employed)
-      // Connect Person to Company ("Zatrudniony/a w").
-      // Type: employed
-      // Direction: usually Person -> Company.
-      // So if we are on Company page, and we select Person,
-      // Current(Company) should be Target.
-      // Selected(Person) should be Source.
-      // Direction: "Od wybranego" (Incoming to this node).
-
       cy.get(".v-select").last().click(); // Open Edge Type
       cy.contains("Zatrudniony/a w").click();
 
@@ -81,7 +62,6 @@ describe("Edit Existing Entity & Add Edge", () => {
       cy.contains(".v-list-item-title", personName).click();
 
       // Set Dates
-      // Vuetify inputs don't have label attribute on the input itself usually
       cy.contains("label", "Data rozpoczęcia")
         .parent()
         .find("input")

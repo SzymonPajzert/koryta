@@ -21,13 +21,14 @@ export default defineEventHandler(async (event) => {
   const revisionData: Record<string, any> = {
     name: body.name,
     type: body.type,
-    parties: body.parties || [],
     content: content,
-    sourceURL: body.sourceURL || "",
-    shortName: body.shortName || "",
+
+    parties: body?.parties,
+    sourceURL: body?.sourceURL,
+    shortName: body?.shortName,
     // Edge fields
-    start_date: body.start_date || null,
-    end_date: body.end_date || null,
+    start_date: body?.start_date,
+    end_date: body?.end_date,
   };
 
   if (body.source) {

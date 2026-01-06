@@ -24,7 +24,7 @@
                 },
                 {
                   title: 'Firma',
-                  value: 'company',
+                  value: 'place',
                 },
                 {
                   title: 'Artykuł',
