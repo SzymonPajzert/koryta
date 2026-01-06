@@ -24,7 +24,7 @@
 </template>
 
 <script lang="ts" setup>
-import type { Node, NodeType, Article } from "~~/shared/model";
+import type { NodeType, Article } from "~~/shared/model";
 import { useDialogStore } from "@/stores/dialog";
 import { compareTwoStrings } from "string-similarity";
 

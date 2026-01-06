@@ -75,7 +75,6 @@
 </template>
 
 <script lang="ts" setup>
-// @ts-nocheck
 import type { VDataTable } from "vuetify/components";
 import type { Company } from "~~/shared/model";
 import { useEditIndexedField } from "~/composables/editIndexedField";

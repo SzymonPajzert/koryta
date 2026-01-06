@@ -1,8 +1,9 @@
-import {
+import type {
   Firestore,
-  Timestamp,
   DocumentReference,
-  WriteBatch,
+  WriteBatch} from "firebase-admin/firestore";
+import {
+  Timestamp
 } from "firebase-admin/firestore";
 
 export interface BatchResult {

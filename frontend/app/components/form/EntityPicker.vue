@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useDialogStore } from "@/stores/dialog";
+
 import type { NodeType, Link } from "~~/shared/model";
 
 defineOptions({
@@ -44,8 +44,6 @@ const props = defineProps<{
   entity: NodeType;
 }>();
 
-const dialogStore = useDialogStore();
-
 const model = defineModel<Link<typeof props.entity>>();
 
 const search = ref("");
@@ -55,7 +53,7 @@ const { idToken } = useAuthState();
 const { data: response } = useFetch<{
   entities: Record<string, any>;
 }>(() => `/api/nodes/${props.entity}`, {
-  key: `entities-picker-${props.entity}-${!!idToken.value ? "auth" : "guest"}`,
+  key: `entities-picker-${props.entity}-${idToken.value ? "auth" : "guest"}`,
   query: {
     search: search,
   },

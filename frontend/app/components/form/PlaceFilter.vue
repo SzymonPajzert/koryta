@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-// @ts-ignore
+// @ts-expect-error Pinia store definition is complex
 import { useGraphStore, type NodeGroup } from "@/stores/graph";
 const { push, currentRoute } = useRouter();
 

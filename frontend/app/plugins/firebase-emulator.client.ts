@@ -3,7 +3,8 @@ import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { connectStorageEmulator, getStorage } from "firebase/storage";
 
-export default defineNuxtPlugin((nuxtApp) => {
+
+export default defineNuxtPlugin((_nuxtApp) => {
   const config = useRuntimeConfig();
 
   if (config.public.isLocal) {

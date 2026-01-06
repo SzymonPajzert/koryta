@@ -14,7 +14,7 @@ export async function getUser(event: H3Event) {
   try {
     const decodedToken = await getAuth().verifyIdToken(token);
     return decodedToken;
-  } catch (error) {
+  } catch {
     throw createError({
       statusCode: 401,
       statusMessage: "Unauthorized: Invalid token",

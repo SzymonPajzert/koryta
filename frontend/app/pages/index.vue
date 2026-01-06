@@ -8,7 +8,7 @@
         informacji o politycznych układach. Znajdziesz w nim polityków i ich
         bliskich, którzy pracują w publicznych spółkach.
         <!-- TODO VSCode is autoadding breaks here, I don't know why -->
-        <br /><br />
+        <br ><br >
         Te dane są oficjalnie publiczne i dostępne, jednak trzeba wiedzieć,
         czego szukać. My wiemy i szukamy. Zobacz film o projekcie na
         <a href="https://youtu.be/x20MFMDUAuk">YouTube</a>.
@@ -18,8 +18,8 @@
       <HomeCard height="100%">
         ❤️ Robimy ten projekt z miłości do przejrzystej i publicznej informacji.
         Nie mamy sponsorów ani partyjnego wsparcia.
-        <br />
-        <br />
+        <br >
+        <br >
         <strong>
           Jeśli chcesz pomóc w rozbiciu politycznego betonu, wesprzyj nas:
         </strong>

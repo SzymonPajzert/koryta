@@ -41,12 +41,12 @@
 
       <div class="form-group">
         <label for="email">Email</label>
-        <input id="email" v-model="email" type="email" required />
+        <input id="email" v-model="email" type="email" required >
       </div>
 
       <div class="form-group">
         <label for="password">Hasło</label>
-        <input id="password" v-model="password" type="password" required />
+        <input id="password" v-model="password" type="password" required >
       </div>
 
       <div class="form-group">
@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref } from "vue";
 import {
   GoogleAuthProvider,
   signInWithPopup,

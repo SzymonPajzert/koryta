@@ -28,8 +28,8 @@
           block
           color="success"
           :loading="loading"
-          @click="handleAdd"
           :disabled="!url"
+          @click="handleAdd"
         >
           Dodaj
         </v-btn>

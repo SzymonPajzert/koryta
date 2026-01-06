@@ -153,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
+
 type EditType = "comment" | "link" | "person";
 
 const editingItemId = ref<string | null>(null);

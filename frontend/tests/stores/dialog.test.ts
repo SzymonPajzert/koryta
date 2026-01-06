@@ -9,10 +9,10 @@ vi.mock("../../app/composables/entity", async () => {
   const mockEntities = ref({});
   const mockSubmit = vi
     .fn()
-    .mockImplementation((val) => ({ key: "mockedKey" }));
+    .mockImplementation((_val) => ({ key: "mockedKey" }));
 
   return {
-    useEntity: (type: string) => {
+    useEntity: (_type: string) => {
       return {
         entities: mockEntities,
         submit: mockSubmit,
