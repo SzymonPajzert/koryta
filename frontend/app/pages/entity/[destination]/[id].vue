@@ -11,6 +11,21 @@
         {{ person?.content }}
       </v-card-text>
     </v-card>
+
+    <v-card v-if="type == 'place'" width="100%">
+      <v-card-title class="headline">
+        <v-icon start icon="mdi-office-building-outline" />
+        <h2 class="text-h5 font-weight-bold d-inline">
+          {{ person?.name }}
+        </h2>
+      </v-card-title>
+      <v-card-text>
+        <div v-if="(person as any)?.krsNumber" class="text-caption mb-2">
+          KRS: {{ (person as any)?.krsNumber }}
+        </div>
+        {{ person?.content }}
+      </v-card-text>
+    </v-card>
     <div class="mt-4">
       <v-row>
         <v-col

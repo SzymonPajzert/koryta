@@ -18,17 +18,23 @@ describe("Edit Node Connections", () => {
 
     // 2. Go to edit page for Jan Kowalski (node 1)
     cy.visit("/edit/node/1");
-    cy.contains("Treść i Powiązania").should("be.visible");
+    // Ensure data loaded (Name should be Jan Kowalski)
+    cy.get(".v-chip").contains("Jan Kowalski").should("exist");
 
     // 3. Verify existing connections are listed
     cy.contains("Powiązania").should("be.visible");
     cy.contains("Anna Nowak").should("be.visible");
 
     // 3. Select "Powiązanie z"
-    cy.contains("label", "Rodzaj relacji").parent().click();
-    cy.get(".v-overlay").contains(".v-list-item", "Powiązanie z").click();
+    // Open Edge Type Select
+    cy.get(".v-select")
+      .filter((index, element) => {
+        return Cypress.$(element).text().includes("Relacja");
+      })
+      .click();
+    cy.get(".v-overlay").contains("Powiązanie z").click();
 
-    // Verify "Typ celu" is gone (it shouldn't be visible)
+    // Verify "Typ celu" is gone (old UI artifact checks)
     cy.contains("label", "Typ celu").should("not.exist");
 
     // Use EntityPicker to find Piotr Wiśniewski
@@ -38,7 +44,9 @@ describe("Edit Node Connections", () => {
       .click()
       .type("Piotr", { delay: 100 });
 
-    cy.get(".v-overlay").contains(".v-list-item", "Piotr Wiśniewski").click();
+    cy.get(".v-overlay")
+      .contains(".v-list-item-title", "Piotr Wiśniewski")
+      .click();
 
     // Fill in name and text
     cy.contains("label", "Nazwa relacji")
@@ -63,11 +71,15 @@ describe("Edit Node Connections", () => {
 
     // 2. Go to edit page for Jan Kowalski (node 1)
     cy.visit("/edit/node/1");
-    cy.contains("Treść i Powiązania").should("be.visible");
+    cy.get(".v-chip").contains("Jan Kowalski").should("exist");
 
     // 3. Select "Zatrudniony/a w" relationship type
-    cy.contains("label", "Rodzaj relacji").parent().click();
-    cy.get(".v-overlay").contains(".v-list-item", "Zatrudniony/a w").click();
+    cy.get(".v-select")
+      .filter((index, element) => {
+        return Cypress.$(element).text().includes("Relacja");
+      })
+      .click();
+    cy.get(".v-overlay").contains("Zatrudniony/a w").click();
 
     // 4. Verify target type updated
     // And verify label logic just in case
@@ -81,7 +93,7 @@ describe("Edit Node Connections", () => {
       .click()
       .type("Orlen", { delay: 100 });
 
-    cy.get(".v-overlay").contains(".v-list-item", "Orlen").click();
+    cy.get(".v-overlay").contains(".v-list-item-title", "Orlen").click();
 
     // 6. Fill in details
     cy.contains("label", "Nazwa relacji")
@@ -104,8 +116,12 @@ describe("Edit Node Connections", () => {
     cy.visit("/edit/node/1");
 
     // 3. Select "Wspomina firmę/urząd"
-    cy.contains("label", "Rodzaj relacji").parent().click();
-    cy.get(".v-overlay").contains(".v-list-item", "Wspomina firmę").click();
+    cy.get(".v-select")
+      .filter((index, element) => {
+        return Cypress.$(element).text().includes("Relacja");
+      })
+      .click();
+    cy.get(".v-overlay").contains("Wspomina firmę").click();
 
     // 4. Select "Orlen"
     cy.contains("label", "Wyszukaj firmę")
@@ -114,7 +130,7 @@ describe("Edit Node Connections", () => {
       .click()
       .type("Orlen", { delay: 100 });
 
-    cy.get(".v-overlay").contains(".v-list-item", "Orlen").click();
+    cy.get(".v-overlay").contains(".v-list-item-title", "Orlen").click();
 
     // 6. Add
     cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();

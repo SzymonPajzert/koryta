@@ -41,6 +41,11 @@ const mockState = {
   allEdges: ref([]),
   partiesDefault: ref(["partia A", "partia B"]),
   idToken: ref("test-token"),
+  edgeType: ref("connection"),
+  edgeTargetType: ref("person"),
+  availableEdgeTypes: ref([
+    { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
+  ]),
 };
 
 vi.mock("../../../../app/composables/useNodeEdit", () => ({

@@ -48,29 +48,52 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const lastFetchedId = ref<string | undefined>(undefined);
   const isSaving = ref(false);
 
+  /* eslint-disable @typescript-eslint/naming_convention */
   const edgeTypeOptions = [
-    { value: "owns", label: "Właściciel", targetType: "place" },
-    { value: "connection", label: "Powiązanie z", targetType: "person" },
+    {
+      value: "owns",
+      label: "Właściciel",
+      sourceType: "person",
+      targetType: "place",
+    },
+    {
+      value: "connection",
+      label: "Powiązanie z",
+      sourceType: "person",
+      targetType: "person",
+    },
     {
       value: "mentions_person",
       label: "Wspomina osobę",
+      // sourceType: "person", // Generic source
       targetType: "person",
       realType: "mentions",
     },
-    { value: "employed", label: "Zatrudniony/a w", targetType: "place" },
+    {
+      value: "employed",
+      label: "Zatrudniony/a w",
+      sourceType: "person",
+      targetType: "place",
+    },
     {
       value: "mentions_place",
       label: "Wspomina firmę/urząd",
+      // sourceType: "person", // Generic source
       targetType: "place",
       realType: "mentions",
     },
   ];
+  /* eslint-enable @typescript-eslint/naming_convention */
 
   const newEdge = ref<Partial<Edge>>({
     type: "connection",
     target: "",
     name: "",
     content: "",
+    start_date: "",
+    end_date: "",
+    // @ts-ignore
+    direction: "outgoing",
   });
   const edgeType = ref<string>("connection"); // Isolated ref for v-select
 
@@ -93,8 +116,65 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   } = await useEdges(() => node_id.value);
   const allEdges = computed(() => [...sources.value, ...targets.value]);
 
+  const availableEdgeTypes = computed(() => {
+    // @ts-ignore
+    const dir = newEdge.value.direction || "outgoing";
+    const myType = current.value.type;
+
+    return edgeTypeOptions.filter((o) => {
+      // @ts-ignore
+      const reqSource = o.sourceType;
+      // @ts-ignore
+      const reqTarget = o.targetType;
+
+      if (dir === "outgoing") {
+        // I am Source.
+        return !reqSource || reqSource === myType;
+      } else {
+        // I am Target.
+        return !reqTarget || reqTarget === myType;
+      }
+    });
+  });
+
+  // Handle direction switch and type validation
+  watch(
+    [() => (newEdge.value as any).direction, availableEdgeTypes],
+    ([newDir], [oldDir]) => {
+      // Direction change detection via checking if just triggered?
+      // Watch triggers on availableEdgeTypes change too.
+      // Simply enforce consistency.
+
+      if (!isEditingEdge.value) {
+        // If direction actually changed or types changed, validate edgeType
+        if (!availableEdgeTypes.value.find((o) => o.value === edgeType.value)) {
+          edgeType.value = availableEdgeTypes.value[0]?.value || "";
+        }
+      }
+    },
+  );
+
+  // Watch direction specifically for clearing picker
+  watch(
+    () => (newEdge.value as any).direction,
+    () => {
+      if (!isEditingEdge.value) {
+        pickerTarget.value = null;
+      }
+    },
+  );
+
   const edgeTargetType = computed<NodeType>(() => {
     const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+    // @ts-ignore
+    const dir = newEdge.value.direction;
+    if (dir === "incoming") {
+      // I am Target. Picker is Source.
+      // @ts-ignore
+      return (option?.sourceType as NodeType) || "person";
+    }
+    // I am Source. Picker is Target.
+    // @ts-ignore
     return (option?.targetType as NodeType) || "person";
   });
 
@@ -260,6 +340,10 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       target: "",
       name: "",
       content: "",
+      start_date: "",
+      end_date: "",
+      // @ts-ignore
+      direction: "outgoing",
     };
     edgeType.value = "connection";
     pickerTarget.value = null;
@@ -273,9 +357,13 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       type = targetType === "place" ? "mentions_place" : "mentions_person";
     }
 
+    // Determine direction relative to current node
+    const direction = edge.source === node_id.value ? "outgoing" : "incoming";
+
     newEdge.value = {
       ...edge,
       type,
+      direction,
     };
     edgeType.value = type;
     pickerTarget.value = edge.richNode;
@@ -301,24 +389,35 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   async function addEdge() {
     if (!node_id.value || !pickerTarget.value) return;
+
+    // @ts-ignore
+    const direction = newEdge.value.direction || "outgoing";
+    const source =
+      direction === "outgoing" ? node_id.value : pickerTarget.value.id;
+    const target =
+      direction === "outgoing" ? pickerTarget.value.id : node_id.value;
+
     try {
       await $fetch<any>("/api/edges/create", {
         method: "POST",
         headers: authHeaders.value,
         body: {
-          source: node_id.value,
-          target: pickerTarget.value.id,
+          source,
+          target,
           type: getRealType(newEdge.value.type),
           name: newEdge.value.name,
           content: newEdge.value.content,
+          start_date: newEdge.value.start_date,
+          end_date: newEdge.value.end_date,
         },
       });
       resetEdgeForm();
       alert("Dodano powiązanie");
       await refreshEdges();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Błąd dodawania powiązania");
+      const msg = e.data?.statusMessage || e.message || "Unknown error";
+      alert("Błąd dodawania powiązania: " + msg);
     }
   }
 
@@ -337,6 +436,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           name: newEdge.value.name,
           // text: newEdge.value.content, // Deprecated
           content: newEdge.value.content,
+          start_date: newEdge.value.start_date,
+          end_date: newEdge.value.end_date,
         },
         headers: authHeaders.value,
       });
@@ -371,5 +472,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     openEditEdge,
     edgeTargetType,
     edgeType,
+    availableEdgeTypes,
   };
 }

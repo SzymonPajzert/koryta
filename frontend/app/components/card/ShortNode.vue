@@ -2,11 +2,19 @@
   <v-card
     :key="edge.richNode.id"
     :prepend-icon="icon(edge.richNode.type)"
-    :title="edge.richNode.name"
-    :subtitle="edge.label"
-    :text="edge.richNode.content"
     :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
-  />
+  >
+    <template #title>{{ edge.richNode.name }}</template>
+    <template #subtitle>
+      <div>{{ edge.label }}</div>
+      <div v-if="edge.start_date || edge.end_date" class="text-caption">
+        {{ edge.start_date }} - {{ edge.end_date || "obecnie" }}
+      </div>
+    </template>
+    <v-card-text v-if="edge.richNode.content">
+      {{ edge.richNode.content }}
+    </v-card-text>
+  </v-card>
 </template>
 
 <script setup lang="ts">

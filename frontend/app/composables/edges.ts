@@ -9,6 +9,8 @@ export type EdgeNode = {
   target: string;
   id?: string;
   traverse?: TraversePolicy;
+  start_date?: string;
+  end_date?: string;
 };
 
 const edgeTypeLabels: Record<string, string> = {

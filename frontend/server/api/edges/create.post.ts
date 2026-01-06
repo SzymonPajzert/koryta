@@ -25,6 +25,8 @@ export default defineEventHandler(async (event) => {
     type: body.type,
     name: body.name || "",
     content: body.content || body.text || "",
+    start_date: body.start_date || null,
+    end_date: body.end_date || null,
   };
 
   const batch = db.batch();
