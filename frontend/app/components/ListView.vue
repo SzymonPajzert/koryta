@@ -62,7 +62,7 @@ const { isAdmin } = useAuthState();
 
 const { people } = defineProps<{ people: Record<string, Person> }>();
 const peopleOrdered = computed<[string, Person][]>(() => {
-  const result = Object.entries(people ?? {});
+  const result = Object.entries(people);
   result.sort((a, b) => a[1].name.localeCompare(b[1].name));
   return result;
 });

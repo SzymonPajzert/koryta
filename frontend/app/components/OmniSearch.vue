@@ -19,9 +19,9 @@
     single-line
     @click:clear="nodeGroupPicked = null"
   >
-    <template #item="{ props, item }">
+    <template #item="{ props: itemProps, item }">
       <v-list-item
-        v-bind="props"
+        v-bind="itemProps"
         :subtitle="item.raw?.subtitle"
         :title="item.raw.title"
         max-width="400px"

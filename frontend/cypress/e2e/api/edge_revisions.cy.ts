@@ -25,7 +25,7 @@ describe("Edge API", () => {
             const getAllRequest = objectStore.getAll();
             getAllRequest.onsuccess = () => {
               const users = getAllRequest.result;
-              if (users && users.length > 0) {
+              if (users.length > 0) {
                 // The object structure in firebaseLocalStorage usually has the user data in 'value' property
                 const user = users[0].value;
                 // Verify structure just in case
@@ -91,7 +91,7 @@ describe("Edge API", () => {
         expect(res.body).to.be.an("array");
 
         const found = res.body.find(
-          (e: any) =>
+          (e: { source: string; target: string }) =>
             e.source === edgeData.source && e.target === edgeData.target,
         );
         expect(
@@ -109,7 +109,7 @@ describe("Edge API", () => {
         expect(res.status).to.eq(200);
         expect(res.body).to.be.an("array");
         const found = res.body.find(
-          (e: any) =>
+          (e: { source: string; target: string }) =>
             e.source === edgeData.source && e.target === edgeData.target,
         );
         expect(found).to.not.exist;

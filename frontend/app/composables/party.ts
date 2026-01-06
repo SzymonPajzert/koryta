@@ -2,7 +2,7 @@ import { computed, type Ref } from "vue";
 import { partyColors } from "~~/shared/misc";
 
 export async function usePartyStatistics(
-  existingPeople?: Ref<Record<string, any>>,
+  existingPeople?: Ref<Record<string, Person>>,
 ) {
   const people = existingPeople || (await useEntity("person")).entities;
 

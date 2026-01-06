@@ -21,10 +21,10 @@ const mockGetFunctions = vi.fn();
 
 vi.mock("firebase/functions", async () => {
   return {
-    getFunctions: (...args: any[]) => mockGetFunctions(...args),
-    httpsCallable: (...args: any[]) => mockHttpsCallable(...args),
-    httpsCallableFromURL: (...args: any[]) => mockHttpsCallableFromURL(...args),
-    connectFunctionsEmulator: (...args: any[]) =>
+    getFunctions: (...args: unknown[]) => mockGetFunctions(...args),
+    httpsCallable: (...args: unknown[]) => mockHttpsCallable(...args),
+    httpsCallableFromURL: (...args: unknown[]) => mockHttpsCallableFromURL(...args),
+    connectFunctionsEmulator: (...args: unknown[]) =>
       mockConnectFunctionsEmulator(...args),
   };
 });

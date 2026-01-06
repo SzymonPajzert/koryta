@@ -51,7 +51,7 @@ const search = ref("");
 const { idToken } = useAuthState();
 
 const { data: response } = useFetch<{
-  entities: Record<string, any>;
+  entities: Record<string, { name: string }>;
 }>(() => `/api/nodes/${props.entity}`, {
   key: `entities-picker-${props.entity}-${idToken.value ? "auth" : "guest"}`,
   query: {
@@ -69,11 +69,11 @@ const { data: response } = useFetch<{
 });
 
 const entitiesList = computed(() => {
-  const ents = (response.value as any)?.entities ?? {};
+  const ents = response.value?.entities ?? {};
   return Object.entries(ents).map(([key, value]) => ({
     type: props.entity,
     id: key,
-    name: (value as any).name,
+    name: value.name,
   }));
 });
 

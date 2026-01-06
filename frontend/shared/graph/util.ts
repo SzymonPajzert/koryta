@@ -123,7 +123,7 @@ export function getNodesNoStats(
       color: color,
     };
   });
-  if (companies) {
+
     Object.entries(companies).forEach(([key, company]) => {
       const entry: Node = {
         ...company,
@@ -133,8 +133,8 @@ export function getNodesNoStats(
 
       result[key] = entry;
     });
-  }
-  if (articles) {
+
+
     Object.entries(articles).forEach(([articleID, article]) => {
       const entry: Node = {
         name: article.shortName || getHostname(article),
@@ -144,7 +144,7 @@ export function getNodesNoStats(
       };
       result[articleID] = entry;
     });
-  }
+
   return result;
 }
 

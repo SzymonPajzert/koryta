@@ -30,7 +30,9 @@ vi.mock("firebase/firestore", () => ({
 }));
 
 describe("useNodeEdit", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockRoute: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockIdToken: any;
   const mockEdges = {
     sources: ref([]),

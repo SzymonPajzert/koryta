@@ -109,9 +109,10 @@ const handleAdd = async () => {
     alert("Dodano propozycję artykułu!");
     expanded.value = false;
     url.value = "";
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error(e);
-    alert("Błąd: " + (e.message || "Wystąpił błąd"));
+    const msg = e instanceof Error ? e.message : "Wystąpił błąd";
+    alert("Błąd: " + msg);
   } finally {
     loading.value = false;
   }

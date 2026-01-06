@@ -24,7 +24,7 @@ const nonZeroIndices = computed(() =>
 );
 const parties = computed(
   () =>
-    partiesUnfiltered.filter((_, i) => nonZeroIndices.value.includes(i)) ?? [],
+    partiesUnfiltered.filter((_, i) => nonZeroIndices.value.includes(i)),
 );
 const partyColors = computed(() =>
   Object.values(partyColorsUnfiltered).filter((_, i) =>
@@ -68,7 +68,6 @@ const chartOptions = computed(() => ({
 }));
 
 const series = computed(() => {
-  if (!parties.value || !results.value) return [];
   if (parties.value.length !== results.value.length) return [];
 
   return [

@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const db = getFirestore(getApp(), "koryta-pl");
 
    
-  const revisionData: Record<string, any> = {
+  const revisionData: Record<string, unknown> = {
     name: body.name,
     type: body.type,
     content: content,

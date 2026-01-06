@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { usePartyStatistics } from "../../app/composables/party";
 import { ref } from "vue";
 import { partyColors } from "../../shared/misc";
+import type { Person } from "../../shared/model";
 
 // Stub global useEntity since it is auto-imported in the composable
 const mockEntities = ref({});
@@ -25,8 +26,8 @@ describe("usePartyStatistics", () => {
 
     // Debug logic locally
     const debugResults = Object.keys(partyColors).map((party) => {
-      return Object.values(mockEntities.value).filter((person: any) => {
-        return (person.parties ?? []).findIndex((p: any) => p === party) != -1;
+      return Object.values(mockEntities.value).filter((person: Person) => {
+        return (person.parties ?? []).findIndex((p: string) => p === party) != -1;
       }).length;
     });
     console.log("Debug Results:", debugResults);

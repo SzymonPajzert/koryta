@@ -11,7 +11,7 @@ type NodeLocation = {
 export default defineEventHandler(async (event) => {
   const [graph, layout] = await Promise.all([
     event.$fetch("/api/graph"),
-    fetchRTDB<typeof result>("layout"),
+    fetchRTDB<Partial<typeof result>>("layout"),
   ]);
   if (
     layout.nodes &&

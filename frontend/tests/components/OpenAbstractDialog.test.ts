@@ -30,7 +30,8 @@ describe("OpenAbstractDialog", () => {
     mockUser.value = null;
     const wrapper = mount(OpenAbstractDialog, {
       global: { plugins: [vuetify] },
-      props: { dialog: "person" as any },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      props: { dialog: { type: "person" } as any },
     });
 
     const item = wrapper.findComponent(components.VListItem);
@@ -39,9 +40,11 @@ describe("OpenAbstractDialog", () => {
   });
 
   it("renders clickable item when logged in", async () => {
-    mockUser.value = { uid: "123" } as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUser.value = { uid: "123" } as unknown as any;
     const wrapper = mount(OpenAbstractDialog, {
       global: { plugins: [vuetify] },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       props: { dialog: "person" as any },
     });
 

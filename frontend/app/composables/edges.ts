@@ -49,8 +49,13 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
     { immediate: true },
   );
 
-  const nodesResponse = useState<any>("nodes-all-data-global", () => null);
-  const { data: fetchedNodes, refresh: refreshNodes } = await useFetch<any>(
+  const nodesResponse = useState<{ nodes: Record<string, unknown> }>(
+    "nodes-all-data-global",
+    () => null,
+  );
+  const { data: fetchedNodes, refresh: refreshNodes } = await useFetch<{
+    nodes: Record<string, unknown>;
+  }>(
     "/api/nodes",
     {
       key: "nodes-all-fetch-global",

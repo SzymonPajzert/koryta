@@ -40,7 +40,9 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   const current = useState<EditablePage>(`${stateKey.value}-current`, () => ({
     name: isNew.value ? (route.query.name as string) || "" : "",
-    type: isNew.value ? (route.query.type as NodeType) || "person" : "person",
+    type: isNew.value
+      ? ((route.query.type as NodeType | undefined) ?? "person")
+      : "person",
     parties: [],
     content: "",
     sourceURL: "",
@@ -84,7 +86,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           headers: authHeaders.value,
         },
       );
-      revisions.value = res.revisions || [];
+      revisions.value = res.revisions;
     } catch (e) {
       console.error("Error fetching revisions", e);
     }
@@ -132,7 +134,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       await fetchRevisions();
     } else if (isNew.value && lastFetchedId.value !== undefined) {
       lastFetchedId.value = undefined;
-      const initialType = (route.query.type as NodeType) || "person";
+      const initialType = (route.query.type as NodeType | undefined) ?? "person";
       current.value = {
         name: "",
         type: initialType,
