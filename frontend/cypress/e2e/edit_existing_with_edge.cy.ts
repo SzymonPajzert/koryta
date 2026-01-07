@@ -61,8 +61,8 @@ describe("Edit Existing Entity & Add Edge", () => {
       cy.contains("Zatrudniony/a w").click();
 
       // Search for Person
-      cy.get('[data-testid="entity-picker-input"]').click();
-      cy.get('[data-testid="entity-picker-input"]').type(personName);
+      cy.get('[data-testid="entity-picker-input"]').first().click();
+      cy.get('[data-testid="entity-picker-input"]').first().type(personName);
 
       // Wait for results and click
       cy.contains(".v-list-item-title", personName).click();
@@ -74,7 +74,7 @@ describe("Edit Existing Entity & Add Edge", () => {
         .type("2024-01-01");
 
       // Save Connection
-      cy.contains("button", "Dodaj powiązanie").click();
+      cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
 
       // Verify
       cy.on("window:alert", (str) => {

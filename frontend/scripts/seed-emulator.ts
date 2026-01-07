@@ -108,6 +108,10 @@ async function seedAuth() {
       },
     ]) {
       await auth.createUser(user);
+      if (user.uid === "test-admin") {
+        await auth.setCustomUserClaims(user.uid, { admin: true });
+        console.log(`Set admin claim for ${user.email}`);
+      }
       console.log(`User created: ${user.email} / ${user.password}`);
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

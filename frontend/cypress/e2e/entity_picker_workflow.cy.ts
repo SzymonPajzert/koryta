@@ -38,8 +38,8 @@ describe("Entity Picker Workflow", () => {
     cy.url({ timeout: 10000 }).should("include", "/edit/node/");
 
     // 3. In the Source node edit page, use EntityPicker to find HiddenNode
-    cy.get('[data-testid="entity-picker-input"]').click();
-    cy.get('[data-testid="entity-picker-input"]').type(hiddenNodeName);
+    cy.get('[data-testid="entity-picker-input"]').first().click();
+    cy.get('[data-testid="entity-picker-input"]').first().type(hiddenNodeName);
 
     // Check if the item appears in the dropdown list
     cy.contains(".v-list-item-title", hiddenNodeName).should("exist");
@@ -60,8 +60,8 @@ describe("Entity Picker Workflow", () => {
     });
 
     // Type non-existent name
-    cy.get('[data-testid="entity-picker-input"]').click();
-    cy.get('[data-testid="entity-picker-input"]').type(newTargetName);
+    cy.get('[data-testid="entity-picker-input"]').first().click();
+    cy.get('[data-testid="entity-picker-input"]').first().type(newTargetName);
 
     // Wait for "Add ..." option
     cy.contains(`Dodaj "${newTargetName}"`).should("be.visible").click();

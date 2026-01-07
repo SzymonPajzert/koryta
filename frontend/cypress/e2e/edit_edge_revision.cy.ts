@@ -43,7 +43,7 @@ describe("Edit Edge Revision", () => {
       .type("Updated Relation Description");
 
     // 6. Save
-    cy.contains("button", "Zapisz zmiany").click();
+    cy.get("button[type='submit']").contains("Zapisz zmiany").click();
 
     // 7. Verify success alert (assuming standard alert behavior is mocked or visible)
     cy.on("window:alert", (str) => {

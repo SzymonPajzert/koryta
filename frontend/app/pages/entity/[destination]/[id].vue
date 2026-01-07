@@ -26,6 +26,23 @@
         {{ person?.content }}
       </v-card-text>
     </v-card>
+    <v-card v-if="type == 'article'" width="100%">
+      <v-card-title class="headline">
+        <v-icon start icon="mdi-file-document-outline" />
+        <h2 class="text-h5 font-weight-bold d-inline">
+          {{ person?.name }}
+        </h2>
+      </v-card-title>
+      <v-card-text>
+        <div v-if="(person as any)?.sourceURL" class="text-caption mb-2">
+          URL:
+          <a :href="(person as any)?.sourceURL" target="_blank">{{
+            (person as any)?.sourceURL
+          }}</a>
+        </div>
+        {{ person?.content }}
+      </v-card-text>
+    </v-card>
     <div class="mt-4">
       <v-row>
         <v-col
@@ -56,11 +73,20 @@
       </v-row>
     </div>
 
+    <div v-if="referencedIn.length" class="mt-4">
+      <h3 class="text-h6 mb-2">Artykuł stanowi źródło dla:</h3>
+      <v-row>
+        <v-col v-for="edge in referencedIn" :key="edge.id" cols="12" md="6">
+          <CardShortNode :edge="edge" />
+        </v-col>
+      </v-row>
+    </div>
+
     <div class="mt-4">
       <v-btn
         variant="tonal"
         prepend-icon="mdi-pencil-outline"
-        :href="`/edit/node/${node}`"
+        :to="{ path: `/edit/node/${node}`, query: { type } }"
       >
         <template #prepend>
           <v-icon color="warning" />
@@ -102,6 +128,6 @@ const { data: response } = await useFetch<{ node: Person }>(
 );
 const person = computed(() => response.value?.node);
 
-const { sources, targets } = await useEdges(node);
+const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
 </script>

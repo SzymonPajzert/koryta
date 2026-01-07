@@ -93,10 +93,21 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
         richNode: nodes.value[e.target] as Node,
       }));
   });
+  const referencedIn = computed<EdgeNode[]>(() => {
+    const id = toValue(nodeID);
+    if (!id) return [];
+    return (edges.value || [])
+      .filter((e) => e.references?.includes(id))
+      .map((e) => ({
+        ...e,
+        label: e.name || edgeTypeLabels[e.type] || e.type,
+        richNode: nodes.value[e.source] as Node, // We show source node for referenced edges
+      }));
+  });
 
   async function refresh() {
     await Promise.all([refreshEdges(), refreshNodes()]);
   }
 
-  return { sources, targets, refresh };
+  return { sources, targets, referencedIn, refresh };
 }

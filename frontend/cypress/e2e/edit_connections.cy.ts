@@ -59,7 +59,10 @@ describe("Edit Node Connections", () => {
       .type("Testowy opis");
 
     // Click Add
-    cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();
+    cy.get("button[type='submit']")
+      .contains("Dodaj powiązanie")
+      .should("not.be.disabled")
+      .click();
 
     // 5. Verify the new connection appears in the list
     cy.contains("Piotr Wiśniewski").should("be.visible");
@@ -101,7 +104,10 @@ describe("Edit Node Connections", () => {
       .type("Zatrudnienie");
 
     // 7. Click Add
-    cy.contains("button", "Dodaj powiązanie").should("not.be.disabled").click();
+    cy.get("button[type='submit']")
+      .contains("Dodaj powiązanie")
+      .should("not.be.disabled")
+      .click();
 
     // 8. Verify the new connection appears
     cy.contains("Orlen").should("be.visible");

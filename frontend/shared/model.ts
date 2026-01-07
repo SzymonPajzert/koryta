@@ -24,6 +24,7 @@ export interface Edge extends PageBase<EdgeType> {
   target: string;
   start_date?: string;
   end_date?: string;
+  references?: string[];
 }
 
 export function pageIsPublic(node: { revision_id?: string }) {

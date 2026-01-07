@@ -82,6 +82,11 @@ export function useEdgeEdit({
     () => undefined,
   );
 
+  const pickerSource = useState<Link<NodeType> | undefined>(
+    `${baseKey}-pickerSource`,
+    () => undefined,
+  );
+
   const isEditingEdge = computed(() => !!newEdge.value.id);
 
   const availableEdgeTypes = computed(() => {
@@ -167,6 +172,7 @@ export function useEdgeEdit({
     newEdge.value = emptyEdge();
     edgeType.value = "connection"; // TODO pick something else
     pickerTarget.value = undefined;
+    pickerSource.value = undefined;
   }
 
   function openEditEdge(edge: EdgeNode) {
@@ -200,10 +206,17 @@ export function useEdgeEdit({
     if (!nodeId.value || !pickerTarget.value) return;
 
     const direction = newEdge.value.direction || "outgoing";
-    const source =
-      direction === "outgoing" ? nodeId.value : pickerTarget.value.id;
-    const target =
-      direction === "outgoing" ? pickerTarget.value.id : nodeId.value;
+    // If we have pickerSource, use it. Otherwise use nodeId.
+    const source = pickerSource.value
+      ? pickerSource.value.id
+      : direction === "outgoing"
+        ? nodeId.value
+        : pickerTarget.value.id;
+    const target = pickerSource.value
+      ? pickerTarget.value.id
+      : direction === "outgoing"
+        ? pickerTarget.value.id
+        : nodeId.value;
 
     try {
       await $fetch<undefined>("/api/edges/create", {
@@ -217,6 +230,7 @@ export function useEdgeEdit({
           content: newEdge.value.content,
           start_date: newEdge.value.start_date,
           end_date: newEdge.value.end_date,
+          references: newEdge.value.references,
         },
       });
       resetEdgeForm();
@@ -244,6 +258,7 @@ export function useEdgeEdit({
           content: newEdge.value.content,
           start_date: newEdge.value.start_date,
           end_date: newEdge.value.end_date,
+          references: newEdge.value.references,
         },
         headers: authHeaders.value,
       });
@@ -259,6 +274,7 @@ export function useEdgeEdit({
     newEdge,
     edgeType,
     pickerTarget,
+    pickerSource,
     isEditingEdge,
     availableEdgeTypes,
     edgeTargetType,
@@ -285,5 +301,6 @@ function emptyEdge(): Partial<Edge> & { direction: "outgoing" | "incoming" } {
     start_date: "",
     end_date: "",
     direction: "outgoing",
+    references: [],
   };
 }
