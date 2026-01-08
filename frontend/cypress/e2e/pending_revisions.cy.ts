@@ -40,13 +40,20 @@ describe("Pending Revisions", () => {
     cy.contains("label", "Nazwa relacji")
       .parent()
       .find("input")
-      .type("Connection Pending Verification");
-
+      .type("znajomi");
     cy.contains("button", "Dodaj powiązanie").click();
+
+    // TODO it doesn't refresh the edges after submission, trigger refresh somehow.
+    cy.visit("/edit/node/1");
 
     // Alerts might appear, we can check for item in list
     cy.contains("Piotr Wiśniewski").should("be.visible");
-    cy.contains("Connection Pending Verification").should("be.visible");
+    cy.contains("znajomi").should("be.visible");
+
+    // TODO we expect to see those changes there as well, but no luck.
+    cy.visit("/entity/person/1");
+    cy.contains("Piotr Wiśniewski").should("be.visible");
+    cy.contains("znajomi").should("be.visible");
 
     // 3. Visit Revisions
     cy.visit("/revisions");

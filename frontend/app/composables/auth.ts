@@ -65,6 +65,8 @@ export function useAuthState() {
     const headers = computed(() => {
       const h: Record<string, string> = {};
       if (idToken.value) {
+        h["Cache-Control"] = "no-cache";
+        h.Pragma = "no-cache";
         h.Authorization = `Bearer ${idToken.value}`;
       }
       return h;
