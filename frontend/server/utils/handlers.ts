@@ -1,9 +1,8 @@
-import type { EventHandler } from "h3";
+import type { EventHandler, H3Event } from "h3";
 import { getUser } from "~~/server/utils/auth";
 
-async function eventIsAuthenticated(event: any): Promise<boolean> {
+async function eventIsAuthenticated(event: H3Event): Promise<boolean> {
   const user = await getUser(event).catch(() => null);
-  console.log("Checking auth cache for event:", event.path, "User:", !!user);
   return !!user;
 }
 
@@ -17,7 +16,7 @@ export const authCachedEventHandler = (handler: EventHandler, options = {}) => {
   });
 
   // 2. Return a master handler that decides which path to take
-  return defineEventHandler(async (event) => {
+  return defineEventHandler(async (event: H3Event) => {
     const isAuth = await eventIsAuthenticated(event);
     if (isAuth) {
       // Explicitly prevent browser caching for this response
