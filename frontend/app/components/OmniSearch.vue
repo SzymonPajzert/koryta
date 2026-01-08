@@ -82,14 +82,11 @@ type ListItem = {
 
 const { idToken, authFetch } = useAuthState();
 
-const { data: graph, refresh } = await authFetch(
-  "/api/graph",
-  {
-    key: "graph",
-    lazy: true,
-    query: computed(() => ({ pending: !!idToken.value })),
-  },
-);
+const { data: graph, refresh } = await authFetch("/api/graph", {
+  key: "graph",
+  lazy: true,
+  query: computed(() => ({ pending: !!idToken.value })),
+});
 
 watch(autocompleteFocus, (focused) => {
   if (focused) {

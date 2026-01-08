@@ -56,13 +56,11 @@ definePageMeta({
 
 const { authFetch } = useAuthState();
 
-const { data: nodesData, pending: nodesLoading } = await authFetch<
-  Record<string, Node & PageRevisioned>
->("/api/nodes/pending");
+const { data: nodesData, pending: nodesLoading } =
+  await authFetch<Record<string, Node & PageRevisioned>>("/api/nodes/pending");
 
-const { data: edgesData, pending: edgesLoading } = await authFetch<
-  Record<string, Edge & PageRevisioned>
->("/api/edges/pending");
+const { data: edgesData, pending: edgesLoading } =
+  await authFetch<Record<string, Edge & PageRevisioned>>("/api/edges/pending");
 
 const loading = computed(() => nodesLoading.value || edgesLoading.value);
 
