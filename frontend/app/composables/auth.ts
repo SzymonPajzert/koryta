@@ -23,7 +23,8 @@ export function useAuthState() {
   );
   const userConfig = useDocument<UserConfig>(userConfigRef);
 
-  const isAuthResolved = useState<boolean>("isAuthResolved", () => false);
+  // If the auth state is resolved from hydration, we can make API calls
+  const isAuthResolved = useState<boolean>("isAuthResolved", () => !!idToken.value);
 
   // Initialize listener only once on the client
   if (import.meta.client && !useState("authListenerInitialized").value) {
@@ -74,9 +75,7 @@ export function useAuthState() {
     return useFetch<T>(url, {
       key,
       headers,
-      // wait for auth to be resolved, so we don't return unauthenticated data
-      immediate: isAuthResolved.value,
-      watch: [idToken, isAuthResolved],
+      watch: [idToken],
       ...options,
     });
   };
