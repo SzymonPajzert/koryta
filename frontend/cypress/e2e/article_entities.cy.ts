@@ -25,8 +25,8 @@ describe("Article Entities and Edge References", () => {
     // cy.contains(".v-list-item-title", "Jan Kowalski").first().click();
 
     // Fill target
-    cy.get('[label="Wyszukaj firmę"]').type("Orlen");
-    cy.contains(".v-list-item-title", "Orlen").first().click();
+    cy.contains(".v-input", "Wyszukaj firmę").click();
+    cy.contains("Orlen").click();
 
     cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
 
