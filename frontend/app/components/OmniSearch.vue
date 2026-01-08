@@ -2,37 +2,37 @@
   <v-autocomplete
     v-model="nodeGroupPicked"
     v-model:focused="autocompleteFocus"
-    v-model:search="search"
-    label="Szukaj osoby albo miejsca"
-    :items="items"
-    item-title="title"
-    return-object
-    autocomplete="off"
-    class="ma-2"
-    bg-color="white"
-    :rounded="true"
-    :width
-    density="comfortable"
-    :hide-details="true"
-    menu-icon="mdi-magnify"
-    clearable
-    single-line
-    @click:clear="nodeGroupPicked = null"
-  >
-    <template #item="{ props: itemProps, item }">
-      <v-list-item
-        v-bind="itemProps"
-        :subtitle="item.raw?.subtitle"
-        :title="item.raw.title"
-        max-width="400px"
-        :prepend-icon="item.raw.icon"
-      />
-    </template>
-    <template #no-data>
-      <v-list-item v-if="!search">
-        <v-list-item-title> Ładuję dane... </v-list-item-title>
-      </v-list-item>
-    </template>
+      v-model:search="search"
+      label="Szukaj osoby albo miejsca"
+      :items="items"
+      item-title="title"
+      return-object
+      autocomplete="off"
+      class="ma-2"
+      bg-color="white"
+      :rounded="true"
+      :width
+      density="comfortable"
+      :hide-details="true"
+      menu-icon="mdi-magnify"
+      clearable
+      single-line
+      @click:clear="nodeGroupPicked = null"
+    >
+      <template #item="{ props: itemProps, item }">
+        <v-list-item
+          v-bind="itemProps"
+          :subtitle="item.raw?.subtitle"
+          :title="item.raw.title"
+          max-width="400px"
+          :prepend-icon="item.raw.icon"
+        />
+      </template>
+      <template #no-data>
+        <v-list-item v-if="!search">
+          <v-list-item-title> Ładuję dane... </v-list-item-title>
+        </v-list-item>
+      </template>
   </v-autocomplete>
 </template>
 
@@ -40,7 +40,10 @@
 import { getAnalytics, logEvent } from "firebase/analytics";
 
 const { push, currentRoute } = useRouter();
-const analytics = getAnalytics();
+let analytics: any;
+if (import.meta.client) {
+  analytics = getAnalytics();
+}
 
 const props = defineProps<{
   searchText?: string;
@@ -79,7 +82,7 @@ type ListItem = {
 
 const { idToken } = useAuthState();
 
-const { data: graph } = await useAsyncData(
+const { data: graph, refresh } = await useAsyncData(
   "graph",
   () =>
     $fetch("/api/graph", {
@@ -93,6 +96,12 @@ const { data: graph } = await useAsyncData(
     watch: [idToken],
   },
 );
+
+watch(autocompleteFocus, (focused) => {
+  if (focused) {
+    refresh();
+  }
+});
 
 const items = computed<ListItem[]>(() => {
   if (
@@ -172,7 +181,9 @@ if (!props.fake) {
         ...value.query,
       },
     });
-    logEvent(analytics, "select_content", value.logEventKey);
+    if (analytics) {
+      logEvent(analytics, "select_content", value.logEventKey);
+    }
     autocompleteFocus.value = false;
   });
 }

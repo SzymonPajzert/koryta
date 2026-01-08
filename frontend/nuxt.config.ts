@@ -58,12 +58,10 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { prerender: true },
     // Cached for 10 minutes
-    "/api/**": isLocal ? undefined : { swr: 60 * 10 },
+    "/api/*": { swr: 60 * 10 },
+    "/api/nodes/*": { swr: 60 * 10 },
     // Known issue with POST requests if cached.
     // https://github.com/nitrojs/nitro/issues/887
-    "/api/graph?pending=true": { swr: false, cache: false },
-    "/api/nodes?pending=true": { swr: false, cache: false },
-    "/api/nodes/pending": { swr: false, cache: false },
     "/api/nodes/create": { swr: false, cache: false },
     "/api/edges/create": { swr: false, cache: false },
     "/api/revisions/create": { swr: false, cache: false },
