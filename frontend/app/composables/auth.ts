@@ -23,6 +23,8 @@ export function useAuthState() {
   );
   const userConfig = useDocument<UserConfig>(userConfigRef);
 
+  const isAuthResolved = useState<boolean>("isAuthResolved", () => false);
+
   // Initialize listener only once on the client
   if (import.meta.client && !useState("authListenerInitialized").value) {
     useState("authListenerInitialized", () => true);
@@ -36,6 +38,7 @@ export function useAuthState() {
         isAdmin.value = false;
         idToken.value = "";
       }
+      isAuthResolved.value = true;
     });
   }
 
@@ -65,10 +68,15 @@ export function useAuthState() {
       }
       return h;
     });
+    const key = computed(() => {
+      return (typeof url === "string" ? url : url()) + "-auth-fetch" + (idToken.value ? "-auth" : "-public");
+    });
     return useFetch<T>(url, {
-      key: (typeof url === "string" ? url : "dynamic-url") + "-auth-fetch" + (idToken.value ? "-authed" : "-public"),
+      key,
       headers,
-      watch: [idToken],
+      // wait for auth to be resolved, so we don't return unauthenticated data
+      immediate: isAuthResolved.value,
+      watch: [idToken, isAuthResolved],
       ...options,
     });
   };
