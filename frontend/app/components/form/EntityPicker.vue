@@ -59,11 +59,9 @@ const headers = computed(() => {
   return h;
 });
 
-const {
-  data: response,
-  pending,
-  refresh,
-} = await useFetch(`/api/nodes/${props.entity}`, {
+const { data: response, refresh } = await useFetch(
+  `/api/nodes/${props.entity}`,
+  {
     key: `api-nodes-${props.entity}-${idToken.value ? "auth" : "guest"}`,
     headers: headers,
     lazy: true,
