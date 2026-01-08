@@ -59,32 +59,21 @@ const route = useRoute();
 const nodeId = route.params.id as string;
 const revisionId = route.params.revisionId as string;
 
-const { idToken } = useAuthState();
-const headers = computed(() => {
-  const h: Record<string, string> = {};
-  if (idToken.value) {
-    h.Authorization = `Bearer ${idToken.value}`;
-  }
-  return h;
-});
+const { authFetch } = useAuthState();
 
 // Fetch Revision
 const {
   data: revisionData,
   pending: revLoading,
   error: revError,
-} = await useFetch<Revision>(`/api/revisions/entry/${revisionId}`, {
-  headers,
-});
+} = await authFetch<Revision>(`/api/revisions/entry/${revisionId}`);
 
 // Fetch Node (Current State)
 const {
   data: nodeData,
   pending: nodeLoading,
   error: nodeError,
-} = await useFetch<Node>(`/api/nodes/entry/${nodeId}`, {
-  headers,
-});
+} = await authFetch<Node>(`/api/nodes/entry/${nodeId}`);
 
 const loading = computed(() => revLoading.value || nodeLoading.value);
 const error = computed(() => revError.value || nodeError.value);

@@ -80,20 +80,14 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { idToken } = useAuthState();
+const { idToken, authFetch } = useAuthState();
 
-const { data: graph, refresh } = await useAsyncData(
-  "graph",
-  () =>
-    $fetch("/api/graph", {
-      headers: idToken.value
-        ? { Authorization: `Bearer ${idToken.value}` }
-        : {},
-      query: { pending: !!idToken.value },
-    }),
+const { data: graph, refresh } = await authFetch(
+  "/api/graph",
   {
+    key: "graph",
     lazy: true,
-    watch: [idToken],
+    query: computed(() => ({ pending: !!idToken.value })),
   },
 );
 

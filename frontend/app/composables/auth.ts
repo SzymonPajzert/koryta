@@ -57,7 +57,7 @@ export function useAuthState() {
     return await createUserWithEmailAndPassword(auth, email, pass);
   };
 
-  const authFetch = async <T>(url: string, options = {}) => {
+  const authFetch = <T>(url: string | (() => string), options: any = {}) => {
     const headers = computed(() => {
       const h: Record<string, string> = {};
       if (idToken.value) {
@@ -65,8 +65,8 @@ export function useAuthState() {
       }
       return h;
     });
-    return await useFetch<T>(url, {
-      key: url + "-auth-fetch" + (idToken.value ? "-authed" : "-public"),
+    return useFetch<T>(url, {
+      key: (typeof url === "string" ? url : "dynamic-url") + "-auth-fetch" + (idToken.value ? "-authed" : "-public"),
       headers,
       watch: [idToken],
       ...options,

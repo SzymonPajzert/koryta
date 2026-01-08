@@ -54,26 +54,15 @@ definePageMeta({
   middleware: "auth",
 });
 
-const { idToken } = useAuthState();
-const headers = computed(() => {
-  const h: Record<string, string> = {};
-  if (idToken.value) {
-    h.Authorization = `Bearer ${idToken.value}`;
-  }
-  return h;
-});
+const { authFetch } = useAuthState();
 
-const { data: nodesData, pending: nodesLoading } = await useFetch<
+const { data: nodesData, pending: nodesLoading } = await authFetch<
   Record<string, Node & PageRevisioned>
->("/api/nodes/pending", {
-  headers,
-});
+>("/api/nodes/pending");
 
-const { data: edgesData, pending: edgesLoading } = await useFetch<
+const { data: edgesData, pending: edgesLoading } = await authFetch<
   Record<string, Edge & PageRevisioned>
->("/api/edges/pending", {
-  headers,
-});
+>("/api/edges/pending");
 
 const loading = computed(() => nodesLoading.value || edgesLoading.value);
 

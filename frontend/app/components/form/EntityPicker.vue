@@ -49,23 +49,12 @@ const model = defineModel<Link<typeof props.entity>>();
 
 const search = ref("");
 
-const { idToken } = useAuthState();
+const { authFetch } = useAuthState();
 
-const headers = computed(() => {
-  const h: Record<string, string> = {};
-  if (idToken.value) {
-    h.Authorization = `Bearer ${idToken.value}`;
-  }
-  return h;
-});
-
-const { data: response, refresh } = await useFetch(
+const { data: response, refresh } = await authFetch(
   `/api/nodes/${props.entity}`,
   {
-    key: `api-nodes-${props.entity}-${idToken.value ? "auth" : "guest"}`,
-    headers: headers,
     lazy: true,
-    watch: [idToken],
   },
 );
 

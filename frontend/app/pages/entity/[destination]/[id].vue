@@ -109,22 +109,10 @@ const node = route.params.id as string;
 const type = route.params.destination;
 
 // Use API fetch to ensure revisions are merged correctly (auth aware)
-const { idToken } = useAuthState();
-const headers = computed(() => {
-  const h: Record<string, string> = {};
-  if (idToken.value) {
-    h.Authorization = `Bearer ${idToken.value}`;
-  }
-  return h;
-});
+const { authFetch } = useAuthState();
 
-const { data: response } = await useFetch<{ node: Person }>(
+const { data: response } = await authFetch<{ node: Person }>(
   `/api/nodes/entry/${node}`,
-  {
-    key: `node-entry-${node}-${idToken.value ? "auth" : "anon"}`,
-    headers,
-    watch: [headers],
-  },
 );
 const person = computed(() => response.value?.node);
 
