@@ -22,25 +22,11 @@ const edgeTypeLabels: Record<string, string> = {
 };
 
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
-  const { idToken } = useAuthState();
-
-  const headers = computed(() => {
-    const h: Record<string, string> = {};
-    if (idToken.value) {
-      h.Authorization = `Bearer ${idToken.value}`;
-    }
-    return h;
-  });
+  const { authFetch } = useAuthState();
 
   const edgesData = useState<Edge[] | null>("edges-data-global", () => null);
-  const { data: fetchedEdges, refresh: refreshEdges } = await useFetch<Edge[]>(
-    "/api/graph/edges",
-    {
-      key: "edges-data-global",
-      headers,
-      watch: [headers],
-    },
-  );
+  const { data: fetchedEdges, refresh: refreshEdges } =
+    await authFetch<Edge[]>("/api/graph/edges");
   watch(
     fetchedEdges,
     (v) => {
@@ -53,13 +39,9 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
     "nodes-all-data-global",
     () => null,
   );
-  const { data: fetchedNodes, refresh: refreshNodes } = await useFetch<{
+  const { data: fetchedNodes, refresh: refreshNodes } = await authFetch<{
     nodes: Record<string, unknown>;
-  }>("/api/nodes", {
-    key: "nodes-all-fetch-global",
-    headers,
-    watch: [headers],
-  });
+  }>("/api/nodes");
   watch(
     fetchedNodes,
     (v) => {

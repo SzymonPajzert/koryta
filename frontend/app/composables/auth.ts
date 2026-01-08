@@ -57,5 +57,30 @@ export function useAuthState() {
     return await createUserWithEmailAndPassword(auth, email, pass);
   };
 
-  return { user, isAdmin, idToken, userConfig, logout, login, register };
+  const authFetch = async <T>(url: string, options = {}) => {
+    const headers = computed(() => {
+      const h: Record<string, string> = {};
+      if (idToken.value) {
+        h.Authorization = `Bearer ${idToken.value}`;
+      }
+      return h;
+    });
+    return await useFetch<T>(url, {
+      key: url + "-auth-fetch" + (idToken.value ? "-authed" : "-public"),
+      headers,
+      watch: [idToken],
+      ...options,
+    });
+  };
+
+  return {
+    user,
+    isAdmin,
+    idToken,
+    userConfig,
+    logout,
+    login,
+    register,
+    authFetch,
+  };
 }
