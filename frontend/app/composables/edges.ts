@@ -24,31 +24,12 @@ const edgeTypeLabels: Record<string, string> = {
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   const { authFetch } = useAuthState();
 
-  const edgesData = useState<Edge[] | null>("edges-data-global", () => null);
-  const { data: fetchedEdges, refresh: refreshEdges } =
+  const { data: edgesData, refresh: refreshEdges } =
     await authFetch<Edge[]>("/api/graph/edges");
-  watch(
-    fetchedEdges,
-    (v) => {
-      if (v) edgesData.value = v;
-    },
-    { immediate: true },
-  );
 
-  const nodesResponse = useState<{ nodes: Record<string, unknown> } | null>(
-    "nodes-all-data-global",
-    () => null,
-  );
-  const { data: fetchedNodes, refresh: refreshNodes } = await authFetch<{
+  const { data: nodesResponse, refresh: refreshNodes } = await authFetch<{
     nodes: Record<string, unknown>;
   }>("/api/nodes");
-  watch(
-    fetchedNodes,
-    (v) => {
-      if (v) nodesResponse.value = v;
-    },
-    { immediate: true },
-  );
 
   const nodes = computed(() => nodesResponse.value?.nodes || {});
   const edges = computed(() => edgesData.value || []);
