@@ -2,8 +2,9 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import type { Revision } from "~~/shared/model";
 import { getUser } from "~~/server/utils/auth";
+import { authCachedEventHandler } from "~~/server/utils/handlers";
 
-export default defineEventHandler(async (event) => {
+export default authCachedEventHandler(async (event) => {
   const node_id = getRouterParam(event, "node_id");
   if (!node_id) return { revisions: [] };
 

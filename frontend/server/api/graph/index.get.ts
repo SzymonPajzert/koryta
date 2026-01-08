@@ -7,9 +7,9 @@ import {
   type GraphLayout,
 } from "~~/shared/graph/util";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
-import { getUser } from "~~/server/utils/auth";
+import { authCachedEventHandler } from "~~/server/utils/handlers";
 
-export default defineEventHandler(async (event) => {
+export default authCachedEventHandler(async (event) => {
   const user = await getUser(event).catch(() => null);
   const isAuth = !!user;
 
