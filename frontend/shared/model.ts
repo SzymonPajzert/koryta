@@ -3,7 +3,18 @@ type PageBase<PageType> = {
   type: PageType;
   content?: string;
   revision_id?: string;
+  votes?: Votes;
 };
+
+export type VoteCategory = "interesting" | "quality";
+
+export type Votes = Record<
+  VoteCategory,
+  {
+    total: number;
+    [userUid: string]: number;
+  }
+>;
 
 export type Node = PageBase<NodeType> & {
   name: string;
@@ -61,12 +72,14 @@ export interface Person {
   content?: string;
   wikipedia?: string;
   rejestrIo?: string;
+  votes?: Votes;
 }
 
 export interface Company {
   name: string;
   type: "place";
   krsNumber?: string;
+  votes?: Votes;
 }
 
 export interface Article {
@@ -74,6 +87,7 @@ export interface Article {
   type: "article";
   sourceURL: string;
   shortName?: string;
+  votes?: Votes;
 }
 
 export interface NodeTypeMap {
