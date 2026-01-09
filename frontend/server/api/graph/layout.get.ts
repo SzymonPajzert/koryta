@@ -2,6 +2,11 @@ import { simulation } from "~~/shared/graph/simulation";
 import * as d3 from "d3-force";
 import { fetchRTDB, setRTDB } from "~~/server/utils/fetch";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
+import type { GraphLayout } from "~~/shared/graph/util";
+
+interface Layout {
+  nodes: Record<string, { x: number; y: number }>;
+}
 
 type NodeLocation = {
   id: string;
@@ -11,8 +16,8 @@ type NodeLocation = {
 
 export default authCachedEventHandler(async (event) => {
   const [graph, layout] = await Promise.all([
-    event.$fetch("/api/graph"),
-    fetchRTDB<Partial<typeof result>>("layout"),
+    event.$fetch<GraphLayout>("/api/graph"),
+    fetchRTDB<Layout>("layout"),
   ]);
   if (
     layout.nodes &&

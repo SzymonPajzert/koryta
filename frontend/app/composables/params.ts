@@ -2,7 +2,9 @@ import type { GraphLayout } from "~~/shared/graph/util";
 
 export function useParams(title: string) {
   const route = useRoute();
-  const { data } = useAsyncData("graph", () => $fetch("/api/graph"));
+  const { data } = useAsyncData<GraphLayout>("graph", () =>
+    $fetch("/api/graph"),
+  );
   const nodeGroupsMap = computed(
     () =>
       data.value?.nodeGroups.reduce(

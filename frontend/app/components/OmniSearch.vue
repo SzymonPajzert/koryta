@@ -38,6 +38,7 @@
 
 <script setup lang="ts">
 import { getAnalytics, logEvent } from "firebase/analytics";
+import type { GraphLayout } from "~~/shared/graph/util";
 
 const { push, currentRoute } = useRouter();
 let analytics: any;
@@ -82,7 +83,7 @@ type ListItem = {
 
 const { idToken, authFetch } = useAuthState();
 
-const { data: graph, refresh } = await authFetch("/api/graph", {
+const { data: graph, refresh } = await authFetch<GraphLayout>("/api/graph", {
   key: "graph",
   lazy: true,
   query: computed(() => ({ pending: !!idToken.value })),

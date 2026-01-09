@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 
-import type { NodeType, Link } from "~~/shared/model";
+import type { NodeType, Link, Person, Company, Article } from "~~/shared/model";
 
 defineOptions({
   inheritAttrs: false,
@@ -51,12 +51,11 @@ const search = ref("");
 
 const { authFetch } = useAuthState();
 
-const { data: response, refresh } = await authFetch(
-  `/api/nodes/${props.entity}`,
-  {
-    lazy: true,
-  },
-);
+const { data: response, refresh } = await authFetch<{
+  entities: Record<string, Person | Company | Article>;
+}>(`/api/nodes/${props.entity}`, {
+  lazy: true,
+});
 
 const entitiesList = computed(() => {
   const ents = response.value?.entities ?? {};

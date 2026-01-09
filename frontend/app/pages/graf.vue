@@ -6,6 +6,8 @@ import { useDialogStore } from "@/stores/dialog";
 import { useSimulationStore } from "@/stores/simulation";
 import { useParams } from "@/composables/params";
 import type { NodeType } from "~~/shared/model";
+import type { GraphLayout } from "~~/shared/graph/util";
+import type { Node, NodeStats } from "~~/shared/graph/model";
 
 definePageMeta({
   title: "Graf",
@@ -15,29 +17,29 @@ definePageMeta({
 
 const dialogStore = useDialogStore();
 const simulationStore = useSimulationStore();
-const { data: graph } = await useAsyncData(
+const { data: graph } = await useAsyncData<GraphLayout>(
   "graph",
   () => $fetch("/api/graph"),
   { lazy: true },
 );
-const { data: layout } = await useAsyncData(
-  "layout",
-  () => $fetch("/api/graph/layout"),
-  { lazy: true },
-);
+const { data: layout } = await useAsyncData<{
+  nodes: Record<string, { x: number; y: number }>;
+}>("layout", () => $fetch("/api/graph/layout"), { lazy: true });
 
 const nodes = computed(() => graph.value?.nodes);
 const edges = computed(() => graph.value?.edges);
 
 const router = useRouter();
 
-const interestingNodes = computed(() => {
-  return Object.fromEntries(
-    Object.entries(nodes.value ?? {}).filter(
-      ([_, node]) => node.type !== "rect" || node.stats.people > 0,
-    ),
-  );
-});
+const interestingNodes = computed<Record<string, Node & { stats: NodeStats }>>(
+  () => {
+    return Object.fromEntries(
+      Object.entries(nodes.value ?? {}).filter(
+        ([_, node]) => node.type !== "rect" || node.stats.people > 0,
+      ),
+    );
+  },
+);
 
 const { filtered } = useParams("Graf ");
 
