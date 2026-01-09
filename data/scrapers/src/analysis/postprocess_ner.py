@@ -1,5 +1,6 @@
 import os
 
+import IPython
 import pandas as pd
 from google import genai
 from joblib import Memory
@@ -11,24 +12,33 @@ client = genai.Client(api_key=os.environ["GENAI_API_KEY"])  # get one from https
 
 
 def iou(a: list[str], b: list[str]) -> float:
-    a = set(x.lower() for x in a)
-    b = set(x.lower() for x in b)
-    return len(a & b) / len(a | b)
+    a_set = set(x.lower() for x in a)
+    b_set = set(x.lower() for x in b)
+    if not a_set and not b_set:
+        return 1.0
+    if not a_set or not b_set:
+        return 0.0
+    return len(a_set & b_set) / len(a_set | b_set)
 
 
 def parse_response(response: str) -> list[str]:
-    l = response.index("[")
-    r = response.index("]")
-    return [name.strip()[1:-1] for name in response[l + 1 : r].split(",")]
+    try:
+        left_bracket_index = response.index("[")
+        right_bracket_index = response.index("]")
+        return [name.strip()[1:-1] for name in response[left_bracket_index + 1 : right_bracket_index].split(",")]
+    except ValueError:
+        return []
 
 
 @memory.cache
 def get_response(prompt: str) -> str:
     pred = client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
-    return pred
+    return pred.text or ""
 
 
 def percent_words_in_text(names: list[str], text: str) -> float:
+    if not names:
+        return 0.0
     matched_words = 0
     text_lower = text.lower()
     for name in names:
@@ -46,10 +56,13 @@ def words_not_in_text(names: list[str], text: str) -> list[str]:
 
 def recall(pred_names: list[str], names_in_text: list[str], names_normalized: list[str]) -> float:
     assert len(names_in_text) == len(names_normalized)
-    pred_names = set(n.lower() for n in pred_names)
+    if not names_in_text:
+        return 1.0
+
+    pred_names_set = set(n.lower() for n in pred_names)
     matched = 0
     for nt, nn in zip(names_in_text, names_normalized):
-        if nt.lower() in pred_names or nn.lower() in pred_names:
+        if nt.lower() in pred_names_set or nn.lower() in pred_names_set:
             matched += 1
     return matched / len(names_in_text)
 
@@ -66,9 +79,9 @@ def main():
     preds = []
     for i, row in tqdm(ex_df.iterrows(), total=len(ex_df), desc="Processing examples"):
         try:
-            pred = get_response(prompt + row["text"])
-            pred_names = sorted(parse_response(pred.text))
-        except Exception as e:
+            pred_text = get_response(prompt + row["text"])
+            pred_names = sorted(parse_response(pred_text))
+        except Exception:
             pred_names = None
 
         preds.append(pred_names)
@@ -83,7 +96,6 @@ def main():
 
     print(ex_df["recall"].mean())
     print(ex_df.shape)
-    import IPython
 
     IPython.embed()
 

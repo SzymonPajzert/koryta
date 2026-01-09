@@ -170,6 +170,7 @@ module = [
     "cloudpathlib.*",
     "pymodulon.*",
     "adjustText.*",
+    "joblib",
 ]
 ignore_missing_imports = true
 
