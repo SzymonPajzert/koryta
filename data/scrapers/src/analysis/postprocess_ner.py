@@ -7,7 +7,8 @@ from joblib import Memory
 from tqdm import tqdm
 
 prompt = (
-    "Given a wikipedia article please list all people mentioned in this article in a list "
+    "Given a wikipedia article please list all people mentioned "
+    "in this article in a list "
     "and output as in python. Example output: [Ala Biba, Barack Obama]\n\n"
 )
 memory = Memory(location="/tmp/genai_cache", verbose=0)
