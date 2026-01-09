@@ -5,54 +5,64 @@
       <div class="text-caption text-medium-emphasis mb-1">Ciekawe?</div>
       <v-btn-group density="compact" rounded="pill" variant="outlined" divided>
         <v-btn
-          :color="userVoteInteresting === 1 ? 'primary' : undefined"
-          :variant="userVoteInteresting === 1 ? 'flat' : 'outlined'"
+          :color="userVoteInteresting > 0 ? 'primary' : undefined"
+          :variant="userVoteInteresting > 0 ? 'flat' : 'outlined'"
           size="small"
           prepend-icon="mdi-thumb-up"
-          :loading="loading.interesting"
-          @click="vote('interesting', userVoteInteresting === 1 ? 0 : 1)"
+          @click="vote('interesting', 1)"
         >
           Tak
         </v-btn>
         <v-btn
-          :color="userVoteInteresting === -1 ? 'error' : undefined"
-          :variant="userVoteInteresting === -1 ? 'flat' : 'outlined'"
+          :color="userVoteInteresting > 0 ? 'primary' : userVoteInteresting < 0 ? 'error' : undefined"
+          :disabled="true"
+          variant="flat"
+          size="small"
+        >
+          {{ userVoteInteresting }}
+        </v-btn>
+        <v-btn
+          :color="userVoteInteresting < 0 ? 'error' : undefined"
+          :variant="userVoteInteresting < 0 ? 'flat' : 'outlined'"
           size="small"
           prepend-icon="mdi-thumb-down"
-          :loading="loading.interesting"
-          @click="vote('interesting', userVoteInteresting === -1 ? 0 : -1)"
+          @click="vote('interesting', -1)"
         >
           Nie
         </v-btn>
       </v-btn-group>
-      <div class="text-caption mt-1">Wynik: {{ interestingTotal }}</div>
     </div>
 
     <div>
       <div class="text-caption text-medium-emphasis mb-1">Jakość</div>
       <v-btn-group density="compact" rounded="pill" variant="outlined" divided>
         <v-btn
-          :color="userVoteQuality === 1 ? 'success' : undefined"
-          :variant="userVoteQuality === 1 ? 'flat' : 'outlined'"
+          :color="userVoteQuality > 0 ? 'success' : undefined"
+          :variant="userVoteQuality > 0 ? 'flat' : 'outlined'"
           size="small"
           prepend-icon="mdi-check-circle"
-          :loading="loading.quality"
-          @click="vote('quality', userVoteQuality === 1 ? 0 : 1)"
+          @click="vote('quality', 1)"
         >
           Gotowe
         </v-btn>
         <v-btn
-          :color="userVoteQuality === -1 ? 'warning' : undefined"
-          :variant="userVoteQuality === -1 ? 'flat' : 'outlined'"
+          :color="userVoteQuality > 0 ? 'success' : userVoteQuality < 0 ? 'warning' : undefined"
+          :disabled="true"
+          variant="flat"
+          size="small"
+        >
+          {{ userVoteQuality }}
+        </v-btn>
+        <v-btn
+          :color="userVoteQuality < 0 ? 'warning' : undefined"
+          :variant="userVoteQuality < 0 ? 'flat' : 'outlined'"
           size="small"
           prepend-icon="mdi-alert-circle"
-          :loading="loading.quality"
-          @click="vote('quality', userVoteQuality === -1 ? 0 : -1)"
+          @click="vote('quality', -1)"
         >
           Popraw
         </v-btn>
       </v-btn-group>
-      <div class="text-caption mt-1">Wynik: {{ qualityTotal }}</div>
     </div>
   </div>
 </template>
@@ -113,7 +123,7 @@ const loading = reactive({
 const router = useRouter();
 const route = useRoute();
 
-async function vote(category: VoteCategory, value: number) {
+async function vote(category: VoteCategory, delta: number) {
   if (!user.value) {
     router.push({
       path: "/login",
@@ -121,6 +131,15 @@ async function vote(category: VoteCategory, value: number) {
     });
     return;
   }
+
+  // True optimistic update
+  if (!localVotes.value[category]) localVotes.value[category] = { total: 0 };
+  
+  const originalTotal = localVotes.value[category].total;
+  const originalUserVote = localVotes.value[category][user.value.uid] || 0;
+
+  localVotes.value[category].total += delta;
+  localVotes.value[category][user.value.uid] = originalUserVote + delta;
 
   loading[category] = true;
   try {
@@ -130,20 +149,14 @@ async function vote(category: VoteCategory, value: number) {
         id: props.id || props.entity.id || (props.entity as any)._id,
         type: props.type,
         category,
-        vote: value,
+        vote: delta,
       },
     });
-
-    // Optimistic update using local state
-    if (!localVotes.value[category]) localVotes.value[category] = { total: 0 };
-
-    const oldUserVote = localVotes.value[category][user.value.uid] || 0;
-    const diff = value - oldUserVote;
-
-    localVotes.value[category].total += diff;
-    localVotes.value[category][user.value.uid] = value;
   } catch (e) {
     console.error("Failed to vote", e);
+    // Revert optimistic update
+    localVotes.value[category].total = originalTotal;
+    localVotes.value[category][user.value.uid] = originalUserVote;
     alert("Wystąpił błąd podczas głosowania.");
   } finally {
     loading[category] = false;
