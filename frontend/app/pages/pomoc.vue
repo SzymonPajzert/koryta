@@ -1,40 +1,25 @@
 <template>
-  <v-alert
-    type="info"
-    variant="tonal"
-    class="mb-4"
-    border="start"
-    density="compact"
-    closable
-  >
-    <span class="text-caption"
-      >Aktywnie pracujemy nad możliwością edycji wpisów. Damy Ci znać mailem,
-      kiedy to naprawimy.</span
-    >
-  </v-alert>
   <v-row>
-    <v-col cols="12" sm="4"
-      ><HomeCard disabled="true">Dodaj artykuł</HomeCard>
-    </v-col>
-    <v-col cols="12" sm="4"
-      ><HomeCard disabled="true">Dodaj spółkę (KRS)</HomeCard>
-    </v-col>
-    <v-col cols="12" sm="4"
-      ><HomeCard disabled="true">Wyślij informację</HomeCard>
-    </v-col>
-    <v-col cols="12" md="6"
-      ><HomeCard disabled="true">Przejrzyj osoby</HomeCard></v-col
-    >
-    <v-col cols="12" md="6"
-      ><HomeCard disabled="true">Wyślij informację</HomeCard></v-col
-    >
-
     <v-col cols="12">
       <h2>Dołącz do społeczności</h2>
     </v-col>
+    <v-col cols="12">
+      <!-- TODO update the link before the end of January 2025 -->
+      <nuxt-link
+        to="https://join.slack.com/t/korytapl/shared_invite/zt-3mx37782c-X2tRnWIYdMkSJm5oqK6yqQ"
+        tag="div"
+        class="clickable-card"
+      >
+        <HomeCard height="100px"
+          ><template #header>Dołącz do Slacka</template>
+          Pracują z nami ludzie od UX, programowania, analizy danych i
+          czegokolwiek co może się przydać.
+        </HomeCard>
+      </nuxt-link>
+    </v-col>
     <v-col cols="12" md="6">
       <nuxt-link
-        to="https://www.guidedtrack.com/programs/9fk0fj2/run"
+        to="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
         tag="div"
         class="clickable-card"
       >
