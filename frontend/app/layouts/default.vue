@@ -94,6 +94,14 @@
       <v-btn prepend-icon="mdi-magnify-scan" variant="text" to="/admin/audit">
         Audyt
       </v-btn>
+      <v-btn
+        prepend-icon="mdi-lightning-bolt"
+        variant="text"
+        href="https://github.com/SzymonPajzert/koryta/issues/new"
+        target="_blank"
+      >
+        Zgłoś problem
+      </v-btn>
       <v-spacer icon />
     </v-toolbar>
     <v-container
