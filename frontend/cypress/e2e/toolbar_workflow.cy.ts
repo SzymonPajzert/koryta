@@ -10,7 +10,7 @@ describe("User Toolbar and Edit Workflow", () => {
 
     cy.login();
     cy.reload();
-    cy.contains("Dodaj artykuł").should("be.visible");
+    cy.contains("Dodaj nowe").should("be.visible");
 
     cy.wait(500); // Wait for potential animations
     cy.percySnapshot("toolbar-logged-in");
@@ -19,6 +19,7 @@ describe("User Toolbar and Edit Workflow", () => {
   it("pre-selects Article type when clicking Dodaj artykuł", () => {
     cy.login();
     cy.visit("/");
+    cy.contains("Dodaj nowe").click();
     cy.contains("Dodaj artykuł").click();
 
     cy.url().should("include", "/edit/node/new");
@@ -37,6 +38,7 @@ describe("User Toolbar and Edit Workflow", () => {
   it("pre-selects Person type when clicking Dodaj osobę", () => {
     cy.login();
     cy.visit("/");
+    cy.contains("Dodaj nowe").click();
     cy.contains("Dodaj osobę").click();
 
     cy.url().should("include", "type=person");

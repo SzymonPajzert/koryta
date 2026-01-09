@@ -51,39 +51,39 @@
   <v-main>
     <v-toolbar v-if="user" density="compact" color="surface-variant">
       <v-spacer />
-      <v-btn
-        prepend-icon="mdi-plus"
-        variant="text"
-        :to="{ path: '/edit/node/new', query: { type: 'article' } }"
-        :active="
-          route.path === '/edit/node/new' && route.query.type === 'article'
-        "
-        active-class="v-btn--active"
-      >
-        Dodaj artykuł
-      </v-btn>
-      <v-btn
-        prepend-icon="mdi-plus"
-        variant="text"
-        :to="{ path: '/edit/node/new', query: { type: 'person' } }"
-        :active="
-          route.path === '/edit/node/new' && route.query.type === 'person'
-        "
-        active-class="v-btn--active"
-      >
-        Dodaj osobę
-      </v-btn>
-      <v-btn
-        prepend-icon="mdi-plus"
-        variant="text"
-        :to="{ path: '/edit/node/new', query: { type: 'place' } }"
-        :active="
-          route.path === '/edit/node/new' && route.query.type === 'place'
-        "
-        active-class="v-btn--active"
-      >
-        Dodaj firmę
-      </v-btn>
+      <v-menu>
+        <template #activator="{ props }">
+          <v-btn v-bind="props" prepend-icon="mdi-plus" variant="text">
+            Dodaj nowe
+          </v-btn>
+        </template>
+        <v-list>
+          <v-list-item
+            prepend-icon="mdi-plus"
+            :to="{ path: '/edit/node/new', query: { type: 'article' } }"
+            :active="
+              route.path === '/edit/node/new' && route.query.type === 'article'
+            "
+            title="Dodaj artykuł"
+          />
+          <v-list-item
+            prepend-icon="mdi-plus"
+            :to="{ path: '/edit/node/new', query: { type: 'person' } }"
+            :active="
+              route.path === '/edit/node/new' && route.query.type === 'person'
+            "
+            title="Dodaj osobę"
+          />
+          <v-list-item
+            prepend-icon="mdi-plus"
+            :to="{ path: '/edit/node/new', query: { type: 'place' } }"
+            :active="
+              route.path === '/edit/node/new' && route.query.type === 'place'
+            "
+            title="Dodaj firmę"
+          />
+        </v-list>
+      </v-menu>
       <v-btn
         prepend-icon="mdi-format-list-bulleted"
         variant="text"
