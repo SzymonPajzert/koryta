@@ -46,22 +46,37 @@ describe("Voting functionality", () => {
       expect(interception.response?.statusCode).to.equal(200);
     });
 
-    // Check if score updated (assuming it was 0 initially)
-    // We look for the "Wynik" text in the first section (Interesting)
-    cy.contains("Ciekawe?").parent().find(".text-caption").contains("Wynik: 1");
+    // Check if score updated to 1
+    // New UI shows score in a disabled button in the middle
+    cy.contains("div", "Ciekawe?")
+      .parent()
+      .find("button:disabled")
+      .should("contain", "1");
 
-    // Expect button to be active (primary color means flat variant here)
+    // Expect "Tak" button to be active (primary color means flat variant here)
     cy.contains("button", "Tak")
       .should("have.class", "v-btn--variant-flat")
-      .and("have.class", "bg-primary"); // Vuetify uses bg-primary for flat buttons with color="primary"
+      .and("have.class", "bg-primary");
 
-    // Click "Nie" for Interesting
+    // Click "Tak" again to verify additive voting
+    cy.contains("button", "Tak").click();
+    cy.wait("@voteRequest");
+
+    // Check if score updated to 2
+    cy.contains("div", "Ciekawe?")
+      .parent()
+      .find("button:disabled")
+      .should("contain", "2");
+
+    // Click "Nie" for Interesting (should decrease by 1)
     cy.contains("button", "Nie").click();
-    cy.contains("button", "Nie").should("have.class", "v-btn--variant-flat");
-    cy.contains("button", "Tak").should(
-      "have.class",
-      "v-btn--variant-outlined",
-    );
+    cy.wait("@voteRequest");
+    
+    // Score should go back to 1 (2 - 1 = 1)
+    cy.contains("div", "Ciekawe?")
+      .parent()
+      .find("button:disabled")
+      .should("contain", "1");
 
     // Click "Gotowe" for Quality
     cy.contains("button", "Gotowe").click();

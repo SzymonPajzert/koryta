@@ -14,7 +14,13 @@
           Tak
         </v-btn>
         <v-btn
-          :color="userVoteInteresting > 0 ? 'primary' : userVoteInteresting < 0 ? 'error' : undefined"
+          :color="
+            userVoteInteresting > 0
+              ? 'primary'
+              : userVoteInteresting < 0
+                ? 'error'
+                : undefined
+          "
           :disabled="true"
           variant="flat"
           size="small"
@@ -46,7 +52,13 @@
           Gotowe
         </v-btn>
         <v-btn
-          :color="userVoteQuality > 0 ? 'success' : userVoteQuality < 0 ? 'warning' : undefined"
+          :color="
+            userVoteQuality > 0
+              ? 'success'
+              : userVoteQuality < 0
+                ? 'warning'
+                : undefined
+          "
           :disabled="true"
           variant="flat"
           size="small"
@@ -68,10 +80,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, reactive } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthState } from "@/composables/auth";
-import type { Node, Edge, VoteCategory, Votes } from "~~/shared/model";
+import type { Node, Edge, VoteCategory } from "~~/shared/model";
+import { getFirestore, collection, doc } from "firebase/firestore";
+import { useDocument } from "vuefire";
 
 const props = defineProps<{
   entity: Node | Edge;
@@ -79,41 +93,31 @@ const props = defineProps<{
   id?: string;
 }>();
 
-const { authFetch, user } = useAuthState();
+const { idToken, user } = useAuthState();
 
-// Create local reactive state for votes to ensure UI updates
-const localVotes = ref<Votes>({} as Votes);
-
-// Watch for prop changes to update local state (e.g. initial load)
-watch(
-  () => props.entity.votes,
-  (newVotes) => {
-    if (newVotes) {
-      localVotes.value = JSON.parse(JSON.stringify(newVotes));
-    } else {
-      localVotes.value = {
-        interesting: { total: 0 },
-        quality: { total: 0 },
-      } as Votes;
-    }
-  },
-  { immediate: true, deep: true },
+const firebaseApp = useFirebaseApp();
+const db = getFirestore(firebaseApp, "koryta-pl");
+const entityDocument = useDocument(
+  doc(collection(db, props.type + "s"), props.id),
 );
 
 const getUserVote = (category: VoteCategory) => {
+  console.log(category);
+  console.log(entityDocument.value);
   if (!user.value) return 0;
-  return localVotes.value[category]?.[user.value.uid] || 0;
-};
-
-const getTotal = (category: VoteCategory) => {
-  return localVotes.value[category]?.total || 0;
+  if (!entityDocument.value) return 0;
+  return entityDocument.value.votes[category]?.[user.value.uid] || 0;
 };
 
 const userVoteInteresting = computed(() => getUserVote("interesting"));
 const userVoteQuality = computed(() => getUserVote("quality"));
 
-const interestingTotal = computed(() => getTotal("interesting"));
-const qualityTotal = computed(() => getTotal("quality"));
+// const getTotal = (category: VoteCategory) => {
+//   if (!localVotes.value) return 0;
+//   return localVotes.value[category]?.total || 0;
+// };
+// const interestingTotal = computed(() => getTotal("interesting"));
+// const qualityTotal = computed(() => getTotal("quality"));
 
 const loading = reactive({
   interesting: false,
@@ -132,18 +136,9 @@ async function vote(category: VoteCategory, delta: number) {
     return;
   }
 
-  // True optimistic update
-  if (!localVotes.value[category]) localVotes.value[category] = { total: 0 };
-  
-  const originalTotal = localVotes.value[category].total;
-  const originalUserVote = localVotes.value[category][user.value.uid] || 0;
-
-  localVotes.value[category].total += delta;
-  localVotes.value[category][user.value.uid] = originalUserVote + delta;
-
   loading[category] = true;
   try {
-    await authFetch("/api/votes/vote", {
+    await $fetch("/api/votes/vote", {
       method: "POST",
       body: {
         id: props.id || props.entity.id || (props.entity as any)._id,
@@ -151,12 +146,12 @@ async function vote(category: VoteCategory, delta: number) {
         category,
         vote: delta,
       },
+      headers: {
+        Authorization: `Bearer ${idToken.value}`,
+      },
     });
   } catch (e) {
     console.error("Failed to vote", e);
-    // Revert optimistic update
-    localVotes.value[category].total = originalTotal;
-    localVotes.value[category][user.value.uid] = originalUserVote;
     alert("Wystąpił błąd podczas głosowania.");
   } finally {
     loading[category] = false;
