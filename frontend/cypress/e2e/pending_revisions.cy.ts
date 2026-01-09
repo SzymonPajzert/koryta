@@ -40,13 +40,15 @@ describe("Pending Revisions", () => {
     cy.contains("label", "Nazwa relacji")
       .parent()
       .find("input")
-      .type("Connection Pending Verification");
-
+      .type("znajomi");
     cy.contains("button", "Dodaj powiązanie").click();
 
-    // Alerts might appear, we can check for item in list
     cy.contains("Piotr Wiśniewski").should("be.visible");
-    cy.contains("Connection Pending Verification").should("be.visible");
+    cy.contains("znajomi").should("be.visible");
+
+    cy.visit("/entity/person/1");
+    cy.contains("Piotr Wiśniewski").should("be.visible");
+    cy.contains("znajomi").should("be.visible");
 
     // 3. Visit Revisions
     cy.visit("/revisions");

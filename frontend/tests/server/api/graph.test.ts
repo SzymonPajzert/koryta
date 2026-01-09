@@ -3,6 +3,13 @@ import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 vi.stubGlobal("defineEventHandler", (handler: any) => handler);
+vi.stubGlobal(
+  "defineCachedEventHandler",
+  (handler: any, _options: any) => handler,
+);
+vi.stubGlobal("getUser", async (_event: any) => {
+  return true;
+});
 
 vi.mock("~~/server/utils/fetch", () => ({
   fetchNodes: vi.fn(),

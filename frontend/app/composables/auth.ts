@@ -23,6 +23,12 @@ export function useAuthState() {
   );
   const userConfig = useDocument<UserConfig>(userConfigRef);
 
+  // If the auth state is resolved from hydration, we can make API calls
+  const isAuthResolved = useState<boolean>(
+    "isAuthResolved",
+    () => !!idToken.value,
+  );
+
   // Initialize listener only once on the client
   if (import.meta.client && !useState("authListenerInitialized").value) {
     useState("authListenerInitialized", () => true);
@@ -36,6 +42,7 @@ export function useAuthState() {
         isAdmin.value = false;
         idToken.value = "";
       }
+      isAuthResolved.value = true;
     });
   }
 
@@ -57,5 +64,39 @@ export function useAuthState() {
     return await createUserWithEmailAndPassword(auth, email, pass);
   };
 
-  return { user, isAdmin, idToken, userConfig, logout, login, register };
+  const authFetch = <T>(url: string | (() => string), options: any = {}) => {
+    const headers = computed(() => {
+      const h: Record<string, string> = {};
+      if (idToken.value) {
+        h["Cache-Control"] = "no-cache";
+        h.Pragma = "no-cache";
+        h.Authorization = `Bearer ${idToken.value}`;
+      }
+      return h;
+    });
+    const key = computed(() => {
+      return (
+        (typeof url === "string" ? url : url()) +
+        "-auth-fetch" +
+        (idToken.value ? "-auth" : "-public")
+      );
+    });
+    return useFetch<T>(url, {
+      key,
+      headers,
+      watch: [idToken],
+      ...options,
+    });
+  };
+
+  return {
+    user,
+    isAdmin,
+    idToken,
+    userConfig,
+    logout,
+    login,
+    register,
+    authFetch,
+  };
 }

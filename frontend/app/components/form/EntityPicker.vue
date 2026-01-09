@@ -12,6 +12,7 @@
     return-object
     autocomplete="off"
     data-testid="entity-picker-input"
+    @update:focused="(val: boolean) => val && refresh()"
   >
     <template #no-data>
       <v-list-item v-if="search" @click="addNewItem">
@@ -48,25 +49,14 @@ const model = defineModel<Link<typeof props.entity>>();
 
 const search = ref("");
 
-const { idToken } = useAuthState();
+const { authFetch } = useAuthState();
 
-const { data: response } = useFetch<{
-  entities: Record<string, { name: string }>;
-}>(() => `/api/nodes/${props.entity}`, {
-  key: `entities-picker-${props.entity}-${idToken.value ? "auth" : "guest"}`,
-  query: {
-    search: search,
+const { data: response, refresh } = await authFetch(
+  `/api/nodes/${props.entity}`,
+  {
+    lazy: true,
   },
-  headers: computed(() => {
-    const h: Record<string, string> = {};
-    if (idToken.value) {
-      h.Authorization = `Bearer ${idToken.value}`;
-    }
-    return h;
-  }),
-  watch: [idToken],
-  lazy: true,
-});
+);
 
 const entitiesList = computed(() => {
   const ents = response.value?.entities ?? {};

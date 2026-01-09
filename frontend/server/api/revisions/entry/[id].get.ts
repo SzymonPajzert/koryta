@@ -1,7 +1,8 @@
 import { getFirestore } from "firebase-admin/firestore";
 import type { Revision } from "~~/shared/model";
+import { authCachedEventHandler } from "~~/server/utils/handlers";
 
-export default defineEventHandler(async (event) => {
+export default authCachedEventHandler(async (event) => {
   const id = getRouterParam(event, "id");
   if (!id) {
     throw createError({

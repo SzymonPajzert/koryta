@@ -74,24 +74,13 @@ definePageMeta({
   middleware: "auth",
 });
 
-const { idToken } = useAuthState();
-const headers = computed(() => {
-  const h: Record<string, string> = {};
-  if (idToken.value) {
-    h.Authorization = `Bearer ${idToken.value}`;
-  }
-  return h;
-});
+const { authFetch } = useAuthState();
 
-const { data: edges } = await useFetch<Edge[]>("/api/graph/edges", {
-  headers,
-});
+const { data: edges } = await authFetch<Edge[]>("/api/graph/edges");
 
-const { data: articlesResponse } = await useFetch<{
+const { data: articlesResponse } = await authFetch<{
   entities: Record<string, Node>;
-}>("/api/nodes/article", {
-  headers,
-});
+}>("/api/nodes/article");
 
 const edgesData = computed(() => edges.value || []);
 const articles = computed(() => {

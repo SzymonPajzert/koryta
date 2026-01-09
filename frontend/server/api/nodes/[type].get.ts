@@ -1,8 +1,9 @@
 import { fetchNodes } from "~~/server/utils/fetch";
 import type { NodeType } from "~~/shared/model";
 import { getUser } from "~~/server/utils/auth";
+import { authCachedEventHandler } from "~~/server/utils/handlers";
 
-export default defineEventHandler(async (event) => {
+export default authCachedEventHandler(async (event) => {
   const nodeType = getRouterParam(event, "type");
   if (!nodeType) return undefined;
 

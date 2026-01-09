@@ -2,8 +2,9 @@ import { getUser } from "~~/server/utils/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { pageIsPublic } from "~~/shared/model";
+import { authCachedEventHandler } from "~~/server/utils/handlers";
 
-export default defineEventHandler(async (event) => {
+export default authCachedEventHandler(async (event) => {
   const id = getRouterParam(event, "id");
   const user = await getUser(event).catch(() => null);
 

@@ -1,10 +1,10 @@
 import { fetchNodes } from "~~/server/utils/fetch";
 import { getUser } from "~~/server/utils/auth";
+import { authCachedEventHandler } from "~~/server/utils/handlers";
 
-export default defineEventHandler(async (event) => {
+export default authCachedEventHandler(async (event) => {
   const user = await getUser(event).catch(() => null);
-  const query = getQuery(event);
-  const isAuth = !!user || query?.pending === "true";
+  const isAuth = !!user;
 
   const [people, places, articles] = await Promise.all([
     fetchNodes("person", { isAuth }),

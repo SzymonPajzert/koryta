@@ -1,8 +1,9 @@
 import type { Node } from "~~/shared/model";
 import { getFirestore } from "firebase-admin/firestore";
 import { getRevisionsForNodes } from "~~/server/utils/revisions";
+import { authCachedEventHandler } from "~~/server/utils/handlers";
 
-export default defineEventHandler(async () => {
+export default authCachedEventHandler(async () => {
   const db = getFirestore("koryta-pl");
   const query: FirebaseFirestore.Query = db
     .collection("nodes")

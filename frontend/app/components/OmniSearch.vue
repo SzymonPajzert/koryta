@@ -40,7 +40,10 @@
 import { getAnalytics, logEvent } from "firebase/analytics";
 
 const { push, currentRoute } = useRouter();
-const analytics = getAnalytics();
+let analytics: any;
+if (import.meta.client) {
+  analytics = getAnalytics();
+}
 
 const props = defineProps<{
   searchText?: string;
@@ -77,21 +80,19 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { idToken } = useAuthState();
+const { idToken, authFetch } = useAuthState();
 
-const { data: graph } = await useAsyncData(
-  "graph",
-  () =>
-    $fetch("/api/graph", {
-      headers: idToken.value
-        ? { Authorization: `Bearer ${idToken.value}` }
-        : {},
-    }),
-  {
-    lazy: true,
-    watch: [idToken],
-  },
-);
+const { data: graph, refresh } = await authFetch("/api/graph", {
+  key: "graph",
+  lazy: true,
+  query: computed(() => ({ pending: !!idToken.value })),
+});
+
+watch(autocompleteFocus, (focused) => {
+  if (focused) {
+    refresh();
+  }
+});
 
 const items = computed<ListItem[]>(() => {
   if (
@@ -171,7 +172,9 @@ if (!props.fake) {
         ...value.query,
       },
     });
-    logEvent(analytics, "select_content", value.logEventKey);
+    if (analytics) {
+      logEvent(analytics, "select_content", value.logEventKey);
+    }
     autocompleteFocus.value = false;
   });
 }
