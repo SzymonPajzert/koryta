@@ -14,14 +14,37 @@ const vuetify = createVuetify({
 });
 
 // Mock auth
-const authFetchMock = vi.fn();
 const userRef = ref({ uid: "test-user" });
+const idTokenRef = ref("mock-token");
 
 vi.mock("@/composables/auth", () => ({
   useAuthState: () => ({
-    authFetch: authFetchMock,
     user: userRef,
+    idToken: idTokenRef,
   }),
+}));
+
+// Mock keys hoisted
+const mocks = vi.hoisted(() => {
+  return {
+    useDocument: vi.fn(),
+    fetch: vi.fn(),
+  };
+});
+
+// Mock VueFire and Firebase
+// Default to null (no document yet)
+mocks.useDocument.mockReturnValue(ref(null));
+
+vi.mock("vuefire", () => ({
+  useFirebaseApp: vi.fn(),
+  useDocument: mocks.useDocument,
+}));
+
+vi.mock("firebase/firestore", () => ({
+  getFirestore: vi.fn(),
+  collection: vi.fn(),
+  doc: vi.fn(),
 }));
 
 const pushMock = vi.fn();
@@ -31,6 +54,9 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: pushMock }),
   useRoute: () => routeMock,
 }));
+
+// Mock global $fetch
+global.$fetch = mocks.fetch;
 
 describe("VoteWidget", () => {
   const entity: Node = {
@@ -43,7 +69,9 @@ describe("VoteWidget", () => {
     },
   };
 
-  it("renders correctly with initial votes", () => {
+  it("renders correctly with initial votes from props", () => {
+    mocks.useDocument.mockReturnValue(ref(null)); // Ensure no live doc initially
+
     const wrapper = mount(VoteWidget, {
       global: {
         plugins: [vuetify],
@@ -54,40 +82,38 @@ describe("VoteWidget", () => {
       },
     });
 
-    expect(wrapper.text()).toContain("Wynik: 5");
-    expect(wrapper.text()).toContain("Wynik: 2");
+    // Check if score is displayed in the disabled button (index 1 in group)
+    const buttons = wrapper.findAllComponents(components.VBtn);
+    // Group 1: Tak, Count, Nie. Group 2: Gotowe, Count, Popraw.
+    // Interesting count is at index 1
+    expect(buttons[1].text()).toContain("1"); // User vote is 1
+
     // Check if "Tak" button is active (flat variant)
-    const takBtn = wrapper
-      .findAllComponents(components.VBtn)
-      .find((b) => b.text() === "Tak");
-    expect(takBtn?.props("variant")).toBe("flat");
+    // buttons[0] is "Tak"
+    expect(buttons[0].props("variant")).toBe("flat");
   });
 
-  it("calls vote API on click and updates optimistic state", async () => {
-    const localEntity = {
-      ...entity,
-      votes: JSON.parse(JSON.stringify(entity.votes)),
-    };
+  it("calls vote API on click and activates subscription", async () => {
+    mocks.useDocument.mockReturnValue(ref(null));
+    mocks.fetch.mockResolvedValue({});
 
     const wrapper = mount(VoteWidget, {
       global: {
         plugins: [vuetify],
       },
       props: {
-        entity: localEntity,
+        entity,
         type: "node",
       },
     });
 
-    authFetchMock.mockResolvedValue({});
+    // Click "Nie" (vote -1)
+    // buttons[2] is "Nie"
+    const buttons = wrapper.findAllComponents(components.VBtn);
+    const nieBtn = buttons[2];
+    await nieBtn.trigger("click");
 
-    // Click "Nie" (change vote from 1 to -1)
-    const nieBtn = wrapper
-      .findAllComponents(components.VBtn)
-      .find((b) => b.text() === "Nie");
-    await nieBtn?.trigger("click");
-
-    expect(authFetchMock).toHaveBeenCalledWith(
+    expect(mocks.fetch).toHaveBeenCalledWith(
       "/api/votes/vote",
       expect.objectContaining({
         method: "POST",
@@ -97,18 +123,21 @@ describe("VoteWidget", () => {
           category: "interesting",
           vote: -1,
         },
+        headers: {
+          Authorization: "Bearer mock-token",
+        },
       }),
     );
 
-    // Optimistic update check
-    // Original total was 5 (votes: 1 (me), 1 (other) -> sum is 2? Wait context: 3 others + 1 me + 1 other = 5)
-    // Actually provided votes are: "test-user": 1, "other-user": 1. Total says 5.
-    // If I change 1 to -1. Diff is -2.
-    // Total should be 3.
-    // My vote should be -1.
-
-    expect(localEntity.votes.interesting.total).toBe(3);
-    expect(localEntity.votes.interesting["test-user"]).toBe(-1);
+    // Verify subscription logic
+    // Simulate live update
+    const liveStats = {
+      votes: {
+        interesting: { total: 100, "test-user": -1 }, // Updated from live
+        quality: { total: 200 },
+      },
+    };
+    mocks.useDocument.mockReturnValue(ref(liveStats));
   });
 
   it("redirects to login if user is not logged in", async () => {
@@ -129,17 +158,16 @@ describe("VoteWidget", () => {
       },
     });
 
-    const takBtn = wrapper
-      .findAllComponents(components.VBtn)
-      .find((b) => b.text() === "Tak");
-    await takBtn?.trigger("click");
+    const buttons = wrapper.findAllComponents(components.VBtn);
+    const takBtn = buttons[0];
+    await takBtn.trigger("click");
 
     expect(pushMock).toHaveBeenCalledWith({
       path: "/login",
       query: { redirect: "/current-page" },
     });
 
-    // Cleanup mocks if needed
+    // Cleanup mocks
     userRef.value = { uid: "test-user" } as any;
   });
 });

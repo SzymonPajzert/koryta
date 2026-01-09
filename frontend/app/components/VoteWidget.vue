@@ -85,7 +85,7 @@ import { useRouter, useRoute } from "vue-router";
 import { useAuthState } from "@/composables/auth";
 import type { Node, Edge, VoteCategory } from "~~/shared/model";
 import { getFirestore, collection, doc } from "firebase/firestore";
-import { useDocument } from "vuefire";
+import { useDocument, useFirebaseApp } from "vuefire";
 
 const props = defineProps<{
   entity: Node | Edge;
