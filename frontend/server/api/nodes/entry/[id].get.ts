@@ -55,11 +55,11 @@ export default authCachedEventHandler(async (event) => {
 async function getEntity(db: FirebaseFirestore.Firestore, id: string) {
   const nodeDoc = await db.collection("nodes").doc(id).get();
   if (nodeDoc.exists) {
-    return nodeDoc.data();
+    return { id: nodeDoc.id, ...nodeDoc.data() };
   }
   const edgeDoc = await db.collection("edges").doc(id).get();
   if (edgeDoc.exists) {
-    return edgeDoc.data();
+    return { id: edgeDoc.id, ...edgeDoc.data() };
   }
   return null;
 }

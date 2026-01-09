@@ -9,6 +9,9 @@
       </v-card-title>
       <v-card-text>
         {{ person?.content }}
+        <div class="mt-4">
+          <VoteWidget v-if="person" :id="node" :entity="person" type="node" />
+        </div>
       </v-card-text>
     </v-card>
 
@@ -24,6 +27,9 @@
           KRS: {{ (person as any)?.krsNumber }}
         </div>
         {{ person?.content }}
+        <div class="mt-4">
+          <VoteWidget v-if="person" :id="node" :entity="person" type="node" />
+        </div>
       </v-card-text>
     </v-card>
     <v-card v-if="type == 'article'" width="100%">
@@ -41,6 +47,9 @@
           }}</a>
         </div>
         {{ person?.content }}
+        <div class="mt-4">
+          <VoteWidget v-if="person" :id="node" :entity="person" type="node" />
+        </div>
       </v-card-text>
     </v-card>
     <div class="mt-4">
