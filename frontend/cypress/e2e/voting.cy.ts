@@ -71,7 +71,7 @@ describe("Voting functionality", () => {
     // Click "Nie" for Interesting (should decrease by 1)
     cy.contains("button", "Nie").click();
     cy.wait("@voteRequest");
-    
+
     // Score should go back to 1 (2 - 1 = 1)
     cy.contains("div", "Ciekawe?")
       .parent()

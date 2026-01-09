@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, reactive, ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthState } from "@/composables/auth";
 import type { Node, Edge, VoteCategory } from "~~/shared/model";
@@ -97,27 +97,40 @@ const { idToken, user } = useAuthState();
 
 const firebaseApp = useFirebaseApp();
 const db = getFirestore(firebaseApp, "koryta-pl");
-const entityDocument = useDocument(
-  doc(collection(db, props.type + "s"), props.id),
-);
+
+const shouldSubscribe = ref(false);
+
+const docSource = computed(() => {
+  if (!shouldSubscribe.value) return null;
+  return doc(
+    collection(db, props.type + "s"),
+    props.id || props.entity.id || (props.entity as any)._id,
+  );
+});
+
+const entityDocument = useDocument(docSource);
+
+const displayedVotes = computed(() => {
+  if (entityDocument.value) {
+    return (
+      entityDocument.value.votes || {
+        interesting: { total: 0 },
+        quality: { total: 0 },
+      }
+    );
+  }
+  return (
+    props.entity.votes || { interesting: { total: 0 }, quality: { total: 0 } }
+  );
+});
 
 const getUserVote = (category: VoteCategory) => {
-  console.log(category);
-  console.log(entityDocument.value);
   if (!user.value) return 0;
-  if (!entityDocument.value) return 0;
-  return entityDocument.value.votes[category]?.[user.value.uid] || 0;
+  return displayedVotes.value[category]?.[user.value.uid] || 0;
 };
 
 const userVoteInteresting = computed(() => getUserVote("interesting"));
 const userVoteQuality = computed(() => getUserVote("quality"));
-
-// const getTotal = (category: VoteCategory) => {
-//   if (!localVotes.value) return 0;
-//   return localVotes.value[category]?.total || 0;
-// };
-// const interestingTotal = computed(() => getTotal("interesting"));
-// const qualityTotal = computed(() => getTotal("quality"));
 
 const loading = reactive({
   interesting: false,
@@ -136,6 +149,7 @@ async function vote(category: VoteCategory, delta: number) {
     return;
   }
 
+  shouldSubscribe.value = true;
   loading[category] = true;
   try {
     await $fetch("/api/votes/vote", {
