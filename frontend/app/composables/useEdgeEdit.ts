@@ -90,6 +90,22 @@ export function useEdgeEdit({
   const isEditingEdge = computed(() => !!newEdge.value.id);
 
   const availableEdgeTypes = computed(() => {
+    // Special handling for "article" mode (context mode)
+    if (myType.value === "article") {
+      let options = edgeTypeOptions;
+      if (pickerSource.value) {
+        options = options.filter(
+          (o) => o.sourceType === pickerSource.value?.type,
+        );
+      }
+      if (pickerTarget.value) {
+        options = options.filter(
+          (o) => o.targetType === pickerTarget.value?.type,
+        );
+      }
+      return options;
+    }
+
     const dir = newEdge.value.direction;
     return edgeTypeOptions.filter((o) => {
       if (dir === "outgoing") {
@@ -123,7 +139,7 @@ export function useEdgeEdit({
   watch(
     () => newEdge.value.direction,
     (newDir) => {
-      if (!isEditingEdge.value) {
+      if (!isEditingEdge.value && myType.value !== "article") {
         pickerTarget.value = undefined;
 
         // Re-validate current edgeType
@@ -151,8 +167,17 @@ export function useEdgeEdit({
     { deep: true },
   );
 
+  const edgeSourceType = computed<NodeType>(() => {
+    const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+    return option?.sourceType || "person";
+  });
+
   const edgeTargetType = computed<NodeType>(() => {
     const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+    if (myType.value === "article") {
+      return option?.targetType || "place";
+    }
+
     const dir = newEdge.value.direction;
     if (dir === "incoming") {
       // I am Target. Picker is Source.
@@ -164,7 +189,10 @@ export function useEdgeEdit({
 
   watch(edgeType, () => {
     if (!isEditingEdge.value) {
-      pickerTarget.value = undefined;
+      // TODO should we lear pickers if type changes?
+      if (myType.value !== "article") {
+        pickerTarget.value = undefined;
+      }
     }
   });
 
@@ -278,6 +306,7 @@ export function useEdgeEdit({
     isEditingEdge,
     availableEdgeTypes,
     edgeTargetType,
+    edgeSourceType,
     edgeTypeOptions,
     processEdge,
     cancelEditEdge,

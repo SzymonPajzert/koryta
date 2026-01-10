@@ -10,7 +10,7 @@
         <div v-if="effectiveNodeType === 'article'" class="w-100">
           <EntityPicker
             v-model="pickerSource"
-            entity="person"
+            :entity="edgeSourceType"
             label="Wyszukaj źródło"
             density="compact"
             hide-details
@@ -194,6 +194,7 @@ const {
   cancelEditEdge,
   isEditingEdge,
   edgeTargetType,
+  edgeSourceType,
   edgeType,
   availableEdgeTypes,
   pickerTarget,
