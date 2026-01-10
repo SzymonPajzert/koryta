@@ -4,7 +4,7 @@
     style="max-width: 800px; width: 100%"
   >
     <v-card width="100%">
-      <v-tabs v-model="tab" bg-color="surface-variant">
+      <v-tabs v-model="tab" bg-color="primary">
         <v-tab value="details">Informacje</v-tab>
         <v-tab value="discussion">Dyskusja</v-tab>
       </v-tabs>

@@ -49,7 +49,7 @@
     </template>
   </v-app-bar>
   <v-main>
-    <v-toolbar v-if="user" density="compact" color="surface-variant">
+    <v-toolbar v-if="user" density="compact" color="primary">
       <v-spacer />
       <v-menu>
         <template #activator="{ props }">
