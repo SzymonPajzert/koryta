@@ -1,5 +1,6 @@
-import os
 import re
+from pathlib import Path
+from typing import Dict, List
 
 import spacy
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
@@ -13,11 +14,11 @@ class HerbertNERClient:
 
     def __init__(self):
         self.model_checkpoint = "pczarnik/herbert-base-ner"
-        self.model_dir = os.path.join("models","herbert-base-ner")
+        self.model_dir = Path("models") / "herbert-base-ner"
         
     def _get_pipeline(self):
         if self._pipeline is None:
-            if not os.path.isdir(self.model_dir):
+            if not Path(self.model_dir).is_dir():
                 
                 print(f"Loading model from {self.model_checkpoint}...")
                 tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
@@ -43,18 +44,22 @@ class HerbertNERClient:
         return HerbertNERClient._nlp_spacy
             
 
-    def extract_entities(self, text):
+    def extract_entities(self, text: str) -> List[dict]:
+        """extract all entities from given text"""
+
         ner_pipeline = self._get_pipeline()
         return ner_pipeline(text)
         
-    def group_entities(self, ner_output):
-        entities = {
+    def group_entities(self, ner_output: List[dict]) -> dict:
+        """ group NERs withing three categories: PER, LOC, ORG"""
+
+        entities: Dict[str, List[str]] = {
             'PER': [],
             'LOC': [],
             'ORG': []
         }
     
-        current_entity = []
+        current_entity: list[str] = []
         current_type = None
         
         for token in ner_output:
@@ -76,12 +81,14 @@ class HerbertNERClient:
                 current_entity = []
                 current_type = None
         
-            if current_entity and current_type:
-                entities[current_type].append(''.join(current_entity))
-        
-            return entities
+        if current_entity and current_type:
+            entities[current_type].append(''.join(current_entity))
+    
+        return entities
 
-    def fix_spacing_full_names(self, full_name):
+    def fix_spacing_full_names(self, full_name: str) -> str:
+        """remove unnecessary spacing"""
+
         # tokenize string
         tokens = re.findall(r'\b\w+\b', full_name)
     
@@ -97,7 +104,9 @@ class HerbertNERClient:
     
         return result.strip()
 
-    def lemmatize_name_spacy(self, name):
+    def lemmatize_name_spacy(self, name: str) -> str:
+        """return the basic form of given name"""
+
         nlp_spacy = self._get_nlp_spacy()
         doc = nlp_spacy(name)
         lemmatized = [token.lemma_ for token in doc]
