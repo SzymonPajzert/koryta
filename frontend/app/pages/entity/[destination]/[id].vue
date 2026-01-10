@@ -102,7 +102,7 @@
         </template>
         Zaproponuj zmianę
       </v-btn>
-      <QuickAddArticleButton :node-id="node" />
+      <QuickAddArticleButton v-if="type !== 'article'" :node-id="node" />
     </div>
   </div>
 </template>

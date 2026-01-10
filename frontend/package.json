@@ -22,7 +22,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:duplication": "jscpd app server --ignore app/coverage",
-    "quick-check": "npm run format:check; npm run test:ci; npm run typecheck; npx eslint; npm run check:duplication"
+    "quick-check": "npm run format; npm run format:check && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.3",
