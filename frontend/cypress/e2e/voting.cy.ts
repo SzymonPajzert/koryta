@@ -43,15 +43,6 @@ describe("Voting functionality", () => {
     cy.contains("button", "Nie").click();
     cy.wait("@voteRequest");
 
-    // We can't strictly assert the middle state without knowing the start state,
-    // but we can ensure the UI responds.
-    // If we clicked Tak (1) -> Tak (2) -> Nie (1).
-    // Result should still be positive (bg-primary)
-    // Actually if we start at 0: 0 -> 1 -> 2 -> 1. Primary.
-    // If we start at -1: -1 -> 0 -> 1 -> 0. Not primary.
-    // Since we can't guarantee start state, let's just assert the request flow works and
-    // the UI is interactive.
-
     // Click "Gotowe" for Quality
     cy.contains("button", "Gotowe").click();
     cy.wait("@voteRequest");
