@@ -1,2 +1,0 @@
-- DONE Enabled sentry
-- TODO Is the sentry configured?
