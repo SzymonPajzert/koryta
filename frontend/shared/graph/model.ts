@@ -6,6 +6,7 @@ export interface Node {
   color: string;
   sizeMult?: number;
   hide?: boolean;
+  parties?: string[];
 }
 
 export interface NodeStats {

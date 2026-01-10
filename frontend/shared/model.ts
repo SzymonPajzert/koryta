@@ -81,6 +81,7 @@ export interface Company {
   name: string;
   type: "place";
   krsNumber?: string;
+  content?: string;
   votes?: Votes;
 }
 
@@ -89,6 +90,7 @@ export interface Article {
   type: "article";
   sourceURL: string;
   shortName?: string;
+  content?: string;
   votes?: Votes;
 }
 

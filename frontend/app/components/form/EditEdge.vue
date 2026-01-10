@@ -26,7 +26,7 @@
             {{ current.name || "Ten węzeł" }}
           </v-chip>
           <div class="text-caption text-medium-emphasis">
-            {{ (newEdge as any).direction === "outgoing" ? "Źródło" : "Cel" }}
+            {{ newEdge.direction === "outgoing" ? "Źródło" : "Cel" }}
           </div>
         </div>
       </v-col>
@@ -59,20 +59,18 @@
             class="px-4"
             :title="'Odwróć kierunek'"
             @click="
-              (newEdge as any).direction =
-                (newEdge as any).direction === 'outgoing'
-                  ? 'incoming'
-                  : 'outgoing'
+              newEdge.direction =
+                newEdge.direction === 'outgoing' ? 'incoming' : 'outgoing'
             "
           >
             <span class="mr-1">
-              {{ (newEdge as any).direction === "outgoing" ? "Do" : "Od" }}
+              {{ newEdge.direction === "outgoing" ? "Do" : "Od" }}
             </span>
             <v-icon
               :icon="
                 effectiveNodeType === 'article'
                   ? 'mdi-arrow-right'
-                  : (newEdge as any).direction === 'outgoing'
+                  : newEdge.direction === 'outgoing'
                     ? 'mdi-arrow-right'
                     : 'mdi-arrow-left'
               "
@@ -95,7 +93,7 @@
           />
         </div>
         <div class="text-caption text-center mt-1 text-medium-emphasis">
-          {{ (newEdge as any).direction === "outgoing" ? "Cel" : "Źródło" }}
+          {{ newEdge.direction === "outgoing" ? "Cel" : "Źródło" }}
         </div>
       </v-col>
     </v-row>
@@ -168,7 +166,7 @@
         </v-btn>
         <DialogProposeRemoval
           v-if="isEditingEdge"
-          :id="(newEdge as any).id"
+          :id="newEdge.id!"
           collection="edges"
           class="ml-2"
           @success="cancelEditEdge"
@@ -181,7 +179,7 @@
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import EntityPicker from "~/components/form/EntityPicker.vue";
-import type { Link } from "~~/shared/model";
+import type { Link, NodeType } from "~~/shared/model";
 
 definePageMeta({
   middleware: "auth",
@@ -191,7 +189,7 @@ const route = useRoute();
 const { node_id, refreshEdges, current, authHeaders, stateKey } =
   await useNodeEdit();
 const effectiveNodeType = computed(() => {
-  if (route.query.type) return route.query.type as any;
+  if (route.query.type) return route.query.type as NodeType;
   return current.value.type || "person";
 });
 

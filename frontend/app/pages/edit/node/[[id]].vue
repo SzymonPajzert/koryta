@@ -105,6 +105,14 @@
                     size="small"
                     @click="openEditEdge(edge)"
                   />
+                  <v-btn
+                    icon="mdi-open-in-new"
+                    variant="text"
+                    size="small"
+                    target="_blank"
+                    :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
+                    title="Otwórz w nowej karcie"
+                  />
                 </template>
               </v-list-item>
             </v-list>

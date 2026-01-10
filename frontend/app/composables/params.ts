@@ -30,9 +30,8 @@ export function useParams(title: string) {
     if (route.query.partia && typeof route.query.partia === "string") {
       document.title = title + route.query.partia;
       keys = Object.keys(nodes.value).filter((key) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const node = nodes.value[key] as any;
-        return node.parties?.includes(route.query.partia as string);
+        const node = nodes.value[key];
+        return node?.parties?.includes(route.query.partia as string);
       });
     }
 

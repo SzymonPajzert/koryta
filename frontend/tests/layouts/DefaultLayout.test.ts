@@ -31,11 +31,11 @@ describe("DefaultLayout", () => {
   });
 
   it("shows Audit button when user is logged in", async () => {
-    (useAuthState as any).mockReturnValue({
+    vi.mocked(useAuthState).mockReturnValue({
       user: ref({ uid: "test-admin" }),
       userConfig: { data: ref({}) },
       logout: vi.fn(),
-    });
+    } as any);
 
     const wrapper = mount(DefaultLayout, {
       global: {
@@ -70,11 +70,11 @@ describe("DefaultLayout", () => {
   });
 
   it("does not show Audit button when user is not logged in", async () => {
-    (useAuthState as any).mockReturnValue({
+    vi.mocked(useAuthState).mockReturnValue({
       user: ref(null),
       userConfig: { data: ref({}) },
       logout: vi.fn(),
-    });
+    } as any);
 
     const wrapper = mount(DefaultLayout, {
       global: {

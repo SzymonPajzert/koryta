@@ -1,6 +1,6 @@
 <template>
   <div class="vote-widget d-flex align-center">
-    <span v-if="user" data-cy="user-logged-in" class="d-none"></span>
+    <span v-if="user" data-cy="user-logged-in" class="d-none" />
     <div class="mr-4">
       <div class="text-caption text-medium-emphasis mb-1">Ciekawe?</div>
       <v-btn-group density="compact" rounded="pill" variant="outlined" divided>
@@ -102,10 +102,7 @@ const shouldSubscribe = ref(false);
 
 const docSource = computed(() => {
   if (!shouldSubscribe.value) return null;
-  return doc(
-    collection(db, props.type + "s"),
-    props.id || props.entity.id || (props.entity as any)._id,
-  );
+  return doc(collection(db, props.type + "s"), props.id || props.entity.id);
 });
 
 const entityDocument = useDocument(docSource);
@@ -155,7 +152,7 @@ async function vote(category: VoteCategory, delta: number) {
     await $fetch("/api/votes/vote", {
       method: "POST",
       body: {
-        id: props.id || props.entity.id || (props.entity as any)._id,
+        id: props.id || props.entity.id,
         type: props.type,
         category,
         vote: delta,

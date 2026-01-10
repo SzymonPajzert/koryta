@@ -60,6 +60,7 @@ describe("Entity Page - Add Article Button Visibility", () => {
         destination: destination,
         id: "123",
       },
+      query: {},
     });
 
     // Setup Data Mocks

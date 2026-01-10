@@ -4,7 +4,7 @@
     style="max-width: 800px; width: 100%"
   >
     <v-card width="100%">
-      <v-tabs v-model="tab" bg-color="surface-variant">
+      <v-tabs v-model="tab" bg-color="primary">
         <v-tab value="details">Informacje</v-tab>
         <v-tab value="discussion">Dyskusja</v-tab>
       </v-tabs>
@@ -15,16 +15,16 @@
             <v-card v-if="type == 'person'" width="100%" variant="flat">
               <v-card-title class="headline px-0">
                 <PartyChip
-                  v-for="party in person?.parties"
+                  v-for="party in personEntity?.parties"
                   :key="party"
                   :party
                 />
                 <h2 class="text-h5 font-weight-bold">
-                  {{ person?.name }}
+                  {{ entity?.name }}
                 </h2>
               </v-card-title>
               <v-card-text class="px-0">
-                {{ person?.content }}
+                {{ entity?.content }}
               </v-card-text>
             </v-card>
 
@@ -32,17 +32,14 @@
               <v-card-title class="headline px-0">
                 <v-icon start icon="mdi-office-building-outline" />
                 <h2 class="text-h5 font-weight-bold d-inline">
-                  {{ person?.name }}
+                  {{ entity?.name }}
                 </h2>
               </v-card-title>
               <v-card-text class="px-0">
-                <div
-                  v-if="(person as any)?.krsNumber"
-                  class="text-caption mb-2"
-                >
-                  KRS: {{ (person as any)?.krsNumber }}
+                <div v-if="company?.krsNumber" class="text-caption mb-2">
+                  KRS: {{ company?.krsNumber }}
                 </div>
-                {{ person?.content }}
+                {{ entity?.content }}
               </v-card-text>
             </v-card>
 
@@ -50,20 +47,17 @@
               <v-card-title class="headline px-0">
                 <v-icon start icon="mdi-file-document-outline" />
                 <h2 class="text-h5 font-weight-bold d-inline">
-                  {{ person?.name }}
+                  {{ entity?.name }}
                 </h2>
               </v-card-title>
               <v-card-text class="px-0">
-                <div
-                  v-if="(person as any)?.sourceURL"
-                  class="text-caption mb-2"
-                >
+                <div v-if="article?.sourceURL" class="text-caption mb-2">
                   URL:
-                  <a :href="(person as any)?.sourceURL" target="_blank">{{
-                    (person as any)?.sourceURL
+                  <a :href="article?.sourceURL" target="_blank">{{
+                    article?.sourceURL
                   }}</a>
                 </div>
-                {{ person?.content }}
+                {{ entity?.content }}
               </v-card-text>
             </v-card>
 
@@ -123,10 +117,10 @@
                 Zaproponuj zmianę
               </v-btn>
               <DialogProposeRemoval
-                v-if="person"
+                v-if="entity"
                 :id="node"
                 :type="type"
-                :name="person.name"
+                :name="entity.name"
               >
                 <template #activator="{ props }">
                   <v-btn v-bind="props" variant="tonal" class="ml-2">
@@ -148,7 +142,7 @@
 
         <v-window-item value="discussion">
           <div class="pa-4">
-            <VoteWidget v-if="person" :id="node" :entity="person" type="node" />
+            <VoteWidget v-if="entity" :id="node" :entity="entity" type="node" />
           </div>
           <div class="pa-4">
             <CommentsSection :node-id="node" />
@@ -162,22 +156,42 @@
 <script setup lang="ts">
 import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
-import type { Person } from "~~/shared/model";
+import type { Person, Company, Article } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 
 const route = useRoute<"/entity/[destination]/[id]">();
 
 const node = route.params.id as string;
 const type = route.params.destination as string;
-const tab = ref("details");
+const tab = ref((route.query.tab as string) || "details");
+
+watch(tab, (newTab) => {
+  const query = { ...route.query };
+  if (newTab === "discussion") {
+    query.tab = "discussion";
+  } else {
+    delete query.tab;
+  }
+  useRouter().replace({ query });
+});
 
 // Use API fetch to ensure revisions are merged correctly (auth aware)
 const { authFetch } = useAuthState();
 
-const { data: response } = await authFetch<{ node: Person }>(
-  `/api/nodes/entry/${node}`,
+const { data: response } = await authFetch<{
+  node: Person | Company | Article;
+}>(`/api/nodes/entry/${node}`);
+const entity = computed(() => response.value?.node);
+const company = computed(() =>
+  entity.value?.type === "place" ? (entity.value as Company) : undefined,
 );
-const person = computed(() => response.value?.node);
+const article = computed(() =>
+  entity.value?.type === "article" ? (entity.value as Article) : undefined,
+);
+
+const personEntity = computed(() =>
+  entity.value?.type === "person" ? (entity.value as Person) : undefined,
+);
 
 const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);

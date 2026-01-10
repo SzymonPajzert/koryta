@@ -9,7 +9,7 @@
       variant="outlined"
       density="comfortable"
       data-test="comment-input"
-    ></v-textarea>
+    />
     <div class="d-flex justify-end mt-2">
       <v-btn
         v-if="parentId"
