@@ -91,6 +91,13 @@
       >
         Lista rewizji
       </v-btn>
+      <v-btn
+        prepend-icon="mdi-comment-text-multiple-outline"
+        variant="text"
+        to="/leads"
+      >
+        Leady
+      </v-btn>
       <v-btn prepend-icon="mdi-magnify-scan" variant="text" to="/admin/audit">
         Audyt
       </v-btn>
