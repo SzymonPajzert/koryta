@@ -20,11 +20,11 @@
                   :party
                 />
                 <h2 class="text-h5 font-weight-bold">
-                  {{ person?.name }}
+                  {{ entity?.name }}
                 </h2>
               </v-card-title>
               <v-card-text class="px-0">
-                {{ person?.content }}
+                {{ entity?.content }}
               </v-card-text>
             </v-card>
 
@@ -32,14 +32,14 @@
               <v-card-title class="headline px-0">
                 <v-icon start icon="mdi-office-building-outline" />
                 <h2 class="text-h5 font-weight-bold d-inline">
-                  {{ person?.name }}
+                  {{ entity?.name }}
                 </h2>
               </v-card-title>
               <v-card-text class="px-0">
                 <div v-if="company?.krsNumber" class="text-caption mb-2">
                   KRS: {{ company?.krsNumber }}
                 </div>
-                {{ person?.content }}
+                {{ entity?.content }}
               </v-card-text>
             </v-card>
 
@@ -47,7 +47,7 @@
               <v-card-title class="headline px-0">
                 <v-icon start icon="mdi-file-document-outline" />
                 <h2 class="text-h5 font-weight-bold d-inline">
-                  {{ person?.name }}
+                  {{ entity?.name }}
                 </h2>
               </v-card-title>
               <v-card-text class="px-0">
@@ -57,7 +57,7 @@
                     article?.sourceURL
                   }}</a>
                 </div>
-                {{ person?.content }}
+                {{ entity?.content }}
               </v-card-text>
             </v-card>
 
@@ -117,10 +117,10 @@
                 Zaproponuj zmianę
               </v-btn>
               <DialogProposeRemoval
-                v-if="person"
+                v-if="entity"
                 :id="node"
                 :type="type"
-                :name="person.name"
+                :name="entity.name"
               >
                 <template #activator="{ props }">
                   <v-btn v-bind="props" variant="tonal" class="ml-2">
@@ -142,7 +142,7 @@
 
         <v-window-item value="discussion">
           <div class="pa-4">
-            <VoteWidget v-if="person" :id="node" :entity="person" type="node" />
+            <VoteWidget v-if="entity" :id="node" :entity="entity" type="node" />
           </div>
           <div class="pa-4">
             <CommentsSection :node-id="node" />
@@ -181,16 +181,16 @@ const { authFetch } = useAuthState();
 const { data: response } = await authFetch<{
   node: Person | Company | Article;
 }>(`/api/nodes/entry/${node}`);
-const person = computed(() => response.value?.node);
+const entity = computed(() => response.value?.node);
 const company = computed(() =>
-  person.value?.type === "place" ? (person.value as Company) : undefined,
+  entity.value?.type === "place" ? (entity.value as Company) : undefined,
 );
 const article = computed(() =>
-  person.value?.type === "article" ? (person.value as Article) : undefined,
+  entity.value?.type === "article" ? (entity.value as Article) : undefined,
 );
 
 const personEntity = computed(() =>
-  person.value?.type === "person" ? (person.value as Person) : undefined,
+  entity.value?.type === "person" ? (entity.value as Person) : undefined,
 );
 
 const { sources, targets, referencedIn } = await useEdges(node);

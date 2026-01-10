@@ -35,7 +35,6 @@ describe("DefaultLayout", () => {
       user: ref({ uid: "test-admin" }),
       userConfig: { data: ref({}) },
       logout: vi.fn(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const wrapper = mount(DefaultLayout, {
@@ -75,7 +74,6 @@ describe("DefaultLayout", () => {
       user: ref(null),
       userConfig: { data: ref({}) },
       logout: vi.fn(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const wrapper = mount(DefaultLayout, {

@@ -1,14 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 vi.stubGlobal("defineEventHandler", (handler: any) => handler);
 vi.stubGlobal(
   "defineCachedEventHandler",
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (handler: any, _options: any) => handler,
 );
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 vi.stubGlobal("getUser", async (_event: any) => {
   return true;
 });
@@ -35,7 +32,6 @@ describe("Graph API", () => {
     ]);
 
     const handlerModule = await import("../../../server/api/graph/index.get");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await handlerModule.default({} as any);
 
     expect(result).toHaveProperty("nodes");
