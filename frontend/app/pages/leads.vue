@@ -5,7 +5,7 @@
         <h1 class="text-h4 mb-4">Leads / Wolne wątki</h1>
         <p class="mb-4">
           Tutaj znajdują się komentarze i uwagi, które nie zostały jeszcze
-          przypisane do żadnego węzła ani krawędzi.
+          przypisane do niczego na stronie.
         </p>
 
         <v-card>
