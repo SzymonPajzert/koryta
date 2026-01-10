@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 import re
 from typing import Dict, List
 
@@ -14,11 +14,11 @@ class HerbertNERClient:
 
     def __init__(self):
         self.model_checkpoint = "pczarnik/herbert-base-ner"
-        self.model_dir = os.path.join("models","herbert-base-ner")
+        self.model_dir = Path("models") / "herbert-base-ner"
         
     def _get_pipeline(self):
         if self._pipeline is None:
-            if not os.path.isdir(self.model_dir):
+            if not Path(self.model_dir).is_dir():
                 
                 print(f"Loading model from {self.model_checkpoint}...")
                 tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)

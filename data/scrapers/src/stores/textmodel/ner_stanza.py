@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import spacy
 import stanza  # type: ignore
@@ -9,18 +9,18 @@ class StanzaNERClient:
     _nlp_spacy = None
 
     def __init__(self):
-        self.model_dir = os.path.join('models','stanza')
+        self.model_dir = Path("models") / "stanza"
 
     def _get_model(self):
         if self._nlp_stanza is None:
-            if not os.path.isdir(os.path.join(self.model_dir,'pl')):
+            if not (Path(self.model_dir) / 'pl').is_dir():
                 print(f'Model is downloaded from external resource to location {self.model_dir}') # noqa: E501
                 stanza.download('pl', model_dir=self.model_dir)
             else:
                 print(f'Model already exists in location: {self.model_dir}')
 
             StanzaNERClient._nlp_stanza = stanza.Pipeline('pl', processors='tokenize,ner', # noqa: E501
-                                                           dir = self.model_dir)
+                                                           dir = str(self.model_dir))
             print("Model has been loaded")
         
         return StanzaNERClient._nlp_stanza
