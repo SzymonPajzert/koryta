@@ -44,6 +44,7 @@ describe("Entity Page - Add Article Button Visibility", () => {
     // Default implementations
     vi.mocked(useAuthState).mockReturnValue({
       authFetch: mockAuthFetch,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   });
 
@@ -60,6 +61,7 @@ describe("Entity Page - Add Article Button Visibility", () => {
         destination: destination,
         id: "123",
       },
+      query: {},
     });
 
     // Setup Data Mocks
@@ -73,6 +75,7 @@ describe("Entity Page - Add Article Button Visibility", () => {
       sources: ref([]),
       targets: ref([]),
       referencedIn: ref([]),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const wrapper = mount(

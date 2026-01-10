@@ -60,9 +60,7 @@
             :title="'Odwróć kierunek'"
             @click="
               newEdge.direction =
-                newEdge.direction === 'outgoing'
-                  ? 'incoming'
-                  : 'outgoing'
+                newEdge.direction === 'outgoing' ? 'incoming' : 'outgoing'
             "
           >
             <span class="mr-1">

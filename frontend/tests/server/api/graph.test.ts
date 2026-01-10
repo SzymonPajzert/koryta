@@ -5,8 +5,10 @@ import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 vi.stubGlobal("defineEventHandler", (handler: any) => handler);
 vi.stubGlobal(
   "defineCachedEventHandler",
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (handler: any, _options: any) => handler,
 );
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 vi.stubGlobal("getUser", async (_event: any) => {
   return true;
 });

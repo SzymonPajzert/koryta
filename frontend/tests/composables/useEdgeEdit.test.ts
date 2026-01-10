@@ -11,6 +11,7 @@ const mockOnUpdate = vi.fn();
 
 // Mock useState
 vi.mock("#app", () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useState: (key: string, init: () => any) => ref(init()),
 }));
 
@@ -265,11 +266,13 @@ describe("useEdgeEdit - articles", () => {
       id: "source-person",
       type: "person",
       name: "Source",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     pickerTarget.value = {
       id: "target-place",
       type: "place",
       name: "Target",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
     newEdge.value.type = "employed";
     newEdge.value.references = ["test-article-id"];
@@ -304,6 +307,7 @@ describe("useEdgeEdit - articles", () => {
     expect(availableEdgeTypes.value.length).toBeGreaterThan(0);
 
     // Select Person as Source
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pickerSource.value = { type: "person" } as any;
     await nextTick();
 
@@ -314,6 +318,7 @@ describe("useEdgeEdit - articles", () => {
     expect(types).not.toContain("owns"); // Place->Place
 
     // Select Place as Target
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pickerTarget.value = { type: "place" } as any;
     await nextTick();
 
@@ -324,6 +329,7 @@ describe("useEdgeEdit - articles", () => {
     expect(types).not.toContain("connection");
 
     // Select Article as Source
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pickerSource.value = { type: "article" } as any;
     // Clear target to allow re-filtering based on source
     pickerTarget.value = undefined;

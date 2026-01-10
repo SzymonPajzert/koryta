@@ -178,9 +178,9 @@ watch(tab, (newTab) => {
 // Use API fetch to ensure revisions are merged correctly (auth aware)
 const { authFetch } = useAuthState();
 
-const { data: response } = await authFetch<{ node: Person | Company | Article }>(
-  `/api/nodes/entry/${node}`,
-);
+const { data: response } = await authFetch<{
+  node: Person | Company | Article;
+}>(`/api/nodes/entry/${node}`);
 const person = computed(() => response.value?.node);
 const company = computed(() =>
   person.value?.type === "place" ? (person.value as Company) : undefined,
