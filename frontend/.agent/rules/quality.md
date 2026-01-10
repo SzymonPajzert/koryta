@@ -7,6 +7,7 @@
    `jj new -m 'Description of the change'`
 
    You are free to pick a short description based on the prompt from the user.
+   Do not use the feat: style: format. Just a normal description of the feature.
 
 1. Test driven development
 
