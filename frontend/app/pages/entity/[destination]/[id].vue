@@ -15,7 +15,7 @@
             <v-card v-if="type == 'person'" width="100%" variant="flat">
               <v-card-title class="headline px-0">
                 <PartyChip
-                  v-for="party in person?.parties"
+                  v-for="party in personEntity?.parties"
                   :key="party"
                   :party
                 />
@@ -36,11 +36,8 @@
                 </h2>
               </v-card-title>
               <v-card-text class="px-0">
-                <div
-                  v-if="(person as any)?.krsNumber"
-                  class="text-caption mb-2"
-                >
-                  KRS: {{ (person as any)?.krsNumber }}
+                <div v-if="company?.krsNumber" class="text-caption mb-2">
+                  KRS: {{ company?.krsNumber }}
                 </div>
                 {{ person?.content }}
               </v-card-text>
@@ -54,13 +51,10 @@
                 </h2>
               </v-card-title>
               <v-card-text class="px-0">
-                <div
-                  v-if="(person as any)?.sourceURL"
-                  class="text-caption mb-2"
-                >
+                <div v-if="article?.sourceURL" class="text-caption mb-2">
                   URL:
-                  <a :href="(person as any)?.sourceURL" target="_blank">{{
-                    (person as any)?.sourceURL
+                  <a :href="article?.sourceURL" target="_blank">{{
+                    article?.sourceURL
                   }}</a>
                 </div>
                 {{ person?.content }}
@@ -162,7 +156,7 @@
 <script setup lang="ts">
 import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
-import type { Person } from "~~/shared/model";
+import type { Person, Company, Article } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 
 const route = useRoute<"/entity/[destination]/[id]">();
@@ -174,10 +168,20 @@ const tab = ref("details");
 // Use API fetch to ensure revisions are merged correctly (auth aware)
 const { authFetch } = useAuthState();
 
-const { data: response } = await authFetch<{ node: Person }>(
+const { data: response } = await authFetch<{ node: Person | Company | Article }>(
   `/api/nodes/entry/${node}`,
 );
 const person = computed(() => response.value?.node);
+const company = computed(() =>
+  person.value?.type === "place" ? (person.value as Company) : undefined,
+);
+const article = computed(() =>
+  person.value?.type === "article" ? (person.value as Article) : undefined,
+);
+
+const personEntity = computed(() =>
+  person.value?.type === "person" ? (person.value as Person) : undefined,
+);
 
 const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);

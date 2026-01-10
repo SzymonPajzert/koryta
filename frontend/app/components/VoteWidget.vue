@@ -104,7 +104,7 @@ const docSource = computed(() => {
   if (!shouldSubscribe.value) return null;
   return doc(
     collection(db, props.type + "s"),
-    props.id || props.entity.id || (props.entity as any)._id,
+    props.id || props.entity.id,
   );
 });
 
@@ -155,7 +155,7 @@ async function vote(category: VoteCategory, delta: number) {
     await $fetch("/api/votes/vote", {
       method: "POST",
       body: {
-        id: props.id || props.entity.id || (props.entity as any)._id,
+        id: props.id || props.entity.id,
         type: props.type,
         category,
         vote: delta,

@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
         });
       }
 
-      const data = doc.data() as any;
+      const data = doc.data() || {};
       if (!data.votes) data.votes = {};
       if (!data.votes[category]) data.votes[category] = { total: 0 };
 
@@ -54,12 +54,13 @@ export default defineEventHandler(async (event) => {
     });
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Vote error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     throw createError({
       statusCode: 500,
       statusMessage: "Internal Server Error",
-      data: error.message,
+      data: message,
     });
   }
 });
