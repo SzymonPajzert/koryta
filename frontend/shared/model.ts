@@ -120,3 +120,16 @@ export interface Connection<T extends Destination> {
   connection?: Link<T>;
   content?: string;
 }
+
+export interface Comment {
+  id: string;
+  content: string;
+  authorId: string;
+  authorName?: string; // Currently not strictly enforced, might rely on user fetching
+  createdAt: string; // ISO string
+
+  isLead: boolean; // True if no nodeId, edgeId, parentId
+  nodeId?: string; // Optional: attached to a node (Person, Company, Article)
+  edgeId?: string; // Optional: attached to an edge
+  parentId?: string; // Optional: reply to another comment
+}

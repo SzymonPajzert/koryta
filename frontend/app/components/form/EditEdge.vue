@@ -160,12 +160,19 @@
         <v-btn
           color="secondary"
           type="submit"
-          block
+          :block="!isEditingEdge"
           :class="{ 'flex-grow-1': isEditingEdge }"
           :disabled="!pickerTarget"
         >
           {{ isEditingEdge ? "Zapisz zmiany" : "Dodaj powiązanie" }}
         </v-btn>
+        <DialogProposeRemoval
+          v-if="isEditingEdge"
+          :id="(newEdge as any).id"
+          collection="edges"
+          class="ml-2"
+          @success="cancelEditEdge"
+        />
       </v-col>
     </v-row>
   </v-form>
