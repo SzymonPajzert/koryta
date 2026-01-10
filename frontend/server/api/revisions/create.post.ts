@@ -29,6 +29,8 @@ export default defineEventHandler(async (event) => {
     start_date: body.start_date || null,
     end_date: body.end_date || null,
     references: body.references || [],
+    deleted: body.deleted || false,
+    delete_reason: body.delete_reason || null,
   };
 
   if (body.source) {
