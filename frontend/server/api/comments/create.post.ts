@@ -20,6 +20,7 @@ export default defineEventHandler(async (event) => {
     authorId: user.uid,
     authorName: user.email || user.uid,
     createdAt: new Date().toISOString(),
+    isLead: !body.nodeId && !body.edgeId && !body.parentId,
     nodeId: body.nodeId || null,
     edgeId: body.edgeId || null,
     parentId: body.parentId || null,

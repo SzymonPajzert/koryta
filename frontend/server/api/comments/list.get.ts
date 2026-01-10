@@ -10,10 +10,7 @@ export default authCachedEventHandler(async (event) => {
   let collectionRef = db.collection("comments") as FirebaseFirestore.Query;
 
   if (query.onlyLeads === "true") {
-    collectionRef = collectionRef
-      .where("nodeId", "==", null)
-      .where("edgeId", "==", null)
-      .where("parentId", "==", null);
+    collectionRef = collectionRef.where("isLead", "==", true);
   } else if (query.nodeId) {
     collectionRef = collectionRef.where("nodeId", "==", query.nodeId);
   } else if (query.edgeId) {
@@ -23,7 +20,7 @@ export default authCachedEventHandler(async (event) => {
     return [];
   }
 
-  const snapshot = await collectionRef.get();
+  const snapshot = await collectionRef.limit(50).get();
   const comments = snapshot.docs.map(
     (doc) => ({ id: doc.id, ...doc.data() }) as Comment,
   );

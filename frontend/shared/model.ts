@@ -127,6 +127,8 @@ export interface Comment {
   authorId: string;
   authorName?: string; // Currently not strictly enforced, might rely on user fetching
   createdAt: string; // ISO string
+
+  isLead: boolean; // True if no nodeId, edgeId, parentId
   nodeId?: string; // Optional: attached to a node (Person, Company, Article)
   edgeId?: string; // Optional: attached to an edge
   parentId?: string; // Optional: reply to another comment
