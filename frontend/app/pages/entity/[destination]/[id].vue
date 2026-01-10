@@ -25,14 +25,6 @@
               </v-card-title>
               <v-card-text class="px-0">
                 {{ person?.content }}
-                <div class="mt-4">
-                  <VoteWidget
-                    v-if="person"
-                    :id="node"
-                    :entity="person"
-                    type="node"
-                  />
-                </div>
               </v-card-text>
             </v-card>
 
@@ -51,14 +43,6 @@
                   KRS: {{ (person as any)?.krsNumber }}
                 </div>
                 {{ person?.content }}
-                <div class="mt-4">
-                  <VoteWidget
-                    v-if="person"
-                    :id="node"
-                    :entity="person"
-                    type="node"
-                  />
-                </div>
               </v-card-text>
             </v-card>
 
@@ -80,14 +64,6 @@
                   }}</a>
                 </div>
                 {{ person?.content }}
-                <div class="mt-4">
-                  <VoteWidget
-                    v-if="person"
-                    :id="node"
-                    :entity="person"
-                    type="node"
-                  />
-                </div>
               </v-card-text>
             </v-card>
 
@@ -171,6 +147,9 @@
         </v-window-item>
 
         <v-window-item value="discussion">
+          <div class="pa-4">
+            <VoteWidget v-if="person" :id="node" :entity="person" type="node" />
+          </div>
           <div class="pa-4">
             <CommentsSection :node-id="node" />
           </div>
