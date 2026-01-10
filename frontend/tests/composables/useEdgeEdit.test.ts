@@ -162,11 +162,6 @@ describe("useEdgeEdit", () => {
         expectedOutgoing: ["owns"],
         expectedIncoming: ["employed", "mentioned_company", "owns"],
       },
-      {
-        nodeType: "article",
-        expectedOutgoing: ["mentioned_person", "mentioned_company"],
-        expectedIncoming: [],
-      },
     ];
 
     for (const { nodeType, expectedOutgoing, expectedIncoming } of cases) {
@@ -293,5 +288,51 @@ describe("useEdgeEdit - articles", () => {
         }),
       }),
     );
+  });
+
+  it("filters available types based on selected options in Article mode", async () => {
+    const { availableEdgeTypes, pickerSource, pickerTarget } = useEdgeEdit({
+      nodeId,
+      nodeType,
+      authHeaders,
+      onUpdate,
+      stateKey: ref("test-article-filtering"),
+    });
+
+    // Initially all options should be available (or pending decision)
+    // Actually our implementation returns ALL options if no pickers selected
+    expect(availableEdgeTypes.value.length).toBeGreaterThan(0);
+
+    // Select Person as Source
+    pickerSource.value = { type: "person" } as any;
+    await nextTick();
+
+    // Should include 'connection' (Person->Person) and 'employed' (Person->Place)
+    let types = availableEdgeTypes.value.map((o) => o.value);
+    expect(types).toContain("connection");
+    expect(types).toContain("employed");
+    expect(types).not.toContain("owns"); // Place->Place
+
+    // Select Place as Target
+    pickerTarget.value = { type: "place" } as any;
+    await nextTick();
+
+    // Should restrict to 'employed' (Person->Place)
+    // 'connection' is Person->Person, so it should be gone if Target is Place
+    types = availableEdgeTypes.value.map((o) => o.value);
+    expect(types).toContain("employed");
+    expect(types).not.toContain("connection");
+
+    // Select Article as Source
+    pickerSource.value = { type: "article" } as any;
+    // Clear target to allow re-filtering based on source
+    pickerTarget.value = undefined;
+    await nextTick();
+
+    // Should restrict to 'mentioned_person', 'mentioned_company'
+    types = availableEdgeTypes.value.map((o) => o.value);
+    expect(types).toContain("mentioned_person");
+    expect(types).toContain("mentioned_company");
+    expect(types).not.toContain("employed");
   });
 });
