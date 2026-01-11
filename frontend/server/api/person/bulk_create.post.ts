@@ -2,7 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
-import type { Edge, Node, Article, Company, Person } from "~~/shared/model";
+import type { Edge, Article, Company, Person } from "~~/shared/model";
 
 type CompanyRequest = {
   name: string;
@@ -177,7 +177,7 @@ async function lookupNode(
     .limit(1)
     .get();
   if (!snap.empty) {
-    return snap.docs[0].id;
+    return snap.docs[0]?.id;
   }
   return undefined;
 }
@@ -200,5 +200,5 @@ async function findEdgeOrCreate(
     createRevisionTransaction(db, batch, user, edgeRef, edge);
     return edgeRef.id;
   }
-  return edgeSnap.docs[0].id;
+  return edgeSnap.docs[0]?.id;
 }
