@@ -248,6 +248,5 @@ ignore_imports = [
     "scrapers.stores -> os",
     "scrapers.stores -> io",
     # TODO https://github.com/SzymonPajzert/koryta/issues/272
-    "scrapers.article.ner_herbert -> os",
     "scrapers.article.ner_stanza -> os",
 ]
