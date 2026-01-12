@@ -1,3 +1,8 @@
+"""
+Script to evaluate Gemini model on Wikipedia NER task.
+It defines metrics like recall for data person_wikipedia_ner.jsonl.
+"""
+
 import os
 
 import IPython
@@ -32,8 +37,8 @@ def parse_response(response: str) -> list[str]:
         return [
             name.strip()[1:-1]
             for name in response[
-                left_bracket_index + 1 : right_bracket_index
-            ].split(",")
+                        left_bracket_index + 1: right_bracket_index
+                        ].split(",")
         ]
     except ValueError:
         return []
@@ -66,7 +71,7 @@ def words_not_in_text(names: list[str], text: str) -> list[str]:
 
 
 def recall(
-    pred_names: list[str], names_in_text: list[str], names_normalized: list[str]
+        pred_names: list[str], names_in_text: list[str], names_normalized: list[str]
 ) -> float:
     assert len(names_in_text) == len(names_normalized)
     if not names_in_text:
@@ -97,7 +102,7 @@ def main():
         df["n_names"].le(30)
         & df["n_names"].ge(3)
         & df["text_len"].le(10_000)
-    ].sample(100, random_state=42)
+        ].sample(100, random_state=42)
 
     preds = []
     for i, row in tqdm(ex_df.iterrows(), total=len(ex_df), desc="Processing examples"):
