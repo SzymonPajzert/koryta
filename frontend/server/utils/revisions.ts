@@ -3,6 +3,7 @@ import type {
   DocumentReference,
   WriteBatch,
 } from "firebase-admin/firestore";
+import type { Edge, Node } from "~~/shared/model";
 import { Timestamp } from "firebase-admin/firestore";
 
 export interface BatchResult {
@@ -15,7 +16,7 @@ export function createRevisionTransaction(
   batch: WriteBatch,
   user: { uid: string },
   targetRef: DocumentReference,
-  data: Record<string, unknown>,
+  data: Record<string, unknown> | Node | Edge, // TODO unify this
   updateHead: boolean = true,
 ): BatchResult {
   const revisionRef = db.collection("revisions").doc();
