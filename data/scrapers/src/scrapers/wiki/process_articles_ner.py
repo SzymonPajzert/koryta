@@ -3,12 +3,10 @@ import xml.etree.ElementTree as ET
 
 import mwparserfromhell
 import pandas as pd
-from memoized_property import memoized_property  # type: ignore
 from tqdm import tqdm
 
 from scrapers.stores import Context, Pipeline
 from scrapers.wiki.process_articles import DUMP_SIZE, WIKI_DUMP, WikiArticle
-
 
 # TODO https://github.com/SzymonPajzert/koryta/issues/327
 
