@@ -262,6 +262,12 @@ class Web(metaclass=ABCMeta):
         raise NotImplementedError()
 
 
+class NLP(metaclass=ABCMeta):
+    """Abstract interface for NLP wrapped models"""
+    herbert_ner_client: Any
+    stanza_ner_client: Any
+
+
 @dataclass
 class ProcessPolicy:
     refresh_pipelines: set[str]
@@ -298,6 +304,7 @@ class Context:
     con: "DuckDBPyConnection"
     utils: Utils
     web: Web
+    nlp: NLP
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
 
 

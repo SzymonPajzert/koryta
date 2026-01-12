@@ -52,6 +52,7 @@ class TestTeryt(unittest.TestCase):
             con=None,  # type: ignore
             utils=MagicMock(),
             web=MagicMock(),
+            nlp=MagicMock(),
         )
 
         # Initialize Teryt with the mocked context
