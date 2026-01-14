@@ -222,7 +222,7 @@ def main():
             if p_type.__name__ in args.pipeline or no_pipeline:
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)
-                p.read_or_process(ctx, policy)
+                p.read_or_process(ctx)
         print("Finished processing")
     finally:
         print("Dumping...")

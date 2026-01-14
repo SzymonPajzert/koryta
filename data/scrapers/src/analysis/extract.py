@@ -1,35 +1,85 @@
 import argparse
+from functools import cached_property
 
 import pandas as pd
 from memoized_property import memoized_property  # type:ignore
 
 from analysis.people import PeopleEnriched
 from analysis.utils import filter_local_good
+from scrapers.krs.graph import CompanyGraph
+from scrapers.krs.list import CompaniesKRS
 from scrapers.stores import Context, Pipeline
 
 
 class Extract(Pipeline):
     people: PeopleEnriched
+    companies: CompaniesKRS
     format = "csv"
 
-    @memoized_property
-    def region(self):
+    @cached_property
+    def args(self):
         parser = argparse.ArgumentParser()
         parser.add_argument(
             "--region",
             help="TERYT of the region to export the data for",
             default=None,
-            required=True,
+            required=False,
+        )
+        parser.add_argument(
+            "--krs",
+            help="KRS of the company to export the data for",
+            default=None,
+            required=False,
         )
         args, _ = parser.parse_known_args()
-        return args.region
+
+        if not args.region and not args.krs:
+            raise ValueError("Either region or krs must be provided")
+
+        return args
+
+    @property
+    def region(self):
+        return self.args.region
+
+    @property
+    def krs(self):
+        return self.args.krs
 
     @memoized_property
     def filename(self):
+        if self.krs:
+            return f"people_extracted_krs_{self.krs}"
         return f"people_extracted_{self.region}"
+
+    def process_graph(self, ctx: Context):
+        companies_df = self.companies.read_or_process(ctx)
+        graph = CompanyGraph()
+
+        for record in companies_df.to_dict("records"):
+            parent = record["krs"]
+            for child in record.get("children", []) or []:
+                graph.add_parent(parent, child)
+
+        return graph
 
     def process(self, ctx: Context):
         df = self.people.read_or_process(ctx)
+
+        if self.krs:
+            graph = self.process_graph(ctx)
+            relevant_companies = graph.all_descendants([self.krs])
+
+            def works_in_relevant(employment_list):
+                if not isinstance(employment_list, list):
+                    return False
+                for emp in employment_list:
+                    if emp.get("employed_krs") in relevant_companies:
+                        return True
+                return False
+
+            df = df[df["employment"].apply(works_in_relevant)]
+
         df = filter_local_good(df, self.region)
 
         print(f"Found {len(df)} people")

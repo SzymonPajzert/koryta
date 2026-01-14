@@ -165,6 +165,10 @@ def filter_local_good(matched_all, filter_region: str | None):
         return filter_region in row_regions
 
     def check_employed(employed):
+        if filter_region is None:
+            return True
+        if filter_region != "10":
+            raise NotImplementedError("Only region '10' (Łódzkie) is implemented")
         for emp in empty_list_if_nan(employed):
             if emp["employed_krs"] in lodzkie_companies:
                 return True
