@@ -161,8 +161,8 @@ def map_to_payload(row):
 
                 companies.append(
                     {
-                        "name": c_name
-                        or "Unknown Company",  # Fallback only if no KRS either (e.g. unknown entity type)
+                        # Fallback only if no KRS either (e.g. unknown entity type)
+                        "name": c_name or "Unknown Company",
                         "krs": c_krs,
                         "role": c.get("role") or c.get("function"),
                         "start": c.get("start") or c.get("employed_start"),
