@@ -1,14 +1,17 @@
 import argparse
 import http.server
 import json
+import os
 import sys
 import threading
 import webbrowser
 
+import pandas as pd
 import requests
 
-from main import KorytaPeople, _setup_context
+from main import PIPELINES, _setup_context
 from scrapers.stores import Pipeline
+from stores.config import PROJECT_ROOT
 
 # Global variable to store the token received securely
 RECEIVED_TOKEN: str | None = None
@@ -21,19 +24,15 @@ class AuthHandler(http.server.BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length).decode("utf-8")
 
         try:
-            # Try parsing as JSON
             data = json.loads(post_data)
             token = data.get("token")
         except json.JSONDecodeError:
-            # Fallback to just using the body as token if it's not JSON
             token = post_data
 
         if token:
             RECEIVED_TOKEN = token
             self.send_response(200)
-            self.send_header(
-                "Access-Control-Allow-Origin", "*"
-            )  # Allow CORS for localhost
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.end_headers()
@@ -51,7 +50,6 @@ class AuthHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, format, *args):
-        # Silence server logs
         return
 
 
@@ -63,9 +61,6 @@ def run_auth_server(port, stop_event):
 
 
 def authenticate_user(endpoint_url: str) -> str:
-    """
-    Starts a local server, opens the browser to login, and waits for a token.
-    """
     port = 8085
     callback_url = f"http://localhost:{port}"
     login_url = f"{endpoint_url}/cli-login?callback={callback_url}"
@@ -85,8 +80,7 @@ def authenticate_user(endpoint_url: str) -> str:
             server_thread.join(timeout=0.5)
             if not server_thread.is_alive():
                 if RECEIVED_TOKEN:
-                    break  # Got it
-                # Restart listening if we just handled a non-token request.
+                    break
     except KeyboardInterrupt:
         print("\nAuthentication cancelled.")
         stop_event.set()
@@ -104,18 +98,22 @@ def authenticate_user(endpoint_url: str) -> str:
     return RECEIVED_TOKEN
 
 
-# TODO this should be a general logic for pipeline processor in main.py
 def check_pipeline_files(ctx):
     """
     Checks if output files for all pipelines exist. Returns missing pipelines.
     """
     missing = []
-    for pipeline_cls in [KorytaPeople]:  # TODO add PIPELINES
-        p = Pipeline.create(pipeline_cls)
-        if p.filename:
-            # checking p.output_time(ctx) returns None if file doesn't exist
-            if p.output_time(ctx) is None:
-                missing.append(p.pipeline_name)
+    # Only check key pipelines or all? sticking to PIPELINES
+    for pipeline_cls in PIPELINES:
+        try:
+            p = Pipeline.create(pipeline_cls)
+            if p.filename:
+                # Check existence using output_time (checks get_mtime)
+                if p.output_time(ctx) is None:
+                    missing.append(p.pipeline_name)
+        except Exception:
+            # Skip pipelines that fail to initialize (e.g. need args)
+            continue
     return missing
 
 
@@ -124,22 +122,21 @@ def map_to_payload(row):
     Maps a result row (dict) to the API payload format.
     """
 
-    # Helper to safe get
     def get(key):
         return row.get(key)
 
-    # Basic fields
-    name = get("name") or get("fullname") or get("krs_name") or "Unknown Payload"
+    name = (
+        get("name")
+        or get("full_name")
+        or get("fullname")
+        or get("krs_name")
+        or "Unknown Payload"
+    )
 
     companies = []
-
     company_list = get("companies")
     if isinstance(company_list, list):
-        # Assume it matches format or map it
         for c in company_list:
-            # Try to adapt if it's from scrapers format
-            # Scrapers 'employment' format: {'employed_krs': ..., 'employed_end': ...}
-            # We need: name, krs, role, start, end
             if isinstance(c, dict):
                 companies.append(
                     {
@@ -151,7 +148,6 @@ def map_to_payload(row):
                     }
                 )
 
-    # Same for articles
     articles = []
     arts = get("articles")
     if isinstance(arts, list):
@@ -171,7 +167,7 @@ def map_to_payload(row):
     }
 
 
-def setup():
+def main():
     parser = argparse.ArgumentParser(description="Koryta Uploader CLI")
     parser.add_argument("--script", help="SQL script file to execute")
     parser.add_argument("--query", help="SQL query string to execute")
@@ -180,8 +176,14 @@ def setup():
         "--endpoint", default="http://localhost:3000", help="API endpoint base URL"
     )
     parser.add_argument("--api", default="bulk_create", help="API endpoint path")
+    parser.add_argument(
+        "--prod", action="store_true", help="Use production default endpoint"
+    )
 
     args = parser.parse_args()
+
+    if args.prod and args.endpoint == "http://localhost:3000":
+        args.endpoint = "https://koryta.pl"
 
     if not args.script and not args.query:
         print("Error: Must provide either --script or --query")
@@ -192,43 +194,39 @@ def setup():
         with open(args.script, "r") as f:
             query = f.read()
 
-    # 1. Dataset Check & Context Setup
     ctx, _ = _setup_context(False)
 
     missing = check_pipeline_files(ctx)
     if missing:
+        # Just warn, don't exit, user might know what they are querying
         print("Warning: The following pipelines have no output files:")
         for m in missing:
             print(f" - {m}")
-        print("Queries leveraging these tables might fail.")
-        print("Run `koryta <pipeline_name>` to generate data.")
-        sys.exit(1)
-
-    return args, query, ctx
-
-
-def main():
-    args, query, ctx = setup()
 
     print("Registering tables...")
     registered_count = 0
-    for pipeline_cls in [KorytaPeople]:  # TODO add PIPELINES
-        p = pipeline_cls()
-        table_name = p.filename
-        df = p.read_or_process(ctx)
+    for pipeline_cls in PIPELINES:
         try:
-            ctx.con.execute(
-                f"""
-                CREATE OR REPLACE VIEW {table_name} AS
-                SELECT * FROM '{df}'"""
-            )
-            registered_count += 1
+            p = Pipeline.create(pipeline_cls)
+            if not p.filename:
+                continue
+
+            table_name = p.filename
+
+            # Robust method: Use pipeline's own reader
+            # Check existence first to avoid re-processing accidentally if missing
+            if p.output_time(ctx) is not None:
+                # read_or_process will read cached file if exists
+                df = p.read_or_process(ctx)
+                if df is not None:
+                    ctx.con.register(table_name, df)
+                    registered_count += 1
         except Exception as e:
-            print(f"Failed to register {table_name}: {e}")
+            # Skip pipelines that fail to initialize
+            continue
 
     print(f"Registered {registered_count} tables.")
 
-    # 2. Execute Query
     print("Executing query...")
     try:
         df = ctx.con.execute(query).df()
@@ -242,9 +240,7 @@ def main():
         print("No results.")
         sys.exit(0)
 
-    # 3. Process Execution (Submit or Preview)
     if not args.submit:
-        # Preview Mode
         print("\n--- Query Results (First 20) ---")
         print(df.head(20).to_string())
         print("\n--- Payload Preview (First 1) ---")
@@ -254,7 +250,6 @@ def main():
         print("\nUse --submit to upload.")
     else:
         token = authenticate_user(args.endpoint)
-
         target_url = f"{args.endpoint}/api/person/{args.api}"
         headers = {
             "Content-Type": "application/json",
@@ -265,7 +260,7 @@ def main():
         for idx, row in df.iterrows():
             payload = map_to_payload(row)
             name = payload.get("name")
-            print(f"[{idx}/{len(df)}] Uploading {name}...", end=" ")
+            print(f"[{idx + 1}/{len(df)}] Uploading {name}...", end=" ")
 
             try:
                 resp = requests.post(target_url, json=payload, headers=headers)
@@ -278,8 +273,7 @@ def main():
                 print(f"ERROR: {e}")
 
         print(
-            f"\nUpload complete. Success: {success_count}, \
-                Failed: {len(df) - success_count}".lstrip()
+            f"\nUpload complete. Success: {success_count}, Failed: {len(df) - success_count}"
         )
 
 
