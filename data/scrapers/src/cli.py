@@ -140,10 +140,11 @@ def map_to_payload(row):
     )
 
     companies = []
-    company_list = get("companies")
-    if isinstance(company_list, list):
+    company_list = get("companies") or get("employment")
+    
+    if isinstance(company_list, (list, np.ndarray)):
         for c in company_list:
-            if isinstance(c, dict):
+             if isinstance(c, dict):
                 companies.append(
                     {
                         "name": c.get("name") or c.get("krs") or "Unknown Company",
