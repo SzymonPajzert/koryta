@@ -8,11 +8,12 @@ import webbrowser
 import numpy as np
 import requests
 
-from main import PIPELINES, _setup_context
+from main import PIPELINES, CompaniesMerged, _setup_context
 from scrapers.stores import Pipeline
 
 # Global variable to store the token received securely
 RECEIVED_TOKEN: str | None = None
+COMPANY_LOOKUP: dict[str, str] = {}
 
 
 class AuthHandler(http.server.BaseHTTPRequestHandler):
@@ -136,19 +137,33 @@ def map_to_payload(row):
         or get_scalar("full_name")
         or get_scalar("fullname")
         or get_scalar("krs_name")
+        or get_scalar("base_full_name")
         or "Unknown Payload"
     )
 
     companies = []
     company_list = get("companies") or get("employment")
-    
+
     if isinstance(company_list, (list, np.ndarray)):
         for c in company_list:
-             if isinstance(c, dict):
+            if isinstance(c, dict):
+                c_name = c.get("name")
+                c_krs = c.get("krs") or c.get("employed_krs")
+
+                if not c_name and c_krs:
+                    c_name = COMPANY_LOOKUP.get(c_krs)
+
+                # If we still don't have a name but have a KRS, we must fail
+                if not c_name and c_krs:
+                    # TODO raise an exception here
+                    print(f"Cannot resolve company name for KRS: {c_krs}")
+                    return None
+
                 companies.append(
                     {
-                        "name": c.get("name") or c.get("krs") or "Unknown Company",
-                        "krs": c.get("krs") or c.get("employed_krs"),
+                        "name": c_name
+                        or "Unknown Company",  # Fallback only if no KRS either (e.g. unknown entity type)
+                        "krs": c_krs,
                         "role": c.get("role") or c.get("function"),
                         "start": c.get("start") or c.get("employed_start"),
                         "end": c.get("end") or c.get("employed_end"),
@@ -221,6 +236,20 @@ def main():
         for m in missing:
             print(f" - {m}")
 
+    print("Loading company lookup...")
+    global COMPANY_LOOKUP
+    try:
+        p_comp = Pipeline.create(CompaniesMerged)
+        if p_comp.output_time(ctx):
+            df_comp = p_comp.read_or_process(ctx)
+            # df_comp should have 'krs' and 'name'
+            # Drop NAs in key columns
+            df_comp = df_comp.dropna(subset=["krs", "name"])
+            COMPANY_LOOKUP = dict(zip(df_comp["krs"], df_comp["name"]))
+            print(f"Loaded {len(COMPANY_LOOKUP)} companies for lookup.")
+    except Exception as e:
+        print(f"Warning: Failed to load company lookup: {e}")
+
     print("Registering tables...")
     registered_count = 0
     for pipeline_cls in PIPELINES:
@@ -282,6 +311,10 @@ def main():
         success_count = 0
         for idx, row in df.iterrows():
             payload = map_to_payload(row)
+            if payload is None:
+                print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
+                continue
+
             name = payload.get("name")
             print(f"[{idx + 1}/{len(df)}] Uploading {name}...", end=" ")
 
