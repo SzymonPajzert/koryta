@@ -1,17 +1,15 @@
 import argparse
 import http.server
 import json
-import os
 import sys
 import threading
 import webbrowser
 
-import pandas as pd
+import numpy as np
 import requests
 
 from main import PIPELINES, _setup_context
 from scrapers.stores import Pipeline
-from stores.config import PROJECT_ROOT
 
 # Global variable to store the token received securely
 RECEIVED_TOKEN: str | None = None
@@ -122,14 +120,22 @@ def map_to_payload(row):
     Maps a result row (dict) to the API payload format.
     """
 
+    def get_scalar(key):
+        val = row.get(key)
+        if isinstance(val, (list, np.ndarray)):
+            if len(val) > 0:
+                return val[0]
+            return None
+        return val
+
     def get(key):
         return row.get(key)
 
     name = (
-        get("name")
-        or get("full_name")
-        or get("fullname")
-        or get("krs_name")
+        get_scalar("name")
+        or get_scalar("full_name")
+        or get_scalar("fullname")
+        or get_scalar("krs_name")
         or "Unknown Payload"
     )
 
@@ -165,6 +171,17 @@ def map_to_payload(row):
         "companies": companies,
         "articles": articles,
     }
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, np.integer):
+            return int(o)
+        if isinstance(o, np.floating):
+            return float(o)
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        return super(NumpyEncoder, self).default(o)
 
 
 def main():
@@ -246,7 +263,12 @@ def main():
         print("\n--- Payload Preview (First 1) ---")
         if not df.empty:
             preview_payload = map_to_payload(df.iloc[0])
-            print(json.dumps(preview_payload, indent=2, ensure_ascii=False))
+
+            print(
+                json.dumps(
+                    preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder
+                )
+            )
         print("\nUse --submit to upload.")
     else:
         token = authenticate_user(args.endpoint)
@@ -263,7 +285,12 @@ def main():
             print(f"[{idx + 1}/{len(df)}] Uploading {name}...", end=" ")
 
             try:
-                resp = requests.post(target_url, json=payload, headers=headers)
+                # Use data=json.dumps(..., cls=NumpyEncoder) to handle numpy types
+                resp = requests.post(
+                    target_url,
+                    data=json.dumps(payload, cls=NumpyEncoder),
+                    headers=headers,
+                )
                 if resp.status_code in [200, 201]:
                     print("OK")
                     success_count += 1
