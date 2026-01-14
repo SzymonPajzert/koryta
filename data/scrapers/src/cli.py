@@ -179,11 +179,21 @@ def map_to_payload(row):
             elif isinstance(a, str):
                 articles.append({"url": a})
 
+    wiki_name = get_scalar("wiki_name")
+    wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
+    if not wikipedia_url and wiki_name:
+        wikipedia_url = f"https://pl.wikipedia.org/wiki/{wiki_name.replace(' ', '_')}"
+
+    rejestr_io_url = get_scalar("rejestrIo")
+    rejestr_id = get_scalar("rejestrio_id")
+    if not rejestr_io_url and rejestr_id:
+        rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
+
     return {
         "name": name,
         "content": get("content") or get("history"),
-        "wikipedia": get("wikipedia") or get("wiki_url"),
-        "rejestrIo": get("rejestrIo"),
+        "wikipedia": wikipedia_url,
+        "rejestrIo": rejestr_io_url,
         "companies": companies,
         "articles": articles,
     }
