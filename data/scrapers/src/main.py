@@ -28,6 +28,7 @@ from scrapers.stores import (
     ProcessPolicy,
 )
 from scrapers.wiki.process_articles import ProcessWiki
+from scrapers.wiki.process_articles_ner import ProcessWikiNer
 from stores import file
 from stores.config import PROJECT_ROOT
 from stores.download import FileSource
@@ -172,6 +173,7 @@ PIPELINES = [
     PeopleKRS,
     CompaniesKRS,
     ProcessWiki,
+    ProcessWikiNer,
     PeopleMerged,
     PeopleEnriched,
     CompaniesMerged,
