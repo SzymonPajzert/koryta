@@ -1,4 +1,7 @@
 /// <reference types="cypress" />
+import { addMatchImageSnapshotCommand } from "@simonsmith/cypress-image-snapshot/command";
+
+addMatchImageSnapshotCommand();
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -7,6 +10,7 @@ declare global {
       login(email?: string, password?: string): Chainable<void>;
       logout(): Chainable<void>;
       refreshAuth(): Chainable<void>;
+      matchImageSnapshot(name?: string, options?: unknown): Chainable<void>;
     }
   }
 }
@@ -16,39 +20,30 @@ export {};
 Cypress.Commands.add(
   "login",
   (email = "user@koryta.pl", password = "password123") => {
-    cy.visit("/login");
+    cy.session(
+      [email, password],
+      () => {
+        cy.visit("/login");
+        cy.clearLocalStorage();
+        cy.clearCookies();
 
-    // Clear possible stale state
-    cy.clearLocalStorage();
-    cy.clearCookies();
-    cy.reload();
-    cy.wait(2000); // Wait for hydration and potential redirects
-
-    // Check if we were redirected away from login (implies already logged in)
-    cy.url().then((url) => {
-      if (!url.includes("/login")) {
-        cy.log("Redirected away from login, assuming already logged in.");
-        return;
-      }
-
-      cy.get("body").then(($body) => {
-        if ($body.find("button:contains('Wyloguj się teraz')").length > 0) {
-          cy.log("Already logged in (button found), skipping login sequence.");
-          return;
-        }
-
-        // Proceed to login
-        cy.get('input[type="email"]', { timeout: 20000 })
-          .should("be.visible")
-          .type(email);
+        cy.get('input[type="email"]').should("be.visible").type(email);
         cy.get('input[type="password"]').should("be.visible").type(password);
         cy.get('button[type="submit"]').should("be.visible").click();
 
-        // Wait for navigation away from login (to home or redirect)
-        cy.url({ timeout: 20000 }).should("not.contain", "/login");
-        cy.wait(1000);
-      });
-    });
+        cy.url().should("not.contain", "/login");
+        // Verify login success by checking for a logout button or similar authenticated state
+        cy.contains("button", "Wyloguj się teraz", { timeout: 10000 }).should(
+          "exist",
+        );
+      },
+      {
+        validate: () => {
+          cy.visit("/");
+          cy.contains("button", "Wyloguj się teraz").should("exist");
+        },
+      },
+    );
   },
 );
 

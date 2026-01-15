@@ -4,7 +4,6 @@ describe("Voting functionality", () => {
     cy.visit("/entity/person/1");
     // Switch to Discussion tab to see the widget
     cy.contains(".v-tab", "Dyskusja").should("be.visible").click();
-    cy.wait(500);
 
     // Verify we are on the page and authenticated
     cy.url({ timeout: 10000 }).should("include", "/entity/person/1");

@@ -1,5 +1,4 @@
 import "./commands";
-import "@percy/cypress";
 
 // Hide noisy Firestore long-polling requests from Cypress logs
 beforeEach(() => {

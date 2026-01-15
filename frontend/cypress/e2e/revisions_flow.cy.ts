@@ -13,8 +13,7 @@ describe("Revisions Flow", () => {
     // We target the text and force checking bubbling to the activator
     cy.contains(".v-list-item", "Not approved person").click();
     // Wait for unfolding
-    cy.wait(500);
-    cy.percySnapshot("Revisions List one unfolded");
+    cy.matchImageSnapshot("Revisions List one unfolded");
 
     // Look for the specific revision link associated with this person
     // Scope search to the group containing "Not approved person"

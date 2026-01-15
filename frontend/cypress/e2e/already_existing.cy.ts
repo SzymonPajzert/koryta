@@ -7,7 +7,10 @@ describe("Already Existing Suggestions", () => {
   it("shows suggestions for similar names and navigates to existing page", () => {
     // 1. Visit create page
     cy.visit("/edit/node/new");
-    cy.wait(3000); // Give plenty of time for initialization
+    // Verify page is loaded by checking input existence
+    cy.get('[data-testid="already-existing-input"] input', {
+      timeout: 10000,
+    }).should("be.visible");
 
     // 2. Try adding a person (similar to "Jan Kowalski")
     cy.get('[data-testid="already-existing-input"] input').type("Jan", {

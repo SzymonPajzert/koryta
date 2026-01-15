@@ -67,7 +67,12 @@ describe("Comments and Discussions", () => {
     // The form closes on success, so we just wait a bit or assume success if next steps pass.
 
     // Wait for network/processing
-    cy.wait(3000);
+    // Wait for network/processing
+    // Assume success message or UI update happens.
+    // If not, we can assume the reload checks persistence, but let's wait a bit shorter or rely on an assertion if possible.
+    // Since we don't have a success UI indicator, we'll wait for the button to maybe change state or just short wait.
+    // Better: Intercept the write if possible. For now, reducing wait.
+    cy.wait(1000);
     cy.reload();
     cy.contains(".v-tab", "Dyskusja").click();
 
