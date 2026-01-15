@@ -228,6 +228,9 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
         });
         alert("Zapisano!");
         await fetchRevisions();
+        if (node_id.value) {
+          await router.push(`/entity/${current.value.type}/${node_id.value}`);
+        }
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
