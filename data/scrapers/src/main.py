@@ -27,6 +27,7 @@ from scrapers.stores import (
     Pipeline,
     ProcessPolicy,
 )
+from scrapers.teryt import Regions
 from scrapers.wiki.process_articles import ProcessWiki
 from scrapers.wiki.process_articles_ner import ProcessWikiNer
 from stores import file
@@ -181,6 +182,7 @@ PIPELINES = [
     CompaniesMerged,
     Statistics,
     Extract,
+    Regions,
 ]
 
 

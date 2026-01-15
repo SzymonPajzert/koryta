@@ -211,6 +211,81 @@ class NumpyEncoder(json.JSONEncoder):
         return super(NumpyEncoder, self).default(o)
 
 
+def process_regions(df, endpoint, token):
+    # Sort by ID length to Ensure parents created first
+    # Convert to string just in case
+    df["id_str"] = df["id"].astype(str)
+    df["id_len"] = df["id"].astype(str).str.len()
+    df = df.sort_values("id_len")
+
+    id_map = {}  # teryt_id -> node_id
+
+    target_url = f"{endpoint}/api/nodes/create"
+    edge_url = f"{endpoint}/api/edges/create"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    success = 0
+    total = len(df)
+
+    for idx, row in enumerate(df.itertuples()):
+        payload = {
+            "type": "region",
+            "name": row.name,
+            "teryt": str(row.id),
+            "revision_id": f"teryt{row.id}",
+        }
+
+        try:
+            print(f"[{idx + 1}/{total}] Creating {row.name} ({row.id})...", end=" ")
+            resp = requests.post(target_url, json=payload, headers=headers)
+            if resp.ok:
+                node_id = resp.json()["id"]
+                # Store mapping using string ID
+                id_map[str(row.id)] = node_id
+                success += 1
+                print("OK", end=" ")
+
+                # Create Edge if parent exists
+                parent_id = getattr(row, "parent_id", None)
+                if (
+                    parent_id
+                    and parent_id is not None
+                    and str(parent_id) != "nan"
+                    and str(parent_id) != "None"
+                ):
+                    parent_id = str(parent_id)
+                    if parent_id in id_map:
+                        p_node_id = id_map[parent_id]
+                        edge_payload = {
+                            "source": p_node_id,
+                            "target": node_id,
+                            "type": "owns",
+                            "name": "owns",
+                        }
+                        r_edge = requests.post(
+                            edge_url, json=edge_payload, headers=headers
+                        )
+                        if not r_edge.ok:
+                            print(f"(Edge Failed: {r_edge.text})")
+                        else:
+                            print("(Edge OK)")
+                    else:
+                        print(f"(Parent {parent_id} not found locally)")
+                else:
+                    print("")
+
+            else:
+                print(f"FAILED: {resp.text}")
+
+        except Exception as e:
+            print(f"ERROR: {e}")
+
+    print(f"\nDone. Created {success}/{total} regions.")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Koryta Uploader CLI")
     parser.add_argument("--script", help="SQL script file to execute")
@@ -218,6 +293,12 @@ def parse_args():
     parser.add_argument("--submit", action="store_true", help="Upload results to API")
     parser.add_argument(
         "--endpoint", default="http://localhost:3000", help="API endpoint base URL"
+    )
+    parser.add_argument(
+        "--type",
+        default="person",
+        choices=["person", "region"],
+        help="Entity type to upload",
     )
     parser.add_argument("--api", default="bulk_create", help="API endpoint path")
     parser.add_argument(
@@ -264,6 +345,12 @@ def register_table(ctx, pipeline_cls):
 
 def submit_results(args, df):
     token = authenticate_user(args.endpoint)
+
+    if args.type == "region":
+        print("Processing regions...")
+        process_regions(df, args.endpoint, token)
+        sys.exit(0)
+
     target_url = f"{args.endpoint}/api/person/{args.api}"
     headers = {
         "Content-Type": "application/json",
