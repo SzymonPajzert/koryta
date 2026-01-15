@@ -1,12 +1,20 @@
 <template>
   <div class="already-existing-wrapper">
-    <v-text-field v-bind="$attrs" v-model="model" data-testid="already-existing-input" hide-details />
-    <v-list v-if="create && closest.length > 0" data-testid="similar-suggestions">
+    <v-text-field
+      v-bind="$attrs"
+      v-model="model"
+      data-testid="already-existing-input"
+      hide-details
+    />
+    <v-list
+      v-if="create && closest.length > 0"
+      data-testid="similar-suggestions"
+    >
       <v-list-item
         v-for="([key, item], index) in closest"
         :key="index"
         class="w-100"
-        @click="onSelect(key, item)"
+        @click="onSelect(key)"
       >
         <v-list-item-title
           ><span
@@ -24,35 +32,28 @@
 </template>
 
 <script lang="ts" setup>
+import type { NodeType, Article } from "~~/shared/model";
+import { compareTwoStrings } from "string-similarity";
+
 defineOptions({
   inheritAttrs: false,
 });
-import type { NodeType, Article } from "~~/shared/model";
-import { useDialogStore } from "@/stores/dialog";
-import { compareTwoStrings } from "string-similarity";
 
-const dialogStore = useDialogStore();
 const model = defineModel<string>({ required: true });
 const {
   entity,
   create,
   max = 3,
-  navigate = false,
 } = defineProps<{
   entity: NodeType;
   create?: boolean;
   max?: number;
-  navigate?: boolean;
 }>();
 
 const { entities } = await useEntity(entity);
 
-function onSelect(key: string, item: any) {
-  if (navigate) {
-    navigateTo(`/edit/node/${key}`);
-  } else {
-    dialogStore.open({ type: entity, edit: { value: item, key: key } });
-  }
+function onSelect(key: string) {
+  navigateTo(`/edit/node/${key}`);
 }
 
 type Entry<T> = [string, T & { similarity: number; equal: boolean }];

@@ -2,7 +2,6 @@
 import { defineConfigs, SimpleLayout } from "v-network-graph";
 import type { EventHandlers, NodeEvent } from "v-network-graph";
 
-import { useDialogStore } from "@/stores/dialog";
 import { useSimulationStore } from "@/stores/simulation";
 import { useParams } from "@/composables/params";
 import type { NodeType } from "~~/shared/model";
@@ -15,7 +14,6 @@ definePageMeta({
   fullWidth: true,
 });
 
-const dialogStore = useDialogStore();
 const simulationStore = useSimulationStore();
 const { data: graph } = await useAsyncData<GraphLayout>(
   "graph",
@@ -82,7 +80,7 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
 };
 
 const handleDoubleClick = () => {
-  dialogStore.openMain();
+  navigateTo("/edit/node/new");
 };
 
 const eventHandlers: EventHandlers = {

@@ -26,25 +26,6 @@
           <v-card-text v-if="person.content">
             {{ person.content }}
           </v-card-text>
-
-          <v-card-actions v-if="isAdmin">
-            <v-spacer />
-            <v-btn
-              variant="tonal"
-              prepend-icon="mdi-pencil-outline"
-              @click.stop="
-                dialogStore.open({
-                  type: 'person',
-                  edit: { value: person, key: key },
-                })
-              "
-            >
-              <template #prepend>
-                <v-icon color="warning" />
-              </template>
-              Edytuj
-            </v-btn>
-          </v-card-actions>
         </v-card>
       </v-col>
     </v-row>
@@ -54,11 +35,6 @@
 <script setup lang="ts">
 import type { Person } from "~~/shared/model";
 import PartyChip from "./PartyChip.vue";
-import { useAuthState } from "@/composables/auth";
-import { useDialogStore } from "@/stores/dialog"; // Import the new store
-
-const dialogStore = useDialogStore();
-const { isAdmin } = useAuthState();
 
 const { people } = defineProps<{ people: Record<string, Person> }>();
 const peopleOrdered = computed<[string, Person][]>(() => {
