@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!body || !body.type || !body.name) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Missing required fields (type, name)",
+      message: "Missing required fields (type, name)",
     });
   }
 

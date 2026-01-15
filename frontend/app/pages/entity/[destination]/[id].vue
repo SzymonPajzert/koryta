@@ -62,7 +62,7 @@
               <v-btn
                 variant="tonal"
                 prepend-icon="mdi-pencil-outline"
-                :to="{ path: `/edit/node/${node}`, query: { type } }"
+                @click="handleEdit"
               >
                 <template #prepend>
                   <v-icon color="warning" />
@@ -76,7 +76,12 @@
                 :name="entity.name"
               >
                 <template #activator="{ props }">
-                  <v-btn v-bind="props" variant="tonal" class="ml-2">
+                  <v-btn
+                    v-bind="user ? props : {}"
+                    variant="tonal"
+                    class="ml-2"
+                    @click="!user && handleLoginRedirect()"
+                  >
                     <template #prepend>
                       <v-icon color="error" icon="mdi-delete-outline" />
                     </template>
@@ -129,7 +134,26 @@ watch(tab, (newTab) => {
 });
 
 // Use API fetch to ensure revisions are merged correctly (auth aware)
-const { authFetch } = useAuthState();
+const { authFetch, user } = useAuthState();
+const router = useRouter();
+
+const handleLoginRedirect = () => {
+  router.push({
+    path: "/login",
+    query: { redirect: route.fullPath },
+  });
+};
+
+const handleEdit = () => {
+  if (!user.value) {
+    handleLoginRedirect();
+  } else {
+    router.push({
+      path: `/edit/node/${node}`,
+      query: { type },
+    });
+  }
+};
 
 const { data: response } = await authFetch<{
   node: Person | Company | Article;

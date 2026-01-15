@@ -59,22 +59,56 @@ const { data: response, refresh } = await authFetch<{
 
 const entitiesList = computed(() => {
   const ents = response.value?.entities ?? {};
-  return Object.entries(ents).map(([key, value]) => ({
+  const list = Object.entries(ents).map(([key, value]) => ({
     type: props.entity,
     id: key,
     name: value.name,
   }));
+
+  if (model.value && !list.find((e) => e.id === model.value?.id)) {
+    list.push(model.value);
+  }
+
+  return list;
 });
 
-function addNewItem() {
+async function addNewItem() {
   const newEntityName = search.value;
   if (newEntityName) {
     // Clear the search input after triggering the add new item action
     search.value = "";
 
-    // Open new tab with prepopulated data
-    const url = `/edit/node/new?type=${props.entity}&name=${encodeURIComponent(newEntityName)}`;
-    window.open(url, "_blank");
+    const { data, error } = await authFetch<{ id: string }>(
+      `/api/nodes/create`,
+      {
+        method: "POST",
+        body: {
+          type: props.entity,
+          name: newEntityName,
+        },
+      },
+    );
+
+    if (error.value) {
+      console.error("Failed to create entity:", error.value);
+      return;
+    }
+
+    const id = data.value?.id;
+
+    if (id) {
+      await refresh();
+
+      // Select the newly created item
+      model.value = {
+        type: props.entity,
+        id,
+        name: newEntityName,
+      };
+
+      // Force update the search input to show the name
+      search.value = newEntityName;
+    }
   }
 }
 </script>

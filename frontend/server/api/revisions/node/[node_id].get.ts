@@ -15,7 +15,7 @@ export default authCachedEventHandler(async (event) => {
   if (!isAuth) {
     throw createError({
       statusCode: 401,
-      statusMessage: "Unauthorized",
+      message: "Unauthorized",
     });
   }
 
