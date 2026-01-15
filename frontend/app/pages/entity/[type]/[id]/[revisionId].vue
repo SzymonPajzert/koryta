@@ -7,41 +7,43 @@
         <div v-else-if="error">
           <v-alert type="error">Nie udało się załadować rewizji.</v-alert>
         </div>
-        <div v-else-if="revisionData">
-          <v-card class="mb-4">
-            <v-card-title>
-              Rewizja dla: {{ nodeData?.name || `ID: ${nodeId}` }}
-            </v-card-title>
-            <v-card-subtitle>
-              Autor: {{ revisionData.update_user }} <br />
-              Data: {{ new Date(revisionData.update_time).toLocaleString() }}
-            </v-card-subtitle>
-            <v-card-text>
-              <h3 class="text-h6 mb-2">Dane rewizji:</h3>
-              <pre class="bg-grey-lighten-4 pa-4 rounded">{{
-                JSON.stringify(revisionData.data, null, 2)
-              }}</pre>
-            </v-card-text>
-            <v-card-actions>
-              <v-btn color="primary" variant="tonal" @click="applyRevision">
-                Zatwierdź
-              </v-btn>
-              <v-btn color="error" variant="text" @click="rejectRevision">
-                Odrzuć
-              </v-btn>
-            </v-card-actions>
-          </v-card>
+        <v-card class="mb-4">
+          <v-card-title>
+            Rewizja dla: {{ nodeData?.name || `ID: ${nodeId}` }}
+          </v-card-title>
+          <v-card-subtitle>
+            Autor: {{ revisionData.update_user }} <br />
+            Data: {{ new Date(revisionData.update_time).toLocaleString() }}
+          </v-card-subtitle>
+          <v-card-text>
+            <h3 class="text-h6 mb-2">Podgląd wersji:</h3>
+            <EntityDetailsCard
+              :entity="revisionData.data"
+              :type="revisionData.data.type"
+            />
+          </v-card-text>
+          <v-card-actions>
+            <v-btn color="primary" variant="tonal" @click="applyRevision">
+              Zatwierdź
+            </v-btn>
+            <v-btn color="error" variant="text" @click="rejectRevision">
+              Odrzuć
+            </v-btn>
+          </v-card-actions>
+        </v-card>
 
-          <v-expansion-panels>
-            <v-expansion-panel title="Aktualna wersja węzła">
-              <v-expansion-panel-text>
-                <pre class="bg-grey-lighten-4 pa-4 rounded">{{
-                  JSON.stringify(nodeData, null, 2)
-                }}</pre>
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-          </v-expansion-panels>
-        </div>
+        <v-expansion-panels>
+          <v-expansion-panel title="Aktualna wersja węzła">
+            <v-expansion-panel-text>
+              <EntityDetailsCard
+                v-if="nodeData"
+                :entity="nodeData"
+                :type="nodeData.type"
+              />
+              <div v-else>Brak danych o aktualnej wersji.</div>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
       </v-col>
     </v-row>
   </v-container>
