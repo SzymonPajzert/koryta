@@ -117,6 +117,7 @@ dependencies = [
 [project.scripts]
 # jupyter lab is available as well for analysis
 koryta = "main:main"
+koryta_uploader = "cli:main"
 
 
 [build-system]
@@ -248,6 +249,4 @@ ignore_imports = [
     "entities.util -> urllib",
     "scrapers.stores -> os",
     "scrapers.stores -> io",
-    # TODO https://github.com/SzymonPajzert/koryta/issues/272
-    # "scrapers.article.ner_stanza -> os",   # mpacek: not sure why it was introduced in the first place, but I need to comment it out to make the import linter pass
 ]
