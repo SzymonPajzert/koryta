@@ -39,6 +39,7 @@
 <script setup lang="ts">
 import { getAnalytics, logEvent } from "firebase/analytics";
 import type { GraphLayout } from "~~/shared/graph/util";
+import { parties } from "~~/shared/misc";
 
 const { push, currentRoute } = useRouter();
 let analytics: any;
@@ -123,6 +124,23 @@ const items = computed<ListItem[]>(() => {
       content_type: "nodeGroup",
     },
   });
+
+  parties.forEach((item) => {
+    result.push({
+      title: item,
+      icon: "mdi-flag",
+      subtitle: "Partia",
+      path: "/lista",
+      query: {
+        partia: item,
+      },
+      logEventKey: {
+        content_id: item,
+        content_type: "party",
+      },
+    });
+  });
+
   graph.value.nodeGroups.slice(1).forEach((item) =>
     result.push({
       title: item.name,
