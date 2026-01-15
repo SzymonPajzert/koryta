@@ -147,5 +147,6 @@ describe("useNodeEdit", () => {
         body: expect.objectContaining({ name: "Updated Name", node_id: "123" }),
       }),
     );
+    expect(mockRouterPush).toHaveBeenCalledWith("/entity/person/123");
   });
 });
