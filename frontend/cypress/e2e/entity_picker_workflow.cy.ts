@@ -45,7 +45,7 @@ describe("Entity Picker Workflow", () => {
     cy.contains(".v-list-item-title", hiddenNodeName).should("exist");
   });
 
-  it("should open new tab with correct params when adding new entity", () => {
+  it("should create new entity inline and select it", () => {
     const sourceNodeName = generateName("SourceForNew");
     cy.visit("/edit/node/new?type=person");
     cy.contains("label", "Nazwa").parent().find("input").type(sourceNodeName);
@@ -54,27 +54,20 @@ describe("Entity Picker Workflow", () => {
 
     const newTargetName = generateName("NewTarget");
 
-    // Setup stub for window.open
-    cy.window().then((win) => {
-      cy.stub(win, "open").as("windowOpen");
-    });
-
     // Type non-existent name
     cy.get('[data-testid="entity-picker-input"]').first().click();
     cy.get('[data-testid="entity-picker-input"]').first().type(newTargetName);
 
-    // Wait for "Add ..." option
+    // Wait for "Add ..." option and click it
     cy.contains(`Dodaj "${newTargetName}"`).should("be.visible").click();
 
-    // Assert window.open was called
-    cy.get("@windowOpen").should("be.calledWithMatch", (url: string) => {
-      // The exact URL might depend on base URL, but window.open usually gets relative or absolute.
-      // We check for presence of query params
-      return (
-        url.includes(`/edit/node/new`) &&
-        url.includes(`type=person`) &&
-        url.includes(`name=${newTargetName}`)
-      );
-    });
+    // Verify that the new item is selected in the input
+    // The v-autocomplete typically displays the selection in the input or as a chip
+    // Depending on implementation, checking the value might be different.
+    // Given return-object and item-title="name", the input text should be the name.
+    cy.get('[data-testid="entity-picker-input"]')
+      .find("input")
+      .first()
+      .should("have.value", newTargetName);
   });
 });
