@@ -9,7 +9,7 @@ export default authCachedEventHandler(async (event) => {
   const user = await getUser(event).catch(() => null);
 
   if (!id) {
-    throw createError({ statusCode: 400, statusMessage: "Missing type or id" });
+    throw createError({ statusCode: 400, message: "Missing type or id" });
   }
 
   const db = getFirestore(getApp(), "koryta-pl");
@@ -34,7 +34,7 @@ export default authCachedEventHandler(async (event) => {
   }
 
   if (!node) {
-    throw createError({ statusCode: 404, statusMessage: "Node not found" });
+    throw createError({ statusCode: 404, message: "Node not found" });
   }
 
   if (isEdge(node)) {
@@ -45,7 +45,7 @@ export default authCachedEventHandler(async (event) => {
   if (!user && !pageIsPublic(node)) {
     throw createError({
       statusCode: 404,
-      statusMessage: "Node not found (internal)",
+      message: "Node not found (internal)",
     });
   }
 

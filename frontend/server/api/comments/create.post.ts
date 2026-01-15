@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!body || !body.content) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Missing content",
+      message: "Missing content",
     });
   }
 

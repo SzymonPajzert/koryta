@@ -91,7 +91,7 @@ export default defineEventHandler(async (event) => {
 function badRequest(message: string) {
   throw createError({
     statusCode: 400,
-    statusMessage: message,
+    message: message,
   });
 }
 

@@ -6,7 +6,7 @@ export async function getUser(event: H3Event) {
   if (!authHeader?.startsWith("Bearer ")) {
     throw createError({
       statusCode: 401,
-      statusMessage:
+      message:
         "Błąd uwierzytelniania: brak tokenu. Proszę się zalogować.",
     });
   }
@@ -18,7 +18,7 @@ export async function getUser(event: H3Event) {
   } catch {
     throw createError({
       statusCode: 401,
-      statusMessage:
+      message:
         "Błąd uwierzytelniania: nieważny token. Proszę zalogować się ponownie.",
     });
   }

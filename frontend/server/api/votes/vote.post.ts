@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   if (!user) {
     throw createError({
       statusCode: 401,
-      statusMessage: "Unauthorized",
+      message: "Unauthorized",
     });
   }
 
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
   if (!id || !category || typeof vote !== "number") {
     throw createError({
       statusCode: 400,
-      statusMessage: "Missing required fields",
+      message: "Missing required fields",
       data: { id, type, vote, category },
     });
   }
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
       if (!doc.exists) {
         throw createError({
           statusCode: 404,
-          statusMessage: "Entity not found",
+          message: "Entity not found",
         });
       }
 
@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
     const message = error instanceof Error ? error.message : "Unknown error";
     throw createError({
       statusCode: 500,
-      statusMessage: "Internal Server Error",
+      message: "Internal Server Error",
       data: message,
     });
   }

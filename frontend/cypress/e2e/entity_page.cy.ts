@@ -20,6 +20,6 @@ describe("Entity Page Data", () => {
     cy.visit("/entity/person/1");
     cy.contains("Orlen").click();
     cy.url().should("include", "/entity/place/");
-    cy.get('a[href^="/edit/node/2"]').should("exist");
+    cy.contains("button", "Zaproponuj zmianę").should("exist");
   });
 });

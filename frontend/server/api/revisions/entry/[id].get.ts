@@ -7,7 +7,7 @@ export default authCachedEventHandler(async (event) => {
   if (!id) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Zgłoszenie nie posiada ID",
+      message: "Zgłoszenie nie posiada ID",
     });
   }
 
@@ -17,7 +17,7 @@ export default authCachedEventHandler(async (event) => {
   if (!doc.exists) {
     throw createError({
       statusCode: 404,
-      statusMessage: "Rewizja nie znaleziona",
+      message: "Rewizja nie znaleziona",
     });
   }
 

@@ -235,7 +235,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       console.error(e);
-      const msg = e.data?.statusMessage || e.message || "Unknown error";
+      const msg =
+        e.data?.message || e.data?.statusMessage || e.message || "Unknown error";
       alert("Błąd zapisu: " + msg);
     } finally {
       loading.value = false;
