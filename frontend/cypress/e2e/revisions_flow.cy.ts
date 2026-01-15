@@ -27,7 +27,7 @@ describe("Revisions Flow", () => {
 
     // Verify details page content
     cy.contains("Szczegóły Rewizji").should("be.visible");
-    cy.contains("Dane rewizji").should("be.visible");
+    cy.contains("Podgląd wersji").should("be.visible");
     cy.contains("Not approved person (Updated)").should("be.visible");
   });
 });

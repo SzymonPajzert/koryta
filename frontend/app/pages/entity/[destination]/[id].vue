@@ -136,7 +136,6 @@ const { data: response } = await authFetch<{
 }>(`/api/nodes/entry/${node}`);
 const entity = computed(() => response.value?.node);
 
-
 const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
 </script>

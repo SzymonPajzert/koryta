@@ -7,7 +7,7 @@
         <div v-else-if="error">
           <v-alert type="error">Nie udało się załadować rewizji.</v-alert>
         </div>
-        <v-card class="mb-4">
+        <v-card v-if="revisionData" class="mb-4">
           <v-card-title>
             Rewizja dla: {{ nodeData?.name || `ID: ${nodeId}` }}
           </v-card-title>
