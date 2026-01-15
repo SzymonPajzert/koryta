@@ -65,6 +65,12 @@ vi.mock("../../../../app/composables/useNodeEdit", () => ({
 // Mock definePageMeta
 vi.stubGlobal("definePageMeta", vi.fn());
 
+vi.stubGlobal("useEdgeEdit", () => ({
+  openEditEdge: vi.fn(),
+  cancelEditEdge: vi.fn(),
+  isEditingEdge: ref(false),
+}));
+
 // Helper to mount async component
 function mountAsync(component: unknown, options: unknown = {}) {
   return mount(
@@ -203,5 +209,50 @@ describe("NodeEditPage", () => {
     await forms[1].trigger("submit");
 
     // expect(mockAddEdge).toHaveBeenCalled(); TODO
+  });
+
+  it("cancel button links to home when creating new node", async () => {
+    mockState.isNew.value = true;
+    const wrapper = mountAsync(NodeEditPage, {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          VWindowItem: {
+            template: "<div><slot /></div>",
+          },
+        },
+      },
+    });
+    await flushPromises();
+
+    const buttons = wrapper.findAllComponents(components.VBtn);
+    const cancelBtn = buttons.find((b) => b.text().includes("Anuluj"));
+    expect(cancelBtn).toBeDefined();
+    expect(cancelBtn?.props("to")).toBe("/");
+  });
+
+  it("cancel button links to entity page when editing existing node", async () => {
+    mockState.isNew.value = false;
+    mockState.current.value.type = "person";
+    mockState.node_id.value = "123";
+
+    const wrapper = mountAsync(NodeEditPage, {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          VWindowItem: {
+            template: "<div><slot /></div>",
+          },
+        },
+      },
+    });
+    await flushPromises();
+
+    const buttons = wrapper.findAllComponents(components.VBtn);
+    const cancelBtn = buttons.find((b) => b.text().includes("Anuluj"));
+    expect(cancelBtn).toBeDefined();
+    expect(cancelBtn?.props("to")).toBe("/entity/person/123");
   });
 });

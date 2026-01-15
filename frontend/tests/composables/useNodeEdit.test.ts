@@ -123,12 +123,15 @@ describe("useNodeEdit", () => {
 
   it("saves existing node as revision", async () => {
     mockRoute.params = { id: "123" };
-    mockedFetch.mockResolvedValueOnce({ node: { name: "Old Name" } });
+    mockedFetch.mockResolvedValueOnce({
+      node: { name: "Old Name", type: "person" },
+    });
     mockedFetch.mockResolvedValueOnce({ revisions: [] });
 
     const { saveNode, current } = await useNodeEdit({
       route: mockRoute,
       idToken: mockIdToken,
+      router: { push: mockRouterPush },
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
     mockedFetch.mockClear();
@@ -147,5 +150,6 @@ describe("useNodeEdit", () => {
         body: expect.objectContaining({ name: "Updated Name", node_id: "123" }),
       }),
     );
+    expect(mockRouterPush).toHaveBeenCalledWith("/entity/person/123");
   });
 });

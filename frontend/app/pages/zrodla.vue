@@ -30,6 +30,7 @@
           v-for="source in articles"
           :key="source.name"
           :href="source.sourceURL"
+          target="_blank"
         >
           <v-list-item-title>
             {{ source.name }}

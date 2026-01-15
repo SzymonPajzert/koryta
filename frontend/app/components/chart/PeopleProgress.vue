@@ -48,7 +48,7 @@ const segments: Segment[] = [
     value: 431,
     color: "#f44336",
     label: "Znalezione",
-    link: "https://www.guidedtrack.com/programs/9fk0fj2/run",
+    link: "/revisions",
   },
 ];
 

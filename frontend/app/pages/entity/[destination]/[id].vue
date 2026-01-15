@@ -12,54 +12,7 @@
       <v-window v-model="tab">
         <v-window-item value="details">
           <div class="pa-4">
-            <v-card v-if="type == 'person'" width="100%" variant="flat">
-              <v-card-title class="headline px-0">
-                <PartyChip
-                  v-for="party in personEntity?.parties"
-                  :key="party"
-                  :party
-                />
-                <h2 class="text-h5 font-weight-bold">
-                  {{ entity?.name }}
-                </h2>
-              </v-card-title>
-              <v-card-text class="px-0">
-                {{ entity?.content }}
-              </v-card-text>
-            </v-card>
-
-            <v-card v-if="type == 'place'" width="100%" variant="flat">
-              <v-card-title class="headline px-0">
-                <v-icon start icon="mdi-office-building-outline" />
-                <h2 class="text-h5 font-weight-bold d-inline">
-                  {{ entity?.name }}
-                </h2>
-              </v-card-title>
-              <v-card-text class="px-0">
-                <div v-if="company?.krsNumber" class="text-caption mb-2">
-                  KRS: {{ company?.krsNumber }}
-                </div>
-                {{ entity?.content }}
-              </v-card-text>
-            </v-card>
-
-            <v-card v-if="type == 'article'" width="100%" variant="flat">
-              <v-card-title class="headline px-0">
-                <v-icon start icon="mdi-file-document-outline" />
-                <h2 class="text-h5 font-weight-bold d-inline">
-                  {{ entity?.name }}
-                </h2>
-              </v-card-title>
-              <v-card-text class="px-0">
-                <div v-if="article?.sourceURL" class="text-caption mb-2">
-                  URL:
-                  <a :href="article?.sourceURL" target="_blank">{{
-                    article?.sourceURL
-                  }}</a>
-                </div>
-                {{ entity?.content }}
-              </v-card-text>
-            </v-card>
+            <EntityDetailsCard :entity="entity" :type="type" />
 
             <div class="mt-4">
               <v-row>
@@ -182,16 +135,6 @@ const { data: response } = await authFetch<{
   node: Person | Company | Article;
 }>(`/api/nodes/entry/${node}`);
 const entity = computed(() => response.value?.node);
-const company = computed(() =>
-  entity.value?.type === "place" ? (entity.value as Company) : undefined,
-);
-const article = computed(() =>
-  entity.value?.type === "article" ? (entity.value as Article) : undefined,
-);
-
-const personEntity = computed(() =>
-  entity.value?.type === "person" ? (entity.value as Person) : undefined,
-);
 
 const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
