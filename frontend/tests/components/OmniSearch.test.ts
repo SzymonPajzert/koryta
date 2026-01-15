@@ -66,4 +66,50 @@ describe("OmniSearch", () => {
     const input = wrapper.find("input");
     await input.setValue("Person");
   });
+
+  it("redirects to place for 'rect' nodes", async () => {
+    vi.stubGlobal("useAsyncData", () => ({
+      data: {
+        value: {
+          nodeGroups: [],
+          nodes: {
+            place1: { type: "rect", name: "Place 1" },
+          },
+        },
+      },
+    }));
+
+    const wrapper = mount(
+      defineComponent({
+        render() {
+          return h(Suspense, null, {
+            default: () => h(OmniSearch),
+            fallback: () => h("div", "fallback"),
+          });
+        },
+      }),
+      {
+        global: {
+          plugins: [vuetify],
+        },
+      },
+    );
+
+    await flushPromises();
+
+    // Simulate item selection which OmniSearch handles via watcher on model
+    const vm = wrapper.findComponent(OmniSearch).vm;
+    // @ts-expect-error accessing private/internal ref for test
+    vm.nodeGroupPicked = {
+      title: "Place 1",
+      path: "/entity/place/place1",
+      logEventKey: { content_id: "place1", content_type: "place" },
+    };
+
+    await nextTick();
+    expect(pushMock).toHaveBeenCalledWith({
+      path: "/entity/place/place1",
+      query: {},
+    });
+  });
 });
