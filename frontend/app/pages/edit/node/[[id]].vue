@@ -72,6 +72,13 @@
               >
                 Zapisz zmianę
               </v-btn>
+              <v-btn
+                color="secondary"
+                variant="text"
+                :to="isNew ? '/' : `/entity/${current.type}/${node_id}`"
+              >
+                Anuluj
+              </v-btn>
             </div>
           </v-form>
 
