@@ -1,42 +1,60 @@
 <template>
-  <v-text-field v-bind="$attrs" v-model="model" hide-details />
-  <v-list v-if="create">
-    <v-list-item
-      v-for="([key, item], index) in closest"
-      :key="index"
-      class="w-100"
-      @click="
-        dialogStore.open({ type: entity, edit: { value: item, key: key } })
-      "
+  <div class="already-existing-wrapper">
+    <v-text-field
+      v-bind="$attrs"
+      v-model="model"
+      data-testid="already-existing-input"
+      hide-details
+    />
+    <v-list
+      v-if="create && closest.length > 0"
+      data-testid="similar-suggestions"
     >
-      <v-list-item-title
-        ><span
-          :style="
-            item.equal
-              ? { 'font-weight': 'bold', 'font-style': 'italic' }
-              : undefined
-          "
-          >{{ item.name }}</span
-        ></v-list-item-title
+      <v-list-item
+        v-for="([key, item], index) in closest"
+        :key="index"
+        class="w-100"
+        @click="onSelect(key)"
       >
-    </v-list-item>
-  </v-list>
+        <v-list-item-title
+          ><span
+            :style="
+              item.equal
+                ? { 'font-weight': 'bold', 'font-style': 'italic' }
+                : undefined
+            "
+            >{{ item.name }}</span
+          ></v-list-item-title
+        >
+      </v-list-item>
+    </v-list>
+  </div>
 </template>
 
 <script lang="ts" setup>
 import type { NodeType, Article } from "~~/shared/model";
-import { useDialogStore } from "@/stores/dialog";
 import { compareTwoStrings } from "string-similarity";
 
-const dialogStore = useDialogStore();
-const model = defineModel<string>({ required: true });
-const { entity, create } = defineProps<{
+defineOptions({
+  inheritAttrs: false,
+});
+
+const model = defineModel<string | undefined>({ required: true });
+const {
+  entity,
+  create,
+  max = 3,
+} = defineProps<{
   entity: NodeType;
   create?: boolean;
+  max?: number;
 }>();
 
 const { entities } = await useEntity(entity);
-const max = 5;
+
+function onSelect(key: string) {
+  navigateTo(`/edit/node/${key}`);
+}
 
 type Entry<T> = [string, T & { similarity: number; equal: boolean }];
 
@@ -46,6 +64,7 @@ const closest = computed(() => {
 
   const result = Object.entries(entities.value)
     .map(entitySimilarity(entity, model.value))
+    .filter(([, item]) => item.similarity > 0.1)
     .sort(entitySort());
   return result.slice(0, max);
 });

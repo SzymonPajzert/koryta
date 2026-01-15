@@ -236,7 +236,10 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     } catch (e: any) {
       console.error(e);
       const msg =
-        e.data?.message || e.data?.statusMessage || e.message || "Unknown error";
+        e.data?.message ||
+        e.data?.statusMessage ||
+        e.message ||
+        "Unknown error";
       alert("Błąd zapisu: " + msg);
     } finally {
       loading.value = false;

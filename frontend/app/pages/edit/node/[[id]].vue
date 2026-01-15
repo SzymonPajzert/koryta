@@ -14,7 +14,14 @@
       <v-window-item value="content">
         <v-card class="mt-4 pa-4">
           <v-form @submit.prevent="saveNode">
-            <v-text-field v-model="current.name" label="Nazwa" required />
+            <FormAlreadyExisting
+              v-model="current.name"
+              label="Nazwa"
+              :entity="current.type || 'person'"
+              :create="isNew"
+              navigate
+              required
+            />
             <v-select
               v-model="current.type"
               :items="[
