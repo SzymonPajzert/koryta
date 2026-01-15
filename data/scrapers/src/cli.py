@@ -194,6 +194,7 @@ def map_to_payload(row):
         "content": get("content") or get("history"),
         "wikipedia": wikipedia_url,
         "rejestrIo": rejestr_io_url,
+        "birthDate": get_scalar("birth_date") or get_scalar("birthDate"),
         "companies": companies,
         "articles": articles,
     }
