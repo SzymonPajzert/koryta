@@ -166,6 +166,16 @@ const items = computed<ListItem[]>(() => {
         },
         path: "/entity/person/" + key,
       });
+    } else if (value.type == "rect") {
+      result.push({
+        title: value.name,
+        icon: "mdi-domain",
+        logEventKey: {
+          content_id: key,
+          content_type: "place",
+        },
+        path: "/entity/place/" + key,
+      });
     }
   });
   return result;
@@ -180,7 +190,10 @@ if (!props.fake) {
     }
     let path = value?.path ?? currentRoute.value.path;
     const allowedPath =
-      path == "/lista" || path == "/graf" || path.startsWith("/entity/person/");
+      path == "/lista" ||
+      path == "/graf" ||
+      path.startsWith("/entity/person/") ||
+      path.startsWith("/entity/place/");
     if (!allowedPath) {
       path = "/lista";
     }
