@@ -1,7 +1,7 @@
 <template>
   <v-row dense>
     <v-col cols="11">
-      <AlreadyExisting
+      <FormAlreadyExisting
         v-model="formData.sourceURL"
         entity="article"
         :create="create"

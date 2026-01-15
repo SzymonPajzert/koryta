@@ -1,7 +1,7 @@
 <template>
   <v-row dense>
     <v-col cols="12" md="12">
-      <AlreadyExisting
+      <FormAlreadyExisting
         v-model="formData.name"
         entity="place"
         label="Nazwa"

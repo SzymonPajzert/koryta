@@ -1,7 +1,7 @@
 <template>
   <v-row dense>
     <v-col cols="12" md="8">
-      <AlreadyExisting
+      <FormAlreadyExisting
         v-model="formData.name"
         entity="employed"
         :create="create"
