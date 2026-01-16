@@ -55,5 +55,11 @@
     "type": "article",
     "sourceURL": "http://lone-article.com",
     "revision_id": "rev8"
+  },
+  "10": {
+    "name": "Województwo Pomorskie",
+    "type": "region",
+    "teryt": "22",
+    "revision_id": "teryt22"
   }
 }

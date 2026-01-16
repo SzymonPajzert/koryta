@@ -99,10 +99,10 @@ export interface Article {
 export interface Region {
   name: string;
   type: "region";
+  teryt: string;
   content?: string;
   votes?: Votes;
 }
-
 
 export interface NodeTypeMap {
   person: Person;

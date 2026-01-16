@@ -47,15 +47,16 @@
       {{ entity?.content }}
     </v-card-text>
   </v-card>
+
   <v-card v-if="type == 'region'" width="100%" variant="flat">
     <v-card-title class="headline px-0">
       <v-icon start icon="mdi-map-marker-radius-outline" />
       <h2 class="text-h5 font-weight-bold d-inline">
-        {{ entity?.name }}
+        {{ region?.name }}
       </h2>
     </v-card-title>
     <v-card-text class="px-0">
-      {{ entity?.content }}
+      {{ region?.content }}
     </v-card-text>
   </v-card>
 </template>
@@ -73,6 +74,9 @@ const company = computed(() =>
 );
 const article = computed(() =>
   props.type === "article" ? (props.entity as Article) : undefined,
+);
+const region = computed(() =>
+  props.type === "region" ? (props.entity as Region) : undefined,
 );
 
 const personEntity = computed(() =>

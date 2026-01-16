@@ -20,7 +20,7 @@ describe("Region Node Type", () => {
     cy.intercept("GET", "/api/graph", {
       body: {
         nodes: {
-          "p1": { id: "p1", name: "Existing Person", type: "person" }
+          p1: { id: "p1", name: "Existing Person", type: "person" },
         },
         edges: [],
         nodeGroups: {}, // Needed for graph?
@@ -30,7 +30,7 @@ describe("Region Node Type", () => {
     cy.intercept("GET", "/api/graph/layout", {
       body: {
         nodes: {
-          "p1": { x: 0, y: 0, fixed: true },
+          p1: { x: 0, y: 0, fixed: true },
         },
       },
     }).as("getGraphLayout");
@@ -41,14 +41,14 @@ describe("Region Node Type", () => {
     cy.wait("@getRegion");
 
     // Verify name logic (might need adjustment if UI shows just name)
-    cy.contains("Kozłów"); 
-    
+    cy.contains("Kozłów");
+
     // Initial tab is details
     cy.contains("Informacje");
 
     // Should NOT have "Zaproponuj zmianę" button
     cy.contains("Zaproponuj zmianę").should("not.exist");
-    
+
     // Should NOT have "Zaproponuj usunięcie" (if hidden for region)
     // Code was: v-if="entity && type !== 'region'"
     cy.contains("Zaproponuj usunięcie").should("not.exist");
@@ -69,10 +69,12 @@ describe("Region Node Type", () => {
   });
 
   it("should not allow navigating to edit page", () => {
-     // Direct visit
-     cy.visit(`/edit/node/${REGION_ID}?type=region`, { failOnStatusCode: false });
-     
-     // Should redirect to entity page
-     cy.url().should("include", `/entity/region/${REGION_ID}`);
+    // Direct visit
+    cy.visit(`/edit/node/${REGION_ID}?type=region`, {
+      failOnStatusCode: false,
+    });
+
+    // Should redirect to entity page
+    cy.url().should("include", `/entity/region/${REGION_ID}`);
   });
 });
