@@ -4,6 +4,7 @@ import {
   type Person,
   type Company,
   type Article,
+  type Region,
   pageIsPublic,
 } from "~~/shared/model";
 import { getDatabase } from "firebase-admin/database";
@@ -13,6 +14,7 @@ interface nodeData {
   person: Person;
   place: Company;
   article: Article;
+  region: Region;
   record: unknown;
 }
 

@@ -20,7 +20,11 @@ export default authCachedEventHandler(async (event) => {
   ]);
 
   const nodesNoStats = getNodesNoStats(people, places, {}, partyColors);
-  const edges = getEdges(edgesFromDB);
+  const validNodeIds = new Set(Object.keys(nodesNoStats));
+  const edgesFiltered = edgesFromDB.filter(
+    (e) => validNodeIds.has(e.source) && validNodeIds.has(e.target),
+  );
+  const edges = getEdges(edgesFiltered);
   const nodeGroups = getNodeGroups(nodesNoStats, edges, people, places);
   const nodes = getNodes(nodeGroups, nodesNoStats);
 
