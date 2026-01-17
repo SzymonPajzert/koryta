@@ -19,6 +19,8 @@ class NLPImpl(NLP):
         ner_model_name: The name of the NER model to use ("herbert" or "stanza").
     """
 
+    ner_client: Union[HerbertNERClient, StanzaNERClient]
+
     def __init__(self, ner_model_name: NERModelName = "stanza"):
         if ner_model_name == "herbert":
             self.ner_client = HerbertNERClient()
@@ -39,10 +41,10 @@ class NLPImpl(NLP):
 
     def lemmatize(self, text_data: Union[str, List[str]]) -> Union[str, List[str]]:
         """
-        Lemmatizes input text using spaCy. 
+        Lemmatizes input text using spaCy.
         Allowed data types: string and list of strings.
-        Automatically routes the request to single or batch processing 
-        based on input type. 
+        Automatically routes the request to single or batch processing
+        based on input type.
         """
         if isinstance(text_data, str):
             return self.spacy_utils.lemmatize_name(text_data)

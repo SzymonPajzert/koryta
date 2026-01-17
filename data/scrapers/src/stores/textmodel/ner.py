@@ -195,7 +195,7 @@ class StanzaNERClient:
 
     def parse_entities(self, text) -> NEREntities:
         """Combined logic of extracting, cleaning and parsing NER entities"""
-        stanza_entities = self.extract_entities(text)
+        stanza_entities = self.extract_raw_entities(text)
         personalia = [
             {"entity": elem, "score": 1.0}
             for elem in self.filter_entities(stanza_entities, "persName")
