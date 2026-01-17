@@ -85,7 +85,6 @@ type ListItem = {
 const { idToken, authFetch } = useAuthState();
 
 const { data: graph, refresh } = await authFetch<GraphLayout>("/api/graph", {
-  key: "graph",
   lazy: true,
   query: computed(() => ({ pending: !!idToken.value })),
 });
@@ -96,7 +95,7 @@ watch(autocompleteFocus, (focused) => {
   }
 });
 
-const items = computed<ListItem[]>(() => {
+const baseItems = computed<ListItem[]>(() => {
   if (
     !graph.value ||
     !graph.value.nodeGroups ||
@@ -181,6 +180,39 @@ const items = computed<ListItem[]>(() => {
   return result;
 });
 
+const items = computed<ListItem[]>(() => {
+  const list = [...baseItems.value];
+  if (search.value) {
+    list.push({
+      title: `Utwórz osobę: "${search.value}"`,
+      icon: "mdi-account-plus",
+      path: "/edit/node/new",
+      query: {
+        type: "person",
+        name: search.value,
+      },
+      logEventKey: {
+        content_id: "new",
+        content_type: "create-person",
+      },
+    });
+    list.push({
+      title: `Utwórz firmę: "${search.value}"`,
+      icon: "mdi-office-building-plus",
+      path: "/edit/node/new",
+      query: {
+        type: "place",
+        name: search.value,
+      },
+      logEventKey: {
+        content_id: "new",
+        content_type: "create-place",
+      },
+    });
+  }
+  return list;
+});
+
 // Monitor the state only if the bar is not fake
 if (!props.fake) {
   watch(nodeGroupPicked, (value) => {
@@ -193,7 +225,8 @@ if (!props.fake) {
       path == "/lista" ||
       path == "/graf" ||
       path.startsWith("/entity/person/") ||
-      path.startsWith("/entity/place/");
+      path.startsWith("/entity/place/") ||
+      path.startsWith("/edit/");
     if (!allowedPath) {
       path = "/lista";
     }

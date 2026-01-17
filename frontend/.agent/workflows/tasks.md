@@ -1,3 +1,10 @@
+1.  Replace percySnapshots
+
+- rename command to something generic, e.g. snapshot("page name"), still taking the argument.
+- I ran out of quota on percySnapshots, so use another solution, e.g. checking in the screenshots and checking their diff.
+- Add snapshot in cypress tests to increase the coverage
+- also decrease their total number so we don't run out of quota.
+
 1. Testing Infrastructure (High Priority)
    - Unified VueFire/Auth Mocking: We struggled with [Vue warn]: injection "Symbol(VueFireAuth)" not found in OmniSearch.test.ts.
      Currently, we are using ad-hoc vi.stubGlobal calls in each test file.
@@ -26,13 +33,6 @@
 
 - Fix too narrow cards on the list view on emulated server. They are very very narrow.
 - Cypress tests are duplicated. Decide if they should be merged.
-
-6.  Replace percySnapshots
-
-- rename command to something generic, e.g. snapshot("page name"), still taking the argument.
-- I ran out of quota on percySnapshots, so use another solution, e.g. checking in the screenshots and checking their diff.
-- Add snapshot in cypress tests to increase the coverage
-- also decrease their total number so we don't run out of quota.
 
 7. Component unification
 
