@@ -6,9 +6,7 @@
 - also decrease their total number so we don't run out of quota.
 
 
-1. OmniSearch forwads to add
 
-If after typing in the omnisearch, there is no corresponding entry - allow creating either a place or a person with the given name as the empty value.
 
 1. Testing Infrastructure (High Priority)
    - Unified VueFire/Auth Mocking: We struggled with [Vue warn]: injection "Symbol(VueFireAuth)" not found in OmniSearch.test.ts.

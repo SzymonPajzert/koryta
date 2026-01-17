@@ -126,4 +126,41 @@ describe("OmniSearch", () => {
       }),
     );
   });
+  it("shows create options when searching", async () => {
+    const wrapper = mount(
+      defineComponent({
+        render() {
+          return h(Suspense, null, {
+            default: () => h(OmniSearch, { searchText: "NewGuy" }),
+            fallback: () => h("div", "fallback"),
+          });
+        },
+      }),
+      {
+        global: {
+          plugins: [vuetify, router],
+        },
+      },
+    );
+
+    await flushPromises();
+
+    const autocomplete = wrapper.findComponent({ name: "VAutocomplete" });
+    const items = autocomplete.props("items");
+
+    const createPerson = items.find((i: any) =>
+      i.title.includes('Utwórz osobę: "NewGuy"'),
+    );
+    const createPlace = items.find((i: any) =>
+      i.title.includes('Utwórz firmę: "NewGuy"'),
+    );
+
+    expect(createPerson).toBeDefined();
+    expect(createPerson.path).toBe("/edit/node/new");
+    expect(createPerson.query).toEqual({ type: "person", name: "NewGuy" });
+
+    expect(createPlace).toBeDefined();
+    expect(createPlace.path).toBe("/edit/node/new");
+    expect(createPlace.query).toEqual({ type: "place", name: "NewGuy" });
+  });
 });
