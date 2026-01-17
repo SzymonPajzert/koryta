@@ -5,9 +5,6 @@
 - Add snapshot in cypress tests to increase the coverage
 - also decrease their total number so we don't run out of quota.
 
-
-
-
 1. Testing Infrastructure (High Priority)
    - Unified VueFire/Auth Mocking: We struggled with [Vue warn]: injection "Symbol(VueFireAuth)" not found in OmniSearch.test.ts.
      Currently, we are using ad-hoc vi.stubGlobal calls in each test file.
