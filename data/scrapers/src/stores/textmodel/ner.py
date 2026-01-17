@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from statistics import mean
 from typing import Dict, List
 
 import spacy
@@ -9,10 +10,14 @@ from transformers import AutoModelForTokenClassification, AutoTokenizer, pipelin
 
 
 @dataclass
+class EntityField:
+    entity: str
+    score: float
+@dataclass
 class NEREntities:
-    personalia: List[str] = field(default_factory=list)
-    locations: List[str] = field(default_factory=list)
-    organizations: List[str] = field(default_factory=list)
+    personalia: List[EntityField] = field(default_factory=list)
+    locations: List[EntityField] = field(default_factory=list)
+    organizations: List[EntityField] = field(default_factory=list)
 
 class HerbertNERClient:
     
@@ -52,7 +57,7 @@ class HerbertNERClient:
     def group_entities(self, ner_output: List[dict]) -> dict:
         """Group NERs withing three categories: PER, LOC, ORG"""
 
-        entities: Dict[str, List[str]] = {
+        entities: Dict[str, List[dict]] = {
             'PER': [],
             'LOC': [],
             'ORG': []
@@ -60,28 +65,34 @@ class HerbertNERClient:
     
         current_entity: list[str] = []
         current_type = None
+        current_entity_score = []
         
         for token in ner_output:
             tag = token['entity']
             word = token['word'].replace('</w>', ' ')
+            score = float(token['score'])
     
             if tag.startswith('B-'):
                 if current_entity and current_type:
-                    entities[current_type].append(''.join(current_entity))
+                    entities[current_type].append({'entity':''.join(current_entity),
+                                                   'score':mean(current_entity_score)})
                 current_type = tag[2:]
                 current_entity = [word]
     
             elif tag.startswith('I-') and current_type == tag[2:]:
                 current_entity.append(word)
+                current_entity_score.append(score)
     
             else:
                 if current_entity and current_type:
-                    entities[current_type].append(''.join(current_entity))
+                    entities[current_type].append({'entity':''.join(current_entity),
+                                                   'score':mean(current_entity_score)})
                 current_entity = []
                 current_type = None
         
         if current_entity and current_type:
-            entities[current_type].append(''.join(current_entity))
+            entities[current_type].append({'entity':''.join(current_entity),
+                                                   'score':mean(current_entity_score)})
     
         return entities
 
@@ -103,13 +114,13 @@ class HerbertNERClient:
     
         return result.strip()
 
-    def parse_entities(self, text: str) -> NEREntities:
+    def parse_entities(self, text) -> NEREntities:
         """Combined logic of extracting, cleaning and parsing NER entities"""
         entities_herbert = self.extract_raw_entities(text)
         grouped_entities = self.group_entities(entities_herbert)
-        personalia = [self.fix_spacing_full_names(pers) for pers in grouped_entities.get('PER',[])]
-        locations = [self.fix_spacing_full_names(loc) for loc in grouped_entities.get('LOC',[])]
-        organizations = [self.fix_spacing_full_names(org) for org in grouped_entities.get('ORG',[])]
+        personalia = [{'entity':self.fix_spacing_full_names(elem['entity']), 'score':elem['score']} for elem in grouped_entities['PER']]
+        locations = [{'entity':self.fix_spacing_full_names(elem['entity']), 'score':elem['score']} for elem in grouped_entities['LOC']]
+        organizations = [{'entity':self.fix_spacing_full_names(elem['entity']), 'score':elem['score']} for elem in grouped_entities['ORG']]
         return NEREntities(personalia, locations, organizations)
 
         
@@ -166,12 +177,12 @@ class StanzaNERClient:
     
         return findings
 
-    def parse_entities(self, text: str) -> NEREntities:
+    def parse_entities(self, text) -> NEREntities:
         """Combined logic of extracting, cleaning and parsing NER entities"""
-        stanza_entities = self.extract_raw_entities(text)
-        personalia = self.filter_entities(stanza_entities, 'persName')
-        locations = self.filter_entities(stanza_entities, 'placeName')
-        organizations = self.filter_entities(stanza_entities, 'orgName')
+        stanza_entities = self.extract_entities(text)
+        personalia = [{'entity':elem, 'score':1.0} for elem in self.filter_entities(stanza_entities, 'persName')]
+        locations = [{'entity':elem, 'score':1.0} for elem in self.filter_entities(stanza_entities, 'placeName')]
+        organizations = [{'entity':elem, 'score':1.0} for elem in self.filter_entities(stanza_entities, 'orgName')]
         return NEREntities(personalia, locations, organizations)
 
     
