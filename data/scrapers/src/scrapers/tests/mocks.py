@@ -135,7 +135,7 @@ class MockIO(IO):
         self.files[filename] = MockFile(content, mtime=9999999999.0)  # Newest
 
     def upload(self, source, data, content_type):
-        self.output.append((source, data, content_type))        
+        self.output.append((source, data, content_type))
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return []

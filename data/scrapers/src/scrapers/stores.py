@@ -268,7 +268,7 @@ class NLP(metaclass=ABCMeta):
     """Abstract interface for NLP toolkit"""
 
     @abstractmethod
-    def extract_ner_entities(self, text: str) -> NEREntities: 
+    def extract_ner_entities(self, text: str) -> NEREntities:
         """Extract Named Entity Recognition entities from text."""
         pass
 
@@ -285,7 +285,6 @@ class NLP(metaclass=ABCMeta):
         """Lemmatize text or list of texts."""
         pass
 
-    
 
 @dataclass
 class ProcessPolicy:

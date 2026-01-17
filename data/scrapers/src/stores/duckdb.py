@@ -20,12 +20,12 @@ class EntityDumper:
         # Normalizing name as done in insert_into
         if name in self.inmemory:
             return self.inmemory[name]
-        
+
         # Try normalizing the name
         normalized = name.replace(".", "_")
         if normalized in self.inmemory:
             return self.inmemory[normalized]
-            
+
         raise ValueError(f"No output for {name} in EntityDumper")
 
     def insert_into(self, v, sort_by):
@@ -51,7 +51,7 @@ class EntityDumper:
             # Ensure the directory exists
             path = os.path.join(VERSIONED_DIR, f"{name}/{name}.jsonl")
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            
+
             df = pd.DataFrame.from_records([asdict(i) for i in v])
             if len(self.sort_keys[k]) > 0:
                 df.sort_values(

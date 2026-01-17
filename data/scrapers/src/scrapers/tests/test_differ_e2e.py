@@ -78,7 +78,7 @@ class TestKorytaDifferE2E(unittest.TestCase):
         # Check if we see the expected comparison
         if "Comparing 2024-01-01 -> 2024-01-02" not in output:
             print(f"DEBUG OUTPUT:\n{output}")
-            
+
         self.assertIn("Comparing 2024-01-01 -> 2024-01-02", output)
         self.assertIn("New: 1, Deleted: 1", output)
         self.assertIn("Name: Bo", output)
