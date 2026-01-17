@@ -9,10 +9,11 @@ import os.path
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, List, Union, Literal, overload
-from stores.textmodel.ner import NEREntities
+from typing import TYPE_CHECKING, Any, List, Literal, Union, overload
 
 import pandas as pd
+
+from stores.textmodel.ner import NEREntities
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection

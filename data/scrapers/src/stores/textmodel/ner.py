@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
@@ -6,8 +7,6 @@ import spacy
 import stanza  # type: ignore
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
 
-from dataclasses import dataclass, field
-from typing import List
 
 @dataclass
 class NEREntities:
@@ -45,13 +44,13 @@ class HerbertNERClient:
             
 
     def extract_raw_entities(self, text: str) -> List[dict]:
-        """extract all entities from given text"""
+        """Extract all entities from given text"""
 
         ner_pipeline = self._get_pipeline()
         return ner_pipeline(text)
         
     def group_entities(self, ner_output: List[dict]) -> dict:
-        """ group NERs withing three categories: PER, LOC, ORG"""
+        """Group NERs withing three categories: PER, LOC, ORG"""
 
         entities: Dict[str, List[str]] = {
             'PER': [],
@@ -87,7 +86,7 @@ class HerbertNERClient:
         return entities
 
     def fix_spacing_full_names(self, full_name: str) -> str:
-        """remove unnecessary spacing"""
+        """Remove unnecessary spacing"""
 
         # tokenize string
         tokens = re.findall(r'\b\w+\b', full_name)
@@ -136,14 +135,14 @@ class StanzaNERClient:
         return StanzaNERClient._nlp_stanza
 
     def extract_raw_entities(self, text: str):
-        """extract all entities from given text"""
+        """Extract all entities from given text"""
 
         ner_model = self._get_model()
         return ner_model(text)
 
 
     def filter_entities(self, document, pos_type: str):
-        """filter entities with pos_type: persName, placeName or orgName"""
+        """Filter entities with pos_type: persName, placeName or orgName"""
 
         findings = []
         current = []

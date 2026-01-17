@@ -1,8 +1,12 @@
-from typing import Literal, List, Union, overload
+from typing import List, Literal, Union, overload
 
 from scrapers.stores import NLP
-from stores.textmodel.ner import HerbertNERClient, StanzaNERClient, SpacyUtils, NEREntities
-
+from stores.textmodel.ner import (
+    HerbertNERClient,
+    NEREntities,
+    SpacyUtils,
+    StanzaNERClient,
+)
 
 NERModelName =  Literal["herbert", "stanza"]
 
