@@ -1,5 +1,4 @@
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import mean
 from typing import Dict, List
@@ -8,12 +7,7 @@ import spacy
 import stanza  # type: ignore
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
 
-
-@dataclass
-class NEREntities:
-    personalia: List[dict] = field(default_factory=list)
-    locations: List[dict] = field(default_factory=list)
-    organizations: List[dict] = field(default_factory=list)
+from entities.ner import NEREntities
 
 
 class HerbertNERClient:

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, List, Literal, Union, overload
 
 import pandas as pd
 
-from stores.textmodel.ner import NEREntities
+from entities.ner import NEREntities
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection
