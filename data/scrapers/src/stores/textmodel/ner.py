@@ -10,16 +10,10 @@ from transformers import AutoModelForTokenClassification, AutoTokenizer, pipelin
 
 
 @dataclass
-class EntityField:
-    entity: str
-    score: float
-
-
-@dataclass
 class NEREntities:
-    personalia: List[EntityField] = field(default_factory=list)
-    locations: List[EntityField] = field(default_factory=list)
-    organizations: List[EntityField] = field(default_factory=list)
+    personalia: List[dict] = field(default_factory=list)
+    locations: List[dict] = field(default_factory=list)
+    organizations: List[dict] = field(default_factory=list)
 
 
 class HerbertNERClient:
