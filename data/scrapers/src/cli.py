@@ -210,7 +210,7 @@ class NumpyEncoder(json.JSONEncoder):
         return super(NumpyEncoder, self).default(o)
 
 
-def main():
+def parse_args():
     parser = argparse.ArgumentParser(description="Koryta Uploader CLI")
     parser.add_argument("--script", help="SQL script file to execute")
     parser.add_argument("--query", help="SQL query string to execute")
@@ -236,7 +236,70 @@ def main():
     if args.script:
         with open(args.script, "r") as f:
             query = f.read()
+    return args, query
 
+
+def register_table(ctx, pipeline_cls):
+    try:
+        p = Pipeline.create(pipeline_cls)
+        if not p.filename:
+            return False
+
+        table_name = p.filename
+
+        # Robust method: Use pipeline's own reader
+        # Check existence first to avoid re-processing accidentally if missing
+        if p.output_time(ctx) is not None:
+            # read_or_process will read cached file if exists
+            df = p.read_or_process(ctx)
+            if df is not None:
+                ctx.con.register(table_name, df)
+                return True
+    except Exception:
+        # Skip pipelines that fail to initialize
+        return False
+    return False
+
+
+def submit_results(args, df):
+    token = authenticate_user(args.endpoint)
+    target_url = f"{args.endpoint}/api/person/{args.api}"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}",
+    }
+
+    success_count = 0
+    for idx, row in df.iterrows():
+        payload = map_to_payload(row)
+        if payload is None:
+            print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
+            continue
+
+        name = payload.get("name")
+        print(f"[{idx + 1}/{len(df)}] Uploading {name}...", end=" ")
+
+        try:
+            # Use data=json.dumps(..., cls=NumpyEncoder) to handle numpy types
+            resp = requests.post(
+                target_url,
+                data=json.dumps(payload, cls=NumpyEncoder),
+                headers=headers,
+            )
+            if resp.status_code in [200, 201]:
+                print("OK")
+                success_count += 1
+            else:
+                print(f"FAILED ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            print(f"ERROR: {e}")
+
+    failures = len(df) - success_count
+    print(f"\nUpload complete. Success: {success_count}, Failed: {failures}")
+
+
+def main():
+    args, query = parse_args()
     ctx, _ = _setup_context(False)
 
     missing = check_pipeline_files(ctx)
@@ -263,25 +326,8 @@ def main():
     print("Registering tables...")
     registered_count = 0
     for pipeline_cls in PIPELINES:
-        try:
-            p = Pipeline.create(pipeline_cls)
-            if not p.filename:
-                continue
-
-            table_name = p.filename
-
-            # Robust method: Use pipeline's own reader
-            # Check existence first to avoid re-processing accidentally if missing
-            if p.output_time(ctx) is not None:
-                # read_or_process will read cached file if exists
-                df = p.read_or_process(ctx)
-                if df is not None:
-                    ctx.con.register(table_name, df)
-                    registered_count += 1
-        except Exception as e:
-            # Skip pipelines that fail to initialize
-            continue
-
+        if register_table(ctx, pipeline_cls):
+            registered_count += 1
     print(f"Registered {registered_count} tables.")
 
     print("Executing query...")
@@ -311,41 +357,7 @@ def main():
             )
         print("\nUse --submit to upload.")
     else:
-        token = authenticate_user(args.endpoint)
-        target_url = f"{args.endpoint}/api/person/{args.api}"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-        }
-
-        success_count = 0
-        for idx, row in df.iterrows():
-            payload = map_to_payload(row)
-            if payload is None:
-                print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
-                continue
-
-            name = payload.get("name")
-            print(f"[{idx + 1}/{len(df)}] Uploading {name}...", end=" ")
-
-            try:
-                # Use data=json.dumps(..., cls=NumpyEncoder) to handle numpy types
-                resp = requests.post(
-                    target_url,
-                    data=json.dumps(payload, cls=NumpyEncoder),
-                    headers=headers,
-                )
-                if resp.status_code in [200, 201]:
-                    print("OK")
-                    success_count += 1
-                else:
-                    print(f"FAILED ({resp.status_code}): {resp.text}")
-            except Exception as e:
-                print(f"ERROR: {e}")
-
-        print(
-            f"\nUpload complete. Success: {success_count}, Failed: {len(df) - success_count}"
-        )
+        submit_results(args, df)
 
 
 if __name__ == "__main__":
