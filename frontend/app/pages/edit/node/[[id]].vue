@@ -14,6 +14,20 @@
       <v-window-item value="content">
         <v-card class="mt-4 pa-4">
           <v-form @submit.prevent="saveNode">
+            <template v-if="current.type === 'article'">
+              <v-text-field
+                v-model="current.sourceURL"
+                label="URL Źródła"
+                hint="Link do artykułu"
+                persistent-hint
+              />
+              <v-text-field
+                v-model="current.shortName"
+                label="Krótka nazwa"
+                hint="Np. Onet, WP, etc."
+                persistent-hint
+              />
+            </template>
             <FormAlreadyExisting
               v-model="current.name"
               label="Nazwa"
@@ -50,17 +64,11 @@
               chips
               deletable-chips
             />
-            <template v-if="current.type === 'article'">
+            <template v-if="current.type === 'place'">
               <v-text-field
-                v-model="current.sourceURL"
-                label="URL Źródła"
-                hint="Link do artykułu"
-                persistent-hint
-              />
-              <v-text-field
-                v-model="current.shortName"
-                label="Krótka nazwa"
-                hint="Np. Onet, WP, etc."
+                v-model="current.krsNumber"
+                label="Numer KRS"
+                hint="Numer w Krajowym Rejestrze Sądowym"
                 persistent-hint
               />
             </template>

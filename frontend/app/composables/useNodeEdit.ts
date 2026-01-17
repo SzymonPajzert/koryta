@@ -6,6 +6,7 @@ import type {
   Revision,
   Article,
   NodeType,
+  Company,
 } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 import { useEdges } from "~/composables/edges";
@@ -19,7 +20,8 @@ interface UseNodeEditOptions {
 
 type EditablePage = Partial<Node> &
   Partial<Omit<Person, "type">> &
-  Partial<Omit<Article, "type">>;
+  Partial<Omit<Article, "type">> &
+  Partial<Omit<Company, "type">>;
 
 export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const route = options.route || useRoute();
@@ -124,6 +126,9 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           if (node.type === "article") {
             v.sourceURL = (node as Partial<Article>).sourceURL || "";
             v.shortName = (node as Partial<Article>).shortName || "";
+          }
+          if (node.type === "place") {
+            v.krsNumber = (node as Partial<Company>).krsNumber || "";
           }
           current.value = v;
           lastFetchedId.value = id;
