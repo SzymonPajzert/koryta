@@ -90,7 +90,10 @@ describe("Pending Revisions", () => {
       .click(); // Unfolds the group
 
     // Wait for animation
-    cy.wait(500);
+    // Ensure content is visible before interaction
+    cy.contains(".v-list-group", "connection").within(() => {
+      cy.contains("Rewizja z").should("be.visible");
+    });
 
     // Click the actual revision - SCOPED to the opened group
     // We find the group that contains our text

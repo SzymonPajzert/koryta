@@ -15,9 +15,9 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test:ci": "vitest run",
-    "test:e2e": "start-server-and-test dev:local http://localhost:3000 'cypress run'",
-    "test:e2e:open": "start-server-and-test dev:local http://localhost:3000 'cypress open'",
-    "test:e2e:build": "start-server-and-test dev:build http://localhost:3000 'cypress run'",
+    "test:e2e": "start-server-and-test dev:local http://127.0.0.1:3000 'cypress run'",
+    "test:e2e:open": "start-server-and-test dev:local http://127.0.0.1:3000 'cypress open'",
+    "test:e2e:build": "start-server-and-test dev:build http://127.0.0.1:3000 'cypress run'",
     "test": "npm run test:ci && npm run test:e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -55,8 +55,6 @@
     "vuetify-nuxt-module": "^0.16.1"
   },
   "devDependencies": {
-    "@percy/cli": "^1.30.1",
-    "@percy/cypress": "^3.1.2",
     "@simonsmith/cypress-image-snapshot": "^10.0.3",
     "@types/d3-force": "^3.0.10",
     "@types/string-similarity": "^4.0.2",

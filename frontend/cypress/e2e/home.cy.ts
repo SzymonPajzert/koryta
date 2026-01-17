@@ -7,13 +7,11 @@ describe("home", () => {
 
   it("displays four clickable cards", () => {
     cy.get(".v-card").should("have.length.at.least", 4);
-    cy.wait(500); // Wait for potential animations
-    cy.percySnapshot("home-page");
+    cy.matchImageSnapshot("home-page");
   });
 
   it("displays dashboard", () => {
-    cy.wait(500); // Wait for potential animations
-    cy.percySnapshot("home-dashboard");
+    cy.matchImageSnapshot("home-dashboard");
   });
 
   it("shows list when clicking the first card - chart", () => {

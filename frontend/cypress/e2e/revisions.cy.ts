@@ -42,8 +42,7 @@ describe("Revisions Logic", () => {
       cy.contains("Politician from Konfederacja").should("be.visible");
       cy.contains("Politician from Konfederacja and PiS").should("not.exist");
 
-      cy.wait(500); // Wait for potential animations
-      cy.percySnapshot("approved-revision");
+      cy.matchImageSnapshot("approved-revision");
     });
 
     it("Displays latest revision for logged in user", () => {
@@ -55,8 +54,7 @@ describe("Revisions Logic", () => {
       // Public (rev5): "Politician from Konfederacja"
       // Latest (rev6): "Politician from Konfederacja and PiS"
 
-      cy.wait(500); // Wait for potential animations
-      cy.percySnapshot("latest-revision");
+      cy.matchImageSnapshot("latest-revision");
 
       cy.contains("Politician from Konfederacja and PiS").should("be.visible");
     });
