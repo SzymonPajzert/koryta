@@ -23,5 +23,11 @@
     "type": "connection",
     "revision_id": "rev_edge_3",
     "references": []
+  },
+  {
+    "source": "10",
+    "target": "2",
+    "type": "owns",
+    "revision_id": "rev_edge_4"
   }
 ]
