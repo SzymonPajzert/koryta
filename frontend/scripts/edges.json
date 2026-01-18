@@ -23,5 +23,29 @@
     "type": "connection",
     "revision_id": "rev_edge_3",
     "references": []
+  },
+  {
+    "source": "teryt22",
+    "target": "2",
+    "type": "owns",
+    "revision_id": "rev_edge_4"
+  },
+  {
+    "source": "chain-person",
+    "target": "chain-company",
+    "type": "employed",
+    "revision_id": "rev-edge-chain-1"
+  },
+  {
+    "source": "chain-powiat",
+    "target": "chain-company",
+    "type": "owns",
+    "revision_id": "rev-edge-chain-2"
+  },
+  {
+    "source": "chain-wojewodztwo",
+    "target": "chain-powiat",
+    "type": "owns",
+    "revision_id": "rev-edge-chain-3"
   }
 ]

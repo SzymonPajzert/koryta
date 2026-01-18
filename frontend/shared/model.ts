@@ -44,7 +44,7 @@ export function pageIsPublic(node: { revision_id?: string }) {
   return !!node.revision_id;
 }
 
-export type NodeType = "person" | "place" | "article" | "record";
+export type NodeType = "person" | "place" | "article" | "record" | "region";
 
 export type EdgeType =
   | "employed"
@@ -58,6 +58,7 @@ export const nodeTypeIcon: Record<NodeType, string> = {
   place: "mdi-office-building-outline",
   article: "mdi-file-document-outline",
   record: "mdi-file-document-outline",
+  region: "mdi-map-marker-radius-outline",
 };
 
 export const destinationAddText: Record<NodeType, string> = {
@@ -65,6 +66,7 @@ export const destinationAddText: Record<NodeType, string> = {
   place: "Dodaj firmę",
   article: "Dodaj artykuł",
   record: "Dodaj rekord",
+  region: "Dodaj region",
 };
 
 export interface Person {
@@ -94,11 +96,20 @@ export interface Article {
   votes?: Votes;
 }
 
+export interface Region {
+  name: string;
+  type: "region";
+  teryt: string;
+  content?: string;
+  votes?: Votes;
+}
+
 export interface NodeTypeMap {
   person: Person;
   place: Company;
   article: Article;
   record: never;
+  region: Region;
 }
 
 export interface Revision {

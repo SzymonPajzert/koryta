@@ -22,7 +22,7 @@ describe("home", () => {
   });
 
   it("shows correct number of people", () => {
-    const expectedPeople = 4;
+    const expectedPeople = 5;
 
     cy.request("/api/nodes/person").then((response) => {
       expect(Object.values(response.body["entities"])).to.have.lengthOf(

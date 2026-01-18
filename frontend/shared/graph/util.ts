@@ -3,12 +3,12 @@ import { SPLIT } from "./model";
 import type {
   Person,
   Company,
-  Article,
   Edge as DBEdge,
   EdgeType,
+  Region,
 } from "@/../shared/model";
 import { DiGraph } from "digraph-js";
-import { getHostname } from "../misc";
+import { personNode, companyNode, regionNode } from "./nodes";
 
 export interface GraphLayout {
   edges: Edge[];
@@ -17,10 +17,11 @@ export interface GraphLayout {
 }
 
 export function getNodeGroups(
-  nodesNoStats: ReturnType<typeof getNodesNoStats>,
+  nodesNoStats: Record<string, Node>,
   edges: ReturnType<typeof getEdges>,
   people: Record<string, Person>,
   companies: Record<string, Company>,
+  regions: Record<string, Region>,
 ) {
   const placeConnection = new DiGraph();
   placeConnection.addVertices(
@@ -52,26 +53,29 @@ export function getNodeGroups(
     }
   });
 
-  const entries = Object.entries(companies).map(([placeID, place]) => {
-    const children = [
-      ...placeConnection.getDeepChildren(placeID + SPLIT + "active"),
-    ]
-      // Remove node state from the ID.
-      .map((extendedID) => extendedID.split(SPLIT)[0])
-      .filter((id) => {
-        if (!id) return false;
-        return !nodesNoStats[id]?.hide;
-      }) as string[];
-    return {
-      id: placeID,
-      name: place.name,
-      connected: [placeID, ...children],
-      stats: {
-        people: children.filter((node) => nodesNoStats[node]?.type === "circle")
-          .length,
-      },
-    };
-  });
+  const entries = Object.entries({ ...companies, ...regions }).map(
+    ([placeID, place]) => {
+      const children = [
+        ...placeConnection.getDeepChildren(placeID + SPLIT + "active"),
+      ]
+        // Remove node state from the ID.
+        .map((extendedID) => extendedID.split(SPLIT)[0])
+        .filter((id) => {
+          if (!id) return false;
+          return !nodesNoStats[id]?.hide;
+        }) as string[];
+      return {
+        id: placeID,
+        name: place.name,
+        connected: [placeID, ...children],
+        stats: {
+          people: children.filter(
+            (node) => nodesNoStats[node]?.type === "circle",
+          ).length,
+        },
+      };
+    },
+  );
   entries.push({
     id: "",
     name: "Wszystkie",
@@ -82,8 +86,6 @@ export function getNodeGroups(
   });
   return entries.sort((a, b) => b.stats.people - a.stats.people);
 }
-
-//
 
 export function getNodes(
   nodeGroups: ReturnType<typeof getNodeGroups>,
@@ -105,43 +107,18 @@ export function getNodes(
 export function getNodesNoStats(
   people: Record<string, Person>,
   companies: Record<string, Company>,
-  articles: Record<string, Article>,
+  regions: Record<string, Region>,
   partyColors: Record<string, string>,
 ): Record<string, Node> {
   const result: Record<string, Node> = {};
   Object.entries(people).forEach(([key, person]) => {
-    const party =
-      person.parties && person.parties.length > 0
-        ? (person.parties[0] ?? "")
-        : "";
-    const color = (
-      party != "" ? partyColors[party] : "#4466cc"
-    ) as Node["color"];
-    result[key] = {
-      ...person,
-      type: "circle",
-      color: color,
-    };
+    result[key] = personNode(person, partyColors);
   });
-
   Object.entries(companies).forEach(([key, company]) => {
-    const entry: Node = {
-      ...company,
-      type: "rect",
-      color: "gray",
-    };
-
-    result[key] = entry;
+    result[key] = companyNode(company);
   });
-
-  Object.entries(articles).forEach(([articleID, article]) => {
-    const entry: Node = {
-      name: article.shortName || getHostname(article),
-      sizeMult: 1,
-      type: "document",
-      color: "pink",
-    };
-    result[articleID] = entry;
+  Object.entries(regions).forEach(([key, region]) => {
+    result[key] = regionNode(region);
   });
 
   return result;

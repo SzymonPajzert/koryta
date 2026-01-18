@@ -55,5 +55,47 @@
     "type": "article",
     "sourceURL": "http://lone-article.com",
     "revision_id": "rev8"
+  },
+  "teryt22": {
+    "name": "Województwo Pomorskie",
+    "type": "region",
+    "teryt": "22",
+    "revision_id": "teryt22"
+  },
+  "teryt10": {
+    "name": "Województwo Łódzkie",
+    "type": "region",
+    "teryt": "10",
+    "revision_id": "teryt10"
+  },
+  "region-empty": {
+    "name": "Województwo Puste",
+    "type": "region",
+    "revision_id": "rev-region-empty"
+  },
+  "company-empty": {
+    "name": "Firma Pusta",
+    "type": "place",
+    "revision_id": "rev-company-empty"
+  },
+  "chain-person": {
+    "name": "Osoba Testowa",
+    "type": "person",
+    "revision_id": "rev-chain-person"
+  },
+  "chain-company": {
+    "name": "Firma Testowa",
+    "type": "place",
+    "revision_id": "rev-chain-company"
+  },
+  "chain-powiat": {
+    "name": "Powiat Testowy",
+    "type": "region",
+    "revision_id": "rev-chain-powiat"
+  },
+  "chain-wojewodztwo": {
+    "name": "Województwo Testowe",
+    "type": "region",
+    "revision_id": "rev-chain-wojewodztwo"
   }
 }

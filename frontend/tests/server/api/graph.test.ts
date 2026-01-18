@@ -39,7 +39,7 @@ describe("Graph API", () => {
     expect(result).toHaveProperty("nodeGroups");
 
     expect(result.nodes["p1"]).toBeDefined();
-    expect(fetchNodes).toHaveBeenCalledTimes(2);
+    expect(fetchNodes).toHaveBeenCalledTimes(3);
     expect(fetchEdges).toHaveBeenCalledTimes(1);
   });
 });

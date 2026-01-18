@@ -194,4 +194,9 @@ const { openEditEdge } = useEdgeEdit({
   onUpdate: refreshEdges,
   stateKey,
 });
+
+if (route.query.type === "region" || current.value.type === "region") {
+  // Region is read-only
+  useRouter().replace(`/entity/region/${node_id.value}`);
+}
 </script>

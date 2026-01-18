@@ -60,6 +60,7 @@
 
             <div class="mt-4">
               <v-btn
+                v-if="type !== 'region'"
                 variant="tonal"
                 prepend-icon="mdi-pencil-outline"
                 @click="handleEdit"
@@ -70,7 +71,7 @@
                 Zaproponuj zmianę
               </v-btn>
               <DialogProposeRemoval
-                v-if="entity"
+                v-if="entity && type !== 'region'"
                 :id="node"
                 :type="type"
                 :name="entity.name"
@@ -90,7 +91,7 @@
                 </template>
               </DialogProposeRemoval>
               <QuickAddArticleButton
-                v-if="type !== 'article'"
+                v-if="type !== 'article' && type !== 'region'"
                 :node-id="node"
                 class="ml-2"
               />
@@ -114,7 +115,7 @@
 <script setup lang="ts">
 import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
-import type { Person, Company, Article } from "~~/shared/model";
+import type { Person, Company, Article, Region } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 
 const route = useRoute<"/entity/[destination]/[id]">();
@@ -156,7 +157,7 @@ const handleEdit = () => {
 };
 
 const { data: response } = await authFetch<{
-  node: Person | Company | Article;
+  node: Person | Company | Article | Region;
 }>(`/api/nodes/entry/${node}`);
 const entity = computed(() => response.value?.node);
 
