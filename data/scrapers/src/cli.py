@@ -5,8 +5,10 @@ import sys
 import threading
 import webbrowser
 
+import firebase_admin
 import numpy as np
 import requests
+from firebase_admin import firestore
 
 from main import PIPELINES, CompaniesMerged, _setup_context
 from scrapers.stores import Pipeline
@@ -211,79 +213,63 @@ class NumpyEncoder(json.JSONEncoder):
         return super(NumpyEncoder, self).default(o)
 
 
-def process_regions(df, endpoint, token):
+def process_regions(df, db):
     # Sort by ID length to Ensure parents created first
     # Convert to string just in case
     df["id_str"] = df["id"].astype(str)
     df["id_len"] = df["id"].astype(str).str.len()
     df = df.sort_values("id_len")
 
-    id_map = {}  # teryt_id -> node_id
-
-    target_url = f"{endpoint}/api/nodes/create"
-    edge_url = f"{endpoint}/api/edges/create"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-
     success = 0
     total = len(df)
 
     for idx, row in enumerate(df.itertuples()):
+        print(f"[{idx + 1}/{total}] Processing {row.name} ({row.id})...", end=" ")
+        
+        node_id = f"teryt{row.id}"
+        node_ref = db.collection("nodes").document(node_id)
+        
         payload = {
             "type": "region",
             "name": row.name,
             "teryt": str(row.id),
             "revision_id": f"teryt{row.id}",
         }
-
+        
         try:
-            print(f"[{idx + 1}/{total}] Creating {row.name} ({row.id})...", end=" ")
-            resp = requests.post(target_url, json=payload, headers=headers)
-            if resp.ok:
-                node_id = resp.json()["id"]
-                # Store mapping using string ID
-                id_map[str(row.id)] = node_id
-                success += 1
-                print("OK", end=" ")
+            node_ref.set(payload, merge=True)
+            success += 1
+            print("Node OK", end=" ")
 
-                # Create Edge if parent exists
-                parent_id = getattr(row, "parent_id", None)
-                if (
-                    parent_id
-                    and parent_id is not None
-                    and str(parent_id) != "nan"
-                    and str(parent_id) != "None"
-                ):
-                    parent_id = str(parent_id)
-                    if parent_id in id_map:
-                        p_node_id = id_map[parent_id]
-                        edge_payload = {
-                            "source": p_node_id,
-                            "target": node_id,
-                            "type": "owns",
-                            "name": "owns",
-                        }
-                        r_edge = requests.post(
-                            edge_url, json=edge_payload, headers=headers
-                        )
-                        if not r_edge.ok:
-                            print(f"(Edge Failed: {r_edge.text})")
-                        else:
-                            print("(Edge OK)")
-                    else:
-                        print(f"(Parent {parent_id} not found locally)")
-                else:
-                    print("")
-
+            # Create Edge if parent exists
+            parent_id = getattr(row, "parent_id", None)
+            if (
+                parent_id
+                and parent_id is not None
+                and str(parent_id) != "nan"
+                and str(parent_id) != "None"
+            ):
+                parent_id = str(parent_id)
+                parent_node_id = f"teryt{parent_id}"
+                
+                edge_id = f"edge_{parent_node_id}_{node_id}_owns"
+                edge_ref = db.collection("edges").document(edge_id)
+                
+                edge_payload = {
+                    "source": parent_node_id,
+                    "target": node_id,
+                    "type": "owns",
+                    "revision_id": f"rev_{edge_id}",
+                }
+                edge_ref.set(edge_payload, merge=True)
+                print("(Edge OK)")
             else:
-                print(f"FAILED: {resp.text}")
+                print("")
 
         except Exception as e:
             print(f"ERROR: {e}")
 
-    print(f"\nDone. Created {success}/{total} regions.")
+    print(f"\nDone. Processed {success}/{total} regions.")
 
 
 def parse_args():
@@ -344,12 +330,15 @@ def register_table(ctx, pipeline_cls):
 
 
 def submit_results(args, df):
-    token = authenticate_user(args.endpoint)
-
     if args.type == "region":
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+        db = firestore.client()
         print("Processing regions...")
-        process_regions(df, args.endpoint, token)
+        process_regions(df, db)
         sys.exit(0)
+
+    token = authenticate_user(args.endpoint)
 
     target_url = f"{args.endpoint}/api/person/{args.api}"
     headers = {
