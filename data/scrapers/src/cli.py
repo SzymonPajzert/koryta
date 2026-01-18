@@ -213,6 +213,12 @@ class NumpyEncoder(json.JSONEncoder):
         return super(NumpyEncoder, self).default(o)
 
 
+def non_empty_query(query):
+    for doc in query.stream():
+        return True
+    return False
+
+
 def process_regions(df, db):
     # Sort by ID length to Ensure parents created first
     # Convert to string just in case
@@ -224,22 +230,35 @@ def process_regions(df, db):
     total = len(df)
 
     for idx, row in enumerate(df.itertuples()):
-        print(f"[{idx + 1}/{total}] Processing {row.name} ({row.id})...", end=" ")
-        
+        name = row.name
+        if len(row.id) == 2:
+            name = f"Województwo {name}"
+        elif len(row.id) == 4 and name.lower() == name:
+            name = f"Powiat {name}"
+        elif len(row.id) == 7:
+            name = f"Gmina {name}"
+        print(f"[{idx + 1}/{total}] Processing '{name}' ({row.id})...", end=" ")
+
+        if non_empty_query(db.collection("nodes").where("teryt", "==", str(row.id))):
+            print(f"Already done {row.id}")
+            continue
+        if len(row.id) > 4:
+            print("Skipping detailed region")
+            continue
+
         node_id = f"teryt{row.id}"
         node_ref = db.collection("nodes").document(node_id)
-        
+
         payload = {
             "type": "region",
-            "name": row.name,
+            "name": name,
             "teryt": str(row.id),
             "revision_id": f"teryt{row.id}",
         }
-        
+
         try:
             node_ref.set(payload, merge=True)
             success += 1
-            print("Node OK", end=" ")
 
             # Create Edge if parent exists
             parent_id = getattr(row, "parent_id", None)
@@ -251,10 +270,10 @@ def process_regions(df, db):
             ):
                 parent_id = str(parent_id)
                 parent_node_id = f"teryt{parent_id}"
-                
+
                 edge_id = f"edge_{parent_node_id}_{node_id}_owns"
                 edge_ref = db.collection("edges").document(edge_id)
-                
+
                 edge_payload = {
                     "source": parent_node_id,
                     "target": node_id,
@@ -331,9 +350,12 @@ def register_table(ctx, pipeline_cls):
 
 def submit_results(args, df):
     if args.type == "region":
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app()
-        db = firestore.client()
+        options = {
+            "projectId": "koryta-pl",
+            # "databaseURL": "http://localhost:8080",
+        }
+        app = firebase_admin.initialize_app(options=options)
+        db = firestore.client(app, "koryta-pl")
         print("Processing regions...")
         process_regions(df, db)
         sys.exit(0)
