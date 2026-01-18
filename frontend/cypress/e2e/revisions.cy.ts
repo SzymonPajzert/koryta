@@ -16,7 +16,7 @@ describe("Revisions Logic", () => {
       cy.refreshAuth();
     });
     it("shows correct number of people", () => {
-      const expectedPeople = 4;
+      const expectedPeople = 5;
 
       cy.logout();
 

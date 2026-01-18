@@ -1,5 +1,6 @@
-<template :id="`omni-search${fake ? '-fake' : ''}`">
+<template>
   <v-autocomplete
+    :id="`omni-search${fake ? '-fake' : ''}`"
     v-model="nodeGroupPicked"
     v-model:focused="autocompleteFocus"
     v-model:search="search"

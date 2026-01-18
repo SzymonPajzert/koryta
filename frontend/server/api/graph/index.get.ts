@@ -26,14 +26,35 @@ export default authCachedEventHandler(async (event) => {
     (e) => validNodeIds.has(e.source) && validNodeIds.has(e.target),
   );
   const edges = getEdges(edgesFiltered);
-  const nodeGroups = getNodeGroups(
+  const nodeGroupsRaw = getNodeGroups(
     nodesNoStats,
     edges,
     people,
     places,
     regions,
   );
-  const nodes = getNodes(nodeGroups, nodesNoStats);
+
+  // Filter out empty regions/companies from nodeGroups
+  const nodeGroups = nodeGroupsRaw.filter((group) => {
+    // Keep "All" group (empty ID)
+    if (!group.id) return true;
+    // For specific groups (regions/companies), check if they have people
+    return group.stats.people > 0;
+  });
+
+  // Now we need to filter `nodes` to also exclude these empty entities so they don't show up in search/graph
+  const validGroupIds = new Set(nodeGroups.map((g) => g.id));
+  const nodesAll = getNodes(nodeGroups, nodesNoStats);
+
+  // Filter nodes: keep if it's NOT a company/region OR if it IS a company/region that exists in validGroupIds
+  const nodes = Object.fromEntries(
+    Object.entries(nodesAll).filter(([key, node]) => {
+      if (node.type === "rect" || node.type === "document") {
+        return validGroupIds.has(key);
+      }
+      return true;
+    }),
+  );
 
   return {
     edges,

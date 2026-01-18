@@ -1,11 +1,5 @@
 import type { Node } from "./model";
-import type {
-  Person,
-  Company,
-  Article,
-  EdgeType,
-  Region,
-} from "@/../shared/model";
+import type { Person, Company, Region } from "@/../shared/model";
 
 export function personNode(
   person: Person,
