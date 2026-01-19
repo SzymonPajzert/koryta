@@ -1,4 +1,5 @@
 """Data classes for articles and mentions."""
+
 from dataclasses import dataclass
 
 

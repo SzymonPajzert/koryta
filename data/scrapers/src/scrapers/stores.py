@@ -9,9 +9,11 @@ import os.path
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, List, Literal, Union, overload
 
 import pandas as pd
+
+from entities.ner import NEREntities
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection
@@ -262,6 +264,28 @@ class Web(metaclass=ABCMeta):
         raise NotImplementedError()
 
 
+class NLP(metaclass=ABCMeta):
+    """Abstract interface for NLP toolkit"""
+
+    @abstractmethod
+    def extract_ner_entities(self, text: str) -> NEREntities:
+        """Extract Named Entity Recognition entities from text."""
+        pass
+
+    @overload
+    @abstractmethod
+    def lemmatize(self, text_data: str) -> str: ...
+
+    @overload
+    @abstractmethod
+    def lemmatize(self, text_data: List[str]) -> List[str]: ...
+
+    @abstractmethod
+    def lemmatize(self, text_data: Union[str, List[str]]) -> Union[str, List[str]]:
+        """Lemmatize text or list of texts."""
+        pass
+
+
 @dataclass
 class ProcessPolicy:
     refresh_pipelines: set[str]
@@ -298,6 +322,7 @@ class Context:
     con: "DuckDBPyConnection"
     utils: Utils
     web: Web
+    nlp: NLP
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
 
 
