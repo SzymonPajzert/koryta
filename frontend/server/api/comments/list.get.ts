@@ -10,7 +10,9 @@ export default authCachedEventHandler(async (event) => {
   let collectionRef = db.collection("comments") as FirebaseFirestore.Query;
 
   if (query.onlyLeads === "true") {
-    collectionRef = collectionRef.where("isLead", "==", true);
+    collectionRef = collectionRef
+      .where("nodeId", "==", null)
+      .where("edgeId", "==", null);
   } else if (query.nodeId) {
     collectionRef = collectionRef.where("nodeId", "==", query.nodeId);
   } else if (query.edgeId) {

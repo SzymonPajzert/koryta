@@ -24,8 +24,9 @@ describe("Comments and Discussions", () => {
     // Submit
     cy.contains(".comments-section button", "Wyślij").click();
 
-    // Verify comment appears
+    // Verify comment appears with correct author name
     cy.contains(commentText).should("be.visible");
+    cy.contains("Normal User").should("be.visible");
   });
 
   it("allows replying to a comment", () => {
@@ -80,7 +81,7 @@ describe("Comments and Discussions", () => {
       .should("be.visible");
   });
 
-  it("allows posting a lead in leads page", () => {
+  it("allows posting a lead in leads page and replying to it", () => {
     cy.visit("/leads");
 
     cy.contains("Leads / Wolne wątki");
@@ -91,5 +92,34 @@ describe("Comments and Discussions", () => {
     cy.contains(".comments-section button", "Wyślij").click();
 
     cy.contains(leadText).should("be.visible");
+    cy.contains("Normal User").should("be.visible");
+
+    // Reply to the lead
+    cy.contains(".comment-item", leadText)
+      .find("button")
+      .contains("Odpowiedz")
+      .click();
+
+    const replyText = `Reply to Lead ${Date.now()}`;
+    cy.contains(".comment-item", leadText)
+      .find("[data-test='comment-input']")
+      .type(replyText);
+
+    cy.contains(".comment-item", leadText)
+      .find(".comment-form button")
+      .contains("Wyślij")
+      .click({ force: true });
+
+    cy.wait(1000);
+
+    // Verify visibility on leads page
+    cy.contains(replyText).should("be.visible");
+
+    // Verify persistence on reload
+    cy.reload();
+    cy.contains(replyText).should("be.visible");
+    cy.contains(".comment-item", leadText)
+      .contains(replyText)
+      .should("be.visible");
   });
 });
