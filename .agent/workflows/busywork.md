@@ -1,6 +1,6 @@
 # Busywork
 
-1. Analize centralized tasks from .agent/workflows/tasks.md
+1. Analize centralized tasks from .agent/workflows/tasks.md or your local directory e.g. frontend/.agent/workflows/tasks.md
 1. If empty, analyze TODOs outlined in the codebase.
 1. Pick any you'd like to work on, create a new jj commit with a description and resolve it.
 1. Remove any resolved TODOs.
