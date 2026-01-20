@@ -11,7 +11,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
       // Double fallback to NuxtApp $auth if available
       const { $auth } = useNuxtApp();
       const nuxtAuth = $auth as { currentUser?: User };
-      if (nuxtAuth.currentUser) {
+      if (nuxtAuth?.currentUser) {
         user = nuxtAuth.currentUser;
       }
     }
