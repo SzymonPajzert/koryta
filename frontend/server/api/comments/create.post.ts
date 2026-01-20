@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   const comment = {
     content: body.content,
     authorId: user.uid,
-    authorName: user.email || user.uid,
+    authorName: user.name || user.email || user.uid,
     createdAt: new Date().toISOString(),
     isLead: !body.nodeId && !body.edgeId && !body.parentId,
     nodeId: body.nodeId || null,

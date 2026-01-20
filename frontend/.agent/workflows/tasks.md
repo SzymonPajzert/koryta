@@ -1,4 +1,4 @@
-1.  Replace percySnapshots
+1. Replace percySnapshots
 
 - rename command to something generic, e.g. snapshot("page name"), still taking the argument.
 - I ran out of quota on percySnapshots, so use another solution, e.g. checking in the screenshots and checking their diff.
