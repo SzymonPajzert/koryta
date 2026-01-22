@@ -104,7 +104,7 @@
       <v-btn
         prepend-icon="mdi-lightning-bolt"
         variant="text"
-        href="https://github.com/SzymonPajzert/koryta/issues/new"
+        href="https://github.com/users/SzymonPajzert/projects/2/views/3"
         target="_blank"
       >
         Zgłoś problem
