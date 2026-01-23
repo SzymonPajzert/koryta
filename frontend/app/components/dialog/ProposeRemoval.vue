@@ -23,8 +23,7 @@
         <v-textarea
           id="delete-reason-input"
           v-model="reason"
-          label="Powód usunięcia"
-          placeholder="np. Duplikat, Dane nieprawdziwe"
+          placeholder="Powód usunięcia, np. Duplikat, Dane nieprawdziwe"
           auto-grow
           rows="3"
         />

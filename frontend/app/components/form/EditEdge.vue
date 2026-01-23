@@ -129,9 +129,10 @@
           <v-text-field
             v-model="newEdge.start_date"
             label="Data rozpoczęcia"
-            type="date"
+            placeholder="RRRR-MM-DD"
             density="compact"
-            hide-details
+            hide-details="auto"
+            :rules="[dateRule]"
             prepend-inner-icon="mdi-calendar"
           />
         </v-col>
@@ -139,9 +140,10 @@
           <v-text-field
             v-model="newEdge.end_date"
             label="Data zakończenia"
-            type="date"
+            placeholder="RRRR-MM-DD"
             density="compact"
-            hide-details
+            hide-details="auto"
+            :rules="[dateRule]"
             prepend-inner-icon="mdi-calendar"
           />
         </v-col>
@@ -229,5 +231,11 @@ const articleReference = computed({
 
 if (current.value.type === "article") {
   newEdge.value.references = [node_id.value!];
+}
+
+function dateRule(value: string) {
+  if (!value) return true;
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  return regex.test(value) || "Format daty musi być RRRR-MM-DD";
 }
 </script>

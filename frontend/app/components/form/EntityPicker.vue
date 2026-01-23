@@ -22,9 +22,6 @@
         </v-list-item-title>
       </v-list-item>
     </template>
-    <template #prepend>
-      <slot name="prepend" />
-    </template>
   </v-autocomplete>
 </template>
 
