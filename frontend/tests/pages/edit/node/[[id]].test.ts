@@ -62,6 +62,13 @@ vi.mock("../../../../app/composables/useNodeEdit", () => ({
     }),
 }));
 
+vi.mock("~/composables/auth", () => ({
+  useAuthState: vi.fn(() => ({
+    user: ref(null),
+    authFetch: vi.fn(() => ({ data: ref({}), refresh: vi.fn() })),
+  })),
+}));
+
 // Mock definePageMeta
 vi.stubGlobal("definePageMeta", vi.fn());
 
@@ -202,6 +209,12 @@ describe("NodeEditPage", () => {
       },
     });
     await flushPromises();
+
+    // Find the buttons
+    const buttons = wrapper.findAll(".v-btn");
+    const addBtn = buttons.find((b) => b.text().includes("zna")); // Use 'zna' for generic connection
+    await addBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
 
     // Find the second form (add edge form)
     const forms = wrapper.findAll("form");

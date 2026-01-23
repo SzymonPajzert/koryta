@@ -2,7 +2,42 @@
   <h4 class="text-subtitle-1 mb-2 mt-4">
     {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
   </h4>
-  <v-form @submit.prevent="processEdge">
+
+  <div
+    v-if="
+      !isEditingEdge && mode === 'initial' && effectiveNodeType === 'person'
+    "
+    class="d-flex flex-column gap-2"
+  >
+    <v-btn
+      variant="tonal"
+      prepend-icon="mdi-file-document-plus-outline"
+      color="primary"
+      class="mb-2"
+      @click="startAddEdge('mentioned_person', 'incoming')"
+    >
+      Dodaj artykuł wspominający {{ current.name }}
+    </v-btn>
+    <v-btn
+      variant="tonal"
+      prepend-icon="mdi-briefcase-plus-outline"
+      color="primary"
+      class="mb-2"
+      @click="startAddEdge('employed', 'outgoing')"
+    >
+      Dodaj gdzie {{ current.name }} pracuje
+    </v-btn>
+    <v-btn
+      variant="tonal"
+      prepend-icon="mdi-account-plus-outline"
+      color="primary"
+      @click="startAddEdge('connection', 'outgoing')"
+    >
+      Dodaj osobę, którą {{ current.name }} zna
+    </v-btn>
+  </div>
+
+  <v-form v-else @submit.prevent="processEdge">
     <!-- Visual Connection Editor -->
     <v-row class="align-center my-4">
       <!-- Source Picker / Current Node -->
@@ -37,6 +72,7 @@
         class="text-center d-flex flex-column justify-center position-relative px-0"
       >
         <v-select
+          v-if="isEditingEdge || mode === 'generic'"
           v-model="edgeType"
           :items="availableEdgeTypes"
           item-title="label"
@@ -49,6 +85,12 @@
           :disabled="!availableEdgeTypes.length"
           :placeholder="availableEdgeTypes.length ? undefined : 'Brak relacji'"
         />
+        <div v-else class="text-caption font-weight-bold mb-2">
+          {{
+            availableEdgeTypes.find((t) => t.value === edgeType)?.label ||
+            edgeType
+          }}
+        </div>
 
         <div class="d-flex align-center justify-center">
           <v-btn
@@ -58,6 +100,7 @@
             color="secondary"
             class="px-4"
             :title="'Odwróć kierunek'"
+            :disabled="!isEditingEdge && mode !== 'generic'"
             @click="
               newEdge.direction =
                 newEdge.direction === 'outgoing' ? 'incoming' : 'outgoing'
@@ -150,10 +193,10 @@
       </template>
       <v-col cols="12" class="mt-2 d-flex gap-2">
         <v-btn
-          v-if="isEditingEdge"
+          v-if="isEditingEdge || mode !== 'initial'"
           variant="text"
           class="mr-2"
-          @click="cancelEditEdge"
+          @click="resetMode"
         >
           Anuluj
         </v-btn>
@@ -181,7 +224,7 @@
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import EntityPicker from "~/components/form/EntityPicker.vue";
-import type { Link, NodeType } from "~~/shared/model";
+import type { Link, NodeType, EdgeType } from "~~/shared/model";
 
 definePageMeta({
   middleware: "auth",
@@ -213,6 +256,44 @@ const {
   onUpdate: refreshEdges,
   stateKey,
 });
+
+const mode = ref<"initial" | "form" | "generic">("initial");
+
+function resetMode() {
+  cancelEditEdge();
+  mode.value = "initial";
+}
+
+// If we are editing, we are always in form mode
+watch(
+  isEditingEdge,
+  (val) => {
+    if (val) {
+      mode.value = "form";
+    }
+  },
+  { immediate: true },
+);
+
+function startAddEdge(
+  typeValue: string,
+  direction: "outgoing" | "incoming" = "outgoing",
+) {
+  // Find real type from options
+  // This logic repeats somewhat useEdgeEdit internal, but we need to force it here
+  edgeType.value = typeValue as EdgeType;
+  newEdge.value.direction = direction;
+
+  // Wait for watchers in useEdgeEdit to settle?
+  // They are sync, so it should be fine. However, useEdgeEdit watchers might try to reset things.
+  // We'll see.
+  mode.value = "form";
+}
+
+// Fallback for non-person nodes or generic add
+if (effectiveNodeType.value !== "person") {
+  mode.value = "generic";
+}
 
 const articleReference = computed({
   get: () => {

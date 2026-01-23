@@ -45,6 +45,13 @@ vi.mock("~/composables/useNodeEdit", () => ({
   }),
 }));
 
+vi.mock("~/composables/auth", () => ({
+  useAuthState: vi.fn(() => ({
+    user: ref(null),
+    authFetch: vi.fn(() => ({ data: ref({}), refresh: vi.fn() })),
+  })),
+}));
+
 vi.stubGlobal("definePageMeta", vi.fn());
 
 const EditEdgeWrapper = defineComponent({
@@ -57,7 +64,7 @@ const EditEdgeWrapper = defineComponent({
 });
 
 describe("EditEdge.vue", () => {
-  it("renders form", async () => {
+  it("renders buttons initially and form after click", async () => {
     const wrapper = mount(EditEdgeWrapper, {
       global: {
         plugins: [vuetify],
@@ -71,46 +78,18 @@ describe("EditEdge.vue", () => {
     });
 
     await flushPromises();
+    // Expect buttons not form
     expect(wrapper.text()).toContain("Dodaj nowe powiązanie");
-    expect(wrapper.find("form").exists()).toBe(true);
-  });
-
-  it("toggles direction", async () => {
-    const wrapper = mount(EditEdgeWrapper, {
-      global: {
-        plugins: [vuetify],
-        stubs: {
-          EntityPicker: {
-            template: '<div class="entity-picker-stub"></div>',
-            props: ["modelValue", "entity"],
-          },
-        },
-      },
-    });
-    await flushPromises();
+    expect(wrapper.find("form").exists()).toBe(false);
 
     const buttons = wrapper.findAll(".v-btn");
-    const toggleBtn = buttons.find(
-      (b) => b.text().includes("Do") || b.text().includes("Od"),
-    );
+    const addAcquaintanceBtn = buttons.find((b) => b.text().includes("zna"));
+    expect(addAcquaintanceBtn?.exists()).toBe(true);
 
-    expect(toggleBtn).toBeDefined();
+    await addAcquaintanceBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
 
-    // Depending on mocked state, verify initial text
-    if (mockNewEdge.value.direction === "outgoing") {
-      expect(toggleBtn?.text()).toContain("Do");
-    } else {
-      expect(toggleBtn?.text()).toContain("Od");
-    }
-
-    await toggleBtn?.trigger("click");
-
-    // Check if newEdge direction changed.
-    expect(mockNewEdge.value.direction).toBe(
-      mockNewEdge.value.direction === "outgoing" ? "outgoing" : "incoming",
-    );
-    // Wait, the template logic: direction = direction === 'outgoing' ? 'incoming' : 'outgoing'
-    // If it started as outgoing, it receives 'incoming'.
+    expect(wrapper.find("form").exists()).toBe(true);
   });
 
   it("submits the form", async () => {
@@ -126,6 +105,11 @@ describe("EditEdge.vue", () => {
       },
     });
     await flushPromises();
+
+    // Enter form mode
+    const buttons = wrapper.findAll(".v-btn");
+    await buttons[0].trigger("click");
+    await wrapper.vm.$nextTick();
 
     // Enable button by ensuring pickerTarget is set?
     // The button has :disabled="!pickerTarget"

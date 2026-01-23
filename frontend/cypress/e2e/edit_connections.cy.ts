@@ -26,13 +26,8 @@ describe("Edit Node Connections", () => {
     cy.contains("Anna Nowak").should("be.visible");
 
     // 3. Select "Powiązanie z"
-    // Open Edge Type Select
-    cy.get(".v-select")
-      .filter((index, element) => {
-        return Cypress.$(element).text().includes("Relacja");
-      })
-      .click();
-    cy.get(".v-overlay").contains("Powiązanie z").click();
+    // Click button directly
+    cy.contains("button", "Powiązanie z").click();
 
     // Verify "Typ celu" is gone (old UI artifact checks)
     cy.contains("label", "Typ celu").should("not.exist");
@@ -77,12 +72,7 @@ describe("Edit Node Connections", () => {
     cy.get(".v-chip").contains("Jan Kowalski").should("exist");
 
     // 3. Select "Zatrudniony/a w" relationship type
-    cy.get(".v-select")
-      .filter((index, element) => {
-        return Cypress.$(element).text().includes("Relacja");
-      })
-      .click();
-    cy.get(".v-overlay").contains("Zatrudniony/a w").click();
+    cy.contains("button", "Zatrudniony/a w").click();
 
     // 4. Verify target type updated
     cy.contains("label", "Wyszukaj firmę").should("exist");

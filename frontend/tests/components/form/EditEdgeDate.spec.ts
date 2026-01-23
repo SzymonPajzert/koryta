@@ -29,6 +29,13 @@ vi.mock("~/composables/useNodeEdit", () => ({
   useNodeEdit: mocks.useNodeEdit,
 }));
 
+vi.mock("~/composables/auth", () => ({
+  useAuthState: vi.fn(() => ({
+    user: ref(null),
+    authFetch: vi.fn(() => ({ data: ref({}), refresh: vi.fn() })),
+  })),
+}));
+
 vi.stubGlobal("definePageMeta", vi.fn());
 vi.stubGlobal(
   "useRoute",
@@ -108,6 +115,12 @@ describe("EditEdge Date Format", () => {
 
     await flushPromises();
 
+    // Enter form mode via Employed button
+    const buttons = wrapper.findAll(".v-btn");
+    const employedBtn = buttons.find((b) => b.text().includes("pracuje"));
+    await employedBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
+
     // Use the stubbed class
     const dateInputs = wrapper
       .findAll("input.v-text-field-stub")
@@ -137,6 +150,12 @@ describe("EditEdge Date Format", () => {
 
     await flushPromises();
 
+    // Enter form mode via Employed button
+    const buttons = wrapper.findAll(".v-btn");
+    const employedBtn = buttons.find((b) => b.text().includes("pracuje"));
+    await employedBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
+
     const startInput = wrapper
       .findAll("input.v-text-field-stub")
       .find((input) => input.attributes("placeholder") === "RRRR-MM-DD");
@@ -161,6 +180,12 @@ describe("EditEdge Date Format", () => {
       },
     });
     await flushPromises();
+
+    // Enter form mode via Employed button
+    const buttons = wrapper.findAll(".v-btn");
+    const employedBtn = buttons.find((b) => b.text().includes("pracuje"));
+    await employedBtn?.trigger("click");
+    await wrapper.vm.$nextTick();
 
     const startInput = wrapper
       .findAll("input.v-text-field-stub")
