@@ -4,102 +4,25 @@
   </h4>
 
   <div
-    v-if="
-      !isEditingEdge && mode === 'initial' && effectiveNodeType === 'person'
-    "
+    v-if="!isEditingEdge && mode === 'initial'"
     class="d-flex flex-column gap-2"
   >
+    <!-- Initial Buttons to pick edge type for a given node type -->
     <v-btn
+      v-for="button in filteredButtons"
+      :key="button.edgeType + '-' + button.direction"
       variant="tonal"
-      prepend-icon="mdi-file-document-plus-outline"
+      :prepend-icon="button.icon"
       color="primary"
       class="mb-2"
-      @click="startAddEdge('mentioned_person', 'incoming')"
+      @click="startAddEdge(button.edgeType, button.direction)"
     >
-      Dodaj artykuł wspominający {{ current.name }}
-    </v-btn>
-    <v-btn
-      variant="tonal"
-      prepend-icon="mdi-briefcase-plus-outline"
-      color="primary"
-      class="mb-2"
-      @click="startAddEdge('employed', 'outgoing')"
-    >
-      Dodaj gdzie {{ current.name }} pracuje
-    </v-btn>
-    <v-btn
-      variant="tonal"
-      prepend-icon="mdi-account-plus-outline"
-      color="primary"
-      @click="startAddEdge('connection', 'outgoing')"
-    >
-      Dodaj osobę, którą {{ current.name }} zna
-    </v-btn>
-  </div>
-
-  <div
-    v-else-if="
-      !isEditingEdge && mode === 'initial' && effectiveNodeType === 'place'
-    "
-    class="d-flex flex-column gap-2"
-  >
-    <v-btn
-      variant="tonal"
-      prepend-icon="mdi-file-document-plus-outline"
-      color="primary"
-      class="mb-2"
-      @click="startAddEdge('mentioned_company', 'incoming')"
-    >
-      Dodaj artykuł wspominający {{ current.name }}
-    </v-btn>
-    <v-btn
-      variant="tonal"
-      prepend-icon="mdi-domain-plus"
-      color="primary"
-      class="mb-2"
-      @click="startAddEdge('owns', 'outgoing')"
-    >
-      Dodaj firmę córkę
-    </v-btn>
-    <v-btn
-      variant="tonal"
-      prepend-icon="mdi-domain"
-      color="primary"
-      @click="startAddEdge('owns', 'incoming')"
-    >
-      Dodaj firmę matkę
-    </v-btn>
-  </div>
-
-  <div
-    v-else-if="
-      !isEditingEdge && mode === 'initial' && effectiveNodeType === 'article'
-    "
-    class="d-flex flex-column gap-2"
-  >
-    <v-btn
-      variant="tonal"
-      prepend-icon="mdi-account-plus-outline"
-      color="primary"
-      class="mb-2"
-      @click="startAddEdge('mentioned_person', 'outgoing')"
-    >
-      Wspomniana osoba w artykule
-    </v-btn>
-    <v-btn
-      variant="tonal"
-      prepend-icon="mdi-domain-plus"
-      color="primary"
-      @click="startAddEdge('mentioned_company', 'outgoing')"
-    >
-      Wspomniane miejsce w artykule
+      {{ button.text }}
     </v-btn>
   </div>
 
   <v-form v-else @submit.prevent="processEdge">
-    <!-- Visual Connection Editor -->
     <v-row class="align-center my-4">
-      <!-- Source Picker / Current Node -->
       <v-col cols="4" class="text-center d-flex flex-column align-center">
         <div v-if="effectiveNodeType === 'article'" class="w-100">
           <EntityPicker
@@ -297,6 +220,78 @@ const effectiveNodeType = computed(() => {
   return current.value.type || "person";
 });
 
+type NewEdgeButton = {
+  edgeType: string;
+  direction: "incoming" | "outgoing";
+  nodeType: NodeType;
+  icon: string;
+  text: string;
+};
+
+// TODO migrate it somewhere to edge model since it looks like a global config
+const newEdgeButtons = computed<NewEdgeButton[]>(() => [
+  {
+    edgeType: "mentioned_person",
+    direction: "incoming",
+    nodeType: "person",
+    icon: "mdi-file-document-plus-outline",
+    text: "Dodaj artykuł wspominający " + current.value.name,
+  },
+  {
+    edgeType: "employed",
+    direction: "outgoing",
+    nodeType: "person",
+    icon: "mdi-briefcase-plus-outline",
+    text: "Dodaj gdzie " + current.value.name + " pracuje",
+  },
+  {
+    edgeType: "connection",
+    direction: "outgoing",
+    nodeType: "person",
+    icon: "mdi-account-plus-outline",
+    text: "Dodaj osobę, którą " + current.value.name + " zna",
+  },
+  {
+    edgeType: "mentioned_company",
+    direction: "incoming",
+    nodeType: "place",
+    icon: "mdi-file-document-plus-outline",
+    text: "Dodaj artykuł wspominający " + current.value.name,
+  },
+  {
+    edgeType: "owns",
+    direction: "outgoing",
+    nodeType: "place",
+    icon: "mdi-domain-plus",
+    text: "Dodaj firmę córkę",
+  },
+  {
+    edgeType: "owns",
+    direction: "incoming",
+    nodeType: "place",
+    icon: "mdi-domain",
+    text: "Dodaj firmę matkę",
+  },
+  {
+    edgeType: "mentioned_person",
+    direction: "outgoing",
+    nodeType: "article",
+    icon: "mdi-account-plus-outline",
+    text: "Wspomniana osoba w artykule",
+  },
+  {
+    edgeType: "mentioned_company",
+    direction: "outgoing",
+    nodeType: "article",
+    icon: "mdi-domain-plus",
+    text: "Wspomniane miejsce w artykule",
+  },
+]);
+
+const filteredButtons = computed(() =>
+  newEdgeButtons.value.filter((b) => b.nodeType === effectiveNodeType.value),
+);
+
 const {
   newEdge,
   processEdge,
@@ -338,14 +333,8 @@ function startAddEdge(
   typeValue: string,
   direction: "outgoing" | "incoming" = "outgoing",
 ) {
-  // Find real type from options
-  // This logic repeats somewhat useEdgeEdit internal, but we need to force it here
   edgeType.value = typeValue as EdgeType;
   newEdge.value.direction = direction;
-
-  // Wait for watchers in useEdgeEdit to settle?
-  // They are sync, so it should be fine. However, useEdgeEdit watchers might try to reset things.
-  // We'll see.
   mode.value = "form";
 }
 
