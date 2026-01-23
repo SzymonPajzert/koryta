@@ -38,6 +38,9 @@ describe("Entity Picker Workflow", () => {
     cy.url({ timeout: 10000 }).should("include", "/edit/node/");
 
     // 3. In the Source node edit page, use EntityPicker to find HiddenNode
+    // Click button to show form
+    cy.contains("button", "zna").click();
+
     cy.get('[data-testid="entity-picker-input"]').first().click();
     cy.get('[data-testid="entity-picker-input"]').first().type(hiddenNodeName);
 

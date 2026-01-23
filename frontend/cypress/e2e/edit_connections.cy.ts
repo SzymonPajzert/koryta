@@ -18,8 +18,8 @@ describe("Edit Node Connections", () => {
 
     // 2. Go to edit page for Jan Kowalski (node 1)
     cy.visit("/edit/node/1");
-    // Ensure data loaded (Name should be Jan Kowalski)
-    cy.get(".v-chip").contains("Jan Kowalski").should("exist");
+    // Ensure data loaded (Buttons should contain Jan Kowalski)
+    cy.contains("button", "Jan Kowalski").should("exist");
 
     // 3. Verify existing connections are listed
     cy.contains("Powiązania").should("be.visible");
@@ -69,7 +69,7 @@ describe("Edit Node Connections", () => {
 
     // 2. Go to edit page for Jan Kowalski (node 1)
     cy.visit("/edit/node/1");
-    cy.get(".v-chip").contains("Jan Kowalski").should("exist");
+    cy.contains("button", "Jan Kowalski").should("exist");
 
     // 3. Select "Zatrudniony/a w" relationship type
     // Matches "Dodaj gdzie ... pracuje"

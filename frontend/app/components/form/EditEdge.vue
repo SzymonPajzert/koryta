@@ -37,6 +37,65 @@
     </v-btn>
   </div>
 
+  <div
+    v-else-if="
+      !isEditingEdge && mode === 'initial' && effectiveNodeType === 'place'
+    "
+    class="d-flex flex-column gap-2"
+  >
+    <v-btn
+      variant="tonal"
+      prepend-icon="mdi-file-document-plus-outline"
+      color="primary"
+      class="mb-2"
+      @click="startAddEdge('mentioned_company', 'incoming')"
+    >
+      Dodaj artykuł wspominający {{ current.name }}
+    </v-btn>
+    <v-btn
+      variant="tonal"
+      prepend-icon="mdi-domain-plus"
+      color="primary"
+      class="mb-2"
+      @click="startAddEdge('owns', 'outgoing')"
+    >
+      Dodaj firmę córkę
+    </v-btn>
+    <v-btn
+      variant="tonal"
+      prepend-icon="mdi-domain"
+      color="primary"
+      @click="startAddEdge('owns', 'incoming')"
+    >
+      Dodaj firmę matkę
+    </v-btn>
+  </div>
+
+  <div
+    v-else-if="
+      !isEditingEdge && mode === 'initial' && effectiveNodeType === 'article'
+    "
+    class="d-flex flex-column gap-2"
+  >
+    <v-btn
+      variant="tonal"
+      prepend-icon="mdi-account-plus-outline"
+      color="primary"
+      class="mb-2"
+      @click="startAddEdge('mentioned_person', 'outgoing')"
+    >
+      Wspomniana osoba w artykule
+    </v-btn>
+    <v-btn
+      variant="tonal"
+      prepend-icon="mdi-domain-plus"
+      color="primary"
+      @click="startAddEdge('mentioned_company', 'outgoing')"
+    >
+      Wspomniane miejsce w artykule
+    </v-btn>
+  </div>
+
   <v-form v-else @submit.prevent="processEdge">
     <!-- Visual Connection Editor -->
     <v-row class="align-center my-4">
@@ -294,11 +353,11 @@ function startAddEdge(
 watch(
   effectiveNodeType,
   (type) => {
-    if (type !== "person" && !isEditingEdge.value) {
+    // If it's a known type, we support the initial buttons mode
+    const supportedTypes = ["person", "place", "article"];
+    if (!supportedTypes.includes(type) && !isEditingEdge.value) {
       mode.value = "generic";
-    } else if (type === "person" && mode.value === "generic") {
-      // Optional: switch back to initial if going back to person?
-      // For now, if we loaded as person, we are fine.
+    } else if (supportedTypes.includes(type) && mode.value === "generic") {
       mode.value = "initial";
     }
   },

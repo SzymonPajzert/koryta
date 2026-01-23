@@ -19,8 +19,8 @@ describe("Pending Revisions", () => {
     // Wait for page load
     cy.contains("Treść i Powiązania", { timeout: 10000 }).should("be.visible");
 
-    // Click "Powiązanie z" button directly (matching "zna")
-    cy.contains("button", "zna").click();
+    // Click "Powiązanie z" button directly (matching "Dodaj osobę, którą")
+    cy.contains("button", "Dodaj osobę, którą").click();
 
     cy.contains("label", "Wyszukaj osobę")
       .parent()

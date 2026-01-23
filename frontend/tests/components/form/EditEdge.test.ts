@@ -27,9 +27,11 @@ const mockAvailableEdgeTypes = ref([
 const mockPickerTarget = ref(null);
 const mockIsEditingEdge = ref(false);
 
+const mockCurrent = ref({ name: "Current Node", type: "person" });
+
 vi.mock("~/composables/useNodeEdit", () => ({
   useNodeEdit: async () => ({
-    current: ref({ name: "Current Node", type: "person" }),
+    current: mockCurrent,
     newEdge: mockNewEdge,
     pickerTarget: mockPickerTarget,
     processEdge: mockProcessEdge,
@@ -63,15 +65,28 @@ const EditEdgeWrapper = defineComponent({
   },
 });
 
+vi.stubGlobal("useEdgeEdit", () => ({
+  newEdge: mockNewEdge,
+  processEdge: mockProcessEdge,
+  cancelEditEdge: mockCancelEditEdge,
+  isEditingEdge: mockIsEditingEdge,
+  edgeTargetType: ref("person"),
+  edgeSourceType: ref("article"),
+  edgeType: mockEdgeType,
+  availableEdgeTypes: mockAvailableEdgeTypes,
+  pickerTarget: mockPickerTarget,
+  pickerSource: ref(null),
+}));
+
 describe("EditEdge.vue", () => {
-  it("renders buttons initially and form after click", async () => {
+  it("renders Person buttons initially and form after click", async () => {
     const wrapper = mount(EditEdgeWrapper, {
       global: {
         plugins: [vuetify],
         stubs: {
           EntityPicker: {
             template: '<div class="entity-picker-stub"></div>',
-            props: ["modelValue", "entity"],
+            props: ["modelValue", "entity", "density", "hide-details", "label"],
           },
         },
       },
@@ -83,13 +98,71 @@ describe("EditEdge.vue", () => {
     expect(wrapper.find("form").exists()).toBe(false);
 
     const buttons = wrapper.findAll(".v-btn");
-    const addAcquaintanceBtn = buttons.find((b) => b.text().includes("zna"));
-    expect(addAcquaintanceBtn?.exists()).toBe(true);
+    // Verify Person buttons
+    expect(
+      buttons.some((b) => b.text().includes("wspominający Current Node")),
+    ).toBe(true);
+    expect(buttons.some((b) => b.text().includes("pracuje"))).toBe(true);
+    expect(buttons.some((b) => b.text().includes("zna"))).toBe(true);
 
+    const addAcquaintanceBtn = buttons.find((b) => b.text().includes("zna"));
     await addAcquaintanceBtn?.trigger("click");
     await wrapper.vm.$nextTick();
 
     expect(wrapper.find("form").exists()).toBe(true);
+  });
+
+  it("renders Place buttons when node type is place", async () => {
+    mockCurrent.value.type = "place";
+    mockIsEditingEdge.value = false;
+
+    const wrapper = mount(EditEdgeWrapper, {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: {
+            template: '<div class="entity-picker-stub"></div>',
+            props: ["modelValue", "entity", "density", "hide-details", "label"],
+          },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const buttons = wrapper.findAll(".v-btn");
+    expect(buttons.some((b) => b.text().includes("firmę córkę"))).toBe(true);
+    expect(buttons.some((b) => b.text().includes("firmę matkę"))).toBe(true);
+    expect(
+      buttons.some((b) => b.text().includes("wspominający Current Node")),
+    ).toBe(true);
+  });
+
+  it("renders Article buttons when node type is article", async () => {
+    mockCurrent.value.type = "article";
+    mockIsEditingEdge.value = false;
+
+    const wrapper = mount(EditEdgeWrapper, {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: {
+            template: '<div class="entity-picker-stub"></div>',
+            props: ["modelValue", "entity", "density", "hide-details", "label"],
+          },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const buttons = wrapper.findAll(".v-btn");
+    expect(buttons.some((b) => b.text().includes("Wspomniana osoba"))).toBe(
+      true,
+    );
+    expect(buttons.some((b) => b.text().includes("Wspomniane miejsce"))).toBe(
+      true,
+    );
   });
 
   it("submits the form", async () => {
@@ -99,7 +172,7 @@ describe("EditEdge.vue", () => {
         stubs: {
           EntityPicker: {
             template: '<div class="entity-picker-stub"></div>',
-            props: ["modelValue", "entity"],
+            props: ["modelValue", "entity", "density", "hide-details", "label"],
           },
         },
       },
