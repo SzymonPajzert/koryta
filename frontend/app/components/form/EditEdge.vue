@@ -291,9 +291,19 @@ function startAddEdge(
 }
 
 // Fallback for non-person nodes or generic add
-if (effectiveNodeType.value !== "person") {
-  mode.value = "generic";
-}
+watch(
+  effectiveNodeType,
+  (type) => {
+    if (type !== "person" && !isEditingEdge.value) {
+      mode.value = "generic";
+    } else if (type === "person" && mode.value === "generic") {
+      // Optional: switch back to initial if going back to person?
+      // For now, if we loaded as person, we are fine.
+      mode.value = "initial";
+    }
+  },
+  { immediate: true },
+);
 
 const articleReference = computed({
   get: () => {

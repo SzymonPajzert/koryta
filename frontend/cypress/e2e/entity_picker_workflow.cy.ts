@@ -54,6 +54,10 @@ describe("Entity Picker Workflow", () => {
 
     const newTargetName = generateName("NewTarget");
 
+    // Click button to show form (since SourceForNew is a person)
+    // Matches "Dodaj osobę, którą ... zna"
+    cy.contains("button", "zna").click();
+
     // Type non-existent name
     cy.get('[data-testid="entity-picker-input"]').first().click();
     cy.get('[data-testid="entity-picker-input"]').first().type(newTargetName);

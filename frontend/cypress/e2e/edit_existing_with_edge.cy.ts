@@ -50,8 +50,15 @@ describe("Edit Existing Entity & Add Edge", () => {
       // Select Direction FIRST (Incoming: "Od")
       // Since we are editing a Company ('place'), and "Zatrudniony" requires Target=Place,
       // we MUST be in Incoming mode (Target=Me) to see this option.
-      // Click button directly (it sets direction automatically)
-      cy.contains("button", "Zatrudniony/a w").click();
+      cy.get('button[title="Odwróć kierunek"]').click();
+
+      // Open Edge Type - use specific label "Relacja"
+      cy.get(".v-select")
+        .filter((index, element) => {
+          return Cypress.$(element).text().includes("Relacja");
+        })
+        .click();
+      cy.contains("Zatrudniony/a w").click();
 
       // Search for Person
       cy.get('[data-testid="entity-picker-input"]').first().click();

@@ -26,8 +26,8 @@ describe("Edit Node Connections", () => {
     cy.contains("Anna Nowak").should("be.visible");
 
     // 3. Select "Powiązanie z"
-    // Click button directly
-    cy.contains("button", "Powiązanie z").click();
+    // Click button directly (matching "zna")
+    cy.get(".v-btn").contains("zna").click();
 
     // Verify "Typ celu" is gone (old UI artifact checks)
     cy.contains("label", "Typ celu").should("not.exist");
@@ -72,7 +72,8 @@ describe("Edit Node Connections", () => {
     cy.get(".v-chip").contains("Jan Kowalski").should("exist");
 
     // 3. Select "Zatrudniony/a w" relationship type
-    cy.contains("button", "Zatrudniony/a w").click();
+    // Matches "Dodaj gdzie ... pracuje"
+    cy.get(".v-btn").contains("pracuje").click();
 
     // 4. Verify target type updated
     cy.contains("label", "Wyszukaj firmę").should("exist");
