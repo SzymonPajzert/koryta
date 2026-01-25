@@ -10,8 +10,12 @@ vi.mock("firebase/app", () => ({
 }));
 
 vi.mock("firebase/auth", () => ({
-  getAuth: vi.fn(),
+  getAuth: vi.fn(() => ({})),
   connectAuthEmulator: vi.fn(),
+  initializeAuth: vi.fn(() => ({})),
+  indexedDBLocalPersistence: { type: "indexedDB", dummy: true },
+  browserLocalPersistence: { type: "browserLocal", dummy: true },
+  browserSessionPersistence: { type: "browserSession", dummy: true },
 }));
 
 const mockHttpsCallable = vi.fn();
