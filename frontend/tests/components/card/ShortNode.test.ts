@@ -22,8 +22,7 @@ describe("ShortNode", () => {
     const wrapper = mount(ShortNode, {
       global: { plugins: [vuetify] },
       props: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        edge: edge as unknown as any,
+        edge,
       },
     });
 
@@ -33,5 +32,56 @@ describe("ShortNode", () => {
     expect(card.text()).toContain("Alice");
     expect(card.text()).toContain("Developer");
     expect(card.text()).toContain("Bio");
+  });
+
+  it("applies green background if currently employed", () => {
+    const currentEdge = {
+      ...edge,
+      start_date: "2023-01-01",
+      end_date: null,
+    };
+    const wrapper = mount(ShortNode, {
+      global: { plugins: [vuetify] },
+      props: {
+        edge: currentEdge,
+      },
+    });
+
+    const card = wrapper.findComponent({ name: "VCard" });
+    expect(card.classes()).toContain("bg-green-lighten-5");
+  });
+
+  it("does not apply green background if past employment (has end_date)", () => {
+    const pastEdge = {
+      ...edge,
+      start_date: "2023-01-01",
+      end_date: "2023-06-01",
+    };
+    const wrapper = mount(ShortNode, {
+      global: { plugins: [vuetify] },
+      props: {
+        edge: pastEdge,
+      },
+    });
+
+    const card = wrapper.findComponent({ name: "VCard" });
+    expect(card.classes()).not.toContain("bg-green-lighten-5");
+  });
+
+  it("does not apply green background if start_date is missing (even if no end_date)", () => {
+    const vagueEdge = {
+      ...edge,
+      start_date: null,
+      end_date: null,
+    };
+    const wrapper = mount(ShortNode, {
+      global: { plugins: [vuetify] },
+      props: {
+        edge: vagueEdge,
+      },
+    });
+
+    const card = wrapper.findComponent({ name: "VCard" });
+    expect(card.classes()).not.toContain("bg-green-lighten-5");
   });
 });
