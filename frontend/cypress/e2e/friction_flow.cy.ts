@@ -15,10 +15,10 @@ describe("UI Friction Flow", () => {
     cy.contains("button", "Dodaj").should("exist");
 
     // 3. Create Person
-    cy.createNode({ 
-        name: personName, 
-        type: "person", 
-        content: "Some biographical content." 
+    cy.createNode({
+      name: personName,
+      type: "person",
+      content: "Some biographical content.",
     });
 
     // Optionally go to the public page to verify
@@ -31,8 +31,8 @@ describe("UI Friction Flow", () => {
     cy.intercept("POST", "/api/nodes/create").as("createNodeReq");
 
     cy.createNode({
-        name: companyName,
-        type: "place"
+      name: companyName,
+      type: "place",
     });
 
     cy.wait("@createNodeReq").then((interception) => {

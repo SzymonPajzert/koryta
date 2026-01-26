@@ -21,7 +21,11 @@ describe("Entity Editing", () => {
     const onAlert = cy.stub();
     cy.on("window:alert", onAlert);
 
-    cy.createNode({ name: "Test Person", type: "person", content: "Some test content" });
+    cy.createNode({
+      name: "Test Person",
+      type: "person",
+      content: "Some test content",
+    });
 
     cy.contains("h1", "Edytuj");
 

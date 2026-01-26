@@ -232,9 +232,9 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
             sourceURL: "",
             shortName: "",
           };
-          // Also reset lastFetchedId to ensure clean slate? 
+          // Also reset lastFetchedId to ensure clean slate?
           // actually leave it so fetchData triggers reset if we navigate back to new without reload
-          
+
           await router.push(`/edit/node/${id}`);
         }
       } else {

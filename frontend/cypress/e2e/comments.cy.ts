@@ -42,4 +42,5 @@ describe("Comments and Discussions", () => {
     cy.contains(leadText).should("be.visible");
 
     const replyText = `Reply to Lead ${Date.now()}`;
+  });
 });

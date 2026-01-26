@@ -14,7 +14,7 @@ describe("Edit Node Connections", () => {
 
     const targetName = `Friend ${Date.now()}`;
     cy.createNode({ name: targetName, type: "person" });
-    
+
     // Switch back to original person
     cy.visit("/");
     cy.search(personName);

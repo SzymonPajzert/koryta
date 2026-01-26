@@ -17,7 +17,6 @@ describe("Article Entities and Edge References", () => {
     cy.pickEntity("Orlen", "entity-picker-source");
     cy.pickEntity("Orlen", "entity-picker-target");
 
-
     cy.contains("button", "Dodaj powiązanie").click();
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");

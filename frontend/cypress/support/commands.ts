@@ -12,7 +12,11 @@ declare global {
        * Creates a new node using the UI.
        * Handles navigation, type selection (robustly), form filling, and save verification.
        */
-      createNode(node: { name: string; type: "person" | "place"; content?: string }): Chainable<void>;
+      createNode(node: {
+        name: string;
+        type: "person" | "place";
+        content?: string;
+      }): Chainable<void>;
       /**
        * Selects an option from a Vuetify v-select.
        * @param label The label of the select input
@@ -44,11 +48,18 @@ declare global {
       /**
        * Fills a form field by its label.
        */
-      fillField(label: string | RegExp, value: string, options?: { clear?: boolean }): Chainable<void>;
+      fillField(
+        label: string | RegExp,
+        value: string,
+        options?: { clear?: boolean },
+      ): Chainable<void>;
       /**
        * Verifies a field contains specific content (useful for chips, selects, etc.)
        */
-      verifyFieldContent(label: string | RegExp, content: string): Chainable<void>;
+      verifyFieldContent(
+        label: string | RegExp,
+        content: string,
+      ): Chainable<void>;
     }
   }
 }
@@ -57,9 +68,7 @@ export {};
 
 Cypress.Commands.add("verifyFieldContent", (label, content) => {
   cy.log(`Verifying field ${label} contains ${content}`);
-  cy.contains("label", label)
-    .parents(".v-input")
-    .should("contain", content);
+  cy.contains("label", label).parents(".v-input").should("contain", content);
 });
 
 Cypress.Commands.add("fillField", (label, value, options = { clear: true }) => {
@@ -73,10 +82,7 @@ Cypress.Commands.add("fillField", (label, value, options = { clear: true }) => {
 
 Cypress.Commands.add("verifyField", (label, value, type = "input") => {
   cy.log(`Verifying field ${label} has value ${value}`);
-  cy.contains("label", label)
-    .parent()
-    .find(type)
-    .should("have.value", value);
+  cy.contains("label", label).parent().find(type).should("have.value", value);
 });
 
 Cypress.Commands.add(
@@ -159,7 +165,7 @@ Cypress.Commands.add("refreshAuth", () => {
 Cypress.Commands.add("search", (query: string) => {
   // Abstracting the header search input selection
   const searchInput = cy.get("header").find("input");
-  
+
   searchInput.then(($input) => {
     if ($input.val()) {
       cy.wrap($input).clear();
@@ -171,7 +177,6 @@ Cypress.Commands.add("search", (query: string) => {
   cy.get("header").find("input").should("have.value", query);
 });
 
-
 Cypress.Commands.add("createNode", ({ name, type, content }) => {
   cy.log(`Creating node: ${name} (${type})`);
   cy.visit(`/edit/node/new?type=${type}`);
@@ -181,7 +186,7 @@ Cypress.Commands.add("createNode", ({ name, type, content }) => {
 
   // Enforce type selection to prevent state leaks or default mismatches
   const typeLabel = type === "person" ? "Osoba" : "Firma";
-  
+
   // Use our new helper
   cy.selectVuetifyOption("Typ", typeLabel);
 
@@ -216,10 +221,13 @@ Cypress.Commands.add(
   },
 );
 
-Cypress.Commands.add("selectVuetifyOption", (label: string, optionText: string) => {
-  cy.log(`Selecting ${optionText} for ${label}`);
-  // Find the v-select by label and click it
-  cy.contains("label", label).parent().should("be.visible").click();
-  // Find the option in the overlay (Vuetify mounts overlays at root)
-  cy.get(".v-overlay").should("be.visible").contains(optionText).click();
-});
+Cypress.Commands.add(
+  "selectVuetifyOption",
+  (label: string, optionText: string) => {
+    cy.log(`Selecting ${optionText} for ${label}`);
+    // Find the v-select by label and click it
+    cy.contains("label", label).parent().should("be.visible").click();
+    // Find the option in the overlay (Vuetify mounts overlays at root)
+    cy.get(".v-overlay").should("be.visible").contains(optionText).click();
+  },
+);

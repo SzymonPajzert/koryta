@@ -9,10 +9,10 @@ describe("New Node Navigation", () => {
 
     // 2. Create new node using abstracted command
     const newName = "Test Person " + Date.now();
-    cy.createNode({ 
-      name: newName, 
-      type: "person", 
-      content: "This is a test person content." 
+    cy.createNode({
+      name: newName,
+      type: "person",
+      content: "This is a test person content.",
     });
 
     // 3. Verify name is still there on the edit page
@@ -30,7 +30,7 @@ describe("New Node Navigation", () => {
     // 3. Go to home page and search for it
     cy.visit("/");
     cy.search(newName);
-    
+
     // Wait for debounce and search results
     cy.contains(".v-list-item-title", newName, { timeout: 10000 }).should(
       "be.visible",
