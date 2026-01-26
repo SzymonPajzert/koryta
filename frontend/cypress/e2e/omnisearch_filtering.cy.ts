@@ -1,37 +1,53 @@
 describe("OmniSearch and Graph Filtering", () => {
   beforeEach(() => {
-    cy.login(); // Or setup necessary state
     cy.visit("/");
   });
 
   it("should filter out regions and companies without people in OmniSearch", () => {
     cy.intercept("GET", "/api/graph*").as("getGraph");
 
-    // Search for entities that should be seeded but empty
-    cy.get('[id="omni-search"]').type("Puste");
+    cy.search("Puste");
     cy.wait("@getGraph");
 
-    // Verify negative cases (should NOT exist)
     cy.contains("Województwo Puste").should("not.exist");
     cy.contains("Firma Pusta").should("not.exist");
   });
 
   it("should show valid chain of connected entities in OmniSearch", () => {
-    cy.intercept("GET", "/api/graph*").as("getGraph");
+    it("should show valid chain of connected entities in OmniSearch", () => {
+      cy.search("Testowa");
 
-    // Search for the chain elements
-    cy.get('[id="omni-search"]').type("Testowa");
-    cy.wait("@getGraph");
+      cy.get(".v-overlay")
+        .filter(":visible")
+        .should("be.visible")
+        .within(() => {
+          cy.contains(".v-list-item-title", "Osoba Testowa").should("exist");
+          cy.contains(".v-list-item-title", "Firma Testowa").should("exist");
+        });
 
-    // Verify positive cases (should exist)
-    cy.contains("Osoba Testowa").should("be.visible");
-    cy.contains("Firma Testowa").should("be.visible");
+      cy.search("Testowe");
+      // wait for list update - graph isn't re-fetched if cached but filtering happens
+      cy.wait(500);
 
-    cy.get('[id="omni-search"]').clear().type("Testowe");
-    cy.contains("Województwo Testowe").should("be.visible");
+      cy.get(".v-overlay")
+        .filter(":visible")
+        .should("be.visible")
+        .within(() => {
+          cy.contains(".v-list-item-title", "Województwo Testowe").should(
+            "exist",
+          );
+        });
 
-    cy.get('[id="omni-search"]').clear().type("Powiat Testowy");
-    cy.contains("Powiat Testowy").should("be.visible");
+      cy.search("Powiat Testowy");
+      cy.wait(500);
+
+      cy.get(".v-overlay")
+        .filter(":visible")
+        .should("be.visible")
+        .within(() => {
+          cy.contains(".v-list-item-title", "Powiat Testowy").should("exist");
+        });
+    });
   });
 
   it("should filter out empty regions and companies in the Graph view", () => {

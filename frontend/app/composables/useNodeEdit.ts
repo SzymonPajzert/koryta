@@ -223,6 +223,18 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
         });
         if (id) {
           lastFetchedId.value = id;
+          // Reset current for the next "new" visit to clean state
+          current.value = {
+            name: "",
+            type: "person",
+            parties: [],
+            content: "",
+            sourceURL: "",
+            shortName: "",
+          };
+          // Also reset lastFetchedId to ensure clean slate?
+          // actually leave it so fetchData triggers reset if we navigate back to new without reload
+
           await router.push(`/edit/node/${id}`);
         }
       } else {

@@ -1,6 +1,5 @@
 <template>
   <v-autocomplete
-    v-bind="$attrs"
     v-model="model"
     v-model:search="search"
     :label="props.label"
@@ -13,6 +12,7 @@
     autocomplete="off"
     data-testid="entity-picker-input"
     @update:focused="(val: boolean) => val && refresh()"
+    v-bind="$attrs"
   >
     <template #no-data>
       <v-list-item v-if="search" @click="addNewItem">

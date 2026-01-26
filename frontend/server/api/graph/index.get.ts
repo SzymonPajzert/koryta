@@ -38,6 +38,10 @@ export default authCachedEventHandler(async (event) => {
   const nodeGroups = nodeGroupsRaw.filter((group) => {
     // Keep "All" group (empty ID)
     if (!group.id) return true;
+
+    // Authenticated users can see all groups (so they can link to empty companies)
+    if (isAuth) return true;
+
     // For specific groups (regions/companies), check if they have people
     return group.stats.people > 0;
   });

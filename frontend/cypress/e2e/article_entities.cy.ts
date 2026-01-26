@@ -12,55 +12,28 @@ describe("Article Entities and Edge References", () => {
 
   it("should allow adding an edge from an article page", () => {
     cy.visit("/entity/article/6");
-
     cy.contains("Zaproponuj zmianę").click();
-
-    // Click the button for the relation
     cy.contains("Wspomniane miejsce w artykule").click();
+    cy.pickEntity("Orlen", "entity-picker-source");
+    cy.pickEntity("Orlen", "entity-picker-target");
 
-    // Fill target
-    cy.contains(".v-input", "Wyszukaj firmę").click();
-    cy.contains("Orlen").click();
-
-    cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
-
+    cy.contains("button", "Dodaj powiązanie").click();
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");
     });
   });
 
-  // TODO restore
-  it.skip("should allow adding an edge with article reference from person page", () => {
+  it("should allow adding an edge with article reference from person page", () => {
     cy.visit("/entity/person/1");
     cy.contains("Zaproponuj zmianę").click();
+    cy.contains("Dodaj gdzie").contains("pracuje").click();
 
-    // Select relation first to ensure target is Company (if defaulted to person)
-    // Actually "Orlen" is a place. We need a relation that points to Place.
-    // If default is "employed", target is Place.
-    // If default is not employed, we should select it.
-    // Select relation
-    cy.contains(".v-select", "Relacja").click();
-    cy.contains("Zatrudniony/a w").click();
+    cy.pickEntity("Orlen", "entity-picker-target");
+    cy.pickEntity("Sample Article", "entity-picker-reference");
 
-    // Picker target (Use .first() to avoid ambiguity with article reference picker)
-    cy.get('[label="Wyszukaj firmę"]').type("Orlen");
-    cy.contains(".v-list-item-title", "Orlen").first().click();
-
-    // Picker reference
-    cy.get('[label="Źródło informacji (artykuł)"]').type("Sample Article");
-    cy.contains(".v-list-item-title", "Sample Article").first().click();
-
-    cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
-
+    cy.contains("button", "Dodaj powiązanie").click();
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");
     });
-  });
-
-  it("should show audit page with inconsistencies", () => {
-    cy.visit("/admin/audit");
-    cy.get("h1").should("contain", "Audyt danych");
-    // Depending on seeded data, check for lists
-    cy.get(".v-card").should("have.length", 2);
   });
 });

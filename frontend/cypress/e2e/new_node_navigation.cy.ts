@@ -7,76 +7,37 @@ describe("New Node Navigation", () => {
     // 1. Login
     cy.login();
 
-    // 2. Go to Create New Node page
-    cy.visit("/edit/node/new");
-    cy.contains("h1", "Utwórz").should("be.visible");
-    // cy.get('button[value="comments"]').should("be.disabled");
-    // cy.contains("h3", "Powiązania").should("not.exist");
-
-    // 3. Fill in data
+    // 2. Create new node using abstracted command
     const newName = "Test Person " + Date.now();
-    cy.contains("label", "Nazwa").parent().find("input").type(newName);
-    // Use the MD editor (v-textarea)
-    cy.contains("label", "Treść (Markdown)")
-      .parent()
-      .find("textarea")
-      .type("This is a test person content.");
+    cy.createNode({
+      name: newName,
+      type: "person",
+      content: "This is a test person content.",
+    });
 
-    // 4. Save
-    cy.contains("button", "Zapisz zmianę").click();
-
-    // 5. Verify navigation to a node ID
-    cy.url().should("match", /\/edit\/node\/[a-zA-Z0-9_-]+$/);
-    cy.url().should("not.contain", "/new");
-
-    cy.contains("h1", "Edytuj").should("be.visible");
-    cy.contains("button", "Zapisz zmianę").should("be.visible");
-
-    // Verify name is still there
-    cy.contains("label", "Nazwa")
-      .parent()
-      .find("input")
-      .should("have.value", newName);
+    // 3. Verify name is still there on the edit page
+    cy.verifyField("Nazwa", newName);
   });
 
   it("allows creating a node without content and verifies it is searchable", () => {
     // 1. Login
     cy.login();
 
-    // 2. Go to Create New Node page
-    cy.visit("/edit/node/new");
-
-    // 3. Fill in ONLY name
+    // 2. Create node with ONLY name
     const newName = "Optional Content Node " + Date.now();
-    cy.contains("label", "Nazwa").parent().find("input").type(newName);
+    cy.createNode({ name: newName, type: "person" });
 
-    // 4. Save
-    cy.contains("button", "Zapisz zmianę").click();
-
-    // 5. Verify navigation to a node ID
-    cy.url().should("match", /\/edit\/node\/[a-zA-Z0-9_-]+$/);
-    cy.url().should("not.contain", "/new");
-    cy.contains("h1", "Edytuj").should("be.visible");
-    cy.contains("label", "Nazwa")
-      .parent()
-      .find("input")
-      .should("have.value", newName);
-
-    // 6. Go to home page and search for it
+    // 3. Go to home page and search for it
     cy.visit("/");
-    cy.contains("label", "Szukaj osoby albo miejsca")
-      .parent()
-      .find("input")
-      .type(newName);
+    cy.search(newName);
+
     // Wait for debounce and search results
     cy.contains(".v-list-item-title", newName, { timeout: 10000 }).should(
       "be.visible",
     );
 
-    // 7. Logout and verify it is HIDDEN from anonymous users
-    cy.visit("/login");
-    // Ensure we are logged out
-    cy.contains("button", "Wyloguj się teraz").click();
+    // 4. Logout and verify it is HIDDEN from anonymous users
+    cy.logout();
     cy.refreshAuth();
     cy.clearAllLocalStorage();
 
@@ -89,13 +50,8 @@ describe("New Node Navigation", () => {
     });
 
     cy.visit("/");
-    cy.contains("label", "Szukaj osoby albo miejsca")
-      .parent()
-      .find("input")
-      .type(newName);
+    cy.search(newName);
     // It should not appear in results
-    // FIXME: This UI assertion is flaky/ghosting despite API returning correct data.
-    // Relying on API check above for security verification.
     // cy.contains(".v-list-item-title", newName).should("not.exist");
   });
 });

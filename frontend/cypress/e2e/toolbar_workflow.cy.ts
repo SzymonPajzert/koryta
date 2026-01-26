@@ -5,45 +5,36 @@ describe("User Toolbar and Edit Workflow", () => {
   });
 
   it("shows toolbar only when logged in", () => {
-    cy.contains("Dodaj artykuł").should("not.exist");
-    // Verified that there is no toolbar when not logged in
+    cy.contains("button", "Dodaj nowe").should("not.exist");
 
     cy.login();
-    cy.reload();
-    cy.contains("Dodaj nowe").should("be.visible");
+    cy.contains("button", "Dodaj nowe").should("be.visible");
 
-    cy.wait(500); // Wait for potential animations
     cy.percySnapshot("toolbar-logged-in");
   });
 
   it("pre-selects Article type when clicking Dodaj artykuł", () => {
     cy.login();
-    cy.visit("/");
-    cy.contains("Dodaj nowe").click();
+    cy.contains("button", "Dodaj nowe").click();
     cy.contains("Dodaj artykuł").click();
 
     cy.url().should("include", "/edit/node/new");
     cy.url().should("include", "type=article");
 
-    // Check if select has 'article'
-    // Vuetify select is tricky. We check the value model if possible or the text.
-    // The v-select stores value.
-    // We can check if Article specific fields are visible.
-    cy.contains("URL Źródła").should("exist");
-    cy.contains("Krótka nazwa").should("exist");
-    // Parties should be hidden
-    cy.contains("Partia").should("not.exist");
+    cy.verifyLabelExists("URL Źródła");
+    cy.verifyLabelExists("Krótka nazwa");
+    cy.verifyLabelDoesNotExist("Partia");
   });
 
   it("pre-selects Person type when clicking Dodaj osobę", () => {
     cy.login();
     cy.visit("/");
-    cy.contains("Dodaj nowe").click();
+    cy.contains("button", "Dodaj nowe").click();
     cy.contains("Dodaj osobę").click();
 
     cy.url().should("include", "type=person");
-    cy.contains("Partia").should("exist");
-    cy.contains("URL Źródła").should("not.exist");
+    cy.verifyLabelExists("Partia");
+    cy.verifyLabelDoesNotExist("URL Źródła");
   });
 
   it("shows revisions list", () => {

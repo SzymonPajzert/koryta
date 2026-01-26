@@ -33,20 +33,7 @@ describe("home", () => {
     cy.contains(`Lista wszystkich ${expectedPeople}`);
   });
 
-  // TODO
-  // it("shows graph when clicking the second card", () => {
-  //   cy.contains(".v-card", "Zobacz jak PSL").click();
-  //   cy.url().should("include", "/graf");
-  //   cy.get("g > text").should("have.length.greaterThan", 10);
-  // });
-  // TODO
-  // it("shows graph when clicking the third card", () => {
-  //   cy.contains(".v-card", "Albo PL2050").click();
-  //   cy.url().should("include", "/graf");
-  //   cy.get("g > text").should("have.length.greaterThan", 10);
-  // });
-
-  it.skip("shows pomoc when clicking the card with 'Dodaj osoby'", () => {
+  it("shows pomoc when clicking the card with 'Dodaj osoby'", () => {
     cy.contains("Dodaj osoby")
       .closest(".v-card")
       .should("have.attr", "href", "/pomoc")
