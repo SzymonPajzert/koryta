@@ -16,7 +16,7 @@ describe("User Toolbar and Edit Workflow", () => {
   it("pre-selects Article type when clicking Dodaj artykuł", () => {
     cy.login();
     cy.contains("button", "Dodaj nowe").click();
-    cy.contains("button", "Dodaj artykuł").click();
+    cy.contains("Dodaj artykuł").click();
 
     cy.url().should("include", "/edit/node/new");
     cy.url().should("include", "type=article");
@@ -30,7 +30,7 @@ describe("User Toolbar and Edit Workflow", () => {
     cy.login();
     cy.visit("/");
     cy.contains("button", "Dodaj nowe").click();
-    cy.contains("button", "Dodaj osobę").click();
+    cy.contains("Dodaj osobę").click();
 
     cy.url().should("include", "type=person");
     cy.verifyLabelExists("Partia");
@@ -40,7 +40,7 @@ describe("User Toolbar and Edit Workflow", () => {
   it("shows revisions list", () => {
     cy.login();
     cy.visit("/");
-    cy.contains("button", "Lista rewizji").click();
+    cy.contains("Lista rewizji").click();
     cy.url().should("include", "/revisions");
     cy.contains("Lista Rewizji").should("be.visible");
 

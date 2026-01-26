@@ -21,7 +21,10 @@ describe("Entity Picker Workflow", () => {
     cy.contains("button", "zna").click();
 
     // Use pickEntity command which handles the internal logic
-    cy.get('[data-testid="entity-picker-target"] input').first().click().type(hiddenNodeName);
+    cy.get('[data-testid="entity-picker-target"] input')
+      .first()
+      .click()
+      .type(hiddenNodeName);
     cy.contains(".v-list-item-title", hiddenNodeName).should("exist");
   });
 
@@ -36,11 +39,17 @@ describe("Entity Picker Workflow", () => {
     cy.contains("button", "zna").click();
 
     // Type non-existent name
-    cy.get('[data-testid="entity-picker-target"] input').first().click().type(newTargetName);
+    cy.get('[data-testid="entity-picker-target"] input')
+      .first()
+      .click()
+      .type(newTargetName);
 
     // Wait for "Dodaj ..." option and click it
     // Note: EntityPicker uses Polish text "Dodaj ..."
-    cy.get(".v-overlay").contains(`Dodaj "${newTargetName}"`).should("be.visible").click();
+    cy.get(".v-overlay")
+      .contains(`Dodaj "${newTargetName}"`)
+      .should("be.visible")
+      .click();
 
     // Verify that the new item is selected in the input
     cy.get('[data-testid="entity-picker-target"] input')

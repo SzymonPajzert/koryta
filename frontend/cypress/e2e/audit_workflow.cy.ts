@@ -1,5 +1,6 @@
 describe("Admin Audit Workflow", () => {
   beforeEach(() => {
+    cy.refreshAuth();
     cy.login();
   });
 

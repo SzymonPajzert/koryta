@@ -78,9 +78,17 @@ Cypress.Commands.add("fillField", (label, value, options = { clear: true }) => {
   cy.log(`Filling field ${label} with ${value}`);
   cy.contains("label", label).parents(".v-input").first().as("fieldContainer");
   if (options.clear) {
-    cy.get("@fieldContainer").find("input, textarea").filter(":visible").first().clear();
+    cy.get("@fieldContainer")
+      .find("input, textarea")
+      .filter(":visible")
+      .first()
+      .clear();
   }
-  cy.get("@fieldContainer").find("input, textarea").filter(":visible").first().type(value);
+  cy.get("@fieldContainer")
+    .find("input, textarea")
+    .filter(":visible")
+    .first()
+    .type(value);
 });
 
 Cypress.Commands.add("verifyField", (label, value, type = "input") => {
@@ -259,7 +267,10 @@ Cypress.Commands.add("replyToComment", (parentText, replyText) => {
     .first()
     .should("be.visible")
     .type(replyText);
-  cy.contains(".comment-item", parentText).first().contains("button", "Wyślij").click();
+  cy.contains(".comment-item", parentText)
+    .first()
+    .contains("button", "Wyślij")
+    .click();
 });
 
 Cypress.Commands.add("verifyLabelExists", (label) => {
@@ -269,4 +280,3 @@ Cypress.Commands.add("verifyLabelExists", (label) => {
 Cypress.Commands.add("verifyLabelDoesNotExist", (label) => {
   cy.contains("label", label).should("not.exist");
 });
-
