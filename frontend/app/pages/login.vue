@@ -17,7 +17,7 @@
     </v-alert>
     <h2 class="blue">{{ isLogin ? "Zaloguj się" : "Rejestracja" }}</h2>
     <div>
-      <a href="#" @click.prevent="isLogin = !isLogin">
+      <a href="javascript:void(0)" @click="isLogin = !isLogin">
         {{
           isLogin
             ? "Nie masz konta? Zarejestruj się"

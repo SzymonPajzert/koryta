@@ -27,10 +27,10 @@
       <v-btn icon :to="{ path: '/graf', query: { miejsce: safeQuery.miejsce } }"
         ><v-icon>mdi-graph-outline</v-icon></v-btn
       >
-      <v-btn :icon="!mdAndUp" to="/pomoc">
+      <v-btn :icon="!mdAndUp" :to="user ? '/edit/node/new' : '/login'">
         <v-icon :start="mdAndUp">mdi-plus</v-icon>
         <!-- This span will be hidden on 'sm' and smaller screens -->
-        <span class="d-none d-md-inline">Działaj</span>
+        <span class="d-none d-md-inline">{{ user ? "Dodaj" : "Działaj" }}</span>
       </v-btn>
       <v-btn v-if="mdAndUp" text to="/zrodla">Źródła</v-btn>
       <v-avatar
