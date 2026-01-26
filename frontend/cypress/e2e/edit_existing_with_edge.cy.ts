@@ -2,15 +2,6 @@ describe("Edit Existing Entity & Add Edge", () => {
   const generateName = (prefix: string) => `${prefix}_${Date.now()}`;
 
   beforeEach(() => {
-    // Clear indexedDB based on previous patterns to ensure clean state
-    cy.window().then((win) => {
-      return new Cypress.Promise((resolve) => {
-        const req = win.indexedDB.deleteDatabase("firebaseLocalStorageDb");
-        req.onsuccess = resolve;
-        req.onerror = resolve;
-        req.onblocked = resolve;
-      });
-    });
     cy.refreshAuth();
     cy.login();
   });
@@ -34,11 +25,7 @@ describe("Edit Existing Entity & Add Edge", () => {
 
       // 4. Modify Company Name
       const updatedName = companyName + "_Updated";
-      cy.contains("label", "Nazwa")
-        .parent()
-        .find("input")
-        .clear()
-        .type(updatedName);
+      cy.fillField("Nazwa", updatedName);
       cy.contains("button", "Zapisz zmianę").click();
 
       // Click "Dodaj firmę córkę" button (owns, outgoing)

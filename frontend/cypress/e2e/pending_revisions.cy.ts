@@ -25,10 +25,9 @@ describe("Pending Revisions", () => {
     // Use pickEntity
     cy.pickEntity("Piotr Wiśniewski");
 
-    cy.contains("label", "Nazwa relacji")
-      .parent()
-      .find("input")
-      .type("znajomi");
+    cy.pickEntity("Piotr Wiśniewski");
+
+    cy.fillField("Nazwa relacji", "znajomi");
     cy.contains("button", "Dodaj powiązanie").click();
 
     cy.contains("Piotr Wiśniewski").should("be.visible");

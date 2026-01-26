@@ -22,13 +22,39 @@ declare global {
       /**
        * Selects an entity in the EntityPicker component.
        * @param name The name of the entity to search for and select.
+       * @param testId Optional data-testid of the picker (source/target/reference).
        */
-      pickEntity(name: string): Chainable<void>;
+      pickEntity(name: string, testId?: string): Chainable<void>;
+      /**
+       * Fills a form field by its label.
+       */
+      fillField(label: string | RegExp, value: string, options?: { clear?: boolean }): Chainable<void>;
+      /**
+       * Verifies a form field's value by its label.
+       */
+      verifyField(label: string | RegExp, value: string, type?: "input" | "textarea"): Chainable<void>;
     }
   }
 }
 
 export {};
+
+Cypress.Commands.add("fillField", (label, value, options = { clear: true }) => {
+  cy.log(`Filling field ${label} with ${value}`);
+  const field = cy.contains("label", label).parent();
+  if (options.clear) {
+    field.find("input, textarea").clear();
+  }
+  field.find("input, textarea").type(value);
+});
+
+Cypress.Commands.add("verifyField", (label, value, type = "input") => {
+  cy.log(`Verifying field ${label} has value ${value}`);
+  cy.contains("label", label)
+    .parent()
+    .find(type)
+    .should("have.value", value);
+});
 
 Cypress.Commands.add(
   "login",
@@ -136,11 +162,10 @@ Cypress.Commands.add("createNode", ({ name, type, content }) => {
   // Use our new helper
   cy.selectVuetifyOption("Typ", typeLabel);
 
-  // Fill Name
-  cy.contains("label", "Nazwa").parent().find("input").should("be.visible").type(name);
+  cy.fillField("Nazwa", name);
 
   if (content) {
-    cy.get("textarea").type(content);
+    cy.fillField("Treść (Markdown)", content);
   }
 
   // Submit

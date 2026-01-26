@@ -64,11 +64,9 @@ describe("Edit Node Connections", () => {
     // 5. Use EntityPicker to find Orlen (node 2)
     cy.pickEntity("Orlen");
 
-    // 6. Fill in details
-    cy.contains("label", "Nazwa relacji")
-      .parent()
-      .find("input")
-      .type("Zatrudnienie");
+    cy.pickEntity("Orlen");
+
+    cy.fillField("Nazwa relacji", "Zatrudnienie");
 
     // 7. Click Add
     cy.get("button[type='submit']")

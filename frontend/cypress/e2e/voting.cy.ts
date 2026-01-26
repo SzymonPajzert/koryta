@@ -1,3 +1,5 @@
+import { testVotingBehavior } from "../support/shared/voting";
+
 describe("Voting functionality", () => {
   beforeEach(() => {
     cy.login();
@@ -16,36 +18,8 @@ describe("Voting functionality", () => {
 
     // Wait for auth to propagate and widget to check
     cy.get('[data-cy="user-logged-in"]', { timeout: 10000 }).should("exist");
-    cy.contains("Ciekawe?").should("be.visible");
 
-    // Click "Tak" for Interesting
-    cy.contains("button", "Tak").click();
-
-    // Verify request
-    cy.wait("@voteRequest").then((interception) => {
-      expect(interception.response?.statusCode).to.equal(200);
-    });
-
-    // Expect "Tak" button to be active
-    // This confirms the vote was registered and UI updated (either from optimistic or real update)
-    cy.contains("button", "Tak")
-      .should("have.class", "v-btn--variant-flat")
-      .and("have.class", "bg-primary");
-
-    // Click "Tak" again to verify additive voting (backend integration mostly)
-    cy.contains("button", "Tak").click();
-    cy.wait("@voteRequest");
-
-    // Verify it is still active
-    cy.contains("button", "Tak").should("have.class", "bg-primary");
-
-    // Click "Nie" for Interesting
-    cy.contains("button", "Nie").click();
-    cy.wait("@voteRequest");
-
-    // Click "Gotowe" for Quality
-    cy.contains("button", "Gotowe").click();
-    cy.wait("@voteRequest");
-    cy.contains("button", "Gotowe").should("have.class", "v-btn--variant-flat");
+    // Run shared logic
+    testVotingBehavior();
   });
 });

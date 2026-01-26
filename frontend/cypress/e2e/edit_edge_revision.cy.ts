@@ -1,15 +1,6 @@
 describe("Edit Edge Revision", () => {
   beforeEach(() => {
-    cy.task("log", "Starting test: " + Cypress.currentTest.title);
-    // Clear indexedDB to avoid stale auth state
-    cy.window().then((win) => {
-      return new Cypress.Promise((resolve) => {
-        const req = win.indexedDB.deleteDatabase("firebaseLocalStorageDb");
-        req.onsuccess = resolve;
-        req.onerror = resolve;
-        req.onblocked = resolve;
-      });
-    });
+    cy.refreshAuth();
   });
 
   it("allows modifying an existing edge and saves a revision", () => {
@@ -29,18 +20,8 @@ describe("Edit Edge Revision", () => {
     // 4. Verify form populated
     cy.contains("h4", "Edytuj powiązanie").should("be.visible");
 
-    // 5. Modify name and text
-    cy.contains("label", "Nazwa relacji")
-      .parent()
-      .find("input")
-      .clear()
-      .type("Updated Relation Name");
-
-    cy.contains("label", "Opis relacji")
-      .parent()
-      .find("input")
-      .clear()
-      .type("Updated Relation Description");
+    cy.fillField("Nazwa relacji", "Updated Relation Name");
+    cy.fillField("Opis relacji", "Updated Relation Description");
 
     // 6. Save
     cy.get("button[type='submit']").contains("Zapisz zmiany").click();

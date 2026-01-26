@@ -51,11 +51,7 @@ describe("Revisions Logic", () => {
 
       cy.visit("/entity/person/5");
 
-      // Node 5 (Krzysztof Wójcik)
-      // Public (rev5): "Politician from Konfederacja"
-      // Latest (rev6): "Politician from Konfederacja and PiS"
-
-      cy.wait(500); // Wait for potential animations
+      cy.wait(500);
       cy.percySnapshot("latest-revision");
 
       cy.contains("Politician from Konfederacja and PiS").should("be.visible");

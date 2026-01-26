@@ -16,10 +16,7 @@ describe("New Node Navigation", () => {
     });
 
     // 3. Verify name is still there on the edit page
-    cy.contains("label", "Nazwa")
-      .parent()
-      .find("input")
-      .should("have.value", newName);
+    cy.verifyField("Nazwa", newName);
   });
 
   it("allows creating a node without content and verifies it is searchable", () => {

@@ -1,6 +1,9 @@
 describe("Entity Page Authentication Redirects", () => {
+  beforeEach(() => {
+    cy.logout();
+  });
+
   it("Redirects to login when clicking 'Zaproponuj zmianę' while logged out", () => {
-    // Ensure we are logged out
     cy.visit("/entity/person/1");
 
     // The button might take a moment to appear or be interactive
@@ -13,9 +16,7 @@ describe("Entity Page Authentication Redirects", () => {
   });
 
   it("Redirects to login when clicking 'Zaproponuj usunięcie' while logged out", () => {
-    // Ensure we are logged out
     cy.visit("/entity/person/1");
-
     cy.contains("Zaproponuj usunięcie").click();
 
     // For a dialog activator, if we want it to redirect instead of opening dialog
@@ -23,9 +24,7 @@ describe("Entity Page Authentication Redirects", () => {
   });
 
   it("Redirects to login when clicking 'Dodaj artykuł' while logged out", () => {
-    // Ensure we are logged out
     cy.visit("/entity/person/1");
-
     cy.contains("Dodaj artykuł").click();
 
     cy.url().should("include", "/login");

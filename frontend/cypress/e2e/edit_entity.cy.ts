@@ -25,22 +25,15 @@ describe("Entity Editing", () => {
 
     cy.contains("h1", "Edytuj");
 
-    cy.contains("label", /^Nazwa$/)
-      .parent()
-      .find("input")
-      .should("have.value", "Test Person", { timeout: 10000 })
-      .clear()
-      .type("Test Person Updated");
+    cy.verifyField(/^Nazwa$/, "Test Person");
+    cy.fillField(/^Nazwa$/, "Test Person Updated");
 
     cy.contains("Zapisz zmianę").click();
 
     cy.wrap(onAlert).should("be.calledWith", "Zapisano!");
 
     cy.reload();
-    cy.contains("label", /^Nazwa$/)
-      .parent()
-      .find("input")
-      .should("have.value", "Test Person Updated");
+    cy.verifyField(/^Nazwa$/, "Test Person Updated");
   });
 
   it("should prepopulate fields when editing an existing entity", () => {
@@ -52,11 +45,7 @@ describe("Entity Editing", () => {
 
     cy.url().should("include", "/edit/node/1");
 
-    cy.contains("label", /^Nazwa$/)
-      .parent()
-      .find("input")
-      .should("have.value", "Jan Kowalski", { timeout: 10000 });
-
+    cy.verifyField(/^Nazwa$/, "Jan Kowalski");
     cy.contains("label", "Typ").parents(".v-input").should("contain", "Osoba");
 
     cy.contains("label", "Partia")
@@ -64,9 +53,6 @@ describe("Entity Editing", () => {
       .find(".v-chip")
       .should("contain", "PO");
 
-    cy.contains("label", "Treść (Markdown)")
-      .parent()
-      .find("textarea")
-      .should("have.value", "Politician from PO");
+    cy.verifyField("Treść (Markdown)", "Politician from PO", "textarea");
   });
 });

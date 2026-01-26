@@ -7,11 +7,9 @@ describe("OmniSearch and Graph Filtering", () => {
   it("should filter out regions and companies without people in OmniSearch", () => {
     cy.intercept("GET", "/api/graph*").as("getGraph");
 
-    // Search for entities that should be seeded but empty
-    cy.get('[id="omni-search"]').type("Puste");
+    cy.search("Puste");
     cy.wait("@getGraph");
 
-    // Verify negative cases (should NOT exist)
     cy.contains("Województwo Puste").should("not.exist");
     cy.contains("Firma Pusta").should("not.exist");
   });
@@ -19,18 +17,16 @@ describe("OmniSearch and Graph Filtering", () => {
   it("should show valid chain of connected entities in OmniSearch", () => {
     cy.intercept("GET", "/api/graph*").as("getGraph");
 
-    // Search for the chain elements
-    cy.get('[id="omni-search"]').type("Testowa");
+    cy.search("Testowa");
     cy.wait("@getGraph");
 
-    // Verify positive cases (should exist)
     cy.contains("Osoba Testowa").should("be.visible");
     cy.contains("Firma Testowa").should("be.visible");
 
-    cy.get('[id="omni-search"]').clear().type("Testowe");
+    cy.search("Testowe");
     cy.contains("Województwo Testowe").should("be.visible");
 
-    cy.get('[id="omni-search"]').clear().type("Powiat Testowy");
+    cy.search("Powiat Testowy");
     cy.contains("Powiat Testowy").should("be.visible");
   });
 

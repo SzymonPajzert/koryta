@@ -40,21 +40,11 @@ describe("Region Node Type", () => {
     cy.visit(`/entity/region/${REGION_ID}`);
     cy.wait("@getRegion");
 
-    // Verify name logic (might need adjustment if UI shows just name)
     cy.contains("Kozłów");
-
-    // Initial tab is details
     cy.contains("Informacje");
 
-    // Should NOT have "Zaproponuj zmianę" button
     cy.contains("Zaproponuj zmianę").should("not.exist");
-
-    // Should NOT have "Zaproponuj usunięcie" (if hidden for region)
-    // Code was: v-if="entity && type !== 'region'"
     cy.contains("Zaproponuj usunięcie").should("not.exist");
-
-    // Should NOT have "Dodaj artykuł" (QuickAddArticleButton)
-    // Code was: v-if="type !== 'article' && type !== 'region'"
     cy.get('[data-test-id="quick-add-article"]').should("not.exist");
   });
 
