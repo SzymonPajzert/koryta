@@ -1,5 +1,3 @@
-const isCI = Cypress.env("CI");
-
 describe("Revisions Logic", () => {
   beforeEach(() => {
     cy.refreshAuth();

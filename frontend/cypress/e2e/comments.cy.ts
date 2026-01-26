@@ -14,33 +14,40 @@ describe("Comments and Discussions", () => {
     cy.contains("Normal User").should("be.visible");
   });
 
-  it("allows replying to a comment", () => {
-    cy.visit("/entity/person/1");
-    cy.contains(".v-tab", "Dyskusja").click();
+  describe("allow replying", () => {
+    const checkReply = (commentText: string, replyText: string) => {
+      cy.wait(1000);
+      cy.reload();
+      cy.contains(".v-tab", "Dyskusja").click();
 
-    cy.postComment("Parent comment");
-    cy.contains("Parent comment").should("be.visible");
+      cy.contains(replyText, { timeout: 15000 }).should("be.visible");
+      cy.contains(".comment-item", commentText)
+        .contains(replyText)
+        .should("be.visible");
+    };
 
-    const replyText = `Reply ${Date.now()}`;
-    cy.replyToComment("Parent comment", replyText);
+    it("allows replying to a comment", () => {
+      cy.visit("/entity/person/1");
+      cy.contains(".v-tab", "Dyskusja").click();
 
-    cy.wait(1000);
-    cy.reload();
-    cy.contains(".v-tab", "Dyskusja").click();
+      cy.postComment("Parent comment");
+      cy.contains("Parent comment").should("be.visible");
 
-    cy.contains(replyText, { timeout: 15000 }).should("be.visible");
-    cy.contains(".comment-item", "Parent comment")
-      .contains(replyText)
-      .should("be.visible");
-  });
+      const replyText = `Reply ${Date.now()}`;
+      cy.replyToComment("Parent comment", replyText);
+      checkReply("Parent comment", replyText);
+    });
 
-  it("allows posting a lead in leads page and replying to it", () => {
-    cy.visit("/leads");
+    it("allows posting a lead in leads page and replying to it", () => {
+      cy.visit("/leads");
 
-    const leadText = `Lead ${Date.now()}`;
-    cy.postComment(leadText);
-    cy.contains(leadText).should("be.visible");
+      const leadText = `Lead ${Date.now()}`;
+      cy.postComment(leadText);
+      cy.contains(leadText).should("be.visible");
 
-    const replyText = `Reply to Lead ${Date.now()}`;
+      const replyText = `Reply to Lead ${Date.now()}`;
+      cy.replyToComment(leadText, replyText);
+      checkReply(leadText, replyText);
+    });
   });
 });
