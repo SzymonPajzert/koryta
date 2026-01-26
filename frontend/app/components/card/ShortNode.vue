@@ -1,8 +1,10 @@
 <template>
+  <!-- TODO find a better place to contain somewhere information if they're currently employed -->
   <v-card
     :key="edge.richNode.id"
     :prepend-icon="icon(edge.richNode.type)"
     :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
+    :class="{ 'bg-green-lighten-5': edge.start_date && !edge.end_date }"
   >
     <template #title>{{ edge.richNode.name }}</template>
     <template #subtitle>

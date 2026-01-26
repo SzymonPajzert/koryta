@@ -180,7 +180,31 @@ const { data: response } = await authFetch<{
 const entity = computed(() => response.value?.node);
 
 const { sources, targets, referencedIn } = await useEdges(node);
-const edges = computed(() => [...sources.value, ...targets.value]);
+const edges = computed(() => {
+  const allEdges = [...sources.value, ...targets.value];
+  return allEdges.sort((a, b) => {
+    // 1. Current employments first (start_date && !end_date)
+    // TODO find a better place to contain somewhere information if they're currently employed
+    const aCurrent = a.start_date && !a.end_date;
+    const bCurrent = b.start_date && !b.end_date;
+    if (aCurrent && !bCurrent) return -1;
+    if (!aCurrent && bCurrent) return 1;
+
+    // 2. Sort by end_date descending (recent finished jobs first)
+    if (a.end_date && b.end_date) {
+      if (a.end_date > b.end_date) return -1;
+      if (a.end_date < b.end_date) return 1;
+    }
+
+    // 3. Sort by start_date descending
+    if (a.start_date && b.start_date) {
+      if (a.start_date > b.start_date) return -1;
+      if (a.start_date < b.start_date) return 1;
+    }
+
+    return 0;
+  });
+});
 
 const quickAddButtons = computed(() => {
   if (!entity.value) return [];
