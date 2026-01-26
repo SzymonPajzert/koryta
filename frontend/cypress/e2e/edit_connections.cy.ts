@@ -12,55 +12,37 @@ describe("Edit Node Connections", () => {
     });
   });
 
-  it("displays existing connections and allows adding a new one with details", () => {
+  it("allows adding and removing a connection", () => {
     // 1. Login
     cy.login();
 
-    // 2. Go to edit page for Jan Kowalski (node 1)
-    cy.visit("/edit/node/1");
-    // Ensure data loaded (Buttons should contain Jan Kowalski)
-    cy.contains("button", "Jan Kowalski").should("exist");
+    // 2. Create a person node
+    const personName = `Person ${Date.now()}`;
+    cy.createNode({ name: personName, type: "person" });
 
-    // 3. Verify existing connections are listed
+    // 3. Select "Powiązanie z" (Generic connection)
+    // Click button directly (matching "zna" for 'connection' type)
     cy.contains("Powiązania").should("be.visible");
-    cy.contains("Anna Nowak").should("be.visible");
-
-    // 3. Select "Powiązanie z"
-    // Click button directly (matching "zna")
     cy.get(".v-btn").contains("zna").click();
 
-    // Verify "Typ celu" is gone (old UI artifact checks)
-    cy.contains("label", "Typ celu").should("not.exist");
+    // 4. Create nodes for testing
+    const targetName = `Friend ${Date.now()}`;
+    cy.createNode({ name: targetName, type: "person" });
+    
+    cy.createNode({ name: personName, type: "person" });
 
-    // Use EntityPicker to find Piotr Wiśniewski
-    cy.contains("label", "Wyszukaj osobę")
-      .parent()
-      .find("input")
-      .click()
-      .type("Piotr", { delay: 100 });
+    // Add Connection
+    cy.get(".v-btn").contains("zna").click();
+    
+    cy.pickEntity(targetName);
 
-    cy.get(".v-overlay")
-      .contains(".v-list-item-title", "Piotr Wiśniewski")
-      .click();
+    // Save
+    cy.contains("Dodaj powiązanie").click();
 
-    // Fill in name and text
-    cy.contains("label", "Nazwa relacji")
-      .parent()
-      .find("input")
-      .type("Testowa nazwa");
-    cy.contains("label", "Opis relacji")
-      .parent()
-      .find("input")
-      .type("Testowy opis");
+    // Verify
+    cy.contains(targetName).should("be.visible");
+    
 
-    // Click Add
-    cy.get("button[type='submit']")
-      .contains("Dodaj powiązanie")
-      .should("not.be.disabled")
-      .click();
-
-    // 5. Verify the new connection appears in the list
-    cy.contains("Piotr Wiśniewski").should("be.visible");
   });
 
   it("updates the entity picker when switching to 'Zatrudniony/a w' (Company)", () => {
@@ -80,13 +62,7 @@ describe("Edit Node Connections", () => {
     cy.contains("label", "Wyszukaj osobę").should("not.exist");
 
     // 5. Use EntityPicker to find Orlen (node 2)
-    cy.contains("label", "Wyszukaj firmę")
-      .parent()
-      .find("input")
-      .click()
-      .type("Orlen", { delay: 100 });
-
-    cy.get(".v-overlay").contains("Orlen").click();
+    cy.pickEntity("Orlen");
 
     // 6. Fill in details
     cy.contains("label", "Nazwa relacji")

@@ -12,84 +12,52 @@ describe("UI Friction Flow", () => {
     const companyName = `Test Company ${timestamp}`;
 
     // 1. Login with seeded user
-    cy.visit("/login");
-    cy.get('input[type="email"]').type("user@koryta.pl");
-    cy.get('input[type="password"]').type("password123");
-    cy.get('button[type="submit"]').click();
+    cy.login();
 
-    // Wait for login/redirect
-    cy.url().should("not.include", "/login");
-
-    // 2. Verify "Dodaj" button exists
+    // 2. Verify "Dodaj" button exists (sanity check)
     cy.get("header").contains("Dodaj").should("exist");
 
-    // 3. Create Person via the new button or direct link
-    // Let's use the shortcut we added to default.vue if screen is small or just direct link for stability
-    cy.visit("/edit/node/new?type=person");
-    
-    // Fill Person Form
-    // Try to find the input for name. Based on snippet it is FormAlreadyExisting inside.
-    // We should look for a label "Nazwa" or similar.
-    cy.contains("label", "Nazwa").parent().find("input").type(personName);
-    cy.get("textarea").type("Some biographical content.");
-    cy.contains("button", "Zapisz zmianę").click();
+    // 3. Create Person
+    cy.createNode({ 
+        name: personName, 
+        type: "person", 
+        content: "Some biographical content." 
+    });
 
-    // Verify redirect to the edit page for the new node
-    cy.url().should("include", "/edit/node/");
     // Optionally go to the public page to verify
     cy.contains("Anuluj").click(); // "Anuluj" goes to entity page if not new
     cy.url().should("include", "/entity/person/");
     cy.contains(personName).should("be.visible");
 
     // 4. Create Company
-    cy.visit("/edit/node/new?type=place");
-    // Ensure we are in "Place" mode. Use robust Vuetify selection.
-    // Click the select to open options
-    cy.contains("label", "Typ").parent().click();
-    // Wait for the overlay and click "Firma"
-    // Vuetify renders options in .v-overlay-container at the root
-    cy.get(".v-overlay").contains("Firma").click();
-    
-    // Verify selection (optional but good for debugging)
-    // The select should now show "Firma"
-    cy.contains("label", "Typ").parents(".v-select").contains("Firma").should("exist");
-
-    cy.contains("label", "Nazwa").parent().find("input").type(companyName);
-    
     // Intercept the create request to verify payload
-    cy.intercept("POST", "/api/nodes/create").as("createNode");
+    cy.intercept("POST", "/api/nodes/create").as("createNodeReq");
 
-    // Select Type if necessary, but we passed ?type=place so it should be pre-filled
-    cy.contains("button", "Zapisz zmianę").click();
+    cy.createNode({
+        name: companyName,
+        type: "place"
+    });
 
-    cy.wait("@createNode").then((interception) => {
+    cy.wait("@createNodeReq").then((interception) => {
       expect(interception.request.body.type).to.equal("place");
       expect(interception.request.body.name).to.equal(companyName);
     });
-
-    // Verify redirect to edit page
-    cy.url().should("include", "/edit/node/");
-    
-    // Wait for data to load and verify it's a Company
-    // This ensures we don't click Anuluj before the type is fetched
-    cy.contains(".v-select .v-select__selection-text", "Firma").should("exist");
 
     // Go to public page
     cy.contains("Anuluj").click();
     cy.url().should("include", "/entity/place/");
     cy.contains(companyName).should("be.visible");
 
-    // 5. Verify Company is visible in Search (The main fix)
-    // We need to wait a bit for any indexing? Or just backend refresh.
-    // Clear search first
-    cy.get("header").find("input").clear().type(companyName);
+    // 5. Verify Company is visible in Search
+    cy.search(companyName);
+
     // Should see it in results
     cy.contains(".v-list-item-title", companyName).should("exist");
 
     // 6. Link Person to Company
-    // Go back to person
-    cy.visit("/lista"); // navigate via list or search
-    cy.get("input[label='Szukaj osoby albo miejsca']").clear().type(personName);
+    // Search for person to navigate back
+    cy.visit("/");
+    cy.search(personName);
     cy.contains(".v-list-item-title", personName).click();
 
     // Click "Suggest Change" or "Edit"
@@ -100,11 +68,7 @@ describe("UI Friction Flow", () => {
     cy.contains(`Dodaj gdzie ${personName} pracuje`).click();
 
     // In the edge form, search for the company
-    // This is the EntityPicker inside EditEdge
-    cy.contains("label", "Wyszukaj firmę").parent().find("input").type(companyName);
-    
-    // Select the company from dropdown
-    cy.contains(".v-list-item-title", companyName).click();
+    cy.pickEntity(companyName);
 
     // Save Edge
     cy.contains("button", "Dodaj powiązanie").click();

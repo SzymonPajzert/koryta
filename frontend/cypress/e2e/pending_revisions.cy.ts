@@ -22,15 +22,8 @@ describe("Pending Revisions", () => {
     // Click "Powiązanie z" button directly (matching "Dodaj osobę, którą")
     cy.contains("button", "Dodaj osobę, którą").click();
 
-    cy.contains("label", "Wyszukaj osobę")
-      .parent()
-      .find("input")
-      .click()
-      .type("Piotr", { delay: 100 });
-
-    cy.get(".v-overlay")
-      .contains(".v-list-item-title", "Piotr Wiśniewski")
-      .click();
+    // Use pickEntity
+    cy.pickEntity("Piotr Wiśniewski");
 
     cy.contains("label", "Nazwa relacji")
       .parent()
@@ -48,10 +41,7 @@ describe("Pending Revisions", () => {
     // 3. Visit Revisions
     cy.visit("/revisions");
 
-    // Debug API directly to see if backend is returning what we expect
     cy.request("/api/edges/pending").then((resp) => {
-      cy.log("Pending Edges Response:", JSON.stringify(resp.body));
-      // Check if our edge is there
       const edges = Object.values(resp.body);
       const myEdge = edges.find(
         (e) =>
@@ -59,43 +49,30 @@ describe("Pending Revisions", () => {
           (e as { source_name: string }).source_name === "Jan Kowalski",
       );
       if (myEdge) {
-        cy.log("Found edge:", JSON.stringify(myEdge));
         expect((myEdge as { source_name: string }).source_name).to.equal(
           "Jan Kowalski",
         );
-        // Check target name if resolved
-      } else {
-        cy.log("Edge NOT found in API response");
       }
     });
 
     // Wait for loading
     cy.contains("Ładowanie...").should("not.exist");
 
-    // Debug
-    cy.get("body").then(($body) => {
-      cy.log("Body content:", $body.text());
-    });
-
     // 4. Verify it appears
-    // Search more loosely for the row
     cy.contains(".v-list-item", "connection")
       .should("contain", "Jan Kowalski")
       .should("contain", "Piotr Wiśniewski")
       .click(); // Unfolds the group
 
-    // Wait for animation
     cy.wait(500);
 
     // Click the actual revision - SCOPED to the opened group
-    // We find the group that contains our text
     cy.contains(".v-list-group", "connection").within(() => {
       cy.contains("Rewizja z").click({ force: true });
     });
 
     // 6. Verify we navigate to the entity page (with revision ID)
     cy.url().should("include", "/entity/connection/");
-    // URL will be like /entity/connection/[id]/[revId]
 
     cy.get("body").should("be.visible");
   });

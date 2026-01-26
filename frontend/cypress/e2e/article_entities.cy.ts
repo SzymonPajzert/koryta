@@ -18,9 +18,11 @@ describe("Article Entities and Edge References", () => {
     // Click the button for the relation
     cy.contains("Wspomniane miejsce w artykule").click();
 
-    // Fill target
-    cy.contains(".v-input", "Wyszukaj firmę").click();
-    cy.contains("Orlen").click();
+    // Use pickEntity (Target is default)
+    cy.pickEntity("Orlen", "entity-picker-source");
+
+    // Since we have both, we use the IDs.
+    cy.pickEntity("Orlen", "entity-picker-target");
 
     cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
 
@@ -29,26 +31,18 @@ describe("Article Entities and Edge References", () => {
     });
   });
 
-  // TODO restore
-  it.skip("should allow adding an edge with article reference from person page", () => {
+  it("should allow adding an edge with article reference from person page", () => {
     cy.visit("/entity/person/1");
     cy.contains("Zaproponuj zmianę").click();
 
-    // Select relation first to ensure target is Company (if defaulted to person)
-    // Actually "Orlen" is a place. We need a relation that points to Place.
-    // If default is "employed", target is Place.
-    // If default is not employed, we should select it.
     // Select relation
-    cy.contains(".v-select", "Relacja").click();
-    cy.contains("Zatrudniony/a w").click();
+    cy.selectVuetifyOption("Relacja", "Zatrudniony/a w");
 
-    // Picker target (Use .first() to avoid ambiguity with article reference picker)
-    cy.get('[label="Wyszukaj firmę"]').type("Orlen");
-    cy.contains(".v-list-item-title", "Orlen").first().click();
+    // Picker target
+    cy.pickEntity("Orlen", "entity-picker-target");
 
     // Picker reference
-    cy.get('[label="Źródło informacji (artykuł)"]').type("Sample Article");
-    cy.contains(".v-list-item-title", "Sample Article").first().click();
+    cy.pickEntity("Sample Article", "entity-picker-reference");
 
     cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
 

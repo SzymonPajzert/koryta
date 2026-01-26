@@ -6,7 +6,6 @@ describe("User Toolbar and Edit Workflow", () => {
 
   it("shows toolbar only when logged in", () => {
     cy.contains("Dodaj artykuł").should("not.exist");
-    // Verified that there is no toolbar when not logged in
 
     cy.login();
     cy.reload();
@@ -25,13 +24,8 @@ describe("User Toolbar and Edit Workflow", () => {
     cy.url().should("include", "/edit/node/new");
     cy.url().should("include", "type=article");
 
-    // Check if select has 'article'
-    // Vuetify select is tricky. We check the value model if possible or the text.
-    // The v-select stores value.
-    // We can check if Article specific fields are visible.
     cy.contains("URL Źródła").should("exist");
     cy.contains("Krótka nazwa").should("exist");
-    // Parties should be hidden
     cy.contains("Partia").should("not.exist");
   });
 

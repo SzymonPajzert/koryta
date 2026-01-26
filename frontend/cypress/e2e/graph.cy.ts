@@ -9,12 +9,6 @@ describe("graph", () => {
     cy.visit("/graf");
   });
 
-  // TODO
-  // it("displays a lot of nodes", () => {
-  //   cy.get("g > text").should("have.length.greaterThan", 100);
-  //   cy.get("g > text").contains("Rząd").should("exist");
-  // });
-
   context("shows dialog for each node", () => {
     beforeEach(() => {
       // Clear filters or set default
@@ -24,18 +18,5 @@ describe("graph", () => {
     it("normally doesn't see a dialog", () => {
       cy.get(".v-overlay__content").should("not.exist");
     });
-
-    // TODO
-    // it("shows dialog on person", () => {
-    //   cy.get("g > text")
-    //     .contains("Jan Kowalski")
-    //     .should("exist")
-    //     .click();
-    //   cy.get(".v-overlay__content").should("exist");
-    // });
-    // it("shows dialog on place", () => {
-    //   cy.get("g > text").contains("Orlen").click();
-    //   cy.get(".v-overlay__content").should("exist");
-    // });
   });
 });

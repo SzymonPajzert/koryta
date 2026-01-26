@@ -18,22 +18,16 @@ describe("Edit Existing Entity & Add Edge", () => {
   it("should edit an existing entity and add a new connection with direction", () => {
     // 1. Create a Base Entity (Company)
     const companyName = generateName("TestCompany");
-    cy.visit("/edit/node/new?type=place");
-    cy.contains("label", "Nazwa").parent().find("input").type(companyName);
-    cy.contains("button", "Zapisz zmianę").click();
-    cy.url({ timeout: 10000 }).should("include", "/edit/node/");
+    cy.createNode({ name: companyName, type: "place" });
 
-    // Capture ID
+    // Capture ID from URL to return later if needed, though we can just navigate via URL parts
     cy.url().then((url) => {
       const parts = url.split("/");
-      const companyId = parts[parts.length - 1]; // /edit/node/[id]
+      const companyId = parts[parts.length - 1];
 
       // 2. Create another entity (Subsidiary) to connect to
       const subsidiaryName = generateName("Subsidiary");
-      cy.visit("/edit/node/new?type=place");
-      cy.contains("label", "Nazwa").parent().find("input").type(subsidiaryName);
-      cy.contains("button", "Zapisz zmianę").click();
-      cy.url({ timeout: 10000 }).should("include", "/edit/node/");
+      cy.createNode({ name: subsidiaryName, type: "place" });
 
       // 3. Go back to Company Edit page
       cy.visit(`/edit/node/${companyId}`);
@@ -50,14 +44,8 @@ describe("Edit Existing Entity & Add Edge", () => {
       // Click "Dodaj firmę córkę" button (owns, outgoing)
       cy.get(".v-btn").contains("firmę córkę").click();
 
-      // Search for Subsidiary
-      cy.get('[data-testid="entity-picker-input"]').first().click();
-      cy.get('[data-testid="entity-picker-input"]')
-        .first()
-        .type(subsidiaryName);
-
-      // Wait for results and click
-      cy.contains(".v-list-item-title", subsidiaryName).click();
+      // Search for Subsidiary using abstracted command
+      cy.pickEntity(subsidiaryName);
 
       // Save Connection
       cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
@@ -69,7 +57,6 @@ describe("Edit Existing Entity & Add Edge", () => {
 
       // Ensure the edge appears in the list
       cy.contains(subsidiaryName).should("exist");
-      // cy.contains("employed").should("exist"); // Label might be different/translated
     });
   });
 });

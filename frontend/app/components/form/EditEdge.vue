@@ -41,6 +41,7 @@
             label="Wyszukaj źródło"
             density="compact"
             hide-details
+            data-testid="entity-picker-source"
           />
         </div>
         <div v-else class="d-flex flex-column align-center w-100">
@@ -125,6 +126,7 @@
             density="compact"
             hide-details
             :disabled="!availableEdgeTypes.length"
+            data-testid="entity-picker-target"
           />
         </div>
         <div class="text-caption text-center mt-1 text-medium-emphasis">
@@ -157,6 +159,7 @@
           label="Źródło informacji (artykuł)"
           density="compact"
           hide-details
+          data-testid="entity-picker-reference"
         />
       </v-col>
       <template v-if="edgeType === 'employed'">
