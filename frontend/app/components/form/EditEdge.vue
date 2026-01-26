@@ -1,7 +1,17 @@
 <template>
-  <h4 class="text-subtitle-1 mb-2 mt-4">
-    {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
-  </h4>
+  <div class="d-flex align-center justify-space-between mb-2 mt-4">
+    <h4 class="text-subtitle-1">
+      {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
+    </h4>
+    <v-btn
+      v-if="mode !== 'initial'"
+      icon="mdi-close"
+      variant="text"
+      size="small"
+      title="Anuluj"
+      @click="resetMode"
+    />
+  </div>
 
   <div
     v-if="!isEditingEdge && mode === 'initial'"
