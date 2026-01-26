@@ -137,7 +137,7 @@
       <v-col cols="12" md="6">
         <v-text-field
           v-model="newEdge.name"
-          label="Nazwa relacji (opcjonalnie)"
+          label="Nazwa relacji"
           density="compact"
           hide-details
         />
