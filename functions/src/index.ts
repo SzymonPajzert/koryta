@@ -117,7 +117,7 @@ export const scheduledFirestoreExport = onSchedule(
       const [response] = await adminClient.exportDocuments({
         name: databaseName,
         outputUriPrefix: outputUriPrefix,
-        collectionIds: ["nodes", "edges", "revisions", "comments"],
+        collectionIds: ["nodes", "edges", "revisions", "comments", "votes"],
       });
 
       logger.info(`Operation Name: ${response.name}`);
