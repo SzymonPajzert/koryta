@@ -1,11 +1,38 @@
 <template>
-  <h4 class="text-subtitle-1 mb-2 mt-4">
-    {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
-  </h4>
-  <v-form @submit.prevent="processEdge">
-    <!-- Visual Connection Editor -->
+  <div class="d-flex align-center justify-space-between mb-2 mt-4">
+    <h4 class="text-subtitle-1">
+      {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
+    </h4>
+    <v-btn
+      v-if="mode !== 'initial'"
+      icon="mdi-close"
+      variant="text"
+      size="small"
+      title="Anuluj"
+      @click="resetMode"
+    />
+  </div>
+
+  <div
+    v-if="!isEditingEdge && mode === 'initial'"
+    class="d-flex flex-column gap-2"
+  >
+    <!-- Initial Buttons to pick edge type for a given node type -->
+    <v-btn
+      v-for="button in filteredButtons"
+      :key="button.edgeType + '-' + button.direction"
+      variant="tonal"
+      :prepend-icon="button.icon"
+      color="primary"
+      class="mb-2"
+      @click="startAddEdge(button.edgeType, button.direction)"
+    >
+      {{ button.text }}
+    </v-btn>
+  </div>
+
+  <v-form v-else @submit.prevent="processEdge">
     <v-row class="align-center my-4">
-      <!-- Source Picker / Current Node -->
       <v-col cols="4" class="text-center d-flex flex-column align-center">
         <div v-if="effectiveNodeType === 'article'" class="w-100">
           <EntityPicker
@@ -37,6 +64,7 @@
         class="text-center d-flex flex-column justify-center position-relative px-0"
       >
         <v-select
+          v-if="isEditingEdge || mode === 'generic'"
           v-model="edgeType"
           :items="availableEdgeTypes"
           item-title="label"
@@ -49,6 +77,12 @@
           :disabled="!availableEdgeTypes.length"
           :placeholder="availableEdgeTypes.length ? undefined : 'Brak relacji'"
         />
+        <div v-else class="text-caption font-weight-bold mb-2">
+          {{
+            availableEdgeTypes.find((t) => t.value === edgeType)?.label ||
+            edgeType
+          }}
+        </div>
 
         <div class="d-flex align-center justify-center">
           <v-btn
@@ -58,6 +92,7 @@
             color="secondary"
             class="px-4"
             :title="'Odwróć kierunek'"
+            :disabled="!isEditingEdge && mode !== 'generic'"
             @click="
               newEdge.direction =
                 newEdge.direction === 'outgoing' ? 'incoming' : 'outgoing'
@@ -150,10 +185,10 @@
       </template>
       <v-col cols="12" class="mt-2 d-flex gap-2">
         <v-btn
-          v-if="isEditingEdge"
+          v-if="isEditingEdge || mode !== 'initial'"
           variant="text"
           class="mr-2"
-          @click="cancelEditEdge"
+          @click="resetMode"
         >
           Anuluj
         </v-btn>
@@ -181,7 +216,7 @@
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import EntityPicker from "~/components/form/EntityPicker.vue";
-import type { Link, NodeType } from "~~/shared/model";
+import type { Link, NodeType, EdgeType } from "~~/shared/model";
 
 definePageMeta({
   middleware: "auth",
@@ -194,6 +229,78 @@ const effectiveNodeType = computed(() => {
   if (route.query.type) return route.query.type as NodeType;
   return current.value.type || "person";
 });
+
+type NewEdgeButton = {
+  edgeType: string;
+  direction: "incoming" | "outgoing";
+  nodeType: NodeType;
+  icon: string;
+  text: string;
+};
+
+// TODO migrate it somewhere to edge model since it looks like a global config
+const newEdgeButtons = computed<NewEdgeButton[]>(() => [
+  {
+    edgeType: "mentioned_person",
+    direction: "incoming",
+    nodeType: "person",
+    icon: "mdi-file-document-plus-outline",
+    text: "Dodaj artykuł wspominający " + current.value.name,
+  },
+  {
+    edgeType: "employed",
+    direction: "outgoing",
+    nodeType: "person",
+    icon: "mdi-briefcase-plus-outline",
+    text: "Dodaj gdzie " + current.value.name + " pracuje",
+  },
+  {
+    edgeType: "connection",
+    direction: "outgoing",
+    nodeType: "person",
+    icon: "mdi-account-plus-outline",
+    text: "Dodaj osobę, którą " + current.value.name + " zna",
+  },
+  {
+    edgeType: "mentioned_company",
+    direction: "incoming",
+    nodeType: "place",
+    icon: "mdi-file-document-plus-outline",
+    text: "Dodaj artykuł wspominający " + current.value.name,
+  },
+  {
+    edgeType: "owns",
+    direction: "outgoing",
+    nodeType: "place",
+    icon: "mdi-domain-plus",
+    text: "Dodaj firmę córkę",
+  },
+  {
+    edgeType: "owns",
+    direction: "incoming",
+    nodeType: "place",
+    icon: "mdi-domain",
+    text: "Dodaj firmę matkę",
+  },
+  {
+    edgeType: "mentioned_person",
+    direction: "outgoing",
+    nodeType: "article",
+    icon: "mdi-account-plus-outline",
+    text: "Wspomniana osoba w artykule",
+  },
+  {
+    edgeType: "mentioned_company",
+    direction: "outgoing",
+    nodeType: "article",
+    icon: "mdi-domain-plus",
+    text: "Wspomniane miejsce w artykule",
+  },
+]);
+
+const filteredButtons = computed(() =>
+  newEdgeButtons.value.filter((b) => b.nodeType === effectiveNodeType.value),
+);
 
 const {
   newEdge,
@@ -213,6 +320,48 @@ const {
   onUpdate: refreshEdges,
   stateKey,
 });
+
+const mode = ref<"initial" | "form" | "generic">("initial");
+
+function resetMode() {
+  cancelEditEdge();
+  mode.value = "initial";
+}
+
+// If we are editing, we are always in form mode
+watch(
+  isEditingEdge,
+  (val) => {
+    if (val) {
+      mode.value = "form";
+    }
+  },
+  { immediate: true },
+);
+
+function startAddEdge(
+  typeValue: string,
+  direction: "outgoing" | "incoming" = "outgoing",
+) {
+  edgeType.value = typeValue as EdgeType;
+  newEdge.value.direction = direction;
+  mode.value = "form";
+}
+
+// Fallback for non-person nodes or generic add
+watch(
+  effectiveNodeType,
+  (type) => {
+    // If it's a known type, we support the initial buttons mode
+    const supportedTypes = ["person", "place", "article"];
+    if (!supportedTypes.includes(type) && !isEditingEdge.value) {
+      mode.value = "generic";
+    } else if (supportedTypes.includes(type) && mode.value === "generic") {
+      mode.value = "initial";
+    }
+  },
+  { immediate: true },
+);
 
 const articleReference = computed({
   get: () => {

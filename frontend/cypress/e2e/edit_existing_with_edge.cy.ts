@@ -28,10 +28,10 @@ describe("Edit Existing Entity & Add Edge", () => {
       const parts = url.split("/");
       const companyId = parts[parts.length - 1]; // /edit/node/[id]
 
-      // 2. Create another entity (Person) to connect to
-      const personName = generateName("Employee");
-      cy.visit("/edit/node/new?type=person");
-      cy.contains("label", "Nazwa").parent().find("input").type(personName);
+      // 2. Create another entity (Subsidiary) to connect to
+      const subsidiaryName = generateName("Subsidiary");
+      cy.visit("/edit/node/new?type=place");
+      cy.contains("label", "Nazwa").parent().find("input").type(subsidiaryName);
       cy.contains("button", "Zapisz zmianę").click();
       cy.url({ timeout: 10000 }).should("include", "/edit/node/");
 
@@ -47,31 +47,17 @@ describe("Edit Existing Entity & Add Edge", () => {
         .type(updatedName);
       cy.contains("button", "Zapisz zmianę").click();
 
-      // Select Direction FIRST (Incoming: "Od")
-      // Since we are editing a Company ('place'), and "Zatrudniony" requires Target=Place,
-      // we MUST be in Incoming mode (Target=Me) to see this option.
-      cy.get('button[title="Odwróć kierunek"]').click();
+      // Click "Dodaj firmę córkę" button (owns, outgoing)
+      cy.get(".v-btn").contains("firmę córkę").click();
 
-      // Open Edge Type - use specific label "Relacja"
-      cy.get(".v-select")
-        .filter((index, element) => {
-          return Cypress.$(element).text().includes("Relacja");
-        })
-        .click();
-      cy.contains("Zatrudniony/a w").click();
-
-      // Search for Person
+      // Search for Subsidiary
       cy.get('[data-testid="entity-picker-input"]').first().click();
-      cy.get('[data-testid="entity-picker-input"]').first().type(personName);
+      cy.get('[data-testid="entity-picker-input"]')
+        .first()
+        .type(subsidiaryName);
 
       // Wait for results and click
-      cy.contains(".v-list-item-title", personName).click();
-
-      // Set Dates
-      cy.contains("label", "Data rozpoczęcia")
-        .parent()
-        .find("input")
-        .type("2024-01-01");
+      cy.contains(".v-list-item-title", subsidiaryName).click();
 
       // Save Connection
       cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
@@ -82,7 +68,7 @@ describe("Edit Existing Entity & Add Edge", () => {
       });
 
       // Ensure the edge appears in the list
-      cy.contains(personName).should("exist");
+      cy.contains(subsidiaryName).should("exist");
       // cy.contains("employed").should("exist"); // Label might be different/translated
     });
   });

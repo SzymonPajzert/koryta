@@ -19,13 +19,8 @@ describe("Pending Revisions", () => {
     // Wait for page load
     cy.contains("Treść i Powiązania", { timeout: 10000 }).should("be.visible");
 
-    // 2. Add new connection to Piotr Wiśniewski
-    cy.get(".v-select")
-      .filter((index, element) => {
-        return Cypress.$(element).text().includes("Relacja");
-      })
-      .click();
-    cy.get(".v-overlay").contains("Powiązanie z").click();
+    // Click "Powiązanie z" button directly (matching "Dodaj osobę, którą")
+    cy.contains("button", "Dodaj osobę, którą").click();
 
     cy.contains("label", "Wyszukaj osobę")
       .parent()

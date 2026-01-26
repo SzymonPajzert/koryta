@@ -38,6 +38,9 @@ describe("Entity Picker Workflow", () => {
     cy.url({ timeout: 10000 }).should("include", "/edit/node/");
 
     // 3. In the Source node edit page, use EntityPicker to find HiddenNode
+    // Click button to show form
+    cy.contains("button", "zna").click();
+
     cy.get('[data-testid="entity-picker-input"]').first().click();
     cy.get('[data-testid="entity-picker-input"]').first().type(hiddenNodeName);
 
@@ -53,6 +56,10 @@ describe("Entity Picker Workflow", () => {
     cy.url({ timeout: 10000 }).should("include", "/edit/node/");
 
     const newTargetName = generateName("NewTarget");
+
+    // Click button to show form (since SourceForNew is a person)
+    // Matches "Dodaj osobę, którą ... zna"
+    cy.contains("button", "zna").click();
 
     // Type non-existent name
     cy.get('[data-testid="entity-picker-input"]').first().click();

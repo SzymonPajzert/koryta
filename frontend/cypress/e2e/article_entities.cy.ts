@@ -15,14 +15,8 @@ describe("Article Entities and Edge References", () => {
 
     cy.contains("Zaproponuj zmianę").click();
 
-    // Select relation first to set the target type
-    // Select relation
-    cy.contains(".v-select", "Relacja").click();
-    cy.contains("Wspomina firmę/urząd").click();
-
-    // Source is the article itself, no need to fill
-    // cy.get('[label="Wyszukaj źródło"]').type("Jan Kowalski");
-    // cy.contains(".v-list-item-title", "Jan Kowalski").first().click();
+    // Click the button for the relation
+    cy.contains("Wspomniane miejsce w artykule").click();
 
     // Fill target
     cy.contains(".v-input", "Wyszukaj firmę").click();
