@@ -26,8 +26,8 @@ describe("Article Entities and Edge References", () => {
   it("should allow adding an edge with article reference from person page", () => {
     cy.visit("/entity/person/1");
     cy.contains("Zaproponuj zmianę").click();
+    cy.contains("Dodaj gdzie").contains("pracuje").click();
 
-    cy.selectVuetifyOption("Relacja", "Zatrudniony/a w");
     cy.pickEntity("Orlen", "entity-picker-target");
     cy.pickEntity("Sample Article", "entity-picker-reference");
 

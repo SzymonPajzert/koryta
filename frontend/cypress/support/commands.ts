@@ -53,6 +53,9 @@ declare global {
         value: string,
         options?: { clear?: boolean },
       ): Chainable<void>;
+
+      verifyField(label: string | RegExp, value: string): Chainable<void>;
+
       /**
        * Verifies a field contains specific content (useful for chips, selects, etc.)
        */
@@ -73,55 +76,45 @@ Cypress.Commands.add("verifyFieldContent", (label, content) => {
 
 Cypress.Commands.add("fillField", (label, value, options = { clear: true }) => {
   cy.log(`Filling field ${label} with ${value}`);
-  const field = cy.contains("label", label).parent();
+  cy.contains("label", label).parents(".v-input").first().as("fieldContainer");
   if (options.clear) {
-    field.find("input, textarea").clear();
+    cy.get("@fieldContainer").find("input, textarea").filter(":visible").first().clear();
   }
-  field.find("input, textarea").type(value);
+  cy.get("@fieldContainer").find("input, textarea").filter(":visible").first().type(value);
 });
 
 Cypress.Commands.add("verifyField", (label, value, type = "input") => {
   cy.log(`Verifying field ${label} has value ${value}`);
-  cy.contains("label", label).parent().find(type).should("have.value", value);
+  cy.contains("label", label)
+    .parents(".v-input")
+    .first()
+    .find(type)
+    .first()
+    .should("have.value", value);
 });
 
 Cypress.Commands.add(
   "login",
   (email = "user@koryta.pl", password = "password123") => {
     cy.visit("/login");
+    cy.wait(1000); // Wait for potential auth initialization
 
-    // Clear possible stale state
-    cy.clearLocalStorage();
-    cy.clearCookies();
-    cy.reload();
-    cy.wait(2000); // Wait for hydration and potential redirects
-
-    // Check if we were redirected away from login (implies already logged in)
-    cy.url().then((url) => {
-      if (!url.includes("/login")) {
-        cy.log("Redirected away from login, assuming already logged in.");
-        return;
-      }
-
-      cy.get("body").then(($body) => {
-        // More robust check for "Wyloguj się teraz" button using standard selector if possible, or keep text but ensure context
-        if ($body.find("button:contains('Wyloguj się teraz')").length > 0) {
-          cy.log("Already logged in (button found), skipping login sequence.");
-          return;
-        }
-
+    cy.get("body").then(($body) => {
+      // If we see the logout button, we're already logged in
+      if ($body.find('button:contains("Wyloguj się teraz")').length > 0) {
+        cy.log("Already logged in (button found), skipping login sequence.");
+        cy.visit("/");
+      } else {
         // Proceed to login
         cy.get('input[type="email"]', { timeout: 20000 })
           .should("be.visible")
           .type(email);
         cy.get('input[type="password"]').should("be.visible").type(password);
-        // Use type="submit" to avoid clicking Google Login button
         cy.get('button[type="submit"]').should("be.visible").click();
+      }
 
-        // Wait for navigation away from login (to home or redirect)
-        cy.url({ timeout: 20000 }).should("not.contain", "/login");
-        cy.wait(1000);
-      });
+      // Final verification: we are not on the login page anymore
+      cy.url({ timeout: 20000 }).should("not.contain", "/login");
     });
   },
 );
@@ -226,8 +219,54 @@ Cypress.Commands.add(
   (label: string, optionText: string) => {
     cy.log(`Selecting ${optionText} for ${label}`);
     // Find the v-select by label and click it
-    cy.contains("label", label).parent().should("be.visible").click();
+    cy.contains("label", label)
+      .parents(".v-input")
+      .first()
+      .should("be.visible")
+      .click();
     // Find the option in the overlay (Vuetify mounts overlays at root)
     cy.get(".v-overlay").should("be.visible").contains(optionText).click();
   },
 );
+
+Cypress.Commands.add("postComment", (text) => {
+  cy.get(".comments-section", { timeout: 10000 }).then(($section) => {
+    if ($section.find("textarea:visible").length === 0) {
+      cy.wrap($section).contains("button", "Dodaj komentarz").click();
+    }
+  });
+  // Fresh lookup to handle re-renders/detachment
+  // Filter for visible and pick the first to avoid measuring textareas
+  cy.get(".comments-section")
+    .find("textarea")
+    .filter(":visible")
+    .first()
+    .should("be.visible")
+    .type(text);
+  cy.get(".comments-section").contains("button", "Wyślij").click();
+});
+
+Cypress.Commands.add("replyToComment", (parentText, replyText) => {
+  cy.contains(".comment-item", parentText)
+    .first()
+    .contains("button", "Odpowiedz")
+    .click();
+  // Fresh lookup
+  cy.contains(".comment-item", parentText)
+    .first()
+    .find("textarea")
+    .filter(":visible")
+    .first()
+    .should("be.visible")
+    .type(replyText);
+  cy.contains(".comment-item", parentText).first().contains("button", "Wyślij").click();
+});
+
+Cypress.Commands.add("verifyLabelExists", (label) => {
+  cy.contains("label", label).should("exist");
+});
+
+Cypress.Commands.add("verifyLabelDoesNotExist", (label) => {
+  cy.contains("label", label).should("not.exist");
+});
+

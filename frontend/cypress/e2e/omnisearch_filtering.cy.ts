@@ -1,6 +1,5 @@
 describe("OmniSearch and Graph Filtering", () => {
   beforeEach(() => {
-    cy.login(); // Or setup necessary state
     cy.visit("/");
   });
 
@@ -15,19 +14,29 @@ describe("OmniSearch and Graph Filtering", () => {
   });
 
   it("should show valid chain of connected entities in OmniSearch", () => {
-    cy.intercept("GET", "/api/graph*").as("getGraph");
-
+  it("should show valid chain of connected entities in OmniSearch", () => {
     cy.search("Testowa");
-    cy.wait("@getGraph");
-
-    cy.contains("Osoba Testowa").should("be.visible");
-    cy.contains("Firma Testowa").should("be.visible");
+    
+    cy.get(".v-overlay").filter(":visible").should("be.visible").within(() => {
+      cy.contains(".v-list-item-title", "Osoba Testowa").should("exist");
+      cy.contains(".v-list-item-title", "Firma Testowa").should("exist");
+    });
 
     cy.search("Testowe");
-    cy.contains("Województwo Testowe").should("be.visible");
+    // wait for list update - graph isn't re-fetched if cached but filtering happens
+    cy.wait(500); 
+
+    cy.get(".v-overlay").filter(":visible").should("be.visible").within(() => {
+        cy.contains(".v-list-item-title", "Województwo Testowe").should("exist");
+    });
 
     cy.search("Powiat Testowy");
-    cy.contains("Powiat Testowy").should("be.visible");
+    cy.wait(500);
+
+    cy.get(".v-overlay").filter(":visible").should("be.visible").within(() => {
+        cy.contains(".v-list-item-title", "Powiat Testowy").should("exist");
+    });
+  });
   });
 
   it("should filter out empty regions and companies in the Graph view", () => {

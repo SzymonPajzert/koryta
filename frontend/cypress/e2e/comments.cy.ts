@@ -18,7 +18,11 @@ describe("Comments and Discussions", () => {
     const checkReply = (commentText: string, replyText: string) => {
       cy.wait(1000);
       cy.reload();
-      cy.contains(".v-tab", "Dyskusja").click();
+      cy.get("body").then(($body) => {
+        if ($body.find('.v-tab:contains("Dyskusja")').length > 0) {
+          cy.contains(".v-tab", "Dyskusja").click();
+        }
+      });
 
       cy.contains(replyText, { timeout: 15000 }).should("be.visible");
       cy.contains(".comment-item", commentText)

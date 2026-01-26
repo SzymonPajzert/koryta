@@ -6,7 +6,7 @@ describe("Admin Audit Workflow", () => {
   it("should navigate to Audit page via toolbar button", () => {
     cy.visit("/");
 
-    cy.contains("button", "Audyt").should("be.visible").click();
+    cy.contains("Audyt", { matchCase: false }).should("be.visible").click();
 
     cy.url().should("include", "/admin/audit");
 
