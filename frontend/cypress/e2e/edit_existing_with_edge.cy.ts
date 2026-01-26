@@ -35,7 +35,7 @@ describe("Edit Existing Entity & Add Edge", () => {
       cy.pickEntity(subsidiaryName);
 
       // Save Connection
-      cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
+      cy.contains("button", "Dodaj powiązanie").click();
 
       // Verify
       cy.on("window:alert", (str) => {

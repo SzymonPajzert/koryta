@@ -1,15 +1,6 @@
 describe("Pending Revisions", () => {
   beforeEach(() => {
-    cy.task("log", "Starting test: " + Cypress.currentTest.title);
-    // Clear indexedDB to avoid stale auth state
-    cy.window().then((win) => {
-      return new Cypress.Promise((resolve) => {
-        const req = win.indexedDB.deleteDatabase("firebaseLocalStorageDb");
-        req.onsuccess = resolve;
-        req.onerror = resolve;
-        req.onblocked = resolve;
-      });
-    });
+    cy.refreshAuth();
     cy.login();
   });
 
@@ -57,11 +48,10 @@ describe("Pending Revisions", () => {
     // Wait for loading
     cy.contains("Ładowanie...").should("not.exist");
 
-    // 4. Verify it appears
     cy.contains(".v-list-item", "connection")
       .should("contain", "Jan Kowalski")
       .should("contain", "Piotr Wiśniewski")
-      .click(); // Unfolds the group
+      .click();
 
     cy.wait(500);
 

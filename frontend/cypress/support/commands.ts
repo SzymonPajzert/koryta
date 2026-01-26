@@ -26,18 +26,41 @@ declare global {
        */
       pickEntity(name: string, testId?: string): Chainable<void>;
       /**
+       * Posts a comment in the comments section.
+       */
+      postComment(text: string): Chainable<void>;
+      /**
+       * Replies to a specific comment.
+       */
+      replyToComment(parentText: string, replyText: string): Chainable<void>;
+      /**
+       * Verifies a label exists on the page.
+       */
+      verifyLabelExists(label: string | RegExp): Chainable<void>;
+      /**
+       * Verifies a label does not exist on the page.
+       */
+      verifyLabelDoesNotExist(label: string | RegExp): Chainable<void>;
+      /**
        * Fills a form field by its label.
        */
       fillField(label: string | RegExp, value: string, options?: { clear?: boolean }): Chainable<void>;
       /**
-       * Verifies a form field's value by its label.
+       * Verifies a field contains specific content (useful for chips, selects, etc.)
        */
-      verifyField(label: string | RegExp, value: string, type?: "input" | "textarea"): Chainable<void>;
+      verifyFieldContent(label: string | RegExp, content: string): Chainable<void>;
     }
   }
 }
 
 export {};
+
+Cypress.Commands.add("verifyFieldContent", (label, content) => {
+  cy.log(`Verifying field ${label} contains ${content}`);
+  cy.contains("label", label)
+    .parents(".v-input")
+    .should("contain", content);
+});
 
 Cypress.Commands.add("fillField", (label, value, options = { clear: true }) => {
   cy.log(`Filling field ${label} with ${value}`);

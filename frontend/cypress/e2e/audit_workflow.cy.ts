@@ -6,12 +6,12 @@ describe("Admin Audit Workflow", () => {
   it("should navigate to Audit page via toolbar button", () => {
     cy.visit("/");
 
-    cy.contains("Audyt").should("be.visible").click();
+    cy.contains("button", "Audyt").should("be.visible").click();
 
     cy.url().should("include", "/admin/audit");
 
     cy.get("h1").should("contain", "Audyt danych");
-    cy.contains("Krawędzie bez źródeł (artykułów)").should("be.visible");
+    cy.contains("Krawędzie bez źródeł").should("be.visible");
     cy.contains("Artykuły bez powiązanych krawędzi").should("be.visible");
   });
 

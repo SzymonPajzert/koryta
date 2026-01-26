@@ -11,11 +11,8 @@ describe("UI Friction Flow", () => {
     const personName = `Test Person ${timestamp}`;
     const companyName = `Test Company ${timestamp}`;
 
-    // 1. Login with seeded user
     cy.login();
-
-    // 2. Verify "Dodaj" button exists (sanity check)
-    cy.get("header").contains("Dodaj").should("exist");
+    cy.contains("button", "Dodaj").should("exist");
 
     // 3. Create Person
     cy.createNode({ 

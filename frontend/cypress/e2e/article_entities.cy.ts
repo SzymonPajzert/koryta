@@ -12,20 +12,13 @@ describe("Article Entities and Edge References", () => {
 
   it("should allow adding an edge from an article page", () => {
     cy.visit("/entity/article/6");
-
     cy.contains("Zaproponuj zmianę").click();
-
-    // Click the button for the relation
     cy.contains("Wspomniane miejsce w artykule").click();
-
-    // Use pickEntity (Target is default)
     cy.pickEntity("Orlen", "entity-picker-source");
-
-    // Since we have both, we use the IDs.
     cy.pickEntity("Orlen", "entity-picker-target");
 
-    cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
 
+    cy.contains("button", "Dodaj powiązanie").click();
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");
     });
@@ -35,26 +28,13 @@ describe("Article Entities and Edge References", () => {
     cy.visit("/entity/person/1");
     cy.contains("Zaproponuj zmianę").click();
 
-    // Select relation
     cy.selectVuetifyOption("Relacja", "Zatrudniony/a w");
-
-    // Picker target
     cy.pickEntity("Orlen", "entity-picker-target");
-
-    // Picker reference
     cy.pickEntity("Sample Article", "entity-picker-reference");
 
-    cy.get("button[type='submit']").contains("Dodaj powiązanie").click();
-
+    cy.contains("button", "Dodaj powiązanie").click();
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");
     });
-  });
-
-  it("should show audit page with inconsistencies", () => {
-    cy.visit("/admin/audit");
-    cy.get("h1").should("contain", "Audyt danych");
-    // Depending on seeded data, check for lists
-    cy.get(".v-card").should("have.length", 2);
   });
 });

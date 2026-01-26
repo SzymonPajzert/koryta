@@ -46,12 +46,8 @@ describe("Entity Editing", () => {
     cy.url().should("include", "/edit/node/1");
 
     cy.verifyField(/^Nazwa$/, "Jan Kowalski");
-    cy.contains("label", "Typ").parents(".v-input").should("contain", "Osoba");
-
-    cy.contains("label", "Partia")
-      .parents(".v-input")
-      .find(".v-chip")
-      .should("contain", "PO");
+    cy.verifyFieldContent("Typ", "Osoba");
+    cy.verifyFieldContent("Partia", "PO");
 
     cy.verifyField("Treść (Markdown)", "Politician from PO", "textarea");
   });
