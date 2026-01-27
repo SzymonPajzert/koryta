@@ -94,3 +94,68 @@ class Teryt(Pipeline):
         """
         voj = voj.lower()
         return self.voj_lower_to_teryt[voj]
+
+
+class Regions(Pipeline):
+    filename = "regions"
+
+    def process(self, ctx: Context) -> pd.DataFrame:
+        teryt_file = ctx.io.read_data(teryt_data)
+        data = teryt_file.read_zip("TERC_Urzedowy_2025-11-15.csv").read_dataframe(
+            "csv", csv_sep=";", dtype={"WOJ": str, "POW": str, "GMI": str, "RODZ": str}
+        )
+
+        rows = []
+
+        # Województwa
+        # Filter: POW is NaN, GMI is NaN
+        woj_df = data[data["POW"].isna() & data["GMI"].isna()]
+        for row in woj_df.itertuples():
+            # ID: XX (2 chars)
+            node_id = str(row.WOJ)
+            rows.append({
+                "id": node_id,
+                "name": str(row.NAZWA).lower(),
+
+                "original_name": row.NAZWA,
+                "type": "region",
+                "level": "wojewodztwo",
+                "parent_id": None
+            })
+
+        # Powiaty
+        # Filter: POW present, GMI NaN
+        pow_df = data[~data["POW"].isna() & data["GMI"].isna()]
+        for row in pow_df.itertuples():
+            # ID: XXYY
+            node_id = str(row.WOJ) + str(row.POW)
+            parent_id = str(row.WOJ)
+            rows.append({
+                "id": node_id,
+                "name": row.NAZWA, # e.g. "powiat bolesławiecki"
+                "original_name": row.NAZWA,
+                "type": "region",
+                "level": "powiat",
+                "parent_id": parent_id
+            })
+
+        # Gminy
+        # Filter: POW present, GMI present
+        gmi_df = data[~data["POW"].isna() & ~data["GMI"].isna()]
+        for row in gmi_df.itertuples():
+
+            # TERYT: WOJ(2)+POW(2)+GMI(3)
+            # If duplicates exist, appending RODZ is safer.
+            node_id = str(row.WOJ) + str(row.POW) + str(row.GMI) + str(row.RODZ)
+            parent_id = str(row.WOJ) + str(row.POW)
+            
+            rows.append({
+                "id": node_id,
+                "name": row.NAZWA, # e.g. "Bolesławiec"
+                "original_name": row.NAZWA,
+                "type": "region",
+                "level": "gmina",
+                "parent_id": parent_id
+            })
+
+        return pd.DataFrame(rows)
