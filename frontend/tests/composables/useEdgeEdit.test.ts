@@ -160,7 +160,12 @@ describe("useEdgeEdit", () => {
       {
         nodeType: "place",
         expectedOutgoing: ["owns"],
-        expectedIncoming: ["employed", "mentioned_company", "owns"],
+        expectedIncoming: [
+          "employed",
+          "mentioned_company",
+          "owns",
+          "owns_region",
+        ],
       },
     ];
 
