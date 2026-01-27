@@ -26,6 +26,13 @@ const edgeTypeOptions: edgeTypeOption[] = [
     realType: "owns",
   },
   {
+    value: "owns_region",
+    label: "Region właściciel",
+    sourceType: "region",
+    targetType: "place",
+    realType: "owns",
+  },
+  {
     value: "connection",
     label: "Powiązanie z",
     sourceType: "person",

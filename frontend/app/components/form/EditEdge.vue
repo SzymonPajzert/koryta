@@ -142,6 +142,7 @@
           label="Nazwa relacji"
           density="compact"
           hide-details
+          data-testid="edge-name-field"
         />
       </v-col>
       <v-col cols="12" md="6">
@@ -201,6 +202,7 @@
           :block="!isEditingEdge"
           :class="{ 'flex-grow-1': isEditingEdge }"
           :disabled="!pickerTarget"
+          data-testid="submit-edge-button"
         >
           {{ isEditingEdge ? "Zapisz zmiany" : "Dodaj powiązanie" }}
         </v-btn>
@@ -220,6 +222,7 @@
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import EntityPicker from "~/components/form/EntityPicker.vue";
 import type { Link, NodeType, EdgeType } from "~~/shared/model";
+import { useEdgeButtons } from "~/composables/edgeConfig";
 
 definePageMeta({
   middleware: "auth",
@@ -233,73 +236,10 @@ const effectiveNodeType = computed(() => {
   return current.value.type || "person";
 });
 
-type NewEdgeButton = {
-  edgeType: string;
-  direction: "incoming" | "outgoing";
-  nodeType: NodeType;
-  icon: string;
-  text: string;
-};
-
-// TODO migrate it somewhere to edge model since it looks like a global config
-const newEdgeButtons = computed<NewEdgeButton[]>(() => [
-  {
-    edgeType: "mentioned_person",
-    direction: "incoming",
-    nodeType: "person",
-    icon: "mdi-file-document-plus-outline",
-    text: "Dodaj artykuł wspominający " + current.value.name,
-  },
-  {
-    edgeType: "employed",
-    direction: "outgoing",
-    nodeType: "person",
-    icon: "mdi-briefcase-plus-outline",
-    text: "Dodaj gdzie " + current.value.name + " pracuje",
-  },
-  {
-    edgeType: "connection",
-    direction: "outgoing",
-    nodeType: "person",
-    icon: "mdi-account-plus-outline",
-    text: "Dodaj osobę, którą " + current.value.name + " zna",
-  },
-  {
-    edgeType: "mentioned_company",
-    direction: "incoming",
-    nodeType: "place",
-    icon: "mdi-file-document-plus-outline",
-    text: "Dodaj artykuł wspominający " + current.value.name,
-  },
-  {
-    edgeType: "owns",
-    direction: "outgoing",
-    nodeType: "place",
-    icon: "mdi-domain-plus",
-    text: "Dodaj firmę córkę",
-  },
-  {
-    edgeType: "owns",
-    direction: "incoming",
-    nodeType: "place",
-    icon: "mdi-domain",
-    text: "Dodaj firmę matkę",
-  },
-  {
-    edgeType: "mentioned_person",
-    direction: "outgoing",
-    nodeType: "article",
-    icon: "mdi-account-plus-outline",
-    text: "Wspomniana osoba w artykule",
-  },
-  {
-    edgeType: "mentioned_company",
-    direction: "outgoing",
-    nodeType: "article",
-    icon: "mdi-domain-plus",
-    text: "Wspomniane miejsce w artykule",
-  },
-]);
+// Use shared config
+const newEdgeButtons = computed(() =>
+  useEdgeButtons(current.value.name || "Ten węzeł"),
+);
 
 const filteredButtons = computed(() =>
   newEdgeButtons.value.filter((b) => b.nodeType === effectiveNodeType.value),
@@ -350,6 +290,15 @@ function startAddEdge(
   newEdge.value.direction = direction;
   mode.value = "form";
 }
+
+onMounted(() => {
+  if (route.query.edgeType) {
+    startAddEdge(
+      route.query.edgeType as string,
+      (route.query.direction as "outgoing" | "incoming") || "outgoing",
+    );
+  }
+});
 
 // Fallback for non-person nodes or generic add
 watch(

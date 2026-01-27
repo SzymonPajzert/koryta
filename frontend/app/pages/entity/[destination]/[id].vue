@@ -96,6 +96,23 @@
                 class="ml-2"
               />
             </div>
+
+            <div v-if="user && entity" class="mt-4">
+              <h4 class="text-subtitle-2 mb-2">Szybkie dodawanie</h4>
+              <div class="d-flex flex-column gap-2">
+                <v-btn
+                  v-for="btn in quickAddButtons"
+                  :key="btn.text"
+                  variant="tonal"
+                  size="small"
+                  :prepend-icon="btn.icon"
+                  class="mr-2 mb-2"
+                  @click="quickAddEdge(btn)"
+                >
+                  {{ btn.text }}
+                </v-btn>
+              </div>
+            </div>
           </div>
         </v-window-item>
 
@@ -117,6 +134,7 @@ import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
 import type { Person, Company, Article, Region } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
+import { useEdgeButtons, type NewEdgeButton } from "~/composables/edgeConfig";
 
 const route = useRoute<"/entity/[destination]/[id]">();
 
@@ -163,4 +181,21 @@ const entity = computed(() => response.value?.node);
 
 const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
+
+const quickAddButtons = computed(() => {
+  if (!entity.value) return [];
+  // Filter buttons relevant for this node type
+  return useEdgeButtons(entity.value.name).filter((b) => b.nodeType === type);
+});
+
+function quickAddEdge(btn: NewEdgeButton) {
+  router.push({
+    path: `/edit/node/${node}`,
+    query: {
+      type,
+      edgeType: btn.edgeType,
+      direction: btn.direction,
+    },
+  });
+}
 </script>

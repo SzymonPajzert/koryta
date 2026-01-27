@@ -65,9 +65,14 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const {
     sources,
     targets,
+    referencedIn,
     refresh: refreshEdges,
   } = await useEdges(() => node_id.value);
-  const allEdges = computed(() => [...sources.value, ...targets.value]);
+  const allEdges = computed(() => [
+    ...sources.value,
+    ...targets.value,
+    ...referencedIn.value,
+  ]);
 
   const partiesDefault = computed<string[]>(() => [...parties, "inne"]);
 

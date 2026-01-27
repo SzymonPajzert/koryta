@@ -10,12 +10,18 @@
     required
     return-object
     autocomplete="off"
-    data-testid="entity-picker-input"
+    v-bind="{
+      ...$attrs,
+      'data-testid': $attrs['data-testid'] || 'entity-picker-input',
+    }"
     @update:focused="(val: boolean) => val && refresh()"
-    v-bind="$attrs"
   >
     <template #no-data>
-      <v-list-item v-if="search" @click="addNewItem">
+      <v-list-item
+        v-if="search"
+        data-testid="add-new-entity"
+        @click="addNewItem"
+      >
         <v-list-item-title>
           Dodaj "<strong>{{ search }}</strong
           >" do bazy.
