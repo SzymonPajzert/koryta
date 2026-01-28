@@ -51,16 +51,17 @@ describe("Pending Revisions", () => {
     // Wait for loading
     cy.get(".v-progress-circular").should("not.exist");
 
-    cy.contains(".v-list-item", "connection")
+    // 5. Expand the group
+    cy.contains(".v-list-group", "connection", { timeout: 15000 })
       .should("contain", "Jan Kowalski")
       .should("contain", "Piotr Wiśniewski")
-      .click();
+      .as("group");
 
-    cy.wait(500);
+    cy.get("@group").click();
 
-    // Click the actual revision - SCOPED to the opened group
-    cy.contains(".v-list-group", "connection").within(() => {
-      cy.contains("Rewizja z").click({ force: true });
+    // Click the actual revision - wait for it to be visible after expansion
+    cy.get("@group").within(() => {
+      cy.contains("Rewizja z", { timeout: 10000 }).should("be.visible").click();
     });
 
     // 6. Verify we navigate to the entity page (with revision ID)
