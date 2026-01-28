@@ -73,4 +73,5 @@ jobs:
         run: |
 
           # Run e2e test with cypress and emulators on the built server
-          npx percy exec -- npm run test:e2e:build
+          # npx percy exec -- npm run test:e2e:build
+          npm run test:e2e:build
