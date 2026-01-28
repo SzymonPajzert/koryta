@@ -1,12 +1,17 @@
 describe("Pending Revisions", () => {
   beforeEach(() => {
-    cy.refreshAuth();
     cy.login();
   });
 
   it("lists pending edge revisions (newly created edges) and resolves names", () => {
+    // Warmup
+    cy.visit("/");
+    cy.wait(1000);
+
     // 1. Visit Jan Kowalski (node 1) edit page
     cy.visit("/edit/node/1");
+    cy.url().should("include", "/edit/node/1");
+    cy.wait(2000);
     // Wait for page load
     cy.contains("Treść i Powiązania", { timeout: 10000 }).should("be.visible");
 
@@ -14,8 +19,6 @@ describe("Pending Revisions", () => {
     cy.contains("button", "Dodaj osobę, którą").click();
 
     // Use pickEntity
-    cy.pickEntity("Piotr Wiśniewski");
-
     cy.pickEntity("Piotr Wiśniewski");
 
     cy.fillField("Nazwa relacji", "znajomi");
@@ -29,7 +32,7 @@ describe("Pending Revisions", () => {
     cy.contains("znajomi").should("be.visible");
 
     // 3. Visit Revisions
-    cy.visit("/revisions");
+    cy.visit("/admin/audit?tab=pending");
 
     cy.request("/api/edges/pending").then((resp) => {
       const edges = Object.values(resp.body);
@@ -46,7 +49,7 @@ describe("Pending Revisions", () => {
     });
 
     // Wait for loading
-    cy.contains("Ładowanie...").should("not.exist");
+    cy.get(".v-progress-circular").should("not.exist");
 
     cy.contains(".v-list-item", "connection")
       .should("contain", "Jan Kowalski")

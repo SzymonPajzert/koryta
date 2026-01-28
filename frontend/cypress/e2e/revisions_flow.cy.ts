@@ -5,8 +5,8 @@ describe("Revisions Flow", () => {
   });
 
   it("should display pending revisions and allow navigation to details", () => {
-    cy.visit("/revisions");
-    cy.contains("Lista Rewizji (Do Przejrzenia)");
+    cy.visit("/admin/audit?tab=pending");
+    cy.contains(".v-tab--selected", "Oczekujące Rewizje").should("be.visible");
 
     cy.contains(".v-list-item", "Not approved person").click();
     cy.wait(500);
