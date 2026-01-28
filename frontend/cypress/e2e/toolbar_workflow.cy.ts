@@ -40,9 +40,10 @@ describe("User Toolbar and Edit Workflow", () => {
   it("shows revisions list", () => {
     cy.login();
     cy.visit("/");
-    cy.contains("Lista rewizji").click();
-    cy.url().should("include", "/revisions");
-    cy.contains("Lista Rewizji").should("be.visible");
+    cy.contains("Audyt").click();
+    cy.url().should("include", "/admin/audit");
+    cy.url().should("include", "tab=pending");
+    cy.contains(".v-tab--selected", "Oczekujące Rewizje").should("be.visible");
 
     // Check if there is at least one item and click it
     // Note: This depends on seeded data having pending revisions or created nodes.
