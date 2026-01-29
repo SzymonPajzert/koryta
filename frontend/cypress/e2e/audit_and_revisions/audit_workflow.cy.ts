@@ -1,1 +1,1 @@
-import "../../_implementations/audit_workflow";
+import '../_implementations/audit_workflow';

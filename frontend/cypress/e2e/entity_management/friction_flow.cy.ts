@@ -1,1 +1,1 @@
-import "../../_implementations/friction_flow";
+import '../_implementations/friction_flow';

@@ -1,1 +1,1 @@
-import "../../_implementations/new_node_navigation";
+import '../_implementations/new_node_navigation';

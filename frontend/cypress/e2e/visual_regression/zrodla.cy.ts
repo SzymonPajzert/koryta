@@ -1,1 +1,1 @@
-import "../../_implementations/zrodla";
+import '../_implementations/zrodla';

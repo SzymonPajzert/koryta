@@ -1,1 +1,1 @@
-import "../../_implementations/omni_search";
+import '../_implementations/omni_search';

@@ -1,1 +1,1 @@
-import "../../_implementations/api/edge_revisions";
+import '../_implementations/api/edge_revisions';
