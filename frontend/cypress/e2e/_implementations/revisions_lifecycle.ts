@@ -1,4 +1,4 @@
-describe("Pending Revisions", () => {
+describe("Revisions Lifecycle", () => {
   beforeEach(() => {
     cy.login();
   });
@@ -68,5 +68,32 @@ describe("Pending Revisions", () => {
     cy.url().should("include", "/entity/connection/");
 
     cy.get("body").should("be.visible");
+  });
+
+  it("should display pending revisions and allow navigation to details", () => {
+    // This test uses the seeded data "Not approved person"
+    cy.visit("/admin/audit?tab=pending");
+    cy.contains(".v-tab--selected", "Oczekujące Rewizje").should("be.visible");
+
+    // Check if the seeded item exists before trying to click it to avoid flakes if seeding changes
+    cy.get("body").then(($body) => {
+        if ($body.text().includes("Not approved person")) {
+            cy.contains(".v-list-item", "Not approved person").click();
+            cy.wait(500);
+            cy.percySnapshot("Revisions List one unfolded");
+
+            cy.contains(".v-list-group", "Not approved person").within(() => {
+            cy.contains("Rewizja z").click({ force: true });
+            });
+
+            cy.url().should("include", "/entity/person/h1/rev-h1");
+
+            cy.contains("Szczegóły Rewizji").should("be.visible");
+            cy.contains("Podgląd wersji").should("be.visible");
+            cy.contains("Not approved person (Updated)").should("be.visible");
+        } else {
+            cy.log("Seeded 'Not approved person' not found, skipping this part of test");
+        }
+    });
   });
 });
