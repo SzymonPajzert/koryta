@@ -1,1 +1,1 @@
-import '../../_implementations/voting';
+import "../../_implementations/voting";

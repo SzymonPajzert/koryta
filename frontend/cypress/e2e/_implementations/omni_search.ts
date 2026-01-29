@@ -42,33 +42,33 @@ describe("OmniSearch", () => {
   it("should show valid chain of connected entities in OmniSearch", () => {
     cy.search("Testowa");
 
-    cy.get(".v-overlay-container .v-overlay:visible")
-      .should("exist")
-      .last()
+    cy.get(".v-overlay")
+      .filter(":visible")
+      .should("be.visible")
       .within(() => {
         cy.contains(".v-list-item-title", "Osoba Testowa").should("exist");
         cy.contains(".v-list-item-title", "Firma Testowa").should("exist");
       });
 
-    cy.search("Testowe");
-    // wait for list update - graph isn't re-fetched if cached but filtering happens
-    cy.wait(500);
+      cy.search("Testowe");
+      // wait for list update - graph isn't re-fetched if cached but filtering happens
+      cy.wait(500);
 
-    cy.get(".v-overlay-container .v-overlay:visible")
-      .should("exist")
-      .last()
+    cy.get(".v-overlay")
+      .filter(":visible")
+      .should("be.visible")
       .within(() => {
         cy.contains(".v-list-item-title", "Województwo Testowe").should(
           "exist",
         );
       });
 
-    cy.search("Powiat Testowy");
-    cy.wait(500);
+      cy.search("Powiat Testowy");
+      cy.wait(500);
 
-    cy.get(".v-overlay-container .v-overlay:visible")
-      .should("exist")
-      .last()
+    cy.get(".v-overlay")
+      .filter(":visible")
+      .should("be.visible")
       .within(() => {
         cy.contains(".v-list-item-title", "Powiat Testowy").should("exist");
       });

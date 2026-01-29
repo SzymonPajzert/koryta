@@ -1,1 +1,1 @@
-import '../../_implementations/pending_revisions';
+import "../../_implementations/pending_revisions";

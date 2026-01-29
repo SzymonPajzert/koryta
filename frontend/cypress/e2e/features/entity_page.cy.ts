@@ -1,1 +1,1 @@
-import '../../_implementations/entity_page';
+import "../../_implementations/entity_page";

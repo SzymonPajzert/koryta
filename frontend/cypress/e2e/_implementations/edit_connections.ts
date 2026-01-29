@@ -48,7 +48,7 @@ describe("Edit Node Connections", () => {
 
   it("should edit an existing entity and add a new connection with direction (Firm/Subsidiary)", () => {
     cy.login();
-    
+
     const generateName = (prefix: string) => `${prefix}_${Date.now()}`;
 
     // 1. Create a Base Entity (Company)

@@ -1,1 +1,1 @@
-import '../../_implementations/region_support';
+import "../../_implementations/region_support";

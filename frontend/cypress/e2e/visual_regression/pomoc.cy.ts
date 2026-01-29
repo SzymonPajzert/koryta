@@ -1,1 +1,1 @@
-import '../../_implementations/pomoc';
+import "../../_implementations/pomoc";
