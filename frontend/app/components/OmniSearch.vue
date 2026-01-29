@@ -141,7 +141,10 @@ const baseItems = computed<ListItem[]>(() => {
     });
   });
 
-  graph.value.nodeGroups.slice(1).forEach((item) =>
+  const addedIds = new Set<string>();
+
+  graph.value.nodeGroups.slice(1).forEach((item) => {
+    addedIds.add(item.id);
     result.push({
       title: item.name,
       subtitle: `${item.stats.people} powiązanych osób`,
@@ -153,9 +156,12 @@ const baseItems = computed<ListItem[]>(() => {
       query: {
         miejsce: item.id,
       },
-    }),
-  );
+    });
+  });
   Object.entries(graph.value.nodes).forEach(([key, value]) => {
+    if (addedIds.has(key)) {
+      return;
+    }
     if (value.type == "circle") {
       result.push({
         title: value.name,
