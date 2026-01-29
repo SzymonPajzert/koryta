@@ -1,1 +1,1 @@
-import '../_implementations/my_revisions';
+import "../_implementations/my_revisions";

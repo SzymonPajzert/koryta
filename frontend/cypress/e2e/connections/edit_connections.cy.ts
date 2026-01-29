@@ -1,1 +1,1 @@
-import '../_implementations/edit_connections';
+import "../_implementations/edit_connections";

@@ -4,7 +4,6 @@ describe("OmniSearch", () => {
   beforeEach(() => {
     cy.intercept("GET", "/api/graph*").as("getGraph");
     cy.visit("/");
-    cy.wait("@getGraph");
   });
 
   it("allows searching for parties", () => {
@@ -33,46 +32,52 @@ describe("OmniSearch", () => {
   });
 
   it("should filter out regions and companies without people in OmniSearch", () => {
-    // We expect the graph to be fetched upon interaction or load
-    cy.search("Puste");
+    // Force focus to trigger refresh() if needed
+    cy.get("header input").focus().clear().type("Puste");
+
+    // Wait for the overlay to appear instead of a network request
+    cy.get(".v-overlay-container .v-overlay:visible", {
+      timeout: 10000,
+    }).should("exist");
 
     cy.contains("Województwo Puste").should("not.exist");
     cy.contains("Firma Pusta").should("not.exist");
   });
 
   it("should show valid chain of connected entities in OmniSearch", () => {
-      cy.search("Testowa");
+    cy.search("Testowa");
 
-      cy.get(".v-overlay")
-        .filter(":visible")
-        .should("be.visible")
-        .within(() => {
-          cy.contains(".v-list-item-title", "Osoba Testowa").should("exist");
-          cy.contains(".v-list-item-title", "Firma Testowa").should("exist");
-        });
+    // Use v-overlay__content which is the actual container for the list items
+    cy.get(".v-overlay__content")
+      .filter(":visible")
+      .should("be.visible")
+      .within(() => {
+        cy.contains(".v-list-item-title", "Osoba Testowa").should("exist");
+        cy.contains(".v-list-item-title", "Firma Testowa").should("exist");
+      });
 
-      cy.search("Testowe");
-      // wait for list update - graph isn't re-fetched if cached but filtering happens
-      cy.wait(500);
+    cy.search("Testowe");
+    // wait for list update - graph isn't re-fetched if cached but filtering happens
+    cy.wait(500);
 
-      cy.get(".v-overlay")
-        .filter(":visible")
-        .should("be.visible")
-        .within(() => {
-          cy.contains(".v-list-item-title", "Województwo Testowe").should(
-            "exist",
-          );
-        });
+    cy.get(".v-overlay__content")
+      .filter(":visible")
+      .should("be.visible")
+      .within(() => {
+        cy.contains(".v-list-item-title", "Województwo Testowe").should(
+          "exist",
+        );
+      });
 
-      cy.search("Powiat Testowy");
-      cy.wait(500);
+    cy.search("Powiat Testowy");
+    cy.wait(500);
 
-      cy.get(".v-overlay")
-        .filter(":visible")
-        .should("be.visible")
-        .within(() => {
-          cy.contains(".v-list-item-title", "Powiat Testowy").should("exist");
-        });
+    cy.get(".v-overlay__content")
+      .filter(":visible")
+      .should("be.visible")
+      .within(() => {
+        cy.contains(".v-list-item-title", "Powiat Testowy").should("exist");
+      });
   });
 
   it("should dedup companies", () => {

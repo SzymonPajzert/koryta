@@ -1,1 +1,1 @@
-import '../_implementations/article_entities';
+import "../_implementations/article_entities";

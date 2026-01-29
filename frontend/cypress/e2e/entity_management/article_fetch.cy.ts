@@ -1,1 +1,1 @@
-import '../_implementations/article_fetch';
+import "../_implementations/article_fetch";

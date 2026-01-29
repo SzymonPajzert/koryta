@@ -1,1 +1,1 @@
-import '../_implementations/edit_entity';
+import "../_implementations/edit_entity";
