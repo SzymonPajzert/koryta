@@ -87,12 +87,8 @@ const props = defineProps<{
     | "my-revisions";
 }>();
 
-const { user, idToken, authFetch } = useAuthState();
+const { user, authFetch, idToken } = useAuthState();
 const revertingId = ref<string | null>(null);
-
-const authHeaders = computed(() => ({
-  Authorization: idToken.value ? `Bearer ${idToken.value}` : "",
-}));
 
 // Data Types
 type AuditItem = {
@@ -107,144 +103,137 @@ type AuditItem = {
   children?: AuditItem[];
 };
 
-const items = ref<AuditItem[]>([]);
-const loading = ref(true);
+// --- Data Fetching ---
 
-// Fetch Data based on type
-async function fetchData() {
-  if (!user.value) {
-    loading.value = false;
-    items.value = [];
-    return;
+// 1. Pending Revisions
+const { data: pendingNodes, pending: pendingNodesLoading } = authFetch<
+  Record<string, any>
+>(() => (props.type === "pending-revisions" ? "/api/nodes/pending" : null));
+
+const { data: pendingEdges, pending: pendingEdgesLoading } = authFetch<
+  Record<string, any>
+>(() => (props.type === "pending-revisions" ? "/api/edges/pending" : null));
+
+// 2. Edges (shared by 'edges-no-source' and 'articles-no-edges')
+const { data: allEdges, pending: allEdgesLoading } = authFetch<Edge[]>(() =>
+  ["edges-no-source", "articles-no-edges"].includes(props.type)
+    ? "/api/graph/edges"
+    : null,
+);
+
+// 3. Articles (for 'articles-no-edges')
+const { data: allArticles, pending: allArticlesLoading } = authFetch<{
+  entities: Record<string, Node>;
+}>(() => (props.type === "articles-no-edges" ? "/api/nodes/article" : null));
+
+// 4. My Revisions
+const {
+  data: myRevisionsData,
+  pending: myRevisionsLoading,
+  refresh: refreshMyRevisions,
+} = authFetch<{
+  items: any[];
+}>(() =>
+  props.type === "my-revisions" && user.value
+    ? `/api/revisions/user/${user.value.uid}`
+    : null,
+);
+
+// --- Computed Logic ---
+
+const loading = computed(() => {
+  if (props.type === "pending-revisions")
+    return pendingNodesLoading.value || pendingEdgesLoading.value;
+  if (props.type === "edges-no-source") return allEdgesLoading.value;
+  if (props.type === "articles-no-edges")
+    return allEdgesLoading.value || allArticlesLoading.value;
+  if (props.type === "my-revisions") return myRevisionsLoading.value;
+  return false;
+});
+
+const items = computed<AuditItem[]>(() => {
+  if (props.type === "pending-revisions") {
+    const nodes = pendingNodes.value ? Object.values(pendingNodes.value) : [];
+    const edges = pendingEdges.value ? Object.values(pendingEdges.value) : [];
+    return [...nodes, ...edges].map((p) => ({
+      id: p.id,
+      title: p.name || getDefaultTitle(p),
+      subtitle: getSubtitle(p),
+      icon: iconMap[p.type] || "mdi-help",
+      isGroup: true,
+      children: (p.revisions || []).map((rev: any) => ({
+        id: rev.id,
+        title: `Rewizja z ${new Date(rev.update_time).toLocaleString()}`,
+        subtitle: `Autor: ${rev.update_user}`,
+        link: `/entity/${p.type}/${p.id}/${rev.id}`,
+      })),
+    }));
+  } else if (props.type === "edges-no-source") {
+    const list = (allEdges.value || []).filter(
+      (e) => !e.references || e.references.length === 0,
+    );
+    return list.map((e) => ({
+      id: e.id || "",
+      title: `${e.source} -> ${e.target}`,
+      subtitle: e.type,
+      icon: "mdi-connection",
+      href: `/edit/node/${e.source}`,
+      actionIcon: "mdi-pencil",
+    }));
+  } else if (props.type === "articles-no-edges") {
+    const ents = allArticles.value?.entities || {};
+    const articles = Object.entries(ents).map(([id, data]) => ({
+      id,
+      ...data,
+    }));
+
+    const referencedArticleIds = new Set<string>();
+    (allEdges.value || []).forEach((e) => {
+      e.references?.forEach((refId) => referencedArticleIds.add(refId));
+    });
+
+    const list = articles.filter((a) => !referencedArticleIds.has(a.id));
+    return list.map((a) => ({
+      id: a.id,
+      title: a.name,
+      subtitle: a.id,
+      icon: "mdi-file-document-outline",
+      href: `/entity/article/${a.id}`,
+      actionIcon: "mdi-eye",
+    }));
+  } else if (props.type === "my-revisions") {
+    return (
+      myRevisionsData.value?.items.map((rev: any) => ({
+        id: rev.id,
+        title: `${rev.node_name || "Obiekt"} (${rev.name || "Edycja"})`,
+        subtitle: `Złożono: ${new Date(rev.update_time).toLocaleString()}`,
+        icon: "mdi-file-document-edit-outline",
+        link: `/entity/${rev.node_type || "person"}/${rev.node_id}/${rev.id}`,
+      })) || []
+    );
   }
-  loading.value = true;
-  try {
-    items.value = [];
+  return [];
+});
 
-    if (props.type === "pending-revisions") {
-      await fetchPendingRevisions();
-    } else if (props.type === "edges-no-source") {
-      await fetchEdgesNoSource();
-    } else if (props.type === "articles-no-edges") {
-      await fetchArticlesNoEdges();
-    } else if (props.type === "my-revisions") {
-      await fetchMyRevisions();
-    }
-  } catch (e) {
-    console.error("Failed to fetch audit data", e);
-  } finally {
-    loading.value = false;
-  }
-}
+// --- Actions ---
 
-// 1. Pending Revisions Logic
-async function fetchPendingRevisions() {
-  const [nodes, edges] = await Promise.all([
-    $fetch<Record<string, any>>("/api/nodes/pending", {
-      headers: authHeaders.value,
-    }),
-    $fetch<Record<string, any>>("/api/edges/pending", {
-      headers: authHeaders.value,
-    }),
-  ]);
-
-  const nodesList = nodes ? Object.values(nodes) : [];
-  const edgesList = edges ? Object.values(edges) : [];
-  const allPending = [...nodesList, ...edgesList];
-
-  items.value = allPending.map((p) => ({
-    id: p.id,
-    title: p.name || getDefaultTitle(p),
-    subtitle: getSubtitle(p),
-    icon: iconMap[p.type] || "mdi-help",
-    isGroup: true,
-    children: (p.revisions || []).map((rev: any) => ({
-      id: rev.id,
-      title: `Rewizja z ${new Date(rev.update_time).toLocaleString()}`,
-      subtitle: `Autor: ${rev.update_user}`,
-      link: `/entity/${p.type}/${p.id}/${rev.id}`,
-    })),
-  }));
-}
-
-// 2. Edges No Source Logic
-async function fetchEdgesNoSource() {
-  const edges = await $fetch<Edge[]>("/api/graph/edges", {
-    headers: authHeaders.value,
-  });
-  const list = (edges || []).filter(
-    (e) => !e.references || e.references.length === 0,
-  );
-
-  items.value = list.map((e) => ({
-    id: e.id || "",
-    title: `${e.source} -> ${e.target}`,
-    subtitle: e.type,
-    icon: "mdi-connection",
-    href: `/edit/node/${e.source}`,
-    actionIcon: "mdi-pencil",
-  }));
-}
-
-// 3. Articles No Edges Logic
-async function fetchArticlesNoEdges() {
-  const [edges, articlesResponse] = await Promise.all([
-    $fetch<Edge[]>("/api/graph/edges", { headers: authHeaders.value }),
-    $fetch<{ entities: Record<string, Node> }>("/api/nodes/article", {
-      headers: authHeaders.value,
-    }),
-  ]);
-
-  const edgesData = edges || [];
-  const ents = articlesResponse?.entities || {};
-  const articles = Object.entries(ents).map(([id, data]) => ({ id, ...data }));
-
-  const referencedArticleIds = new Set<string>();
-  edgesData.forEach((e) => {
-    e.references?.forEach((refId) => referencedArticleIds.add(refId));
-  });
-
-  const list = articles.filter((a) => !referencedArticleIds.has(a.id));
-
-  items.value = list.map((a) => ({
-    id: a.id,
-    title: a.name,
-    subtitle: a.id,
-    icon: "mdi-file-document-outline",
-    href: `/entity/article/${a.id}`,
-    actionIcon: "mdi-eye",
-  }));
-}
-
-// 4. My Revisions Logic
-async function fetchMyRevisions() {
-  const myUid = user.value?.uid;
-  if (!myUid) return;
-
-  const data = await $fetch<{ items: any[] }>(`/api/revisions/user/${myUid}`, {
-    headers: authHeaders.value,
-  });
-  const list = data?.items || [];
-
-  items.value = list.map((rev: any) => ({
-    id: rev.id,
-    title: `${rev.node_name || "Obiekt"} (${rev.name || "Edycja"})`,
-    subtitle: `Złożono: ${new Date(rev.update_time).toLocaleString()}`,
-    icon: "mdi-file-document-edit-outline",
-    link: `/entity/${rev.node_type || "person"}/${rev.node_id}/${rev.id}`,
-  }));
-}
-
-// Revert Action
 async function revertRevision(id: string) {
   if (!confirm("Czy na pewno chcesz wycofać tę propozycję?")) return;
   revertingId.value = id;
   try {
-    await authFetch(`/api/revisions/entry/${id}`, {
+    const headers: Record<string, string> = {};
+    if (idToken.value) {
+      headers.Authorization = `Bearer ${idToken.value}`;
+    }
+    await $fetch(`/api/revisions/entry/${id}`, {
       method: "DELETE",
+      headers,
     });
-    // Refresh locally
-    items.value = items.value.filter((i) => i.id !== id);
+
+    // Refresh the revisions list
+    if (props.type === "my-revisions") {
+      refreshMyRevisions();
+    }
   } catch (e) {
     alert("Nie udało się wycofać propozycji.");
     console.error(e);
@@ -253,7 +242,8 @@ async function revertRevision(id: string) {
   }
 }
 
-// Helpers
+// --- Helpers ---
+
 const iconMap: Record<string, string> = {
   ...nodeTypeIcon,
   employed: "mdi-briefcase-outline",
@@ -280,6 +270,4 @@ function getSubtitle(item: any) {
   }
   return item.type;
 }
-
-watch([() => props.type, user], fetchData, { immediate: true });
 </script>

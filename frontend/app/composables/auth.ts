@@ -64,7 +64,10 @@ export function useAuthState() {
     return await createUserWithEmailAndPassword(auth, email, pass);
   };
 
-  const authFetch = <T>(url: string | (() => string), options: any = {}) => {
+  const authFetch = <T>(
+    url: string | (() => string | null),
+    options: any = {},
+  ) => {
     const headers = computed(() => {
       const h: Record<string, string> = {};
       if (idToken.value) {
@@ -81,7 +84,7 @@ export function useAuthState() {
         (idToken.value ? "-auth" : "-public")
       );
     });
-    return useFetch<T>(url, {
+    return useFetch<T>(url as any, {
       key,
       headers,
       watch: [idToken],
