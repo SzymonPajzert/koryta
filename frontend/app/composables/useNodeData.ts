@@ -35,6 +35,8 @@ export function useNodeData(options: UseNodeDataOptions) {
     content: "",
     sourceURL: "",
     shortName: "",
+    wikipedia: "",
+    rejestrIo: "",
   }));
 
   const revisions = useState<Revision[]>(
@@ -91,6 +93,8 @@ export function useNodeData(options: UseNodeDataOptions) {
           };
           if (node.type === "person") {
             v.parties = (node as Partial<Person>).parties || [];
+            v.wikipedia = (node as Partial<Person>).wikipedia || "";
+            v.rejestrIo = (node as Partial<Person>).rejestrIo || "";
           }
           if (node.type === "article") {
             v.sourceURL = (node as Partial<Article>).sourceURL || "";
@@ -116,6 +120,8 @@ export function useNodeData(options: UseNodeDataOptions) {
         content: "",
         sourceURL: "",
         shortName: "",
+        wikipedia: "",
+        rejestrIo: "",
       };
       revisions.value = [];
     }

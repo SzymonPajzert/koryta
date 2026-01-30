@@ -24,6 +24,11 @@ export default authCachedEventHandler(async (event) => {
         .get()
     ).docs.map((doc) => doc.data())[0];
     if (revision) {
+      console.log(
+        "Found revision for node",
+        id,
+        revision.data?.wikipedia ? "HAS WIKI" : "NO WIKI",
+      );
       node = { ...revision.data, node_id: revision.node_id };
     } else {
       // Fallback to original node if no revisions found

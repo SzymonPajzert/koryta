@@ -13,7 +13,12 @@
           </v-card-title>
           <v-card-subtitle>
             Autor: {{ revisionData.update_user }} <br />
-            Data: {{ new Date(revisionData.update_time).toLocaleString() }}
+            Data:
+            {{
+              new Date(
+                (revisionData.update_time as any)._seconds * 1000,
+              ).toLocaleString()
+            }}
           </v-card-subtitle>
           <v-card-text>
             <h3 class="text-h6 mb-2">Podgląd wersji:</h3>
@@ -81,9 +86,27 @@ const loading = computed(() => revLoading.value || nodeLoading.value);
 const error = computed(() => revError.value || nodeError.value);
 
 async function applyRevision() {
-  // Placeholder for apply logic
-  // TODO https://github.com/SzymonPajzert/koryta/milestone/3
-  alert("Funkcja zatwierdzania nie jest jeszcze w pełni zaimplementowana.");
+  try {
+    const { idToken } = useAuthState();
+    await $fetch(`/api/revisions/entry/${revisionId}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken.value}`,
+      },
+    });
+    alert("Zatwierdzono rewizję!");
+
+    // Redirect to entity page
+    const targetType =
+      revisionData.value?.data?.type || nodeData.value?.type || "person";
+    // Clear cache for the node entry to ensure fresh data is fetched
+    clearNuxtData((key) => key.includes(`/api/nodes/entry/${nodeId}`));
+
+    useRouter().push(`/entity/${targetType}/${nodeId}`);
+  } catch (e) {
+    console.error(e);
+    alert("Błąd podczas zatwierdzania rewizji.");
+  }
 }
 
 async function rejectRevision() {
