@@ -23,21 +23,23 @@ class DedupeClient:
         text = re.sub("\n", " ", text)
         text = text.strip().strip('"').strip("'").lower().strip()
         return text
-        
+
     def _prepare_data(self, data):
-        return  {
-                k: {'full': self._preprocess_text(v)} 
-                for k, v in data.items()
-            }
+        return {k: {"full": self._preprocess_text(v)} for k, v in data.items()}
 
-        
-
-    def messy_canon_match(self, data_canon, data_messy, threshold=0.3, n_matches=3, generator = False):
+    def messy_canon_match(
+        self, data_canon, data_messy, threshold=0.3, n_matches=3, generator=False
+    ):
         gazetteer = self._get_gazetteer()
         data_canon_processed = self._prepare_data(data_canon)
         data_messy_processed = self._prepare_data(data_messy)
-        
+
         gazetteer.index(data_canon_processed)
-        results = gazetteer.search(data_messy_processed, threshold=threshold,n_matches=n_matches, generator=generator)
+        results = gazetteer.search(
+            data_messy_processed,
+            threshold=threshold,
+            n_matches=n_matches,
+            generator=generator,
+        )
 
         return results

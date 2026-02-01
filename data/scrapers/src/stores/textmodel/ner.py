@@ -148,7 +148,8 @@ class StanzaNERClient:
         if self._nlp_stanza is None:
             if not (Path(self.model_dir) / "pl").is_dir():
                 print(
-                    f"Model is downloaded from external resource to location {self.model_dir}")  # noqa: E501
+                    f"Model is downloaded from external resource to location {self.model_dir}"
+                )  # noqa: E501
                 stanza.download("pl", model_dir=str(self.model_dir))
             else:
                 print(f"Model already exists in location: {self.model_dir}")

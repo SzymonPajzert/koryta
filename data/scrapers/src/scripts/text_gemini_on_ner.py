@@ -17,7 +17,9 @@ prompt = (
     "and output as in python. Example output: [Ala Biba, Barack Obama]\n\n"
 )
 memory = Memory(location="/tmp/genai_cache", verbose=0)
-client = genai.Client(api_key=os.environ["GENAI_API_KEY"])  # get one from https://aistudio.google.com/
+client = genai.Client(
+    api_key=os.environ["GENAI_API_KEY"]
+)  # get one from https://aistudio.google.com/
 
 
 def iou(a: list[str], b: list[str]) -> float:
@@ -36,9 +38,9 @@ def parse_response(response: str) -> list[str]:
         right_bracket_index = response.index("]")
         return [
             name.strip()[1:-1]
-            for name in response[
-                        left_bracket_index + 1: right_bracket_index
-                        ].split(",")
+            for name in response[left_bracket_index + 1 : right_bracket_index].split(
+                ","
+            )
         ]
     except ValueError:
         return []
@@ -71,7 +73,7 @@ def words_not_in_text(names: list[str], text: str) -> list[str]:
 
 
 def recall(
-        pred_names: list[str], names_in_text: list[str], names_normalized: list[str]
+    pred_names: list[str], names_in_text: list[str], names_normalized: list[str]
 ) -> float:
     assert len(names_in_text) == len(names_normalized)
     if not names_in_text:
@@ -99,10 +101,8 @@ def main():
         lambda x: [name["name_normalize"] for name in x]
     )
     ex_df = df[
-        df["n_names"].le(30)
-        & df["n_names"].ge(3)
-        & df["text_len"].le(10_000)
-        ].sample(100, random_state=42)
+        df["n_names"].le(30) & df["n_names"].ge(3) & df["text_len"].le(10_000)
+    ].sample(100, random_state=42)
 
     preds = []
     for i, row in tqdm(ex_df.iterrows(), total=len(ex_df), desc="Processing examples"):
