@@ -93,6 +93,7 @@ def init_db(ctx: Context, initial_urls_file: str):
     logger.info("Database initialization complete.")
 
 
+# TODO for now these delays local, but in the future, we can consider storing it in shared db
 next_request_time: dict[str, float] = {}
 
 
@@ -120,6 +121,7 @@ def process_url(ctx: Context, url: str, config: dict) -> (set[str], str | None):
 
         parsed = NormalizedParse.parse(url)
 
+        # TODO check how to use robots.txt
         if not ctx.web.robot_txt_allowed(ctx, url, parsed, HEADERS["User-Agent"]):
             return set(), "Disallowed by robots.txt"
 
@@ -226,6 +228,14 @@ def crawl(ctx: Context, config: dict):
                 rows_to_insert.append(
                     (uuid7(), link_url, new_priority, False, [], 0, datetime.now(warsaw_tz), None))
             insert_url_rows(ctx, rows_to_insert)
+
+# TODO change db to postgress
+# TODO prepare runner script for running it with on multiple machines
+# TODO hook grafana to it / or maybe just one scipt that prints some stats based on db (like queries per second, number of unique hostnames etc)
+# TODO RSS feeds as entry (https://echodnia.eu/rss)
+# TODO add score based on keywords in link
+# TODO try to figure out a date of an article
+# TODO add more seeds from https://naszemiasto.pl/ 
 
 
 if __name__ == "__main__":
