@@ -1,7 +1,8 @@
 """Data classes for logging and managing web crawling activities."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import List
 
 
 @dataclass
@@ -33,4 +34,7 @@ class WebsiteIndex:
 
     id: str
     url: str
-    interesting: bool | None
+    priority: int
+    done: bool
+    num_retries: int
+    errors: List[str] = field(default_factory=list)

@@ -41,12 +41,13 @@ from stores.web import WebImpl
 
 
 class Conductor(IO):
-    def __init__(self, dumper: EntityDumper):
+    def __init__(self, dumper: EntityDumper, storage_mode: str = "gcs"):
         self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
+        self.storage_mode = storage_mode
 
     def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, DownloadableFile):
@@ -122,7 +123,34 @@ class Conductor(IO):
                 content(f)
 
     def upload(self, source, data, content_type):
-        self.storage.upload(source, data, content_type)
+        if self.storage_mode == "gcs":
+            self.storage.upload(source, data, content_type)
+        elif self.storage_mode == "local":
+            # Sanitize path to avoid directory traversal issues
+            path = source.path.lstrip("/").replace("/", "__")
+
+            if not path:
+                path = "index.html"
+            elif path.endswith("/"):
+                path = os.path.join(path, "index.html")
+            else:
+                # If there is no file extension, treat it as a directory path
+                # and save the content to an index.html file within that directory.
+                if os.path.splitext(os.path.basename(path))[1] == '':
+                    path = os.path.join(path, "index.html")
+
+            # Combine with hostname
+            full_path = os.path.join(
+                PROJECT_ROOT, "downloaded", "crawled", source.hostname_normalized, path
+            )
+
+            # Create directory and save file
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(data)
+            print(f"Saved locally: {full_path}")
+        else:
+            raise ValueError(f"Unknown storage mode: {self.storage_mode}")
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)
@@ -143,10 +171,13 @@ class Conductor(IO):
 
 
 def _setup_context(
-    use_rejestr_io: bool, policy: ProcessPolicy = ProcessPolicy.with_default()
+    use_rejestr_io: bool,
+    policy: ProcessPolicy = ProcessPolicy.with_default(),
+    storage_mode: str = "gcs",
+    db_path: str = ":memory:",
 ) -> tuple[Context, EntityDumper]:
     dumper = EntityDumper()
-    conductor = Conductor(dumper)
+    conductor = Conductor(dumper, storage_mode=storage_mode)
     rejestr_io = None
     if use_rejestr_io:
         rejestr_io = Rejestr()
@@ -154,7 +185,7 @@ def _setup_context(
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
-        con=duckdb.connect(),
+        con=duckdb.connect(database=db_path),
         utils=UtilsImpl(),
         web=WebImpl(),
         refresh_policy=policy,
