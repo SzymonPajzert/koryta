@@ -58,14 +58,9 @@ class Extract(Pipeline):
 
     def process_graph(self, ctx: Context):
         companies_df = self.companies.read_or_process(ctx)
-        graph = CompanyGraph()
-
-        for record in companies_df.to_dict("records"):
-            parent = record["krs"]
-            for child in record.get("children", []) or []:
-                graph.add_parent(parent, child)
-
-        return graph
+        rows_num = len(companies_df)
+        print(f"Read {rows_num} companies")
+        return CompanyGraph.from_dataframe(companies_df)
 
     def process(self, ctx: Context):
         df = self.people.read_or_process(ctx)
