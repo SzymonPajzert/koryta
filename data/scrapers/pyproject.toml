@@ -112,6 +112,7 @@ dependencies = [
     "mwparserfromhell (>=0.7.2,<0.8.0)",
     "scipy (>=1.16.3,<2.0.0)",
     "leveldb-export @ git+https://github.com/SzymonPajzert/leveldb-export.git@upgrade",
+    "stanza (>=1.11.0,<2.0.0)",
 ]
 
 [project.scripts]
