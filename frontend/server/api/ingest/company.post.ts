@@ -53,6 +53,46 @@ export default defineEventHandler(async (event) => {
   const batch = db.batch();
   createRevisionTransaction(db, batch, user, nodeRef, revisionData);
 
+  // Process 'owns' relationships
+  if (body.owns && Array.isArray(body.owns)) {
+    for (const childKrs of body.owns) {
+      if (!childKrs) continue;
+
+      // Find child node
+      const childQuery = await db
+        .collection("nodes")
+        .where("krsNumber", "==", childKrs)
+        .limit(1)
+        .get();
+
+      let childRef;
+      const firstDoc = childQuery.docs[0];
+      if (!childQuery.empty && firstDoc) {
+        childRef = firstDoc.ref;
+      } else {
+        childRef = db.collection("nodes").doc();
+        const childData = {
+          // TODO have a better way to add placeholders
+          name: "Unknown Company",
+          type: "place",
+          krsNumber: childKrs,
+          content: "",
+        };
+        createRevisionTransaction(db, batch, user, childRef, childData);
+      }
+
+      // Create 'owns' edge
+      const edgeId = `edge_${nodeRef.id}_${childRef.id}_owns`;
+      const edgeRef = db.collection("edges").doc(edgeId);
+      const edgeData = {
+        source: nodeRef.id,
+        target: childRef.id,
+        type: "owns",
+      };
+      createRevisionTransaction(db, batch, user, edgeRef, edgeData);
+    }
+  }
+
   await batch.commit();
 
   return { id: nodeRef.id, code: existingQuery.empty ? 201 : 200 };

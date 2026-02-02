@@ -144,4 +144,42 @@ describe("api/ingest/company", () => {
     );
     expect(result).toEqual({ id: "existing-id", code: 200 });
   });
+
+  it("should create edges for owned companies", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "12345",
+      name: "Parent Company",
+      owns: ["67890"],
+    });
+
+    // Parent query: Empty (creating new parent)
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "parent-id", ref: mockRef });
+
+    // Child query: Found
+    const childRef = { id: "child-id" };
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: childRef }],
+    });
+
+    // Edge creation
+    const edgeRef = { id: "edge-id" };
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    // Verify Edge Creation
+    expect(createRevisionTransaction).toHaveBeenCalledWith(
+      mockDb,
+      expect.anything(),
+      { uid: "test-user-id" },
+      edgeRef,
+      {
+        source: "parent-id",
+        target: "child-id",
+        type: "owns",
+      },
+    );
+  });
 });
