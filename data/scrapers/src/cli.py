@@ -11,6 +11,7 @@ import requests
 from firebase_admin import firestore
 
 from main import PIPELINES, CompaniesMerged, _setup_context
+from scrapers.krs.graph import CompanyGraph
 from scrapers.stores import Pipeline
 
 # Global variable to store the token received securely
@@ -118,10 +119,21 @@ def check_pipeline_files(ctx):
     return missing
 
 
-def map_to_payload(row):
+def map_to_payload(row, type: str):
     """
     Maps a result row (dict) to the API payload format.
     """
+
+    if type == "company":
+        if not row.get("krs") or not row.get("name"):
+            print("Skipping invalid company payload ...")
+            return
+        return {
+            "krs": row.get("krs"),
+            "name": row.get("name"),
+            "city": row.get("city"),
+            "owns": row.get("children") or [],
+        }
 
     def get_scalar(key):
         val = row.get(key)
@@ -302,7 +314,7 @@ def parse_args():
     parser.add_argument(
         "--type",
         default="person",
-        choices=["person", "region"],
+        choices=["person", "region", "company"],
         help="Entity type to upload",
     )
     parser.add_argument("--api", default="bulk_create", help="API endpoint path")
@@ -310,12 +322,19 @@ def parse_args():
         "--prod", action="store_true", help="Use production default endpoint"
     )
 
+    parser.add_argument(
+        "--krs",
+        help="KRS of the company to export the data for (only for type=company)",
+        default=None,
+        required=False,
+    )
+
     args = parser.parse_args()
 
     if args.prod and args.endpoint == "http://localhost:3000":
         args.endpoint = "https://koryta.pl"
 
-    if not args.script and not args.query:
+    if not args.script and not args.query and args.type != "company":
         print("Error: Must provide either --script or --query")
         sys.exit(1)
 
@@ -362,7 +381,11 @@ def submit_results(args, df):
 
     token = authenticate_user(args.endpoint)
 
-    target_url = f"{args.endpoint}/api/person/{args.api}"
+    if args.type == "company":
+        target_url = f"{args.endpoint}/api/ingest/company"
+    else:
+        target_url = f"{args.endpoint}/api/person/{args.api}"
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
@@ -370,7 +393,7 @@ def submit_results(args, df):
 
     success_count = 0
     for idx, row in df.iterrows():
-        payload = map_to_payload(row)
+        payload = map_to_payload(row, args.type)
         if payload is None:
             print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
             continue
@@ -395,6 +418,17 @@ def submit_results(args, df):
 
     failures = len(df) - success_count
     print(f"\nUpload complete. Success: {success_count}, Failed: {failures}")
+
+
+def print_results(df, type):
+    print("\n--- Query Results (First 20) ---")
+    print(df.head(20).to_string())
+    print("\n--- Payload Preview (First 1) ---")
+    if not df.empty:
+        preview_payload = map_to_payload(df.iloc[0], type)
+        print(
+            json.dumps(preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder)
+        )
 
 
 def main():
@@ -431,7 +465,19 @@ def main():
 
     print("Executing query...")
     try:
-        df = ctx.con.execute(query).df()
+        if args.type == "company":
+            print("Loading companies...")
+            p_comp = Pipeline.create(CompaniesMerged)
+            df = p_comp.read_or_process(ctx)
+
+            if args.krs:
+                print(f"Building graph to find descendants of {args.krs}...")
+                graph = CompanyGraph.from_dataframe(df)
+                relevant_companies = graph.all_descendants([args.krs])
+                print(f"Found {len(relevant_companies)} relevant companies.")
+                df = df[df["krs"].isin(relevant_companies)]
+        else:
+            df = ctx.con.execute(query).df()
     except Exception as e:
         print(f"Query execution failed: {e}")
         sys.exit(1)
@@ -443,17 +489,7 @@ def main():
         sys.exit(0)
 
     if not args.submit:
-        print("\n--- Query Results (First 20) ---")
-        print(df.head(20).to_string())
-        print("\n--- Payload Preview (First 1) ---")
-        if not df.empty:
-            preview_payload = map_to_payload(df.iloc[0])
-
-            print(
-                json.dumps(
-                    preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder
-                )
-            )
+        print_results(df, args.type)
         print("\nUse --submit to upload.")
     else:
         submit_results(args, df)
