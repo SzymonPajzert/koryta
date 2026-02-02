@@ -1,4 +1,5 @@
 import argparse
+import logging
 import sys
 import time
 from zoneinfo import ZoneInfo
@@ -11,12 +12,13 @@ from entities.crawler import WebsiteIndex
 from entities.util import NormalizedParse
 from scrapers.stores import Context
 
+logger = logging.getLogger(__name__)
+
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
-CRAWL_DELAY_SECONDS = 5
-MAX_RETRIES = 5
-
+CRAWL_DELAY_SECONDS = 5  # TODO put this into arparse
+MAX_RETRIES = 5  # TODO put this into argparse
 
 def ensure_scheme(url: str) -> str:
     """Adds https:// to a URL if it's missing a scheme."""
@@ -41,18 +43,29 @@ def parse_hostname(url: str) -> str:
 
 def init_db(ctx: Context, initial_urls_file: str):
     """Initializes the database, creating the website_index table and populating it with initial URLs."""
-    print("Initializing database...")
+    logger.info("Initializing database...")
     ctx.con.execute(
         """
-        CREATE TABLE IF NOT EXISTS website_index (
-            id VARCHAR PRIMARY KEY,
-            url VARCHAR UNIQUE,
-            priority INTEGER,
-            done BOOLEAN,
-            errors VARCHAR[],
-            num_retries INTEGER
+        CREATE TABLE IF NOT EXISTS website_index
+        (
+            id
+            VARCHAR
+            PRIMARY
+            KEY,
+            url
+            VARCHAR
+            UNIQUE,
+            priority
+            INTEGER,
+            done
+            BOOLEAN,
+            errors
+            VARCHAR
+        [],
+            num_retries
+            INTEGER
         );
-        """
+        """ # TODO add two columns, date added and date finished. Make sure you set first on adding the link to db and second on crawling it suceessfully
     )
 
     try:
@@ -68,13 +81,13 @@ def init_db(ctx: Context, initial_urls_file: str):
                     "INSERT INTO website_index (id, url, priority, done, errors, num_retries) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING",
                     urls_to_insert,
                 )
-                print(f"Added or ignored {len(urls_to_insert)} URLs.")
+                logger.info("Added or ignored %d URLs.", len(urls_to_insert))
 
     except FileNotFoundError:
-        print(f"Error: Initial URLs file not found at {initial_urls_file}", file=sys.stderr)
+        logger.error("Initial URLs file not found at %s", initial_urls_file)
         sys.exit(1)
 
-    print("Database initialization complete.")
+    logger.info("Database initialization complete.")
 
 
 next_request_time: dict[str, float] = {}
@@ -112,7 +125,7 @@ def process_url(ctx: Context, url: str) -> (set[str], str | None):
             return set(), "RATE_LIMITED"
 
         set_crawl_delay(parsed)
-        print(f"Crawling: {url}")
+        logger.info("Crawling: %s", url)
         response = requests.get(url, headers=HEADERS, timeout=10)
 
         if response.status_code != 200:
@@ -136,11 +149,11 @@ def process_url(ctx: Context, url: str) -> (set[str], str | None):
             if absolute_link:
                 pages_to_visit.add(absolute_link)
 
-        print(f"  -> Found {len(pages_to_visit)} links.")
+        logger.info("Found %d links on %s", len(pages_to_visit), url)
         return pages_to_visit, None
 
     except requests.RequestException as e:
-        print(f"  -> An error occurred: {e}")
+        logger.error("An error occurred while crawling %s: %s", url, e)
         return set(), str(e)
 
 
@@ -155,11 +168,11 @@ def crawl(ctx: Context):
             WHERE done = FALSE AND num_retries < {MAX_RETRIES}
             ORDER BY priority ASC, id ASC
             LIMIT 1
-            """
+            """ # TODO try to shuffle the URLs, curently they are always from the same hostname so we are getting lot's of Rate limits
         ).fetchone()
 
         if not row:
-            print("No more URLs to crawl. Exiting.")
+            logger.info("No more URLs to crawl. Exiting.")
             break
 
         uid, current_url, current_priority, num_retries = row
@@ -167,7 +180,7 @@ def crawl(ctx: Context):
 
         if error:
             if error == "RATE_LIMITED":
-                print("Rate limited, will try again later.")
+                logger.warning("Rate limited, will try again later.")
                 # We don't update the DB, so it will be picked up again
                 time.sleep(CRAWL_DELAY_SECONDS)
                 continue
@@ -213,17 +226,24 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - [%(name)s] %(message)s',
+        stream=sys.stdout,
+    )
+
     from main import _setup_context
+
     ctx, _ = _setup_context(use_rejestr_io=False, storage_mode=args.storage, db_path=args.db_path)
 
     if args.initial_urls_file:
         init_db(ctx, args.initial_urls_file)
         sys.exit(0)
 
-    print("Starting crawl...")
+    logger.info("Starting crawl...")
     try:
         crawl(ctx)
     except KeyboardInterrupt:
-        print("\nCrawl interrupted by user. Exiting.")
+        logger.info("Crawl interrupted by user. Exiting.")
 
-    print("Crawl finished.")
+    logger.info("Crawl finished.")
