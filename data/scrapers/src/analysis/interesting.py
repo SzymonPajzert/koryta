@@ -98,6 +98,7 @@ class CompaniesMerged(Pipeline):
                     krs=row["krs"] if pd.notna(row["krs"]) else None,
                     reasons=reasons,
                     sources=sources,
+                    children=set(graph.children.get(row["krs"], [])),
                 )
                 ctx.io.output_entity(entity)
 

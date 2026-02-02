@@ -42,6 +42,7 @@ class InterestingEntity:
     krs: str | None
     reasons: list[InterestingReason] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
+    children: set[str] = field(default_factory=set)
 
 
 @dataclass
