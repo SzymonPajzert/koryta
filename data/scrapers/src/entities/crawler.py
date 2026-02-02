@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -37,4 +37,6 @@ class WebsiteIndex:
     priority: int
     done: bool
     num_retries: int
+    date_added: datetime
     errors: List[str] = field(default_factory=list)
+    date_finished: Optional[datetime] = None

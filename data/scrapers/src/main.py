@@ -148,7 +148,6 @@ class Conductor(IO):
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(data)
-            print(f"Saved locally: {full_path}")
         else:
             raise ValueError(f"Unknown storage mode: {self.storage_mode}")
 
