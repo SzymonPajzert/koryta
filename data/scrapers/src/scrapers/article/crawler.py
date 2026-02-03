@@ -328,7 +328,7 @@ def crawl(ctx: Context, config: dict, worker_id: str):
                     (uuid7(), link_url, priority, False, [], 0, datetime.now(warsaw_tz), None))
             insert_url_rows(ctx, rows_to_insert)
 
-# TODO save link to dump in db (path)
+# TODO save link to dump in db (path), store from which url one was mined?
 # TODO try to figure out a date of an article and title and content
 # TODO zaklepać viewer htmli w oparciu o bazke
 
