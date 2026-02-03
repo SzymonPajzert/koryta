@@ -208,12 +208,13 @@ def crawl(ctx: Context, config: dict):
             logger.info("No more URLs to crawl. Exiting.")
             break
 
-        uid, current_url, current_priority, num_retries = maybe_row
+        uid, current_url, _, _ = maybe_row
         new_links, error = process_url(ctx, current_url, config)
 
         if error:
             if error == "RATE_LIMITED":
                 logger.warning("Rate limited, will try another url")
+                time.sleep(1)
                 continue
 
             propagate_url_error(ctx, uid, error)
@@ -221,21 +222,54 @@ def crawl(ctx: Context, config: dict):
 
         mark_url_done(ctx, uid)
         if new_links:
-            new_priority = current_priority + 1  # Descrease priority, we make bfs for now
             rows_to_insert = []
             for link_url in new_links:
                 link_url = ensure_url_format(link_url)
+                score = url_score(link_url)
+                priority = 100 - score
                 rows_to_insert.append(
-                    (uuid7(), link_url, new_priority, False, [], 0, datetime.now(warsaw_tz), None))
+                    (uuid7(), link_url, priority, False, [], 0, datetime.now(warsaw_tz), None))
             insert_url_rows(ctx, rows_to_insert)
+
 
 # TODO change db to postgress
 # TODO prepare runner script for running it with on multiple machines
 # TODO hook grafana to it / or maybe just one scipt that prints some stats based on db (like queries per second, number of unique hostnames etc)
 # TODO RSS feeds as entry (https://echodnia.eu/rss)
-# TODO add score based on keywords in link
 # TODO try to figure out a date of an article
 # TODO add more seeds from https://naszemiasto.pl/ 
+# TODO handle links like https://www.facebook.com/share_channel/?type=reshare&link=https%3A%2F%2Ftvn24.pl%2Fplus%2Fpodcasty%2Fpodcast-polityczny%2Fafera-wokol-dzialki-pod-cpk-agata-adamek-i-konrad-piasecki-o-najnowszych-ustaleniach-vc8724900&app_id=966242223397117&source_surface=external_reshare&display&hashtag
+# https://www.linkedin.com/checkpoint/rp/request-password-reset?session_redirect=https%3A%2F%2Fwww%2Elinkedin%2Ecom%2FshareArticle%3Fmini%3Dtrue%26url%3Dhttps%3A%2F%2Fwww%2Erp%2Epl%2Fpolityka%2Fart43745271-tusk-powolal-specjalny-zespol-chodzi-o-skandal-zwiazany-z-pedofilia-w-usa&trk=hb_signin
+
+
+def remove_polish_diacritics(text: str) -> str:
+    mapping = {
+        'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n', 'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
+        'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N', 'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z'
+    }
+    return "".join(mapping.get(char, char) for char in text)
+
+
+def tag_in_url(tag: str, url: str) -> bool:
+    tag = remove_polish_diacritics(tag.lower().replace(" ", "-"))
+    return tag in url.lower()
+
+
+def url_score(url: str) -> int:
+    score = 0
+
+    keywords = [
+        "afera", "korupcja", "skandal", "układ", "mafia", "nepotyzm",
+        "polityk", "partia", "dotacje", "prywatyzacja", "fundusz", "wybory",
+        "polityczny", "polityczna", "afera korupcyjna",
+    ]
+    for k in keywords:
+        score += tag_in_url(k, url)
+
+    if tag_in_url("polityka prywatności", url):
+        score -= 10
+
+    return max(0, score)
 
 
 if __name__ == "__main__":
@@ -256,7 +290,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--crawl-delay-seconds",
         type=int,
-        default=5,
+        default=1,
         help="Number of seconds to wait between requests to the same domain.",
     )
     parser.add_argument(
