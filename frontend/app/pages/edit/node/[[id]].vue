@@ -189,7 +189,10 @@ const {
 const { node_id, refreshEdges, authHeaders, stateKey } = await useNodeEdit();
 const { openEditEdge } = useEdgeEdit({
   nodeId: node_id,
-  nodeType: computed(() => current.value.type || "person"),
+  nodeType: computed(() => {
+    if (route.query.type) return route.query.type as NodeType;
+    return current.value.type || "person";
+  }),
   authHeaders,
   onUpdate: refreshEdges,
   stateKey,
