@@ -126,7 +126,7 @@ async function findRegionByTeryt(
     .where("teryt", "==", teryt)
     .limit(1);
   const snapshot = await nodeWithTerytField.get();
-  if (!snapshot.empty) {
+  if (!snapshot.empty && snapshot.docs[0]) {
     return snapshot.docs[0].id;
   }
 
