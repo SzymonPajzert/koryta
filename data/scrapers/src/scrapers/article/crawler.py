@@ -329,7 +329,6 @@ def crawl(ctx: Context, config: dict, worker_id: str):
             insert_url_rows(ctx, rows_to_insert)
 
 # TODO save link to dump in db (path)
-# TODO number of success in 1min, 10min, 60min, number of errors in 1min, 10min, 60min
 # TODO RSS feeds as entry (https://echodnia.eu/rss)
 # TODO try to figure out a date of an article and title and content
 # TODO add more seeds from https://naszemiasto.pl/ 

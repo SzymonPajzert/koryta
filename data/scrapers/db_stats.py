@@ -61,20 +61,6 @@ def print_db_stats():
                 else:
                     logger.info("No error messages recorded.")
 
-                # 7. Queries per second (average URLs processed per second)
-                cur.execute("SELECT MIN(date_added), MAX(date_finished) FROM website_index WHERE done = TRUE;")
-                min_date_added, max_date_finished = cur.fetchone()
-
-                if finished_urls > 0 and min_date_added and max_date_finished:
-                    time_span = max_date_finished - min_date_added
-                    if time_span.total_seconds() > 0:
-                        urls_per_second = finished_urls / time_span.total_seconds()
-                        logger.info(f"Average URLs processed per second: {urls_per_second:.2f}")
-                    else:
-                        logger.info("Time span for finished URLs is too short to calculate average rate.")
-                else:
-                    logger.info("Not enough finished URLs to calculate average processing rate.")
-
                 # 8. Average processing time per finished URL
                 cur.execute("SELECT AVG(EXTRACT(EPOCH FROM (date_finished - date_added))) FROM website_index WHERE done = TRUE AND date_finished IS NOT NULL;")
                 avg_processing_time_seconds = cur.fetchone()[0]
@@ -82,6 +68,32 @@ def print_db_stats():
                     logger.info(f"Average processing time per finished URL: {avg_processing_time_seconds:.2f} seconds")
                 else:
                     logger.info("No finished URLs with valid date_added/date_finished to calculate average processing time.")
+
+                # 9. Successes and Errors in recent timeframes
+                now = datetime.now()
+                timeframes = {"1min": 1, "10min": 10, "60min": 60}
+
+                for label, minutes in timeframes.items():
+                    logger.info(f"\n--- Stats from {label}---")
+                    start_time = now - timedelta(minutes=minutes)
+
+                    # Successes
+                    cur.execute(
+                        "SELECT COUNT(*) FROM website_index WHERE done = TRUE AND date_finished >= %s;",
+                        (start_time,)
+                    )
+                    success_count = cur.fetchone()[0]
+                    logger.info(f"Successes in last {label}: {success_count}")
+
+                    # Errors
+                    cur.execute(
+                        "SELECT COUNT(*) FROM website_index WHERE array_length(errors, 1) > 0 AND date_added >= %s;",
+                        (start_time,)
+                    )
+                    error_count = cur.fetchone()[0]
+                    logger.info(f"Errors in last {label}: {error_count}")
+                    logger.info(f"Error % in last {label}: {error_count/success_count * 100:.2f}%")
+
 
 
     except psycopg2.OperationalError as e:
