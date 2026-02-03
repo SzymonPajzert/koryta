@@ -12,6 +12,23 @@
       <v-window v-model="tab">
         <v-window-item value="details">
           <div class="pa-4">
+            <div v-if="type === 'place'" class="mb-4 d-flex">
+              <v-btn
+                variant="tonal"
+                prepend-icon="mdi-format-list-bulleted"
+                :to="`/lista?miejsce=${node}`"
+              >
+                Lista
+              </v-btn>
+              <v-btn
+                class="ml-2"
+                variant="tonal"
+                prepend-icon="mdi-graph-outline"
+                :to="`/graf?miejsce=${node}`"
+              >
+                Graf
+              </v-btn>
+            </div>
             <EntityDetailsCard :entity="entity" :type="type" />
 
             <div class="mt-4">
