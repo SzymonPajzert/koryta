@@ -329,9 +329,11 @@ def crawl(ctx: Context, config: dict, worker_id: str):
             insert_url_rows(ctx, rows_to_insert)
 
 # TODO save link to dump in db (path)
-# TODO RSS feeds as entry (https://echodnia.eu/rss)
 # TODO try to figure out a date of an article and title and content
-# TODO add more seeds from https://naszemiasto.pl/ 
+# TODO zaklepać viewer htmli w oparciu o bazke
+
+# TODO RSS feeds as entry (https://echodnia.eu/rss)
+# TODO add more seeds from https://naszemiasto.pl/
 # TODO handle links like https://www.facebook.com/share_channel/?type=reshare&link=https%3A%2F%2Ftvn24.pl%2Fplus%2Fpodcasty%2Fpodcast-polityczny%2Fafera-wokol-dzialki-pod-cpk-agata-adamek-i-konrad-piasecki-o-najnowszych-ustaleniach-vc8724900&app_id=966242223397117&source_surface=external_reshare&display&hashtag
 # https://www.linkedin.com/checkpoint/rp/request-password-reset?session_redirect=https%3A%2F%2Fwww%2Elinkedin%2Ecom%2FshareArticle%3Fmini%3Dtrue%26url%3Dhttps%3A%2F%2Fwww%2Erp%2Epl%2Fpolityka%2Fart43745271-tusk-powolal-specjalny-zespol-chodzi-o-skandal-zwiazany-z-pedofilia-w-usa&trk=hb_signin
 
