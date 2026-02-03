@@ -1,10 +1,12 @@
 import argparse
 import logging
+import os  # Added
 import sys
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import psycopg2  # Added
 import requests
 from bs4 import BeautifulSoup
 from uuid_extensions import uuid7str
@@ -17,6 +19,17 @@ logger = logging.getLogger(__name__)
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
+
+# PostgreSQL Connection Details (Hardcoded for now as per instruction)
+# In a real application, these should come from environment variables or a configuration file.
+DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
+DB_NAME = os.getenv("POSTGRES_DB", "crawler_db")
+DB_USER = os.getenv("POSTGRES_USER", "crawler_user")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "crawler_password")
+
+
+def get_pg_connection():
+    return psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASSWORD)
 
 
 def ensure_url_format(url: str) -> str:
@@ -43,52 +56,67 @@ def parse_hostname(url: str) -> str:
 def init_db(ctx: Context, initial_urls_file: str):
     """Initializes the database, creating the website_index table and populating it with initial URLs."""
     logger.info("Initializing database...")
-    ctx.con.execute(
-        """
-        CREATE TABLE IF NOT EXISTS website_index
-        (
-            id
-            VARCHAR
-            PRIMARY
-            KEY,
-            url
-            VARCHAR
-            UNIQUE,
-            priority
-            INTEGER,
-            done
-            BOOLEAN,
-            errors
-            VARCHAR
-        [],
-            num_retries
-            INTEGER,
-            date_added
-            TIMESTAMP,
-            date_finished
-            TIMESTAMP
-        );
-        """
-    )
+    with get_pg_connection() as pg_conn:
+        with pg_conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS website_index
+                (
+                    id
+                    TEXT
+                    PRIMARY
+                    KEY,
+                    url
+                    TEXT
+                    UNIQUE,
+                    priority
+                    INTEGER,
+                    done
+                    BOOLEAN,
+                    errors
+                    TEXT
+                [],
+                    num_retries
+                    INTEGER,
+                    date_added
+                    TIMESTAMP
+                    WITH
+                    TIME
+                    ZONE,
+                    date_finished
+                    TIMESTAMP
+                    WITH
+                    TIME
+                    ZONE
+                );
+                """
+            )
+            pg_conn.commit()
 
-    try:
-        with open(initial_urls_file, "r") as f:
-            urls_to_insert = []
-            for line in f:
-                url = ensure_url_format(line.strip())
-                if url:
-                    urls_to_insert.append((uuid7(), url, 0, False, [], 0, datetime.now(warsaw_tz), None))
+            try:
+                with open(initial_urls_file, "r") as f:
+                    urls_to_insert = []
+                    for line in f:
+                        url = ensure_url_format(line.strip())
+                        if url:
+                            urls_to_insert.append((uuid7(), url, 0, False, [], 0, datetime.now(warsaw_tz), None))
 
-            if urls_to_insert:
-                ctx.con.executemany(
-                    "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING",
-                    urls_to_insert,
-                )
-                logger.info("Added or ignored %d URLs.", len(urls_to_insert))
+                    if urls_to_insert:
+                        processed_urls_to_insert = []
+                        for uid, url_val, prio, done_val, errs, retries, added, finished in urls_to_insert:
+                            processed_urls_to_insert.append(
+                                (uid, url_val, prio, done_val, errs, retries, added, finished))
 
-    except FileNotFoundError:
-        logger.error("Initial URLs file not found at %s", initial_urls_file)
-        sys.exit(1)
+                        cur.executemany(
+                            "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(url) DO NOTHING",
+                            processed_urls_to_insert,
+                        )
+                        pg_conn.commit()
+                        logger.info("Added or ignored %d URLs.", len(urls_to_insert))
+
+            except FileNotFoundError:
+                logger.error("Initial URLs file not found at %s", initial_urls_file)
+                sys.exit(1)
 
     logger.info("Database initialization complete.")
 
@@ -163,15 +191,18 @@ def process_url(ctx: Context, url: str, config: dict) -> (set[str], str | None):
 
 
 def next_url(ctx: Context, config: dict) -> tuple | None:
-    row = ctx.con.execute(
-        f"""
-        SELECT id, url, priority, num_retries
-        FROM website_index
-        WHERE done = FALSE AND num_retries < {config["max_retries"]}
-        ORDER BY priority ASC, RANDOM()
-        LIMIT 1
-        """
-    ).fetchone()
+    with get_pg_connection() as pg_conn:
+        with pg_conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT id, url, priority, num_retries
+                FROM website_index
+                WHERE done = FALSE AND num_retries < {config["max_retries"]}
+                ORDER BY priority ASC, RANDOM()
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
     if not row:
         return None
 
@@ -179,24 +210,42 @@ def next_url(ctx: Context, config: dict) -> tuple | None:
 
 
 def propagate_url_error(ctx: Context, uid: str, error: str) -> None:
-    ctx.con.execute(
-        "UPDATE website_index SET num_retries = num_retries + 1, errors = list_append(errors, ?) WHERE id = ?",
-        [error, uid],
-    )
+    with get_pg_connection() as pg_conn:
+        with pg_conn.cursor() as cur:
+            cur.execute(
+                "UPDATE website_index SET num_retries = num_retries + 1, errors = array_append(errors, %s) WHERE id = %s",
+                [error, uid],
+            )
+            pg_conn.commit()
 
 
 def mark_url_done(ctx: Context, uid: str) -> None:
-    ctx.con.execute(
-        "UPDATE website_index SET done = TRUE, date_finished = ? WHERE id = ?",
-        [datetime.now(warsaw_tz), uid],
-    )
+    with get_pg_connection() as pg_conn:
+        with pg_conn.cursor() as cur:
+            cur.execute(
+                "UPDATE website_index SET done = TRUE, date_finished = %s WHERE id = %s",
+                [datetime.now(warsaw_tz), uid],
+            )
+            pg_conn.commit()
 
 
 def insert_url_rows(ctx: Context, rows: list) -> None:
-    ctx.con.executemany(
-        "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING",
-        rows,
-    )
+    if not rows:  # No rows to insert
+        return
+    with get_pg_connection() as pg_conn:
+        with pg_conn.cursor() as cur:
+            processed_rows = []
+            for row in rows:
+                processed_row = list(row)
+                if processed_row[4] is None: processed_row[4] = []  # Convert None to empty list for errors TEXT[]
+                if processed_row[7] is None: processed_row[7] = None  # Ensure None for date_finished
+                processed_rows.append(tuple(processed_row))
+
+            cur.executemany(
+                "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(url) DO NOTHING",
+                processed_rows,
+            )
+            pg_conn.commit()
     # TODO check how many new rows were actually added and log it
 
 
