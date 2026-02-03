@@ -182,4 +182,38 @@ describe("api/ingest/company", () => {
       },
     );
   });
+
+  it("should create edge to region if teryt is provided", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "123456",
+      name: "Regional Company",
+      teryt: "1061",
+    });
+
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "company-id", ref: mockRef });
+
+    const regionSnapshot = { exists: true, ref: { id: "teryt1061" } };
+    const regionRefMock = {
+      id: "teryt1061",
+      get: vi.fn().mockResolvedValue(regionSnapshot),
+    };
+
+    mockDoc.mockReturnValueOnce(regionRefMock);
+
+    const edgeRef = { id: "edge-region-id" };
+    mockDoc.mockReturnValueOnce(edgeRef);
+    await handler({} as any);
+    expect(createRevisionTransaction).toHaveBeenCalledWith(
+      mockDb,
+      expect.anything(),
+      { uid: "test-user-id" },
+      edgeRef,
+      {
+        source: "teryt1061",
+        target: "company-id",
+        type: "owns",
+      },
+    );
+  });
 });
