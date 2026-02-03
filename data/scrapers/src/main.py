@@ -128,9 +128,9 @@ class Conductor(IO):
         data,
         content_type,
         file_id: str | None = None,
-    ):
+    ) -> str | None:
         if self.storage_mode == "gcs":
-            self.storage.upload(source, data, content_type)
+            return self.storage.upload(source, data, content_type)
         elif self.storage_mode == "local":
             filename = ""
             if file_id:
@@ -160,6 +160,7 @@ class Conductor(IO):
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(data)
+            return full_path
         else:
             raise ValueError(f"Unknown storage mode: {self.storage_mode}")
 

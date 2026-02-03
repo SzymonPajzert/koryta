@@ -124,6 +124,7 @@ class Client:
 
             full_path = f"gs://{BUCKET}/{destination_blob_name}"
             print(f"Successfully uploaded data to: {full_path}")
+            return full_path
 
         except Exception as e:
             print(f"An error occurred: {e}")

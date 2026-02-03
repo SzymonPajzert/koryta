@@ -53,11 +53,15 @@ def parse_hostname(url: str) -> str:
     return NormalizedParse.parse(url).hostname_normalized
 
 
-def init_db(ctx: Context, initial_urls_file: str):
+def init_db(ctx: Context, initial_urls_file: str, reset: bool = False):
     """Initializes the database, creating the website_index table and populating it with initial URLs."""
     logger.info("Initializing database...")
     with get_pg_connection() as pg_conn:
         with pg_conn.cursor() as cur:
+            if reset:
+                logger.info("Resetting database by dropping website_index table.")
+                cur.execute("DROP TABLE IF EXISTS website_index;")
+
             cur.execute(
                 """
                                 CREATE TABLE IF NOT EXISTS website_index
@@ -94,7 +98,11 @@ def init_db(ctx: Context, initial_urls_file: str):
                                     TIMESTAMP
                                     WITH
                                     TIME
-                                    ZONE
+                                    ZONE,
+                                    storage_path
+                                    TEXT,
+                                    mined_from_url
+                                    TEXT
                                 );
                                 -- Add locked_by_worker_id column if it does not exist
                                 DO $$
@@ -113,6 +121,24 @@ def init_db(ctx: Context, initial_urls_file: str):
                                     END IF;
                                 END
                                 $$;
+
+                                -- Add storage_path column if it does not exist
+                                DO $$
+                                BEGIN
+                                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='website_index' AND column_name='storage_path') THEN
+                                        ALTER TABLE website_index ADD COLUMN storage_path TEXT;
+                                    END IF;
+                                END
+                                $$;
+
+                                -- Add mined_from_url column if it does not exist
+                                DO $$
+                                BEGIN
+                                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='website_index' AND column_name='mined_from_url') THEN
+                                        ALTER TABLE website_index ADD COLUMN mined_from_url TEXT;
+                                    END IF;
+                                END
+                                $$;
                                                 """
             )
             pg_conn.commit()
@@ -123,16 +149,16 @@ def init_db(ctx: Context, initial_urls_file: str):
                     for line in f:
                         url = ensure_url_format(line.strip())
                         if url:
-                            urls_to_insert.append((uuid7(), url, 0, False, [], 0, datetime.now(warsaw_tz), None))
+                            urls_to_insert.append((uuid7(), url, 0, False, [], 0, datetime.now(warsaw_tz), None, None))
 
                     if urls_to_insert:
                         processed_urls_to_insert = []
-                        for uid, url_val, prio, done_val, errs, retries, added, finished in urls_to_insert:
+                        for uid, url_val, prio, done_val, errs, retries, added, finished, mined_from in urls_to_insert:
                             processed_urls_to_insert.append(
-                                (uid, url_val, prio, done_val, errs, retries, added, finished))
+                                (uid, url_val, prio, done_val, errs, retries, added, finished, mined_from))
 
                         cur.executemany(
-                            "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(url) DO NOTHING",
+                            "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished, mined_from_url) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(url) DO NOTHING",
                             processed_urls_to_insert,
                         )
                         pg_conn.commit()
@@ -161,36 +187,36 @@ def set_crawl_delay(parsed: NormalizedParse, config: dict):
     next_request_time[domain] = time.time() + config["crawl_delay_seconds"]
 
 
-def process_url(ctx: Context, uid: str, url: str, config: dict) -> (set[str], str | None):
+def process_url(ctx: Context, uid: str, url: str, config: dict) -> (set[str], str | None, str | None):
     """
     Crawls a single URL.
-    Returns a tuple of (set_of_found_links, error_message_or_None).
+    Returns a tuple of (set_of_found_links, error_message_or_None, storage_path_or_None).
     """
     try:
         url = ensure_url_format(url)
         if not url:
-            return set(), "Empty URL"
+            return set(), "Empty URL", None
 
         parsed = NormalizedParse.parse(url)
 
         # TODO check how to use robots.txt
         if not ctx.web.robot_txt_allowed(ctx, url, parsed, HEADERS["User-Agent"]):
-            return set(), "Disallowed by robots.txt"
+            return set(), "Disallowed by robots.txt", None
 
         if not ready_to_crawl(parsed):
             # Not an error, just need to wait. Return no links and a specific message.
-            return set(), "RATE_LIMITED"
+            return set(), "RATE_LIMITED", None
 
         set_crawl_delay(parsed, config)
         logger.info("Crawling: %s", url)
         response = requests.get(url, headers=HEADERS, timeout=10)
 
         if response.status_code != 200:
-            return set(), f"HTTP status code {response.status_code}"
+            return set(), f"HTTP status code {response.status_code}", None
 
         # Success
         pages_to_visit = set()
-        ctx.io.upload(parsed, response.text, "text/html", file_id=uid)
+        storage_path = ctx.io.upload(parsed, response.text, "text/html", file_id=uid)
 
         soup = BeautifulSoup(response.text, "html.parser")
         for link in soup.find_all("a", href=True):
@@ -207,11 +233,11 @@ def process_url(ctx: Context, uid: str, url: str, config: dict) -> (set[str], st
                 pages_to_visit.add(absolute_link)
 
         logger.info("Found %d links on %s", len(pages_to_visit), url)
-        return pages_to_visit, None
+        return pages_to_visit, None, storage_path
 
     except requests.RequestException as e:
         logger.error("An error occurred while crawling %s: %s", url, e)
-        return set(), str(e)
+        return set(), str(e), None
 
 
 def get_and_lock_url(ctx: Context, config: dict, worker_id: str) -> tuple | None:
@@ -256,12 +282,12 @@ def propagate_url_error(ctx: Context, uid: str, error: str) -> None:
             pg_conn.commit()
 
 
-def mark_url_done(ctx: Context, uid: str) -> None:
+def mark_url_done(ctx: Context, uid: str, storage_path: str | None) -> None:
     with get_pg_connection() as pg_conn:
         with pg_conn.cursor() as cur:
             cur.execute(
-                "UPDATE website_index SET done = TRUE, date_finished = %s, locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
-                [datetime.now(warsaw_tz), uid],
+                "UPDATE website_index SET done = TRUE, date_finished = %s, locked_by_worker_id = NULL, locked_at = NULL, storage_path = %s WHERE id = %s",
+                [datetime.now(warsaw_tz), storage_path, uid],
             )
             pg_conn.commit()
 
@@ -276,10 +302,11 @@ def insert_url_rows(ctx: Context, rows: list) -> None:
                 processed_row = list(row)
                 if processed_row[4] is None: processed_row[4] = []  # Convert None to empty list for errors TEXT[]
                 if processed_row[7] is None: processed_row[7] = None  # Ensure None for date_finished
+                if len(processed_row) > 8 and processed_row[8] is None: processed_row[8] = None # Ensure None for mined_from_url
                 processed_rows.append(tuple(processed_row))
 
             cur.executemany(
-                "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(url) DO NOTHING",
+                "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished, mined_from_url) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(url) DO NOTHING",
                 processed_rows,
             )
             pg_conn.commit()
@@ -296,7 +323,7 @@ def crawl(ctx: Context, config: dict, worker_id: str):
 
         uid, current_url, _, _ = maybe_row
         logger.info(f"Worker {worker_id} crawling: {current_url}")
-        new_links, error = process_url(ctx, uid, current_url, config)
+        new_links, error, storage_path = process_url(ctx, uid, current_url, config)
 
         if error:
             if error == "RATE_LIMITED":
@@ -317,7 +344,7 @@ def crawl(ctx: Context, config: dict, worker_id: str):
             propagate_url_error(ctx, uid, error)
             continue
 
-        mark_url_done(ctx, uid)
+        mark_url_done(ctx, uid, storage_path)
         if new_links:
             rows_to_insert = []
             for link_url in new_links:
@@ -325,10 +352,9 @@ def crawl(ctx: Context, config: dict, worker_id: str):
                 score = url_score(link_url)
                 priority = 100 - score
                 rows_to_insert.append(
-                    (uuid7(), link_url, priority, False, [], 0, datetime.now(warsaw_tz), None))
+                    (uuid7(), link_url, priority, False, [], 0, datetime.now(warsaw_tz), None, current_url))
             insert_url_rows(ctx, rows_to_insert)
 
-# TODO save link to dump in db (path), store from which url one was mined?
 # TODO try to figure out a date of an article and title and content
 # TODO zaklepać viewer htmli w oparciu o bazke
 
@@ -383,6 +409,7 @@ if __name__ == "__main__":
         metavar="URL_FILE",
         help="Initialize the database with a list of URLs from a file and exit.",
     )
+    parser.add_argument("--reset-db", action="store_true", help="Reset database before initialization (requires --init-db).")
     parser.add_argument(
         "--crawl-delay-seconds",
         type=int,
@@ -419,7 +446,7 @@ if __name__ == "__main__":
     }
 
     if args.initial_urls_file:
-        init_db(ctx, args.initial_urls_file)
+        init_db(ctx, args.initial_urls_file, reset=args.reset_db)
         sys.exit(0)
 
     logger.info("Starting crawl...")
