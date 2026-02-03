@@ -114,6 +114,15 @@ class CompaniesKRS(Pipeline):
             existing.city = existing.city or company.city
             self.companies[krs_id] = existing
         else:
+            name = item["nazwy"]["skrocona"]
+            city = item["adres"]["miejscowosc"]
+            teryt_code = None
+            if "adres" in item and "teryt" in item["adres"] and item["adres"]["teryt"]:
+                teryt_code = item["adres"]["teryt"].get("wojewodztwo")
+
+            company = KrsCompany(
+                krs=krs_id, name=name, city=city, teryt_code=teryt_code
+            )
             self.companies[company.krs] = company
 
         if krs_id in self.awaiting_relations:

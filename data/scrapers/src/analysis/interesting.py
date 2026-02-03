@@ -71,6 +71,7 @@ class CompaniesMerged(Pipeline):
             w.owner_articles,
             w.content_score,
             k.city as krs_city,
+            k.teryt_code,
             w.city as wiki_city,
             CASE WHEN ik.krs IS NOT NULL THEN 1 ELSE 0 END as is_interesting_krs,
             CASE WHEN hn.name IS NOT NULL THEN 1 ELSE 0 END as is_hardcoded_name
@@ -96,6 +97,7 @@ class CompaniesMerged(Pipeline):
                 entity = InterestingEntity(
                     name=row["name"],
                     krs=row["krs"] if pd.notna(row["krs"]) else None,
+                    teryt_code=row["teryt_code"] if pd.notna(row["teryt_code"]) else None,
                     reasons=reasons,
                     sources=sources,
                     children=set(graph.children.get(row["krs"], [])),

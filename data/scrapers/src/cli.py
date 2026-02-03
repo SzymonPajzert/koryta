@@ -7,6 +7,7 @@ import webbrowser
 
 import firebase_admin
 import numpy as np
+import pandas as pd
 import requests
 from firebase_admin import firestore
 
@@ -133,6 +134,9 @@ def map_to_payload(row, type: str):
             "name": row.get("name"),
             "city": row.get("city"),
             "owns": row.get("children") or [],
+            "teryt": str(row.get("teryt_code")).removesuffix(".0")
+            if pd.notna(row.get("teryt_code"))
+            else None,
         }
 
     def get_scalar(key):
@@ -329,6 +333,13 @@ def parse_args():
         required=False,
     )
 
+    parser.add_argument(
+        "--region",
+        help="TERYT region code prefix to filter companies (e.g. 10 for Łódzkie)",
+        default=None,
+        required=False,
+    )
+
     args = parser.parse_args()
 
     if args.prod and args.endpoint == "http://localhost:3000":
@@ -476,6 +487,22 @@ def main():
                 relevant_companies = graph.all_descendants([args.krs])
                 print(f"Found {len(relevant_companies)} relevant companies.")
                 df = df[df["krs"].isin(relevant_companies)]
+
+            if args.region:
+                print(f"Filtering companies by region starting with {args.region}...")
+                # Ensure teryt-code is string and handle NaNs
+                # The column in dataframe should be 'teryt_code' as exported by InterestingEntity
+                if "teryt_code" in df.columns:
+                    df = df[
+                        df["teryt_code"]
+                        .astype(str)
+                        .str.startswith(args.region, na=False)
+                    ]
+                    print(f"Found {len(df)} companies in region {args.region}.")
+                else:
+                    print(
+                        "Warning: 'teryt_code' column not found in dataframe. Region filtering skipped."
+                    )
         else:
             df = ctx.con.execute(query).df()
     except Exception as e:
