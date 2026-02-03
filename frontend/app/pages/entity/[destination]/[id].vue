@@ -32,11 +32,24 @@
             <EntityDetailsCard :entity="entity" :type="type" />
 
             <div class="mt-4">
+              <template v-if="type === 'place' || type === 'region'">
+                <CardConnectionList :edges="owners" title="Właściciele" />
+                <CardConnectionList
+                  :edges="subsidiaries"
+                  title="Spółki zależne"
+                />
+              </template>
+
               <v-row>
                 <v-col
-                  v-for="edge in edges.filter((edge) =>
-                    ['employed', 'connection', 'owns'].includes(edge.type),
-                  )"
+                  v-for="edge in edges.filter((edge) => {
+                    if (type === 'place' || type === 'region') {
+                      return ['employed', 'connection'].includes(edge.type);
+                    }
+                    return ['employed', 'connection', 'owns'].includes(
+                      edge.type,
+                    );
+                  })"
                   :key="edge.richNode?.name"
                   cols="12"
                   md="6"
@@ -198,6 +211,14 @@ const entity = computed(() => response.value?.node);
 
 const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
+
+const owners = computed(() => {
+  return sources.value.filter((e) => e.type === "owns");
+});
+
+const subsidiaries = computed(() => {
+  return targets.value.filter((e) => e.type === "owns");
+});
 
 const quickAddButtons = computed(() => {
   if (!entity.value) return [];
