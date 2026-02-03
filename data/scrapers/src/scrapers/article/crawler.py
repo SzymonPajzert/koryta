@@ -355,7 +355,6 @@ def crawl(ctx: Context, config: dict, worker_id: str):
                     (uuid7(), link_url, priority, False, [], 0, datetime.now(warsaw_tz), None, current_url))
             insert_url_rows(ctx, rows_to_insert)
 
-# TODO try to figure out a date of an article and title and content
 # TODO zaklepać viewer htmli w oparciu o bazke
 
 # TODO RSS feeds as entry (https://echodnia.eu/rss)
