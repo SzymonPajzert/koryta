@@ -161,7 +161,7 @@ def set_crawl_delay(parsed: NormalizedParse, config: dict):
     next_request_time[domain] = time.time() + config["crawl_delay_seconds"]
 
 
-def process_url(ctx: Context, url: str, config: dict) -> (set[str], str | None):
+def process_url(ctx: Context, uid: str, url: str, config: dict) -> (set[str], str | None):
     """
     Crawls a single URL.
     Returns a tuple of (set_of_found_links, error_message_or_None).
@@ -190,7 +190,7 @@ def process_url(ctx: Context, url: str, config: dict) -> (set[str], str | None):
 
         # Success
         pages_to_visit = set()
-        ctx.io.upload(parsed, response.text, "text/html")
+        ctx.io.upload(parsed, response.text, "text/html", file_id=uid)
 
         soup = BeautifulSoup(response.text, "html.parser")
         for link in soup.find_all("a", href=True):
@@ -296,7 +296,7 @@ def crawl(ctx: Context, config: dict, worker_id: str):
 
         uid, current_url, _, _ = maybe_row
         logger.info(f"Worker {worker_id} crawling: {current_url}")
-        new_links, error = process_url(ctx, current_url, config)
+        new_links, error = process_url(ctx, uid, current_url, config)
 
         if error:
             if error == "RATE_LIMITED":

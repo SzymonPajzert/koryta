@@ -122,26 +122,38 @@ class Conductor(IO):
             with open(path, "wb") as f:
                 content(f)
 
-    def upload(self, source, data, content_type):
+    def upload(
+        self,
+        source,
+        data,
+        content_type,
+        file_id: str | None = None,
+    ):
         if self.storage_mode == "gcs":
             self.storage.upload(source, data, content_type)
         elif self.storage_mode == "local":
-            # Sanitize path to avoid directory traversal issues
-            path = source.path.lstrip("/").replace("/", "__")
-
-            if not path:
-                path = "index.html"
-            elif path.endswith("/"):
-                path = os.path.join(path, "index.html")
+            filename = ""
+            if file_id:
+                filename = file_id + ".html"
             else:
-                # If there is no file extension, treat it as a directory path
-                # and save the content to an index.html file within that directory.
-                if os.path.splitext(os.path.basename(path))[1] == '':
-                    path = os.path.join(path, "index.html")
+                # Sanitize path to avoid directory traversal issues
+                path = source.path.lstrip("/").replace("/", "__")
+
+                if not path:
+                    filename = "index.html"
+                elif path.endswith("/"):
+                    filename = os.path.join(path, "index.html")
+                else:
+                    # If there is no file extension, treat it as a directory path
+                    # and save the content to an index.html file within that directory.
+                    if os.path.splitext(os.path.basename(path))[1] == '':
+                        filename = os.path.join(path, "index.html")
+                    else:
+                        filename = path
 
             # Combine with hostname
             full_path = os.path.join(
-                PROJECT_ROOT, "downloaded", "crawled", source.hostname_normalized, path
+                PROJECT_ROOT, "downloaded", "crawled", source.hostname_normalized, filename
             )
 
             # Create directory and save file
