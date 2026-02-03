@@ -153,9 +153,7 @@ const baseItems = computed<ListItem[]>(() => {
         content_id: item.id,
         content_type: "nodeGroup",
       },
-      query: {
-        miejsce: item.id,
-      },
+      path: "/entity/place/" + item.id,
     });
   });
   Object.entries(graph.value.nodes).forEach(([key, value]) => {
