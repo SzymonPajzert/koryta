@@ -114,15 +114,6 @@ class CompaniesKRS(Pipeline):
             existing.city = existing.city or company.city
             self.companies[krs_id] = existing
         else:
-            name = item["nazwy"]["skrocona"]
-            city = item["adres"]["miejscowosc"]
-            teryt_code = None
-            if "adres" in item and "teryt" in item["adres"] and item["adres"]["teryt"]:
-                teryt_code = item["adres"]["teryt"].get("wojewodztwo")
-
-            company = KrsCompany(
-                krs=krs_id, name=name, city=city, teryt_code=teryt_code
-            )
             self.companies[company.krs] = company
 
         if krs_id in self.awaiting_relations:
@@ -212,7 +203,12 @@ def company_from_rejestrio(data: dict) -> KrsCompany:
     krs = data["numery"]["krs"]
     name = data["nazwy"]["skrocona"]
     city = data["adres"]["miejscowosc"]
-    return KrsCompany(krs=krs, name=name, city=city)
+    teryt_code = None
+    if "adres" in data and "teryt" in data["adres"] and data["adres"]["teryt"]:
+        t = data["adres"]["teryt"]
+        # Prefer powiat (4 digits) if available
+        teryt_code = t.get("powiat") or t.get("wojewodztwo")
+    return KrsCompany(krs=krs, name=name, city=city, teryt_code=teryt_code)
 
 
 def company_from_api_krs(data: dict) -> KrsCompany:

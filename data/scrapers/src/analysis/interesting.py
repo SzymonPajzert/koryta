@@ -71,7 +71,7 @@ class CompaniesMerged(Pipeline):
             w.owner_articles,
             w.content_score,
             k.city as krs_city,
-            k.teryt_code,
+            CAST(k.teryt_code AS VARCHAR) as teryt_code,
             w.city as wiki_city,
             CASE WHEN ik.krs IS NOT NULL THEN 1 ELSE 0 END as is_interesting_krs,
             CASE WHEN hn.name IS NOT NULL THEN 1 ELSE 0 END as is_hardcoded_name
