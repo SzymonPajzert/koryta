@@ -92,7 +92,7 @@ def print_db_stats():
                     )
                     error_count = cur.fetchone()[0]
                     logger.info(f"Errors in last {label}: {error_count}")
-                    logger.info(f"Error % in last {label}: {error_count/success_count * 100:.2f}%")
+                    logger.info(f"Error % in last {label}: {error_count/(success_count + 1e-9) * 100:.2f}%")
 
 
 
