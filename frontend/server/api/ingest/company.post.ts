@@ -93,7 +93,45 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Process 'teryt' to link the company to a region
+  if (body.teryt) {
+    const regionNodeId = await findRegionByTeryt(db, body.teryt);
+    const edgeRef = db.collection("edges").doc();
+    const edgeData = {
+      source: regionNodeId,
+      target: nodeRef.id,
+      type: "owns",
+    };
+
+    createRevisionTransaction(db, batch, user, edgeRef, edgeData);
+  }
+
   await batch.commit();
 
   return { id: nodeRef.id, code: existingQuery.empty ? 201 : 200 };
 });
+
+async function findRegionByTeryt(
+  db: FirebaseFirestore.Firestore,
+  teryt: string,
+): Promise<string> {
+  const regionNodeId = `teryt${teryt}`;
+  const nodeWithTerytID = db.collection("nodes").doc(regionNodeId);
+  if ((await nodeWithTerytID.get()).exists) {
+    return regionNodeId;
+  }
+
+  const nodeWithTerytField = db
+    .collection("nodes")
+    .where("teryt", "==", teryt)
+    .limit(1);
+  const snapshot = await nodeWithTerytField.get();
+  if (!snapshot.empty && snapshot.docs[0]) {
+    return snapshot.docs[0].id;
+  }
+
+  throw createError({
+    statusCode: 400,
+    message: `Region with TERYT code ${teryt} not found`,
+  });
+}
