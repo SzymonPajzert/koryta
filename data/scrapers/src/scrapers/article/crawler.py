@@ -3,7 +3,7 @@ import logging
 import os  # Added
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import psycopg2  # Added
@@ -60,36 +60,60 @@ def init_db(ctx: Context, initial_urls_file: str):
         with pg_conn.cursor() as cur:
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS website_index
-                (
-                    id
-                    TEXT
-                    PRIMARY
-                    KEY,
-                    url
-                    TEXT
-                    UNIQUE,
-                    priority
-                    INTEGER,
-                    done
-                    BOOLEAN,
-                    errors
-                    TEXT
-                [],
-                    num_retries
-                    INTEGER,
-                    date_added
-                    TIMESTAMP
-                    WITH
-                    TIME
-                    ZONE,
-                    date_finished
-                    TIMESTAMP
-                    WITH
-                    TIME
-                    ZONE
-                );
-                """
+                                CREATE TABLE IF NOT EXISTS website_index
+                                (
+                                    id
+                                    TEXT
+                                    PRIMARY
+                                    KEY,
+                                    url
+                                    TEXT
+                                    UNIQUE,
+                                    priority
+                                    INTEGER,
+                                    done
+                                    BOOLEAN,
+                                    errors
+                                    TEXT
+                                    [],
+                                    num_retries
+                                    INTEGER,
+                                    date_added
+                                    TIMESTAMP
+                                    WITH
+                                    TIME
+                                    ZONE,
+                                    date_finished
+                                    TIMESTAMP
+                                    WITH
+                                    TIME
+                                    ZONE,
+                                    locked_by_worker_id
+                                    TEXT,
+                                    locked_at
+                                    TIMESTAMP
+                                    WITH
+                                    TIME
+                                    ZONE
+                                );
+                                -- Add locked_by_worker_id column if it does not exist
+                                DO $$
+                                BEGIN
+                                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='website_index' AND column_name='locked_by_worker_id') THEN
+                                        ALTER TABLE website_index ADD COLUMN locked_by_worker_id TEXT;
+                                    END IF;
+                                END
+                                $$;
+                
+                                -- Add locked_at column if it does not exist
+                                DO $$
+                                BEGIN
+                                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='website_index' AND column_name='locked_at') THEN
+                                        ALTER TABLE website_index ADD COLUMN locked_at TIMESTAMP WITH TIME ZONE;
+                                    END IF;
+                                END
+                                $$;
+                                                """
             )
             pg_conn.commit()
 
@@ -190,30 +214,43 @@ def process_url(ctx: Context, url: str, config: dict) -> (set[str], str | None):
         return set(), str(e)
 
 
-def next_url(ctx: Context, config: dict) -> tuple | None:
+def get_and_lock_url(ctx: Context, config: dict, worker_id: str) -> tuple | None:
+    """
+    Selects an available URL, locks it for the current worker, and returns its details.
+    Handles unlocking URLs that were locked by "dead" workers (more than 60 seconds ago).
+    """
+    timeout_seconds = 60
     with get_pg_connection() as pg_conn:
         with pg_conn.cursor() as cur:
+            # First, try to find an unlocked URL or one locked by a dead worker
             cur.execute(
                 f"""
-                SELECT id, url, priority, num_retries
-                FROM website_index
-                WHERE done = FALSE AND num_retries < {config["max_retries"]}
-                ORDER BY priority ASC, RANDOM()
-                LIMIT 1
-                """
+                UPDATE website_index
+                SET locked_by_worker_id = %s, locked_at = %s
+                WHERE id = (
+                    SELECT id
+                    FROM website_index
+                    WHERE done = FALSE
+                      AND num_retries < %s
+                      AND (locked_by_worker_id IS NULL OR locked_at < %s)
+                    ORDER BY priority ASC, RANDOM()
+                    LIMIT 1
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING id, url, priority, num_retries;
+                """,
+                (worker_id, datetime.now(warsaw_tz), config["max_retries"], datetime.now(warsaw_tz) - timedelta(seconds=timeout_seconds)),
             )
             row = cur.fetchone()
-    if not row:
-        return None
-
-    return row
+            pg_conn.commit()
+            return row
 
 
 def propagate_url_error(ctx: Context, uid: str, error: str) -> None:
     with get_pg_connection() as pg_conn:
         with pg_conn.cursor() as cur:
             cur.execute(
-                "UPDATE website_index SET num_retries = num_retries + 1, errors = array_append(errors, %s) WHERE id = %s",
+                "UPDATE website_index SET num_retries = num_retries + 1, errors = array_append(errors, %s), locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
                 [error, uid],
             )
             pg_conn.commit()
@@ -223,7 +260,7 @@ def mark_url_done(ctx: Context, uid: str) -> None:
     with get_pg_connection() as pg_conn:
         with pg_conn.cursor() as cur:
             cur.execute(
-                "UPDATE website_index SET done = TRUE, date_finished = %s WHERE id = %s",
+                "UPDATE website_index SET done = TRUE, date_finished = %s, locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
                 [datetime.now(warsaw_tz), uid],
             )
             pg_conn.commit()
@@ -249,20 +286,31 @@ def insert_url_rows(ctx: Context, rows: list) -> None:
     # TODO check how many new rows were actually added and log it
 
 
-def crawl(ctx: Context, config: dict):
+def crawl(ctx: Context, config: dict, worker_id: str):
     """Main crawling loop."""
     while True:
-        maybe_row = next_url(ctx, config)
+        maybe_row = get_and_lock_url(ctx, config, worker_id)
         if not maybe_row:
             logger.info("No more URLs to crawl. Exiting.")
             break
 
         uid, current_url, _, _ = maybe_row
+        logger.info(f"Worker {worker_id} crawling: {current_url}")
         new_links, error = process_url(ctx, current_url, config)
 
         if error:
             if error == "RATE_LIMITED":
                 logger.warning("Rate limited, will try another url")
+                # Release the lock for this URL so another worker can pick it up
+                # if the rate limit for this domain has passed for them.
+                # Or, if this worker comes back to it, it will pick it up again.
+                with get_pg_connection() as pg_conn:
+                    with pg_conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE website_index SET locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
+                            [uid],
+                        )
+                        pg_conn.commit()
                 time.sleep(1)
                 continue
 
@@ -280,11 +328,10 @@ def crawl(ctx: Context, config: dict):
                     (uuid7(), link_url, priority, False, [], 0, datetime.now(warsaw_tz), None))
             insert_url_rows(ctx, rows_to_insert)
 
-
-# TODO prepare runner script for running it with on multiple machines
-# TODO hook grafana to it / or maybe just one scipt that prints some stats based on db (like queries per second, number of unique hostnames etc)
+# TODO save link to dump in db (path)
+# TODO number of success in 1min, 10min, 60min, number of errors in 1min, 10min, 60min
 # TODO RSS feeds as entry (https://echodnia.eu/rss)
-# TODO try to figure out a date of an article
+# TODO try to figure out a date of an article and title and content
 # TODO add more seeds from https://naszemiasto.pl/ 
 # TODO handle links like https://www.facebook.com/share_channel/?type=reshare&link=https%3A%2F%2Ftvn24.pl%2Fplus%2Fpodcasty%2Fpodcast-polityczny%2Fafera-wokol-dzialki-pod-cpk-agata-adamek-i-konrad-piasecki-o-najnowszych-ustaleniach-vc8724900&app_id=966242223397117&source_surface=external_reshare&display&hashtag
 # https://www.linkedin.com/checkpoint/rp/request-password-reset?session_redirect=https%3A%2F%2Fwww%2Elinkedin%2Ecom%2FshareArticle%3Fmini%3Dtrue%26url%3Dhttps%3A%2F%2Fwww%2Erp%2Epl%2Fpolityka%2Fart43745271-tusk-powolal-specjalny-zespol-chodzi-o-skandal-zwiazany-z-pedofilia-w-usa&trk=hb_signin
@@ -347,6 +394,12 @@ if __name__ == "__main__":
         default=5,
         help="Maximum number of retries for a failed URL.",
     )
+    parser.add_argument(
+        "--worker-id",
+        type=str,
+        required=True,
+        help="Unique identifier for the current crawler worker.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -357,7 +410,7 @@ if __name__ == "__main__":
 
     from main import _setup_context
 
-    ctx, _ = _setup_context(use_rejestr_io=False, storage_mode=args.storage, db_path=args.db_path)
+    ctx, _ = _setup_context(use_rejestr_io=False, storage_mode=args.storage)
 
     config = {
         "crawl_delay_seconds": args.crawl_delay_seconds,
@@ -370,7 +423,7 @@ if __name__ == "__main__":
 
     logger.info("Starting crawl...")
     try:
-        crawl(ctx, config)
+        crawl(ctx, config, args.worker_id)
     except KeyboardInterrupt:
         logger.info("Crawl interrupted by user. Exiting.")
 
