@@ -281,7 +281,6 @@ def crawl(ctx: Context, config: dict):
             insert_url_rows(ctx, rows_to_insert)
 
 
-# TODO change db to postgress
 # TODO prepare runner script for running it with on multiple machines
 # TODO hook grafana to it / or maybe just one scipt that prints some stats based on db (like queries per second, number of unique hostnames etc)
 # TODO RSS feeds as entry (https://echodnia.eu/rss)
