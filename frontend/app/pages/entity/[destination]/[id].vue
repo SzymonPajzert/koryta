@@ -18,7 +18,7 @@
                 prepend-icon="mdi-format-list-bulleted"
                 :to="`/lista?miejsce=${node}`"
               >
-                Lista
+                Lista pracowników
               </v-btn>
               <v-btn
                 class="ml-2"
@@ -26,7 +26,7 @@
                 prepend-icon="mdi-graph-outline"
                 :to="`/graf?miejsce=${node}`"
               >
-                Graf
+                Graf połączeń
               </v-btn>
             </div>
             <EntityDetailsCard :entity="entity" :type="type" />

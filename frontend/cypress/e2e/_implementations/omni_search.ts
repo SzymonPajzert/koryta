@@ -101,44 +101,44 @@ describe("OmniSearch", () => {
   describe("Places Navigation", () => {
     it("navigates to entity page when clicking a company result", () => {
       cy.search("Orlen");
-  
+
       cy.get(".v-overlay__content")
-          .should("be.visible")
-          .contains(".v-list-item-title", /^Orlen$/)
-          .click();
-  
+        .should("be.visible")
+        .contains(".v-list-item-title", /^Orlen$/)
+        .click();
+
       // Verify URL change
       cy.url().should("include", "/entity/place/");
     });
-    
+
     it("navigates to list view when clicking 'Lista' button on entity page", () => {
-        cy.search("Orlen");
-        cy.get(".v-overlay__content")
-            .should("be.visible")
-            .contains(".v-list-item-title", /^Orlen$/)
-            .click();
-        
-        cy.url().should("include", "/entity/place/");
-  
-        // Check for 'Lista' button
-        cy.contains("a, button", "Lista").should("be.visible").click();
-        cy.url().should("include", "/lista");
-        cy.url().should("include", "miejsce=");
+      cy.search("Orlen");
+      cy.get(".v-overlay__content")
+        .should("be.visible")
+        .contains(".v-list-item-title", /^Orlen$/)
+        .click();
+
+      cy.url().should("include", "/entity/place/");
+
+      // Check for 'Lista' button
+      cy.contains("a, button", "Lista").should("be.visible").click();
+      cy.url().should("include", "/lista");
+      cy.url().should("include", "miejsce=");
     });
-  
-      it("navigates to graph view when clicking 'Graf' button on entity page", () => {
-        cy.search("Orlen");
-        cy.get(".v-overlay__content")
-            .should("be.visible")
-            .contains(".v-list-item-title", /^Orlen$/)
-            .click();
-        
-        cy.url().should("include", "/entity/place/");
-  
-        // Check for 'Graf' button
-        cy.contains("a, button", "Graf").should("be.visible").click();
-        cy.url().should("include", "/graf");
-        cy.url().should("include", "miejsce=");
+
+    it("navigates to graph view when clicking 'Graf' button on entity page", () => {
+      cy.search("Orlen");
+      cy.get(".v-overlay__content")
+        .should("be.visible")
+        .contains(".v-list-item-title", /^Orlen$/)
+        .click();
+
+      cy.url().should("include", "/entity/place/");
+
+      // Check for 'Graf' button
+      cy.contains("a, button", "Graf").should("be.visible").click();
+      cy.url().should("include", "/graf");
+      cy.url().should("include", "miejsce=");
     });
   });
 });
