@@ -1,10 +1,9 @@
-
 import { computed, ref, watch, onMounted, type Ref } from "vue";
-import type { NodeType, Revision } from "~~/shared/model";
+import type { NodeType } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 import { useEdges } from "~/composables/edges";
 import { useEntityMutation } from "./useEntityMutation";
-import { useNodeData, type EditablePage } from "./useNodeData";
+import { useNodeData } from "./useNodeData";
 
 interface UseNodeEditOptions {
   route?: ReturnType<typeof useRoute>;
@@ -146,8 +145,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           },
         });
       }
-    } catch (e) {
-      // Error is already alerted by useEntityMutation
     } finally {
       loading.value = false;
     }

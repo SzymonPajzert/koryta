@@ -94,38 +94,6 @@ export function useEdgeEdit({
     }
   });
 
-  // Handle direction switch -> validate type
-  watch(
-    () => newEdge.value.direction,
-    (newDir) => {
-      if (!isEditingEdge.value && myType.value !== "article") {
-        pickerTarget.value = undefined;
-
-        // Re-validate current edgeType
-        const option = getEdgeOption(edgeType.value);
-        let currentStillValid = false;
-        if (option) {
-          const rs = option.sourceType;
-          const rt = option.targetType;
-          if (newDir === "outgoing") {
-            currentStillValid = rs === myType.value;
-          } else {
-            currentStillValid = rt === myType.value;
-          }
-        }
-
-        if (!currentStillValid) {
-          // Default to the first available type for the new direction
-          const available = availableEdgeTypes.value;
-          if (available[0]) {
-            edgeType.value = available[0].realType;
-          }
-        }
-      }
-    },
-    { deep: true },
-  );
-
   const edgeSourceType = computed<NodeType>(() => {
     const option = getEdgeOption(edgeType.value);
     return option?.sourceType || "person";

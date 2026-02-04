@@ -1,4 +1,4 @@
-import { computed, ref, watch, type Ref } from "vue";
+import { watch, type Ref } from "vue";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
 import type {
   Person,

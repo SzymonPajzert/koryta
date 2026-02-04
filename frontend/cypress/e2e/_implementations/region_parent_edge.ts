@@ -100,16 +100,6 @@ describe("Region Parent Edge", () => {
     // Verifying chip creation - use broader selector
     cy.contains(NEW_REGION_NAME).should("exist");
 
-    // Click Add
-    // The button might be "Dodaj powiązanie" or similar icon
-    // Assuming standard form submission logic or auto-save?
-    // In EditEdge.vue, there is "Dodaj powiązanie" button usually?
-    // Actually, `useEdgeEdit` `addEdge` is called via a button in `EditEdge.vue` template?
-    // Let's check EditEdge.vue template later to be sure of selector.
-    // For now assume "Zapisz" or check component structure.
-
-    // Looking at EditEdge.vue (implied):
-    // <v-btn ... @click="processEdge">Dodaj powiązanie</v-btn>
     cy.contains("button", "Dodaj powiązanie").click();
 
     cy.wait("@createEdge");
