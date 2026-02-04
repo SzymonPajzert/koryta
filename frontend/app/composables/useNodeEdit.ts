@@ -1,16 +1,10 @@
+
 import { computed, ref, watch, onMounted, type Ref } from "vue";
-import { doc, getDoc, getFirestore } from "firebase/firestore";
-import type {
-  Person,
-  Node,
-  Revision,
-  Article,
-  NodeType,
-  Company,
-} from "~~/shared/model";
+import type { NodeType, Revision } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 import { useEdges } from "~/composables/edges";
-import { getPageTitle } from "~/composables/useFunctions";
+import { useEntityMutation } from "./useEntityMutation";
+import { useNodeData, type EditablePage } from "./useNodeData";
 
 interface UseNodeEditOptions {
   route?: ReturnType<typeof useRoute>;
@@ -18,17 +12,11 @@ interface UseNodeEditOptions {
   idToken?: Ref<string>;
 }
 
-type EditablePage = Partial<Node> &
-  Partial<Omit<Person, "type">> &
-  Partial<Omit<Article, "type">> &
-  Partial<Omit<Company, "type">>;
-
 export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   const route = options.route || useRoute();
   const router = options.router || useRouter();
   const { idToken: authIdToken } = useAuthState();
   const idToken = options.idToken || authIdToken;
-  const db = getFirestore(useFirebaseApp(), "koryta-pl");
 
   const paramId = computed(() => route.params.id as string | undefined);
   const isNew = computed(
@@ -40,27 +28,29 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   // State keys should include node_id to avoid sharing across different nodes if navigated
   const stateKey = computed(() => `node-edit-${node_id.value || "new"}`);
 
-  const current = useState<EditablePage>(`${stateKey.value}-current`, () => ({
-    name: isNew.value ? (route.query.name as string) || "" : "",
-    type: isNew.value
-      ? ((route.query.type as NodeType | undefined) ?? "person")
-      : "person",
-    parties: [],
-    content: "",
-    sourceURL: "",
-    shortName: "",
-  }));
+  const authHeaders = computed<Record<string, string>>(() => {
+    const headers: Record<string, string> = {};
+    if (idToken.value) {
+      headers.Authorization = `Bearer ${idToken.value}`;
+    }
+    return headers;
+  });
 
-  const lastFetchedId = useState<string | undefined>(
-    `${stateKey.value}-lastFetchedId`,
-    () => undefined,
-  );
-  const isSaving = useState(`${stateKey.value}-isSaving`, () => false);
-  const revisions = useState<Revision[]>(
-    `${stateKey.value}-revisions`,
-    () => [],
-  );
-  const loading = useState(`${stateKey.value}-loading`, () => false);
+  const {
+    current,
+    revisions,
+    loading,
+    lastFetchedId,
+    fetchData,
+    fetchRevisions,
+  } = useNodeData({
+    nodeId: node_id,
+    isNew,
+    authHeaders,
+    stateKey,
+    idToken,
+    initialType: (route.query.type as NodeType | undefined) ?? "person",
+  });
 
   const {
     sources,
@@ -76,87 +66,15 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   const partiesDefault = computed<string[]>(() => [...parties, "inne"]);
 
-  const authHeaders = computed<Record<string, string>>(() => {
-    const headers: Record<string, string> = {};
-    if (idToken.value) {
-      headers.Authorization = `Bearer ${idToken.value}`;
-    }
-    return headers;
-  });
-
-  async function fetchRevisions() {
-    if (!node_id.value) return;
-    try {
-      const res = await $fetch<{ revisions: Revision[] }>(
-        `/api/revisions/node/${node_id.value}`,
-        {
-          headers: authHeaders.value,
-        },
-      );
-      revisions.value = res.revisions;
-    } catch (e) {
-      console.error("Error fetching revisions", e);
-    }
-  }
-
-  async function fetchData() {
-    const id = node_id.value;
-
-    if (isSaving.value) return;
-    if (id === lastFetchedId.value && id !== undefined) return;
-
-    if (!isNew.value && id && idToken.value) {
-      try {
-        const snap = await getDoc(doc(db, "nodes", id));
-        if (snap.exists()) {
-          const data = snap.data();
-          const type = data.type || "person";
-
-          const { node } = await $fetch<{ node: Node }>(
-            `/api/nodes/entry/${id}`,
-            {
-              query: { type },
-              headers: authHeaders.value,
-            },
-          );
-
-          const v: EditablePage = {
-            name: node.name || "",
-            type: node.type,
-            content: node.content || "",
-          };
-          if (node.type === "person") {
-            v.parties = (node as Partial<Person>).parties || [];
-          }
-          if (node.type === "article") {
-            v.sourceURL = (node as Partial<Article>).sourceURL || "";
-            v.shortName = (node as Partial<Article>).shortName || "";
-          }
-          if (node.type === "place") {
-            v.krsNumber = (node as Partial<Company>).krsNumber || "";
-          }
-          current.value = v;
-          lastFetchedId.value = id;
-        }
-      } catch (e) {
-        console.error("Error fetching node data", e);
+  watch(
+    () => route.query.type,
+    (newType) => {
+      if (isNew.value && newType) {
+        current.value.type = newType as NodeType;
       }
-      await fetchRevisions();
-    } else if (isNew.value && lastFetchedId.value !== undefined) {
-      lastFetchedId.value = undefined;
-      const initialType =
-        (route.query.type as NodeType | undefined) ?? "person";
-      current.value = {
-        name: "",
-        type: initialType,
-        parties: [],
-        content: "",
-        sourceURL: "",
-        shortName: "",
-      };
-      revisions.value = [];
-    }
-  }
+    },
+    { immediate: true },
+  );
 
   watch(
     [() => node_id.value, () => idToken.value],
@@ -168,45 +86,11 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     { immediate: true },
   );
 
-  watch(
-    () => route.query.type,
-    (newType) => {
-      if (isNew.value && newType) {
-        current.value.type = newType as NodeType;
-      }
-    },
-    { immediate: true },
-  );
-
-  async function fetchPageTitle() {
-    if (!current.value.sourceURL || current.value.type !== "article") return;
-    loading.value = true;
-    try {
-      const title = await getPageTitle(current.value.sourceURL);
-      if (title && !current.value.name) {
-        current.value.name = title;
-      }
-    } catch (e) {
-      console.error("Error fetching page title", e);
-    } finally {
-      loading.value = false;
-    }
-  }
-
   onMounted(() => {
     if (idToken.value) {
       fetchData();
     }
   });
-
-  watch(
-    () => current.value.sourceURL,
-    (newUrl) => {
-      if (newUrl && current.value.type === "article" && !current.value.name) {
-        fetchPageTitle();
-      }
-    },
-  );
 
   const { save } = useEntityMutation({ authHeaders });
 
@@ -215,12 +99,11 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       alert("Czekam na autoryzację...");
       return;
     }
-    if (loading.value || isSaving.value) {
+    if (loading.value) {
       return;
     }
 
     loading.value = true;
-    isSaving.value = true;
 
     try {
       if (isNew.value) {
@@ -254,7 +137,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           payload: { ...current.value, node_id: node_id.value },
           successMessage: "Zapisano!",
           onSuccess: async () => {
-            // alert("Zapisano!"); // useEntityMutation shows generic revision saved message
             await fetchRevisions();
             if (node_id.value) {
               await router.push(
@@ -268,9 +150,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       // Error is already alerted by useEntityMutation
     } finally {
       loading.value = false;
-      setTimeout(() => {
-        isSaving.value = false;
-      }, 500);
     }
   }
 
