@@ -9,13 +9,16 @@ vi.stubGlobal("alert", vi.fn());
 
 const mockOnUpdate = vi.fn();
 
-// Mock useState
+// Mock useState with actual shared state behavior
+const stateMap = new Map<string, any>();
 vi.mock("#app", () => ({
-  useState: (key: string, init: () => any) => ref(init()),
+  useState: (key: string, init: () => any) => {
+    if (!stateMap.has(key)) {
+      stateMap.set(key, ref(init()));
+    }
+    return stateMap.get(key);
+  },
 }));
-
-// Mock alert
-vi.stubGlobal("alert", vi.fn());
 
 describe("useEdgeEdit", () => {
   let mockNodeId: string;
@@ -339,5 +342,104 @@ describe("useEdgeEdit - articles", () => {
     expect(types).toContain("mentioned_person");
     expect(types).toContain("mentioned_company");
     expect(types).not.toContain("employed");
+  });
+});
+
+describe("Region as Parent", () => {
+  const nodeId = ref("company-123");
+  const nodeType = ref("place" as const);
+  const authHeaders = ref({ Authorization: "Bearer token" });
+  const onUpdate = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedFetch.mockReset();
+  });
+
+  it("transforms owns_region to owns type when saving edge", async () => {
+    stateMap.clear();
+    const { processEdge, newEdge, pickerTarget, edgeType } = useEdgeEdit({
+      nodeId,
+      nodeType,
+      authHeaders,
+      onUpdate,
+      stateKey: ref("test-region-save"),
+    });
+
+    // Set up as if we selected "owns_region" (incoming)
+    // Target defaults to nodeId (the company), Source is chosen in pickerTarget because it's incoming
+    newEdge.value.direction = "incoming";
+    await nextTick();
+
+    edgeType.value = "owns_region" as any;
+    await nextTick(); // Wait for edgeType watcher to clear pickerTarget
+
+    pickerTarget.value = { id: "region-1", type: "region" } as any;
+    await nextTick();
+
+    mockedFetch.mockResolvedValueOnce({});
+
+    await processEdge();
+
+    expect(global.$fetch as any).toHaveBeenCalledWith(
+      "/api/edges/create",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          source: "region-1",
+          target: "company-123",
+          type: "owns", // Should be transformed from owns_region -> owns
+        }),
+      }),
+    );
+  });
+
+  it("detects owns_region when opening existing edge edit", () => {
+    const { openEditEdge, edgeType } = useEdgeEdit({
+      nodeId,
+      nodeType,
+      authHeaders,
+      stateKey: ref("test-region-edit"),
+    });
+
+    const mockEdge: any = {
+      type: "owns",
+      source: "region-1",
+      target: "company-123",
+      id: "edge-999",
+      richNode: {
+        id: "region-1",
+        type: "region",
+        name: "Some Region",
+      },
+    };
+
+    openEditEdge(mockEdge);
+
+    expect(edgeType.value).toBe("owns_region");
+  });
+
+  it("defaults to normal 'owns' if owner is company", () => {
+    const { openEditEdge, edgeType } = useEdgeEdit({
+      nodeId,
+      nodeType,
+      authHeaders,
+      stateKey: ref("test-company-edit"),
+    });
+
+    const mockEdge: any = {
+      type: "owns",
+      source: "company-parent",
+      target: "company-123",
+      id: "edge-999",
+      richNode: {
+        id: "company-parent",
+        type: "place",
+        name: "Parent Company",
+      },
+    };
+
+    openEditEdge(mockEdge);
+
+    expect(edgeType.value).toBe("owns");
   });
 });

@@ -36,9 +36,11 @@ describe("My Revisions Workflow", () => {
     // 4. Click revert (Wycofaj)
     // We need to find the specific item. Since we just added it, it should be there.
     // The "Wycofaj" button is inside the list item.
-    cy.contains(".v-list-item", newName).within(() => {
-      cy.contains("Wycofaj").click();
-    });
+    cy.contains(".v-list-item", newName)
+      .should("be.visible")
+      .within(() => {
+        cy.contains("button", "Wycofaj").click();
+      });
 
     // 5. Confirm dialog (browser confirm)
     // Cypress automatically accepts confirms, but we can verify it was triggered if needed.
