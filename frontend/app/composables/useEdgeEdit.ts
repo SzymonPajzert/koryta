@@ -248,6 +248,7 @@ export function useEdgeEdit({
         references: newEdge.value.references,
       };
 
+      // TODO it should be saveEdge and it should be strongly typed
       await save({
         isNew: true,
         createEndpoint: "/api/edges/create",
