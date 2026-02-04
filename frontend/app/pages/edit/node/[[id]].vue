@@ -167,6 +167,7 @@
 
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
+import type { NodeType } from "~~/shared/model";
 
 definePageMeta({
   middleware: "auth",

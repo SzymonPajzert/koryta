@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useEdgeEdit } from "../../app/composables/useEdgeEdit";
 import { ref, nextTick } from "vue";
@@ -375,14 +374,14 @@ describe("Region as Parent", () => {
     edgeType.value = "owns_region" as any;
     await nextTick(); // Wait for edgeType watcher to clear pickerTarget
 
-    pickerTarget.value = { id: "region-1", type: "region" } as any; 
+    pickerTarget.value = { id: "region-1", type: "region" } as any;
     await nextTick();
 
     mockedFetch.mockResolvedValueOnce({});
 
     await processEdge();
-    
-    expect((global.$fetch as any)).toHaveBeenCalledWith(
+
+    expect(global.$fetch as any).toHaveBeenCalledWith(
       "/api/edges/create",
       expect.objectContaining({
         body: expect.objectContaining({

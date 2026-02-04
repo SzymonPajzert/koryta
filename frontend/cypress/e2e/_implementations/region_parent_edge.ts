@@ -1,4 +1,3 @@
-
 describe("Region Parent Edge", () => {
   const COMPANY_ID = "company-123";
   const EXISTING_REGION_ID = "region-1";
@@ -22,44 +21,44 @@ describe("Region Parent Edge", () => {
     // The component uses `/api/nodes/${props.entity}`
     // If props.entity is "region", it calls `/api/nodes/region`
     cy.intercept("GET", "/api/nodes/region*", (req) => {
-        req.reply({
-            body: {
-                entities: {
-                    [EXISTING_REGION_ID]: {
-                        id: EXISTING_REGION_ID,
-                        name: "Existing Region",
-                        type: "region",
-                    }
-                }
-            }
-        });
+      req.reply({
+        body: {
+          entities: {
+            [EXISTING_REGION_ID]: {
+              id: EXISTING_REGION_ID,
+              name: "Existing Region",
+              type: "region",
+            },
+          },
+        },
+      });
     }).as("getRegions");
 
     // Mock edges
     cy.intercept("GET", "/api/edges*", { body: [] }).as("getEdges");
-    
+
     // Mock revisions check
     cy.intercept("GET", "/api/revisions*", { body: [] }).as("getRevisions");
 
     // Mock create node
     cy.intercept("POST", "/api/nodes/create", (req) => {
-        expect(req.body).to.include({
-            type: "region",
-            name: NEW_REGION_NAME
-        });
-        req.reply({
-            body: { id: "new-region-99" }
-        });
+      expect(req.body).to.include({
+        type: "region",
+        name: NEW_REGION_NAME,
+      });
+      req.reply({
+        body: { id: "new-region-99" },
+      });
     }).as("createRegion");
 
     // Mock create edge
     cy.intercept("POST", "/api/edges/create", (req) => {
-        expect(req.body).to.include({
-            source: "new-region-99",
-            target: COMPANY_ID,
-            type: "owns"
-        });
-        req.reply({ body: undefined });
+      expect(req.body).to.include({
+        source: "new-region-99",
+        target: COMPANY_ID,
+        type: "owns",
+      });
+      req.reply({ body: undefined });
     }).as("createEdge");
   });
 
@@ -73,7 +72,7 @@ describe("Region Parent Edge", () => {
     // Verification of correct mode by checking the label
     // The current fix sets label to "Wyszukaj obiekt" because it falls into 'else' of (person? place?)
     cy.contains("label", "Wyszukaj obiekt").should("exist");
-    
+
     // Check that we are in the form
     cy.get("input").should("exist");
   });
@@ -84,8 +83,11 @@ describe("Region Parent Edge", () => {
 
     // Type new region name
     // Use accessible label look up or just general input interaction since specific testid might be buried
-    cy.contains("label", "Wyszukaj obiekt").parent().find("input").type(NEW_REGION_NAME);
-    
+    cy.contains("label", "Wyszukaj obiekt")
+      .parent()
+      .find("input")
+      .type(NEW_REGION_NAME);
+
     // Wait for debounce/search
     cy.wait("@getRegions");
 
@@ -105,13 +107,13 @@ describe("Region Parent Edge", () => {
     // Actually, `useEdgeEdit` `addEdge` is called via a button in `EditEdge.vue` template?
     // Let's check EditEdge.vue template later to be sure of selector.
     // For now assume "Zapisz" or check component structure.
-    
+
     // Looking at EditEdge.vue (implied):
     // <v-btn ... @click="processEdge">Dodaj powiązanie</v-btn>
     cy.contains("button", "Dodaj powiązanie").click();
 
     cy.wait("@createEdge");
-    
+
     // Should show success message or clear form
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie");

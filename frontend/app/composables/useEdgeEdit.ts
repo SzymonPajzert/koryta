@@ -84,7 +84,8 @@ export function useEdgeEdit({
     newEdge.value.type = t;
   });
 
-  const getRealType = (t: string): EdgeType => {
+  const getRealType = (t: string | undefined): EdgeType => {
+    if (!t) return "connection";
     const option = edgeTypeOptions.find((o) => o.value === t);
     return option?.realType || (t as EdgeType);
   };

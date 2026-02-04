@@ -52,9 +52,10 @@ describe("Revisions Lifecycle", () => {
     cy.get(".v-progress-circular").should("not.exist");
 
     // 5. Expand the group
-    cy.contains(".v-list-group", "connection", { timeout: 15000 })
-      .should("contain", "Jan Kowalski")
-      .should("contain", "Piotr Wiśniewski")
+    cy.contains(".v-list-group", "Jan Kowalski -> Piotr Wiśniewski", {
+      timeout: 15000,
+    })
+      .should("contain", "connection")
       .as("group");
 
     cy.get("@group").click();
