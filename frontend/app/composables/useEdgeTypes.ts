@@ -134,6 +134,7 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
 
 export type NewEdgeButton = {
   edgeType: string;
+  edgeTypeExt: edgeTypeExt;
   direction: "incoming" | "outgoing";
   nodeType: NodeType;
   icon: string;
@@ -149,6 +150,7 @@ export function useEdgeButtons(nodeName: string): NewEdgeButton[] {
       if (option.buttons.outgoing) {
         result.push({
           edgeType: key,
+          edgeTypeExt: option.value,
           direction: "outgoing",
           nodeType: option.sourceType, // We are source, we add target
           icon: option.buttons.outgoing.icon,
@@ -158,6 +160,7 @@ export function useEdgeButtons(nodeName: string): NewEdgeButton[] {
       if (option.buttons.incoming) {
         result.push({
           edgeType: key,
+          edgeTypeExt: option.value,
           direction: "incoming",
           nodeType: option.targetType, // We are target, we add source
           icon: option.buttons.incoming.icon,

@@ -153,7 +153,6 @@ const props = defineProps<{
   nodeId: string;
   nodeType: NodeType;
   nodeName: string;
-  authHeaders: Record<string, string>;
   editedEdge?: string;
   edgeTypeExt: edgeTypeExt;
 }>();

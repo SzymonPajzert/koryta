@@ -12,8 +12,10 @@ describe("Article Entities and Edge References", () => {
 
   it("should allow adding an edge from an article page", () => {
     cy.visit("/entity/article/6");
-    cy.contains("Zaproponuj zmianę").click();
+    // Inline quick add
+    cy.contains("Szybkie dodawanie").should("be.visible");
     cy.contains("Wspomniane miejsce w artykule").click();
+
     cy.pickEntity("Orlen", "entity-picker-target");
 
     cy.contains("button", "Dodaj powiązanie").click();
