@@ -71,7 +71,7 @@ describe("Region Parent Edge", () => {
 
     // Verification of correct mode by checking the label
     // The current fix sets label to "Wyszukaj obiekt" because it falls into 'else' of (person? place?)
-    cy.contains("label", "Wyszukaj obiekt").should("exist");
+    cy.contains("label", "Wyszukaj region").should("exist");
 
     // Check that we are in the form
     cy.get("input").should("exist");
@@ -83,7 +83,7 @@ describe("Region Parent Edge", () => {
 
     // Type new region name
     // Use accessible label look up or just general input interaction since specific testid might be buried
-    cy.contains("label", "Wyszukaj obiekt")
+    cy.contains("label", "Wyszukaj region")
       .parent()
       .find("input")
       .type(NEW_REGION_NAME);

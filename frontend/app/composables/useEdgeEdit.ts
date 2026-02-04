@@ -1,7 +1,16 @@
-import { computed } from "vue";
+import { computed, ref, unref, watch, type Ref } from "vue";
 import type { NodeType, Edge, Link } from "~~/shared/model";
 import { edgeTypeOptions, type edgeTypeExt } from "./useEdgeTypes";
 import { useEntityMutation } from "./useEntityMutation";
+
+export type InternalEdge = Partial<Edge> & {
+  direction?: "outgoing" | "incoming";
+  richNode?: {
+    id: string;
+    type: NodeType;
+    name: string;
+  };
+};
 
 export type NodeRef = {
   id?: string;
@@ -20,63 +29,84 @@ interface UseEdgeEditOptions {
 export function useEdgeEdit({
   fixedNode,
   referenceNode,
-  edgeType,
+  edgeType = "connection",
   editedEdge,
-  onUpdate,
-}: UseEdgeEditOptions) {
+  onUpdate = async () => {},
+}: Partial<UseEdgeEditOptions>) {
   const { save } = useEntityMutation();
 
-  const newEdge = ref<Partial<Edge>>(emptyEdge());
-  const currentOption = edgeTypeOptions[edgeType];
-
-  const _v = referenceNode;
+  const newEdge = ref<InternalEdge>(emptyEdge());
+  const internalEdgeType = ref(edgeType);
+  const currentOption = computed(() =>
+    internalEdgeType.value
+      ? edgeTypeOptions[internalEdgeType.value]
+      : undefined,
+  );
 
   const matches = (position: "source" | "target") => {
-    if (referenceNode) return false; // we want both to be pickable
+    if (!currentOption.value) return false;
+    const direction = newEdge.value.direction;
+    const expectedPosition = direction === "outgoing" ? "source" : "target";
+    if (position !== expectedPosition) return false;
+
     const expectedType =
       position === "source"
-        ? currentOption.sourceType
-        : currentOption.targetType;
-    return fixedNode?.type === expectedType;
+        ? currentOption.value.sourceType
+        : currentOption.value.targetType;
+    return unref(fixedNode)?.type === expectedType;
   };
 
-  const layout: { source: NodeRef; target: NodeRef } = {
+  const layout = {
     source: {
-      id: matches("source") ? fixedNode?.id : undefined,
-      type: currentOption.sourceType,
+      id: computed(() =>
+        matches("source") ? unref(fixedNode)?.id : undefined,
+      ),
+      type: computed(() => currentOption.value?.sourceType || "person"),
       ref: ref<Link<NodeType> | undefined>(undefined),
     },
     target: {
-      id: matches("target") ? fixedNode?.id : undefined,
-      type: currentOption.targetType,
+      id: computed(() =>
+        matches("target") ? unref(fixedNode)?.id : undefined,
+      ),
+      type: computed(() => currentOption.value?.targetType || "person"),
       ref: ref<Link<NodeType> | undefined>(undefined),
     },
   };
 
+  const pickedNode = computed({
+    get: () => {
+      if (matches("source")) return layout.target.ref.value;
+      if (matches("target")) return layout.source.ref.value;
+      return undefined;
+    },
+    set: (val) => {
+      if (matches("source")) layout.target.ref.value = val as any;
+      else if (matches("target")) layout.source.ref.value = val as any;
+    },
+  });
+
   const sourceId = computed(() => {
-    return layout.source.ref.value?.id ?? layout.source.id;
+    return layout.source.ref.value?.id ?? layout.source.id.value;
   });
   const targetId = computed(() => {
-    return layout.target.ref.value?.id ?? layout.target.id;
+    return layout.target.ref.value?.id ?? layout.target.id.value;
   });
 
   const readyToSubmit = computed(() => {
-    // Must have picked nodes or they are already picked
     return !!sourceId.value && !!targetId.value;
   });
 
-  const edgeLabel = edgeTypeOptions[edgeType].label;
+  const edgeLabel = computed(() => currentOption.value?.label || "");
 
   async function processEdge() {
     if (!readyToSubmit.value) {
-      alert("Brak źródła lub celu!");
       return;
     }
 
     const payload = {
       source: sourceId.value,
       target: targetId.value,
-      type: currentOption.realType,
+      type: currentOption.value?.realType,
       name: newEdge.value.name,
       content: newEdge.value.content,
       start_date: newEdge.value.start_date,
@@ -103,18 +133,114 @@ export function useEdgeEdit({
     });
   }
 
+  const availableEdgeTypes = computed(() => {
+    const fn = unref(fixedNode);
+    if (!fn) return [];
+    return Object.values(edgeTypeOptions).filter((option) => {
+      const direction = newEdge.value.direction || "outgoing";
+      if (
+        option.allowedDirections &&
+        !option.allowedDirections.includes(direction)
+      ) {
+        return false;
+      }
+      if (direction === "outgoing") {
+        return option.sourceType === fn.type;
+      } else {
+        return option.targetType === fn.type;
+      }
+    });
+  });
+
+  watch(
+    [() => newEdge.value.direction, internalEdgeType],
+    ([newDir, newType], [oldDir, oldType]) => {
+      if (editedEdge) return;
+      const fn = unref(fixedNode);
+      if (!fn) return;
+      const option = edgeTypeOptions[newType];
+      if (!option) return;
+
+      const direction = newDir || "outgoing";
+      const isAllowed =
+        (direction === "outgoing" ? option.sourceType : option.targetType) ===
+        fn.type;
+      const isDirRestricted =
+        option.allowedDirections &&
+        !option.allowedDirections.includes(direction);
+
+      if (!isAllowed || isDirRestricted) {
+        if (newDir !== oldDir && oldDir !== undefined) {
+          // Direction changed, type became invalid -> reset type
+          internalEdgeType.value = "connection";
+        } else {
+          // Type changed, direction is invalid -> try switching direction
+          const otherDir = direction === "outgoing" ? "incoming" : "outgoing";
+          const isOtherAllowed =
+            (otherDir === "outgoing"
+              ? option.sourceType
+              : option.targetType) === fn.type;
+          const isOtherDirNotRestricted =
+            !option.allowedDirections ||
+            option.allowedDirections.includes(otherDir);
+
+          if (isOtherAllowed && isOtherDirNotRestricted) {
+            newEdge.value.direction = otherDir;
+          } else {
+            internalEdgeType.value = "connection";
+          }
+        }
+      }
+    },
+    { immediate: true },
+  );
+
+  function openEditEdge(edge: Edge) {
+    const internalEdge = edge as InternalEdge;
+    newEdge.value = { ...internalEdge };
+    const fn = unref(fixedNode);
+    // Try to detect edgeTypeExt
+    if (edge.type === "owns") {
+      // Determine if it's owns_parent, owns_child or owns_region
+      if (internalEdge.richNode?.type === "region") {
+        internalEdgeType.value = "owns_region";
+      } else if (edge.source === fn?.id) {
+        internalEdgeType.value = "owns_child";
+      } else {
+        internalEdgeType.value = "owns_parent";
+      }
+    } else {
+      internalEdgeType.value = edge.type as edgeTypeExt;
+    }
+
+    if (matches("source")) {
+      layout.target.ref.value = {
+        id: edge.target,
+        type: layout.target.type.value,
+      } as any;
+    } else if (matches("target")) {
+      layout.source.ref.value = {
+        id: edge.source,
+        type: layout.source.type.value,
+      } as any;
+    }
+  }
+
   return {
     newEdge,
-    edgeType,
+    edgeType: internalEdgeType,
     edgeLabel,
     layout,
     readyToSubmit,
+    availableEdgeTypes,
+    pickedNode,
     // Methods
     processEdge,
+    openEditEdge,
   };
 }
 
-function emptyEdge(): Partial<Edge> & { direction: "outgoing" | "incoming" } {
+function emptyEdge(): InternalEdge {
   return {
     type: "connection",
     target: "",

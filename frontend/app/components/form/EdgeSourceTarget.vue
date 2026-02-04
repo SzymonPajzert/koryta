@@ -17,7 +17,7 @@
     <FormEntityPicker
       v-model="pickedNode"
       :entity="nodeType"
-      :label="`Wyszukaj ${nodeType === 'person' ? 'osobę' : nodeType === 'place' ? 'firmę' : 'obiekt'}`"
+      :label="`Wyszukaj ${nodeType === 'person' ? 'osobę' : nodeType === 'place' ? 'firmę' : nodeType === 'region' ? 'region' : 'obiekt'}`"
       density="compact"
       hide-details
       data-testid="entity-picker-source"

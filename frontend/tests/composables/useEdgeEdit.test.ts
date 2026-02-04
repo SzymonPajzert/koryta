@@ -64,7 +64,7 @@ describe("useEdgeEdit", () => {
       // 'connection' (Source: Person) -> Include
       // 'employed' (Source: Person) -> Include
       const types = availableEdgeTypes.value.map((o) => o.value);
-      expect(types).not.toContain("owns");
+      expect(types).not.toContain("owns_parent");
       expect(types).toContain("connection");
       expect(types).toContain("employed");
 
@@ -78,7 +78,7 @@ describe("useEdgeEdit", () => {
       // 'mentioned_person' (Target: Person) -> Include
       expect(typesIn).toContain("connection");
       expect(typesIn).toContain("mentioned_person");
-      expect(typesIn).not.toContain("owns");
+      expect(typesIn).not.toContain("owns_parent");
       expect(typesIn).not.toContain("employed");
     });
 
@@ -97,7 +97,7 @@ describe("useEdgeEdit", () => {
       // Place Outgoing (Default)
       // 'owns' (Source: Place) -> Include
       const types = availableEdgeTypes.value.map((o) => o.value);
-      expect(types).toContain("owns");
+      expect(types).toContain("owns_child");
 
       // Change to incoming
       newEdge.value.direction = "incoming";
@@ -108,7 +108,7 @@ describe("useEdgeEdit", () => {
       // 'owns' (Target: Place) -> Include
       // 'employed' (Target: Place) -> Include
       // 'mentioned_company' (Target: Place) -> Include
-      expect(typesIn).toContain("owns");
+      expect(typesIn).toContain("owns_parent");
       expect(typesIn).toContain("employed");
       expect(typesIn).toContain("mentioned_company");
     });
@@ -164,7 +164,7 @@ describe("useEdgeEdit", () => {
       await nextTick();
       await nextTick();
 
-      expect(edgeType.value).toBeOneOf(["connection", "employed"]);
+      expect(edgeType.value).toBe("connection");
     });
   });
 
@@ -177,11 +177,11 @@ describe("useEdgeEdit", () => {
       },
       {
         nodeType: "place",
-        expectedOutgoing: ["owns"],
+        expectedOutgoing: ["owns_child"],
         expectedIncoming: [
           "employed",
           "mentioned_company",
-          "owns",
+          "owns_parent",
           "owns_region",
         ],
       },
@@ -242,8 +242,8 @@ describe("useEdgeEdit", () => {
 
     newEdge.value.direction = "outgoing";
     edgeType.value = "employed";
+    await nextTick();
     pickedNode.value = { id: "company-1" };
-
     mockedFetch.mockResolvedValueOnce({});
 
     await processEdge();
@@ -299,12 +299,13 @@ describe("useEdgeEdit - articles", () => {
     const mockFetch = vi.fn().mockResolvedValue({ id: "new-edge-id" });
     global.$fetch = mockFetch;
 
+    edgeType.value = "mentioned_person";
+    await nextTick();
     pickedNode.value = {
       id: "target-person",
       type: "person",
       name: "Target P",
     } as any;
-    edgeType.value = "mentioned_person";
 
     // newEdge.value.direction is default 'outgoing' -> Source=Fixed(Article), Target=Picked(Person)
 
@@ -318,7 +319,7 @@ describe("useEdgeEdit - articles", () => {
           // source should be nodeId (article)
           source: "test-article-id",
           target: "target-person",
-          type: "mentioned_person",
+          type: "mentions",
         }),
       }),
     );
@@ -455,6 +456,6 @@ describe("Region as Parent", () => {
 
     openEditEdge(mockEdge);
 
-    expect(edgeType.value).toBe("owns");
+    expect(edgeType.value).toBe("owns_parent");
   });
 });

@@ -82,7 +82,10 @@ mocks.useEdgeEdit.mockReturnValue({
   availableEdgeTypes: mockAvailableEdgeTypes,
   pickedNode: mockPickerTarget,
   pickerType: ref("place"),
-  layout: ref({ source: "fixed", target: "picked" }),
+  layout: {
+    source: { id: ref("test-node-id"), type: ref("person"), ref: ref(null) },
+    target: { id: ref(null), type: ref("place"), ref: ref(null) },
+  },
 });
 
 mocks.useNodeEdit.mockResolvedValue({

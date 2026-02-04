@@ -15,6 +15,7 @@ export type edgeTypeOption = {
   sourceType: NodeType;
   targetType: NodeType;
   realType: EdgeType;
+  allowedDirections?: ("outgoing" | "incoming")[];
 };
 
 export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
@@ -24,6 +25,7 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     sourceType: "place",
     targetType: "place",
     realType: "owns",
+    allowedDirections: ["incoming"],
   },
   owns_child: {
     value: "owns_child",
@@ -31,6 +33,7 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     sourceType: "place",
     targetType: "place",
     realType: "owns",
+    allowedDirections: ["outgoing"],
   },
   owns_region: {
     value: "owns_region",

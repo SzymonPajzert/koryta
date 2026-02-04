@@ -16,7 +16,9 @@
 </template>
 
 <script lang="ts" setup>
+import { computed } from "vue";
 import type { NodeType } from "~~/shared/model";
+import { useEdgeButtons } from "~/composables/edgeConfig";
 
 const props = defineProps<{
   nodeId: string;
@@ -24,11 +26,21 @@ const props = defineProps<{
   nodeName?: string;
 }>();
 
+const emit = defineEmits<{
+  (e: "pick", edgeType: string, direction: string): void;
+}>();
+
 const newEdgeButtons = computed(() =>
   useEdgeButtons(props.nodeName || "Ten węzeł"),
 );
 
+const effectiveNodeType = computed(() => props.nodeType);
+
 const filteredButtons = computed(() =>
   newEdgeButtons.value.filter((b) => b.nodeType === effectiveNodeType.value),
 );
+
+function startAddEdge(edgeType: string, direction: string) {
+  emit("pick", edgeType, direction);
+}
 </script>

@@ -17,9 +17,9 @@
       <!-- Left Condition: Source -->
       <v-col cols="5" class="text-center d-flex flex-column align-center">
         <FormEdgeSourceTarget
-          :v-model="layout.source.ref"
-          :node-name="layout.source ? props.nodeName : undefined"
-          :node-type="layout.source.type"
+          v-model="layout.source.ref.value"
+          :node-name="layout.source.id.value ? props.nodeName : undefined"
+          :node-type="layout.source.type.value"
           data-testid="entity-picker-source"
         />
       </v-col>
@@ -48,9 +48,9 @@
       <!-- Right Condition: Target -->
       <v-col cols="5" class="text-center d-flex flex-column align-center">
         <FormEdgeSourceTarget
-          :v-model="layout.source.ref"
-          :node-name="layout.target ? props.nodeName : undefined"
-          :node-type="layout.target.type"
+          v-model="layout.target.ref.value"
+          :node-name="layout.target.id.value ? props.nodeName : undefined"
+          :node-type="layout.target.type.value"
           data-testid="entity-picker-target"
         />
       </v-col>
@@ -76,7 +76,7 @@
       </v-col>
       <v-col v-if="nodeType !== 'article'" cols="12">
         <EntityPicker
-          :v-model="referenceNode.ref"
+          v-model="referenceNode.ref.value"
           entity="article"
           label="Źródło informacji (artykuł)"
           density="compact"
@@ -141,6 +141,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed } from "vue";
 import EntityPicker from "~/components/form/EntityPicker.vue";
 import type { NodeType, Link } from "~~/shared/model";
 
@@ -169,17 +170,28 @@ const referenceNode: NodeRef = {
   ref: ref<Link<NodeType> | undefined>(undefined),
 };
 
-const { newEdge, processEdge, edgeType, edgeLabel, layout, readyToSubmit } =
-  useEdgeEdit({
-    fixedNode: {
-      id: props.nodeId,
-      type: props.nodeType,
-      ref: ref<Link<NodeType> | undefined>(undefined),
-    },
-    edgeType: props.edgeTypeExt,
-    referenceNode,
-    onUpdate: async () => emit("update"),
-  });
+const {
+  newEdge,
+  processEdge,
+  openEditEdge,
+  edgeType,
+  edgeLabel,
+  layout,
+  readyToSubmit,
+} = useEdgeEdit({
+  fixedNode: {
+    id: props.nodeId,
+    type: props.nodeType,
+    ref: ref<Link<NodeType> | undefined>(undefined),
+  },
+  edgeType: props.edgeTypeExt,
+  referenceNode,
+  onUpdate: async () => emit("update"),
+});
+
+defineExpose({
+  openEditEdge,
+});
 
 function dateRule(value: string) {
   if (!value) return true;
