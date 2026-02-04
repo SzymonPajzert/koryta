@@ -83,7 +83,7 @@ describe("Edit Node Connections", () => {
 
       // Verify
       cy.on("window:alert", (str) => {
-        expect(str).to.contain("Dodano powiązanie");
+        expect(str).to.equal("Dodano powiązanie!");
       });
 
       // Ensure the edge appears in the list

@@ -20,7 +20,7 @@
       :label="`Wyszukaj ${nodeType === 'person' ? 'osobę' : nodeType === 'place' ? 'firmę' : nodeType === 'region' ? 'region' : 'obiekt'}`"
       density="compact"
       hide-details
-      data-testid="entity-picker-source"
+      v-bind="$attrs"
     />
     <div class="text-caption text-medium-emphasis mt-1">Źródło</div>
   </div>

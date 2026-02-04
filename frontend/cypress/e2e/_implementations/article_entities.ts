@@ -14,12 +14,11 @@ describe("Article Entities and Edge References", () => {
     cy.visit("/entity/article/6");
     cy.contains("Zaproponuj zmianę").click();
     cy.contains("Wspomniane miejsce w artykule").click();
-    cy.pickEntity("Orlen", "entity-picker-source");
     cy.pickEntity("Orlen", "entity-picker-target");
 
     cy.contains("button", "Dodaj powiązanie").click();
     cy.on("window:alert", (str) => {
-      expect(str).to.equal("Dodano powiązanie");
+      expect(str).to.equal("Dodano powiązanie!");
     });
   });
 
@@ -33,7 +32,7 @@ describe("Article Entities and Edge References", () => {
 
     cy.contains("button", "Dodaj powiązanie").click();
     cy.on("window:alert", (str) => {
-      expect(str).to.equal("Dodano powiązanie");
+      expect(str).to.equal("Dodano powiązanie!");
     });
   });
 });

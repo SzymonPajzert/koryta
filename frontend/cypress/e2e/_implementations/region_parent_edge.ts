@@ -71,7 +71,7 @@ describe("Region Parent Edge", () => {
 
     // Verification of correct mode by checking the label
     // The current fix sets label to "Wyszukaj obiekt" because it falls into 'else' of (person? place?)
-    cy.contains("label", "Wyszukaj region").should("exist");
+    cy.contains("Wyszukaj region").should("exist");
 
     // Check that we are in the form
     cy.get("input").should("exist");
@@ -83,10 +83,7 @@ describe("Region Parent Edge", () => {
 
     // Type new region name
     // Use accessible label look up or just general input interaction since specific testid might be buried
-    cy.contains("label", "Wyszukaj region")
-      .parent()
-      .find("input")
-      .type(NEW_REGION_NAME);
+    cy.contains("Wyszukaj region").parent().find("input").type(NEW_REGION_NAME);
 
     // Wait for debounce/search
     cy.wait("@getRegions");
@@ -106,7 +103,7 @@ describe("Region Parent Edge", () => {
 
     // Should show success message or clear form
     cy.on("window:alert", (str) => {
-      expect(str).to.equal("Dodano powiązanie");
+      expect(str).to.equal("Dodano powiązanie!");
     });
   });
 });

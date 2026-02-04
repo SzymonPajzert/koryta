@@ -126,7 +126,9 @@ export function useEdgeEdit({
       createEndpoint: editedEdge ? "" : "/api/edges/create",
       revisionEndpoint: editedEdge ? "/api/revisions/create" : "",
       payload: payloadFull,
-      successMessage: "Dodano powiązanie!",
+      successMessage: editedEdge
+        ? "Zapisano propozycję zmiany!"
+        : "Dodano powiązanie!",
       onSuccess: async () => {
         await onUpdate();
       },
