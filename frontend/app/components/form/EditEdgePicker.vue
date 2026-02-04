@@ -18,7 +18,7 @@
 <script lang="ts" setup>
 import { computed } from "vue";
 import type { NodeType } from "~~/shared/model";
-import { useEdgeButtons } from "~/composables/edgeConfig";
+import { useEdgeButtons } from "~/composables/useEdgeTypes";
 
 const props = defineProps<{
   nodeId: string;

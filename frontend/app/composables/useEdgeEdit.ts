@@ -28,7 +28,7 @@ interface UseEdgeEditOptions {
 
 export function useEdgeEdit({
   fixedNode,
-  referenceNode,
+  referenceNode: _referenceNode,
   edgeType = "connection",
   editedEdge,
   onUpdate = async () => {},
@@ -154,7 +154,7 @@ export function useEdgeEdit({
 
   watch(
     [() => newEdge.value.direction, internalEdgeType],
-    ([newDir, newType], [oldDir, oldType]) => {
+    ([newDir, newType], [oldDir, _oldType]) => {
       if (editedEdge) return;
       const fn = unref(fixedNode);
       if (!fn) return;

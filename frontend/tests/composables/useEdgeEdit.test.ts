@@ -286,7 +286,7 @@ describe("useEdgeEdit - articles", () => {
   });
 
   it("handles article mode in processEdge (adding reference edge)", async () => {
-    const { newEdge, pickedNode, processEdge, edgeType } = useEdgeEdit({
+    const { pickedNode, processEdge, edgeType } = useEdgeEdit({
       fixedNode: computed(() => ({
         id: nodeId.value,
         type: nodeType.value,
@@ -327,7 +327,7 @@ describe("useEdgeEdit - articles", () => {
 
   it("filters available types (Article)", async () => {
     // Only check basic availability as sophisticated "3rd party edge" logic is removed
-    const { availableEdgeTypes, pickedNode } = useEdgeEdit({
+    const { availableEdgeTypes } = useEdgeEdit({
       fixedNode: computed(() => ({
         id: nodeId.value,
         type: nodeType.value,

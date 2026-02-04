@@ -9,6 +9,11 @@ export type edgeTypeExt =
   | "mentioned_company"
   | "owns_region";
 
+export type ButtonConfig = {
+  label: (name: string) => string;
+  icon: string;
+};
+
 export type edgeTypeOption = {
   value: edgeTypeExt;
   label: string;
@@ -16,6 +21,7 @@ export type edgeTypeOption = {
   targetType: NodeType;
   realType: EdgeType;
   allowedDirections?: ("outgoing" | "incoming")[];
+  buttons?: Partial<Record<"outgoing" | "incoming", ButtonConfig>>;
 };
 
 export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
@@ -26,6 +32,12 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     targetType: "place",
     realType: "owns",
     allowedDirections: ["incoming"],
+    buttons: {
+      incoming: {
+        label: (_name) => "Dodaj firmę matkę",
+        icon: "mdi-domain",
+      },
+    },
   },
   owns_child: {
     value: "owns_child",
@@ -34,6 +46,12 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     targetType: "place",
     realType: "owns",
     allowedDirections: ["outgoing"],
+    buttons: {
+      outgoing: {
+        label: (_name) => "Dodaj firmę córkę",
+        icon: "mdi-domain-plus",
+      },
+    },
   },
   owns_region: {
     value: "owns_region",
@@ -41,6 +59,12 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     sourceType: "region",
     targetType: "place",
     realType: "owns",
+    buttons: {
+      incoming: {
+        label: (_name) => "Dodaj region zarządzający firmą",
+        icon: "mdi-map-marker-radius-outline",
+      },
+    },
   },
   connection: {
     value: "connection",
@@ -48,6 +72,12 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     sourceType: "person",
     targetType: "person",
     realType: "connection",
+    buttons: {
+      outgoing: {
+        label: (name) => "Dodaj osobę, którą " + name + " zna",
+        icon: "mdi-account-plus-outline",
+      },
+    },
   },
   mentioned_person: {
     value: "mentioned_person",
@@ -55,6 +85,16 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     sourceType: "article",
     targetType: "person",
     realType: "mentions",
+    buttons: {
+      incoming: {
+        label: (name) => "Dodaj artykuł wspominający " + name,
+        icon: "mdi-newspaper-plus",
+      },
+      outgoing: {
+        label: (_name) => "Wspomniana osoba w artykule",
+        icon: "mdi-account-plus-outline",
+      },
+    },
   },
   mentioned_company: {
     value: "mentioned_company",
@@ -62,6 +102,16 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     sourceType: "article",
     targetType: "place",
     realType: "mentions",
+    buttons: {
+      incoming: {
+        label: (name) => "Dodaj artykuł wspominający " + name,
+        icon: "mdi-newspaper-plus",
+      },
+      outgoing: {
+        label: (_name) => "Wspomniane miejsce w artykule",
+        icon: "mdi-domain-plus",
+      },
+    },
   },
   employed: {
     value: "employed",
@@ -69,5 +119,53 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     sourceType: "person",
     targetType: "place",
     realType: "employed",
+    buttons: {
+      outgoing: {
+        label: (name) => "Dodaj gdzie " + name + " pracuje",
+        icon: "mdi-briefcase-plus-outline",
+      },
+      incoming: {
+        label: (_name) => "Dodaj osobę, która pracuje w tej firmie", // New button
+        icon: "mdi-account-plus",
+      },
+    },
   },
 };
+
+export type NewEdgeButton = {
+  edgeType: string;
+  direction: "incoming" | "outgoing";
+  nodeType: NodeType;
+  icon: string;
+  text: string;
+};
+
+export function useEdgeButtons(nodeName: string): NewEdgeButton[] {
+  const result: NewEdgeButton[] = [];
+
+  for (const key in edgeTypeOptions) {
+    const option = edgeTypeOptions[key as edgeTypeExt];
+    if (option.buttons) {
+      if (option.buttons.outgoing) {
+        result.push({
+          edgeType: key,
+          direction: "outgoing",
+          nodeType: option.sourceType, // We are source, we add target
+          icon: option.buttons.outgoing.icon,
+          text: option.buttons.outgoing.label(nodeName),
+        });
+      }
+      if (option.buttons.incoming) {
+        result.push({
+          edgeType: key,
+          direction: "incoming",
+          nodeType: option.targetType, // We are target, we add source
+          icon: option.buttons.incoming.icon,
+          text: option.buttons.incoming.label(nodeName),
+        });
+      }
+    }
+  }
+
+  return result;
+}

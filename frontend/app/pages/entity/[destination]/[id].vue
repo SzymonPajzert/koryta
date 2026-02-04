@@ -164,7 +164,7 @@ import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
 import type { Person, Company, Article, Region } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
-import { useEdgeButtons, type NewEdgeButton } from "~/composables/edgeConfig";
+import { useEdgeButtons, type NewEdgeButton } from "~/composables/useEdgeTypes";
 
 const route = useRoute<"/entity/[destination]/[id]">();
 

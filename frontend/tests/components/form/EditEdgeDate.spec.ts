@@ -68,7 +68,7 @@ const mockNewEdge = ref({
 const mockEdgeType = ref("employed");
 const mockAvailableEdgeTypes = ref([{ value: "employed", label: "Employed" }]);
 const mockPickerTarget = ref({ id: "target1", type: "place" });
-const mockPickerSource = ref(null);
+
 const mockIsEditingEdge = ref(false);
 
 mocks.useEdgeEdit.mockReturnValue({
