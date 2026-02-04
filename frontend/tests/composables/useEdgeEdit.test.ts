@@ -112,60 +112,6 @@ describe("useEdgeEdit", () => {
       expect(typesIn).toContain("employed");
       expect(typesIn).toContain("mentioned_company");
     });
-
-    it("switches direction when selecting a type that requires it", async () => {
-      mockNodeType.value = "article"; // Article is strictly outgoing source
-      const { newEdge, edgeType } = useEdgeEdit({
-        fixedNode: computed(() => ({
-          id: mockNodeId.value,
-          type: mockNodeType.value,
-          name: "Test Node",
-        })),
-        authHeaders: mockAuthHeaders,
-        stateKey: ref("test-article-switch"),
-      });
-
-      // Initially outgoing
-      expect(newEdge.value.direction).toBe("outgoing");
-
-      // Force incoming - this isn't a great test for "switches direction"
-      // because we don't have many strictly incoming types for specific nodes.
-      // But let's test that 'mentioned_person' forces 'outgoing' for Article.
-      newEdge.value.direction = "incoming";
-      await nextTick();
-
-      edgeType.value = "mentioned_person";
-      await nextTick();
-
-      expect(newEdge.value.direction).toBe("outgoing");
-    });
-
-    it("resets edgeType if invalid after direction switch", async () => {
-      mockNodeType.value = "person";
-      const { availableEdgeTypes, newEdge, edgeType } = useEdgeEdit({
-        fixedNode: computed(() => ({
-          id: mockNodeId.value,
-          type: mockNodeType.value,
-          name: "Test Node",
-        })),
-        authHeaders: mockAuthHeaders,
-        stateKey: ref("test-person-reset"),
-      });
-
-      // Initially outgoing, check if 'employed' is there
-      expect(
-        availableEdgeTypes.value.find((t) => t.value === "employed"),
-      ).toBeTruthy();
-      edgeType.value = "employed";
-
-      // Switch to incoming where 'employed' is NOT valid for Person
-      // (Employed target is Place, I am Person)
-      newEdge.value = { ...newEdge.value, direction: "incoming" };
-      await nextTick();
-      await nextTick();
-
-      expect(edgeType.value).toBe("connection");
-    });
   });
 
   describe("Edge Types Availability", () => {

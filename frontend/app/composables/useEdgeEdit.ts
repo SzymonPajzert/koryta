@@ -1,4 +1,4 @@
-import { computed, ref, unref, watch, type Ref } from "vue";
+import { computed, ref, unref, type Ref } from "vue";
 import type { NodeType, Edge, Link } from "~~/shared/model";
 import { edgeTypeOptions, type edgeTypeExt } from "./useEdgeTypes";
 import { useEntityMutation } from "./useEntityMutation";
@@ -153,49 +153,6 @@ export function useEdgeEdit({
       }
     });
   });
-
-  watch(
-    [() => newEdge.value.direction, internalEdgeType],
-    ([newDir, newType], [oldDir, _oldType]) => {
-      if (editedEdge) return;
-      const fn = unref(fixedNode);
-      if (!fn) return;
-      const option = edgeTypeOptions[newType];
-      if (!option) return;
-
-      const direction = newDir || "outgoing";
-      const isAllowed =
-        (direction === "outgoing" ? option.sourceType : option.targetType) ===
-        fn.type;
-      const isDirRestricted =
-        option.allowedDirections &&
-        !option.allowedDirections.includes(direction);
-
-      if (!isAllowed || isDirRestricted) {
-        if (newDir !== oldDir && oldDir !== undefined) {
-          // Direction changed, type became invalid -> reset type
-          internalEdgeType.value = "connection";
-        } else {
-          // Type changed, direction is invalid -> try switching direction
-          const otherDir = direction === "outgoing" ? "incoming" : "outgoing";
-          const isOtherAllowed =
-            (otherDir === "outgoing"
-              ? option.sourceType
-              : option.targetType) === fn.type;
-          const isOtherDirNotRestricted =
-            !option.allowedDirections ||
-            option.allowedDirections.includes(otherDir);
-
-          if (isOtherAllowed && isOtherDirNotRestricted) {
-            newEdge.value.direction = otherDir;
-          } else {
-            internalEdgeType.value = "connection";
-          }
-        }
-      }
-    },
-    { immediate: true },
-  );
 
   function openEditEdge(edge: Edge) {
     const internalEdge = edge as InternalEdge;
