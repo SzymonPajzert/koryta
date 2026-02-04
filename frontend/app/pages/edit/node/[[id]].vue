@@ -174,7 +174,6 @@
 
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
-import type { NodeType } from "~~/shared/model";
 import FormEditEdge from "~/components/form/EditEdge.vue";
 
 definePageMeta({

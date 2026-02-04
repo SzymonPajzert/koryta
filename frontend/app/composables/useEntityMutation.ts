@@ -1,9 +1,3 @@
-import type { Ref } from "vue";
-
-interface UseEntityMutationOptions {
-  authHeaders: Ref<Record<string, string>>;
-}
-
 interface MutationParams<T = any> {
   isNew: boolean;
   createEndpoint: string;
@@ -13,8 +7,9 @@ interface MutationParams<T = any> {
   successMessage?: string;
 }
 
-export function useEntityMutation(options: UseEntityMutationOptions) {
+export function useEntityMutation() {
   const isSaving = ref(false);
+  const { authHeaders } = useAuthState(); // Ensure auth state is ready
 
   async function save<Result = { id: string }>({
     isNew,
@@ -33,7 +28,7 @@ export function useEntityMutation(options: UseEntityMutationOptions) {
       const response = await $fetch<Result>(endpoint, {
         method: "POST",
         body: payload,
-        headers: options.authHeaders.value,
+        headers: authHeaders.value,
       });
 
       if (successMessage) {

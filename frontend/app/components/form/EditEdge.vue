@@ -1,158 +1,58 @@
 <template>
   <div class="d-flex align-center justify-space-between mb-2 mt-4">
     <h4 class="text-subtitle-1">
-      {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
+      {{ editedEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
     </h4>
     <v-btn
-      v-if="mode !== 'initial'"
       icon="mdi-close"
       variant="text"
       size="small"
       title="Anuluj"
-      @click="resetMode"
+      @click="emit('update')"
     />
   </div>
 
-  <div
-    v-if="!isEditingEdge && mode === 'initial'"
-    class="d-flex flex-column gap-2"
-  >
-    <!-- Initial Buttons to pick edge type for a given node type -->
-    <v-btn
-      v-for="button in filteredButtons"
-      :key="button.edgeType + '-' + button.direction"
-      variant="tonal"
-      :prepend-icon="button.icon"
-      color="primary"
-      class="mb-2"
-      @click="startAddEdge(button.edgeType, button.direction)"
-    >
-      {{ button.text }}
-    </v-btn>
-  </div>
-
-  <v-form v-else @submit.prevent="processEdge">
+  <v-form @submit.prevent="processEdge">
     <v-row class="align-center my-4">
       <!-- Left Condition: Source -->
-      <v-col cols="4" class="text-center d-flex flex-column align-center">
-        <!-- Render Fixed Node if layout.source is 'fixed' -->
-        <div
-          v-if="layout.source === 'fixed'"
-          class="d-flex flex-column align-center w-100"
-        >
-          <v-chip
-            class="mb-1 text-truncate"
-            style="max-width: 100%"
-            color="primary"
-            variant="outlined"
-          >
-            {{ props.nodeName || "Ten węzeł" }}
-          </v-chip>
-          <div class="text-caption text-medium-emphasis">Źródło</div>
-        </div>
-
-        <!-- Render Picker if layout.source is 'picked' -->
-        <div v-else class="w-100">
-          <EntityPicker
-            v-model="pickedNode"
-            :entity="pickerType"
-            label="Wyszukaj źródło"
-            density="compact"
-            hide-details
-            data-testid="entity-picker-source"
-          />
-          <div class="text-caption text-medium-emphasis mt-1">Źródło</div>
-        </div>
+      <v-col cols="5" class="text-center d-flex flex-column align-center">
+        <FormEdgeSourceTarget
+          :v-model="layout.source.ref"
+          :node-name="layout.source ? props.nodeName : undefined"
+          :node-type="layout.source.type"
+          data-testid="entity-picker-source"
+        />
       </v-col>
 
       <!-- Connection (Center) -->
       <v-col
-        cols="4"
+        cols="2"
         class="text-center d-flex flex-column justify-center position-relative px-0"
       >
-        <v-select
-          v-if="isEditingEdge || mode === 'generic'"
-          v-model="edgeType"
-          :items="availableEdgeTypes"
-          item-title="label"
-          item-value="value"
-          label="Relacja"
-          density="compact"
-          variant="solo-filled"
-          hide-details
-          class="mb-2"
-          :disabled="!availableEdgeTypes.length"
-          :placeholder="availableEdgeTypes.length ? undefined : 'Brak relacji'"
-        />
-        <div v-else class="text-caption font-weight-bold mb-2">
-          {{
-            availableEdgeTypes.find((t) => t.value === edgeType)?.label ||
-            edgeType
-          }}
-        </div>
-
         <div class="d-flex align-center justify-center">
-          <v-btn
+          <v-chip
             variant="tonal"
             rounded="pill"
             size="small"
             color="secondary"
             class="px-4"
-            :title="'Odwróć kierunek'"
-            :disabled="!isEditingEdge && mode !== 'generic'"
-            @click="
-              newEdge.direction =
-                newEdge.direction === 'outgoing' ? 'incoming' : 'outgoing'
-            "
           >
             <span class="mr-1">
-              {{ newEdge.direction === "outgoing" ? "Do" : "Od" }}
+              {{ edgeLabel }}
             </span>
-            <v-icon
-              :icon="
-                effectiveNodeType === 'article'
-                  ? 'mdi-arrow-right'
-                  : newEdge.direction === 'outgoing'
-                    ? 'mdi-arrow-right'
-                    : 'mdi-arrow-left'
-              "
-            />
-          </v-btn>
+            <v-icon :icon="arrowIcon" />
+          </v-chip>
         </div>
       </v-col>
 
       <!-- Right Condition: Target -->
-      <v-col cols="4" class="text-center d-flex flex-column align-center">
-        <!-- Render Fixed Node if layout.target is 'fixed' -->
-        <div
-          v-if="layout.target === 'fixed'"
-          class="d-flex flex-column align-center w-100"
-        >
-          <v-chip
-            class="mb-1 text-truncate"
-            style="max-width: 100%"
-            color="primary"
-            variant="outlined"
-          >
-            {{ props.nodeName || "Ten węzeł" }}
-          </v-chip>
-          <div class="text-caption text-medium-emphasis">Cel</div>
-        </div>
-
-        <!-- Render Picker if layout.target is 'picked' -->
-        <div v-else class="w-100">
-          <EntityPicker
-            :key="pickerType"
-            v-model="pickedNode"
-            :entity="pickerType"
-            :label="`Wyszukaj ${pickerType === 'person' ? 'osobę' : pickerType === 'place' ? 'firmę' : 'obiekt'}`"
-            density="compact"
-            hide-details
-            :disabled="!availableEdgeTypes.length"
-            data-testid="entity-picker-target"
-          />
-          <div class="text-caption text-medium-emphasis mt-1">Cel</div>
-        </div>
+      <v-col cols="5" class="text-center d-flex flex-column align-center">
+        <FormEdgeSourceTarget
+          :v-model="layout.source.ref"
+          :node-name="layout.target ? props.nodeName : undefined"
+          :node-type="layout.target.type"
+          data-testid="entity-picker-target"
+        />
       </v-col>
     </v-row>
 
@@ -174,9 +74,9 @@
           hide-details
         />
       </v-col>
-      <v-col v-if="effectiveNodeType !== 'article'" cols="12">
+      <v-col v-if="nodeType !== 'article'" cols="12">
         <EntityPicker
-          v-model="articleReference"
+          :v-model="referenceNode.ref"
           entity="article"
           label="Źródło informacji (artykuł)"
           density="compact"
@@ -208,31 +108,32 @@
           />
         </v-col>
       </template>
+
       <v-col cols="12" class="mt-2 d-flex gap-2">
         <v-btn
-          v-if="isEditingEdge || mode !== 'initial'"
+          v-if="editedEdge"
           variant="text"
           class="mr-2"
-          @click="resetMode"
+          @click="emit('update')"
         >
           Anuluj
         </v-btn>
         <v-btn
           color="secondary"
           type="submit"
-          :block="!isEditingEdge"
-          :class="{ 'flex-grow-1': isEditingEdge }"
-          :disabled="!pickedNode"
+          :block="!editedEdge"
+          :class="{ 'flex-grow-1': editedEdge }"
+          :disabled="!readyToSubmit"
           data-testid="submit-edge-button"
         >
-          {{ isEditingEdge ? "Zapisz zmiany" : "Dodaj powiązanie" }}
+          {{ editedEdge ? "Zapisz zmiany" : "Dodaj powiązanie" }}
         </v-btn>
         <DialogProposeRemoval
-          v-if="isEditingEdge"
+          v-if="editedEdge"
           :id="newEdge.id!"
           collection="edges"
           class="ml-2"
-          @success="cancelEditEdge"
+          @success="emit('update')"
         />
       </v-col>
     </v-row>
@@ -241,8 +142,7 @@
 
 <script setup lang="ts">
 import EntityPicker from "~/components/form/EntityPicker.vue";
-import type { Link, NodeType, EdgeType } from "~~/shared/model";
-import { useEdgeButtons } from "~/composables/edgeConfig";
+import type { NodeType, Link } from "~~/shared/model";
 
 definePageMeta({
   middleware: "auth",
@@ -253,122 +153,33 @@ const props = defineProps<{
   nodeType: NodeType;
   nodeName: string;
   authHeaders: Record<string, string>;
+  editedEdge?: string;
+  edgeTypeExt: edgeTypeExt;
 }>();
 
+// Used to notify that the component has finished.
 const emit = defineEmits<{
   (e: "update"): void;
 }>();
 
-const route = useRoute();
+const arrowIcon = computed(() => "mdi-arrow-right");
 
-const effectiveNodeType = computed(() => {
-  if (route.query.type) return route.query.type as NodeType;
-  return props.nodeType || "person";
-});
+const referenceNode: NodeRef = {
+  type: "article",
+  ref: ref<Link<NodeType> | undefined>(undefined),
+};
 
-// Use shared config
-const newEdgeButtons = computed(() =>
-  useEdgeButtons(props.nodeName || "Ten węzeł"),
-);
-
-const filteredButtons = computed(() =>
-  newEdgeButtons.value.filter((b) => b.nodeType === effectiveNodeType.value),
-);
-
-const sourceNode = computed(() => ({
-  id: props.nodeId,
-  type: effectiveNodeType.value,
-}));
-
-const {
-  newEdge,
-  processEdge,
-  cancelEditEdge,
-  isEditingEdge,
-  edgeType,
-  availableEdgeTypes,
-  pickedNode,
-  pickerType,
-  layout,
-} = useEdgeEdit({
-  fixedNode: sourceNode,
-  authHeaders: toRef(props, "authHeaders"),
-  onUpdate: async () => emit("update"),
-});
-
-defineExpose({
-  openEditEdge,
-});
-
-const mode = ref<"initial" | "form" | "generic">("initial");
-
-function resetMode() {
-  cancelEditEdge();
-  mode.value = "initial";
-}
-
-// If we are editing, we are always in form mode
-watch(
-  isEditingEdge,
-  (val) => {
-    if (val) {
-      mode.value = "form";
-    }
-  },
-  { immediate: true },
-);
-
-function startAddEdge(
-  typeValue: string,
-  direction: "outgoing" | "incoming" = "outgoing",
-) {
-  edgeType.value = typeValue as EdgeType;
-  newEdge.value.direction = direction;
-  mode.value = "form";
-}
-
-onMounted(() => {
-  if (route.query.edgeType) {
-    startAddEdge(
-      route.query.edgeType as string,
-      (route.query.direction as "outgoing" | "incoming") || "outgoing",
-    );
-  }
-});
-
-// Fallback for non-person nodes or generic add
-watch(
-  effectiveNodeType,
-  (type) => {
-    // If it's a known type, we support the initial buttons mode
-    const supportedTypes = ["person", "place", "article"];
-    if (!supportedTypes.includes(type) && !isEditingEdge.value) {
-      mode.value = "generic";
-    } else if (supportedTypes.includes(type) && mode.value === "generic") {
-      mode.value = "initial";
-    }
-  },
-  { immediate: true },
-);
-
-const articleReference = computed({
-  get: () => {
-    const id = newEdge.value.references?.[0];
-    if (!id) return undefined;
-    return { id, type: "article", name: "" } as Link<"article">; // Name is not strictly required by EntityPicker for display if it's just the model
-  },
-  set: (val) => {
-    if (val) {
-      newEdge.value.references = [val.id];
-    } else {
-      newEdge.value.references = [];
-    }
-  },
-});
-
-if (props.nodeType === "article") {
-  newEdge.value.references = [props.nodeId];
-}
+const { newEdge, processEdge, edgeType, edgeLabel, layout, readyToSubmit } =
+  useEdgeEdit({
+    fixedNode: {
+      id: props.nodeId,
+      type: props.nodeType,
+      ref: ref<Link<NodeType> | undefined>(undefined),
+    },
+    edgeType: props.edgeTypeExt,
+    referenceNode,
+    onUpdate: async () => emit("update"),
+  });
 
 function dateRule(value: string) {
   if (!value) return true;

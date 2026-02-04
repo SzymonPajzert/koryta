@@ -35,7 +35,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     return headers;
   });
 
-  const { save } = useEntityMutation({ authHeaders });
+  const { save } = useEntityMutation();
 
   const {
     current,
