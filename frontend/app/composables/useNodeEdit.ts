@@ -35,6 +35,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     return headers;
   });
 
+  const { save } = useEntityMutation({ authHeaders });
+
   const {
     current,
     revisions,
@@ -57,6 +59,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     referencedIn,
     refresh: refreshEdges,
   } = await useEdges(() => node_id.value);
+
   const allEdges = computed(() => [
     ...sources.value,
     ...targets.value,
@@ -90,8 +93,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
       fetchData();
     }
   });
-
-  const { save } = useEntityMutation({ authHeaders });
 
   async function saveNode() {
     if (!idToken.value) {

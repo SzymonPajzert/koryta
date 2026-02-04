@@ -142,7 +142,14 @@
               Brak istniejących powiązań.
             </div>
 
-            <FormEditEdge />
+            <FormEditEdge
+              ref="editEdgeForm"
+              :node-id="node_id"
+              :node-type="current.type || 'person'"
+              :node-name="current.name"
+              :auth-headers="authHeaders"
+              @update="refreshEdges"
+            />
           </template>
         </v-card>
       </v-window-item>
@@ -168,6 +175,7 @@
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import type { NodeType } from "~~/shared/model";
+import FormEditEdge from "~/components/form/EditEdge.vue";
 
 definePageMeta({
   middleware: "auth",
@@ -185,19 +193,15 @@ const {
   idToken,
   saveNode,
   fetchRevisions,
-} = await useNodeEdit();
-
-const { node_id, refreshEdges, authHeaders, stateKey } = await useNodeEdit();
-const { openEditEdge } = useEdgeEdit({
-  nodeId: node_id,
-  nodeType: computed(() => {
-    if (route.query.type) return route.query.type as NodeType;
-    return current.value.type || "person";
-  }),
+  node_id,
+  refreshEdges,
   authHeaders,
-  onUpdate: refreshEdges,
-  stateKey,
-});
+} = await useNodeEdit();
+const editEdgeForm = ref<InstanceType<typeof FormEditEdge> | null>(null);
+
+function openEditEdge(edge: any) {
+  editEdgeForm.value?.openEditEdge(edge);
+}
 
 if (route.query.type === "region" || current.value.type === "region") {
   // Region is read-only

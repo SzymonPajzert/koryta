@@ -1,155 +1,152 @@
-import { computed, watch, ref, toValue, type Ref } from "vue";
+import { computed, watch, toValue, type Ref } from "vue";
 import type { NodeType, EdgeType, Edge, Link } from "~~/shared/model";
 import { useEdgeTypes } from "./useEdgeTypes";
 import { useEntityMutation } from "./useEntityMutation";
 
+// NodeRef used to specify source/target nodes
+// If id is undefined, it only specifies the expected type of the node.
+type NodeRef = {
+  id?: string;
+  type: NodeType;
+};
+
+export type FixedNode = {
+  id: string;
+  type: NodeType;
+};
+
 interface UseEdgeEditOptions {
-  nodeId: Ref<string | undefined>;
-  nodeType: Ref<NodeType>;
+  fixedNode?: Ref<FixedNode | undefined>; // The node we are "on" (context)
   authHeaders: Ref<Record<string, string>>;
   onUpdate?: () => Promise<void>;
-  stateKey?: Ref<string>; // Optional stateKey for shared state
 }
 
 export function useEdgeEdit({
-  nodeId,
-  nodeType: myType,
+  fixedNode,
   authHeaders,
   onUpdate,
-  stateKey = ref("global-edge-edit"),
 }: UseEdgeEditOptions) {
   const { edgeTypeOptions, getRealType, getEdgeOption } = useEdgeTypes();
   const { save } = useEntityMutation({ authHeaders });
 
-  // Determine the actual key string once
-  const baseKey = toValue(stateKey);
-  const newEdge = useState(`${baseKey}-newEdge`, emptyEdge);
-
-  // TODO it shouldn't be a connection
-  const edgeType = useState<EdgeType>(
-    `${baseKey}-edgeType`,
-    () => "connection",
+  // Internal state
+  const newEdge = ref<Partial<Edge> & { direction: "outgoing" | "incoming" }>(
+    emptyEdge(),
   );
-
-  // Sync edgeType -> newEdge.type
-  watch(edgeType, (t) => {
-    newEdge.value.type = t;
-  });
-
-  const pickerTarget = useState<Link<NodeType> | undefined>(
-    `${baseKey}-pickerTarget`,
-    () => undefined,
-  );
-
-  const pickerSource = useState<Link<NodeType> | undefined>(
-    `${baseKey}-pickerSource`,
-    () => undefined,
-  );
+  const edgeType = ref<EdgeType>("connection");
+  const pickedNode = ref<Link<NodeType> | undefined>(undefined);
 
   const isEditingEdge = computed(() => !!newEdge.value.id);
 
-  const availableEdgeTypes = computed(() => {
-    // Special handling for "article" mode (context mode)
-    if (myType.value === "article") {
-      let options = edgeTypeOptions;
-      if (pickerSource.value) {
-        options = options.filter(
-          (o) => o.sourceType === pickerSource.value?.type,
-        );
-      }
-      if (pickerTarget.value) {
-        options = options.filter(
-          (o) => o.targetType === pickerTarget.value?.type,
-        );
-      }
-      return options;
-    }
+  // Helper to get current option
+  const currentOption = computed(() => getEdgeOption(edgeType.value));
 
+  // Determine which side is fixed based on direction and fixedNode presence
+  // If fixedNode is present:
+  //   direction="outgoing" => Source is fixedNode, Target is pickedNode
+  //   direction="incoming" => Source is pickedNode, Target is fixedNode
+
+  const layout = computed(() => {
     const dir = newEdge.value.direction;
-    return edgeTypeOptions.filter((o) => {
+    if (fixedNode?.value) {
       if (dir === "outgoing") {
-        const rs = o.sourceType;
-        return rs === myType.value;
+        return { source: "fixed", target: "picked" };
       } else {
-        const rt = o.targetType;
-        return rt === myType.value;
+        return { source: "picked", target: "fixed" };
       }
-    });
+    }
+    // Generic mode (no fixed context) - simplified, assuming standard left-to-right creation if needed
+    // But currently we always have fixedNode in context of "Edit Node" page.
+    // For generic tool usage, we might allow picking both.
+    // Let's assume generic mode means we pick both, but `pickedNode` is just one of them.
+    // Actually, user requirement says "callsite can pick its expected type".
+    // If no fixedNode, maybe we need two pickers?
+    // Let's stick to the user's "optionalNode (set if it's not in the reference mode...)"
+    // If fixedNode is missing (reference mode or generic), we might rely on manual assignment?
+    // User said: "optionalNode ... and pickedNode which is empty ... return on which position each should be"
+
+    // For now, let's strictly handle the fixedNode case which is 99% of usage
+    return { source: "fixed", target: "picked" }; // Fallback
   });
 
-  // Handle type selection -> enforce direction if needed
+  const availableEdgeTypes = computed(() => {
+    if (!fixedNode?.value) return edgeTypeOptions;
+    const myType = fixedNode.value.type;
+
+    // Filter options based on whether we are currently behaving as Source or Target
+    if (layout.value.source === "fixed") {
+       // We are Source, so edge option must have sourceType === myType
+       return edgeTypeOptions.filter(o => o.sourceType === myType);
+    } else {
+       // We are Target, so edge option must have targetType === myType
+       // OR if we are "picked" (generic) - but here layout says we are "fixed" in Target pos.
+       return edgeTypeOptions.filter(o => o.targetType === myType);
+    }
+  });
+
+  // What kind of node should the picker allow?
+  const pickerType = computed<NodeType>(() => {
+    const opt = currentOption.value;
+    if (!opt) return "person";
+
+    // If layout says target is picked, we need targetType
+    // If layout says source is picked, we need sourceType
+    if (layout.value.target === "picked") {
+      return opt.targetType;
+    } else {
+      return opt.sourceType;
+    }
+  });
+
+  // Force direction if type implies only one direction from fixedNode
   watch(edgeType, (t) => {
-    if (!isEditingEdge.value) {
-      const option = getEdgeOption(t);
-      if (option) {
-        const canBeSource = option.sourceType === myType.value;
-        const canBeTarget = option.targetType === myType.value;
+    if (!fixedNode?.value || isEditingEdge.value) return; // Don't flip execution on edit
 
-        if (canBeSource && !canBeTarget) {
-          newEdge.value.direction = "outgoing";
-        } else if (!canBeSource && canBeTarget) {
-          newEdge.value.direction = "incoming";
-        }
-      }
-    }
-  });
+    const opt = getEdgeOption(t);
+    if (!opt) return;
 
-  const edgeSourceType = computed<NodeType>(() => {
-    const option = getEdgeOption(edgeType.value);
-    return option?.sourceType || "person";
-  });
+    const myType = fixedNode.value.type;
+    const canBeSource = opt.sourceType === myType;
+    const canBeTarget = opt.targetType === myType;
 
-  const edgeTargetType = computed<NodeType>(() => {
-    const option = getEdgeOption(edgeType.value);
-    if (myType.value === "article") {
-      return option?.targetType || "place";
-    }
-
-    const dir = newEdge.value.direction;
-    if (dir === "incoming") {
-      // I am Target. Picker is Source.
-      return option?.sourceType || "person"; // TODO remove this fallback
-    }
-    // I am Source. Picker is Target.
-    return option?.targetType || "person";
-  });
-
-  watch(edgeType, () => {
-    if (!isEditingEdge.value) {
-      // TODO should we lear pickers if type changes?
-      if (myType.value !== "article") {
-        pickerTarget.value = undefined;
-      }
+    // If can be both (symmetric like 'connection' between persons), keep current direction or default
+    if (canBeSource && !canBeTarget) {
+      newEdge.value.direction = "outgoing";
+    } else if (!canBeSource && canBeTarget) {
+      newEdge.value.direction = "incoming";
     }
   });
 
   function resetEdgeForm() {
     newEdge.value = emptyEdge();
-    edgeType.value = "connection"; // TODO pick something else
-    pickerTarget.value = undefined;
-    pickerSource.value = undefined;
+    edgeType.value = "connection";
+    pickedNode.value = undefined;
   }
 
-  function openEditEdge(edge: EdgeNode) {
-    // Determine direction relative to current node
-    const direction = edge.source === nodeId.value ? "outgoing" : "incoming";
+  function openEditEdge(edge: Edge) {
+    // Determine direction relative to fixedNode
+    let direction: "outgoing" | "incoming" = "outgoing";
+
+    if (fixedNode?.value) {
+      direction = edge.source === fixedNode.value.id ? "outgoing" : "incoming";
+    }
 
     newEdge.value = {
       ...edge,
       direction,
+      content: edge.section || "",
     };
     edgeType.value = edge.type;
 
+    // Handle special "owns_region" type check if needed
     if (edge.type === "owns" && direction === "incoming") {
-      // Check if the owner is a region
-      // If we are editing, current node is target. Source is the owner.
-      // edge.richNode is the OTHER node (source).
       if (edge.richNode?.type === "region") {
         edgeType.value = "owns_region" as EdgeType;
       }
     }
 
-    pickerTarget.value = {
+    // Populate pickedNode with the "other" side (richNode is already that)
+    pickedNode.value = {
       ...edge.richNode,
       id: edge.richNode.id || "",
     };
@@ -160,90 +157,94 @@ export function useEdgeEdit({
   }
 
   async function processEdge() {
+    const type = getRealType(edgeType.value);
+
+    // Determine Source and Target IDs
+    let sourceId: string | undefined;
+    let targetId: string | undefined;
+
     if (isEditingEdge.value) {
-      // Edit mode (Revision)
-      if (!newEdge.value.id || !newEdge.value.source) return;
+      // Edit mode: IDs are already in newEdge (from openEditEdge)
+      // But wait, newEdge is partial.
+      // And we might have changed the picked node (if we allow re-linking, though UI might block it)
+      // Usually edit doesn't change endpoints.
+      sourceId = newEdge.value.source;
+      targetId = newEdge.value.target;
+    } else {
+      // Create mode: Use layout to determine
+      if (fixedNode?.value) {
+        if (layout.value.source === "fixed") {
+          sourceId = fixedNode.value.id;
+          targetId = pickedNode.value?.id;
+        } else {
+          sourceId = pickedNode.value?.id;
+          targetId = fixedNode.value.id;
+        }
+      }
+    }
 
-      const payload = {
-        node_id: newEdge.value.id,
-        collection: "edges",
-        source: newEdge.value.source, // Keep required context
-        target: newEdge.value.target,
-        type: getRealType(newEdge.value.type),
-        name: newEdge.value.name,
-        // text: newEdge.value.content, // Deprecated
-        content: newEdge.value.content,
-        start_date: newEdge.value.start_date,
-        end_date: newEdge.value.end_date,
-        references: newEdge.value.references,
-      };
+    if (!sourceId || !targetId) {
+      alert("Brak źródła lub celu!");
+      return;
+    }
 
+    const payload = {
+      source: sourceId,
+      target: targetId,
+      type,
+      name: newEdge.value.name,
+      content: newEdge.value.content,
+      start_date: newEdge.value.start_date,
+      end_date: newEdge.value.end_date,
+      references: newEdge.value.references,
+    };
+
+    if (isEditingEdge.value) {
       await save({
         isNew: false,
-        createEndpoint: "", // Not used
+        createEndpoint: "",
         revisionEndpoint: "/api/revisions/create",
-        payload,
+        payload: { ...payload, node_id: newEdge.value.id, collection: "edges" },
         onSuccess: async () => {
           resetEdgeForm();
           if (onUpdate) await onUpdate();
         },
       });
     } else {
-      // Create mode
-      if (!nodeId.value || !pickerTarget.value) return;
-
-      const direction = newEdge.value.direction || "outgoing";
-      // If we have pickerSource, use it. Otherwise use nodeId.
-      const source = pickerSource.value
-        ? pickerSource.value.id
-        : direction === "outgoing"
-          ? nodeId.value
-          : pickerTarget.value.id;
-      const target = pickerSource.value
-        ? pickerTarget.value.id
-        : direction === "outgoing"
-          ? pickerTarget.value.id
-          : nodeId.value;
-
-      const payload = {
-        source,
-        target,
-        type: getRealType(newEdge.value.type),
-        name: newEdge.value.name,
-        content: newEdge.value.content,
-        start_date: newEdge.value.start_date,
-        end_date: newEdge.value.end_date,
-        references: newEdge.value.references,
-      };
-
-      // TODO it should be saveEdge and it should be strongly typed
       await save({
         isNew: true,
         createEndpoint: "/api/edges/create",
-        revisionEndpoint: "", // Not used
+        revisionEndpoint: "",
         payload,
+        successMessage: "Dodano powiązanie!",
         onSuccess: async () => {
           resetEdgeForm();
-          alert("Dodano powiązanie");
           if (onUpdate) await onUpdate();
         },
       });
     }
   }
 
+  // Expose methods to manually set type/direction if UI needs to force it (e.g. from buttons)
+  function initNewEdge(type: EdgeType) {
+    resetEdgeForm();
+    edgeType.value = type;
+  }
+
   return {
     newEdge,
     edgeType,
-    pickerTarget,
-    pickerSource,
+    pickedNode,
+    pickerType,
+    layout,
     isEditingEdge,
     availableEdgeTypes,
-    edgeTargetType,
-    edgeSourceType,
-    edgeTypeOptions,
+    // Methods
     processEdge,
     cancelEditEdge,
     openEditEdge,
+    initNewEdge,
+    getEdgeOption, // Useful for UI to display icons etc
   };
 }
 

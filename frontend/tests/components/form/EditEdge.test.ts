@@ -59,7 +59,13 @@ vi.stubGlobal("definePageMeta", vi.fn());
 const EditEdgeWrapper = defineComponent({
   render() {
     return h(Suspense, null, {
-      default: () => h(EditEdge),
+      default: () =>
+        h(EditEdge, {
+          nodeId: "test-node-id",
+          nodeType: mockCurrent.value.type as any,
+          nodeName: mockCurrent.value.name,
+          authHeaders: {},
+        }),
       fallback: () => h("div", "fallback"),
     });
   },
@@ -74,8 +80,9 @@ vi.stubGlobal("useEdgeEdit", () => ({
   edgeSourceType: ref("article"),
   edgeType: mockEdgeType,
   availableEdgeTypes: mockAvailableEdgeTypes,
-  pickerTarget: mockPickerTarget,
-  pickerSource: ref(null),
+  pickedNode: mockPickerTarget, // Reusing the ref for convenience
+  pickerType: ref("person"),
+  layout: ref({ source: "fixed", target: "picked" }),
 }));
 
 describe("EditEdge.vue", () => {

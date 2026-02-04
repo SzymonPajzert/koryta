@@ -76,6 +76,13 @@ vi.stubGlobal("useEdgeEdit", () => ({
   openEditEdge: vi.fn(),
   cancelEditEdge: vi.fn(),
   isEditingEdge: ref(false),
+  newEdge: ref({}),
+  processEdge: vi.fn(),
+  edgeType: ref("connection"),
+  availableEdgeTypes: ref([]),
+  pickedNode: ref(null),
+  pickerType: ref("person"),
+  layout: ref({ source: "fixed", target: "picked" }),
 }));
 
 // Helper to mount async component

@@ -36,8 +36,10 @@ export function useEntityMutation(options: UseEntityMutationOptions) {
         headers: options.authHeaders.value,
       });
 
-      if (!isNew) {
-        alert(successMessage || "Zapisano propozycję zmiany!");
+      if (successMessage) {
+        alert(successMessage);
+      } else if (!isNew) {
+        alert("Zapisano propozycję zmiany!");
       }
 
       if (onSuccess) {

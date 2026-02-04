@@ -45,7 +45,13 @@ vi.stubGlobal(
 const EditEdgeWrapper = defineComponent({
   render() {
     return h(Suspense, null, {
-      default: () => h(EditEdge),
+      default: () =>
+        h(EditEdge, {
+          nodeId: "test-node-id",
+          nodeType: "person",
+          nodeName: "Current Node",
+          authHeaders: {},
+        }),
       fallback: () => h("div", "fallback"),
     });
   },
@@ -74,8 +80,9 @@ mocks.useEdgeEdit.mockReturnValue({
   edgeSourceType: ref("person"),
   edgeType: mockEdgeType,
   availableEdgeTypes: mockAvailableEdgeTypes,
-  pickerTarget: mockPickerTarget,
-  pickerSource: mockPickerSource,
+  pickedNode: mockPickerTarget,
+  pickerType: ref("place"),
+  layout: ref({ source: "fixed", target: "picked" }),
 });
 
 mocks.useNodeEdit.mockResolvedValue({

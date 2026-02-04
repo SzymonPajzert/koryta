@@ -33,29 +33,35 @@
 
   <v-form v-else @submit.prevent="processEdge">
     <v-row class="align-center my-4">
+      <!-- Left Condition: Source -->
       <v-col cols="4" class="text-center d-flex flex-column align-center">
-        <div v-if="effectiveNodeType === 'article'" class="w-100">
-          <EntityPicker
-            v-model="pickerSource"
-            :entity="edgeSourceType"
-            label="Wyszukaj źródło"
-            density="compact"
-            hide-details
-            data-testid="entity-picker-source"
-          />
-        </div>
-        <div v-else class="d-flex flex-column align-center w-100">
+        <!-- Render Fixed Node if layout.source is 'fixed' -->
+        <div
+          v-if="layout.source === 'fixed'"
+          class="d-flex flex-column align-center w-100"
+        >
           <v-chip
             class="mb-1 text-truncate"
             style="max-width: 100%"
             color="primary"
             variant="outlined"
           >
-            {{ current.name || "Ten węzeł" }}
+            {{ props.nodeName || "Ten węzeł" }}
           </v-chip>
-          <div class="text-caption text-medium-emphasis">
-            {{ newEdge.direction === "outgoing" ? "Źródło" : "Cel" }}
-          </div>
+          <div class="text-caption text-medium-emphasis">Źródło</div>
+        </div>
+
+        <!-- Render Picker if layout.source is 'picked' -->
+        <div v-else class="w-100">
+          <EntityPicker
+            v-model="pickedNode"
+            :entity="pickerType"
+            label="Wyszukaj źródło"
+            density="compact"
+            hide-details
+            data-testid="entity-picker-source"
+          />
+          <div class="text-caption text-medium-emphasis mt-1">Źródło</div>
         </div>
       </v-col>
 
@@ -115,22 +121,37 @@
         </div>
       </v-col>
 
-      <!-- Picker (Right) -->
+      <!-- Right Condition: Target -->
       <v-col cols="4" class="text-center d-flex flex-column align-center">
-        <div class="w-100">
+        <!-- Render Fixed Node if layout.target is 'fixed' -->
+        <div
+          v-if="layout.target === 'fixed'"
+          class="d-flex flex-column align-center w-100"
+        >
+          <v-chip
+            class="mb-1 text-truncate"
+            style="max-width: 100%"
+            color="primary"
+            variant="outlined"
+          >
+            {{ props.nodeName || "Ten węzeł" }}
+          </v-chip>
+          <div class="text-caption text-medium-emphasis">Cel</div>
+        </div>
+
+        <!-- Render Picker if layout.target is 'picked' -->
+        <div v-else class="w-100">
           <EntityPicker
-            :key="edgeTargetType"
-            v-model="pickerTarget"
-            :entity="edgeTargetType"
-            :label="`Wyszukaj ${edgeTargetType === 'person' ? 'osobę' : edgeTargetType === 'place' ? 'firmę' : 'obiekt'}`"
+            :key="pickerType"
+            v-model="pickedNode"
+            :entity="pickerType"
+            :label="`Wyszukaj ${pickerType === 'person' ? 'osobę' : pickerType === 'place' ? 'firmę' : 'obiekt'}`"
             density="compact"
             hide-details
             :disabled="!availableEdgeTypes.length"
             data-testid="entity-picker-target"
           />
-        </div>
-        <div class="text-caption text-center mt-1 text-medium-emphasis">
-          {{ newEdge.direction === "outgoing" ? "Cel" : "Źródło" }}
+          <div class="text-caption text-medium-emphasis mt-1">Cel</div>
         </div>
       </v-col>
     </v-row>
@@ -201,7 +222,7 @@
           type="submit"
           :block="!isEditingEdge"
           :class="{ 'flex-grow-1': isEditingEdge }"
-          :disabled="!pickerTarget"
+          :disabled="!pickedNode"
           data-testid="submit-edge-button"
         >
           {{ isEditingEdge ? "Zapisz zmiany" : "Dodaj powiązanie" }}
@@ -219,7 +240,6 @@
 </template>
 
 <script setup lang="ts">
-import { useNodeEdit } from "~/composables/useNodeEdit";
 import EntityPicker from "~/components/form/EntityPicker.vue";
 import type { Link, NodeType, EdgeType } from "~~/shared/model";
 import { useEdgeButtons } from "~/composables/edgeConfig";
@@ -228,40 +248,56 @@ definePageMeta({
   middleware: "auth",
 });
 
+const props = defineProps<{
+  nodeId: string;
+  nodeType: NodeType;
+  nodeName: string;
+  authHeaders: Record<string, string>;
+}>();
+
+const emit = defineEmits<{
+  (e: "update"): void;
+}>();
+
 const route = useRoute();
-const { node_id, refreshEdges, current, authHeaders, stateKey } =
-  await useNodeEdit();
+
 const effectiveNodeType = computed(() => {
   if (route.query.type) return route.query.type as NodeType;
-  return current.value.type || "person";
+  return props.nodeType || "person";
 });
 
 // Use shared config
 const newEdgeButtons = computed(() =>
-  useEdgeButtons(current.value.name || "Ten węzeł"),
+  useEdgeButtons(props.nodeName || "Ten węzeł"),
 );
 
 const filteredButtons = computed(() =>
   newEdgeButtons.value.filter((b) => b.nodeType === effectiveNodeType.value),
 );
 
+const sourceNode = computed(() => ({
+  id: props.nodeId,
+  type: effectiveNodeType.value,
+}));
+
 const {
   newEdge,
   processEdge,
   cancelEditEdge,
   isEditingEdge,
-  edgeTargetType,
-  edgeSourceType,
   edgeType,
   availableEdgeTypes,
-  pickerTarget,
-  pickerSource,
+  pickedNode,
+  pickerType,
+  layout,
 } = useEdgeEdit({
-  nodeId: node_id,
-  nodeType: effectiveNodeType,
-  authHeaders,
-  onUpdate: refreshEdges,
-  stateKey,
+  fixedNode: sourceNode,
+  authHeaders: toRef(props, "authHeaders"),
+  onUpdate: async () => emit("update"),
+});
+
+defineExpose({
+  openEditEdge,
 });
 
 const mode = ref<"initial" | "form" | "generic">("initial");
@@ -330,8 +366,8 @@ const articleReference = computed({
   },
 });
 
-if (current.value.type === "article") {
-  newEdge.value.references = [node_id.value!];
+if (props.nodeType === "article") {
+  newEdge.value.references = [props.nodeId];
 }
 
 function dateRule(value: string) {
