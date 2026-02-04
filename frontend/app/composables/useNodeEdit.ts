@@ -208,6 +208,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     },
   );
 
+  const { save } = useEntityMutation({ authHeaders });
+
   async function saveNode() {
     if (!idToken.value) {
       alert("Czekam na autoryzację...");
@@ -219,50 +221,51 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
     loading.value = true;
     isSaving.value = true;
+
     try {
       if (isNew.value) {
-        const { id } = await $fetch<{ id: string }>("/api/nodes/create", {
-          method: "POST",
-          body: { ...current.value },
-          headers: authHeaders.value,
+        await save({
+          isNew: true,
+          createEndpoint: "/api/nodes/create",
+          revisionEndpoint: "",
+          payload: { ...current.value },
+          onSuccess: async (res: any) => {
+            const { id } = res;
+            if (id) {
+              lastFetchedId.value = id;
+              // Reset current for the next "new" visit to clean state
+              current.value = {
+                name: "",
+                type: "person",
+                parties: [],
+                content: "",
+                sourceURL: "",
+                shortName: "",
+              };
+              await router.push(`/edit/node/${id}`);
+            }
+          },
         });
-        if (id) {
-          lastFetchedId.value = id;
-          // Reset current for the next "new" visit to clean state
-          current.value = {
-            name: "",
-            type: "person",
-            parties: [],
-            content: "",
-            sourceURL: "",
-            shortName: "",
-          };
-          // Also reset lastFetchedId to ensure clean slate?
-          // actually leave it so fetchData triggers reset if we navigate back to new without reload
-
-          await router.push(`/edit/node/${id}`);
-        }
       } else {
-        await $fetch<{ id: string }>("/api/revisions/create", {
-          method: "POST",
-          body: { ...current.value, node_id: node_id.value },
-          headers: authHeaders.value,
+        await save({
+          isNew: false,
+          createEndpoint: "",
+          revisionEndpoint: "/api/revisions/create",
+          payload: { ...current.value, node_id: node_id.value },
+          successMessage: "Zapisano!",
+          onSuccess: async () => {
+            // alert("Zapisano!"); // useEntityMutation shows generic revision saved message
+            await fetchRevisions();
+            if (node_id.value) {
+              await router.push(
+                `/entity/${current.value.type}/${node_id.value}`,
+              );
+            }
+          },
         });
-        alert("Zapisano!");
-        await fetchRevisions();
-        if (node_id.value) {
-          await router.push(`/entity/${current.value.type}/${node_id.value}`);
-        }
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      console.error(e);
-      const msg =
-        e.data?.message ||
-        e.data?.statusMessage ||
-        e.message ||
-        "Unknown error";
-      alert("Błąd zapisu: " + msg);
+    } catch (e) {
+      // Error is already alerted by useEntityMutation
     } finally {
       loading.value = false;
       setTimeout(() => {

@@ -1,5 +1,7 @@
 import { computed, watch, ref, toValue, type Ref } from "vue";
 import type { NodeType, EdgeType, Edge, Link } from "~~/shared/model";
+import { useEdgeTypes } from "./useEdgeTypes";
+import { useEntityMutation } from "./useEntityMutation";
 
 interface UseEdgeEditOptions {
   nodeId: Ref<string | undefined>;
@@ -9,59 +11,6 @@ interface UseEdgeEditOptions {
   stateKey?: Ref<string>; // Optional stateKey for shared state
 }
 
-type edgeTypeOption = {
-  value: string;
-  label: string;
-  sourceType: NodeType;
-  targetType: NodeType;
-  realType: EdgeType;
-};
-
-const edgeTypeOptions: edgeTypeOption[] = [
-  {
-    value: "owns",
-    label: "Właściciel",
-    sourceType: "place",
-    targetType: "place",
-    realType: "owns",
-  },
-  {
-    value: "owns_region",
-    label: "Region właściciel",
-    sourceType: "region",
-    targetType: "place",
-    realType: "owns",
-  },
-  {
-    value: "connection",
-    label: "Powiązanie z",
-    sourceType: "person",
-    targetType: "person",
-    realType: "connection",
-  },
-  {
-    value: "mentioned_person",
-    label: "Wspomina osobę",
-    sourceType: "article",
-    targetType: "person",
-    realType: "mentions",
-  },
-  {
-    value: "mentioned_company",
-    label: "Wspomina firmę/urząd",
-    sourceType: "article",
-    targetType: "place",
-    realType: "mentions",
-  },
-  {
-    value: "employed",
-    label: "Zatrudniony/a w",
-    sourceType: "person",
-    targetType: "place",
-    realType: "employed",
-  },
-];
-
 export function useEdgeEdit({
   nodeId,
   nodeType: myType,
@@ -69,6 +18,9 @@ export function useEdgeEdit({
   onUpdate,
   stateKey = ref("global-edge-edit"),
 }: UseEdgeEditOptions) {
+  const { edgeTypeOptions, getRealType, getEdgeOption } = useEdgeTypes();
+  const { save } = useEntityMutation({ authHeaders });
+
   // Determine the actual key string once
   const baseKey = toValue(stateKey);
   const newEdge = useState(`${baseKey}-newEdge`, emptyEdge);
@@ -83,12 +35,6 @@ export function useEdgeEdit({
   watch(edgeType, (t) => {
     newEdge.value.type = t;
   });
-
-  const getRealType = (t: string | undefined): EdgeType => {
-    if (!t) return "connection";
-    const option = edgeTypeOptions.find((o) => o.value === t);
-    return option?.realType || (t as EdgeType);
-  };
 
   const pickerTarget = useState<Link<NodeType> | undefined>(
     `${baseKey}-pickerTarget`,
@@ -134,7 +80,7 @@ export function useEdgeEdit({
   // Handle type selection -> enforce direction if needed
   watch(edgeType, (t) => {
     if (!isEditingEdge.value) {
-      const option = edgeTypeOptions.find((o) => o.value === t);
+      const option = getEdgeOption(t);
       if (option) {
         const canBeSource = option.sourceType === myType.value;
         const canBeTarget = option.targetType === myType.value;
@@ -156,7 +102,7 @@ export function useEdgeEdit({
         pickerTarget.value = undefined;
 
         // Re-validate current edgeType
-        const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+        const option = getEdgeOption(edgeType.value);
         let currentStillValid = false;
         if (option) {
           const rs = option.sourceType;
@@ -181,12 +127,12 @@ export function useEdgeEdit({
   );
 
   const edgeSourceType = computed<NodeType>(() => {
-    const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+    const option = getEdgeOption(edgeType.value);
     return option?.sourceType || "person";
   });
 
   const edgeTargetType = computed<NodeType>(() => {
-    const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
+    const option = getEdgeOption(edgeType.value);
     if (myType.value === "article") {
       return option?.targetType || "place";
     }
@@ -247,77 +193,72 @@ export function useEdgeEdit({
 
   async function processEdge() {
     if (isEditingEdge.value) {
-      await saveEdgeRevision();
+      // Edit mode (Revision)
+      if (!newEdge.value.id || !newEdge.value.source) return;
+
+      const payload = {
+        node_id: newEdge.value.id,
+        collection: "edges",
+        source: newEdge.value.source, // Keep required context
+        target: newEdge.value.target,
+        type: getRealType(newEdge.value.type),
+        name: newEdge.value.name,
+        // text: newEdge.value.content, // Deprecated
+        content: newEdge.value.content,
+        start_date: newEdge.value.start_date,
+        end_date: newEdge.value.end_date,
+        references: newEdge.value.references,
+      };
+
+      await save({
+        isNew: false,
+        createEndpoint: "", // Not used
+        revisionEndpoint: "/api/revisions/create",
+        payload,
+        onSuccess: async () => {
+          resetEdgeForm();
+          if (onUpdate) await onUpdate();
+        },
+      });
     } else {
-      await addEdge();
-    }
-  }
+      // Create mode
+      if (!nodeId.value || !pickerTarget.value) return;
 
-  async function addEdge() {
-    if (!nodeId.value || !pickerTarget.value) return;
-
-    const direction = newEdge.value.direction || "outgoing";
-    // If we have pickerSource, use it. Otherwise use nodeId.
-    const source = pickerSource.value
-      ? pickerSource.value.id
-      : direction === "outgoing"
-        ? nodeId.value
-        : pickerTarget.value.id;
-    const target = pickerSource.value
-      ? pickerTarget.value.id
-      : direction === "outgoing"
+      const direction = newEdge.value.direction || "outgoing";
+      // If we have pickerSource, use it. Otherwise use nodeId.
+      const source = pickerSource.value
+        ? pickerSource.value.id
+        : direction === "outgoing"
+          ? nodeId.value
+          : pickerTarget.value.id;
+      const target = pickerSource.value
         ? pickerTarget.value.id
-        : nodeId.value;
+        : direction === "outgoing"
+          ? pickerTarget.value.id
+          : nodeId.value;
 
-    try {
-      await $fetch<undefined>("/api/edges/create", {
-        method: "POST",
-        headers: authHeaders.value,
-        body: {
-          source,
-          target,
-          type: getRealType(newEdge.value.type),
-          name: newEdge.value.name,
-          content: newEdge.value.content,
-          start_date: newEdge.value.start_date,
-          end_date: newEdge.value.end_date,
-          references: newEdge.value.references,
+      const payload = {
+        source,
+        target,
+        type: getRealType(newEdge.value.type),
+        name: newEdge.value.name,
+        content: newEdge.value.content,
+        start_date: newEdge.value.start_date,
+        end_date: newEdge.value.end_date,
+        references: newEdge.value.references,
+      };
+
+      await save({
+        isNew: true,
+        createEndpoint: "/api/edges/create",
+        revisionEndpoint: "", // Not used
+        payload,
+        onSuccess: async () => {
+          resetEdgeForm();
+          alert("Dodano powiązanie");
+          if (onUpdate) await onUpdate();
         },
       });
-      resetEdgeForm();
-      alert("Dodano powiązanie");
-      if (onUpdate) await onUpdate();
-    } catch (e) {
-      alertError(e);
-    }
-  }
-
-  async function saveEdgeRevision() {
-    if (!newEdge.value.id || !newEdge.value.source) return;
-
-    try {
-      await $fetch<{ id: string }>("/api/revisions/create", {
-        method: "POST",
-        body: {
-          node_id: newEdge.value.id,
-          collection: "edges",
-          source: newEdge.value.source, // Keep required context
-          target: newEdge.value.target,
-          type: getRealType(newEdge.value.type),
-          name: newEdge.value.name,
-          // text: newEdge.value.content, // Deprecated
-          content: newEdge.value.content,
-          start_date: newEdge.value.start_date,
-          end_date: newEdge.value.end_date,
-          references: newEdge.value.references,
-        },
-        headers: authHeaders.value,
-      });
-      alert("Zapisano propozycję zmiany!");
-      resetEdgeForm();
-      if (onUpdate) await onUpdate();
-    } catch (e) {
-      alertError(e);
     }
   }
 
@@ -335,13 +276,6 @@ export function useEdgeEdit({
     cancelEditEdge,
     openEditEdge,
   };
-}
-
-function alertError(e: unknown) {
-  console.error(e);
-  if (!(e instanceof Error)) return;
-  const msg = e.message || "Unknown error";
-  alert("Błąd dodawania powiązania: " + msg);
 }
 
 function emptyEdge(): Partial<Edge> & { direction: "outgoing" | "incoming" } {
