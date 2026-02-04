@@ -23,7 +23,7 @@ export default withNuxt(
     rules: {
       "vue/no-multiple-template-root": "off",
       "vue/no-mutating-props": "off", // TODO enable it again
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
 )
@@ -34,8 +34,9 @@ export default withNuxt(
     },
   })
   .append({
-    files: ["cypress/**/*.ts", "cypress.config.ts"],
+    files: ["*.test.ts", "cypress/**/*.ts", "cypress.config.ts"],
     rules: {
       "@typescript-eslint/no-unused-expressions": "warn",
+      "@typescript-eslint/no-explicit-any": "off",
     },
   });
