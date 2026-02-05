@@ -158,7 +158,7 @@ class Conductor(IO):
 
             # Create directory and save file
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, "w", encoding="utf-8") as f:
+            with open(full_path, "wb") as f:
                 f.write(data)
             return full_path
         else:

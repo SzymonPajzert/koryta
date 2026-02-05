@@ -216,7 +216,7 @@ def process_url(ctx: Context, uid: str, url: str, config: dict) -> (set[str], st
 
         # Success
         pages_to_visit = set()
-        storage_path = ctx.io.upload(parsed, response.text, "text/html", file_id=uid)
+        storage_path = ctx.io.upload(parsed, response.content, "text/html", file_id=uid)
 
         soup = BeautifulSoup(response.text, "html.parser")
         for link in soup.find_all("a", href=True):
