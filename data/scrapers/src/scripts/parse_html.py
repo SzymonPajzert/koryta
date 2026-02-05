@@ -3,10 +3,10 @@ import json
 import logging
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime
 
-import psycopg2
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
@@ -23,11 +23,12 @@ def get_pages_to_parse(limit: int):
     Fetches pages from the database that are ready to be parsed.
     """
     query = """
-        SELECT id, url, storage_path
-        FROM website_index
-        WHERE done = TRUE AND storage_path IS NOT NULL
-        LIMIT %s;
-    """
+            SELECT id, url, storage_path
+            FROM website_index
+            WHERE done = TRUE
+              AND storage_path IS NOT NULL
+                LIMIT %s; \
+            """
     with get_pg_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(query, (limit,))
@@ -159,8 +160,8 @@ def extract_article_content(url: str, html_bytes: bytes) -> dict:
         is_article_score += 1
 
     return {
-        "title": title,
-        "content": content_text,
+        "title": title.strip(),
+        "content": content_text.strip(),
         "is_article": is_article_score >= 2,
         "publication_date": publication_date.isoformat() if publication_date else None,
     }
@@ -174,6 +175,11 @@ def main():
         default=10,
         help="Number of articles to process.",
     )
+    parser.add_argument(
+        "--view",
+        action="store_true",
+        help="Open each parsed HTML in Firefox for manual validation.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -186,44 +192,102 @@ def main():
         logger.info("No pages to parse.")
         return
 
-    output_filename = "parsed_articles.jsonl"
+    if args.view:
+        logger.info(
+            f"Found {len(pages)} pages to parse. Opening in Firefox for manual validation."
+        )
+        try:
+            for page_id, url, storage_path in pages:
+                if not storage_path or not os.path.exists(storage_path):
+                    logger.warning(f"Storage path not found for URL {url}: {storage_path}")
+                    continue
 
-    logger.info(
-        f"Found {len(pages)} pages to parse. Output will be saved to {output_filename}"
-    )
+                if storage_path.startswith("gs://"):
+                    logger.info(f"Skipping GCS path for now: {storage_path}")
+                    continue
 
-    with open(output_filename, "w", encoding="utf-8") as f:
-        for page_id, url, storage_path in tqdm(pages, desc="Parsing articles"):
-            if not storage_path or not os.path.exists(storage_path):
-                logger.warning(f"Storage path not found for URL {url}: {storage_path}")
-                continue
+                try:
+                    with open(storage_path, "r") as html_file:
+                        html_content_bytes = html_file.read()
 
-            # handle GCS paths later
-            if storage_path.startswith("gs://"):
-                logger.info(f"Skipping GCS path for now: {storage_path}")
-                continue
+                    extracted_data = extract_article_content(url, html_content_bytes)
 
-            try:
-                with open(storage_path, "r") as html_file:
-                    html_content_bytes = html_file.read()
+                    record = {
+                        "id": page_id,
+                        "url": url,
+                        "title": extracted_data["title"],
+                        "is_article": extracted_data["is_article"],
+                        "publication_date": extracted_data["publication_date"],
+                        "content": extracted_data["content"],
+                    }
 
-                extracted_data = extract_article_content(url, html_content_bytes)
+                    logger.info(f"Opening {url} in Firefox...")
+                    # Replace webbrowser.open with this:
+                    subprocess.Popen(
+                        ["firefox", f"file://{os.path.abspath(storage_path)}"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    print("\n" + "=" * 80)
+                    print("=" * 80 + "\n")
+                    print(f"URL: {record['url']}")
+                    print(f"Title: {record['title']}")
+                    print(f"Is Article: {record['is_article']}")
+                    print(f"Publication Date: {record['publication_date']}")
+                    print("-" * 80)
+                    print("Content:")
+                    print(record["content"][:1000] + "..." if len(record["content"]) > 1000 else record[
+                        "content"])  # Print first 1000 chars of content
 
-                record = {
-                    "id": page_id,
-                    "url": url,
-                    "title": extracted_data["title"],
-                    "is_article": extracted_data["is_article"],
-                    "publication_date": extracted_data["publication_date"],
-                    "content": extracted_data["content"],
-                }
+                    input("Press Enter to continue, or Ctrl+C to quit...")
 
-                f.write(json.dumps(record) + "\n")
+                except KeyboardInterrupt:
+                    logger.info("Viewer interrupted by user. Exiting.")
+                    break
+                except Exception as e:
+                    logger.error(f"Failed to parse or view {url} from {storage_path}: {e}")
+        except KeyboardInterrupt:
+            logger.info("Viewer interrupted by user. Exiting.")
 
-            except Exception as e:
-                logger.error(f"Failed to parse {url} from {storage_path}: {e}")
+    else:
+        output_filename = "parsed_articles.jsonl"
 
-    logger.info(f"Finished parsing. Results saved to {output_filename}")
+        logger.info(
+            f"Found {len(pages)} pages to parse. Output will be saved to {output_filename}"
+        )
+
+        with open(output_filename, "w", encoding="utf-8") as f:
+            for page_id, url, storage_path in tqdm(pages, desc="Parsing articles"):
+                if not storage_path or not os.path.exists(storage_path):
+                    logger.warning(f"Storage path not found for URL {url}: {storage_path}")
+                    continue
+
+                # handle GCS paths later
+                if storage_path.startswith("gs://"):
+                    logger.info(f"Skipping GCS path for now: {storage_path}")
+                    continue
+
+                try:
+                    with open(storage_path, "r") as html_file:
+                        html_content_bytes = html_file.read()
+
+                    extracted_data = extract_article_content(url, html_content_bytes)
+
+                    record = {
+                        "id": page_id,
+                        "url": url,
+                        "title": extracted_data["title"],
+                        "is_article": extracted_data["is_article"],
+                        "publication_date": extracted_data["publication_date"],
+                        "content": extracted_data["content"],
+                    }
+
+                    f.write(json.dumps(record) + "\n")
+
+                except Exception as e:
+                    logger.error(f"Failed to parse {url} from {storage_path}: {e}")
+
+        logger.info(f"Finished parsing. Results saved to {output_filename}")
 
 
 if __name__ == "__main__":
