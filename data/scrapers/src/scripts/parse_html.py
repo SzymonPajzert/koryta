@@ -2,12 +2,12 @@ import argparse
 import json
 import logging
 import os
-import re
 import subprocess
 import sys
 from datetime import datetime
 
 from bs4 import BeautifulSoup
+from bs4 import Comment
 from tqdm import tqdm
 
 # Add src to python path
@@ -54,118 +54,87 @@ def parse_date(date_string: str) -> datetime | None:
     return None
 
 
+import json
+import re
+from datetime import datetime
+from bs4 import BeautifulSoup, Comment
+
+
 def extract_article_content(url: str, html_bytes: bytes) -> dict:
-    """
-    Parses HTML to extract title, main content, publication date, and determine if it's an article.
-    """
+    # 1. Parse and Pre-clean
+    # Using 'lxml' is faster and more robust if available, otherwise 'html.parser'
     soup = BeautifulSoup(html_bytes, "html.parser")
 
-    title = soup.title.string if soup.title else ""
+    # Remove obvious non-content noise before analysis
+    for noise in soup(["script", "style", "nav", "footer", "header", "aside", "form", "iframe"]):
+        noise.decompose()
 
-    # Is_article scoring
-    is_article_score = 0
-    og_type = soup.find("meta", property="og:type")
-    if og_type and og_type.get("content", "").lower() == "article":
-        is_article_score += 2
-
-    if soup.article:
-        is_article_score += 1
-
-    for keyword in ["article", "news", "wiadomosci", "informacje"]:
-        if keyword in url:
-            is_article_score += 1
-            break
-
-    # Date extraction
+    # --- 1. METADATA VALIDATION ---
     publication_date = None
-    date_selectors = [
-        ("meta", {"property": "article:published_time"}),
-        ("meta", {"name": "pubdate"}),
-        ("meta", {"name": "date"}),
-        ("meta", {"property": "og:article:published_time"}),
-        ("meta", {"name": "cXenseParse:recs:publishtime"}),
-        ("meta", {"name": "parsely-pub-date"}),
-        ("time", {"datetime": True}),
-    ]
-    for tag, attrs in date_selectors:
-        element = soup.find(tag, attrs)
-        if element:
-            date_str = element.get("content") or element.get("datetime")
-            if date_str:
-                publication_date = parse_date(date_str)
-                if publication_date:
-                    break
+    is_article_by_meta = False
 
-    # JSON-LD
-    if not publication_date:
-        for script in soup.find_all("script", type="application/ld+json"):
-            try:
-                json_ld_text = script.string
-                if json_ld_text:
-                    json_ld = json.loads(json_ld_text)
-                    if isinstance(json_ld, dict) and "datePublished" in json_ld:
-                        publication_date = parse_date(json_ld["datePublished"])
-                        if publication_date:
+    # Check JSON-LD for "NewsArticle" or "BlogPosting"
+    # Homepages (like bad2.html) often list multiple types or just "WebSite"
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string)
+            nodes = data.get("@graph", [data]) if isinstance(data, dict) else data
+            for node in nodes:
+                if isinstance(node, dict):
+                    node_type = str(node.get("@type", ""))
+                    if any(x in node_type for x in ["Article", "NewsArticle", "BlogPosting"]):
+                        # Verify this isn't just a snippet in a list
+                        date_str = node.get("datePublished")
+                        if date_str:
+                            publication_date = parse_date(date_str)
+                            is_article_by_meta = True
                             break
-            except (json.JSONDecodeError, TypeError):
-                continue
+        except:
+            continue
 
-    # URL matching
-    if not publication_date:
-        match = re.search(r"/(\d{4})/(\d{2})/(\d{2})/", url)
-        if match:
-            try:
-                publication_date = datetime(
-                    int(match.group(1)), int(match.group(2)), int(match.group(3))
-                )
-            except ValueError:
-                pass
+    # --- 2. CONTENT SCORING (Standard Assumptions) ---
+    # Find the "Main" container. role="main" is the modern accessibility standard.
+    main_tag = soup.find("article") or soup.find("main") or soup.find(role="main") or soup.body
 
-    main_content_tag = None
-    if soup.article:
-        main_content_tag = soup.article
-    elif soup.main:
-        main_content_tag = soup.main
-    else:
-        # A simple heuristic to find a content div
-        possible_ids = ["content", "main-content", "article", "article-body"]
-        for pid in possible_ids:
-            main_content_tag = soup.find("div", id=pid)
-            if main_content_tag:
-                break
-        if not main_content_tag:
-            possible_classes = [
-                "content",
-                "main-content",
-                "article",
-                "article-body",
-                "post-content",
-            ]
-            for pclass in possible_classes:
-                main_content_tag = soup.find("div", class_=pclass)
-                if main_content_tag:
-                    break
-
-    if not main_content_tag:
-        main_content_tag = soup.body
-
+    # Heuristic: Article content has high text density and few links.
+    # Homepages have many <a> tags relative to text length.
     content_text = ""
-    if main_content_tag:
-        # Remove script and style tags
-        for script_or_style in main_content_tag(["script", "style"]):
-            script_or_style.decompose()
-        content_text = main_content_tag.get_text(separator="\n", strip=True)
+    if main_tag:
+        # Get text while preserving paragraph breaks
+        content_text = main_tag.get_text(separator="\n", strip=True)
 
-    if 200 < len(content_text) < 20000:
-        is_article_score += 1
+        # Calculate Link Density: (Total Link Text Length) / (Total Text Length)
+        links = main_tag.find_all("a")
+        link_text_len = sum(len(a.get_text(strip=True)) for a in links)
+        total_text_len = len(content_text)
+        link_density = link_text_len / total_text_len if total_text_len > 0 else 1
+    else:
+        link_density = 1
+
+    # --- 3. FINAL IS_ARTICLE DECISION ---
+    # Thresholds based on file analysis:
+    # - Good articles have link density < 20% (mostly body text).
+    # - Homepages have link density > 50% (mostly menus/headlines).
+    # - Articles should have a substantial word count (> 200 words).
+    word_count = len(content_text.split())
+
+    is_article = False
+    if is_article_by_meta and link_density < 0.35 and word_count > 200:
+        is_article = True
+    elif link_density < 0.20 and word_count > 300:  # Strong content even without meta
+        is_article = True
+
+    # Title fallback
+    og_title = soup.find("meta", property="og:title")
+    title = og_title.get("content") if og_title else (soup.title.string if soup.title else "")
 
     return {
-        "title": title.strip(),
+        "title": title.strip() if title else "",
         "content": content_text.strip(),
-        "is_article": is_article_score >= 2,
+        "is_article": is_article,
         "publication_date": publication_date.isoformat() if publication_date else None,
+        "metrics": {"word_count": word_count, "link_density": round(link_density, 2)}  # For debugging
     }
-
 
 def main():
     parser = argparse.ArgumentParser(description="Parse downloaded HTML articles.")
@@ -207,7 +176,7 @@ def main():
                     continue
 
                 try:
-                    with open(storage_path, "r") as html_file:
+                    with open(storage_path, "rb") as html_file:
                         html_content_bytes = html_file.read()
 
                     extracted_data = extract_article_content(url, html_content_bytes)
@@ -220,6 +189,8 @@ def main():
                         "publication_date": extracted_data["publication_date"],
                         "content": extracted_data["content"],
                     }
+                    if not record["is_article"]:
+                        continue
 
                     logger.info(f"Opening {url} in Firefox...")
                     # Replace webbrowser.open with this:
