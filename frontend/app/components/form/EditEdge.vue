@@ -175,6 +175,7 @@
             prepend-inner-icon="mdi-calendar"
           />
         </v-col>
+
         <v-col cols="12" md="6">
           <v-text-field
             v-model="newEdge.end_date"
