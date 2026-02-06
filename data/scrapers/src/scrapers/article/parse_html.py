@@ -139,7 +139,7 @@ def main():
                     with open(storage_path, "r") as html_file:
                         html_content_bytes = html_file.read()
 
-                    extracted_data = extract_article_content(url, html_content_bytes)
+                    extracted_data = extract_article_content(html_content_bytes)
 
                     record = {
                         "id": page_id,
