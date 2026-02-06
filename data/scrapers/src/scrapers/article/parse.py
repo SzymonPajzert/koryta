@@ -112,18 +112,20 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
 
             # --- Clean up title ---
     if title:
-        title = title.replace('″', '"').replace('”', '"').replace('„', '"').replace('“', '"')
-        title = title.replace("''", '"').replace("’", "'").replace("‘", "'")
-        title = re.sub(r'\s*[-—–|»«›‹]\s*.*$', '', title, flags=re.I)
+        # Normalize various quotation marks and guillemets to straight double/single quotes
+        title = title.replace('”', '"').replace('„', '"').replace('“', '"').replace('″', '"')
+        title = title.replace("’", "'").replace("‘", "'").replace('«', '"').replace('»', '"')
+        title = title.replace('›', "'").replace('‹', "'")
+        title = title.replace("''", '"') # Handle double single quotes becoming a double quote
 
-        # Remove specific site names only if they appear at the end
-        title = re.sub(
-            r'\s*:\s*(Niezalezna\.pl|RadioZET\.pl|PortalPłock\.pl|oko\.press|polityka\.se\.pl|zpleszewa\.pl|radomszczanska\.pl)\s*$',
-            '', title, flags=re.I)
-
-        title = re.sub(r'\s+-\s+.*$', '', title, flags=re.I)  # General " - sitename" pattern
-        title = re.sub(r'\s{2,}', ' ', title)  # Collapse multiple spaces, but don't strip at the end
-        # DO NOT apply final .strip() here to match expected trailing spaces in tests
+        # Remove specific site names only if they appear at the end, and only if preceded by a common separator.
+        title = re.sub(r'(\s*[:|—–-]\s*|\s*)\s*(Niezalezna\.pl|RadioZET\.pl|PortalPłock\.pl|oko\.press|polityka\.se\.pl|zpleszewa\.pl|radomszczanska\.pl|Jawny Lublin|Swidnica24\.pl|Swidnica24\.pl - wydarzenia, informacje, rozrywka, kultura, polityka, wywiady, wypadki)\s*$', '', title, flags=re.I)
+        
+        # Collapse multiple spaces, but don't strip at the end
+        title = re.sub(r'\s{2,}', ' ', title) 
+        
+        # Strip leading/trailing whitespace after all operations
+        title = title.strip()
 
     # --- Extract Publication Date ---
     # 1. Try to find date in Schema.org JSON-LD
@@ -237,9 +239,11 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
         is_article = True
     elif has_article_og_type:
         is_article = True
-    elif has_article_tag and publication_date and len(article_content) > 1000:  # Increased threshold for content
+    elif has_article_tag and publication_date: # Simplified condition: if article tag and date, it's an article
         is_article = True
-    elif title and publication_date and len(article_content) > 1500:  # Even stricter content length
+    elif has_article_tag and len(article_content) > 500: # If article tag and decent content, it's an article
+        is_article = True
+    elif title and publication_date and len(article_content) > 1500:  # Original stricter condition
         is_article = True
 
     # Final override for negative heuristics

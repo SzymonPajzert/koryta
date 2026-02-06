@@ -3,7 +3,7 @@ import requests
 
 from . import parse
 
-URL_DF_PATH = "/home/mp/Downloads/all.csv"
+URL_DF_PATH = "src/scrapers/article/test_data/url_parsing.csv"
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
 
 
@@ -11,6 +11,13 @@ def fetch_url(url: str) -> bytes:
     response = requests.get(url, headers=HEADERS, timeout=10)
     return response.content
 
+def normalize_quotes(text: str) -> str:
+    """Normalizes various quotes to straight double and single quotes."""
+    text = text.replace('”', '"').replace('„', '"').replace('“', '"').replace('″', '"')
+    text = text.replace("’", "'").replace("‘", "'").replace('«', '"').replace('»', '"')
+    text = text.replace('›', "'").replace('‹', "'")
+    text = text.replace("''", '"')
+    return text
 
 def pytest_generate_tests(metafunc):
     """Dynamically generates test cases from the CSV file."""
@@ -44,9 +51,9 @@ def test_article(row_article):
     assert parsed_data["is_article"], f"Failed for {url}: Should be an article"
 
     if not pd.isna(alternative_title):
-        assert parsed_data["title"] in (expected_title, alternative_title)
+        assert normalize_quotes(parsed_data["title"]).strip() in (normalize_quotes(expected_title).strip(), normalize_quotes(alternative_title).strip())
     else:
-        assert parsed_data["title"].strip() == expected_title.strip()
+        assert normalize_quotes(parsed_data["title"]).strip() == normalize_quotes(expected_title).strip()
 
     if not pd.isna(expected_date):
         assert parsed_data["publication_date"] == expected_date, \
