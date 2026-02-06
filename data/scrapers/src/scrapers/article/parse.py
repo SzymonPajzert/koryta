@@ -3,82 +3,39 @@ import re
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
+import dateparser
 from bs4 import BeautifulSoup
-from dateutil.parser import parse, parserinfo
-
-
-class PolishParserInfo(parserinfo):
-    """Custom parserinfo for Polish month and weekday names."""
-    MONTHS = [
-        ("stycznia", "sty"), ("lutego", "lut"), ("marca", "mar"),
-        ("kwietnia", "kwi"), ("maja", "maj"), ("czerwca", "cze"),
-        ("lipca", "lip"), ("sierpnia", "sie"), ("września", "wrz"),
-        ("października", "paź"), ("listopada", "lis"), ("grudnia", "gru"),
-    ]
-    WEEKDAYS = [
-        ("poniedziałek", "pon"), ("wtorek", "wto"), ("środa", "śro"),
-        ("czwartek", "czw"), ("piątek", "pią"), ("sobota", "sob"),
-        ("niedziela", "nie"),
-    ]
-
-
-_polish_parser_info = PolishParserInfo()
 
 
 def _parse_polish_date(date_string: str) -> Optional[date]:
-    """
-    Parses a Polish date string into a date object.
-    Tries several specific formats (prioritizing DD.MM.YYYY) and falls back to dateutil.parser.
-    """
-    polish_month_map = {
-        "stycznia": "January", "lutego": "February", "marca": "March",
-        "kwietnia": "April", "maja": "May", "czerwca": "June",
-        "lipca": "July", "sierpnia": "August", "września": "September",
-        "października": "October", "listopada": "November", "grudnia": "Dec",
-        "sty": "Jan", "lut": "Feb", "mar": "Mar", "kwi": "Apr",
-        "maj": "May", "cze": "Jun", "lip": "Jul", "sie": "Aug",
-        "wrz": "Sep", "paź": "Oct", "lis": "Nov", "gru": "Dec",
-    }
+    if not date_string:
+        return None
 
-    pre_normalized_date_string = date_string
-    for pl_month, en_month in polish_month_map.items():
-        pre_normalized_date_string = re.sub(
-            r"\b" + re.escape(pl_month) + r"\b",
-            en_month,
-            pre_normalized_date_string,
-            flags=re.IGNORECASE,
-        )
+    date_string = date_string.strip()
 
-    date_formats_to_try = [
-        "%d.%m.%Y, %H:%M",
-        "%d.%m.%Y %H:%M",
-        "%d/%m/%Y %H:%M",
-        "%d.%m.%Y",
-        "%d/%m/%Y",
-        "%A, %d %b %Y %H:%M",
-        "%d %B %Y %H:%M",
-        "%d %b %Y %H:%M",
-        "%d %B %Y",
-        "%d %b %Y",
-        "%Y-%m-%dT%H:%M:%S%z",
-        "%Y-%m-%d %H:%M",
-        "%Y-%m-%d",
-        "%m.%d.%Y %H:%M",
-        "%m/%d/%Y %H:%M",
-        "%m.%d.%Y",
-        "%m/%d/%Y",
-    ]
-
-    for fmt in date_formats_to_try:
+    for fmt in (
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%d",
+    ):
         try:
-            return datetime.strptime(pre_normalized_date_string, fmt).date()
+            return datetime.strptime(date_string, fmt).date()
         except ValueError:
             pass
 
-    try:
-        return parse(date_string, parserinfo=_polish_parser_info, yearfirst=False).date()
-    except (ValueError, TypeError):
-        return None
+    parsed = dateparser.parse(
+        date_string,
+        languages=["pl"],
+        settings={
+            "DATE_ORDER": "DMY",
+            "RETURN_AS_TIMEZONE_AWARE": False,
+            "PREFER_DAY_OF_MONTH": "first",
+        },
+    )
+    return parsed.date() if parsed else None
 
 
 def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
@@ -129,7 +86,8 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
                             if publication_date:
                                 break
             elif isinstance(json_data, dict) and json_data.get("@type") == "NewsArticle":
-                date_str = json_data.get("datePublished") or json_data.get("dateCreated") or json_data.get("dateModified")
+                date_str = json_data.get("datePublished") or json_data.get("dateCreated") or json_data.get(
+                    "dateModified")
                 if date_str:
                     publication_date = _parse_polish_date(date_str)
         except json.JSONDecodeError:
@@ -174,7 +132,8 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
     if tight_candidates:
         main_content_element = max(tight_candidates, key=lambda e: len(e.get_text(strip=True)))
         subtitle = soup.find("div", class_="article__subtitle")
-        if subtitle and main_content_element.get("class") and "article__content" in main_content_element.get("class", []):
+        if subtitle and main_content_element.get("class") and "article__content" in main_content_element.get("class",
+                                                                                                             []):
             import copy
 
             container = soup.new_tag("div")
@@ -196,11 +155,13 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
             main_content_element = container
 
     if not main_content_element:
-        article_body_elements = soup.find_all(["article", "main"], class_=re.compile(r"article|post|content|story|body", re.I))
+        article_body_elements = soup.find_all(["article", "main"],
+                                              class_=re.compile(r"article|post|content|story|body", re.I))
         if not article_body_elements:
             article_body_elements = soup.find_all(
                 ["div", "section"],
-                class_=re.compile(r"article-body|post-body|main-content|entry-content|td-post-content|articleBody", re.I),
+                class_=re.compile(r"article-body|post-body|main-content|entry-content|td-post-content|articleBody",
+                                  re.I),
             )
         if article_body_elements:
             main_content_element = max(article_body_elements, key=lambda e: len(e.get_text(strip=True)))
@@ -212,8 +173,8 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
 
     if main_content_element:
         for unwanted in main_content_element.find_all(
-            ["script", "style", "img", "iframe", "nav", "aside", "footer", "header"],
-            recursive=True,
+                ["script", "style", "img", "iframe", "nav", "aside", "footer", "header"],
+                recursive=True,
         ):
             unwanted.extract()
 
@@ -269,8 +230,8 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
         try:
             json_data = json.loads(script_ld_json.string)
             if (
-                isinstance(json_data, list)
-                and any(item.get("@type") == "NewsArticle" for item in json_data)
+                    isinstance(json_data, list)
+                    and any(item.get("@type") == "NewsArticle" for item in json_data)
             ) or (isinstance(json_data, dict) and json_data.get("@type") == "NewsArticle"):
                 is_schema_article = True
         except json.JSONDecodeError:
