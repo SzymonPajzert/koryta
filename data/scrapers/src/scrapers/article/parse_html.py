@@ -147,7 +147,7 @@ def main():
                         "title": extracted_data["title"],
                         "is_article": extracted_data["is_article"],
                         "publication_date": extracted_data["publication_date"],
-                        "content": extracted_data["content"],
+                        "content": extracted_data["article_content"],
                     }
 
                     f.write(json.dumps(record) + "\n")
