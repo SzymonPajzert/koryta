@@ -1,12 +1,25 @@
+from datetime import timedelta
+from functools import lru_cache
+
 import pandas as pd
 import requests
+import requests_cache
 
 from . import parse
 
 URL_DF_PATH = "src/scrapers/article/test_data/url_parsing.csv"
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
 
+# This sets up a local SQLite database named 'http_cache'
+# It will automatically cache any 'GET' request
+requests_cache.install_cache(
+    'http_cache',
+    backend='sqlite',
+    expire_after=timedelta(days=1)
+)
 
+
+@lru_cache(maxsize=128)
 def fetch_url(url: str) -> bytes:
     response = requests.get(url, headers=HEADERS, timeout=10)
     return response.content
@@ -43,13 +56,10 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("row_no_article", no_articles.to_dict('records'))
 
 
-def test_article(row_article):
+def test_article_title(row_article):
     url = row_article["Link"]
     expected_title = row_article["Tytuł"]
     alternative_title = row_article["Tytuł Alternatywny"]
-    expected_date = row_article["Data Normalizowana"]
-    expected_first_sentence = row_article["Pierwsze Zdanie"]
-    expected_last_sentence = row_article["Ostatnie Zdanie"]
 
     website_bytes = fetch_url(url)
     parsed_data = parse.extract_article_content(website_bytes)
@@ -63,12 +73,33 @@ def test_article(row_article):
     else:
         assert normalize_quotes(parsed_data["title"]).strip() == normalize_quotes(expected_title).strip()
 
+
+def test_article_date(row_article):
+    url = row_article["Link"]
+    expected_date = row_article["Data Normalizowana"]
+
+    website_bytes = fetch_url(url)
+    parsed_data = parse.extract_article_content(website_bytes)
+
+    assert parsed_data["is_article"], f"Failed for {url}: Should be an article"
+
     # Date
     if not pd.isna(expected_date):
         assert parsed_data["publication_date"] == expected_date, \
             f"Hint, the date in the article looks like '{row_article['Data']}'"
     else:
         assert parsed_data["publication_date"] is None
+
+
+def test_article_content(row_article):
+    url = row_article["Link"]
+    expected_first_sentence = row_article["Pierwsze Zdanie"]
+    expected_last_sentence = row_article["Ostatnie Zdanie"]
+
+    website_bytes = fetch_url(url)
+    parsed_data = parse.extract_article_content(website_bytes)
+
+    assert parsed_data["is_article"], f"Failed for {url}: Should be an article"
 
     # Content
     if not pd.isna(expected_first_sentence):
