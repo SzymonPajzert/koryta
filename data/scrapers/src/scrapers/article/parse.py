@@ -186,41 +186,103 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
                     break
 
     # --- Extract Article Content ---
-    article_body_elements = soup.find_all(['article', 'main'],
-                                          class_=re.compile(r'article|post|content|story|body', re.I))
-
-    if not article_body_elements:
-        article_body_elements = soup.find_all(['div', 'section'], class_=re.compile(
-            r'article-body|post-body|main-content|entry-content|td-post-content|articleBody', re.I))
-
     main_content_element = None
-    max_len = 0
-    for element in article_body_elements:
-        current_len = len(element.get_text(separator=' ', strip=True))
-        if current_len > max_len:
-            max_len = current_len
-            main_content_element = element
+
+    # Tier 1: Very specific body content selectors (tightest containers)
+    # Use anchored regex to match exact class values, not substrings
+    tight_class_pattern = re.compile(
+        r'^(article__content|post__content|news__content|entry-content|td-post-content)$',
+        re.I
+    )
+    tight_candidates = soup.find_all(['div', 'section'], class_=tight_class_pattern)
+    if tight_candidates:
+        main_content_element = max(tight_candidates, key=lambda e: len(e.get_text(strip=True)))
+        # For OS Media sites: include article__subtitle lead paragraph if present
+        subtitle = soup.find('div', class_='article__subtitle')
+        if subtitle and main_content_element.get('class') and 'article__content' in main_content_element.get('class', []):
+            import copy
+            container = soup.new_tag('div')
+            container.append(copy.copy(subtitle))
+            container.append(copy.copy(main_content_element))
+            main_content_element = container
+
+    # Tier 2: Multiple articleBody divs (rp.pl pattern - combine them)
+    if not main_content_element:
+        article_bodies = soup.find_all('div', class_='articleBody')
+        if len(article_bodies) > 1:
+            import copy
+            container = soup.new_tag('div')
+            # Include lead/subtitle paragraph if present
+            subtitle = soup.find('div', class_='blog--subtitle')
+            if subtitle:
+                container.append(copy.copy(subtitle))
+            for body in article_bodies:
+                container.append(copy.copy(body))
+            main_content_element = container
+
+    # Tier 3: Broader selectors (original logic)
+    if not main_content_element:
+        article_body_elements = soup.find_all(['article', 'main'],
+                                              class_=re.compile(r'article|post|content|story|body', re.I))
+
+        if not article_body_elements:
+            article_body_elements = soup.find_all(['div', 'section'], class_=re.compile(
+                r'article-body|post-body|main-content|entry-content|td-post-content|articleBody', re.I))
+
+        if article_body_elements:
+            main_content_element = max(article_body_elements, key=lambda e: len(e.get_text(strip=True)))
+
+    # Tier 5: Single <article> tag on the page (no class requirement)
+    if not main_content_element:
+        all_articles = soup.find_all('article')
+        if len(all_articles) == 1:
+            main_content_element = all_articles[0]
 
     if main_content_element:
+        # Remove unwanted elements by tag
         for unwanted in main_content_element.find_all(
                 ['script', 'style', 'img', 'iframe', 'nav', 'aside', 'footer', 'header'], recursive=True):
             unwanted.extract()
+
+        # Remove unwanted elements by class - use anchored patterns to avoid matching
+        # Tailwind utility classes like [&_div.twitter-tweet]:mx-auto
+        # First group: exact class value matches only
+        # Second group: prefix matches (class starts with pattern)
+        unwanted_class_pattern = re.compile(
+            r'^(ads|ad-unit|embed|twit-embed|twitter-tweet|sonda|poll|quizv2|tab--open)$|'
+            r'^(share-button|related-post|comment|disqus|'
+            r'post__disqus|post__listing|post__footer|'
+            r'recommend|esi-content|'
+            r'sd-sharing|sd-social|robots-nocontent|'
+            r'content--excerpt|article--featured|latest--articles|'
+            r'article__recommended|article__img--wrapper|'
+            r'td_block_related|td-post-header|'
+            r'wc-memberships|popup--content|'
+            r'news__content-more)',
+            re.I
+        )
         for unwanted_class in main_content_element.find_all(
-                class_=re.compile(r'ads|ad-unit|share-buttons|related-posts|comments', re.I), recursive=True):
+                class_=unwanted_class_pattern, recursive=True):
             unwanted_class.extract()
 
         article_content = main_content_element.get_text(separator=' ', strip=True)
-        article_content = re.sub(r'\s*\n\s*', '\n', article_content).strip()
-        article_content = re.sub(r' {2,}', ' ', article_content).strip()
     else:
         article_content = soup.get_text(separator=' ', strip=True)
-        article_content = re.sub(r'\s*\n\s*', '\n', article_content).strip()
-        article_content = re.sub(r' {2,}', ' ', article_content).strip()
+
+    # Normalize whitespace and non-breaking spaces
+    article_content = article_content.replace('\xa0', ' ')
+    article_content = re.sub(r'\s*\n\s*', '\n', article_content).strip()
+    article_content = re.sub(r' {2,}', ' ', article_content).strip()
+    # Fix spaces before punctuation caused by get_text(separator=' ') on inline elements
+    article_content = re.sub(r' ([.,:;!?])', r'\1', article_content)
 
     # --- Determine if it's an article ---
     og_type = soup.find("meta", property="og:type")
     has_article_og_type = og_type and og_type.get("content") == "article"
-    has_article_tag = soup.find('article')
+    all_article_tags = soup.find_all('article')
+    has_article_tag = len(all_article_tags) > 0
+    # Many article tags typically means a listing/homepage, not a single article
+    is_listing_page = len(all_article_tags) > 5
 
     # Stricter heuristic for is_article
     is_schema_article = False
@@ -234,11 +296,13 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    # Evaluate positive conditions
+    # Evaluate positive conditions (strong signals override listing page heuristic)
     if is_schema_article:
         is_article = True
     elif has_article_og_type:
         is_article = True
+    elif is_listing_page:
+        is_article = False
     elif has_article_tag and publication_date: # Simplified condition: if article tag and date, it's an article
         is_article = True
     elif has_article_tag and len(article_content) > 500: # If article tag and decent content, it's an article
