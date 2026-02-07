@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from typing import Generator
 from zoneinfo import ZoneInfo
@@ -7,6 +8,7 @@ from tqdm import tqdm
 
 from entities.util import NormalizedParse
 from scrapers.stores import IO, CloudStorage, DownloadableFile
+from stores.config import PROJECT_ROOT
 
 BUCKET = "koryta-pl-crawled"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
@@ -104,6 +106,7 @@ class Client:
         source: NormalizedParse | str,
         data,
         content_type,
+        file_id: str | None = None,
     ):
         if isinstance(source, str):
             source = NormalizedParse.parse(source)
@@ -155,3 +158,38 @@ class Client:
                     values.add(v)
 
         return sorted(list(values))
+
+
+class LocalClient:
+    """Local filesystem storage backend with the same upload() interface as Client."""
+
+    def upload(
+        self,
+        source: NormalizedParse | str,
+        data: bytes,
+        content_type: str,
+        file_id: str | None = None,
+    ) -> str:
+        if isinstance(source, str):
+            source = NormalizedParse.parse(source)
+
+        if file_id:
+            filename = file_id + ".html"
+        else:
+            path = source.path.lstrip("/").replace("/", "__")
+            if not path:
+                filename = "index.html"
+            elif path.endswith("/"):
+                filename = path + "index.html"
+            elif os.path.splitext(os.path.basename(path))[1] == '':
+                filename = path + "__index.html"
+            else:
+                filename = path
+
+        full_path = os.path.join(
+            PROJECT_ROOT, "downloaded", "crawled", source.hostname_normalized, filename
+        )
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, "wb") as f:
+            f.write(data)
+        return full_path

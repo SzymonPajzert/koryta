@@ -11,7 +11,12 @@ from analysis.extract import Extract
 from analysis.interesting import CompaniesMerged
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
-from scrapers.article.crawler import parse_hostname, uuid7
+from entities.util import parse_hostname
+from uuid_extensions import uuid7str
+
+
+def _uuid7() -> str:
+    return uuid7str()
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -36,6 +41,7 @@ from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
+from stores.storage import LocalClient
 from stores.utils import UtilsImpl
 from stores.web import WebImpl
 
@@ -44,10 +50,9 @@ class Conductor(IO):
     def __init__(self, dumper: EntityDumper, storage_mode: str = "gcs"):
         self.firestore = FirestoreIO()
         self.dumper = dumper
-        self.storage = CloudStorageClient()
+        self.storage = LocalClient() if storage_mode == "local" else CloudStorageClient()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
-        self.storage_mode = storage_mode
 
     def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, DownloadableFile):
@@ -129,40 +134,7 @@ class Conductor(IO):
         content_type,
         file_id: str | None = None,
     ) -> str | None:
-        if self.storage_mode == "gcs":
-            return self.storage.upload(source, data, content_type)
-        elif self.storage_mode == "local":
-            filename = ""
-            if file_id:
-                filename = file_id + ".html"
-            else:
-                # Sanitize path to avoid directory traversal issues
-                path = source.path.lstrip("/").replace("/", "__")
-
-                if not path:
-                    filename = "index.html"
-                elif path.endswith("/"):
-                    filename = os.path.join(path, "index.html")
-                else:
-                    # If there is no file extension, treat it as a directory path
-                    # and save the content to an index.html file within that directory.
-                    if os.path.splitext(os.path.basename(path))[1] == '':
-                        filename = os.path.join(path, "index.html")
-                    else:
-                        filename = path
-
-            # Combine with hostname
-            full_path = os.path.join(
-                PROJECT_ROOT, "downloaded", "crawled", source.hostname_normalized, filename
-            )
-
-            # Create directory and save file
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, "wb") as f:
-                f.write(data)
-            return full_path
-        else:
-            raise ValueError(f"Unknown storage mode: {self.storage_mode}")
+        return self.storage.upload(source, data, content_type, file_id=file_id)
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)
@@ -204,7 +176,7 @@ def _setup_context(
     )
 
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore
-    ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
+    ctx.con.create_function("uuid7str", _uuid7, [], VARCHAR)  # type: ignore
 
     return ctx, dumper
 
