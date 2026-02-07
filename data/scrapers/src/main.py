@@ -200,7 +200,13 @@ def main():
         action="append",
         default=[],
     )
-    parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
+    parser.add_argument(
+        "pipeline",
+        help="Pipeline to be run - available are "
+        + " ".join(pt.__name__ for pt in PIPELINES),
+        default=None,
+        nargs="*",
+    )
     args, _ = parser.parse_known_args()
 
     refresh = []
@@ -218,7 +224,8 @@ def main():
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:
-        print("No pipeline specified, will run all")
+        # TODO this special handling is bad imo
+        print("No pipeline specified, will run all except ScrapeRejestrIO")
     pipeline_names = set(pt.__name__ for pt in PIPELINES)
     for p in args.pipeline:
         if p not in pipeline_names:
@@ -230,7 +237,9 @@ def main():
 
     try:
         for p_type in PIPELINES:
-            if p_type.__name__ in args.pipeline or no_pipeline:
+            if p_type.__name__ in args.pipeline or (
+                no_pipeline and p_type.__name__ != "ScrapeRejestrIO"
+            ):
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)
                 p.read_or_process(ctx)
