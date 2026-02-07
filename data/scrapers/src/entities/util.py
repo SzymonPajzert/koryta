@@ -1,4 +1,5 @@
 """Utility data classes and functions for data processing."""
+
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -40,7 +41,7 @@ class NormalizedParse:
         # Handle scheme-less URLs by assuming http
         if not url.startswith(("http://", "https://")):
             url = "http://" + url
-            
+
         if url.endswith("/"):
             url = url[:-1]
 

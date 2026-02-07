@@ -5,8 +5,10 @@ import sys
 import threading
 import webbrowser
 
+import firebase_admin
 import numpy as np
 import requests
+from firebase_admin import firestore
 
 from main import PIPELINES, CompaniesMerged, _setup_context
 from scrapers.stores import Pipeline
@@ -194,6 +196,7 @@ def map_to_payload(row):
         "content": get("content") or get("history"),
         "wikipedia": wikipedia_url,
         "rejestrIo": rejestr_io_url,
+        "birthDate": get_scalar("birth_date") or get_scalar("birthDate"),
         "companies": companies,
         "articles": articles,
     }
@@ -210,6 +213,84 @@ class NumpyEncoder(json.JSONEncoder):
         return super(NumpyEncoder, self).default(o)
 
 
+def non_empty_query(query):
+    for doc in query.stream():
+        return True
+    return False
+
+
+def process_regions(df, db):
+    # Sort by ID length to Ensure parents created first
+    # Convert to string just in case
+    df["id_str"] = df["id"].astype(str)
+    df["id_len"] = df["id"].astype(str).str.len()
+    df = df.sort_values("id_len")
+
+    success = 0
+    total = len(df)
+
+    for idx, row in enumerate(df.itertuples()):
+        name = row.name
+        if len(row.id) == 2:
+            name = f"Województwo {name}"
+        elif len(row.id) == 4 and name.lower() == name:
+            name = f"Powiat {name}"
+        elif len(row.id) == 7:
+            name = f"Gmina {name}"
+        print(f"[{idx + 1}/{total}] Processing '{name}' ({row.id})...", end=" ")
+
+        if non_empty_query(db.collection("nodes").where("teryt", "==", str(row.id))):
+            print(f"Already done {row.id}")
+            continue
+        if len(row.id) > 4:
+            print("Skipping detailed region")
+            continue
+
+        node_id = f"teryt{row.id}"
+        node_ref = db.collection("nodes").document(node_id)
+
+        payload = {
+            "type": "region",
+            "name": name,
+            "teryt": str(row.id),
+            "revision_id": f"teryt{row.id}",
+        }
+
+        try:
+            node_ref.set(payload, merge=True)
+            success += 1
+
+            # Create Edge if parent exists
+            parent_id = getattr(row, "parent_id", None)
+            if (
+                parent_id
+                and parent_id is not None
+                and str(parent_id) != "nan"
+                and str(parent_id) != "None"
+            ):
+                parent_id = str(parent_id)
+                parent_node_id = f"teryt{parent_id}"
+
+                edge_id = f"edge_{parent_node_id}_{node_id}_owns"
+                edge_ref = db.collection("edges").document(edge_id)
+
+                edge_payload = {
+                    "source": parent_node_id,
+                    "target": node_id,
+                    "type": "owns",
+                    "revision_id": f"rev_{edge_id}",
+                }
+                edge_ref.set(edge_payload, merge=True)
+                print("(Edge OK)")
+            else:
+                print("")
+
+        except Exception as e:
+            print(f"ERROR: {e}")
+
+    print(f"\nDone. Processed {success}/{total} regions.")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Koryta Uploader CLI")
     parser.add_argument("--script", help="SQL script file to execute")
@@ -217,6 +298,12 @@ def parse_args():
     parser.add_argument("--submit", action="store_true", help="Upload results to API")
     parser.add_argument(
         "--endpoint", default="http://localhost:3000", help="API endpoint base URL"
+    )
+    parser.add_argument(
+        "--type",
+        default="person",
+        choices=["person", "region"],
+        help="Entity type to upload",
     )
     parser.add_argument("--api", default="bulk_create", help="API endpoint path")
     parser.add_argument(
@@ -262,7 +349,19 @@ def register_table(ctx, pipeline_cls):
 
 
 def submit_results(args, df):
+    if args.type == "region":
+        options = {
+            "projectId": "koryta-pl",
+            # "databaseURL": "http://localhost:8080",
+        }
+        app = firebase_admin.initialize_app(options=options)
+        db = firestore.client(app, "koryta-pl")
+        print("Processing regions...")
+        process_regions(df, db)
+        sys.exit(0)
+
     token = authenticate_user(args.endpoint)
+
     target_url = f"{args.endpoint}/api/person/{args.api}"
     headers = {
         "Content-Type": "application/json",

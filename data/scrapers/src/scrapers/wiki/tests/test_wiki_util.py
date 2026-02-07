@@ -4,7 +4,6 @@ from scrapers.wiki.util import parse_date
 
 
 class TestParseDate:
-
     # --- Happy Paths: Standard Date Formats ---
 
     @pytest.mark.parametrize(

@@ -6,100 +6,45 @@
       </v-col>
     </v-row>
 
-    <v-row>
-      <v-col cols="12" md="6">
-        <v-card>
-          <v-card-title>Krawędzie bez źródeł (artykułów)</v-card-title>
-          <v-list density="compact">
-            <v-list-item
-              v-for="edge in edgesWithoutArticles"
-              :key="edge.id"
-              :title="`${edge.source} -> ${edge.target}`"
-              :subtitle="edge.type"
-            >
-              <template #append>
-                <v-btn
-                  size="small"
-                  variant="text"
-                  icon="mdi-pencil"
-                  :href="`/edit/node/${edge.source}`"
-                />
-              </template>
-            </v-list-item>
-            <v-list-item v-if="!edgesWithoutArticles.length">
-              <v-list-item-title class="text-success"
-                >Wszystkie krawędzie mają źródła!</v-list-item-title
-              >
-            </v-list-item>
-          </v-list>
-        </v-card>
-      </v-col>
+    <v-tabs v-model="tab" color="primary" class="mb-4">
+      <v-tab value="pending">Oczekujące Rewizje</v-tab>
+      <v-tab value="edges-no-source">Krawędzie bez źródeł</v-tab>
+      <v-tab value="articles-no-edges">Artykuły bez powiązań</v-tab>
+      <v-tab value="my-revisions">Moje Propozycje</v-tab>
+    </v-tabs>
 
-      <v-col cols="12" md="6">
-        <v-card>
-          <v-card-title>Artykuły bez powiązanych krawędzi</v-card-title>
-          <v-list density="compact">
-            <v-list-item
-              v-for="article in articlesWithoutEdges"
-              :key="article.id"
-              :title="article.name"
-              :subtitle="article.id"
-            >
-              <template #append>
-                <v-btn
-                  size="small"
-                  variant="text"
-                  icon="mdi-eye"
-                  :href="`/entity/article/${article.id}`"
-                />
-              </template>
-            </v-list-item>
-            <v-list-item v-if="!articlesWithoutEdges.length">
-              <v-list-item-title class="text-success"
-                >Wszystkie artykuły są użyte jako źródła!</v-list-item-title
-              >
-            </v-list-item>
-          </v-list>
-        </v-card>
-      </v-col>
-    </v-row>
+    <v-window v-model="tab">
+      <v-window-item value="pending">
+        <AuditView type="pending-revisions" />
+      </v-window-item>
+      <v-window-item value="edges-no-source">
+        <AuditView type="edges-no-source" />
+      </v-window-item>
+      <v-window-item value="articles-no-edges">
+        <AuditView type="articles-no-edges" />
+      </v-window-item>
+      <v-window-item value="my-revisions">
+        <AuditView type="my-revisions" />
+      </v-window-item>
+    </v-window>
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "~/composables/auth";
-import type { Edge, Node } from "~~/shared/model";
+import { computed } from "vue";
+import AuditView from "@/components/audit/AuditView.vue";
 
 definePageMeta({
   middleware: "auth",
 });
 
-const { authFetch } = useAuthState();
+const route = useRoute();
+const router = useRouter();
 
-const { data: edges } = await authFetch<Edge[]>("/api/graph/edges");
-
-const { data: articlesResponse } = await authFetch<{
-  entities: Record<string, Node>;
-}>("/api/nodes/article");
-
-const edgesData = computed(() => edges.value || []);
-const articles = computed(() => {
-  const ents = articlesResponse.value?.entities || {};
-  return Object.entries(ents).map(([id, data]) => ({ id, ...data }));
-});
-
-const edgesWithoutArticles = computed(() => {
-  return edgesData.value.filter(
-    (e) => !e.references || e.references.length === 0,
-  );
-});
-
-const articlesWithoutEdges = computed(() => {
-  const referencedArticleIds = new Set<string>();
-  edgesData.value.forEach((e) => {
-    e.references?.forEach((refId) => referencedArticleIds.add(refId));
-  });
-
-  return articles.value.filter((a) => !referencedArticleIds.has(a.id));
+const tab = computed({
+  get: () => (route.query.tab as string) || "pending",
+  set: (val) => {
+    router.replace({ query: { ...route.query, tab: val } });
+  },
 });
 </script>

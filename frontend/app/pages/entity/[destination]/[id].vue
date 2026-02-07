@@ -12,14 +12,44 @@
       <v-window v-model="tab">
         <v-window-item value="details">
           <div class="pa-4">
+            <div v-if="type === 'place'" class="mb-4 d-flex">
+              <v-btn
+                variant="tonal"
+                prepend-icon="mdi-format-list-bulleted"
+                :to="`/lista?miejsce=${node}`"
+              >
+                Lista pracowników
+              </v-btn>
+              <v-btn
+                class="ml-2"
+                variant="tonal"
+                prepend-icon="mdi-graph-outline"
+                :to="`/graf?miejsce=${node}`"
+              >
+                Graf połączeń
+              </v-btn>
+            </div>
             <EntityDetailsCard :entity="entity" :type="type" />
 
             <div class="mt-4">
+              <template v-if="type === 'place' || type === 'region'">
+                <CardConnectionList :edges="owners" title="Właściciele" />
+                <CardConnectionList
+                  :edges="subsidiaries"
+                  title="Spółki zależne"
+                />
+              </template>
+
               <v-row>
                 <v-col
-                  v-for="edge in edges.filter((edge) =>
-                    ['employed', 'connection', 'owns'].includes(edge.type),
-                  )"
+                  v-for="edge in edges.filter((edge) => {
+                    if (type === 'place' || type === 'region') {
+                      return ['employed', 'connection'].includes(edge.type);
+                    }
+                    return ['employed', 'connection', 'owns'].includes(
+                      edge.type,
+                    );
+                  })"
                   :key="edge.richNode?.name"
                   cols="12"
                   md="6"
@@ -96,6 +126,23 @@
                 class="ml-2"
               />
             </div>
+
+            <div v-if="user && entity" class="mt-4">
+              <h4 class="text-subtitle-2 mb-2">Szybkie dodawanie</h4>
+              <div class="d-flex flex-column gap-2">
+                <v-btn
+                  v-for="btn in quickAddButtons"
+                  :key="btn.text"
+                  variant="tonal"
+                  size="small"
+                  :prepend-icon="btn.icon"
+                  class="mr-2 mb-2"
+                  @click="quickAddEdge(btn)"
+                >
+                  {{ btn.text }}
+                </v-btn>
+              </div>
+            </div>
           </div>
         </v-window-item>
 
@@ -117,6 +164,7 @@ import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
 import type { Person, Company, Article, Region } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
+import { useEdgeButtons, type NewEdgeButton } from "~/composables/edgeConfig";
 
 const route = useRoute<"/entity/[destination]/[id]">();
 
@@ -163,4 +211,29 @@ const entity = computed(() => response.value?.node);
 
 const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
+
+const owners = computed(() => {
+  return sources.value.filter((e) => e.type === "owns");
+});
+
+const subsidiaries = computed(() => {
+  return targets.value.filter((e) => e.type === "owns");
+});
+
+const quickAddButtons = computed(() => {
+  if (!entity.value) return [];
+  // Filter buttons relevant for this node type
+  return useEdgeButtons(entity.value.name).filter((b) => b.nodeType === type);
+});
+
+function quickAddEdge(btn: NewEdgeButton) {
+  router.push({
+    path: `/edit/node/${node}`,
+    query: {
+      type,
+      edgeType: btn.edgeType,
+      direction: btn.direction,
+    },
+  });
+}
 </script>

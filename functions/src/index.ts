@@ -27,7 +27,7 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
     if (!url) {
       throw new functions.https.HttpsError(
         "invalid-argument",
-        `The function must be called with one argument 'url ' that is a string: ${request}`
+        `The function must be called with one argument 'url ' that is a string: ${request}`,
       );
     }
     logger.warn(url);
@@ -60,7 +60,7 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
     } catch (error: any) {
       functions.logger.error(
         `Error fetching page title for URL: ${url}`,
-        error
+        error,
       );
 
       // Rzucanie bardziej szczegółowych błędów w zależności od przyczyny
@@ -69,29 +69,29 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
           // Serwer odpowiedział statusem błędu (4xx, 5xx)
           throw new functions.https.HttpsError(
             "unavailable",
-            `Failed to fetch the page. Status: ${error.response.status}`
+            `Failed to fetch the page. Status: ${error.response.status}`,
           );
         } else if (error.request) {
           // Żądanie zostało wysłane, ale nie otrzymano odpowiedzi
           throw new functions.https.HttpsError(
             "deadline-exceeded",
-            "No response received from the server."
+            "No response received from the server.",
           );
         } else {
           // Coś poszło nie tak przy konfiguracji żądania
           throw new functions.https.HttpsError(
             "internal",
-            "Error setting up the request."
+            "Error setting up the request.",
           );
         }
       }
       // Inne błędy (np. błąd parsowania, błąd sieciowy nieobsłużony przez axios)
       throw new functions.https.HttpsError(
         "internal",
-        "An unexpected error occurred while fetching the page title."
+        "An unexpected error occurred while fetching the page title.",
       );
     }
-  }
+  },
 );
 
 const adminClient = new v1.FirestoreAdminClient();
@@ -117,7 +117,7 @@ export const scheduledFirestoreExport = onSchedule(
       const [response] = await adminClient.exportDocuments({
         name: databaseName,
         outputUriPrefix: outputUriPrefix,
-        collectionIds: ["nodes", "edges", "revisions"],
+        collectionIds: ["nodes", "edges", "revisions", "comments", "votes"],
       });
 
       logger.info(`Operation Name: ${response.name}`);
@@ -125,5 +125,5 @@ export const scheduledFirestoreExport = onSchedule(
       logger.error(err);
       throw new Error("Export operation failed");
     }
-  }
+  },
 );

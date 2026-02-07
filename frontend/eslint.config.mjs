@@ -4,7 +4,14 @@ import withNuxt from "./node_modules/.cache/nuxt/.nuxt/eslint.config.mjs";
 export default withNuxt(
   // Your custom configs here
   {
-    ignores: ["**/coverage/**", "**/.nuxt/**", "**/.output/**", "**/dist/**"],
+    ignores: [
+      "**/coverage/**",
+      "app/coverage/**",
+      "backstop_data/**",
+      "**/.nuxt/**",
+      "**/.output/**",
+      "**/dist/**",
+    ],
   },
   {
     languageOptions: {

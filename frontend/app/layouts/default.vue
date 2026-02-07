@@ -27,10 +27,10 @@
       <v-btn icon :to="{ path: '/graf', query: { miejsce: safeQuery.miejsce } }"
         ><v-icon>mdi-graph-outline</v-icon></v-btn
       >
-      <v-btn :icon="!mdAndUp" to="/pomoc">
+      <v-btn :icon="!mdAndUp" :to="user ? '/edit/node/new' : '/login'">
         <v-icon :start="mdAndUp">mdi-plus</v-icon>
         <!-- This span will be hidden on 'sm' and smaller screens -->
-        <span class="d-none d-md-inline">Działaj</span>
+        <span class="d-none d-md-inline">{{ user ? "Dodaj" : "Działaj" }}</span>
       </v-btn>
       <v-btn v-if="mdAndUp" text to="/zrodla">Źródła</v-btn>
       <v-avatar
@@ -85,26 +85,23 @@
         </v-list>
       </v-menu>
       <v-btn
-        prepend-icon="mdi-format-list-bulleted"
-        variant="text"
-        to="/revisions"
-      >
-        Lista rewizji
-      </v-btn>
-      <v-btn
         prepend-icon="mdi-comment-text-multiple-outline"
         variant="text"
         to="/leads"
       >
         Leady
       </v-btn>
-      <v-btn prepend-icon="mdi-magnify-scan" variant="text" to="/admin/audit">
+      <v-btn
+        prepend-icon="mdi-magnify-scan"
+        variant="text"
+        :to="{ path: '/admin/audit', query: { tab: 'pending' } }"
+      >
         Audyt
       </v-btn>
       <v-btn
         prepend-icon="mdi-lightning-bolt"
         variant="text"
-        href="https://github.com/SzymonPajzert/koryta/issues/new"
+        href="https://github.com/users/SzymonPajzert/projects/2/views/3"
         target="_blank"
       >
         Zgłoś problem

@@ -1,11 +1,38 @@
 <template>
-  <h4 class="text-subtitle-1 mb-2 mt-4">
-    {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
-  </h4>
-  <v-form @submit.prevent="processEdge">
-    <!-- Visual Connection Editor -->
+  <div class="d-flex align-center justify-space-between mb-2 mt-4">
+    <h4 class="text-subtitle-1">
+      {{ isEditingEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
+    </h4>
+    <v-btn
+      v-if="mode !== 'initial'"
+      icon="mdi-close"
+      variant="text"
+      size="small"
+      title="Anuluj"
+      @click="resetMode"
+    />
+  </div>
+
+  <div
+    v-if="!isEditingEdge && mode === 'initial'"
+    class="d-flex flex-column gap-2"
+  >
+    <!-- Initial Buttons to pick edge type for a given node type -->
+    <v-btn
+      v-for="button in filteredButtons"
+      :key="button.edgeType + '-' + button.direction"
+      variant="tonal"
+      :prepend-icon="button.icon"
+      color="primary"
+      class="mb-2"
+      @click="startAddEdge(button.edgeType, button.direction)"
+    >
+      {{ button.text }}
+    </v-btn>
+  </div>
+
+  <v-form v-else @submit.prevent="processEdge">
     <v-row class="align-center my-4">
-      <!-- Source Picker / Current Node -->
       <v-col cols="4" class="text-center d-flex flex-column align-center">
         <div v-if="effectiveNodeType === 'article'" class="w-100">
           <EntityPicker
@@ -14,6 +41,7 @@
             label="Wyszukaj źródło"
             density="compact"
             hide-details
+            data-testid="entity-picker-source"
           />
         </div>
         <div v-else class="d-flex flex-column align-center w-100">
@@ -37,6 +65,7 @@
         class="text-center d-flex flex-column justify-center position-relative px-0"
       >
         <v-select
+          v-if="isEditingEdge || mode === 'generic'"
           v-model="edgeType"
           :items="availableEdgeTypes"
           item-title="label"
@@ -49,6 +78,12 @@
           :disabled="!availableEdgeTypes.length"
           :placeholder="availableEdgeTypes.length ? undefined : 'Brak relacji'"
         />
+        <div v-else class="text-caption font-weight-bold mb-2">
+          {{
+            availableEdgeTypes.find((t) => t.value === edgeType)?.label ||
+            edgeType
+          }}
+        </div>
 
         <div class="d-flex align-center justify-center">
           <v-btn
@@ -58,6 +93,7 @@
             color="secondary"
             class="px-4"
             :title="'Odwróć kierunek'"
+            :disabled="!isEditingEdge && mode !== 'generic'"
             @click="
               newEdge.direction =
                 newEdge.direction === 'outgoing' ? 'incoming' : 'outgoing'
@@ -90,6 +126,7 @@
             density="compact"
             hide-details
             :disabled="!availableEdgeTypes.length"
+            data-testid="entity-picker-target"
           />
         </div>
         <div class="text-caption text-center mt-1 text-medium-emphasis">
@@ -102,9 +139,10 @@
       <v-col cols="12" md="6">
         <v-text-field
           v-model="newEdge.name"
-          label="Nazwa relacji (opcjonalnie)"
+          label="Nazwa relacji"
           density="compact"
           hide-details
+          data-testid="edge-name-field"
         />
       </v-col>
       <v-col cols="12" md="6">
@@ -122,6 +160,7 @@
           label="Źródło informacji (artykuł)"
           density="compact"
           hide-details
+          data-testid="entity-picker-reference"
         />
       </v-col>
       <template v-if="edgeType === 'employed'">
@@ -129,9 +168,10 @@
           <v-text-field
             v-model="newEdge.start_date"
             label="Data rozpoczęcia"
-            type="date"
+            placeholder="RRRR-MM-DD"
             density="compact"
-            hide-details
+            hide-details="auto"
+            :rules="[dateRule]"
             prepend-inner-icon="mdi-calendar"
           />
         </v-col>
@@ -139,19 +179,20 @@
           <v-text-field
             v-model="newEdge.end_date"
             label="Data zakończenia"
-            type="date"
+            placeholder="RRRR-MM-DD"
             density="compact"
-            hide-details
+            hide-details="auto"
+            :rules="[dateRule]"
             prepend-inner-icon="mdi-calendar"
           />
         </v-col>
       </template>
       <v-col cols="12" class="mt-2 d-flex gap-2">
         <v-btn
-          v-if="isEditingEdge"
+          v-if="isEditingEdge || mode !== 'initial'"
           variant="text"
           class="mr-2"
-          @click="cancelEditEdge"
+          @click="resetMode"
         >
           Anuluj
         </v-btn>
@@ -161,6 +202,7 @@
           :block="!isEditingEdge"
           :class="{ 'flex-grow-1': isEditingEdge }"
           :disabled="!pickerTarget"
+          data-testid="submit-edge-button"
         >
           {{ isEditingEdge ? "Zapisz zmiany" : "Dodaj powiązanie" }}
         </v-btn>
@@ -179,7 +221,8 @@
 <script setup lang="ts">
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import EntityPicker from "~/components/form/EntityPicker.vue";
-import type { Link, NodeType } from "~~/shared/model";
+import type { Link, NodeType, EdgeType } from "~~/shared/model";
+import { useEdgeButtons } from "~/composables/edgeConfig";
 
 definePageMeta({
   middleware: "auth",
@@ -192,6 +235,15 @@ const effectiveNodeType = computed(() => {
   if (route.query.type) return route.query.type as NodeType;
   return current.value.type || "person";
 });
+
+// Use shared config
+const newEdgeButtons = computed(() =>
+  useEdgeButtons(current.value.name || "Ten węzeł"),
+);
+
+const filteredButtons = computed(() =>
+  newEdgeButtons.value.filter((b) => b.nodeType === effectiveNodeType.value),
+);
 
 const {
   newEdge,
@@ -212,6 +264,57 @@ const {
   stateKey,
 });
 
+const mode = ref<"initial" | "form" | "generic">("initial");
+
+function resetMode() {
+  cancelEditEdge();
+  mode.value = "initial";
+}
+
+// If we are editing, we are always in form mode
+watch(
+  isEditingEdge,
+  (val) => {
+    if (val) {
+      mode.value = "form";
+    }
+  },
+  { immediate: true },
+);
+
+function startAddEdge(
+  typeValue: string,
+  direction: "outgoing" | "incoming" = "outgoing",
+) {
+  edgeType.value = typeValue as EdgeType;
+  newEdge.value.direction = direction;
+  mode.value = "form";
+}
+
+onMounted(() => {
+  if (route.query.edgeType) {
+    startAddEdge(
+      route.query.edgeType as string,
+      (route.query.direction as "outgoing" | "incoming") || "outgoing",
+    );
+  }
+});
+
+// Fallback for non-person nodes or generic add
+watch(
+  effectiveNodeType,
+  (type) => {
+    // If it's a known type, we support the initial buttons mode
+    const supportedTypes = ["person", "place", "article"];
+    if (!supportedTypes.includes(type) && !isEditingEdge.value) {
+      mode.value = "generic";
+    } else if (supportedTypes.includes(type) && mode.value === "generic") {
+      mode.value = "initial";
+    }
+  },
+  { immediate: true },
+);
+
 const articleReference = computed({
   get: () => {
     const id = newEdge.value.references?.[0];
@@ -229,5 +332,11 @@ const articleReference = computed({
 
 if (current.value.type === "article") {
   newEdge.value.references = [node_id.value!];
+}
+
+function dateRule(value: string) {
+  if (!value) return true;
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  return regex.test(value) || "Format daty musi być RRRR-MM-DD";
 }
 </script>

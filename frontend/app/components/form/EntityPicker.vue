@@ -1,6 +1,5 @@
 <template>
   <v-autocomplete
-    v-bind="$attrs"
     v-model="model"
     v-model:search="search"
     :label="props.label"
@@ -11,19 +10,23 @@
     required
     return-object
     autocomplete="off"
-    data-testid="entity-picker-input"
+    v-bind="{
+      ...$attrs,
+      'data-testid': $attrs['data-testid'] || 'entity-picker-input',
+    }"
     @update:focused="(val: boolean) => val && refresh()"
   >
     <template #no-data>
-      <v-list-item v-if="search" @click="addNewItem">
+      <v-list-item
+        v-if="search"
+        data-testid="add-new-entity"
+        @click="addNewItem"
+      >
         <v-list-item-title>
           Dodaj "<strong>{{ search }}</strong
           >" do bazy.
         </v-list-item-title>
       </v-list-item>
-    </template>
-    <template #prepend>
-      <slot name="prepend" />
     </template>
   </v-autocomplete>
 </template>

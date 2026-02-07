@@ -26,6 +26,13 @@ const edgeTypeOptions: edgeTypeOption[] = [
     realType: "owns",
   },
   {
+    value: "owns_region",
+    label: "Region właściciel",
+    sourceType: "region",
+    targetType: "place",
+    realType: "owns",
+  },
+  {
     value: "connection",
     label: "Powiązanie z",
     sourceType: "person",
@@ -76,6 +83,12 @@ export function useEdgeEdit({
   watch(edgeType, (t) => {
     newEdge.value.type = t;
   });
+
+  const getRealType = (t: string | undefined): EdgeType => {
+    if (!t) return "connection";
+    const option = edgeTypeOptions.find((o) => o.value === t);
+    return option?.realType || (t as EdgeType);
+  };
 
   const pickerTarget = useState<Link<NodeType> | undefined>(
     `${baseKey}-pickerTarget`,
@@ -212,6 +225,16 @@ export function useEdgeEdit({
       direction,
     };
     edgeType.value = edge.type;
+
+    if (edge.type === "owns" && direction === "incoming") {
+      // Check if the owner is a region
+      // If we are editing, current node is target. Source is the owner.
+      // edge.richNode is the OTHER node (source).
+      if (edge.richNode?.type === "region") {
+        edgeType.value = "owns_region" as EdgeType;
+      }
+    }
+
     pickerTarget.value = {
       ...edge.richNode,
       id: edge.richNode.id || "",
@@ -253,7 +276,7 @@ export function useEdgeEdit({
         body: {
           source,
           target,
-          type: newEdge.value.type,
+          type: getRealType(newEdge.value.type),
           name: newEdge.value.name,
           content: newEdge.value.content,
           start_date: newEdge.value.start_date,
@@ -280,7 +303,7 @@ export function useEdgeEdit({
           collection: "edges",
           source: newEdge.value.source, // Keep required context
           target: newEdge.value.target,
-          type: newEdge.value.type,
+          type: getRealType(newEdge.value.type),
           name: newEdge.value.name,
           // text: newEdge.value.content, // Deprecated
           content: newEdge.value.content,

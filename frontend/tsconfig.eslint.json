@@ -1,5 +1,5 @@
 {
   "extends": "./.nuxt/tsconfig.json",
   "include": ["**/*", "**/*.json", "**/*.vue"],
-  "exclude": ["node_modules", ".nuxt", ".output", "dist"]
+  "exclude": ["node_modules", ".nuxt", ".output", "dist", "backstop_data"]
 }

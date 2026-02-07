@@ -6,28 +6,48 @@
       data-testid="already-existing-input"
       hide-details
     />
-    <v-list
-      v-if="create && closest.length > 0"
-      data-testid="similar-suggestions"
+    <v-card
+      v-if="create && closest.length > 0 && showSuggestions"
+      class="mt-2"
+      variant="outlined"
+      density="compact"
     >
-      <v-list-item
-        v-for="([key, item], index) in closest"
-        :key="index"
-        class="w-100"
-        @click="onSelect(key)"
+      <div
+        class="d-flex align-center justify-space-between px-2 pt-1 bg-green-lighten-4"
       >
-        <v-list-item-title
-          ><span
-            :style="
-              item.equal
-                ? { 'font-weight': 'bold', 'font-style': 'italic' }
-                : undefined
-            "
-            >{{ item.name }}</span
-          ></v-list-item-title
+        <span class="text-caption text-grey-darken-1 font-weight-medium"
+          >Podobne wpisy</span
         >
-      </v-list-item>
-    </v-list>
+        <v-btn
+          icon="mdi-close"
+          variant="text"
+          size="x-small"
+          density="compact"
+          color="grey"
+          @click="showSuggestions = false"
+        />
+      </div>
+      <v-divider />
+      <v-list data-testid="similar-suggestions" density="compact" class="py-0">
+        <v-list-item
+          v-for="([key, item], index) in closest"
+          :key="index"
+          class="w-100"
+          @click="onSelect(key)"
+        >
+          <v-list-item-title class="text-caption">
+            <span
+              :style="
+                item.equal
+                  ? { 'font-weight': 'bold', 'font-style': 'italic' }
+                  : undefined
+              "
+              >{{ item.name }}</span
+            >
+          </v-list-item-title>
+        </v-list-item>
+      </v-list>
+    </v-card>
   </div>
 </template>
 
@@ -49,6 +69,12 @@ const {
   create?: boolean;
   max?: number;
 }>();
+
+const showSuggestions = ref(true);
+
+watch(model, () => {
+  showSuggestions.value = true;
+});
 
 const { entities } = await useEntity(entity);
 

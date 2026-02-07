@@ -83,6 +83,7 @@ def ctx(tmp_path):
         con=duckdb.connect(),
         utils=MagicMock(),
         web=MagicMock(),
+        nlp=MagicMock(),
     )
 
 

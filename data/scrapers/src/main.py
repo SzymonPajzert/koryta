@@ -32,6 +32,7 @@ from scrapers.stores import (
     Pipeline,
     ProcessPolicy,
 )
+from scrapers.teryt import Regions
 from scrapers.wiki.process_articles import ProcessWiki
 from scrapers.wiki.process_articles_ner import ProcessWikiNer
 from stores import file
@@ -39,6 +40,7 @@ from stores.config import PROJECT_ROOT
 from stores.download import FileSource
 from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
+from stores.nlp import NLPImpl
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
 from stores.storage import LocalClient
@@ -172,6 +174,7 @@ def _setup_context(
         con=duckdb.connect(database=db_path),
         utils=UtilsImpl(),
         web=WebImpl(),
+        nlp=NLPImpl(),
         refresh_policy=policy,
     )
 
@@ -194,6 +197,7 @@ PIPELINES = [
     CompaniesMerged,
     Statistics,
     Extract,
+    Regions,
 ]
 
 

@@ -19,6 +19,10 @@ export default defineConfig({
     devServer: {
       framework: "vue",
       bundler: "vite",
+      viteConfig: async () => {
+        const config = await import("./cypress/vite.config");
+        return config.default;
+      },
     },
   },
 });

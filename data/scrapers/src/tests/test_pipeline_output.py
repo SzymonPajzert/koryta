@@ -77,14 +77,14 @@ def test_pipeline_output(filename, column):
         # Check first 10 lines
         iterator = enumerate(f)
         if filename.endswith(".csv"):
-             # Reset file pointer for DictReader
-             f.seek(0)
-             iterator = enumerate(csv.DictReader(f))
+            # Reset file pointer for DictReader
+            f.seek(0)
+            iterator = enumerate(csv.DictReader(f))
 
         for i, record in iterator:
             if i > 10:
                 break
-            
+
             if not filename.endswith(".csv"):
                 record = json.loads(record)
 

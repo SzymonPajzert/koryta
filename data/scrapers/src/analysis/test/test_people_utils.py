@@ -8,6 +8,7 @@ def test_unique_probability_defaults():
     # p_combined == 1 -> returns 0
     assert unique_probability(None, None, False, None) == 0
 
+
 def test_unique_probability_no_collision():
     # p1=0.001, p2=0.001, match=True, n=4000
     # p_combined = 1e-6
@@ -16,6 +17,7 @@ def test_unique_probability_no_collision():
     prob = unique_probability(0.001, 0.001, True, 4000)
     assert 0.99 < prob < 1.0
 
+
 def test_unique_probability_small_n():
     # n < 50 branch
     # n=40 -> n_adj = 1
@@ -23,6 +25,7 @@ def test_unique_probability_small_n():
     # pow(1 - 0.5, 1) = 0.5
     prob = unique_probability(0.5, None, False, 40)
     assert prob == 0.5
+
 
 def test_unique_probability_second_name_mismatch():
     # second_name_match=False -> p2 becomes 1.0

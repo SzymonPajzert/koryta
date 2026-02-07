@@ -71,6 +71,14 @@ jobs:
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
           CYPRESS_CI: true
         run: |
+          # Run visual tests only on:
+          # 1. Push to main
+          # Regular tests run on every synchronize (push to PR)
 
-          # Run e2e test with cypress and emulators on the built server
-          npx percy exec -- npm run test:e2e:build
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "Running with Percy..."
+            npx percy exec -- npm run test:e2e:build
+          else
+            echo "Running regular tests (skipping Percy)..."
+            npm run test:e2e:build
+          fi

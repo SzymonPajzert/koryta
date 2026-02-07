@@ -1,4 +1,3 @@
-
 import unittest
 from dataclasses import dataclass
 
@@ -9,9 +8,11 @@ from stores.duckdb import EntityDumper
 class TypeA:
     val: int
 
+
 @dataclass
 class TypeB:
     name: str
+
 
 class TestEntityDumper(unittest.TestCase):
     def setUp(self):
@@ -37,9 +38,9 @@ class TestEntityDumper(unittest.TestCase):
         self.dumper.insert_into(b1, sort_by=[])
 
         def get_name(t):
-           mod = t.__module__.removeprefix("entities.")
-           n = mod + "." + t.__name__
-           return n.replace(".", "_")
+            mod = t.__module__.removeprefix("entities.")
+            n = mod + "." + t.__name__
+            return n.replace(".", "_")
 
         name_a = get_name(TypeA)
         name_b = get_name(TypeB)
@@ -56,7 +57,7 @@ class TestEntityDumper(unittest.TestCase):
         self.assertIsNotNone(output_b)
         self.assertEqual(len(output_b), 1)
         self.assertEqual(output_b[0], b1)
-        
+
         # Verify no cross-contamination
         self.assertNotIn(b1, output_a)
         self.assertNotIn(a1, output_b)

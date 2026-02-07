@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import MagicMock, Mock, patch
 
 from scrapers.koryta.differ import KorytaDiffer
-from scrapers.stores import Context, DownloadableFile, Utils, Web
+from scrapers.stores import NLP, Context, DownloadableFile, Utils, Web
 
 
 class TestKorytaDifferE2E(unittest.TestCase):
@@ -38,6 +38,7 @@ class TestKorytaDifferE2E(unittest.TestCase):
             con=Mock(),
             utils=Mock(spec=Utils),
             web=Mock(spec=Web),
+            nlp=Mock(spec=NLP),
             refresh_policy=self.mock_io.refresh_policy,
         )
 
@@ -77,7 +78,7 @@ class TestKorytaDifferE2E(unittest.TestCase):
         # Check if we see the expected comparison
         if "Comparing 2024-01-01 -> 2024-01-02" not in output:
             print(f"DEBUG OUTPUT:\n{output}")
-            
+
         self.assertIn("Comparing 2024-01-01 -> 2024-01-02", output)
         self.assertIn("New: 1, Deleted: 1", output)
         self.assertIn("Name: Bo", output)

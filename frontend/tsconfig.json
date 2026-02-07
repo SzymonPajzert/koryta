@@ -14,5 +14,6 @@
     {
       "path": "./.nuxt/tsconfig.node.json"
     }
-  ]
+  ],
+  "exclude": ["node_modules", ".nuxt", ".output", "dist", "backstop_data"]
 }
