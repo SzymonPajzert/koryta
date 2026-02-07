@@ -15,6 +15,7 @@ from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.scrape import ScrapeRejestrIO
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import (
     IO,
@@ -170,6 +171,7 @@ def _setup_context(
 
 
 PIPELINES = [
+    ScrapeRejestrIO,
     KorytaPeople,
     KorytaDiffer,
     PeoplePKW,

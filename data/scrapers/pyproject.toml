@@ -118,6 +118,7 @@ dependencies = [
 [project.scripts]
 # jupyter lab is available as well for analysis
 koryta = "main:main"
+scrape_krs = "scrapers.krs.scrape:scrape_rejestrio"
 koryta_uploader = "cli:main"
 
 

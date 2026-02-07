@@ -99,6 +99,26 @@ class CompaniesHardcoded(Pipeline):
 
 
 def a_lot_of_code(self: CompaniesHardcoded):
+    self.register_partials(
+        "KONIN",
+        data=[
+            "0000340359",
+            "0000144386",
+            "0000062694",
+            "0000395315",
+            "0000376721",
+            "0000010157",
+            "0000393680",
+            "0000407520",
+            "0000163885",
+            "0000130027",
+            "0000155179",
+            "0000920074",
+            "0000071223",
+            "0000081004",
+        ],
+    )
+
     # https://www.gov.pl/attachment/55892deb-efa3-44ba-87ed-7653034ee00f from
     # https://www.gov.pl/web/aktywa-panstwowe/spolki-objete-nadzorem-wlascicielskim-ministra-aktywow-panstwowych
     self.register_partials(
