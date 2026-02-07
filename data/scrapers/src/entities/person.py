@@ -67,3 +67,10 @@ class Wikipedia:
     infoboxes: list[str]
     content_score: int
     links: list[str]
+
+
+@dataclass
+class RejestrIOKey:
+    """Represents a person from the RejestrIO dataset."""
+
+    id: str

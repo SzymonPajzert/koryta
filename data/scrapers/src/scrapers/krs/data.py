@@ -4,6 +4,7 @@ from typing import Callable
 import pandas as pd
 
 from entities.company import ManualKRS as KRS
+from entities.person import RejestrIOKey
 from scrapers.stores import Context, Pipeline
 from scrapers.stores import DownloadableFile as FileSource
 from scrapers.teryt import Teryt
@@ -89,7 +90,7 @@ class CompaniesHardcoded(Pipeline):
             data=self.read_public_companies(ctx),
             map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
         )
-        a_lot_of_code(self)
+        register_companies(self)
         df = pd.DataFrame.from_dict(
             {k: dataclasses.asdict(v) for k, v in self.all_companies_krs.items()},
             orient="index",  # Each key is a separate entry
@@ -98,7 +99,31 @@ class CompaniesHardcoded(Pipeline):
         return df
 
 
-def a_lot_of_code(self: CompaniesHardcoded):
+class PeopleRejestrIOHardcoded(Pipeline):
+    filename = None
+
+    def process(self, ctx: Context):
+        for url in PEOPLE_LIST:
+            rejestr_id = url.split("/osoby/")[1].split("/")[0]
+            ctx.io.output_entity(RejestrIOKey(id=rejestr_id))
+
+
+PEOPLE_LIST = [
+    "https://rejestr.io/osoby/1316430/radoslaw-kolacinski",
+    "https://rejestr.io/osoby/2440394/lukasz-myszko",
+    "https://rejestr.io/osoby/1378837/krystian-kinastowski",
+    "https://rejestr.io/osoby/1256122/dariusz-samulak",
+    "https://rejestr.io/osoby/2501090/michal-sopinski",
+    "https://rejestr.io/osoby/2018700/karolina-pawliczak",
+    "https://rejestr.io/osoby/2221917/dariusz-grodzinski",
+    "https://rejestr.io/osoby/325689/marzena-wodzinska",
+    "https://rejestr.io/osoby/2799946/andrzej-pichet",
+    "https://rejestr.io/osoby/1388969/grzegorz-grygiel",
+    "https://rejestr.io/osoby/1594252/malgorzata-martuzalska",
+]
+
+
+def register_companies(self: CompaniesHardcoded):
     self.register_partials(
         "KALISZ",
         data=[
