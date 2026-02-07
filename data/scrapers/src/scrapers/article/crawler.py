@@ -1,4 +1,5 @@
 import argparse
+import csv
 import logging
 import os  # Added
 import sys
@@ -171,6 +172,40 @@ def init_db(ctx: Context, initial_urls_file: str, reset: bool = False):
     logger.info("Database initialization complete.")
 
 
+def load_blocked_csv(csv_path: str):
+    """Loads blocked domains from a CSV file into the blocked_domains table."""
+    logger.info("Loading blocked domains from %s", csv_path)
+    with get_pg_connection() as pg_conn:
+        with pg_conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS blocked_domains (
+                    domain TEXT PRIMARY KEY,
+                    reason TEXT
+                );
+                """
+            )
+            pg_conn.commit()
+
+            with open(csv_path, "r") as f:
+                reader = csv.DictReader(f)
+                rows = []
+                for row in reader:
+                    domain = parse_hostname(row["Domena"].strip())
+                    reason = row.get("Powód", "").strip()
+                    rows.append((domain, reason))
+
+            if rows:
+                cur.executemany(
+                    "INSERT INTO blocked_domains (domain, reason) VALUES (%s, %s) ON CONFLICT(domain) DO UPDATE SET reason = EXCLUDED.reason",
+                    rows,
+                )
+                pg_conn.commit()
+                logger.info("Loaded %d blocked domains.", len(rows))
+            else:
+                logger.info("No blocked domains found in CSV.")
+
+
 # TODO for now these delays local, but in the future, we can consider storing it in shared db
 next_request_time: dict[str, float] = {}
 
@@ -199,7 +234,6 @@ def process_url(ctx: Context, uid: str, url: str, config: dict) -> (set[str], st
 
         parsed = NormalizedParse.parse(url)
 
-        # TODO check how to use robots.txt
         if not ctx.web.robot_txt_allowed(ctx, url, parsed, HEADERS["User-Agent"]):
             return set(), "Disallowed by robots.txt", None
 
@@ -248,18 +282,22 @@ def get_and_lock_url(ctx: Context, config: dict, worker_id: str) -> tuple | None
     timeout_seconds = 60
     with get_pg_connection() as pg_conn:
         with pg_conn.cursor() as cur:
-            # First, try to find an unlocked URL or one locked by a dead worker
+            # Find an unlocked URL not matching any blocked domain
             cur.execute(
-                f"""
+                """
                 UPDATE website_index
                 SET locked_by_worker_id = %s, locked_at = %s
                 WHERE id = (
-                    SELECT id
-                    FROM website_index
-                    WHERE done = FALSE
-                      AND num_retries < %s
-                      AND (locked_by_worker_id IS NULL OR locked_at < %s)
-                    ORDER BY priority ASC, RANDOM()
+                    SELECT wi.id
+                    FROM website_index wi
+                    WHERE wi.done = FALSE
+                      AND wi.num_retries < %s
+                      AND (wi.locked_by_worker_id IS NULL OR wi.locked_at < %s)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM blocked_domains bd
+                          WHERE wi.url ~ ('https?://(www\.)?' || regexp_replace(bd.domain, '\.', '\\.', 'g') || '(/|$)')
+                      )
+                    ORDER BY wi.priority ASC, RANDOM()
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 )
@@ -410,6 +448,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("--reset-db", action="store_true", help="Reset database before initialization (requires --init-db).")
     parser.add_argument(
+        "--load-blocked",
+        type=str,
+        dest="blocked_csv",
+        metavar="CSV_FILE",
+        help="Load blocked domains from a CSV file into the database and exit.",
+    )
+    parser.add_argument(
         "--crawl-delay-seconds",
         type=int,
         default=1,
@@ -424,8 +469,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--worker-id",
         type=str,
-        required=True,
-        help="Unique identifier for the current crawler worker.",
+        help="Unique identifier for the current crawler worker (required for crawling).",
     )
     args = parser.parse_args()
 
@@ -447,6 +491,13 @@ if __name__ == "__main__":
     if args.initial_urls_file:
         init_db(ctx, args.initial_urls_file, reset=args.reset_db)
         sys.exit(0)
+
+    if args.blocked_csv:
+        load_blocked_csv(args.blocked_csv)
+        sys.exit(0)
+
+    if not args.worker_id:
+        parser.error("--worker-id is required for crawling.")
 
     logger.info("Starting crawl...")
     try:
