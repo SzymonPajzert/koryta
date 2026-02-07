@@ -1,12 +1,12 @@
 import argparse
 import typing
 from functools import cached_property
-from pprint import pprint
 from time import sleep
 
+from entities.company import OnlyKRS
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
-from scrapers.krs.list import KRS
+from scrapers.krs.list import KRS, CompaniesKRS
 from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
 
 
@@ -36,16 +36,18 @@ def save_org_connections(
 
 
 class ScrapeRejestrIO(Pipeline):
+    # TODO be able to write that this pipeline doesn't return anything new.
     filename = None
 
     hardcoded_companies: CompaniesHardcoded
+    companies: CompaniesKRS
 
     @cached_property
     def args(self):
         parser = argparse.ArgumentParser(description="I'll add docs here")
         parser.add_argument(
-            "--only",
-            dest="only",
+            "--only_krs",
+            dest="only_krs",
             default="",
             help="only show children of this KRS",
         )
@@ -60,17 +62,27 @@ class ScrapeRejestrIO(Pipeline):
         return args
 
     def to_scrape(self, ctx: Context):
-        # This should be a list actually
-        already_scraped = set(
-            KRS.from_blob_name(blob.url)
-            for blob in ctx.io.list_files(CloudStorage("hostname=rejestr.io"))
-            if isinstance(blob, DownloadableFile)
-        )
+        scraped_companies = self.companies.read_or_process(ctx)
+        self.hardcoded_companies.process(ctx)
 
-        starters = set(KRS(krs) for krs in self.hardcoded_companies.all_companies_krs)
-        if self.args.only != "":
-            # Narrow down starters to only specified companies
-            starters = {KRS(self.args.only)}
+        # TODO ManualKRS has information about teryts etc.
+        # We should probably use the general KRS
+        # Or the class I imported - OnlyKRS
+
+        # This should be a list actually
+        already_scraped = set(KRS(krs) for krs in scraped_companies["krs"].tolist())
+
+        starters = set(
+            # TODO remove the hardcode
+            KRS(krs)
+            for krs in self.hardcoded_companies.from_source("KALISZ")
+        )
+        print("Starters: ", starters)
+        # TODO only KRS doesn't work now for some reason.
+        # if self.args.only_krs != "":
+        #     # Narrow down starters to only specified companies
+        #     starters = {KRS(self.args.only_krs)}
+        print("Starters: ", starters)
 
         graph = CompanyGraph()
 
@@ -82,9 +94,11 @@ class ScrapeRejestrIO(Pipeline):
             children = starters
 
         to_scrape = (starters | children) - already_scraped
-        print(f"Already scraped: {already_scraped}")
-        print(f"To scrape: {to_scrape}")
-        print("To scrape (children):")
+        print(f"Starters: {len(starters)} {set_head(starters, 10)}")
+        print(
+            f"Already scraped: {len(already_scraped)} {set_head(already_scraped, 10)}"
+        )
+        print(f"To scrape: {len(to_scrape)} {set_head(to_scrape, 10)}")
         return to_scrape
 
     def process(self, ctx: Context):
@@ -93,7 +107,7 @@ class ScrapeRejestrIO(Pipeline):
                 self.to_scrape(ctx),
                 # TODO calculate here which companies don't have the name
                 # instead of hardcoding them.
-                map(KRS, self.hardcoded_companies.from_source("NAME_MISSING")),
+                [],  # map(KRS, self.hardcoded_companies.from_source("NAME_MISSING")),
             )
         )
         print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
@@ -110,3 +124,7 @@ class ScrapeRejestrIO(Pipeline):
             # We're discarding query params, so it's a hotfix for this
             url = url.replace("?aktualnosc=", "/aktualnosc_")
             ctx.io.upload(url, result, "application/json")
+
+
+def set_head(s: set[KRS], n: int):
+    return sorted(list(s), key=lambda x: x.id)[:n]

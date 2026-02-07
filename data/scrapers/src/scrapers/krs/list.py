@@ -139,6 +139,8 @@ class CompaniesKRS(Pipeline):
         Iterates through GCS files from rejestr.io, parses them,
         and extracts information about companies.
         """
+        # TODO it should list data from https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/
+        # to list the names of the companies
         for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
             blob = ctx.io.read_data(blob_ref)
             assert isinstance(blob_ref, DownloadableFile)

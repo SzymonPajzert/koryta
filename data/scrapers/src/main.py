@@ -152,6 +152,7 @@ def _setup_context(
     conductor = Conductor(dumper)
     rejestr_io = None
     if use_rejestr_io:
+        print("Initializing RejestrIO as a data source")
         rejestr_io = Rejestr()
 
     ctx = Context(
@@ -189,6 +190,9 @@ PIPELINES = [
 
 
 def main():
+    # TODO this parsing logic and CLI should be moved to a separate file
+    # Then we should have examples how to thoroughly test it.
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--refresh",
@@ -208,8 +212,9 @@ def main():
             else:
                 refresh.append(r)
 
+    rejestr_io = "ScrapeRejestrIO" in args.pipeline
     policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
-    ctx, dumper = _setup_context(False, policy)
+    ctx, dumper = _setup_context(rejestr_io, policy)
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:

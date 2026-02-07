@@ -100,7 +100,7 @@ class CompaniesHardcoded(Pipeline):
 
 def a_lot_of_code(self: CompaniesHardcoded):
     self.register_partials(
-        "KONIN",
+        "KALISZ",
         data=[
             "0000340359",
             "0000144386",

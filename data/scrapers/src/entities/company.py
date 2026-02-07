@@ -3,8 +3,12 @@
 from dataclasses import dataclass, field
 
 
+class OnlyKRS:
+    krs: str
+
+
 @dataclass
-class KRS:
+class KRS(OnlyKRS):
     """Represents a company entry from a KRS (National Court Register) search."""
 
     krs: str
@@ -44,12 +48,13 @@ class InterestingEntity:
 
 
 @dataclass
-class ManualKRS:
+class ManualKRS(OnlyKRS):
     """
     Represents a manually curated KRS entry, often from multiple sources.
     Provides methods for merging and handling different representations.
     """
 
+    # TODO migrate id to krs for consistency
     id: str
     sources: set[str] = field(default_factory=set)
     teryts: set[str] = field(default_factory=set)
@@ -90,6 +95,12 @@ class ManualKRS:
             self.teryts | other.teryts,
             self.ministry or other.ministry,
         )
+
+    def __str__(self) -> str:
+        return f"{self.id}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
     def __hash__(self) -> int:
         """Computes the hash based on the KRS ID."""
