@@ -1,3 +1,0 @@
-- https://pl.wikipedia.org/wiki/Stanis%C5%82aw_Witaszczyk
--
--

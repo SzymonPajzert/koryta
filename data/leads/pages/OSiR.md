@@ -1,3 +1,0 @@
-- #idea
-- OSiRy średnio działają. Możnaby w sumie zrobić sobie listę wszystkich, i pchać narrację, że może gdybyśmy mieli ogarniętych dyrektorów, to nie mielibyśmy problemów, zamkniętych w wakację albo pomylonych rejestracji. Kuba Taratuta o tym mówił.
--

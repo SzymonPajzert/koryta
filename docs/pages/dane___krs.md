@@ -1,2 +1,0 @@
-- Also ingest confirmed people's companies
-	- Companies that we found are interesting that aren't really public companies

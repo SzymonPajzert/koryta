@@ -1,8 +1,0 @@
-- #dump
--
-- [Lista wszystkich spółek](https://pl.wikipedia.org/wiki/Ustr%C3%B3j_miasta_sto%C5%82ecznego_Warszawy#Jednoosobowe_sp%C3%B3%C5%82ki_prawa_handlowego_m.st._Warszawy)
-	- Metro_Warszawskie
-	- Miejskie Zakłady Autobusowe w Warszawie - in progress
-	- Tramwaje
-- [[Sławomir Potapowicz]]
-- Platforma i PSL - jak jedno jest w zarządzie to drugie w radzie nadzorczej - Dlaczego PO i PSL nigdy się nie rozwiodą #tweet

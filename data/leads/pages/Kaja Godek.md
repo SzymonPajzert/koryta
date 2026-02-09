@@ -1,5 +1,0 @@
-- https://pl.wikipedia.org/wiki/Kaja_Godek
--
-- Antyaborcyjna, pozwana i skazana za znieważenie 17 osób.
--
-- W latach 2015–2019 była członkiem rady nadzorczej Warszawskich Zakładów Mechanicznych, będących spółką państwową (wówczas, po 2014 roku, 85% akcji należało do Agencji Rozwoju Przemysłu[7]). Podniesiony w mediach zarzut braku jej kompetencji do sprawowania swojej funkcji spotkał się ze zwolnieniem Godek ze stanowiska decyzją walnego zgromadzenia akcjonariuszy[8].

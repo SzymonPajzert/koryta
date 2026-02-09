@@ -1,2 +1,0 @@
-- Pracował w 2014 roku w radzie nadzorczej firmy z Arabii Saudyjskiej - info [[Co to będzie]] z [[2025-10-24]]
--

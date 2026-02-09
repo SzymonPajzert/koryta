@@ -1,9 +1,0 @@
-- #ui
-- Investigator
-	- Wants to add some people
-	- Wants to add information about existing people
--
-- Phone quick user
-	- [[cuj/visit on a phone for a quick check]]
--
--

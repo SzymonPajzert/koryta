@@ -1,1 +1,0 @@
-- Everything on the page is shareable for future interactions [[share findings]]
