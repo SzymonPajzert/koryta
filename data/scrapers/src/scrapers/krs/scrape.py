@@ -3,16 +3,17 @@ import typing
 from functools import cached_property
 from time import sleep
 
-from entities.company import OnlyKRS
-from scrapers.krs.data import CompaniesHardcoded
+from entities.person import RejestrIOKey
+from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import KRS, CompaniesKRS
-from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
+from scrapers.stores import Context, Pipeline
 
 
 def save_org_connections(
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
+    people: typing.Iterable[RejestrIOKey],
 ):
     for krs in names:
         yield (
@@ -33,6 +34,15 @@ def save_org_connections(
             f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne",
             0.05,
         )
+    for person in people:
+        yield (
+            f"https://rejestr.io/api/v2/osoby/{person.id}/krs-powiazania?aktualnosc=aktualne",
+            0.05,
+        )
+        yield (
+            f"https://rejestr.io/api/v2/osoby/{person.id}/krs-powiazania?aktualnosc=historyczne",
+            0.05,
+        )
 
 
 class ScrapeRejestrIO(Pipeline):
@@ -41,6 +51,7 @@ class ScrapeRejestrIO(Pipeline):
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
+    hardcoded_people: PeopleRejestrIOHardcoded
 
     @cached_property
     def args(self):
@@ -61,7 +72,8 @@ class ScrapeRejestrIO(Pipeline):
 
         return args
 
-    def to_scrape(self, ctx: Context):
+    def companies_to_scrape(self, ctx: Context) -> set[KRS]:
+        # TODO currently it doesn't reprocess, it should automatically.
         scraped_companies = self.companies.read_or_process(ctx)
         self.hardcoded_companies.process(ctx)
 
@@ -94,20 +106,31 @@ class ScrapeRejestrIO(Pipeline):
             children = starters
 
         to_scrape = (starters | children) - already_scraped
-        print(f"Starters: {len(starters)} {set_head(starters, 10)}")
+        print(f"Starters: {len(starters)} {get_head(starters, 10)}")
         print(
-            f"Already scraped: {len(already_scraped)} {set_head(already_scraped, 10)}"
+            f"Already scraped: {len(already_scraped)} {get_head(already_scraped, 10)}"
         )
-        print(f"To scrape: {len(to_scrape)} {set_head(to_scrape, 10)}")
+        print(f"To scrape: {len(to_scrape)} {get_head(to_scrape, 10)}")
+
         return to_scrape
+
+    def people_to_scrape(self, ctx: Context) -> set[RejestrIOKey]:
+        scraped_people = set(
+            RejestrIOKey(id=person_id)
+            for person_id in self.hardcoded_people.read_or_process(ctx)["id"].to_list()
+        )
+        print(f"People to scrape: {len(scraped_people)} {get_head(scraped_people, 10)}")
+        return scraped_people
 
     def process(self, ctx: Context):
         urls = list(
             save_org_connections(
-                self.to_scrape(ctx),
+                connections=self.companies_to_scrape(ctx),
                 # TODO calculate here which companies don't have the name
                 # instead of hardcoding them.
-                [],  # map(KRS, self.hardcoded_companies.from_source("NAME_MISSING")),
+                # map(KRS, self.hardcoded_companies.from_source("NAME_MISSING")),
+                names=[],
+                people=self.people_to_scrape(ctx),
             )
         )
         print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
@@ -126,5 +149,5 @@ class ScrapeRejestrIO(Pipeline):
             ctx.io.upload(url, result, "application/json")
 
 
-def set_head(s: set[KRS], n: int):
+def get_head(s: typing.Iterable[KRS | RejestrIOKey], n: int):
     return sorted(list(s), key=lambda x: x.id)[:n]
