@@ -74,3 +74,11 @@ class RejestrIOKey:
     """Represents a person from the RejestrIO dataset."""
 
     id: str
+
+    def __hash__(self) -> int:
+        """Computes the hash based on the KRS ID."""
+        return hash(self.id)
+
+    def __eq__(self, other: object) -> bool:
+        """Checks equality based on the KRS ID."""
+        return isinstance(other, RejestrIOKey) and self.id == other.id
