@@ -8,6 +8,3 @@ poetry run pytest --ignore src/tests
 
 echo "I'll run all the tests now"
 poetry run pytest
-
-
-

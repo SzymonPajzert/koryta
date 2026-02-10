@@ -3,12 +3,8 @@
 from dataclasses import dataclass, field
 
 
-class OnlyKRS:
-    krs: str
-
-
 @dataclass
-class KRS(OnlyKRS):
+class KRS:
     """Represents a company entry from a KRS (National Court Register) search."""
 
     krs: str
@@ -48,7 +44,7 @@ class InterestingEntity:
 
 
 @dataclass
-class ManualKRS(OnlyKRS):
+class ManualKRS:
     """
     Represents a manually curated KRS entry, often from multiple sources.
     Provides methods for merging and handling different representations.

@@ -103,7 +103,7 @@ class CompaniesKRS(Pipeline):
         self.companies: dict[str, KrsCompany] = {}
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
 
-    def add_company(self, item):
+    def add_rejestrio_company(self, item):
         krs_id = item["numery"]["krs"]
         if krs_id in self.companies:
             company = self.companies[krs_id]
@@ -147,14 +147,12 @@ class CompaniesKRS(Pipeline):
         Iterates through GCS files from rejestr.io, parses them,
         and extracts information about companies.
         """
-        # TODO it should list data from https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/
-        # to list the names of the companies
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             if "aktualnosc_" in blob_name:
                 for item in data:
                     if item.get("typ") != "organizacja":
                         continue
-                    c = self.add_company(item)
+                    c = self.add_rejestrio_company(item)
                     parent = KRS.from_blob_name(blob_name)
                     conn_type = QueryRelation.from_rejestrio(
                         item["krs_powiazania_kwerendowane"][0]
@@ -163,7 +161,7 @@ class CompaniesKRS(Pipeline):
                         self.add_relation(parent.id, c.krs)
 
             else:
-                self.add_company(data)
+                self.add_rejestrio_company(data)
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
             if "odpis" not in data:

@@ -109,17 +109,17 @@ class PeopleRejestrIOHardcoded(Pipeline):
 
 
 PEOPLE_LIST = [
-    "https://rejestr.io/osoby/1316430/radoslaw-kolacinski",
-    "https://rejestr.io/osoby/2440394/lukasz-myszko",
-    "https://rejestr.io/osoby/1378837/krystian-kinastowski",
-    "https://rejestr.io/osoby/1256122/dariusz-samulak",
-    "https://rejestr.io/osoby/2501090/michal-sopinski",
-    "https://rejestr.io/osoby/2018700/karolina-pawliczak",
-    "https://rejestr.io/osoby/2221917/dariusz-grodzinski",
-    "https://rejestr.io/osoby/325689/marzena-wodzinska",
-    "https://rejestr.io/osoby/2799946/andrzej-pichet",
-    "https://rejestr.io/osoby/1388969/grzegorz-grygiel",
-    "https://rejestr.io/osoby/1594252/malgorzata-martuzalska",
+    "https://rejestr.io/osoby/1316430/",
+    "https://rejestr.io/osoby/2440394/",
+    "https://rejestr.io/osoby/1378837/",
+    "https://rejestr.io/osoby/1256122/",
+    "https://rejestr.io/osoby/2501090/",
+    "https://rejestr.io/osoby/2018700/",
+    "https://rejestr.io/osoby/2221917/",
+    "https://rejestr.io/osoby/325689/",
+    "https://rejestr.io/osoby/2799946/",
+    "https://rejestr.io/osoby/1388969/",
+    "https://rejestr.io/osoby/1594252/",
 ]
 
 

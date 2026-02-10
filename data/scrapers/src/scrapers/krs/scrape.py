@@ -20,7 +20,6 @@ def save_org_connections(
             f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
             0,
         )
-        # yield (f"https://rejestr.io/api/v2/org/{krs}", 0.05)
     for krs in connections:
         yield (
             f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
@@ -77,10 +76,6 @@ class ScrapeRejestrIO(Pipeline):
         scraped_companies = self.companies.read_or_process(ctx)
         self.hardcoded_companies.process(ctx)
 
-        # TODO ManualKRS has information about teryts etc.
-        # We should probably use the general KRS
-        # Or the class I imported - OnlyKRS
-
         # This should be a list actually
         already_scraped = set(KRS(krs) for krs in scraped_companies["krs"].tolist())
 
@@ -89,11 +84,6 @@ class ScrapeRejestrIO(Pipeline):
             KRS(krs)
             for krs in self.hardcoded_companies.from_source("KALISZ")
         )
-        print("Starters: ", starters)
-        # TODO only KRS doesn't work now for some reason.
-        # if self.args.only_krs != "":
-        #     # Narrow down starters to only specified companies
-        #     starters = {KRS(self.args.only_krs)}
         print("Starters: ", starters)
 
         graph = CompanyGraph()

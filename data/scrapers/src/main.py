@@ -173,6 +173,17 @@ def _setup_context(
     return ctx, dumper
 
 
+def print_results(res, args):
+    if args.output == "stdout":
+        if isinstance(res, pd.DataFrame):
+            print(res.to_json(orient="records", lines=True, date_format="iso"))
+        elif isinstance(res, list):
+            for item in res:
+                print(json.dumps(item, default=str))
+    else:
+        print("Finished processing")
+
+
 PIPELINES = [
     ScrapeRejestrIO,
     KorytaPeople,
@@ -252,18 +263,7 @@ def main():
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)
                 res = p.read_or_process(ctx)
-
-                if args.output == "stdout":
-                    if isinstance(res, pd.DataFrame):
-                        print(
-                            res.to_json(orient="records", lines=True, date_format="iso")
-                        )
-                    elif isinstance(res, list):
-                        for item in res:
-                            print(json.dumps(item, default=str))
-
-        if args.output != "stdout":
-            print("Finished processing")
+                print_results(res, args)
     finally:
         print("Dumping...")
         dumper.dump_pandas()
