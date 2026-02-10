@@ -9,11 +9,13 @@ from analysis.utils import filter_local_good
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
 from scrapers.stores import Context, Pipeline
+from scrapers.teryt import Teryt
 
 
 class Extract(Pipeline):
     people: PeopleEnriched
     companies: CompaniesKRS
+    teryt: Teryt
     format = "csv"
 
     @cached_property
@@ -80,7 +82,10 @@ class Extract(Pipeline):
 
             df = df[df["employment"].apply(works_in_relevant)]
 
-        df = filter_local_good(df, self.region)
+        companies_df = self.companies.read_or_process(ctx)
+        self.teryt.read_or_process(ctx)
+
+        df = filter_local_good(df, self.region, companies_df, self.teryt)
 
         print(f"Found {len(df)} people")
         print("\n".join(df.columns))
