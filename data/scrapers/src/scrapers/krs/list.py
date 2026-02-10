@@ -134,6 +134,14 @@ class CompaniesKRS(Pipeline):
         elif parent not in self.companies:
             self.add_awaiting(parent, (parent, child))
 
+    def iterate_blobs(self, ctx: Context, hostname: str):
+        for blob_ref in ctx.io.list_files(CloudStorage(prefix=f"hostname={hostname}")):
+            blob = ctx.io.read_data(blob_ref)
+            assert isinstance(blob_ref, DownloadableFile)
+            content = blob.read_string()
+            data = json.loads(content)
+            yield blob_ref.url, data
+
     def process(self, ctx: Context):
         """
         Iterates through GCS files from rejestr.io, parses them,
@@ -141,23 +149,12 @@ class CompaniesKRS(Pipeline):
         """
         # TODO it should list data from https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/
         # to list the names of the companies
-        for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
-            blob = ctx.io.read_data(blob_ref)
-            assert isinstance(blob_ref, DownloadableFile)
-            blob_name = blob_ref.url
-            content = blob.read_string()
-            data = json.loads(content)
+        for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             if "aktualnosc_" in blob_name:
                 for item in data:
                     if item.get("typ") != "organizacja":
                         continue
                     c = self.add_company(item)
-
-                    # Add it to the parent of the company
-                    # TODO here we should also add the company,
-                    # since the non aktualnosc_ urls are rare
-                    # Also, we should make sure we're taking in the data from the person queries now
-                    # This is connected to the fact, that we don't have the names for some of the companies.
                     parent = KRS.from_blob_name(blob_name)
                     conn_type = QueryRelation.from_rejestrio(
                         item["krs_powiazania_kwerendowane"][0]
@@ -167,6 +164,30 @@ class CompaniesKRS(Pipeline):
 
             else:
                 self.add_company(data)
+
+        for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
+            if "odpis" not in data:
+                raise ValueError(f"Unexpected data structure in {blob_name}")
+
+            try:
+                odpis = data["odpis"]
+                krs = odpis.get("naglowekA").get("numerKRS")
+                dane = odpis.get("dane", {})
+                dzial1 = dane.get("dzial1", {})
+                nazwa = dzial1.get("danePodmiotu").get("nazwa")
+                siedziba = dzial1.get("siedzibaIAdres", {}).get("siedziba", {})
+                miejscowosc = siedziba.get("miejscowosc")
+            except KeyError as e:
+                raise ValueError(f"Missing key in {blob_name}: {e}")
+
+            if krs in self.companies:
+                # Update existing fields
+                company = self.companies[krs]
+                company.name = company.name or nazwa
+                company.city = company.city or miejscowosc
+                self.companies[krs] = company
+            else:
+                self.companies[krs] = KrsCompany(krs=krs, name=nazwa, city=miejscowosc)
 
         for company in self.companies.values():
             ctx.io.output_entity(company)

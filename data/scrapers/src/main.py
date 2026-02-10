@@ -6,8 +6,6 @@ import typing
 
 import duckdb
 import pandas as pd
-
-import duckdb
 from duckdb.typing import VARCHAR  # type: ignore
 from tqdm import tqdm
 

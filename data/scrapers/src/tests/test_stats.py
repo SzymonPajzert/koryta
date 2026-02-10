@@ -2,7 +2,6 @@ import pytest
 
 from analysis.stats import Statistics
 from main import _setup_context
-from scrapers.stores import ProcessPolicy
 
 
 @pytest.fixture
@@ -13,7 +12,7 @@ def ctx():
 @pytest.fixture
 def stats(ctx):
     stats = Statistics()
-    return stats.read_or_process(ctx, ProcessPolicy({"Statistics"}, set()))
+    return stats.read_or_process(ctx)
 
 
 def test_expected_people(stats):

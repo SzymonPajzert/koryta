@@ -65,6 +65,7 @@ def test_extract_by_krs():
             "unique_chance": 0.0,
             "employed_start": "2020-01-01",
             "employed_end": "2021-01-01",  # Mock extra fields
+            "rejestrio_id": "1",
         },
         {
             "krs_name": "Person2",
@@ -79,6 +80,7 @@ def test_extract_by_krs():
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
+            "rejestrio_id": "2",
         },
         {
             "krs_name": "Person3",
@@ -93,6 +95,7 @@ def test_extract_by_krs():
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
+            "rejestrio_id": "3",
         },
         {
             "krs_name": "Person4",
@@ -107,6 +110,7 @@ def test_extract_by_krs():
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
+            "rejestrio_id": "4",
         },
         {
             "krs_name": "Person5",
@@ -121,6 +125,7 @@ def test_extract_by_krs():
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
+            "rejestrio_id": "5",
         },
     ]
 
@@ -145,7 +150,14 @@ def test_extract_by_krs():
 
     extract.companies = Pipeline.create(type(extract.companies))
     # CompaniesKRS returns a DataFrame where each row is a company dict
+    # CompaniesKRS returns a DataFrame where each row is a company dict
     extract.companies.read_or_process = lambda ctx: pd.DataFrame(companies_data)
+
+    extract.teryt = Pipeline.create(type(extract.teryt))
+    extract.teryt.read_or_process = lambda ctx: None
+
+    extract.hardcoded_people = Pipeline.create(type(extract.hardcoded_people))
+    extract.hardcoded_people.read_or_process = lambda ctx: pd.DataFrame({"id": []})
 
     # 3. Inject args
     class MockArgs:
