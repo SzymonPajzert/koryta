@@ -1,7 +1,11 @@
 import argparse
 import io
+import json
 import os
 import typing
+
+import duckdb
+import pandas as pd
 
 import duckdb
 from duckdb.typing import VARCHAR  # type: ignore
@@ -207,6 +211,13 @@ def main():
         default=None,
         nargs="*",
     )
+    parser.add_argument(
+        "--output",
+        type=str,
+        choices=["file", "stdout"],
+        default="file",
+        help="Output channel (file or stdout)",
+    )
     args, _ = parser.parse_known_args()
 
     refresh = []
@@ -242,9 +253,24 @@ def main():
             ):
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)
-                p.read_or_process(ctx)
-        print("Finished processing")
+                res = p.read_or_process(ctx)
+
+                if args.output == "stdout":
+                    if isinstance(res, pd.DataFrame):
+                        print(
+                            res.to_json(orient="records", lines=True, date_format="iso")
+                        )
+                    elif isinstance(res, list):
+                        for item in res:
+                            print(json.dumps(item, default=str))
+
+        if args.output != "stdout":
+            print("Finished processing")
     finally:
         print("Dumping...")
         dumper.dump_pandas()
         print("Done")
+
+
+if __name__ == "__main__":
+    main()
