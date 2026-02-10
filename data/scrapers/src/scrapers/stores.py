@@ -352,6 +352,8 @@ class Pipeline:
     nested: int
     format: Formats = "jsonl"
     dtype: dict[str, Any] | None = None
+    confirm_run: bool = False
+
     _cached_result: pd.DataFrame | None = None
     _refreshed_execution: bool = False
 
@@ -390,6 +392,23 @@ class Pipeline:
         self_ref = LocalFile(self.output_path, "versioned") if self.filename else None
         return ctx.io.get_mtime(self_ref) if self_ref else None
 
+    @staticmethod
+    def confirm_if_big(func):
+        def wrapper(self, ctx: Context):
+            result = func(self, ctx)
+            if result and self.confirm_run:
+                answer = ctx.utils.input_with_timeout(
+                    "This pipeline is pretty big, Should I run it? (y/n) [n]",
+                    timeout=10,
+                )
+                if answer is None or answer.lower() != "y":
+                    print("Not refreshing")
+                    return False
+            return result
+
+        return wrapper
+
+    @confirm_if_big
     def should_refresh_with_logic(self, ctx: Context) -> bool:
         """
         Determines if the pipeline should refresh based on:

@@ -21,7 +21,9 @@ def _article_generator(f, tq):
             title = elem.findtext("{http://www.mediawiki.org/xml/export-0.11/}title")
             revision = elem.find("{http://www.mediawiki.org/xml/export-0.11/}revision")
             if title and revision:
-                wikitext = revision.findtext("{http://www.mediawiki.org/xml/export-0.11/}text")
+                wikitext = revision.findtext(
+                    "{http://www.mediawiki.org/xml/export-0.11/}text"
+                )
                 if wikitext:
                     yield (title, wikitext)
             elem.clear()
@@ -40,6 +42,7 @@ def _is_person_article_worker(args):
 
 class ProcessWikiPeopleNames(Pipeline):
     filename = "wiki_people_names"
+    confirm_run = True
 
     def process(self, ctx: Context) -> pd.DataFrame:
         person_titles = []
@@ -50,7 +53,7 @@ class ProcessWikiPeopleNames(Pipeline):
             article_gen = _article_generator(f, tq)
             with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
                 for title in pool.imap_unordered(
-                        _is_person_article_worker, article_gen, chunksize=1000
+                    _is_person_article_worker, article_gen, chunksize=1000
                 ):
                     if title:
                         person_titles.append({"title": title})
@@ -111,7 +114,7 @@ class ProcessWikiNer(Pipeline):
             )
             with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
                 for result in pool.imap_unordered(
-                        _ner_worker, worker_args, chunksize=100
+                    _ner_worker, worker_args, chunksize=100
                 ):
                     if result:
                         dataset.append(result)

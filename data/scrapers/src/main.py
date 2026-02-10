@@ -1,9 +1,11 @@
 import argparse
 import io
+import json
 import os
 import typing
 
 import duckdb
+import pandas as pd
 from duckdb.typing import VARCHAR  # type: ignore
 from tqdm import tqdm
 
@@ -15,6 +17,7 @@ from scrapers.article.crawler import parse_hostname, uuid7
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
+from scrapers.krs.scrape import ScrapeRejestrIO
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import (
     IO,
@@ -151,6 +154,7 @@ def _setup_context(
     conductor = Conductor(dumper)
     rejestr_io = None
     if use_rejestr_io:
+        print("Initializing RejestrIO as a data source")
         rejestr_io = Rejestr()
 
     ctx = Context(
@@ -169,7 +173,19 @@ def _setup_context(
     return ctx, dumper
 
 
+def print_results(res, args):
+    if args.output == "stdout":
+        if isinstance(res, pd.DataFrame):
+            print(res.to_json(orient="records", lines=True, date_format="iso"))
+        elif isinstance(res, list):
+            for item in res:
+                print(json.dumps(item, default=str))
+    else:
+        print("Finished processing")
+
+
 PIPELINES = [
+    ScrapeRejestrIO,
     KorytaPeople,
     KorytaDiffer,
     PeoplePKW,
@@ -187,6 +203,9 @@ PIPELINES = [
 
 
 def main():
+    # TODO this parsing logic and CLI should be moved to a separate file
+    # Then we should have examples how to thoroughly test it.
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--refresh",
@@ -194,7 +213,20 @@ def main():
         action="append",
         default=[],
     )
-    parser.add_argument("pipeline", help="Pipeline to be run", default=None, nargs="*")
+    parser.add_argument(
+        "pipeline",
+        help="Pipeline to be run - available are "
+        + " ".join(pt.__name__ for pt in PIPELINES),
+        default=None,
+        nargs="*",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        choices=["file", "stdout"],
+        default="file",
+        help="Output channel (file or stdout)",
+    )
     args, _ = parser.parse_known_args()
 
     refresh = []
@@ -206,12 +238,14 @@ def main():
             else:
                 refresh.append(r)
 
+    rejestr_io = "ScrapeRejestrIO" in args.pipeline
     policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
-    ctx, dumper = _setup_context(False, policy)
+    ctx, dumper = _setup_context(rejestr_io, policy)
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:
-        print("No pipeline specified, will run all")
+        # TODO this special handling is bad imo
+        print("No pipeline specified, will run all except ScrapeRejestrIO")
     pipeline_names = set(pt.__name__ for pt in PIPELINES)
     for p in args.pipeline:
         if p not in pipeline_names:
@@ -223,12 +257,18 @@ def main():
 
     try:
         for p_type in PIPELINES:
-            if p_type.__name__ in args.pipeline or no_pipeline:
+            if p_type.__name__ in args.pipeline or (
+                no_pipeline and p_type.__name__ != "ScrapeRejestrIO"
+            ):
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)
-                p.read_or_process(ctx)
-        print("Finished processing")
+                res = p.read_or_process(ctx)
+                print_results(res, args)
     finally:
         print("Dumping...")
         dumper.dump_pandas()
         print("Done")
+
+
+if __name__ == "__main__":
+    main()

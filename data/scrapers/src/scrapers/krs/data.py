@@ -4,6 +4,7 @@ from typing import Callable
 import pandas as pd
 
 from entities.company import ManualKRS as KRS
+from entities.person import RejestrIOKey
 from scrapers.stores import Context, Pipeline
 from scrapers.stores import DownloadableFile as FileSource
 from scrapers.teryt import Teryt
@@ -89,7 +90,7 @@ class CompaniesHardcoded(Pipeline):
             data=self.read_public_companies(ctx),
             map=lambda x: {"id": x.KRS, "teryts": {x.teryt}},
         )
-        a_lot_of_code(self)
+        register_companies(self)
         df = pd.DataFrame.from_dict(
             {k: dataclasses.asdict(v) for k, v in self.all_companies_krs.items()},
             orient="index",  # Each key is a separate entry
@@ -98,7 +99,51 @@ class CompaniesHardcoded(Pipeline):
         return df
 
 
-def a_lot_of_code(self: CompaniesHardcoded):
+class PeopleRejestrIOHardcoded(Pipeline):
+    filename = None
+
+    def process(self, ctx: Context):
+        for url in PEOPLE_LIST:
+            rejestr_id = url.split("/osoby/")[1].split("/")[0]
+            ctx.io.output_entity(RejestrIOKey(id=rejestr_id))
+
+
+PEOPLE_LIST = [
+    "https://rejestr.io/osoby/1316430/",
+    "https://rejestr.io/osoby/2440394/",
+    "https://rejestr.io/osoby/1378837/",
+    "https://rejestr.io/osoby/1256122/",
+    "https://rejestr.io/osoby/2501090/",
+    "https://rejestr.io/osoby/2018700/",
+    "https://rejestr.io/osoby/2221917/",
+    "https://rejestr.io/osoby/325689/",
+    "https://rejestr.io/osoby/2799946/",
+    "https://rejestr.io/osoby/1388969/",
+    "https://rejestr.io/osoby/1594252/",
+]
+
+
+def register_companies(self: CompaniesHardcoded):
+    self.register_partials(
+        "KALISZ",
+        data=[
+            "0000340359",
+            "0000144386",
+            "0000062694",
+            "0000395315",
+            "0000376721",
+            "0000010157",
+            "0000393680",
+            "0000407520",
+            "0000163885",
+            "0000130027",
+            "0000155179",
+            "0000920074",
+            "0000071223",
+            "0000081004",
+        ],
+    )
+
     # https://www.gov.pl/attachment/55892deb-efa3-44ba-87ed-7653034ee00f from
     # https://www.gov.pl/web/aktywa-panstwowe/spolki-objete-nadzorem-wlascicielskim-ministra-aktywow-panstwowych
     self.register_partials(

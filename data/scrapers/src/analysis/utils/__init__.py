@@ -152,26 +152,59 @@ def drop_duplicates(df, *cols):
     return df
 
 
-def filter_local_good(matched_all, filter_region: str | None):
+def filter_local_good(
+    matched_all,
+    filter_region: str | None,
+    companies_df=None,
+    teryt: Teryt | None = None,
+    interesting_people: set[str] | None = None,
+):
     """
     :param: filter_region - region in TERYT 10 code, to filter to
+    :param: interesting_people - set of RejestrIOKey ids that
+            should be included regardless of other criteria
     """
+
+    krs_map = {}
+    if companies_df is not None:
+        krs_map = {
+            c["krs"]: c["city"]
+            for c in companies_df.to_dict("records")
+            if c.get("city")
+        }
 
     def check_teryt_wojewodztwo(row_regions):
         if filter_region is None:
             return True
         if row_regions is None or isinstance(row_regions, float):
             return False
-        return filter_region in row_regions
+        # legacy check
+        if len(filter_region) == 2 and filter_region in row_regions:
+            return True
+
+        # Check for more granular regions
+        for region in row_regions:
+            if region.startswith(filter_region):
+                return True
+        return False
 
     def check_employed(employed):
         if filter_region is None:
             return True
-        if filter_region != "10":
-            raise NotImplementedError("Only region '10' (Łódzkie) is implemented")
+
         for emp in empty_list_if_nan(employed):
-            if emp["employed_krs"] in lodzkie_companies:
+            krs = emp["employed_krs"]
+            # Check hardcoded list for backward compatibility or specific overrides
+            if filter_region == "10" and krs in lodzkie_companies:
                 return True
+
+            # Dynamic check
+            city = krs_map.get(krs)
+            if city and teryt:
+                city_teryt = teryt.cities_to_teryt.get(city)
+                if city_teryt and city_teryt.startswith(filter_region):
+                    return True
+
         return False
 
     def to_dt(series):
@@ -202,7 +235,20 @@ def filter_local_good(matched_all, filter_region: str | None):
     has_wiki = ~matched_all["wiki_name"].isna()
     accurate = high_probability | has_wiki
 
-    local_good = matched_all[interesting & local & accurate]
+    interesting_person = False
+    if interesting_people is not None:
+
+        def check_interesting_person(ids_list):
+            if ids_list is None:
+                return False
+            if isinstance(ids_list, str):
+                return ids_list in interesting_people
+            # optimized intersection check
+            return not interesting_people.isdisjoint(ids_list)
+
+        interesting_person = matched_all["rejestrio_id"].apply(check_interesting_person)
+
+    local_good = matched_all[(interesting | interesting_person) & local & accurate]
 
     # Filter out duplicates
     local_good = drop_duplicates(local_good, "krs_name", "pkw_name", "wiki_name")

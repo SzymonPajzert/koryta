@@ -6,14 +6,18 @@ from memoized_property import memoized_property  # type:ignore
 
 from analysis.people import PeopleEnriched
 from analysis.utils import filter_local_good
+from scrapers.krs.data import PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
 from scrapers.stores import Context, Pipeline
+from scrapers.teryt import Teryt
 
 
 class Extract(Pipeline):
     people: PeopleEnriched
     companies: CompaniesKRS
+    teryt: Teryt
+    hardcoded_people: PeopleRejestrIOHardcoded
     format = "csv"
 
     @cached_property
@@ -80,7 +84,20 @@ class Extract(Pipeline):
 
             df = df[df["employment"].apply(works_in_relevant)]
 
-        df = filter_local_good(df, self.region)
+        companies_df = self.companies.read_or_process(ctx)
+        self.teryt.read_or_process(ctx)
+
+        interesting_people_rejestr_ids = set(
+            self.hardcoded_people.read_or_process(ctx)["id"].tolist()
+        )
+
+        df = filter_local_good(
+            df,
+            self.region,
+            companies_df,
+            self.teryt,
+            interesting_people=interesting_people_rejestr_ids,
+        )
 
         print(f"Found {len(df)} people")
         print("\n".join(df.columns))
