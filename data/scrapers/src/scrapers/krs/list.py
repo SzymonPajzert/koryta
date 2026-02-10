@@ -154,6 +154,10 @@ class CompaniesKRS(Pipeline):
                     c = self.add_company(item)
 
                     # Add it to the parent of the company
+                    # TODO here we should also add the company,
+                    # since the non aktualnosc_ urls are rare
+                    # Also, we should make sure we're taking in the data from the person queries now
+                    # This is connected to the fact, that we don't have the names for some of the companies.
                     parent = KRS.from_blob_name(blob_name)
                     conn_type = QueryRelation.from_rejestrio(
                         item["krs_powiazania_kwerendowane"][0]
