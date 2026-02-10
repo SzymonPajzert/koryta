@@ -1,7 +1,0 @@
-- Brakuje wyborów z 2006
-- Ale ciekawa osoba, ma powiązania z wieloma partiami
--
-- https://radiolodz.pl/senator-krzysztof-kwiatkowski-zarejestrowal-swoj-komitet-wyborczy,280666/
-- https://lodz.wyborcza.pl/lodz/7,35136,30375411,nowy-inspektor-zaczal-od-zwolnien-w-tle-konflikt-lodzkiego.html
-- https://rejestr.io/osoby/3278494/krystian-kusmierski
-- https://wybory2006.pkw.gov.pl/kbw/kandydaciKomitetOkregd08e.html?okreg=100000-RDA/2&komitet=2c9f9e8e0db7362e010dc568368014f8

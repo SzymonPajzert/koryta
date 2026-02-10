@@ -1,4 +1,0 @@
-- Ciekawy koleś, pracuje w całej Polsce w różnych miejscach
-- TODO Sprawdź jak ludzie przeskakują między różnymi miejscami
--
--

@@ -1,6 +1,0 @@
-- On the server we calculate multiple things
-	- [[api/graph]] - nodes and edges
-	- TODO Calculate [[cuj/suggest changes to website nodes]] for each user
-		- Merge nodes with node -> uniqueNode
-		- Override edges
-		- Don't recalculate [[api/graphLayout]]
