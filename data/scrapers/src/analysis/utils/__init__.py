@@ -153,10 +153,16 @@ def drop_duplicates(df, *cols):
 
 
 def filter_local_good(
-    matched_all, filter_region: str | None, companies_df=None, teryt: Teryt | None = None
+    matched_all,
+    filter_region: str | None,
+    companies_df=None,
+    teryt: Teryt | None = None,
+    interesting_people: set[str] | None = None,
 ):
     """
     :param: filter_region - region in TERYT 10 code, to filter to
+    :param: interesting_people - set of RejestrIOKey ids that
+            should be included regardless of other criteria
     """
 
     krs_map = {}
@@ -229,7 +235,20 @@ def filter_local_good(
     has_wiki = ~matched_all["wiki_name"].isna()
     accurate = high_probability | has_wiki
 
-    local_good = matched_all[interesting & local & accurate]
+    interesting_person = False
+    if interesting_people is not None:
+
+        def check_interesting_person(ids_list):
+            if ids_list is None:
+                return False
+            if isinstance(ids_list, str):
+                return ids_list in interesting_people
+            # optimized intersection check
+            return not interesting_people.isdisjoint(ids_list)
+
+        interesting_person = matched_all["rejestrio_id"].apply(check_interesting_person)
+
+    local_good = matched_all[(interesting | interesting_person) & local & accurate]
 
     # Filter out duplicates
     local_good = drop_duplicates(local_good, "krs_name", "pkw_name", "wiki_name")
