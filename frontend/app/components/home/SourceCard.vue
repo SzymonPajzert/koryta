@@ -10,11 +10,20 @@
       <div
         class="text-h6 font-weight-bold mb-1 w-100 text-truncate text-center"
       >
+        <v-avatar
+          :image="`https://www.google.com/s2/favicons?domain=${source.domain}&sz=128`"
+          size="small"
+        />
         {{ source.domain }}
       </div>
-      <v-chip size="small" color="primary" variant="flat">
-        {{ source.count }} artykułów
-      </v-chip>
+      <div>
+        <v-chip size="small" color="primary" variant="flat">
+          {{ source.peopleCount }} osób
+        </v-chip>
+        <v-chip size="small" color="primary" variant="flat">
+          {{ source.articleCount }} artykułów
+        </v-chip>
+      </div>
     </div>
   </v-card>
 </template>

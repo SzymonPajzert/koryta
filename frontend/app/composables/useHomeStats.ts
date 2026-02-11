@@ -3,7 +3,8 @@ import type { Article } from "~~/shared/model";
 
 export type SourceStat = {
   domain: string;
-  count: number;
+  articleCount: number;
+  peopleCount: number;
   url: string | undefined;
 };
 
@@ -25,9 +26,10 @@ export const useHomeStats = () => {
     // Convert to array and sort
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1]) // Sort desc
-      .map(([domain, count]) => ({
+      .map(([domain, articleCount]) => ({
         domain,
-        count,
+        articleCount,
+        peopleCount: 0, // Placeholder, can be calculated similarly if needed
         url: domainMap[domain],
       }));
   });
