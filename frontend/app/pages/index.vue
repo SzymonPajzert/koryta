@@ -1,7 +1,7 @@
 <template>
   <v-row>
     <HomeIntro />
-    <v-col cols="12" sm="3" class="text-center">
+    <v-col cols="12" sm="4" class="text-center">
       <a
         href="https://zrzutka.pl/rd7ssx/award/g3z29z/przypinka-z-podziekowaniami"
         target="_blank"
@@ -9,11 +9,11 @@
         <v-img position="center" height="300" src="@/assets/logo.png" />
       </a>
     </v-col>
-    <v-col cols="12" sm="9" class="text-center align-self-center">
+    <v-col cols="12" sm="8" class="text-center align-self-center">
       <HomeHeading title="Witaj na koryta.pl" />
     </v-col>
     <v-col cols="12" class="mt-4">
-      <HomeSourceCards :sources="sourceStats" />
+      <HomeSourceCards />
     </v-col>
     <v-col cols="12" md="6">
       <v-card class="py-4" color="surface-variant" variant="tonal" rounded="lg">
