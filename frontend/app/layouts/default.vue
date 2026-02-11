@@ -1,5 +1,4 @@
 <template>
-  <DialogMulti />
   <v-app-bar>
     <v-img
       class="mx-2"
