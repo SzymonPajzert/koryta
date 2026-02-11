@@ -1,26 +1,32 @@
 <template>
   <v-row>
+    <HomeHero />
     <HomeIntro />
-    <v-col cols="12" sm="4" class="text-center">
-      <a
-        href="https://zrzutka.pl/rd7ssx/award/g3z29z/przypinka-z-podziekowaniami"
-        target="_blank"
-      >
-        <v-img position="center" height="300" src="@/assets/logo.png" />
-      </a>
-    </v-col>
-    <v-col cols="12" sm="8" class="text-center align-self-center">
-      <HomeHeading title="Witaj na koryta.pl" />
-    </v-col>
     <v-col cols="12" class="mt-4">
+      <HomeHeading
+        id="najwiekszy"
+        class="scroll-topic"
+        title="Największy"
+        center
+      />
       <HomeSourceCards />
     </v-col>
     <v-col cols="12" md="6">
-      <HomeHeading id="ogolnopolski" title="Ogólnopolski" center />
+      <HomeHeading
+        id="ogolnopolski"
+        class="scroll-topic"
+        title="Ogólnopolski"
+        center
+      />
       <ChartPolandMap />
     </v-col>
     <v-col cols="12" md="6">
-      <HomeHeading id="bezpartyjny" title="Bezpartyjny" center />
+      <HomeHeading
+        id="bezpartyjny"
+        class="scroll-topic"
+        title="Bezpartyjny"
+        center
+      />
       <v-card class="py-4" color="surface-variant" variant="tonal" rounded="lg">
         <v-card-title>
           <h2 class="text-h5 font-weight-bold">
@@ -37,7 +43,12 @@
     </v-col>
 
     <v-col cols="12">
-      <HomeHeading id="agregator" title="Agregator koryciarstwa" center />
+      <HomeHeading
+        id="agregator"
+        class="scroll-topic"
+        title="Agregator koryciarstwa"
+        center
+      />
     </v-col>
     <v-col cols="12" sm="7">
       <omni-search-fake />
@@ -102,3 +113,16 @@ import { useFeminatyw } from "@/composables/feminatyw";
 const { entities: people } = useEntity("person");
 const { koryciarz } = useFeminatyw();
 </script>
+
+<style scoped>
+.scroll-topic {
+  scroll-margin-top: 100px; /* Adjust this value based on header height */
+  /* For mobile you might want less, or use a media query */
+}
+
+@media (max-width: 600px) {
+  .scroll-topic {
+    scroll-margin-top: 80px;
+  }
+}
+</style>
