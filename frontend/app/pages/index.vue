@@ -16,10 +16,15 @@
       <HomeSourceCards />
     </v-col>
     <v-col cols="12" md="6">
+      <HomeHeading id="ogolnopolski" title="Ogólnopolski" center />
+      <ChartPolandMap />
+    </v-col>
+    <v-col cols="12" md="6">
+      <HomeHeading id="bezpartyjny" title="Bezpartyjny" center />
       <v-card class="py-4" color="surface-variant" variant="tonal" rounded="lg">
         <v-card-title>
           <h2 class="text-h5 font-weight-bold">
-            Lista wszystkich {{ Object.values(people).length }}
+            Łącznie {{ Object.values(people).length }}
             {{ koryciarz.plural.genitive }}
           </h2>
         </v-card-title>
@@ -32,7 +37,7 @@
     </v-col>
 
     <v-col cols="12">
-      <HomeHeading title="Agregator koryciarstwa" />
+      <HomeHeading id="agregator" title="Agregator koryciarstwa" center />
     </v-col>
     <v-col cols="12" sm="7">
       <omni-search-fake />

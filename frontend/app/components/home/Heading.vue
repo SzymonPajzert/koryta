@@ -1,5 +1,5 @@
 <template>
-  <div height="100%">
+  <div height="100%" :class="{ 'text-center': center }">
     <h1 class="text-title-1 font-weight-bold mb-2">
       {{ title }}
     </h1>
@@ -14,5 +14,6 @@
 defineProps<{
   title: string;
   subtitle?: string;
+  center?: boolean;
 }>();
 </script>
