@@ -9,7 +9,9 @@
     >
       {{ nodeName }}
     </v-chip>
-    <div class="text-caption text-medium-emphasis">Źródło</div>
+    <div class="text-caption text-medium-emphasis">
+      {{ label || "Źródło" }}
+    </div>
   </div>
 
   <!-- Render Picker we need to pick it -->
@@ -22,7 +24,9 @@
       hide-details
       v-bind="$attrs"
     />
-    <div class="text-caption text-medium-emphasis mt-1">Źródło</div>
+    <div class="text-caption text-medium-emphasis mt-1">
+      {{ label || "Źródło" }}
+    </div>
   </div>
 </template>
 
@@ -32,6 +36,7 @@ import type { NodeType, Link } from "~~/shared/model";
 defineProps<{
   nodeName?: string;
   nodeType: NodeType;
+  label?: string;
 }>();
 
 const pickedNode = defineModel<Link<NodeType> | undefined>({

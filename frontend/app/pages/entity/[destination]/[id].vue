@@ -164,6 +164,7 @@
         :node-type="type"
         :node-name="entity?.name || ''"
         :edge-type-ext="editedEdge.edgeTypeExt"
+        :initial-direction="editedEdge.direction"
         :edited-edge="undefined"
         @update="onEdgeUpdate"
       />

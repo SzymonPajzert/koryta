@@ -19,6 +19,8 @@ export type edgeTypeOption = {
   label: string;
   sourceType: NodeType;
   targetType: NodeType;
+  sourceLabel?: string;
+  targetLabel?: string;
   realType: EdgeType;
   allowedDirections?: ("outgoing" | "incoming")[];
   buttons?: Partial<Record<"outgoing" | "incoming", ButtonConfig>>;
@@ -30,6 +32,8 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     label: "Właściciel",
     sourceType: "place",
     targetType: "place",
+    sourceLabel: "Właściciel",
+    targetLabel: "Podmiot zależny",
     realType: "owns",
     allowedDirections: ["incoming"],
     buttons: {
@@ -44,6 +48,8 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     label: "Właściciel",
     sourceType: "place",
     targetType: "place",
+    sourceLabel: "Właściciel",
+    targetLabel: "Podmiot zależny",
     realType: "owns",
     allowedDirections: ["outgoing"],
     buttons: {
@@ -58,6 +64,8 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     label: "Region właściciel",
     sourceType: "region",
     targetType: "place",
+    sourceLabel: "Region",
+    targetLabel: "Jednostka podległa",
     realType: "owns",
     buttons: {
       incoming: {
@@ -71,6 +79,8 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     label: "Powiązanie z",
     sourceType: "person",
     targetType: "person",
+    sourceLabel: "Osoba 1",
+    targetLabel: "Osoba 2",
     realType: "connection",
     buttons: {
       outgoing: {
@@ -84,6 +94,8 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     label: "Wspomina osobę",
     sourceType: "article",
     targetType: "person",
+    sourceLabel: "Artykuł",
+    targetLabel: "Wspomniana osoba",
     realType: "mentions",
     buttons: {
       incoming: {
@@ -101,6 +113,8 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     label: "Wspomina firmę/urząd",
     sourceType: "article",
     targetType: "place",
+    sourceLabel: "Artykuł",
+    targetLabel: "Wspomniana firma",
     realType: "mentions",
     buttons: {
       incoming: {
@@ -118,6 +132,8 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     label: "Zatrudniony/a w",
     sourceType: "person",
     targetType: "place",
+    sourceLabel: "Pracownik",
+    targetLabel: "Pracodawca",
     realType: "employed",
     buttons: {
       outgoing: {

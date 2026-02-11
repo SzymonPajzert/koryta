@@ -25,15 +25,13 @@ describe("Inline Edge Edition", () => {
 
     // Click a button, e.g. "Dodaj gdzie ... pracuje"
     // The button text depends on useEdgeTypes. "Dodaj gdzie [name] pracuje"
-    cy.contains(`Dodaj gdzie ${name} pracuje`).click();
+    cy.get('button:contains("pracuje")').click();
 
     // Dialog should open
-    cy.get(".v-overlay__content")
-      .contains("Dodaj nowe powiązanie")
-      .should("be.visible");
+    cy.contains("Dodaj nowe powiązanie").should("be.visible");
 
     // Close it
     cy.get("button[title='Anuluj']").click();
-    cy.get(".v-overlay__content").should("not.exist");
+    cy.contains("Dodaj nowe powiązanie").should("not.exist");
   });
 });

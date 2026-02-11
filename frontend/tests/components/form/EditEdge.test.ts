@@ -45,7 +45,7 @@ vi.mock("~/composables/auth", () => ({
 }));
 
 const EditEdgeWrapper = defineComponent({
-  props: ["edgeTypeExt", "editedEdge"],
+  props: ["edgeTypeExt", "editedEdge", "initialDirection"],
   render() {
     return h(Suspense, null, {
       default: () =>
@@ -56,6 +56,7 @@ const EditEdgeWrapper = defineComponent({
           authHeaders: {},
           edgeTypeExt: this.edgeTypeExt || "connection",
           editedEdge: this.editedEdge,
+          initialDirection: this.initialDirection,
         }),
       fallback: () => h("div", "fallback"),
     });
@@ -172,5 +173,61 @@ describe("EditEdge.vue", () => {
     await cancelBtn!.trigger("click");
 
     expect(wrapper.findComponent(EditEdge).emitted("update")).toBeTruthy();
+  });
+
+  it("passes initialDirection to useEdgeEdit", async () => {
+    mount(EditEdgeWrapper, {
+      props: {
+        edgeTypeExt: "employed",
+        initialDirection: "incoming", // prop on the wrapper (if we update wrapper props)
+      },
+      attrs: {
+        // Pass to component directly if wrapper doesn't expose it
+        initialDirection: "incoming",
+      },
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    expect(useEdgeEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialDirection: "incoming",
+        edgeType: "employed",
+      }),
+    );
+  });
+
+  it("passes correct labels to FormEdgeSourceTarget based on edgeType", async () => {
+    // mock useEdgeEdit to return 'employed' to test specific labels
+    // However, the global mock returns 'connection'.
+    // 'connection' options: sourceLabel='Osoba 1', targetLabel='Osoba 2'
+
+    const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "connection" },
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const pickers = wrapper.findAllComponents({ name: "FormEdgeSourceTarget" });
+    expect(pickers.length).toBe(2);
+
+    expect(pickers[0].props("label")).toBe("Osoba 1");
+    expect(pickers[1].props("label")).toBe("Osoba 2");
   });
 });

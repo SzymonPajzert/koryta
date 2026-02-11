@@ -22,6 +22,7 @@ interface UseEdgeEditOptions {
   fixedNode?: NodeRef; // The node we are "on" (context)
   referenceNode?: NodeRef; // Optional node reference for article mode
   edgeType: edgeTypeExt;
+  initialDirection?: "incoming" | "outgoing";
   editedEdge?: string;
   onUpdate: () => Promise<void>;
 }
@@ -30,12 +31,17 @@ export function useEdgeEdit({
   fixedNode,
   referenceNode: _referenceNode,
   edgeType = "connection",
+  initialDirection,
   editedEdge,
   onUpdate = async () => {},
 }: Partial<UseEdgeEditOptions>) {
   const { save } = useEntityMutation();
 
-  const newEdge = ref<InternalEdge>(emptyEdge());
+  const newEdge = ref<InternalEdge>(
+    initialDirection
+      ? { ...emptyEdge(), direction: initialDirection }
+      : emptyEdge(),
+  );
   const internalEdgeType = ref(edgeType);
   const currentOption = computed(() =>
     internalEdgeType.value

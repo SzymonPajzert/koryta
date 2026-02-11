@@ -20,6 +20,7 @@
           v-model="layout.source.ref.value"
           :node-name="layout.source.id.value ? props.nodeName : undefined"
           :node-type="layout.source.type.value"
+          :label="sourceLabel"
           data-testid="entity-picker-source"
         />
       </v-col>
@@ -51,6 +52,7 @@
           v-model="layout.target.ref.value"
           :node-name="layout.target.id.value ? props.nodeName : undefined"
           :node-type="layout.target.type.value"
+          :label="targetLabel"
           data-testid="entity-picker-target"
         />
       </v-col>
@@ -144,6 +146,10 @@
 import { ref, computed } from "vue";
 import EntityPicker from "~/components/form/EntityPicker.vue";
 import type { NodeType, Link } from "~~/shared/model";
+import {
+  type edgeTypeExt as EdgeTypeExt,
+  edgeTypeOptions,
+} from "~/composables/useEdgeTypes";
 
 definePageMeta({
   middleware: "auth",
@@ -154,7 +160,8 @@ const props = defineProps<{
   nodeType: NodeType;
   nodeName: string;
   editedEdge?: string;
-  edgeTypeExt: edgeTypeExt;
+  edgeTypeExt: EdgeTypeExt;
+  initialDirection?: "incoming" | "outgoing";
 }>();
 
 // Used to notify that the component has finished.
@@ -185,8 +192,16 @@ const {
   },
   edgeType: props.edgeTypeExt,
   referenceNode,
+  initialDirection: props.initialDirection,
   onUpdate: async () => emit("update"),
 });
+
+const currentOption = computed(() => {
+  return edgeType.value ? edgeTypeOptions[edgeType.value] : undefined;
+});
+
+const sourceLabel = computed(() => currentOption.value?.sourceLabel);
+const targetLabel = computed(() => currentOption.value?.targetLabel);
 
 defineExpose({
   openEditEdge,
