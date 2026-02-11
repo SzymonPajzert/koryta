@@ -17,7 +17,7 @@ describe("home", () => {
   });
 
   it("shows list when clicking the first card - chart", () => {
-    cy.contains(".v-card", "Lista wszystkich").click();
+    cy.contains(".v-card", "Łącznie").click();
     cy.url().should("include", "/lista");
   });
 
@@ -30,7 +30,7 @@ describe("home", () => {
       );
     });
 
-    cy.contains(`Lista wszystkich ${expectedPeople}`);
+    cy.contains(`Łącznie ${expectedPeople}`);
   });
 
   it("shows pomoc when clicking the card with 'Dodaj osoby'", () => {

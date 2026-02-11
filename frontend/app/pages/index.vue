@@ -1,7 +1,9 @@
 <template>
   <v-row>
-    <HomeHero />
-    <HomeIntro />
+    <v-col cols="12">
+      <HomeHero />
+    </v-col>
+    <HomeIntro id="intro" />
     <v-col cols="12" class="mt-4">
       <HomeHeading
         id="najwiekszy"
