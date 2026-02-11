@@ -1,7 +1,8 @@
 <template>
   <v-container
     fluid
-    class="hero-section d-flex align-center justify-center flex-column text-center py-16 position-relative"
+    class="hero-section d-flex align-center justify-center flex-column text-center py-16 position-relative overflow-hidden w-100"
+    style="max-width: 100%"
   >
     <v-row justify="center" align="center" class="w-100 h-100">
       <v-col cols="12" md="6">
@@ -22,7 +23,7 @@
             to="/pomoc"
           />
 
-          <span>or</span>
+          <span>lub</span>
 
           <v-btn
             append-icon="mdi-chevron-right"
@@ -31,12 +32,14 @@
             flat
             rounded="lg"
             slim
-            text="Zobacz jak to działa"
+            text="Zobacz jak działa"
           />
         </div>
       </v-col>
       <v-col cols="12" md="6">
-        <h1 class="text-h3 text-md-h2 font-weight-bold mb-6 lh-title">
+        <h1
+          class="text-h5 text-sm-h3 text-md-h2 font-weight-bold mb-6 lh-title"
+        >
           <span class="text-high-emphasis">koryta.pl to </span>
           <a
             href="#najwiekszy"
@@ -76,7 +79,7 @@
 
 <script setup lang="ts">
 const scrollToContent = () => {
-  const el = document.getElementById("najwiekszy");
+  const el = document.getElementById("intro");
   if (el) {
     el.scrollIntoView({ behavior: "smooth" });
   }
