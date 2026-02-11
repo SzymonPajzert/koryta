@@ -142,7 +142,27 @@
               Brak istniejących powiązań.
             </div>
 
-            <FormEditEdge />
+            <div v-if="!activeEdgeTypeExt && !isEditingEdge" class="mt-4">
+              <FormEditEdgePicker
+                :node-id="node_id!"
+                :node-type="current.type || 'person'"
+                :node-name="current.name"
+                @pick="startNewEdge"
+              />
+            </div>
+
+            <FormEditEdge
+              v-if="activeEdgeTypeExt || isEditingEdge"
+              ref="editEdgeForm"
+              :key="editedEdgeId || activeEdgeTypeExt"
+              :node-id="node_id!"
+              :node-type="current.type || 'person'"
+              :node-name="current.name || ''"
+              :auth-headers="authHeaders"
+              :edge-type-ext="activeEdgeTypeExt!"
+              :edited-edge="isEditingEdge ? editedEdgeId : undefined"
+              @update="onEdgeUpdate"
+            />
           </template>
         </v-card>
       </v-window-item>
@@ -166,8 +186,11 @@
 </template>
 
 <script setup lang="ts">
+import { ref, nextTick } from "vue";
 import { useNodeEdit } from "~/composables/useNodeEdit";
-import type { NodeType } from "~~/shared/model";
+import FormEditEdge from "~/components/form/EditEdge.vue";
+import FormEditEdgePicker from "~/components/form/EditEdgePicker.vue";
+import type { edgeTypeExt } from "~/composables/useEdgeTypes";
 
 definePageMeta({
   middleware: "auth",
@@ -185,19 +208,40 @@ const {
   idToken,
   saveNode,
   fetchRevisions,
-} = await useNodeEdit();
-
-const { node_id, refreshEdges, authHeaders, stateKey } = await useNodeEdit();
-const { openEditEdge } = useEdgeEdit({
-  nodeId: node_id,
-  nodeType: computed(() => {
-    if (route.query.type) return route.query.type as NodeType;
-    return current.value.type || "person";
-  }),
+  node_id,
+  refreshEdges,
   authHeaders,
-  onUpdate: refreshEdges,
-  stateKey,
-});
+} = await useNodeEdit();
+const editEdgeForm = ref<InstanceType<typeof FormEditEdge> | null>(null);
+
+const activeEdgeTypeExt = ref<edgeTypeExt | undefined>(undefined);
+const isEditingEdge = ref(false);
+const editedEdgeId = ref<string | undefined>(undefined);
+
+function startNewEdge(type: string) {
+  activeEdgeTypeExt.value = type as edgeTypeExt;
+  isEditingEdge.value = false;
+  editedEdgeId.value = undefined;
+}
+
+function openEditEdge(edge: any) {
+  isEditingEdge.value = true;
+  editedEdgeId.value = edge.id;
+  // We need to map the edge type to edgeTypeExt
+  // For now let's assume it's direct or we can infer it
+  // This might need more logic if types don't match 1:1
+  activeEdgeTypeExt.value = edge.type as edgeTypeExt;
+  nextTick(() => {
+    editEdgeForm.value?.openEditEdge(edge);
+  });
+}
+
+function onEdgeUpdate() {
+  activeEdgeTypeExt.value = undefined;
+  isEditingEdge.value = false;
+  editedEdgeId.value = undefined;
+  refreshEdges();
+}
 
 if (route.query.type === "region" || current.value.type === "region") {
   // Region is read-only

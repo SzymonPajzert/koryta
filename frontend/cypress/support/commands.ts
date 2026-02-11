@@ -119,6 +119,29 @@ Cypress.Commands.add(
           .type(email);
         cy.get('input[type="password"]').should("be.visible").type(password);
         cy.get('button[type="submit"]').should("be.visible").click();
+
+        // Check if we are still on login page
+        cy.wait(1000);
+        cy.location("pathname").then((path) => {
+          if (path.includes("/login")) {
+            cy.log(
+              "Still on login page, assuming user missing. Registering...",
+            );
+            cy.get("body").then(($b) => {
+              const registerBtn = $b.find(
+                'a:contains("Zarejestruj"), button:contains("Zarejestruj"), a:contains("Stwórz konto")',
+              );
+              if (registerBtn.length) {
+                cy.wrap(registerBtn).click();
+                cy.get('input[type="email"]').clear().type(email);
+                cy.get('input[type="password"]').clear().type(password);
+                cy.get(
+                  'button:contains("Stwórz konto"), button:contains("Zarejestruj")',
+                ).click();
+              }
+            });
+          }
+        });
       }
 
       // Final verification: we are not on the login page anymore

@@ -156,22 +156,42 @@
         </v-window-item>
       </v-window>
     </v-card>
+
+    <v-card v-if="editedEdge" class="pa-4">
+      <FormEditEdge
+        :key="`new-${editedEdge.edgeType}`"
+        :node-id="node"
+        :node-type="type"
+        :node-name="entity?.name || ''"
+        :edge-type-ext="editedEdge.edgeTypeExt"
+        :initial-direction="editedEdge.direction"
+        :edited-edge="undefined"
+        @update="onEdgeUpdate"
+      />
+    </v-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useEdges } from "~/composables/edges";
 import { useAuthState } from "~/composables/auth";
-import type { Person, Company, Article, Region } from "~~/shared/model";
+import type {
+  Person,
+  Company,
+  Article,
+  Region,
+  NodeType,
+} from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
-import { useEdgeButtons, type NewEdgeButton } from "~/composables/edgeConfig";
+import { useEdgeButtons, type NewEdgeButton } from "~/composables/useEdgeTypes";
 
 const route = useRoute<"/entity/[destination]/[id]">();
 
 const node = route.params.id as string;
-const type = route.params.destination as string;
+const type = route.params.destination as NodeType;
 const tab = ref((route.query.tab as string) || "details");
 
+// TODO remove this, discussion should be below
 watch(tab, (newTab) => {
   const query = { ...route.query };
   if (newTab === "discussion") {
@@ -209,31 +229,29 @@ const { data: response } = await authFetch<{
 }>(`/api/nodes/entry/${node}`);
 const entity = computed(() => response.value?.node);
 
-const { sources, targets, referencedIn } = await useEdges(node);
+// Calculate edges and relationships
+const { sources, targets, referencedIn, refresh } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
-
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");
 });
-
 const subsidiaries = computed(() => {
   return targets.value.filter((e) => e.type === "owns");
 });
 
+// Edge modification buttons
 const quickAddButtons = computed(() => {
   if (!entity.value) return [];
   // Filter buttons relevant for this node type
   return useEdgeButtons(entity.value.name).filter((b) => b.nodeType === type);
 });
 
+const editedEdge = ref<NewEdgeButton | undefined>(undefined);
 function quickAddEdge(btn: NewEdgeButton) {
-  router.push({
-    path: `/edit/node/${node}`,
-    query: {
-      type,
-      edgeType: btn.edgeType,
-      direction: btn.direction,
-    },
-  });
+  editedEdge.value = btn;
+}
+function onEdgeUpdate() {
+  editedEdge.value = undefined;
+  refresh();
 }
 </script>

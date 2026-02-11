@@ -54,7 +54,7 @@ const search = ref("");
 
 const { authFetch } = useAuthState();
 
-const { data: response, refresh } = await authFetch<{
+const { data: response, refresh } = authFetch<{
   entities: Record<string, Person | Company | Article>;
 }>(`/api/nodes/${props.entity}`, {
   lazy: true,

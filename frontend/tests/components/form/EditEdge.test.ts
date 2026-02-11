@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import EditEdge from "../../../app/components/form/EditEdge.vue";
 import { defineComponent, h, Suspense, ref } from "vue";
@@ -11,187 +11,223 @@ const vuetify = createVuetify({
   directives,
 });
 
-// Mock useNodeEdit
+// Mocks
 const mockProcessEdge = vi.fn();
-const mockCancelEditEdge = vi.fn();
+const mockOpenEditEdge = vi.fn();
 const mockNewEdge = ref({
   direction: "outgoing",
   type: "connection",
   id: undefined,
 });
-const mockEdgeType = ref("connection");
-const mockAvailableEdgeTypes = ref([
-  { value: "connection", label: "Connection" },
-  { value: "owns", label: "Owner" },
-]);
-const mockPickerTarget = ref(null);
-const mockIsEditingEdge = ref(false);
+const mockLayout = {
+  source: { id: ref("node-1"), type: ref("person"), ref: ref(undefined) },
+  target: { id: ref(undefined), type: ref("person"), ref: ref(undefined) },
+};
+const mockReadyToSubmit = ref(false);
 
-const mockCurrent = ref({ name: "Current Node", type: "person" });
-
-vi.mock("~/composables/useNodeEdit", () => ({
-  useNodeEdit: async () => ({
-    current: mockCurrent,
+vi.mock("~/composables/useEdgeEdit", () => ({
+  useEdgeEdit: vi.fn(() => ({
     newEdge: mockNewEdge,
-    pickerTarget: mockPickerTarget,
     processEdge: mockProcessEdge,
-    cancelEditEdge: mockCancelEditEdge,
-    isEditingEdge: mockIsEditingEdge,
-    edgeTargetType: ref("person"),
-    edgeType: mockEdgeType,
-    availableEdgeTypes: mockAvailableEdgeTypes,
-    node_id: ref("test-node-id"),
-    authHeaders: ref({}),
-    refreshEdges: vi.fn(),
-    stateKey: ref("test-key"),
-  }),
+    openEditEdge: mockOpenEditEdge,
+    edgeType: ref("connection"),
+    edgeLabel: ref("Powiązanie"),
+    layout: mockLayout,
+    readyToSubmit: mockReadyToSubmit,
+  })),
 }));
 
 vi.mock("~/composables/auth", () => ({
   useAuthState: vi.fn(() => ({
-    user: ref(null),
-    authFetch: vi.fn(() => ({ data: ref({}), refresh: vi.fn() })),
+    user: ref({}),
+    authHeaders: ref({ Authorization: "Bearer test" }),
   })),
 }));
 
-vi.stubGlobal("definePageMeta", vi.fn());
-
 const EditEdgeWrapper = defineComponent({
+  props: ["edgeTypeExt", "editedEdge", "initialDirection"],
   render() {
     return h(Suspense, null, {
-      default: () => h(EditEdge),
+      default: () =>
+        h(EditEdge, {
+          nodeId: "node-1",
+          nodeType: "person",
+          nodeName: "Test Node",
+          authHeaders: {},
+          edgeTypeExt: this.edgeTypeExt || "connection",
+          editedEdge: this.editedEdge,
+          initialDirection: this.initialDirection,
+        }),
       fallback: () => h("div", "fallback"),
     });
   },
 });
 
-vi.stubGlobal("useEdgeEdit", () => ({
-  newEdge: mockNewEdge,
-  processEdge: mockProcessEdge,
-  cancelEditEdge: mockCancelEditEdge,
-  isEditingEdge: mockIsEditingEdge,
-  edgeTargetType: ref("person"),
-  edgeSourceType: ref("article"),
-  edgeType: mockEdgeType,
-  availableEdgeTypes: mockAvailableEdgeTypes,
-  pickerTarget: mockPickerTarget,
-  pickerSource: ref(null),
-}));
-
 describe("EditEdge.vue", () => {
-  it("renders Person buttons initially and form after click", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadyToSubmit.value = false;
+  });
+
+  it("renders the form for a new edge", async () => {
     const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "connection" },
       global: {
         plugins: [vuetify],
         stubs: {
-          EntityPicker: {
-            template: '<div class="entity-picker-stub"></div>',
-            props: ["modelValue", "entity", "density", "hide-details", "label"],
-          },
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
         },
       },
     });
 
     await flushPromises();
-    // Expect buttons not form
-    expect(wrapper.text()).toContain("Dodaj nowe powiązanie");
-    expect(wrapper.find("form").exists()).toBe(false);
-
-    const buttons = wrapper.findAll(".v-btn");
-    // Verify Person buttons
-    expect(
-      buttons.some((b) => b.text().includes("wspominający Current Node")),
-    ).toBe(true);
-    expect(buttons.some((b) => b.text().includes("pracuje"))).toBe(true);
-    expect(buttons.some((b) => b.text().includes("zna"))).toBe(true);
-
-    const addAcquaintanceBtn = buttons.find((b) => b.text().includes("zna"));
-    await addAcquaintanceBtn?.trigger("click");
-    await wrapper.vm.$nextTick();
 
     expect(wrapper.find("form").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Dodaj powiązanie");
+    expect(wrapper.find('[data-testid="submit-edge-button"]').exists()).toBe(
+      true,
+    );
   });
 
-  it("renders Place buttons when node type is place", async () => {
-    mockCurrent.value.type = "place";
-    mockIsEditingEdge.value = false;
-
+  it("renders the form for editing an existing edge", async () => {
     const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "connection", editedEdge: "edge-123" },
       global: {
         plugins: [vuetify],
         stubs: {
-          EntityPicker: {
-            template: '<div class="entity-picker-stub"></div>',
-            props: ["modelValue", "entity", "density", "hide-details", "label"],
-          },
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
         },
       },
     });
 
     await flushPromises();
 
-    const buttons = wrapper.findAll(".v-btn");
-    expect(buttons.some((b) => b.text().includes("firmę córkę"))).toBe(true);
-    expect(buttons.some((b) => b.text().includes("firmę matkę"))).toBe(true);
+    expect(wrapper.text()).toContain("Zapisz zmiany");
     expect(
-      buttons.some((b) => b.text().includes("wspominający Current Node")),
+      wrapper.findComponent({ name: "DialogProposeRemoval" }).exists(),
     ).toBe(true);
   });
 
-  it("renders Article buttons when node type is article", async () => {
-    mockCurrent.value.type = "article";
-    mockIsEditingEdge.value = false;
-
+  it("disables submit button when not ready", async () => {
+    mockReadyToSubmit.value = false;
     const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "connection" },
       global: {
         plugins: [vuetify],
         stubs: {
-          EntityPicker: {
-            template: '<div class="entity-picker-stub"></div>',
-            props: ["modelValue", "entity", "density", "hide-details", "label"],
-          },
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
+        },
+      },
+    });
+
+    await flushPromises();
+    const btn = wrapper.find('[data-testid="submit-edge-button"]');
+    expect(btn.attributes("disabled")).toBeDefined();
+  });
+
+  it("enables submit button and calls processEdge on submit", async () => {
+    mockReadyToSubmit.value = true;
+    const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "connection" },
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
+        },
+      },
+    });
+
+    await flushPromises();
+    const btn = wrapper.find('[data-testid="submit-edge-button"]');
+    expect(btn.attributes("disabled")).toBeUndefined();
+
+    await wrapper.find("form").trigger("submit");
+    expect(mockProcessEdge).toHaveBeenCalled();
+  });
+
+  it("emits update on cancel", async () => {
+    const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "connection", editedEdge: "edge-123" },
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
+        },
+      },
+    });
+
+    await flushPromises();
+    const cancelBtn = wrapper
+      .findAll(".v-btn")
+      .find((b) => b.text().includes("Anuluj"));
+    await cancelBtn!.trigger("click");
+
+    expect(wrapper.findComponent(EditEdge).emitted("update")).toBeTruthy();
+  });
+
+  it("passes initialDirection to useEdgeEdit", async () => {
+    mount(EditEdgeWrapper, {
+      props: {
+        edgeTypeExt: "employed",
+        initialDirection: "incoming", // prop on the wrapper (if we update wrapper props)
+      },
+      attrs: {
+        // Pass to component directly if wrapper doesn't expose it
+        initialDirection: "incoming",
+      },
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
         },
       },
     });
 
     await flushPromises();
 
-    const buttons = wrapper.findAll(".v-btn");
-    expect(buttons.some((b) => b.text().includes("Wspomniana osoba"))).toBe(
-      true,
-    );
-    expect(buttons.some((b) => b.text().includes("Wspomniane miejsce"))).toBe(
-      true,
+    expect(useEdgeEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialDirection: "incoming",
+        edgeType: "employed",
+      }),
     );
   });
 
-  it("submits the form", async () => {
+  it("passes correct labels to FormEdgeSourceTarget based on edgeType", async () => {
+    // mock useEdgeEdit to return 'employed' to test specific labels
+    // However, the global mock returns 'connection'.
+    // 'connection' options: sourceLabel='Osoba 1', targetLabel='Osoba 2'
+
     const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "connection" },
       global: {
         plugins: [vuetify],
         stubs: {
-          EntityPicker: {
-            template: '<div class="entity-picker-stub"></div>',
-            props: ["modelValue", "entity", "density", "hide-details", "label"],
-          },
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
         },
       },
     });
+
     await flushPromises();
 
-    // Enter form mode
-    const buttons = wrapper.findAll(".v-btn");
-    await buttons[0].trigger("click");
-    await wrapper.vm.$nextTick();
+    const pickers = wrapper.findAllComponents({ name: "FormEdgeSourceTarget" });
+    expect(pickers.length).toBe(2);
 
-    // Enable button by ensuring pickerTarget is set?
-    // The button has :disabled="!pickerTarget"
-    mockPickerTarget.value = { id: "target1" };
-    await wrapper.vm.$nextTick();
-
-    const form = wrapper.find("form");
-    await form.trigger("submit");
-
-    // expect(mockProcessEdge).toHaveBeenCalled(); TODO
+    expect(pickers[0].props("label")).toBe("Osoba 1");
+    expect(pickers[1].props("label")).toBe("Osoba 2");
   });
 });

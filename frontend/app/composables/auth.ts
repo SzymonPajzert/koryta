@@ -64,19 +64,20 @@ export function useAuthState() {
     return await createUserWithEmailAndPassword(auth, email, pass);
   };
 
+  const authHeaders = computed(() => {
+    const h: Record<string, string> = {};
+    if (idToken.value) {
+      h["Cache-Control"] = "no-cache";
+      h.Pragma = "no-cache";
+      h.Authorization = `Bearer ${idToken.value}`;
+    }
+    return h;
+  });
+
   const authFetch = <T>(
     url: string | (() => string | null),
     options: any = {},
   ) => {
-    const headers = computed(() => {
-      const h: Record<string, string> = {};
-      if (idToken.value) {
-        h["Cache-Control"] = "no-cache";
-        h.Pragma = "no-cache";
-        h.Authorization = `Bearer ${idToken.value}`;
-      }
-      return h;
-    });
     const key = computed(() => {
       return (
         (typeof url === "string" ? url : url()) +
@@ -86,7 +87,7 @@ export function useAuthState() {
     });
     return useFetch<T>(url as any, {
       key,
-      headers,
+      headers: authHeaders,
       watch: [idToken],
       ...options,
     });
@@ -97,6 +98,7 @@ export function useAuthState() {
     isAdmin,
     idToken,
     userConfig,
+    authHeaders,
     logout,
     login,
     register,

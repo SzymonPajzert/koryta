@@ -1,350 +1,211 @@
-import { computed, watch, ref, toValue, type Ref } from "vue";
-import type { NodeType, EdgeType, Edge, Link } from "~~/shared/model";
+import { computed, ref, unref, type Ref } from "vue";
+import type { NodeType, Edge, Link } from "~~/shared/model";
+import { edgeTypeOptions, type edgeTypeExt } from "./useEdgeTypes";
+import { useEntityMutation } from "./useEntityMutation";
 
-interface UseEdgeEditOptions {
-  nodeId: Ref<string | undefined>;
-  nodeType: Ref<NodeType>;
-  authHeaders: Ref<Record<string, string>>;
-  onUpdate?: () => Promise<void>;
-  stateKey?: Ref<string>; // Optional stateKey for shared state
-}
-
-type edgeTypeOption = {
-  value: string;
-  label: string;
-  sourceType: NodeType;
-  targetType: NodeType;
-  realType: EdgeType;
+export type InternalEdge = Partial<Edge> & {
+  direction?: "outgoing" | "incoming";
+  richNode?: {
+    id: string;
+    type: NodeType;
+    name: string;
+  };
 };
 
-const edgeTypeOptions: edgeTypeOption[] = [
-  {
-    value: "owns",
-    label: "Właściciel",
-    sourceType: "place",
-    targetType: "place",
-    realType: "owns",
-  },
-  {
-    value: "owns_region",
-    label: "Region właściciel",
-    sourceType: "region",
-    targetType: "place",
-    realType: "owns",
-  },
-  {
-    value: "connection",
-    label: "Powiązanie z",
-    sourceType: "person",
-    targetType: "person",
-    realType: "connection",
-  },
-  {
-    value: "mentioned_person",
-    label: "Wspomina osobę",
-    sourceType: "article",
-    targetType: "person",
-    realType: "mentions",
-  },
-  {
-    value: "mentioned_company",
-    label: "Wspomina firmę/urząd",
-    sourceType: "article",
-    targetType: "place",
-    realType: "mentions",
-  },
-  {
-    value: "employed",
-    label: "Zatrudniony/a w",
-    sourceType: "person",
-    targetType: "place",
-    realType: "employed",
-  },
-];
+export type NodeRef = {
+  id?: string;
+  type: NodeType;
+  ref: Ref<Link<NodeType> | undefined>;
+};
+
+interface UseEdgeEditOptions {
+  fixedNode?: NodeRef; // The node we are "on" (context)
+  referenceNode?: NodeRef; // Optional node reference for article mode
+  edgeType: edgeTypeExt;
+  initialDirection?: "incoming" | "outgoing";
+  editedEdge?: string;
+  onUpdate: () => Promise<void>;
+}
 
 export function useEdgeEdit({
-  nodeId,
-  nodeType: myType,
-  authHeaders,
-  onUpdate,
-  stateKey = ref("global-edge-edit"),
-}: UseEdgeEditOptions) {
-  // Determine the actual key string once
-  const baseKey = toValue(stateKey);
-  const newEdge = useState(`${baseKey}-newEdge`, emptyEdge);
+  fixedNode,
+  referenceNode: _referenceNode,
+  edgeType = "connection",
+  initialDirection,
+  editedEdge,
+  onUpdate = async () => {},
+}: Partial<UseEdgeEditOptions>) {
+  const { save } = useEntityMutation();
 
-  // TODO it shouldn't be a connection
-  const edgeType = useState<EdgeType>(
-    `${baseKey}-edgeType`,
-    () => "connection",
+  const newEdge = ref<InternalEdge>(
+    initialDirection
+      ? { ...emptyEdge(), direction: initialDirection }
+      : emptyEdge(),
+  );
+  const internalEdgeType = ref(edgeType);
+  const currentOption = computed(() =>
+    internalEdgeType.value
+      ? edgeTypeOptions[internalEdgeType.value]
+      : undefined,
   );
 
-  // Sync edgeType -> newEdge.type
-  watch(edgeType, (t) => {
-    newEdge.value.type = t;
-  });
+  const matches = (position: "source" | "target") => {
+    if (!currentOption.value) return false;
+    const direction = newEdge.value.direction;
+    const expectedPosition = direction === "outgoing" ? "source" : "target";
+    if (position !== expectedPosition) return false;
 
-  const getRealType = (t: string | undefined): EdgeType => {
-    if (!t) return "connection";
-    const option = edgeTypeOptions.find((o) => o.value === t);
-    return option?.realType || (t as EdgeType);
+    const expectedType =
+      position === "source"
+        ? currentOption.value.sourceType
+        : currentOption.value.targetType;
+    return unref(fixedNode)?.type === expectedType;
   };
 
-  const pickerTarget = useState<Link<NodeType> | undefined>(
-    `${baseKey}-pickerTarget`,
-    () => undefined,
-  );
+  const layout = {
+    source: {
+      id: computed(() =>
+        matches("source") ? unref(fixedNode)?.id : undefined,
+      ),
+      type: computed(() => currentOption.value?.sourceType || "person"),
+      ref: ref<Link<NodeType> | undefined>(undefined),
+    },
+    target: {
+      id: computed(() =>
+        matches("target") ? unref(fixedNode)?.id : undefined,
+      ),
+      type: computed(() => currentOption.value?.targetType || "person"),
+      ref: ref<Link<NodeType> | undefined>(undefined),
+    },
+  };
 
-  const pickerSource = useState<Link<NodeType> | undefined>(
-    `${baseKey}-pickerSource`,
-    () => undefined,
-  );
+  const pickedNode = computed({
+    get: () => {
+      if (matches("source")) return layout.target.ref.value;
+      if (matches("target")) return layout.source.ref.value;
+      return undefined;
+    },
+    set: (val) => {
+      if (matches("source")) layout.target.ref.value = val as any;
+      else if (matches("target")) layout.source.ref.value = val as any;
+    },
+  });
 
-  const isEditingEdge = computed(() => !!newEdge.value.id);
+  const sourceId = computed(() => {
+    return layout.source.ref.value?.id ?? layout.source.id.value;
+  });
+  const targetId = computed(() => {
+    return layout.target.ref.value?.id ?? layout.target.id.value;
+  });
 
-  const availableEdgeTypes = computed(() => {
-    // Special handling for "article" mode (context mode)
-    if (myType.value === "article") {
-      let options = edgeTypeOptions;
-      if (pickerSource.value) {
-        options = options.filter(
-          (o) => o.sourceType === pickerSource.value?.type,
-        );
-      }
-      if (pickerTarget.value) {
-        options = options.filter(
-          (o) => o.targetType === pickerTarget.value?.type,
-        );
-      }
-      return options;
+  const readyToSubmit = computed(() => {
+    return !!sourceId.value && !!targetId.value;
+  });
+
+  const edgeLabel = computed(() => currentOption.value?.label || "");
+
+  async function processEdge() {
+    if (!readyToSubmit.value) {
+      return;
     }
 
-    const dir = newEdge.value.direction;
-    return edgeTypeOptions.filter((o) => {
-      if (dir === "outgoing") {
-        const rs = o.sourceType;
-        return rs === myType.value;
+    const payload = {
+      source: sourceId.value,
+      target: targetId.value,
+      type: currentOption.value?.realType,
+      name: newEdge.value.name,
+      content: newEdge.value.content,
+      start_date: newEdge.value.start_date,
+      end_date: newEdge.value.end_date,
+      references: newEdge.value.references,
+    };
+
+    const payloadFull = editedEdge
+      ? {
+          ...payload,
+          id: editedEdge,
+        }
+      : payload;
+
+    await save({
+      isNew: editedEdge ? false : true,
+      createEndpoint: editedEdge ? "" : "/api/edges/create",
+      revisionEndpoint: editedEdge ? "/api/revisions/create" : "",
+      payload: payloadFull,
+      successMessage: editedEdge
+        ? "Zapisano propozycję zmiany!"
+        : "Dodano powiązanie!",
+      onSuccess: async () => {
+        await onUpdate();
+      },
+    });
+  }
+
+  const availableEdgeTypes = computed(() => {
+    const fn = unref(fixedNode);
+    if (!fn) return [];
+    return Object.values(edgeTypeOptions).filter((option) => {
+      const direction = newEdge.value.direction || "outgoing";
+      if (
+        option.allowedDirections &&
+        !option.allowedDirections.includes(direction)
+      ) {
+        return false;
+      }
+      if (direction === "outgoing") {
+        return option.sourceType === fn.type;
       } else {
-        const rt = o.targetType;
-        return rt === myType.value;
+        return option.targetType === fn.type;
       }
     });
   });
 
-  // Handle type selection -> enforce direction if needed
-  watch(edgeType, (t) => {
-    if (!isEditingEdge.value) {
-      const option = edgeTypeOptions.find((o) => o.value === t);
-      if (option) {
-        const canBeSource = option.sourceType === myType.value;
-        const canBeTarget = option.targetType === myType.value;
-
-        if (canBeSource && !canBeTarget) {
-          newEdge.value.direction = "outgoing";
-        } else if (!canBeSource && canBeTarget) {
-          newEdge.value.direction = "incoming";
-        }
+  function openEditEdge(edge: Edge) {
+    const internalEdge = edge as InternalEdge;
+    newEdge.value = { ...internalEdge };
+    const fn = unref(fixedNode);
+    // Try to detect edgeTypeExt
+    if (edge.type === "owns") {
+      // Determine if it's owns_parent, owns_child or owns_region
+      if (internalEdge.richNode?.type === "region") {
+        internalEdgeType.value = "owns_region";
+      } else if (edge.source === fn?.id) {
+        internalEdgeType.value = "owns_child";
+      } else {
+        internalEdgeType.value = "owns_parent";
       }
-    }
-  });
-
-  // Handle direction switch -> validate type
-  watch(
-    () => newEdge.value.direction,
-    (newDir) => {
-      if (!isEditingEdge.value && myType.value !== "article") {
-        pickerTarget.value = undefined;
-
-        // Re-validate current edgeType
-        const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
-        let currentStillValid = false;
-        if (option) {
-          const rs = option.sourceType;
-          const rt = option.targetType;
-          if (newDir === "outgoing") {
-            currentStillValid = rs === myType.value;
-          } else {
-            currentStillValid = rt === myType.value;
-          }
-        }
-
-        if (!currentStillValid) {
-          // Default to the first available type for the new direction
-          const available = availableEdgeTypes.value;
-          if (available[0]) {
-            edgeType.value = available[0].realType;
-          }
-        }
-      }
-    },
-    { deep: true },
-  );
-
-  const edgeSourceType = computed<NodeType>(() => {
-    const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
-    return option?.sourceType || "person";
-  });
-
-  const edgeTargetType = computed<NodeType>(() => {
-    const option = edgeTypeOptions.find((o) => o.value === edgeType.value);
-    if (myType.value === "article") {
-      return option?.targetType || "place";
-    }
-
-    const dir = newEdge.value.direction;
-    if (dir === "incoming") {
-      // I am Target. Picker is Source.
-      return option?.sourceType || "person"; // TODO remove this fallback
-    }
-    // I am Source. Picker is Target.
-    return option?.targetType || "person";
-  });
-
-  watch(edgeType, () => {
-    if (!isEditingEdge.value) {
-      // TODO should we lear pickers if type changes?
-      if (myType.value !== "article") {
-        pickerTarget.value = undefined;
-      }
-    }
-  });
-
-  function resetEdgeForm() {
-    newEdge.value = emptyEdge();
-    edgeType.value = "connection"; // TODO pick something else
-    pickerTarget.value = undefined;
-    pickerSource.value = undefined;
-  }
-
-  function openEditEdge(edge: EdgeNode) {
-    // Determine direction relative to current node
-    const direction = edge.source === nodeId.value ? "outgoing" : "incoming";
-
-    newEdge.value = {
-      ...edge,
-      direction,
-    };
-    edgeType.value = edge.type;
-
-    if (edge.type === "owns" && direction === "incoming") {
-      // Check if the owner is a region
-      // If we are editing, current node is target. Source is the owner.
-      // edge.richNode is the OTHER node (source).
-      if (edge.richNode?.type === "region") {
-        edgeType.value = "owns_region" as EdgeType;
-      }
-    }
-
-    pickerTarget.value = {
-      ...edge.richNode,
-      id: edge.richNode.id || "",
-    };
-  }
-
-  function cancelEditEdge() {
-    resetEdgeForm();
-  }
-
-  async function processEdge() {
-    if (isEditingEdge.value) {
-      await saveEdgeRevision();
     } else {
-      await addEdge();
+      internalEdgeType.value = edge.type as edgeTypeExt;
     }
-  }
 
-  async function addEdge() {
-    if (!nodeId.value || !pickerTarget.value) return;
-
-    const direction = newEdge.value.direction || "outgoing";
-    // If we have pickerSource, use it. Otherwise use nodeId.
-    const source = pickerSource.value
-      ? pickerSource.value.id
-      : direction === "outgoing"
-        ? nodeId.value
-        : pickerTarget.value.id;
-    const target = pickerSource.value
-      ? pickerTarget.value.id
-      : direction === "outgoing"
-        ? pickerTarget.value.id
-        : nodeId.value;
-
-    try {
-      await $fetch<undefined>("/api/edges/create", {
-        method: "POST",
-        headers: authHeaders.value,
-        body: {
-          source,
-          target,
-          type: getRealType(newEdge.value.type),
-          name: newEdge.value.name,
-          content: newEdge.value.content,
-          start_date: newEdge.value.start_date,
-          end_date: newEdge.value.end_date,
-          references: newEdge.value.references,
-        },
-      });
-      resetEdgeForm();
-      alert("Dodano powiązanie");
-      if (onUpdate) await onUpdate();
-    } catch (e) {
-      alertError(e);
-    }
-  }
-
-  async function saveEdgeRevision() {
-    if (!newEdge.value.id || !newEdge.value.source) return;
-
-    try {
-      await $fetch<{ id: string }>("/api/revisions/create", {
-        method: "POST",
-        body: {
-          node_id: newEdge.value.id,
-          collection: "edges",
-          source: newEdge.value.source, // Keep required context
-          target: newEdge.value.target,
-          type: getRealType(newEdge.value.type),
-          name: newEdge.value.name,
-          // text: newEdge.value.content, // Deprecated
-          content: newEdge.value.content,
-          start_date: newEdge.value.start_date,
-          end_date: newEdge.value.end_date,
-          references: newEdge.value.references,
-        },
-        headers: authHeaders.value,
-      });
-      alert("Zapisano propozycję zmiany!");
-      resetEdgeForm();
-      if (onUpdate) await onUpdate();
-    } catch (e) {
-      alertError(e);
+    if (matches("source")) {
+      layout.target.ref.value = {
+        id: edge.target,
+        type: layout.target.type.value,
+      } as any;
+    } else if (matches("target")) {
+      layout.source.ref.value = {
+        id: edge.source,
+        type: layout.source.type.value,
+      } as any;
     }
   }
 
   return {
     newEdge,
-    edgeType,
-    pickerTarget,
-    pickerSource,
-    isEditingEdge,
+    edgeType: internalEdgeType,
+    edgeLabel,
+    layout,
+    readyToSubmit,
     availableEdgeTypes,
-    edgeTargetType,
-    edgeSourceType,
-    edgeTypeOptions,
+    pickedNode,
+    // Methods
     processEdge,
-    cancelEditEdge,
     openEditEdge,
   };
 }
 
-function alertError(e: unknown) {
-  console.error(e);
-  if (!(e instanceof Error)) return;
-  const msg = e.message || "Unknown error";
-  alert("Błąd dodawania powiązania: " + msg);
-}
-
-function emptyEdge(): Partial<Edge> & { direction: "outgoing" | "incoming" } {
+function emptyEdge(): InternalEdge {
   return {
     type: "connection",
     target: "",
