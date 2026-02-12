@@ -1,5 +1,5 @@
 import {
-  onAuthStateChanged,
+  onIdTokenChanged,
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -32,7 +32,7 @@ export function useAuthState() {
   // Initialize listener only once on the client
   if (import.meta.client && !useState("authListenerInitialized").value) {
     useState("authListenerInitialized", () => true);
-    onAuthStateChanged(auth, async (userIn) => {
+    onIdTokenChanged(auth, async (userIn) => {
       user.value = userIn;
       if (userIn) {
         const idTokenResult = await userIn.getIdTokenResult();
@@ -89,6 +89,13 @@ export function useAuthState() {
       key,
       headers: authHeaders,
       watch: [idToken],
+      onRequest: async ({ options }) => {
+        options.headers = new Headers(options.headers);
+        if (auth.currentUser) {
+          const token = await auth.currentUser.getIdToken();
+          options.headers.set("Authorization", `Bearer ${token}`);
+        }
+      },
       ...options,
     });
   };
