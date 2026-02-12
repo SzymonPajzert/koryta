@@ -10,8 +10,8 @@ describe("Person Entity Wikipedia Link", () => {
 
     // Navigate to create new person page
     cy.visit("/edit/node/new?type=person");
-    cy.contains("Imię i nazwisko").next().find("input").type(personName);
-    cy.contains("Link do Wikipedii").next().find("input").type(wikiLink);
+    cy.fillField("Nazwa", personName);
+    cy.fillField("Link do Wikipedii", wikiLink);
     cy.contains("Zapisz zmianę").click();
 
     // Verify redirection to entity page
