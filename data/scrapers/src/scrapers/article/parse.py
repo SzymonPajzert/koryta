@@ -208,7 +208,24 @@ def _extract_date_from_time_tags(soup: BeautifulSoup) -> Optional[date]:
     return None
 
 
+_BINARY_SIGNATURES = (
+    b"%PDF", b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"PK\x03\x04",
+    b"RIFF", b"\x00\x00\x01\x00", b"\x1f\x8b",
+)
+
+_EMPTY_RESULT: Dict[str, Any] = {
+    "is_article": False,
+    "title": None,
+    "publication_date": None,
+    "article_content": "",
+}
+
+
 def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
+    header = html_bytes[:16]
+    if any(header.startswith(sig) for sig in _BINARY_SIGNATURES):
+        return dict(_EMPTY_RESULT)
+
     soup = BeautifulSoup(html_bytes, "html.parser")
 
     title = _extract_title_from_meta(soup)
@@ -265,8 +282,7 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
     elif is_listing_page:
         is_article = False
     elif len(all_article_tags) > 0:
-        if publication_date or len(article_content) > 500:
-            is_article = True
+        is_article = bool(publication_date or len(article_content) > 500)
     elif title and publication_date and len(article_content) > 1500:
         is_article = True
     else:
