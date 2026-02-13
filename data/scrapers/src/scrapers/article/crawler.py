@@ -15,7 +15,7 @@ from uuid_extensions import uuid7str
 
 from entities.util import NormalizedParse
 from scrapers.article.db import CrawlerDB
-from scrapers.article.scoring import url_score
+from scrapers.article.scoring import ScoringFunction, url_score
 from scrapers.stores import Context
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,13 @@ def process_url(ctx: Context, uid: str, url: str, config: dict) -> tuple[set[str
         return set(), str(e), None
 
 
-def crawl(ctx: Context, db: CrawlerDB, config: dict, worker_id: str):
+def crawl(
+    ctx: Context,
+    db: CrawlerDB,
+    config: dict,
+    worker_id: str,
+    score_fn: ScoringFunction = url_score,
+):
     """Main crawling loop."""
     while True:
         maybe_row = db.get_and_lock_url(worker_id, config["max_retries"])
@@ -127,7 +133,7 @@ def crawl(ctx: Context, db: CrawlerDB, config: dict, worker_id: str):
             rows_to_insert = []
             for link_url in new_links:
                 link_url = ensure_url_format(link_url)
-                score = url_score(link_url)
+                score = score_fn(link_url)
                 priority = 100 - score
                 rows_to_insert.append(
                     (uuid7str(), link_url, priority, False, [], 0, now, None, current_url)

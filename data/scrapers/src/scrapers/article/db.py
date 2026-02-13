@@ -9,6 +9,7 @@ compliant.
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
+from typing import Callable
 from zoneinfo import ZoneInfo
 
 import psycopg2
@@ -228,6 +229,35 @@ class CrawlerDB:
                     processed,
                 )
                 conn.commit()
+
+    def reprioritize(self, score_fn: Callable[[str], int], batch_size: int = 5000):
+        """Recalculate priority for all pending URLs using the given scoring function."""
+        updated = 0
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, url FROM website_index WHERE done = FALSE;")
+                rows = cur.fetchall()
+                logger.info("Reprioritizing %d pending URLs...", len(rows))
+                batch = []
+                for uid, url in rows:
+                    priority = 100 - score_fn(url)
+                    batch.append((priority, uid))
+                    if len(batch) >= batch_size:
+                        cur.executemany(
+                            "UPDATE website_index SET priority = %s WHERE id = %s",
+                            batch,
+                        )
+                        conn.commit()
+                        updated += len(batch)
+                        batch = []
+                if batch:
+                    cur.executemany(
+                        "UPDATE website_index SET priority = %s WHERE id = %s",
+                        batch,
+                    )
+                    conn.commit()
+                    updated += len(batch)
+        logger.info("Reprioritized %d URLs.", updated)
 
     def get_pages_to_parse(self, limit: int) -> list[tuple]:
         """Fetch crawled pages that have a storage_path, for parsing."""

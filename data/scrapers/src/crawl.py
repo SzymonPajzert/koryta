@@ -19,6 +19,7 @@ from main import _setup_context
 from scrapers.article.crawler import crawl, ensure_url_format
 from scrapers.article.db import CrawlerDB
 from scrapers.article.parse import extract_article_content
+from scrapers.article.scoring import get_scoring_function
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,15 @@ def main():
         "--view", action="store_true",
         help="Open parsed articles in Firefox (use with --parse).",
     )
+    parser.add_argument(
+        "--reprioritize", type=str, nargs="?", const="default", dest="reprioritize",
+        metavar="SCORING",
+        help="Reprioritize all pending URLs using a scoring function (default: 'default'). Available: default, kalisz.",
+    )
+    parser.add_argument(
+        "--scoring", type=str, default="default",
+        help="Scoring function for new URLs during crawling (default: 'default'). Available: default, kalisz.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -206,6 +216,11 @@ def main():
         _print_stats(db.get_stats())
         sys.exit(0)
 
+    if args.reprioritize is not None:
+        score_fn = get_scoring_function(args.reprioritize)
+        db.reprioritize(score_fn)
+        sys.exit(0)
+
     if args.parse_limit is not None:
         _run_parse(db, args.parse_limit, args.view)
         sys.exit(0)
@@ -219,9 +234,10 @@ def main():
         "max_retries": args.max_retries,
     }
 
-    logger.info("Starting crawl...")
+    score_fn = get_scoring_function(args.scoring)
+    logger.info("Starting crawl with scoring=%s...", args.scoring)
     try:
-        crawl(ctx, db, config, args.worker_id)
+        crawl(ctx, db, config, args.worker_id, score_fn=score_fn)
     except KeyboardInterrupt:
         logger.info("Crawl interrupted by user. Exiting.")
 
