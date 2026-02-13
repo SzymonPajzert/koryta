@@ -4,6 +4,7 @@ to be used across all scrapers. It provides a common interface for handling
 file operations, data references, and pipeline execution contexts.
 """
 
+import dataclasses
 import io
 import os.path
 import typing
@@ -324,6 +325,12 @@ class Context:
     web: Web
     nlp: NLP
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
+
+    def always_refresh(self) -> typing.Self:
+        return dataclasses.replace(
+            self,
+            refresh_policy=ProcessPolicy(refresh_pipelines={"all"}, exclude_refresh={}),
+        )
 
 
 def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):
