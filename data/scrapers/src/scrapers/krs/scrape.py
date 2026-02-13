@@ -139,12 +139,14 @@ class ScrapeRejestrIO(Pipeline):
                     result = requests.get(url).json()
                 except requests.exceptions.JSONDecodeError:
                     print(f"Failed to decode JSON from {url}, skipping")
-                    skip = 2
+                    # Skip only aktualne
+                    skip = 1
                     continue
 
                 if "odpis" not in result:
                     print(f"Unexpected response for {url}: {result}, skipping")
-                    skip = 2
+                    # Skip only aktualne
+                    skip = 1
                     continue
                 dzial1 = result["odpis"]["dane"]["dzial1"]
                 dane = dzial1["danePodmiotu"]

@@ -156,6 +156,10 @@ class CompaniesKRS(Pipeline):
         and extracts information about companies.
         """
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
+            if "org" not in blob_name:
+                print("Skipping non-org file: ", blob_name)
+                continue
+
             if "aktualnosc_" in blob_name:
                 parent = KRS.from_blob_name(blob_name)
                 self.add_company_source(parent.id, blob_name)
