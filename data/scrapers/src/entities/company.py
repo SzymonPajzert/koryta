@@ -11,6 +11,7 @@ class KRS:
     name: str
     city: str | None = None
     is_interesting: bool = False
+    sources: set[str] = field(default_factory=set)
     children: set[str] = field(default_factory=set)
     parents: set[str] = field(default_factory=set)
 

@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from datetime import datetime, timedelta
 
@@ -101,16 +102,18 @@ class CompaniesKRS(Pipeline):
     def __init__(self) -> None:
         super().__init__()
         self.companies: dict[str, KrsCompany] = {}
+        self.company_sources: dict[str, set[str]] = {}
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
 
-    def add_rejestrio_company(self, item):
-        krs_id = item["numery"]["krs"]
+    def add_company(self, company: KrsCompany):
+        krs_id = company.krs
         if krs_id in self.companies:
-            company = self.companies[krs_id]
+            # TODO implement merge logic
+            existing = self.companies[krs_id]
+            existing.name = existing.name or company.name
+            existing.city = existing.city or company.city
+            self.companies[krs_id] = existing
         else:
-            name = item["nazwy"]["skrocona"]
-            city = item["adres"]["miejscowosc"]
-            company = KrsCompany(krs=krs_id, name=name, city=city)
             self.companies[company.krs] = company
 
         if krs_id in self.awaiting_relations:
@@ -119,6 +122,11 @@ class CompaniesKRS(Pipeline):
             del self.awaiting_relations[krs_id]
 
         return company
+
+    def add_company_source(self, company: str, source: str):
+        self.company_sources[company] = self.company_sources.get(company, set()) | {
+            source
+        }
 
     def add_awaiting(self, company: str, relation: tuple[str, str]):
         self.awaiting_relations[company] = self.awaiting_relations.get(company, []) + [
@@ -149,11 +157,13 @@ class CompaniesKRS(Pipeline):
         """
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             if "aktualnosc_" in blob_name:
+                parent = KRS.from_blob_name(blob_name)
+                self.add_company_source(parent.id, blob_name)
+
                 for item in data:
                     if item.get("typ") != "organizacja":
                         continue
-                    c = self.add_rejestrio_company(item)
-                    parent = KRS.from_blob_name(blob_name)
+                    c = self.add_company(company_from_rejestrio(item))
                     conn_type = QueryRelation.from_rejestrio(
                         item["krs_powiazania_kwerendowane"][0]
                     )
@@ -161,34 +171,21 @@ class CompaniesKRS(Pipeline):
                         self.add_relation(parent.id, c.krs)
 
             else:
-                self.add_rejestrio_company(data)
+                c = company_from_rejestrio(data)
+                self.add_company(c)
+                self.add_company_source(c.krs, blob_name)
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
-            if "odpis" not in data:
-                raise ValueError(f"Unexpected data structure in {blob_name}")
-
-            try:
-                odpis = data["odpis"]
-                krs = odpis.get("naglowekA").get("numerKRS")
-                dane = odpis.get("dane", {})
-                dzial1 = dane.get("dzial1", {})
-                nazwa = dzial1.get("danePodmiotu").get("nazwa")
-                siedziba = dzial1.get("siedzibaIAdres", {}).get("siedziba", {})
-                miejscowosc = siedziba.get("miejscowosc")
-            except KeyError as e:
-                raise ValueError(f"Missing key in {blob_name}: {e}")
-
-            if krs in self.companies:
-                # Update existing fields
-                company = self.companies[krs]
-                company.name = company.name or nazwa
-                company.city = company.city or miejscowosc
-                self.companies[krs] = company
-            else:
-                self.companies[krs] = KrsCompany(krs=krs, name=nazwa, city=miejscowosc)
+            c = company_from_api_krs(data)
+            self.add_company(c)
+            self.add_company_source(c.krs, blob_name)
 
         for company in self.companies.values():
-            ctx.io.output_entity(company)
+            ctx.io.output_entity(
+                dataclasses.replace(
+                    company, sources=self.company_sources.get(company.krs, set())
+                )
+            )
 
         for k, vs in self.awaiting_relations.items():
             for v in vs:
@@ -196,3 +193,26 @@ class CompaniesKRS(Pipeline):
                     continue
 
                 raise ValueError(f"Awaiting relations not empty: {k} {v}")
+
+
+def company_from_rejestrio(data: dict) -> KrsCompany:
+    krs = data["numery"]["krs"]
+    name = data["nazwy"]["skrocona"]
+    city = data["adres"]["miejscowosc"]
+    return KrsCompany(krs=krs, name=name, city=city)
+
+
+def company_from_api_krs(data: dict) -> KrsCompany:
+    try:
+        odpis = data["odpis"]
+        krs = odpis.get("naglowekA").get("numerKRS")
+        dane = odpis.get("dane", {})
+        dzial1 = dane.get("dzial1", {})
+        nazwa = dzial1.get("danePodmiotu").get("nazwa")
+        siedziba = dzial1.get("siedzibaIAdres", {}).get("siedziba", {})
+        miejscowosc = siedziba.get("miejscowosc")
+        return KrsCompany(krs=krs, name=nazwa, city=miejscowosc)
+    except KeyError as e:
+        raise ValueError(
+            f"Failed to extract company data from API KRS response: {e}, data: {data}"
+        ) from e
