@@ -75,8 +75,7 @@ class ScrapeRejestrIO(Pipeline):
         return args
 
     def companies_to_scrape(self, ctx: Context) -> set[KRS]:
-        # TODO currently it doesn't reprocess, it should automatically.
-        scraped_companies = self.companies.read_or_process(ctx.always_refresh())
+        scraped_companies = self.companies.read_or_process(ctx)
         self.hardcoded_companies.process(ctx)
 
         # This should be a list actually
