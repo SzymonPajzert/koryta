@@ -124,6 +124,8 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
                 content: "",
                 sourceURL: "",
                 shortName: "",
+                wikipedia: "",
+                rejestrIo: "",
               };
               await router.push(`/edit/node/${id}`);
             }

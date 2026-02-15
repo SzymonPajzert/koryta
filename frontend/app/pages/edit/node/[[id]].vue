@@ -64,6 +64,26 @@
               chips
               deletable-chips
             />
+            <template v-if="current.type === 'person'">
+              <v-text-field
+                v-model="current.birthDate"
+                label="Data urodzenia"
+                type="date"
+                persistent-hint
+              />
+              <v-text-field
+                v-model="current.wikipedia"
+                label="Link do Wikipedii"
+                hint="Pełny link do artykułu"
+                persistent-hint
+              />
+              <v-text-field
+                v-model="current.rejestrIo"
+                label="Link do Rejestr.io"
+                hint="Pełny link do profilu"
+                persistent-hint
+              />
+            </template>
             <template v-if="current.type === 'place'">
               <v-text-field
                 v-model="current.krsNumber"

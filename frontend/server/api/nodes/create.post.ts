@@ -27,6 +27,8 @@ export default defineEventHandler(async (event) => {
     content: content,
     sourceURL: body.sourceURL || "",
     shortName: body.shortName || "",
+    wikipedia: body.wikipedia || "",
+    rejestrIo: body.rejestrIo || "",
   };
 
   const batch = db.batch();

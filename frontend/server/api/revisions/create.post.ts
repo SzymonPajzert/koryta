@@ -25,6 +25,8 @@ export default defineEventHandler(async (event) => {
     parties: body.parties || [],
     sourceURL: body.sourceURL || "",
     shortName: body.shortName || "",
+    wikipedia: body.wikipedia || "",
+    rejestrIo: body.rejestrIo || "",
     // Edge fields
     start_date: body.start_date || null,
     end_date: body.end_date || null,
