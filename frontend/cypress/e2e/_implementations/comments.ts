@@ -5,7 +5,6 @@ describe("Comments and Discussions", () => {
 
   it("allows posting a comment on an entity page", () => {
     cy.visit("/entity/person/1");
-    cy.contains(".v-tab", "Dyskusja").should("be.visible").click();
 
     const commentText = `Test comment ${Date.now()}`;
     cy.postComment(commentText);
@@ -18,11 +17,6 @@ describe("Comments and Discussions", () => {
     const checkReply = (commentText: string, replyText: string) => {
       cy.wait(1000);
       cy.reload();
-      cy.get("body").then(($body) => {
-        if ($body.find('.v-tab:contains("Dyskusja")').length > 0) {
-          cy.contains(".v-tab", "Dyskusja").click();
-        }
-      });
 
       cy.contains(replyText, { timeout: 15000 }).should("be.visible");
       cy.contains(".comment-item", commentText)
@@ -32,7 +26,6 @@ describe("Comments and Discussions", () => {
 
     it("allows replying to a comment", () => {
       cy.visit("/entity/person/1");
-      cy.contains(".v-tab", "Dyskusja").click();
 
       cy.postComment("Parent comment");
       cy.contains("Parent comment").should("be.visible");

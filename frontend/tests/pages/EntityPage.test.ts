@@ -65,8 +65,22 @@ describe("Entity Page - Add Article Button Visibility", () => {
 
     // Setup Data Mocks
     // authFetch returns { data } ref
-    mockAuthFetch.mockResolvedValue({
-      data: ref({ node: { name: "Test Entity", content: "...", parties: [] } }),
+    mockAuthFetch.mockImplementation(async (url) => {
+      if (url.includes("/api/nodes/entry/")) {
+        return {
+          data: ref({
+            node: { name: "Test Entity", content: "...", parties: [] },
+          }),
+        };
+      }
+      if (url.includes("/api/comments/list")) {
+        return {
+          data: ref([]),
+          pending: ref(false),
+          refresh: vi.fn(),
+        };
+      }
+      return { data: ref(null) };
     });
 
     // useEdges returns Promise<{ sources, targets, referencedIn }>
@@ -94,6 +108,7 @@ describe("Entity Page - Add Article Button Visibility", () => {
             VoteWidget: true,
             CardShortNode: true,
             "router-link": true,
+            GraphCanvas: true, // Stub GraphCanvas to avoid data fetching issues
           },
         },
       },

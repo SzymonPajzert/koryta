@@ -25,7 +25,7 @@ describe("Revisions Logic", () => {
       });
 
       cy.visit("/");
-      cy.contains(`Lista wszystkich ${expectedPeople}`);
+      cy.contains(`Łącznie ${expectedPeople}`);
     });
   });
 
