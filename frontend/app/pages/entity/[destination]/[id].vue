@@ -130,12 +130,14 @@
 
       <v-divider />
 
-      <div class="pa-4">
-        <VoteWidget v-if="entity" :id="node" :entity="entity" type="node" />
-      </div>
-      <div class="pa-4">
-        <CommentsSection :node-id="node" />
-      </div>
+      <template v-if="!!user">
+        <div class="pa-4">
+          <VoteWidget v-if="entity" :id="node" :entity="entity" type="node" />
+        </div>
+        <div class="pa-4">
+          <CommentsSection :node-id="node" />
+        </div>
+      </template>
     </v-card>
 
     <v-card v-if="editedEdge" class="pa-4">

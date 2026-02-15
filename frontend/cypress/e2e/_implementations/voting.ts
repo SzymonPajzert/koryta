@@ -2,8 +2,6 @@ describe("Voting functionality", () => {
   beforeEach(() => {
     cy.login();
     cy.visit("/entity/person/1");
-    cy.contains(".v-tab", "Dyskusja").should("be.visible").click();
-    cy.wait(500);
 
     cy.url().should("include", "/entity/person/1");
     cy.get('[data-cy="user-logged-in"]').should("exist");

@@ -41,7 +41,6 @@ describe("Region Node Type", () => {
     cy.wait("@getRegion");
 
     cy.contains("Kozłów");
-    cy.contains("Informacje");
 
     cy.contains("button", "Zaproponuj zmianę").should("not.exist");
     cy.contains("button", "Zaproponuj usunięcie").should("not.exist");
