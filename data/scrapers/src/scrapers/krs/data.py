@@ -5,9 +5,9 @@ import pandas as pd
 
 from entities.company import ManualKRS as KRS
 from entities.person import RejestrIOKey
+from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
 from scrapers.stores import DownloadableFile as FileSource
-from scrapers.teryt import Teryt
 
 
 class CompaniesHardcoded(Pipeline):

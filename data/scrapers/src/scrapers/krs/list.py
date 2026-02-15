@@ -6,8 +6,8 @@ from entities.company import KRS as KrsCompany
 from entities.company import ManualKRS as KRS
 from entities.person import KRS as KrsPerson
 from scrapers.krs.graph import QueryRelation
+from scrapers.map.teryt import Teryt
 from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
-from scrapers.teryt import Teryt
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 

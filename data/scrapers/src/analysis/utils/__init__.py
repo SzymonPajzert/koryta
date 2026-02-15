@@ -10,10 +10,10 @@ from scrapers.krs.companies import (
 from scrapers.krs.companies import (
     lodzkie_companies,
 )
+from scrapers.map.teryt import Teryt
 from scrapers.pkw.elections import committee_to_party
 from scrapers.pkw.sources import election_date
 from scrapers.stores import Context
-from scrapers.teryt import Teryt
 
 MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
 EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script

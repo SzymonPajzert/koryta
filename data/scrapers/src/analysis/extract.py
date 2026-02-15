@@ -9,8 +9,8 @@ from analysis.utils import filter_local_good
 from scrapers.krs.data import PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
+from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
-from scrapers.teryt import Teryt
 
 
 class Extract(Pipeline):
