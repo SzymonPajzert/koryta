@@ -173,7 +173,7 @@ class CompaniesKRS(Pipeline):
                 for item in data:
                     if item.get("typ") != "organizacja":
                         continue
-                    c = self.add_company(company_from_rejestrio(item))
+                    c = self.add_company(company_from_rejestrio(item, postal_codes))
                     conn_type = QueryRelation.from_rejestrio(
                         item["krs_powiazania_kwerendowane"][0]
                     )
@@ -181,7 +181,7 @@ class CompaniesKRS(Pipeline):
                         self.add_relation(parent.id, c.krs)
 
             else:
-                c = company_from_rejestrio(data)
+                c = company_from_rejestrio(data, postal_codes)
                 self.add_company(c)
                 self.add_company_source(c.krs, blob_name)
 
@@ -205,7 +205,7 @@ class CompaniesKRS(Pipeline):
                 raise ValueError(f"Awaiting relations not empty: {k} {v}")
 
 
-def company_from_rejestrio(data: dict) -> KrsCompany:
+def company_from_rejestrio(data: dict, pcs: DataFrame | None = None) -> KrsCompany:
     krs = data["numery"]["krs"]
     name = data["nazwy"]["skrocona"]
     city = data["adres"]["miejscowosc"]
@@ -214,6 +214,11 @@ def company_from_rejestrio(data: dict) -> KrsCompany:
         t = data["adres"]["teryt"]
         # Prefer powiat (4 digits) if available
         teryt_code = t.get("powiat") or t.get("wojewodztwo")
+
+    if not teryt_code and pcs is not None:
+        postal_code = data.get("adres", {}).get("kodPocztowy")
+        teryt_code = get_teryt(pcs, city.lower(), postal_code)
+
     return KrsCompany(krs=krs, name=name, city=city, teryt_code=teryt_code)
 
 
@@ -221,10 +226,21 @@ def get_teryt(pcs: DataFrame, city: str, code: str | None):
     code = code or ""
     code = code.replace(" ", "")
     try:
-        return pcs[(pcs["city"] == city) & (pcs["postal_code"] == code)].iloc[0]
+        return pcs[(pcs["city"] == city) & (pcs["postal_code"] == code)].iloc[0]["teryt"]
     except IndexError:
-        print("Failing to find teryt code for: ", city, code)
-        return ""
+        pass
+
+    # Fallback: check if the city has a dominant TERYT code
+    candidates = pcs[pcs["city"] == city]
+    if not candidates.empty:
+        counts = candidates["teryt"].value_counts()
+        if not counts.empty:
+            top_teryt = counts.index[0]
+            if counts.iloc[0] / len(candidates) > 0.9:
+                return top_teryt
+
+    print("Failing to find teryt code for: ", city, code)
+    return ""
 
 
 def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
