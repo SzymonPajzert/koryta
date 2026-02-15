@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
+import { anyEdge, anyNode } from "~~/shared/empty";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -13,26 +14,12 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const content = body.content || body.text || "";
-
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
   const revisionData: Record<string, unknown> = {
-    name: body.name,
-    type: body.type,
-    content: content,
-    parties: body.parties || [],
-    sourceURL: body.sourceURL || "",
-    shortName: body.shortName || "",
-    wikipedia: body.wikipedia || "",
-    rejestrIo: body.rejestrIo || "",
-    // Edge fields
-    start_date: body.start_date || null,
-    end_date: body.end_date || null,
-    references: body.references || [],
-    deleted: body.deleted || false,
-    delete_reason: body.delete_reason || null,
+    ...anyNode(body),
+    ...anyEdge(body),
   };
 
   if (body.source) {

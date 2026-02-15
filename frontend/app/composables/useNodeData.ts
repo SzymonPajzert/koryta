@@ -9,6 +9,7 @@ import type {
   Company,
 } from "~~/shared/model";
 import { getPageTitle } from "~/composables/useFunctions";
+import { anyNode } from "~~/shared/empty";
 
 export type EditablePage = Partial<Node> &
   Partial<Omit<Person, "type">> &
@@ -28,16 +29,9 @@ export function useNodeData(options: UseNodeDataOptions) {
   const { nodeId, isNew, authHeaders, stateKey, idToken } = options;
   const db = getFirestore(useFirebaseApp(), "koryta-pl");
 
-  const current = useState<EditablePage>(`${stateKey.value}-current`, () => ({
-    name: "",
-    type: options.initialType || "person",
-    parties: [],
-    content: "",
-    sourceURL: "",
-    shortName: "",
-    wikipedia: "",
-    rejestrIo: "",
-  }));
+  const current = useState<EditablePage>(`${stateKey.value}-current`, () =>
+    anyNode({ type: options.initialType }),
+  );
 
   const revisions = useState<Revision[]>(
     `${stateKey.value}-revisions`,
@@ -113,16 +107,7 @@ export function useNodeData(options: UseNodeDataOptions) {
     } else if (isNew.value && lastFetchedId.value !== undefined) {
       lastFetchedId.value = undefined;
       // Reset for new
-      current.value = {
-        name: "",
-        type: options.initialType || "person",
-        parties: [],
-        content: "",
-        sourceURL: "",
-        shortName: "",
-        wikipedia: "",
-        rejestrIo: "",
-      };
+      current.value = anyNode({ type: options.initialType });
       revisions.value = [];
     }
   }

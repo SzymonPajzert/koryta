@@ -4,6 +4,7 @@ import { parties } from "~~/shared/misc";
 import { useEdges } from "~/composables/edges";
 import { useEntityMutation } from "./useEntityMutation";
 import { useNodeData } from "./useNodeData";
+import { anyNode } from "~~/shared/empty";
 
 interface UseNodeEditOptions {
   route?: ReturnType<typeof useRoute>;
@@ -117,16 +118,7 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
             if (id) {
               lastFetchedId.value = id;
               // Reset current for the next "new" visit to clean state
-              current.value = {
-                name: "",
-                type: "person",
-                parties: [],
-                content: "",
-                sourceURL: "",
-                shortName: "",
-                wikipedia: "",
-                rejestrIo: "",
-              };
+              current.value = anyNode({});
               await router.push(`/edit/node/${id}`);
             }
           },
