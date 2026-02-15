@@ -7,10 +7,12 @@ import webbrowser
 
 import firebase_admin
 import numpy as np
+import pandas as pd
 import requests
 from firebase_admin import firestore
 
 from main import PIPELINES, CompaniesMerged, _setup_context
+from scrapers.krs.graph import CompanyGraph
 from scrapers.stores import Pipeline
 
 # Global variable to store the token received securely
@@ -118,10 +120,24 @@ def check_pipeline_files(ctx):
     return missing
 
 
-def map_to_payload(row):
+def map_to_payload(row, type: str):
     """
     Maps a result row (dict) to the API payload format.
     """
+
+    if type == "company":
+        if not row.get("krs") or not row.get("name"):
+            print("Skipping invalid company payload ...")
+            return
+        return {
+            "krs": row.get("krs"),
+            "name": row.get("name"),
+            "city": row.get("city"),
+            "owns": row.get("children") or [],
+            "teryt": str(row.get("teryt_code")).removesuffix(".0")
+            if pd.notna(row.get("teryt_code"))
+            else None,
+        }
 
     def get_scalar(key):
         val = row.get(key)
@@ -302,12 +318,24 @@ def parse_args():
     parser.add_argument(
         "--type",
         default="person",
-        choices=["person", "region"],
+        choices=["person", "region", "company"],
         help="Entity type to upload",
     )
     parser.add_argument("--api", default="bulk_create", help="API endpoint path")
     parser.add_argument(
         "--prod", action="store_true", help="Use production default endpoint"
+    )
+    parser.add_argument(
+        "--krs",
+        help="KRS of the company to export the data for (only for type=company)",
+        default=None,
+        required=False,
+    )
+    parser.add_argument(
+        "--region",
+        help="TERYT region code prefix to filter companies (e.g. 10 for Łódzkie)",
+        default=None,
+        required=False,
     )
 
     args = parser.parse_args()
@@ -315,8 +343,8 @@ def parse_args():
     if args.prod and args.endpoint == "http://localhost:3000":
         args.endpoint = "https://koryta.pl"
 
-    if not args.script and not args.query:
-        print("Error: Must provide either --script or --query")
+    if not args.script and not args.query and args.type != "company":
+        print("Error: Must provide either --script or --query or --company")
         sys.exit(1)
 
     query = args.query
@@ -326,24 +354,19 @@ def parse_args():
     return args, query
 
 
-def register_table(ctx, pipeline_cls):
+def register_table(ctx, pipeline_cls) -> bool:
     try:
         p = Pipeline.create(pipeline_cls)
         if not p.filename:
             return False
-
         table_name = p.filename
 
-        # Robust method: Use pipeline's own reader
-        # Check existence first to avoid re-processing accidentally if missing
         if p.output_time(ctx) is not None:
-            # read_or_process will read cached file if exists
             df = p.read_or_process(ctx)
             if df is not None:
                 ctx.con.register(table_name, df)
                 return True
     except Exception:
-        # Skip pipelines that fail to initialize
         return False
     return False
 
@@ -362,7 +385,11 @@ def submit_results(args, df):
 
     token = authenticate_user(args.endpoint)
 
-    target_url = f"{args.endpoint}/api/person/{args.api}"
+    if args.type == "company":
+        target_url = f"{args.endpoint}/api/ingest/company"
+    else:
+        target_url = f"{args.endpoint}/api/person/{args.api}"
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
@@ -370,7 +397,7 @@ def submit_results(args, df):
 
     success_count = 0
     for idx, row in df.iterrows():
-        payload = map_to_payload(row)
+        payload = map_to_payload(row, args.type)
         if payload is None:
             print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
             continue
@@ -397,13 +424,64 @@ def submit_results(args, df):
     print(f"\nUpload complete. Success: {success_count}, Failed: {failures}")
 
 
+def print_results(df, type):
+    print("\n--- Query Results (First 20) ---")
+    print(df.head(20).to_string())
+    print("\n--- Payload Preview (First 1) ---")
+    if not df.empty:
+        preview_payload = map_to_payload(df.iloc[0], type)
+        print(
+            json.dumps(preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder)
+        )
+
+
+def execute_query(ctx, args, query):
+    print("Executing query...")
+    try:
+        if args.type == "company":
+            print("Loading companies...")
+            p_comp = Pipeline.create(CompaniesMerged)
+            df = p_comp.read_or_process(ctx)
+
+            if args.krs:
+                print(f"Building graph to find descendants of {args.krs}...")
+                graph = CompanyGraph.from_dataframe(df)
+                relevant_companies = graph.all_descendants([args.krs])
+                print(f"Found {len(relevant_companies)} relevant companies.")
+                df = df[df["krs"].isin(relevant_companies)]
+
+            if args.region:
+                print(f"Filtering companies by region starting with {args.region}...")
+                # Ensure teryt-code is string and handle NaNs
+                # The column in dataframe should be 'teryt_code'
+                # as exported by InterestingEntity
+                if "teryt_code" in df.columns:
+                    df = df[
+                        df["teryt_code"]
+                        .astype(str)
+                        .str.startswith(args.region, na=False)
+                    ]
+                    print(f"Found {len(df)} companies in region {args.region}.")
+                else:
+                    print(
+                        "Warning: 'teryt_code' column not found in dataframe. \
+                            Region filtering skipped."
+                    )
+        else:
+            df = ctx.con.execute(query).df()
+    except Exception as e:
+        print(f"Query execution failed: {e}")
+        sys.exit(1)
+
+    return df
+
+
 def main():
     args, query = parse_args()
     ctx, _ = _setup_context(False)
 
     missing = check_pipeline_files(ctx)
     if missing:
-        # Just warn, don't exit, user might know what they are querying
         print("Warning: The following pipelines have no output files:")
         for m in missing:
             print(f" - {m}")
@@ -414,8 +492,6 @@ def main():
         p_comp = Pipeline.create(CompaniesMerged)
         if p_comp.output_time(ctx):
             df_comp = p_comp.read_or_process(ctx)
-            # df_comp should have 'krs' and 'name'
-            # Drop NAs in key columns
             df_comp = df_comp.dropna(subset=["krs", "name"])
             COMPANY_LOOKUP = dict(zip(df_comp["krs"], df_comp["name"]))
             print(f"Loaded {len(COMPANY_LOOKUP)} companies for lookup.")
@@ -427,15 +503,11 @@ def main():
     for pipeline_cls in PIPELINES:
         if register_table(ctx, pipeline_cls):
             registered_count += 1
+        else:
+            print(f"Failed to register {pipeline_cls.__name__}.")
     print(f"Registered {registered_count} tables.")
 
-    print("Executing query...")
-    try:
-        df = ctx.con.execute(query).df()
-    except Exception as e:
-        print(f"Query execution failed: {e}")
-        sys.exit(1)
-
+    df = execute_query(ctx, args, query)
     print(f"Query returned {len(df)} rows.")
 
     if df.empty:
@@ -443,17 +515,7 @@ def main():
         sys.exit(0)
 
     if not args.submit:
-        print("\n--- Query Results (First 20) ---")
-        print(df.head(20).to_string())
-        print("\n--- Payload Preview (First 1) ---")
-        if not df.empty:
-            preview_payload = map_to_payload(df.iloc[0])
-
-            print(
-                json.dumps(
-                    preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder
-                )
-            )
+        print_results(df, args.type)
         print("\nUse --submit to upload.")
     else:
         submit_results(args, df)

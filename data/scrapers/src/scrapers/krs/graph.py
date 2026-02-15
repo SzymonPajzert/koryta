@@ -2,6 +2,10 @@
 import typing
 from dataclasses import dataclass
 
+if typing.TYPE_CHECKING:
+    import pandas as pd
+
+
 # If relation is passive and one of this type, it's a child.
 PARENT_RELATION = {
     "KRS_ONLY_SHAREHOLDER",
@@ -58,6 +62,15 @@ class CompanyGraph:
         child: str,
     ):
         self.children[parent] = self.children.get(parent, []) + [child]
+
+    @staticmethod
+    def from_dataframe(companies_df: "pd.DataFrame") -> "CompanyGraph":
+        graph = CompanyGraph()
+        for record in companies_df.to_dict("records"):
+            parent = record["krs"]
+            for child in record.get("children", []) or []:
+                graph.add_parent(parent, child)
+        return graph
 
     def all_descendants(self, krss: typing.Iterable[str]):
         descendants: set[str] = set()

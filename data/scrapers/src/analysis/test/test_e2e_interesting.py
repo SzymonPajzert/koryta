@@ -41,13 +41,25 @@ def ctx(tmp_path):
         },
     ]
     krs_data = [
+        # Matches Wiki Company A
         {
             "krs": "0000123456",
             "name": "KRS Company A",
             "city": "Warsaw",
-        },  # Matches Wiki Company A
-        {"krs": "0000654321", "name": "KRS Company C", "city": "Gdansk"},  # Only in KRS
-        {"krs": "0000999999", "name": "Boring Company", "city": "Lodz"},
+        },
+        # Only in KRS
+        {
+            "krs": "0000654321",
+            "name": "KRS Company C",
+            "city": "Gdansk",
+            "teryt_code": "2261",
+        },
+        {
+            "krs": "0000999999",
+            "name": "Łódź Company",
+            "city": "Lodz",
+            "teryt_code": "1061",
+        },
     ]
 
     wiki_file = tmp_path / "company_wikipedia.jsonl"
