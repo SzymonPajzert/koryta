@@ -325,14 +325,12 @@ def parse_args():
     parser.add_argument(
         "--prod", action="store_true", help="Use production default endpoint"
     )
-
     parser.add_argument(
         "--krs",
         help="KRS of the company to export the data for (only for type=company)",
         default=None,
         required=False,
     )
-
     parser.add_argument(
         "--region",
         help="TERYT region code prefix to filter companies (e.g. 10 for Łódzkie)",
@@ -346,7 +344,7 @@ def parse_args():
         args.endpoint = "https://koryta.pl"
 
     if not args.script and not args.query and args.type != "company":
-        print("Error: Must provide either --script or --query")
+        print("Error: Must provide either --script or --query or --company")
         sys.exit(1)
 
     query = args.query
@@ -356,24 +354,19 @@ def parse_args():
     return args, query
 
 
-def register_table(ctx, pipeline_cls):
+def register_table(ctx, pipeline_cls) -> bool:
     try:
         p = Pipeline.create(pipeline_cls)
         if not p.filename:
             return False
-
         table_name = p.filename
 
-        # Robust method: Use pipeline's own reader
-        # Check existence first to avoid re-processing accidentally if missing
         if p.output_time(ctx) is not None:
-            # read_or_process will read cached file if exists
             df = p.read_or_process(ctx)
             if df is not None:
                 ctx.con.register(table_name, df)
                 return True
     except Exception:
-        # Skip pipelines that fail to initialize
         return False
     return False
 
@@ -442,38 +435,7 @@ def print_results(df, type):
         )
 
 
-def main():
-    args, query = parse_args()
-    ctx, _ = _setup_context(False)
-
-    missing = check_pipeline_files(ctx)
-    if missing:
-        # Just warn, don't exit, user might know what they are querying
-        print("Warning: The following pipelines have no output files:")
-        for m in missing:
-            print(f" - {m}")
-
-    print("Loading company lookup...")
-    global COMPANY_LOOKUP
-    try:
-        p_comp = Pipeline.create(CompaniesMerged)
-        if p_comp.output_time(ctx):
-            df_comp = p_comp.read_or_process(ctx)
-            # df_comp should have 'krs' and 'name'
-            # Drop NAs in key columns
-            df_comp = df_comp.dropna(subset=["krs", "name"])
-            COMPANY_LOOKUP = dict(zip(df_comp["krs"], df_comp["name"]))
-            print(f"Loaded {len(COMPANY_LOOKUP)} companies for lookup.")
-    except Exception as e:
-        print(f"Warning: Failed to load company lookup: {e}")
-
-    print("Registering tables...")
-    registered_count = 0
-    for pipeline_cls in PIPELINES:
-        if register_table(ctx, pipeline_cls):
-            registered_count += 1
-    print(f"Registered {registered_count} tables.")
-
+def execute_query(ctx, args, query):
     print("Executing query...")
     try:
         if args.type == "company":
@@ -491,7 +453,8 @@ def main():
             if args.region:
                 print(f"Filtering companies by region starting with {args.region}...")
                 # Ensure teryt-code is string and handle NaNs
-                # The column in dataframe should be 'teryt_code' as exported by InterestingEntity
+                # The column in dataframe should be 'teryt_code'
+                # as exported by InterestingEntity
                 if "teryt_code" in df.columns:
                     df = df[
                         df["teryt_code"]
@@ -501,7 +464,8 @@ def main():
                     print(f"Found {len(df)} companies in region {args.region}.")
                 else:
                     print(
-                        "Warning: 'teryt_code' column not found in dataframe. Region filtering skipped."
+                        "Warning: 'teryt_code' column not found in dataframe. \
+                            Region filtering skipped."
                     )
         else:
             df = ctx.con.execute(query).df()
@@ -509,6 +473,41 @@ def main():
         print(f"Query execution failed: {e}")
         sys.exit(1)
 
+    return df
+
+
+def main():
+    args, query = parse_args()
+    ctx, _ = _setup_context(False)
+
+    missing = check_pipeline_files(ctx)
+    if missing:
+        print("Warning: The following pipelines have no output files:")
+        for m in missing:
+            print(f" - {m}")
+
+    print("Loading company lookup...")
+    global COMPANY_LOOKUP
+    try:
+        p_comp = Pipeline.create(CompaniesMerged)
+        if p_comp.output_time(ctx):
+            df_comp = p_comp.read_or_process(ctx)
+            df_comp = df_comp.dropna(subset=["krs", "name"])
+            COMPANY_LOOKUP = dict(zip(df_comp["krs"], df_comp["name"]))
+            print(f"Loaded {len(COMPANY_LOOKUP)} companies for lookup.")
+    except Exception as e:
+        print(f"Warning: Failed to load company lookup: {e}")
+
+    print("Registering tables...")
+    registered_count = 0
+    for pipeline_cls in PIPELINES:
+        if register_table(ctx, pipeline_cls):
+            registered_count += 1
+        else:
+            print(f"Failed to register {pipeline_cls.__name__}.")
+    print(f"Registered {registered_count} tables.")
+
+    df = execute_query(ctx, args, query)
     print(f"Query returned {len(df)} rows.")
 
     if df.empty:

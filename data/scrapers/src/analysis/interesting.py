@@ -97,7 +97,9 @@ class CompaniesMerged(Pipeline):
                 entity = InterestingEntity(
                     name=row["name"],
                     krs=row["krs"] if pd.notna(row["krs"]) else None,
-                    teryt_code=row["teryt_code"] if pd.notna(row["teryt_code"]) else None,
+                    teryt_code=row["teryt_code"]
+                    if pd.notna(row["teryt_code"])
+                    else None,
                     reasons=reasons,
                     sources=sources,
                     children=set(graph.children.get(row["krs"], [])),
