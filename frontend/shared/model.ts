@@ -74,6 +74,7 @@ export interface Person {
   type: "person";
   parties?: string[];
   content?: string;
+  birthDate?: string;
   wikipedia?: string;
   rejestrIo?: string;
   votes?: Votes;
