@@ -1,7 +1,10 @@
 import argparse
+import json
 import typing
 from functools import cached_property
 from time import sleep
+
+import requests
 
 from entities.person import RejestrIOKey
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
@@ -72,18 +75,13 @@ class ScrapeRejestrIO(Pipeline):
         return args
 
     def companies_to_scrape(self, ctx: Context) -> set[KRS]:
-        # TODO currently it doesn't reprocess, it should automatically.
         scraped_companies = self.companies.read_or_process(ctx)
         self.hardcoded_companies.process(ctx)
 
         # This should be a list actually
         already_scraped = set(KRS(krs) for krs in scraped_companies["krs"].tolist())
 
-        starters = set(
-            # TODO remove the hardcode
-            KRS(krs)
-            for krs in self.hardcoded_companies.from_source("KALISZ")
-        )
+        starters = set(self.hardcoded_companies.all_companies_krs.values())
         print("Starters: ", starters)
 
         graph = CompanyGraph()
@@ -126,8 +124,34 @@ class ScrapeRejestrIO(Pipeline):
         print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
         input("Press enter to continue...")
 
+        skip = 0
         for url, _ in urls:
-            result = ctx.rejestr_io.get_rejestr_io(url)
+            if skip > 0:
+                print(f"Skipping {url} (skipping {skip} more)")
+                skip -= 1
+                continue
+            if "rejestr.io" in url:
+                result = ctx.rejestr_io.get_rejestr_io(url)
+            else:
+                print(f"Requesting: {url}")
+                try:
+                    result = requests.get(url).json()
+                except requests.exceptions.JSONDecodeError:
+                    print(f"Failed to decode JSON from {url}, skipping")
+                    # Skip only aktualne
+                    skip = 1
+                    continue
+
+                if "odpis" not in result:
+                    print(f"Unexpected response for {url}: {result}, skipping")
+                    # Skip only aktualne
+                    skip = 1
+                    continue
+                dzial1 = result["odpis"]["dane"]["dzial1"]
+                dane = dzial1["danePodmiotu"]
+                miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
+                print(f"{dane.get('nazwa', dane)} - {miasto}")
+                result = json.dumps(result)
             sleep(0.3)
 
             if result is None:
@@ -136,6 +160,7 @@ class ScrapeRejestrIO(Pipeline):
 
             # We're discarding query params, so it's a hotfix for this
             url = url.replace("?aktualnosc=", "/aktualnosc_")
+            url = url.replace("?rejestr=P&format=json", "")
             ctx.io.upload(url, result, "application/json")
 
 
