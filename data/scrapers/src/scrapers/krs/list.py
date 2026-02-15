@@ -7,6 +7,7 @@ from entities.company import ManualKRS as KRS
 from entities.person import KRS as KrsPerson
 from scrapers.krs.graph import QueryRelation
 from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
+from scrapers.teryt import Teryt
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -98,6 +99,7 @@ def extract_people(ctx: Context):
 class CompaniesKRS(Pipeline):
     filename = "company_krs"
     dtype = {"krs": str}
+    teryt: Teryt
 
     def __init__(self) -> None:
         super().__init__()
@@ -180,7 +182,7 @@ class CompaniesKRS(Pipeline):
                 self.add_company_source(c.krs, blob_name)
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
-            c = company_from_api_krs(data)
+            c = company_from_api_krs(self.teryt, data)
             self.add_company(c)
             self.add_company_source(c.krs, blob_name)
 
@@ -211,7 +213,7 @@ def company_from_rejestrio(data: dict) -> KrsCompany:
     return KrsCompany(krs=krs, name=name, city=city, teryt_code=teryt_code)
 
 
-def company_from_api_krs(data: dict) -> KrsCompany:
+def company_from_api_krs(teryt: Teryt, data: dict) -> KrsCompany:
     try:
         odpis = data["odpis"]
         krs = odpis.get("naglowekA").get("numerKRS")
@@ -219,8 +221,13 @@ def company_from_api_krs(data: dict) -> KrsCompany:
         dzial1 = dane.get("dzial1", {})
         nazwa = dzial1.get("danePodmiotu").get("nazwa")
         siedziba = dzial1.get("siedzibaIAdres", {}).get("siedziba", {})
-        miejscowosc = siedziba.get("miejscowosc")
-        return KrsCompany(krs=krs, name=nazwa, city=miejscowosc)
+        miejscowosc = siedziba.get("miejscowosc").lower().title()
+        return KrsCompany(
+            krs=krs,
+            name=nazwa,
+            city=miejscowosc,
+            teryt_code=teryt.cities_to_teryt[miejscowosc],
+        )
     except KeyError as e:
         raise ValueError(
             f"Failed to extract company data from API KRS response: {e}, data: {data}"
