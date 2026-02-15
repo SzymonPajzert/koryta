@@ -3,158 +3,139 @@
     class="position-absolute top-0 ma-4"
     style="max-width: 800px; width: 100%"
   >
-    <v-card width="100%">
-      <v-tabs v-model="tab" bg-color="primary">
-        <v-tab value="details">Informacje</v-tab>
-        <v-tab value="discussion">Dyskusja</v-tab>
-      </v-tabs>
+    <v-card width="100%" style="overflow: visible">
+      <div class="pa-4">
+        <div v-if="type === 'place'" class="mb-4 d-flex">
+          <v-btn
+            variant="tonal"
+            prepend-icon="mdi-format-list-bulleted"
+            :to="`/lista?miejsce=${node}`"
+          >
+            Lista pracowników
+          </v-btn>
+          <v-btn
+            class="ml-2"
+            variant="tonal"
+            prepend-icon="mdi-graph-outline"
+            :to="`/graf?miejsce=${node}`"
+          >
+            Graf połączeń
+          </v-btn>
+        </div>
+        <EntityDetailsCard :entity="entity" :type="type" />
 
-      <v-window v-model="tab">
-        <v-window-item value="details">
-          <div class="pa-4">
-            <div v-if="type === 'place'" class="mb-4 d-flex">
+        <div class="mt-4">
+          <template v-if="type === 'place' || type === 'region'">
+            <CardConnectionList :edges="owners" title="Właściciele" />
+            <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
+          </template>
+
+          <v-row>
+            <v-col
+              v-for="edge in edges.filter((edge) => {
+                if (type === 'place' || type === 'region') {
+                  return ['employed', 'connection'].includes(edge.type);
+                }
+                return ['employed', 'connection', 'owns'].includes(edge.type);
+              })"
+              :key="edge.richNode?.name"
+              cols="12"
+              md="6"
+            >
+              <CardShortNode :edge="edge" />
+            </v-col>
+          </v-row>
+        </div>
+
+        <div class="mt-4">
+          <v-row>
+            <v-col
+              v-for="edge in edges.filter((edge) =>
+                ['comment', 'mentions'].includes(edge.type),
+              )"
+              :key="edge.richNode?.name"
+              cols="12"
+              md="6"
+            >
+              <CardShortNode :edge="edge" />
+            </v-col>
+          </v-row>
+        </div>
+
+        <div v-if="referencedIn.length" class="mt-4">
+          <h3 class="text-h6 mb-2">Artykuł stanowi źródło dla:</h3>
+          <v-row>
+            <v-col v-for="edge in referencedIn" :key="edge.id" cols="12" md="6">
+              <CardShortNode :edge="edge" />
+            </v-col>
+          </v-row>
+        </div>
+
+        <div class="mt-4">
+          <v-btn
+            v-if="type !== 'region'"
+            variant="tonal"
+            prepend-icon="mdi-pencil-outline"
+            @click="handleEdit"
+          >
+            <template #prepend>
+              <v-icon color="warning" />
+            </template>
+            Zaproponuj zmianę
+          </v-btn>
+          <DialogProposeRemoval
+            v-if="entity && type !== 'region'"
+            :id="node"
+            :type="type"
+            :name="entity.name"
+          >
+            <template #activator="{ props }">
               <v-btn
+                v-bind="user ? props : {}"
                 variant="tonal"
-                prepend-icon="mdi-format-list-bulleted"
-                :to="`/lista?miejsce=${node}`"
-              >
-                Lista pracowników
-              </v-btn>
-              <v-btn
                 class="ml-2"
-                variant="tonal"
-                prepend-icon="mdi-graph-outline"
-                :to="`/graf?miejsce=${node}`"
-              >
-                Graf połączeń
-              </v-btn>
-            </div>
-            <EntityDetailsCard :entity="entity" :type="type" />
-
-            <div class="mt-4">
-              <template v-if="type === 'place' || type === 'region'">
-                <CardConnectionList :edges="owners" title="Właściciele" />
-                <CardConnectionList
-                  :edges="subsidiaries"
-                  title="Spółki zależne"
-                />
-              </template>
-
-              <v-row>
-                <v-col
-                  v-for="edge in edges.filter((edge) => {
-                    if (type === 'place' || type === 'region') {
-                      return ['employed', 'connection'].includes(edge.type);
-                    }
-                    return ['employed', 'connection', 'owns'].includes(
-                      edge.type,
-                    );
-                  })"
-                  :key="edge.richNode?.name"
-                  cols="12"
-                  md="6"
-                >
-                  <CardShortNode :edge="edge" />
-                </v-col>
-              </v-row>
-            </div>
-
-            <div class="mt-4">
-              <v-row>
-                <v-col
-                  v-for="edge in edges.filter((edge) =>
-                    ['comment', 'mentions'].includes(edge.type),
-                  )"
-                  :key="edge.richNode?.name"
-                  cols="12"
-                  md="6"
-                >
-                  <CardShortNode :edge="edge" />
-                </v-col>
-              </v-row>
-            </div>
-
-            <div v-if="referencedIn.length" class="mt-4">
-              <h3 class="text-h6 mb-2">Artykuł stanowi źródło dla:</h3>
-              <v-row>
-                <v-col
-                  v-for="edge in referencedIn"
-                  :key="edge.id"
-                  cols="12"
-                  md="6"
-                >
-                  <CardShortNode :edge="edge" />
-                </v-col>
-              </v-row>
-            </div>
-
-            <div class="mt-4">
-              <v-btn
-                v-if="type !== 'region'"
-                variant="tonal"
-                prepend-icon="mdi-pencil-outline"
-                @click="handleEdit"
+                @click="!user && handleLoginRedirect()"
               >
                 <template #prepend>
-                  <v-icon color="warning" />
+                  <v-icon color="error" icon="mdi-delete-outline" />
                 </template>
-                Zaproponuj zmianę
+                Zaproponuj usunięcie
               </v-btn>
-              <DialogProposeRemoval
-                v-if="entity && type !== 'region'"
-                :id="node"
-                :type="type"
-                :name="entity.name"
-              >
-                <template #activator="{ props }">
-                  <v-btn
-                    v-bind="user ? props : {}"
-                    variant="tonal"
-                    class="ml-2"
-                    @click="!user && handleLoginRedirect()"
-                  >
-                    <template #prepend>
-                      <v-icon color="error" icon="mdi-delete-outline" />
-                    </template>
-                    Zaproponuj usunięcie
-                  </v-btn>
-                </template>
-              </DialogProposeRemoval>
-              <QuickAddArticleButton
-                v-if="type !== 'article' && type !== 'region'"
-                :node-id="node"
-                class="ml-2"
-              />
-            </div>
+            </template>
+          </DialogProposeRemoval>
+          <QuickAddArticleButton
+            v-if="type !== 'article' && type !== 'region'"
+            :node-id="node"
+            class="ml-2"
+          />
+        </div>
 
-            <div v-if="user && entity" class="mt-4">
-              <h4 class="text-subtitle-2 mb-2">Szybkie dodawanie</h4>
-              <div class="d-flex flex-column gap-2">
-                <v-btn
-                  v-for="btn in quickAddButtons"
-                  :key="btn.text"
-                  variant="tonal"
-                  size="small"
-                  :prepend-icon="btn.icon"
-                  class="mr-2 mb-2"
-                  @click="quickAddEdge(btn)"
-                >
-                  {{ btn.text }}
-                </v-btn>
-              </div>
-            </div>
+        <div v-if="user && entity" class="mt-4">
+          <h4 class="text-subtitle-2 mb-2">Szybkie dodawanie</h4>
+          <div class="d-flex flex-column gap-2">
+            <v-btn
+              v-for="btn in quickAddButtons"
+              :key="btn.text"
+              variant="tonal"
+              size="small"
+              :prepend-icon="btn.icon"
+              class="mr-2 mb-2"
+              @click="quickAddEdge(btn)"
+            >
+              {{ btn.text }}
+            </v-btn>
           </div>
-        </v-window-item>
+        </div>
+      </div>
 
-        <v-window-item value="discussion">
-          <div class="pa-4">
-            <VoteWidget v-if="entity" :id="node" :entity="entity" type="node" />
-          </div>
-          <div class="pa-4">
-            <CommentsSection :node-id="node" />
-          </div>
-        </v-window-item>
-      </v-window>
+      <v-divider />
+
+      <div class="pa-4">
+        <VoteWidget v-if="entity" :id="node" :entity="entity" type="node" />
+      </div>
+      <div class="pa-4">
+        <CommentsSection :node-id="node" />
+      </div>
     </v-card>
 
     <v-card v-if="editedEdge" class="pa-4">
@@ -189,18 +170,6 @@ const route = useRoute<"/entity/[destination]/[id]">();
 
 const node = route.params.id as string;
 const type = route.params.destination as NodeType;
-const tab = ref((route.query.tab as string) || "details");
-
-// TODO remove this, discussion should be below
-watch(tab, (newTab) => {
-  const query = { ...route.query };
-  if (newTab === "discussion") {
-    query.tab = "discussion";
-  } else {
-    delete query.tab;
-  }
-  useRouter().replace({ query });
-});
 
 // Use API fetch to ensure revisions are merged correctly (auth aware)
 const { authFetch, user } = useAuthState();
