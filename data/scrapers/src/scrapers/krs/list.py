@@ -2,11 +2,13 @@ import dataclasses
 import json
 from datetime import datetime, timedelta
 
+from pandas import DataFrame
+
 from entities.company import KRS as KrsCompany
 from entities.company import ManualKRS as KRS
 from entities.person import KRS as KrsPerson
 from scrapers.krs.graph import QueryRelation
-from scrapers.map.teryt import Teryt
+from scrapers.map.postal_codes import PostalCodes
 from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
@@ -99,7 +101,7 @@ def extract_people(ctx: Context):
 class CompaniesKRS(Pipeline):
     filename = "company_krs"
     dtype = {"krs": str}
-    teryt: Teryt
+    postal_codes: PostalCodes
 
     def __init__(self) -> None:
         super().__init__()
@@ -157,6 +159,8 @@ class CompaniesKRS(Pipeline):
         Iterates through GCS files from rejestr.io, parses them,
         and extracts information about companies.
         """
+        postal_codes = self.postal_codes.read_or_process(ctx)
+
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             if "org" not in blob_name:
                 print("Skipping non-org file: ", blob_name)
@@ -182,7 +186,7 @@ class CompaniesKRS(Pipeline):
                 self.add_company_source(c.krs, blob_name)
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
-            c = company_from_api_krs(self.teryt, data)
+            c = company_from_api_krs(postal_codes, data)
             self.add_company(c)
             self.add_company_source(c.krs, blob_name)
 
@@ -213,20 +217,32 @@ def company_from_rejestrio(data: dict) -> KrsCompany:
     return KrsCompany(krs=krs, name=name, city=city, teryt_code=teryt_code)
 
 
-def company_from_api_krs(teryt: Teryt, data: dict) -> KrsCompany:
+def get_teryt(pcs: DataFrame, city: str, code: str | None):
+    code = code or ""
+    code = code.replace(" ", "")
+    try:
+        return pcs[(pcs["city"] == city) & (pcs["postal_code"] == code)].iloc[0]
+    except IndexError:
+        print("Failing to find teryt code for: ", city, code)
+        return ""
+
+
+def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
     try:
         odpis = data["odpis"]
         krs = odpis.get("naglowekA").get("numerKRS")
         dane = odpis.get("dane", {})
         dzial1 = dane.get("dzial1", {})
         nazwa = dzial1.get("danePodmiotu").get("nazwa")
-        siedziba = dzial1.get("siedzibaIAdres", {}).get("siedziba", {})
-        miejscowosc = siedziba.get("miejscowosc").lower().title()
+        siedziba = dzial1.get("siedzibaIAdres", {})
+        miejscowosc = siedziba.get("adres", {}).get("miejscowosc").lower()
+        postal_code = siedziba.get("adres", {}).get("kodPocztowy")
+
         return KrsCompany(
             krs=krs,
             name=nazwa,
             city=miejscowosc,
-            teryt_code=teryt.cities_to_teryt[miejscowosc],
+            teryt_code=get_teryt(pcs, miejscowosc, postal_code),
         )
     except KeyError as e:
         raise ValueError(
