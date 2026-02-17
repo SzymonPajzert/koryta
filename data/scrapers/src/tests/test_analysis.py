@@ -10,6 +10,54 @@ from scrapers.stores import CloudStorage, DownloadableFile
 from stores.config import tests
 
 
+# TODO split it already as another column
+@pytest.fixture(scope="module")
+def df_matched(df_all):
+    return df_all[df_all["overall_score"] > SCORE_CUTOFF]
+
+
+@pytest.fixture(scope="module")
+def df_all(ctx):
+    p: PeopleEnriched = Pipeline.create(PeopleEnriched)
+    return p.read_or_process(ctx)
+
+
+@pytest.fixture(scope="module")
+def ctx():
+    c, _ = _setup_context(False)
+
+    original_list_files = c.io.list_files
+
+    def mock_list_files(ref):
+        if isinstance(ref, CloudStorage) and ref.prefix == "rejestr.io":
+            # List of KRS IDs used in test_krs_present
+            # Note: The test uses both raw ints (strings) and padded strings.
+            # We must ensure the blobs represent valid, padded IDs.
+            ids = [
+                "23302",
+                "140528",
+                "489456",
+                "0000512140",
+                "271591",
+                "0000028860",
+                "0000025667",
+                "0000204527",
+            ]
+            for i in ids:
+                padded = i.zfill(10)
+                # Format expected by ManualKRS.from_blob_name: ...org/{id}/...
+                yield DownloadableFile(
+                    f"gs://bucket/hostname=rejestr.io/org/{padded}/date=2025-01-01"
+                )
+        else:
+            if hasattr(original_list_files, "__call__"):
+                yield from original_list_files(ref)
+            return
+
+    c.io.list_files = mock_list_files
+    return c
+
+
 def normalize(s):
     return " ".join(unicodedata.normalize("NFC", s).split())
 
@@ -95,54 +143,6 @@ IGNORE_FAILURES: list[str] = [
 
 
 SCORE_CUTOFF = 10.5
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    c, _ = _setup_context(False)
-
-    original_list_files = c.io.list_files
-
-    def mock_list_files(ref):
-        if isinstance(ref, CloudStorage) and ref.prefix == "rejestr.io":
-            # List of KRS IDs used in test_krs_present
-            # Note: The test uses both raw ints (strings) and padded strings.
-            # We must ensure the blobs represent valid, padded IDs.
-            ids = [
-                "23302",
-                "140528",
-                "489456",
-                "0000512140",
-                "271591",
-                "0000028860",
-                "0000025667",
-                "0000204527",
-            ]
-            for i in ids:
-                padded = i.zfill(10)
-                # Format expected by ManualKRS.from_blob_name: ...org/{id}/...
-                yield DownloadableFile(
-                    f"gs://bucket/hostname=rejestr.io/org/{padded}/date=2025-01-01"
-                )
-        else:
-            if hasattr(original_list_files, "__call__"):
-                yield from original_list_files(ref)
-            return
-
-    c.io.list_files = mock_list_files
-    return c
-
-
-@pytest.fixture(scope="module")
-def df_all(ctx):
-    p: PeopleEnriched = Pipeline.create(PeopleEnriched)
-    return p.read_or_process(ctx)
-
-
-# TODO split it already as another column
-@pytest.fixture(scope="module")
-def df_matched(df_all):
-    return df_all[df_all["overall_score"] > SCORE_CUTOFF]
 
 
 class Person:
