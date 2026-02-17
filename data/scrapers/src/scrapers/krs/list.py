@@ -226,7 +226,9 @@ def get_teryt(pcs: DataFrame, city: str, code: str | None):
     code = code or ""
     code = code.replace(" ", "")
     try:
-        return pcs[(pcs["city"] == city) & (pcs["postal_code"] == code)].iloc[0]["teryt"]
+        return pcs[(pcs["city"] == city) & (pcs["postal_code"] == code)].iloc[0][
+            "teryt"
+        ]
     except IndexError:
         pass
 
