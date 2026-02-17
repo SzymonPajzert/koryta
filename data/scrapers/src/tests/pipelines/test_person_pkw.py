@@ -1,9 +1,7 @@
-import pandas as pd
 import pytest
 from pytest_check.context_manager import check
 
-from main import _setup_context
-from scrapers.stores import LocalFile
+from main import PeoplePKW, _setup_context
 
 
 @pytest.fixture(scope="module")
@@ -11,15 +9,10 @@ def ctx():
     return _setup_context(False)[0]
 
 
-def people_rows(ctx):
-    yield from ctx.io.read_data(
-        LocalFile("person_pkw/person_pkw.jsonl", "versioned")
-    ).read_jsonl()
-
-
 @pytest.fixture(scope="module")
 def df(ctx):
-    return pd.DataFrame(people_rows(ctx))
+    pipeline = PeoplePKW()
+    return pipeline.read_or_process(ctx)
 
 
 @pytest.mark.parametrize(
@@ -84,10 +77,18 @@ def test_check_no_nulls(column, df):
 
 @pytest.mark.parametrize(
     "column",
-    ["pkw_name", "first_name", "middle_name", "last_name", "party", "party_member"],
+    [
+        "pkw_name",
+        "first_name",
+        "middle_name",
+        "last_name",
+        "party",
+        "party_member",
+        "teryt_candidacy",
+    ],
 )
-def test_check_no_whitespaces(column, ctx):
-    for row in people_rows(ctx):
+def test_check_no_whitespaces(column, df):
+    for row in df.to_dict(orient="records"):
         value = row[column]
         if value is None:
             continue
