@@ -19,6 +19,12 @@ class Extract(Pipeline):
     companies: CompaniesKRS
     teryt: Teryt
     hardcoded_people: PeopleRejestrIOHardcoded
+
+    MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
+    EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
+    RECENT_EMPLOYMENT_START = date.fromisoformat("2024-10-01")
+    OLD_EMPLOYMENT_END = date.fromisoformat("2020-10-01")
+
     format = "csv"
 
     @cached_property
@@ -63,40 +69,55 @@ class Extract(Pipeline):
         print(f"Read {rows_num} companies")
         return CompanyGraph.from_dataframe(companies_df)
 
-    def process(self, ctx: Context):
-        df = self.people.read_or_process(ctx)
+    def relevant_companies(self, ctx) -> set[str]:
+        """Returns KRS IDs of companies that match one of the passed requirements."""
+        result = set()
 
         if self.krs:
             graph = self.process_graph(ctx)
-            relevant_companies = graph.all_descendants([self.krs])
+            result = set.union(graph.all_descendants([self.krs]))
 
-            def works_in_relevant(employment_list):
-                if not isinstance(employment_list, list):
-                    return False
-                for emp in employment_list:
-                    if emp.get("employed_krs") in relevant_companies:
-                        return True
+        if self.region:
+            for company in self.companies.read_or_process(ctx).itertuples():
+                # TODO
+                if company.teryt_code.startswith(self.region):
+                    result.add(company.krs)
+
+        return result
+
+    def relevant_employment(self, ctx):
+        relevant_companies = self.relevant_companies(ctx)
+
+        def works_in_relevant(employment_list):
+            if not isinstance(employment_list, list):
                 return False
+            for emp in employment_list:
+                if emp.get("employed_krs") in relevant_companies:
+                    return True
+            return False
 
-            df = df[df["employment"].apply(works_in_relevant)]
+        return works_in_relevant
 
-        companies_df = self.companies.read_or_process(ctx)
-        self.teryt.read_or_process(ctx)
+    def relevant_elections(self):
+        def check(elections):
+            if not isinstance(elections, list):
+                return False
+            if len(self.region) == "":
+                return False
+            for election in elections:
+                print(election)
+                teryt = (
+                    head_or_none(election["teryt_powiat"])
+                    or head_or_none("teryt_wojewodztwo")
+                    or ""
+                )
+                if teryt.startswith(self.args.region):
+                    return True
+            return False
 
-        interesting_people_rejestr_ids = set(
-            self.hardcoded_people.read_or_process(ctx)["id"].tolist()
-        )
+        return check
 
-        df = filter_local_good(
-            df,
-            self.region,
-            companies_df,
-            self.teryt,
-            interesting_people=interesting_people_rejestr_ids,
-        )
-
-        print(f"Found {len(df)} people")
-
+    def format_output(self, df):
         result = pd.DataFrame()
         result["name"] = df["krs_name"]
         result["history"] = df["history"]
@@ -107,15 +128,32 @@ class Extract(Pipeline):
         ).apply(lambda r: r.days / 365)
         result["first_employed"] = pd.to_datetime(df["first_employed"], unit="ms")
         result["last_employed"] = df["last_employed"]
+        result["total_elections"] = df["elections"].apply(
+            lambda ss: len(empty_list_if_nan(ss))
+        )
         return result
 
+    def process(self, ctx: Context):
+        people = self.people.read_or_process(ctx)
+        self.teryt.read_or_process(ctx)
 
-MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
-EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
-RECENT_EMPLOYMENT_START = date.fromisoformat("2024-10-01")
-OLD_EMPLOYMENT_END = date.fromisoformat("2020-10-01")
+        relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
+        relevant_elections = people["elections"].apply(self.relevant_elections())
+        relevant = relevant_employment | relevant_elections
+        people_interesting = people[relevant]
+
+        df = drop_duplicates(people_interesting, "krs_name", "pkw_name", "wiki_name")
+        print(f"Found {len(df)} people")
+        return self.format_output(df)
 
 
+def head_or_none(ss):
+    for s in ss:
+        return s
+    return None
+
+
+# TODO add interesting people
 def filter_local_good(
     matched_all,
     filter_region: str | None,
@@ -129,52 +167,6 @@ def filter_local_good(
             should be included regardless of other criteria
     """
 
-    krs_map = {}
-    if companies_df is not None:
-        krs_map = {
-            c["krs"]: c["city"]
-            for c in companies_df.to_dict("records")
-            if c.get("city")
-        }
-
-    def check_teryt_wojewodztwo(row_regions):
-        if filter_region is None:
-            return True
-        if row_regions is None or isinstance(row_regions, float):
-            return False
-        # legacy check
-        if len(filter_region) == 2 and filter_region in row_regions:
-            return True
-        if isinstance(row_regions, str):
-            return row_regions.startswith(filter_region)
-
-        # Check for more granular regions
-        for region in row_regions:
-            if region.startswith(filter_region):
-                return True
-        return False
-
-    def check_employed(employed):
-        if filter_region is None:
-            return True
-
-        print(employed)
-
-        for emp in empty_list_if_nan(employed):
-            krs = emp["employed_krs"]
-            # Check hardcoded list for backward compatibility or specific overrides
-            if filter_region == "10" and krs in lodzkie_companies:
-                return True
-
-            # Dynamic check
-            city = krs_map.get(krs)
-            if city and teryt:
-                city_teryt = teryt.cities_to_teryt.get(city)
-                if city_teryt and city_teryt.startswith(filter_region):
-                    return True
-
-        return False
-
     def to_dt(series):
         if pd.api.types.is_numeric_dtype(series):
             return pd.to_datetime(series, unit="ms")
@@ -182,7 +174,6 @@ def filter_local_good(
 
     # Get people with high enough scores
     good_score = matched_all["overall_score"] > EXPECTED_SCORE
-
     first_employed_dt = to_dt(matched_all["first_employed"])
     last_employed_dt = to_dt(matched_all["last_employed"])
 
@@ -217,8 +208,3 @@ def filter_local_good(
         interesting_person = matched_all["rejestrio_id"].apply(check_interesting_person)
 
     local_good = matched_all[(interesting | interesting_person) & local & accurate]
-
-    # Filter out duplicates
-    local_good = drop_duplicates(local_good, "krs_name", "pkw_name", "wiki_name")
-
-    return local_good
