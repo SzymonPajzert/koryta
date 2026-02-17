@@ -88,32 +88,35 @@ class Extract(Pipeline):
     def relevant_employment(self, ctx):
         relevant_companies = self.relevant_companies(ctx)
 
-        def works_in_relevant(employment_list):
+        def works_in_relevant(employment_list) -> int:
             if not isinstance(employment_list, list):
-                return False
+                return 0
+            result = 0
             for emp in employment_list:
                 if emp.get("employed_krs") in relevant_companies:
-                    return True
-            return False
+                    result += 1
+            return result
 
         return works_in_relevant
 
     def relevant_elections(self):
-        def check(elections):
+        def check(elections) -> int:
             if not isinstance(elections, list):
-                return False
+                return 0
             if not self.region or len(self.region) == "":
-                return False
+                return 0
+            result = 0
             for election in elections:
-                print(election)
                 teryt = (
                     head_or_none(election["teryt_powiat"])
-                    or head_or_none("teryt_wojewodztwo")
+                    or head_or_none(election["teryt_wojewodztwo"])
                     or ""
                 )
+                if teryt == "":
+                    print(election)
                 if teryt.startswith(self.args.region):
-                    return True
-            return False
+                    result += 1
+            return result
 
         return check
 
@@ -128,9 +131,8 @@ class Extract(Pipeline):
         ).apply(lambda r: r.days / 365)
         result["first_employed"] = pd.to_datetime(df["first_employed"], unit="ms")
         result["last_employed"] = df["last_employed"]
-        result["total_elections"] = df["elections"].apply(
-            lambda ss: len(empty_list_if_nan(ss))
-        )
+        result["total_elections"] = df["total_elections"]
+        result["relevance_ratio"] = df["relevance_ratio"]
         return result
 
     def process(self, ctx: Context):
@@ -139,7 +141,12 @@ class Extract(Pipeline):
 
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
-        relevant = relevant_employment | relevant_elections
+        people["total_elections"] = people["elections"].apply(list_length)
+        people["total_employments"] = people["employment"].apply(list_length)
+        relevant = (relevant_employment + relevant_elections) > 0
+        people["relevance_ratio"] = (relevant_employment + relevant_elections) / (
+            people["total_elections"] + people["total_employments"]
+        )
         people_interesting = people[relevant]
 
         df = drop_duplicates(people_interesting, "krs_name", "pkw_name", "wiki_name")
@@ -151,6 +158,10 @@ def head_or_none(ss):
     for s in ss:
         return s
     return None
+
+
+def list_length(ss):
+    return len(empty_list_if_nan(ss))
 
 
 # TODO add interesting people
