@@ -79,7 +79,7 @@ class Extract(Pipeline):
 
         if self.region:
             for company in self.companies.read_or_process(ctx).itertuples():
-                # TODO
+                assert isinstance(company.teryt_code, str)
                 if company.teryt_code.startswith(self.region):
                     result.add(company.krs)
 
@@ -102,7 +102,7 @@ class Extract(Pipeline):
         def check(elections):
             if not isinstance(elections, list):
                 return False
-            if len(self.region) == "":
+            if not self.region or len(self.region) == "":
                 return False
             for election in elections:
                 print(election)
@@ -154,57 +154,48 @@ def head_or_none(ss):
 
 
 # TODO add interesting people
-def filter_local_good(
-    matched_all,
-    filter_region: str | None,
-    companies_df=None,
-    teryt: Teryt | None = None,
-    interesting_people: set[str] | None = None,
-):
-    """
-    :param: filter_region - region in TERYT 10 code, to filter to
-    :param: interesting_people - set of RejestrIOKey ids that
-            should be included regardless of other criteria
-    """
-
-    def to_dt(series):
-        if pd.api.types.is_numeric_dtype(series):
-            return pd.to_datetime(series, unit="ms")
-        return pd.to_datetime(series)
-
-    # Get people with high enough scores
-    good_score = matched_all["overall_score"] > EXPECTED_SCORE
-    first_employed_dt = to_dt(matched_all["first_employed"])
-    last_employed_dt = to_dt(matched_all["last_employed"])
-
-    recent = first_employed_dt > pd.Timestamp(RECENT_EMPLOYMENT_START)
-    not_too_old = last_employed_dt > pd.Timestamp(OLD_EMPLOYMENT_END)
-
-    interesting = (good_score | recent) & not_too_old
-
-    # Get people for the given region
-    local_candidacy = matched_all["teryt_wojewodztwo"].apply(check_teryt_wojewodztwo)
-    local_company = matched_all["employment"].apply(check_employed)
-    local = local_candidacy | local_company
-
-    # Make sure the chance of a random match is low
-    # TODO There's an issue with priobability calculation
-    high_probability = True  # (1 - matched_all["unique_chance"]).lt(1 / MATCHED_ODDS)
-    # Does the person has matching
-    has_wiki = ~matched_all["wiki_name"].isna()
-    accurate = high_probability | has_wiki
-
-    interesting_person = False
-    if interesting_people is not None:
-
-        def check_interesting_person(ids_list):
-            if ids_list is None:
-                return False
-            if isinstance(ids_list, str):
-                return ids_list in interesting_people
-            # optimized intersection check
-            return not interesting_people.isdisjoint(ids_list)
-
-        interesting_person = matched_all["rejestrio_id"].apply(check_interesting_person)
-
-    local_good = matched_all[(interesting | interesting_person) & local & accurate]
+# def filter_local_good(
+#     matched_all,
+#     filter_region: str | None,
+#     companies_df=None,
+#     teryt: Teryt | None = None,
+#     interesting_people: set[str] | None = None,
+# ):
+#     """
+#     :param: filter_region - region in TERYT 10 code, to filter to
+#     :param: interesting_people - set of RejestrIOKey ids that
+#             should be included regardless of other criteria
+#     """
+#     def to_dt(series):
+#         if pd.api.types.is_numeric_dtype(series):
+#             return pd.to_datetime(series, unit="ms")
+#         return pd.to_datetime(series)
+#     # Get people with high enough scores
+#     good_score = matched_all["overall_score"] > EXPECTED_SCORE
+#     first_employed_dt = to_dt(matched_all["first_employed"])
+#     last_employed_dt = to_dt(matched_all["last_employed"])
+#     recent = first_employed_dt > pd.Timestamp(RECENT_EMPLOYMENT_START)
+#     not_too_old = last_employed_dt > pd.Timestamp(OLD_EMPLOYMENT_END)
+#     interesting = (good_score | recent) & not_too_old
+#     # Get people for the given region
+#     local_candidacy = matched_all["teryt_wojewodztwo"].apply(check_teryt_wojewodztwo)
+#     local_company = matched_all["employment"].apply(check_employed)
+#     local = local_candidacy | local_company
+#     # Make sure the chance of a random match is low
+#     # TODO There's an issue with priobability calculation
+#     high_probability = True  # (1 - matched_all["unique_chance"]).lt(1 / MATCHED_ODDS)
+#     # Does the person has matching
+#     has_wiki = ~matched_all["wiki_name"].isna()
+#     accurate = high_probability | has_wikis
+#     interesting_person = False
+#     if interesting_people is not None:
+#         def check_interesting_person(ids_list):
+#             if ids_list is None:
+#                 return False
+#             if isinstance(ids_list, str):
+#                 return ids_list in interesting_people
+#             # optimized intersection check
+#             return not interesting_people.isdisjoint(ids_list)
+#         interesting_person = matched_all["rejestrio_id"].apply(
+#           check_interesting_person)
+#     local_good = matched_all[(interesting | interesting_person) & local & accurate]

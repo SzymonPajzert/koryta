@@ -2,6 +2,7 @@ import io
 from unittest.mock import MagicMock
 
 import pandas as pd
+
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.stores import Context
 
