@@ -9,7 +9,7 @@ import requests
 from entities.person import RejestrIOKey
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
-from scrapers.krs.list import KRS, CompaniesKRS
+from scrapers.krs.list import KRS, CompaniesKRS, PeopleKRS
 from scrapers.stores import Context, Pipeline
 
 
@@ -54,6 +54,7 @@ class ScrapeRejestrIO(Pipeline):
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
     hardcoded_people: PeopleRejestrIOHardcoded
+    people: PeopleKRS
 
     @cached_property
     def args(self):
@@ -74,12 +75,16 @@ class ScrapeRejestrIO(Pipeline):
 
         return args
 
-    def companies_to_scrape(self, ctx: Context) -> set[KRS]:
-        scraped_companies = self.companies.read_or_process(ctx)
-        self.hardcoded_companies.process(ctx)
+    def series_to_set(self, series) -> set[KRS]:
+        return set(KRS(krs) for krs in series.tolist())
 
-        # This should be a list actually
-        already_scraped = set(KRS(krs) for krs in scraped_companies["krs"].tolist())
+    def already_scraped_companies(self, ctx: Context) -> set[KRS]:
+        scraped_companies = self.companies.read_or_process(ctx)
+        return self.series_to_set(scraped_companies["krs"])
+
+    def companies_to_scrape(self, ctx: Context) -> set[KRS]:
+        self.hardcoded_companies.process(ctx)
+        already_scraped = self.already_scraped_companies(ctx)
 
         starters = set(self.hardcoded_companies.all_companies_krs.values())
         print("Starters: ", starters)
@@ -102,6 +107,13 @@ class ScrapeRejestrIO(Pipeline):
 
         return to_scrape
 
+    def companies_without_names(self, ctx: Context) -> set[KRS]:
+        already_scraped = self.already_scraped_companies(ctx)
+        encountered_companies = self.series_to_set(
+            self.people.read_or_process(ctx)["employed_krs"]
+        )
+        return encountered_companies - already_scraped
+
     def people_to_scrape(self, ctx: Context) -> set[RejestrIOKey]:
         scraped_people = set(
             RejestrIOKey(id=person_id)
@@ -114,10 +126,7 @@ class ScrapeRejestrIO(Pipeline):
         urls = list(
             save_org_connections(
                 connections=self.companies_to_scrape(ctx),
-                # TODO calculate here which companies don't have the name
-                # instead of hardcoding them.
-                # map(KRS, self.hardcoded_companies.from_source("NAME_MISSING")),
-                names=[],
+                names=self.companies_without_names(ctx),
                 people=self.people_to_scrape(ctx),
             )
         )
