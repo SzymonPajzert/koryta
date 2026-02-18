@@ -13,7 +13,12 @@ from analysis.extract import Extract
 from analysis.interesting import CompaniesMerged
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
-from scrapers.article.crawler import parse_hostname, uuid7
+from entities.util import parse_hostname
+from uuid_extensions import uuid7str
+
+
+def _uuid7() -> str:
+    return uuid7str()
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -42,15 +47,16 @@ from stores.firestore import FirestoreIO
 from stores.nlp import NLPImpl
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
+from stores.storage import LocalClient
 from stores.utils import UtilsImpl
 from stores.web import WebImpl
 
 
 class Conductor(IO):
-    def __init__(self, dumper: EntityDumper):
+    def __init__(self, dumper: EntityDumper, storage_mode: str = "gcs"):
         self.firestore = FirestoreIO()
         self.dumper = dumper
-        self.storage = CloudStorageClient()
+        self.storage = LocalClient() if storage_mode == "local" else CloudStorageClient()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
 
@@ -127,8 +133,14 @@ class Conductor(IO):
             with open(path, "wb") as f:
                 content(f)
 
-    def upload(self, source, data, content_type):
-        self.storage.upload(source, data, content_type)
+    def upload(
+        self,
+        source,
+        data,
+        content_type,
+        file_id: str | None = None,
+    ) -> str | None:
+        return self.storage.upload(source, data, content_type, file_id=file_id)
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)
@@ -149,10 +161,13 @@ class Conductor(IO):
 
 
 def _setup_context(
-    use_rejestr_io: bool, policy: ProcessPolicy = ProcessPolicy.with_default()
+    use_rejestr_io: bool,
+    policy: ProcessPolicy = ProcessPolicy.with_default(),
+    storage_mode: str = "gcs",
+    db_path: str = ":memory:",
 ) -> tuple[Context, EntityDumper]:
     dumper = EntityDumper()
-    conductor = Conductor(dumper)
+    conductor = Conductor(dumper, storage_mode=storage_mode)
     rejestr_io = None
     if use_rejestr_io:
         print("Initializing RejestrIO as a data source")
@@ -161,7 +176,7 @@ def _setup_context(
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
-        con=duckdb.connect(),
+        con=duckdb.connect(database=db_path),
         utils=UtilsImpl(),
         web=WebImpl(),
         nlp=NLPImpl(),
@@ -169,7 +184,7 @@ def _setup_context(
     )
 
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore
-    ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
+    ctx.con.create_function("uuid7str", _uuid7, [], VARCHAR)  # type: ignore
 
     return ctx, dumper
 
