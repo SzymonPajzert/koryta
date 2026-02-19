@@ -43,12 +43,10 @@ defineOptions({
 const props = defineProps<{
   label?: string;
   hint?: string;
-  // which entity type to use to lookup suggested values to bind to this field
-  // e.g. employed, company
   entity: NodeType;
 }>();
 
-const model = defineModel<Link<typeof props.entity>>();
+const model = defineModel<Link<NodeType> | undefined>();
 
 const search = ref("");
 
