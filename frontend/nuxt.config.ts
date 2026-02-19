@@ -76,6 +76,7 @@ export default defineNuxtConfig({
     "nuxt-vuefire",
     "vuetify-nuxt-module",
     "@sentry/nuxt/module",
+    "@nuxt/test-utils/module",
   ],
 
   eslint: {
