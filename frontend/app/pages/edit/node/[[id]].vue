@@ -215,6 +215,9 @@ import type { edgeTypeExt } from "~/composables/useEdgeTypes";
 definePageMeta({
   middleware: "auth",
 });
+useHead({
+  title: computed(() => (isNew.value ? "Utwórz" : "Edytuj")),
+});
 
 const route = useRoute();
 const {
@@ -232,6 +235,7 @@ const {
   refreshEdges,
   authHeaders,
 } = await useNodeEdit();
+
 const editEdgeForm = ref<InstanceType<typeof FormEditEdge> | null>(null);
 
 const activeEdgeTypeExt = ref<edgeTypeExt | undefined>(undefined);

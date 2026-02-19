@@ -144,9 +144,11 @@ Cypress.Commands.add(
         });
       }
 
-      // Final verification: we are not on the login page anymore
-      cy.url({ timeout: 20000 }).should("not.contain", "/login");
-    });
+    // Wait for navigation away from login (to home or redirect)
+    cy.url({ timeout: 20000 }).should("not.contain", "/login");
+
+    // Extra wait for auth state to settle in the app
+    cy.wait(1000);
   },
 );
 

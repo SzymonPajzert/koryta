@@ -39,7 +39,10 @@ const interestingNodes = computed<Record<string, Node & { stats: NodeStats }>>(
   },
 );
 
-const { filtered } = useParams("Graf ");
+const { filterName, filtered } = useParams();
+useHead({
+  title: computed(() => `Graf ${filterName()}`.trim()),
+});
 
 const nodesFiltered = computed(() => {
   return Object.fromEntries(
@@ -122,6 +125,12 @@ watch(filtered, () => {
     // Don't run the simulation if it's the whole graph
     configs.view.layoutHandler = new SimpleLayout();
   } else configs.view.layoutHandler = simulationStore.newForceLayout();
+});
+
+useSeoMeta({
+  title: "Graf połączeń - Koryta.pl",
+  description:
+    "Interaktywny graf pokazujący powiązania między politykami, ich rodzinami a spółkami skarbu państwa.",
 });
 </script>
 

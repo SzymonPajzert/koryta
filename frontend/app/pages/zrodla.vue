@@ -50,4 +50,8 @@
 
 <script lang="ts" setup>
 const { entities: articles } = await useEntity("article");
+
+useHead({
+  title: "Źródła strony",
+});
 </script>

@@ -205,6 +205,9 @@ const getErrorMessage = (errorCode: string) => {
       return "An unexpected error occurred. Please try again.";
   }
 };
+useHead({
+  title: computed(() => (isLogin.value ? "Logowanie" : "Rejestracja")),
+});
 </script>
 
 <style scoped>

@@ -1,3 +1,9 @@
+<script setup lang="ts">
+useHead({
+  title: "Statystyki",
+});
+</script>
+
 <template>
   <v-col cols="12">
     <h2 class="text-h5 font-weight-bold">Statystyki aktywności:</h2>
