@@ -1,11 +1,13 @@
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 
+import { fetchNodes } from "~~/server/utils/fetch";
+
 export default authCachedEventHandler(async () => {
   const [people, places, articles, regions] = await Promise.all([
-    $fetch("/api/nodes/person"),
-    $fetch("/api/nodes/place"),
-    $fetch("/api/nodes/article"),
-    $fetch("/api/nodes/region"),
+    fetchNodes("person"),
+    fetchNodes("place"),
+    fetchNodes("article"),
+    fetchNodes("region"),
   ]);
 
   const nodes = { ...people, ...places, ...articles, ...regions };

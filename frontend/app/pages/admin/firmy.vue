@@ -155,7 +155,7 @@ const companies = computed(() => {
     });
   });
 
-  Object.entries(entities.value).forEach(([key, company]) => {
+  Object.entries(entities.value || {}).forEach(([key, company]) => {
     const fetched = mapped.get(company.krsNumber || "") ?? {};
 
     mapped.set(key, {

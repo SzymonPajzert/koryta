@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
-
 vi.stubGlobal("defineEventHandler", (handler: any) => handler);
 vi.stubGlobal(
   "defineCachedEventHandler",
@@ -9,12 +8,10 @@ vi.stubGlobal(
 vi.stubGlobal("getUser", async (_event: any) => {
   return true;
 });
-
 vi.mock("~~/server/utils/fetch", () => ({
   fetchNodes: vi.fn(),
   fetchEdges: vi.fn(),
 }));
-
 describe("Graph API", () => {
   it("assembles graph correctly", async () => {
     // Setup mocks
@@ -23,12 +20,12 @@ describe("Graph API", () => {
         return Promise.resolve({ p1: { name: "Person 1", parties: ["PiS"] } });
       if (type === "place")
         return Promise.resolve({ c1: { name: "Company 1" } });
-      if (type === "article") return Promise.resolve({});
+      if (type === "region") return Promise.resolve({});
       return Promise.resolve({});
     });
 
     vi.mocked(fetchEdges).mockResolvedValue([
-      { from: "p1", to: "c1", type: "work" },
+      { source: "p1", target: "c1", type: "employed" },
     ]);
 
     const handlerModule = await import("../../../server/api/graph/index.get");
@@ -38,6 +35,7 @@ describe("Graph API", () => {
     expect(result).toHaveProperty("edges");
     expect(result).toHaveProperty("nodeGroups");
 
+    expect(result.nodes["p1"]).toBeDefined();
     expect(result.nodes["p1"]).toBeDefined();
     expect(fetchNodes).toHaveBeenCalledTimes(3);
     expect(fetchEdges).toHaveBeenCalledTimes(1);

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { defineConfigs, SimpleLayout } from "v-network-graph";
 import type { EventHandlers, NodeEvent } from "v-network-graph";
+import { useEntityFiltering } from "@/composables/useEntityFiltering";
 
 import { useSimulationStore } from "@/stores/simulation";
 import { useParams } from "@/composables/params";
@@ -25,14 +26,16 @@ const { data: layout } = await useAsyncData<{
 }>("layout", () => $fetch("/api/graph/layout"), { lazy: true });
 
 const nodes = computed(() => graph.value?.nodes);
-const edges = computed(() => graph.value?.edges);
+const edgesRaw = computed(() => graph.value?.edges);
+const edges = useEntityFiltering(edgesRaw);
+const nodesFiltered1 = useEntityFiltering(nodes);
 
 const router = useRouter();
 
 const interestingNodes = computed<Record<string, Node & { stats: NodeStats }>>(
   () => {
     return Object.fromEntries(
-      Object.entries(nodes.value ?? {}).filter(
+      Object.entries(nodesFiltered1.value ?? {}).filter(
         ([_, node]) => node.type !== "rect" || node.stats.people > 0,
       ),
     );

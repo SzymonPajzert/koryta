@@ -7,14 +7,16 @@ import {
   type GraphLayout,
 } from "~~/shared/graph/util";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
-import { Edge } from "~~/shared/model";
+import type { Edge } from "~~/shared/model";
+
+import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
 export default authCachedEventHandler(async () => {
   const [people, places, regions, edgesFromDB] = await Promise.all([
-    $fetch("/api/nodes/person"),
-    $fetch("/api/nodes/place"),
-    $fetch("/api/nodes/region"),
-    $fetch("/api/graph/edges"),
+    fetchNodes("person"),
+    fetchNodes("place"),
+    fetchNodes("region"),
+    fetchEdges(),
   ]);
 
   const nodesNoStats = getNodesNoStats(people, places, regions, partyColors);

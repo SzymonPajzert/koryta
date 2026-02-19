@@ -1,0 +1,77 @@
+
+DevTools listening on ws://127.0.0.1:56921/devtools/browser/49e62590-b33d-48b3-84ef-3f0b2e8533c7
+Warning: The allowCypressEnv configuration option is enabled. This allows any browser code to read values from Cypress.env(). This is insecure and will be removed in a future major version.
+
+1. Replace Cypress.env() calls with cy.env() (for sensitive values) or Cypress.expose() (for public configuration)
+2. Set allowCypressEnv: false in your Cypress configuration to disable Cypress.env()
+
+Learn more: https://on.cypress.io/cypress-env-migration
+
+
+====================================================================================================
+
+  (Run Starting)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Cypress:        15.10.0                                                                        │
+  │ Browser:        Electron 138 (headless)                                                        │
+  │ Node Version:   v22.16.0 (/Users/szymonpajzert/.nvm/versions/node/v22.16.0/bin/node)           │
+  │ Specs:          1 found (revisions_lifecycle.cy.ts)                                            │
+  │ Searched:       cypress/e2e/audit_and_revisions/revisions_lifecycle.cy.ts                      │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  revisions_lifecycle.cy.ts                                                       (1 of 1)
+
+
+  Revisions Lifecycle
+    1) lists pending edge revisions (newly created edges) and resolves names
+    ✓ should display pending revisions and allow navigation to details (1628ms)
+
+
+  1 passing (22s)
+  1 failing
+
+  1) Revisions Lifecycle
+       lists pending edge revisions (newly created edges) and resolves names:
+     AssertionError: Timed out retrying after 10000ms: Expected to find content: 'Piotr Wiśniewski' but never did.
+      at Context.eval (webpack://nuxt-app/./cypress/e2e/_implementations/revisions_lifecycle.ts:27:36)
+
+
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        2                                                                                │
+  │ Passing:      1                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     22 seconds                                                                       │
+  │ Spec Ran:     revisions_lifecycle.cy.ts                                                        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /Users/szymonpajzert/Programming/koryta/frontend/cypress/screenshots/revisions_l     (1280x720)
+     ifecycle.cy.ts/Revisions Lifecycle -- lists pending edge revisions (newly create               
+     d edges) and resolves names (failed).png                                                       
+
+
+====================================================================================================
+
+  (Run Finished)
+
+
+       Spec                                              Tests  Passing  Failing  Pending  Skipped  
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ ✖  revisions_lifecycle.cy.ts                00:22        2        1        1        -        - │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ✖  1 of 1 failed (100%)                     00:22        2        1        1        -        -  
+

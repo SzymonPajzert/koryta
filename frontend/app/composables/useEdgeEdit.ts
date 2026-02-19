@@ -43,14 +43,10 @@ export function useEdgeEdit({
       : emptyEdge(),
   );
   const internalEdgeType = ref(edgeType);
-  const currentOption = computed(() =>
-    internalEdgeType.value
-      ? edgeTypeOptions[internalEdgeType.value]
-      : undefined,
-  );
+  const currentOption = computed(() => edgeTypeOptions[internalEdgeType.value]);
 
   const matches = (position: "source" | "target") => {
-    if (!currentOption.value) return false;
+    // currentOption is guaranteed by type
     const direction = newEdge.value.direction;
     const expectedPosition = direction === "outgoing" ? "source" : "target";
     if (position !== expectedPosition) return false;
@@ -67,14 +63,14 @@ export function useEdgeEdit({
       id: computed(() =>
         matches("source") ? unref(fixedNode)?.id : undefined,
       ),
-      type: computed(() => currentOption.value?.sourceType || "person"),
+      type: computed(() => currentOption.value.sourceType),
       ref: ref<Link<NodeType> | undefined>(undefined),
     },
     target: {
       id: computed(() =>
         matches("target") ? unref(fixedNode)?.id : undefined,
       ),
-      type: computed(() => currentOption.value?.targetType || "person"),
+      type: computed(() => currentOption.value.targetType),
       ref: ref<Link<NodeType> | undefined>(undefined),
     },
   };
@@ -86,8 +82,8 @@ export function useEdgeEdit({
       return undefined;
     },
     set: (val) => {
-      if (matches("source")) layout.target.ref.value = val as any;
-      else if (matches("target")) layout.source.ref.value = val as any;
+      if (matches("source")) layout.target.ref.value = val;
+      else if (matches("target")) layout.source.ref.value = val;
     },
   });
 
@@ -102,7 +98,7 @@ export function useEdgeEdit({
     return !!sourceId.value && !!targetId.value;
   });
 
-  const edgeLabel = computed(() => currentOption.value?.label || "");
+  const edgeLabel = computed(() => currentOption.value.label);
 
   async function processEdge() {
     if (!readyToSubmit.value) {
@@ -112,12 +108,17 @@ export function useEdgeEdit({
     const payload = {
       source: sourceId.value,
       target: targetId.value,
-      type: currentOption.value?.realType,
+      type: currentOption.value.realType,
       name: newEdge.value.name,
       content: newEdge.value.content,
       start_date: newEdge.value.start_date,
       end_date: newEdge.value.end_date,
-      references: newEdge.value.references,
+      references: [
+        ...(newEdge.value.references || []),
+        ...(unref(_referenceNode?.ref)?.id
+          ? [unref(_referenceNode?.ref)?.id]
+          : []),
+      ],
       party: newEdge.value.party,
       committee: newEdge.value.committee,
       position: newEdge.value.position,
@@ -198,14 +199,12 @@ export function useEdgeEdit({
       layout.target.ref.value = {
         id: edge.target,
         type: layout.target.type.value,
-        name: internalEdge.richNode?.name || "",
-      } as Link<NodeType>;
+      } as any;
     } else if (matches("target")) {
       layout.source.ref.value = {
         id: edge.source,
         type: layout.source.type.value,
-        name: internalEdge.richNode?.name || "",
-      } as Link<NodeType>;
+      } as any;
     }
   }
 

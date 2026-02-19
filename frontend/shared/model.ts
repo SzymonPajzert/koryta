@@ -98,6 +98,7 @@ export interface Person {
   wikipedia?: string;
   rejestrIo?: string;
   votes?: Votes;
+  visibility?: boolean;
 }
 
 export interface Company {
@@ -106,6 +107,7 @@ export interface Company {
   krsNumber?: string;
   content?: string;
   votes?: Votes;
+  visibility?: boolean;
 }
 
 export interface Article {
@@ -115,6 +117,7 @@ export interface Article {
   shortName?: string;
   content?: string;
   votes?: Votes;
+  visibility?: boolean;
 }
 
 export interface Region {
@@ -123,6 +126,7 @@ export interface Region {
   teryt: string;
   content?: string;
   votes?: Votes;
+  visibility?: boolean;
 }
 
 export interface NodeTypeMap {

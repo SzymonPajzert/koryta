@@ -35,10 +35,15 @@ describe("usePartyStatistics", () => {
     console.log("Debug Results:", debugResults);
 
     // Let's inspect the results structure. It should be an array of numbers.
-    expect(Array.isArray(results.value)).toBe(true);
-    // Assuming PiS is one of the keys in partyColors, we should see some count > 0
+    // Wait for invalidation? The composable uses computed, so accessing .value should trigger it.
+
+    // We expect the correct parties to be counted.
+    // PiS: 1, PO: 1, Nowa Lewica: 1.
+    // Assuming partyColors has these keys.
+
+    expect(results.value.length).toBeGreaterThan(0);
     const total = results.value.reduce((a, b) => a + b, 0);
     console.log("Total:", total);
-    expect(total).toBeGreaterThan(0);
+    expect(total).toBeGreaterThanOrEqual(3);
   });
 });
