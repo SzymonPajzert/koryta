@@ -164,6 +164,16 @@ export function useEdgeEdit({
     const internalEdge = edge as InternalEdge;
     newEdge.value = { ...internalEdge };
     const fn = unref(fixedNode);
+
+    // Determine direction based on fixedNode.id
+    if (fn?.id) {
+      if (edge.source === fn.id) {
+        newEdge.value.direction = "outgoing";
+      } else if (edge.target === fn.id) {
+        newEdge.value.direction = "incoming";
+      }
+    }
+
     // Try to detect edgeTypeExt
     if (edge.type === "owns") {
       // Determine if it's owns_parent, owns_child or owns_region
@@ -182,12 +192,14 @@ export function useEdgeEdit({
       layout.target.ref.value = {
         id: edge.target,
         type: layout.target.type.value,
-      } as any;
+        name: internalEdge.richNode?.name || "",
+      } as Link<NodeType>;
     } else if (matches("target")) {
       layout.source.ref.value = {
         id: edge.source,
         type: layout.source.type.value,
-      } as any;
+        name: internalEdge.richNode?.name || "",
+      } as Link<NodeType>;
     }
   }
 

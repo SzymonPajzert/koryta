@@ -193,6 +193,7 @@ const {
   edgeType: props.edgeTypeExt,
   referenceNode,
   initialDirection: props.initialDirection,
+  editedEdge: props.editedEdge,
   onUpdate: async () => emit("update"),
 });
 

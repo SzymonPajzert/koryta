@@ -206,6 +206,37 @@ describe("useEdgeEdit", () => {
     );
     expect(mockOnUpdate).toHaveBeenCalled();
   });
+
+  it("populates layout with name when opening existing edge", async () => {
+    const { openEditEdge, layout, newEdge } = useEdgeEdit({
+      fixedNode: computed(() => ({
+        id: "node-1",
+        type: "person",
+        name: "Node 1",
+      })),
+      authHeaders: mockAuthHeaders,
+    });
+
+    const mockEdge: any = {
+      type: "connection",
+      source: "node-1",
+      target: "node-2",
+      richNode: {
+        id: "node-2",
+        type: "person",
+        name: "Node 2 Name",
+      },
+    };
+
+    openEditEdge(mockEdge);
+
+    expect(newEdge.value.direction).toBe("outgoing");
+    expect(layout.target.ref.value).toEqual({
+      id: "node-2",
+      type: "person",
+      name: "Node 2 Name",
+    });
+  });
 });
 
 describe("useEdgeEdit - articles", () => {
