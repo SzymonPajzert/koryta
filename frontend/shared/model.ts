@@ -6,6 +6,7 @@ type PageBase<PageType> = {
   votes?: Votes;
   deleted?: boolean;
   delete_reason?: string;
+  visibility?: boolean;
 };
 
 export type VoteCategory = "interesting" | "quality";

@@ -19,7 +19,6 @@ interface nodeData {
 }
 
 export interface FetchNodesOptions {
-  isAuth?: boolean;
   nodeId?: string;
 }
 
@@ -27,7 +26,7 @@ export async function fetchNodes<N extends NodeType>(
   path: N,
   options: FetchNodesOptions = {},
 ): Promise<Record<string, nodeData[N]>> {
-  const { isAuth = false, nodeId } = options;
+  const { nodeId } = options;
   const db = getFirestore("koryta-pl");
   const query: FirebaseFirestore.Query = db
     .collection("nodes")
@@ -48,41 +47,33 @@ export async function fetchNodes<N extends NodeType>(
   }
 
   const nodes = await query.get();
-  const nodesData = nodes.docs
-    .map((doc) => {
-      return { id: doc.id, ...doc.data() } as nodeData[N] & {
-        id: string;
-        revision_id?: string;
-      };
-    })
-    .filter((node) => {
-      // Visibility filtering:
-      if (isAuth) return true;
-      return pageIsPublic(node);
-    });
+  const nodesData = nodes.docs.map((doc) => {
+    return {
+      id: doc.id,
+      ...doc.data(),
+      visibility: pageIsPublic(doc.data()),
+    } as nodeData[N] & {
+      id: string;
+      revision_id?: string;
+      visibility: boolean;
+    };
+  });
 
   return Object.fromEntries(nodesData.map((node) => [node.id, node]));
 }
 
-export async function fetchEdges(
-  options: { isAuth?: boolean } = {},
-): Promise<Edge[]> {
-  const { isAuth = false } = options;
+export async function fetchEdges(): Promise<Edge[]> {
   const db = getFirestore("koryta-pl");
-  const edges = (await db.collection("edges").get()).docs
-    .map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        content: data.content || data.text || "",
-        references: data.references || [],
-      } as Edge;
-    })
-    .filter((edge) => {
-      if (isAuth) return true;
-      return pageIsPublic(edge);
-    });
+  const edges = (await db.collection("edges").get()).docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      content: data.content || data.text || "",
+      references: data.references || [],
+      visibility: pageIsPublic(data),
+    } as Edge;
+  });
   return edges as unknown as Edge[];
 }
 
