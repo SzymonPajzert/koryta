@@ -94,9 +94,9 @@ export default defineNuxtConfig({
   vuetify: {
     vuetifyOptions: {
       theme: {
-        defaultTheme: "dark",
+        defaultTheme: "light",
         themes: {
-          dark: {
+          light: {
             colors: {
               primary: "#a8c79f",
               secondary: "#fad3d0",
