@@ -153,7 +153,7 @@
         <v-col cols="12" md="6" class="d-flex align-center">
           <v-checkbox
             v-model="newEdge.elected"
-            label="Wynik: mandat"
+            label="Uzyskano mandat"
             density="compact"
             hide-details="auto"
             class="mb-0"
