@@ -48,4 +48,10 @@ export interface Edge {
   content?: string;
   name?: string;
   references?: string[];
+  party?: string;
+  committee?: string;
+  position?: string;
+  elected?: boolean;
+  term?: string;
+  by_election?: boolean;
 }

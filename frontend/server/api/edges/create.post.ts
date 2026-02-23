@@ -28,6 +28,12 @@ export default defineEventHandler(async (event) => {
     start_date: body.start_date || null,
     end_date: body.end_date || null,
     references: body.references || [],
+    party: body.party || "",
+    committee: body.committee || "",
+    position: body.position || "",
+    elected: !!body.elected,
+    term: body.term || "",
+    by_election: !!body.by_election,
   };
 
   const batch = db.batch();

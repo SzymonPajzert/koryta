@@ -172,6 +172,12 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       content: edge.content,
       name: edge.name,
       references: edge.references,
+      party: edge.party,
+      committee: edge.committee,
+      position: edge.position,
+      elected: edge.elected,
+      term: edge.term,
+      by_election: edge.by_election,
     };
     return result;
   });

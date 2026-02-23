@@ -137,9 +137,33 @@
                   />
                 </template>
                 <v-list-item-title>{{ edge.richNode.name }}</v-list-item-title>
-                <v-list-item-subtitle>{{
-                  edge.label || edge.type
-                }}</v-list-item-subtitle>
+                <v-list-item-subtitle>
+                  <div>{{ edge.label || edge.type }}</div>
+                  <div
+                    v-if="edge.type === 'election'"
+                    class="d-flex flex-wrap gap-x-2 mt-1"
+                  >
+                    <v-chip
+                      v-if="edge.party"
+                      size="x-small"
+                      density="compact"
+                      class="mr-1"
+                    >
+                      {{ edge.party }}
+                    </v-chip>
+                    <span v-if="edge.position" class="font-weight-bold mr-1">{{
+                      edge.position
+                    }}</span>
+                    <v-chip
+                      v-if="edge.term"
+                      variant="outlined"
+                      size="x-small"
+                      density="compact"
+                    >
+                      {{ edge.term }}
+                    </v-chip>
+                  </div>
+                </v-list-item-subtitle>
                 <template #append>
                   <v-btn
                     icon="mdi-pencil"

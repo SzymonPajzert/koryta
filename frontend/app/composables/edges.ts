@@ -17,6 +17,12 @@ export type EdgeNode = {
   traverse?: TraversePolicy;
   start_date?: string;
   end_date?: string;
+  party?: string;
+  committee?: string;
+  position?: string;
+  elected?: boolean;
+  term?: string;
+  by_election?: boolean;
 };
 
 const edgeTypeLabels: Record<string, string> = {
