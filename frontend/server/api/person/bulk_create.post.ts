@@ -16,6 +16,14 @@ type ArticleRequest = {
   url: string;
 };
 
+type ElectionRequest = {
+  party?: string;
+  election_year?: string;
+  election_type?: string;
+  teryt_wojewodztwo?: string[];
+  teryt_powiat?: string[];
+};
+
 type Request = {
   name: string;
   content?: string;
@@ -23,6 +31,7 @@ type Request = {
   rejestrIo?: string;
   companies?: Array<CompanyRequest>;
   articles?: Array<ArticleRequest>;
+  elections?: Array<ElectionRequest>;
 };
 
 export default defineEventHandler(async (event) => {
@@ -53,6 +62,11 @@ export default defineEventHandler(async (event) => {
   // Track results
   const companiesResult: { companyId: string; created: boolean }[] = [];
   const articlesResult: { articleId: string; created: boolean }[] = [];
+  const electionsResult: {
+    regionId: string;
+    edgeId: string;
+    created: boolean;
+  }[] = [];
 
   // Process Companies
   if (body.companies) {
@@ -78,12 +92,44 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Process Elections
+  if (body.elections) {
+    if (!Array.isArray(body.elections)) {
+      badRequest("Elections must be an array");
+    }
+    for (const [i, election] of body.elections.entries()) {
+      const teryts = new Set<string>();
+      if (election.teryt_wojewodztwo) {
+        election.teryt_wojewodztwo.forEach((t) => teryts.add(t));
+      }
+      if (election.teryt_powiat) {
+        election.teryt_powiat.forEach((t) => teryts.add(t));
+      }
+      for (const teryt of teryts) {
+        const result = await createElection(
+          db,
+          batch,
+          user,
+          personId,
+          election,
+          teryt,
+        );
+        electionsResult.push({
+          regionId: result[0],
+          edgeId: result[1],
+          created: result[2],
+        });
+      }
+    }
+  }
+
   await batch.commit();
 
   return {
     personId,
     companies: companiesResult,
     articles: articlesResult,
+    elections: electionsResult,
     status: "ok",
   };
 });
@@ -164,6 +210,52 @@ async function createArticle(
   };
   await findEdgeOrCreate(db, batch, user, edgeData);
   return [articleId, created];
+}
+
+async function createElection(
+  db: FirebaseFirestore.Firestore,
+  batch: FirebaseFirestore.WriteBatch,
+  user: { uid: string },
+  personId: string,
+  election: ElectionRequest,
+  terytCode: string,
+): Promise<[string, string, boolean]> {
+  let regionId: string | undefined = undefined;
+  regionId = await lookupNode(db, "teryt", terytCode);
+
+  let created = false;
+  if (!regionId) {
+    const regionRef = db.collection("nodes").doc();
+    regionId = regionRef.id;
+    // We expect regions to be pre-populated. But just in case, create a stub region.
+    // Use any so we don't have to import Region from model explicitly if we just provide fields
+    const revisionData: any = {
+      name: `Teryt ${terytCode}`,
+      type: "region",
+      teryt: terytCode,
+    };
+    createRevisionTransaction(db, batch, user, regionRef, revisionData);
+    created = true;
+  }
+
+  const nameParts = [];
+  if (election.election_type) nameParts.push(election.election_type);
+  if (election.election_year) nameParts.push(election.election_year);
+  const edgeName = nameParts.join(" ") || "Unknown Election";
+
+  const edgeData: Edge = {
+    source: personId,
+    target: regionId,
+    type: "election",
+    name: edgeName,
+  };
+  if (election.party) edgeData.party = election.party;
+  if (election.election_year) {
+    edgeData.start_date = `${election.election_year}-01-01`;
+  }
+
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  return [regionId, edgeId, created];
 }
 
 async function lookupNode(
