@@ -4,6 +4,7 @@ import json
 import sys
 import threading
 import webbrowser
+import os
 
 import firebase_admin
 import numpy as np
@@ -173,9 +174,8 @@ def map_to_payload(row, type: str):
 
                 # If we still don't have a name but have a KRS, we must fail
                 if not c_name and c_krs:
-                    # TODO raise an exception here
-                    print(f"Cannot resolve company name for KRS: {c_krs}")
-                    return None
+                    print(f"Warning: Cannot resolve company name for KRS: {c_krs}. Using KRS as name.")
+                    c_name = c_krs
 
                 companies.append(
                     {
@@ -197,6 +197,21 @@ def map_to_payload(row, type: str):
             elif isinstance(a, str):
                 articles.append({"url": a})
 
+    elections = []
+    elec_list = get("elections")
+    if isinstance(elec_list, (list, np.ndarray)):
+        for e in elec_list:
+            if isinstance(e, dict):
+                elections.append(
+                    {
+                        "party": e.get("party"),
+                        "election_year": e.get("election_year"),
+                        "election_type": e.get("election_type"),
+                        "teryt_wojewodztwo": e.get("teryt_wojewodztwo", []),
+                        "teryt_powiat": e.get("teryt_powiat", []),
+                    }
+                )
+
     wiki_name = get_scalar("wiki_name")
     wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
     if not wikipedia_url and wiki_name:
@@ -215,6 +230,7 @@ def map_to_payload(row, type: str):
         "birthDate": get_scalar("birth_date") or get_scalar("birthDate"),
         "companies": companies,
         "articles": articles,
+        "elections": elections,
     }
 
 
@@ -343,14 +359,24 @@ def parse_args():
     if args.prod and args.endpoint == "http://localhost:3000":
         args.endpoint = "https://koryta.pl"
 
-    if not args.script and not args.query and args.type != "company":
+    query = args.query
+    if args.region and not query and not args.script:
+        if args.type == "person":
+             query = f"SELECT * FROM people_enriched WHERE list_contains(teryt_powiat, '{args.region}')"
+        elif args.type == "region":
+             query = f"SELECT * FROM regions WHERE id = '{args.region}'"
+
+    if args.type == "region" and not query and not args.script:
+        query = "SELECT * FROM regions"
+
+    if not args.script and not query and args.type != "company":
         print("Error: Must provide either --script or --query or --company")
         sys.exit(1)
 
-    query = args.query
     if args.script:
         with open(args.script, "r") as f:
             query = f.read()
+
     return args, query
 
 
@@ -373,6 +399,9 @@ def register_table(ctx, pipeline_cls) -> bool:
 
 def submit_results(args, df):
     if args.type == "region":
+        if not args.prod:
+            os.environ["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080"
+
         options = {
             "projectId": "koryta-pl",
             # "databaseURL": "http://localhost:8080",
@@ -383,7 +412,10 @@ def submit_results(args, df):
         process_regions(df, db)
         sys.exit(0)
 
-    token = authenticate_user(args.endpoint)
+    if not args.prod and args.endpoint.startswith("http://localhost"):
+        token = "test-token"
+    else:
+        token = authenticate_user(args.endpoint)
 
     if args.type == "company":
         target_url = f"{args.endpoint}/api/ingest/company"
