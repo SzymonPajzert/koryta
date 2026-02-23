@@ -24,6 +24,7 @@ export default withNuxt(
       "vue/no-multiple-template-root": "off",
       "vue/no-mutating-props": "off", // TODO enable it again
       "@typescript-eslint/no-explicit-any": "warn",
+      "vue/html-self-closing": "off",
     },
   },
 )

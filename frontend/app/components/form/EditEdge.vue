@@ -110,6 +110,67 @@
           />
         </v-col>
       </template>
+      <template v-if="edgeType === 'election'">
+        <v-col cols="12" md="6">
+          <v-select
+            v-model="newEdge.party"
+            :items="parties"
+            label="Partia polityczna"
+            density="compact"
+            hide-details="auto"
+            data-testid="edge-party-select"
+          />
+        </v-col>
+        <v-col cols="12" md="6">
+          <v-text-field
+            v-model="newEdge.committee"
+            label="Komitet wyborczy"
+            density="compact"
+            hide-details="auto"
+            data-testid="edge-committee-field"
+          />
+        </v-col>
+        <v-col cols="12" md="6">
+          <v-select
+            v-model="newEdge.position"
+            :items="electionPositions"
+            label="Stanowisko"
+            density="compact"
+            hide-details="auto"
+            data-testid="edge-position-select"
+          />
+        </v-col>
+        <v-col cols="12" md="6">
+          <v-select
+            v-model="newEdge.term"
+            :items="electionTerms"
+            label="Kadencja"
+            density="compact"
+            hide-details="auto"
+            data-testid="edge-term-select"
+          />
+        </v-col>
+        <v-col cols="12" md="6" class="d-flex align-center">
+          <v-checkbox
+            v-model="newEdge.elected"
+            label="Wynik: mandat"
+            density="compact"
+            hide-details="auto"
+            class="mb-0"
+            data-testid="edge-elected-checkbox"
+          />
+        </v-col>
+        <v-col cols="12" md="6" class="d-flex align-center">
+          <v-checkbox
+            v-model="newEdge.by_election"
+            label="Wybory uzupełniające"
+            density="compact"
+            hide-details="auto"
+            class="mb-0"
+            data-testid="edge-by-election-checkbox"
+          />
+        </v-col>
+      </template>
 
       <v-col cols="12" class="mt-2 d-flex gap-2">
         <v-btn
@@ -150,6 +211,7 @@ import {
   type edgeTypeExt as EdgeTypeExt,
   edgeTypeOptions,
 } from "~/composables/useEdgeTypes";
+import { parties, electionPositions, electionTerms } from "~~/shared/misc";
 
 definePageMeta({
   middleware: "auth",

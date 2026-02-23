@@ -230,4 +230,51 @@ describe("EditEdge.vue", () => {
     expect(pickers[0].props("label")).toBe("Osoba 1");
     expect(pickers[1].props("label")).toBe("Osoba 2");
   });
+
+  it("renders specific fields when edgeType is election", async () => {
+    mockNewEdge.value = { ...mockNewEdge.value, type: "election" };
+    // update mock useEdgeEdit to return 'election'
+    useEdgeEdit.mockReturnValueOnce({
+      newEdge: mockNewEdge,
+      processEdge: mockProcessEdge,
+      openEditEdge: mockOpenEditEdge,
+      edgeType: ref("election"),
+      edgeLabel: ref("Kandydował/a w"),
+      layout: mockLayout,
+      readyToSubmit: mockReadyToSubmit,
+    });
+
+    const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "election" },
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          FormEdgeSourceTarget: true,
+          DialogProposeRemoval: true,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="edge-party-select"]').exists()).toBe(
+      true,
+    );
+    expect(wrapper.find('[data-testid="edge-committee-field"]').exists()).toBe(
+      true,
+    );
+    expect(wrapper.find('[data-testid="edge-position-select"]').exists()).toBe(
+      true,
+    );
+    expect(wrapper.find('[data-testid="edge-term-select"]').exists()).toBe(
+      true,
+    );
+    expect(wrapper.find('[data-testid="edge-elected-checkbox"]').exists()).toBe(
+      true,
+    );
+    expect(
+      wrapper.find('[data-testid="edge-by-election-checkbox"]').exists(),
+    ).toBe(true);
+  });
 });

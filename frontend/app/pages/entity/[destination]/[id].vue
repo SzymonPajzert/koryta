@@ -36,7 +36,9 @@
                 if (type === 'place' || type === 'region') {
                   return ['employed', 'connection'].includes(edge.type);
                 }
-                return ['employed', 'connection', 'owns'].includes(edge.type);
+                return ['employed', 'connection', 'owns', 'election'].includes(
+                  edge.type,
+                );
               })"
               :key="edge.richNode?.name"
               cols="12"

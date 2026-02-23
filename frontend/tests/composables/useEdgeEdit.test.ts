@@ -63,10 +63,12 @@ describe("useEdgeEdit", () => {
       // Person Outgoing (Default)
       // 'connection' (Source: Person) -> Include
       // 'employed' (Source: Person) -> Include
+      // 'election' (Source: Person) -> Include
       const types = availableEdgeTypes.value.map((o) => o.value);
       expect(types).not.toContain("owns_parent");
       expect(types).toContain("connection");
       expect(types).toContain("employed");
+      expect(types).toContain("election");
 
       // Change to incoming
       newEdge.value.direction = "incoming";
@@ -118,7 +120,7 @@ describe("useEdgeEdit", () => {
     const cases = [
       {
         nodeType: "person",
-        expectedOutgoing: ["connection", "employed"],
+        expectedOutgoing: ["connection", "employed", "election"],
         expectedIncoming: ["connection", "mentioned_person"],
       },
       {

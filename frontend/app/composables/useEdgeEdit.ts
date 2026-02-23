@@ -118,6 +118,12 @@ export function useEdgeEdit({
       start_date: newEdge.value.start_date,
       end_date: newEdge.value.end_date,
       references: newEdge.value.references,
+      party: newEdge.value.party,
+      committee: newEdge.value.committee,
+      position: newEdge.value.position,
+      elected: newEdge.value.elected,
+      term: newEdge.value.term,
+      by_election: newEdge.value.by_election,
     };
 
     const payloadFull = editedEdge
@@ -227,5 +233,7 @@ function emptyEdge(): InternalEdge {
     end_date: "",
     direction: "outgoing",
     references: [],
+    elected: false,
+    by_election: false,
   };
 }

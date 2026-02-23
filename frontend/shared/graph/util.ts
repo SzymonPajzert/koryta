@@ -130,6 +130,7 @@ const edgeLabel: Record<EdgeType, string> = {
   mentions: "wspomina",
   owns: "właściciel",
   comment: "komentarz",
+  election: "kandydował",
 };
 
 const edgeTraverse: Record<EdgeType, TraversePolicy> = {
@@ -153,6 +154,10 @@ const edgeTraverse: Record<EdgeType, TraversePolicy> = {
     forward: "dead_end",
     backward: "dead_end",
   },
+  election: {
+    forward: "dead_end",
+    backward: "active",
+  },
 };
 
 export function getEdges(edgesFromDB: DBEdge[]) {
@@ -167,6 +172,12 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       content: edge.content,
       name: edge.name,
       references: edge.references,
+      party: edge.party,
+      committee: edge.committee,
+      position: edge.position,
+      elected: edge.elected,
+      term: edge.term,
+      by_election: edge.by_election,
     };
     return result;
   });

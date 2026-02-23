@@ -38,6 +38,12 @@ export interface Edge extends PageBase<EdgeType> {
   start_date?: string;
   end_date?: string;
   references?: string[];
+  party?: string;
+  committee?: string;
+  position?: string;
+  elected?: boolean;
+  term?: string;
+  by_election?: boolean;
 }
 
 export function pageIsPublic(node: { revision_id?: string }) {
@@ -51,7 +57,8 @@ export type EdgeType =
   | "connection"
   | "mentions"
   | "owns"
-  | "comment";
+  | "comment"
+  | "election";
 
 export const nodeTypeIcon: Record<NodeType, string> = {
   person: "mdi-account-outline",
