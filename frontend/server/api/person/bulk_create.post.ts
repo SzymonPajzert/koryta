@@ -97,7 +97,7 @@ export default defineEventHandler(async (event) => {
     if (!Array.isArray(body.elections)) {
       badRequest("Elections must be an array");
     }
-    for (const [i, election] of body.elections.entries()) {
+    for (const [_, election] of body.elections.entries()) {
       const teryts = new Set<string>();
       if (election.teryt_wojewodztwo) {
         election.teryt_wojewodztwo.forEach((t) => teryts.add(t));
@@ -255,6 +255,7 @@ async function createElection(
   }
 
   const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  if (!edgeId) throw new Error("Failed to create edge");
   return [regionId, edgeId, created];
 }
 

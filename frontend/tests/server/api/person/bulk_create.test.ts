@@ -127,15 +127,15 @@ describe("api/person/bulk_create", () => {
     const result = await handler({} as any);
 
     expect(createRevisionTransaction).toHaveBeenCalledWith(
-        mockDb,
-        expect.anything(),
-        { uid: "test-user-id" },
-        newRegionRef,
-        {
-            name: "Teryt 0201",
-            teryt: "0201",
-            type: "region"
-        }
+      mockDb,
+      expect.anything(),
+      { uid: "test-user-id" },
+      newRegionRef,
+      {
+        name: "Teryt 0201",
+        teryt: "0201",
+        type: "region",
+      },
     );
 
     expect(createRevisionTransaction).toHaveBeenCalledWith(
@@ -167,6 +167,6 @@ describe("api/person/bulk_create", () => {
         start_date: "2023-01-01",
       },
     );
-     expect(result.elections).toHaveLength(2);
+    expect(result.elections).toHaveLength(2);
   });
 });
