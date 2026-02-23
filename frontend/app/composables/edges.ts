@@ -1,15 +1,9 @@
-import type { Node, Edge } from "~~/shared/model";
+import type { Node, Edge, EdgeType, ElectionPosition } from "~~/shared/model";
 import type { TraversePolicy } from "~~/shared/graph/model";
 
 export type EdgeNode = {
   richNode: Node;
-  type:
-    | "employed"
-    | "connection"
-    | "mentions"
-    | "owns"
-    | "comment"
-    | "election";
+  type: EdgeType;
   label: string;
   source: string;
   target: string;
@@ -19,7 +13,7 @@ export type EdgeNode = {
   end_date?: string;
   party?: string;
   committee?: string;
-  position?: string;
+  position?: ElectionPosition;
   elected?: boolean;
   term?: string;
   by_election?: boolean;

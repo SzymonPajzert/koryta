@@ -91,9 +91,8 @@ describe("api/person/bulk_create", () => {
         {
           party: "Test Party",
           election_year: "2023",
-          election_type: "Sejm",
-          teryt_wojewodztwo: ["02"],
-          teryt_powiat: ["0201", "02"], // Contains duplicate to test uniqueness
+          election_type: "Sejmik",
+          teryt: "02",
         },
       ],
     });
@@ -126,17 +125,7 @@ describe("api/person/bulk_create", () => {
 
     const result = await handler({} as any);
 
-    expect(createRevisionTransaction).toHaveBeenCalledWith(
-      mockDb,
-      expect.anything(),
-      { uid: "test-user-id" },
-      newRegionRef,
-      {
-        name: "Teryt 0201",
-        teryt: "0201",
-        type: "region",
-      },
-    );
+    expect(createRevisionTransaction).toHaveBeenCalled();
 
     expect(createRevisionTransaction).toHaveBeenCalledWith(
       mockDb,
@@ -147,26 +136,11 @@ describe("api/person/bulk_create", () => {
         source: "person-id",
         target: "region-id-02",
         type: "election",
-        name: "Sejm 2023",
+        name: "kandydatura",
         party: "Test Party",
         start_date: "2023-01-01",
       },
     );
-
-    expect(createRevisionTransaction).toHaveBeenCalledWith(
-      mockDb,
-      expect.anything(),
-      { uid: "test-user-id" },
-      edgeRef2,
-      {
-        source: "person-id",
-        target: "region-id-0201",
-        type: "election",
-        name: "Sejm 2023",
-        party: "Test Party",
-        start_date: "2023-01-01",
-      },
-    );
-    expect(result.elections).toHaveLength(2);
+    expect(result.elections).toHaveLength(1);
   });
 });
