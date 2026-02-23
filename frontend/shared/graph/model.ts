@@ -36,7 +36,13 @@ export interface Edge {
   source: string;
   target: string;
   label: string;
-  type: "employed" | "connection" | "mentions" | "owns" | "comment";
+  type:
+    | "employed"
+    | "connection"
+    | "mentions"
+    | "owns"
+    | "comment"
+    | "election";
 
   traverse?: TraversePolicy;
   content?: string;

@@ -3,7 +3,13 @@ import type { TraversePolicy } from "~~/shared/graph/model";
 
 export type EdgeNode = {
   richNode: Node;
-  type: "employed" | "connection" | "mentions" | "owns" | "comment";
+  type:
+    | "employed"
+    | "connection"
+    | "mentions"
+    | "owns"
+    | "comment"
+    | "election";
   label: string;
   source: string;
   target: string;
@@ -19,6 +25,7 @@ const edgeTypeLabels: Record<string, string> = {
   connection: "Powiązanie z",
   mentions: "Wspomina o",
   comment: "Komentarz",
+  election: "Kandydował/a w",
 };
 
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {

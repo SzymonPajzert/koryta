@@ -7,7 +7,8 @@ export type edgeTypeExt =
   | "employed"
   | "mentioned_person"
   | "mentioned_company"
-  | "owns_region";
+  | "owns_region"
+  | "election";
 
 export type ButtonConfig = {
   label: (name: string) => string;
@@ -143,6 +144,25 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
       incoming: {
         label: (_name) => "Dodaj osobę, która pracuje w tej firmie", // New button
         icon: "mdi-account-plus",
+      },
+    },
+  },
+  election: {
+    value: "election",
+    label: "Kandydował/a w",
+    sourceType: "person",
+    targetType: "region",
+    sourceLabel: "Kandydat",
+    targetLabel: "Region",
+    realType: "election",
+    buttons: {
+      outgoing: {
+        label: (name) => "Dodaj wybory, w których brał udział " + name,
+        icon: "mdi-vote-outline",
+      },
+      incoming: {
+        label: (_name) => "Dodaj kandydata w tym regionie",
+        icon: "mdi-account-star-outline",
       },
     },
   },

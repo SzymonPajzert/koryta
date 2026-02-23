@@ -130,6 +130,7 @@ const edgeLabel: Record<EdgeType, string> = {
   mentions: "wspomina",
   owns: "właściciel",
   comment: "komentarz",
+  election: "kandydował",
 };
 
 const edgeTraverse: Record<EdgeType, TraversePolicy> = {
@@ -152,6 +153,10 @@ const edgeTraverse: Record<EdgeType, TraversePolicy> = {
   comment: {
     forward: "dead_end",
     backward: "dead_end",
+  },
+  election: {
+    forward: "dead_end",
+    backward: "active",
   },
 };
 
