@@ -130,6 +130,19 @@
         </div>
       </div>
 
+      <div v-if="editedEdge" class="pa-4">
+        <FormEditEdge
+          :key="`new-${editedEdge.edgeType}`"
+          :node-id="node"
+          :node-type="type"
+          :node-name="entity?.name || ''"
+          :edge-type-ext="editedEdge.edgeTypeExt"
+          :initial-direction="editedEdge.direction"
+          :edited-edge="undefined"
+          @update="onEdgeUpdate"
+        />
+      </div>
+
       <v-divider />
 
       <template v-if="!!user">
@@ -140,19 +153,6 @@
           <CommentsSection :node-id="node" />
         </div>
       </template>
-    </v-card>
-
-    <v-card v-if="editedEdge" class="pa-4">
-      <FormEditEdge
-        :key="`new-${editedEdge.edgeType}`"
-        :node-id="node"
-        :node-type="type"
-        :node-name="entity?.name || ''"
-        :edge-type-ext="editedEdge.edgeTypeExt"
-        :initial-direction="editedEdge.direction"
-        :edited-edge="undefined"
-        @update="onEdgeUpdate"
-      />
     </v-card>
   </div>
 </template>
