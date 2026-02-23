@@ -268,7 +268,7 @@ function startNewEdge(type: string) {
   editedEdgeId.value = undefined;
 }
 
-function openEditEdge(edge: any) {
+function openEditEdge(edge: EdgeNode) {
   isEditingEdge.value = true;
   editedEdgeId.value = edge.id;
   // We need to map the edge type to edgeTypeExt
