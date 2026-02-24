@@ -10,6 +10,7 @@ import firebase_admin
 import numpy as np
 import pandas as pd
 import requests
+from pathlib import Path
 from firebase_admin import firestore
 
 from main import PIPELINES, CompaniesMerged, _setup_context
@@ -19,6 +20,18 @@ from scrapers.stores import Pipeline
 # Global variable to store the token received securely
 RECEIVED_TOKEN: str | None = None
 COMPANY_LOOKUP: dict[str, str] = {}
+
+
+def strip_none(d):
+    if isinstance(d, dict):
+        return {
+            k: strip_none(v)
+            for k, v in d.items()
+            if v is not None and (not isinstance(v, float) or not np.isnan(v))
+        }
+    elif isinstance(d, list):
+        return [strip_none(v) for v in d if v is not None]
+    return d
 
 
 class AuthHandler(http.server.BaseHTTPRequestHandler):
@@ -174,7 +187,9 @@ def map_to_payload(row, type: str):
 
                 # If we still don't have a name but have a KRS, we must fail
                 if not c_name and c_krs:
-                    print(f"Warning: Cannot resolve company name for KRS: {c_krs}. Using KRS as name.")
+                    print(
+                        f"Warning: Cannot resolve company name for KRS: {c_krs}. Using KRS as name."
+                    )
                     c_name = c_krs
 
                 companies.append(
@@ -202,15 +217,35 @@ def map_to_payload(row, type: str):
     if isinstance(elec_list, (list, np.ndarray)):
         for e in elec_list:
             if isinstance(e, dict):
-                elections.append(
-                    {
-                        "party": e.get("party"),
-                        "election_year": e.get("election_year"),
-                        "election_type": e.get("election_type"),
-                        "teryt_wojewodztwo": e.get("teryt_wojewodztwo", []),
-                        "teryt_powiat": e.get("teryt_powiat", []),
-                    }
-                )
+                teryt_powiat = e.get("teryt_powiat", [])
+                teryt_wojewodztwo = e.get("teryt_wojewodztwo", [])
+
+                teryt_val = None
+                if (
+                    isinstance(teryt_powiat, (list, np.ndarray))
+                    and len(teryt_powiat) > 0
+                ):
+                    teryt_val = str(teryt_powiat[0])
+                elif (
+                    isinstance(teryt_wojewodztwo, (list, np.ndarray))
+                    and len(teryt_wojewodztwo) > 0
+                ):
+                    teryt_val = str(teryt_wojewodztwo[0])
+                elif e.get("teryt"):
+                    teryt_val = str(e.get("teryt"))
+
+                # Keep only valid enum values if possible? Or let jsonschema fail
+                election_payload = {
+                    "election_type": e.get("election_type"),
+                }
+                if e.get("party"):
+                    election_payload["party"] = e.get("party")
+                if e.get("election_year"):
+                    election_payload["election_year"] = str(e.get("election_year"))
+                if teryt_val:
+                    election_payload["teryt"] = teryt_val
+
+                elections.append(election_payload)
 
     wiki_name = get_scalar("wiki_name")
     wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
@@ -222,16 +257,25 @@ def map_to_payload(row, type: str):
     if not rejestr_io_url and rejestr_id:
         rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
 
-    return {
+    # Filter out empty fields and optional fields with None to satisfy schema
+    payload = {
         "name": name,
-        "content": get("content") or get("history"),
-        "wikipedia": wikipedia_url,
-        "rejestrIo": rejestr_io_url,
-        "birthDate": get_scalar("birth_date") or get_scalar("birthDate"),
-        "companies": companies,
-        "articles": articles,
-        "elections": elections,
     }
+
+    if get("content") or get("history"):
+        payload["content"] = get("content") or get("history")
+    if wikipedia_url:
+        payload["wikipedia"] = wikipedia_url
+    if rejestr_io_url:
+        payload["rejestrIo"] = rejestr_io_url
+    if companies:
+        payload["companies"] = companies
+    if articles:
+        payload["articles"] = articles
+    if elections:
+        payload["elections"] = elections
+
+    return strip_none(payload)
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -362,9 +406,9 @@ def parse_args():
     query = args.query
     if args.region and not query and not args.script:
         if args.type == "person":
-             query = f"SELECT * FROM people_enriched WHERE list_contains(teryt_powiat, '{args.region}')"
+            query = f"SELECT * FROM people_enriched WHERE list_contains(teryt_powiat, '{args.region}')"
         elif args.type == "region":
-             query = f"SELECT * FROM regions WHERE id = '{args.region}'"
+            query = f"SELECT * FROM regions WHERE id = '{args.region}'"
 
     if args.type == "region" and not query and not args.script:
         query = "SELECT * FROM regions"
