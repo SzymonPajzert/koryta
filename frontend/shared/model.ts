@@ -40,11 +40,23 @@ export interface Edge extends PageBase<EdgeType> {
   references?: string[];
   party?: string;
   committee?: string;
-  position?: string;
+  position?: ElectionPosition;
   elected?: boolean;
   term?: string;
   by_election?: boolean;
 }
+
+export type ElectionPosition =
+  | "Sejmik"
+  | "Rada miasta"
+  | "Rada gminy"
+  | "Rada powiatu"
+  | "Burmistrz"
+  | "Wójt"
+  | "Prezydent"
+  | "Sejm"
+  | "Senat"
+  | "Parlament Europejski";
 
 export function pageIsPublic(node: { revision_id?: string }) {
   return !!node.revision_id;

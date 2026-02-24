@@ -84,17 +84,17 @@ describe("API /api/person/bulk_create", () => {
 
       // Verify Companies response
       expect(resp.body.companies).to.be.an("array").that.has.length(1);
-      expect(resp.body.companies[0].companyId).to.be.a("string");
+      expect(resp.body.companies[0].nodeId).to.be.a("string");
       expect(resp.body.companies[0].created).to.eq(true);
 
       // Verify Articles response
       expect(resp.body.articles).to.be.an("array").that.has.length(1);
-      expect(resp.body.articles[0].articleId).to.be.a("string");
+      expect(resp.body.articles[0].nodeId).to.be.a("string");
       expect(resp.body.articles[0].created).to.eq(true);
 
       const personId = resp.body.personId;
-      const companyId = resp.body.companies[0].companyId;
-      const articleId = resp.body.articles[0].articleId;
+      const companyId = resp.body.companies[0].nodeId;
+      const articleId = resp.body.articles[0].nodeId;
 
       // 2. Verify Person Created via GET API
       cy.request({
@@ -169,10 +169,10 @@ describe("API /api/person/bulk_create", () => {
           "Should return same ID for existing person",
         );
         // Verify duplicate companies/articles return created: false
-        expect(resp2.body.companies[0].companyId).to.eq(companyId);
+        expect(resp2.body.companies[0].nodeId).to.eq(companyId);
         expect(resp2.body.companies[0].created).to.eq(false);
 
-        expect(resp2.body.articles[0].articleId).to.eq(articleId);
+        expect(resp2.body.articles[0].nodeId).to.eq(articleId);
         expect(resp2.body.articles[0].created).to.eq(false);
       });
     });

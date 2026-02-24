@@ -1,4 +1,4 @@
-import type { Article } from "./model";
+import type { Article, ElectionPosition } from "./model";
 
 export const parties = [
   "PO",
@@ -20,7 +20,7 @@ export const partyColors: Record<string, string> = {
   Razem: "#871057",
 };
 
-export const electionPositions = [
+export const electionPositions: ElectionPosition[] = [
   "Sejmik",
   "Rada miasta",
   "Rada gminy",
