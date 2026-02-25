@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from analysis.extract import Extract
 from analysis.interesting import CompaniesMerged
+from analysis.payloads import UploadPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
 from scrapers.article.crawler import parse_hostname, uuid7
@@ -201,6 +202,7 @@ PIPELINES = [
     Extract,
     PostalCodes,
     Regions,
+    UploadPayloads,
 ]
 
 

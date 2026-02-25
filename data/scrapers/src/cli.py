@@ -1,37 +1,23 @@
 import argparse
 import http.server
 import json
+import os
 import sys
 import threading
 import webbrowser
-import os
 
 import firebase_admin
 import numpy as np
-import pandas as pd
 import requests
-from pathlib import Path
 from firebase_admin import firestore
 
-from main import PIPELINES, CompaniesMerged, _setup_context
+from analysis.payloads import UploadPayloads
+from main import PIPELINES, _setup_context
 from scrapers.krs.graph import CompanyGraph
-from scrapers.stores import Pipeline
+from scrapers.stores import LocalFile, Pipeline
 
 # Global variable to store the token received securely
 RECEIVED_TOKEN: str | None = None
-COMPANY_LOOKUP: dict[str, str] = {}
-
-
-def strip_none(d):
-    if isinstance(d, dict):
-        return {
-            k: strip_none(v)
-            for k, v in d.items()
-            if v is not None and (not isinstance(v, float) or not np.isnan(v))
-        }
-    elif isinstance(d, list):
-        return [strip_none(v) for v in d if v is not None]
-    return d
 
 
 class AuthHandler(http.server.BaseHTTPRequestHandler):
@@ -134,150 +120,6 @@ def check_pipeline_files(ctx):
     return missing
 
 
-def map_to_payload(row, type: str):
-    """
-    Maps a result row (dict) to the API payload format.
-    """
-
-    if type == "company":
-        if not row.get("krs") or not row.get("name"):
-            print("Skipping invalid company payload ...")
-            return
-        return {
-            "krs": row.get("krs"),
-            "name": row.get("name"),
-            "city": row.get("city"),
-            "owns": row.get("children") or [],
-            "teryt": str(row.get("teryt_code")).removesuffix(".0")
-            if pd.notna(row.get("teryt_code"))
-            else None,
-        }
-
-    def get_scalar(key):
-        val = row.get(key)
-        if isinstance(val, (list, np.ndarray)):
-            if len(val) > 0:
-                return val[0]
-            return None
-        return val
-
-    def get(key):
-        return row.get(key)
-
-    name = (
-        get_scalar("name")
-        or get_scalar("full_name")
-        or get_scalar("fullname")
-        or get_scalar("krs_name")
-        or get_scalar("base_full_name")
-        or "Unknown Payload"
-    )
-
-    companies = []
-    company_list = get("companies") or get("employment")
-
-    if isinstance(company_list, (list, np.ndarray)):
-        for c in company_list:
-            if isinstance(c, dict):
-                c_name = c.get("name")
-                c_krs = c.get("krs") or c.get("employed_krs")
-
-                if not c_name and c_krs:
-                    c_name = COMPANY_LOOKUP.get(c_krs)
-
-                # If we still don't have a name but have a KRS, we must fail
-                if not c_name and c_krs:
-                    print(
-                        f"Warning: Cannot resolve company name for KRS: {c_krs}. Using KRS as name."
-                    )
-                    c_name = c_krs
-
-                companies.append(
-                    {
-                        # Fallback only if no KRS either (e.g. unknown entity type)
-                        "name": c_name or "Unknown Company",
-                        "krs": c_krs,
-                        "role": c.get("role") or c.get("function"),
-                        "start": c.get("start") or c.get("employed_start"),
-                        "end": c.get("end") or c.get("employed_end"),
-                    }
-                )
-
-    articles = []
-    arts = get("articles")
-    if isinstance(arts, list):
-        for a in arts:
-            if isinstance(a, dict) and a.get("url"):
-                articles.append({"url": a.get("url")})
-            elif isinstance(a, str):
-                articles.append({"url": a})
-
-    elections = []
-    elec_list = get("elections")
-    if isinstance(elec_list, (list, np.ndarray)):
-        for e in elec_list:
-            if isinstance(e, dict):
-                teryt_powiat = e.get("teryt_powiat", [])
-                teryt_wojewodztwo = e.get("teryt_wojewodztwo", [])
-
-                teryt_val = None
-                if (
-                    isinstance(teryt_powiat, (list, np.ndarray))
-                    and len(teryt_powiat) > 0
-                ):
-                    teryt_val = str(teryt_powiat[0])
-                elif (
-                    isinstance(teryt_wojewodztwo, (list, np.ndarray))
-                    and len(teryt_wojewodztwo) > 0
-                ):
-                    teryt_val = str(teryt_wojewodztwo[0])
-                elif e.get("teryt"):
-                    teryt_val = str(e.get("teryt"))
-
-                # Keep only valid enum values if possible? Or let jsonschema fail
-                election_payload = {
-                    "election_type": e.get("election_type"),
-                }
-                if e.get("party"):
-                    election_payload["party"] = e.get("party")
-                if e.get("election_year"):
-                    election_payload["election_year"] = str(e.get("election_year"))
-                if teryt_val:
-                    election_payload["teryt"] = teryt_val
-
-                elections.append(election_payload)
-
-    wiki_name = get_scalar("wiki_name")
-    wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
-    if not wikipedia_url and wiki_name:
-        wikipedia_url = f"https://pl.wikipedia.org/wiki/{wiki_name.replace(' ', '_')}"
-
-    rejestr_io_url = get_scalar("rejestrIo")
-    rejestr_id = get_scalar("rejestrio_id")
-    if not rejestr_io_url and rejestr_id:
-        rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
-
-    # Filter out empty fields and optional fields with None to satisfy schema
-    payload = {
-        "name": name,
-    }
-
-    if get("content") or get("history"):
-        payload["content"] = get("content") or get("history")
-    if wikipedia_url:
-        payload["wikipedia"] = wikipedia_url
-    if rejestr_io_url:
-        payload["rejestrIo"] = rejestr_io_url
-    if companies:
-        payload["companies"] = companies
-    if articles:
-        payload["articles"] = articles
-    if elections:
-        payload["elections"] = elections
-
-    return strip_none(payload)
-
-
 class NumpyEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, np.integer):
@@ -296,66 +138,38 @@ def non_empty_query(query):
 
 
 def process_regions(df, db):
-    # Sort by ID length to Ensure parents created first
-    # Convert to string just in case
-    df["id_str"] = df["id"].astype(str)
-    df["id_len"] = df["id"].astype(str).str.len()
-    df = df.sort_values("id_len")
-
     success = 0
     total = len(df)
 
     for idx, row in enumerate(df.itertuples()):
-        name = row.name
-        if len(row.id) == 2:
-            name = f"Województwo {name}"
-        elif len(row.id) == 4 and name.lower() == name:
-            name = f"Powiat {name}"
-        elif len(row.id) == 7:
-            name = f"Gmina {name}"
-        print(f"[{idx + 1}/{total}] Processing '{name}' ({row.id})...", end=" ")
+        payload = row.payload
+        node_id = payload["node_id"]
 
-        if non_empty_query(db.collection("nodes").where("teryt", "==", str(row.id))):
-            print(f"Already done {row.id}")
-            continue
-        if len(row.id) > 4:
-            print("Skipping detailed region")
+        print(
+            f"[{idx + 1}/{total}] Processing '{payload['name']}' ({payload['teryt']})",
+            end=" ",
+        )
+
+        if non_empty_query(
+            db.collection("nodes").where("teryt", "==", str(payload["teryt"]))
+        ):
+            print(f"Already done {payload['teryt']}")
             continue
 
-        node_id = f"teryt{row.id}"
         node_ref = db.collection("nodes").document(node_id)
 
-        payload = {
-            "type": "region",
-            "name": name,
-            "teryt": str(row.id),
-            "revision_id": f"teryt{row.id}",
-        }
+        # Remove edge and node_id from node payload
+        node_payload = dict(payload)
+        edge_payload = node_payload.pop("edge", None)
+        node_payload.pop("node_id", None)
 
         try:
-            node_ref.set(payload, merge=True)
+            node_ref.set(node_payload, merge=True)
             success += 1
 
-            # Create Edge if parent exists
-            parent_id = getattr(row, "parent_id", None)
-            if (
-                parent_id
-                and parent_id is not None
-                and str(parent_id) != "nan"
-                and str(parent_id) != "None"
-            ):
-                parent_id = str(parent_id)
-                parent_node_id = f"teryt{parent_id}"
-
-                edge_id = f"edge_{parent_node_id}_{node_id}_owns"
+            if edge_payload:
+                edge_id = edge_payload.pop("edge_id")
                 edge_ref = db.collection("edges").document(edge_id)
-
-                edge_payload = {
-                    "source": parent_node_id,
-                    "target": node_id,
-                    "type": "owns",
-                    "revision_id": f"rev_{edge_id}",
-                }
                 edge_ref.set(edge_payload, merge=True)
                 print("(Edge OK)")
             else:
@@ -406,12 +220,14 @@ def parse_args():
     query = args.query
     if args.region and not query and not args.script:
         if args.type == "person":
-            query = f"SELECT * FROM people_enriched WHERE list_contains(teryt_powiat, '{args.region}')"
+            query = f"""SELECT * FROM upload_payloads WHERE entity_type='person'
+            AND list_contains(teryt_powiat, '{args.region}')"""
         elif args.type == "region":
-            query = f"SELECT * FROM regions WHERE id = '{args.region}'"
+            query = f"""SELECT * FROM upload_payloads WHERE entity_type='region'
+            AND entity_id = '{args.region}'"""
 
     if args.type == "region" and not query and not args.script:
-        query = "SELECT * FROM regions"
+        query = "SELECT * FROM upload_payloads WHERE entity_type='region'"
 
     if not args.script and not query and args.type != "company":
         print("Error: Must provide either --script or --query or --company")
@@ -473,7 +289,7 @@ def submit_results(args, df):
 
     success_count = 0
     for idx, row in df.iterrows():
-        payload = map_to_payload(row, args.type)
+        payload = row.get("payload")
         if payload is None:
             print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
             continue
@@ -502,10 +318,13 @@ def submit_results(args, df):
 
 def print_results(df, type):
     print("\n--- Query Results (First 20) ---")
-    print(df.head(20).to_string())
+    if not df.empty and "payload" in df.columns:
+        print(df.drop(columns=["payload"]).head(20).to_string())
+    else:
+        print(df.head(20).to_string())
     print("\n--- Payload Preview (First 1) ---")
-    if not df.empty:
-        preview_payload = map_to_payload(df.iloc[0], type)
+    if not df.empty and "payload" in df.columns:
+        preview_payload = df.iloc[0].get("payload")
         print(
             json.dumps(preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder)
         )
@@ -514,37 +333,45 @@ def print_results(df, type):
 def execute_query(ctx, args, query):
     print("Executing query...")
     try:
-        if args.type == "company":
-            print("Loading companies...")
-            p_comp = Pipeline.create(CompaniesMerged)
-            df = p_comp.read_or_process(ctx)
+        p_payloads = Pipeline.create(UploadPayloads)
+        p_payloads.read_or_process(ctx)  # Ensure upload payloads exist.
 
+        if args.type == "company":
             if args.krs:
                 print(f"Building graph to find descendants of {args.krs}...")
-                graph = CompanyGraph.from_dataframe(df)
+                graph = CompanyGraph.from_dataframe(
+                    ctx.io.read_data(
+                        LocalFile(
+                            "companies_merged/companies_merged.jsonl", "versioned"
+                        )
+                    ).read_dataframe("jsonl")
+                )
                 relevant_companies = graph.all_descendants([args.krs])
                 print(f"Found {len(relevant_companies)} relevant companies.")
-                df = df[df["krs"].isin(relevant_companies)]
-
-            if args.region:
-                print(f"Filtering companies by region starting with {args.region}...")
-                # Ensure teryt-code is string and handle NaNs
-                # The column in dataframe should be 'teryt_code'
-                # as exported by InterestingEntity
-                if "teryt_code" in df.columns:
-                    df = df[
-                        df["teryt_code"]
-                        .astype(str)
-                        .str.startswith(args.region, na=False)
-                    ]
-                    print(f"Found {len(df)} companies in region {args.region}.")
+                id_list = ", ".join([f"'{k}'" for k in relevant_companies])
+                if id_list:
+                    query = f"""SELECT * FROM upload_payloads
+                    WHERE entity_type='company' AND entity_id IN ({id_list})"""
                 else:
-                    print(
-                        "Warning: 'teryt_code' column not found in dataframe. \
-                            Region filtering skipped."
+                    query = (
+                        "SELECT * FROM upload_payloads WHERE head=false"  # return empty
                     )
-        else:
-            df = ctx.con.execute(query).df()
+            elif args.region:
+                query = f"""
+                SELECT * FROM upload_payloads
+                WHERE entity_type='company'
+                    AND payload ->> 'teryt' LIKE '{args.region}%'"""
+
+            if getattr(args, "script", None) or getattr(args, "query", None):
+                # if script/query provided, fallback
+                pass
+            elif not args.krs and not args.region:
+                query = "SELECT * FROM upload_payloads WHERE entity_type='company'"
+
+        if not query:
+            query = f"SELECT * FROM upload_payloads WHERE entity_type='{args.type}'"
+
+        df = ctx.con.execute(query).df()
     except Exception as e:
         print(f"Query execution failed: {e}")
         sys.exit(1)
@@ -561,18 +388,6 @@ def main():
         print("Warning: The following pipelines have no output files:")
         for m in missing:
             print(f" - {m}")
-
-    print("Loading company lookup...")
-    global COMPANY_LOOKUP
-    try:
-        p_comp = Pipeline.create(CompaniesMerged)
-        if p_comp.output_time(ctx):
-            df_comp = p_comp.read_or_process(ctx)
-            df_comp = df_comp.dropna(subset=["krs", "name"])
-            COMPANY_LOOKUP = dict(zip(df_comp["krs"], df_comp["name"]))
-            print(f"Loaded {len(COMPANY_LOOKUP)} companies for lookup.")
-    except Exception as e:
-        print(f"Warning: Failed to load company lookup: {e}")
 
     print("Registering tables...")
     registered_count = 0
