@@ -8,6 +8,7 @@
     "stop": "npx kill-port --port 8080,9000,9099,5001,8085,3000,5002,4000",
     "emulators": "firebase emulators:start --project demo-koryta-pl --only auth,functions,firestore,database",
     "seed": "npx tsx scripts/seed-emulator.ts",
+    "migrate:teryt": "npx tsx scripts/migrate-teryt.ts",
     "dev": "export USE_EMULATORS=true FIRESTORE_EMULATOR_HOST='127.0.0.1:8080' FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099'; nuxt dev --loglevel=verbose",
     "dev:local": "npm run stop; concurrently \"npm run emulators\" \"npm run seed; npm run dev\"",
     "db:pull": "bash scripts/pull-db.sh",
