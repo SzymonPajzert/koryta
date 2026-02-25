@@ -1,168 +1,141 @@
-import dataclasses
+"""Article crawler business logic.
+
+Handles HTTP requests, link extraction, rate limiting, and the main crawl loop.
+Database operations are delegated to CrawlerDB; URL scoring to the scoring module.
+"""
+
+import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
-from uuid_extensions import uuid7str  # type: ignore
+from uuid_extensions import uuid7str
 
-from entities.crawler import RequestLog, WebsiteIndex
 from entities.util import NormalizedParse
+from scrapers.article.db import CrawlerDB
+from scrapers.article.scoring import ScoringFunction, url_score
 from scrapers.stores import Context
+
+logger = logging.getLogger(__name__)
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
-CRAWL_DELAY_SECONDS = 20
 
-
-def config_from_row(allowed, quality):
-    if allowed:
-        if quality == "good":
-            return "good"
-        return "approved"
-    return "block"
-
-
+# Per-domain rate limiting (local to this process)
 next_request_time: dict[str, float] = {}
-url_to_update: set[str] = set()
-page_score: dict[str, int] = dict()
 
 
-def add_crawl_record(
-    ctx: Context, uid, parsed, url, response_code, payload_size_bytes, duration
-):
-    """Updates the timestamp for a successfully crawled URL in the sites file."""
-    ctx.io.output_entity(
-        RequestLog(
-            uuid7str(),
-            uid,
-            parsed.hostname_normalized,
-            url,
-            datetime.now(warsaw_tz),
-            response_code,
-            payload_size_bytes,
-            duration,
-        )
-    )
+def ensure_url_format(url: str) -> str:
+    """Adds https:// to a URL if it's missing a scheme."""
+    if not url:
+        return ""
+    url = url.strip()
+    if not url.startswith(("http://", "https://")):
+        if url.startswith("//"):
+            return "https:" + url
+        return "https://" + url
+    return url
 
 
-def ready_to_crawl(parsed):
+def ready_to_crawl(parsed: NormalizedParse) -> bool:
     domain = parsed.hostname_normalized
-    result = True
-    if domain in next_request_time:
-        result = time.time() > next_request_time[domain]
-
-    if result:
-        next_request_time[domain] = time.time() + CRAWL_DELAY_SECONDS
-    return result
+    if domain not in next_request_time:
+        return True
+    return time.time() > next_request_time[domain]
 
 
-def parse_hostname(url: str) -> str:
-    return NormalizedParse.parse(url).hostname_normalized
+def set_crawl_delay(parsed: NormalizedParse, config: dict):
+    domain = parsed.hostname_normalized
+    next_request_time[domain] = time.time() + config["crawl_delay_seconds"]
 
 
-def uuid7():
-    return uuid7str()
+def process_url(ctx: Context, uid: str, url: str, config: dict) -> tuple[set[str], str | None, str | None]:
+    """Crawl a single URL.
 
-
-# --- Main Crawler Logic ---
-def crawl_website(ctx: Context, uid, current_url):
-    parsed = NormalizedParse.parse(current_url)
-    if not ctx.web.robot_txt_allowed(ctx, current_url, parsed, HEADERS["User-Agent"]):
-        print(f"Skipping (disallowed by robots.txt): {current_url}")
-        return
-    if not ready_to_crawl(parsed):
-        return
-
+    Returns (found_links, error_or_None, storage_path_or_None).
+    """
     try:
-        print(f"Crawling: {current_url}")
-        started = datetime.now(warsaw_tz)
-        response = requests.get(current_url, headers=HEADERS, timeout=10)
+        url = ensure_url_format(url)
+        if not url:
+            return set(), "Empty URL", None
 
-        # Check if the request was successful (status code 200)
-        if response.status_code == 200:
-            pages_to_visit = set()
-            ctx.io.upload(parsed, response.text, "text/html")
+        parsed = NormalizedParse.parse(url)
 
-            for parser in ["html.parser", "lxml", "html5lib"]:
-                soup = BeautifulSoup(response.text, parser)
-                copy_parsed = dataclasses.replace(
-                    parsed, path=parsed.path + f".{parser}.txt"
-                )
-                ctx.io.upload(copy_parsed, soup.get_text(), "text/plain")
+        if not ctx.web.robot_txt_allowed(ctx, url, parsed, HEADERS["User-Agent"]):
+            return set(), "Disallowed by robots.txt", None
 
-                for link in soup.find_all("a", href=True):
-                    absolute_link = ctx.utils.join_url(current_url, link["href"])  # type: ignore
-                    absolute_link = absolute_link.split("#")[0]  # Remove fragment
-                    stop = False
-                    for prefix in ["javascript", "mailto", "tel"]:
-                        if absolute_link.startswith(prefix):
-                            stop = True
-                    if stop:
-                        continue
-                    absolute_link = absolute_link.rstrip("/")
-                    pages_to_visit.add(absolute_link)
+        if not ready_to_crawl(parsed):
+            return set(), "RATE_LIMITED", None
 
-            pages_to_visit.difference_update(
-                row[0]
-                for row in ctx.con.sql("SELECT url FROM website_index").fetchall()
-            )
-            if len(pages_to_visit) > 0:
-                for url in pages_to_visit:
-                    ctx.io.output_entity(WebsiteIndex(uuid7str(), current_url, None))
+        set_crawl_delay(parsed, config)
+        logger.info("Crawling: %s", url)
+        response = requests.get(url, headers=HEADERS, timeout=10)
 
-        else:
-            print(f"  -> Failed to retrieve page: Status code {response.status_code}")
+        if response.status_code != 200:
+            return set(), f"HTTP status code {response.status_code}", None
 
-        add_crawl_record(
-            ctx,
-            uid,
-            parsed,
-            current_url,
-            response.status_code,
-            len(response.content),
-            str(datetime.now(warsaw_tz) - started),
-        )
+        pages_to_visit = set()
+        storage_path = ctx.io.upload(parsed, response.content, "text/html", file_id=uid)
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        for link in soup.find_all("a", href=True):
+            href = link.get("href")
+            if not href:
+                continue
+            if any(href.startswith(prefix) for prefix in ["javascript:", "mailto:", "tel:"]):
+                continue
+            absolute_link = ctx.utils.join_url(url, href).split("#")[0].rstrip("/")
+            if absolute_link:
+                pages_to_visit.add(absolute_link)
+
+        logger.info("Found %d links on %s", len(pages_to_visit), url)
+        return pages_to_visit, None, storage_path
 
     except requests.RequestException as e:
-        print(f"  -> An error occurred: {e}")
+        logger.error("An error occurred while crawling %s: %s", url, e)
+        return set(), str(e), None
 
 
-def crawl(ctx: Context):
-    # Initialize hostname_config using ctx.con
-    hostname_config = {  # noqa: F841
-        row[0]: config_from_row(row[1], row[2])
-        for row in ctx.con.sql("SELECT * FROM hostname_config").fetchall()
-    }
+def crawl(
+    ctx: Context,
+    db: CrawlerDB,
+    config: dict,
+    worker_id: str,
+    score_fn: ScoringFunction = url_score,
+):
+    """Main crawling loop."""
+    while True:
+        maybe_row = db.get_and_lock_url(worker_id, config["max_retries"])
+        if not maybe_row:
+            logger.info("No more URLs to crawl. Exiting.")
+            break
 
-    try:
-        pages_to_visit_query = ctx.con.sql(
-            """
-            SELECT id, url, interesting
-            FROM website_index JOIN hostname_config
-                ON hostname_config.hostname == parse_hostname(website_index.url)
-            WHERE
-                id NOT IN (SELECT website_id FROM request_logs)
-                AND url NOT IN (SELECT url FROM request_logs)
-                AND quality == 'good'
-            ORDER BY (case
-                when interesting then 1
-                when interesting is null then 2
-                else 3 end) asc
-            """
-        )
+        uid, current_url, _, _ = maybe_row
+        logger.info("Worker %s crawling: %s", worker_id, current_url)
+        new_links, error, storage_path = process_url(ctx, uid, current_url, config)
 
-        pages_to_visit_list = pages_to_visit_query.fetchall()
+        if error:
+            if error == "RATE_LIMITED":
+                logger.warning("Rate limited, will try another url")
+                db.release_lock(uid)
+                time.sleep(1)
+                continue
 
-        print(len(pages_to_visit_list))
-        last_save = datetime.now(warsaw_tz)
-        for row in pages_to_visit_list:
-            crawl_website(ctx, row[0], row[1])
-            if datetime.now(warsaw_tz) - last_save > timedelta(minutes=2):
-                # dump_dbs() # Removed as it's not available
-                pass
-    finally:
-        # dump_dbs() # Removed
-        pass
+            db.propagate_error(uid, error)
+            continue
+
+        db.mark_done(uid, storage_path)
+        if new_links:
+            now = datetime.now(warsaw_tz)
+            rows_to_insert = []
+            for link_url in new_links:
+                link_url = ensure_url_format(link_url)
+                score = score_fn(link_url)
+                priority = 100 - score
+                rows_to_insert.append(
+                    (uuid7str(), link_url, priority, False, [], 0, now, None, current_url)
+                )
+            db.insert_urls(rows_to_insert)
