@@ -15,7 +15,7 @@ import sys
 from tqdm import tqdm
 
 from entities.util import parse_hostname
-from main import _setup_context
+from stores.conductor import setup_context
 from scrapers.article.crawler import crawl, ensure_url_format
 from scrapers.article.db import CrawlerDB
 from scrapers.article.parse import extract_article_content
@@ -228,7 +228,7 @@ def main():
     if not args.worker_id:
         parser.error("--worker-id is required for crawling.")
 
-    ctx, _ = _setup_context(use_rejestr_io=False, storage_mode=args.storage)
+    ctx, _ = setup_context(use_rejestr_io=False, storage_mode=args.storage)
     config = {
         "crawl_delay_seconds": args.crawl_delay_seconds,
         "max_retries": args.max_retries,
