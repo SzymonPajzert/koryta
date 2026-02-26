@@ -1,7 +1,7 @@
 <template>
   <v-network-graph
     v-if="nodes"
-    :nodes="nodes"
+    :nodes="nodesFiltered"
     :edges="edgesFiltered"
     :configs="configs"
     :layouts="layout"
@@ -65,6 +65,7 @@ const interestingNodes = computed<Record<string, Node & { stats: NodeStats }>>(
 
 const { filtered } = useParams("Graf ");
 
+// TODO move it to the backend
 const nodesFiltered = computed(() => {
   // console.log("Canvas.vue: focusNodeId", props.focusNodeId, "maxDepth", props.maxDepth);
   if (props.focusNodeId) {
@@ -76,11 +77,11 @@ const nodesFiltered = computed(() => {
     ];
     visited.add(props.focusNodeId);
 
-    while (queue.length > 0) {
+    while (queue.length > 0 && !!edges.value) {
       const current = queue.shift()!;
       if (current.d >= depth) continue;
 
-      const neighbors = graph.value.edges
+      const neighbors = edges.value
         .filter((e) => e.source === current.id || e.target === current.id)
         .map((e) => (e.source === current.id ? e.target : e.source));
 
