@@ -53,7 +53,6 @@
 
 <script setup lang="ts">
 import type { Comment } from "~~/shared/model";
-import { useAuthState } from "@/composables/auth";
 import CommentForm from "./CommentForm.vue";
 // Import self for recursion
 import CommentItem from "./CommentItem.vue";

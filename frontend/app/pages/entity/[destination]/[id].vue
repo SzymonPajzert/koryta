@@ -158,8 +158,6 @@
 </template>
 
 <script setup lang="ts">
-import { useEdges } from "~/composables/edges";
-import { useAuthState } from "~/composables/auth";
 import type {
   Person,
   Company,

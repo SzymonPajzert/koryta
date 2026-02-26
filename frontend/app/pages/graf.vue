@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { defineConfigs, SimpleLayout } from "v-network-graph";
 import type { EventHandlers, NodeEvent } from "v-network-graph";
-import { useEntityFiltering } from "@/composables/useEntityFiltering";
 
 import { useSimulationStore } from "@/stores/simulation";
 import { useParams } from "@/composables/params";

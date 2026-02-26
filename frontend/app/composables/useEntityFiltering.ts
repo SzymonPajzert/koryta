@@ -1,5 +1,4 @@
 import { computed, type Ref, type ComputedRef } from "vue";
-import { useAuthState } from "@/composables/auth";
 
 export interface EntityWithVisibility {
   visibility?: boolean;

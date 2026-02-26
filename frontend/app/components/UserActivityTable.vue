@@ -21,7 +21,6 @@
 
 <script lang="ts" setup>
 import { computed } from "vue";
-import { useAuthState } from "@/composables/auth"; // Assuming auth store path
 const { user } = useAuthState();
 
 interface UserSuggestionTypes {

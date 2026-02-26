@@ -41,7 +41,6 @@
 import { getAnalytics, logEvent } from "firebase/analytics";
 import type { GraphLayout } from "~~/shared/graph/util";
 import { parties } from "~~/shared/misc";
-import { useEntityFiltering } from "@/composables/useEntityFiltering";
 
 const { push, currentRoute } = useRouter();
 let analytics: any;

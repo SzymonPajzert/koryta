@@ -77,7 +77,6 @@
 <script lang="ts" setup>
 import type { VDataTable } from "vuetify/components";
 import type { Company, Link } from "~~/shared/model";
-import { useEditIndexedField } from "~/composables/editIndexedField";
 
 definePageMeta({
   middleware: "admin",

@@ -59,7 +59,6 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useHomeStats } from "@/composables/useHomeStats";
 
 const { sourceStats: sources } = useHomeStats();
 

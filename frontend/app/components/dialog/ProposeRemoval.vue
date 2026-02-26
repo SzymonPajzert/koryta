@@ -46,8 +46,6 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
-
 const props = defineProps<{
   id: string; // node_id or edge_id
   type?: string;

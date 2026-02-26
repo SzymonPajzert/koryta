@@ -1,8 +1,5 @@
 import type { NodeTypeMap, NodeType } from "~~/shared/model";
 
-import { useAuthState } from "@/composables/auth";
-import { useEntityFiltering } from "./useEntityFiltering";
-
 export function useEntity<N extends NodeType>(nodeType: N) {
   const { authFetch } = useAuthState();
 

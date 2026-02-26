@@ -110,8 +110,6 @@
 </template>
 
 <script setup lang="ts">
-import { useFeminatyw } from "@/composables/feminatyw";
-
 const { entities: people } = useEntity("person");
 const { koryciarz } = useFeminatyw();
 </script>

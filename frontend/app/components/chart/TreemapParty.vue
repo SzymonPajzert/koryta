@@ -9,7 +9,6 @@
 </template>
 
 <script lang="ts" setup>
-import { usePartyStatistics } from "@/composables/party";
 import { computed } from "vue";
 import {
   parties as partiesUnfiltered,
