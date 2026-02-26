@@ -25,8 +25,6 @@ class Extract(Pipeline):
     RECENT_EMPLOYMENT_START = date.fromisoformat("2024-10-01")
     OLD_EMPLOYMENT_END = date.fromisoformat("2020-10-01")
 
-    format = "csv"
-
     @cached_property
     def args(self):
         parser = argparse.ArgumentParser()
@@ -140,6 +138,8 @@ class Extract(Pipeline):
 
 
 class FormatCSV(Pipeline):
+    format = "csv"
+
     extract: Extract
 
     def format_output(self, df):

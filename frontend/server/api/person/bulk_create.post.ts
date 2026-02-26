@@ -152,6 +152,7 @@ async function createCompany(
       type: "place",
     };
     if (company.krs) revisionData.krsNumber = company.krs;
+    batch.set(companyRef, revisionData);
     createRevisionTransaction(db, batch, user, companyRef, revisionData);
     created = true;
   }
@@ -165,7 +166,7 @@ async function createCompany(
   if (company.start) edgeData.start_date = company.start;
   if (company.end) edgeData.end_date = company.end;
 
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData, true);
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
 
   return {
     nodeId: companyId,
@@ -196,6 +197,7 @@ async function createArticle(
       type: "article",
       sourceURL: article.url,
     };
+    batch.set(articleRef, revisionData);
     createRevisionTransaction(db, batch, user, articleRef, revisionData);
     created = true;
   }
@@ -206,7 +208,7 @@ async function createArticle(
     target: articleId,
     type: "mentions",
   };
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData, true);
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
 
   return {
     nodeId: articleId,
@@ -242,7 +244,7 @@ async function createElection(
     edgeData.start_date = `${election.election_year}-01-01`;
   }
 
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData, true);
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
   if (!edgeId) throw new Error("Failed to create edge");
   return {
     nodeId: regionId,
