@@ -290,6 +290,12 @@ def submit_results(args, df):
     success_count = 0
     for idx, row in df.iterrows():
         payload = row.get("payload")
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                pass
+
         if payload is None:
             print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
             continue
@@ -334,7 +340,9 @@ def execute_query(ctx, args, query):
     print("Executing query...")
     try:
         p_payloads = Pipeline.create(UploadPayloads)
-        p_payloads.read_or_process(ctx)  # Ensure upload payloads exist.
+        df_payloads = p_payloads.read_or_process(ctx)  # Ensure upload payloads exist.
+        if df_payloads is not None:
+            ctx.con.register(p_payloads.filename, df_payloads)
 
         if args.type == "company":
             if args.krs:
