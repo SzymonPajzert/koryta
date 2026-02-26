@@ -43,6 +43,7 @@ type EntityResult = {
   nodeId: string;
   created: boolean;
   edgeId?: string;
+  krs?: string;
 };
 
 export default defineEventHandler(async (event) => {
@@ -164,6 +165,7 @@ async function createCompany(
 
   return {
     nodeId: companyId,
+    krs: company.krs,
     created,
     edgeId: await findEdgeOrCreate(db, batch, user, edgeData),
   };
