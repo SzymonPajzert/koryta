@@ -24,6 +24,19 @@
         </div>
         <EntityDetailsCard :entity="entity" :type="type" />
 
+        <div
+          class="mt-4"
+          style="
+            height: 500px;
+            width: 100%;
+            position: relative;
+            overflow: visible;
+            border: 1px solid #ccc;
+          "
+        >
+          <GraphCanvas :focus-node-id="node" :max-depth="3" />
+        </div>
+
         <div class="mt-4">
           <template v-if="type === 'place' || type === 'region'">
             <CardConnectionList :edges="owners" title="Właściciele" />

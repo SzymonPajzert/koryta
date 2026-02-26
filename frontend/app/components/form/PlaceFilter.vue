@@ -10,7 +10,7 @@
     <template #item="{ props, item }">
       <v-list-item
         v-bind="props"
-        :subtitle="`${item.raw.stats.people} powiązanych osób`"
+        :subtitle="`${item.raw.stats?.people ?? 0} powiązanych osób`"
         :title="item.raw.name"
         max-width="250px"
       />
