@@ -67,6 +67,15 @@ describe("API /api/person/bulk_create", () => {
           url: articleUrl,
         },
       ],
+      elections: [
+        {
+          teryt: "3061",
+          election_type: "Sejmik",
+          party: "Test Party",
+          election_year: "2023",
+          votes: 1234,
+        },
+      ],
     };
 
     // 1. Create Person
@@ -92,9 +101,14 @@ describe("API /api/person/bulk_create", () => {
       expect(resp.body.articles[0].nodeId).to.be.a("string");
       expect(resp.body.articles[0].created).to.eq(true);
 
+      // Verify Elections response
+      expect(resp.body.elections).to.be.an("array").that.has.length(1);
+      expect(resp.body.elections[0].nodeId).to.be.a("string");
+
       const personId = resp.body.personId;
       const companyId = resp.body.companies[0].nodeId;
       const articleId = resp.body.articles[0].nodeId;
+      const regionId = resp.body.elections[0].nodeId;
 
       // 2. Verify Person Created via GET API
       cy.request({
@@ -132,6 +146,14 @@ describe("API /api/person/bulk_create", () => {
             e.source === personId && e.target === articleId,
         );
         cy.wrap(articleEdge).should("exist", "Should find edge to article");
+
+        // Verify Election Edge
+        const electionEdge = edges.find(
+          (e: { source: string; target: string; type: string }) =>
+            e.source === personId && e.target === regionId && e.type === "election",
+        );
+        cy.wrap(electionEdge).should("exist", "Should find edge to region");
+        expect(electionEdge.label).to.eq("kandydatura");
       });
 
       // 4. Verify Nodes are visible in /api/nodes list
