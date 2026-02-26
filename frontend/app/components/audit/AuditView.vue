@@ -75,7 +75,6 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
 import type { Node, Edge } from "~~/shared/model";
 import { nodeTypeIcon } from "~~/shared/model";
 

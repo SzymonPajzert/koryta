@@ -40,7 +40,6 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { useAuthState } from "~/composables/auth";
 import { getPageTitle } from "~/composables/useFunctions";
 
 const props = defineProps<{

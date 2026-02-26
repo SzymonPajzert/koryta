@@ -55,7 +55,6 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
 import type { Node, Revision } from "~~/shared/model";
 
 definePageMeta({

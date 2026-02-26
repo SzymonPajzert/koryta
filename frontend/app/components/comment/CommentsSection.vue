@@ -49,7 +49,6 @@
 
 <script setup lang="ts">
 import type { Comment } from "~~/shared/model";
-import { useAuthState } from "@/composables/auth";
 import CommentItem from "./CommentItem.vue";
 import CommentForm from "./CommentForm.vue";
 
