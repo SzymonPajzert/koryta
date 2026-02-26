@@ -172,13 +172,13 @@ const configs = reactive(
         color: (node) => node.color,
       },
       label: {
-        color: "#fff",
+        color: "#000",
       },
     },
     edge: {
       label: {
         fontSize: 11,
-        color: "#fff",
+        color: "000",
       },
     },
     view: {
