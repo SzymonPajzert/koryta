@@ -293,8 +293,9 @@ def submit_results(args, df):
         if isinstance(payload, str):
             try:
                 payload = json.loads(payload)
-            except Exception:
-                pass
+            except Exception as e:
+                e.add_note(f"payload: {payload}")
+                raise e
 
         if payload is None:
             print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
@@ -343,6 +344,12 @@ def execute_query(ctx, args, query):
         df_payloads = p_payloads.read_or_process(ctx)  # Ensure upload payloads exist.
         if df_payloads is not None:
             ctx.con.register(p_payloads.filename, df_payloads)
+
+        if args.type == "person":
+            print(
+                "Returning UploadPayloads output"
+            )  # TODO this should be just a single table
+            return df_payloads
 
         if args.type == "company":
             if args.krs:
