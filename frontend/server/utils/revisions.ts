@@ -17,28 +17,19 @@ export function createRevisionTransaction(
   user: { uid: string },
   targetRef: DocumentReference,
   data: Record<string, unknown> | Node | Edge, // TODO unify this
-  updateHead: boolean = true,
 ): BatchResult {
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
 
   const revision = {
-    node_id: targetRef.id,
+    // TODO test it is always set correctly and check if the DB has wrong entries there
+    nodeId: targetRef.id,
     data,
     update_time: timestamp,
     update_user: user.uid,
   };
 
   batch.set(revisionRef, revision);
-
-  if (updateHead) {
-    batch.set(targetRef, {
-      ...data,
-      revision_id: null,
-      update_time: timestamp,
-      update_user: user.uid,
-    });
-  }
 
   return { revisionRef, targetRef };
 }
