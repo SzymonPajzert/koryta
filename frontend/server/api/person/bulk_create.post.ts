@@ -85,6 +85,10 @@ export default defineEventHandler(async (event) => {
 
   await batch.commit();
 
+  // Invalidate cache
+  await useStorage("cache").clear("nitro:handlers");
+  console.log("Invalidated cache");
+
   return {
     personId,
     companies: companiesResult,
