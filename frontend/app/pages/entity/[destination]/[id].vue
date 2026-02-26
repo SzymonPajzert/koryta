@@ -31,6 +31,7 @@
             width: 100%;
             position: relative;
             overflow: visible;
+            border: 1px solid #ccc;
           "
         >
           <GraphCanvas :focus-node-id="node" :max-depth="3" />
