@@ -23,6 +23,7 @@ export function useEntityFiltering<
     } else {
       return Object.fromEntries(
         Object.entries(raw as Record<string, T>).filter(([_, entity]) => {
+          if (!entity) return false;
           if (user.value) return true;
           return entity.visibility !== false;
         }),

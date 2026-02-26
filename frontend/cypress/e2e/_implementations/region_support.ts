@@ -23,7 +23,7 @@ describe("Region Node Type", () => {
           p1: { id: "p1", name: "Existing Person", type: "person" },
         },
         edges: [],
-        nodeGroups: {}, // Needed for graph?
+        nodeGroups: [], // Needed for graph?
       },
     }).as("getGraph");
 

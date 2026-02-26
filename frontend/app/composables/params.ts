@@ -5,16 +5,17 @@ export function useParams(title: string) {
   const { data } = useAsyncData<GraphLayout>("graph", () =>
     $fetch("/api/graph"),
   );
-  const nodeGroupsMap = computed(
-    () =>
-      data.value?.nodeGroups.reduce(
-        (acc, curr) => {
-          acc[curr.id] = curr;
-          return acc;
-        },
-        {} as Record<string, GraphLayout["nodeGroups"][number]>,
-      ) ?? {},
-  );
+  const nodeGroupsMap = computed(() => {
+    const groups = data.value?.nodeGroups;
+    if (!Array.isArray(groups)) return {};
+    return groups.reduce(
+      (acc, curr) => {
+        acc[curr.id] = curr;
+        return acc;
+      },
+      {} as Record<string, GraphLayout["nodeGroups"][number]>,
+    );
+  });
   const nodes = computed(() => data.value?.nodes ?? {});
 
   // Identifiers of the nodes, that should be returned

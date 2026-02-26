@@ -109,7 +109,7 @@ const baseItems = computed<ListItem[]>(() => {
   const result: ListItem[] = [];
   result.push({
     title: "Lista wszystkich osób",
-    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people} powiązanych osób`,
+    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people ?? 0} powiązanych osób`,
     icon: "mdi-format-list-bulleted-type",
     path: "/lista",
     logEventKey: {
@@ -119,7 +119,7 @@ const baseItems = computed<ListItem[]>(() => {
   });
   result.push({
     title: "Graf wszystkich osób",
-    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people} powiązanych osób`,
+    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people ?? 0} powiązanych osób`,
     icon: "mdi-graph-outline",
     path: "/graf",
     logEventKey: {
@@ -157,7 +157,7 @@ const baseItems = computed<ListItem[]>(() => {
     addedIds.add(item.id);
     result.push({
       title: item.name,
-      subtitle: `${item.stats.people} powiązanych osób`,
+      subtitle: `${item.stats?.people ?? 0} powiązanych osób`,
       icon: "mdi-domain",
       logEventKey: {
         content_id: item.id,

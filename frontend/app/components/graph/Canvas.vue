@@ -56,9 +56,14 @@ const router = useRouter();
 const interestingNodes = computed<Record<string, Node & { stats: NodeStats }>>(
   () => {
     return Object.fromEntries(
-      Object.entries(nodesFiltered1.value ?? {}).filter(
-        ([_, node]) => node.type !== "rect" || node.stats?.people > 0,
-      ),
+      Object.entries(nodesFiltered1.value ?? {}).filter(([_, node]) => {
+        if (!node) return false;
+        // Only show circles (people), documents (articles/regions) or rects (places) with people
+        if (node.type === "rect") {
+          return node.stats?.people > 0;
+        }
+        return true;
+      }),
     );
   },
 );
@@ -137,7 +142,7 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
       destination = "person";
       break;
     case "document":
-      destination = "article";
+      destination = (nodeWhole as any).teryt ? "region" : "article";
       break;
   }
 
