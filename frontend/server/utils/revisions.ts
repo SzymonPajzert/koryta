@@ -23,7 +23,7 @@ export function createRevisionTransaction(
 
   const revision = {
     // TODO test it is always set correctly and check if the DB has wrong entries there
-    nodeId: targetRef.id,
+    node_id: targetRef.id,
     data,
     update_time: timestamp,
     update_user: user.uid,
