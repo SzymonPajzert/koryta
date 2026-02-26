@@ -19,9 +19,10 @@ describe("Revisions Logic", () => {
       cy.logout();
 
       cy.request("/api/nodes/person").then((response) => {
-        expect(Object.values(response.body["entities"])).to.have.lengthOf(
-          expectedPeople,
+        const visibleEntities = Object.values(response.body["entities"]).filter(
+          (e: any) => e.visibility !== false,
         );
+        expect(visibleEntities).to.have.lengthOf(expectedPeople);
       });
 
       cy.visit("/");

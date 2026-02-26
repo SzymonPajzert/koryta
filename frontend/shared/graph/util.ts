@@ -172,6 +172,7 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       content: edge.content,
       name: edge.name,
       references: edge.references,
+      visibility: edge.visibility,
       party: edge.party,
       committee: edge.committee,
       position: edge.position,

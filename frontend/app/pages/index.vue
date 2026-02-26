@@ -32,7 +32,7 @@
       <v-card class="py-4" color="surface-variant" variant="tonal" rounded="lg">
         <v-card-title>
           <h2 class="text-h5 font-weight-bold">
-            Łącznie {{ Object.values(people).length }}
+            Łącznie {{ people ? Object.values(people).length : 0 }}
             {{ koryciarz.plural.genitive }}
           </h2>
         </v-card-title>

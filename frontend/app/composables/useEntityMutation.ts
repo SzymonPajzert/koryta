@@ -1,9 +1,9 @@
-interface MutationParams<T = any> {
+interface MutationParams<Payload = unknown, Result = any> {
   isNew: boolean;
   createEndpoint: string;
   revisionEndpoint: string;
-  payload: T;
-  onSuccess?: (response: any) => Promise<void> | void;
+  payload: Payload;
+  onSuccess?: (response: Result) => Promise<void> | void;
   successMessage?: string;
 }
 
@@ -11,14 +11,17 @@ export function useEntityMutation() {
   const isSaving = ref(false);
   const { authHeaders } = useAuthState(); // Ensure auth state is ready
 
-  async function save<Result = { id: string }>({
+  async function save<
+    Result = { id: string },
+    Payload extends Record<string, any> = any,
+  >({
     isNew,
     createEndpoint,
     revisionEndpoint,
     payload,
     onSuccess,
     successMessage,
-  }: MutationParams) {
+  }: MutationParams<Payload, Result>) {
     if (isSaving.value) return;
 
     isSaving.value = true;
@@ -38,7 +41,7 @@ export function useEntityMutation() {
       }
 
       if (onSuccess) {
-        await onSuccess(response);
+        await onSuccess(response as unknown as Result);
       }
       return response;
     } catch (e: any) {

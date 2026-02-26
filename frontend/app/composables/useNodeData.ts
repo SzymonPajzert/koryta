@@ -10,6 +10,7 @@ import type {
 } from "~~/shared/model";
 import { getPageTitle } from "~/composables/useFunctions";
 import { anyNode } from "~~/shared/empty";
+import { useAuthState } from "./auth";
 
 export type EditablePage = Partial<Node> &
   Partial<Omit<Person, "type">> &
@@ -28,6 +29,7 @@ interface UseNodeDataOptions {
 export function useNodeData(options: UseNodeDataOptions) {
   const { nodeId, isNew, authHeaders, stateKey, idToken } = options;
   const db = getFirestore(useFirebaseApp(), "koryta-pl");
+  const { user } = useAuthState();
 
   const current = useState<EditablePage>(`${stateKey.value}-current`, () =>
     anyNode({ type: options.initialType }),
@@ -84,6 +86,7 @@ export function useNodeData(options: UseNodeDataOptions) {
             name: node.name || "",
             type: node.type,
             content: node.content || "",
+            visibility: node.visibility,
           };
           if (node.type === "person") {
             v.parties = (node as Partial<Person>).parties || [];
@@ -139,6 +142,22 @@ export function useNodeData(options: UseNodeDataOptions) {
         fetchPageTitleIfNeeded();
       }
     },
+  );
+
+  watch(
+    () => [current.value, user.value],
+    () => {
+      if (
+        current.value.visibility === false && // Explicitly false
+        !user.value
+      ) {
+        showError({
+          statusCode: 404,
+          statusMessage: "Page not found",
+        });
+      }
+    },
+    { deep: true },
   );
 
   return {

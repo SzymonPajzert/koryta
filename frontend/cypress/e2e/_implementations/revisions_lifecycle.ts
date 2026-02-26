@@ -1,6 +1,41 @@
 describe("Revisions Lifecycle", () => {
+  let authToken: string;
+
   beforeEach(() => {
     cy.login();
+    cy.window()
+      .then((win) => {
+        return new Cypress.Promise((resolve, reject) => {
+          const req = win.indexedDB.open("firebaseLocalStorageDb");
+          req.onsuccess = (e) => {
+            const db = (e.target as IDBOpenDBRequest).result;
+            if (!db.objectStoreNames.contains("firebaseLocalStorage")) {
+              resolve(null);
+              return;
+            }
+            const transaction = db.transaction(
+              ["firebaseLocalStorage"],
+              "readonly",
+            );
+            const objectStore = transaction.objectStore("firebaseLocalStorage");
+            const getAllRequest = objectStore.getAll();
+            getAllRequest.onsuccess = () => {
+              const users = getAllRequest.result;
+              if (users && users.length > 0) {
+                const user = users[0].value || users[0];
+                resolve(user.stsTokenManager?.accessToken);
+              } else {
+                resolve(null);
+              }
+            };
+            getAllRequest.onerror = () => reject("Failed to read from DB");
+          };
+          req.onerror = () => reject("Failed to open DB");
+        });
+      })
+      .then((token) => {
+        authToken = token as string;
+      });
   });
 
   it("lists pending edge revisions (newly created edges) and resolves names", () => {
@@ -34,13 +69,20 @@ describe("Revisions Lifecycle", () => {
     // 3. Visit Revisions
     cy.visit("/admin/audit?tab=pending");
 
-    cy.request("/api/edges/pending").then((resp) => {
+    cy.request({
+      url: "/api/edges/pending",
+      headers: { Authorization: `Bearer ${authToken}` },
+    }).then((resp) => {
       const edges = Object.values(resp.body);
       const myEdge = edges.find(
         (e) =>
           (e as { source: string }).source === "1" ||
           (e as { source_name: string }).source_name === "Jan Kowalski",
       );
+      if (!myEdge) {
+        cy.log("All edges:", JSON.stringify(edges));
+        throw new Error("Could not find pending edge for Jan Kowalski");
+      }
       if (myEdge) {
         expect((myEdge as { source_name: string }).source_name).to.equal(
           "Jan Kowalski",

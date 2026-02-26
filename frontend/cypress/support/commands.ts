@@ -146,6 +146,10 @@ Cypress.Commands.add(
 
       // Final verification: we are not on the login page anymore
       cy.url({ timeout: 20000 }).should("not.contain", "/login");
+      // Wait for the user to be logged in (avatar or profile button visible)
+      cy.get('a[href="/profil"], button[to="/profil"], .v-avatar', {
+        timeout: 20000,
+      }).should("exist");
     });
   },
 );

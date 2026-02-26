@@ -33,6 +33,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import { useEntityFiltering } from "@/composables/useEntityFiltering";
 
 import type { NodeType, Link, Person, Company, Article } from "~~/shared/model";
 
@@ -58,8 +59,11 @@ const { data: response, refresh } = authFetch<{
   lazy: true,
 });
 
+const entities = computed(() => response.value?.entities);
+const filteredEntities = useEntityFiltering(entities);
+
 const entitiesList = computed(() => {
-  const ents = response.value?.entities ?? {};
+  const ents = filteredEntities.value ?? {};
   const list = Object.entries(ents).map(([key, value]) => ({
     type: props.entity,
     id: key,

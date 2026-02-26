@@ -8,11 +8,12 @@ export const usePartyStatistics = async (
   const people = existingPeople || (await useEntity("person")).entities;
 
   const results = computed<number[]>(() => {
-    if (!people.value) return [];
+    const p = people.value;
+    if (!p) return [];
 
     return (Object.keys(partyColors) as (keyof typeof partyColors)[]).map(
       (party) => {
-        return Object.values(people.value).filter((person) => {
+        return Object.values(p).filter((person) => {
           return (person.parties ?? []).includes(party);
         }).length;
       },

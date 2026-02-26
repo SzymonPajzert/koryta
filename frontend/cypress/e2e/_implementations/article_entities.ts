@@ -32,9 +32,22 @@ describe("Article Entities and Edge References", () => {
     cy.pickEntity("Orlen", "entity-picker-target");
     cy.pickEntity("Sample Article", "entity-picker-reference");
 
+    cy.intercept("POST", "/api/nodes/create").as("createNode");
+    cy.intercept("POST", "/api/edges/create").as("createEdge");
+
+    const alertStub = cy.stub();
+    cy.on("window:alert", alertStub);
+
     cy.contains("button", "Dodaj powiązanie").click();
-    cy.on("window:alert", (str) => {
-      expect(str).to.equal("Dodano powiązanie!");
+
+    cy.wait("@createEdge").then((interception) => {
+      expect(interception.response?.statusCode).to.equal(200);
+      cy.log(
+        "Edge creation response:",
+        JSON.stringify(interception.response?.body),
+      );
     });
+
+    cy.wrap(alertStub).should("have.been.calledWith", "Dodano powiązanie!");
   });
 });
