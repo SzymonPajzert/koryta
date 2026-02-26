@@ -51,6 +51,7 @@ export default defineEventHandler(async (event) => {
   };
 
   const batch = db.batch();
+  batch.set(nodeRef, revisionData, { merge: true });
   createRevisionTransaction(db, batch, user, nodeRef, revisionData);
 
   // Process 'owns' relationships
@@ -89,6 +90,7 @@ export default defineEventHandler(async (event) => {
         target: childRef.id,
         type: "owns",
       };
+      batch.set(edgeRef, edgeData);
       createRevisionTransaction(db, batch, user, edgeRef, edgeData);
     }
   }
@@ -103,6 +105,7 @@ export default defineEventHandler(async (event) => {
       type: "owns",
     };
 
+    batch.set(edgeRef, edgeData);
     createRevisionTransaction(db, batch, user, edgeRef, edgeData);
   }
 

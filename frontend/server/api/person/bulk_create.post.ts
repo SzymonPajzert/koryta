@@ -60,7 +60,9 @@ export default defineEventHandler(async (event) => {
   if (!personId) {
     const personRef = db.collection("nodes").doc();
     personId = personRef.id;
-    createRevisionTransaction(db, batch, user, personRef, createPerson(body));
+    const personData = createPerson(body);
+    batch.set(personRef, personData);
+    createRevisionTransaction(db, batch, user, personRef, personData);
   }
 
   // Track results
@@ -163,11 +165,13 @@ async function createCompany(
   if (company.start) edgeData.start_date = company.start;
   if (company.end) edgeData.end_date = company.end;
 
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData, true);
+
   return {
     nodeId: companyId,
     krs: company.krs,
     created,
-    edgeId: await findEdgeOrCreate(db, batch, user, edgeData),
+    edgeId,
   };
 }
 
@@ -202,10 +206,12 @@ async function createArticle(
     target: articleId,
     type: "mentions",
   };
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData, true);
+
   return {
     nodeId: articleId,
     created,
-    edgeId: await findEdgeOrCreate(db, batch, user, edgeData),
+    edgeId,
   };
 }
 
@@ -236,7 +242,7 @@ async function createElection(
     edgeData.start_date = `${election.election_year}-01-01`;
   }
 
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData, true);
   if (!edgeId) throw new Error("Failed to create edge");
   return {
     nodeId: regionId,
@@ -276,6 +282,7 @@ async function findEdgeOrCreate(
 
   if (edgeSnap.empty) {
     const edgeRef = db.collection("edges").doc();
+    batch.set(edgeRef, edge);
     createRevisionTransaction(db, batch, user, edgeRef, edge);
     return edgeRef.id;
   }
