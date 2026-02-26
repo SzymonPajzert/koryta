@@ -1,3 +1,4 @@
+import json
 from typing import Any, cast
 
 import numpy as np
@@ -53,6 +54,7 @@ def _extract_companies(
                 )
     return companies
 
+
 def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
     elections = []
     elec_list = row.get("elections")
@@ -86,6 +88,7 @@ def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
 
                 elections.append(election_payload)
     return elections
+
 
 def map_person_payload(
     row: pd.Series, company_lookup: dict[str, str]
@@ -272,7 +275,7 @@ class UploadPayloads(Pipeline):
                         "entity_id": str(row.id),
                         "krs": None,
                         "teryt_powiat": [],
-                        "payload": r_payload,
+                        "payload": json.dumps(r_payload),
                     }
                 )
 
