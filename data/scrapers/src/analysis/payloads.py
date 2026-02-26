@@ -4,8 +4,8 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
+from analysis.extract import Extract
 from analysis.interesting import CompaniesMerged
-from analysis.people import PeopleEnriched
 from scrapers.map.teryt import Regions
 from scrapers.stores import Context, Pipeline
 
@@ -205,9 +205,9 @@ def map_region_payload(row: pd.Series) -> dict[str, Any] | None:
 
 
 class UploadPayloads(Pipeline):
-    filename = "upload_payloads"
+    filename = None
 
-    people: PeopleEnriched
+    people: Extract
     companies: CompaniesMerged
     regions: Regions
 
@@ -261,22 +261,22 @@ class UploadPayloads(Pipeline):
                     }
                 )
 
-        print("Processing region payloads...")
-        regions_df["id_str"] = regions_df["id"].astype(str)
-        regions_df["id_len"] = regions_df["id"].astype(str).str.len()
-        regions_df = regions_df.sort_values("id_len")
-
-        for _, row in regions_df.iterrows():
-            r_payload = map_region_payload(row)
-            if r_payload:
-                payloads.append(
-                    {
-                        "entity_type": "region",
-                        "entity_id": str(row.id),
-                        "krs": None,
-                        "teryt_powiat": [],
-                        "payload": json.dumps(r_payload),
-                    }
-                )
+        # TODO remove or move to other pipeline
+        # print("Processing region payloads...")
+        # regions_df["id_str"] = regions_df["id"].astype(str)
+        # regions_df["id_len"] = regions_df["id"].astype(str).str.len()
+        # regions_df = regions_df.sort_values("id_len")
+        # for _, row in regions_df.iterrows():
+        #     r_payload = map_region_payload(row)
+        #     if r_payload:
+        #         payloads.append(
+        #             {
+        #                 "entity_type": "region",
+        #                 "entity_id": str(row.id),
+        #                 "krs": None,
+        #                 "teryt_powiat": [],
+        #                 "payload": json.dumps(r_payload),
+        #             }
+        #         )
 
         return pd.DataFrame(payloads)
