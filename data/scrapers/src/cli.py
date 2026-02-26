@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import threading
+import typing
 import webbrowser
 
 import firebase_admin
@@ -311,8 +312,20 @@ def submit_results(args, df):
                 data=json.dumps(payload, cls=NumpyEncoder),
                 headers=headers,
             )
+            j: dict[str, typing.Any] = resp.json()
+            for company in j["companies"]:
+                if company["created"]:
+                    print(
+                        f"\n  Created company with KRS: {company['krs']} node {company['nodeId']}",
+                        end=" ",
+                    )
+                else:
+                    print(
+                        f"\n  Already existed KRS: {company['krs']} node {company['nodeId']}",
+                        end=" ",
+                    )
             if resp.status_code in [200, 201]:
-                print("OK")
+                print("  OK")
                 success_count += 1
             else:
                 print(f"FAILED ({resp.status_code}): {resp.text}")
@@ -343,7 +356,7 @@ def execute_query(ctx, args, query):
         p_payloads = Pipeline.create(UploadPayloads)
         df_payloads = p_payloads.read_or_process(ctx)  # Ensure upload payloads exist.
         if df_payloads is not None:
-            ctx.con.register(p_payloads.filename, df_payloads)
+            ctx.con.register("upload_payloads", df_payloads)
 
         if args.type == "person":
             print(
