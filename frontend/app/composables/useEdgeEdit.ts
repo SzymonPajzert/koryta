@@ -199,11 +199,13 @@ export function useEdgeEdit({
       layout.target.ref.value = {
         id: edge.target,
         type: layout.target.type.value,
+        name: internalEdge.richNode?.name,
       } as any;
     } else if (matches("target")) {
       layout.source.ref.value = {
         id: edge.source,
         type: layout.source.type.value,
+        name: internalEdge.richNode?.name,
       } as any;
     }
   }
