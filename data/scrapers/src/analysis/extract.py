@@ -120,21 +120,6 @@ class Extract(Pipeline):
 
         return check
 
-    def format_output(self, df):
-        result = pd.DataFrame()
-        result["name"] = df["krs_name"]
-        result["history"] = df["history"]
-        result["has_wikipedia"] = df["wiki_name"].notna()
-        result["birth_date"] = df["birth_date"]
-        result["total_employed_years"] = pd.to_timedelta(
-            df["employed_total"], unit="ms"
-        ).apply(lambda r: r.days / 365)
-        result["first_employed"] = pd.to_datetime(df["first_employed"], unit="ms")
-        result["last_employed"] = df["last_employed"]
-        result["total_elections"] = df["total_elections"]
-        result["relevance_ratio"] = df["relevance_ratio"]
-        return result
-
     def process(self, ctx: Context):
         people = self.people.read_or_process(ctx)
         self.teryt.read_or_process(ctx)
@@ -151,6 +136,29 @@ class Extract(Pipeline):
 
         df = drop_duplicates(people_interesting, "krs_name", "pkw_name", "wiki_name")
         print(f"Found {len(df)} people")
+        return df
+
+
+class FormatCSV(Pipeline):
+    extract: Extract
+
+    def format_output(self, df):
+        result = pd.DataFrame()
+        result["name"] = df["krs_name"]
+        result["history"] = df["history"]
+        result["has_wikipedia"] = df["wiki_name"].notna()
+        result["birth_date"] = df["birth_date"]
+        result["total_employed_years"] = pd.to_timedelta(
+            df["employed_total"], unit="ms"
+        ).apply(lambda r: r.days / 365)
+        result["first_employed"] = pd.to_datetime(df["first_employed"], unit="ms")
+        result["last_employed"] = df["last_employed"]
+        result["total_elections"] = df["total_elections"]
+        result["relevance_ratio"] = df["relevance_ratio"]
+        return result
+
+    def process(self, ctx: Context):
+        df = self.extract.read_or_process(ctx)
         return self.format_output(df)
 
 
