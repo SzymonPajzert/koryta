@@ -57,7 +57,7 @@ const interestingNodes = computed<Record<string, Node & { stats: NodeStats }>>(
   () => {
     return Object.fromEntries(
       Object.entries(nodesFiltered1.value ?? {}).filter(
-        ([_, node]) => node.type !== "rect" || node.stats.people > 0,
+        ([_, node]) => node.type !== "rect" || node.stats?.people > 0,
       ),
     );
   },
