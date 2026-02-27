@@ -1,8 +1,9 @@
 <template>
   <v-network-graph
     v-if="nodes"
-    :nodes="nodesFiltered"
-    :edges="edgesFiltered"
+    :key="`${focusNodeId}-${maxDepth}-${Object.keys(nodesFiltered).length}-${(edgesFiltered ?? []).length}`"
+    :nodes="unref(nodesFiltered)"
+    :edges="unref(edgesFiltered)"
     :configs="configs"
     :layouts="layout"
     :event-handlers="eventHandlers"
@@ -209,7 +210,6 @@ watch(filtered, () => {
   }
 });
 
-// Also watch focusNodeId to trigger layout maybe?
 watch(
   () => props.focusNodeId,
   () => {
