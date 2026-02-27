@@ -218,8 +218,10 @@ class UploadPayloads(Pipeline):
         # Region filtering for companies
         region = getattr(self.people.args, "region", None)
         if region:
-             companies_df = companies_df[companies_df["teryt_code"].fillna("").str.startswith(region)]
-             print(f"Filtered to {len(companies_df)} relevant companies for region {region}")
+            companies_df = companies_df[
+                companies_df["teryt_code"].fillna("").str.startswith(region)
+            ]
+            print(f"Filtered to {len(companies_df)} companies for region {region}")
 
         companies_df_lookup = companies_df.dropna(subset=["krs", "name"])
         company_lookup = dict(
@@ -287,5 +289,7 @@ class UploadPayloads(Pipeline):
         df = pd.DataFrame(payloads)
         # Ensure 'payload' is always a valid JSON string for DuckDB
         if not df.empty and "payload" in df.columns:
-            df["payload"] = df["payload"].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
+            df["payload"] = df["payload"].apply(
+                lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x
+            )
         return df

@@ -2,7 +2,7 @@ import json
 
 import pandas as pd
 
-from analysis.extract import Extract
+from analysis.extract import FormatCSV
 from scrapers.stores import Pipeline
 from scrapers.tests.mocks import get_test_context, setup_test_context
 
@@ -147,7 +147,8 @@ def test_extract_by_krs():
     )
 
     # 2. Initialize Extract pipeline
-    extract = Pipeline.create(Extract)
+    format = Pipeline.create(FormatCSV)
+    extract = format.extract
 
     # Mock dependencies to prevent full pipeline execution
     extract.people = Pipeline.create(type(extract.people))
@@ -172,7 +173,7 @@ def test_extract_by_krs():
     extract.args = MockArgs()
 
     # 4. Run Process
-    result_df = extract.process(ctx)
+    result_df = format.process(ctx)
 
     # 5. Verify Results
     assert len(result_df) == 4  # P1, P2, P3, P4

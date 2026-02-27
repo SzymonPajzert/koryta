@@ -1,31 +1,31 @@
 import argparse
+import ast
 import http.server
 import json
 import os
 import sys
 import threading
+import time
 import typing
 import urllib.parse
 import webbrowser
 
-import duckdb
 import numpy as np
-import pandas as pd
 import requests
 
 from analysis.payloads import UploadPayloads
+from main import _setup_context
 from scrapers.krs.graph import CompanyGraph
-from scrapers.stores import Context, Pipeline
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
-from stores.duckdb import EntityDumper
-from stores.firestore import FirestoreIO
+from scrapers.stores import Context, LocalFile, Pipeline
 
 PIPELINES = [
     UploadPayloads,
     PostalCodes,
     Regions,
 ]
+
 
 class AuthHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -66,12 +66,14 @@ class AuthHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
 
+
 def run_auth_server(port, stop_event):
     server = http.server.HTTPServer(("localhost", port), AuthHandler)
     server.token = None  # type: ignore
     while not stop_event.is_set():
         server.handle_request()
     return server.token  # type: ignore
+
 
 def authenticate_user(endpoint_url: str) -> str:
     auth_port = 8085
@@ -87,23 +89,14 @@ def authenticate_user(endpoint_url: str) -> str:
 
     print("Waiting for authentication...")
     while True:
-        # Check if the token was received
-        # We need to access the server's token somehow.
-        # This is a bit tricky with threading. Simple wait for now.
-        # In a real scenario, you'd use a shared state.
-        import time
         time.sleep(1)
-        # For now, let's assume the user will paste it if browser doesn't work
-        # and we can't get it automatically:
-        # Actually, let's just ask for it as a fallback.
-        # But for this task, we assume the user is already logged in on localhost:3000
-        # and the server will receive it.
-        # To simplify, let's use a dummy token or ask user input:
-        token = input("Enter authentication token (or press Enter if browser succeeded): ")
+        token = input(
+            "Enter authentication token (or press Enter if browser succeeded): "
+        )
         if token:
             stop_event.set()
             return token
-        # If the server thread sets a global token, we could use that.
+
 
 def check_pipeline_files(ctx: Context):
     missing = []
@@ -115,6 +108,7 @@ def check_pipeline_files(ctx: Context):
                 missing.append(p_type.__name__)
     return missing
 
+
 class NumpyEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, np.ndarray):
@@ -125,23 +119,24 @@ class NumpyEncoder(json.JSONEncoder):
             return float(o)
         return super().default(o)
 
+
 def non_empty_query(query):
     if not query:
         return False
     return query.strip() != ""
 
+
 def process_regions(df, db):
     # This is handled by bulk_create or similar
     pass
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Upload koryta data to Firestore.")
     parser.add_argument(
         "--endpoint", default="http://localhost:3000", help="API endpoint URL"
     )
-    parser.add_argument(
-        "--submit", action="store_true", help="Submit data to the API"
-    )
+    parser.add_argument("--submit", action="store_true", help="Submit data to the API")
     parser.add_argument(
         "--type",
         choices=["person", "company", "region"],
@@ -151,22 +146,17 @@ def parse_args():
     parser.add_argument(
         "--query", type=str, help="SQL query to filter data from upload_payloads"
     )
-    parser.add_argument(
-        "--region", type=str, help="Filter by teryt prefix (e.g. 3061)"
-    )
-    parser.add_argument(
-        "--krs", type=str, help="Filter by KRS and all its descendants"
-    )
+    parser.add_argument("--region", type=str, help="Filter by teryt prefix (e.g. 3061)")
+    parser.add_argument("--krs", type=str, help="Filter by KRS and all its descendants")
     parser.add_argument(
         "--api",
         choices=["bulk_create", "bulk_update"],
         default="bulk_create",
         help="API endpoint to use",
     )
-    parser.add_argument(
-        "--token", type=str, help="Optional auth token"
-    )
+    parser.add_argument("--token", type=str, help="Optional auth token")
     return parser.parse_known_args()
+
 
 def register_table(ctx, pipeline_cls) -> bool:
     p = Pipeline.create(pipeline_cls)
@@ -179,6 +169,20 @@ def register_table(ctx, pipeline_cls) -> bool:
         return True
     return False
 
+
+def print_company(company):
+    if company["created"]:
+        print(
+            f"\n  Created company with KRS: {company['krs']} node {company['nodeId']}",
+            end=" ",
+        )
+    else:
+        print(
+            f"\n  Already existed KRS: {company['krs']} node {company['nodeId']}",
+            end=" ",
+        )
+
+
 def submit_results(args, df):
     token = args.token
     if not token:
@@ -187,11 +191,6 @@ def submit_results(args, df):
     if not token:
         # Try local storage or similar? For now dummy
         token = "test-token"
-
-    if args.type == "company":
-        default_target_url = f"{args.endpoint}/api/ingest/company"
-    else:
-        default_target_url = f"{args.endpoint}/api/person/{args.api}"
 
     headers = {
         "Content-Type": "application/json",
@@ -206,7 +205,6 @@ def submit_results(args, df):
                 payload = json.loads(payload)
             except Exception:
                 try:
-                    import ast
                     payload = ast.literal_eval(payload)
                 except Exception as e:
                     e.add_note(f"payload: {payload}")
@@ -235,16 +233,7 @@ def submit_results(args, df):
             j: dict[str, typing.Any] = resp.json()
             if "companies" in j:
                 for company in j["companies"]:
-                    if company["created"]:
-                        print(
-                            f"\n  Created company with KRS: {company['krs']} node {company['nodeId']}",
-                            end=" ",
-                        )
-                    else:
-                        print(
-                            f"\n  Already existed KRS: {company['krs']} node {company['nodeId']}",
-                            end=" ",
-                        )
+                    print_company(company)
             if resp.status_code in [200, 201]:
                 print("  OK")
                 success_count += 1
@@ -255,6 +244,7 @@ def submit_results(args, df):
 
     failures = len(df) - success_count
     print(f"\nUpload complete. Success: {success_count}, Failed: {failures}")
+
 
 def print_results(df, type):
     print("\n--- Query Results (First 20) ---")
@@ -269,9 +259,6 @@ def print_results(df, type):
             json.dumps(preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder)
         )
 
-def _setup_context(use_rejestr_io: bool):
-    import main
-    return main._setup_context(use_rejestr_io)
 
 def execute_query(ctx, args, query):
     print("Executing query...")
@@ -283,7 +270,8 @@ def execute_query(ctx, args, query):
 
         if args.type == "person":
             if not query and args.region:
-                # pipeline already filtered people by region, so we just take all 'person' entities
+                # pipeline already filtered people by region,
+                # so we just take all 'person' entities
                 query = "SELECT * FROM upload_payloads WHERE entity_type='person'"
             elif not query:
                 query = "SELECT * FROM upload_payloads WHERE entity_type='person'"
@@ -309,7 +297,6 @@ def execute_query(ctx, args, query):
                         "SELECT * FROM upload_payloads WHERE head=false"  # return empty
                     )
             elif args.region:
-                # Use JSON extraction that works for string columns in DuckDB if payload is a string
                 query = f"""
                 SELECT * FROM upload_payloads
                 WHERE entity_type='company'
@@ -332,6 +319,7 @@ def execute_query(ctx, args, query):
 
     return df
 
+
 def main():
     args, query = parse_args()
     ctx, _ = _setup_context(False)
@@ -348,6 +336,7 @@ def main():
         print("\nUse --submit to upload.")
     else:
         submit_results(args, df)
+
 
 if __name__ == "__main__":
     main()
