@@ -76,11 +76,11 @@ const nodesFiltered = computed(() => {
   if (props.focusNodeId) {
     if (!graph.value) return {};
     const depth = props.maxDepth ?? 3;
-    const visited = new Set<string>();
+    const visited = new Map<string, number>();
     const queue: { id: string; d: number }[] = [
       { id: props.focusNodeId, d: 0 },
     ];
-    visited.add(props.focusNodeId);
+    visited.set(props.focusNodeId, 1);
 
     while (queue.length > 0 && !!edges.value) {
       const current = queue.shift()!;
@@ -95,15 +95,17 @@ const nodesFiltered = computed(() => {
         if (!interestingNodes.value[neighborId]) continue;
 
         if (!visited.has(neighborId)) {
-          visited.add(neighborId);
+          visited.set(neighborId, 1);
           queue.push({ id: neighborId, d: current.d + 1 });
+        } else {
+          visited.set(neighborId, (visited.get(neighborId) ?? 0) + 1);
         }
       }
     }
 
     return Object.fromEntries(
-      Object.entries(interestingNodes.value).filter(([key]) =>
-        visited.has(key),
+      Object.entries(interestingNodes.value).filter(
+        ([key]) => (visited.get(key) ?? 0) > 1,
       ),
     );
   }
