@@ -1,9 +1,9 @@
 <template>
   <v-network-graph
     v-if="ready"
-    :key="`${focusNodeId}-${maxDepth}-${Object.keys(nodesFiltered).length}-${(edgesFiltered ?? []).length}`"
-    :nodes="unref(nodesFiltered)"
-    :edges="unref(edgesFiltered)"
+    :key="`${focusNodeId}-${Object.keys(nodes).length}-${(edges ?? []).length}`"
+    :nodes="nodes"
+    :edges="edges"
     :configs="configs"
     :layouts="layout"
     :event-handlers="eventHandlers"
@@ -27,22 +27,22 @@
 import { defineConfigs, SimpleLayout } from "v-network-graph";
 import type { EventHandlers, NodeEvent } from "v-network-graph";
 import { useSimulationStore } from "@/stores/simulation";
-import { useGraph } from "~/composables/graph";
 import type { NodeType } from "~~/shared/model";
+import type { Node as GraphNode } from "~~/shared/graph/model";
 
 const props = defineProps<{
+  nodes: Record<string, GraphNode>;
+  edges: any[];
+  layout?: { nodes: Record<string, { x: number; y: number }> };
+  ready: boolean;
   focusNodeId?: string;
-  maxDepth?: number;
-  filtered?: string[];
 }>();
 
 const simulationStore = useSimulationStore();
 const router = useRouter();
 
-const { nodesFiltered, edgesFiltered, layout, ready } = await useGraph(props);
-
 const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
-  const nodeWhole = nodesFiltered.value[node];
+  const nodeWhole = props.nodes[node];
   if (!nodeWhole) return;
 
   let destination: NodeType | undefined = undefined;
@@ -64,7 +64,7 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
     }
   } else {
     // optional chaining
-    if (nodesFiltered.value[node]?.type === "rect") {
+    if (props.nodes[node]?.type === "rect") {
       router.push({ query: { miejsce: node } });
     }
   }
@@ -107,15 +107,18 @@ const configs = reactive(
   }),
 );
 
-watch(nodesFiltered, () => {
-  if (!configs.view) return;
-  // Use simple layout if we show many nodes (typical for global view)
-  if (Object.keys(nodesFiltered.value).length > 200 && !props.focusNodeId) {
-    configs.view.layoutHandler = new SimpleLayout();
-  } else {
-    configs.view.layoutHandler = simulationStore.newForceLayout();
-  }
-});
+watch(
+  () => props.nodes,
+  () => {
+    if (!configs.view) return;
+    // Use simple layout if we show many nodes (typical for global view)
+    if (Object.keys(props.nodes).length > 200 && !props.focusNodeId) {
+      configs.view.layoutHandler = new SimpleLayout();
+    } else {
+      configs.view.layoutHandler = simulationStore.newForceLayout();
+    }
+  },
+);
 
 watch(
   () => props.focusNodeId,
