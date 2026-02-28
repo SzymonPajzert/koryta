@@ -39,7 +39,7 @@ describe("createRevisionTransaction", () => {
     const targetRef = { id: "node-1" } as DocumentReference;
     const data = { title: "New Title" };
 
-    createRevisionTransaction(mockDb, mockBatch, user, targetRef, data, false);
+    createRevisionTransaction(mockDb, mockBatch, user, targetRef, data);
 
     // Should create revision
     expect(mockCollection).toHaveBeenCalledWith("revisions");
