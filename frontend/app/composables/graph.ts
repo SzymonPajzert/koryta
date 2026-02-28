@@ -1,3 +1,4 @@
+import type { Ref } from "vue";
 import type { GraphLayout } from "~~/shared/graph/util";
 import type { Node as GraphNode, NodeStats } from "~~/shared/graph/model";
 
@@ -5,6 +6,7 @@ export type GraphOptions = {
   focusNodeId?: string;
   maxDepth?: number;
   filtered?: string[];
+  expandedNodes?: Ref<Set<string>>;
 };
 
 export function useGraph(opts: GraphOptions = {}) {
@@ -58,12 +60,24 @@ export function useGraph(opts: GraphOptions = {}) {
     // console.log("Canvas.vue: focusNodeId", props.focusNodeId, "maxDepth", props.maxDepth);
     if (opts.focusNodeId) {
       if (!graph.value) return {};
-      const depth = opts.maxDepth ?? 3;
+      const depth = opts.maxDepth ?? 1;
       const visited = new Map<string, number>();
-      const queue: { id: string; d: number }[] = [
-        { id: opts.focusNodeId, d: 0 },
-      ];
-      visited.set(opts.focusNodeId, 1);
+
+      const expandedSet =
+        opts.expandedNodes?.value || new Set([opts.focusNodeId]);
+
+      console.log(
+        "interestingNodes",
+        Object.keys(interestingNodes.value),
+        "expandedSet",
+        Array.from(expandedSet),
+      );
+
+      const queue: { id: string; d: number }[] = [];
+      for (const id of expandedSet) {
+        queue.push({ id, d: 0 });
+        visited.set(id, 1);
+      }
 
       while (queue.length > 0 && !!edges.value) {
         const current = queue.shift()!;
@@ -87,8 +101,8 @@ export function useGraph(opts: GraphOptions = {}) {
       }
 
       return Object.fromEntries(
-        Object.entries(interestingNodes.value).filter(
-          ([key]) => (visited.get(key) ?? 0) > 1,
+        Object.entries(interestingNodes.value).filter(([key]) =>
+          visited.has(key),
         ),
       );
     }
