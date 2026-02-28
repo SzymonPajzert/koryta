@@ -1,6 +1,6 @@
 <template>
   <v-network-graph
-    v-if="nodes"
+    v-if="ready"
     :key="`${focusNodeId}-${maxDepth}-${Object.keys(nodesFiltered).length}-${(edgesFiltered ?? []).length}`"
     :nodes="unref(nodesFiltered)"
     :edges="unref(edgesFiltered)"
@@ -27,112 +27,21 @@
 import { defineConfigs, SimpleLayout } from "v-network-graph";
 import type { EventHandlers, NodeEvent } from "v-network-graph";
 import { useSimulationStore } from "@/stores/simulation";
-import { useParams } from "@/composables/params";
+import { useGraph } from "~/composables/graph";
 import type { NodeType } from "~~/shared/model";
-import type { GraphLayout } from "~~/shared/graph/util";
-import type { Node, NodeStats } from "~~/shared/graph/model";
 
 const props = defineProps<{
   focusNodeId?: string;
   maxDepth?: number;
+  filtered?: string[];
 }>();
 
 const simulationStore = useSimulationStore();
-const { data: graph } = await useAsyncData<GraphLayout>(
-  "graph",
-  () => $fetch("/api/graph"),
-  { lazy: true },
-);
-const { data: layout } = await useAsyncData<{
-  nodes: Record<string, { x: number; y: number }>;
-}>("layout", () => $fetch("/api/graph/layout"), { lazy: true });
-
-const nodes = computed(() => graph.value?.nodes);
-const edgesRaw = computed(() => graph.value?.edges);
-const edges = useEntityFiltering(edgesRaw);
-const nodesFiltered1 = useEntityFiltering(nodes);
-
 const router = useRouter();
 
-const interestingNodes = computed<Record<string, Node & { stats: NodeStats }>>(
-  () => {
-    return Object.fromEntries(
-      Object.entries(nodesFiltered1.value ?? {}).filter(([_, node]) => {
-        if (!node) return false;
-        // Only show circles (people), documents (articles/regions) or rects (places) with people
-        if (node.type === "rect") {
-          return node.stats?.people > 0;
-        }
-        return true;
-      }),
-    );
-  },
-);
-
-const { filtered } = useParams("Graf ");
-
-// TODO move it to the backend
-const nodesFiltered = computed(() => {
-  // console.log("Canvas.vue: focusNodeId", props.focusNodeId, "maxDepth", props.maxDepth);
-  if (props.focusNodeId) {
-    if (!graph.value) return {};
-    const depth = props.maxDepth ?? 3;
-    const visited = new Map<string, number>();
-    const queue: { id: string; d: number }[] = [
-      { id: props.focusNodeId, d: 0 },
-    ];
-    visited.set(props.focusNodeId, 1);
-
-    while (queue.length > 0 && !!edges.value) {
-      const current = queue.shift()!;
-      if (current.d >= depth) continue;
-
-      const neighbors = edges.value
-        .filter((e) => e.source === current.id || e.target === current.id)
-        .map((e) => (e.source === current.id ? e.target : e.source));
-
-      for (const neighborId of neighbors) {
-        // Skip nodes that represent empty places or are otherwise filtered out
-        if (!interestingNodes.value[neighborId]) continue;
-
-        if (!visited.has(neighborId)) {
-          visited.set(neighborId, 1);
-          queue.push({ id: neighborId, d: current.d + 1 });
-        } else {
-          visited.set(neighborId, (visited.get(neighborId) ?? 0) + 1);
-        }
-      }
-    }
-
-    return Object.fromEntries(
-      Object.entries(interestingNodes.value).filter(
-        ([key]) => (visited.get(key) ?? 0) > 1,
-      ),
-    );
-  }
-
-  return Object.fromEntries(
-    Object.entries(interestingNodes.value).filter(([key, _]) =>
-      filtered.value.includes(key),
-    ),
-  );
-});
-
-// We need to filter edges as well because v-network-graph might show edges connecting to non-existent nodes if we don't?
-// Actually v-network-graph ignores edges where source/target are missing from `nodes`.
-// But for performance or correctness let's filter them if in local mode.
-const edgesFiltered = computed(() => {
-  if (props.focusNodeId && graph.value) {
-    const validNodeIds = new Set(Object.keys(nodesFiltered.value));
-    return graph.value.edges.filter(
-      (e) => validNodeIds.has(e.source) && validNodeIds.has(e.target),
-    );
-  }
-  return edges.value;
-});
+const { nodesFiltered, edgesFiltered, layout, ready } = await useGraph(props);
 
 const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
-  console.log(event.detail);
   const nodeWhole = nodesFiltered.value[node];
   if (!nodeWhole) return;
 
@@ -198,12 +107,10 @@ const configs = reactive(
   }),
 );
 
-watch(filtered, () => {
+watch(nodesFiltered, () => {
   if (!configs.view) return;
   // Use simple layout if we show many nodes (typical for global view)
-  // Check nodesFiltered size? or just filtered.value.length
-  // Logic from original:
-  if (filtered.value.length > 200 && !props.focusNodeId) {
+  if (Object.keys(nodesFiltered.value).length > 200 && !props.focusNodeId) {
     configs.view.layoutHandler = new SimpleLayout();
   } else {
     configs.view.layoutHandler = simulationStore.newForceLayout();
