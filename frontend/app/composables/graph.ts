@@ -7,15 +7,30 @@ export type GraphOptions = {
   filtered?: string[];
 };
 
-export async function useGraph(opts: GraphOptions = {}) {
-  const { data: graph } = await useAsyncData<GraphLayout>(
+export function useGraph(opts: GraphOptions = {}) {
+  const { data: graph } = useAsyncData<GraphLayout>(
     "graph",
     () => $fetch("/api/graph"),
     { lazy: true },
   );
-  const { data: layout } = await useAsyncData<{
+  const { data: layout } = useAsyncData<{
     nodes: Record<string, { x: number; y: number }>;
   }>("layout", () => $fetch("/api/graph/layout"), { lazy: true });
+
+  const { data } = useAsyncData<GraphLayout>("graph", () =>
+    $fetch("/api/graph"),
+  );
+  const nodeGroupsMap = computed(() => {
+    const groups = data.value?.nodeGroups;
+    if (!Array.isArray(groups)) return {};
+    return groups.reduce(
+      (acc, curr) => {
+        acc[curr.id] = curr;
+        return acc;
+      },
+      {} as Record<string, GraphLayout["nodeGroups"][number]>,
+    );
+  });
 
   const nodes = computed(() => graph.value?.nodes);
   const ready = computed(() => !!nodes.value);
@@ -85,9 +100,6 @@ export async function useGraph(opts: GraphOptions = {}) {
     );
   });
 
-  // We need to filter edges as well because v-network-graph might show edges connecting to non-existent nodes if we don't?
-  // Actually v-network-graph ignores edges where source/target are missing from `nodes`.
-  // But for performance or correctness let's filter them if in local mode.
   const edgesFiltered = computed(() => {
     if (opts.focusNodeId && graph.value) {
       const validNodeIds = new Set(Object.keys(nodesFiltered.value));
@@ -100,6 +112,7 @@ export async function useGraph(opts: GraphOptions = {}) {
 
   return {
     nodesFiltered,
+    nodeGroupsMap,
     edgesFiltered,
     layout,
     ready,

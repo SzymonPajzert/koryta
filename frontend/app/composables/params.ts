@@ -1,22 +1,6 @@
-import type { GraphLayout } from "~~/shared/graph/util";
-
 export function useParams(title: string) {
   const route = useRoute();
-  const { data } = useAsyncData<GraphLayout>("graph", () =>
-    $fetch("/api/graph"),
-  );
-  const nodeGroupsMap = computed(() => {
-    const groups = data.value?.nodeGroups;
-    if (!Array.isArray(groups)) return {};
-    return groups.reduce(
-      (acc, curr) => {
-        acc[curr.id] = curr;
-        return acc;
-      },
-      {} as Record<string, GraphLayout["nodeGroups"][number]>,
-    );
-  });
-  const nodes = computed(() => data.value?.nodes ?? {});
+  const { nodesFiltered: nodes, nodeGroupsMap } = useGraph();
 
   // Identifiers of the nodes, that should be returned
   // TODO move the query to the server
