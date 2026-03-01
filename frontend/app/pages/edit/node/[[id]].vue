@@ -204,6 +204,7 @@
               :node-name="current.name || ''"
               :auth-headers="authHeaders"
               :edge-type-ext="activeEdgeTypeExt!"
+              :initial-direction="activeDirection"
               :edited-edge="isEditingEdge ? editedEdgeId : undefined"
               @update="onEdgeUpdate"
             />
@@ -259,11 +260,13 @@ const {
 const editEdgeForm = ref<InstanceType<typeof FormEditEdge> | null>(null);
 
 const activeEdgeTypeExt = ref<edgeTypeExt | undefined>(undefined);
+const activeDirection = ref<"incoming" | "outgoing" | undefined>(undefined);
 const isEditingEdge = ref(false);
 const editedEdgeId = ref<string | undefined>(undefined);
 
-function startNewEdge(type: string) {
+function startNewEdge(type: string, direction: string) {
   activeEdgeTypeExt.value = type as edgeTypeExt;
+  activeDirection.value = direction as "incoming" | "outgoing";
   isEditingEdge.value = false;
   editedEdgeId.value = undefined;
 }
@@ -275,6 +278,7 @@ function openEditEdge(edge: EdgeNode) {
   // For now let's assume it's direct or we can infer it
   // This might need more logic if types don't match 1:1
   activeEdgeTypeExt.value = edge.type as edgeTypeExt;
+  activeDirection.value = undefined;
   nextTick(() => {
     editEdgeForm.value?.openEditEdge(edge);
   });
@@ -282,6 +286,7 @@ function openEditEdge(edge: EdgeNode) {
 
 function onEdgeUpdate() {
   activeEdgeTypeExt.value = undefined;
+  activeDirection.value = undefined;
   isEditingEdge.value = false;
   editedEdgeId.value = undefined;
   refreshEdges();

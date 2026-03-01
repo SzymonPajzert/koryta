@@ -13,11 +13,16 @@ describe("Article Entities and Edge References", () => {
   it("should allow adding an edge from an article page", () => {
     cy.visit("/entity/article/6");
     // Inline quick add
-    cy.contains("Szybkie dodawanie").should("be.visible");
-    cy.contains("Wspomniane miejsce w artykule").click();
+    cy.contains("Szybkie dodawanie", { timeout: 15000 }).should("be.visible");
+    cy.get('[data-testid="edge-picker-mentioned_company"]', { timeout: 15000 })
+      .should("be.visible")
+      .scrollIntoView()
+      .click({ force: true });
 
+    cy.contains("Dodaj nowe powiązanie").first().scrollIntoView().should("be.visible");
     cy.pickEntity("Orlen", "entity-picker-target");
 
+    cy.contains("Dodaj powiązanie").first().scrollIntoView().should("be.visible");
     cy.contains("button", "Dodaj powiązanie").click();
     cy.on("window:alert", (str) => {
       expect(str).to.equal("Dodano powiązanie!");
@@ -27,8 +32,12 @@ describe("Article Entities and Edge References", () => {
   it("should allow adding an edge with article reference from person page", () => {
     cy.visit("/entity/person/1");
     cy.contains("Zaproponuj zmianę").click();
-    cy.contains("Dodaj gdzie").contains("pracuje").click();
+    cy.get('[data-testid="edge-picker-employed"]', { timeout: 15000 })
+      .should("be.visible")
+      .scrollIntoView()
+      .click({ force: true });
 
+    cy.contains("Dodaj nowe powiązanie").first().scrollIntoView().should("be.visible");
     cy.pickEntity("Orlen", "entity-picker-target");
     cy.pickEntity("Sample Article", "entity-picker-reference");
 

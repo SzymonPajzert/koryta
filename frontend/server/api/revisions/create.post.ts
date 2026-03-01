@@ -40,7 +40,6 @@ export default defineEventHandler(async (event) => {
     user,
     nodeRef,
     revisionData,
-    false,
   );
 
   await batch.commit();

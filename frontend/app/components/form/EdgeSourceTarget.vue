@@ -1,6 +1,10 @@
 <template>
   <!-- Render Fixed Node it's already set -->
-  <div v-if="nodeName" class="d-flex flex-column align-center w-100">
+  <div
+    v-if="nodeName"
+    v-bind="$attrs"
+    class="d-flex flex-column align-center w-100"
+  >
     <v-chip
       class="mb-1 text-truncate"
       style="max-width: 100%"
