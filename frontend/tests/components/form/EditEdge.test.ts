@@ -53,7 +53,6 @@ const EditEdgeWrapper = defineComponent({
           nodeId: "node-1",
           nodeType: "person",
           nodeName: "Test Node",
-          authHeaders: {},
           edgeTypeExt: this.edgeTypeExt || "connection",
           editedEdge: this.editedEdge,
           initialDirection: this.initialDirection,
@@ -76,7 +75,11 @@ describe("EditEdge.vue", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            name: "FormEdgeSourceTarget",
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },
@@ -98,7 +101,11 @@ describe("EditEdge.vue", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            name: "FormEdgeSourceTarget",
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },
@@ -120,7 +127,11 @@ describe("EditEdge.vue", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            name: "FormEdgeSourceTarget",
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },
@@ -139,7 +150,11 @@ describe("EditEdge.vue", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            name: "FormEdgeSourceTarget",
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },
@@ -160,7 +175,11 @@ describe("EditEdge.vue", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            name: "FormEdgeSourceTarget",
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },
@@ -189,7 +208,11 @@ describe("EditEdge.vue", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            name: "FormEdgeSourceTarget",
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },
@@ -216,7 +239,11 @@ describe("EditEdge.vue", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            name: "FormEdgeSourceTarget",
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },
@@ -250,7 +277,11 @@ describe("EditEdge.vue", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            name: "FormEdgeSourceTarget",
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },

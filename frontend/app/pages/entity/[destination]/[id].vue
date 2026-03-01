@@ -135,6 +135,7 @@
               size="small"
               :prepend-icon="btn.icon"
               class="mr-2 mb-2"
+              :data-testid="'edge-picker-' + btn.edgeType"
               @click="quickAddEdge(btn)"
             >
               {{ btn.text }}

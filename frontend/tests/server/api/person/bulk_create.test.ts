@@ -59,6 +59,10 @@ const mockReadBody = vi.fn();
 vi.stubGlobal("readBody", mockReadBody);
 vi.stubGlobal("createError", (err: any) => err); // Mock createError to just return the error object/string
 vi.stubGlobal("defineEventHandler", (fn: any) => fn); // Stub defineEventHandler to return the function as is
+vi.stubGlobal(
+  "useStorage",
+  vi.fn(() => ({ clear: vi.fn() })),
+);
 
 describe("api/person/bulk_create", () => {
   let handler: any;

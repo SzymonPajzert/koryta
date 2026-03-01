@@ -7,13 +7,10 @@
     :items="entitiesList"
     item-title="name"
     item-value="id"
-    required
-    return-object
     autocomplete="off"
-    v-bind="{
-      ...$attrs,
-      'data-testid': $attrs['data-testid'] || 'entity-picker-input',
-    }"
+    v-bind="$attrs"
+    return-object
+    required
     @update:focused="(val: boolean) => val && refresh()"
   >
     <template #no-data>

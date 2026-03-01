@@ -42,7 +42,10 @@ describe("Election Edge Form Flow", () => {
         plugins: [vuetify],
         stubs: {
           EntityPicker: true,
-          FormEdgeSourceTarget: true,
+          FormEdgeSourceTarget: {
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
           DialogProposeRemoval: true,
         },
       },

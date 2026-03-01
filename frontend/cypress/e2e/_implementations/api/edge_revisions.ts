@@ -79,28 +79,7 @@ describe("Edge API", () => {
       const edgeId = response.body.id;
       expect(edgeId).to.be.a("string");
 
-      // Verify visibility for authenticated user
-      cy.request({
-        method: "GET",
-        url: "/api/graph/edges",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      }).then((res) => {
-        expect(res.status).to.eq(200);
-        expect(res.body).to.be.an("array");
-
-        const found = res.body.find(
-          (e: { source: string; target: string }) =>
-            e.source === edgeData.source && e.target === edgeData.target,
-        );
-        expect(
-          found,
-          `Edge ${edgeId} (source: ${edgeData.source}) should be visible to auth user`,
-        ).to.exist;
-      });
-
-      // Verify visibility for anonymous user
+      // Verify it's NOT in the public graph edges
       cy.request({
         method: "GET",
         url: "/api/graph/edges",
@@ -112,7 +91,30 @@ describe("Edge API", () => {
           (e: { source: string; target: string }) =>
             e.source === edgeData.source && e.target === edgeData.target,
         );
-        expect(found).to.not.exist;
+        expect(found, "Pending edge should not be in global graph").to.not
+          .exist;
+      });
+
+      // Verify visibility for authenticated user in revisions API
+      cy.request({
+        method: "GET",
+        url: `/api/revisions/node/${edgeData.source}`,
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }).then((res) => {
+        expect(res.status).to.eq(200);
+        expect(res.body.revisions).to.be.an("array");
+
+        const found = res.body.revisions.find(
+          (rev: any) =>
+            rev.data.source === edgeData.source &&
+            rev.data.target === edgeData.target,
+        );
+        expect(
+          found,
+          `Edge revision should be visible to auth user under node revisions`,
+        ).to.exist;
       });
     });
   });

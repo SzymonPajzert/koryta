@@ -21,9 +21,11 @@ export function createRevisionTransaction(
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
 
+  const isEdge = "source" in data && "target" in data;
+
   const revision = {
     // TODO test it is always set correctly and check if the DB has wrong entries there
-    node_id: targetRef.id,
+    node_id: isEdge ? (data as Edge).source : targetRef.id,
     data,
     update_time: timestamp,
     update_user: user.uid,

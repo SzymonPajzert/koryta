@@ -50,7 +50,7 @@ const EditEdgeWrapper = defineComponent({
           nodeId: "test-node-id",
           nodeType: "person",
           nodeName: "Current Node",
-          authHeaders: {},
+          edgeTypeExt: "employed",
         }),
       fallback: () => h("div", "fallback"),
     });

@@ -1,5 +1,4 @@
 import { watch, type Ref } from "vue";
-import { doc, getDoc, getFirestore } from "firebase/firestore";
 import type {
   Person,
   Node,
@@ -28,7 +27,6 @@ interface UseNodeDataOptions {
 
 export function useNodeData(options: UseNodeDataOptions) {
   const { nodeId, isNew, authHeaders, stateKey, idToken } = options;
-  const db = getFirestore(useFirebaseApp(), "koryta-pl");
   const { user } = useAuthState();
 
   const current = useState<EditablePage>(`${stateKey.value}-current`, () =>
@@ -69,19 +67,14 @@ export function useNodeData(options: UseNodeDataOptions) {
 
     if (!isNew.value && id && idToken.value) {
       try {
-        const snap = await getDoc(doc(db, "nodes", id));
-        if (snap.exists()) {
-          const data = snap.data();
-          const type = data.type || "person";
+        const { node } = await $fetch<{ node: Node }>(
+          `/api/nodes/entry/${id}`,
+          {
+            headers: authHeaders.value,
+          },
+        );
 
-          const { node } = await $fetch<{ node: Node }>(
-            `/api/nodes/entry/${id}`,
-            {
-              query: { type },
-              headers: authHeaders.value,
-            },
-          );
-
+        if (node) {
           const v: EditablePage = {
             name: node.name || "",
             type: node.type,

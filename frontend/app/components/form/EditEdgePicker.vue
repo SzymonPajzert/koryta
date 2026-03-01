@@ -8,6 +8,7 @@
       :prepend-icon="button.icon"
       color="primary"
       class="mb-2"
+      :data-testid="'edge-picker-' + button.edgeType"
       @click="startAddEdge(button.edgeType, button.direction)"
     >
       {{ button.text }}

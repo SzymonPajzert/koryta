@@ -57,16 +57,21 @@ describe("Revisions Lifecycle", () => {
     cy.pickEntity("Piotr Wiśniewski");
 
     cy.fillField("Nazwa relacji", "znajomi");
+
+    let alertFired = false;
+    cy.on("window:alert", (str) => {
+      expect(str).to.contain("Powiązanie dodane!");
+      alertFired = true;
+    });
+
     cy.contains("button", "Dodaj powiązanie").click();
 
-    cy.contains("Piotr Wiśniewski").should("be.visible");
-    cy.contains("znajomi").should("be.visible");
+    // Wait for the alert to have fired (a poor man's wait since Cypress on event is async but non-blocking)
+    cy.wrap(null).should(() => {
+      expect(alertFired).to.be.true;
+    });
 
-    cy.visit("/entity/person/1");
-    cy.contains("Piotr Wiśniewski").should("be.visible");
-    cy.contains("znajomi").should("be.visible");
-
-    // 3. Visit Revisions
+    // 3. Visit Revisions (skip checking entity page as pending edges are not visible)
     cy.visit("/admin/audit?tab=pending");
 
     cy.request({
