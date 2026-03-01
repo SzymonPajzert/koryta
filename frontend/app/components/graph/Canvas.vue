@@ -43,11 +43,11 @@ import { defineConfigs, SimpleLayout } from "v-network-graph";
 import type { EventHandlers, NodeEvent } from "v-network-graph";
 import { useSimulationStore } from "@/stores/simulation";
 import type { NodeType } from "~~/shared/model";
-import type { Node as GraphNode } from "~~/shared/graph/model";
+import type { Node as GraphNode, Edge } from "~~/shared/graph/model";
 
 const props = defineProps<{
   nodes: Record<string, GraphNode>;
-  edges: any[];
+  edges: Edge[];
   layout?: { nodes: Record<string, { x: number; y: number }> };
   ready: boolean;
   focusNodeId?: string;
@@ -82,9 +82,7 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
         break;
     }
 
-    if (destination) {
-      router.push({ path: `/entity/${destination}/${node}` });
-    }
+    router.push({ path: `/entity/${destination}/${node}` });
   }
 };
 

@@ -22,7 +22,7 @@ describe("API /api/person/bulk_create", () => {
             const getAllRequest = objectStore.getAll();
             getAllRequest.onsuccess = () => {
               const users = getAllRequest.result;
-              if (users && users.length > 0) {
+              if (users.length > 0) {
                 const user = users[0].value || users[0];
                 resolve(user.stsTokenManager?.accessToken);
               } else {

@@ -22,11 +22,13 @@ export function useEntityFiltering<
       }) as C;
     } else {
       return Object.fromEntries(
-        Object.entries(raw as Record<string, T>).filter(([_, entity]) => {
-          if (!entity) return false;
-          if (user.value) return true;
-          return entity.visibility !== false;
-        }),
+        Object.entries(raw as Record<string, T | undefined>).filter(
+          ([_, entity]) => {
+            if (!entity) return false;
+            if (user.value) return true;
+            return entity.visibility !== false;
+          },
+        ),
       ) as C;
     }
   });

@@ -77,7 +77,7 @@ export async function fetchEdges(): Promise<Edge[]> {
   return edges as unknown as Edge[];
 }
 
-export async function fetchRTDB<T>(path: string): Promise<T> {
+export async function fetchRTDB(path: string) {
   const db = getDatabase();
   const snapshot = await db.ref(path).once("value");
   return snapshot.val() || {};

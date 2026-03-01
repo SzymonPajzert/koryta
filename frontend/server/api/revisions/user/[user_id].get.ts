@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
   const items = snapshot.docs.map((doc) => {
     const d = doc.data();
-    const data = (d.data as Record<string, any>) || {};
+    const data = d.data as Record<string, unknown>;
 
     return {
       id: doc.id,

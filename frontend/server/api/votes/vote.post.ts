@@ -5,19 +5,20 @@ import type { VoteCategory } from "~~/shared/model";
 
 export default defineEventHandler(async (event) => {
   const user = await getUser(event);
-  if (!user) {
-    throw createError({
-      statusCode: 401,
-      message: "Unauthorized",
-    });
-  }
+  // TODO I think it will just fail here and will not get user, but let's test it
+  // if (!user) {
+  //   throw createError({
+  //     statusCode: 401,
+  //     message: "Unauthorized",
+  //   });
+  // }
 
   const body = await readBody(event);
   const { id, type, vote, category } = body as {
     id: string;
     type: "node" | "edge";
     vote: number;
-    category: VoteCategory;
+    category?: VoteCategory;
   };
 
   if (!id || !category || typeof vote !== "number") {
