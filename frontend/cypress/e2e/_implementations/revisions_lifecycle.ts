@@ -21,7 +21,7 @@ describe("Revisions Lifecycle", () => {
             const getAllRequest = objectStore.getAll();
             getAllRequest.onsuccess = () => {
               const users = getAllRequest.result;
-              if (users && users.length > 0) {
+              if (users.length > 0) {
                 const user = users[0].value || users[0];
                 resolve(user.stsTokenManager?.accessToken);
               } else {
@@ -88,11 +88,10 @@ describe("Revisions Lifecycle", () => {
         cy.log("All edges:", JSON.stringify(edges));
         throw new Error("Could not find pending edge for Jan Kowalski");
       }
-      if (myEdge) {
-        expect((myEdge as { source_name: string }).source_name).to.equal(
-          "Jan Kowalski",
-        );
-      }
+
+      expect((myEdge as { source_name: string }).source_name).to.equal(
+        "Jan Kowalski",
+      );
     });
 
     // Wait for loading

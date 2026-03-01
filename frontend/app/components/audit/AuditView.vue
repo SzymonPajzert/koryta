@@ -142,15 +142,21 @@ const {
 // --- Computed Logic ---
 
 const loading = computed(() => {
-  if (props.type === "pending-revisions")
-    return pendingNodesLoading.value || pendingEdgesLoading.value;
-  if (props.type === "edges-no-source") return allEdgesLoading.value;
-  if (props.type === "articles-no-edges")
-    return allEdgesLoading.value || allArticlesLoading.value;
-  if (props.type === "my-revisions") return myRevisionsLoading.value;
-  return false;
+  switch (props.type) {
+    case "pending-revisions":
+      return pendingNodesLoading.value || pendingEdgesLoading.value;
+    case "edges-no-source":
+      return allEdgesLoading.value;
+    case "articles-no-edges":
+      return allEdgesLoading.value || allArticlesLoading.value;
+    case "my-revisions":
+      return myRevisionsLoading.value;
+    default:
+      return false;
+  }
 });
 
+// TODO this needs a simplification
 const items = computed<AuditItem[]>(() => {
   if (props.type === "pending-revisions") {
     const nodes = pendingNodes.value ? Object.values(pendingNodes.value) : [];
@@ -201,7 +207,7 @@ const items = computed<AuditItem[]>(() => {
       href: `/entity/article/${a.id}`,
       actionIcon: "mdi-eye",
     }));
-  } else if (props.type === "my-revisions") {
+  } else {
     return (
       myRevisionsData.value?.items.map((rev: any) => ({
         id: rev.id,

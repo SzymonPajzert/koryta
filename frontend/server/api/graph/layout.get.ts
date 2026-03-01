@@ -15,14 +15,15 @@ type NodeLocation = {
 };
 
 export default authCachedEventHandler(async (event) => {
-  const [graph, layout] = await Promise.all([
+  const [graph, layoutUntyped] = await Promise.all([
     event.$fetch<GraphLayout>("/api/graph"),
-    fetchRTDB<Layout>("layout"),
+    fetchRTDB("layout"),
   ]);
-  if (
-    layout.nodes &&
-    Object.keys(graph.nodes).length === Object.keys(layout.nodes).length
-  ) {
+
+  // Enforce the shape of the layout
+  const layout: Layout = { nodes: layoutUntyped.nodes || {} };
+
+  if (Object.keys(graph.nodes).length === Object.keys(layout.nodes).length) {
     console.log("reading saved from DB");
     return layout;
   } else {
