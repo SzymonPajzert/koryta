@@ -9,8 +9,8 @@ import nodes from "./nodes.json";
 import edges from "./edges.json";
 import revisions from "./revisions.json";
 
-process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
-process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
+process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.GCLOUD_PROJECT = "demo-koryta-pl";
 
 const app = initializeApp({
@@ -34,7 +34,7 @@ async function seed() {
 
 async function seedDatabase() {
   await waitOn({
-    resources: ["tcp:localhost:8080"],
+    resources: ["tcp:127.0.0.1:8080"],
     timeout: undefined,
   });
   const db = getFirestore(app, "koryta-pl");
@@ -83,7 +83,7 @@ async function seedDatabase() {
 
 async function seedAuth() {
   await waitOn({
-    resources: ["tcp:localhost:9099"],
+    resources: ["tcp:127.0.0.1:9099"],
     timeout: undefined,
   });
   const auth = getAuth(app);
