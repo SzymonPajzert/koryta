@@ -126,10 +126,6 @@ This document outlines all test cases grouped by their respective files.
 - navigates to the new node edit page after creation
 - allows creating a node without content and verifies it is searchable
 
-## `e2e/_implementations/article_fetch.ts`
-
-- automatically fetches title when source URL is entered for an article
-
 ## `e2e/_implementations/home.ts`
 
 - displays four clickable cards
