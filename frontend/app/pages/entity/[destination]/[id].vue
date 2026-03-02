@@ -146,7 +146,7 @@
 
       <div v-if="editedEdge" class="pa-4">
         <FormEditEdge
-          :key="`new-${editedEdge.edgeType}`"
+          :key="node"
           :node-id="node"
           :node-type="type"
           :node-name="entity?.name || ''"
@@ -189,7 +189,6 @@ const route = useRoute<"/entity/[destination]/[id]">();
 const node = route.params.id as string;
 const type = route.params.destination as NodeType;
 
-// Use API fetch to ensure revisions are merged correctly (auth aware)
 const { authFetch, user } = useAuthState();
 const router = useRouter();
 
