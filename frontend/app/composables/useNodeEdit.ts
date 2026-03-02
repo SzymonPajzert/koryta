@@ -38,21 +38,15 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   const { save } = useEntityMutation();
 
-  const {
-    current,
-    revisions,
-    loading,
-    lastFetchedId,
-    fetchData,
-    fetchRevisions,
-  } = useNodeData({
-    nodeId: node_id,
-    isNew,
-    authHeaders,
-    stateKey,
-    idToken,
-    initialType: (route.query.type as NodeType | undefined) ?? "person",
-  });
+  const { current, revisions, loading, fetchData, fetchRevisions } =
+    useNodeData({
+      nodeId: node_id,
+      isNew,
+      authHeaders,
+      stateKey,
+      idToken,
+      initialType: (route.query.type as NodeType | undefined) ?? "person",
+    });
 
   const {
     sources,
@@ -116,10 +110,9 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
           onSuccess: async (res: any) => {
             const { id } = res;
             if (id) {
-              lastFetchedId.value = id;
+              await router.push(`/edit/node/${id}`);
               // Reset current for the next "new" visit to clean state
               current.value = anyNode({});
-              await router.push(`/edit/node/${id}`);
             }
           },
         });

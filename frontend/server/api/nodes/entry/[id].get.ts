@@ -15,14 +15,17 @@ export default authCachedEventHandler(async (event) => {
   const db = getFirestore(getApp(), "koryta-pl");
   let node;
   if (user) {
-    const revision = (
+    const revisions = (
       await db
         .collection("revisions")
         .where("node_id", "==", id)
         .orderBy("update_time", "desc")
-        .limit(1)
+        .limit(20)
         .get()
-    ).docs.map((doc) => doc.data())[0];
+    ).docs.map((doc) => doc.data());
+
+    // We only want the latest revision that is NOT an edge (as edges share the same node_id)
+    const revision = revisions.find((rev) => !isEdge(rev.data));
     if (revision) {
       node = { ...revision.data, node_id: revision.node_id };
     } else {

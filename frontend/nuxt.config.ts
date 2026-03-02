@@ -180,4 +180,7 @@ export default defineNuxtConfig({
   nitro: {
     preset: "firebase_app_hosting", // or 'firebase-functions'
   },
+  devServer: {
+    host: "127.0.0.1",
+  },
 });
