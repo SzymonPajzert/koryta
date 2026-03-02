@@ -218,6 +218,49 @@ async function createArticle(
   };
 }
 
+const allowedFailingElections: Partial<ElectionRequest>[] = [
+  { election_type: "Samorząd", election_year: "1998" },
+  { election_type: "Samorząd", election_year: "1994" },
+  { election_type: "Sejm", election_year: "2001" },
+  { election_type: "Sejm", election_year: "1993" },
+  { election_type: "Sejm", election_year: "1991" },
+  { election_type: "Sejm", election_year: "1997" },
+  { election_type: "Senat", election_year: "2005" },
+  // TODO remove it and fix it all of the above
+  { election_type: "Parlament Europejski" },
+];
+
+async function lookupRegionId(
+  db: FirebaseFirestore.Firestore,
+  election: ElectionRequest,
+): Promise<string | undefined> {
+  if (!election.teryt) {
+    for (const allowed of allowedFailingElections) {
+      if (
+        allowed.election_type === election.election_type &&
+        (!allowed.election_year ||
+          allowed.election_year === election.election_year)
+      ) {
+        console.log(
+          `Region not found for allowed election ${JSON.stringify(allowed)}: ${JSON.stringify(election)}`,
+        );
+        return undefined;
+      }
+    }
+
+    console.error(`Election without teryt: ${JSON.stringify(election)}`);
+    throw new Error(
+      "Election without teryt: " +
+        election.election_type +
+        " " +
+        election.election_year,
+    );
+  }
+  const regionId = await lookupNode(db, "teryt", election.teryt);
+  if (!regionId) throw new Error(`Region not found: ${election.teryt}`);
+  return regionId;
+}
+
 async function createElection(
   db: FirebaseFirestore.Firestore,
   batch: FirebaseFirestore.WriteBatch,
@@ -225,8 +268,6 @@ async function createElection(
   personId: string,
   election: ElectionRequest,
 ): Promise<EntityResult | undefined> {
-  let regionId: string | undefined = undefined;
-
   if (!electionPositions.includes(election.election_type)) {
     throw badRequest(
       "Election must have a valid election_type, got: " +
@@ -234,13 +275,10 @@ async function createElection(
     );
   }
 
-  if (!election.teryt) {
-    console.error(`Election without teryt: ${JSON.stringify(election)}`);
-    throw new Error("Election without teryt");
+  const regionId = await lookupRegionId(db, election);
+  if (!regionId) {
+    return undefined;
   }
-  regionId = await lookupNode(db, "teryt", election.teryt);
-
-  if (!regionId) throw new Error(`Region not found: ${election.teryt}`);
 
   const edgeData: Edge = {
     source: personId,
