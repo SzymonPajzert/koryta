@@ -231,7 +231,7 @@ async function createElection(
   }
   regionId = await lookupNode(db, "teryt", election.teryt);
 
-  if (!regionId) throw new Error("Region not found");
+  if (!regionId) throw new Error(`Region not found: ${election.teryt}`);
 
   const edgeData: Edge = {
     source: personId,
