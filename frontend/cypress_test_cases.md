@@ -146,11 +146,6 @@ This document outlines all test cases grouped by their respective files.
 
 - should allow a logged-in user to create a person and a company, then link them
 
-## `e2e/_implementations/article_button_visibility.ts`
-
-- should show 'Dodaj artykuł' button on person page
-- should NOT show 'Dodaj artykuł' button on article page
-
 ## `e2e/_implementations/api/bulk_create.ts`
 
 - creates a person with companies
