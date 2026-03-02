@@ -16,6 +16,14 @@ const vuetify = createVuetify({
 const mockSaveNode = vi.fn();
 const mockAddEdge = vi.fn();
 const mockFetchRevisions = vi.fn();
+const mockRouterReplace = vi.fn();
+
+mockNuxtImport("useRouter", () => {
+  return () => ({
+    replace: mockRouterReplace,
+    push: vi.fn(),
+  });
+});
 
 const mockState = {
   isNew: ref(true),
@@ -253,5 +261,22 @@ describe("NodeEditPage", () => {
     const cancelBtn = buttons.find((b) => b.text().includes("Anuluj"));
     expect(cancelBtn).toBeDefined();
     expect(cancelBtn?.props("to")).toBe("/entity/person/123");
+  });
+
+  it("redirects to entity page if node is a region", async () => {
+    mockState.isNew.value = false;
+    mockState.current.value.type = "region";
+    mockState.node_id.value = "123";
+
+    await mountSuspended(NodeEditPage, {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+        },
+      },
+    });
+
+    expect(mockRouterReplace).toHaveBeenCalledWith("/entity/region/123");
   });
 });
