@@ -23,9 +23,10 @@
       <v-btn icon :to="{ path: '/lista', query: safeQuery }"
         ><v-icon>mdi-format-list-bulleted-type</v-icon></v-btn
       >
-      <v-btn icon :to="{ path: '/graf', query: { miejsce: safeQuery.miejsce } }"
+      <!-- TODO reenable -->
+      <!-- <v-btn icon :to="{ path: '/graf', query: { miejsce: safeQuery.miejsce } }"
         ><v-icon>mdi-graph-outline</v-icon></v-btn
-      >
+      > -->
       <v-btn :icon="!mdAndUp" :to="user ? '/edit/node/new' : '/login'">
         <v-icon :start="mdAndUp">mdi-plus</v-icon>
         <!-- This span will be hidden on 'sm' and smaller screens -->

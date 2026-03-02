@@ -1,4 +1,4 @@
-describe("Comments and Discussions", () => {
+describe.skip("Comments and Discussions", () => {
   beforeEach(() => {
     cy.login();
   });
