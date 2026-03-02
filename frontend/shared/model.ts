@@ -48,6 +48,7 @@ export interface Edge extends PageBase<EdgeType> {
 }
 
 export type ElectionPosition =
+  | "Samorząd"
   | "Sejmik"
   | "Rada miasta"
   | "Rada gminy"
