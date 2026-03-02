@@ -10,20 +10,18 @@
   >
     <template #node="{ node, config }">
       <circle
-        v-if="node.type === 'circle'"
+        v-if="node?.type === 'circle'"
         :r="config.node.normal.width(node) / 2"
         :fill="config.node.normal.color(node)"
       />
       <rect
-        v-else-if="node.type === 'rect'"
+        v-else-if="node?.type === 'rect'"
         :width="config.node.normal.width(node)"
         :height="config.node.normal.height(node)"
         :x="-config.node.normal.width(node) / 2"
         :y="-config.node.normal.height(node) / 2"
         :fill="config.node.normal.color(node)"
       />
-      <!-- We don't redefine the whole node svg shape unless we want to, wait, v-network-graph requires us to redefine it all if we use `#node`? -->
-      <!-- Actually we can just use the label slot! -->
     </template>
 
     <template #override-node>
