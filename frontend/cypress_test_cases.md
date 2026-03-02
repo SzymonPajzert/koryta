@@ -58,7 +58,6 @@ This document outlines all test cases grouped by their respective files.
 - should allow adding an edge from an article page
 - should allow adding an edge with article reference from person page
 
-
 ## `e2e/_implementations/edit_entity.ts`
 
 - allows creating and editing an entity
@@ -125,6 +124,8 @@ This document outlines all test cases grouped by their respective files.
 
 ## `e2e/_implementations/home.ts`
 
+\_(Skip it, attempting it in another commit)\_\_
+
 - displays four clickable cards
 - displays dashboard
 - shows list when clicking the first card - chart
@@ -142,7 +143,7 @@ This document outlines all test cases grouped by their respective files.
 ## `e2e/_implementations/friction_flow.ts`
 
 - should allow a logged-in user to create a person and a company, then link them
-*(Note: Not migrating to Vitest as this is an End-to-End integration test covering multiple pages, forms, and search functionality which is unsuited for unit testing)*
+  _(Note: Not migrating to Vitest as this is an End-to-End integration test covering multiple pages, forms, and search functionality which is unsuited for unit testing)_
 
 ## `e2e/_implementations/api/bulk_create.ts`
 
