@@ -7,7 +7,11 @@ from scrapers.stores import Context
 
 
 def flatten_parties(df):
-    df["person_id"] = df["first_name"] + " " + df["second_name"] + " " + df["last_name"]
+    df["person_id"] = (
+        df["first_name"].fillna("") + " " + 
+        df["second_name"].fillna("") + " " + 
+        df["last_name"].fillna("")
+    ).str.strip().str.replace(r"\s+", " ", regex=True)
 
     print("Flattening parties...")
 
