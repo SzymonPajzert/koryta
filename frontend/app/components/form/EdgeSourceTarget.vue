@@ -1,6 +1,10 @@
 <template>
   <!-- Render Fixed Node it's already set -->
-  <div v-if="nodeName" class="d-flex flex-column align-center w-100">
+  <div
+    v-if="nodeName"
+    v-bind="$attrs"
+    class="d-flex flex-column align-center w-100"
+  >
     <v-chip
       class="mb-1 text-truncate"
       style="max-width: 100%"
@@ -15,14 +19,13 @@
   </div>
 
   <!-- Render Picker we need to pick it -->
-  <div v-else class="w-100">
+  <div v-else class="w-100" v-bind="$attrs">
     <FormEntityPicker
       v-model="pickedNode"
       :entity="nodeType"
       :label="`Wyszukaj ${nodeType === 'person' ? 'osobę' : nodeType === 'place' ? 'firmę' : nodeType === 'region' ? 'region' : 'obiekt'}`"
       density="compact"
       hide-details
-      v-bind="$attrs"
     />
     <div class="text-caption text-medium-emphasis mt-1">
       {{ label || "Źródło" }}
