@@ -55,6 +55,23 @@ def _extract_companies(
     return companies
 
 
+def get_election_type(election_type: str) -> str:
+    # TODO this should be well typed
+    match election_type.lower():
+        case "sejmu":
+            return "Sejm"
+        case "senatu":
+            return "Senat"
+        case "prezydenckie":
+            return "Prezydent"
+        case "samorządu":
+            return "Samorząd"
+        case "europarlamentu":
+            return "Parlament Europejski"
+
+    raise ValueError(f"Unknown election type: {election_type}")
+
+
 def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
     elections = []
     elec_list = row.get("elections")
@@ -78,7 +95,9 @@ def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
                 elif e.get("teryt"):
                     teryt_val = str(e.get("teryt"))
 
-                election_payload = {"election_type": e.get("election_type")}
+                election_payload = {
+                    "election_type": get_election_type(e.get("election_type"))
+                }
                 if e.get("party"):
                     election_payload["party"] = e.get("party")
                 if e.get("election_year"):

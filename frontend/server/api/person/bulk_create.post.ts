@@ -228,7 +228,10 @@ async function createElection(
   let regionId: string | undefined = undefined;
 
   if (!electionPositions.includes(election.election_type)) {
-    throw badRequest("Election must have a valid election_type");
+    throw badRequest(
+      "Election must have a valid election_type, got: " +
+        election.election_type,
+    );
   }
 
   if (!election.teryt) {
