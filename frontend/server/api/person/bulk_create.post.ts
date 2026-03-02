@@ -35,6 +35,7 @@ type Request = {
   content?: string;
   wikipedia?: string;
   rejestrIo?: string;
+  party: string[];
   companies?: Array<CompanyRequest>;
   articles?: Array<ArticleRequest>;
   elections?: Array<ElectionRequest>;

@@ -355,7 +355,7 @@ def get_party_from_elections(elections: list[dict[str, Any]]) -> set[str]:
             if e["committee"].title() in IGNORE_COMMITTEES:
                 continue
 
-            party_new = COMMITTEE_MAP[e["committee"].title()]
+            party_new = COMMITTEE_MAP.get(e["committee"].title(), "")
             if isinstance(party_new, list):
                 party |= set(party_new)
             else:
@@ -367,5 +367,5 @@ def get_party_from_elections(elections: list[dict[str, Any]]) -> set[str]:
                 # TODO support it at one point
                 continue
 
-            raise ValueError(f"Election entry does not contain 'committee': {e}")
-    return party
+            # raise ValueError(f"Election entry does not contain 'committee': {e}")
+    return list(party)
