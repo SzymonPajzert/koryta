@@ -109,6 +109,7 @@ describe("Entity Page - Add Article Button Visibility", () => {
             CardShortNode: true,
             "router-link": true,
             GraphCanvas: true, // Stub GraphCanvas to avoid data fetching issues
+            FormEditEdge: true,
           },
         },
       },
@@ -174,6 +175,50 @@ describe("Entity Page - Add Article Button Visibility", () => {
         b.text().includes("Zaproponuj usunięcie"),
       );
       expect(removeBtn).toBeDefined();
+    });
+  });
+
+  describe("Inline Edge Edition", () => {
+    it("renders quick add buttons only for authenticated users", async () => {
+      // Logged out
+      vi.mocked(useAuthState).mockReturnValue({
+        authFetch: mockAuthFetch,
+        user: ref(null),
+      } as any);
+      let wrapper = await mountPage("person");
+      expect(wrapper.text()).not.toContain("Szybkie dodawanie");
+
+      // Logged in
+      vi.mocked(useAuthState).mockReturnValue({
+        authFetch: mockAuthFetch,
+        user: ref({ uid: "123" }),
+      } as any);
+      wrapper = await mountPage("person");
+      expect(wrapper.text()).toContain("Szybkie dodawanie");
+      expect(wrapper.find('[data-testid^="edge-picker-"]').exists()).toBe(true);
+    });
+
+    it("opens FormEditEdge when a quick add button is clicked", async () => {
+      vi.mocked(useAuthState).mockReturnValue({
+        authFetch: mockAuthFetch,
+        user: ref({ uid: "123" }),
+      } as any);
+      const wrapper = await mountPage("person");
+
+      // Find the button "Dodaj gdzie ... pracuje" which is "edge-picker-employed"
+      const btn = wrapper.find('[data-testid="edge-picker-employed"]');
+      expect(btn.exists()).toBe(true);
+
+      // Initially FormEditEdge should not be visible (it's in a v-if="editedEdge")
+      expect(wrapper.findComponent({ name: "FormEditEdge" }).exists()).toBe(
+        false,
+      );
+
+      await btn.trigger("click");
+
+      // Now it should be visible
+      const form = wrapper.findComponent({ name: "FormEditEdge" });
+      expect(form.exists()).toBe(true);
     });
   });
 });

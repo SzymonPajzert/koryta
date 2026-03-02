@@ -73,4 +73,47 @@ describe("Election Edge Form Flow", () => {
     expect(wrapper.text()).toContain("Komitet");
     expect(wrapper.text()).toContain("Stanowisko");
   });
+
+  it("can fill all election details and they are correctly bound", async () => {
+    const wrapper = mount(EditEdgeWrapper, {
+      props: { edgeTypeExt: "election" },
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+          FormEdgeSourceTarget: {
+            template: '<div class="form-edge-source-target-stub"></div>',
+            props: ["nodeType", "nodeName", "label", "modelValue"],
+          },
+          DialogProposeRemoval: true,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const committeeField = wrapper.find(
+      '[data-testid="edge-committee-field"] input',
+    );
+    const electedCheckbox = wrapper.find(
+      '[data-testid="edge-elected-checkbox"] input',
+    );
+    const byElectionCheckbox = wrapper.find(
+      '[data-testid="edge-by-election-checkbox"] input',
+    );
+
+    await committeeField.setValue("KKW Koalicja Obywatelska");
+
+    // Let's check if the values are reflected in the inputs
+    expect((committeeField.element as HTMLInputElement).value).toBe(
+      "KKW Koalicja Obywatelska",
+    );
+
+    // We can also verify that checkboxes can be checked
+    await electedCheckbox.setValue(true);
+    expect((electedCheckbox.element as HTMLInputElement).checked).toBe(true);
+
+    await byElectionCheckbox.setValue(true);
+    expect((byElectionCheckbox.element as HTMLInputElement).checked).toBe(true);
+  });
 });
