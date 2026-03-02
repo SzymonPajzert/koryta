@@ -2,14 +2,6 @@
 
 This document outlines all test cases grouped by their respective files.
 
-## `e2e/entity_management/edge_edition_inline.cy.ts`
-
-- opens edge edition dialog on entity page
-
-## `e2e/entity_management/add_election_edge.cy.ts`
-
-- should open the form and allow filling the election details
-
 ## `e2e/entity_management/local_graph.cy.ts`
 
 - shows local graph with current node and neighbors
