@@ -9,6 +9,11 @@ describe("Edit Node Connections", () => {
     const personName = `Person ${Date.now()}`;
     cy.createNode({ name: personName, type: "person" });
 
+    let personId: string;
+    cy.url().then((url) => {
+      personId = url.split("/").pop() as string;
+    });
+
     cy.contains("Powiązania").should("be.visible");
     cy.get(".v-btn").contains("zna").click();
 
@@ -16,16 +21,23 @@ describe("Edit Node Connections", () => {
     cy.createNode({ name: targetName, type: "person" });
 
     // Switch back to original person
-    cy.visit("/");
-    cy.search(personName);
-    cy.contains(".v-list-item-title", personName).click();
+    cy.then(() => {
+      cy.visit(`/entity/person/${personId}`);
+    });
     cy.contains("Zaproponuj zmianę").click();
 
     cy.get(".v-btn").contains("zna").click();
     cy.pickEntity(targetName);
+    let alertFired1 = false;
+    cy.on("window:alert", (str) => {
+      if (str.includes("Powiązanie dodane!")) alertFired1 = true;
+    });
+
     cy.contains("button", "Dodaj powiązanie").click();
 
-    cy.contains(targetName).should("be.visible");
+    cy.wrap(null).should(() => {
+      expect(alertFired1).to.be.true;
+    });
   });
 
   it("updates the entity picker when switching relationship types", () => {
@@ -41,9 +53,16 @@ describe("Edit Node Connections", () => {
     cy.pickEntity("Orlen");
     cy.fillField("Nazwa relacji", "Zatrudnienie");
 
+    let alertFired2 = false;
+    cy.on("window:alert", (str) => {
+      if (str.includes("Powiązanie dodane!")) alertFired2 = true;
+    });
+
     cy.contains("button", "Dodaj powiązanie").click();
 
-    cy.contains("Orlen").should("be.visible");
+    cy.wrap(null).should(() => {
+      expect(alertFired2).to.be.true;
+    });
   });
 
   // TODO reenable - I don't think this test has good assumptions now

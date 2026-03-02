@@ -35,9 +35,11 @@ describe("Election Edge Flow", () => {
       "KKW Koalicja Obywatelska",
     );
 
-    // 4. Position (selectVuetifyOption)
     // Use the overlay directly to ensure exact match for "Sejm" vs "Sejmik"
-    cy.contains("label", "Stanowisko").parents(".v-input").click();
+    cy.contains("label", "Stanowisko")
+      .parents(".v-input")
+      .as("stanowiskoInput");
+    cy.get("@stanowiskoInput").click();
     cy.get(".v-overlay")
       .should("be.visible")
       .contains(/^Sejm$/)

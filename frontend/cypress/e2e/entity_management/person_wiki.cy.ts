@@ -14,7 +14,15 @@ describe("Person Entity Wikipedia Link", () => {
     cy.fillField("Link do Wikipedii", wikiLink);
     cy.contains("Zapisz zmianę").click();
 
-    // Verify redirection to entity page
+    // Verify redirection to edit page first
+    cy.url().should("include", "/edit/node/");
+
+    // Navigate directly to the entity page
+    cy.url().then((url) => {
+      const id = url.split("/").pop();
+      cy.visit(`/entity/person/${id}`);
+    });
+
     cy.url().should("include", "/entity/person/");
     cy.contains(personName).should("be.visible");
 

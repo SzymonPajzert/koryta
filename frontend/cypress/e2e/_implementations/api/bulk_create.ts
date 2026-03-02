@@ -69,7 +69,7 @@ describe("API /api/person/bulk_create", () => {
       ],
       elections: [
         {
-          teryt: "3061",
+          teryt: "22",
           election_type: "Sejmik",
           party: "Test Party",
           election_year: "2023",
@@ -150,7 +150,9 @@ describe("API /api/person/bulk_create", () => {
         // Verify Election Edge
         const electionEdge = edges.find(
           (e: { source: string; target: string; type: string }) =>
-            e.source === personId && e.target === regionId && e.type === "election",
+            e.source === personId &&
+            e.target === regionId &&
+            e.type === "election",
         );
         cy.wrap(electionEdge).should("exist", "Should find edge to region");
         expect(electionEdge.label).to.eq("kandydatura");
