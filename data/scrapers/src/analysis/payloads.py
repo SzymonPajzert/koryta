@@ -84,6 +84,8 @@ def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
                 if e.get("election_year"):
                     election_payload["election_year"] = str(e.get("election_year"))
                 if teryt_val:
+                    if len(teryt_val) == 4 and teryt_val.endswith("00"):
+                        teryt_val = teryt_val[:2]
                     election_payload["teryt"] = teryt_val
 
                 elections.append(election_payload)
@@ -133,8 +135,6 @@ def map_person_payload(
         rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
 
     payload = {"name": name}
-    if row.get("content") or row.get("history"):
-        payload["content"] = row.get("content") or row.get("history")
     if wikipedia_url:
         payload["wikipedia"] = wikipedia_url
     if rejestr_io_url:
