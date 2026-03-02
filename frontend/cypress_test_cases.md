@@ -83,10 +83,6 @@ This document outlines all test cases grouped by their respective files.
 - Displays connected entities with names
 - Navigates to connected entity page when link is clicked
 
-## `e2e/_implementations/node_type_dropdown.ts`
-
-- should display 'Firma' when type is 'place'
-
 ## `e2e/_implementations/person_details.ts`
 
 - should allow adding birth date and external links when creating a person

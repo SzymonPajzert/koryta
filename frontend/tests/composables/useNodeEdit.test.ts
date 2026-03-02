@@ -72,6 +72,16 @@ describe("useNodeEdit", () => {
     expect(current.value.type).toBe("article");
   });
 
+  it("initializes type 'place' from query param", async () => {
+    mockRoute.params = { id: "new" };
+    mockRoute.query = { type: "place" };
+    const { current } = await useNodeEdit({
+      route: mockRoute,
+      idToken: mockIdToken,
+    });
+    expect(current.value.type).toBe("place");
+  });
+
   it("fetches data for existing node", async () => {
     mockRoute.params = { id: "123" };
 
