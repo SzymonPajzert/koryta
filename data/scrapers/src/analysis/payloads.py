@@ -99,7 +99,8 @@ def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
                     "election_type": get_election_type(e.get("election_type"))
                 }
                 if e.get("party"):
-                    election_payload["party"] = e.get("party")
+                    # TODO handle this nicer and add some checks
+                    election_payload["committee"] = e.get("party")
                 if e.get("election_year"):
                     election_payload["election_year"] = str(e.get("election_year"))
                 if teryt_val:
@@ -164,6 +165,7 @@ def map_person_payload(
         payload["articles"] = articles
     if elections:
         payload["elections"] = elections
+        payload["party"] = get_party_from_elections(elections)
 
     return cast(dict[str, Any], strip_none(payload))
 
@@ -312,3 +314,58 @@ class UploadPayloads(Pipeline):
                 lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x
             )
         return df
+
+
+COMMITTEE_MAP = {
+    "Komitet Wyborczy Liga Polskich Rodzin": "LPR",
+    "Komitet Wyborczy Polskie Stronnictwo Ludowe": "PSL",
+    "Komitet Wyborczy Prawo I Sprawiedliwość": "PiS",
+    # TODO this should be a list
+    "Koalicyjny Komitet Wyborczy Trzecia Droga Polska 2050 Szymona Hołowni - Polskie Stronnictwo Ludowe": [
+        "PSL",
+        "PL2050",
+    ],
+    "Komitet Wyborczy Platforma Obywatelska RP": "PO",
+    "Komitet Wyborczy Sojusz Lewicy Demokratycznej": "SLD",
+    "Komitet Wyborczy Polskie Stronnictwo Ludowe - Porozumienie Ludowe": "PSL",
+    "Komitet Wyborczy Polskie Stronnictwo Ludowe - Ruch Ludowy": "PSL",
+    "Komitet Wyborczy Polskie Stronnictwo Ludowe - Samoobrona": "PSL",
+    "Komitet Wyborczy Polskie Stronnictwo Ludowe - Unia Pracy": "PSL",
+    "Komitet Wyborczy Nowa Lewica": "Nowa Lewica",
+    "Komitet Wyborczy Polska Jest Najważniejsza": "PiS",
+}
+
+# TODO we need a better logic than this
+IGNORE_COMMITTEES = {
+    "Kww Romuald Antosik",
+    "Komitet Wyborczy Wyborców Razem Dla Gminy Opatówek",
+    "Komitet Wyborczy Wyborców Wspólny Kalisz",
+    "Komitet Wyborczy Wyborców Spoza Sitwy",
+    # TODO - should we care about them?
+    "Komitet Wyborczy Wyborców „Kukiz'15”",
+    "Komitet Wyborczy Twój Ruch",
+    "Kw Samoobrona",
+}
+
+
+def get_party_from_elections(elections: list[dict[str, Any]]) -> set[str]:
+    party = set()
+    for e in elections:
+        if "committee" in e:
+            if e["committee"].title() in IGNORE_COMMITTEES:
+                continue
+
+            party_new = COMMITTEE_MAP[e["committee"].title()]
+            if isinstance(party_new, list):
+                party |= set(party_new)
+            else:
+                party.add(party_new)
+        else:
+            if e["election_type"] == "Parlament Europejski":
+                continue
+            if int(e["election_year"]) < 2006:
+                # TODO support it at one point
+                continue
+
+            raise ValueError(f"Election entry does not contain 'committee': {e}")
+    return party
