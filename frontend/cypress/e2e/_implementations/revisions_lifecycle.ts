@@ -60,7 +60,7 @@ describe("Revisions Lifecycle", () => {
 
     let alertFired = false;
     cy.on("window:alert", (str) => {
-      expect(str).to.contain("Powiązanie dodane!");
+      expect(str).to.contain("Dodano powiązanie!");
       alertFired = true;
     });
 

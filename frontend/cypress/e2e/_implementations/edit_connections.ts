@@ -30,7 +30,7 @@ describe("Edit Node Connections", () => {
     cy.pickEntity(targetName);
     let alertFired1 = false;
     cy.on("window:alert", (str) => {
-      if (str.includes("Powiązanie dodane!")) alertFired1 = true;
+      if (str.includes("Dodano powiązanie!")) alertFired1 = true;
     });
 
     cy.contains("button", "Dodaj powiązanie").click();
@@ -55,7 +55,7 @@ describe("Edit Node Connections", () => {
 
     let alertFired2 = false;
     cy.on("window:alert", (str) => {
-      if (str.includes("Powiązanie dodane!")) alertFired2 = true;
+      if (str.includes("Dodano powiązanie!")) alertFired2 = true;
     });
 
     cy.contains("button", "Dodaj powiązanie").click();
