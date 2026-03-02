@@ -93,6 +93,8 @@
   },
   "overrides": {
     "@vercel/nft": "^0.27.4",
-    "minimatch": "^10.2.1"
+    "minimatch": "^10.2.1",
+    "serialize-javascript": "^7.0.3",
+    "citty": "0.2.1"
   }
 }

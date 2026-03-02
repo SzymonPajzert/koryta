@@ -56,9 +56,7 @@ describe("UI Friction Flow", () => {
     cy.visit("/");
     cy.search(personName);
     cy.contains(".v-list-item-title", personName).click();
-
-    // Click "Suggest Change" or "Edit"
-    cy.contains("Zaproponuj zmianę").click();
+    cy.contains("Zapisz zmianę").click();
 
     // Add "Employed" edge
     // "Dodaj gdzie [Name] pracuje"

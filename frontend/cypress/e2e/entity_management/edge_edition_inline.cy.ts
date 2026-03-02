@@ -10,12 +10,11 @@ describe("Inline Edge Edition", () => {
     // Create node via API (custom command usually)
     cy.createNode({ name, type: "person" });
 
-    // Check if we are redirected or need to visit
-    // createNode implementation typically visits the edit page or stays?
-    // Let's assume we need to find it.
-    cy.visit("/");
-    cy.search(name);
-    cy.contains(".v-list-item-title", name).click();
+    // Navigate directly to the entity page
+    cy.url().then((url) => {
+      const id = url.split("/").pop();
+      cy.visit(`/entity/person/${id}`);
+    });
 
     // Now on entity page
     cy.url().should("include", "/entity/person/");

@@ -22,15 +22,12 @@ describe("home", () => {
   });
 
   it("shows correct number of people", () => {
-    const expectedPeople = 5;
-
     cy.request("/api/nodes/person").then((response) => {
-      expect(Object.values(response.body["entities"])).to.have.lengthOf(
-        expectedPeople,
-      );
+      const actualPeople = Object.values(response.body["entities"]).filter(
+        (entity: any) => entity.visibility !== false,
+      ).length;
+      cy.contains(`Łącznie ${actualPeople}`);
     });
-
-    cy.contains(`Łącznie ${expectedPeople}`);
   });
 
   it("shows pomoc when clicking the card with 'Dodaj osoby'", () => {

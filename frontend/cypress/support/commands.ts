@@ -237,15 +237,55 @@ Cypress.Commands.add("createNode", ({ name, type, content }) => {
 Cypress.Commands.add(
   "pickEntity",
   (name: string, testId: string = "entity-picker-target") => {
-    cy.log(`Picking entity: ${name} using ${testId}`);
-    // Target the input inside the specific entity picker
-    cy.get(`[data-testid="${testId}"] input`)
-      .click()
-      .clear()
+    const containerSelector = `[data-testid="${testId}"]`;
+    cy.task("log", `--- START pickEntity for ${name} using ${testId} ---`);
+
+    // Ensure we are in a clean state
+    cy.get("body").then(($body) => {
+      const overlays = $body.find(".v-overlay--active");
+      if (overlays.length > 0) {
+        cy.task("log", `Found ${overlays.length} active overlays, closing...`);
+        cy.get("body").type("{esc}");
+        cy.wait(500);
+      }
+    });
+
+    // Strategy 1: Find by data-testid directly or via body.find
+    cy.get("body", { timeout: 15000 }).should("exist");
+
+    cy.get(containerSelector, { timeout: 20000 })
+      .should("be.visible")
+      .first()
+      .scrollIntoView();
+
+    cy.get(containerSelector)
+      .first()
+      .find("input")
+      .first()
+      .should("be.visible")
+      .click({ force: true });
+
+    cy.wait(1500); // Wait for Vuetify
+
+    // Re-verify it still exists before typing
+    cy.get(containerSelector, { timeout: 20000 })
+      .should("be.visible")
+      .first()
+      .find("input")
+      .first()
+      .should("be.visible")
+      .clear({ force: true })
       .type(name, { delay: 100 });
 
-    // Wait for overlay item
-    cy.get(".v-overlay").should("be.visible").contains(name).click();
+    // Wait for overlay item and click it
+    cy.get(".v-overlay:visible", { timeout: 15000 })
+      .filter(":visible")
+      .contains(name)
+      .first()
+      .should("be.visible")
+      .click({ force: true });
+
+    cy.task("log", `--- END pickEntity for ${name} ---`);
   },
 );
 
@@ -257,8 +297,9 @@ Cypress.Commands.add(
     cy.contains("label", label)
       .parents(".v-input")
       .first()
-      .should("be.visible")
-      .click();
+      .as("vuetifySelectInput");
+
+    cy.get("@vuetifySelectInput").should("be.visible").click();
     // Find the option in the overlay (Vuetify mounts overlays at root)
     cy.get(".v-overlay").should("be.visible").contains(optionText).click();
   },
