@@ -142,12 +142,6 @@ This document outlines all test cases grouped by their respective files.
 
 - should allow reverting a proposed revision
 
-## `e2e/_implementations/region_support.ts`
-
-- should display region details but no edit button
-- should not show region in graph
-- should not allow navigating to edit page
-
 ## `e2e/_implementations/friction_flow.ts`
 
 - should allow a logged-in user to create a person and a company, then link them
@@ -164,5 +158,3 @@ This document outlines all test cases grouped by their respective files.
 ## `e2e/_implementations/api/edge_revisions.ts`
 
 - creates an edge with revision
-
-**Total Test Cases:** 69

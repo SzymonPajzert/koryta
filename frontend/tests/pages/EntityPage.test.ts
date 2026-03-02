@@ -137,4 +137,43 @@ describe("Entity Page - Add Article Button Visibility", () => {
       false,
     );
   });
+
+  describe("Region Type Restrictions", () => {
+    it("does NOT render edit or remove buttons when type is region", async () => {
+      const wrapper = await mountPage("region");
+      const buttons = wrapper.findAll(".v-btn");
+
+      // Zaproponuj zmianę button
+      const changeBtn = buttons.find((b) =>
+        b.text().includes("Zaproponuj zmianę"),
+      );
+      expect(changeBtn).toBeUndefined();
+
+      // Zaproponuj usunięcie button
+      const removeBtn = buttons.find((b) =>
+        b.text().includes("Zaproponuj usunięcie"),
+      );
+      expect(removeBtn).toBeUndefined();
+
+      // QuickAddArticleButton
+      expect(wrapper.findComponent(QuickAddArticleButtonStub).exists()).toBe(
+        false,
+      );
+    });
+
+    it("renders edit and remove buttons for non-region types", async () => {
+      const wrapper = await mountPage("person");
+      const buttons = wrapper.findAll(".v-btn");
+
+      const changeBtn = buttons.find((b) =>
+        b.text().includes("Zaproponuj zmianę"),
+      );
+      expect(changeBtn).toBeDefined();
+
+      const removeBtn = buttons.find((b) =>
+        b.text().includes("Zaproponuj usunięcie"),
+      );
+      expect(removeBtn).toBeDefined();
+    });
+  });
 });

@@ -39,4 +39,28 @@ describe("Graph API", () => {
     expect(fetchNodes).toHaveBeenCalledTimes(3);
     expect(fetchEdges).toHaveBeenCalledTimes(1);
   });
+
+  it("filters out empty regions and companies", async () => {
+    vi.mocked(fetchNodes).mockImplementation((type: string) => {
+      if (type === "person")
+        return Promise.resolve({ p1: { name: "Person 1" } });
+      if (type === "place")
+        return Promise.resolve({ c1: { name: "Company 1" } }); // Empty company
+      if (type === "region")
+        return Promise.resolve({ r1: { name: "Region 1" } }); // Empty region
+      return Promise.resolve({});
+    });
+
+    vi.mocked(fetchEdges).mockResolvedValue([]);
+
+    const handlerModule = await import("../../../server/api/graph/index.get");
+    const result = await handlerModule.default({} as any);
+
+    // Filter should drop c1 and r1 from nodeGroups and nodes because they have 0 people connected
+    expect(result.nodeGroups.find((g: any) => g.id === "c1")).toBeUndefined();
+    expect(result.nodeGroups.find((g: any) => g.id === "r1")).toBeUndefined();
+
+    expect(result.nodes["c1"]).toBeUndefined();
+    expect(result.nodes["r1"]).toBeUndefined();
+  });
 });
