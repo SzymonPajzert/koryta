@@ -3,15 +3,21 @@ import pandas as pd
 
 from analysis.people_pkw_merged import PeoplePKWMerged
 from analysis.utils import committee_to_party
-from scrapers.stores import Context
+from scrapers.stores import Context, Pipeline
 
 
 def flatten_parties(df):
     df["person_id"] = (
-        df["first_name"].fillna("") + " " + 
-        df["second_name"].fillna("") + " " + 
-        df["last_name"].fillna("")
-    ).str.strip().str.replace(r"\s+", " ", regex=True)
+        (
+            df["first_name"].fillna("")
+            + " "
+            + df["second_name"].fillna("")
+            + " "
+            + df["last_name"].fillna("")
+        )
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+    )
 
     print("Flattening parties...")
 
@@ -31,19 +37,25 @@ def flatten_parties(df):
     return flattened
 
 
-def calculate_people_parties(ctx: Context):
-    df = PeoplePKWMerged().read_or_process(ctx)
-    df = flatten_parties(df)
+class PeopleParties(Pipeline):
+    filename = "people_parties"
+    people_pkw_merged: PeoplePKWMerged
 
-    print(df[:10])
+    def process(self, ctx: Context):
+        df = self.people_pkw_merged.read_or_process(ctx)
+        df = flatten_parties(df)
 
-    committes_to_parties = pd.DataFrame.from_records(
-        [(committee, party) for committee, party in committee_to_party.items()],
-        columns=["subgroup_id", "group_id"],
-    )
-    print(committes_to_parties[:10])
+        print(df[:10])
 
-    return calculate_ppr_scores(df, committes_to_parties)
+        committes_to_parties = pd.DataFrame.from_records(
+            [(committee, party) for committee, party in committee_to_party.items()],
+            columns=["subgroup_id", "group_id"],
+        )
+        print(committes_to_parties[:10])
+
+        result = calculate_ppr_scores(df, committes_to_parties)
+        print(result[:10])
+        return result
 
 
 def calculate_ppr_scores(
