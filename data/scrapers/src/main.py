@@ -10,7 +10,7 @@ from duckdb.typing import VARCHAR  # type: ignore
 from tqdm import tqdm
 
 from analysis.extract import Extract
-from analysis.graph import PeopleParties
+from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import CompaniesMerged
 from analysis.payloads import UploadPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
@@ -205,6 +205,7 @@ PIPELINES = [
     Regions,
     UploadPayloads,
     PeopleParties,
+    CommitteeParties,
 ]
 
 

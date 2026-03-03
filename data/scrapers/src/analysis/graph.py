@@ -1,3 +1,5 @@
+import typing
+
 import networkx as nx
 import pandas as pd
 
@@ -64,9 +66,39 @@ class PeopleParties(Pipeline):
         return result
 
 
+class CommitteeParties(Pipeline):
+    filename = "committee_parties"
+    people_pkw_merged: PeoplePKWMerged
+
+    def read_or_process(self, ctx) -> pd.DataFrame:
+        df = super().read_or_process(ctx)
+        if df is not None and "subgroup_id" in df.columns:
+            df = df.set_index("subgroup_id")
+        return df
+
+    def process(self, ctx: Context):
+        df = self.people_pkw_merged.read_or_process(ctx)
+        df = flatten_parties(df)
+
+        print(df[:10])
+
+        committes_to_parties = pd.DataFrame.from_records(
+            [(committee, party) for committee, party in committee_to_party.items()],
+            columns=["subgroup_id", "group_id"],
+        )
+        print(committes_to_parties[:10])
+
+        result = calculate_ppr_scores(
+            df, committes_to_parties, measured_id="subgroup_id"
+        )
+        print(result[:10])
+        return result
+
+
 def calculate_ppr_scores(
     df_people_subgroups: pd.DataFrame,
     df_subgroups_groups: pd.DataFrame,
+    measured_id: typing.Literal["person_id", "subgroup_id"] = "person_id",
     alpha: float = 0.85,
 ):
     """
@@ -113,11 +145,18 @@ def calculate_ppr_scores(
         G.add_edge(person_id, subgroup_id)  # P -> S
 
     # Get unique node lists for filtering later
-    person_nodes = [p_node(pid) for pid in df_people_subgroups["person_id"].unique()]
+    if measured_id == "person_id":
+        measured_nodes = [
+            p_node(pid) for pid in df_people_subgroups["person_id"].unique()
+        ]
+    elif measured_id == "subgroup_id":
+        measured_nodes = [
+            s_node(pid) for pid in df_people_subgroups["subgroup_id"].unique()
+        ]
     group_nodes = [g_node(gid) for gid in df_subgroups_groups["group_id"].unique()]
 
     print(f"Graph built: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges.")
-    print(f"Found {len(person_nodes)} people and {len(group_nodes)} groups.")
+    print(f"Found {len(measured_nodes)} measured nodes and {len(group_nodes)} groups.")
 
     # 3. Run Personalized PageRank for each group
     all_scores = {}
@@ -135,9 +174,9 @@ def calculate_ppr_scores(
             G, alpha=alpha, personalization=personalization, nstart=personalization
         )
 
-        # 4. Extract scores for *person* nodes only
+        # 4. Extract scores for *measured* nodes only
         group_results = {}
-        for p_id in person_nodes:
+        for p_id in measured_nodes:
             # .get(p_id, 0) ensures a score of 0 if a person is
             # in a completely disconnected part of the graph
             group_results[p_id] = ppr_scores.get(p_id, 0)
@@ -153,7 +192,7 @@ def calculate_ppr_scores(
     # Clean up the index and column names (remove 'p_' and 'g_')
     df_scores.index = df_scores.index.map(lambda x: x[2:])
     df_scores.columns = df_scores.columns.map(lambda x: x[2:])
-    df_scores.index.name = "person_id"
+    df_scores.index.name = measured_id
     df_scores.columns.name = "group_id"
 
     # Normalize each *row* (person) to sum to 1 and avoid division by 0
