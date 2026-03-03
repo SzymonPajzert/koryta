@@ -125,7 +125,9 @@ def calculate_ppr_scores(
         personalization[group_node] = 1
 
         # Run PageRank
-        ppr_scores = nx.pagerank(G, alpha=alpha, personalization=personalization)
+        ppr_scores = nx.pagerank(
+            G, alpha=alpha, personalization=personalization, nstart=personalization
+        )
 
         # 4. Extract scores for *person* nodes only
         group_results = {}
@@ -141,9 +143,6 @@ def calculate_ppr_scores(
 
     # Create the (Person x Group) score matrix
     df_scores = pd.DataFrame(all_scores)
-
-    # Zero out small scores (noise from PageRank on disconnected components)
-    df_scores[df_scores < 1e-5] = 0
 
     # Clean up the index and column names (remove 'p_' and 'g_')
     df_scores.index = df_scores.index.map(lambda x: x[2:])
