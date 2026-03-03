@@ -158,3 +158,33 @@ def calculate_ppr_scores(
 
     print("Done.")
     return df_scores_normalized
+
+
+def search_person(query, scores_df):
+    # Split query into words to allow matching names with middle names
+    query_words = query.lower().split()
+
+    if not query_words:
+        print("Please provide a search query.")
+        return
+
+    # Find all matches where ALL query words are present in the name
+    matches = [
+        name for name in scores_df.index if all(word in name for word in query_words)
+    ]
+
+    if not matches:
+        print(f"No matches found for '{query}'.")
+        # Try matching any of the words as a fallback
+        fallback_matches = [
+            name
+            for name in scores_df.index
+            if any(word in name for word in query_words)
+        ]
+        if fallback_matches:
+            print(
+                f"Did you mean someone from these partial matches? {fallback_matches[:10]}"
+            )
+        return
+
+    return matches
