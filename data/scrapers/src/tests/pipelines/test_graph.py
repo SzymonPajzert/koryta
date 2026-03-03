@@ -1,6 +1,6 @@
 import pytest
 
-from analysis.graph import PeopleParties
+from analysis.graph import PeopleParties, search_person
 from main import _setup_context
 
 
@@ -24,7 +24,8 @@ def test_party_mapping(graph):
     # assigned_parties = graph.idxmax(axis=1)
 
     # Someone with score > 0.5
-    people_with_high_scores = graph[(graph > 0.5).sum(axis=1) >= 1]
+    numeric_graph = graph.select_dtypes(include="number")
+    people_with_high_scores = graph[(numeric_graph > 0.5).sum(axis=1) >= 1]
 
     assert len(people_with_high_scores) > 0, (
         "No individuals were mapped to a party with a coefficient >= 0.5"
@@ -32,8 +33,17 @@ def test_party_mapping(graph):
 
 
 def test_no_mappings(graph):
-    people_with_no_mapping = graph[graph.sum(axis=1) == 0.0]
+    # Depending on whether person_id is an index or a column, handle summation
+    numeric_graph = graph.select_dtypes(include="number")
+    people_with_no_mapping = graph[numeric_graph.sum(axis=1) == 0.0]
     print(people_with_no_mapping[:10])
     assert len(people_with_no_mapping) > 0, (
         "No individuals were mapped (i.e., all had zero scores)"
     )
+
+
+def test_search_person(graph):
+    matches = search_person("Donald Tusk", graph)
+    assert matches is not None
+    assert len(matches) >= 1
+    assert any("donald" in m and "tusk" in m for m in matches)

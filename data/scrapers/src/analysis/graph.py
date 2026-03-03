@@ -41,6 +41,12 @@ class PeopleParties(Pipeline):
     filename = "people_parties"
     people_pkw_merged: PeoplePKWMerged
 
+    def read_or_process(self, ctx) -> pd.DataFrame:
+        df = super().read_or_process(ctx)
+        if df is not None and "person_id" in df.columns:
+            df = df.set_index("person_id")
+        return df
+
     def process(self, ctx: Context):
         df = self.people_pkw_merged.read_or_process(ctx)
         df = flatten_parties(df)
@@ -155,6 +161,7 @@ def calculate_ppr_scores(
     row_sums[row_sums == 0] = 1
 
     df_scores_normalized = df_scores.div(row_sums, axis=0)
+    df_scores_normalized = df_scores_normalized.reset_index()
 
     print("Done.")
     return df_scores_normalized
@@ -166,11 +173,17 @@ def search_person(query, scores_df):
 
     if not query_words:
         print("Please provide a search query.")
-        return
+        return []
+
+    # Get names depending on if it's an index or column
+    if "person_id" in scores_df.columns:
+        names = scores_df["person_id"].dropna().tolist()
+    else:
+        names = scores_df.index.dropna().tolist()
 
     # Find all matches where ALL query words are present in the name
     matches = [
-        name for name in scores_df.index if all(word in name for word in query_words)
+        name for name in names if all(word in name for word in query_words)
     ]
 
     if not matches:
@@ -178,13 +191,13 @@ def search_person(query, scores_df):
         # Try matching any of the words as a fallback
         fallback_matches = [
             name
-            for name in scores_df.index
+            for name in names
             if any(word in name for word in query_words)
         ]
         if fallback_matches:
             print(
                 f"Did you mean someone from these partial matches? {fallback_matches[:10]}"
             )
-        return
+        return []
 
     return matches
