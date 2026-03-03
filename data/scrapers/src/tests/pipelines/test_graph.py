@@ -32,6 +32,15 @@ def test_party_mapping(graph):
     )
 
 
+def test_sum_smaller_than_one(graph):
+    numeric_graph = graph.select_dtypes(include="number")
+    row_sums = numeric_graph.sum(axis=1)
+    people_with_sum_greater_than_one = graph[row_sums > 1.0]
+    assert len(people_with_sum_greater_than_one) == 0, (
+        "Some individuals have a sum of scores greater than 1.0, which should not happen after normalization"
+    )
+
+
 def test_no_mappings(graph):
     # Depending on whether person_id is an index or a column, handle summation
     numeric_graph = graph.select_dtypes(include="number")
