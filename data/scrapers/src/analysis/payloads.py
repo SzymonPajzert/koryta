@@ -55,6 +55,23 @@ def _extract_companies(
     return companies
 
 
+def get_election_type(election_type: str) -> str:
+    # TODO this should be well typed
+    match election_type.lower():
+        case "sejmu":
+            return "Sejm"
+        case "senatu":
+            return "Senat"
+        case "prezydenckie":
+            return "Prezydent"
+        case "samorządu":
+            return "Samorząd"
+        case "europarlamentu":
+            return "Parlament Europejski"
+
+    raise ValueError(f"Unknown election type: {election_type}")
+
+
 def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
     elections = []
     elec_list = row.get("elections")
@@ -78,12 +95,16 @@ def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
                 elif e.get("teryt"):
                     teryt_val = str(e.get("teryt"))
 
-                election_payload = {"election_type": e.get("election_type")}
+                election_payload = {
+                    "election_type": get_election_type(e.get("election_type"))
+                }
                 if e.get("party"):
                     election_payload["party"] = e.get("party")
                 if e.get("election_year"):
                     election_payload["election_year"] = str(e.get("election_year"))
                 if teryt_val:
+                    if len(teryt_val) == 4 and teryt_val.endswith("00"):
+                        teryt_val = teryt_val[:2]
                     election_payload["teryt"] = teryt_val
 
                 elections.append(election_payload)
@@ -133,8 +154,6 @@ def map_person_payload(
         rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
 
     payload = {"name": name}
-    if row.get("content") or row.get("history"):
-        payload["content"] = row.get("content") or row.get("history")
     if wikipedia_url:
         payload["wikipedia"] = wikipedia_url
     if rejestr_io_url:

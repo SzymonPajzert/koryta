@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
+import { electionPositions } from "~~/shared/misc";
 import type {
   Edge,
   Article,
@@ -225,13 +226,21 @@ async function createElection(
   election: ElectionRequest,
 ): Promise<EntityResult | undefined> {
   let regionId: string | undefined = undefined;
+
+  if (!electionPositions.includes(election.election_type)) {
+    throw badRequest(
+      "Election must have a valid election_type, got: " +
+        election.election_type,
+    );
+  }
+
   if (!election.teryt) {
-    console.error("Election without teryt");
-    return undefined;
+    console.error(`Election without teryt: ${JSON.stringify(election)}`);
+    throw new Error("Election without teryt");
   }
   regionId = await lookupNode(db, "teryt", election.teryt);
 
-  if (!regionId) throw new Error("Region not found");
+  if (!regionId) throw new Error(`Region not found: ${election.teryt}`);
 
   const edgeData: Edge = {
     source: personId,

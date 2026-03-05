@@ -217,30 +217,30 @@ def submit_results(args, df):
         name = payload.get("name")
         print(f"[{idx + 1}/{len(df)}] Uploading {name}...", end=" ")
 
-        try:
-            entity_type = row.get("entity_type", args.type)
-            if entity_type == "company":
-                current_target_url = f"{args.endpoint}/api/ingest/company"
-            else:
-                current_target_url = f"{args.endpoint}/api/person/{args.api}"
+        entity_type = row.get("entity_type", args.type)
+        if entity_type == "company":
+            current_target_url = f"{args.endpoint}/api/ingest/company"
+        else:
+            current_target_url = f"{args.endpoint}/api/person/{args.api}"
 
-            # Use data=json.dumps(..., cls=NumpyEncoder) to handle numpy types
-            resp = requests.post(
-                current_target_url,
-                data=json.dumps(payload, cls=NumpyEncoder),
-                headers=headers,
+        # Use data=json.dumps(..., cls=NumpyEncoder) to handle numpy types
+        resp = requests.post(
+            current_target_url,
+            data=json.dumps(payload, cls=NumpyEncoder),
+            headers=headers,
+        )
+        j: dict[str, typing.Any] = resp.json()
+        if "companies" in j:
+            for company in j["companies"]:
+                print_company(company)
+        if resp.status_code in [200, 201]:
+            print("  OK")
+            success_count += 1
+        else:
+            print(f"FAILED ({resp.status_code}): {resp.text}")
+            raise Exception(
+                f"API error: {resp.status_code} - {resp.text} for payload: {payload}"
             )
-            j: dict[str, typing.Any] = resp.json()
-            if "companies" in j:
-                for company in j["companies"]:
-                    print_company(company)
-            if resp.status_code in [200, 201]:
-                print("  OK")
-                success_count += 1
-            else:
-                print(f"FAILED ({resp.status_code}): {resp.text}")
-        except Exception as e:
-            print(f"ERROR: {e}")
 
     failures = len(df) - success_count
     print(f"\nUpload complete. Success: {success_count}, Failed: {failures}")
