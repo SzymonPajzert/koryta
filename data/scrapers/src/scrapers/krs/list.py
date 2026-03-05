@@ -255,12 +255,20 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
         siedziba = dzial1.get("siedzibaIAdres", {})
         miejscowosc = siedziba.get("adres", {}).get("miejscowosc").lower()
         postal_code = siedziba.get("adres", {}).get("kodPocztowy")
+        
+        owners = []
+        wspolnicy = dzial1.get("wspolnicySpzoo", [])
+        for w in wspolnicy:
+            w_nazwa = w.get("nazwa", "")
+            if w_nazwa:
+                owners.append(w_nazwa)
 
         return KrsCompany(
             krs=krs,
             name=nazwa,
             city=miejscowosc,
             teryt_code=get_teryt(pcs, miejscowosc, postal_code),
+            owners=owners
         )
     except KeyError as e:
         raise ValueError(

@@ -15,6 +15,7 @@ class KRS:
     sources: set[str] = field(default_factory=set)
     children: set[str] = field(default_factory=set)
     parents: set[str] = field(default_factory=set)
+    owners: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         """Ensures the KRS ID is zero-padded to 10 digits."""

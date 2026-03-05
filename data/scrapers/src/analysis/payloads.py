@@ -96,11 +96,11 @@ def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
                     teryt_val = str(e.get("teryt"))
 
                 election_payload = {
-                    "election_type": get_election_type(e.get("election_type"))
+                    "election_type": get_election_type(str(e.get("election_type")))
                 }
                 if e.get("party"):
                     # TODO handle this nicer and add some checks
-                    election_payload["committee"] = e.get("party")
+                    election_payload["committee"] = str(e.get("party"))
                 if e.get("election_year"):
                     election_payload["election_year"] = str(e.get("election_year"))
                 if teryt_val:
@@ -170,18 +170,72 @@ def map_person_payload(
     return cast(dict[str, Any], strip_none(payload))
 
 
+def get_owner_teryts(row: pd.Series) -> list[str]:
+    owner_teryts = []
+    reasons = row.get("reasons")
+    if isinstance(reasons, (list, np.ndarray)):
+        for r in reasons:
+            r_type = (
+                r.get("reason") if isinstance(r, dict) else getattr(r, "reason", None)
+            )
+            r_details = (
+                r.get("details") if isinstance(r, dict) else getattr(r, "details", None)
+            )
+            if r_type == "owner_teryt" and r_details:
+                owner_teryts.append(str(r_details))
+    return owner_teryts
+
+
+def is_communal(row: pd.Series) -> bool:
+    if len(get_owner_teryts(row)) > 0:
+        return True
+
+    if pd.notna(row.get("owner_text")) and row.get("owner_text"):
+        lower_owner = str(row.get("owner_text")).lower()
+        if (
+            "miasto" in lower_owner
+            or "województwo" in lower_owner
+            or "gmina" in lower_owner
+        ):
+            return True
+
+    owner_articles = row.get("owner_articles")
+    if isinstance(owner_articles, (list, np.ndarray)) and len(owner_articles) > 0:
+        for article in owner_articles:
+            if isinstance(article, dict):
+                article_str = str(article.get("title", article))
+            else:
+                article_str = str(article)
+
+            lower_article = article_str.lower()
+            if (
+                "miasto" in lower_article
+                or "województwo" in lower_article
+                or "gmina" in lower_article
+            ):
+                return True
+    return False
+
+
 def map_company_payload(row: pd.Series) -> dict[str, Any] | None:
     if not row.get("krs") or not row.get("name"):
         return None
+
     payload = {
         "krs": row.get("krs"),
         "name": row.get("name"),
-        "city": row.get("city"),
+        "city": row.get("city") or row.get("krs_city") or row.get("wiki_city"),
         "owns": row.get("children") or [],
-        "teryt": str(row.get("teryt_code")).removesuffix(".0")
-        if pd.notna(row.get("teryt_code"))
-        else None,
     }
+
+    owner_teryts = get_owner_teryts(row)
+    if len(owner_teryts) > 0:
+        # Prefer the most specific (longest) teryt code if multiple exist
+        owner_teryts.sort(key=len, reverse=True)
+        payload["teryt"] = owner_teryts[0].removesuffix(".0")
+    elif is_communal(row) and pd.notna(row.get("teryt_code")):
+        payload["teryt"] = str(row.get("teryt_code")).removesuffix(".0")
+
     return cast(dict[str, Any], strip_none(payload))
 
 
@@ -320,8 +374,8 @@ COMMITTEE_MAP = {
     "Komitet Wyborczy Liga Polskich Rodzin": "LPR",
     "Komitet Wyborczy Polskie Stronnictwo Ludowe": "PSL",
     "Komitet Wyborczy Prawo I Sprawiedliwość": "PiS",
-    # TODO this should be a list
-    "Koalicyjny Komitet Wyborczy Trzecia Droga Polska 2050 Szymona Hołowni - Polskie Stronnictwo Ludowe": [
+    "Koalicyjny Komitet Wyborczy Trzecia Droga Polska 2050 \
+Szymona Hołowni - Polskie Stronnictwo Ludowe": [
         "PSL",
         "PL2050",
     ],
@@ -367,5 +421,4 @@ def get_party_from_elections(elections: list[dict[str, Any]]) -> set[str]:
                 # TODO support it at one point
                 continue
 
-            # raise ValueError(f"Election entry does not contain 'committee': {e}")
-    return list(party)
+    return set(party)
