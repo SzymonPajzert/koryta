@@ -100,6 +100,7 @@ def calculate_ppr_scores(
     df_subgroups_groups: pd.DataFrame,
     measured_id: typing.Literal["person_id", "subgroup_id"] = "person_id",
     alpha: float = 0.85,
+    normalize_rows: bool = True,
 ):
     """
     Calculates the probability score for each person belonging to each group
@@ -195,15 +196,18 @@ def calculate_ppr_scores(
     df_scores.index.name = measured_id
     df_scores.columns.name = "group_id"
 
-    # Normalize each *row* (person) to sum to 1 and avoid division by 0
-    average_row = df_scores.sum().sum() / len(df_scores[df_scores.sum(axis=1) > 0])
-    row_sums = df_scores.sum(axis=1)
-    row_sums[row_sums == 0] = 1
-    row_sums[row_sums < average_row] = average_row
+    if normalize_rows:
+        average_row = df_scores.sum().sum() / len(df_scores[df_scores.sum(axis=1) > 0])
+        row_sums = df_scores.sum(axis=1)
+        row_sums[row_sums == 0] = 1
+        row_sums[row_sums < average_row] = average_row
+        df_scores_normalized = df_scores.div(row_sums, axis=0)
+        df_scores_normalized["original_sum"] = df_scores.sum(axis=1)
+    else:
+        divisor = df_scores.sum(axis=1).replace(0, 1)
+        df_scores_normalized = df_scores.div(divisor, axis=0)
 
-    df_scores_normalized = df_scores.div(row_sums, axis=0)
-    df_scores_normalized["original_sum"] = df_scores.sum(axis=1)
-    df_scores_normalized = df_scores_normalized.reset_index()
+    df_scores_normalized = df_scores_normalized.reset_index().set_index(measured_id)
 
     print("Done.")
     return df_scores_normalized
@@ -233,9 +237,7 @@ def search_person(query, scores_df):
             name for name in names if any(word in name for word in query_words)
         ]
         if fallback_matches:
-            print(
-                f"Did you mean someone from these partial matches? {fallback_matches[:10]}"
-            )
+            print(f"Found partial matches {fallback_matches[:10]}")
         return []
 
     return matches
