@@ -7,6 +7,7 @@ export interface Node {
   sizeMult?: number;
   hide?: boolean;
   parties?: string[];
+  visibility?: boolean;
 }
 
 export interface NodeStats {
@@ -36,10 +37,23 @@ export interface Edge {
   source: string;
   target: string;
   label: string;
-  type: "employed" | "connection" | "mentions" | "owns" | "comment";
+  type:
+    | "employed"
+    | "connection"
+    | "mentions"
+    | "owns"
+    | "comment"
+    | "election";
 
   traverse?: TraversePolicy;
   content?: string;
   name?: string;
   references?: string[];
+  visibility?: boolean;
+  party?: string;
+  committee?: string;
+  position?: string;
+  elected?: boolean;
+  term?: string;
+  by_election?: boolean;
 }

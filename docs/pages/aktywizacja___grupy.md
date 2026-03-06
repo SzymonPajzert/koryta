@@ -1,6 +1,0 @@
-- Myśleć głębiej - Discord
-- Jan Śpiewak - Patronite
-- Może DLR
-- Co to ma być
-- Może Razem
-- Może MJN

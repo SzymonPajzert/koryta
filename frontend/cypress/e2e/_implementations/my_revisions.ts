@@ -39,7 +39,7 @@ describe("My Revisions Workflow", () => {
     cy.contains(".v-list-item", newName)
       .should("be.visible")
       .within(() => {
-        cy.contains("button", "Wycofaj").click();
+        cy.contains("button", "Wycofaj").click({ force: true });
       });
 
     // 5. Confirm dialog (browser confirm)

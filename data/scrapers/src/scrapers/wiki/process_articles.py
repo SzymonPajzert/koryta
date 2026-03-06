@@ -328,6 +328,7 @@ def process_article_worker(args):
 
 class ProcessWiki(Pipeline):
     filename = "person_wikipedia"  # TODO support two filenames
+    confirm_run = True
 
     def process(self, ctx: Context):
         scrape_wiki(ctx)

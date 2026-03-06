@@ -78,7 +78,10 @@ const {
 });
 
 const comments = computed(() => data.value || []);
-const mainComments = computed(() => comments.value.filter((c) => !c.parentId));
+const mainComments = computed(() => {
+  if (!Array.isArray(comments.value)) return [];
+  return comments.value.filter((c) => !c.parentId);
+});
 
 function handleSuccess() {
   showForm.value = false;

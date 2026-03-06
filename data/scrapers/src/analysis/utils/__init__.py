@@ -7,18 +7,10 @@ import pandas as pd
 from scrapers.krs.companies import (
     company_names as company_names_harcoded,
 )
-from scrapers.krs.companies import (
-    lodzkie_companies,
-)
+from scrapers.map.teryt import Teryt
 from scrapers.pkw.elections import committee_to_party
 from scrapers.pkw.sources import election_date
 from scrapers.stores import Context
-from scrapers.teryt import Teryt
-
-MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
-EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
-RECENT_EMPLOYMENT_START = date.fromisoformat("2024-10-01")
-OLD_EMPLOYMENT_END = date.fromisoformat("2020-10-01")
 
 
 def read_enriched(ctx: Context, matched_all, companies_df, teryt: Teryt):
@@ -150,64 +142,6 @@ def drop_duplicates(df, *cols):
     for col in cols:
         df = df[(~df[col].duplicated()) | df[col].isna()]
     return df
-
-
-def filter_local_good(matched_all, filter_region: str | None):
-    """
-    :param: filter_region - region in TERYT 10 code, to filter to
-    """
-
-    def check_teryt_wojewodztwo(row_regions):
-        if filter_region is None:
-            return True
-        if row_regions is None or isinstance(row_regions, float):
-            return False
-        return filter_region in row_regions
-
-    def check_employed(employed):
-        if filter_region is None:
-            return True
-        if filter_region != "10":
-            raise NotImplementedError("Only region '10' (Łódzkie) is implemented")
-        for emp in empty_list_if_nan(employed):
-            if emp["employed_krs"] in lodzkie_companies:
-                return True
-        return False
-
-    def to_dt(series):
-        if pd.api.types.is_numeric_dtype(series):
-            return pd.to_datetime(series, unit="ms")
-        return pd.to_datetime(series)
-
-    # Get people with high enough scores
-    good_score = matched_all["overall_score"] > EXPECTED_SCORE
-
-    first_employed_dt = to_dt(matched_all["first_employed"])
-    last_employed_dt = to_dt(matched_all["last_employed"])
-
-    recent = first_employed_dt > pd.Timestamp(RECENT_EMPLOYMENT_START)
-    not_too_old = last_employed_dt > pd.Timestamp(OLD_EMPLOYMENT_END)
-
-    interesting = (good_score | recent) & not_too_old
-
-    # Get people for the given region
-    local_candidacy = matched_all["teryt_wojewodztwo"].apply(check_teryt_wojewodztwo)
-    local_company = matched_all["employment"].apply(check_employed)
-    local = local_candidacy | local_company
-
-    # Make sure the chance of a random match is low
-    # TODO There's an issue with priobability calculation
-    high_probability = True  # (1 - matched_all["unique_chance"]).lt(1 / MATCHED_ODDS)
-    # Does the person has matching
-    has_wiki = ~matched_all["wiki_name"].isna()
-    accurate = high_probability | has_wiki
-
-    local_good = matched_all[interesting & local & accurate]
-
-    # Filter out duplicates
-    local_good = drop_duplicates(local_good, "krs_name", "pkw_name", "wiki_name")
-
-    return local_good
 
 
 def empty_list_if_nan(value):

@@ -71,7 +71,7 @@ describe("Region Parent Edge", () => {
 
     // Verification of correct mode by checking the label
     // The current fix sets label to "Wyszukaj obiekt" because it falls into 'else' of (person? place?)
-    cy.contains("label", "Wyszukaj obiekt").should("exist");
+    cy.contains("Wyszukaj region").should("exist");
 
     // Check that we are in the form
     cy.get("input").should("exist");
@@ -83,10 +83,7 @@ describe("Region Parent Edge", () => {
 
     // Type new region name
     // Use accessible label look up or just general input interaction since specific testid might be buried
-    cy.contains("label", "Wyszukaj obiekt")
-      .parent()
-      .find("input")
-      .type(NEW_REGION_NAME);
+    cy.contains("Wyszukaj region").parent().find("input").type(NEW_REGION_NAME);
 
     // Wait for debounce/search
     cy.wait("@getRegions");
@@ -100,23 +97,13 @@ describe("Region Parent Edge", () => {
     // Verifying chip creation - use broader selector
     cy.contains(NEW_REGION_NAME).should("exist");
 
-    // Click Add
-    // The button might be "Dodaj powiązanie" or similar icon
-    // Assuming standard form submission logic or auto-save?
-    // In EditEdge.vue, there is "Dodaj powiązanie" button usually?
-    // Actually, `useEdgeEdit` `addEdge` is called via a button in `EditEdge.vue` template?
-    // Let's check EditEdge.vue template later to be sure of selector.
-    // For now assume "Zapisz" or check component structure.
-
-    // Looking at EditEdge.vue (implied):
-    // <v-btn ... @click="processEdge">Dodaj powiązanie</v-btn>
     cy.contains("button", "Dodaj powiązanie").click();
 
     cy.wait("@createEdge");
 
     // Should show success message or clear form
     cy.on("window:alert", (str) => {
-      expect(str).to.equal("Dodano powiązanie");
+      expect(str).to.equal("Dodano powiązanie!");
     });
   });
 });

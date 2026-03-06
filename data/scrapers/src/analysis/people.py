@@ -8,8 +8,8 @@ from analysis.people_wiki_merged import PeopleWikiMerged
 from analysis.utils import read_enriched
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
+from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, LocalFile, Pipeline, write_dataframe
-from scrapers.teryt import Teryt
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)

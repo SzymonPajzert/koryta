@@ -4,10 +4,10 @@ import typing
 from collections import Counter
 
 from entities.person import PKW as Person
+from scrapers.map.teryt import Teryt
 from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
 from scrapers.pkw.sources import InputSource, sources
 from scrapers.stores import Context, Pipeline
-from scrapers.teryt import Teryt
 from util.polish import PkwFormat, parse_name
 
 counters: dict[str, Counter[str]] = {k: Counter() for k in CSV_HEADERS.keys()}

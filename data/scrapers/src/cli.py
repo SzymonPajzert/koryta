@@ -1,52 +1,65 @@
 import argparse
+import ast
 import http.server
 import json
+import os
 import sys
 import threading
+import time
+import typing
+import urllib.parse
 import webbrowser
 
-import firebase_admin
 import numpy as np
 import requests
-from firebase_admin import firestore
 
-from main import PIPELINES, CompaniesMerged, _setup_context
-from scrapers.stores import Pipeline
+from analysis.payloads import UploadPayloads
+from main import _setup_context
+from scrapers.krs.graph import CompanyGraph
+from scrapers.map.postal_codes import PostalCodes
+from scrapers.map.teryt import Regions
+from scrapers.stores import Context, LocalFile, Pipeline
 
-# Global variable to store the token received securely
-RECEIVED_TOKEN: str | None = None
-COMPANY_LOOKUP: dict[str, str] = {}
+PIPELINES = [
+    UploadPayloads,
+    PostalCodes,
+    Regions,
+]
 
 
 class AuthHandler(http.server.BaseHTTPRequestHandler):
-    def do_POST(self):
-        global RECEIVED_TOKEN
-        content_length = int(self.headers["Content-Length"])
-        post_data = self.rfile.read(content_length).decode("utf-8")
-
-        try:
-            data = json.loads(post_data)
-            token = data.get("token")
-        except json.JSONDecodeError:
-            token = post_data
-
-        if token:
-            RECEIVED_TOKEN = token
+    def do_GET(self):
+        query = urllib.parse.urlparse(self.path).query
+        params = urllib.parse.parse_qs(query)
+        if "token" in params:
+            self.server.token = params["token"][0]  # type: ignore
             self.send_response(200)
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Content-type", "text/html")
             self.end_headers()
-            self.wfile.write(b"Token received")
+            self.wfile.write(b"Authentication successful! You can close this window.")
+        else:
+            self.send_response(400)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"No token found in response.")
+
+    def do_POST(self):
+        content_length = int(self.headers["Content-Length"])
+        post_data = self.rfile.read(content_length)
+        data = json.loads(post_data.decode("utf-8"))
+        if "token" in data:
+            self.server.token = data["token"]  # type: ignore
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
         else:
             self.send_response(400)
             self.end_headers()
-            self.wfile.write(b"No token provided")
 
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
@@ -56,313 +69,129 @@ class AuthHandler(http.server.BaseHTTPRequestHandler):
 
 def run_auth_server(port, stop_event):
     server = http.server.HTTPServer(("localhost", port), AuthHandler)
-    server.timeout = 1
+    server.token = None  # type: ignore
     while not stop_event.is_set():
         server.handle_request()
+    return server.token  # type: ignore
 
 
 def authenticate_user(endpoint_url: str) -> str:
-    port = 8085
-    callback_url = f"http://localhost:{port}"
-    login_url = f"{endpoint_url}/cli-login?callback={callback_url}"
-
-    print(f"Opening browser to login: {login_url}")
-    webbrowser.open(login_url)
-
+    auth_port = 8085
     stop_event = threading.Event()
-    server_thread = threading.Thread(target=run_auth_server, args=(port, stop_event))
+    server_thread = threading.Thread(
+        target=run_auth_server, args=(auth_port, stop_event)
+    )
     server_thread.start()
 
-    print("Waiting for authentication...", end="", flush=True)
-    try:
-        while RECEIVED_TOKEN is None:
-            sys.stdout.write(".")
-            sys.stdout.flush()
-            server_thread.join(timeout=0.5)
-            if not server_thread.is_alive():
-                if RECEIVED_TOKEN:
-                    break
-    except KeyboardInterrupt:
-        print("\nAuthentication cancelled.")
-        stop_event.set()
-        server_thread.join()
-        sys.exit(1)
+    auth_url = f"{endpoint_url}/auth/login?redirect=http://localhost:{auth_port}"
+    print(f"Opening browser for authentication: {auth_url}")
+    webbrowser.open(auth_url)
 
-    print("\nAuthenticated successfully!")
-    stop_event.set()
-    server_thread.join()
-
-    if not RECEIVED_TOKEN:
-        print("Failed to retrieve token.")
-        sys.exit(1)
-
-    return RECEIVED_TOKEN
+    print("Waiting for authentication...")
+    while True:
+        time.sleep(1)
+        token = input(
+            "Enter authentication token (or press Enter if browser succeeded): "
+        )
+        if token:
+            stop_event.set()
+            return token
 
 
-def check_pipeline_files(ctx):
-    """
-    Checks if output files for all pipelines exist. Returns missing pipelines.
-    """
+def check_pipeline_files(ctx: Context):
     missing = []
-    # Only check key pipelines or all? sticking to PIPELINES
-    for pipeline_cls in PIPELINES:
-        try:
-            p = Pipeline.create(pipeline_cls)
-            if p.filename:
-                # Check existence using output_time (checks get_mtime)
-                if p.output_time(ctx) is None:
-                    missing.append(p.pipeline_name)
-        except Exception:
-            # Skip pipelines that fail to initialize (e.g. need args)
-            continue
+    for p_type in PIPELINES:
+        p = Pipeline.create(p_type)
+        if p.filename:
+            path = os.path.join("versioned", p.filename + "." + p.format)
+            if not os.path.exists(path):
+                missing.append(p_type.__name__)
     return missing
-
-
-def map_to_payload(row):
-    """
-    Maps a result row (dict) to the API payload format.
-    """
-
-    def get_scalar(key):
-        val = row.get(key)
-        if isinstance(val, (list, np.ndarray)):
-            if len(val) > 0:
-                return val[0]
-            return None
-        return val
-
-    def get(key):
-        return row.get(key)
-
-    name = (
-        get_scalar("name")
-        or get_scalar("full_name")
-        or get_scalar("fullname")
-        or get_scalar("krs_name")
-        or get_scalar("base_full_name")
-        or "Unknown Payload"
-    )
-
-    companies = []
-    company_list = get("companies") or get("employment")
-
-    if isinstance(company_list, (list, np.ndarray)):
-        for c in company_list:
-            if isinstance(c, dict):
-                c_name = c.get("name")
-                c_krs = c.get("krs") or c.get("employed_krs")
-
-                if not c_name and c_krs:
-                    c_name = COMPANY_LOOKUP.get(c_krs)
-
-                # If we still don't have a name but have a KRS, we must fail
-                if not c_name and c_krs:
-                    # TODO raise an exception here
-                    print(f"Cannot resolve company name for KRS: {c_krs}")
-                    return None
-
-                companies.append(
-                    {
-                        # Fallback only if no KRS either (e.g. unknown entity type)
-                        "name": c_name or "Unknown Company",
-                        "krs": c_krs,
-                        "role": c.get("role") or c.get("function"),
-                        "start": c.get("start") or c.get("employed_start"),
-                        "end": c.get("end") or c.get("employed_end"),
-                    }
-                )
-
-    articles = []
-    arts = get("articles")
-    if isinstance(arts, list):
-        for a in arts:
-            if isinstance(a, dict) and a.get("url"):
-                articles.append({"url": a.get("url")})
-            elif isinstance(a, str):
-                articles.append({"url": a})
-
-    wiki_name = get_scalar("wiki_name")
-    wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
-    if not wikipedia_url and wiki_name:
-        wikipedia_url = f"https://pl.wikipedia.org/wiki/{wiki_name.replace(' ', '_')}"
-
-    rejestr_io_url = get_scalar("rejestrIo")
-    rejestr_id = get_scalar("rejestrio_id")
-    if not rejestr_io_url and rejestr_id:
-        rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
-
-    return {
-        "name": name,
-        "content": get("content") or get("history"),
-        "wikipedia": wikipedia_url,
-        "rejestrIo": rejestr_io_url,
-        "birthDate": get_scalar("birth_date") or get_scalar("birthDate"),
-        "companies": companies,
-        "articles": articles,
-    }
 
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, np.integer):
-            return int(o)
-        if isinstance(o, np.floating):
-            return float(o)
         if isinstance(o, np.ndarray):
             return o.tolist()
-        return super(NumpyEncoder, self).default(o)
+        if isinstance(o, (np.int64, np.int32, np.int16, np.int8)):
+            return int(o)
+        if isinstance(o, (np.float64, np.float32)):
+            return float(o)
+        return super().default(o)
 
 
 def non_empty_query(query):
-    for doc in query.stream():
+    if not query:
+        return False
+    return query.strip() != ""
+
+
+def process_regions(df, db):
+    # This is handled by bulk_create or similar
+    pass
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Upload koryta data to Firestore.")
+    parser.add_argument(
+        "--endpoint", default="http://localhost:3000", help="API endpoint URL"
+    )
+    parser.add_argument("--submit", action="store_true", help="Submit data to the API")
+    parser.add_argument(
+        "--type",
+        choices=["person", "company", "region"],
+        default="person",
+        help="Entity type to query",
+    )
+    parser.add_argument(
+        "--query", type=str, help="SQL query to filter data from upload_payloads"
+    )
+    parser.add_argument("--region", type=str, help="Filter by teryt prefix (e.g. 3061)")
+    parser.add_argument("--krs", type=str, help="Filter by KRS and all its descendants")
+    parser.add_argument(
+        "--api",
+        choices=["bulk_create", "bulk_update"],
+        default="bulk_create",
+        help="API endpoint to use",
+    )
+    parser.add_argument("--token", type=str, help="Optional auth token")
+    return parser.parse_known_args()
+
+
+def register_table(ctx, pipeline_cls) -> bool:
+    p = Pipeline.create(pipeline_cls)
+    if not p.filename:
+        return False
+    df = p.read_or_process(ctx)
+    if df is not None:
+        table_name = p.filename.replace(".", "_")
+        ctx.con.register(table_name, df)
         return True
     return False
 
 
-def process_regions(df, db):
-    # Sort by ID length to Ensure parents created first
-    # Convert to string just in case
-    df["id_str"] = df["id"].astype(str)
-    df["id_len"] = df["id"].astype(str).str.len()
-    df = df.sort_values("id_len")
-
-    success = 0
-    total = len(df)
-
-    for idx, row in enumerate(df.itertuples()):
-        name = row.name
-        if len(row.id) == 2:
-            name = f"Województwo {name}"
-        elif len(row.id) == 4 and name.lower() == name:
-            name = f"Powiat {name}"
-        elif len(row.id) == 7:
-            name = f"Gmina {name}"
-        print(f"[{idx + 1}/{total}] Processing '{name}' ({row.id})...", end=" ")
-
-        if non_empty_query(db.collection("nodes").where("teryt", "==", str(row.id))):
-            print(f"Already done {row.id}")
-            continue
-        if len(row.id) > 4:
-            print("Skipping detailed region")
-            continue
-
-        node_id = f"teryt{row.id}"
-        node_ref = db.collection("nodes").document(node_id)
-
-        payload = {
-            "type": "region",
-            "name": name,
-            "teryt": str(row.id),
-            "revision_id": f"teryt{row.id}",
-        }
-
-        try:
-            node_ref.set(payload, merge=True)
-            success += 1
-
-            # Create Edge if parent exists
-            parent_id = getattr(row, "parent_id", None)
-            if (
-                parent_id
-                and parent_id is not None
-                and str(parent_id) != "nan"
-                and str(parent_id) != "None"
-            ):
-                parent_id = str(parent_id)
-                parent_node_id = f"teryt{parent_id}"
-
-                edge_id = f"edge_{parent_node_id}_{node_id}_owns"
-                edge_ref = db.collection("edges").document(edge_id)
-
-                edge_payload = {
-                    "source": parent_node_id,
-                    "target": node_id,
-                    "type": "owns",
-                    "revision_id": f"rev_{edge_id}",
-                }
-                edge_ref.set(edge_payload, merge=True)
-                print("(Edge OK)")
-            else:
-                print("")
-
-        except Exception as e:
-            print(f"ERROR: {e}")
-
-    print(f"\nDone. Processed {success}/{total} regions.")
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Koryta Uploader CLI")
-    parser.add_argument("--script", help="SQL script file to execute")
-    parser.add_argument("--query", help="SQL query string to execute")
-    parser.add_argument("--submit", action="store_true", help="Upload results to API")
-    parser.add_argument(
-        "--endpoint", default="http://localhost:3000", help="API endpoint base URL"
-    )
-    parser.add_argument(
-        "--type",
-        default="person",
-        choices=["person", "region"],
-        help="Entity type to upload",
-    )
-    parser.add_argument("--api", default="bulk_create", help="API endpoint path")
-    parser.add_argument(
-        "--prod", action="store_true", help="Use production default endpoint"
-    )
-
-    args = parser.parse_args()
-
-    if args.prod and args.endpoint == "http://localhost:3000":
-        args.endpoint = "https://koryta.pl"
-
-    if not args.script and not args.query:
-        print("Error: Must provide either --script or --query")
-        sys.exit(1)
-
-    query = args.query
-    if args.script:
-        with open(args.script, "r") as f:
-            query = f.read()
-    return args, query
-
-
-def register_table(ctx, pipeline_cls):
-    try:
-        p = Pipeline.create(pipeline_cls)
-        if not p.filename:
-            return False
-
-        table_name = p.filename
-
-        # Robust method: Use pipeline's own reader
-        # Check existence first to avoid re-processing accidentally if missing
-        if p.output_time(ctx) is not None:
-            # read_or_process will read cached file if exists
-            df = p.read_or_process(ctx)
-            if df is not None:
-                ctx.con.register(table_name, df)
-                return True
-    except Exception:
-        # Skip pipelines that fail to initialize
-        return False
-    return False
+def print_company(company):
+    if company["created"]:
+        print(
+            f"\n  Created company with KRS: {company['krs']} node {company['nodeId']}",
+            end=" ",
+        )
+    else:
+        print(
+            f"\n  Already existed KRS: {company['krs']} node {company['nodeId']}",
+            end=" ",
+        )
 
 
 def submit_results(args, df):
-    if args.type == "region":
-        options = {
-            "projectId": "koryta-pl",
-            # "databaseURL": "http://localhost:8080",
-        }
-        app = firebase_admin.initialize_app(options=options)
-        db = firestore.client(app, "koryta-pl")
-        print("Processing regions...")
-        process_regions(df, db)
-        sys.exit(0)
+    token = args.token
+    if not token:
+        # Check environment
+        token = os.environ.get("KORYTA_TOKEN")
+    if not token:
+        # Try local storage or similar? For now dummy
+        token = "test-token"
 
-    token = authenticate_user(args.endpoint)
-
-    target_url = f"{args.endpoint}/api/person/{args.api}"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
@@ -370,7 +199,17 @@ def submit_results(args, df):
 
     success_count = 0
     for idx, row in df.iterrows():
-        payload = map_to_payload(row)
+        payload = row.get("payload")
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                try:
+                    payload = ast.literal_eval(payload)
+                except Exception as e:
+                    e.add_note(f"payload: {payload}")
+                    raise e
+
         if payload is None:
             print(f"[{idx + 1}/{len(df)}] Skipping invalid payload ...")
             continue
@@ -379,14 +218,24 @@ def submit_results(args, df):
         print(f"[{idx + 1}/{len(df)}] Uploading {name}...", end=" ")
 
         try:
+            entity_type = row.get("entity_type", args.type)
+            if entity_type == "company":
+                current_target_url = f"{args.endpoint}/api/ingest/company"
+            else:
+                current_target_url = f"{args.endpoint}/api/person/{args.api}"
+
             # Use data=json.dumps(..., cls=NumpyEncoder) to handle numpy types
             resp = requests.post(
-                target_url,
+                current_target_url,
                 data=json.dumps(payload, cls=NumpyEncoder),
                 headers=headers,
             )
+            j: dict[str, typing.Any] = resp.json()
+            if "companies" in j:
+                for company in j["companies"]:
+                    print_company(company)
             if resp.status_code in [200, 201]:
-                print("OK")
+                print("  OK")
                 success_count += 1
             else:
                 print(f"FAILED ({resp.status_code}): {resp.text}")
@@ -397,45 +246,85 @@ def submit_results(args, df):
     print(f"\nUpload complete. Success: {success_count}, Failed: {failures}")
 
 
-def main():
-    args, query = parse_args()
-    ctx, _ = _setup_context(False)
+def print_results(df, type):
+    print("\n--- Query Results (First 20) ---")
+    if not df.empty and "payload" in df.columns:
+        print(df.drop(columns=["payload"]).head(20).to_string())
+    else:
+        print(df.head(20).to_string())
+    print("\n--- Payload Preview (First 1) ---")
+    if not df.empty and "payload" in df.columns:
+        preview_payload = df.iloc[0].get("payload")
+        print(
+            json.dumps(preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder)
+        )
 
-    missing = check_pipeline_files(ctx)
-    if missing:
-        # Just warn, don't exit, user might know what they are querying
-        print("Warning: The following pipelines have no output files:")
-        for m in missing:
-            print(f" - {m}")
 
-    print("Loading company lookup...")
-    global COMPANY_LOOKUP
-    try:
-        p_comp = Pipeline.create(CompaniesMerged)
-        if p_comp.output_time(ctx):
-            df_comp = p_comp.read_or_process(ctx)
-            # df_comp should have 'krs' and 'name'
-            # Drop NAs in key columns
-            df_comp = df_comp.dropna(subset=["krs", "name"])
-            COMPANY_LOOKUP = dict(zip(df_comp["krs"], df_comp["name"]))
-            print(f"Loaded {len(COMPANY_LOOKUP)} companies for lookup.")
-    except Exception as e:
-        print(f"Warning: Failed to load company lookup: {e}")
-
-    print("Registering tables...")
-    registered_count = 0
-    for pipeline_cls in PIPELINES:
-        if register_table(ctx, pipeline_cls):
-            registered_count += 1
-    print(f"Registered {registered_count} tables.")
-
+def execute_query(ctx, args, query):
     print("Executing query...")
     try:
+        p_payloads = Pipeline.create(UploadPayloads)
+        df_payloads = p_payloads.read_or_process(ctx)  # Ensure upload payloads exist.
+        if df_payloads is not None:
+            ctx.con.register("upload_payloads", df_payloads)
+
+        if args.type == "person":
+            if not query and args.region:
+                # pipeline already filtered people by region,
+                # so we just take all 'person' entities
+                query = "SELECT * FROM upload_payloads WHERE entity_type='person'"
+            elif not query:
+                query = "SELECT * FROM upload_payloads WHERE entity_type='person'"
+
+        if args.type == "company":
+            if args.krs:
+                print(f"Building graph to find descendants of {args.krs}...")
+                graph = CompanyGraph.from_dataframe(
+                    ctx.io.read_data(
+                        LocalFile(
+                            "companies_merged/companies_merged.jsonl", "versioned"
+                        )
+                    ).read_dataframe("jsonl")
+                )
+                relevant_companies = graph.all_descendants([args.krs])
+                print(f"Found {len(relevant_companies)} relevant companies.")
+                id_list = ", ".join([f"'{k}'" for k in relevant_companies])
+                if id_list:
+                    query = f"""SELECT * FROM upload_payloads
+                    WHERE entity_type='company' AND entity_id IN ({id_list})"""
+                else:
+                    query = (
+                        "SELECT * FROM upload_payloads WHERE head=false"  # return empty
+                    )
+            elif args.region:
+                query = f"""
+                SELECT * FROM upload_payloads
+                WHERE entity_type='company'
+                    AND json_extract_string(payload, '$.teryt') LIKE '{args.region}%'"""
+
+            if getattr(args, "script", None) or getattr(args, "query", None):
+                # if script/query provided, fallback
+                pass
+            elif not args.krs and not args.region:
+                query = "SELECT * FROM upload_payloads WHERE entity_type='company'"
+
+        if not query:
+            query = f"SELECT * FROM upload_payloads WHERE entity_type='{args.type}'"
+
+        print(f"Executing query: {query}")
         df = ctx.con.execute(query).df()
     except Exception as e:
         print(f"Query execution failed: {e}")
         sys.exit(1)
 
+    return df
+
+
+def main():
+    args, query = parse_args()
+    ctx, _ = _setup_context(False)
+
+    df = execute_query(ctx, args, query)
     print(f"Query returned {len(df)} rows.")
 
     if df.empty:
@@ -443,17 +332,7 @@ def main():
         sys.exit(0)
 
     if not args.submit:
-        print("\n--- Query Results (First 20) ---")
-        print(df.head(20).to_string())
-        print("\n--- Payload Preview (First 1) ---")
-        if not df.empty:
-            preview_payload = map_to_payload(df.iloc[0])
-
-            print(
-                json.dumps(
-                    preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder
-                )
-            )
+        print_results(df, args.type)
         print("\nUse --submit to upload.")
     else:
         submit_results(args, df)

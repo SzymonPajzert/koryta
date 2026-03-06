@@ -56,7 +56,7 @@ async function submit() {
   if (!content.value.trim()) return;
   loading.value = true;
   try {
-    const body: any = {
+    const body = {
       content: content.value,
       nodeId: props.nodeId,
       edgeId: props.edgeId,
@@ -75,9 +75,8 @@ async function submit() {
 
     content.value = "";
     emit("success");
-  } catch (e: any) {
+  } catch (e) {
     console.error(e);
-    // TODO: Error handling toast
   } finally {
     loading.value = false;
   }

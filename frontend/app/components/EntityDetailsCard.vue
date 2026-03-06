@@ -10,7 +10,22 @@
         {{ entity?.name }}
       </h2>
     </v-card-title>
+    <v-card-subtitle v-if="personEntity?.birthDate" class="px-0">
+      Data urodzenia: {{ personEntity.birthDate }}
+    </v-card-subtitle>
     <v-card-text class="px-0">
+      <div v-if="personEntity?.wikipedia" class="text-caption mb-2">
+        Wikipedia:
+        <a :href="personEntity?.wikipedia" target="_blank">{{
+          personEntity?.wikipedia
+        }}</a>
+      </div>
+      <div v-if="personEntity?.rejestrIo" class="text-caption mb-2">
+        Rejestr.io:
+        <a :href="personEntity?.rejestrIo" target="_blank">{{
+          personEntity?.rejestrIo
+        }}</a>
+      </div>
       {{ entity?.content }}
     </v-card-text>
   </v-card>

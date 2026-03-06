@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
+from scrapers.map.teryt import Teryt
 from scrapers.stores import Context
-from scrapers.teryt import Teryt
 from scrapers.tests.mocks import MockIO
 
 # Sample CSV data for testing, including voivodeships, powiats, and other data

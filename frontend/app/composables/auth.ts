@@ -1,5 +1,5 @@
 import {
-  onAuthStateChanged,
+  onIdTokenChanged,
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -32,7 +32,7 @@ export function useAuthState() {
   // Initialize listener only once on the client
   if (import.meta.client && !useState("authListenerInitialized").value) {
     useState("authListenerInitialized", () => true);
-    onAuthStateChanged(auth, async (userIn) => {
+    onIdTokenChanged(auth, async (userIn) => {
       user.value = userIn;
       if (userIn) {
         const idTokenResult = await userIn.getIdTokenResult();
@@ -64,19 +64,20 @@ export function useAuthState() {
     return await createUserWithEmailAndPassword(auth, email, pass);
   };
 
+  const authHeaders = computed(() => {
+    const h: Record<string, string> = {};
+    if (idToken.value) {
+      h["Cache-Control"] = "no-cache";
+      h.Pragma = "no-cache";
+      h.Authorization = `Bearer ${idToken.value}`;
+    }
+    return h;
+  });
+
   const authFetch = <T>(
     url: string | (() => string | null),
     options: any = {},
   ) => {
-    const headers = computed(() => {
-      const h: Record<string, string> = {};
-      if (idToken.value) {
-        h["Cache-Control"] = "no-cache";
-        h.Pragma = "no-cache";
-        h.Authorization = `Bearer ${idToken.value}`;
-      }
-      return h;
-    });
     const key = computed(() => {
       return (
         (typeof url === "string" ? url : url()) +
@@ -86,8 +87,15 @@ export function useAuthState() {
     });
     return useFetch<T>(url as any, {
       key,
-      headers,
+      headers: authHeaders,
       watch: [idToken],
+      onRequest: async ({ options }) => {
+        options.headers = new Headers(options.headers);
+        if (auth.currentUser) {
+          const token = await auth.currentUser.getIdToken();
+          options.headers.set("Authorization", `Bearer ${token}`);
+        }
+      },
       ...options,
     });
   };
@@ -97,6 +105,7 @@ export function useAuthState() {
     isAdmin,
     idToken,
     userConfig,
+    authHeaders,
     logout,
     login,
     register,

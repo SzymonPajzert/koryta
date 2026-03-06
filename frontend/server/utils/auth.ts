@@ -11,6 +11,13 @@ export async function getUser(event: H3Event) {
   }
 
   const token = authHeader.substring(7);
+  if (token === "test-token" && process.env.USE_EMULATORS) {
+    return {
+      uid: "test-user-uid",
+      email: "test@example.com",
+      name: "Test User",
+    };
+  }
   try {
     const decodedToken = await getAuth().verifyIdToken(token);
     return decodedToken;

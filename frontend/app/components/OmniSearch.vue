@@ -41,6 +41,7 @@
 import { getAnalytics, logEvent } from "firebase/analytics";
 import type { GraphLayout } from "~~/shared/graph/util";
 import { parties } from "~~/shared/misc";
+import { useEntityFiltering } from "@/composables/useEntityFiltering";
 
 const { push, currentRoute } = useRouter();
 let analytics: any;
@@ -52,6 +53,7 @@ const props = defineProps<{
   searchText?: string;
   fake?: boolean;
   width?: string;
+  autofocus?: boolean;
 }>();
 const { width = "300px" } = props;
 
@@ -83,12 +85,13 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { idToken, authFetch } = useAuthState();
-
+const { authFetch } = useAuthState();
 const { data: graph, refresh } = await authFetch<GraphLayout>("/api/graph", {
   lazy: true,
-  query: computed(() => ({ pending: !!idToken.value })),
 });
+
+const nodes = computed(() => graph.value?.nodes);
+const nodesFiltered = useEntityFiltering(nodes);
 
 watch(autocompleteFocus, (focused) => {
   if (focused) {
@@ -106,7 +109,7 @@ const baseItems = computed<ListItem[]>(() => {
   const result: ListItem[] = [];
   result.push({
     title: "Lista wszystkich osób",
-    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people} powiązanych osób`,
+    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people ?? 0} powiązanych osób`,
     icon: "mdi-format-list-bulleted-type",
     path: "/lista",
     logEventKey: {
@@ -116,7 +119,7 @@ const baseItems = computed<ListItem[]>(() => {
   });
   result.push({
     title: "Graf wszystkich osób",
-    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people} powiązanych osób`,
+    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people ?? 0} powiązanych osób`,
     icon: "mdi-graph-outline",
     path: "/graf",
     logEventKey: {
@@ -144,10 +147,17 @@ const baseItems = computed<ListItem[]>(() => {
   const addedIds = new Set<string>();
 
   graph.value.nodeGroups.slice(1).forEach((item) => {
+    // Check if the group ID (which is a place/region ID) is in pending/hidden state
+    // If the group corresponds to a node that is filtered out, skip it.
+    // The group ID is `item.id`.
+    if (item.id && !nodesFiltered.value?.[item.id]) {
+      return;
+    }
+
     addedIds.add(item.id);
     result.push({
       title: item.name,
-      subtitle: `${item.stats.people} powiązanych osób`,
+      subtitle: `${item.stats?.people ?? 0} powiązanych osób`,
       icon: "mdi-domain",
       logEventKey: {
         content_id: item.id,
@@ -156,7 +166,9 @@ const baseItems = computed<ListItem[]>(() => {
       path: "/entity/place/" + item.id,
     });
   });
-  Object.entries(graph.value.nodes).forEach(([key, value]) => {
+
+  // Now iterate over filtered nodes
+  Object.entries(nodesFiltered.value || {}).forEach(([key, value]) => {
     if (addedIds.has(key)) {
       return;
     }

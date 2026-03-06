@@ -1,4 +1,0 @@
-- Auto import gminy w całej polsce, dziwnie że trzeba je dodawać
-	- Filtruj je osobno w omnisearch
-	- Parse wikipedia #dane/wiki
-- [[dane/bip]]

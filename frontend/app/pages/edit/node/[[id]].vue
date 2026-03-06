@@ -64,6 +64,26 @@
               chips
               deletable-chips
             />
+            <template v-if="current.type === 'person'">
+              <v-text-field
+                v-model="current.birthDate"
+                label="Data urodzenia"
+                type="date"
+                persistent-hint
+              />
+              <v-text-field
+                v-model="current.wikipedia"
+                label="Link do Wikipedii"
+                hint="Pełny link do artykułu"
+                persistent-hint
+              />
+              <v-text-field
+                v-model="current.rejestrIo"
+                label="Link do Rejestr.io"
+                hint="Pełny link do profilu"
+                persistent-hint
+              />
+            </template>
             <template v-if="current.type === 'place'">
               <v-text-field
                 v-model="current.krsNumber"
@@ -117,9 +137,33 @@
                   />
                 </template>
                 <v-list-item-title>{{ edge.richNode.name }}</v-list-item-title>
-                <v-list-item-subtitle>{{
-                  edge.label || edge.type
-                }}</v-list-item-subtitle>
+                <v-list-item-subtitle>
+                  <div>{{ edge.label || edge.type }}</div>
+                  <div
+                    v-if="edge.type === 'election'"
+                    class="d-flex flex-wrap gap-x-2 mt-1"
+                  >
+                    <v-chip
+                      v-if="edge.party"
+                      size="x-small"
+                      density="compact"
+                      class="mr-1"
+                    >
+                      {{ edge.party }}
+                    </v-chip>
+                    <span v-if="edge.position" class="font-weight-bold mr-1">{{
+                      edge.position
+                    }}</span>
+                    <v-chip
+                      v-if="edge.term"
+                      variant="outlined"
+                      size="x-small"
+                      density="compact"
+                    >
+                      {{ edge.term }}
+                    </v-chip>
+                  </div>
+                </v-list-item-subtitle>
                 <template #append>
                   <v-btn
                     icon="mdi-pencil"
@@ -142,7 +186,28 @@
               Brak istniejących powiązań.
             </div>
 
-            <FormEditEdge />
+            <div v-if="!activeEdgeTypeExt && !isEditingEdge" class="mt-4">
+              <FormEditEdgePicker
+                :node-id="node_id!"
+                :node-type="current.type || 'person'"
+                :node-name="current.name"
+                @pick="startNewEdge"
+              />
+            </div>
+
+            <FormEditEdge
+              v-if="activeEdgeTypeExt || isEditingEdge"
+              ref="editEdgeForm"
+              :key="editedEdgeId || activeEdgeTypeExt"
+              :node-id="node_id!"
+              :node-type="current.type || 'person'"
+              :node-name="current.name || ''"
+              :auth-headers="authHeaders"
+              :edge-type-ext="activeEdgeTypeExt!"
+              :initial-direction="activeDirection"
+              :edited-edge="isEditingEdge ? editedEdgeId : undefined"
+              @update="onEdgeUpdate"
+            />
           </template>
         </v-card>
       </v-window-item>
@@ -166,8 +231,11 @@
 </template>
 
 <script setup lang="ts">
+import { ref, nextTick } from "vue";
 import { useNodeEdit } from "~/composables/useNodeEdit";
-import type { NodeType } from "~~/shared/model";
+import FormEditEdge from "~/components/form/EditEdge.vue";
+import FormEditEdgePicker from "~/components/form/EditEdgePicker.vue";
+import type { edgeTypeExt } from "~/composables/useEdgeTypes";
 
 definePageMeta({
   middleware: "auth",
@@ -185,19 +253,44 @@ const {
   idToken,
   saveNode,
   fetchRevisions,
-} = await useNodeEdit();
-
-const { node_id, refreshEdges, authHeaders, stateKey } = await useNodeEdit();
-const { openEditEdge } = useEdgeEdit({
-  nodeId: node_id,
-  nodeType: computed(() => {
-    if (route.query.type) return route.query.type as NodeType;
-    return current.value.type || "person";
-  }),
+  node_id,
+  refreshEdges,
   authHeaders,
-  onUpdate: refreshEdges,
-  stateKey,
-});
+} = await useNodeEdit();
+const editEdgeForm = ref<InstanceType<typeof FormEditEdge> | null>(null);
+
+const activeEdgeTypeExt = ref<edgeTypeExt | undefined>(undefined);
+const activeDirection = ref<"incoming" | "outgoing" | undefined>(undefined);
+const isEditingEdge = ref(false);
+const editedEdgeId = ref<string | undefined>(undefined);
+
+function startNewEdge(type: string, direction: string) {
+  activeEdgeTypeExt.value = type as edgeTypeExt;
+  activeDirection.value = direction as "incoming" | "outgoing";
+  isEditingEdge.value = false;
+  editedEdgeId.value = undefined;
+}
+
+function openEditEdge(edge: EdgeNode) {
+  isEditingEdge.value = true;
+  editedEdgeId.value = edge.id;
+  // We need to map the edge type to edgeTypeExt
+  // For now let's assume it's direct or we can infer it
+  // This might need more logic if types don't match 1:1
+  activeEdgeTypeExt.value = edge.type as edgeTypeExt;
+  activeDirection.value = undefined;
+  nextTick(() => {
+    editEdgeForm.value?.openEditEdge(edge);
+  });
+}
+
+function onEdgeUpdate() {
+  activeEdgeTypeExt.value = undefined;
+  activeDirection.value = undefined;
+  isEditingEdge.value = false;
+  editedEdgeId.value = undefined;
+  refreshEdges();
+}
 
 if (route.query.type === "region" || current.value.type === "region") {
   // Region is read-only

@@ -1,4 +1,0 @@
-- https://jawnylublin.pl/tluste-koty-zuka-gdzie-pracuja-i-ile-zarabiaja-zaufani-radni-i-ludzie-prezydenta-lublina/
-- https://lublin.wyborcza.pl/lublin/7,48724,27132726,jest-nowy-przewodniczacy-klubu-radnych-prezydenta-zuka-to-reprezentant.html
-- https://pl.wikipedia.org/wiki/Dariusz_Sadowski
-- https://kurierlubelski.pl/roszady-personalne-w-radzie-miasta-lublin-dariusz-sadowski-nie-jest-juz-przewodniczacym-klubu-prezydenckich-radnych-powod/ar/c1-16976627

@@ -6,24 +6,23 @@ import {
   getNodesNoStats,
   type GraphLayout,
 } from "~~/shared/graph/util";
-import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
+import type { Edge } from "~~/shared/model";
 
-export default authCachedEventHandler(async (event) => {
-  const user = await getUser(event).catch(() => null);
-  const isAuth = !!user;
+import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
+export default authCachedEventHandler(async () => {
   const [people, places, regions, edgesFromDB] = await Promise.all([
-    fetchNodes("person", { isAuth }),
-    fetchNodes("place", { isAuth }),
-    fetchNodes("region", { isAuth }),
-    fetchEdges({ isAuth }),
+    fetchNodes("person"),
+    fetchNodes("place"),
+    fetchNodes("region"),
+    fetchEdges(),
   ]);
 
   const nodesNoStats = getNodesNoStats(people, places, regions, partyColors);
   const validNodeIds = new Set(Object.keys(nodesNoStats));
   const edgesFiltered = edgesFromDB.filter(
-    (e) => validNodeIds.has(e.source) && validNodeIds.has(e.target),
+    (e: Edge) => validNodeIds.has(e.source) && validNodeIds.has(e.target),
   );
   const edges = getEdges(edgesFiltered);
   const nodeGroupsRaw = getNodeGroups(
@@ -40,7 +39,7 @@ export default authCachedEventHandler(async (event) => {
     if (!group.id) return true;
 
     // Authenticated users can see all groups (so they can link to empty companies)
-    if (isAuth) return true;
+    // TODO set node group visibility as well
 
     // For specific groups (regions/companies), check if they have people
     return group.stats.people > 0;

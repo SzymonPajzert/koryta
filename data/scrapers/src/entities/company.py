@@ -10,7 +10,9 @@ class KRS:
     krs: str
     name: str
     city: str | None = None
+    teryt_code: str | None = None
     is_interesting: bool = False
+    sources: set[str] = field(default_factory=set)
     children: set[str] = field(default_factory=set)
     parents: set[str] = field(default_factory=set)
 
@@ -39,8 +41,10 @@ class InterestingReason:
 class InterestingEntity:
     name: str
     krs: str | None
+    teryt_code: str | None = None
     reasons: list[InterestingReason] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
+    children: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -50,6 +54,7 @@ class ManualKRS:
     Provides methods for merging and handling different representations.
     """
 
+    # TODO migrate id to krs for consistency
     id: str
     sources: set[str] = field(default_factory=set)
     teryts: set[str] = field(default_factory=set)
@@ -90,6 +95,12 @@ class ManualKRS:
             self.teryts | other.teryts,
             self.ministry or other.ministry,
         )
+
+    def __str__(self) -> str:
+        return f"{self.id}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
     def __hash__(self) -> int:
         """Computes the hash based on the KRS ID."""

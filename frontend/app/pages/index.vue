@@ -1,80 +1,56 @@
 <template>
   <v-row>
-    <v-col cols="12" md="8">
-      <HomeCard height="100%">
-        <template #header> Co tutaj robimy? </template>
-        Polskie partie oskarżają się od lat o koryciarstwo - ale kto robi go
-        najwięcej? Koryta.pl to największy, ogólnopolski i bezpartyjny agregator
-        informacji o politycznych układach. Znajdziesz w nim polityków i ich
-        bliskich, którzy pracują w publicznych spółkach.
-        <!-- TODO VSCode is autoadding breaks here, I don't know why -->
-        <br /><br />
-        Te dane są oficjalnie publiczne i dostępne, jednak trzeba wiedzieć,
-        czego szukać. My wiemy i szukamy. Zobacz film o projekcie na
-        <a href="https://youtu.be/x20MFMDUAuk">YouTube</a>.
-      </HomeCard>
+    <v-col cols="12">
+      <HomeHero />
     </v-col>
-    <v-col cols="12" md="4">
-      <HomeCard height="100%">
-        ❤️ Robimy ten projekt z miłości do przejrzystej i publicznej informacji.
-        Nie mamy sponsorów ani partyjnego wsparcia.
-        <br />
-        <br />
-        <strong>
-          Jeśli chcesz pomóc w rozbiciu politycznego betonu, wesprzyj nas:
-        </strong>
-        <v-container class="d-flex flex-wrap ga-2 pa-2">
-          <v-spacer />
-          <v-btn
-            href="https://patronite.pl/romb.me"
-            target="_blank"
-            color="white"
-          >
-            <v-img
-              :width="30"
-              aspect-ratio="16/9"
-              cover
-              src="@/assets/patronite.png"
-            />
-          </v-btn>
-          <v-btn
-            href="https://zrzutka.pl/rd7ssx/pay"
-            target="_blank"
-            color="#E64164"
-          >
-            <v-img
-              :width="30"
-              aspect-ratio="16/9"
-              cover
-              src="@/assets/zrzutka.png"
-            />
-          </v-btn>
-          <v-btn
-            href="https://github.com/SzymonPajzert/koryta"
-            target="_blank"
-            color="white"
-          >
-            <v-img
-              :width="30"
-              aspect-ratio="16/9"
-              cover
-              src="@/assets/github.svg"
-            />
-          </v-btn>
-          <v-spacer />
-        </v-container>
-      </HomeCard>
+    <HomeIntro id="intro" />
+    <v-col cols="12" class="mt-4">
+      <HomeHeading
+        id="najwiekszy"
+        class="scroll-topic"
+        title="Największy"
+        center
+      />
+      <HomeSourceCards />
     </v-col>
-    <v-col cols="12" sm="3" class="text-center">
-      <a
-        href="https://zrzutka.pl/rd7ssx/award/g3z29z/przypinka-z-podziekowaniami"
-        target="_blank"
-      >
-        <v-img position="center" height="300" src="@/assets/logo.png" />
-      </a>
+    <v-col cols="12" md="6">
+      <HomeHeading
+        id="ogolnopolski"
+        class="scroll-topic"
+        title="Ogólnopolski"
+        center
+      />
+      <ChartPolandMap />
     </v-col>
-    <v-col cols="12" sm="9" class="text-center">
-      <CardCallToAction />
+    <v-col cols="12" md="6">
+      <HomeHeading
+        id="bezpartyjny"
+        class="scroll-topic"
+        title="Bezpartyjny"
+        center
+      />
+      <v-card class="py-4" color="surface-variant" variant="tonal" rounded="lg">
+        <v-card-title>
+          <h2 class="text-h5 font-weight-bold">
+            Łącznie {{ people ? Object.values(people).length : 0 }}
+            {{ koryciarz.plural.genitive }}
+          </h2>
+        </v-card-title>
+        <v-card-text>
+          <ClientOnly>
+            <ChartTreemapParty />
+          </ClientOnly>
+        </v-card-text>
+      </v-card>
+    </v-col>
+
+    <v-col cols="12">
+      <HomeHeading
+        id="agregator"
+        class="scroll-topic"
+        title="Agregator koryciarstwa"
+        center
+      />
     </v-col>
     <v-col cols="12" sm="7">
       <omni-search-fake />
@@ -85,20 +61,9 @@
         albo kliknij nasze propozyce po lewej stronie.
       </HomeCard>
     </v-col>
-    <v-col cols="12" md="6">
-      <v-card class="py-4" color="surface-variant" variant="tonal" rounded="lg">
-        <v-card-title>
-          <h2 class="text-h5 font-weight-bold">
-            Lista wszystkich {{ Object.values(people).length }}
-            {{ koryciarz.plural.genitive }}
-          </h2>
-        </v-card-title>
-        <v-card-text>
-          <ClientOnly>
-            <ChartTreemapParty />
-          </ClientOnly>
-        </v-card-text>
-      </v-card>
+
+    <v-col cols="12" class="text-center">
+      <CardCallToAction />
     </v-col>
 
     <v-col cols="12" md="6">
@@ -146,6 +111,20 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
-const { entities: people } = await useEntity("person");
+
+const { entities: people } = useEntity("person");
 const { koryciarz } = useFeminatyw();
 </script>
+
+<style scoped>
+.scroll-topic {
+  scroll-margin-top: 100px; /* Adjust this value based on header height */
+  /* For mobile you might want less, or use a media query */
+}
+
+@media (max-width: 600px) {
+  .scroll-topic {
+    scroll-margin-top: 80px;
+  }
+}
+</style>

@@ -1,2 +1,0 @@
-- a [[Cloud Storage]] bucket for [[Firestore]] exports
-- See database/import_firestore.sh

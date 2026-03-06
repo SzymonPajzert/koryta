@@ -14,6 +14,7 @@ export function personNode(
     ...person,
     type: "circle",
     color: color,
+    visibility: person.visibility,
   };
 }
 
@@ -22,6 +23,7 @@ export function companyNode(company: Company): Node {
     ...company,
     type: "rect",
     color: "gray",
+    visibility: company.visibility,
   };
 }
 
@@ -30,5 +32,6 @@ export function regionNode(region: Region): Node {
     ...region,
     type: "document",
     color: "green",
+    visibility: region.visibility,
   };
 }

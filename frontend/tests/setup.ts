@@ -7,6 +7,7 @@ vi.mock("vuefire", async (importOriginal) => {
     ...actual,
     useFirestore: vi.fn(() => ({})),
     useCollection: vi.fn(() => ref([])), // Return a ref with an empty array
+    useFirebaseAuth: vi.fn(() => ({ currentUser: null })),
   };
 });
 
@@ -28,6 +29,7 @@ vi.mock("firebase/auth", async (importOriginal) => {
     initializeAuth: vi.fn(() => ({})),
     connectAuthEmulator: vi.fn(),
     onAuthStateChanged: vi.fn(),
+    onIdTokenChanged: vi.fn(),
     signInWithEmailAndPassword: vi.fn(),
     createUserWithEmailAndPassword: vi.fn(),
     signOut: vi.fn(),

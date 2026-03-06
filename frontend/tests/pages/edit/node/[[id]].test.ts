@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
+import { mountSuspended, mockNuxtImport } from "@nuxt/test-utils/runtime";
 import NodeEditPage from "../../../../app/pages/edit/node/[[id]].vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
-import { ref, defineComponent, h, Suspense } from "vue";
+import { ref } from "vue";
 
 // Setup Vuetify
 const vuetify = createVuetify({
@@ -16,6 +16,14 @@ const vuetify = createVuetify({
 const mockSaveNode = vi.fn();
 const mockAddEdge = vi.fn();
 const mockFetchRevisions = vi.fn();
+const mockRouterReplace = vi.fn();
+
+mockNuxtImport("useRouter", () => {
+  return () => ({
+    replace: mockRouterReplace,
+    push: vi.fn(),
+  });
+});
 
 const mockState = {
   isNew: ref(true),
@@ -49,8 +57,8 @@ const mockState = {
   stateKey: ref("test-key"),
 };
 
-vi.mock("../../../../app/composables/useNodeEdit", () => ({
-  useNodeEdit: () =>
+mockNuxtImport("useNodeEdit", () => {
+  return () =>
     Promise.resolve({
       ...mockState,
       saveNode: mockSaveNode,
@@ -59,39 +67,33 @@ vi.mock("../../../../app/composables/useNodeEdit", () => ({
       cancelEditEdge: vi.fn(),
       isEditingEdge: ref(false),
       fetchRevisions: mockFetchRevisions,
-    }),
-}));
+    });
+});
 
-vi.mock("~/composables/auth", () => ({
-  useAuthState: vi.fn(() => ({
+mockNuxtImport("useAuthState", () => {
+  return () => ({
     user: ref(null),
     authFetch: vi.fn(() => ({ data: ref({}), refresh: vi.fn() })),
-  })),
-}));
+  });
+});
 
-// Mock definePageMeta
-vi.stubGlobal("definePageMeta", vi.fn());
-
-vi.stubGlobal("useEdgeEdit", () => ({
-  openEditEdge: vi.fn(),
-  cancelEditEdge: vi.fn(),
-  isEditingEdge: ref(false),
-}));
-
-// Helper to mount async component
-function mountAsync(component: unknown, options: unknown = {}) {
-  return mount(
-    defineComponent({
-      render() {
-        return h(Suspense, null, {
-          default: () => h(component),
-          fallback: () => h("div", "fallback"),
-        });
-      },
-    }),
-    options,
-  );
-}
+mockNuxtImport("useEdgeEdit", () => {
+  return () => ({
+    openEditEdge: vi.fn(),
+    cancelEditEdge: vi.fn(),
+    isEditingEdge: ref(false),
+    newEdge: ref({}),
+    processEdge: vi.fn(),
+    edgeType: ref("connection"),
+    availableEdgeTypes: ref([]),
+    pickedNode: ref(null),
+    pickerType: ref("person"),
+    layout: {
+      source: { id: ref("test-node-id"), type: ref("person"), ref: ref(null) },
+      target: { id: ref(null), type: ref("person"), ref: ref(null) },
+    },
+  });
+});
 
 describe("NodeEditPage", () => {
   beforeEach(() => {
@@ -110,7 +112,7 @@ describe("NodeEditPage", () => {
   });
 
   it("renders 'Utwórz' title when creating new node", async () => {
-    const wrapper = mountAsync(NodeEditPage, {
+    const wrapper = await mountSuspended(NodeEditPage, {
       global: {
         plugins: [vuetify],
         stubs: {
@@ -118,13 +120,12 @@ describe("NodeEditPage", () => {
         },
       },
     });
-    await flushPromises();
     expect(wrapper.text()).toContain("Utwórz");
   });
 
   it("renders 'Edytuj' title when editing existing node", async () => {
     mockState.isNew.value = false;
-    const wrapper = mountAsync(NodeEditPage, {
+    const wrapper = await mountSuspended(NodeEditPage, {
       global: {
         plugins: [vuetify],
         stubs: {
@@ -135,13 +136,12 @@ describe("NodeEditPage", () => {
         },
       },
     });
-    await flushPromises();
     expect(wrapper.text()).toContain("Edytuj");
   });
 
   it("disables save button when loading", async () => {
     mockState.loading.value = true;
-    const wrapper = mountAsync(NodeEditPage, {
+    const wrapper = await mountSuspended(NodeEditPage, {
       global: {
         plugins: [vuetify],
         stubs: {
@@ -149,14 +149,13 @@ describe("NodeEditPage", () => {
         },
       },
     });
-    await flushPromises();
     const saveBtn = wrapper.find('button[type="submit"]');
     expect(saveBtn.exists()).toBe(true);
     expect(saveBtn.attributes("disabled")).toBeDefined();
   });
 
   it("calls saveNode on form submission", async () => {
-    const wrapper = mountAsync(NodeEditPage, {
+    const wrapper = await mountSuspended(NodeEditPage, {
       global: {
         plugins: [vuetify],
         stubs: {
@@ -164,7 +163,6 @@ describe("NodeEditPage", () => {
         },
       },
     });
-    await flushPromises();
 
     await wrapper.find("form").trigger("submit");
     expect(mockSaveNode).toHaveBeenCalled();
@@ -176,7 +174,7 @@ describe("NodeEditPage", () => {
       { richNode: { id: "1", name: "Associated Node" }, type: "employed" },
     ];
 
-    const wrapper = mountAsync(NodeEditPage, {
+    const wrapper = await mountSuspended(NodeEditPage, {
       global: {
         plugins: [vuetify],
         stubs: {
@@ -187,7 +185,6 @@ describe("NodeEditPage", () => {
         },
       },
     });
-    await flushPromises();
 
     expect(wrapper.text()).toContain("Powiązania");
     expect(wrapper.text()).toContain("Associated Node");
@@ -197,7 +194,7 @@ describe("NodeEditPage", () => {
     mockState.isNew.value = false;
     mockState.pickerTarget.value = { id: "target-id" };
 
-    const wrapper = mountAsync(NodeEditPage, {
+    const wrapper = await mountSuspended(NodeEditPage, {
       global: {
         plugins: [vuetify],
         stubs: {
@@ -208,7 +205,6 @@ describe("NodeEditPage", () => {
         },
       },
     });
-    await flushPromises();
 
     // Find the buttons
     const buttons = wrapper.findAll(".v-btn");
@@ -226,7 +222,7 @@ describe("NodeEditPage", () => {
 
   it("cancel button links to home when creating new node", async () => {
     mockState.isNew.value = true;
-    const wrapper = mountAsync(NodeEditPage, {
+    const wrapper = await mountSuspended(NodeEditPage, {
       global: {
         plugins: [vuetify],
         stubs: {
@@ -237,7 +233,6 @@ describe("NodeEditPage", () => {
         },
       },
     });
-    await flushPromises();
 
     const buttons = wrapper.findAllComponents(components.VBtn);
     const cancelBtn = buttons.find((b) => b.text().includes("Anuluj"));
@@ -250,7 +245,7 @@ describe("NodeEditPage", () => {
     mockState.current.value.type = "person";
     mockState.node_id.value = "123";
 
-    const wrapper = mountAsync(NodeEditPage, {
+    const wrapper = await mountSuspended(NodeEditPage, {
       global: {
         plugins: [vuetify],
         stubs: {
@@ -261,11 +256,27 @@ describe("NodeEditPage", () => {
         },
       },
     });
-    await flushPromises();
 
     const buttons = wrapper.findAllComponents(components.VBtn);
     const cancelBtn = buttons.find((b) => b.text().includes("Anuluj"));
     expect(cancelBtn).toBeDefined();
     expect(cancelBtn?.props("to")).toBe("/entity/person/123");
+  });
+
+  it("redirects to entity page if node is a region", async () => {
+    mockState.isNew.value = false;
+    mockState.current.value.type = "region";
+    mockState.node_id.value = "123";
+
+    await mountSuspended(NodeEditPage, {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          EntityPicker: true,
+        },
+      },
+    });
+
+    expect(mockRouterReplace).toHaveBeenCalledWith("/entity/region/123");
   });
 });

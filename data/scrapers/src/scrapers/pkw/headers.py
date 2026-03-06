@@ -2,9 +2,9 @@ import typing
 from dataclasses import dataclass
 from typing import Any, Never
 
+from scrapers.map.teryt import Teryt
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.okregi import voting_district_to_city
-from scrapers.teryt import Teryt
 
 
 @dataclass

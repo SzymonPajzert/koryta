@@ -2,7 +2,7 @@ import json
 
 import pandas as pd
 
-from analysis.extract import Extract
+from analysis.extract import FormatCSV
 from scrapers.stores import Pipeline
 from scrapers.tests.mocks import get_test_context, setup_test_context
 
@@ -60,11 +60,13 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000001"}],
+            "elections": [],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
             "employed_start": "2020-01-01",
             "employed_end": "2021-01-01",  # Mock extra fields
+            "rejestrio_id": "1",
         },
         {
             "krs_name": "Person2",
@@ -76,9 +78,11 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000002"}],
+            "elections": [],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
+            "rejestrio_id": "2",
         },
         {
             "krs_name": "Person3",
@@ -90,9 +94,11 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000003"}],
+            "elections": [],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
+            "rejestrio_id": "3",
         },
         {
             "krs_name": "Person4",
@@ -104,9 +110,11 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000004"}],
+            "elections": [],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
+            "rejestrio_id": "4",
         },
         {
             "krs_name": "Person5",
@@ -118,9 +126,11 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000099"}],
+            "elections": [],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
+            "rejestrio_id": "5",
         },
     ]
 
@@ -137,7 +147,8 @@ def test_extract_by_krs():
     )
 
     # 2. Initialize Extract pipeline
-    extract = Pipeline.create(Extract)
+    format = Pipeline.create(FormatCSV)
+    extract = format.extract
 
     # Mock dependencies to prevent full pipeline execution
     extract.people = Pipeline.create(type(extract.people))
@@ -145,7 +156,14 @@ def test_extract_by_krs():
 
     extract.companies = Pipeline.create(type(extract.companies))
     # CompaniesKRS returns a DataFrame where each row is a company dict
+    # CompaniesKRS returns a DataFrame where each row is a company dict
     extract.companies.read_or_process = lambda ctx: pd.DataFrame(companies_data)
+
+    extract.teryt = Pipeline.create(type(extract.teryt))
+    extract.teryt.read_or_process = lambda ctx: None
+
+    extract.hardcoded_people = Pipeline.create(type(extract.hardcoded_people))
+    extract.hardcoded_people.read_or_process = lambda ctx: pd.DataFrame({"id": []})
 
     # 3. Inject args
     class MockArgs:
@@ -155,7 +173,7 @@ def test_extract_by_krs():
     extract.args = MockArgs()
 
     # 4. Run Process
-    result_df = extract.process(ctx)
+    result_df = format.process(ctx)
 
     # 5. Verify Results
     assert len(result_df) == 4  # P1, P2, P3, P4

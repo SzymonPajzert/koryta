@@ -1,1 +1,0 @@
-- https://www.dziennikwschodni.pl/polityka/nasze-tluste-koty,n,1000292595.html

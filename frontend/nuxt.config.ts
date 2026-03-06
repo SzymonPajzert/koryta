@@ -70,12 +70,12 @@ export default defineNuxtConfig({
     "@nuxt/content", // TODO what do I need it for '@nuxt/icon',
     // TODO what do I need it for '@nuxt/image',
     // TODO what do I need it for '@nuxt/scripts',
-    "@nuxt/test-utils",
     "@nuxt/fonts",
     "@nuxt/eslint",
     "nuxt-vuefire",
     "vuetify-nuxt-module",
     "@sentry/nuxt/module",
+    "@nuxt/test-utils/module",
   ],
 
   eslint: {
@@ -94,9 +94,9 @@ export default defineNuxtConfig({
   vuetify: {
     vuetifyOptions: {
       theme: {
-        defaultTheme: "dark",
+        defaultTheme: "light",
         themes: {
-          dark: {
+          light: {
             colors: {
               primary: "#a8c79f",
               secondary: "#fad3d0",
@@ -179,5 +179,8 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: "firebase_app_hosting", // or 'firebase-functions'
+  },
+  devServer: {
+    host: "127.0.0.1",
   },
 });

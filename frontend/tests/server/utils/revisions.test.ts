@@ -39,7 +39,7 @@ describe("createRevisionTransaction", () => {
     const targetRef = { id: "node-1" } as DocumentReference;
     const data = { title: "New Title" };
 
-    createRevisionTransaction(mockDb, mockBatch, user, targetRef, data, false);
+    createRevisionTransaction(mockDb, mockBatch, user, targetRef, data);
 
     // Should create revision
     expect(mockCollection).toHaveBeenCalledWith("revisions");
@@ -49,31 +49,6 @@ describe("createRevisionTransaction", () => {
     expect(firstCallArgs[1]).toMatchObject({
       node_id: "node-1",
       data: data,
-      update_user: "test-user",
-    });
-  });
-
-  it("should create a revision AND update head when updateHead=true", () => {
-    const user = { uid: "test-user" };
-    const targetRef = { id: "node-1" } as DocumentReference;
-    const data = { title: "New Title" };
-
-    createRevisionTransaction(mockDb, mockBatch, user, targetRef, data, true);
-
-    expect(mockBatch.set).toHaveBeenCalledTimes(2);
-
-    // Revision set
-    const revCall = vi.mocked(mockBatch.set).mock.calls[0];
-    expect(revCall[1]).toMatchObject({
-      node_id: "node-1",
-    });
-
-    // Node update set
-    const nodeCall = vi.mocked(mockBatch.set).mock.calls[1];
-    expect(nodeCall[0]).toBe(targetRef);
-    expect(nodeCall[1]).toMatchObject({
-      ...data,
-      revision_id: null,
       update_user: "test-user",
     });
   });

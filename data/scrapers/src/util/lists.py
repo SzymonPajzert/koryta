@@ -193,36 +193,3 @@ blockers = {
     "crawler": True,
     "wiki extracting people": True,
 }
-
-# Whenever we encounter an interesting person, we have a space to put notes about them
-# and exclude them from our failing tests.
-# The goal is to get to zero test failures, either through
-#  - solving the problems
-#  - idenfitying issues with them and putthing them here
-# Open logseq in data/leads to see the content of these files
-
-
-# TODO reenable it
-# def ignore_failures(ctx: Context) -> set[str]:
-#     result = set()
-
-#     # TODO fail the test if it's ingored but it's actually passing
-
-#     def get_blockers(content):
-#         for line in content.split("\n"):
-#             if "blocked" in line:
-#                 yield line.split(":: ")
-
-#     # TODO implement the functionality
-#     # path_format = os.path.join(os.path.dirname(PROJECT_ROOT), "leads/pages/*.md")
-#     # for file in glob.glob(path_format):
-#     for file in ctx.conductor.list_files("~/leads/pages/*.md"):
-#         person = file.split("/")[-1].replace(".md", "")
-#         with open(file, "r") as f:
-#             content = f.read()
-#             print(content)
-#             for f in get_blockers(content):
-#                 if blockers[f[1]]:
-#                     result.add(person)
-
-#     return result

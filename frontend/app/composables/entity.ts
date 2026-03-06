@@ -1,6 +1,7 @@
 import type { NodeTypeMap, NodeType } from "~~/shared/model";
 
 import { useAuthState } from "@/composables/auth";
+import { useEntityFiltering } from "./useEntityFiltering";
 
 export function useEntity<N extends NodeType>(nodeType: N) {
   const { authFetch } = useAuthState();
@@ -8,7 +9,9 @@ export function useEntity<N extends NodeType>(nodeType: N) {
   const { data: response } = authFetch<{
     entities: Record<string, NodeTypeMap[N]>;
   }>(`/api/nodes/${nodeType}`);
-  const entities = computed(() => response?.value?.entities ?? {});
+
+  const entitiesRaw = computed(() => response?.value?.entities ?? {});
+  const entities = useEntityFiltering(entitiesRaw);
 
   function submit<N extends NodeType>(
     _value: Partial<NodeTypeMap[N]>,

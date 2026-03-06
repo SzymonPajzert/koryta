@@ -22,7 +22,7 @@ describe("API /api/person/bulk_create", () => {
             const getAllRequest = objectStore.getAll();
             getAllRequest.onsuccess = () => {
               const users = getAllRequest.result;
-              if (users && users.length > 0) {
+              if (users.length > 0) {
                 const user = users[0].value || users[0];
                 resolve(user.stsTokenManager?.accessToken);
               } else {
@@ -67,6 +67,15 @@ describe("API /api/person/bulk_create", () => {
           url: articleUrl,
         },
       ],
+      elections: [
+        {
+          teryt: "22",
+          election_type: "Sejmik",
+          party: "Test Party",
+          election_year: "2023",
+          votes: 1234,
+        },
+      ],
     };
 
     // 1. Create Person
@@ -84,17 +93,22 @@ describe("API /api/person/bulk_create", () => {
 
       // Verify Companies response
       expect(resp.body.companies).to.be.an("array").that.has.length(1);
-      expect(resp.body.companies[0].companyId).to.be.a("string");
+      expect(resp.body.companies[0].nodeId).to.be.a("string");
       expect(resp.body.companies[0].created).to.eq(true);
 
       // Verify Articles response
       expect(resp.body.articles).to.be.an("array").that.has.length(1);
-      expect(resp.body.articles[0].articleId).to.be.a("string");
+      expect(resp.body.articles[0].nodeId).to.be.a("string");
       expect(resp.body.articles[0].created).to.eq(true);
 
+      // Verify Elections response
+      expect(resp.body.elections).to.be.an("array").that.has.length(1);
+      expect(resp.body.elections[0].nodeId).to.be.a("string");
+
       const personId = resp.body.personId;
-      const companyId = resp.body.companies[0].companyId;
-      const articleId = resp.body.articles[0].articleId;
+      const companyId = resp.body.companies[0].nodeId;
+      const articleId = resp.body.articles[0].nodeId;
+      const regionId = resp.body.elections[0].nodeId;
 
       // 2. Verify Person Created via GET API
       cy.request({
@@ -132,6 +146,16 @@ describe("API /api/person/bulk_create", () => {
             e.source === personId && e.target === articleId,
         );
         cy.wrap(articleEdge).should("exist", "Should find edge to article");
+
+        // Verify Election Edge
+        const electionEdge = edges.find(
+          (e: { source: string; target: string; type: string }) =>
+            e.source === personId &&
+            e.target === regionId &&
+            e.type === "election",
+        );
+        cy.wrap(electionEdge).should("exist", "Should find edge to region");
+        expect(electionEdge.label).to.eq("kandydatura");
       });
 
       // 4. Verify Nodes are visible in /api/nodes list
@@ -169,10 +193,10 @@ describe("API /api/person/bulk_create", () => {
           "Should return same ID for existing person",
         );
         // Verify duplicate companies/articles return created: false
-        expect(resp2.body.companies[0].companyId).to.eq(companyId);
+        expect(resp2.body.companies[0].nodeId).to.eq(companyId);
         expect(resp2.body.companies[0].created).to.eq(false);
 
-        expect(resp2.body.articles[0].articleId).to.eq(articleId);
+        expect(resp2.body.articles[0].nodeId).to.eq(articleId);
         expect(resp2.body.articles[0].created).to.eq(false);
       });
     });

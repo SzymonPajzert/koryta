@@ -6,6 +6,7 @@ type PageBase<PageType> = {
   votes?: Votes;
   deleted?: boolean;
   delete_reason?: string;
+  visibility?: boolean;
 };
 
 export type VoteCategory = "interesting" | "quality";
@@ -38,7 +39,25 @@ export interface Edge extends PageBase<EdgeType> {
   start_date?: string;
   end_date?: string;
   references?: string[];
+  party?: string;
+  committee?: string;
+  position?: ElectionPosition;
+  elected?: boolean;
+  term?: string;
+  by_election?: boolean;
 }
+
+export type ElectionPosition =
+  | "Sejmik"
+  | "Rada miasta"
+  | "Rada gminy"
+  | "Rada powiatu"
+  | "Burmistrz"
+  | "Wójt"
+  | "Prezydent"
+  | "Sejm"
+  | "Senat"
+  | "Parlament Europejski";
 
 export function pageIsPublic(node: { revision_id?: string }) {
   return !!node.revision_id;
@@ -51,7 +70,8 @@ export type EdgeType =
   | "connection"
   | "mentions"
   | "owns"
-  | "comment";
+  | "comment"
+  | "election";
 
 export const nodeTypeIcon: Record<NodeType, string> = {
   person: "mdi-account-outline",
@@ -74,9 +94,11 @@ export interface Person {
   type: "person";
   parties?: string[];
   content?: string;
+  birthDate?: string;
   wikipedia?: string;
   rejestrIo?: string;
   votes?: Votes;
+  visibility?: boolean;
 }
 
 export interface Company {
@@ -85,6 +107,7 @@ export interface Company {
   krsNumber?: string;
   content?: string;
   votes?: Votes;
+  visibility?: boolean;
 }
 
 export interface Article {
@@ -94,6 +117,7 @@ export interface Article {
   shortName?: string;
   content?: string;
   votes?: Votes;
+  visibility?: boolean;
 }
 
 export interface Region {
@@ -102,6 +126,7 @@ export interface Region {
   teryt: string;
   content?: string;
   votes?: Votes;
+  visibility?: boolean;
 }
 
 export interface NodeTypeMap {

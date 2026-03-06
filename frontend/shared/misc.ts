@@ -1,4 +1,4 @@
-import type { Article } from "./model";
+import type { Article, ElectionPosition } from "./model";
 
 export const parties = [
   "PO",
@@ -19,6 +19,21 @@ export const partyColors: Record<string, string> = {
   Konfederacja: "#102440",
   Razem: "#871057",
 };
+
+export const electionPositions: ElectionPosition[] = [
+  "Sejmik",
+  "Rada miasta",
+  "Rada gminy",
+  "Rada powiatu",
+  "Burmistrz",
+  "Wójt",
+  "Prezydent",
+  "Sejm",
+  "Senat",
+  "Parlament Europejski",
+];
+
+export const electionTerms = ["2024-2029", "2018-2024", "2014-2018"];
 
 const breakpoint = /\.|-/;
 

@@ -1,13 +1,25 @@
+import typing
+
 import networkx as nx
 import pandas as pd
 
 from analysis.people_pkw_merged import PeoplePKWMerged
 from analysis.utils import committee_to_party
-from scrapers.stores import Context
+from scrapers.stores import Context, Pipeline
 
 
 def flatten_parties(df):
-    df["person_id"] = df["first_name"] + " " + df["second_name"] + " " + df["last_name"]
+    df["person_id"] = (
+        (
+            df["first_name"].fillna("")
+            + " "
+            + df["second_name"].fillna("")
+            + " "
+            + df["last_name"].fillna("")
+        )
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+    )
 
     print("Flattening parties...")
 
@@ -27,24 +39,66 @@ def flatten_parties(df):
     return flattened
 
 
-def calculate_people_parties(ctx: Context):
-    df = PeoplePKWMerged().read_or_process(ctx)
-    df = flatten_parties(df)
+class PeopleParties(Pipeline):
+    filename = "people_parties"
+    people_pkw_merged: PeoplePKWMerged
 
-    print(df[:10])
+    def read_or_process(self, ctx) -> pd.DataFrame:
+        df = super().read_or_process(ctx)
+        if df is not None and "person_id" in df.columns:
+            df = df.set_index("person_id")
+        return df
 
-    committes_to_parties = pd.DataFrame.from_records(
-        [(committee, party) for committee, party in committee_to_party.items()],
-        columns=["subgroup_id", "group_id"],
-    )
-    print(committes_to_parties[:10])
+    def process(self, ctx: Context):
+        df = self.people_pkw_merged.read_or_process(ctx)
+        df = flatten_parties(df)
 
-    return calculate_ppr_scores(df, committes_to_parties)
+        print(df[:10])
+
+        committes_to_parties = pd.DataFrame.from_records(
+            [(committee, party) for committee, party in committee_to_party.items()],
+            columns=["subgroup_id", "group_id"],
+        )
+        print(committes_to_parties[:10])
+
+        result = calculate_ppr_scores(df, committes_to_parties)
+        print(result[:10])
+        return result
+
+
+class CommitteeParties(Pipeline):
+    filename = "committee_parties"
+    people_pkw_merged: PeoplePKWMerged
+
+    def read_or_process(self, ctx) -> pd.DataFrame:
+        df = super().read_or_process(ctx)
+        if df is not None and "subgroup_id" in df.columns:
+            df = df.set_index("subgroup_id")
+        return df
+
+    def process(self, ctx: Context):
+        df = self.people_pkw_merged.read_or_process(ctx)
+        df = flatten_parties(df)
+
+        print(df[:10])
+
+        committes_to_parties = pd.DataFrame.from_records(
+            [(committee, party) for committee, party in committee_to_party.items()],
+            columns=["subgroup_id", "group_id"],
+        )
+        print(committes_to_parties[:10])
+
+        result = calculate_ppr_scores(
+            df, committes_to_parties, measured_id="subgroup_id"
+        )
+        print(result[:10])
+        return result
 
 
 def calculate_ppr_scores(
     df_people_subgroups: pd.DataFrame,
     df_subgroups_groups: pd.DataFrame,
+    measured_id: typing.Literal["person_id", "subgroup_id"] = "person_id",
     alpha: float = 0.85,
 ):
     """
@@ -91,11 +145,18 @@ def calculate_ppr_scores(
         G.add_edge(person_id, subgroup_id)  # P -> S
 
     # Get unique node lists for filtering later
-    person_nodes = [p_node(pid) for pid in df_people_subgroups["person_id"].unique()]
+    if measured_id == "person_id":
+        measured_nodes = [
+            p_node(pid) for pid in df_people_subgroups["person_id"].unique()
+        ]
+    elif measured_id == "subgroup_id":
+        measured_nodes = [
+            s_node(pid) for pid in df_people_subgroups["subgroup_id"].unique()
+        ]
     group_nodes = [g_node(gid) for gid in df_subgroups_groups["group_id"].unique()]
 
     print(f"Graph built: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges.")
-    print(f"Found {len(person_nodes)} people and {len(group_nodes)} groups.")
+    print(f"Found {len(measured_nodes)} measured nodes and {len(group_nodes)} groups.")
 
     # 3. Run Personalized PageRank for each group
     all_scores = {}
@@ -109,11 +170,13 @@ def calculate_ppr_scores(
         personalization[group_node] = 1
 
         # Run PageRank
-        ppr_scores = nx.pagerank(G, alpha=alpha, personalization=personalization)
+        ppr_scores = nx.pagerank(
+            G, alpha=alpha, personalization=personalization, nstart=personalization
+        )
 
-        # 4. Extract scores for *person* nodes only
+        # 4. Extract scores for *measured* nodes only
         group_results = {}
-        for p_id in person_nodes:
+        for p_id in measured_nodes:
             # .get(p_id, 0) ensures a score of 0 if a person is
             # in a completely disconnected part of the graph
             group_results[p_id] = ppr_scores.get(p_id, 0)
@@ -126,20 +189,53 @@ def calculate_ppr_scores(
     # Create the (Person x Group) score matrix
     df_scores = pd.DataFrame(all_scores)
 
-    # Zero out small scores (noise from PageRank on disconnected components)
-    df_scores[df_scores < 1e-5] = 0
-
     # Clean up the index and column names (remove 'p_' and 'g_')
     df_scores.index = df_scores.index.map(lambda x: x[2:])
     df_scores.columns = df_scores.columns.map(lambda x: x[2:])
-    df_scores.index.name = "person_id"
+    df_scores.index.name = measured_id
     df_scores.columns.name = "group_id"
 
     # Normalize each *row* (person) to sum to 1 and avoid division by 0
+    average_row = df_scores.sum().sum() / len(df_scores[df_scores.sum(axis=1) > 0])
     row_sums = df_scores.sum(axis=1)
     row_sums[row_sums == 0] = 1
+    row_sums[row_sums < average_row] = average_row
 
     df_scores_normalized = df_scores.div(row_sums, axis=0)
+    df_scores_normalized["original_sum"] = df_scores.sum(axis=1)
+    df_scores_normalized = df_scores_normalized.reset_index()
 
     print("Done.")
     return df_scores_normalized
+
+
+def search_person(query, scores_df):
+    # Split query into words to allow matching names with middle names
+    query_words = query.lower().split()
+
+    if not query_words:
+        print("Please provide a search query.")
+        return []
+
+    # Get names depending on if it's an index or column
+    if "person_id" in scores_df.columns:
+        names = scores_df["person_id"].dropna().tolist()
+    else:
+        names = scores_df.index.dropna().tolist()
+
+    # Find all matches where ALL query words are present in the name
+    matches = [name for name in names if all(word in name for word in query_words)]
+
+    if not matches:
+        print(f"No matches found for '{query}'.")
+        # Try matching any of the words as a fallback
+        fallback_matches = [
+            name for name in names if any(word in name for word in query_words)
+        ]
+        if fallback_matches:
+            print(
+                f"Did you mean someone from these partial matches? {fallback_matches[:10]}"
+            )
+        return []
+
+    return matches

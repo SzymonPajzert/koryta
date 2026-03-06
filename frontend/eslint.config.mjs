@@ -22,15 +22,16 @@ export default withNuxt(
     },
     rules: {
       "vue/no-multiple-template-root": "off",
-      "vue/no-mutating-props": "off", // TODO enable it again
+      "vue/no-mutating-props": "error",
       "@typescript-eslint/no-explicit-any": "warn",
+      "vue/html-self-closing": "off",
     },
   },
 )
   .append({
     files: ["**/*.ts", "**/*.vue"],
     rules: {
-      "@typescript-eslint/no-unnecessary-condition": "warn",
+      "@typescript-eslint/no-unnecessary-condition": "error",
     },
   })
   .append({

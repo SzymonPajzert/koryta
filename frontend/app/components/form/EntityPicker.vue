@@ -1,3 +1,4 @@
+```
 <template>
   <v-autocomplete
     v-model="model"
@@ -7,19 +8,16 @@
     :items="entitiesList"
     item-title="name"
     item-value="id"
-    required
-    return-object
     autocomplete="off"
-    v-bind="{
-      ...$attrs,
-      'data-testid': $attrs['data-testid'] || 'entity-picker-input',
-    }"
+    v-bind="$attrs"
+    return-object
+    required
     @update:focused="(val: boolean) => val && refresh()"
   >
     <template #no-data>
       <v-list-item
         v-if="search"
-        data-testid="add-new-entity"
+        data-testid="entity-picker-add-new-entity"
         @click="addNewItem"
       >
         <v-list-item-title>
@@ -33,6 +31,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import { useEntityFiltering } from "@/composables/useEntityFiltering";
 
 import type { NodeType, Link, Person, Company, Article } from "~~/shared/model";
 
@@ -43,25 +42,26 @@ defineOptions({
 const props = defineProps<{
   label?: string;
   hint?: string;
-  // which entity type to use to lookup suggested values to bind to this field
-  // e.g. employed, company
   entity: NodeType;
 }>();
 
-const model = defineModel<Link<typeof props.entity>>();
+const model = defineModel<Link<NodeType> | undefined>();
 
 const search = ref("");
 
 const { authFetch } = useAuthState();
 
-const { data: response, refresh } = await authFetch<{
+const { data: response, refresh } = authFetch<{
   entities: Record<string, Person | Company | Article>;
 }>(`/api/nodes/${props.entity}`, {
   lazy: true,
 });
 
+const entities = computed(() => response.value?.entities);
+const filteredEntities = useEntityFiltering(entities);
+
 const entitiesList = computed(() => {
-  const ents = response.value?.entities ?? {};
+  const ents = filteredEntities.value ?? {};
   const list = Object.entries(ents).map(([key, value]) => ({
     type: props.entity,
     id: key,

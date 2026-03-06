@@ -2,7 +2,13 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
-import type { Edge, Article, Company, Person } from "~~/shared/model";
+import type {
+  Edge,
+  Article,
+  Company,
+  Person,
+  ElectionPosition,
+} from "~~/shared/model";
 
 type CompanyRequest = {
   name: string;
@@ -16,6 +22,13 @@ type ArticleRequest = {
   url: string;
 };
 
+type ElectionRequest = {
+  party?: string;
+  election_year?: string;
+  election_type: ElectionPosition;
+  teryt?: string;
+};
+
 type Request = {
   name: string;
   content?: string;
@@ -23,6 +36,14 @@ type Request = {
   rejestrIo?: string;
   companies?: Array<CompanyRequest>;
   articles?: Array<ArticleRequest>;
+  elections?: Array<ElectionRequest>;
+};
+
+type EntityResult = {
+  nodeId: string;
+  created: boolean;
+  edgeId?: string;
+  krs?: string;
 };
 
 export default defineEventHandler(async (event) => {
@@ -31,7 +52,7 @@ export default defineEventHandler(async (event) => {
   const db = getFirestore(getApp(), "koryta-pl");
 
   // TODO do some checking of the body format - zod should be used here?
-  if (!bodyUntyped.name) badRequest("Missing required person name");
+  if (!bodyUntyped.name) throw badRequest("Missing required person name");
   const body: Request = bodyUntyped;
   const batch = db.batch();
 
@@ -39,60 +60,74 @@ export default defineEventHandler(async (event) => {
   if (!personId) {
     const personRef = db.collection("nodes").doc();
     personId = personRef.id;
-    const revisionData: Person = {
-      name: body.name,
-      type: "person",
-    };
-    if (body.content) revisionData.content = body.content;
-    if (body.wikipedia) revisionData.wikipedia = body.wikipedia;
-    if (body.rejestrIo) revisionData.rejestrIo = body.rejestrIo;
-
-    createRevisionTransaction(db, batch, user, personRef, revisionData);
+    const personData = createPerson(body);
+    batch.set(personRef, personData);
+    createRevisionTransaction(db, batch, user, personRef, personData);
   }
 
   // Track results
-  const companiesResult: { companyId: string; created: boolean }[] = [];
-  const articlesResult: { articleId: string; created: boolean }[] = [];
+  const companiesResult: EntityResult[] = [];
+  const articlesResult: EntityResult[] = [];
+  const electionsResult: EntityResult[] = [];
 
-  // Process Companies
-  if (body.companies) {
-    if (!Array.isArray(body.companies)) {
-      badRequest("Companies must be an array");
-    }
-    for (const [i, company] of body.companies.entries()) {
-      if (!company.name) badRequest(`Company [${i}] must have a name`);
-      const result = await createCompany(db, batch, user, personId, company);
-      companiesResult.push({ companyId: result[0], created: result[1] });
-    }
+  for (const company of assertArray(body.companies, "companies")) {
+    companiesResult.push(
+      await createCompany(db, batch, user, personId, company),
+    );
   }
-
-  // Process Articles
-  if (body.articles) {
-    if (!Array.isArray(body.articles)) {
-      badRequest("Articles must be an array");
-    }
-    for (const [i, article] of body.articles.entries()) {
-      if (!article.url) badRequest(`Article [${i}] must have a URL`);
-      const result = await createArticle(db, batch, user, personId, article);
-      articlesResult.push({ articleId: result[0], created: result[1] });
-    }
+  for (const article of assertArray(body.articles, "articles")) {
+    articlesResult.push(
+      await createArticle(db, batch, user, personId, article),
+    );
+  }
+  for (const election of assertArray(body.elections, "elections")) {
+    const result = await createElection(db, batch, user, personId, election);
+    if (!result) continue; // TODO handle missing teryt for sejm etc.
+    electionsResult.push(result);
   }
 
   await batch.commit();
+
+  // Invalidate cache
+  await useStorage("cache").clear("nitro:handlers");
+  console.log("Invalidated cache");
 
   return {
     personId,
     companies: companiesResult,
     articles: articlesResult,
+    elections: electionsResult,
     status: "ok",
   };
 });
 
+function assertArray<T>(vs: T[] | undefined, field: string) {
+  if (!vs) {
+    return [];
+  }
+  if (!Array.isArray(vs)) {
+    throw badRequest(`${field} must be an array`);
+  }
+  return vs;
+}
+
 function badRequest(message: string) {
-  throw createError({
+  return createError({
     statusCode: 400,
     message: message,
   });
+}
+
+function createPerson(body: Partial<Person>): Person {
+  if (!body.name) throw badRequest("Missing required person name");
+  const person: Person = {
+    name: body.name,
+    type: "person",
+  };
+  if (body.content) person.content = body.content;
+  if (body.wikipedia) person.wikipedia = body.wikipedia;
+  if (body.rejestrIo) person.rejestrIo = body.rejestrIo;
+  return person;
 }
 
 async function createCompany(
@@ -101,7 +136,9 @@ async function createCompany(
   user: { uid: string },
   personId: string,
   company: CompanyRequest,
-): Promise<[string, boolean]> {
+): Promise<EntityResult> {
+  if (!company.krs) throw badRequest(`Company must have a KRS`);
+
   let companyId: string | undefined = undefined;
   if (company.krs) companyId = await lookupNode(db, "krs", company.krs);
   if (!companyId) companyId = await lookupNode(db, "name", company.name);
@@ -115,7 +152,7 @@ async function createCompany(
       type: "place",
     };
     if (company.krs) revisionData.krsNumber = company.krs;
-
+    batch.set(companyRef, revisionData);
     createRevisionTransaction(db, batch, user, companyRef, revisionData);
     created = true;
   }
@@ -129,8 +166,14 @@ async function createCompany(
   if (company.start) edgeData.start_date = company.start;
   if (company.end) edgeData.end_date = company.end;
 
-  await findEdgeOrCreate(db, batch, user, edgeData);
-  return [companyId, created];
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+
+  return {
+    nodeId: companyId,
+    krs: company.krs,
+    created,
+    edgeId,
+  };
 }
 
 async function createArticle(
@@ -139,7 +182,9 @@ async function createArticle(
   user: { uid: string },
   personId: string,
   article: ArticleRequest,
-): Promise<[string, boolean]> {
+): Promise<EntityResult> {
+  if (!article.url) throw badRequest(`Article must have a URL`);
+
   let articleId: string | undefined = undefined;
   articleId = await lookupNode(db, "sourceURL", article.url);
 
@@ -152,6 +197,7 @@ async function createArticle(
       type: "article",
       sourceURL: article.url,
     };
+    batch.set(articleRef, revisionData);
     createRevisionTransaction(db, batch, user, articleRef, revisionData);
     created = true;
   }
@@ -162,8 +208,49 @@ async function createArticle(
     target: articleId,
     type: "mentions",
   };
-  await findEdgeOrCreate(db, batch, user, edgeData);
-  return [articleId, created];
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+
+  return {
+    nodeId: articleId,
+    created,
+    edgeId,
+  };
+}
+
+async function createElection(
+  db: FirebaseFirestore.Firestore,
+  batch: FirebaseFirestore.WriteBatch,
+  user: { uid: string },
+  personId: string,
+  election: ElectionRequest,
+): Promise<EntityResult | undefined> {
+  let regionId: string | undefined = undefined;
+  if (!election.teryt) {
+    console.error("Election without teryt");
+    return undefined;
+  }
+  regionId = await lookupNode(db, "teryt", election.teryt);
+
+  if (!regionId) throw new Error("Region not found");
+
+  const edgeData: Edge = {
+    source: personId,
+    target: regionId,
+    type: "election",
+    name: "kandydatura",
+  };
+  if (election.party) edgeData.party = election.party;
+  if (election.election_year) {
+    edgeData.start_date = `${election.election_year}-01-01`;
+  }
+
+  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  if (!edgeId) throw new Error("Failed to create edge");
+  return {
+    nodeId: regionId,
+    edgeId,
+    created: false,
+  };
 }
 
 async function lookupNode(
@@ -197,6 +284,7 @@ async function findEdgeOrCreate(
 
   if (edgeSnap.empty) {
     const edgeRef = db.collection("edges").doc();
+    batch.set(edgeRef, edge);
     createRevisionTransaction(db, batch, user, edgeRef, edge);
     return edgeRef.id;
   }

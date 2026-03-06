@@ -1,9 +1,9 @@
-import type { Node, Edge } from "~~/shared/model";
+import type { Node, Edge, EdgeType, ElectionPosition } from "~~/shared/model";
 import type { TraversePolicy } from "~~/shared/graph/model";
 
 export type EdgeNode = {
   richNode: Node;
-  type: "employed" | "connection" | "mentions" | "owns" | "comment";
+  type: EdgeType;
   label: string;
   source: string;
   target: string;
@@ -11,6 +11,12 @@ export type EdgeNode = {
   traverse?: TraversePolicy;
   start_date?: string;
   end_date?: string;
+  party?: string;
+  committee?: string;
+  position?: ElectionPosition;
+  elected?: boolean;
+  term?: string;
+  by_election?: boolean;
 };
 
 const edgeTypeLabels: Record<string, string> = {
@@ -19,6 +25,7 @@ const edgeTypeLabels: Record<string, string> = {
   connection: "Powiązanie z",
   mentions: "Wspomina o",
   comment: "Komentarz",
+  election: "Kandydował/a w",
 };
 
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {

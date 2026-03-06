@@ -18,7 +18,10 @@ Sentry.init({
   replaysOnErrorSampleRate: 1.0,
 
   // If you don't want to use Session Replay, just remove the line below:
-  integrations: [Sentry.replayIntegration()],
+  integrations: [
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    Sentry.replayIntegration ? Sentry.replayIntegration() : undefined,
+  ].filter(Boolean) as any,
 
   // Enable logs to be sent to Sentry
   enableLogs: true,

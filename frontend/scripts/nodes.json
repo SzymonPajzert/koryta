@@ -56,6 +56,42 @@
     "sourceURL": "http://lone-article.com",
     "revision_id": "rev8"
   },
+  "a1": {
+    "name": "Artykuł placeholder 1",
+    "type": "article",
+    "sourceURL": "http://example1.com",
+    "revision_id": "a1"
+  },
+  "a2": {
+    "name": "Artykuł placeholder 2",
+    "type": "article",
+    "sourceURL": "http://example2.com",
+    "revision_id": "a2"
+  },
+  "a3": {
+    "name": "Artykuł placeholder 3",
+    "type": "article",
+    "sourceURL": "http://example3.com",
+    "revision_id": "a3"
+  },
+  "a4": {
+    "name": "Artykuł placeholder 4",
+    "type": "article",
+    "sourceURL": "http://example4.com",
+    "revision_id": "a4"
+  },
+  "a5": {
+    "name": "Artykuł placeholder 5",
+    "type": "article",
+    "sourceURL": "http://example5.com",
+    "revision_id": "a5"
+  },
+  "a6": {
+    "name": "Artykuł placeholder 6",
+    "type": "article",
+    "sourceURL": "http://example6.com",
+    "revision_id": "a6"
+  },
   "teryt22": {
     "name": "Województwo Pomorskie",
     "type": "region",

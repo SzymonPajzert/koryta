@@ -1,5 +1,0 @@
-- TODO Show [[backlinks]] for #entity/task
-- [[dane/artykuły]] - models
--
-- TODO Have a good place to just dump them - [[article dump]]
-	- E.g. https://radomszczanska.pl/autor/andrzej-andrysiak-u204202
