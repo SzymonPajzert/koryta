@@ -38,7 +38,9 @@ def test_calculate_ppr_scores():
 
     df_subgroups_groups = pd.DataFrame({"subgroup_id": ["S1"], "group_id": ["G1"]})
 
-    scores = calculate_ppr_scores(df_people_subgroups, df_subgroups_groups, alpha=0.85)
+    scores = calculate_ppr_scores(
+        df_people_subgroups, df_subgroups_groups, alpha=0.85, normalize_rows=False
+    )
 
     assert isinstance(scores, pd.DataFrame)
     assert "G1" in scores.columns
