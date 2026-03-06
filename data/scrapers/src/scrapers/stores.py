@@ -525,7 +525,7 @@ class Pipeline:
 
         if df is None:
             last_written = dumper.get_last_written()
-            if last_written:
+            if isinstance(last_written, tuple) and len(last_written) == 2:
                 name, data = last_written
                 print(f"Recovered {name} from dumper")
                 df = pd.DataFrame.from_records([asdict(i) for i in data])

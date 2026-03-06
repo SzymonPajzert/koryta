@@ -84,8 +84,10 @@ def process_url(
 
         soup = BeautifulSoup(response.text, "html.parser")
         for link in soup.find_all("a", href=True):
+            if not isinstance(link, Tag):
+                continue
             href = link.get("href")
-            if not href:
+            if not isinstance(href, str):
                 continue
             if any(
                 href.startswith(prefix) for prefix in ["javascript:", "mailto:", "tel:"]
@@ -134,7 +136,7 @@ def crawl(
         db.mark_done(uid, storage_path)
         if new_links:
             now = datetime.now(warsaw_tz)
-            rows_to_insert = []
+            rows_to_insert: list[tuple] = []
             for link_url in new_links:
                 link_url = ensure_url_format(link_url)
                 score = score_fn(link_url)
