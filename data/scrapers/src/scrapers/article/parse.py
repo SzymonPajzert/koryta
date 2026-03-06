@@ -5,7 +5,7 @@ from datetime import date, datetime
 from typing import Any, Dict, Optional
 
 import dateparser
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 
 def _parse_polish_date(date_string: str) -> Optional[date]:
@@ -72,7 +72,11 @@ def _find_main_content_element(soup: BeautifulSoup) -> Optional[Any]:
     if tight_candidates:
         main_content_element = _pick_longest(tight_candidates)
         subtitle = soup.find("div", class_="article__subtitle")
-        if subtitle and "article__content" in (main_content_element.get("class") or []):
+        if (
+            isinstance(subtitle, Tag)
+            and isinstance(main_content_element, Tag)
+            and "article__content" in (main_content_element.get("class") or [])
+        ):
             return _combine_elements(soup, subtitle, main_content_element)
         return main_content_element
 
@@ -166,7 +170,25 @@ def _clean_main_content_element(main_content_element: Any) -> str:
 def _extract_article_text(soup: BeautifulSoup) -> str:
     main_content_element = _find_main_content_element(soup)
     if main_content_element:
-        return _clean_main_content_element(main_content_element)
+        text = _clean_main_content_element(main_content_element)
+        if len(text) > 100:
+            return text
+    
+    selectors = [
+        "article",
+        "main",
+        "div#content",
+        "div.content",
+        "div#main",
+        "div.main",
+    ]
+    for selector in selectors:
+        element = soup.select_one(selector)
+        if element:
+            text = _clean_main_content_element(element)
+            if len(text) > 200:
+                return text
+
     return soup.get_text(separator=" ", strip=True)
 
 
@@ -186,11 +208,16 @@ def _trim_trailing_markers(text: str) -> str:
 
 def _extract_title_from_meta(soup: BeautifulSoup) -> Optional[str]:
     og_title = soup.find("meta", property="og:title")
-    if og_title and og_title.get("content"):
-        title = og_title["content"]
+    if isinstance(og_title, Tag) and og_title.get("content"):
+        content = og_title["content"]
+        if isinstance(content, list):
+            content = " ".join(content)
+        title = content
         title = re.sub(
-            r"(\s*[:|—–-]\s*|\s*)\s*(Niezalezna\.pl|RadioZET\.pl|PortalPłock\.pl|oko\.press|polityka\.se\.pl|"
-            r"zpleszewa\.pl|radomszczanska\.pl|Jawny Lublin|Swidnica24\.pl|Swidnica24\.pl - wydarzenia, informacje, rozrywka, kultura, polityka, wywiady, wypadki)\s*$",
+            r"(\s*[:|—–-]\s*|\s*)\s*(Niezalezna\.pl|RadioZET\.pl|PortalPłock\.pl|"
+            r"oko\.press|polityka\.se\.pl|zpleszewa\.pl|radomszczanska\.pl|"
+            r"Jawny Lublin|Swidnica24\.pl|Swidnica24\.pl - wydarzenia, informacje, "
+            r"rozrywka, kultura, polityka, wywiady, wypadki)\s*$",
             "",
             title,
             flags=re.I,
@@ -203,7 +230,11 @@ def _extract_title_from_meta(soup: BeautifulSoup) -> Optional[str]:
 
 def _extract_date_from_ldjson(soup: BeautifulSoup) -> Optional[date]:
     script_ld_json = soup.find("script", type="application/ld+json")
-    if script_ld_json and script_ld_json.string:
+    if (
+        isinstance(script_ld_json, Tag)
+        and script_ld_json.string
+        and isinstance(script_ld_json.string, str)
+    ):
         try:
             json_data = json.loads(script_ld_json.string)
             if isinstance(json_data, list):
@@ -249,8 +280,10 @@ def _extract_date_from_meta_tags(soup: BeautifulSoup) -> Optional[date]:
     )
 
     for tag in meta_date_tags:
+        if not isinstance(tag, Tag):
+            continue
         content = tag.get("content")
-        if content:
+        if isinstance(content, str):
             parsed = _parse_polish_date(content)
             if parsed:
                 return parsed
@@ -259,14 +292,20 @@ def _extract_date_from_meta_tags(soup: BeautifulSoup) -> Optional[date]:
 
 def _extract_date_from_time_tags(soup: BeautifulSoup) -> Optional[date]:
     for tag in soup.find_all("time"):
+        if not isinstance(tag, Tag):
+            continue
         datetime_attr = tag.get("datetime")
-        if tag.string and "ago" not in tag.string.lower():
+        if (
+            tag.string
+            and isinstance(tag.string, str)
+            and "ago" not in tag.string.lower()
+        ):
             parsed_from_string = _parse_polish_date(tag.string)
             current_year = date.today().year
             if parsed_from_string and abs(parsed_from_string.year - current_year) < 20:
                 return parsed_from_string
 
-        if datetime_attr:
+        if isinstance(datetime_attr, str):
             parsed = _parse_polish_date(datetime_attr)
             if parsed:
                 return parsed
@@ -292,6 +331,26 @@ _EMPTY_RESULT: Dict[str, Any] = {
 }
 
 
+def _extract_description_from_ldjson(soup: BeautifulSoup) -> Optional[str]:
+    script_ld_json = soup.find("script", type="application/ld+json")
+    if (
+        isinstance(script_ld_json, Tag)
+        and script_ld_json.string
+        and isinstance(script_ld_json.string, str)
+    ):
+        try:
+            json_data = json.loads(script_ld_json.string)
+            items = json_data if isinstance(json_data, list) else [json_data]
+            for item in items:
+                if isinstance(item, dict) and item.get("@type") == "NewsArticle":
+                    desc = item.get("description")
+                    if isinstance(desc, str) and len(desc) > 40:
+                        return desc.strip()
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
     header = html_bytes[:16]
     if any(header.startswith(sig) for sig in _BINARY_SIGNATURES):
@@ -310,18 +369,22 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
     article_content = _extract_article_text(soup)
 
     # Prepend meta description when it's a short lead not already in content
-    meta_desc = soup.find("meta", attrs={"name": "description"})
-    og_desc = soup.find("meta", property="og:description")
-    desc = None
-    if meta_desc and meta_desc.get("content"):
-        desc = meta_desc["content"].strip()
-    elif og_desc and og_desc.get("content"):
-        desc = og_desc["content"].strip()
+    desc = _extract_description_from_ldjson(soup)
+    if not desc:
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        og_desc = soup.find("meta", property="og:description")
+        if isinstance(meta_desc, Tag) and meta_desc.get("content"):
+            c = meta_desc["content"]
+            desc = c.strip() if isinstance(c, str) else None
+        elif isinstance(og_desc, Tag) and og_desc.get("content"):
+            c = og_desc["content"]
+            desc = c.strip() if isinstance(c, str) else None
+
     if (
         desc
         and len(desc) > 40
         and desc not in article_content
-        and len(article_content) < 2500
+        and len(article_content) < 20000
     ):
         article_content = f"{desc} {article_content}"
 
@@ -334,13 +397,19 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
         article_content = article_content.rstrip() + "  "
 
     og_type = soup.find("meta", property="og:type")
-    has_article_og_type = og_type and og_type.get("content") == "article"
+    has_article_og_type = (
+        isinstance(og_type, Tag) and og_type.get("content") == "article"
+    )
     all_article_tags = soup.find_all("article")
     is_listing_page = len(all_article_tags) > 5
 
     is_schema_article = False
     script_ld_json = soup.find("script", type="application/ld+json")
-    if script_ld_json and script_ld_json.string:
+    if (
+        isinstance(script_ld_json, Tag)
+        and script_ld_json.string
+        and isinstance(script_ld_json.string, str)
+    ):
         try:
             json_data = json.loads(script_ld_json.string)
             if (
