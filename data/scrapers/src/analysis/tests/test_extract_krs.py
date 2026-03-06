@@ -152,17 +152,20 @@ def test_extract_by_krs():
 
     # Mock dependencies to prevent full pipeline execution
     extract.people = Pipeline.create(type(extract.people))
+    extract.dependencies["people"] = extract.people
     extract.people.read_or_process = lambda ctx: pd.DataFrame(people_data)
 
     extract.companies = Pipeline.create(type(extract.companies))
-    # CompaniesKRS returns a DataFrame where each row is a company dict
+    extract.dependencies["companies"] = extract.companies
     # CompaniesKRS returns a DataFrame where each row is a company dict
     extract.companies.read_or_process = lambda ctx: pd.DataFrame(companies_data)
 
     extract.teryt = Pipeline.create(type(extract.teryt))
+    extract.dependencies["teryt"] = extract.teryt
     extract.teryt.read_or_process = lambda ctx: None
 
     extract.hardcoded_people = Pipeline.create(type(extract.hardcoded_people))
+    extract.dependencies["hardcoded_people"] = extract.hardcoded_people
     extract.hardcoded_people.read_or_process = lambda ctx: pd.DataFrame({"id": []})
 
     # 3. Inject args
