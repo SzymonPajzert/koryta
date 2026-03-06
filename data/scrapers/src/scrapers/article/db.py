@@ -68,28 +68,34 @@ class CrawlerDB:
 
                     DO $$ BEGIN
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns \
-                            WHERE table_name='website_index' AND column_name='locked_by_worker_id') THEN
-                            ALTER TABLE website_index ADD COLUMN locked_by_worker_id TEXT;
+                            WHERE table_name='website_index'
+                                AND column_name='locked_by_worker_id') THEN
+                            ALTER TABLE website_index
+                            ADD COLUMN locked_by_worker_id TEXT;
                         END IF;
                     END $$;
 
                     DO $$ BEGIN
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns \
-                            WHERE table_name='website_index' AND column_name='locked_at') THEN
-                            ALTER TABLE website_index ADD COLUMN locked_at TIMESTAMP WITH TIME ZONE;
+                            WHERE table_name='website_index'
+                                AND column_name='locked_at') THEN
+                            ALTER TABLE website_index ADD COLUMN locked_at TIMESTAMP
+                                WITH TIME ZONE;
                         END IF;
                     END $$;
 
                     DO $$ BEGIN
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns \
-                            WHERE table_name='website_index' AND column_name='storage_path') THEN
+                            WHERE table_name='website_index'
+                                AND column_name='storage_path') THEN
                             ALTER TABLE website_index ADD COLUMN storage_path TEXT;
                         END IF;
                     END $$;
 
                     DO $$ BEGIN
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns \
-                            WHERE table_name='website_index' AND column_name='mined_from_url') THEN
+                            WHERE table_name='website_index'
+                                AND column_name='mined_from_url') THEN
                             ALTER TABLE website_index ADD COLUMN mined_from_url TEXT;
                         END IF;
                     END $$;
@@ -99,7 +105,7 @@ class CrawlerDB:
 
                 if urls:
                     now = datetime.now(warsaw_tz)
-                    rows = [
+                    rows: list[tuple] = [
                         (uuid7str(), url, 0, False, [], 0, now, None, None)
                         for url in urls
                     ]

@@ -237,8 +237,7 @@ def search_person(query, scores_df):
             name for name in names if any(word in name for word in query_words)
         ]
         if fallback_matches:
-            msg = f"Did you mean someone from these partial matches? {fallback_matches[:10]}"
-            print(msg)
+            print(f"Found partial matches {fallback_matches[:10]}")
         return []
 
     return matches
