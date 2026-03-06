@@ -285,9 +285,12 @@ class TestPipeline(unittest.TestCase):
 
             # Verify write was called
             self.mock_ctx.io.write_file.assert_called_once()
-            args, _ = self.mock_ctx.io.write_file.call_args
-            # args: (fs, content_callback)
-            self.assertTrue(args[0].filename.endswith(".jsonl"))
+            if self.mock_ctx.io.write_file.called:
+                args, _ = self.mock_ctx.io.write_file.call_args
+                # args: (fs, content_callback)
+                self.assertTrue(args[0].filename.endswith(".jsonl"))
+            else:
+                self.fail("write_file was not called")
 
     def test_deep_dependency_refresh(self):
         """

@@ -1,30 +1,8 @@
-"""Data classes for logging and managing web crawling activities."""
+"""Data classes for web crawling entities."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-
-
-@dataclass
-class HostnameConfig:
-    """Configuration for a specific hostname, determining crawlability."""
-
-    hostname: str
-    allowed: bool
-    quality: str
-
-
-@dataclass
-class RequestLog:
-    """Logs the details of a single HTTP request made by the crawler."""
-
-    id: str
-    website_id: str
-    domain: str
-    url: str
-    time: datetime
-    response_code: int
-    payload_size_bytes: int
-    duration: str
+from typing import List, Optional
 
 
 @dataclass
@@ -33,4 +11,21 @@ class WebsiteIndex:
 
     id: str
     url: str
-    interesting: bool | None
+    priority: int
+    done: bool
+    num_retries: int
+    date_added: datetime
+    errors: List[str] = field(default_factory=list)
+    date_finished: Optional[datetime] = None
+    locked_by_worker_id: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    storage_path: Optional[str] = None
+    mined_from_url: Optional[str] = None
+
+
+@dataclass
+class BlockedDomain:
+    """A domain blocked from crawling."""
+
+    domain: str
+    reason: str = ""

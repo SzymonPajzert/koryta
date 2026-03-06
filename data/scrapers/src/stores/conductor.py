@@ -1,29 +1,15 @@
-import argparse
+"""Conductor: IO implementation and application context factory."""
+
 import io
-import json
 import os
 import typing
 
 import duckdb
-import pandas as pd
 from duckdb.typing import VARCHAR  # type: ignore
 from tqdm import tqdm
-from uuid_extensions import uuid7str as uuid7  # type: ignore
+from uuid_extensions import uuid7str
 
-from analysis.extract import Extract
-from analysis.graph import CommitteeParties, PeopleParties
-from analysis.interesting import CompaniesMerged
-from analysis.payloads import UploadPayloads
-from analysis.people import PeopleEnriched, PeopleMerged
-from analysis.stats import Statistics
 from entities.util import parse_hostname
-from scrapers.koryta.differ import KorytaDiffer
-from scrapers.koryta.download import KorytaPeople
-from scrapers.krs.list import CompaniesKRS, PeopleKRS
-from scrapers.krs.scrape import ScrapeRejestrIO
-from scrapers.map.postal_codes import PostalCodes
-from scrapers.map.teryt import Regions
-from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import (
     IO,
     CloudStorage,
@@ -32,11 +18,8 @@ from scrapers.stores import (
     DownloadableFile,
     File,
     LocalFile,
-    Pipeline,
     ProcessPolicy,
 )
-from scrapers.wiki.process_articles import ProcessWiki
-from scrapers.wiki.process_articles_ner import ProcessWikiNer
 from stores import file
 from stores.config import PROJECT_ROOT
 from stores.download import FileSource
@@ -45,15 +28,22 @@ from stores.firestore import FirestoreIO
 from stores.nlp import NLPImpl
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
+from stores.storage import LocalClient
 from stores.utils import UtilsImpl
 from stores.web import WebImpl
 
 
+def _uuid7() -> str:
+    return uuid7str()
+
+
 class Conductor(IO):
-    def __init__(self, dumper: EntityDumper):
+    def __init__(self, dumper: EntityDumper, storage_mode: str = "gcs"):
         self.firestore = FirestoreIO()
         self.dumper = dumper
-        self.storage = CloudStorageClient()
+        self.storage = (
+            LocalClient() if storage_mode == "local" else CloudStorageClient()
+        )
         self.progress_bar: tqdm | None = None
         self.continous_download = False
 
@@ -130,8 +120,14 @@ class Conductor(IO):
             with open(path, "wb") as f:
                 content(f)
 
-    def upload(self, source, data, content_type):
-        self.storage.upload(source, data, content_type)
+    def upload(
+        self,
+        source,
+        data,
+        content_type,
+        file_id: str | None = None,
+    ) -> str | None:
+        return self.storage.upload(source, data, content_type, file_id=file_id)
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)
@@ -151,20 +147,22 @@ class Conductor(IO):
         return self.dumper.get_output(n)
 
 
-def _setup_context(
-    use_rejestr_io: bool, policy: ProcessPolicy = ProcessPolicy.with_default()
+def setup_context(
+    use_rejestr_io: bool,
+    policy: ProcessPolicy = ProcessPolicy.with_default(),
+    storage_mode: str = "gcs",
+    db_path: str = ":memory:",
 ) -> tuple[Context, EntityDumper]:
     dumper = EntityDumper()
-    conductor = Conductor(dumper)
+    conductor = Conductor(dumper, storage_mode=storage_mode)
     rejestr_io = None
     if use_rejestr_io:
-        print("Initializing RejestrIO as a data source")
         rejestr_io = Rejestr()
 
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
-        con=duckdb.connect(),
+        con=duckdb.connect(database=db_path),
         utils=UtilsImpl(),
         web=WebImpl(),
         nlp=NLPImpl(),
@@ -172,111 +170,6 @@ def _setup_context(
     )
 
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore
-    ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
+    ctx.con.create_function("uuid7str", _uuid7, [], VARCHAR)  # type: ignore
 
     return ctx, dumper
-
-
-def print_results(res, args):
-    if args.output == "stdout":
-        if isinstance(res, pd.DataFrame):
-            print(res.to_json(orient="records", lines=True, date_format="iso"))
-        elif isinstance(res, list):
-            for item in res:
-                print(json.dumps(item, default=str))
-    else:
-        print("Finished processing")
-
-
-PIPELINES = [
-    ScrapeRejestrIO,
-    KorytaPeople,
-    KorytaDiffer,
-    PeoplePKW,
-    PeopleKRS,
-    CompaniesKRS,
-    ProcessWiki,
-    ProcessWikiNer,
-    PeopleMerged,
-    PeopleEnriched,
-    CompaniesMerged,
-    Statistics,
-    Extract,
-    PostalCodes,
-    Regions,
-    UploadPayloads,
-    PeopleParties,
-    CommitteeParties,
-]
-
-
-def main():
-    # TODO this parsing logic and CLI should be moved to a separate file
-    # Then we should have examples how to thoroughly test it.
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--refresh",
-        help="Pipeline name to refresh, : to exclude or 'all'",
-        action="append",
-        default=[],
-    )
-    parser.add_argument(
-        "pipeline",
-        help="Pipeline to be run - available are "
-        + " ".join(pt.__name__ for pt in PIPELINES),
-        default=None,
-        nargs="*",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        choices=["file", "stdout"],
-        default="file",
-        help="Output channel (file or stdout)",
-    )
-    args, _ = parser.parse_known_args()
-
-    refresh = []
-    exclude_refresh = []
-    if args.refresh:
-        for r in args.refresh:
-            if r.startswith(":"):
-                exclude_refresh.append(r[1:])
-            else:
-                refresh.append(r)
-
-    rejestr_io = "ScrapeRejestrIO" in args.pipeline
-    policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
-    ctx, dumper = _setup_context(rejestr_io, policy)
-
-    no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
-    if no_pipeline:
-        # TODO this special handling is bad imo
-        print("No pipeline specified, will run all except ScrapeRejestrIO")
-    pipeline_names = set(pt.__name__ for pt in PIPELINES)
-    for p in args.pipeline:
-        if p not in pipeline_names:
-            print(f"Error: pipeline {p} not found")
-            raise ValueError(
-                f"Pipeline {p} not found. Available: {' '.join(pipeline_names)}"
-            )
-        print(f"Will run pipeline: {p}")
-
-    try:
-        for p_type in PIPELINES:
-            if p_type.__name__ in args.pipeline or (
-                no_pipeline and p_type.__name__ != "ScrapeRejestrIO"
-            ):
-                print(f"Processing {p_type.__name__}")
-                p: Pipeline = Pipeline.create(p_type)
-                res = p.read_or_process(ctx)
-                print_results(res, args)
-    finally:
-        print("Dumping...")
-        dumper.dump_pandas()
-        print("Done")
-
-
-if __name__ == "__main__":
-    main()

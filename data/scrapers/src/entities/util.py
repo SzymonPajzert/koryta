@@ -65,3 +65,8 @@ class NormalizedParse:
             hostname_normalized=hostname_normalized,
             domain=domain,
         )
+
+
+def parse_hostname(url: str) -> str:
+    """Extracts the normalized hostname from a URL."""
+    return NormalizedParse.parse(url).hostname_normalized

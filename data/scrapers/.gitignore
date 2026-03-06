@@ -13,3 +13,8 @@ versioned*
 koryta-pl*.json
 
 .ipynb_checkpoints
+
+http_cache.sqlite
+
+# Allow for test_data
+!src/scrapers/article/test_data/*

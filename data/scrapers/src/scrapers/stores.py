@@ -199,7 +199,9 @@ class IO(metaclass=ABCMeta):
 
     # TODO remove this as well - it should just be a write_file
     @abstractmethod
-    def upload(self, source: Any, data: Any, content_type: str):
+    def upload(
+        self, source: Any, data: Any, content_type: str, file_id: str | None = None
+    ) -> str | None:
         """Uploads data to storage (e.g. GCS)."""
         raise NotImplementedError()
 
@@ -523,7 +525,7 @@ class Pipeline:
 
         if df is None:
             last_written = dumper.get_last_written()
-            if last_written:
+            if isinstance(last_written, tuple) and len(last_written) == 2:
                 name, data = last_written
                 print(f"Recovered {name} from dumper")
                 df = pd.DataFrame.from_records([asdict(i) for i in data])
