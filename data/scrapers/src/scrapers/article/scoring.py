@@ -14,6 +14,7 @@ def _register(name: str):
     def decorator(fn: ScoringFunction) -> ScoringFunction:
         SCORING_FUNCTIONS[name] = fn
         return fn
+
     return decorator
 
 
@@ -30,8 +31,24 @@ def get_scoring_function(name: str) -> ScoringFunction:
 
 def remove_polish_diacritics(text: str) -> str:
     mapping = {
-        'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n', 'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
-        'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N', 'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z'
+        "ą": "a",
+        "ć": "c",
+        "ę": "e",
+        "ł": "l",
+        "ń": "n",
+        "ó": "o",
+        "ś": "s",
+        "ź": "z",
+        "ż": "z",
+        "Ą": "A",
+        "Ć": "C",
+        "Ę": "E",
+        "Ł": "L",
+        "Ń": "N",
+        "Ó": "O",
+        "Ś": "S",
+        "Ź": "Z",
+        "Ż": "Z",
     }
     return "".join(mapping.get(char, char) for char in text)
 
@@ -46,9 +63,21 @@ def url_score(url: str) -> int:
     score = 0
 
     keywords = [
-        "afera", "korupcja", "skandal", "układ", "mafia", "nepotyzm",
-        "polityk", "partia", "dotacje", "prywatyzacja", "fundusz", "wybory",
-        "polityczny", "polityczna", "afera korupcyjna",
+        "afera",
+        "korupcja",
+        "skandal",
+        "układ",
+        "mafia",
+        "nepotyzm",
+        "polityk",
+        "partia",
+        "dotacje",
+        "prywatyzacja",
+        "fundusz",
+        "wybory",
+        "polityczny",
+        "polityczna",
+        "afera korupcyjna",
     ]
     for k in keywords:
         score += tag_in_url(k, url)
@@ -95,9 +124,21 @@ def url_score_kalisz(url: str) -> int:
         score += tag_in_url(k, url) * 10
 
     keywords = [
-        "afera", "korupcja", "skandal", "układ", "mafia", "nepotyzm",
-        "polityk", "partia", "dotacje", "prywatyzacja", "fundusz", "wybory",
-        "polityczny", "polityczna", "afera korupcyjna",
+        "afera",
+        "korupcja",
+        "skandal",
+        "układ",
+        "mafia",
+        "nepotyzm",
+        "polityk",
+        "partia",
+        "dotacje",
+        "prywatyzacja",
+        "fundusz",
+        "wybory",
+        "polityczny",
+        "polityczna",
+        "afera korupcyjna",
     ]
     for k in keywords:
         score += tag_in_url(k, url)

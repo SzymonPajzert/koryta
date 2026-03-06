@@ -15,12 +15,12 @@ def _parse_polish_date(date_string: str) -> Optional[date]:
     date_string = date_string.strip()
 
     for fmt in (
-            "%Y-%m-%dT%H:%M:%S%z",
-            "%Y-%m-%dT%H:%M:%S.%f%z",
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%d %H:%M:%S",
-            "%Y-%m-%d %H:%M",
-            "%Y-%m-%d",
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%S.%f%z",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
     ):
         try:
             return datetime.strptime(date_string, fmt).date()
@@ -40,7 +40,9 @@ def _parse_polish_date(date_string: str) -> Optional[date]:
 
 
 def _pick_longest(elements: list[Any]) -> Optional[Any]:
-    return max(elements, key=lambda e: len(e.get_text(strip=True))) if elements else None
+    return (
+        max(elements, key=lambda e: len(e.get_text(strip=True))) if elements else None
+    )
 
 
 def _combine_elements(soup: BeautifulSoup, *elements: Optional[Any]) -> Any:
@@ -53,12 +55,19 @@ def _combine_elements(soup: BeautifulSoup, *elements: Optional[Any]) -> Any:
 
 def _find_main_content_element(soup: BeautifulSoup) -> Optional[Any]:
     tight_classes = (
-        "article__content", "post__content", "news__content", "entry-content",
-        "td-post-content", "shortcode-content", "full-content__main__body",
+        "article__content",
+        "post__content",
+        "news__content",
+        "entry-content",
+        "td-post-content",
+        "shortcode-content",
+        "full-content__main__body",
     )
     tight_candidates = soup.find_all(
         ["div", "section"],
-        class_=re.compile(r"^(" + "|".join(map(re.escape, tight_classes)) + r")$", re.I),
+        class_=re.compile(
+            r"^(" + "|".join(map(re.escape, tight_classes)) + r")$", re.I
+        ),
     )
     if tight_candidates:
         main_content_element = _pick_longest(tight_candidates)
@@ -79,7 +88,10 @@ def _find_main_content_element(soup: BeautifulSoup) -> Optional[Any]:
     if not article_body_elements:
         article_body_elements = soup.find_all(
             ["div", "section"],
-            class_=re.compile(r"article-body|post-body|main-content|entry-content|td-post-content|articleBody", re.I),
+            class_=re.compile(
+                r"article-body|post-body|main-content|entry-content|td-post-content|articleBody",
+                re.I,
+            ),
         )
     main_content_element = _pick_longest(article_body_elements)
     if main_content_element:
@@ -94,22 +106,58 @@ def _find_main_content_element(soup: BeautifulSoup) -> Optional[Any]:
 
 def _clean_main_content_element(main_content_element: Any) -> str:
     for unwanted in main_content_element.find_all(
-            ["script", "style", "img", "iframe", "nav", "aside", "footer", "header"],
-            recursive=True,
+        ["script", "style", "img", "iframe", "nav", "aside", "footer", "header"],
+        recursive=True,
     ):
         unwanted.extract()
 
     unwanted_classes = [
-        "ads", "ad-unit", "embed", "twit-embed", "twitter-tweet", "sonda", "poll", "quizv2", "tab--open",
-        "share-button", "related-post", "comment", "disqus", "post__disqus", "post__listing", "post__footer",
-        "recommend", "esi-content", "sd-sharing", "sd-social", "robots-nocontent", "content--excerpt",
-        "article--featured", "latest--articles", "article__recommended", "article__img--wrapper",
-        "td_block_related", "td-post-header", "wc-memberships", "popup--content", "news__content-more",
-        "content-part__share-links", "content-part__tags", "content-part__reaction", "full-content__main__footer",
-        "redphone__bottom", "radio-program-widget", "list-summary", "article-foot",
+        "ads",
+        "ad-unit",
+        "embed",
+        "twit-embed",
+        "twitter-tweet",
+        "sonda",
+        "poll",
+        "quizv2",
+        "tab--open",
+        "share-button",
+        "related-post",
+        "comment",
+        "disqus",
+        "post__disqus",
+        "post__listing",
+        "post__footer",
+        "recommend",
+        "esi-content",
+        "sd-sharing",
+        "sd-social",
+        "robots-nocontent",
+        "content--excerpt",
+        "article--featured",
+        "latest--articles",
+        "article__recommended",
+        "article__img--wrapper",
+        "td_block_related",
+        "td-post-header",
+        "wc-memberships",
+        "popup--content",
+        "news__content-more",
+        "content-part__share-links",
+        "content-part__tags",
+        "content-part__reaction",
+        "full-content__main__footer",
+        "redphone__bottom",
+        "radio-program-widget",
+        "list-summary",
+        "article-foot",
     ]
-    unwanted_class_pattern = re.compile(r"^(" + "|".join(map(re.escape, unwanted_classes)) + r")$", re.I)
-    for unwanted_class in main_content_element.find_all(class_=unwanted_class_pattern, recursive=True):
+    unwanted_class_pattern = re.compile(
+        r"^(" + "|".join(map(re.escape, unwanted_classes)) + r")$", re.I
+    )
+    for unwanted_class in main_content_element.find_all(
+        class_=unwanted_class_pattern, recursive=True
+    ):
         unwanted_class.extract()
 
     return main_content_element.get_text(separator=" ", strip=True)
@@ -161,14 +209,23 @@ def _extract_date_from_ldjson(soup: BeautifulSoup) -> Optional[date]:
             if isinstance(json_data, list):
                 for item in json_data:
                     if item.get("@type") == "NewsArticle":
-                        date_str = item.get("datePublished") or item.get("dateCreated") or item.get("dateModified")
+                        date_str = (
+                            item.get("datePublished")
+                            or item.get("dateCreated")
+                            or item.get("dateModified")
+                        )
                         if date_str:
                             parsed = _parse_polish_date(date_str)
                             if parsed:
                                 return parsed
-            elif isinstance(json_data, dict) and json_data.get("@type") == "NewsArticle":
-                date_str = json_data.get("datePublished") or json_data.get("dateCreated") or json_data.get(
-                    "dateModified")
+            elif (
+                isinstance(json_data, dict) and json_data.get("@type") == "NewsArticle"
+            ):
+                date_str = (
+                    json_data.get("datePublished")
+                    or json_data.get("dateCreated")
+                    or json_data.get("dateModified")
+                )
                 if date_str:
                     return _parse_polish_date(date_str)
         except json.JSONDecodeError:
@@ -179,9 +236,17 @@ def _extract_date_from_ldjson(soup: BeautifulSoup) -> Optional[date]:
 def _extract_date_from_meta_tags(soup: BeautifulSoup) -> Optional[date]:
     meta_date_tags = soup.find_all(
         "meta",
-        attrs={"property": re.compile(r"article:published_time|og:published_time|published_time", re.I)},
+        attrs={
+            "property": re.compile(
+                r"article:published_time|og:published_time|published_time", re.I
+            )
+        },
     )
-    meta_date_tags.extend(soup.find_all("meta", attrs={"name": re.compile(r"date|pubdate|timestamp", re.I)}))
+    meta_date_tags.extend(
+        soup.find_all(
+            "meta", attrs={"name": re.compile(r"date|pubdate|timestamp", re.I)}
+        )
+    )
 
     for tag in meta_date_tags:
         content = tag.get("content")
@@ -209,8 +274,14 @@ def _extract_date_from_time_tags(soup: BeautifulSoup) -> Optional[date]:
 
 
 _BINARY_SIGNATURES = (
-    b"%PDF", b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"PK\x03\x04",
-    b"RIFF", b"\x00\x00\x01\x00", b"\x1f\x8b",
+    b"%PDF",
+    b"\x89PNG",
+    b"\xff\xd8\xff",
+    b"GIF8",
+    b"PK\x03\x04",
+    b"RIFF",
+    b"\x00\x00\x01\x00",
+    b"\x1f\x8b",
 )
 
 _EMPTY_RESULT: Dict[str, Any] = {
@@ -231,9 +302,9 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
     title = _extract_title_from_meta(soup)
 
     publication_date = (
-            _extract_date_from_ldjson(soup)
-            or _extract_date_from_meta_tags(soup)
-            or _extract_date_from_time_tags(soup)
+        _extract_date_from_ldjson(soup)
+        or _extract_date_from_meta_tags(soup)
+        or _extract_date_from_time_tags(soup)
     )
 
     article_content = _extract_article_text(soup)
@@ -246,7 +317,12 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
         desc = meta_desc["content"].strip()
     elif og_desc and og_desc.get("content"):
         desc = og_desc["content"].strip()
-    if desc and len(desc) > 40 and desc not in article_content and len(article_content) < 2500:
+    if (
+        desc
+        and len(desc) > 40
+        and desc not in article_content
+        and len(article_content) < 2500
+    ):
         article_content = f"{desc} {article_content}"
 
     article_content = article_content.replace("\xa0", " ")
@@ -268,9 +344,11 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
         try:
             json_data = json.loads(script_ld_json.string)
             if (
-                    isinstance(json_data, list)
-                    and any(item.get("@type") == "NewsArticle" for item in json_data)
-            ) or (isinstance(json_data, dict) and json_data.get("@type") == "NewsArticle"):
+                isinstance(json_data, list)
+                and any(item.get("@type") == "NewsArticle" for item in json_data)
+            ) or (
+                isinstance(json_data, dict) and json_data.get("@type") == "NewsArticle"
+            ):
                 is_schema_article = True
         except json.JSONDecodeError:
             pass

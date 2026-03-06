@@ -52,7 +52,9 @@ def set_crawl_delay(parsed: NormalizedParse, config: dict):
     next_request_time[domain] = time.time() + config["crawl_delay_seconds"]
 
 
-def process_url(ctx: Context, uid: str, url: str, config: dict) -> tuple[set[str], str | None, str | None]:
+def process_url(
+    ctx: Context, uid: str, url: str, config: dict
+) -> tuple[set[str], str | None, str | None]:
     """Crawl a single URL.
 
     Returns (found_links, error_or_None, storage_path_or_None).
@@ -85,7 +87,9 @@ def process_url(ctx: Context, uid: str, url: str, config: dict) -> tuple[set[str
             href = link.get("href")
             if not href:
                 continue
-            if any(href.startswith(prefix) for prefix in ["javascript:", "mailto:", "tel:"]):
+            if any(
+                href.startswith(prefix) for prefix in ["javascript:", "mailto:", "tel:"]
+            ):
                 continue
             absolute_link = ctx.utils.join_url(url, href).split("#")[0].rstrip("/")
             if absolute_link:
@@ -136,6 +140,16 @@ def crawl(
                 score = score_fn(link_url)
                 priority = 100 - score
                 rows_to_insert.append(
-                    (uuid7str(), link_url, priority, False, [], 0, now, None, current_url)
+                    (
+                        uuid7str(),
+                        link_url,
+                        priority,
+                        False,
+                        [],
+                        0,
+                        now,
+                        None,
+                        current_url,
+                    )
                 )
             db.insert_urls(rows_to_insert)

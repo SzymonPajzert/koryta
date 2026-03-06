@@ -15,11 +15,11 @@ import sys
 from tqdm import tqdm
 
 from entities.util import parse_hostname
-from stores.conductor import setup_context
 from scrapers.article.crawler import crawl, ensure_url_format
 from scrapers.article.db import CrawlerDB
 from scrapers.article.parse import extract_article_content
 from scrapers.article.scoring import get_scoring_function
+from stores.conductor import setup_context
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,11 @@ def _print_stats(stats: dict):
         logger.info("--- Stats from %s ---", label)
         logger.info("Successes in last %s: %d", label, data["successes"])
         logger.info("Errors in last %s: %d", label, data["errors"])
-        logger.info("Error %% in last %s: %.2f%%", label, data["errors"] / (data["successes"] + 1e-9) * 100)
+        logger.info(
+            "Error %% in last %s: %.2f%%",
+            label,
+            data["errors"] / (data["successes"] + 1e-9) * 100,
+        )
 
 
 def _run_parse(db: CrawlerDB, limit: int, view: bool):
@@ -65,11 +69,16 @@ def _run_parse(db: CrawlerDB, limit: int, view: bool):
         return
 
     if view:
-        logger.info("Found %d pages to parse. Opening in Firefox for manual validation.", len(pages))
+        logger.info(
+            "Found %d pages to parse. Opening in Firefox for manual validation.",
+            len(pages),
+        )
         try:
             for page_id, url, storage_path in pages:
                 if not storage_path or not os.path.exists(storage_path):
-                    logger.warning("Storage path not found for URL %s: %s", url, storage_path)
+                    logger.warning(
+                        "Storage path not found for URL %s: %s", url, storage_path
+                    )
                     continue
                 if storage_path.startswith("gs://"):
                     logger.info("Skipping GCS path for now: %s", storage_path)
@@ -98,16 +107,24 @@ def _run_parse(db: CrawlerDB, limit: int, view: bool):
                     logger.info("Viewer interrupted by user. Exiting.")
                     break
                 except Exception as e:
-                    logger.error("Failed to parse or view %s from %s: %s", url, storage_path, e)
+                    logger.error(
+                        "Failed to parse or view %s from %s: %s", url, storage_path, e
+                    )
         except KeyboardInterrupt:
             logger.info("Viewer interrupted by user. Exiting.")
     else:
         output_filename = "parsed_articles.jsonl"
-        logger.info("Found %d pages to parse. Output will be saved to %s", len(pages), output_filename)
+        logger.info(
+            "Found %d pages to parse. Output will be saved to %s",
+            len(pages),
+            output_filename,
+        )
         with open(output_filename, "w", encoding="utf-8") as f:
             for page_id, url, storage_path in tqdm(pages, desc="Parsing articles"):
                 if not storage_path or not os.path.exists(storage_path):
-                    logger.warning("Storage path not found for URL %s: %s", url, storage_path)
+                    logger.warning(
+                        "Storage path not found for URL %s: %s", url, storage_path
+                    )
                     continue
                 if storage_path.startswith("gs://"):
                     logger.info("Skipping GCS path for now: %s", storage_path)
@@ -121,7 +138,9 @@ def _run_parse(db: CrawlerDB, limit: int, view: bool):
                         "url": url,
                         "title": extracted["title"],
                         "is_article": extracted["is_article"],
-                        "publication_date": str(extracted["publication_date"]) if extracted["publication_date"] else None,
+                        "publication_date": str(extracted["publication_date"])
+                        if extracted["publication_date"]
+                        else None,
                         "content": extracted["article_content"],
                     }
                     f.write(json.dumps(record) + "\n")
@@ -131,58 +150,7 @@ def _run_parse(db: CrawlerDB, limit: int, view: bool):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Article crawler CLI.")
-    parser.add_argument(
-        "--storage", choices=["local", "gcs"], default="local",
-        help="Storage backend for crawled files.",
-    )
-    parser.add_argument(
-        "--init-db", type=str, dest="initial_urls_file", metavar="URL_FILE",
-        help="Initialize the database with URLs from a file and exit.",
-    )
-    parser.add_argument(
-        "--reset-db", action="store_true",
-        help="Reset database before initialization (requires --init-db).",
-    )
-    parser.add_argument(
-        "--load-blocked", type=str, dest="blocked_csv", metavar="CSV_FILE",
-        help="Load blocked domains from a CSV file and exit.",
-    )
-    parser.add_argument(
-        "--crawl-delay-seconds", type=int, default=1,
-        help="Seconds to wait between requests to the same domain.",
-    )
-    parser.add_argument(
-        "--max-retries", type=int, default=5,
-        help="Maximum retries for a failed URL.",
-    )
-    parser.add_argument(
-        "--worker-id", type=str,
-        help="Unique identifier for the crawler worker (required for crawling).",
-    )
-    parser.add_argument(
-        "--stats", action="store_true",
-        help="Print database statistics and exit.",
-    )
-    parser.add_argument(
-        "--parse", type=int, nargs="?", const=10, dest="parse_limit", metavar="LIMIT",
-        help="Parse crawled HTML articles (default limit: 10).",
-    )
-    parser.add_argument(
-        "--view", action="store_true",
-        help="Open parsed articles in Firefox (use with --parse).",
-    )
-    parser.add_argument(
-        "--reprioritize", type=str, nargs="?", const="default", dest="reprioritize",
-        metavar="SCORING",
-        help="Reprioritize all pending URLs using a scoring function (default: 'default'). Available: default, kalisz.",
-    )
-    parser.add_argument(
-        "--scoring", type=str, default="default",
-        help="Scoring function for new URLs during crawling (default: 'default'). Available: default, kalisz.",
-    )
-    args = parser.parse_args()
-
+    parser, args = parse_args()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - [%(name)s] %(message)s",
@@ -242,6 +210,88 @@ def main():
         logger.info("Crawl interrupted by user. Exiting.")
 
     logger.info("Crawl finished.")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Article crawler CLI.")
+    parser.add_argument(
+        "--storage",
+        choices=["local", "gcs"],
+        default="local",
+        help="Storage backend for crawled files.",
+    )
+    parser.add_argument(
+        "--init-db",
+        type=str,
+        dest="initial_urls_file",
+        metavar="URL_FILE",
+        help="Initialize the database with URLs from a file and exit.",
+    )
+    parser.add_argument(
+        "--reset-db",
+        action="store_true",
+        help="Reset database before initialization (requires --init-db).",
+    )
+    parser.add_argument(
+        "--load-blocked",
+        type=str,
+        dest="blocked_csv",
+        metavar="CSV_FILE",
+        help="Load blocked domains from a CSV file and exit.",
+    )
+    parser.add_argument(
+        "--crawl-delay-seconds",
+        type=int,
+        default=1,
+        help="Seconds to wait between requests to the same domain.",
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=5,
+        help="Maximum retries for a failed URL.",
+    )
+    parser.add_argument(
+        "--worker-id",
+        type=str,
+        help="Unique identifier for the crawler worker (required for crawling).",
+    )
+    parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="Print database statistics and exit.",
+    )
+    parser.add_argument(
+        "--parse",
+        type=int,
+        nargs="?",
+        const=10,
+        dest="parse_limit",
+        metavar="LIMIT",
+        help="Parse crawled HTML articles (default limit: 10).",
+    )
+    parser.add_argument(
+        "--view",
+        action="store_true",
+        help="Open parsed articles in Firefox (use with --parse).",
+    )
+    parser.add_argument(
+        "--reprioritize",
+        type=str,
+        nargs="?",
+        const="default",
+        dest="reprioritize",
+        metavar="SCORING",
+        help="Reprioritize all pending URLs using a scoring function (default: 'default'). Available: default, kalisz.",
+    )
+    parser.add_argument(
+        "--scoring",
+        type=str,
+        default="default",
+        help="Scoring function for new URLs during crawling (default: 'default'). Available: default, kalisz.",
+    )
+    args = parser.parse_args()
+    return parser, args
 
 
 if __name__ == "__main__":

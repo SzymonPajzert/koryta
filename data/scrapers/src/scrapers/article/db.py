@@ -67,25 +67,29 @@ class CrawlerDB:
                     );
 
                     DO $$ BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='website_index' AND column_name='locked_by_worker_id') THEN
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns \
+                            WHERE table_name='website_index' AND column_name='locked_by_worker_id') THEN
                             ALTER TABLE website_index ADD COLUMN locked_by_worker_id TEXT;
                         END IF;
                     END $$;
 
                     DO $$ BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='website_index' AND column_name='locked_at') THEN
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns \
+                            WHERE table_name='website_index' AND column_name='locked_at') THEN
                             ALTER TABLE website_index ADD COLUMN locked_at TIMESTAMP WITH TIME ZONE;
                         END IF;
                     END $$;
 
                     DO $$ BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='website_index' AND column_name='storage_path') THEN
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns \
+                            WHERE table_name='website_index' AND column_name='storage_path') THEN
                             ALTER TABLE website_index ADD COLUMN storage_path TEXT;
                         END IF;
                     END $$;
 
                     DO $$ BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='website_index' AND column_name='mined_from_url') THEN
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns \
+                            WHERE table_name='website_index' AND column_name='mined_from_url') THEN
                             ALTER TABLE website_index ADD COLUMN mined_from_url TEXT;
                         END IF;
                     END $$;
@@ -160,7 +164,8 @@ class CrawlerDB:
                           AND (wi.locked_by_worker_id IS NULL OR wi.locked_at < %s)
                           AND NOT EXISTS (
                               SELECT 1 FROM blocked_domains bd
-                              WHERE wi.url ~ ('https?://(www\.)?' || regexp_replace(bd.domain, '\.', '\\.', 'g') || '(/|$)')
+                              WHERE wi.url ~ ('https?://(www\.)?' ||
+                                regexp_replace(bd.domain, '\.', '\\.', 'g') || '(/|$)')
                           )
                         ORDER BY wi.priority ASC, RANDOM()
                         LIMIT 1
@@ -168,7 +173,12 @@ class CrawlerDB:
                     )
                     RETURNING id, url, priority, num_retries;
                     """,
-                    (worker_id, now, max_retries, now - timedelta(seconds=timeout_seconds)),
+                    (
+                        worker_id,
+                        now,
+                        max_retries,
+                        now - timedelta(seconds=timeout_seconds),
+                    ),
                 )
                 row = cur.fetchone()
                 conn.commit()
@@ -180,7 +190,8 @@ class CrawlerDB:
             with conn.cursor() as cur:
                 cur.execute(
                     "UPDATE website_index SET done = TRUE, date_finished = %s, "
-                    "locked_by_worker_id = NULL, locked_at = NULL, storage_path = %s WHERE id = %s",
+                    "locked_by_worker_id = NULL, locked_at = NULL, \
+                        storage_path = %s WHERE id = %s",
                     [datetime.now(warsaw_tz), storage_path, uid],
                 )
                 conn.commit()
@@ -202,7 +213,8 @@ class CrawlerDB:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "UPDATE website_index SET locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
+                    "UPDATE website_index SET locked_by_worker_id = NULL,\
+                        locked_at = NULL WHERE id = %s",
                     [uid],
                 )
                 conn.commit()
@@ -210,7 +222,8 @@ class CrawlerDB:
     def insert_urls(self, rows: list[tuple]):
         """Batch insert discovered URLs.
 
-        Each row: (id, url, priority, done, errors, num_retries, date_added, date_finished, mined_from_url)
+        Each row: (id, url, priority, done, errors, num_retries, \
+            date_added, date_finished, mined_from_url)
         """
         if not rows:
             return
@@ -224,8 +237,11 @@ class CrawlerDB:
                     processed.append(tuple(r))
 
                 cur.executemany(
-                    "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished, mined_from_url) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(url) DO NOTHING",
+                    "INSERT INTO website_index (\
+                        id, url, priority, done, errors, num_retries, \
+                            date_added, date_finished, mined_from_url) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)\
+                        ON CONFLICT(url) DO NOTHING",
                     processed,
                 )
                 conn.commit()
@@ -285,13 +301,22 @@ class CrawlerDB:
                 cur.execute("SELECT COUNT(*) FROM website_index WHERE done = FALSE;")
                 stats["pending_urls"] = cur.fetchone()[0]
 
-                cur.execute("SELECT COUNT(*) FROM website_index WHERE array_length(errors, 1) > 0;")
+                cur.execute(
+                    "SELECT COUNT(*) FROM website_index \
+                        WHERE array_length(errors, 1) > 0;"
+                )
                 stats["urls_with_errors"] = cur.fetchone()[0]
 
-                cur.execute("SELECT SUM(array_length(errors, 1)) FROM website_index WHERE array_length(errors, 1) > 0;")
+                cur.execute(
+                    "SELECT SUM(array_length(errors, 1)) FROM website_index \
+                        WHERE array_length(errors, 1) > 0;"
+                )
                 stats["total_errors"] = cur.fetchone()[0] or 0
 
-                cur.execute("SELECT unnest(errors) AS error_msg FROM website_index WHERE array_length(errors, 1) > 0;")
+                cur.execute(
+                    "SELECT unnest(errors) AS error_msg FROM website_index \
+                        WHERE array_length(errors, 1) > 0;"
+                )
                 all_errors = [row[0] for row in cur.fetchall()]
                 if all_errors:
                     stats["top_errors"] = Counter(all_errors).most_common(5)
@@ -310,12 +335,14 @@ class CrawlerDB:
                 for label, minutes in timeframes.items():
                     start_time = now - timedelta(minutes=minutes)
                     cur.execute(
-                        "SELECT COUNT(*) FROM website_index WHERE done = TRUE AND date_finished >= %s;",
+                        "SELECT COUNT(*) FROM website_index \
+                            WHERE done = TRUE AND date_finished >= %s;",
                         (start_time,),
                     )
                     successes = cur.fetchone()[0]
                     cur.execute(
-                        "SELECT COUNT(*) FROM website_index WHERE array_length(errors, 1) > 0 AND date_added >= %s;",
+                        "SELECT COUNT(*) FROM website_index \
+                            WHERE array_length(errors, 1) > 0 AND date_added >= %s;",
                         (start_time,),
                     )
                     errors = cur.fetchone()[0]

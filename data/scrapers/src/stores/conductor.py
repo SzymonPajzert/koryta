@@ -41,7 +41,9 @@ class Conductor(IO):
     def __init__(self, dumper: EntityDumper, storage_mode: str = "gcs"):
         self.firestore = FirestoreIO()
         self.dumper = dumper
-        self.storage = LocalClient() if storage_mode == "local" else CloudStorageClient()
+        self.storage = (
+            LocalClient() if storage_mode == "local" else CloudStorageClient()
+        )
         self.progress_bar: tqdm | None = None
         self.continous_download = False
 

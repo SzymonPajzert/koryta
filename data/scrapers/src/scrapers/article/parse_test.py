@@ -13,9 +13,7 @@ HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
 # This sets up a local SQLite database named 'http_cache'
 # It will automatically cache any 'GET' request
 requests_cache.install_cache(
-    'http_cache',
-    backend='sqlite',
-    expire_after=timedelta(days=1)
+    "http_cache", backend="sqlite", expire_after=timedelta(days=1)
 )
 
 
@@ -27,9 +25,9 @@ def fetch_url(url: str) -> bytes:
 
 def normalize_quotes(text: str) -> str:
     """Normalizes various quotes to straight double and single quotes."""
-    text = text.replace('”', '"').replace('„', '"').replace('“', '"').replace('″', '"')
-    text = text.replace("’", "'").replace("‘", "'").replace('«', '"').replace('»', '"')
-    text = text.replace('›', "'").replace('‹', "'")
+    text = text.replace("”", '"').replace("„", '"').replace("“", '"').replace("″", '"')
+    text = text.replace("’", "'").replace("‘", "'").replace("«", '"').replace("»", '"')
+    text = text.replace("›", "'").replace("‹", "'")
     text = text.replace("''", '"')
     return text
 
@@ -37,8 +35,19 @@ def normalize_quotes(text: str) -> str:
 def pytest_generate_tests(metafunc):
     """Dynamically generates test cases from the CSV file."""
     df = pd.read_csv(URL_DF_PATH)
-    assert set(df.columns) == {"Link", "Artykuł", "Domena", "Tytuł", "Tytuł Alternatywny", "Data", "Data Normalizowana",
-                               "Kto", "Gdzie", "Pierwsze Zdanie", "Ostatnie Zdanie"}
+    assert set(df.columns) == {
+        "Link",
+        "Artykuł",
+        "Domena",
+        "Tytuł",
+        "Tytuł Alternatywny",
+        "Data",
+        "Data Normalizowana",
+        "Kto",
+        "Gdzie",
+        "Pierwsze Zdanie",
+        "Ostatnie Zdanie",
+    }
     df["Pierwsze Zdanie"] = df["Pierwsze Zdanie"].replace("", None)
     df["Ostatnie Zdanie"] = df["Ostatnie Zdanie"].replace("", None)
     df["Tytuł Alternatywny"] = df["Tytuł Alternatywny"].replace("", None)
@@ -48,12 +57,12 @@ def pytest_generate_tests(metafunc):
     if "row_article" in metafunc.fixturenames:
         # Filter for rows that ARE articles
         articles = df[df["Artykuł"] == "Tak"]
-        metafunc.parametrize("row_article", articles.to_dict('records'))
+        metafunc.parametrize("row_article", articles.to_dict("records"))
 
     if "row_no_article" in metafunc.fixturenames:
         # Filter for rows that ARE NOT articles
         no_articles = df[df["Artykuł"] == "Nie"]
-        metafunc.parametrize("row_no_article", no_articles.to_dict('records'))
+        metafunc.parametrize("row_no_article", no_articles.to_dict("records"))
 
 
 def test_article_title(row_article):
@@ -68,10 +77,15 @@ def test_article_title(row_article):
 
     # Title
     if not pd.isna(alternative_title):
-        assert normalize_quotes(parsed_data["title"]).strip() in (normalize_quotes(expected_title).strip(),
-                                                                  normalize_quotes(alternative_title).strip())
+        assert normalize_quotes(parsed_data["title"]).strip() in (
+            normalize_quotes(expected_title).strip(),
+            normalize_quotes(alternative_title).strip(),
+        )
     else:
-        assert normalize_quotes(parsed_data["title"]).strip() == normalize_quotes(expected_title).strip()
+        assert (
+            normalize_quotes(parsed_data["title"]).strip()
+            == normalize_quotes(expected_title).strip()
+        )
 
 
 def test_article_date(row_article):
@@ -85,8 +99,9 @@ def test_article_date(row_article):
 
     # Date
     if not pd.isna(expected_date):
-        assert parsed_data["publication_date"] == expected_date, \
+        assert parsed_data["publication_date"] == expected_date, (
             f"Hint, the date in the article looks like '{row_article['Data']}'"
+        )
     else:
         assert parsed_data["publication_date"] is None
 
@@ -112,7 +127,9 @@ def test_article_content(row_article):
         # Assert sentence ends in last 90% of string
         assert expected_last_sentence in parsed_data["article_content"]
         index = parsed_data["article_content"].index(expected_last_sentence)
-        assert len(parsed_data["article_content"]) * 0.9 < index + len(expected_last_sentence)
+        assert len(parsed_data["article_content"]) * 0.9 < index + len(
+            expected_last_sentence
+        )
 
 
 def test_no_article(row_no_article):

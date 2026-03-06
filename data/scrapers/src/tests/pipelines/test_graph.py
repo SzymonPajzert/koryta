@@ -37,7 +37,8 @@ def test_sum_smaller_than_one(graph):
     row_sums = numeric_graph.sum(axis=1)
     people_with_sum_greater_than_one = graph[row_sums > 1.0]
     assert len(people_with_sum_greater_than_one) == 0, (
-        "Some individuals have a sum of scores greater than 1.0, which should not happen after normalization"
+        "Some individuals have a sum of scores greater than 1.0, \
+            which should not happen after normalization"
     )
 
 
