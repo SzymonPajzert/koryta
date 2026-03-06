@@ -8,6 +8,7 @@ import duckdb
 import pandas as pd
 from duckdb.typing import VARCHAR  # type: ignore
 from tqdm import tqdm
+from uuid_extensions import uuid7str as uuid7  # type: ignore
 
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
@@ -15,6 +16,7 @@ from analysis.interesting import CompaniesMerged
 from analysis.payloads import UploadPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
+from entities.util import parse_hostname
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS

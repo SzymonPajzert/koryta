@@ -10,8 +10,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import requests
-from bs4 import BeautifulSoup
-from uuid_extensions import uuid7str
+from bs4 import BeautifulSoup, Tag
+from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
 from scrapers.article.db import CrawlerDB

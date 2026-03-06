@@ -13,7 +13,7 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 import psycopg2
-from uuid_extensions import uuid7str
+from uuid_extensions import uuid7str  # type: ignore
 
 logger = logging.getLogger(__name__)
 
