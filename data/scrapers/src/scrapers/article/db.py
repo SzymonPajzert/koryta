@@ -104,8 +104,10 @@ class CrawlerDB:
                         for url in urls
                     ]
                     cur.executemany(
-                        "INSERT INTO website_index (id, url, priority, done, errors, num_retries, date_added, date_finished, mined_from_url) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(url) DO NOTHING",
+                        "INSERT INTO website_index (id, url, priority, done, errors, "
+                        "num_retries, date_added, date_finished, mined_from_url) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                        "ON CONFLICT(url) DO NOTHING",
                         rows,
                     )
                     conn.commit()
@@ -247,7 +249,7 @@ class CrawlerDB:
                 conn.commit()
 
     def reprioritize(self, score_fn: Callable[[str], int], batch_size: int = 5000):
-        """Recalculate priority for all pending URLs using the given scoring function."""
+        """Recalculate priority for all pending URLs using scoring function."""
         updated = 0
         with self._connect() as conn:
             with conn.cursor() as cur:
@@ -325,7 +327,8 @@ class CrawlerDB:
 
                 cur.execute(
                     "SELECT AVG(EXTRACT(EPOCH FROM (date_finished - date_added))) "
-                    "FROM website_index WHERE done = TRUE AND date_finished IS NOT NULL;"
+                    "FROM website_index "
+                    "WHERE done = TRUE AND date_finished IS NOT NULL;"
                 )
                 stats["avg_processing_seconds"] = cur.fetchone()[0]
 

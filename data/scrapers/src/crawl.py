@@ -282,13 +282,19 @@ def parse_args():
         const="default",
         dest="reprioritize",
         metavar="SCORING",
-        help="Reprioritize all pending URLs using a scoring function (default: 'default'). Available: default, kalisz.",
+        help=(
+            "Reprioritize all pending URLs using a scoring function "
+            "(default: 'default'). Available: default, kalisz."
+        ),
     )
     parser.add_argument(
         "--scoring",
         type=str,
         default="default",
-        help="Scoring function for new URLs during crawling (default: 'default'). Available: default, kalisz.",
+        help=(
+            "Scoring function for new URLs during crawling (default: 'default'). "
+            "Available: default, kalisz."
+        ),
     )
     args = parser.parse_args()
     return parser, args
