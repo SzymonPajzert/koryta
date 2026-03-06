@@ -163,6 +163,13 @@ class Client:
 class LocalClient:
     """Local filesystem storage backend with the same upload() interface as Client."""
 
+    def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
+        raise NotImplementedError
+
+    def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
+        # Local implementation of list_namespaces
+        return []
+
     def upload(
         self,
         source: NormalizedParse | str,
@@ -181,7 +188,7 @@ class LocalClient:
                 filename = "index.html"
             elif path.endswith("/"):
                 filename = path + "index.html"
-            elif os.path.splitext(os.path.basename(path))[1] == '':
+            elif os.path.splitext(os.path.basename(path))[1] == "":
                 filename = path + "__index.html"
             else:
                 filename = path
