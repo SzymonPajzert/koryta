@@ -19,10 +19,6 @@ vi.mock("vuetify", async () => {
     useDisplay: () => ({ mdAndUp: { value: true } }),
   };
 });
-vi.mock("firebase/analytics", () => ({
-  getAnalytics: vi.fn(),
-  logEvent: vi.fn(),
-}));
 const vuetify = createVuetify();
 
 describe("DefaultLayout", () => {

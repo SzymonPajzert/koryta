@@ -111,9 +111,6 @@ export default defineNuxtConfig({
     auth: {
       enabled: true,
     },
-    analytics: {
-      enabled: !isLocal,
-    },
     appCheck: {
       enabled: !isLocal,
     },
@@ -130,7 +127,6 @@ export default defineNuxtConfig({
       storageBucket: isLocal ? undefined : "koryta-pl.firebasestorage.app",
       messagingSenderId: isLocal ? undefined : "735903577811",
       appId: "1:735903577811:web:53e6461c641b947a4e8626",
-      measurementId: isLocal ? undefined : "G-KRYVKQ4T7T",
     },
     emulators: {
       enabled: isLocal,
