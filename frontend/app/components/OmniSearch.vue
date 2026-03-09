@@ -38,16 +38,11 @@
 </template>
 
 <script setup lang="ts">
-import { getAnalytics, logEvent } from "firebase/analytics";
 import type { GraphLayout } from "~~/shared/graph/util";
 import { parties } from "~~/shared/misc";
 import { useEntityFiltering } from "@/composables/useEntityFiltering";
 
 const { push, currentRoute } = useRouter();
-let analytics: any;
-if (import.meta.client) {
-  analytics = getAnalytics();
-}
 
 const props = defineProps<{
   searchText?: string;
@@ -254,9 +249,6 @@ if (!props.fake) {
         ...value.query,
       },
     });
-    if (analytics) {
-      logEvent(analytics, "select_content", value.logEventKey);
-    }
     autocompleteFocus.value = false;
   });
 }

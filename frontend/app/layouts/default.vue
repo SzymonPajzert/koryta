@@ -119,23 +119,9 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, computed } from "vue";
-import { getAnalytics, logEvent } from "firebase/analytics";
+import { computed } from "vue";
 import { useAuthState } from "@/composables/auth";
 import { useDisplay } from "vuetify";
-
-if (import.meta.client) {
-  onMounted(() => {
-    const analytics = getAnalytics();
-
-    logEvent(analytics, "page_view", {
-      page_location: window.location.href,
-      page_path: window.location.pathname,
-      page_title: document.title,
-      user_agent: navigator.userAgent,
-    });
-  });
-}
 
 const { mdAndUp } = useDisplay();
 const { user, userConfig, logout } = useAuthState();

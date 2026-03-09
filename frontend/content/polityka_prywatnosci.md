@@ -40,7 +40,7 @@ Twoje dane osobowe mogą być przekazywane podmiotom, które świadczą dla nas 
 
 - Dostawcy systemów do wysyłki newsletterów (np. Mailchimp, FreshMail).
 
-- Dostawcy narzędzi analitycznych (np. Google Analytics).
+- Dostawcy narzędzi analitycznych (w Unii Europejskiej).
 
 Takie podmioty przetwarzają dane na podstawie umowy z nami i tylko zgodnie z naszymi poleceniami.
 
