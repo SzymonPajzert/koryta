@@ -15,6 +15,7 @@ from scrapers.stores import (
     DownloadableFile,
     File,
     LocalFile,
+    Postgres,
     ProcessPolicy,
 )
 from stores import file
@@ -23,6 +24,7 @@ from stores.download import FileSource
 from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
 from stores.nlp import NLPImpl
+from stores.postgres import PostgresClient
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
 from stores.utils import UtilsImpl
@@ -132,7 +134,9 @@ class Conductor(IO):
 
 
 def _setup_context(
-    use_rejestr_io: bool, policy: ProcessPolicy = ProcessPolicy.with_default()
+    use_rejestr_io: bool,
+    policy: ProcessPolicy = ProcessPolicy.with_default(),
+    postgres: Postgres | None = None,
 ) -> tuple[Context, EntityDumper]:
     dumper = EntityDumper()
     conductor = Conductor(dumper)
@@ -141,6 +145,8 @@ def _setup_context(
         print("Initializing RejestrIO as a data source")
         rejestr_io = Rejestr()
 
+    postgres_client = postgres or PostgresClient.from_env()
+
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
@@ -148,6 +154,7 @@ def _setup_context(
         utils=UtilsImpl(),
         web=WebImpl(),
         nlp=NLPImpl(),
+        postgres=postgres_client,
         refresh_policy=policy,
     )
 

@@ -286,6 +286,14 @@ class NLP(metaclass=ABCMeta):
         pass
 
 
+class Postgres(metaclass=ABCMeta):
+    """Minimal Postgres interface."""
+
+    @abstractmethod
+    def connect(self):
+        raise NotImplementedError()
+
+
 @dataclass
 class ProcessPolicy:
     refresh_pipelines: set[str]
@@ -323,6 +331,7 @@ class Context:
     utils: Utils
     web: Web
     nlp: NLP
+    postgres: Postgres | None = None
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
 
 
