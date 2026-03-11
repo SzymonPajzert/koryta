@@ -242,7 +242,7 @@ def get_teryt(pcs: DataFrame, city: str, code: str | None):
             if counts.iloc[0] / len(candidates) > 0.9:
                 return top_teryt
 
-    print("Failing to find teryt code for: ", city, code)
+    print(f"Failing to find teryt code for: '{city}' '{code}'")
     return ""
 
 
@@ -274,9 +274,9 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
         for w in wspolnicy:
             if "nazwa" not in w:
                 continue
-            nazwa = w["nazwa"]
+            w_nazwa = w["nazwa"]
             for prefix, teryt_length in KNOWN_OWNER_PREFIXES.items():
-                if nazwa.startswith(prefix) and teryt_length is not None:
+                if w_nazwa.startswith(prefix) and teryt_length is not None:
                     owners.add(Owner(krs=None, teryt=teryt_code[:teryt_length]))
                     break
 
