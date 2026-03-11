@@ -23,6 +23,7 @@ from stores.config import PROJECT_ROOT
 from stores.download import FileSource
 from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
+from stores.nlp import NLPImpl
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
 from stores.utils import UtilsImpl
@@ -151,8 +152,8 @@ def setup_context(
         con=duckdb.connect(),
         utils=UtilsImpl(),
         web=WebImpl(),
-        nlp=None,  # type: ignore
         crawl_queue=crawl_queue,
+        nlp=NLPImpl(),
         refresh_policy=policy,
     )
 
