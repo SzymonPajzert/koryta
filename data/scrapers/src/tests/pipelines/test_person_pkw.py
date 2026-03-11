@@ -1,8 +1,8 @@
 import pytest
 from pytest_check.context_manager import check
 
+from pipelines import PeoplePKW
 from conductor import _setup_context
-from main import PeoplePKW
 
 
 @pytest.fixture(scope="module")
