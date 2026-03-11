@@ -6,6 +6,7 @@ from pandas import DataFrame
 
 from entities.company import KRS as KrsCompany
 from entities.company import ManualKRS as KRS
+from entities.company import Owner
 from entities.person import KRS as KrsPerson
 from scrapers.krs.graph import QueryRelation
 from scrapers.map.postal_codes import PostalCodes
@@ -140,7 +141,7 @@ class CompaniesKRS(Pipeline):
     def add_relation(self, parent: str, child: str):
         if parent in self.companies and child in self.companies:
             self.companies[parent].children.add(child)
-            self.companies[child].parents.add(parent)
+            self.companies[child].parents.add(Owner(krs=parent, teryt=None))
         elif child not in self.companies:
             self.add_awaiting(child, (parent, child))
         elif parent not in self.companies:
@@ -245,6 +246,15 @@ def get_teryt(pcs: DataFrame, city: str, code: str | None):
     return ""
 
 
+KNOWN_OWNER_PREFIXES = {
+    "GMINA": 7,
+    "MIASTO": 4,
+    "POWIAT": 4,
+    "WOJEWODZTWO": 2,
+    "SKARB PAŃSTWA": None,  # TODO support it
+}
+
+
 def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
     try:
         odpis = data["odpis"]
@@ -255,20 +265,27 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
         siedziba = dzial1.get("siedzibaIAdres", {})
         miejscowosc = siedziba.get("adres", {}).get("miejscowosc").lower()
         postal_code = siedziba.get("adres", {}).get("kodPocztowy")
-        
-        owners = []
+
+        teryt_code = get_teryt(pcs, miejscowosc, postal_code)
+        owners: set[Owner] = set()
+        # Check who's listed as wspolnicy.
+        # If it's one of the known prefixes, add teryt as owners
         wspolnicy = dzial1.get("wspolnicySpzoo", [])
         for w in wspolnicy:
-            w_nazwa = w.get("nazwa", "")
-            if w_nazwa:
-                owners.append(w_nazwa)
+            if "nazwa" not in w:
+                continue
+            nazwa = w["nazwa"]
+            for prefix, teryt_length in KNOWN_OWNER_PREFIXES.items():
+                if nazwa.startswith(prefix) and teryt_length is not None:
+                    owners.add(Owner(krs=None, teryt=teryt_code[:teryt_length]))
+                    break
 
         return KrsCompany(
             krs=krs,
             name=nazwa,
             city=miejscowosc,
-            teryt_code=get_teryt(pcs, miejscowosc, postal_code),
-            owners=owners
+            teryt_code=teryt_code,
+            parents=owners,
         )
     except KeyError as e:
         raise ValueError(

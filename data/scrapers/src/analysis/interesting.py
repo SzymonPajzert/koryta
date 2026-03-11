@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from entities.company import KRS as KrsCompany
-from entities.company import InterestingEntity, InterestingReason, ManualKRS
+from entities.company import InterestingEntity, InterestingReason, ManualKRS, Owner
 from scrapers.krs.companies import company_names
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
@@ -45,7 +45,10 @@ class CompaniesMerged(Pipeline):
             for child in company.children:
                 graph.add_parent(company.krs, child)
             for parent in company.parents:
-                graph.add_parent(parent, company.krs)
+                if isinstance(parent, dict):
+                    parent = Owner(**parent)
+                if parent.krs is not None:
+                    graph.add_parent(parent.krs, company.krs)
 
         krs_to_owner_teryts: dict[str, set[str]] = {}
         for row in iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d)):
