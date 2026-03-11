@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 
 import pandas as pd
 
@@ -23,12 +24,19 @@ from scrapers.wiki.process_articles_ner import ProcessWikiNer
 
 
 def print_results(res, args):
-    if args.output == "stdout":
+    if args.output in {"stdout", "stderr"}:
+        output = sys.stdout if args.output == "stdout" else sys.stderr
         if isinstance(res, pd.DataFrame):
-            print(res.to_json(orient="records", lines=True, date_format="iso"))
+            print(
+                res.to_json(orient="records", lines=True, date_format="iso"),
+                file=output,
+            )
         elif isinstance(res, list):
             for item in res:
-                print(json.dumps(item, default=str))
+                print(
+                    json.dumps(item, default=str),
+                    file=output,
+                )
     else:
         print("Finished processing")
 
@@ -78,7 +86,7 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        choices=["file", "stdout"],
+        choices=["file", "stdout", "stderr"],
         default="file",
         help="Output channel (file or stdout)",
     )
