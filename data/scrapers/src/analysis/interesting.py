@@ -40,16 +40,7 @@ class CompaniesMerged(Pipeline):
         self.teryt_pipeline.read_or_process(ctx)
         self.cities_to_teryt = getattr(self.teryt_pipeline, "cities_to_teryt", {})
 
-        graph = CompanyGraph()
-        for company in iterate(ctx, self.scraped_companies, lambda d: KrsCompany(*d)):
-            for child in company.children:
-                graph.add_parent(company.krs, child)
-            for parent in company.parents:
-                if isinstance(parent, dict):
-                    parent = Owner(**parent)
-                if parent.krs is not None:
-                    graph.add_parent(parent.krs, company.krs)
-
+        graph = self.company_graph(ctx)
         krs_to_owner_teryts: dict[str, set[str]] = {}
         for row in iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d)):
             teryts = getattr(row, "teryts", None)
@@ -140,6 +131,18 @@ class CompaniesMerged(Pipeline):
                     children=set(graph.children.get(row["krs"], [])),
                 )
                 ctx.io.output_entity(entity)
+
+    def company_graph(self, ctx: Context):
+        graph = CompanyGraph()
+        for company in iterate(ctx, self.scraped_companies, lambda d: KrsCompany(*d)):
+            for child in company.children:
+                graph.add_parent(company.krs, child)
+            for parent in company.parents:
+                if isinstance(parent, dict):
+                    parent = Owner(**parent)
+                if parent.krs is not None:
+                    graph.add_parent(parent.krs, company.krs)
+        return graph
 
     def get_reasons(self, row):
         reasons = []
