@@ -1,7 +1,7 @@
 import pytest
 
 from analysis.stats import Statistics
-from main import _setup_context
+from conductor import _setup_context
 
 
 @pytest.fixture

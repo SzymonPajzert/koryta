@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from main import _setup_context
+from conductor import _setup_context
 from scrapers.stores import LocalFile
 from scrapers.wiki.process_articles import (
     Company,

@@ -14,7 +14,7 @@ import numpy as np
 import requests
 
 from analysis.payloads import UploadPayloads
-from main import _setup_context
+from conductor import _setup_context
 from scrapers.krs.graph import CompanyGraph
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
