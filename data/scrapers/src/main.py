@@ -28,7 +28,9 @@ def print_results(res, args):
         output = sys.stdout if args.output == "stdout" else sys.stderr
         if isinstance(res, pd.DataFrame):
             print(
-                res.to_json(orient="records", lines=True, date_format="iso"),
+                res.to_json(
+                    orient="records", lines=True, date_format="iso", force_ascii=False
+                ),
                 file=output,
             )
         elif isinstance(res, list):
