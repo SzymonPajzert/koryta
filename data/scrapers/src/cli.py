@@ -251,12 +251,11 @@ def print_results(df, type):
         print(df.drop(columns=["payload"]).head(20).to_string())
     else:
         print(df.head(20).to_string())
-    print("\n--- Payload Preview (First 1) ---")
+    print("\n--- Payload Preview (First 3) ---")
     if not df.empty and "payload" in df.columns:
-        preview_payload = df.iloc[0].get("payload")
-        print(
-            json.dumps(preview_payload, indent=2, ensure_ascii=False, cls=NumpyEncoder)
-        )
+        for i in range(3):
+            preview_payload = df.iloc[i].get("payload")
+            print(json.dumps(json.loads(preview_payload), indent=2))
 
 
 def execute_query(ctx, args, query):
