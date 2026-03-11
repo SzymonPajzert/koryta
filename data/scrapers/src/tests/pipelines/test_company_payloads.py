@@ -5,16 +5,8 @@ from analysis.payloads import CompanyPayloads
 from main import _setup_context
 from scrapers.stores import ProcessPolicy
 
-# TODO this check doesn't work yet
-
 
 def test_pipeline_owner_teryt_presence():
-    """
-    End-to-end test to verify that MS KRS API 'wspolnicySpzoo' mappings
-    successfully surface as owner TERYT codes in UploadPayloads payloads.
-    We test on a known company (KLA - Kaliskie Linie Autobusowe - 0000144386).
-    """
-
     sys.argv.extend(["--region", "3061"])
     ctx, dumper = _setup_context(False, ProcessPolicy.with_default())
 
