@@ -1,4 +1,5 @@
 from datetime import timedelta
+from pathlib import Path
 from functools import lru_cache
 
 import pandas as pd
@@ -7,7 +8,7 @@ import requests_cache
 
 from . import parse
 
-URL_DF_PATH = "src/scrapers/article/test_data/url_parsing.csv"
+URL_DF_PATH = Path(__file__).resolve().parent / "test_data" / "url_parsing.csv"
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
 
 # This sets up a local SQLite database named 'http_cache'
