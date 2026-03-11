@@ -402,7 +402,7 @@ IGNORE_COMMITTEES = {
 }
 
 
-def get_party_from_elections(elections: list[dict[str, Any]]) -> set[str]:
+def get_party_from_elections(elections: list[dict[str, Any]]) -> list[str]:
     party = set()
     for e in elections:
         if "committee" in e:
@@ -421,4 +421,4 @@ def get_party_from_elections(elections: list[dict[str, Any]]) -> set[str]:
                 # TODO support it at one point
                 continue
 
-    return set(party)
+    return list(party)

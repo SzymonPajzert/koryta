@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -94,7 +95,7 @@ def test_upload_payloads_person_shape(mock_ctx):
     assert person_row["entity_type"] == "person"
     assert "1465" in person_row["teryt_powiat"]
 
-    payload = person_row["payload"]
+    payload = json.loads(person_row["payload"])
     assert payload["name"] == "Jan Kowalski"
     assert payload["wikipedia"] == "https://pl.wikipedia.org/wiki/Jan_Kowalski"
     assert len(payload["companies"]) == 1
@@ -102,7 +103,7 @@ def test_upload_payloads_person_shape(mock_ctx):
     assert payload["companies"][0]["name"] == "Test Company Sp. z o.o."
     assert payload["companies"][0]["role"] == "Prezes"
     assert len(payload["elections"]) == 1
-    assert payload["elections"][0]["party"] == "Test Party"
+    assert payload["elections"][0]["committee"] == "Test Party"
     assert payload["elections"][0]["teryt"] == "1465"
 
 
@@ -143,7 +144,7 @@ def test_upload_payloads_company_shape(mock_ctx):
     assert company_row["entity_id"] == "0000123456"
     assert company_row["krs"] == "0000123456"
 
-    payload = company_row["payload"]
+    payload = json.loads(company_row["payload"])
     assert payload["name"] == "Test Company Sp. z o.o."
     assert payload["krs"] == "0000123456"
     assert payload["city"] == "Warszawa"
