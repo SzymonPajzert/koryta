@@ -1,9 +1,11 @@
 import json
 import sys
 
-from analysis.payloads import UploadPayloads
+from analysis.payloads import CompanyPayloads
 from main import _setup_context
 from scrapers.stores import ProcessPolicy
+
+# TODO this check doesn't work yet
 
 
 def test_pipeline_owner_teryt_presence():
@@ -17,7 +19,7 @@ def test_pipeline_owner_teryt_presence():
     ctx, dumper = _setup_context(False, ProcessPolicy.with_default())
 
     # Ensure UploadPayloads yields dataframe for region 3061
-    p_payloads = UploadPayloads()
+    p_payloads = CompanyPayloads()
     df_payloads = p_payloads.read_or_process(ctx)
 
     assert df_payloads is not None, "Payloads Pipeline should return a DataFrame"
