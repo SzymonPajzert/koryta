@@ -242,9 +242,7 @@ async function lookupRegionId(
         (!allowed.election_year ||
           allowed.election_year === election.election_year)
       ) {
-        console.log(
-          `Region not found for allowed election ${JSON.stringify(allowed)}: ${JSON.stringify(election)}`,
-        );
+        console.info(`Skipping missing region for allowed election`);
         return undefined;
       }
     }
