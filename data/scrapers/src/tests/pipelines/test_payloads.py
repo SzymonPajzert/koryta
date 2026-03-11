@@ -144,7 +144,7 @@ def test_upload_payloads_company_shape(mock_ctx):
     assert company_row["entity_id"] == "0000123456"
     assert company_row["krs"] == "0000123456"
 
-    payload = json.loads(company_row["payload"])
+    payload = company_row["payload"]
     assert payload["name"] == "Test Company Sp. z o.o."
     assert payload["krs"] == "0000123456"
     assert payload["city"] == "Warszawa"
