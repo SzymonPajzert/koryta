@@ -1,11 +1,23 @@
 """Data classes for representing companies and KRS entities."""
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
-class Company:
-    pass
+class Owner:
+    krs: Optional[str]
+    teryt: Optional[str]
+
+    def __hash__(self) -> int:
+        return hash(self.krs or self.teryt)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, Owner)
+            and self.krs == other.krs
+            and self.teryt == other.teryt
+        )
 
 
 @dataclass
@@ -19,8 +31,7 @@ class KRS:
     is_interesting: bool = False
     sources: set[str] = field(default_factory=set)
     children: set[str] = field(default_factory=set)
-    parents: set[str] = field(default_factory=set)
-    owners: list[str] = field(default_factory=list)
+    parents: set[Owner] = field(default_factory=set)
 
     def __post_init__(self):
         """Ensures the KRS ID is zero-padded to 10 digits."""
@@ -109,9 +120,7 @@ class ManualKRS:
         return self.__str__()
 
     def __hash__(self) -> int:
-        """Computes the hash based on the KRS ID."""
         return hash(self.id)
 
     def __eq__(self, other: object) -> bool:
-        """Checks equality based on the KRS ID."""
         return isinstance(other, ManualKRS) and self.id == other.id
