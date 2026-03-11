@@ -4,6 +4,11 @@ from dataclasses import dataclass
 
 
 @dataclass
+class Person:
+    pass
+
+
+@dataclass
 class Koryta:
     """Represents a person from the main 'koryta.pl' dataset."""
 
