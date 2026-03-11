@@ -14,11 +14,12 @@ import numpy as np
 import requests
 
 from analysis.payloads import CompanyPayloads, PeoplePayloads
+from entities.company import Company
+from entities.person import Person
 from conductor import _setup_context
-from scrapers.krs.graph import CompanyGraph
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
-from scrapers.stores import Context, LocalFile, Pipeline
+from scrapers.stores import Context, Pipeline
 
 PIPELINES = [
     CompanyPayloads,
@@ -144,9 +145,6 @@ def parse_args():
         default="person",
         help="Entity type to query",
     )
-    parser.add_argument(
-        "--query", type=str, help="SQL query to filter data from upload_payloads"
-    )
     parser.add_argument("--region", type=str, help="Filter by teryt prefix (e.g. 3061)")
     parser.add_argument("--krs", type=str, help="Filter by KRS and all its descendants")
     parser.add_argument(
@@ -156,7 +154,7 @@ def parse_args():
         help="API endpoint to use",
     )
     parser.add_argument("--token", type=str, help="Optional auth token")
-    return parser.parse_known_args()
+    return parser.parse_known_args()[0]
 
 
 def register_table(ctx, pipeline_cls) -> bool:
@@ -259,7 +257,7 @@ def print_results(df, type):
             print(json.dumps(json.loads(preview_payload), indent=2))
 
 
-def read_payloads(ctx, args):
+def read_payloads(ctx, args) -> list[Person] | list[Company]:
     if args.type == "person":
         p_payloads = Pipeline.create(PeoplePayloads)
     elif args.type == "company":
@@ -273,80 +271,44 @@ def read_payloads(ctx, args):
     return df_payloads
 
 
-def execute_query(ctx, args, query):
+def read_payloads_filtered(ctx, args):
     print("Executing query...")
-    try:
-        df_payloads = read_payloads(ctx, args)
-        ctx.con.register("upload_payloads", df_payloads)
+    # TODO make it a typed list
+    payloads = read_payloads(ctx, args)
+    entity_filters = []
 
-        if args.type == "person":
-            if not query and args.region:
-                # pipeline already filtered people by region,
-                # so we just take all 'person' entities
-                query = "SELECT * FROM upload_payloads WHERE entity_type='person'"
-            elif not query:
-                query = "SELECT * FROM upload_payloads WHERE entity_type='person'"
+    if args.type == "person":
+        if args.region:
+            entity_filters.append(lambda p: p.teryt == args.region)
 
-        if args.type == "company":
-            if args.krs:
-                print(f"Building graph to find descendants of {args.krs}...")
-                graph = CompanyGraph.from_dataframe(
-                    ctx.io.read_data(
-                        LocalFile(
-                            "companies_merged/companies_merged.jsonl", "versioned"
-                        )
-                    ).read_dataframe("jsonl")
-                )
-                relevant_companies = graph.all_descendants([args.krs])
-                print(f"Found {len(relevant_companies)} relevant companies.")
-                id_list = ", ".join([f"'{k}'" for k in relevant_companies])
-                if id_list:
-                    query = f"""SELECT * FROM upload_payloads
-                    WHERE entity_type='company' AND entity_id IN ({id_list})"""
-                else:
-                    query = (
-                        "SELECT * FROM upload_payloads WHERE head=false"  # return empty
-                    )
-            elif args.region:
-                query = f"""
-                SELECT * FROM upload_payloads
-                WHERE entity_type='company'
-                    AND json_extract_string(payload, '$.teryt') LIKE '{args.region}%'"""
+    if args.type == "company":
+        if args.krs:
+            # TODO support it
+            pass
+        if args.region:
+            entity_filters.append(lambda p: p.teryt == args.region)
 
-            if getattr(args, "script", None) or getattr(args, "query", None):
-                # if script/query provided, fallback
-                pass
-            elif not args.krs and not args.region:
-                query = "SELECT * FROM upload_payloads WHERE entity_type='company'"
-
-        if not query:
-            query = f"SELECT * FROM upload_payloads WHERE entity_type='{args.type}'"
-
-        print(f"Executing query: {query}")
-        df = ctx.con.execute(query).df()
-    except Exception as e:
-        print(f"Query execution failed: {e}")
-        sys.exit(1)
-
-    return df
+    for entity_filter in entity_filters:
+        payloads = filter(entity_filter, payloads)
+    return list(payloads)
 
 
 def main():
-    args, query = parse_args()
+    args = parse_args()
     ctx, _ = _setup_context(False)
 
-    df = execute_query(ctx, args, query)
-    print(f"Query returned {len(df)} rows.")
+    entities = read_payloads_filtered(ctx, args)
+    print(f"Query returned {len(entities)} rows.")
 
-    if df.empty:
+    if len(entities) == 0:
         print("No results.")
         sys.exit(0)
 
     if not args.submit:
-        print_results(df, args.type)
+        print_results(entities, args.type)
         print("\nUse --submit to upload.")
     else:
-        submit_results(args, df)
+        submit_results(args, entities)
 
 
 if __name__ == "__main__":
