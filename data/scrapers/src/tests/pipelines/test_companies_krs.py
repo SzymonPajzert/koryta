@@ -21,3 +21,10 @@ def test_teryt_code_set(companies):
     assert null_teryt_codes == 0, (
         f"total rows: {total}, null teryt codes: {null_teryt_codes}"
     )
+
+
+def test_0000846159(companies):
+    company = companies[companies["krs"] == "0000846159"]
+    assert (
+        company["name"].iloc[0] == "ZAKŁAD GOSPODARKI KOMUNALNEJ GMINY SŁUPIA KONECKA"
+    )

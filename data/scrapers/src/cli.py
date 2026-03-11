@@ -14,7 +14,7 @@ import numpy as np
 import requests
 
 from analysis.payloads import CompanyPayloads, PeoplePayloads
-from entities.company import Company
+from entities.company import KRS as CompanyKRS
 from entities.person import Person
 from conductor import _setup_context
 from scrapers.map.postal_codes import PostalCodes
@@ -253,7 +253,7 @@ def print_results(df, type):
             print(json.dumps(json.loads(preview_payload), indent=2))
 
 
-def read_payloads(ctx, args) -> list[Person] | list[Company]:
+def read_payloads(ctx, args) -> list[Person] | list[CompanyKRS]:
     if args.type == "person":
         p_payloads = Pipeline.create(PeoplePayloads)
     elif args.type == "company":
