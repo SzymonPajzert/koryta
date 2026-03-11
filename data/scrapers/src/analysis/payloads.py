@@ -10,7 +10,137 @@ from scrapers.map.teryt import Regions
 from scrapers.stores import Context, Pipeline
 
 
-def strip_none(d: dict | list) -> dict | list:
+class PeoplePayloads(Pipeline):
+    filename = None
+
+    people: Extract
+    companies: CompaniesMerged
+    regions: Regions
+
+    def process(self, ctx: Context) -> pd.DataFrame:
+        people_df = self.people.read_or_process(ctx)
+        companies_df = self.companies.read_or_process(ctx)
+
+        # Region filtering for companies
+        # TODO support accessing object flags in python
+        people_args = getattr(self.people, "args", None)
+        region = getattr(people_args, "region", None)
+        if region:
+            companies_df = companies_df[
+                companies_df["teryt_code"].fillna("").str.startswith(region)
+            ]
+            print(f"Filtered to {len(companies_df)} companies for region {region}")
+
+        companies_df_lookup = companies_df.dropna(subset=["krs", "name"])
+        company_lookup = dict(
+            zip(companies_df_lookup["krs"], companies_df_lookup["name"])
+        )
+
+        # TODO type this correctly
+        payloads: list[dict[str, Any]] = []
+
+        for _, row in people_df.iterrows():
+            payload = map_person_payload(row, company_lookup)
+            if payload:
+                # Get region for filtering
+                teryt_powiat = []
+                elec_list = row.get("elections")
+                if isinstance(elec_list, (list, np.ndarray)):
+                    for e in elec_list:
+                        if isinstance(e, dict):
+                            powiat = e.get("teryt_powiat", [])
+                            if isinstance(powiat, (list, np.ndarray)):
+                                teryt_powiat.extend([str(p) for p in powiat])
+
+                payloads.append(
+                    {
+                        "entity_type": "person",
+                        "entity_id": None,
+                        "krs": None,
+                        "teryt_powiat": list(set(teryt_powiat)),
+                        "payload": payload,
+                    }
+                )
+
+        df = pd.DataFrame(payloads)
+        # Ensure 'payload' is always a valid JSON string for DuckDB
+        if not df.empty and "payload" in df.columns:
+            df["payload"] = df["payload"].apply(
+                lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x
+            )
+        return df
+
+
+class CompanyPayloads(Pipeline):
+    filename = None
+
+    people: Extract
+    companies: CompaniesMerged
+    regions: Regions
+
+    def process(self, ctx: Context) -> pd.DataFrame:
+        # TODO type this correctly
+        payloads: list[dict[str, Any]] = []
+        companies_df = self.companies.read_or_process(ctx)
+        for _, row in companies_df.iterrows():
+            c_payload = map_company_payload(row)
+            if c_payload:
+                payloads.append(
+                    {
+                        "entity_type": "company",
+                        "entity_id": row.get("krs"),
+                        "krs": row.get("krs"),
+                        "teryt_powiat": [],
+                        "payload": c_payload,
+                    }
+                )
+
+        df = pd.DataFrame(payloads)
+        # Ensure 'payload' is always a valid JSON string for DuckDB
+        if not df.empty and "payload" in df.columns:
+            df["payload"] = df["payload"].apply(
+                lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x
+            )
+        return df
+
+
+class RegionPayloads(Pipeline):
+    filename = None
+
+    people: Extract
+    companies: CompaniesMerged
+    regions: Regions
+
+    def process(self, ctx: Context) -> pd.DataFrame:
+        regions_df = self.regions.read_or_process(ctx)
+        # TODO type this correctly
+        payloads: list[dict[str, Any]] = []
+        regions_df["id_str"] = regions_df["id"].astype(str)
+        regions_df["id_len"] = regions_df["id"].astype(str).str.len()
+        regions_df = regions_df.sort_values("id_len")
+        for _, row in regions_df.iterrows():
+            r_payload = map_region_payload(row)
+            if r_payload:
+                payloads.append(
+                    {
+                        "entity_type": "region",
+                        "entity_id": str(row.id),
+                        "krs": None,
+                        "teryt_powiat": [],
+                        "payload": json.dumps(r_payload),
+                    }
+                )
+
+        df = pd.DataFrame(payloads)
+        # Ensure 'payload' is always a valid JSON string for DuckDB
+        if not df.empty and "payload" in df.columns:
+            df["payload"] = df["payload"].apply(
+                lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x
+            )
+        return df
+
+
+def strip_none(d: dict | list | Any) -> dict | list:
     if isinstance(d, dict):
         return {
             k: strip_none(v)
@@ -277,99 +407,6 @@ def map_region_payload(row: pd.Series) -> dict[str, Any] | None:
         }
 
     return payload
-
-
-class UploadPayloads(Pipeline):
-    filename = None
-
-    people: Extract
-    companies: CompaniesMerged
-    regions: Regions
-
-    def process(self, ctx: Context) -> pd.DataFrame:
-        people_df = self.people.read_or_process(ctx)
-        companies_df = self.companies.read_or_process(ctx)
-
-        # Region filtering for companies
-        # TODO support accessing object flags in python
-        people_args = getattr(self.people, "args", None)
-        region = getattr(people_args, "region", None)
-        if region:
-            companies_df = companies_df[
-                companies_df["teryt_code"].fillna("").str.startswith(region)
-            ]
-            print(f"Filtered to {len(companies_df)} companies for region {region}")
-
-        companies_df_lookup = companies_df.dropna(subset=["krs", "name"])
-        company_lookup = dict(
-            zip(companies_df_lookup["krs"], companies_df_lookup["name"])
-        )
-
-        payloads = []
-
-        print("Processing people payloads...")
-        for _, row in people_df.iterrows():
-            payload = map_person_payload(row, company_lookup)
-            if payload:
-                # Get region for filtering
-                teryt_powiat = []
-                elec_list = row.get("elections")
-                if isinstance(elec_list, (list, np.ndarray)):
-                    for e in elec_list:
-                        if isinstance(e, dict):
-                            powiat = e.get("teryt_powiat", [])
-                            if isinstance(powiat, (list, np.ndarray)):
-                                teryt_powiat.extend([str(p) for p in powiat])
-
-                payloads.append(
-                    {
-                        "entity_type": "person",
-                        "entity_id": None,
-                        "krs": None,
-                        "teryt_powiat": list(set(teryt_powiat)),
-                        "payload": payload,
-                    }
-                )
-
-        print("Processing company payloads...")
-        for _, row in companies_df.iterrows():
-            c_payload = map_company_payload(row)
-            if c_payload:
-                payloads.append(
-                    {
-                        "entity_type": "company",
-                        "entity_id": row.get("krs"),
-                        "krs": row.get("krs"),
-                        "teryt_powiat": [],
-                        "payload": c_payload,
-                    }
-                )
-
-        # TODO remove or move to other pipeline
-        # print("Processing region payloads...")
-        # regions_df["id_str"] = regions_df["id"].astype(str)
-        # regions_df["id_len"] = regions_df["id"].astype(str).str.len()
-        # regions_df = regions_df.sort_values("id_len")
-        # for _, row in regions_df.iterrows():
-        #     r_payload = map_region_payload(row)
-        #     if r_payload:
-        #         payloads.append(
-        #             {
-        #                 "entity_type": "region",
-        #                 "entity_id": str(row.id),
-        #                 "krs": None,
-        #                 "teryt_powiat": [],
-        #                 "payload": json.dumps(r_payload),
-        #             }
-        #         )
-
-        df = pd.DataFrame(payloads)
-        # Ensure 'payload' is always a valid JSON string for DuckDB
-        if not df.empty and "payload" in df.columns:
-            df["payload"] = df["payload"].apply(
-                lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x
-            )
-        return df
 
 
 COMMITTEE_MAP = {

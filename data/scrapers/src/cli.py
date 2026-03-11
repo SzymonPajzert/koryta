@@ -13,7 +13,7 @@ import webbrowser
 import numpy as np
 import requests
 
-from analysis.payloads import UploadPayloads
+from analysis.payloads import CompanyPayloads, PeoplePayloads
 from conductor import _setup_context
 from scrapers.krs.graph import CompanyGraph
 from scrapers.map.postal_codes import PostalCodes
@@ -21,7 +21,8 @@ from scrapers.map.teryt import Regions
 from scrapers.stores import Context, LocalFile, Pipeline
 
 PIPELINES = [
-    UploadPayloads,
+    CompanyPayloads,
+    PeoplePayloads,
     PostalCodes,
     Regions,
 ]
@@ -258,13 +259,25 @@ def print_results(df, type):
             print(json.dumps(json.loads(preview_payload), indent=2))
 
 
+def read_payloads(ctx, args):
+    if args.type == "person":
+        p_payloads = Pipeline.create(PeoplePayloads)
+    elif args.type == "company":
+        p_payloads = Pipeline.create(CompanyPayloads)
+    else:
+        raise ValueError(f"Unknown entity type: {args.type}")
+
+    df_payloads = p_payloads.read_or_process(ctx)  # Ensure upload payloads exist.
+    if df_payloads is None:
+        raise ValueError(f"df_payloads for {args.type} is None")
+    return df_payloads
+
+
 def execute_query(ctx, args, query):
     print("Executing query...")
     try:
-        p_payloads = Pipeline.create(UploadPayloads)
-        df_payloads = p_payloads.read_or_process(ctx)  # Ensure upload payloads exist.
-        if df_payloads is not None:
-            ctx.con.register("upload_payloads", df_payloads)
+        df_payloads = read_payloads(ctx, args)
+        ctx.con.register("upload_payloads", df_payloads)
 
         if args.type == "person":
             if not query and args.region:

@@ -6,7 +6,7 @@ import pandas as pd
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import CompaniesMerged
-from analysis.payloads import UploadPayloads
+from analysis.payloads import CompanyPayloads, PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
 from conductor import _setup_context
@@ -34,24 +34,26 @@ def print_results(res, args):
 
 
 PIPELINES = [
-    ScrapeRejestrIO,
-    KorytaPeople,
-    KorytaDiffer,
-    PeoplePKW,
-    PeopleKRS,
+    CommitteeParties,
     CompaniesKRS,
+    CompaniesMerged,
+    CompanyPayloads,
+    Extract,
+    KorytaDiffer,
+    KorytaPeople,
+    PeopleEnriched,
+    PeopleKRS,
+    PeopleMerged,
+    PeopleParties,
+    PeoplePayloads,
+    PeoplePKW,
+    PostalCodes,
     ProcessWiki,
     ProcessWikiNer,
-    PeopleMerged,
-    PeopleEnriched,
-    CompaniesMerged,
-    Statistics,
-    Extract,
-    PostalCodes,
+    RegionPayloads,
     Regions,
-    UploadPayloads,
-    PeopleParties,
-    CommitteeParties,
+    ScrapeRejestrIO,
+    Statistics,
 ]
 
 
