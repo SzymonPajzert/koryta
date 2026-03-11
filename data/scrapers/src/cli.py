@@ -153,7 +153,6 @@ def parse_args():
         default="bulk_create",
         help="API endpoint to use",
     )
-    parser.add_argument("--token", type=str, help="Optional auth token")
     return parser.parse_known_args()[0]
 
 
@@ -183,13 +182,10 @@ def print_company(company):
 
 
 def submit_results(args, df):
-    token = args.token
-    if not token:
-        # Check environment
-        token = os.environ.get("KORYTA_TOKEN")
-    if not token:
-        # Try local storage or similar? For now dummy
+    if not args.prod and args.endpoint.startswith("http://localhost"):
         token = "test-token"
+    else:
+        token = authenticate_user(args.endpoint)
 
     headers = {
         "Content-Type": "application/json",
