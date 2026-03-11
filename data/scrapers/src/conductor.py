@@ -132,8 +132,10 @@ class Conductor(IO):
 
 
 def _setup_context(
-    use_rejestr_io: bool, policy: ProcessPolicy = ProcessPolicy.with_default()
+    use_rejestr_io: bool, policy: ProcessPolicy | None = None
 ) -> tuple[Context, EntityDumper]:
+    if policy is None:
+        policy = ProcessPolicy.with_default()
     dumper = EntityDumper()
     conductor = Conductor(dumper)
     rejestr_io = None
