@@ -95,13 +95,7 @@ class CompanyPayloads(Pipeline):
                     }
                 )
 
-        df = pd.DataFrame(payloads)
-        # Ensure 'payload' is always a valid JSON string for DuckDB
-        if not df.empty and "payload" in df.columns:
-            df["payload"] = df["payload"].apply(
-                lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x
-            )
-        return df
+        return pd.DataFrame(payloads)
 
 
 class RegionPayloads(Pipeline):
