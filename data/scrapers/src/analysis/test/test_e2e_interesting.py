@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from analysis.interesting import Companies
-from entities.company import InterestingEntity
+from entities.company import Company
 from scrapers.stores import Context, Pipeline
 from scrapers.tests.mocks import DictMockIO
 
@@ -82,7 +82,7 @@ def ctx(tmp_path):
     def get_last_written():
         if mock_io.output:
             # Filter out non-entity outputs (like write_dataframe tuples)
-            entities = [i for i in mock_io.output if isinstance(i, InterestingEntity)]
+            entities = [i for i in mock_io.output if isinstance(i, Company)]
             if entities:
                 return "companies_merged", entities
         return None
@@ -114,7 +114,7 @@ def test_find_interesting_entities_e2e(ctx):
     model.teryt_pipeline.cities_to_teryt = {}
     model.process(ctx)
 
-    results = [e for e in ctx.io.output if isinstance(e, InterestingEntity)]
+    results = [e for e in ctx.io.output if isinstance(e, Company)]
 
     # Verify results
     # We expect:

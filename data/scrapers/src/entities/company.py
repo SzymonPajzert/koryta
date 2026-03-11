@@ -5,19 +5,26 @@ from typing import Optional
 
 
 @dataclass
+class InterestingReason:
+    reason: str
+    details: str | None = None
+
+
+@dataclass(frozen=True)
 class Owner:
     krs: Optional[str]
     teryt: Optional[str]
 
-    def __hash__(self) -> int:
-        return hash(self.krs or self.teryt)
 
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, Owner)
-            and self.krs == other.krs
-            and self.teryt == other.teryt
-        )
+@dataclass
+class Company:
+    name: str
+    krs: str | None
+    teryt_code: str | None = None
+    reasons: list[InterestingReason] = field(default_factory=list)
+    sources: list[str] = field(default_factory=list)
+    children: set[str] = field(default_factory=set)
+    parents: set[Owner] = field(default_factory=set)
 
 
 @dataclass
@@ -46,22 +53,6 @@ class Wikipedia:
     city: str | None = None
     owner_articles: list[str] = field(default_factory=list)
     owner_text: str | None = None
-
-
-@dataclass
-class InterestingReason:
-    reason: str
-    details: str | None = None
-
-
-@dataclass
-class InterestingEntity:
-    name: str
-    krs: str | None
-    teryt_code: str | None = None
-    reasons: list[InterestingReason] = field(default_factory=list)
-    sources: list[str] = field(default_factory=list)
-    children: set[str] = field(default_factory=set)
 
 
 @dataclass

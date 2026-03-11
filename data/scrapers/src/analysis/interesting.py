@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from entities.company import KRS as KrsCompany
-from entities.company import InterestingEntity, InterestingReason, ManualKRS, Owner
+from entities.company import Company, InterestingReason, ManualKRS, Owner
 from scrapers.krs.companies import company_names
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
@@ -120,7 +120,7 @@ class Companies(Pipeline):
             if pd.notna(row["content_score"]):  # content_score comes from wiki
                 sources.append("wiki")
             if reasons:
-                entity = InterestingEntity(
+                entity = Company(
                     name=row["name"],
                     krs=row["krs"] if pd.notna(row["krs"]) else None,
                     teryt_code=row["teryt_code"]
