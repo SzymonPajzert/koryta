@@ -291,7 +291,9 @@ class UploadPayloads(Pipeline):
         companies_df = self.companies.read_or_process(ctx)
 
         # Region filtering for companies
-        region = getattr(self.people.args, "region", None)
+        # TODO support accessing object flags in python
+        people_args = getattr(self.people, "args", None)
+        region = getattr(people_args, "region", None)
         if region:
             companies_df = companies_df[
                 companies_df["teryt_code"].fillna("").str.startswith(region)
