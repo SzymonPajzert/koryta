@@ -32,13 +32,14 @@ def test_party_mapping(graph):
     )
 
 
-def test_sum_smaller_than_one(graph):
+def test_valid_score_range(graph):
     numeric_graph = graph.select_dtypes(include="number")
-    row_sums = numeric_graph.sum(axis=1)
-    people_with_sum_greater_than_one = graph[row_sums > 1.0]
-    assert len(people_with_sum_greater_than_one) == 0, (
-        "Some individuals have a sum of scores greater than 1.0, \
-            which should not happen after normalization"
+    # Due to absolute confidence scoring, individual scores are clipped to 1.0
+    # but their sum can exceed 1.0
+    invalid_scores = graph[(numeric_graph > 1.0).any(axis=1)]
+    assert len(invalid_scores) == 0, (
+        "Some individuals have a score greater than 1.0, "
+        "which should not happen after scaling and clipping"
     )
 
 

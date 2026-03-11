@@ -42,7 +42,7 @@ def test_upload_payloads_person_shape(mock_ctx):
                 "last_name": "Kowalski",
                 "elections": [
                     {
-                        "election_type": "sejm",
+                        "election_type": "sejmu",
                         "party": "Test Party",
                         "election_year": 2023,
                         "teryt_powiat": ["1465"],
