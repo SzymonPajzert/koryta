@@ -36,3 +36,43 @@ PIPELINES = [
     ScrapeRejestrIO,
     Statistics,
 ]
+
+
+def edges():
+    edges = []
+
+    pipelines = {p.__name__: p for p in PIPELINES}
+    todo = list(pipelines.keys())
+
+    for p_name in todo:
+        p = pipelines[p_name]
+        for _, d in p().list_sources():
+            if d.__name__ not in pipelines:
+                pipelines[d.__name__] = d
+                todo.append(d.__name__)
+            edges.append((d.__name__, p.__name__))
+
+    return edges
+
+
+def nodes():
+    result = set()
+    for k, v in edges():
+        result.add(k)
+        result.add(v)
+    return result
+
+
+def graphviz() -> str:
+    return "\n".join(f"{k} -> {v}" for k, v in edges())
+
+
+def flowchart() -> str:
+    ns = "\n".join(k for k in nodes())
+    es = "\n".join(f"({k})\n  ({v})" for k, v in edges())
+    return ns + "\n" + es
+
+
+def main():
+    print(graphviz())
+    print(flowchart())

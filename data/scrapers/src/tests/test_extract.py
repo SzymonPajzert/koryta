@@ -5,7 +5,8 @@ import pandas as pd
 import pytest
 
 from conductor import _setup_context
-from main import Extract, Pipeline
+from main import Pipeline
+from pipelines import Extract
 
 
 @pytest.fixture

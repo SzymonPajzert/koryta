@@ -119,6 +119,7 @@ dependencies = [
 # jupyter lab is available as well for analysis
 koryta = "main:main"
 koryta_uploader = "cli:main"
+koryta_pipelines = "pipelines:main"
 
 
 [build-system]
