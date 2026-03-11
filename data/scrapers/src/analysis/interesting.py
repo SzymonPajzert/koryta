@@ -68,7 +68,14 @@ class CompaniesMerged(Pipeline):
             records.append(
                 {"krs": krs, "owner_teryts": list(krs_to_owner_teryts.get(krs, []))}
             )
-        children_of_hardcoded = pd.DataFrame(records)  # noqa: F841
+        children_of_hardcoded = pd.DataFrame(  # noqa: F841
+            records
+            if records
+            else {
+                "krs": pd.Series([], dtype=str),
+                "owner_teryts": pd.Series([], dtype=object),
+            }
+        )
 
         self.wiki_pipeline.read_or_process(ctx)
         wiki_companies = ctx.io.read_data(  # noqa: F841
@@ -81,6 +88,8 @@ class CompaniesMerged(Pipeline):
         krs_companies = ctx.io.read_data(  # noqa: F841
             LocalFile("company_krs/company_krs.jsonl", "versioned")
         ).read_dataframe("jsonl")
+        if "owners" not in krs_companies.columns:
+            krs_companies = krs_companies.assign(owners=None)
 
         hardcoded_names = pd.DataFrame(  # noqa: F841
             {"name": list(company_names.values()) + list(TEST_FILES)}

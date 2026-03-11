@@ -126,6 +126,7 @@ def test_upload_payloads_company_shape(mock_ctx):
                 "city": "Warszawa",
                 "children": ["0000654321"],
                 "teryt_code": "1465011",
+                "owner_text": "Miasto Warszawa",
             }
         ]
     )
