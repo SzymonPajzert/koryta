@@ -4,6 +4,11 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class Company:
+    pass
+
+
+@dataclass
 class KRS:
     """Represents a company entry from a KRS (National Court Register) search."""
 
