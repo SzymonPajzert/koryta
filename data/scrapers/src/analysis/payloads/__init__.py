@@ -15,7 +15,6 @@ class PeoplePayloads(Pipeline):
 
     people: Extract
     companies: CompaniesMerged
-    regions: Regions
 
     def process(self, ctx: Context) -> pd.DataFrame:
         people_df = self.people.read_or_process(ctx)
@@ -74,9 +73,7 @@ class PeoplePayloads(Pipeline):
 class CompanyPayloads(Pipeline):
     filename = None
 
-    people: Extract
     companies: CompaniesMerged
-    regions: Regions
 
     def process(self, ctx: Context) -> pd.DataFrame:
         # TODO type this correctly
@@ -101,8 +98,6 @@ class CompanyPayloads(Pipeline):
 class RegionPayloads(Pipeline):
     filename = None
 
-    people: Extract
-    companies: CompaniesMerged
     regions: Regions
 
     def process(self, ctx: Context) -> pd.DataFrame:
