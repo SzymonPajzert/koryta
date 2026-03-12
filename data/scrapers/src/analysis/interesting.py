@@ -2,7 +2,6 @@ import typing
 
 import numpy as np
 
-from entities.company import KRS as KrsCompany
 from entities.company import Company, ManualKRS, Owner, Wikipedia
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
@@ -57,15 +56,13 @@ class Companies(Pipeline):
             if krs is not None:
                 teryt_code = krs.teryt_code
 
-            reasons, sources = self.get_reasons(krs, wiki)
-
             ctx.io.output_entity(
                 Company(
-                    name=attr(wiki, "name") or krs.name,
+                    name=attr(wiki, "name") or attr(krs, "name"),
+                    city=attr(wiki, "city") or attr(krs, "city"),
                     krs=krs_id,
                     teryt_code=teryt_code,
-                    reasons=reasons,
-                    sources=sources,
+                    sources=self.merge_sources(krs, wiki),
                     # TODO add owners=[],
                 )
             )
@@ -107,7 +104,7 @@ class Companies(Pipeline):
     def company_graph(self, ctx: Context):
         graph = CompanyGraph()
         for company in iterate_pipeline(
-            ctx, self.scraped_companies, lambda d: KrsCompany(*d)
+            ctx, self.scraped_companies, lambda d: Company(*d)
         ):
             for child in company.children:
                 graph.add_parent(company.krs, child)
@@ -118,9 +115,9 @@ class Companies(Pipeline):
                     graph.add_parent(parent.krs, company.krs)
         return graph
 
-    def get_reasons(self, krs: KrsCompany | None, wiki: Wikipedia | None):
+    def merge_sources(self, krs: Company | None, wiki: Wikipedia | None):
         # TODO implement
-        return [], []
+        return set()
 
 
 # TODO is there a pythonic way
@@ -133,8 +130,9 @@ def attr(obj, f):
 def iterate_pipeline(ctx, pipeline: Pipeline, constructor):
     try:
         df = pipeline.read_or_process(ctx)
-        for row in df.itertuples(index=False):
-            yield constructor(row)
+        for row in df.to_dict(orient="records"):
+            records = typing.cast(dict[str, typing.Any], row)
+            yield constructor(**records)
     except:
         print("Failed to process pipeline", pipeline)
         raise

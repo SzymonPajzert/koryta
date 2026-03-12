@@ -1,10 +1,9 @@
-import dataclasses
 import json
 from datetime import datetime, timedelta
 
 from pandas import DataFrame
 
-from entities.company import KRS as KrsCompany
+from entities.company import Company as KrsCompany
 from entities.company import ManualKRS as KRS
 from entities.company import Owner
 from entities.person import KRS as KrsPerson
@@ -192,11 +191,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             self.add_company_source(c.krs, blob_name)
 
         for company in self.companies.values():
-            ctx.io.output_entity(
-                dataclasses.replace(
-                    company, sources=self.company_sources.get(company.krs, set())
-                )
-            )
+            ctx.io.output_entity(company)
 
         for k, vs in self.awaiting_relations.items():
             for v in vs:

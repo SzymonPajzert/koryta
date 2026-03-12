@@ -14,7 +14,7 @@ import numpy as np
 import requests
 
 from analysis.payloads import CompanyPayloads, PeoplePayloads
-from entities.company import KRS as CompanyKRS
+from entities.company import Company as CompanyKRS  # TODO remove alias
 from entities.person import Person
 from conductor import _setup_context
 from scrapers.map.postal_codes import PostalCodes
