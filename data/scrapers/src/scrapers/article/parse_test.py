@@ -1,27 +1,71 @@
-from datetime import timedelta
 from functools import lru_cache
+import os
+from hashlib import sha256
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pandas as pd
 import requests
-import requests_cache
 
 from . import parse
 
 URL_DF_PATH = Path(__file__).resolve().parent / "test_data" / "url_parsing.csv"
+CACHE_DIR = Path(__file__).resolve().parent / "test_data" / "http_cache"
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
+REFRESH_ENV = "REFRESH_HTTP_CACHE"
 
-# This sets up a local SQLite database named 'http_cache'
-# It will automatically cache any 'GET' request
-requests_cache.install_cache(
-    "http_cache", backend="sqlite", expire_after=timedelta(days=1)
-)
+
+def _cache_path(url: str) -> Path:
+    parsed = urlparse(url)
+    hostname = parsed.hostname or "unknown"
+    url_hash = sha256(url.encode("utf-8")).hexdigest()
+    return CACHE_DIR / hostname / f"{url_hash}.bin"
+
+
+def _cache_meta_path(url: str) -> Path:
+    parsed = urlparse(url)
+    hostname = parsed.hostname or "unknown"
+    url_hash = sha256(url.encode("utf-8")).hexdigest()
+    return CACHE_DIR / hostname / f"{url_hash}.url"
+
+
+def _ensure_cache_dir(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _read_cached_bytes(url: str) -> bytes | None:
+    cache_path = _cache_path(url)
+    if cache_path.exists():
+        return cache_path.read_bytes()
+    return None
+
+
+def _write_cached_bytes(url: str, content: bytes) -> None:
+    cache_path = _cache_path(url)
+    meta_path = _cache_meta_path(url)
+    _ensure_cache_dir(cache_path)
+    cache_path.write_bytes(content)
+    if not meta_path.exists():
+        meta_path.write_text(url + "\n")
 
 
 @lru_cache(maxsize=128)
 def fetch_url(url: str) -> bytes:
+    refresh = os.getenv(REFRESH_ENV) == "1"
+    if not refresh:
+        cached = _read_cached_bytes(url)
+        if cached is not None:
+            return cached
+        raise FileNotFoundError(
+            f"Missing cached response for {url}. "
+            f"Set {REFRESH_ENV}=1 to fetch and populate cache."
+        )
+
     response = requests.get(url, headers=HEADERS, timeout=10)
-    return response.content
+    response.raise_for_status()
+    content = response.content
+    _write_cached_bytes(url, content)
+    return content
 
 
 def normalize_quotes(text: str) -> str:
