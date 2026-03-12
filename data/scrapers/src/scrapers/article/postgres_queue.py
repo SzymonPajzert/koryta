@@ -240,14 +240,16 @@ class PostgresCrawlQueue(CrawlQueue):
             [uid],
         )
 
-    def put(self, urls: list[str]) -> None:
+    def put(self, urls: list[tuple[str, int]]) -> None:
         """Insert/enqueue URLs (idempotent)."""
         if not urls:
             return
         now = datetime.now(warsaw_tz)
-        rows: list[tuple] = [
-            (uuid7str(), url, 0, False, [], 0, now, None, None) for url in urls
-        ]
+        rows: list[tuple] = []
+        for url, priority in urls:
+            if not 0 <= priority <= 100:
+                raise ValueError(f"Priority must be 0-100, got {priority}")
+            rows.append((uuid7str(), url, priority, False, [], 0, now, None, None))
         self.insert_urls(rows)
 
     def insert_urls(self, rows: list[tuple]):

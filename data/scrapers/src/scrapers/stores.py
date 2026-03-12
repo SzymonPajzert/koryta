@@ -290,8 +290,11 @@ class CrawlQueue(metaclass=ABCMeta):
     """Abstract interface for crawler URL queue."""
 
     @abstractmethod
-    def put(self, urls: list[str]) -> None:
-        """Insert/enqueue URLs (idempotent)."""
+    def put(self, urls: list[tuple[str, int]]) -> None:
+        """Insert/enqueue URLs (idempotent).
+
+        Each entry is (url, priority) with priority in [0, 100].
+        """
         raise NotImplementedError()
 
     @abstractmethod
