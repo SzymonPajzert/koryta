@@ -24,7 +24,6 @@ class RegionPayloads(Pipeline):
             if r_payload:
                 payloads.append(
                     {
-                        "entity_type": "region",
                         "entity_id": str(row.id),
                         "krs": None,
                         "teryt_powiat": [],

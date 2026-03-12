@@ -54,7 +54,6 @@ class PeoplePayloads(Pipeline):
 
                 payloads.append(
                     {
-                        "entity_type": "person",
                         "entity_id": None,
                         "krs": None,
                         "teryt_powiat": list(set(teryt_powiat)),

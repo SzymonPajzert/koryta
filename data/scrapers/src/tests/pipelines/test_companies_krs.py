@@ -28,3 +28,11 @@ def test_0000846159(companies):
     assert (
         company["name"].iloc[0] == "ZAKŁAD GOSPODARKI KOMUNALNEJ GMINY SŁUPIA KONECKA"
     )
+
+
+# TODO check field presence, how often it's set
+# assert company_row["krs"] == "0000123456"
+# assert company_row["name"] == "Test Company Sp. z o.o."
+# assert company_row["city"] == "Warszawa"
+# assert company_row["teryt"] == "1465011"
+# assert "0000654321" in company_row["parents"]
