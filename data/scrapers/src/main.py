@@ -12,24 +12,32 @@ from scrapers.stores import (
 )
 
 
-def print_results(res, args):
-    if args.output in {"stdout", "stderr"}:
-        output = sys.stdout if args.output == "stdout" else sys.stderr
+class Printer:
+    def __init__(self, args):
+        self.args = args
+        self.output = sys.stderr if self.args.output == "stderr" else sys.stdout
+
+    def print_results(self, res):
+        if self.args.output in {"stdout", "stderr", "formatted"}:
+            for item in self.iterate(res):
+                print(self.format_dict(item), file=self.output)
+        else:
+            print("Finished processing")
+
+    def format_dict(self, d):
+        if self.args.output == "formatted":
+            return json.dumps(d, default=str, ensure_ascii=False, indent=2)
+        else:
+            # Returns as sinle elements in a line
+            return json.dumps(d, ensure_ascii=False)
+
+    def iterate(self, res):
         if isinstance(res, pd.DataFrame):
-            print(
-                res.to_json(
-                    orient="records", lines=True, date_format="iso", force_ascii=False
-                ),
-                file=output,
-            )
+            for row in res.to_dict(orient="records"):
+                yield row
         elif isinstance(res, list):
             for item in res:
-                print(
-                    json.dumps(item, default=str),
-                    file=output,
-                )
-    else:
-        print("Finished processing")
+                yield item
 
 
 def main():
@@ -53,7 +61,7 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        choices=["file", "stdout", "stderr"],
+        choices=["file", "stdout", "stderr", "formatted"],
         default="file",
         help="Output channel (file or stdout)",
     )
@@ -85,6 +93,7 @@ def main():
             )
         print(f"Will run pipeline: {p}")
 
+    printer = Printer(args)
     try:
         for p_type in PIPELINES:
             if p_type.__name__ in args.pipeline or (
@@ -93,7 +102,7 @@ def main():
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)
                 res = p.read_or_process(ctx)
-                print_results(res, args)
+                printer.print_results(res)
     finally:
         print("Dumping...")
         dumper.dump_pandas()
