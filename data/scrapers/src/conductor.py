@@ -131,7 +131,7 @@ class Conductor(IO):
         return self.dumper.get_output(n)
 
 
-def _setup_context(
+def setup_context(
     use_rejestr_io: bool, policy: ProcessPolicy | None = None
 ) -> tuple[Context, EntityDumper]:
     if policy is None:

@@ -1,6 +1,6 @@
 import pytest
 
-from conductor import _setup_context
+from conductor import setup_context
 from scrapers.krs.data import CompaniesHardcoded, Pipeline
 
 KRS_STARTERS_ALL = "krs_starters.csv"
@@ -9,7 +9,7 @@ COMMON_ROW = 7
 
 @pytest.fixture
 def ctx():
-    return _setup_context(False)[0]
+    return setup_context(False)[0]
 
 
 def test_public_companies_list(ctx):

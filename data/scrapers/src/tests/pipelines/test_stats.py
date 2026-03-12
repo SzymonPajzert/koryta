@@ -1,12 +1,12 @@
 import pytest
 
 from analysis.stats import Statistics
-from conductor import _setup_context
+from conductor import setup_context
 
 
 @pytest.fixture
 def ctx():
-    return _setup_context(False)[0]
+    return setup_context(False)[0]
 
 
 @pytest.fixture
