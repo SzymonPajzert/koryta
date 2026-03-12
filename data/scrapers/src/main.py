@@ -4,7 +4,7 @@ import sys
 
 import pandas as pd
 
-from conductor import _setup_context
+from conductor import setup_context
 from pipelines import PIPELINES
 from scrapers.stores import (
     Pipeline,
@@ -79,7 +79,7 @@ def main():
 
     rejestr_io = "ScrapeRejestrIO" in args.pipeline
     policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
-    ctx, dumper = _setup_context(rejestr_io, policy)
+    ctx, dumper = setup_context(rejestr_io, policy)
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:

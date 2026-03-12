@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from conductor import _setup_context
+from conductor import setup_context
 from scrapers.stores import LocalFile
 from scrapers.wiki.process_articles import (
     Company,
@@ -194,7 +194,7 @@ COMPANIES_EXPECTED = {
 
 @pytest.fixture
 def ctx():
-    return _setup_context(False)[0]
+    return setup_context(False)[0]
 
 
 def list_test_files():

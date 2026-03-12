@@ -4,14 +4,14 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from conductor import _setup_context
+from conductor import setup_context
 from main import Pipeline
 from pipelines import Extract
 
 
 @pytest.fixture
 def ctx():
-    return _setup_context(False)[0]
+    return setup_context(False)[0]
 
 
 def extract(ctx, region):

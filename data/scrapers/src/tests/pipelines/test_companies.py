@@ -1,12 +1,12 @@
 import pytest
 
-from main import _setup_context
+from main import setup_context
 from pipelines import Companies
 
 
 @pytest.fixture
 def ctx():
-    return _setup_context(False)[0]
+    return setup_context(False)[0]
 
 
 @pytest.fixture

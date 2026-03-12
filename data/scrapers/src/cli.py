@@ -14,7 +14,7 @@ import numpy as np
 import requests
 
 from analysis.payloads import PeoplePayloads
-from conductor import _setup_context
+from conductor import setup_context
 from entities.company import Company as CompanyKRS  # TODO remove alias
 from entities.person import Person
 from scrapers.map.postal_codes import PostalCodes
@@ -290,7 +290,7 @@ def read_payloads_filtered(ctx, args):
 
 def main():
     args = parse_args()
-    ctx, _ = _setup_context(False)
+    ctx, _ = setup_context(False)
 
     entities = read_payloads_filtered(ctx, args)
     print(f"Query returned {len(entities)} rows.")

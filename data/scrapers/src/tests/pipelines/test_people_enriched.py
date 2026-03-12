@@ -4,7 +4,7 @@ import pytest
 import regex as re
 
 from analysis.people import PeopleEnriched
-from conductor import _setup_context
+from conductor import setup_context
 from entities.company import ManualKRS as KRS
 from main import Pipeline
 from scrapers.stores import CloudStorage, DownloadableFile
@@ -25,7 +25,7 @@ def df_all(ctx):
 
 @pytest.fixture(scope="module")
 def ctx():
-    c, _ = _setup_context(False)
+    c, _ = setup_context(False)
 
     original_list_files = c.io.list_files
 

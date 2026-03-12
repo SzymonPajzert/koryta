@@ -1,13 +1,13 @@
 import pytest
 from pytest_check.context_manager import check
 
-from conductor import _setup_context
+from conductor import setup_context
 from pipelines import PeoplePKW
 
 
 @pytest.fixture(scope="module")
 def ctx():
-    return _setup_context(False)[0]
+    return setup_context(False)[0]
 
 
 @pytest.fixture(scope="module")
