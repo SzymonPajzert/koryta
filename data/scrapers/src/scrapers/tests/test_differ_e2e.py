@@ -34,7 +34,7 @@ class TestKorytaDifferE2E(unittest.TestCase):
 
         self.ctx = Context(
             io=self.mock_io,
-            rejestr_io=None,
+            rejestr_io=MagicMock(),
             con=Mock(),
             utils=Mock(spec=Utils),
             web=Mock(spec=Web),
