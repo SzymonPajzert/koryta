@@ -10,11 +10,15 @@ from scrapers.stores import Context, Pipeline
 from scrapers.stores import DownloadableFile as FileSource
 
 
-class CompaniesHardcoded(Pipeline):
+class CompaniesHardcoded(Pipeline[KRS]):
     filename = None
 
     all_companies_krs: dict[str, KRS] = dict()
     teryt: Teryt
+
+    @property
+    def output_class(self):
+        return KRS
 
     def parse_teryt_from_row(self, row: pd.Series) -> str:
         try:

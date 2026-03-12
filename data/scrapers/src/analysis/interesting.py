@@ -12,7 +12,7 @@ from scrapers.stores import Context, LocalFile, Pipeline
 from scrapers.wiki.process_articles import ProcessWiki
 
 
-class Companies(Pipeline):
+class Companies(Pipeline[Company]):
     """
     This pipeline lists all companies we're aware of and either provides
     a full information on the given company or lists what information
@@ -25,6 +25,10 @@ class Companies(Pipeline):
     hardcoded_companies: CompaniesHardcoded
     wiki_pipeline: ProcessWiki
     teryt_pipeline: Teryt
+
+    @property
+    def output_class(self):
+        return Company
 
     def process(self, ctx: Context):
         """
@@ -72,7 +76,7 @@ class Companies(Pipeline):
     def graph(self, ctx: Context):
         graph = self.company_graph(ctx)
         krs_to_owner_teryts: dict[str, set[str]] = {}
-        for row in iterate_pipeline(ctx, self.hardcoded_companies, ManualKRS):
+        for row in self.hardcoded_companies.read_or_process_list(ctx):
             teryts = getattr(row, "teryts", None)
             if teryts is None:
                 continue
@@ -97,13 +101,13 @@ class Companies(Pipeline):
 
     def children_of_hardcoded(self, ctx: Context, graph: CompanyGraph) -> list[str]:
         children_of_hardcoded_set = graph.all_descendants(
-            iterate_pipeline(ctx, self.hardcoded_companies, ManualKRS)
+            self.hardcoded_companies.read_or_process_list(ctx)
         )
         return list(children_of_hardcoded_set)
 
     def company_graph(self, ctx: Context):
         graph = CompanyGraph()
-        for company in iterate_pipeline(ctx, self.scraped_companies, Company):
+        for company in self.scraped_companies.read_or_process_list(ctx):
             for child in company.children:
                 graph.add_parent(company.krs, child)
             for parent in company.parents:
