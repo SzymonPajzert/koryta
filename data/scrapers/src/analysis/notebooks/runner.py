@@ -1,6 +1,7 @@
 import typing
 
-from main import Pipeline, _setup_context
+from conductor import _setup_context
+from main import Pipeline
 
 
 def run_pipeline(p_type: typing.Type):

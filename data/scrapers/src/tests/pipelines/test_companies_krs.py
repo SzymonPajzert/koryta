@@ -1,6 +1,6 @@
 import pytest
 
-from main import _setup_context
+from conductor import _setup_context
 from scrapers.krs.list import CompaniesKRS
 
 

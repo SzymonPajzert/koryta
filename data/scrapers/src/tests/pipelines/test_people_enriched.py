@@ -4,8 +4,9 @@ import pytest
 import regex as re
 
 from analysis.people import PeopleEnriched
+from conductor import _setup_context
 from entities.company import ManualKRS as KRS
-from main import Pipeline, _setup_context
+from main import Pipeline
 from scrapers.stores import CloudStorage, DownloadableFile
 from stores.config import tests
 

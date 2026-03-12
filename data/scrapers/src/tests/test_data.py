@@ -1,6 +1,6 @@
 import pytest
 
-from main import _setup_context
+from conductor import _setup_context
 from scrapers.krs.data import CompaniesHardcoded, Pipeline
 
 KRS_STARTERS_ALL = "krs_starters.csv"

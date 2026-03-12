@@ -4,7 +4,8 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from main import Extract, Pipeline, _setup_context
+from conductor import _setup_context
+from main import Extract, Pipeline
 
 
 @pytest.fixture
