@@ -3,14 +3,12 @@ import pandas as pd
 
 from entities.company import KRS as KrsCompany
 from entities.company import Company, InterestingReason, ManualKRS, Owner
-from scrapers.krs.companies import company_names
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
 from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, LocalFile, Pipeline
 from scrapers.wiki.process_articles import ProcessWiki
-from util.lists import TEST_FILES
 
 
 def iterate(ctx, pipeline: Pipeline, constructor):
@@ -24,6 +22,12 @@ def iterate(ctx, pipeline: Pipeline, constructor):
 
 
 class Companies(Pipeline):
+    """
+    This pipeline lists all companies we're aware of and either provides
+    a full information on the given company or lists what information
+    we're missing on it.
+    """
+
     filename = "companies_merged"
 
     scraped_companies: CompaniesKRS
@@ -35,8 +39,6 @@ class Companies(Pipeline):
         """
         Merges KRS and Wiki data to identify interesting entities.
         """
-        con = ctx.con
-
         self.teryt_pipeline.read_or_process(ctx)
         self.cities_to_teryt = getattr(self.teryt_pipeline, "cities_to_teryt", {})
 
@@ -71,7 +73,7 @@ class Companies(Pipeline):
             }
         )
 
-        self.wiki_pipeline.read_or_process(ctx)
+        self.wiki_pipeline.read_or_process_list(ctx)
         wiki_companies = ctx.io.read_data(  # noqa: F841
             LocalFile(
                 "company_wikipedia/company_wikipedia.jsonl", "versioned"
@@ -85,10 +87,6 @@ class Companies(Pipeline):
         if "owners" not in krs_companies.columns:
             krs_companies = krs_companies.assign(owners=None)
 
-        hardcoded_names = pd.DataFrame(  # noqa: F841
-            {"name": list(company_names.values()) + list(TEST_FILES)}
-        )
-
         query = """
         SELECT 
             COALESCE(w.name, k.name) as name,
@@ -98,7 +96,6 @@ class Companies(Pipeline):
             CAST(k.teryt_code AS VARCHAR) as teryt_code,
             w.city as wiki_city,
             CASE WHEN ik.krs IS NOT NULL THEN 1 ELSE 0 END as is_interesting_krs,
-            CASE WHEN hn.name IS NOT NULL THEN 1 ELSE 0 END as is_hardcoded_name,
             ik.owner_teryts,
             k.owners
         FROM wiki_companies w
@@ -106,10 +103,9 @@ class Companies(Pipeline):
             ON CAST(w.krs AS VARCHAR) = CAST(k.krs AS VARCHAR)
         LEFT JOIN children_of_hardcoded ik
             ON CAST(k.krs AS VARCHAR) = CAST(ik.krs AS VARCHAR)
-        LEFT JOIN hardcoded_names hn ON k.name = hn.name
         """
 
-        df = con.execute(query).df()
+        df = ctx.con.execute(query).df()
 
         for _, row in df.iterrows():
             reasons = self.get_reasons(row)
@@ -152,12 +148,6 @@ class Companies(Pipeline):
                 InterestingReason(
                     reason="hardcoded_krs",
                     details="In interesting list or owned by one",
-                )
-            )
-        if row["is_hardcoded_name"]:
-            reasons.append(
-                InterestingReason(
-                    reason="hardcoded_name", details="In company_names list"
                 )
             )
 
