@@ -1,8 +1,9 @@
 import typing
+from dataclasses import dataclass
 
 import numpy as np
 
-from entities.company import Company, ManualKRS, Owner, Wikipedia
+from entities.company import Company, ManualKRS, Owner, Source, Wikipedia
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
@@ -55,14 +56,15 @@ class Companies(Pipeline):
             teryt_code = None
             if krs is not None:
                 teryt_code = krs.teryt_code
+            merge = CompanyMerger(krs, wiki)
 
             ctx.io.output_entity(
                 Company(
-                    name=attr(wiki, "name") or attr(krs, "name"),
+                    name=merge.name(),
                     city=attr(wiki, "city") or attr(krs, "city"),
                     krs=krs_id,
                     teryt_code=teryt_code,
-                    sources=self.merge_sources(krs, wiki),
+                    sources=merge.sources(),
                     # TODO add owners=[],
                 )
             )
@@ -70,9 +72,7 @@ class Companies(Pipeline):
     def graph(self, ctx: Context):
         graph = self.company_graph(ctx)
         krs_to_owner_teryts: dict[str, set[str]] = {}
-        for row in iterate_pipeline(
-            ctx, self.hardcoded_companies, lambda d: ManualKRS(*d)
-        ):
+        for row in iterate_pipeline(ctx, self.hardcoded_companies, ManualKRS):
             teryts = getattr(row, "teryts", None)
             if teryts is None:
                 continue
@@ -97,15 +97,13 @@ class Companies(Pipeline):
 
     def children_of_hardcoded(self, ctx: Context, graph: CompanyGraph) -> list[str]:
         children_of_hardcoded_set = graph.all_descendants(
-            iterate_pipeline(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id)
+            iterate_pipeline(ctx, self.hardcoded_companies, ManualKRS)
         )
         return list(children_of_hardcoded_set)
 
     def company_graph(self, ctx: Context):
         graph = CompanyGraph()
-        for company in iterate_pipeline(
-            ctx, self.scraped_companies, lambda d: Company(*d)
-        ):
+        for company in iterate_pipeline(ctx, self.scraped_companies, Company):
             for child in company.children:
                 graph.add_parent(company.krs, child)
             for parent in company.parents:
@@ -115,9 +113,47 @@ class Companies(Pipeline):
                     graph.add_parent(parent.krs, company.krs)
         return graph
 
-    def merge_sources(self, krs: Company | None, wiki: Wikipedia | None):
-        # TODO implement
-        return set()
+
+@dataclass
+class CompanyMerger:
+    krs: typing.Optional[Company]
+    wiki: typing.Optional[Wikipedia]
+
+    def name(self) -> str | None:
+        name = None
+        if self.krs is not None:
+            name = self.krs.name
+        if name is None and self.wiki is not None:
+            name = self.wiki.name
+        if name is None:
+            return None
+        return remove_company_suffix(name)
+
+    def sources(self) -> set[Source]:
+        result = set()
+        if self.krs is not None:
+            result = set(self.krs.sources)
+        if self.wiki is not None:
+            result.add(Source("wiki", self.wiki.name))
+        return result
+
+
+REMOVABLE_SUFFIXES = [
+    "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "Sp. z o.o.",
+    "SPÓŁKA AKCYJNA",
+    "SA",
+    "S.A.",
+]
+
+
+def remove_company_suffix(name: str) -> str:
+    upper = name.upper()
+    for suffix in REMOVABLE_SUFFIXES:
+        if upper.endswith(suffix.upper()):
+            name = name[: -len(suffix)]
+            return name.rstrip()
+    return name
 
 
 # TODO is there a pythonic way
@@ -127,7 +163,8 @@ def attr(obj, f):
     return None
 
 
-def iterate_pipeline(ctx, pipeline: Pipeline, constructor):
+# TODO remove it and read from read_or_process_list
+def iterate_pipeline(ctx, pipeline: Pipeline, constructor: typing.Type):
     try:
         df = pipeline.read_or_process(ctx)
         for row in df.to_dict(orient="records"):
