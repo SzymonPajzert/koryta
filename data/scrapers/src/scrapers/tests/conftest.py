@@ -6,7 +6,9 @@ from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
 
 pg_factories: Any
 try:
-    from pytest_postgresql import factories as pg_factories  # type: ignore[import-not-found]
+    from pytest_postgresql import (
+        factories as pg_factories,  # type: ignore[import-not-found]
+    )
 except ImportError:  # pragma: no cover - local env without test deps
     pg_factories = None
 
