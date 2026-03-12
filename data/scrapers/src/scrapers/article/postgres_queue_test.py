@@ -47,14 +47,14 @@ def clean_db(db: PostgresCrawlQueue):
 
 
 def test_init_tables_inserts_urls(db: PostgresCrawlQueue, clean_db):
-    db.init_tables(["https://example.com", "https://example.org"], reset=True)
+    db._init_tables(["https://example.com", "https://example.org"], reset=True)
     count = db.pg.fetchone("SELECT COUNT(*) FROM website_index;")[0]
     assert count == 2
 
 
 def test_get_skips_blocked(db: PostgresCrawlQueue, clean_db):
-    db.init_tables(["https://blocked.test/a", "https://ok.test/b"], reset=True)
-    db.load_blocked_domains([("blocked.test", "testing")])
+    db._init_tables(["https://blocked.test/a", "https://ok.test/b"], reset=True)
+    db.add_blocked_domains([("blocked.test", "testing")])
 
     row = db.get("worker-1", max_retries=3)
     assert row is not None
@@ -63,8 +63,8 @@ def test_get_skips_blocked(db: PostgresCrawlQueue, clean_db):
 
 
 def test_load_blocked_domains_upserts(db: PostgresCrawlQueue, clean_db):
-    db.load_blocked_domains([("blocked.test", "first")])
-    db.load_blocked_domains([("blocked.test", "second")])
+    db.add_blocked_domains([("blocked.test", "first")])
+    db.add_blocked_domains([("blocked.test", "second")])
     reason = db.pg.fetchone(
         "SELECT reason FROM blocked_domains WHERE domain = %s", ("blocked.test",)
     )[0]
@@ -72,22 +72,22 @@ def test_load_blocked_domains_upserts(db: PostgresCrawlQueue, clean_db):
 
 
 def test_mark_done_and_get_pages(db: PostgresCrawlQueue, clean_db):
-    db.init_tables(["https://example.com/a"], reset=True)
+    db._init_tables(["https://example.com/a"], reset=True)
     uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
     db.mark_done(uid, "s3://bucket/a")
-    rows = db.get_pages_to_parse(limit=5)
+    rows = db._get_pages_to_parse(limit=5)
     assert rows == [(uid, "https://example.com/a", "s3://bucket/a")]
 
 
 def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue, clean_db):
-    db.init_tables([], reset=True)
+    db._init_tables([], reset=True)
     now = datetime.now()
     rows: list[tuple] = [
         ("id-1", "https://example.com/a", 0, False, None, 0, now, None, None),
         ("id-2", "https://example.com/b", 0, False, [], 0, now, None, None),
     ]
-    db.insert_urls(rows)
-    db.reprioritize(lambda url: 30)
+    db._insert_urls(rows)
+    db._reprioritize(lambda url: 30)
     priorities = db.pg.fetchall(
         "SELECT id, priority FROM website_index ORDER BY id;"
     )
@@ -95,7 +95,7 @@ def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue, clean_db):
 
 
 def test_get_stats(db: PostgresCrawlQueue, clean_db):
-    db.init_tables([], reset=True)
+    db._init_tables([], reset=True)
     now = datetime.now()
     earlier = now - timedelta(minutes=5)
     rows = [
@@ -113,8 +113,8 @@ def test_get_stats(db: PostgresCrawlQueue, clean_db):
         ),
         ("id-3", "https://example.com/c", 0, False, [], 0, earlier, None, None),
     ]
-    db.insert_urls(rows)
-    stats = db.get_stats()
+    db._insert_urls(rows)
+    stats = db._get_stats()
     assert stats["total_urls"] == 3
     assert stats["finished_urls"] == 1
     assert stats["pending_urls"] == 2
@@ -129,7 +129,7 @@ def test_get_stats(db: PostgresCrawlQueue, clean_db):
 @pytest.mark.skipif(not _env_flag("POSTGRES_STRESS"), reason="set POSTGRES_STRESS=1")
 def test_concurrent_get_and_lock(db: PostgresCrawlQueue, clean_db):
     urls = [f"https://example.com/{i}" for i in range(200)]
-    db.init_tables(urls, reset=True)
+    db._init_tables(urls, reset=True)
 
     def worker(idx: int):
         row = db.get(f"worker-{idx}", max_retries=1)

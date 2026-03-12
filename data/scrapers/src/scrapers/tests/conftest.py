@@ -27,7 +27,7 @@ if pg_factories:
             port=int(params.get("port", 5432)),
         )
         queue = PostgresCrawlQueue(pg)
-        queue.init_tables([], reset=True)
+        queue._init_tables([], reset=True)
         return queue
 else:
 
