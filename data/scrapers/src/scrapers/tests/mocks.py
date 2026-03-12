@@ -184,17 +184,17 @@ class DictMockIO(IO):
                 return FromPath(self.files[fs.filename])
         raise FileNotFoundError(f"File {fs} not found in mock")
 
-    def output_entity(self, entity):
+    def output_entity(self, entity, sort_by=[]):
         self.output.append(entity)
 
     def upload(self, source, data, content_type):
         self.output.append((source, data, content_type))
 
-    def list_files(self, ref):
-        if isinstance(ref, LocalFile):
-            if ref.filename in self.files:
-                yield ref.filename
-        if isinstance(ref, CloudStorage):
+    def list_files(self, path: DataRef) -> typing.Iterable[DataRef]:
+        if isinstance(path, LocalFile):
+            if path.filename in self.files:
+                yield path
+        if isinstance(path, CloudStorage):
             return
             yield DownloadableFile("")
 
