@@ -14,7 +14,7 @@ try:
 except ImportError:  # pragma: no cover - local env without test deps
     pytest.skip("pytest-postgresql not installed", allow_module_level=True)
 
-from scrapers.article.db import CrawlerDB
+from scrapers.article.postgres_queue import PostgresCrawlQueue
 
 postgresql_proc = factories.postgresql_proc()
 postgresql = factories.postgresql("postgresql_proc")
@@ -77,7 +77,7 @@ class _TestPostgres:
 
 
 @pytest.fixture
-def db(postgresql) -> CrawlerDB:
+def db(postgresql) -> PostgresCrawlQueue:
     params = postgresql.info.get_parameters()
     pg = _TestPostgres(
         params.get("host", "localhost"),
@@ -86,33 +86,33 @@ def db(postgresql) -> CrawlerDB:
         params.get("user", "postgres"),
         params.get("password"),
     )
-    return CrawlerDB(pg)  # type: ignore[arg-type]
+    return PostgresCrawlQueue(pg)  # type: ignore[arg-type]
 
 
 @pytest.fixture()
-def clean_db(db: CrawlerDB):
+def clean_db(db: PostgresCrawlQueue):
     db.pg.execute("DROP TABLE IF EXISTS website_index;")
     db.pg.execute("DROP TABLE IF EXISTS blocked_domains;")
     yield
 
 
-def test_init_tables_inserts_urls(db: CrawlerDB, clean_db):
+def test_init_tables_inserts_urls(db: PostgresCrawlQueue, clean_db):
     db.init_tables(["https://example.com", "https://example.org"], reset=True)
     count = db.pg.fetchone("SELECT COUNT(*) FROM website_index;")[0]
     assert count == 2
 
 
-def test_get_and_lock_url_skips_blocked(db: CrawlerDB, clean_db):
+def test_get_skips_blocked(db: PostgresCrawlQueue, clean_db):
     db.init_tables(["https://blocked.test/a", "https://ok.test/b"], reset=True)
     db.load_blocked_domains([("blocked.test", "testing")])
 
-    row = db.get_and_lock_url("worker-1", max_retries=3)
+    row = db.get("worker-1", max_retries=3)
     assert row is not None
     _, url, _, _ = row
     assert "ok.test" in url
 
 
-def test_load_blocked_domains_upserts(db: CrawlerDB, clean_db):
+def test_load_blocked_domains_upserts(db: PostgresCrawlQueue, clean_db):
     db.load_blocked_domains([("blocked.test", "first")])
     db.load_blocked_domains([("blocked.test", "second")])
     reason = db.pg.fetchone(
@@ -121,7 +121,7 @@ def test_load_blocked_domains_upserts(db: CrawlerDB, clean_db):
     assert reason == "second"
 
 
-def test_mark_done_and_get_pages(db: CrawlerDB, clean_db):
+def test_mark_done_and_get_pages(db: PostgresCrawlQueue, clean_db):
     db.init_tables(["https://example.com/a"], reset=True)
     uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
     db.mark_done(uid, "s3://bucket/a")
@@ -129,7 +129,7 @@ def test_mark_done_and_get_pages(db: CrawlerDB, clean_db):
     assert rows == [(uid, "https://example.com/a", "s3://bucket/a")]
 
 
-def test_propagate_error_and_release_lock(db: CrawlerDB, clean_db):
+def test_mark_error_and_release(db: PostgresCrawlQueue, clean_db):
     db.init_tables(["https://example.com/a"], reset=True)
     uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
     db.pg.execute(
@@ -137,7 +137,7 @@ def test_propagate_error_and_release_lock(db: CrawlerDB, clean_db):
         "locked_at = %s WHERE id = %s",
         ("worker-1", datetime.now(), uid),
     )
-    db.propagate_error(uid, "boom")
+    db.mark_error(uid, "boom")
     row = db.pg.fetchone(
         "SELECT num_retries, errors, locked_by_worker_id, locked_at "
         "FROM website_index WHERE id = %s",
@@ -153,7 +153,7 @@ def test_propagate_error_and_release_lock(db: CrawlerDB, clean_db):
         "locked_at = %s WHERE id = %s",
         ("worker-2", datetime.now(), uid),
     )
-    db.release_lock(uid)
+    db.release(uid)
     row = db.pg.fetchone(
         "SELECT locked_by_worker_id, locked_at FROM website_index WHERE id = %s",
         (uid,),
@@ -161,7 +161,7 @@ def test_propagate_error_and_release_lock(db: CrawlerDB, clean_db):
     assert row == (None, None)
 
 
-def test_insert_urls_and_reprioritize(db: CrawlerDB, clean_db):
+def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue, clean_db):
     db.init_tables([], reset=True)
     now = datetime.now()
     rows: list[tuple] = [
@@ -176,7 +176,7 @@ def test_insert_urls_and_reprioritize(db: CrawlerDB, clean_db):
     assert priorities == [("id-1", 70), ("id-2", 70)]
 
 
-def test_get_stats(db: CrawlerDB, clean_db):
+def test_get_stats(db: PostgresCrawlQueue, clean_db):
     db.init_tables([], reset=True)
     now = datetime.now()
     earlier = now - timedelta(minutes=5)
@@ -209,12 +209,12 @@ def test_get_stats(db: CrawlerDB, clean_db):
 
 
 @pytest.mark.skipif(not _env_flag("POSTGRES_STRESS"), reason="set POSTGRES_STRESS=1")
-def test_concurrent_get_and_lock(db: CrawlerDB, clean_db):
+def test_concurrent_get_and_lock(db: PostgresCrawlQueue, clean_db):
     urls = [f"https://example.com/{i}" for i in range(200)]
     db.init_tables(urls, reset=True)
 
     def worker(idx: int):
-        row = db.get_and_lock_url(f"worker-{idx}", max_retries=1)
+        row = db.get(f"worker-{idx}", max_retries=1)
         return row[0] if row else None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -224,7 +224,7 @@ def test_concurrent_get_and_lock(db: CrawlerDB, clean_db):
             try:
                 results.append(f.result(timeout=10))
             except FutureTimeout:
-                pytest.fail("Concurrent get_and_lock_url timed out")
+                pytest.fail("Concurrent get timed out")
 
     ids = [r for r in results if r is not None]
     assert len(ids) == len(set(ids))
