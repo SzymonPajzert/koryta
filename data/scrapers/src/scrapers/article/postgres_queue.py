@@ -8,10 +8,12 @@ compliant.
 
 import logging
 from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Callable, Protocol
+from typing import Callable
 from zoneinfo import ZoneInfo
 
+import psycopg2  # type: ignore
 from uuid_extensions import uuid7str  # type: ignore
 
 from scrapers.stores import CrawlQueue
@@ -21,22 +23,63 @@ logger = logging.getLogger(__name__)
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 
-class _PostgresBackend(Protocol):
-    def connect(self): ...
+class PostgresClient:
+    def __init__(
+        self,
+        host: str,
+        database: str,
+        user: str,
+        password: str | None,
+        port: int = 5432,
+    ):
+        self.host = host
+        self.database = database
+        self.user = user
+        self.password = password
+        self.port = port
 
-    def execute(self, sql: str, params=None) -> None: ...
+    def connect(self):
+        return psycopg2.connect(
+            host=self.host,
+            port=self.port,
+            database=self.database,
+            user=self.user,
+            password=self.password,
+        )
 
-    def executemany(self, sql: str, rows: list[tuple]) -> None: ...
+    @contextmanager
+    def transaction(self):
+        conn = self.connect()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    yield cur
+        finally:
+            conn.close()
 
-    def fetchone(self, sql: str, params=None): ...
+    def execute(self, sql: str, params=None) -> None:
+        with self.transaction() as cur:
+            cur.execute(sql, params)
 
-    def fetchall(self, sql: str, params=None) -> list[tuple]: ...
+    def executemany(self, sql: str, rows: list[tuple]) -> None:
+        if not rows:
+            return
+        with self.transaction() as cur:
+            cur.executemany(sql, rows)
 
-    def transaction(self): ...
+    def fetchone(self, sql: str, params=None):
+        with self.transaction() as cur:
+            cur.execute(sql, params)
+            return cur.fetchone()
+
+    def fetchall(self, sql: str, params=None) -> list[tuple]:
+        with self.transaction() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
 
 
 class PostgresCrawlQueue(CrawlQueue):
-    def __init__(self, pg: _PostgresBackend):
+    def __init__(self, pg: PostgresClient):
         self.pg = pg
 
     def init_tables(self, urls: list[str], reset: bool = False):
@@ -88,7 +131,8 @@ class PostgresCrawlQueue(CrawlQueue):
             if urls:
                 now = datetime.now(warsaw_tz)
                 rows: list[tuple] = [
-                    (uuid7str(), url, 0, False, [], 0, now, None, None) for url in urls
+                    (uuid7str(), url, 0, False, [], 0, now, None, None)
+                    for url in urls
                 ]
                 cur.executemany(
                     "INSERT INTO website_index (id, url, priority, done, errors, "
