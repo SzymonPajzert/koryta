@@ -1,7 +1,7 @@
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
-from analysis.payloads import CompanyPayloads, PeoplePayloads, RegionPayloads
+from analysis.payloads import PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
 from scrapers.koryta.differ import KorytaDiffer
@@ -18,7 +18,6 @@ PIPELINES = [
     CommitteeParties,
     CompaniesKRS,
     Companies,
-    CompanyPayloads,
     Extract,
     KorytaDiffer,
     KorytaPeople,

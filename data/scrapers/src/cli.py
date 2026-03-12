@@ -13,16 +13,15 @@ import webbrowser
 import numpy as np
 import requests
 
-from analysis.payloads import CompanyPayloads, PeoplePayloads
+from analysis.payloads import PeoplePayloads
+from conductor import _setup_context
 from entities.company import Company as CompanyKRS  # TODO remove alias
 from entities.person import Person
-from conductor import _setup_context
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
 from scrapers.stores import Context, Pipeline
 
 PIPELINES = [
-    CompanyPayloads,
     PeoplePayloads,
     PostalCodes,
     Regions,
@@ -257,7 +256,7 @@ def read_payloads(ctx, args) -> list[Person] | list[CompanyKRS]:
     if args.type == "person":
         p_payloads = Pipeline.create(PeoplePayloads)
     elif args.type == "company":
-        p_payloads = Pipeline.create(CompanyPayloads)
+        p_payloads = Pipeline.create(PeoplePayloads)
     else:
         raise ValueError(f"Unknown entity type: {args.type}")
 
