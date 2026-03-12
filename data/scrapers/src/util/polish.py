@@ -1,5 +1,8 @@
+from datetime import date, datetime
 from enum import Enum
+from typing import Optional
 
+import dateparser
 import regex as re
 
 UPPER = "A-ZĘẞÃŻŃŚŠĆČÜÖÓŁŹŽĆĄÁŇŚÑŠÁÉÇŐŰÝŸÄṔÍŢİŞÇİŅ'"
@@ -80,3 +83,61 @@ def parse_name(pkw_name: str, format: PkwFormat):
             raise ValueError(f"Unsupported format: {pkw_name}")
 
     return first_name, middle_name, last_name
+
+
+
+
+
+def parse_polish_date(date_string: str) -> Optional[date]:
+    if not date_string:
+        return None
+
+    date_string = date_string.strip()
+
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%S.%f%z",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    ):
+        try:
+            return datetime.strptime(date_string, fmt).date()
+        except ValueError:
+            pass
+
+    parsed = dateparser.parse(
+        date_string,
+        languages=["pl"],
+        settings={
+            "DATE_ORDER": "DMY",
+            "RETURN_AS_TIMEZONE_AWARE": False,
+            "PREFER_DAY_OF_MONTH": "first",
+        },
+    )
+    return parsed.date() if parsed else None
+
+
+def remove_polish_diacritics(text: str) -> str:
+    mapping = {
+        "ą": "a",
+        "ć": "c",
+        "ę": "e",
+        "ł": "l",
+        "ń": "n",
+        "ó": "o",
+        "ś": "s",
+        "ź": "z",
+        "ż": "z",
+        "Ą": "A",
+        "Ć": "C",
+        "Ę": "E",
+        "Ł": "L",
+        "Ń": "N",
+        "Ó": "O",
+        "Ś": "S",
+        "Ź": "Z",
+        "Ż": "Z",
+    }
+    return "".join(mapping.get(char, char) for char in text)
