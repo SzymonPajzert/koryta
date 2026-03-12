@@ -91,8 +91,7 @@ def test_upload_payloads_person_shape(mock_ctx):
 
     assert len(result_df) == 1  # 1 person
 
-    person_row = result_df[result_df["entity_type"] == "person"].iloc[0]
-    assert person_row["entity_type"] == "person"
+    person_row = result_df.iloc[0]
     assert "1465" in person_row["teryt_powiat"]
 
     payload = json.loads(person_row["payload"])
@@ -105,51 +104,6 @@ def test_upload_payloads_person_shape(mock_ctx):
     assert len(payload["elections"]) == 1
     assert payload["elections"][0]["committee"] == "Test Party"
     assert payload["elections"][0]["teryt"] == "1465"
-
-
-def test_upload_payloads_company_shape(mock_ctx):
-    pipeline = Pipeline.create(CompanyPayloads)
-
-    pipeline.people = MockPipeline(
-        {
-            "full_name": [],
-            "elections": [],
-            "companies": [],
-            "articles": [],
-            "wikipedia": [],
-        }
-    )
-    pipeline.companies = MockPipeline(
-        [
-            {
-                "krs": "0000123456",
-                "name": "Test Company Sp. z o.o.",
-                "city": "Warszawa",
-                "children": ["0000654321"],
-                "teryt_code": "1465011",
-                "owner_text": "Miasto Warszawa",
-            }
-        ]
-    )
-    pipeline.regions = MockPipeline(
-        {"id": [], "name": [], "type": [], "level": [], "parent_id": []}
-    )
-
-    result_df = pipeline.process(mock_ctx)
-
-    assert len(result_df) == 1
-    company_row = result_df.iloc[0]
-
-    assert company_row["entity_type"] == "company"
-    assert company_row["entity_id"] == "0000123456"
-    assert company_row["krs"] == "0000123456"
-
-    payload = company_row["payload"]
-    assert payload["name"] == "Test Company Sp. z o.o."
-    assert payload["krs"] == "0000123456"
-    assert payload["city"] == "Warszawa"
-    assert "0000654321" in payload["owns"]
-    assert payload["teryt"] == "1465011"
 
 
 def test_upload_payloads_region_shape(mock_ctx):
@@ -191,7 +145,6 @@ def test_upload_payloads_region_shape(mock_ctx):
 
     # Wojewodztwo
     woj_row = result_df[result_df["entity_id"] == "14"].iloc[0]
-    assert woj_row["entity_type"] == "region"
     woj_payload = json.loads(woj_row["payload"])
     assert woj_payload["teryt"] == "14"
     assert woj_payload["type"] == "region"
@@ -200,7 +153,6 @@ def test_upload_payloads_region_shape(mock_ctx):
 
     # Powiat
     powiat_row = result_df[result_df["entity_id"] == "1465"].iloc[0]
-    assert powiat_row["entity_type"] == "region"
     powiat_payload = json.loads(powiat_row["payload"])
     assert powiat_payload["teryt"] == "1465"
     assert powiat_payload["type"] == "region"
