@@ -252,7 +252,7 @@ def print_results(df, type):
             print(json.dumps(json.loads(preview_payload), indent=2))
 
 
-def read_payloads(ctx, args) -> list[Person] | list[CompanyKRS]:
+def read_payloads(ctx, args) -> list[Person | CompanyKRS]:
     if args.type == "person":
         p_payloads = Pipeline.create(PeoplePayloads)
     elif args.type == "company":
@@ -284,7 +284,7 @@ def read_payloads_filtered(ctx, args):
             entity_filters.append(lambda p: p.teryt == args.region)
 
     for entity_filter in entity_filters:
-        payloads = filter(entity_filter, payloads)
+        payloads = list(filter(entity_filter, payloads))
     return list(payloads)
 
 

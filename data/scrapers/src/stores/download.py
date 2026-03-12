@@ -82,8 +82,11 @@ def download_teryt(destination_path):
     We need to perform a more complex call for it, so it's provided as a lambda.
     """
     url = "https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx?contrast=default"
-    accept = (
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    accept = ",".join(
+        [
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif",
+            "image/webp,image/apng,*/*;q=0.8",
+        ]
     )
 
     headers = {

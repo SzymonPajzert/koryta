@@ -33,6 +33,7 @@ class Rejestr:
             print("Not allowed")
             return {}
 
+        assert self.REJESTR_KEY is not None
         response = requests.get(url, headers={"Authorization": self.REJESTR_KEY})
         if response.status_code != 200:
             print(response.status_code)
