@@ -5,7 +5,7 @@ import duckdb
 import pandas as pd
 import pytest
 
-from analysis.interesting import CompaniesMerged
+from analysis.interesting import Companies
 from entities.company import InterestingEntity
 from scrapers.stores import Context, Pipeline
 from scrapers.tests.mocks import DictMockIO
@@ -100,7 +100,7 @@ def ctx(tmp_path):
 
 
 def test_find_interesting_entities_e2e(ctx):
-    model = Pipeline.create(CompaniesMerged)
+    model = Pipeline.create(Companies)
     model.hardcoded_companies = MagicMock()
     model.hardcoded_companies.filename = "hardcoded_companies"
     model.hardcoded_companies.process = MagicMock(

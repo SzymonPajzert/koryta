@@ -1,6 +1,6 @@
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
-from analysis.interesting import CompaniesMerged
+from analysis.interesting import Companies
 from analysis.payloads import CompanyPayloads, PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
@@ -17,7 +17,7 @@ from scrapers.wiki.process_articles_ner import ProcessWikiNer
 PIPELINES = [
     CommitteeParties,
     CompaniesKRS,
-    CompaniesMerged,
+    Companies,
     CompanyPayloads,
     Extract,
     KorytaDiffer,

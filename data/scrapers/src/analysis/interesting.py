@@ -23,7 +23,7 @@ def iterate(ctx, pipeline: Pipeline, constructor):
         raise
 
 
-class CompaniesMerged(Pipeline):
+class Companies(Pipeline):
     filename = "companies_merged"
 
     scraped_companies: CompaniesKRS
