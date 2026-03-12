@@ -40,10 +40,7 @@ class Printer:
                 yield item
 
 
-def main():
-    # TODO this parsing logic and CLI should be moved to a separate file
-    # Then we should have examples how to thoroughly test it.
-
+def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--refresh",
@@ -66,7 +63,11 @@ def main():
         help="Output channel (file or stdout)",
     )
     args, _ = parser.parse_known_args()
+    return args
 
+
+def main():
+    args = get_args()
     refresh = []
     exclude_refresh = []
     if args.refresh:
