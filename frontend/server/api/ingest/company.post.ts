@@ -2,52 +2,35 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
+import { z } from "zod";
+
+type Request = {
+  krs: string;
+  name: string;
+  owners?: string[];
+  teryt?: string;
+};
+
+const requestSchema = z.object({
+  krs: z.string(),
+  name: z.string(),
+  owners: z.array(z.string()).optional(),
+  teryt: z.string().optional(),
+});
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event);
-
-  if (!body || !body.krs || !body.name) {
-    throw createError({
-      statusCode: 400,
-      message: "Missing required fields (krs, name)",
-    });
-  }
+  const body: Request = await readValidatedBody(event, (body) =>
+    requestSchema.parse(body),
+  );
 
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  // Check if company already exists
-  const existingQuery = await db
-    .collection("nodes")
-    // this is not necessary
-    // .where("type", "==", "place")
-    .where("krsNumber", "==", body.krs)
-    .limit(1)
-    .get();
-
-  let nodeRef;
-  let currentData: any = {};
-
-  if (!existingQuery.empty) {
-    const doc = existingQuery.docs[0];
-    if (!doc) {
-      throw new Error("Unexpected empty docs array");
-    }
-    nodeRef = doc.ref;
-    currentData = doc.data();
-  } else {
-    nodeRef = db.collection("nodes").doc();
-  }
-
-  // Preserve existing content if not provided in update
-  const newContent =
-    body.content !== undefined ? body.content : currentData.content || "";
-
+  const nodeRef = await findCompanyByKRS(db, body.krs, true);
   const revisionData = {
     name: body.name,
     type: "place",
     krsNumber: body.krs,
-    content: newContent,
   };
 
   const batch = db.batch();
@@ -55,64 +38,71 @@ export default defineEventHandler(async (event) => {
   createRevisionTransaction(db, batch, user, nodeRef, revisionData);
 
   // Process 'owns' relationships
-  if (body.owns && Array.isArray(body.owns)) {
-    for (const childKrs of body.owns) {
-      if (!childKrs) continue;
-
-      // Find child node
-      const childQuery = await db
-        .collection("nodes")
-        .where("krsNumber", "==", childKrs)
-        .limit(1)
-        .get();
-
-      let childRef;
-      const firstDoc = childQuery.docs[0];
-      if (!childQuery.empty && firstDoc) {
-        childRef = firstDoc.ref;
-      } else {
-        childRef = db.collection("nodes").doc();
-        const childData = {
-          // TODO have a better way to add placeholders
-          name: "Unknown Company",
-          type: "place",
-          krsNumber: childKrs,
-          content: "",
-        };
-        createRevisionTransaction(db, batch, user, childRef, childData);
-      }
-
-      // Create 'owns' edge
-      const edgeId = `edge_${nodeRef.id}_${childRef.id}_owns`;
-      const edgeRef = db.collection("edges").doc(edgeId);
-      const edgeData = {
-        source: nodeRef.id,
-        target: childRef.id,
-        type: "owns",
-      };
-      batch.set(edgeRef, edgeData);
-      createRevisionTransaction(db, batch, user, edgeRef, edgeData);
+  if (body.owners && Array.isArray(body.owners)) {
+    for (const parent of body.owners) {
+      if (!parent) continue;
+      const parentRef = await findCompanyByKRS(db, parent, false);
+      createEdge({ db, batch, user }, parentRef.id, nodeRef.id, "owns");
     }
   }
 
   // Process 'teryt' to link the company to a region
   if (body.teryt) {
     const regionNodeId = await findRegionByTeryt(db, body.teryt);
-    const edgeRef = db.collection("edges").doc();
-    const edgeData = {
-      source: regionNodeId,
-      target: nodeRef.id,
-      type: "owns",
-    };
-
-    batch.set(edgeRef, edgeData);
-    createRevisionTransaction(db, batch, user, edgeRef, edgeData);
+    createEdge({ db, batch, user }, regionNodeId, nodeRef.id, "owns");
   }
 
   await batch.commit();
 
-  return { id: nodeRef.id, code: existingQuery.empty ? 201 : 200 };
+  return { id: nodeRef.id, code: 200 };
 });
+
+type DBB = {
+  db: FirebaseFirestore.Firestore;
+  batch: FirebaseFirestore.WriteBatch;
+  user: { uid: string };
+};
+
+function createEdge(dbb: DBB, source: string, target: string, type: string) {
+  const { db, batch, user } = dbb;
+  const edgeRef = db.collection("edges").doc();
+  const edgeData = {
+    source,
+    target,
+    type,
+  };
+
+  batch.set(edgeRef, edgeData);
+  createRevisionTransaction(db, batch, user, edgeRef, edgeData);
+}
+
+async function findCompanyByKRS(
+  db: FirebaseFirestore.Firestore,
+  krs: string,
+  createNew: boolean,
+) {
+  // Check if company already exists
+  const existingQuery = await db
+    .collection("nodes")
+    .where("krsNumber", "==", krs)
+    .limit(1)
+    .get();
+
+  if (!existingQuery.empty) {
+    const doc = existingQuery.docs[0];
+    if (!doc) {
+      throw new Error("Unexpected empty docs array");
+    }
+    return doc.ref;
+  } else if (createNew) {
+    return db.collection("nodes").doc();
+  } else {
+    throw createError({
+      statusCode: 404,
+      message: `Company with KRS ${krs} not found`,
+    });
+  }
+}
 
 async function findRegionByTeryt(
   db: FirebaseFirestore.Firestore,
