@@ -1,11 +1,10 @@
 from functools import lru_cache
-import os
-from hashlib import sha256
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pandas as pd
 import requests
+
+from util.http_cache import read_cached_bytes, should_refresh, write_cached_bytes
 
 from . import parse
 
@@ -15,56 +14,18 @@ HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
 REFRESH_ENV = "REFRESH_HTTP_CACHE"
 
 
-def _cache_path(url: str) -> Path:
-    parsed = urlparse(url)
-    hostname = parsed.hostname or "unknown"
-    url_hash = sha256(url.encode("utf-8")).hexdigest()
-    return CACHE_DIR / hostname / f"{url_hash}.bin"
-
-
-def _cache_meta_path(url: str) -> Path:
-    parsed = urlparse(url)
-    hostname = parsed.hostname or "unknown"
-    url_hash = sha256(url.encode("utf-8")).hexdigest()
-    return CACHE_DIR / hostname / f"{url_hash}.url"
-
-
-def _ensure_cache_dir(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def _read_cached_bytes(url: str) -> bytes | None:
-    cache_path = _cache_path(url)
-    if cache_path.exists():
-        return cache_path.read_bytes()
-    return None
-
-
-def _write_cached_bytes(url: str, content: bytes) -> None:
-    cache_path = _cache_path(url)
-    meta_path = _cache_meta_path(url)
-    _ensure_cache_dir(cache_path)
-    cache_path.write_bytes(content)
-    if not meta_path.exists():
-        meta_path.write_text(url + "\n")
-
-
 @lru_cache(maxsize=128)
 def fetch_url(url: str) -> bytes:
-    refresh = os.getenv(REFRESH_ENV) == "1"
+    refresh = should_refresh(REFRESH_ENV)
     if not refresh:
-        cached = _read_cached_bytes(url)
+        cached = read_cached_bytes(CACHE_DIR, url)
         if cached is not None:
             return cached
-        raise FileNotFoundError(
-            f"Missing cached response for {url}. "
-            f"Set {REFRESH_ENV}=1 to fetch and populate cache."
-        )
 
     response = requests.get(url, headers=HEADERS, timeout=10)
     response.raise_for_status()
     content = response.content
-    _write_cached_bytes(url, content)
+    write_cached_bytes(CACHE_DIR, url, content)
     return content
 
 
