@@ -317,6 +317,11 @@ class CrawlQueue(metaclass=ABCMeta):
         """Release a lock without marking done or error."""
         raise NotImplementedError()
 
+    @abstractmethod
+    def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
+        """Add or update blocked domains (domain, reason)."""
+        raise NotImplementedError()
+
 
 @dataclass
 class ProcessPolicy:

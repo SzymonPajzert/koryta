@@ -78,11 +78,12 @@ class PostgresClient:
             return cur.fetchall()
 
 
+# TODO (mpacek) decide whether to normalize https:// prefix
 class PostgresCrawlQueue(CrawlQueue):
     def __init__(self, pg: PostgresClient):
         self.pg = pg
 
-    def init_tables(self, urls: list[str], reset: bool = False):
+    def _init_tables(self, urls: list[str], reset: bool = False):
         """Create the website_index table and insert seed URLs.
 
         Args:
@@ -112,15 +113,6 @@ class PostgresCrawlQueue(CrawlQueue):
                     mined_from_url TEXT
                 );
 
-                ALTER TABLE website_index
-                    ADD COLUMN IF NOT EXISTS locked_by_worker_id TEXT;
-                ALTER TABLE website_index
-                    ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP WITH TIME ZONE;
-                ALTER TABLE website_index
-                    ADD COLUMN IF NOT EXISTS storage_path TEXT;
-                ALTER TABLE website_index
-                    ADD COLUMN IF NOT EXISTS mined_from_url TEXT;
-
                 CREATE TABLE IF NOT EXISTS blocked_domains (
                     domain TEXT PRIMARY KEY,
                     reason TEXT
@@ -145,7 +137,7 @@ class PostgresCrawlQueue(CrawlQueue):
 
         logger.info("Database initialization complete.")
 
-    def load_blocked_domains(self, rows: list[tuple[str, str]]):
+    def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
         """Create blocked_domains table and upsert rows.
 
         Args:
@@ -250,9 +242,9 @@ class PostgresCrawlQueue(CrawlQueue):
             if not 0 <= priority <= 100:
                 raise ValueError(f"Priority must be 0-100, got {priority}")
             rows.append((uuid7str(), url, priority, False, [], 0, now, None, None))
-        self.insert_urls(rows)
+        self._insert_urls(rows)
 
-    def insert_urls(self, rows: list[tuple]):
+    def _insert_urls(self, rows: list[tuple]):
         """Batch insert discovered URLs.
 
         Each row: (id, url, priority, done, errors, num_retries, \
@@ -276,7 +268,7 @@ class PostgresCrawlQueue(CrawlQueue):
             processed,
         )
 
-    def reprioritize(self, score_fn: Callable[[str], int], batch_size: int = 5000):
+    def _reprioritize(self, score_fn: Callable[[str], int], batch_size: int = 5000):
         """Recalculate priority for all pending URLs using scoring function."""
         rows = self.pg.fetchall("SELECT id, url FROM website_index WHERE done = FALSE;")
         logger.info("Reprioritizing %d pending URLs...", len(rows))
@@ -300,7 +292,7 @@ class PostgresCrawlQueue(CrawlQueue):
             updated += len(batch)
         logger.info("Reprioritized %d URLs.", updated)
 
-    def get_pages_to_parse(self, limit: int) -> list[tuple]:
+    def _get_pages_to_parse(self, limit: int) -> list[tuple]:
         """Fetch crawled pages that have a storage_path, for parsing."""
         return self.pg.fetchall(
             "SELECT id, url, storage_path FROM website_index "
@@ -309,7 +301,7 @@ class PostgresCrawlQueue(CrawlQueue):
             (limit,),
         )
 
-    def get_stats(self) -> dict:
+    def _get_stats(self) -> dict:
         """Return crawler statistics as a dict (printing happens in the entrypoint)."""
         stats: dict = {}
 

@@ -57,3 +57,16 @@ def test_priority_affects_order(crawl_queue: CrawlQueue):
     assert first is not None and second is not None
     assert first[1] == "https://example.com/low"
     assert second[1] == "https://example.com/high"
+
+
+def test_blocked_domains_are_skipped(crawl_queue: CrawlQueue):
+    crawl_queue.add_blocked_domains([("blocked.test", "nope")])
+    crawl_queue.put(
+        [
+            ("https://blocked.test/a", 10),
+            ("https://ok.test/b", 20),
+        ]
+    )
+    row = crawl_queue.get("worker-1", max_retries=1)
+    assert row is not None
+    assert row[1] == "https://ok.test/b"
