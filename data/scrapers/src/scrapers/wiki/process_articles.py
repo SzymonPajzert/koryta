@@ -326,7 +326,7 @@ def process_article_worker(args):
         return None
 
 
-class ProcessWiki(Pipeline):
+class ProcessWiki(Pipeline[People]):
     filename = "person_wikipedia"  # TODO support two filenames
     confirm_run = True
 

@@ -341,7 +341,10 @@ def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Forma
     ctx.io.write_file(LocalFile(filename, "versioned"), writer)
 
 
-class Pipeline:
+Output = typing.TypeVar("Output")
+
+
+class Pipeline(typing.Generic[Output]):
     """
     A decorator for defining and configuring a data processing pipeline.
 
@@ -360,6 +363,11 @@ class Pipeline:
     @abstractmethod
     def process(self, ctx: Context):
         raise NotImplementedError()
+
+    @property
+    def output_class(self) -> typing.Type[Output]:
+        """Subclasses must return the dataclass type here for runtime instantiation."""
+        raise NotImplementedError("Subclasses must define output_class")
 
     @staticmethod
     def create(pipeline_type, nested=0):
@@ -482,6 +490,12 @@ class Pipeline:
             self._cached_result = df
 
         return df
+
+    def read_or_process_list(self, ctx: Context):
+        df = self.read_or_process(ctx)
+        for tuple in df.to_dict(orient="records"):
+            records = typing.cast(dict[str, Any], tuple)
+            yield self.output_class(**records)
 
     def preprocess_sources(self, ctx: Context, policy: ProcessPolicy) -> bool:
         """
