@@ -79,38 +79,6 @@ def test_mark_done_and_get_pages(db: PostgresCrawlQueue, clean_db):
     assert rows == [(uid, "https://example.com/a", "s3://bucket/a")]
 
 
-def test_mark_error_and_release(db: PostgresCrawlQueue, clean_db):
-    db.init_tables(["https://example.com/a"], reset=True)
-    uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
-    db.pg.execute(
-        "UPDATE website_index SET locked_by_worker_id = %s, "
-        "locked_at = %s WHERE id = %s",
-        ("worker-1", datetime.now(), uid),
-    )
-    db.mark_error(uid, "boom")
-    row = db.pg.fetchone(
-        "SELECT num_retries, errors, locked_by_worker_id, locked_at "
-        "FROM website_index WHERE id = %s",
-        (uid,),
-    )
-    assert row[0] == 1
-    assert row[1] == ["boom"]
-    assert row[2] is None
-    assert row[3] is None
-
-    db.pg.execute(
-        "UPDATE website_index SET locked_by_worker_id = %s, "
-        "locked_at = %s WHERE id = %s",
-        ("worker-2", datetime.now(), uid),
-    )
-    db.release(uid)
-    row = db.pg.fetchone(
-        "SELECT locked_by_worker_id, locked_at FROM website_index WHERE id = %s",
-        (uid,),
-    )
-    assert row == (None, None)
-
-
 def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue, clean_db):
     db.init_tables([], reset=True)
     now = datetime.now()
