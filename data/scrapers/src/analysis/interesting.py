@@ -1,8 +1,9 @@
+import typing
+
 import numpy as np
-import pandas as pd
 
 from entities.company import KRS as KrsCompany
-from entities.company import Company, InterestingReason, ManualKRS, Owner
+from entities.company import Company, ManualKRS, Owner, Wikipedia
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
@@ -32,55 +33,42 @@ class Companies(Pipeline):
         self.teryt_pipeline.read_or_process(ctx)
         self.cities_to_teryt = getattr(self.teryt_pipeline, "cities_to_teryt", {})
         graph = self.graph(ctx)
-        # TODO join them when there's no more query
-        wiki_companies = self.wiki_companies(ctx)  # noqa: F841
-        children_of_hardcoded = self.children_of_hardcoded(ctx, graph)  # noqa: F841
 
-        # company_krs is already processed by scraped_companies
-        krs_companies = ctx.io.read_data(  # noqa: F841
-            LocalFile("company_krs/company_krs.jsonl", "versioned")
-        ).read_dataframe("jsonl")
-        if "owners" not in krs_companies.columns:
-            krs_companies = krs_companies.assign(owners=None)
+        children_of_hardcoded = self.children_of_hardcoded(ctx, graph)
+        wiki_companies = {c.krs: c for c in self.wiki_companies(ctx)}
+        krs_companies = {
+            c.krs: c for c in self.scraped_companies.read_or_process_list(ctx)
+        }
 
-        query = """
-        SELECT 
-            COALESCE(w.name, k.name) as name,
-            COALESCE(CAST(w.krs AS VARCHAR), CAST(k.krs AS VARCHAR)) as krs,
-            w.content_score,
-            k.city as krs_city,
-            CAST(k.teryt_code AS VARCHAR) as teryt_code,
-            w.city as wiki_city,
-            CASE WHEN ik.krs IS NOT NULL THEN 1 ELSE 0 END as is_interesting_krs,
-            ik.owner_teryts,
-            k.owners
-        FROM wiki_companies w
-        FULL OUTER JOIN krs_companies k
-            ON CAST(w.krs AS VARCHAR) = CAST(k.krs AS VARCHAR)
-        """
+        all_krs = (
+            set(krs_companies.keys())
+            | set(wiki_companies.keys())
+            | set(children_of_hardcoded)
+        )
 
-        df = ctx.con.execute(query).df()
+        for krs_id in all_krs:
+            if krs_id is None:
+                continue
 
-        for _, row in df.iterrows():
-            reasons = self.get_reasons(row)
-            sources = []
+            krs = krs_companies.get(krs_id)
+            wiki = wiki_companies.get(krs_id)
 
-            if pd.notna(row["krs"]):
-                sources.append("krs")
-            if pd.notna(row["content_score"]):  # content_score comes from wiki
-                sources.append("wiki")
-            if reasons:
-                entity = Company(
-                    name=row["name"],
-                    krs=row["krs"] if pd.notna(row["krs"]) else None,
-                    teryt_code=row["teryt_code"]
-                    if pd.notna(row["teryt_code"])
-                    else None,
+            teryt_code = None
+            if krs is not None:
+                teryt_code = krs.teryt_code
+
+            reasons, sources = self.get_reasons(krs, wiki)
+
+            ctx.io.output_entity(
+                Company(
+                    name=attr(wiki, "name") or krs.name,
+                    krs=krs_id,
+                    teryt_code=teryt_code,
                     reasons=reasons,
                     sources=sources,
-                    children=set(graph.children.get(row["krs"], [])),
+                    # TODO add owners=[],
                 )
-                ctx.io.output_entity(entity)
+            )
 
     def graph(self, ctx: Context):
         graph = self.company_graph(ctx)
@@ -100,13 +88,15 @@ class Companies(Pipeline):
                 krs_to_owner_teryts[desc].update(row.teryts)
         return graph
 
-    def wiki_companies(self, ctx: Context):
+    def wiki_companies(self, ctx: Context) -> typing.Iterable[Wikipedia]:
         self.wiki_pipeline.read_or_process(ctx)
-        return ctx.io.read_data(  # noqa: F841
-            LocalFile(
-                "company_wikipedia/company_wikipedia.jsonl", "versioned"
-            )  # TODO fix
-        ).read_dataframe("jsonl")
+        # TODO this could be a method on a pipeline
+        wiki_companies_file = LocalFile(
+            "company_wikipedia/company_wikipedia.jsonl", "versioned"
+        )
+        df = ctx.io.read_data(wiki_companies_file).read_dataframe("jsonl")
+        for row in df.itertuples(index=False):
+            yield Wikipedia(*row)
 
     def children_of_hardcoded(self, ctx: Context, graph: CompanyGraph) -> list[str]:
         children_of_hardcoded_set = graph.all_descendants(
@@ -128,77 +118,16 @@ class Companies(Pipeline):
                     graph.add_parent(parent.krs, company.krs)
         return graph
 
-    def get_reasons(self, row):
-        reasons = []
-        # Check reasons
-        if row["is_interesting_krs"]:
-            reasons.append(
-                InterestingReason(
-                    reason="hardcoded_krs",
-                    details="In interesting list or owned by one",
-                )
-            )
+    def get_reasons(self, krs: KrsCompany | None, wiki: Wikipedia | None):
+        # TODO implement
+        return [], []
 
-        owner_teryts = row.get("owner_teryts")
-        if (
-            owner_teryts is not None
-            and isinstance(owner_teryts, (list, np.ndarray))
-            and len(owner_teryts) > 0
-        ):
-            for t in owner_teryts:
-                if t:
-                    reasons.append(
-                        InterestingReason(
-                            reason="owner_teryt",
-                            details=str(t),
-                        )
-                    )
 
-        if pd.notna(row["content_score"]) and row["content_score"] > 0:
-            reasons.append(
-                InterestingReason(
-                    reason="wiki_content_score",
-                    details=f"Score: {row['content_score']}",
-                )
-            )
-
-        owners = row.get("owners")
-        if (
-            owners is not None
-            and isinstance(owners, (list, np.ndarray))
-            and len(owners) > 0
-        ):
-            for owner in owners:
-                if isinstance(owner, dict):
-                    owner_str = str(owner.get("nazwa", owner))
-                else:
-                    owner_str = str(owner)
-                lower_owner = owner_str.lower()
-
-                if (
-                    "skarb państwa" in lower_owner
-                    or "miasto" in lower_owner
-                    or "województwo" in lower_owner
-                    or "gmina" in lower_owner
-                    or "powiat" in lower_owner
-                ):
-                    reasons.append(
-                        InterestingReason(reason="krs_owner", details=owner_str)
-                    )
-                    krs_city = row.get("krs_city")
-                    if krs_city and isinstance(krs_city, str):
-                        lower_city = krs_city.lower()
-                        if lower_city in lower_owner:
-                            for city_name, teryt in self.cities_to_teryt.items():
-                                if city_name.lower() == lower_city:
-                                    reasons.append(
-                                        InterestingReason(
-                                            reason="owner_teryt", details=teryt
-                                        )
-                                    )
-                                    break
-
-        return reasons
+# TODO is there a pythonic way
+def attr(obj, f):
+    if obj is not None and f in obj.__dict__:
+        return obj.__dict__[f]
+    return None
 
 
 def iterate_pipeline(ctx, pipeline: Pipeline, constructor):

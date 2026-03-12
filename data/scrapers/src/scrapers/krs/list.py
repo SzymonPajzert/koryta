@@ -99,7 +99,7 @@ def extract_people(ctx: Context):
             print(f"  [ERROR] Could not process {blob_name}: {e}")
 
 
-class CompaniesKRS(Pipeline):
+class CompaniesKRS(Pipeline[KrsCompany]):
     filename = "company_krs"
     dtype = {"krs": str}
     postal_codes: PostalCodes
