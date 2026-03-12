@@ -4,9 +4,6 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from scrapers.krs.companies import (
-    company_names as company_names_harcoded,
-)
 from scrapers.map.teryt import Teryt
 from scrapers.pkw.elections import committee_to_party
 from scrapers.pkw.sources import election_date
@@ -21,6 +18,7 @@ def read_enriched(ctx: Context, matched_all, companies_df, teryt: Teryt):
     return enriched
 
 
+# TODO this should be a method on Companies pipeline
 def get_company_names(companies_df):
     krs_companies = companies_df.to_dict("records")
     company_names_krs = {
@@ -28,7 +26,6 @@ def get_company_names(companies_df):
     }
     return {
         **company_names_krs,
-        **company_names_harcoded,
     }
 
 
