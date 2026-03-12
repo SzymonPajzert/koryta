@@ -1,0 +1,331 @@
+<!doctype html>
+<html class="no-js" lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>Nasz Region e-magazyn WRPO 2014+</title>
+    <meta name="description" content="Nasz Region e-magazyn WRPO 2014+">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Import External Scrpit CSS Files -->
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+		<link rel="stylesheet" href="assets/css/font-awesome.min.css">
+    
+
+    <!-- Import Template CSS Files -->
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/header.css">
+    <link rel="stylesheet" href="assets/css/themes.css">
+    <link rel="stylesheet" href="assets/css/responsive.css">
+				<link rel="stylesheet" href="assets/css/wcag.css">
+		<link rel="stylesheet" href="assets/css/lightbox.min.css">
+
+    <!-- <script src="//cdnjs.cloudflare.com/ajax/libs/less.js/2.7.2/less.min.js"></script> -->
+
+    <script src="assets/js/modernizr-2.8.3.min.js"></script>		
+				
+		<!-- social media icon -->
+		
+		<link rel="stylesheet" href="assets/font-awesome.min.css">
+		
+		<meta property="og:title" content="O zielonej przyszłości w Koninie" />
+		<meta property="og:url" content="https://wrpo.wielkopolskie.pl/e-biuletyn/2025/6/o-zielonej-przyszlosci-w-koninie.html" />
+		<meta property="og:image" content="https://wrpo.wielkopolskie.pl/e-biuletyn/2025/6/images/o-zielonej-przyszlosci-w-koninie-1.jpg" />
+		<meta property="og:description" content="Przedstawiciele Komisji Europejskiej i 49 krajów debatowali w Koninie o przyszłości regionów węglowych. Spotkanie trwało dwa dni (24-25 czerwca) w ramach VI edycji Dorocznego Dialogu Politycznego." />
+		<meta property="og:site_name" content="Nasz Region e-magazyn WRPO 2014+" />
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-0VE863M2SQ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-0VE863M2SQ');
+</script>
+</head>
+
+
+<body>
+
+<!-- social media icon -->
+
+<div class="icon-bar hidden-xs">
+	<a href="https://www.facebook.com/FunduszeEuropejskiedlaWielkopolski" class="fa fa-facebook" target="_blank"></a>
+	<a href="https://twitter.com/funduszeuewlkp" class="fa fa-twitter" target="_blank"><img src="images/twitter-x-logo.png" alt="logo"></a>
+	<a href="https://www.linkedin.com/uas/login?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Fcompany%2F101001529%2Fadmin%2Ffeed%2Fposts%2F" class="fa fa-linkedin" target="_blank"></a>
+	<a href="https://www.youtube.com/channel/UCDHHj2XcUEt2mObZjhpZ4QQ" class="fa fa-youtube" target="_blank"></a>
+	<a href="https://www.instagram.com/fundusze_ue_dla_wielkopolski" class="fa fa-instagram" target="_blank"></a>
+</div>
+
+
+
+<div class="overlay-wrapper">
+	 <header class="masthead">
+		
+				<div class="header-bottom">
+				
+							<div class="container">
+								
+								
+								<nav class="navbar navbar-default col-sm-12">
+									<div class="navbar-header">
+												
+										<!-- mobile -->
+										<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#main-menu" aria-expanded="false">
+											<i class="fa fa-bars"></i>
+										</button>
+									</div>
+									<!-- koniec mobile -->
+
+									<div id="main-menu" class="collapse navbar-collapse">
+									
+										<ul class="nav navbar-nav">
+											<li class="menu-item menu-item-has-children active"><a href="index.html">Strona główna</a></li>
+											<li class="menu-item"><a href="https://laczynas.wielkopolskie.pl/" target="_blank">Łączy nas WIELkopolskiE</a></li>
+											<li class="menu-item"><a href="archiwum.html">Archiwum</a></li>
+											<li class="menu-item"><a href="kontakt.html">Kontakt</a></li>
+										</ul>
+									</div>
+										
+								</nav>	
+								</div>
+				</div>
+
+				
+				<div class="container hidden-xs">
+					<a href="index.html"><img src="images/logo.jpg" alt="Nasz Region WRPO 2014+ E-MAGAZYN"></a>
+				</div>
+				
+				<!-- logo mobile-->
+					<div class="slider-mobile hidden-md hidden-sm hidden-lg logo-mobile">
+						<a href="index.html"><img src="images/logo.png" alt=""></a>
+					</div>
+				<!-- koniec logo mobile -->
+				
+		</header>
+</div>
+
+
+
+
+
+<div id="content" class="text-size">
+
+<section class="main-content">
+	
+	<div class="container">
+		
+		<div class="row-article">
+			
+			<div class="col-sm-12">
+				
+				<div class="single-post">
+				
+					<!-- main photo -->
+						<img src="images/o-zielonej-przyszlosci-w-koninie-1.png" alt="Zdjęcie przedstawia debatę w trakcie konferencji. Na scenie siedzi czterech ekspertów – trzech mężczyzn i kobieta. Jeden z mężczyzn przemawia do mikrofonu. Z boku stoi prowadzący. Autorem fotografii jest Dominik Wójcik."/>
+					<!-- end main photo -->
+				
+				</div>
+
+				 
+				<nav class="navigation-new">
+					<div class="nav-links text-center">
+						<a href="index.html"><span class="meta-nav">&#8592; wróć do strony głównej</span></a>
+					</div>                                    
+				</nav>                       
+
+
+				<article class="post type-post">
+
+				<div class="top-content text-center">
+						<!--<h1 class="reportaz">Wywiad</h1>-->
+						<h1 class="big">O zielonej przyszłości w Koninie</h1>
+					</div>
+
+
+<div class="entry-content" id="lead-new">
+	
+<h2>Przedstawiciele Komisji Europejskiej i 49 krajów debatowali w Koninie o przyszłości regionów węglowych. Spotkanie trwało dwa dni (24-25 czerwca) w ramach VI edycji Dorocznego Dialogu Politycznego.</h2>
+
+<div class="separator-line"></div>
+
+<p>Międzynarodowa konferencja „Ścieżki do nowej przyszłości: Konkurencyjność i sprawiedliwa transformacja w regionach węglowych” stała się przestrzenią do pogłębionej debaty na temat transformacji energetycznej w kontekście wyzwań gospodarczych, społecznych i środowiskowych, z jakimi mierzą się regiony przechodzące proces odejścia od węgla. Była to też okazja do wymiany doświadczeń i dobrych praktyk pomiędzy przedstawicielami różnych krajów i instytucji. </p>
+
+<h3>Sprawiedliwa przyszłość </h3>
+
+<p>– Kończy się historia wydobycia węgla brunatnego. To odbije się na kondycji gospodarczej i społecznej Wielkopolski Wschodniej. Subregion przechodzi obecnie trudny proces sprawiedliwej transformacji - pomyślnie, aczkolwiek nie bez problemów. Nie wszystkie scenariusze, które zakładaliśmy przebiegają jednakowo sprawnie. Szczęśliwie od początku towarzyszy nam konstruktywny dialog ze wszystkimi jego uczestnikami - przedsiębiorcami, związkami zawodowymi, organizacjami pozarządowymi i samorządem lokalnym – podkreślał w wystąpieniu inauguracyjnym Marek Woźniak, Marszałek Województwa Wielkopolskiego. – To proces rozpisany na lata, który musimy kontynuować w kolejnej perspektywie finansowej. Wspólnie z uczestnikami dialogu apelujemy do decydentów oraz szefów rządów państw członkowskich Unii Europejskiej, by przychylili się do naszego postulatu. Chcemy by zarówno polityka spójności, jak i Fundusz Sprawiedliwej Transformacji nie tylko były kontynuowane, ale również by ich reguły były bardziej elastyczne i uproszczone. Każdy region górniczy ma swoją specyfikę. Chcemy podejmować kluczowe i mądre decyzje jak najbliżej mieszkańców – zaznaczał. </p>
+
+<a class="example-image-link" href="images/o-zielonej-przyszlosci-w-koninie-2.jpg" data-lightbox="set" data-title="Transformacja to proces rozpisany na lata, który musi być kontynuowany w kolejnej perspektywie finansowej – mówił marszałek Marek Woźniak (fot. Dominik Wójcik)">
+<img class="example-image" src="images/o-zielonej-przyszlosci-w-koninie-2.jpg" alt="Fotografia ukazuje mężczyznę w średnim wieku, o siwych włosach i garniturze, który stoi za pulpitem i przemawia do mikrofonu w trakcie wydarzenia. Autorem zdjęcia jest Dominik Wójcik."/></a>
+
+<h3>Wielkopolska Wschodnia liderem zmian</h3>
+
+<p>Miejsce tegorocznego dialogu wybrane zostało nieprzypadkowo. Wielkopolska Wschodnia jest uznawana w Europie za lidera sprawiedliwej transformacji. Zmiany zachodzą tu najszybciej i to w sposób skoordynowany, partycypacyjny i z poszanowaniem lokalnej tożsamości. </p>
+
+
+<div id="wybicie">
+	<h3>
+		<img src="images/wybicie.svg" alt="cudzysłów"/>
+Na realizację ambitnych celów związanych z odejściem od węgla, subregion koniński otrzymał 414 mln euro z Funduszu na rzecz Sprawiedliwej Transformacji będącego częścią programu Fundusze Europejskie dla Wielkopolski.
+	</h3>
+</div>
+
+<p>– To nasza szansa na nowy początek – mówił Piotr Korytkowski, prezydent Konina. – Także wyzwanie, które wymaga wsparcia finansowego i eksperckiego, w szczególności w kontekście przekwalifikowania pracowników przemysłu ciężkiego i przygotowania ich do nowych przyszłościowych zawodów. Transformacja to jednak nie tylko zmiana technologii, ale przede wszystkim zmiana społeczna. Musimy więc inwestować w ludzi, ich umiejętności, bezpieczeństwo socjalne, energię i aspiracje. Nowoczesna polityka energetyczna musi być oparta na zaangażowaniu społecznym, tworzeniu równych szans i systemowemu wzmacnianiu średnich miast, takich jak Konin.<br/><br/>
+
+Prezydent wspomniał również o planach i nadziejach związanych z budową elektrowni jądrowej w Koninie.<br/><br/>
+
+– Nasze miasto jest najlepszą lokalizacją dla planowanej budowy drugiej elektrowni jądrowej w Polsce. Mamy kadrę, odpowiednią infrastrukturę energetyczną, dobre warunki geologiczne i hydrologiczne, a co równie ważne mamy pełną aprobatę społeczności lokalnej na powstanie tej strategicznej inwestycji.<br/><br/>
+
+O dotychczasowych sukcesach transformacji subregionu świadczy tysiące instalacji fotowoltaicznych zamontowanych na domach mieszkańców. Do tego dochodzą inwestycje w budynkach przestrzeni publicznej, a także projekt związany z zakupem niskoemisyjnego transportu. Dodatkowo pracownicy odchodzący z Grupy Kapitałowej ZE PAK mają zapewnione wsparcie w znalezieniu nowej pracy lub założeniu własnej działalności gospodarczej.<br/><br/>
+
+–  Sprawiedliwa transformacja to długofalowy proces, dlatego kluczowa jest cierpliwość. Efekty nie przyjdą od razu – mówił Maciej Sytek, Pełnomocnik Zarządu Województwa Wielkopolskiego ds. Restrukturyzacji Wielkopolski Wschodniej, prezes ARR w Koninie. –  Nie możemy zatrzymać się w pół drogi, tym bardziej, że to nasza polisa ubezpieczeniowa, która zapobiegnie temu co stało się w Wałbrzychu, który do dziś mierzy się z konsekwencjami nieudanej transformacji prowadzonej w latach dziewięćdziesiątych XX wieku.</p>
+
+<a class="example-image-link" href="images/o-zielonej-przyszlosci-w-koninie-3.jpg" data-lightbox="set" data-title="W wydarzeniu wzięli udział przedstawiciele Komisji Europejskiej, Samorządu Województwa Wielkopolskiego oraz 49 krajów (fot. Dominik Wójcik)">
+<img class="example-image" src="images/o-zielonej-przyszlosci-w-koninie-3.jpg" alt="Na ilustracji widoczna jest licznie zgromadzona publiczność w trakcie wydarzenia. Autorem zdjęcia jest Dominik Wójcik."/></a>
+
+<h3>Kluczowa zmiana społeczna</h3>
+
+<p>W trakcie debat przedstawiciele regionów węglowych podzielili się dotychczasowymi doświadczeniami związanymi z dekarbonizacją przemysłu. Paneliści zgodnie podkreślali, że transformacja energetyczna jest wyzwaniem globalnym i nie ma od niej odwrotu. Jednocześnie zwracali uwagę, że obok zmian gospodarczych, kluczowe są przemiany społeczne.<br/><br/>
+
+– Górnictwo to nie tylko praca w kopalni, ale określony styl życia. Z jednej strony musimy podtrzymać tradycje starej kultury, a z drugiej tworzyć nową. Jednocześnie ludzie muszą mieć pewność, że nie zostaną pozostawieni sami sobie – mówiła Barbara Mayer, Sekretarz Stanu w Ministerstwie Rozwoju Regionalnego Saksonii w Niemczech. <br/><br/>
+
+– Musimy przygotować się na koniec górnictwa – dodawał Leszek Pietraszek, wicemarszałek Województwa Śląskiego. –  Coraz więcej pracowników sektora wydobywczego dostrzega szansę rozwoju poza dotychczasową branżą. Ten potencjał trzeba wykorzystać. Pracownicy przedsiębiorstw górniczych mają ogromną wiedzę i kompetencje, które będą cenne przy wdrażaniu rozwiązań związanych z zieloną energią. Dlatego konieczne jest zachowanie balansu między tworzeniem nowych miejsc pracy, edukacją i inwestycjami w badania i rozwój – zaznaczał.<br/><br/>
+
+Głos w sprawie znaczenia lokalnych społeczności energetycznych zabrał Matthew Baldwin, Zastępca Dyrektora Dyrekcji Generalnej ds. Energii (DG ENER) w Komisji Europejskiej. Coraz więcej ekspertów uważa, że obywatelskie społeczności energetyczne mogą zajmować się nie tylko produkcją, ale też dystrybucją, magazynowaniem czy sprzedażą energii. Jest to zadanie tym ważniejsze, że ubóstwo energetyczne dotyka aż 46 mln obywateli UE. <br/><br/>
+
+– Chcąc zdobyć zaufanie obywateli do zielonej energii musimy mocniej wspierać transformację lokalnie, zachęcając mieszkańców do produkowania własnej energii, co znacznie obniży jej cenę – zaznaczał.<br/><br/>
+
+Tegoroczny Dialog Polityczny to nie tylko ożywcze dyskusje, ale również wizyty studyjne, prezentujące praktyczne przykłady transformacji w subregionie – w obszarze energetyki (Elektrownia ZE PAK), edukacji (Akademia Nauk Stosowanych w Koninie) oraz zielonego ciepła (Miejskie Przedsiębiorstwo Energetyki Cieplnej). <br/><br/>
+
+Głównym organizatorem wydarzenia, które odbyło się pod patronatem Prezydencji Polski w Radzie Unii Europejskiej, była Inicjatywa na rzecz Regionów Węglowych w Transformacji, a współorganizatorami: Komisja Europejska (DG ENER), Samorząd Województwa Wielkopolskiego oraz Agencja Rozwoju Regionalnego S.A. w Koninie, przy wsparciu Funduszu na rzecz Sprawiedliwej Transformacji oraz projektu LIFE AFTER COAL PL.</p>
+
+<!--<div class="video">
+<h4>aaa</h4>
+<iframe width="100%" height="500" src="aaa" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+</div>-->
+
+<div class="sign">
+	<p>Łukasz Karkoszka</p>
+</div>
+
+
+
+
+
+
+<!-- share social media -->
+
+<div class="a2a_kit a2a_kit_size_32 a2a_default_style">
+<a class="a2a_button_facebook"></a>
+<a class="a2a_button_x"></a>
+</div>
+<script async src="assets/sm-share.js"></script>
+
+<!-- koniec social media -->
+
+
+
+
+
+</div>
+</article>
+
+
+
+</div>
+</div>
+
+</div>
+</div>
+
+</section>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+<!-- FOOTER -->								
+
+<footer class="site-footer colophon">
+        <div class="container">
+            <div class="row">
+
+                <div class="col-sm-12">
+								
+								<div class="line"></div>
+								
+								<div class="separator"></div>
+								
+								<div class="bottom-logos vertical-align" style="text-align: center;">
+																	
+									<img style="padding: 15px;" src="images/logo-1.jpg" alt="logo">
+									<img style="padding: 15px;" src="images/logo-2.jpg" alt="logo">
+									<img style="padding: 15px;" src="images/logo-3.jpg" alt="logo">
+									<img style="padding: 15px;" src="images/logo-4.jpg" alt="logo">
+								
+								</div>
+								
+								
+                </div>                
+            </div>
+        </div>
+    </footer>
+	<!--sizer--></div>
+</div>
+
+<script src="assets/js-sizer/jquery.min.js"></script>
+
+<script src="assets/js/plugins.js"></script>
+<script src="assets/js/main.js"></script>
+
+<script src="assets/js/jquery-1.9.1.js"></script>
+
+<script src="assets/js-lightbox/lightbox-plus-jquery.min.js"></script>
+
+<!-- WCAG-->
+<div class="widget">
+        <button onclick="increaseFontSize()">A+</button>
+        <button onclick="decreaseFontSize()">A-</button>
+        <button onclick="toggleContrast()">Kontrast</button>
+    </div>
+
+    <script>
+        function increaseFontSize() {
+            let body = document.body;
+            let style = window.getComputedStyle(body, null).getPropertyValue('font-size');
+            let currentSize = parseFloat(style);
+            body.style.fontSize = (currentSize + 2) + 'px';
+        }
+
+        function decreaseFontSize() {
+            let body = document.body;
+            let style = window.getComputedStyle(body, null).getPropertyValue('font-size');
+            let currentSize = parseFloat(style);
+            body.style.fontSize = (currentSize - 2) + 'px';
+        }
+
+        function toggleContrast() {
+            document.body.classList.toggle('high-contrast');
+        }
+    </script>
+<!-- WCAG koniec-->
+
+</body>
+</html>
