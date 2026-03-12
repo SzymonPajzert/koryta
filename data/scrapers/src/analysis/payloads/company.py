@@ -3,7 +3,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-from analysis.interesting import CompaniesMerged
+from analysis.interesting import Companies
 from analysis.payloads.util import strip_none
 from scrapers.stores import Context, Pipeline
 
@@ -11,7 +11,7 @@ from scrapers.stores import Context, Pipeline
 class CompanyPayloads(Pipeline):
     filename = None
 
-    companies: CompaniesMerged
+    companies: Companies
 
     def process(self, ctx: Context) -> pd.DataFrame:
         # TODO type this correctly
