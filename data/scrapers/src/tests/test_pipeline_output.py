@@ -39,7 +39,7 @@ COLUMNS_IN_FILE = {
     "companies_merged.jsonl": [
         "name",
         "krs",
-        "reasons",
+        "sources",
     ],
     # TODO support region wildcard
     "people_extracted_10.csv": [
