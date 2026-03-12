@@ -33,7 +33,9 @@ class HerbertNERClient:
                 model = AutoModelForTokenClassification.from_pretrained(self.model_dir)
 
             HerbertNERClient._pipeline = pipeline(
-                "ner", model=model, tokenizer=tokenizer
+                "ner",  # type: ignore
+                model=model,
+                tokenizer=tokenizer,  # type: ignore
             )
             print("Model has been loaded")
 
@@ -43,7 +45,7 @@ class HerbertNERClient:
         """Extract all entities from given text"""
 
         ner_pipeline = self._get_pipeline()
-        return ner_pipeline(text)
+        return ner_pipeline(text)  # type: ignore
 
     def group_entities(self, ner_output: List[dict]) -> dict:
         """Group NERs withing three categories: PER, LOC, ORG"""
@@ -147,8 +149,7 @@ class StanzaNERClient:
     def _get_model(self):
         if self._nlp_stanza is None:
             if not (Path(self.model_dir) / "pl").is_dir():
-                print(
-                    f"Model is downloaded from external resource to location {self.model_dir}")  # noqa: E501
+                print(f"Model is downloaded from external resource to {self.model_dir}")
                 stanza.download("pl", model_dir=str(self.model_dir))
             else:
                 print(f"Model already exists in location: {self.model_dir}")

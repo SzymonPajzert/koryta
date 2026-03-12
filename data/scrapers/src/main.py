@@ -86,13 +86,13 @@ def main():
         # TODO this special handling is bad imo
         print("No pipeline specified, will run all except ScrapeRejestrIO")
     pipeline_names = set(pt.__name__ for pt in PIPELINES)
-    for p in args.pipeline:
-        if p not in pipeline_names:
-            print(f"Error: pipeline {p} not found")
+    for p_name in args.pipeline:
+        if p_name not in pipeline_names:
+            print(f"Error: pipeline {p_name} not found")
             raise ValueError(
-                f"Pipeline {p} not found. Available: {' '.join(pipeline_names)}"
+                f"Pipeline {p_name} not found. Available: {' '.join(pipeline_names)}"
             )
-        print(f"Will run pipeline: {p}")
+        print(f"Will run pipeline: {p_name}")
 
     printer = Printer(args)
     try:
