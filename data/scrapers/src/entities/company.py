@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class Source:
     """Represents a source of information for a company."""
 
