@@ -302,7 +302,7 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def mark_done(self, uid: str, storage_path: str) -> None:
+    def mark_done(self, uid: str, storage_path: str | None) -> None:
         """Mark a URL as successfully crawled."""
         raise NotImplementedError()
 
@@ -314,26 +314,6 @@ class CrawlQueue(metaclass=ABCMeta):
     @abstractmethod
     def release(self, uid: str) -> None:
         """Release a lock without marking done or error."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def execute(self, sql: str, params=None) -> None:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def executemany(self, sql: str, rows: list[tuple]) -> None:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def fetchone(self, sql: str, params=None):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def fetchall(self, sql: str, params=None) -> list[tuple]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def transaction(self):
         raise NotImplementedError()
 
 

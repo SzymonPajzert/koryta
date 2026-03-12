@@ -1,4 +1,4 @@
-"""PostgreSQL database abstraction for the article crawler.
+"""PostgreSQL-backed crawl queue for the article crawler.
 
 All direct psycopg2 access is encapsulated here. The constructor takes
 explicit connection parameters (no os.getenv), and data-loading methods
@@ -9,20 +9,34 @@ compliant.
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, Protocol
 from zoneinfo import ZoneInfo
 
 from uuid_extensions import uuid7str  # type: ignore
 
-from scrapers.stores import Postgres
+from scrapers.stores import CrawlQueue
 
 logger = logging.getLogger(__name__)
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 
-class CrawlerDB:
-    def __init__(self, pg: Postgres):
+class _PostgresBackend(Protocol):
+    def connect(self): ...
+
+    def execute(self, sql: str, params=None) -> None: ...
+
+    def executemany(self, sql: str, rows: list[tuple]) -> None: ...
+
+    def fetchone(self, sql: str, params=None): ...
+
+    def fetchall(self, sql: str, params=None) -> list[tuple]: ...
+
+    def transaction(self): ...
+
+
+class PostgresCrawlQueue(CrawlQueue):
+    def __init__(self, pg: _PostgresBackend):
         self.pg = pg
 
     def init_tables(self, urls: list[str], reset: bool = False):
@@ -113,7 +127,7 @@ class CrawlerDB:
             else:
                 logger.info("No blocked domains to load.")
 
-    def get_and_lock_url(self, worker_id: str, max_retries: int) -> tuple | None:
+    def get(self, worker_id: str, max_retries: int) -> tuple | None:
         """Atomically select and lock a URL for crawling.
 
         Returns (id, url, priority, num_retries) or None if nothing available.
@@ -156,7 +170,7 @@ class CrawlerDB:
             )
             return cur.fetchone()
 
-    def mark_done(self, uid: str, storage_path: str | None):
+    def mark_done(self, uid: str, storage_path: str | None) -> None:
         """Mark a URL as successfully crawled."""
         self.pg.execute(
             "UPDATE website_index SET done = TRUE, date_finished = %s, "
@@ -165,7 +179,7 @@ class CrawlerDB:
             [datetime.now(warsaw_tz), storage_path, uid],
         )
 
-    def propagate_error(self, uid: str, error: str):
+    def mark_error(self, uid: str, error: str) -> None:
         """Record an error and increment retries."""
         self.pg.execute(
             "UPDATE website_index SET num_retries = num_retries + 1, "
@@ -174,13 +188,23 @@ class CrawlerDB:
             [error, uid],
         )
 
-    def release_lock(self, uid: str):
+    def release(self, uid: str) -> None:
         """Release a lock without marking done or error."""
         self.pg.execute(
             "UPDATE website_index SET locked_by_worker_id = NULL, "
             "locked_at = NULL WHERE id = %s",
             [uid],
         )
+
+    def put(self, urls: list[str]) -> None:
+        """Insert/enqueue URLs (idempotent)."""
+        if not urls:
+            return
+        now = datetime.now(warsaw_tz)
+        rows: list[tuple] = [
+            (uuid7str(), url, 0, False, [], 0, now, None, None) for url in urls
+        ]
+        self.insert_urls(rows)
 
     def insert_urls(self, rows: list[tuple]):
         """Batch insert discovered URLs.
