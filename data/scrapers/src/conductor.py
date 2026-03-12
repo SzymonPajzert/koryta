@@ -146,6 +146,8 @@ def setup_context(
         print("Initializing RejestrIO as a data source")
         rejestr_io = Rejestr()
 
+    postgres_client = postgres or PostgresClient.from_env()
+
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
