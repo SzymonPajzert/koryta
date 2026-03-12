@@ -11,16 +11,6 @@ from scrapers.stores import Context, LocalFile, Pipeline
 from scrapers.wiki.process_articles import ProcessWiki
 
 
-def iterate(ctx, pipeline: Pipeline, constructor):
-    try:
-        df = pipeline.read_or_process(ctx)
-        for row in df.itertuples(index=False):
-            yield constructor(row)
-    except:
-        print("Failed to process pipeline", pipeline)
-        raise
-
-
 class Companies(Pipeline):
     """
     This pipeline lists all companies we're aware of and either provides
@@ -41,44 +31,10 @@ class Companies(Pipeline):
         """
         self.teryt_pipeline.read_or_process(ctx)
         self.cities_to_teryt = getattr(self.teryt_pipeline, "cities_to_teryt", {})
-
-        graph = self.company_graph(ctx)
-        krs_to_owner_teryts: dict[str, set[str]] = {}
-        for row in iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d)):
-            teryts = getattr(row, "teryts", None)
-            if teryts is None:
-                continue
-            if isinstance(teryts, (list, set, tuple, np.ndarray)) and len(teryts) == 0:
-                continue
-            descendants = graph.all_descendants([row.id])
-            for desc in descendants:
-                if desc not in krs_to_owner_teryts:
-                    krs_to_owner_teryts[desc] = set()
-                krs_to_owner_teryts[desc].update(row.teryts)
-
-        children_of_hardcoded_set = graph.all_descendants(
-            iterate(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id)
-        )
-        records = []
-        for krs in children_of_hardcoded_set:
-            records.append(
-                {"krs": krs, "owner_teryts": list(krs_to_owner_teryts.get(krs, []))}
-            )
-        children_of_hardcoded = pd.DataFrame(  # noqa: F841
-            records
-            if records
-            else {
-                "krs": pd.Series([], dtype=str),
-                "owner_teryts": pd.Series([], dtype=object),
-            }
-        )
-
-        self.wiki_pipeline.read_or_process_list(ctx)
-        wiki_companies = ctx.io.read_data(  # noqa: F841
-            LocalFile(
-                "company_wikipedia/company_wikipedia.jsonl", "versioned"
-            )  # TODO fix
-        ).read_dataframe("jsonl")
+        graph = self.graph(ctx)
+        # TODO join them when there's no more query
+        wiki_companies = self.wiki_companies(ctx)  # noqa: F841
+        children_of_hardcoded = self.children_of_hardcoded(ctx, graph)  # noqa: F841
 
         # company_krs is already processed by scraped_companies
         krs_companies = ctx.io.read_data(  # noqa: F841
@@ -101,8 +57,6 @@ class Companies(Pipeline):
         FROM wiki_companies w
         FULL OUTER JOIN krs_companies k
             ON CAST(w.krs AS VARCHAR) = CAST(k.krs AS VARCHAR)
-        LEFT JOIN children_of_hardcoded ik
-            ON CAST(k.krs AS VARCHAR) = CAST(ik.krs AS VARCHAR)
         """
 
         df = ctx.con.execute(query).df()
@@ -128,9 +82,43 @@ class Companies(Pipeline):
                 )
                 ctx.io.output_entity(entity)
 
+    def graph(self, ctx: Context):
+        graph = self.company_graph(ctx)
+        krs_to_owner_teryts: dict[str, set[str]] = {}
+        for row in iterate_pipeline(
+            ctx, self.hardcoded_companies, lambda d: ManualKRS(*d)
+        ):
+            teryts = getattr(row, "teryts", None)
+            if teryts is None:
+                continue
+            if isinstance(teryts, (list, set, tuple, np.ndarray)) and len(teryts) == 0:
+                continue
+            descendants = graph.all_descendants([row.id])
+            for desc in descendants:
+                if desc not in krs_to_owner_teryts:
+                    krs_to_owner_teryts[desc] = set()
+                krs_to_owner_teryts[desc].update(row.teryts)
+        return graph
+
+    def wiki_companies(self, ctx: Context):
+        self.wiki_pipeline.read_or_process(ctx)
+        return ctx.io.read_data(  # noqa: F841
+            LocalFile(
+                "company_wikipedia/company_wikipedia.jsonl", "versioned"
+            )  # TODO fix
+        ).read_dataframe("jsonl")
+
+    def children_of_hardcoded(self, ctx: Context, graph: CompanyGraph) -> list[str]:
+        children_of_hardcoded_set = graph.all_descendants(
+            iterate_pipeline(ctx, self.hardcoded_companies, lambda d: ManualKRS(*d).id)
+        )
+        return list(children_of_hardcoded_set)
+
     def company_graph(self, ctx: Context):
         graph = CompanyGraph()
-        for company in iterate(ctx, self.scraped_companies, lambda d: KrsCompany(*d)):
+        for company in iterate_pipeline(
+            ctx, self.scraped_companies, lambda d: KrsCompany(*d)
+        ):
             for child in company.children:
                 graph.add_parent(company.krs, child)
             for parent in company.parents:
@@ -211,3 +199,13 @@ class Companies(Pipeline):
                                     break
 
         return reasons
+
+
+def iterate_pipeline(ctx, pipeline: Pipeline, constructor):
+    try:
+        df = pipeline.read_or_process(ctx)
+        for row in df.itertuples(index=False):
+            yield constructor(row)
+    except:
+        print("Failed to process pipeline", pipeline)
+        raise
