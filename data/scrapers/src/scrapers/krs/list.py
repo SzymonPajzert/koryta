@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from typing import Type
 
 from pandas import DataFrame
 
@@ -108,6 +109,10 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.companies: dict[str, KrsCompany] = {}
         self.company_sources: dict[str, set[str]] = {}
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
+
+    @property
+    def output_class(self) -> Type:
+        return KrsCompany
 
     def add_company(self, company: KrsCompany):
         krs_id = company.krs
