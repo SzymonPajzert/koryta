@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from analysis.payloads import CompanyPayloads, PeoplePayloads, RegionPayloads
+from analysis.payloads import PeoplePayloads, RegionPayloads
 from scrapers.stores import Context, Pipeline, ProcessPolicy
 
 
