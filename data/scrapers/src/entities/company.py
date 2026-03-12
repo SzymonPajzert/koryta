@@ -1,12 +1,17 @@
 """Data classes for representing companies and KRS entities."""
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Literal, Optional
 
 
 @dataclass
-class InterestingReason:
+class Source:
+    """Represents a source of information for a company."""
+
+    # TODO make sure you're supporting all the sources.
+    source: Literal["wiki", "rejestr-io", "hardcoded", "krs-api"]
     reason: str
+    is_interesting: bool = False
     details: str | None = None
 
 
@@ -18,25 +23,15 @@ class Owner:
 
 @dataclass
 class Company:
-    name: str
-    krs: str | None
-    teryt_code: str | None = None
-    reasons: list[InterestingReason] = field(default_factory=list)
-    sources: list[str] = field(default_factory=list)
-    children: set[str] = field(default_factory=set)
-    parents: set[Owner] = field(default_factory=set)
+    """Represents a company entry from a KRS (National Court Register) search.
 
-
-@dataclass
-class KRS:
-    """Represents a company entry from a KRS (National Court Register) search."""
+    It is the standard model of the company in our pipeline."""
 
     krs: str
-    name: str
+    name: str | None = None
     city: str | None = None
     teryt_code: str | None = None
-    is_interesting: bool = False
-    sources: set[str] = field(default_factory=set)
+    sources: set[Source] = field(default_factory=set)
     children: set[str] = field(default_factory=set)
     parents: set[Owner] = field(default_factory=set)
 
