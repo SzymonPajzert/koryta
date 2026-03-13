@@ -248,7 +248,9 @@ class PostgresCrawlQueue(CrawlQueue):
         """
         if not rows:
             return
-        prepared = [
+        prepared: list[
+            tuple[str, str, int, bool, list[str], int, datetime, None, None]
+        ] = [
             (
                 uuid7str(),
                 self._normalize_url(url),
