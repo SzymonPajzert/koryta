@@ -1,5 +1,6 @@
 import pytest
 
+from entities.company import Company, Source
 from main import setup_context
 from pipelines import Companies
 
@@ -10,30 +11,56 @@ def ctx():
 
 
 @pytest.fixture
-def companies(ctx):
+def companies_df(ctx):
     stats = Companies()
     return stats.read_or_process(ctx)
 
 
-def test_teryt_code_set(companies):
+@pytest.fixture
+def companies_map(ctx):
+    stats = Companies()
+    return {c.krs: c for c in stats.read_or_process_list(ctx)}
+
+
+def test_teryt_code_set(companies_df):
     pytest.skip("TODO")
-    total = len(companies)
-    null_teryt_codes = companies["teryt_code"].isna().sum()
+    total = len(companies_df)
+    null_teryt_codes = companies_df["teryt_code"].isna().sum()
     assert null_teryt_codes == 0, (
         f"total rows: {total}, null teryt codes: {null_teryt_codes}"
     )
 
 
-def test_0000846159(companies):
-    company = companies[companies["krs"] == "0000846159"]
-    assert (
-        company["name"].iloc[0] == "ZAKŁAD GOSPODARKI KOMUNALNEJ GMINY SŁUPIA KONECKA"
-    )
+def test_sources_non_empty(companies_df):
+    has_name = companies_df["name"].notna()
+    empty_sources = companies_df["sources"].apply(lambda x: len(x)) == 0
+
+    expect_empty = companies_df[empty_sources & has_name]
+    print(expect_empty[["krs", "name"]].head(10))
+    assert len(expect_empty) == 0
 
 
-# TODO check field presence, how often it's set
-# assert company_row["krs"] == "0000123456"
-# assert company_row["name"] == "Test Company Sp. z o.o."
-# assert company_row["city"] == "Warszawa"
-# assert company_row["teryt"] == "1465011"
-# assert "0000654321" in company_row["parents"]
+EXPECTED_COMPANIES = {
+    "0000846159": Company(
+        krs="0000846159",
+        name="ZAKŁAD GOSPODARKI KOMUNALNEJ GMINY SŁUPIA KONECKA",
+    ),
+    "0000156806": Company(
+        krs="0000156806",
+        name="C.HARTWIG - TARGI",
+        city="Siedlce",
+        teryt_code="1464",
+        sources=[Source("rejestr-io")],
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "expected_company",
+    EXPECTED_COMPANIES.values(),
+    ids=EXPECTED_COMPANIES.keys(),
+)
+def test_expected_output(companies_map, companies_df, expected_company):
+    company = companies_map[expected_company.krs]
+    print(companies_df[companies_df["krs"] == expected_company.krs].iloc[0])
+    assert company == expected_company, company

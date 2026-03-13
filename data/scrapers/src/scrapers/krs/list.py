@@ -1,4 +1,6 @@
+import dataclasses
 import json
+import typing
 from datetime import datetime, timedelta
 from typing import Type
 
@@ -6,7 +8,7 @@ from pandas import DataFrame
 
 from entities.company import Company as KrsCompany
 from entities.company import ManualKRS as KRS
-from entities.company import Owner
+from entities.company import Owner, Source
 from entities.person import KRS as KrsPerson
 from scrapers.krs.graph import QueryRelation
 from scrapers.map.postal_codes import PostalCodes
@@ -107,7 +109,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     def __init__(self) -> None:
         super().__init__()
         self.companies: dict[str, KrsCompany] = {}
-        self.company_sources: dict[str, set[str]] = {}
+        self.company_sources: dict[str, set[Source]] = {}
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
 
     @property
@@ -132,9 +134,14 @@ class CompaniesKRS(Pipeline[KrsCompany]):
 
         return company
 
-    def add_company_source(self, company: str, source: str):
+    def add_company_source(self, company: str, uri: str):
+        source = uri.removeprefix("gs://koryta-pl-crawled/hostname=")
+        source = source.split("/")[0]
+        source_type: typing.Literal["rejestr-io", "api-krs"] = "api-krs"
+        if source == "rejestr.io":
+            source_type = "rejestr-io"
         self.company_sources[company] = self.company_sources.get(company, set()) | {
-            source
+            Source(source_type, source)
         }
 
     def add_awaiting(self, company: str, relation: tuple[str, str]):
@@ -144,8 +151,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
 
     def add_relation(self, parent: str, child: str):
         if parent in self.companies and child in self.companies:
-            self.companies[parent].children.add(child)
-            self.companies[child].parents.add(Owner(krs=parent, teryt=None))
+            self.companies[parent].children.append(child)
+            self.companies[child].parents.append(Owner(krs=parent, teryt=None))
         elif child not in self.companies:
             self.add_awaiting(child, (parent, child))
         elif parent not in self.companies:
@@ -179,6 +186,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     if item.get("typ") != "organizacja":
                         continue
                     c = self.add_company(company_from_rejestrio(item, postal_codes))
+                    self.add_company_source(c.krs, blob_name)
                     conn_type = QueryRelation.from_rejestrio(
                         item["krs_powiazania_kwerendowane"][0]
                     )
@@ -196,7 +204,12 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             self.add_company_source(c.krs, blob_name)
 
         for company in self.companies.values():
-            ctx.io.output_entity(company)
+            ctx.io.output_entity(
+                dataclasses.replace(
+                    company,
+                    sources=list(self.company_sources.get(company.krs, set())),
+                )
+            )
 
         for k, vs in self.awaiting_relations.items():
             for v in vs:
@@ -267,7 +280,7 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
         postal_code = siedziba.get("adres", {}).get("kodPocztowy")
 
         teryt_code = get_teryt(pcs, miejscowosc, postal_code)
-        owners: set[Owner] = set()
+        owners: list[Owner] = []
         # Check who's listed as wspolnicy.
         # If it's one of the known prefixes, add teryt as owners
         wspolnicy = dzial1.get("wspolnicySpzoo", [])
@@ -277,7 +290,7 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
             w_nazwa = w["nazwa"]
             for prefix, teryt_length in KNOWN_OWNER_PREFIXES.items():
                 if w_nazwa.startswith(prefix) and teryt_length is not None:
-                    owners.add(Owner(krs=None, teryt=teryt_code[:teryt_length]))
+                    owners.append(Owner(krs=None, teryt=teryt_code[:teryt_length]))
                     break
 
         return KrsCompany(
