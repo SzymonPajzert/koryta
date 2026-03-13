@@ -77,7 +77,6 @@ class PostgresClient:
             return transaction.fetchall()
 
 
-# TODO (mpacek) decide whether to normalize https:// prefix
 class PostgresCrawlQueue(CrawlQueue):
     def __init__(self, pg: PostgresClient):
         self.pg = pg
