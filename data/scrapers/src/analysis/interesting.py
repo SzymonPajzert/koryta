@@ -165,15 +165,3 @@ def attr(obj, f):
     if obj is not None and f in obj.__dict__:
         return obj.__dict__[f]
     return None
-
-
-# TODO remove it and read from read_or_process_list
-def iterate_pipeline(ctx, pipeline: Pipeline, constructor: typing.Type):
-    try:
-        df = pipeline.read_or_process(ctx)
-        for row in df.to_dict(orient="records"):
-            records = typing.cast(dict[str, typing.Any], row)
-            yield constructor(**records)
-    except:
-        print("Failed to process pipeline", pipeline)
-        raise
