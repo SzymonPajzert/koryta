@@ -9,10 +9,9 @@ class Source:
     """Represents a source of information for a company."""
 
     # TODO make sure you're supporting all the sources.
-    source: Literal["wiki", "rejestr-io", "hardcoded", "krs-api"]
-    reason: str
-    is_interesting: bool = False
-    details: str | None = None
+    source: Literal["wiki", "rejestr-io", "hardcoded", "api-krs"]
+    source_krs: str | None = None
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -31,9 +30,9 @@ class Company:
     name: str | None = None
     city: str | None = None
     teryt_code: str | None = None
-    sources: set[Source] = field(default_factory=set)
-    children: set[str] = field(default_factory=set)
-    parents: set[Owner] = field(default_factory=set)
+    sources: list[Source] = field(default_factory=list)
+    children: list[str] = field(default_factory=list)
+    parents: list[Owner] = field(default_factory=list)
 
     def __post_init__(self):
         """Ensures the KRS ID is zero-padded to 10 digits."""

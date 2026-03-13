@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from entities.company import Company, ManualKRS, Owner, Source, Wikipedia
+from entities.company import Company, Owner, Source, Wikipedia
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
@@ -133,12 +133,14 @@ class CompanyMerger:
             return None
         return remove_company_suffix(name)
 
-    def sources(self) -> set[Source]:
-        result = set()
+    def sources(self) -> list[Source]:
+        result = []
         if self.krs is not None:
-            result = set(self.krs.sources)
+            result += self.krs.sources
         if self.wiki is not None:
-            result.add(Source("wiki", self.wiki.name))
+            result += [Source("wiki", self.wiki.name)]
+        if len(result) == 0:
+            result = [Source("hardcoded")]
         return result
 
 
