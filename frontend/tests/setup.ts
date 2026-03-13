@@ -21,6 +21,14 @@ vi.mock("firebase/firestore", async (importOriginal) => {
   };
 });
 
+vi.mock("@firebase/auth", async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    indexedDBLocalCache: actual.inMemoryPersistence,
+  };
+});
+
 vi.mock("firebase/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("firebase/auth")>();
   return {
@@ -51,6 +59,14 @@ vi.mock("firebase/auth", async (importOriginal) => {
 vi.mock("nuxt-vuefire", () => ({
   useCurrentUser: vi.fn(),
 }));
+
+vi.mock("nuxt/app", async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    getAppManifest: vi.fn(() => Promise.resolve({})),
+  };
+});
 
 vi.mock("@sentry/nuxt", () => ({
   init: vi.fn(),

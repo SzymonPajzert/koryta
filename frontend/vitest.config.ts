@@ -8,5 +8,10 @@ export default defineVitestConfig({
     coverage: {
       enabled: true,
     },
+    server: {
+      deps: {
+        inline: ["vuefire", "nuxt-vuefire", "firebase"],
+      },
+    },
   },
 });

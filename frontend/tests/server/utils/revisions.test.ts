@@ -9,6 +9,15 @@ import type {
   DocumentReference,
 } from "firebase-admin/firestore";
 
+vi.mock("firebase-admin/firestore", () => {
+  return {
+    Timestamp: {
+      now: vi.fn(() => ({ toMillis: () => 1234567890 })),
+    },
+    // the rest are types and don't need mocking at runtime
+  };
+});
+
 // Mock Firestore
 const mockGet = vi.fn();
 const mockWhere = vi.fn().mockReturnThis();
