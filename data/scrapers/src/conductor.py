@@ -11,6 +11,7 @@ from scrapers.stores import (
     IO,
     CloudStorage,
     Context,
+    CrawlQueue,
     DataRef,
     DownloadableFile,
     File,
@@ -132,7 +133,9 @@ class Conductor(IO):
 
 
 def setup_context(
-    use_rejestr_io: bool, policy: ProcessPolicy | None = None
+    use_rejestr_io: bool,
+    policy: ProcessPolicy | None = None,
+    crawl_queue: CrawlQueue | None = None,
 ) -> tuple[Context, EntityDumper]:
     if policy is None:
         policy = ProcessPolicy.with_default()
@@ -150,6 +153,7 @@ def setup_context(
         utils=UtilsImpl(),
         web=WebImpl(),
         nlp=NLPImpl(),
+        crawl_queue=crawl_queue,
         refresh_policy=policy,
     )
 

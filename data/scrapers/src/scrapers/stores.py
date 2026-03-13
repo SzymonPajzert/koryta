@@ -288,6 +288,35 @@ class NLP(metaclass=ABCMeta):
         pass
 
 
+class CrawlQueue(metaclass=ABCMeta):
+    """Abstract interface for crawler URL queue."""
+
+    @abstractmethod
+    def put(self, urls: list[str]) -> None:
+        """Insert/enqueue URLs (idempotent)."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get(self, worker_id: str, max_retries: int):
+        """Atomically claim a URL for processing."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def mark_done(self, uid: str, storage_path: str) -> None:
+        """Mark a URL as successfully crawled."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def mark_error(self, uid: str, error: str) -> None:
+        """Record an error and increment retries."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def release(self, uid: str) -> None:
+        """Release a lock without marking done or error."""
+        raise NotImplementedError()
+
+
 @dataclass
 class ProcessPolicy:
     refresh_pipelines: set[str]
@@ -325,6 +354,7 @@ class Context:
     utils: Utils
     web: Web
     nlp: NLP
+    crawl_queue: CrawlQueue | None = None
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
 
 
