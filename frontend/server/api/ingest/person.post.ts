@@ -4,22 +4,21 @@ import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { electionPositions } from "~~/shared/misc";
 import type { Edge, Article, Company, Person } from "~~/shared/model";
-import type {
-  EntityResult,
-  ElectionRequest,
-  EmploymentRequest,
-  ArticleRequest,
-  PersonRequest,
+import {
+  personRequestSchema,
+  type EntityResult,
+  type ElectionRequest,
+  type EmploymentRequest,
+  type ArticleRequest,
+  type PersonRequest,
 } from "#shared/api";
 
 export default defineEventHandler(async (event) => {
-  const bodyUntyped = await readBody(event);
+  const body: PersonRequest = await readValidatedBody(event, (body) =>
+    personRequestSchema.parse(body),
+  );
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
-
-  // TODO do some checking of the body format - zod should be used here?
-  if (!bodyUntyped.name) throw badRequest("Missing required person name");
-  const body: PersonRequest = bodyUntyped;
   const batch = db.batch();
 
   let personId: string | undefined = await lookupNode(db, "name", body.name);
