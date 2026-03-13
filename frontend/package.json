@@ -44,6 +44,7 @@
     "@unhead/vue": "^2.0.13",
     "@vueuse/firebase": "^13.6.0",
     "better-sqlite3": "^12.2.0",
+    "commander": "^13.1.0",
     "d3-force": "^3.0.0",
     "digraph-js": "^2.2.3",
     "eslint": "^9.32.0",
