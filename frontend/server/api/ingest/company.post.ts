@@ -19,6 +19,7 @@ const requestSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
+  console.info("Handling ingest/company.post");
   const body: Request = await readValidatedBody(event, (body) =>
     requestSchema.parse(body),
   );
@@ -106,8 +107,9 @@ async function findCompanyByKRS(
 
 async function findRegionByTeryt(
   db: FirebaseFirestore.Firestore,
-  teryt: string,
+  terytArg: string,
 ): Promise<string> {
+  const teryt = terytArg.length > 4 ? terytArg.slice(0, 4) : terytArg;
   const regionNodeId = `teryt${teryt}`;
   const nodeWithTerytID = db.collection("nodes").doc(regionNodeId);
   if ((await nodeWithTerytID.get()).exists) {
