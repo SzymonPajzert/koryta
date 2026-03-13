@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from scrapers.stores import CrawlQueue
@@ -87,6 +89,43 @@ def test_timeout_allows_reget(crawl_queue: CrawlQueue):
     assert row is not None
     row2 = crawl_queue.get("worker-2", max_retries=1, timeout_seconds=0)
     assert row2 is not None
+
+
+def test_timeout_blocks_until_expired(crawl_queue: CrawlQueue):
+    crawl_queue.put([("https://example.com/locked", 10)])
+    row = crawl_queue.get("worker-1", max_retries=1)
+    assert row is not None
+
+    timeout_seconds = 0.2
+    blocked = crawl_queue.get(
+        "worker-2", max_retries=1, timeout_seconds=timeout_seconds
+    )
+    assert blocked is None
+
+    time.sleep(timeout_seconds + 0.1)
+    reclaimed = crawl_queue.get(
+        "worker-2", max_retries=1, timeout_seconds=timeout_seconds
+    )
+    assert reclaimed == row
+
+
+def test_late_mark_done_is_accepted_after_timeout(crawl_queue: CrawlQueue):
+    crawl_queue.put([("https://example.com/late", 10)])
+    row = crawl_queue.get("worker-1", max_retries=1, timeout_seconds=1)
+    assert row is not None
+
+    time.sleep(1.1)
+    reclaimed = crawl_queue.get("worker-2", max_retries=1, timeout_seconds=1)
+    assert reclaimed == row
+    crawl_queue.mark_done(reclaimed[0], "s3://bucket/late-v2")
+
+    # Worker-1 finishes late; we accept the late mark_done overwrite.
+    # Note that in practice, the path for each url will be the same, so that's
+    # not really an issue.
+    crawl_queue.mark_done(row[0], "s3://bucket/late-v1")
+
+    done_rows = crawl_queue.get_done_urls(limit=5)
+    assert done_rows == [(row[0], "example.com/late", "s3://bucket/late-v1")]
 
 
 def test_put_is_idempotent(crawl_queue: CrawlQueue):
