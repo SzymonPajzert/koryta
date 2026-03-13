@@ -96,7 +96,7 @@ def test_timeout_blocks_until_expired(crawl_queue: CrawlQueue):
     row = crawl_queue.get("worker-1", max_retries=1)
     assert row is not None
 
-    timeout_seconds = 0.2
+    timeout_seconds: int = 1
     blocked = crawl_queue.get(
         "worker-2", max_retries=1, timeout_seconds=timeout_seconds
     )
@@ -111,12 +111,14 @@ def test_timeout_blocks_until_expired(crawl_queue: CrawlQueue):
 
 def test_late_mark_done_is_accepted_after_timeout(crawl_queue: CrawlQueue):
     crawl_queue.put([("https://example.com/late", 10)])
-    timeout_seconds = 0.2
+    timeout_seconds: int = 1
     row = crawl_queue.get("worker-1", max_retries=1, timeout_seconds=timeout_seconds)
     assert row is not None
 
     time.sleep(timeout_seconds + 0.1)
-    reclaimed = crawl_queue.get("worker-2", max_retries=1, timeout_seconds=timeout_seconds)
+    reclaimed = crawl_queue.get(
+        "worker-2", max_retries=1, timeout_seconds=timeout_seconds
+    )
     assert reclaimed == row
     crawl_queue.mark_done(reclaimed[0], "s3://bucket/late-v2")
 
