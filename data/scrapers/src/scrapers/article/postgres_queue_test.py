@@ -36,17 +36,12 @@ def db(postgresql) -> PostgresCrawlQueue:
         params.get("password"),
         port=int(params.get("port", 5432)),
     )
-    return PostgresCrawlQueue(pg)  # type: ignore[arg-type]
+    queue = PostgresCrawlQueue(pg)  # type: ignore[arg-type]
+    queue.reset()
+    return queue
 
 
-@pytest.fixture()
-def clean_db(db: PostgresCrawlQueue):
-    db._init_tables(reset=True)
-    yield
-
-
-def test_put_populates_urls(db: PostgresCrawlQueue, clean_db):
-    db._init_tables(reset=True)
+def test_put_populates_urls(db: PostgresCrawlQueue):
     db.put(
         [
             ("https://example.com", 0),
@@ -57,8 +52,7 @@ def test_put_populates_urls(db: PostgresCrawlQueue, clean_db):
     assert count == 2
 
 
-def test_get_skips_blocked(db: PostgresCrawlQueue, clean_db):
-    db._init_tables(reset=True)
+def test_get_skips_blocked(db: PostgresCrawlQueue):
     db.put(
         [
             ("https://blocked.test/a", 0),
@@ -73,7 +67,7 @@ def test_get_skips_blocked(db: PostgresCrawlQueue, clean_db):
     assert url == "ok.test/b"
 
 
-def test_load_blocked_domains_upserts(db: PostgresCrawlQueue, clean_db):
+def test_load_blocked_domains_upserts(db: PostgresCrawlQueue):
     db.add_blocked_domains([("blocked.test", "first")])
     db.add_blocked_domains([("blocked.test", "second")])
     reason = db.pg.fetchone(
@@ -82,8 +76,7 @@ def test_load_blocked_domains_upserts(db: PostgresCrawlQueue, clean_db):
     assert reason == "second"
 
 
-def test_mark_done_and_get_pages(db: PostgresCrawlQueue, clean_db):
-    db._init_tables(reset=True)
+def test_mark_done_and_get_pages(db: PostgresCrawlQueue):
     db.put([("https://example.com/a", 0)])
     uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
     db.mark_done(uid, "s3://bucket/a")
@@ -91,8 +84,7 @@ def test_mark_done_and_get_pages(db: PostgresCrawlQueue, clean_db):
     assert rows == [(uid, "example.com/a", "s3://bucket/a")]
 
 
-def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue, clean_db):
-    db._init_tables(reset=True)
+def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue):
     now = datetime.now()
     rows: list[tuple] = [
         ("https://example.com/a", 0, now),
@@ -107,8 +99,7 @@ def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue, clean_db):
     assert [priority for _, priority in priorities] == [30, 30]
 
 
-def test_get_stats(db: PostgresCrawlQueue, clean_db):
-    db._init_tables(reset=True)
+def test_get_stats(db: PostgresCrawlQueue):
     now = datetime.now()
     earlier = now - timedelta(minutes=5)
     rows = [
@@ -144,9 +135,8 @@ def test_get_stats(db: PostgresCrawlQueue, clean_db):
 
 
 @pytest.mark.skipif(not _env_flag("POSTGRES_STRESS"), reason="set POSTGRES_STRESS=1")
-def test_concurrent_get_and_lock(db: PostgresCrawlQueue, clean_db):
+def test_concurrent_get_and_lock(db: PostgresCrawlQueue):
     urls = [f"https://example.com/{i}" for i in range(200)]
-    db._init_tables(reset=True)
     now = datetime.now()
     db._insert_urls([(url, 0, now) for url in urls])
 

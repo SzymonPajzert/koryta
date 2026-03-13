@@ -345,6 +345,11 @@ class CrawlQueue(metaclass=ABCMeta):
         """Return done URLs with storage_path (id, url, storage_path)."""
         raise NotImplementedError()
 
+    @abstractmethod
+    def reset(self) -> None:
+        """Reset the queue tables/state to an empty clean slate."""
+        raise NotImplementedError()
+
 
 @dataclass
 class ProcessPolicy:

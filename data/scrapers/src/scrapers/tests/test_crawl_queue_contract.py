@@ -163,3 +163,10 @@ def test_get_done_urls_returns_done(crawl_queue: CrawlQueue):
     crawl_queue.mark_done(row[0], "s3://bucket/a")
     rows = crawl_queue.get_done_urls(limit=5)
     assert rows == [(row[0], "example.com/a", "s3://bucket/a")]
+
+
+def test_reset_clears_queue(crawl_queue: CrawlQueue):
+    crawl_queue.put([("https://example.com/reset", 10)])
+    assert crawl_queue.get("worker-1", max_retries=1) is not None
+    crawl_queue.reset()
+    assert crawl_queue.get("worker-1", max_retries=1) is None

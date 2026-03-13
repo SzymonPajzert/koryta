@@ -93,6 +93,7 @@ class PostgresCrawlQueue(CrawlQueue):
             if reset:
                 logger.info("Resetting database by dropping website_index table.")
                 transaction.execute("DROP TABLE IF EXISTS website_index;")
+                transaction.execute("DROP TABLE IF EXISTS blocked_domains;")
 
             transaction.execute(
                 """
@@ -119,6 +120,10 @@ class PostgresCrawlQueue(CrawlQueue):
             )
 
         logger.info("Database initialization complete.")
+
+    def reset(self) -> None:
+        """Drop and recreate queue tables so the queue is empty."""
+        self._init_tables(reset=True)
 
     def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
         """Create blocked_domains table and upsert rows.
