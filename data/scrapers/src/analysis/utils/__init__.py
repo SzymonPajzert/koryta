@@ -83,7 +83,7 @@ def append_nice_history(ctx: Context, df, company_names, teryt: Teryt):
             region_name = "nieznane"
             for e in el["teryt_powiat"]:
                 if e in teryt.TERYT:
-                    region_name = teryt.TERYT[e]
+                    region_name = str(teryt.TERYT[e])
                 else:
                     missing_teryt.add(e)
 
@@ -95,7 +95,9 @@ def append_nice_history(ctx: Context, df, company_names, teryt: Teryt):
             )
             actions.append((start_election, text))
 
-        before_work = [e for e in elections if e < first_work]
+        before_work = [
+            e for e in elections if first_work is not None and e < first_work
+        ]
         latest_election = max(before_work, default=min(elections, default=None))
 
         actions.sort(key=lambda x: x[0])

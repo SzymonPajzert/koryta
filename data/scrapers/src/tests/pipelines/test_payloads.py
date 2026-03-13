@@ -18,6 +18,9 @@ class MockPipeline(Pipeline):
     def should_refresh_with_logic(self, ctx: Context) -> bool:
         return False
 
+    def process(self, ctx: Context) -> pd.DataFrame:
+        return self.data
+
     def read_or_process(self, ctx: Context) -> pd.DataFrame:
         self._cached_result = self.data
         return self.data

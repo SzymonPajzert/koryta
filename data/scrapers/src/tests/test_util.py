@@ -1,4 +1,5 @@
 import copy
+from typing import Any
 
 from util.dict import trim_object
 
@@ -62,16 +63,16 @@ def test_trim_object_multiple_nested_keys_in_same_path():
 def test_trim_object_empty_keys():
     """Should return an empty dictionary if keys list is empty."""
     source = {"a": 1, "b": 2}
-    keys = []
-    expected = {}
+    keys: list[str] = []
+    expected: dict[str, Any] = {}
     assert trim_object(source, keys) == expected
 
 
 def test_trim_object_empty_source():
     """Should work for empty source."""
-    source = {}
+    source: dict[str, Any] = {}
     keys = ["a"]
-    expected = {}
+    expected: dict[str, Any] = {}
     assert trim_object(source, keys) == expected
 
 
@@ -79,7 +80,7 @@ def test_trim_object_missing_simple_key():
     """Should return empty for a missing simple key."""
     source = {"a": 1, "b": 2}
     keys = ["c"]
-    expected = {}
+    expected: dict[str, Any] = {}
     assert trim_object(source, keys) == expected
 
 
@@ -87,7 +88,7 @@ def test_trim_object_missing_nested_key_part():
     """Should return empty for a missing key part in a nested path."""
     source = {"a": {"b": 1}}
     keys = ["a/c"]
-    expected = {}
+    expected: dict[str, Any] = {}
     assert trim_object(source, keys) == expected
 
 
@@ -95,7 +96,7 @@ def test_trim_object_missing_intermediate_nested_key():
     """Should return empty when missing intermediate key in a nested path."""
     source = {"a": {"b": 1}}
     keys = ["x/y"]
-    expected = {}
+    expected: dict[str, Any] = {}
     assert trim_object(source, keys) == expected
 
 
@@ -103,7 +104,7 @@ def test_trim_object_traversing_non_dict():
     """Should return empty when traversing a non-dictionary value."""
     source = {"a": 1}
     keys = ["a/b"]
-    expected = {}
+    expected: dict[str, Any] = {}
     assert trim_object(source, keys) == expected
 
 

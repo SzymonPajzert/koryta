@@ -2,6 +2,7 @@
 
 import io
 import unittest
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pandas as pd
@@ -207,7 +208,7 @@ class TestPipeline(unittest.TestCase):
         pipeline = Level1()
 
         # Stateful mock for IO
-        written_files = {}
+        written_files: dict[str, Any] = {}
 
         def read_data_se(ref):
             # We assume ref is LocalFile and has .filename

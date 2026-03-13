@@ -28,6 +28,7 @@ FAKE_TERYT_CSV = """WOJ;POW;GMI;RODZ;NAZWA;NAZWA_DOD;STAN_NA
 
 class TestTeryt(unittest.TestCase):
     """Test cases for the Teryt class."""
+    teryt: Teryt
 
     @classmethod
     def setUpClass(cls):
@@ -43,12 +44,12 @@ class TestTeryt(unittest.TestCase):
         mock_zip_content.read_zip.return_value.read_dataframe.return_value = df
 
         # When read_data is called with the teryt_data source, return our mock file
-        mock_io.read_data = MagicMock(return_value=mock_zip_content)
+        mock_io.read_data = MagicMock(return_value=mock_zip_content)  # type: ignore
 
         # Create a context with the mock IO
         mock_context = Context(
             io=mock_io,
-            rejestr_io=None,
+            rejestr_io=MagicMock(),
             con=None,  # type: ignore
             utils=MagicMock(),
             web=MagicMock(),

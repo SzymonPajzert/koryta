@@ -56,7 +56,7 @@ class FromBytesIO(File):
         raise NotImplementedError()
 
     def read_csv(self, sep=","):
-        yield from pd.read_csv(self.raw_bytes, sep=sep, header=None).itertuples(
+        yield from pd.read_csv(self.read_file(), sep=sep, header=None).itertuples(
             index=False, name=None
         )
 

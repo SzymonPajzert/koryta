@@ -50,11 +50,13 @@ class TestEntityDumper(unittest.TestCase):
 
         # 4. Assertions
         self.assertIsNotNone(output_a)
+        assert output_a is not None
         self.assertEqual(len(output_a), 2)
         self.assertEqual(output_a[0], a1)
         self.assertEqual(output_a[1], a2)
 
         self.assertIsNotNone(output_b)
+        assert output_b is not None
         self.assertEqual(len(output_b), 1)
         self.assertEqual(output_b[0], b1)
 

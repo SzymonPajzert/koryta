@@ -114,7 +114,7 @@ def main():
 
         preds.append(pred_names)
 
-    ex_df["pred_names"] = preds
+    ex_df["pred_names"] = preds  # type: ignore
     ex_df = ex_df[~ex_df["pred_names"].isna()]
     ex_df["percent_pred_names_in_text"] = ex_df.apply(
         lambda r: percent_words_in_text(r["pred_names"], r["text"]), axis=1
