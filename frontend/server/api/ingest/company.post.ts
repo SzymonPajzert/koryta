@@ -2,22 +2,16 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
-import { z } from "zod";
-import type { CompanyRequest as Request } from "#shared/api";
-
-const requestSchema = z.object({
-  krs: z.string(),
-  name: z.string(),
-  owners: z.array(z.string()).optional(),
-  teryt: z.string().optional(),
-});
+import {
+  companyRequestSchema,
+  type CompanyRequest as Request,
+} from "#shared/api";
 
 export default defineEventHandler(async (event) => {
   console.info("Handling ingest/company.post");
   const body: Request = await readValidatedBody(event, (body) =>
-    requestSchema.parse(body),
+    companyRequestSchema.parse(body),
   );
-
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
