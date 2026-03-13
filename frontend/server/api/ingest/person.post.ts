@@ -3,50 +3,14 @@ import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { electionPositions } from "~~/shared/misc";
+import type { Edge, Article, Company, Person } from "~~/shared/model";
 import type {
-  Edge,
-  Article,
-  Company,
-  Person,
-  ElectionPosition,
-} from "~~/shared/model";
-
-type CompanyRequest = {
-  name: string;
-  krs?: string;
-  role?: string;
-  start?: string;
-  end?: string;
-};
-
-type ArticleRequest = {
-  url: string;
-};
-
-type ElectionRequest = {
-  party?: string;
-  election_year?: string;
-  election_type: ElectionPosition;
-  teryt?: string;
-};
-
-type Request = {
-  name: string;
-  content?: string;
-  wikipedia?: string;
-  rejestrIo?: string;
-  party: string[];
-  companies?: Array<CompanyRequest>;
-  articles?: Array<ArticleRequest>;
-  elections?: Array<ElectionRequest>;
-};
-
-type EntityResult = {
-  nodeId: string;
-  created: boolean;
-  edgeId?: string;
-  krs?: string;
-};
+  EntityResult,
+  ElectionRequest,
+  EmploymentRequest,
+  ArticleRequest,
+  PersonRequest,
+} from "#shared/api";
 
 export default defineEventHandler(async (event) => {
   const bodyUntyped = await readBody(event);
@@ -55,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
   // TODO do some checking of the body format - zod should be used here?
   if (!bodyUntyped.name) throw badRequest("Missing required person name");
-  const body: Request = bodyUntyped;
+  const body: PersonRequest = bodyUntyped;
   const batch = db.batch();
 
   let personId: string | undefined = await lookupNode(db, "name", body.name);
@@ -137,7 +101,7 @@ async function createCompany(
   batch: FirebaseFirestore.WriteBatch,
   user: { uid: string },
   personId: string,
-  company: CompanyRequest,
+  company: EmploymentRequest,
 ): Promise<EntityResult> {
   if (!company.krs) throw badRequest(`Company must have a KRS`);
 

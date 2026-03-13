@@ -3,13 +3,7 @@ import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { z } from "zod";
-
-type Request = {
-  krs: string;
-  name: string;
-  owners?: string[];
-  teryt?: string;
-};
+import type { CompanyRequest as Request } from "#shared/api";
 
 const requestSchema = z.object({
   krs: z.string(),
