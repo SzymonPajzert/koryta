@@ -58,8 +58,8 @@ def test_get_skips_blocked(db: PostgresCrawlQueue, clean_db):
 
     row = db.get("worker-1", max_retries=3)
     assert row is not None
-    _, url, _, _ = row
-    assert "ok.test" in url
+    _, url = row
+    assert url == "ok.test/b"
 
 
 def test_load_blocked_domains_upserts(db: PostgresCrawlQueue, clean_db):
@@ -75,23 +75,24 @@ def test_mark_done_and_get_pages(db: PostgresCrawlQueue, clean_db):
     db._init_tables(["https://example.com/a"], reset=True)
     uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
     db.mark_done(uid, "s3://bucket/a")
-    rows = db._get_pages_to_parse(limit=5)
-    assert rows == [(uid, "https://example.com/a", "s3://bucket/a")]
+    rows = db.get_done_urls(limit=5)
+    assert rows == [(uid, "example.com/a", "s3://bucket/a")]
 
 
 def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue, clean_db):
     db._init_tables([], reset=True)
     now = datetime.now()
     rows: list[tuple] = [
-        ("id-1", "https://example.com/a", 0, False, None, 0, now, None, None),
-        ("id-2", "https://example.com/b", 0, False, [], 0, now, None, None),
+        ("https://example.com/a", 0, now),
+        ("https://example.com/b", 0, now),
     ]
     db._insert_urls(rows)
-    db._reprioritize(lambda url: 30)
+    db.reprioritize(lambda url: 30)
     priorities = db.pg.fetchall(
         "SELECT id, priority FROM website_index ORDER BY id;"
     )
-    assert priorities == [("id-1", 70), ("id-2", 70)]
+    assert len(priorities) == 2
+    assert [priority for _, priority in priorities] == [30, 30]
 
 
 def test_get_stats(db: PostgresCrawlQueue, clean_db):
@@ -99,21 +100,25 @@ def test_get_stats(db: PostgresCrawlQueue, clean_db):
     now = datetime.now()
     earlier = now - timedelta(minutes=5)
     rows = [
-        ("id-1", "https://example.com/a", 0, True, [], 0, earlier, now, None),
-        (
-            "id-2",
-            "https://example.com/b",
-            0,
-            False,
-            ["e1", "e2"],
-            2,
-            earlier,
-            None,
-            None,
-        ),
-        ("id-3", "https://example.com/c", 0, False, [], 0, earlier, None, None),
+        ("https://example.com/a", 0, earlier),
+        ("https://example.com/b", 0, earlier),
+        ("https://example.com/c", 0, earlier),
     ]
     db._insert_urls(rows)
+    uid1 = db.pg.fetchone(
+        "SELECT id FROM website_index WHERE url = %s", ("example.com/a",)
+    )[0]
+    uid2 = db.pg.fetchone(
+        "SELECT id FROM website_index WHERE url = %s", ("example.com/b",)
+    )[0]
+    db.pg.execute(
+        "UPDATE website_index SET done = TRUE, date_finished = %s WHERE id = %s",
+        [now, uid1],
+    )
+    db.pg.execute(
+        "UPDATE website_index SET errors = %s, num_retries = %s WHERE id = %s",
+        [["e1", "e2"], 2, uid2],
+    )
     stats = db._get_stats()
     assert stats["total_urls"] == 3
     assert stats["finished_urls"] == 1

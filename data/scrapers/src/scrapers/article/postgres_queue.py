@@ -7,6 +7,7 @@ compliant.
 """
 
 import logging
+import re
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -52,30 +53,30 @@ class PostgresClient:
         conn = self.connect()
         try:
             with conn:
-                with conn.cursor() as cur:
-                    yield cur
+                with conn.cursor() as transaction:
+                    yield transaction
         finally:
             conn.close()
 
     def execute(self, sql: str, params=None) -> None:
-        with self.transaction() as cur:
-            cur.execute(sql, params)
+        with self.transaction() as transaction:
+            transaction.execute(sql, params)
 
     def executemany(self, sql: str, rows: list[tuple]) -> None:
         if not rows:
             return
-        with self.transaction() as cur:
-            cur.executemany(sql, rows)
+        with self.transaction() as transaction:
+            transaction.executemany(sql, rows)
 
     def fetchone(self, sql: str, params=None):
-        with self.transaction() as cur:
-            cur.execute(sql, params)
-            return cur.fetchone()
+        with self.transaction() as transaction:
+            transaction.execute(sql, params)
+            return transaction.fetchone()
 
     def fetchall(self, sql: str, params=None) -> list[tuple]:
-        with self.transaction() as cur:
-            cur.execute(sql, params)
-            return cur.fetchall()
+        with self.transaction() as transaction:
+            transaction.execute(sql, params)
+            return transaction.fetchall()
 
 
 # TODO (mpacek) decide whether to normalize https:// prefix
@@ -91,12 +92,12 @@ class PostgresCrawlQueue(CrawlQueue):
             reset: Drop and recreate the table.
         """
         logger.info("Initializing database...")
-        with self.pg.transaction() as cur:
+        with self.pg.transaction() as transaction:
             if reset:
                 logger.info("Resetting database by dropping website_index table.")
-                cur.execute("DROP TABLE IF EXISTS website_index;")
+                transaction.execute("DROP TABLE IF EXISTS website_index;")
 
-            cur.execute(
+            transaction.execute(
                 """
                 CREATE TABLE IF NOT EXISTS website_index (
                     id TEXT PRIMARY KEY,
@@ -122,16 +123,8 @@ class PostgresCrawlQueue(CrawlQueue):
 
             if urls:
                 now = datetime.now(warsaw_tz)
-                rows: list[tuple] = [
-                    (uuid7str(), url, 0, False, [], 0, now, None, None)
-                    for url in urls
-                ]
-                cur.executemany(
-                    "INSERT INTO website_index (id, url, priority, done, errors, "
-                    "num_retries, date_added, date_finished, mined_from_url) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                    "ON CONFLICT(url) DO NOTHING",
-                    rows,
+                self._insert_urls(
+                    [(self._normalize_url(url), 0, now) for url in urls], transaction
                 )
                 logger.info("Added or ignored %d URLs.", len(urls))
 
@@ -144,8 +137,8 @@ class PostgresCrawlQueue(CrawlQueue):
             rows: List of (domain, reason) tuples (CSV parsing done by caller).
         """
         logger.info("Loading blocked domains...")
-        with self.pg.transaction() as cur:
-            cur.execute(
+        with self.pg.transaction() as transaction:
+            transaction.execute(
                 """
                 CREATE TABLE IF NOT EXISTS blocked_domains (
                     domain TEXT PRIMARY KEY,
@@ -154,38 +147,40 @@ class PostgresCrawlQueue(CrawlQueue):
                 """
             )
             if rows:
-                cur.executemany(
+                normalized = [
+                    (self._normalize_url(domain), reason)
+                    for domain, reason in rows
+                ]
+                transaction.executemany(
                     "INSERT INTO blocked_domains (domain, reason) VALUES (%s, %s) "
                     "ON CONFLICT(domain) DO UPDATE SET reason = EXCLUDED.reason",
-                    rows,
+                    normalized,
                 )
                 logger.info("Loaded %d blocked domains.", len(rows))
             else:
                 logger.info("No blocked domains to load.")
 
-    def get(self, worker_id: str, max_retries: int) -> tuple | None:
+    def get(
+        self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
+    ) -> tuple[str, str] | None:
         """Atomically select and lock a URL for crawling.
 
-        Returns (id, url, priority, num_retries) or None if nothing available.
+        Returns (id, url) or None if nothing available.
         """
-        timeout_seconds = 60
         now = datetime.now(warsaw_tz)
-        with self.pg.transaction() as cur:
-            cur.execute(
+        with self.pg.transaction() as transaction:
+            transaction.execute(
                 r"""
                 WITH candidate AS (
                     SELECT wi.id
                     FROM website_index wi
                     WHERE wi.done = FALSE
                       AND wi.num_retries < %s
-                      AND (wi.locked_by_worker_id IS NULL OR wi.locked_at < %s)
+                      AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
                       AND NOT EXISTS (
                           SELECT 1 FROM blocked_domains bd
-                          WHERE wi.url ~ (
-                              'https?://(www\.)?' ||
-                              regexp_replace(bd.domain, '\\.', '\\\\.', 'g') ||
-                              '(/|$)'
-                          )
+                          WHERE wi.url = bd.domain
+                             OR wi.url LIKE bd.domain || '/%%'
                       )
                     ORDER BY wi.priority ASC, RANDOM()
                     LIMIT 1
@@ -195,7 +190,7 @@ class PostgresCrawlQueue(CrawlQueue):
                 SET locked_by_worker_id = %s, locked_at = %s
                 FROM candidate
                 WHERE wi.id = candidate.id
-                RETURNING wi.id, wi.url, wi.priority, wi.num_retries;
+                RETURNING wi.id, wi.url;
                 """,
                 (
                     max_retries,
@@ -204,7 +199,7 @@ class PostgresCrawlQueue(CrawlQueue):
                     now,
                 ),
             )
-            return cur.fetchone()
+            return transaction.fetchone()
 
     def mark_done(self, uid: str, storage_path: str | None) -> None:
         """Mark a URL as successfully crawled."""
@@ -237,45 +232,66 @@ class PostgresCrawlQueue(CrawlQueue):
         if not urls:
             return
         now = datetime.now(warsaw_tz)
-        rows: list[tuple] = []
+        rows: list[tuple[str, int, datetime]] = []
         for url, priority in urls:
             if not 0 <= priority <= 100:
                 raise ValueError(f"Priority must be 0-100, got {priority}")
-            rows.append((uuid7str(), url, priority, False, [], 0, now, None, None))
+            normalized = self._normalize_url(url)
+            rows.append((normalized, priority, now))
         self._insert_urls(rows)
 
-    def _insert_urls(self, rows: list[tuple]):
+    def _insert_urls(
+        self,
+        rows: list[tuple[str, int, datetime]],
+        transaction=None,
+    ) -> None:
         """Batch insert discovered URLs.
 
-        Each row: (id, url, priority, done, errors, num_retries, \
-            date_added, date_finished, mined_from_url)
+        Each row: (url, priority, date_added)
         """
         if not rows:
             return
-        processed = []
-        for row in rows:
-            r = list(row)
-            if r[4] is None:
-                r[4] = []
-            processed.append(tuple(r))
-
-        self.pg.executemany(
+        prepared = [
+            (
+                uuid7str(),
+                self._normalize_url(url),
+                priority,
+                False,
+                [],
+                0,
+                date_added,
+                None,
+                None,
+            )
+            for url, priority, date_added in rows
+        ]
+        if transaction is None:
+            self.pg.executemany(
+                "INSERT INTO website_index ("
+                "id, url, priority, done, errors, num_retries, "
+                "date_added, date_finished, mined_from_url) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT(url) DO NOTHING",
+                prepared,
+            )
+            return
+        transaction.executemany(
             "INSERT INTO website_index ("
             "id, url, priority, done, errors, num_retries, "
             "date_added, date_finished, mined_from_url) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
             "ON CONFLICT(url) DO NOTHING",
-            processed,
+            prepared,
         )
 
-    def _reprioritize(self, score_fn: Callable[[str], int], batch_size: int = 5000):
-        """Recalculate priority for all pending URLs using scoring function."""
+    def reprioritize(self, priority_fn: Callable[[str], int], batch_size: int = 5000):
+        """Recalculate priority for all pending URLs using priority function."""
         rows = self.pg.fetchall("SELECT id, url FROM website_index WHERE done = FALSE;")
         logger.info("Reprioritizing %d pending URLs...", len(rows))
         updated = 0
         batch: list[tuple[int, str]] = []
         for uid, url in rows:
-            priority = 100 - score_fn(url)
+            priority = priority_fn(url)
             batch.append((priority, uid))
             if len(batch) >= batch_size:
                 self.pg.executemany(
@@ -292,7 +308,7 @@ class PostgresCrawlQueue(CrawlQueue):
             updated += len(batch)
         logger.info("Reprioritized %d URLs.", updated)
 
-    def _get_pages_to_parse(self, limit: int) -> list[tuple]:
+    def get_done_urls(self, limit: int) -> list[tuple]:
         """Fetch crawled pages that have a storage_path, for parsing."""
         return self.pg.fetchall(
             "SELECT id, url, storage_path FROM website_index "
@@ -355,3 +371,10 @@ class PostgresCrawlQueue(CrawlQueue):
             stats["recent"][label] = {"successes": successes, "errors": errors}
 
         return stats
+
+    @classmethod
+    def _normalize_url(cls, value: str) -> str:
+        value = value.strip()
+        value = re.sub(r"^https?://", "", value)
+        value = value.removeprefix("www.")
+        return value.rstrip("/")
