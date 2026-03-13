@@ -11,7 +11,9 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any, List, Literal, Union, overload
 
+import numpy as np
 import pandas as pd
+from dacite import from_dict
 
 from entities.ner import NEREntities
 
@@ -492,10 +494,7 @@ class Pipeline(typing.Generic[Output]):
         return df
 
     def read_or_process_list(self, ctx: Context):
-        df = self.read_or_process(ctx)
-        for tuple in df.to_dict(orient="records"):
-            records = typing.cast(dict[str, Any], tuple)
-            yield self.output_class(**records)
+        return iterate_pipeline(self.read_or_process(ctx), self.output_class)
 
     def preprocess_sources(self, ctx: Context, policy: ProcessPolicy) -> bool:
         """
@@ -568,3 +567,10 @@ class Pipeline(typing.Generic[Output]):
     def pipeline_name(self) -> str:
         pipeline_type = type(self)
         return pipeline_type.__name__
+
+
+def iterate_pipeline(df: pd.DataFrame, constructor: typing.Type):
+    df = df.replace({np.nan: None})
+    for row in df.to_dict(orient="records"):
+        records = typing.cast(dict[str, typing.Any], row)
+        yield from_dict(data_class=constructor, data=records)
