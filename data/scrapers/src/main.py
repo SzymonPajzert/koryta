@@ -6,10 +6,7 @@ import pandas as pd
 
 from conductor import setup_context
 from pipelines import PIPELINES
-from scrapers.stores import (
-    Pipeline,
-    ProcessPolicy,
-)
+from scrapers.stores import Pipeline, ProcessPolicy, iterate_pipeline
 
 
 class Printer:
@@ -33,8 +30,7 @@ class Printer:
 
     def iterate(self, res):
         if isinstance(res, pd.DataFrame):
-            for row in res.to_dict(orient="records"):
-                yield row
+            yield from iterate_pipeline(res, None)
         elif isinstance(res, list):
             for item in res:
                 yield item
