@@ -1,9 +1,7 @@
 """PostgreSQL-backed crawl queue for the article crawler.
 
 All direct psycopg2 access is encapsulated here. The constructor takes
-explicit connection parameters (no os.getenv), and data-loading methods
-accept pre-parsed data (no csv/file I/O) so the module stays import-linter
-compliant.
+explicit connection parameters (no os.getenv).
 """
 
 import logging
