@@ -60,6 +60,15 @@ vi.stubGlobal("readBody", mockReadBody);
 vi.stubGlobal("createError", (err: any) => err); // Mock createError to just return the error object/string
 vi.stubGlobal("defineEventHandler", (fn: any) => fn); // Stub defineEventHandler to return the function as is
 
+vi.stubGlobal("readValidatedBody", async (event: any, parse: any) => {
+  const body = await mockReadBody();
+  try {
+    return parse(body);
+  } catch {
+    throw { statusCode: 400, message: "Missing required fields (krs, name)" };
+  }
+});
+
 describe("api/ingest/company", () => {
   let handler: any;
 
@@ -94,7 +103,8 @@ describe("api/ingest/company", () => {
 
     expect(mockCollection).toHaveBeenCalledWith("nodes");
     expect(mockDoc).toHaveBeenCalled(); // Should call doc() for new ID
-    expect(createRevisionTransaction).toHaveBeenCalledWith(
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
       mockDb,
       expect.anything(),
       { uid: "test-user-id" },
@@ -103,18 +113,16 @@ describe("api/ingest/company", () => {
         name: "New Company",
         type: "place",
         krsNumber: "12345",
-        content: "",
       },
     );
     // ref.id is accessed in handler return statement
-    expect(result).toEqual({ id: "doc-ref-id", code: 201 });
+    expect(result).toEqual({ id: "doc-ref-id", code: 200 });
   });
 
   it("should update an existing company", async () => {
     mockReadBody.mockResolvedValue({
       krs: "12345",
       name: "Updated Company",
-      content: "New Content",
     });
 
     const existingRef = { id: "existing-id" };
@@ -130,7 +138,8 @@ describe("api/ingest/company", () => {
     const result = await handler({} as any);
 
     expect(mockDoc).not.toHaveBeenCalled(); // Should use existing doc ref
-    expect(createRevisionTransaction).toHaveBeenCalledWith(
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
       mockDb,
       expect.anything(),
       { uid: "test-user-id" },
@@ -139,7 +148,6 @@ describe("api/ingest/company", () => {
         name: "Updated Company",
         type: "place",
         krsNumber: "12345",
-        content: "New Content",
       },
     );
     expect(result).toEqual({ id: "existing-id", code: 200 });
@@ -149,12 +157,13 @@ describe("api/ingest/company", () => {
     mockReadBody.mockResolvedValue({
       krs: "12345",
       name: "Parent Company",
-      owns: ["67890"],
+      owners: ["67890"],
     });
 
     // Parent query: Empty (creating new parent)
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
-    mockDoc.mockReturnValueOnce({ id: "parent-id", ref: mockRef });
+    const parentRef = { id: "parent-id" };
+    mockDoc.mockReturnValueOnce(parentRef);
 
     // Child query: Found
     const childRef = { id: "child-id" };
@@ -170,14 +179,15 @@ describe("api/ingest/company", () => {
     await handler({} as any);
 
     // Verify Edge Creation
-    expect(createRevisionTransaction).toHaveBeenCalledWith(
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
       mockDb,
       expect.anything(),
       { uid: "test-user-id" },
       edgeRef,
       {
-        source: "parent-id",
-        target: "child-id",
+        source: "child-id",
+        target: "parent-id",
         type: "owns",
       },
     );
@@ -191,7 +201,8 @@ describe("api/ingest/company", () => {
     });
 
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
-    mockDoc.mockReturnValueOnce({ id: "company-id", ref: mockRef });
+    const companyRef = { id: "company-id" };
+    mockDoc.mockReturnValueOnce(companyRef);
 
     const regionSnapshot = { exists: true, ref: { id: "teryt1061" } };
     const regionRefMock = {
@@ -204,7 +215,8 @@ describe("api/ingest/company", () => {
     const edgeRef = { id: "edge-region-id" };
     mockDoc.mockReturnValueOnce(edgeRef);
     await handler({} as any);
-    expect(createRevisionTransaction).toHaveBeenCalledWith(
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
       mockDb,
       expect.anything(),
       { uid: "test-user-id" },
