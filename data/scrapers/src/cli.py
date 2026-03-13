@@ -114,10 +114,6 @@ class NumpyEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, np.ndarray):
             return o.tolist()
-        if isinstance(o, (np.int64, np.int32, np.int16, np.int8)):
-            return int(o)
-        if isinstance(o, (np.float64, np.float32)):
-            return float(o)
         return super().default(o)
 
 
