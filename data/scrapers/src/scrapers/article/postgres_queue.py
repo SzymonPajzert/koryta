@@ -80,12 +80,12 @@ class PostgresClient:
 class PostgresCrawlQueue(CrawlQueue):
     def __init__(self, pg: PostgresClient):
         self.pg = pg
+        self._init_tables()
 
-    def _init_tables(self, urls: list[str], reset: bool = False):
-        """Create the website_index table and insert seed URLs.
+    def _init_tables(self, reset: bool = False):
+        """Ensure sitemap tables exist and optionally reset.
 
         Args:
-            urls: Pre-parsed list of URL strings (file reading done by caller).
             reset: Drop and recreate the table.
         """
         logger.info("Initializing database...")
@@ -117,13 +117,6 @@ class PostgresCrawlQueue(CrawlQueue):
                 );
                 """
             )
-
-            if urls:
-                now = datetime.now(warsaw_tz)
-                self._insert_urls(
-                    [(self._normalize_url(url), 0, now) for url in urls], transaction
-                )
-                logger.info("Added or ignored %d URLs.", len(urls))
 
         logger.info("Database initialization complete.")
 
