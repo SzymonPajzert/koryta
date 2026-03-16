@@ -1,4 +1,5 @@
 import typing
+from dataclasses import asdict
 
 import numpy as np
 import pandas as pd
@@ -20,9 +21,25 @@ class PeoplePayloads(Pipeline[Person]):
 
     def process(self, ctx: Context):
         people_df = self.people.read_or_process(ctx)
+        result = []
         for _, row in people_df.iterrows():
             person = map_person_payload(row)
             ctx.io.output_entity(person)
+            result.append(person)
+        return (
+            pd.DataFrame.from_records([asdict(p) for p in result])
+            if result
+            else pd.DataFrame(
+                columns=[
+                    "name",
+                    "companies",
+                    "elections",
+                    "party",
+                    "wikipedia_url",
+                    "rejestr_io_url",
+                ]
+            )
+        )
 
 
 def map_person_payload(row: pd.Series) -> Person:
@@ -80,7 +97,9 @@ def _extract_companies(row: pd.Series) -> list[Company]:
                 companies.append(
                     Company(
                         krs=c_krs,
-                        role=c.get("role") or c.get("function"),
+                        role=c.get("role")
+                        or c.get("function")
+                        or c.get("employed_role"),
                         start=c.get("start") or c.get("employed_start"),
                         end=c.get("end") or c.get("employed_end"),
                     )

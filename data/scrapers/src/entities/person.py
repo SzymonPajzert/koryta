@@ -25,6 +25,7 @@ class KRS:
     employed_start: str | None
     employed_end: str | None
     employed_for: str | None
+    employed_role: str | None = None
     birth_date: str | None = None
     second_names: str | None = None
     sex: str | None = None

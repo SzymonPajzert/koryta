@@ -53,6 +53,20 @@ def employment_duration(item) -> str:
     return f"{days / 365:.2f}"
 
 
+def employment_role(item: dict) -> str | None:
+    for conn in item.get("krs_powiazania_kwerendowane", []):
+        assert isinstance(conn, dict)
+        typ = conn.get("typ")
+        opis = conn.get("opis")
+        if typ == "KRS_BOARD" or (opis and "Zarząd" in opis):
+            return "Zarząd"
+        if typ == "KRS_SUPERVISION" or (opis and "Rada Nadzorcza" in opis):
+            return "Rada Nadzorcza"
+        if opis and "Prokurent" in opis:
+            return "Prokurent"
+    return None
+
+
 class PeopleKRS(Pipeline):
     filename = "person_krs"
     dtype = {"employed_krs": str}
@@ -95,6 +109,7 @@ def extract_people(ctx: Context):
                             employed_start=start_time(item),
                             employed_end=end_time(item),
                             employed_for=employment_duration(item),
+                            employed_role=employment_role(item),
                         )
                     )
         except KeyError as e:
