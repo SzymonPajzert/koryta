@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 
 from analysis.extract import Extract
-from analysis.interesting import Companies
 from analysis.payloads.election import get_election_type, get_party_from_elections
 from entities.composite import Company, Election, Person
 from scrapers.stores import Context, Pipeline
@@ -14,7 +13,6 @@ class PeoplePayloads(Pipeline[Person]):
     filename = None
 
     people: Extract
-    companies: Companies
 
     @property
     def output_class(self) -> typing.Type:
@@ -22,29 +20,12 @@ class PeoplePayloads(Pipeline[Person]):
 
     def process(self, ctx: Context):
         people_df = self.people.read_or_process(ctx)
-        companies_df = self.companies.read_or_process(ctx)
-
-        # Region filtering for companies
-        # TODO support accessing object flags in python
-        people_args = getattr(self.people, "args", None)
-        region = getattr(people_args, "region", None)
-        if region:
-            companies_df = companies_df[
-                companies_df["teryt_code"].fillna("").str.startswith(region)
-            ]
-            print(f"Filtered to {len(companies_df)} companies for region {region}")
-
-        companies_df_lookup = companies_df.dropna(subset=["krs", "name"])
-        company_lookup = dict(
-            zip(companies_df_lookup["krs"], companies_df_lookup["name"])
-        )
-
         for _, row in people_df.iterrows():
-            person = map_person_payload(row, company_lookup)
+            person = map_person_payload(row)
             ctx.io.output_entity(person)
 
 
-def map_person_payload(row: pd.Series, company_lookup: dict[str, str]) -> Person:
+def map_person_payload(row: pd.Series) -> Person:
     def get_scalar(key):
         val = row.get(key)
         if isinstance(val, (list, np.ndarray)):
@@ -62,7 +43,7 @@ def map_person_payload(row: pd.Series, company_lookup: dict[str, str]) -> Person
         or "Unknown Payload"
     )
 
-    companies = _extract_companies(row, company_lookup)
+    companies = _extract_companies(row)
     elections = _extract_elections(row)
 
     wiki_name = get_scalar("wiki_name")
@@ -89,25 +70,13 @@ def map_person_payload(row: pd.Series, company_lookup: dict[str, str]) -> Person
     )
 
 
-def _extract_companies(row: pd.Series, company_lookup: dict[str, str]) -> list[Company]:
+def _extract_companies(row: pd.Series) -> list[Company]:
     companies = []
     company_list = row.get("companies") or row.get("employment")
     if isinstance(company_list, (list, np.ndarray)):
         for c in company_list:
             if isinstance(c, dict):
-                c_name = c.get("name")
                 c_krs = c.get("krs") or c.get("employed_krs")
-
-                if not c_name and c_krs:
-                    c_name = company_lookup.get(c_krs)
-
-                if not c_name and c_krs:
-                    print(
-                        f"Warning: Cannot resolve company name for KRS: {c_krs}.\
-                            Using KRS as name."
-                    )
-                    c_name = c_krs
-
                 companies.append(
                     Company(
                         krs=c_krs,
