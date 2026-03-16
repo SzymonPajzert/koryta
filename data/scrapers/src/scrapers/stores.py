@@ -599,11 +599,17 @@ class Pipeline(typing.Generic[Output]):
         return pipeline_type.__name__
 
 
-def iterate_pipeline(df: pd.DataFrame, constructor: typing.Type | None):
+def iterate_pipeline_dict(df: pd.DataFrame):
     df = df.replace({np.nan: None})
     for row in df.to_dict(orient="records"):
         records = typing.cast(dict[str, typing.Any], row)
-        if constructor is None:
-            yield records
-        else:
-            yield from_dict(data_class=constructor, data=records)
+        yield records
+
+
+def iterate_pipeline[T](
+    df: pd.DataFrame, constructor: typing.Type
+) -> typing.Iterable[T]:  # TODO join T and constructor
+    df = df.replace({np.nan: None})
+    for row in df.to_dict(orient="records"):
+        records = typing.cast(dict[str, typing.Any], row)
+        yield from_dict(data_class=constructor, data=records)

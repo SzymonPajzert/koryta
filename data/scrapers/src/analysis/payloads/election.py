@@ -1,5 +1,7 @@
 from typing import Any
 
+from entities.composite import Election
+
 
 def get_election_type(election_type: str) -> str:
     # TODO this should be well typed
@@ -50,22 +52,22 @@ IGNORE_COMMITTEES = {
 }
 
 
-def get_party_from_elections(elections: list[dict[str, Any]]) -> list[str]:
+def get_party_from_elections(elections: list[Election]) -> list[str]:
     party = set()
     for e in elections:
-        if "committee" in e:
-            if e["committee"].title() in IGNORE_COMMITTEES:
+        if e.committee is not None:
+            if e.committee.title() in IGNORE_COMMITTEES:
                 continue
 
-            party_new = COMMITTEE_MAP.get(e["committee"].title(), "")
+            party_new = COMMITTEE_MAP.get(e.committee.title(), "")
             if isinstance(party_new, list):
                 party |= set(party_new)
             else:
                 party.add(party_new)
         else:
-            if e["election_type"] == "Parlament Europejski":
+            if e.election_type == "Parlament Europejski":
                 continue
-            if int(e["election_year"]) < 2006:
+            if e.election_year is not None and int(e.election_year) < 2006:
                 # TODO support it at one point
                 continue
 
