@@ -1,5 +1,4 @@
-import json
-from typing import Any, cast
+import typing
 
 import numpy as np
 import pandas as pd
@@ -7,17 +6,21 @@ import pandas as pd
 from analysis.extract import Extract
 from analysis.interesting import Companies
 from analysis.payloads.election import get_election_type, get_party_from_elections
-from analysis.payloads.util import strip_none
+from entities.composite import Company, Election, Person
 from scrapers.stores import Context, Pipeline
 
 
-class PeoplePayloads(Pipeline):
+class PeoplePayloads(Pipeline[Person]):
     filename = None
 
     people: Extract
     companies: Companies
 
-    def process(self, ctx: Context) -> pd.DataFrame:
+    @property
+    def output_class(self) -> typing.Type:
+        return Person
+
+    def process(self, ctx: Context):
         people_df = self.people.read_or_process(ctx)
         companies_df = self.companies.read_or_process(ctx)
 
@@ -36,43 +39,12 @@ class PeoplePayloads(Pipeline):
             zip(companies_df_lookup["krs"], companies_df_lookup["name"])
         )
 
-        # TODO type this correctly
-        payloads: list[dict[str, Any]] = []
-
         for _, row in people_df.iterrows():
-            payload = map_person_payload(row, company_lookup)
-            if payload:
-                # Get region for filtering
-                teryt_powiat = []
-                elec_list = row.get("elections")
-                if isinstance(elec_list, (list, np.ndarray)):
-                    for e in elec_list:
-                        if isinstance(e, dict):
-                            powiat = e.get("teryt_powiat", [])
-                            if isinstance(powiat, (list, np.ndarray)):
-                                teryt_powiat.extend([str(p) for p in powiat])
-
-                payloads.append(
-                    {
-                        "entity_id": None,
-                        "krs": None,
-                        "teryt_powiat": list(set(teryt_powiat)),
-                        "payload": payload,
-                    }
-                )
-
-        df = pd.DataFrame(payloads)
-        # Ensure 'payload' is always a valid JSON string for DuckDB
-        if not df.empty and "payload" in df.columns:
-            df["payload"] = df["payload"].apply(
-                lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x
-            )
-        return df
+            person = map_person_payload(row, company_lookup)
+            ctx.io.output_entity(person)
 
 
-def map_person_payload(
-    row: pd.Series, company_lookup: dict[str, str]
-) -> dict[str, Any]:
+def map_person_payload(row: pd.Series, company_lookup: dict[str, str]) -> Person:
     def get_scalar(key):
         val = row.get(key)
         if isinstance(val, (list, np.ndarray)):
@@ -93,15 +65,6 @@ def map_person_payload(
     companies = _extract_companies(row, company_lookup)
     elections = _extract_elections(row)
 
-    articles = []
-    arts = row.get("articles")
-    if isinstance(arts, list):
-        for a in arts:
-            if isinstance(a, dict) and a.get("url"):
-                articles.append({"url": a.get("url")})
-            elif isinstance(a, str):
-                articles.append({"url": a})
-
     wiki_name = get_scalar("wiki_name")
     wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
     if not wikipedia_url and wiki_name and isinstance(wiki_name, str):
@@ -112,25 +75,21 @@ def map_person_payload(
     if not rejestr_io_url and rejestr_id and isinstance(rejestr_id, str):
         rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
 
-    payload = {"name": name}
-    if wikipedia_url:
-        payload["wikipedia"] = wikipedia_url
-    if rejestr_io_url:
-        payload["rejestrIo"] = rejestr_io_url
-    if companies:
-        payload["companies"] = companies
-    if articles:
-        payload["articles"] = articles
+    party = None
     if elections:
-        payload["elections"] = elections
-        payload["party"] = get_party_from_elections(elections)
+        party = get_party_from_elections(elections)
 
-    return cast(dict[str, Any], strip_none(payload))
+    return Person(
+        name=name,
+        companies=companies,
+        elections=elections,
+        party=party,
+        wikipedia_url=wikipedia_url,
+        rejestr_io_url=rejestr_io_url,
+    )
 
 
-def _extract_companies(
-    row: pd.Series, company_lookup: dict[str, str]
-) -> list[dict[str, Any]]:
+def _extract_companies(row: pd.Series, company_lookup: dict[str, str]) -> list[Company]:
     companies = []
     company_list = row.get("companies") or row.get("employment")
     if isinstance(company_list, (list, np.ndarray)):
@@ -150,18 +109,17 @@ def _extract_companies(
                     c_name = c_krs
 
                 companies.append(
-                    {
-                        "name": c_name or "Unknown Company",
-                        "krs": c_krs,
-                        "role": c.get("role") or c.get("function"),
-                        "start": c.get("start") or c.get("employed_start"),
-                        "end": c.get("end") or c.get("employed_end"),
-                    }
+                    Company(
+                        krs=c_krs,
+                        role=c.get("role") or c.get("function"),
+                        start=c.get("start") or c.get("employed_start"),
+                        end=c.get("end") or c.get("employed_end"),
+                    )
                 )
     return companies
 
 
-def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
+def _extract_elections(row: pd.Series) -> list[typing.Any]:
     elections = []
     elec_list = row.get("elections")
     if isinstance(elec_list, (list, np.ndarray)):
@@ -184,18 +142,18 @@ def _extract_elections(row: pd.Series) -> list[dict[str, Any]]:
                 elif e.get("teryt"):
                     teryt_val = str(e.get("teryt"))
 
-                election_payload = {
-                    "election_type": get_election_type(str(e.get("election_type")))
-                }
+                election_payload = Election(
+                    election_type=get_election_type(str(e.get("election_type")))
+                )
                 if e.get("party"):
                     # TODO handle this nicer and add some checks
-                    election_payload["committee"] = str(e.get("party"))
+                    election_payload.committee = str(e.get("party"))
                 if e.get("election_year"):
-                    election_payload["election_year"] = str(e.get("election_year"))
+                    election_payload.election_year = str(e.get("election_year"))
                 if teryt_val:
                     if len(teryt_val) == 4 and teryt_val.endswith("00"):
                         teryt_val = teryt_val[:2]
-                    election_payload["teryt"] = teryt_val
+                    election_payload.teryt = teryt_val
 
                 elections.append(election_payload)
     return elections
