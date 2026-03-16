@@ -25,6 +25,7 @@ class RequestLog:
     response_code: int
     payload_size_bytes: int
     duration: str
+    storage_path: str | None = None
 
 
 @dataclass

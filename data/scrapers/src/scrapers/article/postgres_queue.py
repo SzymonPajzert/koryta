@@ -5,6 +5,7 @@ explicit connection parameters (no os.getenv).
 """
 
 import logging
+import os
 import re
 from collections import Counter
 from contextlib import contextmanager
@@ -44,6 +45,27 @@ class PostgresClient:
             database=self.database,
             user=self.user,
             password=self.password,
+        )
+
+    @classmethod
+    def from_env(
+        cls,
+        *,
+        host: str | None = None,
+        database: str | None = None,
+        user: str | None = None,
+        password: str | None = None,
+        port: int | None = None,
+    ) -> "PostgresClient":
+        return cls(
+            host or os.getenv("POSTGRESS_HOST", "localhost"),
+            database
+            or os.getenv("POSTGRES_DB", "postgres"),
+            user
+            or os.getenv("POSTGRES_USER", "postgres"),
+            password or os.getenv("POSTGRESS_PASSWORD", "password"),
+            port
+            or int(os.getenv("POSTGRES_PORT", "5432"))
         )
 
     @contextmanager
@@ -375,3 +397,8 @@ class PostgresCrawlQueue(CrawlQueue):
         value = re.sub(r"^https?://", "", value)
         value = value.removeprefix("www.")
         return value.rstrip("/")
+
+    @classmethod
+    def from_env(cls, **kwargs) -> "PostgresCrawlQueue":
+        client = PostgresClient.from_env(**kwargs)
+        return cls(client)
