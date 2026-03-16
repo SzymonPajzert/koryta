@@ -31,6 +31,7 @@ def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
             employed_start,
             employed_end,
             employed_krs,
+            employed_role,
             employed_for,
             id as rejestrio_id,
             full_name
@@ -50,6 +51,7 @@ def people_krs_merged(ctx: Context, krs_data: pd.DataFrame):
             "employed_end": "employed_end",
             "employed_for": "employed_for",
             "employed_start": "employed_start",
+            "employed_role": "employed_role",
         },
     )
 
