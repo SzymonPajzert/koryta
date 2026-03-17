@@ -276,6 +276,7 @@ async function lookupCompanyIDs(
     }),
   );
   if (failingLookup.length > 0) {
+    console.error("Missing companies:", failingLookup);
     throw createError({
       statusCode: 404,
       message: `Missing companies: ${failingLookup.join(", ")}`,
