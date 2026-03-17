@@ -30,7 +30,7 @@ class Printer:
             return json.dumps(d, default=str, ensure_ascii=False, indent=2)
         else:
             # Returns as sinle elements in a line
-            return json.dumps(d, ensure_ascii=False)
+            return json.dumps(d, default=str, ensure_ascii=False)
 
     def iterate(self, res):
         if isinstance(res, pd.DataFrame):
