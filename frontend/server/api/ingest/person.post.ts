@@ -3,7 +3,7 @@ import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { electionPositions } from "~~/shared/misc";
-import type { Edge, Article, Company, Person } from "~~/shared/model";
+import type { Edge, Article, Person } from "~~/shared/model";
 import {
   personRequestSchema,
   type EntityResult,
@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
   );
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
+
+  const companyIDs = await lookupCompanyIDs(db, body.companies);
+
   const batch = db.batch();
 
   let personId: string | undefined = await lookupNode(db, "name", body.name);
@@ -35,11 +38,15 @@ export default defineEventHandler(async (event) => {
   const articlesResult: EntityResult[] = [];
   const electionsResult: EntityResult[] = [];
 
-  for (const company of assertArray(body.companies, "companies")) {
+  body.companies.forEach(async (company, index) => {
+    const companyID = companyIDs[index];
+    if (!companyID)
+      throw new Error(`Missing company ID idx=${index}, krs=${company.krs}`);
     companiesResult.push(
-      await createCompany(db, batch, user, personId, company),
+      await createEmployment(db, batch, user, personId, company, companyID),
     );
-  }
+  });
+
   for (const article of assertArray(body.articles, "articles")) {
     articlesResult.push(
       await createArticle(db, batch, user, personId, article),
@@ -66,6 +73,7 @@ export default defineEventHandler(async (event) => {
   };
 });
 
+// TODO get rid of this, just use zod,
 function assertArray<T>(vs: T[] | undefined, field: string) {
   if (!vs) {
     return [];
@@ -95,48 +103,29 @@ function createPerson(body: Partial<Person>): Person {
   return person;
 }
 
-async function createCompany(
+async function createEmployment(
   db: FirebaseFirestore.Firestore,
   batch: FirebaseFirestore.WriteBatch,
   user: { uid: string },
   personId: string,
-  company: EmploymentRequest,
+  employment: EmploymentRequest,
+  companyId: string,
 ): Promise<EntityResult> {
-  if (!company.krs) throw badRequest(`Company must have a KRS`);
-
-  let companyId: string | undefined = undefined;
-  if (company.krs) companyId = await lookupNode(db, "krs", company.krs);
-  if (!companyId) companyId = await lookupNode(db, "name", company.name);
-
-  let created = false;
-  if (!companyId) {
-    const companyRef = db.collection("nodes").doc();
-    companyId = companyRef.id;
-    const revisionData: Company = {
-      name: company.name,
-      type: "place",
-    };
-    if (company.krs) revisionData.krsNumber = company.krs;
-    batch.set(companyRef, revisionData);
-    createRevisionTransaction(db, batch, user, companyRef, revisionData);
-    created = true;
-  }
-
   const edgeData: Edge = {
     type: "employed",
-    name: company.role || "",
+    name: employment.role, // TODO check that the role is always populated
     source: personId,
     target: companyId,
   };
-  if (company.start) edgeData.start_date = company.start;
-  if (company.end) edgeData.end_date = company.end;
+  if (employment.start) edgeData.start_date = employment.start;
+  if (employment.end) edgeData.end_date = employment.end;
 
   const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
 
   return {
     nodeId: companyId,
-    krs: company.krs,
-    created,
+    krs: employment.krs,
+    created: false,
     edgeId,
   };
 }
@@ -262,6 +251,50 @@ async function createElection(
   };
 }
 
+/** Lookup company node IDs for given employment relations.
+ *
+ * Currently it only uses KRS numbers.
+ * Makes sure the companies are already present.
+ * If not, fails with 404 with the missing KRS numbers
+ *
+ * @param db Connection to firestore DB
+ * @param companies
+ * @returns
+ */
+async function lookupCompanyIDs(
+  db: FirebaseFirestore.Firestore,
+  employments: EmploymentRequest[],
+): Promise<string[]> {
+  const failingLookup: string[] = [];
+  const companyIDsUnfiltered: (string | undefined)[] = await Promise.all(
+    employments.map(async (employment) => {
+      const node = await lookupNode(db, "krsNumber", employment.krs);
+      if (!node) {
+        failingLookup.push(employment.krs);
+      }
+      return node;
+    }),
+  );
+  if (failingLookup.length > 0) {
+    throw createError({
+      statusCode: 404,
+      message: `Missing companies: ${failingLookup.join(", ")}`,
+      data: failingLookup,
+    });
+  }
+  return companyIDsUnfiltered.filter(
+    (id: string | undefined): id is string => id !== undefined,
+  );
+}
+
+// TODO move this to general utils
+/** Look up a node by the given filtering field and value.
+ *
+ * @param db
+ * @param field
+ * @param value
+ * @returns
+ */
 async function lookupNode(
   db: FirebaseFirestore.Firestore,
   field: string,
