@@ -1,15 +1,12 @@
 import argparse
-from functools import cached_property
 import json
 import sys
-import typing
+
+import numpy as np
+import requests
 
 from analysis.interesting import Companies
 from conductor import setup_context
-import numpy as np
-import requests
-from requests import JSONDecodeError
-
 from scrapers.stores import iterate_pipeline_dict
 from stores.auth import authenticate_user
 
@@ -63,9 +60,21 @@ def print_company(company):
         )
 
 
+def company_payloads():
+    # TODO this looks like an ugly pattern but I don't know how to do it better
+    print("Loading company payloads from Companies pipeline")
+    df = Companies().read_or_process(setup_context(False)[0])
+    return {c["krs"]: c for c in iterate_pipeline_dict(df)}
+
+
 class Uploader:
-    def __init__(self, args):
+    def __init__(self, args, companies=None):
         self.args = args
+        if companies is None:
+            self.company_payloads = company_payloads()
+        else:
+            self.company_payloads = companies
+
         if not args.prod and args.endpoint.startswith("http://localhost"):
             token = "test-token"
         else:
@@ -97,13 +106,6 @@ class Uploader:
                 )
 
         return resp
-
-    @cached_property
-    def company_payloads(self):
-        # TODO this looks like an ugly pattern but I don't know how to do it better
-        print("Loading company payloads from Companies pipeline")
-        df = Companies().read_or_process(setup_context(False)[0])
-        return {c["krs"]: c for c in iterate_pipeline_dict(df)}
 
     def submit_company(self, krs: str, payload: dict | None):
         current_target_url = f"{self.args.endpoint}/api/ingest/company"
@@ -224,6 +226,23 @@ def main():
     if len(entities) == 0:
         print("No results.", file=sys.stderr)
         sys.exit(0)
+
+    if args.type == "person":
+        missing_krs = set()
+        # Check that each referred KRS company has name
+        companies = company_payloads()
+        for e in entities:
+            for c in e["companies"]:
+                company = companies.get(c["krs"], None)
+                if company is None:
+                    missing_krs.add(c["krs"])
+                    continue
+                if company["name"] is None:
+                    missing_krs.add(c["krs"])
+
+        if len(missing_krs) > 0:
+            print(list(missing_krs))
+            raise ValueError("Some companies don't have required information")
 
     if not args.submit:
         print_results(entities, args.type)
