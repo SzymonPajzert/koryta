@@ -60,10 +60,10 @@ class PostgresClient:
         return cls(
             host or os.getenv("POSTGRESS_HOST", "localhost"),
             database
-            or os.getenv("POSTGRES_DB", "postgres"),
+            or os.getenv("POSTGRES_DB", "crawler_db"),
             user
-            or os.getenv("POSTGRES_USER", "postgres"),
-            password or os.getenv("POSTGRESS_PASSWORD", "password"),
+            or os.getenv("POSTGRES_USER", "crawler_user"),
+            password or os.getenv("POSTGRESS_PASSWORD", "crawler_password"),
             port
             or int(os.getenv("POSTGRES_PORT", "5432"))
         )

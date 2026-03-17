@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,11 +14,18 @@ from uuid_extensions import uuid7str  # type: ignore
 from entities.crawler import RequestLog
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
-from scrapers.stores import Context, CrawlQueue, LocalFile
-from stores.config import PROJECT_ROOT
+from scrapers.stores import CloudStorage, Context, LocalFile
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
+
+
+def parse_hostname(url: str) -> str:
+    return NormalizedParse.parse(url).hostname_normalized
+
+
+def uuid7():
+    return uuid7str()
 
 
 @dataclass
@@ -96,29 +102,23 @@ def _storage_path(
     return base.replace("//", "/").rstrip("/")
 
 
-def _upload_text(
+def _upload_response(
         ctx: Context,
         parsed: NormalizedParse,
-        text: str,
-        content_type: str,
+        response: requests.Response,
         options: CrawlOptions,
-        suffix: str | None = None,
-) -> str | None:
-    target = _storage_path(parsed, suffix=suffix)
-    ext = "html" if content_type.startswith("text/html") else "txt"
-    if options.storage_type == "local" and options.local_output is not None:
-        relative = Path(options.local_output) / f"{target}.{ext}"
-        ref = LocalFile(str(relative), "downloaded")
-        ctx.io.write_file(ref, text)
-        return os.path.join(PROJECT_ROOT, "downloaded", str(relative))
-    result = ctx.io.upload(parsed, text, content_type)  # TODO it should use DataRef
-    if result is None:
-        return None
-    if isinstance(result, str):
-        return result
-    if hasattr(result, "path"):
-        return str(result.path)
-    return str(result)
+) -> str:
+    file_content = response.text
+    path = _storage_path(parsed)
+    if options.storage_type == "gcs":
+        ref = CloudStorage(prefix=path)
+    elif options.storage_type == "local":
+        ref = LocalFile(filename=path, folder=options.local_output)
+    else:
+        ValueError("Unknown storage type")
+
+    ctx.io.write_file(ref, file_content)
+    return path
 
 
 def crawl_url(
@@ -150,7 +150,7 @@ def crawl_url(
             )
             return CrawlResult(error=f"http {response.status_code}")
 
-        storage_path = _upload_text(ctx, parsed, response.text, "text/html", options)
+        storage_path = _upload_response(ctx, parsed, response.text, options)
         discovered_urls = _extract_urls(ctx, parsed, response)
         duration = (datetime.now(warsaw_tz) - started).total_seconds()
 
@@ -208,6 +208,8 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
 
+    logging.info("Starting to crawl in worker: %s", options.worker_id)
+
     while True:
         entry = queue.get(
             options.worker_id,
@@ -215,7 +217,7 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
             timeout_seconds=options.lock_timeout_seconds,
         )
         if entry is None:
-            logging.info("Closing crawl queue")
+            logging.info("Closing crawl queue. Nothing more to do.")
             return
 
         uid, url = entry
