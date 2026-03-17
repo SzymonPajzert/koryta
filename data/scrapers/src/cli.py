@@ -1,12 +1,16 @@
 import argparse
+from functools import cached_property
 import json
 import sys
 import typing
 
+from analysis.interesting import Companies
+from conductor import setup_context
 import numpy as np
 import requests
 from requests import JSONDecodeError
 
+from scrapers.stores import iterate_pipeline_dict
 from stores.auth import authenticate_user
 
 
@@ -59,70 +63,105 @@ def print_company(company):
         )
 
 
-def get_headers(args):
-    if not args.prod and args.endpoint.startswith("http://localhost"):
-        token = "test-token"
-    else:
-        token = authenticate_user(args.endpoint)
-
-    return {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}",
-    }
-
-
-def submit_results(args, entities, headers):
-    success_count = 0
-    total = len(entities)
-    for idx, payload in enumerate(entities):
-        name = payload.get("name", None) if payload is not None else None
-        if payload is None or name is None:
-            print(f"[{idx + 1}/{total}] Skipping invalid payload ...", file=sys.stderr)
-            continue
-
-        mapped_payload = dict(payload)
-        if args.type == "company":
-            current_target_url = f"{args.endpoint}/api/ingest/company"
-            # TODO move it somewhere else
-            owners = []
-            for parent in mapped_payload.get("parents", []):
-                if isinstance(parent, dict) and parent.get("krs"):
-                    owners.append(parent["krs"])
-            mapped_payload["owners"] = owners
-            if "teryt_code" in mapped_payload and mapped_payload["teryt_code"]:
-                mapped_payload["teryt"] = mapped_payload["teryt_code"]
+class Uploader:
+    def __init__(self, args):
+        self.args = args
+        if not args.prod and args.endpoint.startswith("http://localhost"):
+            token = "test-token"
         else:
-            current_target_url = f"{args.endpoint}/api/ingest/person"
+            token = authenticate_user(args.endpoint)
+
+        self.headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        }
+
+    def submit_payload(self, url, payload, fail=True):
         print(
-            f"[{idx + 1}/{total}] Uploading {name}... to {current_target_url}",
+            f"Uploading {payload['name']}... to {url}",
             end=" ",
             file=sys.stderr,
         )
-
         resp = requests.post(
-            current_target_url,
-            data=json.dumps(mapped_payload, cls=NumpyEncoder),
-            headers=headers,
+            url,
+            data=json.dumps(payload, cls=NumpyEncoder),
+            headers=self.headers,
         )
-        j: dict[str, typing.Any] = resp.json()
-        if "companies" in j:
-            for company in j["companies"]:
-                print_company(company)
-
         if resp.status_code in [200, 201]:
             print("  OK", file=sys.stderr)
-            success_count += 1
         else:
             print(f"FAILED ({resp.status_code}): {resp.text}", file=sys.stderr)
-            raise Exception(
-                f"API error: {resp.status_code} - {resp.text} for: {mapped_payload}"
-            )
+            if fail:
+                raise Exception(
+                    f"API error: {resp.status_code} - {resp.text} for: {payload}"
+                )
 
-    failures = total - success_count
-    print(
-        f"\nUpload complete. Success: {success_count}, Failed: {failures}",
-        file=sys.stderr,
-    )
+        return resp
+
+    @cached_property
+    def company_payloads(self):
+        # TODO this looks like an ugly pattern but I don't know how to do it better
+        print("Loading company payloads from Companies pipeline")
+        df = Companies().read_or_process(setup_context(False)[0])
+        return {c["krs"]: c for c in iterate_pipeline_dict(df)}
+
+    def submit_company(self, krs: str, payload: dict | None):
+        current_target_url = f"{self.args.endpoint}/api/ingest/company"
+        if payload is None:
+            payload = self.company_payloads.get(krs, None)
+            if payload is None:
+                raise ValueError(f"Couldn't look up {krs} in Companies pipeline")
+
+        assert payload is not None
+
+        # TODO move it somewhere else - Companies pipeline?
+        owners = []
+        for parent in payload.get("parents", []):
+            if isinstance(parent, dict) and parent.get("krs"):
+                owners.append(parent["krs"])
+        payload["owners"] = owners
+        if "teryt_code" in payload and payload["teryt_code"]:
+            payload["teryt"] = payload["teryt_code"]
+        return self.submit_payload(
+            current_target_url,
+            payload,
+        )
+
+    def submit_results(self, entities):
+        success_count = 0
+        total = len(entities)
+        for idx, payload in enumerate(entities):
+            name = payload.get("name", None) if payload is not None else None
+            if payload is None or name is None:
+                print(
+                    f"[{idx + 1}/{total}] Skipping invalid payload ...", file=sys.stderr
+                )
+                continue
+
+            mapped_payload = dict(payload)
+            if self.args.type == "company":
+                resp = self.submit_company(mapped_payload["krs"], mapped_payload)
+            else:
+                current_target_url = f"{self.args.endpoint}/api/ingest/person"
+                resp = self.submit_payload(
+                    current_target_url,
+                    payload,
+                    fail=False,
+                )
+                if resp.status_code == 404:
+                    for krs in resp.json()["data"]:
+                        self.submit_company(krs, None)
+                    # Try submitting again
+                    resp = self.submit_payload(
+                        current_target_url,
+                        payload,
+                    )
+
+        failures = total - success_count
+        print(
+            f"\nUpload complete. Success: {success_count}, Failed: {failures}",
+            file=sys.stderr,
+        )
 
 
 def print_results(entities, type):
@@ -190,7 +229,8 @@ def main():
         print_results(entities, args.type)
         print("\nUse --submit to upload.", file=sys.stderr)
     else:
-        submit_results(args, entities, get_headers(args))
+        uploader = Uploader(args)
+        uploader.submit_results(entities)
 
 
 if __name__ == "__main__":
