@@ -21,7 +21,7 @@ export const personRequestSchema = z.object({
   wikipedia: z.string().optional(),
   rejestrIo: z.string().optional(),
   party: z.string().optional(),
-  companies: z.array(z.any()).optional(),
+  companies: z.array(z.any()),
   articles: z.array(z.any()).optional(),
   elections: z.array(z.any()).optional(),
 });
@@ -32,12 +32,13 @@ export type PersonRequest = {
   wikipedia?: string;
   rejestrIo?: string;
   party?: string;
-  companies?: Array<EmploymentRequest>;
+  companies: Array<EmploymentRequest>;
   articles?: Array<ArticleRequest>;
   elections?: Array<ElectionRequest>;
 };
 
-export type EmploymentRequest = CompanyRequest & {
+export type EmploymentRequest = {
+  krs: string;
   role?: string;
   start?: string;
   end?: string;
