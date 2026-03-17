@@ -5,6 +5,7 @@ import typing
 
 import numpy as np
 import requests
+from requests import JSONDecodeError
 
 from stores.auth import authenticate_user
 
@@ -27,17 +28,10 @@ def parse_args():
     parser.add_argument(
         "--type",
         choices=["person", "company", "region"],
-        default="person",
         help="Entity type to query",
     )
     parser.add_argument("--region", type=str, help="Filter by teryt prefix (e.g. 3061)")
     parser.add_argument("--krs", type=str, help="Filter by KRS and all its descendants")
-    parser.add_argument(
-        "--api",
-        choices=["bulk_create", "bulk_update"],
-        default="bulk_create",
-        help="API endpoint to use",
-    )
     parser.add_argument(
         "--limit", type=int, help="Maximum number of entities to upload."
     )
@@ -85,11 +79,11 @@ def submit_results(args, entities, headers):
         if payload is None or name is None:
             print(f"[{idx + 1}/{total}] Skipping invalid payload ...", file=sys.stderr)
             continue
-        print(f"[{idx + 1}/{total}] Uploading {name}...", end=" ", file=sys.stderr)
 
         mapped_payload = dict(payload)
         if args.type == "company":
             current_target_url = f"{args.endpoint}/api/ingest/company"
+            # TODO move it somewhere else
             owners = []
             for parent in mapped_payload.get("parents", []):
                 if isinstance(parent, dict) and parent.get("krs"):
@@ -97,22 +91,23 @@ def submit_results(args, entities, headers):
             mapped_payload["owners"] = owners
             if "teryt_code" in mapped_payload and mapped_payload["teryt_code"]:
                 mapped_payload["teryt"] = mapped_payload["teryt_code"]
-
         else:
-            current_target_url = f"{args.endpoint}/api/person/{args.api}"
+            current_target_url = f"{args.endpoint}/api/ingest/person"
+        print(
+            f"[{idx + 1}/{total}] Uploading {name}... to {current_target_url}",
+            end=" ",
+            file=sys.stderr,
+        )
 
         resp = requests.post(
             current_target_url,
             data=json.dumps(mapped_payload, cls=NumpyEncoder),
             headers=headers,
         )
-        try:
-            j: dict[str, typing.Any] = resp.json()
-            if "companies" in j:
-                for company in j["companies"]:
-                    print_company(company)
-        except Exception:
-            pass
+        j: dict[str, typing.Any] = resp.json()
+        if "companies" in j:
+            for company in j["companies"]:
+                print_company(company)
 
         if resp.status_code in [200, 201]:
             print("  OK", file=sys.stderr)
