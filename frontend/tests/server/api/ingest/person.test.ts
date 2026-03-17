@@ -54,6 +54,7 @@ vi.mock("../../../../server/utils/revisions", () => ({
   createRevisionTransaction: vi.fn(),
 }));
 
+// TODO can I use nuxt integrated tests here instead?
 // Stub global readBody
 const mockReadBody = vi.fn();
 vi.stubGlobal("readBody", mockReadBody);
@@ -63,6 +64,15 @@ vi.stubGlobal(
   "useStorage",
   vi.fn(() => ({ clear: vi.fn() })),
 );
+
+vi.stubGlobal("readValidatedBody", async (event: any, parse: any) => {
+  const body = await mockReadBody();
+  try {
+    return parse(body);
+  } catch {
+    throw { statusCode: 400, message: "Missing required fields (krs, name)" };
+  }
+});
 
 describe("api/person/bulk_create", () => {
   let handler: any;
@@ -75,7 +85,7 @@ describe("api/person/bulk_create", () => {
     queryMock.limit.mockReturnValue(queryMock);
 
     // Dynamic import to ensure globals are stubbed before execution
-    const mod = await import("../../../../server/api/person/bulk_create.post");
+    const mod = await import("../../../../server/api/ingest/person.post");
     handler = mod.default;
   });
 
