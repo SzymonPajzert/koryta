@@ -70,11 +70,11 @@ vi.stubGlobal("readValidatedBody", async (event: any, parse: any) => {
   try {
     return parse(body);
   } catch {
-    throw { statusCode: 400, message: "Missing required fields (krs, name)" };
+    throw { statusCode: 400, message: "Missing required fields" };
   }
 });
 
-describe("api/person/bulk_create", () => {
+describe("api/ingest/person", () => {
   let handler: any;
 
   beforeEach(async () => {
@@ -94,13 +94,15 @@ describe("api/person/bulk_create", () => {
 
     await expect(handler({} as any)).rejects.toMatchObject({
       statusCode: 400,
-      message: "Missing required person name",
+      message: "Missing required fields",
     });
   });
 
   it("should create edges to regions if elections are provided", async () => {
     mockReadBody.mockResolvedValue({
       name: "Test Person",
+      parties: [],
+      companies: [],
       elections: [
         {
           party: "Test Party",
