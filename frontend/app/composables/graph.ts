@@ -1,6 +1,6 @@
 import type { Ref } from "vue";
 import type { GraphLayout } from "~~/shared/graph/util";
-import type { Node as GraphNode, NodeStats } from "~~/shared/graph/model";
+import type { Node as GraphNode, NodeStats, Edge } from "~~/shared/graph/model";
 
 export type GraphOptions = {
   focusNodeId?: string;
@@ -114,7 +114,7 @@ export function useGraph(opts: GraphOptions = {}) {
     );
   });
 
-  const edgesFiltered = computed(() => {
+  const edgesFilteredDuplicates = computed(() => {
     if (opts.focusNodeId && graph.value) {
       const validNodeIds = new Set(Object.keys(nodesFiltered.value));
       return graph.value.edges.filter(
@@ -122,6 +122,18 @@ export function useGraph(opts: GraphOptions = {}) {
       );
     }
     return edges.value;
+  });
+
+  const edgesFiltered = computed(() => {
+    if (!edgesFilteredDuplicates.value) return undefined;
+
+    const unique = new Map<string, Edge>();
+    for (const edge of edgesFilteredDuplicates.value) {
+      if (edge) {
+        unique.set(edge.source + edge.target + edge.type, edge);
+      }
+    }
+    return Array.from(unique.values());
   });
 
   return {
