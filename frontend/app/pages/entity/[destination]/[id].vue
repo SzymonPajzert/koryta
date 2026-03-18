@@ -34,7 +34,7 @@
             border: 1px solid #ccc;
           "
         >
-          <GraphContainer :focus-node-id="node" :max-depth="2" />
+          <GraphContainer :focus-node-id="node" :max-depth="1" />
         </div>
 
         <div class="mt-4">
