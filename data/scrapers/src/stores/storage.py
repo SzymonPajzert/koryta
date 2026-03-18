@@ -123,7 +123,10 @@ class Client:
             blob.upload_from_string(data, content_type=f"{content_type}; charset=utf-8")
 
             full_path = f"gs://{BUCKET}/{destination_blob_name}"
-            print(f"Successfully uploaded data to: {full_path}")
+            file_path = f"{BUCKET}/{destination_blob_name}"
+            print(
+                f"Successfully uploaded data to: {full_path}. Go to https://console.cloud.google.com/storage/browser/_details/{file_path}"
+            )
 
         except Exception as e:
             print(f"An error occurred: {e}")

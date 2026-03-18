@@ -6,11 +6,14 @@ from time import sleep
 
 import requests
 
+from analysis.interesting import Companies
+from analysis.people import PeopleMerged
+from entities.company import ManualKRS
 from entities.person import RejestrIOKey
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import KRS, CompaniesKRS, PeopleKRS
-from scrapers.stores import Context, Pipeline
+from scrapers.stores import Context, Pipeline, iterate_pipeline_dict
 
 
 def save_org_connections(
@@ -18,32 +21,46 @@ def save_org_connections(
     names: typing.Iterable[KRS],
     people: typing.Iterable[RejestrIOKey],
 ):
+    connections = list(connections)
+    names = list(names)
+    people = list(people)
+
+    print(f"len(connections): {len(connections)}")
+    print(f"len(names): {len(names)}")
+    print(f"len(people): {len(people)}")
     for krs in names:
         yield (
             f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
             0,
-        )
-    for krs in connections:
-        yield (
-            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
             0,
         )
         yield (
+            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=S&format=json",
+            0,
+            0,
+        )
+        yield (f"https://rejestr.io/api/v2/org/{krs}", 0.05, 0)
+    for krs in connections:
+        yield (
             f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=aktualne",
             0.05,
+            1,
         )
         yield (
             f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne",
             0.05,
+            0,
         )
     for person in people:
         yield (
             f"https://rejestr.io/api/v2/osoby/{person.id}/krs-powiazania?aktualnosc=aktualne",
             0.05,
+            1,
         )
         yield (
             f"https://rejestr.io/api/v2/osoby/{person.id}/krs-powiazania?aktualnosc=historyczne",
             0.05,
+            0,
         )
 
 
@@ -53,8 +70,10 @@ class ScrapeRejestrIO(Pipeline):
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
+    companies_all: Companies
     hardcoded_people: PeopleRejestrIOHardcoded
     people: PeopleKRS
+    people_all: PeopleMerged
 
     @cached_property
     def args(self):
@@ -108,11 +127,23 @@ class ScrapeRejestrIO(Pipeline):
         return to_scrape
 
     def companies_without_names(self, ctx: Context) -> set[KRS]:
-        already_scraped = self.already_scraped_companies(ctx)
         encountered_companies = self.series_to_set(
             self.people.read_or_process(ctx)["employed_krs"]
         )
-        return encountered_companies - already_scraped
+        results = set()
+        companies = {
+            c["krs"]: c
+            for c in iterate_pipeline_dict(self.companies_all.read_or_process(ctx))
+        }
+        for c in encountered_companies:
+            company = companies.get(c.id, None)
+            if company is None:
+                results.add(c)
+                continue
+            if company["name"] is None:
+                results.add(c)
+
+        return results
 
     def people_to_scrape(self, ctx: Context) -> set[RejestrIOKey]:
         scraped_people = set(
@@ -134,7 +165,7 @@ class ScrapeRejestrIO(Pipeline):
         input("Press enter to continue...")
 
         skip = 0
-        for url, _ in urls:
+        for url, _, skip_on_fail in urls:
             if skip > 0:
                 print(f"Skipping {url} (skipping {skip} more)")
                 skip -= 1
@@ -144,17 +175,16 @@ class ScrapeRejestrIO(Pipeline):
             else:
                 print(f"Requesting: {url}")
                 try:
-                    result = requests.get(url).json()
+                    response = requests.get(url)
+                    result = response.json()
                 except requests.exceptions.JSONDecodeError:
                     print(f"Failed to decode JSON from {url}, skipping")
-                    # Skip only aktualne
-                    skip = 1
+                    print(f"Response: {response.text}")
+                    skip = skip_on_fail
                     continue
-
                 if "odpis" not in result:
                     print(f"Unexpected response for {url}: {result}, skipping")
-                    # Skip only aktualne
-                    skip = 1
+                    skip = skip_on_fail
                     continue
                 dzial1 = result["odpis"]["dane"]["dzial1"]
                 dane = dzial1["danePodmiotu"]
