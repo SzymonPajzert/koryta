@@ -31,6 +31,10 @@ def test_teryt_code_set(companies_df):
     )
 
 
+def test_krs_numbers_unique(companies_df):
+    assert len(companies_df["krs"].unique()) == len(companies_df)
+
+
 def test_sources_non_empty(companies_df):
     has_name = companies_df["name"].notna()
     empty_sources = companies_df["sources"].apply(lambda x: len(x)) == 0
@@ -51,6 +55,10 @@ EXPECTED_COMPANIES = {
         city="Siedlce",
         teryt_code="1464",
         sources=[Source("rejestr-io")],
+    ),
+    "0000459347": Company(
+        krs="0000459347",
+        name="ODOLANOWSKI ZAKŁAD KOMUNALNY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
     ),
 }
 

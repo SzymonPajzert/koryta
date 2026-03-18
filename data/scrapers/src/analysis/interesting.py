@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from entities.company import Company, Owner, Source, Wikipedia
+from entities.company import Company, ManualKRS, Owner, Source, Wikipedia
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
@@ -53,6 +53,15 @@ class Companies(Pipeline[Company]):
         for krs_id in all_krs:
             if krs_id is None:
                 continue
+            assert isinstance(krs_id, str), " ".join(
+                [
+                    f"krs_id: {krs_id}",
+                    f"type: {type(krs_id)}",
+                    f"krs_companies:{krs_id in krs_companies}",
+                    f"wiki_companies:{krs_id in wiki_companies}",
+                    f"children_of_hardcoded:{krs_id in children_of_hardcoded}",
+                ]
+            )
 
             krs = krs_companies.get(krs_id)
             wiki = wiki_companies.get(krs_id)
@@ -100,10 +109,12 @@ class Companies(Pipeline[Company]):
             yield Wikipedia(*row)
 
     def children_of_hardcoded(self, ctx: Context, graph: CompanyGraph) -> list[str]:
-        children_of_hardcoded_set = graph.all_descendants(
+        # This is actually a set[KRS] and if we don't cast it to str,
+        # sets will contain wrong values
+        children_of_hardcoded_set: set[ManualKRS] = graph.all_descendants(
             self.hardcoded_companies.read_or_process_list(ctx)
-        )
-        return list(children_of_hardcoded_set)
+        )  # type: ignore
+        return list((krs.id for krs in children_of_hardcoded_set))
 
     def company_graph(self, ctx: Context):
         graph = CompanyGraph()
@@ -125,9 +136,9 @@ class CompanyMerger:
 
     def name(self) -> str | None:
         name = None
-        if self.krs is not None:
+        if self.krs is not None and self.krs.name is not None:
             name = self.krs.name
-        if name is None and self.wiki is not None:
+        if name is None and self.wiki is not None and self.wiki.name is not None:
             name = self.wiki.name
         if name is None:
             return None
