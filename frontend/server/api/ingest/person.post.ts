@@ -24,53 +24,71 @@ export default defineEventHandler(async (event) => {
 
   const batch = db.batch();
 
-  let personId: string | undefined = await lookupNode(db, "name", body.name);
-  if (!personId) {
-    const personRef = db.collection("nodes").doc();
-    personId = personRef.id;
-    const personData = createPerson(body);
-    batch.set(personRef, personData);
-    createRevisionTransaction(db, batch, user, personRef, personData);
-  }
+  try {
+    let personId: string | undefined = await lookupNode(db, "name", body.name);
+    if (!personId) {
+      const personRef = db.collection("nodes").doc();
+      personId = personRef.id;
+      const personData = createPerson(body);
+      batch.set(personRef, personData);
+      createRevisionTransaction(db, batch, user, personRef, personData);
+    }
 
-  // Track results
-  const companiesResult: EntityResult[] = [];
-  const articlesResult: EntityResult[] = [];
-  const electionsResult: EntityResult[] = [];
+    // Track results
+    const articlesResult: EntityResult[] = [];
+    const electionsResult: EntityResult[] = [];
 
-  body.companies.forEach(async (company, index) => {
-    const companyID = companyIDs[index];
-    if (!companyID)
-      throw new Error(`Missing company ID idx=${index}, krs=${company.krs}`);
-    companiesResult.push(
-      await createEmployment(db, batch, user, personId, company, companyID),
+    const companiesResult: EntityResult[] = await Promise.all(
+      body.companies.map(async (company, index) => {
+        const companyID = companyIDs[index];
+        if (!companyID)
+          throw new Error(
+            `Missing company ID idx=${index}, krs=${company.krs}`,
+          );
+        return await createEmployment(
+          db,
+          batch,
+          user,
+          personId,
+          company,
+          companyID,
+        ).catch((e) => {
+          console.error("Error creating employment", e);
+          return {
+            nodeId: companyID,
+            krs: company.krs,
+            created: false,
+            edgeId: undefined,
+          };
+        });
+      }),
     );
-  });
 
-  for (const article of assertArray(body.articles, "articles")) {
-    articlesResult.push(
-      await createArticle(db, batch, user, personId, article),
-    );
+    for (const article of assertArray(body.articles, "articles")) {
+      articlesResult.push(
+        await createArticle(db, batch, user, personId, article),
+      );
+    }
+    for (const election of assertArray(body.elections, "elections")) {
+      const result = await createElection(db, batch, user, personId, election);
+      if (!result) continue; // TODO handle missing teryt for sejm etc.
+      electionsResult.push(result);
+    }
+
+    // Invalidate cache
+    await useStorage("cache").clear("nitro:handlers");
+    console.log("Invalidated cache");
+
+    return {
+      personId,
+      companies: companiesResult,
+      articles: articlesResult,
+      elections: electionsResult,
+      status: "ok",
+    };
+  } finally {
+    await batch.commit();
   }
-  for (const election of assertArray(body.elections, "elections")) {
-    const result = await createElection(db, batch, user, personId, election);
-    if (!result) continue; // TODO handle missing teryt for sejm etc.
-    electionsResult.push(result);
-  }
-
-  await batch.commit();
-
-  // Invalidate cache
-  await useStorage("cache").clear("nitro:handlers");
-  console.log("Invalidated cache");
-
-  return {
-    personId,
-    companies: companiesResult,
-    articles: articlesResult,
-    elections: electionsResult,
-    status: "ok",
-  };
 });
 
 // TODO get rid of this, just use zod,
@@ -276,7 +294,7 @@ async function lookupCompanyIDs(
     }),
   );
   if (failingLookup.length > 0) {
-    console.error("Missing companies:", failingLookup);
+    console.info("[404] Missing companies:", failingLookup);
     throw createError({
       statusCode: 404,
       message: `Missing companies: ${failingLookup.join(", ")}`,
