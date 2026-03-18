@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+import time
 
 import numpy as np
 import requests
@@ -130,40 +131,53 @@ class Uploader:
         )
 
     def submit_results(self, entities):
-        success_count = 0
-        total = len(entities)
+        self.success_count = 0
+        self.total = len(entities)
         for idx, payload in enumerate(entities):
+            time.sleep(0.3)
             name = payload.get("name", None) if payload is not None else None
             if payload is None or name is None:
                 print(
-                    f"[{idx + 1}/{total}] Skipping invalid payload ...", file=sys.stderr
+                    f"[{idx + 1}/{self.total}] Skipping invalid payload ...",
+                    file=sys.stderr,
                 )
                 continue
 
             mapped_payload = dict(payload)
             if self.args.type == "company":
-                resp = self.submit_company(mapped_payload["krs"], mapped_payload)
+                self.check_success(
+                    self.submit_company(mapped_payload["krs"], mapped_payload)
+                )
             else:
                 current_target_url = f"{self.args.endpoint}/api/ingest/person"
-                resp = self.submit_payload(
-                    current_target_url,
-                    payload,
-                    fail=False,
+                resp = self.check_success(
+                    self.submit_payload(
+                        current_target_url,
+                        payload,
+                        fail=False,
+                    )
                 )
                 if resp.status_code == 404:
                     for krs in resp.json()["data"]:
                         self.submit_company(krs, None)
                     # Try submitting again
-                    resp = self.submit_payload(
-                        current_target_url,
-                        payload,
+                    self.check_success(
+                        self.submit_payload(
+                            current_target_url,
+                            payload,
+                        )
                     )
 
-        failures = total - success_count
+        failures = self.total - self.success_count
         print(
-            f"\nUpload complete. Success: {success_count}, Failed: {failures}",
+            f"\nUpload complete. Success: {self.success_count}, Failed: {failures}",
             file=sys.stderr,
         )
+
+    def check_success(self, resp):
+        if resp.status_code == 200:
+            self.success_count += 1
+        return resp
 
 
 def print_results(entities, type):
