@@ -48,17 +48,20 @@ EXPECTED_COMPANIES = {
     "0000846159": Company(
         krs="0000846159",
         name="ZAKŁAD GOSPODARKI KOMUNALNEJ GMINY SŁUPIA KONECKA",
+        city="Słupia",
+        teryt_code="260506",
     ),
     "0000156806": Company(
         krs="0000156806",
         name="C.HARTWIG - TARGI",
         city="Siedlce",
         teryt_code="1464",
-        sources=[Source("rejestr-io")],
+        sources=[Source("rejestr-io", "rejestr.io")],
     ),
     "0000459347": Company(
         krs="0000459347",
-        name="ODOLANOWSKI ZAKŁAD KOMUNALNY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        name="ODOLANOWSKI ZAKŁAD KOMUNALNY",
+        city="Odolanów",
     ),
 }
 

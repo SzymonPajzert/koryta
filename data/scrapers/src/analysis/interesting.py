@@ -73,11 +73,11 @@ class Companies(Pipeline[Company]):
 
             ctx.io.output_entity(
                 Company(
-                    name=merge.name(),
-                    city=attr(wiki, "city") or attr(krs, "city"),
+                    name=merge.name,
+                    city=merge.city,
                     krs=krs_id,
                     teryt_code=teryt_code,
-                    sources=merge.sources(),
+                    sources=merge.sources,
                     # TODO add owners=[],
                 )
             )
@@ -134,6 +134,7 @@ class CompanyMerger:
     krs: typing.Optional[Company]
     wiki: typing.Optional[Wikipedia]
 
+    @property
     def name(self) -> str | None:
         name = None
         if self.krs is not None and self.krs.name is not None:
@@ -144,6 +145,14 @@ class CompanyMerger:
             return None
         return remove_company_suffix(name)
 
+    @property
+    def city(self) -> str | None:
+        name = attr(self.wiki, "city") or attr(self.krs, "city")
+        if name is not None and isinstance(name, str):
+            return name.title()
+        return None
+
+    @property
     def sources(self) -> list[Source]:
         result = []
         if self.krs is not None:
