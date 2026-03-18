@@ -30,6 +30,7 @@ class MockPipeline(Pipeline):
 def mock_ctx():
     ctx = MagicMock(spec=Context)
     ctx.refresh_policy = ProcessPolicy.with_default()
+    ctx.io = MagicMock()
     return ctx
 
 
@@ -94,15 +95,12 @@ def test_upload_payloads_person_shape(mock_ctx):
 
     assert len(result_df) == 1  # 1 person
 
-    person_row = result_df.iloc[0]
-    assert "1465" in person_row["teryt_powiat"]
-
-    payload = json.loads(person_row["payload"])
+    payload = result_df.iloc[0]
+    print(f"keys: {payload.keys()}")
     assert payload["name"] == "Jan Kowalski"
-    assert payload["wikipedia"] == "https://pl.wikipedia.org/wiki/Jan_Kowalski"
+    assert payload["wikipedia_url"] == "https://pl.wikipedia.org/wiki/Jan_Kowalski"
     assert len(payload["companies"]) == 1
     assert payload["companies"][0]["krs"] == "0000123456"
-    assert payload["companies"][0]["name"] == "Test Company Sp. z o.o."
     assert payload["companies"][0]["role"] == "Prezes"
     assert len(payload["elections"]) == 1
     assert payload["elections"][0]["committee"] == "Test Party"

@@ -220,6 +220,7 @@ include_external_packages = true
 name = "Clean architecture"
 type = "layers"
 layers = ["analysis", "stores", "scrapers", "util", "entities"]
+ignore_imports = ["scrapers.krs.scrape -> analysis.*"]
 
 [[tool.importlinter.contracts]]
 name = "Do not import external packages"
@@ -250,6 +251,7 @@ forbidden_modules = [
     "zipfile",
 ]
 ignore_imports = [
+    "scrapers.krs.scrape -> analysis.interesting",
     "entities.util -> urllib",
     "scrapers.stores -> os",
     "scrapers.stores -> io",

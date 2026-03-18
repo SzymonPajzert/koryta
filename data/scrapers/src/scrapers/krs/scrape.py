@@ -8,7 +8,6 @@ import requests
 
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
-from entities.company import ManualKRS
 from entities.person import RejestrIOKey
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
