@@ -33,6 +33,7 @@
             rounded="lg"
             slim
             text="Zobacz jak działa"
+            to="/o-nas"
           />
         </div>
       </v-col>
