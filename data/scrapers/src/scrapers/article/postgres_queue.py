@@ -6,6 +6,7 @@ explicit connection parameters (no os.getenv).
 
 import logging
 import re
+import time
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -256,7 +257,6 @@ class PostgresCrawlQueue(CrawlQueue):
     def _insert_urls(
         self,
         rows: list[tuple[str, int, datetime]],
-        transaction=None,
     ) -> None:
         """Batch insert discovered URLs.
 
@@ -280,24 +280,37 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             for url, priority, date_added in rows
         ]
-        if transaction is None:
-            self.pg.executemany(
-                "INSERT INTO website_index ("
-                "id, url, priority, done, errors, num_retries, "
-                "date_added, date_finished, mined_from_url) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT(url) DO NOTHING",
-                prepared,
-            )
-            return
-        transaction.executemany(
+        sql = (
             "INSERT INTO website_index ("
             "id, url, priority, done, errors, num_retries, "
             "date_added, date_finished, mined_from_url) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-            "ON CONFLICT(url) DO NOTHING",
-            prepared,
+            "ON CONFLICT(url) DO NOTHING"
         )
+        max_attempts = 5
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self.pg.executemany(sql, prepared)
+                return
+            except psycopg2.errors.DeadlockDetected as exc:
+                if attempt == max_attempts:
+                    logger.error(
+                        "Deadlock detected while inserting URLs (attempt %d/%d). "
+                        "Giving up.",
+                        attempt,
+                        max_attempts,
+                    )
+                    raise
+                backoff = 0.1 * attempt
+                logger.warning(
+                    "Deadlock detected while inserting URLs (attempt %d/%d). "
+                    "Retrying after %.2fs. Error: %s",
+                    attempt,
+                    max_attempts,
+                    backoff,
+                    exc,
+                )
+                time.sleep(backoff)
 
     def reprioritize(self, priority_fn: Callable[[str], int], batch_size: int = 5000):
         """Recalculate priority for all pending URLs using priority function."""
