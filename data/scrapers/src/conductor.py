@@ -99,7 +99,8 @@ class Conductor(IO):
         # If it doesn't have absolute path
         # The filename passed from Pipeline is "something.jsonl"
         if hasattr(fs, "filename"):
-            path = os.path.join(PROJECT_ROOT, "versioned", fs.filename)  # type: ignore
+            folder = getattr(fs, "folder") or "versioned"
+            path = os.path.join(PROJECT_ROOT, folder, fs.filename)  # type: ignore
         else:
             raise ValueError(f"Cannot write to {fs} - missing filename")
         os.makedirs(os.path.dirname(path), exist_ok=True)

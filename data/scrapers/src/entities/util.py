@@ -26,6 +26,7 @@ class NormalizedParse:
     hostname: str
     hostname_normalized: str
     domain: str
+    full_url: str
 
     @staticmethod
     def parse(url: str) -> "NormalizedParse":
@@ -40,7 +41,7 @@ class NormalizedParse:
 
         # Handle scheme-less URLs by assuming http
         if not url.startswith(("http://", "https://")):
-            url = "http://" + url
+            url = "https://" + url
 
         if url.endswith("/"):
             url = url[:-1]
@@ -64,4 +65,5 @@ class NormalizedParse:
             hostname=hostname,
             hostname_normalized=hostname_normalized,
             domain=domain,
+            full_url=domain + parsed.path
         )
