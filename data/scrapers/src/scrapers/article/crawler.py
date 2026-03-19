@@ -11,7 +11,6 @@ import requests
 from bs4 import BeautifulSoup
 from uuid_extensions import uuid7str  # type: ignore
 
-from entities.crawler import RequestLog
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
 from scrapers.stores import CloudStorage, Context, LocalFile
@@ -46,6 +45,7 @@ class CrawlResult:
     error: str | None = None
     hit_rate_limit: bool = False
     discovered_urls: list[str] = field(default_factory=list)
+    response_duration_s: float | None = None
 
 
 # Per each hostname we do on-worker rate limitng.
@@ -60,31 +60,6 @@ def _can_crawl(parsed: NormalizedParse, rate_limit: int) -> bool:
         return False
     next_request_time[domain] = time.time() + rate_limit
     return True
-
-
-def _log_request(
-        ctx: Context,
-        uid: str,
-        url: str,
-        response_code: int,
-        payload_size: int,
-        duration: float,
-        storage_path: str | None,
-):
-    parsed = NormalizedParse.parse(url)
-    ctx.io.output_entity(
-        RequestLog(
-            uuid7str(),
-            uid,
-            parsed.hostname_normalized,
-            url,
-            datetime.now(warsaw_tz),
-            response_code,
-            payload_size,
-            f"{duration:.2f}s",
-            storage_path,
-        )
-    )
 
 
 def _storage_path(
@@ -123,58 +98,34 @@ def _upload_response(
 
 def crawl_url(
         ctx: Context,
-        uid: str,
-        url: str,
+        parsed_url: NormalizedParse,
         options: CrawlOptions,
 ) -> CrawlResult:
-    started = datetime.now(warsaw_tz)
-    parsed = NormalizedParse.parse(url)
+    if not ctx.web.robot_txt_allowed(ctx, parsed_url.full_url, parsed_url, HEADERS["User-Agent"]):
+        return CrawlResult(error="disallowed by robots", response_duration_s=0)
 
-    if not ctx.web.robot_txt_allowed(ctx, url, parsed, HEADERS["User-Agent"]):
-        return CrawlResult(error="disallowed by robots")
-
-    if not _can_crawl(parsed, options.per_domain_rate_limit_seconds):
+    if not _can_crawl(parsed_url, options.per_domain_rate_limit_seconds):
         return CrawlResult(hit_rate_limit=True)
 
     try:
-        response = requests.get(url, headers=HEADERS, timeout=options.request_timeout_seconds)
+        response = requests.get(parsed_url.full_url, headers=HEADERS, timeout=options.request_timeout_seconds)
+        duration = response.elapsed.total_seconds()
         if response.status_code != 200:
-            _log_request(
-                ctx,
-                uid,
-                url,
-                response.status_code,
-                len(response.content),
-                (datetime.now(warsaw_tz) - started).total_seconds(),
-                None,
+            return CrawlResult(
+                error=f"http {response.status_code}",
+                response_duration_s=duration,
             )
-            return CrawlResult(error=f"http {response.status_code}")
 
-        storage_path = _upload_response(ctx, parsed, response.text, options)
-        discovered_urls = _extract_urls(ctx, parsed, response)
-        duration = (datetime.now(warsaw_tz) - started).total_seconds()
+        storage_path = _upload_response(ctx, parsed_url, response, options)
+        discovered_urls = _extract_urls(ctx, parsed_url, response)
 
-        _log_request(
-            ctx,
-            uid,
-            url,
-            response.status_code,
-            len(response.content),
-            duration,
-            storage_path,
+        return CrawlResult(
+            storage_path=storage_path,
+            discovered_urls=list(discovered_urls),
+            response_duration_s=duration,
         )
-        return CrawlResult(storage_path=storage_path, discovered_urls=list(discovered_urls))
     except requests.RequestException as exc:
-        _log_request(
-            ctx,
-            uid,
-            url,
-            0,
-            0,
-            (datetime.now(warsaw_tz) - started).total_seconds(),
-            None,
-        )
-        return CrawlResult(error=str(exc))
+        return CrawlResult(error=str(exc), response_duration_s=0)
 
 
 def _extract_urls(ctx: Context, parsed: NormalizedParse, response: requests.Response) -> set[str]:
@@ -182,15 +133,15 @@ def _extract_urls(ctx: Context, parsed: NormalizedParse, response: requests.Resp
     for parser in ["html.parser", "lxml", "html5lib"]:
         soup = BeautifulSoup(response.text, parser)
 
-        for link in soup.find_all("a", href=True):
-            absolute_link = ctx.utils.join_url(parsed.hostname_normalized, link["href"])
-            absolute_link = absolute_link.split("#")[0]
-            stop = False
-            for prefix in ["javascript", "mailto", "tel"]:
-                if absolute_link.startswith(prefix):
-                    stop = True
-            if stop:
+        for link_el in soup.find_all("a", href=True):
+            link = link_el["href"]
+            if link in ("", "#", "/"):
                 continue
+            if any(link.startswith(p) for p in ("mailto", "url", "tel", "sms", "ftp", "javascript", "data")):
+                continue
+            absolute_link = ctx.utils.join_url(parsed.domain, link)
+            absolute_link = absolute_link.split("#")[0]
+            absolute_link = absolute_link.split("?")[0]
             absolute_link = absolute_link.rstrip("/")
             discovered.add(absolute_link)
 
@@ -221,14 +172,15 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
             return
 
         uid, url = entry
-        result = crawl_url(ctx, uid, url, options)
+        parsed_url = NormalizedParse.parse(url)
+        result = crawl_url(ctx, parsed_url, options)
 
         if result.hit_rate_limit:
-            logging.info("Skipping because of hit rate limit: %s", url)
-        if result.error:
-            logging.error("Crawl failed: %s", result.error)
+            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url})")
+        elif result.error:
+            logging.error(f"[{result.response_duration_s:.2f}s] Crawl failed ({result.error}): {parsed_url.full_url}")
             queue.mark_error(uid, result.error)
         else:
-            logging.info("Crawl succeeded: %s", result.storage_path)
+            logging.info(f"[{result.response_duration_s:.2f}s] Crawl succeeded: {parsed_url.full_url}")
             queue.mark_done(uid, result.storage_path)
             queue.put([(url, _priority_for_url(options, url)) for url in result.discovered_urls])
