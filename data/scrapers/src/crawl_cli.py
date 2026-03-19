@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import os
 from argparse import ArgumentParser
 from pathlib import Path
 from uuid import uuid4
@@ -120,7 +121,13 @@ def main() -> None:
     options = _build_options(args)
     logging.info("Running crawler with options: %s", options)
 
-    queue = PostgresCrawlQueue.from_env()
+    queue = PostgresCrawlQueue.from_env(
+        host=os.getenv("POSTGRESS_HOST", "localhost"),
+        database=os.getenv("POSTGRES_DB", "crawler_db"),
+        user=os.getenv("POSTGRES_USER", "crawler_user"),
+        password=os.getenv("POSTGRESS_PASSWORD", "crawler_password"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+    )
     logging.info("Initializing crawling queue")
 
     if args.reset:
