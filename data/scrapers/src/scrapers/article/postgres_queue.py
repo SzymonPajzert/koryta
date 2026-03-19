@@ -5,7 +5,6 @@ explicit connection parameters (no os.getenv).
 """
 
 import logging
-import os
 import re
 from collections import Counter
 from contextlib import contextmanager
@@ -51,21 +50,18 @@ class PostgresClient:
     def from_env(
         cls,
         *,
-        host: str | None = None,
-        database: str | None = None,
-        user: str | None = None,
-        password: str | None = None,
-        port: int | None = None,
+        host: str = "localhost",
+        database: str = "crawler_db",
+        user: str = "crawler_user",
+        password: str | None = "crawler_password",
+        port: int = 5432,
     ) -> "PostgresClient":
         return cls(
-            host or os.getenv("POSTGRESS_HOST", "localhost"),
-            database
-            or os.getenv("POSTGRES_DB", "crawler_db"),
-            user
-            or os.getenv("POSTGRES_USER", "crawler_user"),
-            password or os.getenv("POSTGRESS_PASSWORD", "crawler_password"),
-            port
-            or int(os.getenv("POSTGRES_PORT", "5432"))
+            host,
+            database,
+            user,
+            password,
+            port,
         )
 
     @contextmanager

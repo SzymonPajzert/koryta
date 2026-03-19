@@ -41,7 +41,7 @@ class NormalizedParse:
 
         # Handle scheme-less URLs by assuming http
         if not url.startswith(("http://", "https://")):
-            url = "https://" + url
+            url = "http://" + url
 
         if url.endswith("/"):
             url = url[:-1]

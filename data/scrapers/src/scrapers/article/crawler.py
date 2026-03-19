@@ -5,15 +5,16 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
-from scrapers.stores import CloudStorage, Context, LocalFile
+from scrapers.stores import CloudStorage, Context, DataRef, LocalFile
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
@@ -63,8 +64,8 @@ def _can_crawl(parsed: NormalizedParse, rate_limit: int) -> bool:
 
 
 def _storage_path(
-        parsed: NormalizedParse,
-        suffix: str | None = None,
+    parsed: NormalizedParse,
+    suffix: str | None = None,
 ) -> str:
     path = parsed.path or ""
     path = path.strip("/")
@@ -78,37 +79,53 @@ def _storage_path(
 
 
 def _upload_response(
-        ctx: Context,
-        parsed: NormalizedParse,
-        response: requests.Response,
-        options: CrawlOptions,
+    ctx: Context,
+    parsed: NormalizedParse,
+    response: requests.Response,
+    options: CrawlOptions,
 ) -> str:
     file_content = response.text
     path = _storage_path(parsed)
+    ref: DataRef
     if options.storage_type == "gcs":
         ref = CloudStorage(prefix=path)
     elif options.storage_type == "local":
-        ref = LocalFile(filename=path, folder=options.local_output)
+        if options.local_output is None:
+            raise ValueError("local_output is required for local storage")
+        folder = cast(
+            Literal["downloaded", "tests", "versioned", "crawler_output"],
+            str(options.local_output),
+        )
+        ref = LocalFile(filename=path, folder=folder)
     else:
-        ValueError("Unknown storage type")
+        raise ValueError("Unknown storage type")
 
     ctx.io.write_file(ref, file_content)
     return path
 
 
 def crawl_url(
-        ctx: Context,
-        parsed_url: NormalizedParse,
-        options: CrawlOptions,
+    ctx: Context,
+    parsed_url: NormalizedParse,
+    options: CrawlOptions,
 ) -> CrawlResult:
-    if not ctx.web.robot_txt_allowed(ctx, parsed_url.full_url, parsed_url, HEADERS["User-Agent"]):
+    if not ctx.web.robot_txt_allowed(
+        ctx,
+        parsed_url.full_url,
+        parsed_url,
+        HEADERS["User-Agent"],
+    ):
         return CrawlResult(error="disallowed by robots", response_duration_s=0)
 
     if not _can_crawl(parsed_url, options.per_domain_rate_limit_seconds):
         return CrawlResult(hit_rate_limit=True)
 
     try:
-        response = requests.get(parsed_url.full_url, headers=HEADERS, timeout=options.request_timeout_seconds)
+        response = requests.get(
+            parsed_url.full_url,
+            headers=HEADERS,
+            timeout=options.request_timeout_seconds,
+        )
         duration = response.elapsed.total_seconds()
         if response.status_code != 200:
             return CrawlResult(
@@ -128,16 +145,27 @@ def crawl_url(
         return CrawlResult(error=str(exc), response_duration_s=0)
 
 
-def _extract_urls(ctx: Context, parsed: NormalizedParse, response: requests.Response) -> set[str]:
+def _extract_urls(
+    ctx: Context,
+    parsed: NormalizedParse,
+    response: requests.Response,
+) -> set[str]:
     discovered = set()
     for parser in ["html.parser", "lxml", "html5lib"]:
         soup = BeautifulSoup(response.text, parser)
 
         for link_el in soup.find_all("a", href=True):
-            link = link_el["href"]
+            if not isinstance(link_el, Tag):
+                continue
+            link = link_el.get("href")
+            if not isinstance(link, str):
+                continue
             if link in ("", "#", "/"):
                 continue
-            if any(link.startswith(p) for p in ("mailto", "url", "tel", "sms", "ftp", "javascript", "data")):
+            if any(
+                link.startswith(p)
+                for p in ("mailto", "url", "tel", "sms", "ftp", "javascript", "data")
+            ):
                 continue
             absolute_link = ctx.utils.join_url(parsed.domain, link)
             absolute_link = absolute_link.split("#")[0]
@@ -178,9 +206,20 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
         if result.hit_rate_limit:
             logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url})")
         elif result.error:
-            logging.error(f"[{result.response_duration_s:.2f}s] Crawl failed ({result.error}): {parsed_url.full_url}")
+            logging.error(
+                f"[{result.response_duration_s:.2f}s] "
+                f"Crawl failed ({result.error}): {parsed_url.full_url}"
+            )
             queue.mark_error(uid, result.error)
         else:
-            logging.info(f"[{result.response_duration_s:.2f}s] Crawl succeeded: {parsed_url.full_url}")
+            logging.info(
+                f"[{result.response_duration_s:.2f}s] "
+                f"Crawl succeeded: {parsed_url.full_url}"
+            )
             queue.mark_done(uid, result.storage_path)
-            queue.put([(url, _priority_for_url(options, url)) for url in result.discovered_urls])
+            queue.put(
+                [
+                    (url, _priority_for_url(options, url))
+                    for url in result.discovered_urls
+                ]
+            )
