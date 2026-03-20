@@ -378,6 +378,7 @@ def main() -> int:
     logs_dir = run_dir / "workers"
     pg_dir = run_dir / "pg"
     cfg.profile_dir = logs_dir
+    print(f"Benchmark artifacts: {run_dir}")
 
     run_meta = {
         "started_at": datetime.now().isoformat(),
