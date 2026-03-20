@@ -456,6 +456,7 @@ def main() -> int:
             f"Seed file must contain more URLs ({seed_count}) than workers "
             f"({cfg.workers})."
         )
+    run_meta["runtime_seconds"] = cfg.runtime_seconds
     run_meta["pg_stat_statements_enabled"] = _ensure_pg_stat_statements(run_dir)
     run_meta["pg_stat_statements_active"] = _pg_stat_statements_active()
     _reset_pg_stat_statements(run_dir)
@@ -475,6 +476,15 @@ def main() -> int:
     _dump_pg_stat_statements(pg_dir / "pg_stat_statements_after.tsv")
 
     summary = _summarize_logs(logs_dir)
+    runtime_seconds = cfg.runtime_seconds
+    if runtime_seconds > 0:
+        summary["aggregate"]["throughput_per_s"] = (
+            summary["aggregate"]["total"] / runtime_seconds
+        )
+        for worker_stats in summary["per_worker"].values():
+            worker_stats["throughput_per_s"] = (
+                worker_stats["total"] / runtime_seconds
+            )
     summary["finished_at"] = datetime.now().isoformat()
     _write_json(run_dir / "summary.json", summary)
     _summarize_profiles(logs_dir, run_dir / "profile_summary.txt")
