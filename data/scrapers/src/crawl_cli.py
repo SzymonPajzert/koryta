@@ -33,6 +33,12 @@ def _build_parser() -> ArgumentParser:
     parser.add_argument("--append-blocked", type=Path,
                         help='CSV file with columns "Domena" and "Powód" to append '
                              "blocked domains.")
+    parser.add_argument("--setup-only", action="store_true",
+                        help="Only apply seed/blocked/reset actions, then exit.")
+    parser.add_argument("--profile", action="store_true",
+                        help="Enable cProfile and write stats to --profile-out.")
+    parser.add_argument("--profile-out", type=Path,
+                        help="Path to write cProfile .pstats output.")
     return parser
 
 
@@ -49,6 +55,8 @@ def _build_options(args: argparse.Namespace) -> CrawlOptions:
 
 
 def _confirm_reset() -> bool:
+    if os.getenv("CRAWL_RESET_CONFIRM") == "1":
+        return True
     answer = input("Reset crawl DB? Type 'reset' to confirm: ").strip()
     return answer.lower() == "reset"
 
@@ -149,8 +157,25 @@ def main() -> None:
         queue.put(rows)
         logging.info("Seeded %d URLs.", len(rows))
 
+    if args.setup_only:
+        logging.info("Setup-only requested, exiting.")
+        return
+
     ctx, _ = _setup_context(False, crawl_queue=queue)
-    run_crawler(ctx, options)
+    if args.profile:
+        import cProfile
+
+        profile_path = args.profile_out or Path(f"{options.worker_id}.pstats")
+        profiler = cProfile.Profile()
+        profiler.enable()
+        try:
+            run_crawler(ctx, options)
+        finally:
+            profiler.disable()
+            profiler.dump_stats(str(profile_path))
+            logging.info("Wrote profile to %s", profile_path)
+    else:
+        run_crawler(ctx, options)
 
 
 if __name__ == "__main__":
