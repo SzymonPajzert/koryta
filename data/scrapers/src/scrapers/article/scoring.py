@@ -12,7 +12,7 @@ ScoringFunction = Callable[[str], int]
 SCORING_FUNCTIONS: dict[str, ScoringFunction] = {}
 
 
-def _register(name: str):
+def score_function(name: str):
     def decorator(fn: ScoringFunction) -> ScoringFunction:
         SCORING_FUNCTIONS[name] = fn
         return fn
@@ -36,7 +36,7 @@ def tag_in_url(tag: str, url: str) -> bool:
     return tag in url.lower()
 
 
-@_register("default")
+@score_function("default")
 def url_score(url: str) -> int:
     score = 0
 
@@ -66,7 +66,7 @@ def url_score(url: str) -> int:
     return max(0, score)
 
 
-@_register("kalisz")
+@score_function("kalisz")
 def url_score_kalisz(url: str) -> int:
     score = 0
 

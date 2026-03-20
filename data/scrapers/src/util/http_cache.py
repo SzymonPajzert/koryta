@@ -4,7 +4,7 @@ from hashlib import sha256
 from pathlib import Path
 
 
-def _hostname(url: str) -> str:
+def get_hostname(url: str) -> str:
     # Minimal URL hostname parser without urllib.
     no_scheme = url.split("//", 1)[-1]
     host_port = no_scheme.split("/", 1)[0]
@@ -13,7 +13,7 @@ def _hostname(url: str) -> str:
     return host or "unknown"
 
 
-def _env_has_flag(env_var: str) -> bool:
+def env_has_flag(env_var: str) -> bool:
     try:
         data = Path("/proc/self/environ").read_bytes()
     except FileNotFoundError:
@@ -22,13 +22,13 @@ def _env_has_flag(env_var: str) -> bool:
 
 
 def cache_path(base_dir: Path, url: str) -> Path:
-    hostname = _hostname(url)
+    hostname = get_hostname(url)
     url_hash = sha256(url.encode("utf-8")).hexdigest()
     return base_dir / hostname / f"{url_hash}.bin"
 
 
 def cache_meta_path(base_dir: Path, url: str) -> Path:
-    hostname = _hostname(url)
+    hostname = get_hostname(url)
     url_hash = sha256(url.encode("utf-8")).hexdigest()
     return base_dir / hostname / f"{url_hash}.url"
 
@@ -50,4 +50,4 @@ def write_cached_bytes(base_dir: Path, url: str, content: bytes) -> None:
 
 
 def should_refresh(env_var: str) -> bool:
-    return _env_has_flag(env_var)
+    return env_has_flag(env_var)
