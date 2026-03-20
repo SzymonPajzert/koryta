@@ -190,13 +190,9 @@
               size="80"
               color="grey-lighten-2"
               class="mr-sm-4 mb-4 mb-sm-0 mt-2 elevation-2"
-            >
-              <v-icon
-                icon="mdi-account"
-                size="x-large"
-                color="grey-darken-1"
-              ></v-icon>
-            </v-avatar>
+              image="@/assets/pajzert.jpeg"
+            />
+
             <div>
               <div class="text-h6 font-weight-bold">Szymon Pajzert</div>
               <div class="text-subtitle-2 text-primary mb-2">
