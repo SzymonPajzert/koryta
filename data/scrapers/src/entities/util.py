@@ -26,6 +26,7 @@ class NormalizedParse:
     hostname: str
     hostname_normalized: str
     domain: str
+    full_url: str
 
     @staticmethod
     def parse(url: str) -> "NormalizedParse":
@@ -64,4 +65,5 @@ class NormalizedParse:
             hostname=hostname,
             hostname_normalized=hostname_normalized,
             domain=domain,
+            full_url=domain + parsed.path
         )
