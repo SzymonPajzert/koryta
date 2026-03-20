@@ -207,11 +207,30 @@ def _stop_workers(procs: Iterable[subprocess.Popen[str]]) -> None:
             handle.close()
 
 
+def _summarize_durations(durations: list[float]) -> dict:
+    durations.sort()
+    if durations:
+        p95 = durations[int(0.95 * (len(durations) - 1))]
+        avg = sum(durations) / len(durations)
+    else:
+        p95 = None
+        avg = None
+    return {
+        "avg_duration_s": avg,
+        "p95_duration_s": p95,
+    }
+
+
 def _summarize_logs(logs_dir: Path) -> dict:
-    successes = 0
-    failures = 0
-    durations = []
-    for log_path in logs_dir.glob("worker-*.log"):
+    aggregate_successes = 0
+    aggregate_failures = 0
+    aggregate_durations: list[float] = []
+    per_worker: dict[str, dict] = {}
+
+    for log_path in sorted(logs_dir.glob("worker-*.log")):
+        successes = 0
+        failures = 0
+        durations: list[float] = []
         for line in log_path.read_text(encoding="utf-8").splitlines():
             match = SUCCESS_RE.search(line)
             if match:
@@ -222,19 +241,36 @@ def _summarize_logs(logs_dir: Path) -> dict:
             if match:
                 failures += 1
                 durations.append(float(match.group("duration")))
-    durations.sort()
-    if durations:
-        p95 = durations[int(0.95 * (len(durations) - 1))]
-        avg = sum(durations) / len(durations)
+        aggregate_successes += successes
+        aggregate_failures += failures
+        aggregate_durations.extend(durations)
+
+        worker_stats = {
+            "successes": successes,
+            "failures": failures,
+            "total": successes + failures,
+        }
+        if worker_stats["total"] > 0:
+            worker_stats["error_rate"] = worker_stats["failures"] / worker_stats["total"]
+        else:
+            worker_stats["error_rate"] = None
+        worker_stats.update(_summarize_durations(durations))
+        per_worker[log_path.stem] = worker_stats
+
+    aggregate_stats = {
+        "successes": aggregate_successes,
+        "failures": aggregate_failures,
+        "total": aggregate_successes + aggregate_failures,
+    }
+    if aggregate_stats["total"] > 0:
+        aggregate_stats["error_rate"] = aggregate_stats["failures"] / aggregate_stats["total"]
     else:
-        p95 = None
-        avg = None
+        aggregate_stats["error_rate"] = None
+    aggregate_stats.update(_summarize_durations(aggregate_durations))
+
     return {
-        "successes": successes,
-        "failures": failures,
-        "avg_duration_s": avg,
-        "p95_duration_s": p95,
-        "total": successes + failures,
+        "aggregate": aggregate_stats,
+        "per_worker": per_worker,
     }
 
 
@@ -266,7 +302,12 @@ def _summarize_profiles(profile_dir: Path, out_path: Path, limit: int = 25) -> N
         out_path.write_text("\n\n".join(sections) + "\n")
 
 
-def _summarize_pg_stats(after_path: Path, out_path: Path, limit: int = 10) -> None:
+def _summarize_pg_stats(
+    after_path: Path,
+    out_path: Path,
+    summary: dict | None = None,
+    limit: int = 10,
+) -> None:
     if not after_path.exists():
         return
     rows: list[dict[str, str]] = []
@@ -319,6 +360,16 @@ def _summarize_pg_stats(after_path: Path, out_path: Path, limit: int = 10) -> No
             f"{row['mean_exec_time']} ms | calls={row['calls']} "
             f"total={row['total_exec_time']} ms | {row['query']}"
         )
+
+    if summary is not None and "per_worker" in summary:
+        lines.append("")
+        lines.append("Per-worker crawl summary")
+        for worker, stats in summary["per_worker"].items():
+            lines.append(
+                f"{worker}: total={stats['total']} success={stats['successes']} "
+                f"failures={stats['failures']} error_rate={stats['error_rate']} "
+                f"avg={stats['avg_duration_s']} p95={stats['p95_duration_s']}"
+            )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n")
@@ -427,8 +478,11 @@ def main() -> int:
     summary["finished_at"] = datetime.now().isoformat()
     _write_json(run_dir / "summary.json", summary)
     _summarize_profiles(logs_dir, run_dir / "profile_summary.txt")
-    _summarize_pg_stats(pg_dir / "pg_stat_statements_after.tsv",
-                        run_dir / "pg_summary.txt")
+    _summarize_pg_stats(
+        pg_dir / "pg_stat_statements_after.tsv",
+        run_dir / "pg_summary.txt",
+        summary=summary,
+    )
 
     return 0
 
