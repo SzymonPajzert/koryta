@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import logging
 import os
 from argparse import ArgumentParser
@@ -39,6 +40,8 @@ def _build_parser() -> ArgumentParser:
                         help="Enable cProfile and write stats to --profile-out.")
     parser.add_argument("--profile-out", type=Path,
                         help="Path to write cProfile .pstats output.")
+    parser.add_argument("--metrics-out", type=Path,
+                        help="Path to write per-worker timing metrics as JSON.")
     return parser
 
 
@@ -162,6 +165,7 @@ def main() -> None:
         return
 
     ctx, _ = _setup_context(False, crawl_queue=queue)
+    metrics = None
     if args.profile:
         import cProfile
 
@@ -169,13 +173,42 @@ def main() -> None:
         profiler = cProfile.Profile()
         profiler.enable()
         try:
-            run_crawler(ctx, options)
+            metrics = run_crawler(ctx, options)
         finally:
             profiler.disable()
             profiler.dump_stats(str(profile_path))
             logging.info("Wrote profile to %s", profile_path)
     else:
-        run_crawler(ctx, options)
+        metrics = run_crawler(ctx, options)
+
+    if args.metrics_out and metrics is not None:
+        payload = {
+            "worker_id": metrics.worker_id,
+            "started_at": metrics.started_at.isoformat(),
+            "finished_at": metrics.finished_at.isoformat() if metrics.finished_at else None,
+            "total_entries": metrics.total_entries,
+            "successes": metrics.successes,
+            "failures": metrics.failures,
+            "rate_limit_skips": metrics.rate_limit_skips,
+            "request_time_s": metrics.request_time_s,
+            "parse_time_s": metrics.parse_time_s,
+            "upload_time_s": metrics.upload_time_s,
+            "total_runtime_s": metrics.total_runtime_s,
+        }
+        if metrics.total_runtime_s > 0:
+            payload["request_time_pct"] = metrics.request_time_s / metrics.total_runtime_s
+            payload["parse_time_pct"] = metrics.parse_time_s / metrics.total_runtime_s
+            payload["upload_time_pct"] = metrics.upload_time_s / metrics.total_runtime_s
+            payload["other_time_s"] = (
+                metrics.total_runtime_s
+                - metrics.request_time_s
+                - metrics.parse_time_s
+                - metrics.upload_time_s
+            )
+            payload["other_time_pct"] = payload["other_time_s"] / metrics.total_runtime_s
+        args.metrics_out.parent.mkdir(parents=True, exist_ok=True)
+        args.metrics_out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        logging.info("Wrote metrics to %s", args.metrics_out)
 
 
 if __name__ == "__main__":
