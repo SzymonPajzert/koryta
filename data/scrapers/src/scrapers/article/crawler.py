@@ -47,6 +47,24 @@ class CrawlResult:
     hit_rate_limit: bool = False
     discovered_urls: list[str] = field(default_factory=list)
     response_duration_s: float | None = None
+    request_duration_s: float | None = None
+    parse_duration_s: float | None = None
+    upload_duration_s: float | None = None
+
+
+@dataclass
+class CrawlMetrics:
+    worker_id: str
+    started_at: datetime
+    finished_at: datetime | None = None
+    total_entries: int = 0
+    successes: int = 0
+    failures: int = 0
+    rate_limit_skips: int = 0
+    request_time_s: float = 0.0
+    parse_time_s: float = 0.0
+    upload_time_s: float = 0.0
+    total_runtime_s: float = 0.0
 
 
 # Per each hostname we do on-worker rate limitng.
@@ -121,28 +139,37 @@ def crawl_url(
         return CrawlResult(hit_rate_limit=True)
 
     try:
+        request_started = time.time()
         response = requests.get(
             parsed_url.full_url,
             headers=HEADERS,
             timeout=options.request_timeout_seconds,
         )
-        duration = response.elapsed.total_seconds()
+        request_duration = time.time() - request_started
         if response.status_code != 200:
             return CrawlResult(
                 error=f"http {response.status_code}",
-                response_duration_s=duration,
+                response_duration_s=request_duration,
+                request_duration_s=request_duration,
             )
 
+        upload_started = time.time()
         storage_path = _upload_response(ctx, parsed_url, response, options)
+        upload_duration = time.time() - upload_started
+        parse_started = time.time()
         discovered_urls = _extract_urls(ctx, parsed_url, response)
+        parse_duration = time.time() - parse_started
 
         return CrawlResult(
             storage_path=storage_path,
             discovered_urls=list(discovered_urls),
-            response_duration_s=duration,
+            response_duration_s=request_duration,
+            request_duration_s=request_duration,
+            parse_duration_s=parse_duration,
+            upload_duration_s=upload_duration,
         )
     except requests.RequestException as exc:
-        return CrawlResult(error=str(exc), response_duration_s=0)
+        return CrawlResult(error=str(exc), response_duration_s=0, request_duration_s=0)
 
 
 def _extract_urls(
@@ -182,44 +209,65 @@ def _priority_for_url(options: CrawlOptions, url: str) -> int:
     return max(0, min(100, 100 - score))
 
 
-def run_crawler(ctx: Context, options: CrawlOptions) -> None:
+def run_crawler(ctx: Context, options: CrawlOptions) -> CrawlMetrics:
     queue = ctx.crawl_queue
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
 
     logging.info("Starting to crawl in worker: %s", options.worker_id)
+    metrics = CrawlMetrics(worker_id=options.worker_id, started_at=datetime.now())
+    runtime_started = time.time()
 
-    while True:
-        entry = queue.get(
-            options.worker_id,
-            max_retries=options.per_url_max_retries,
-            timeout_seconds=options.lock_timeout_seconds,
-        )
-        if entry is None:
-            logging.info("Closing crawl queue. Nothing more to do.")
-            return
+    try:
+        while True:
+            entry = queue.get(
+                options.worker_id,
+                max_retries=options.per_url_max_retries,
+                timeout_seconds=options.lock_timeout_seconds,
+            )
+            if entry is None:
+                logging.info("Closing crawl queue. Nothing more to do.")
+                break
 
-        uid, url = entry
-        parsed_url = NormalizedParse.parse(url)
-        result = crawl_url(ctx, parsed_url, options)
+            uid, url = entry
+            metrics.total_entries += 1
+            parsed_url = NormalizedParse.parse(url)
+            result = crawl_url(ctx, parsed_url, options)
 
-        if result.hit_rate_limit:
-            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url})")
-        elif result.error:
-            logging.error(
-                f"[{result.response_duration_s:.2f}s] "
-                f"Crawl failed ({result.error}): {parsed_url.full_url}"
-            )
-            queue.mark_error(uid, result.error)
-        else:
-            logging.info(
-                f"[{result.response_duration_s:.2f}s] "
-                f"Crawl succeeded: {parsed_url.full_url}"
-            )
-            queue.mark_done(uid, result.storage_path)
-            queue.put(
-                [
-                    (url, _priority_for_url(options, url))
-                    for url in result.discovered_urls
-                ]
-            )
+            if result.hit_rate_limit:
+                logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url})")
+                metrics.rate_limit_skips += 1
+            elif result.error:
+                logging.error(
+                    f"[{result.response_duration_s:.2f}s] "
+                    f"Crawl failed ({result.error}): {parsed_url.full_url}"
+                )
+                queue.mark_error(uid, result.error)
+                metrics.failures += 1
+            else:
+                logging.info(
+                    f"[{result.response_duration_s:.2f}s] "
+                    f"Crawl succeeded: {parsed_url.full_url}"
+                )
+                queue.mark_done(uid, result.storage_path)
+                queue.put(
+                    [
+                        (url, _priority_for_url(options, url))
+                        for url in result.discovered_urls
+                    ]
+                )
+                metrics.successes += 1
+
+                if result.request_duration_s is not None:
+                    metrics.request_time_s += result.request_duration_s
+                if result.parse_duration_s is not None:
+                    metrics.parse_time_s += result.parse_duration_s
+                if result.upload_duration_s is not None:
+                    metrics.upload_time_s += result.upload_duration_s
+    except KeyboardInterrupt:
+        logging.info("Interrupted, returning collected metrics for %s", options.worker_id)
+
+    finally:
+        metrics.finished_at = datetime.now()
+        metrics.total_runtime_s = time.time() - runtime_started
+        return metrics

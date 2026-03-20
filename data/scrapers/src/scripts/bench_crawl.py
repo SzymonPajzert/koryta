@@ -170,6 +170,8 @@ def _build_worker_cmd(idx: int, cfg: RunConfig) -> list[str]:
         "--profile",
         "--profile-out",
         str(cfg.profile_dir / f"worker-{idx}.pstats"),
+        "--metrics-out",
+        str(cfg.profile_dir / f"worker-{idx}.metrics.json"),
     ]
     base += cfg.extra_args
     return base
@@ -225,6 +227,13 @@ def _summarize_logs(logs_dir: Path) -> dict:
     aggregate_successes = 0
     aggregate_failures = 0
     aggregate_durations: list[float] = []
+    aggregate_timing = {
+        "request_time_s": 0.0,
+        "parse_time_s": 0.0,
+        "upload_time_s": 0.0,
+        "other_time_s": 0.0,
+        "total_runtime_s": 0.0,
+    }
     per_worker: dict[str, dict] = {}
 
     for log_path in sorted(logs_dir.glob("worker-*.log")):
@@ -255,6 +264,15 @@ def _summarize_logs(logs_dir: Path) -> dict:
         else:
             worker_stats["error_rate"] = None
         worker_stats.update(_summarize_durations(durations))
+        metrics_path = log_path.with_suffix(".metrics.json")
+        if metrics_path.exists():
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            worker_stats["timing"] = metrics
+            aggregate_timing["request_time_s"] += metrics.get("request_time_s", 0.0)
+            aggregate_timing["parse_time_s"] += metrics.get("parse_time_s", 0.0)
+            aggregate_timing["upload_time_s"] += metrics.get("upload_time_s", 0.0)
+            aggregate_timing["other_time_s"] += metrics.get("other_time_s", 0.0)
+            aggregate_timing["total_runtime_s"] += metrics.get("total_runtime_s", 0.0)
         per_worker[log_path.stem] = worker_stats
 
     aggregate_stats = {
@@ -267,6 +285,20 @@ def _summarize_logs(logs_dir: Path) -> dict:
     else:
         aggregate_stats["error_rate"] = None
     aggregate_stats.update(_summarize_durations(aggregate_durations))
+    if aggregate_timing["total_runtime_s"] > 0:
+        aggregate_timing["request_time_pct"] = (
+            aggregate_timing["request_time_s"] / aggregate_timing["total_runtime_s"]
+        )
+        aggregate_timing["parse_time_pct"] = (
+            aggregate_timing["parse_time_s"] / aggregate_timing["total_runtime_s"]
+        )
+        aggregate_timing["upload_time_pct"] = (
+            aggregate_timing["upload_time_s"] / aggregate_timing["total_runtime_s"]
+        )
+        aggregate_timing["other_time_pct"] = (
+            aggregate_timing["other_time_s"] / aggregate_timing["total_runtime_s"]
+        )
+    aggregate_stats["timing"] = aggregate_timing
 
     return {
         "aggregate": aggregate_stats,
