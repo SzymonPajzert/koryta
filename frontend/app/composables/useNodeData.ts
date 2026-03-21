@@ -74,13 +74,10 @@ export function useNodeData(options: UseNodeDataOptions) {
           const data = snap.data();
           const type = data.type || "person";
 
-          const { node } = await $fetch<{ node: Node }>(
-            `/api/nodes/entry/${id}`,
-            {
-              query: { type },
-              headers: authHeaders.value,
-            },
-          );
+          const { node } = await $fetch<{ node: Node }>(`/api/nodes/${id}`, {
+            query: { latest: user.value ? "true" : undefined },
+            headers: authHeaders.value,
+          });
 
           const v: EditablePage = {
             name: node.name || "",

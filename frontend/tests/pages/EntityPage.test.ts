@@ -66,7 +66,7 @@ describe("Entity Page - Add Article Button Visibility", () => {
     // Setup Data Mocks
     // authFetch returns { data } ref
     mockAuthFetch.mockImplementation(async (url) => {
-      if (url.includes("/api/nodes/entry/")) {
+      if (url.includes("/api/nodes/")) {
         return {
           data: ref({
             node: { name: "Test Entity", content: "...", parties: [] },

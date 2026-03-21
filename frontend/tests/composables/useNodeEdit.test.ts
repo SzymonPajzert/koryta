@@ -102,7 +102,7 @@ describe("useNodeEdit", () => {
     expect(mockedFetch).toHaveBeenCalledTimes(2);
     expect(mockedFetch).toHaveBeenNthCalledWith(
       1,
-      "/api/nodes/entry/123",
+      "/api/nodes/123",
       expect.anything(),
     );
     expect(current.value.name).toBe("Test Person");
