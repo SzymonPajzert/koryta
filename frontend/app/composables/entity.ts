@@ -8,7 +8,7 @@ export function useEntity<N extends NodeType>(nodeType: N) {
 
   const { data: response } = authFetch<{
     entities: Record<string, NodeTypeMap[N]>;
-  }>(`/api/nodes/${nodeType}`);
+  }>(`/api/nodes?type=${nodeType}`);
 
   const entitiesRaw = computed(() => response?.value?.entities ?? {});
   const entities = useEntityFiltering(entitiesRaw);

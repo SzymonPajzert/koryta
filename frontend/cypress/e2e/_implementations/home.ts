@@ -22,7 +22,7 @@ describe("home", () => {
   });
 
   it("shows correct number of people", () => {
-    cy.request("/api/nodes/person").then((response) => {
+    cy.request("/api/nodes?type=person").then((response) => {
       const actualPeople = Object.values(response.body["entities"]).filter(
         (entity: any) => entity.visibility !== false,
       ).length;
