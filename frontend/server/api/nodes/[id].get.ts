@@ -1,94 +1,60 @@
-import { getUser } from "~~/server/utils/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { pageIsPublic } from "~~/shared/model";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
+import { z } from "zod";
+import type { Node } from "~~/shared/model";
+
+const queryValidator = z.object({
+  latest: z.boolean().optional(),
+});
+
+const responseValidator = z.object({
+  name: z.string(),
+  type: z.enum(["person", "place", "article", "region"]),
+});
 
 export default authCachedEventHandler(async (event) => {
   const id = getRouterParam(event, "id");
-  const user = await getUser(event).catch(() => null);
-
   if (!id) {
     throw createError({ statusCode: 400, message: "Missing type or id" });
   }
+  const query = await getValidatedQuery(event, (query) =>
+    queryValidator.parse(query),
+  );
 
   const db = getFirestore(getApp(), "koryta-pl");
-  let node;
-  if (user) {
-    const revisions = (
-      await db
-        .collection("revisions")
-        .where("node_id", "==", id)
-        .orderBy("update_time", "desc")
-        .limit(20)
-        .get()
-    ).docs.map((doc) => doc.data());
-
-    // We only want the latest revision that is NOT an edge (as edges share the same node_id)
-    const revision = revisions.find((rev) => !isEdge(rev.data));
-    if (revision) {
-      node = { ...revision.data, node_id: revision.node_id };
-    } else {
-      // Fallback to original node if no revisions found
-      node = await getEntity(db, id);
-    }
-  } else {
-    node = await getEntity(db, id);
-  }
+  const node = await (query.latest
+    ? getLatestRevision(db, id)
+    : getEntity(db, id));
 
   if (!node) {
     throw createError({ statusCode: 404, message: "Node not found" });
   }
-
-  if (isEdge(node)) {
-    node = await resolveEdgeNames(db, node);
-  }
-
-  // Visibility filtering
-  if (!user && !pageIsPublic(node)) {
-    throw createError({
-      statusCode: 404,
-      message: "Node not found (internal)",
-    });
+  // TODO how to check the response has a correct shape
+  const response: Node = responseValidator.parse(node);
+  if (!pageIsPublic(response) && !query.latest) {
+    throw createError({ statusCode: 404, message: "Page not approved" });
   }
 
   return { node };
 });
+
+async function getLatestRevision(db: FirebaseFirestore.Firestore, id: string) {
+  return (
+    await db
+      .collection("revisions")
+      .where("node_id", "==", id)
+      .orderBy("update_time", "desc")
+      .limit(1)
+      .get()
+  ).docs.map((doc) => doc.data())[0];
+}
 
 async function getEntity(db: FirebaseFirestore.Firestore, id: string) {
   const nodeDoc = await db.collection("nodes").doc(id).get();
   if (nodeDoc.exists) {
     return { id: nodeDoc.id, ...nodeDoc.data() };
   }
-  const edgeDoc = await db.collection("edges").doc(id).get();
-  if (edgeDoc.exists) {
-    return { id: edgeDoc.id, ...edgeDoc.data() };
-  }
   return null;
-}
-
-function isEdge(data: unknown): boolean {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    "source" in data &&
-    "target" in data &&
-    "type" in data
-  );
-}
-
-async function resolveEdgeNames(
-  db: FirebaseFirestore.Firestore,
-  data: Record<string, unknown>,
-) {
-  const source = data.source as string;
-  const target = data.target as string;
-  const sourceDoc = await db.collection("nodes").doc(source).get();
-  const targetDoc = await db.collection("nodes").doc(target).get();
-
-  return {
-    ...data,
-    source_name: sourceDoc.exists ? sourceDoc.data()?.name : source,
-    target_name: targetDoc.exists ? targetDoc.data()?.name : target,
-  };
 }
