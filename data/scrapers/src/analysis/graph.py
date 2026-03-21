@@ -40,14 +40,13 @@ def flatten_parties(df):
 
 
 class PeopleParties(Pipeline):
+    """
+    PeopleParties maps people to political parties based
+    on other people's political associations.
+    """
+
     filename = "people_parties"
     people_pkw_merged: PeoplePKWMerged
-
-    def read_or_process(self, ctx) -> pd.DataFrame:
-        df = super().read_or_process(ctx)
-        if df is not None and "person_id" in df.columns:
-            df = df.set_index("person_id")
-        return df
 
     def process(self, ctx: Context):
         df = self.people_pkw_merged.read_or_process(ctx)
@@ -207,7 +206,7 @@ def calculate_ppr_scores(
         divisor = df_scores.sum(axis=1).replace(0, 1)
         df_scores_normalized = df_scores.div(divisor, axis=0)
 
-    df_scores_normalized = df_scores_normalized.reset_index().set_index(measured_id)
+    df_scores_normalized = df_scores_normalized.reset_index(names=[measured_id])
 
     print("Done.")
     return df_scores_normalized

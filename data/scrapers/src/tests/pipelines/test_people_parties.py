@@ -58,3 +58,7 @@ def test_search_person(graph):
     assert matches is not None
     assert len(matches) >= 1
     assert any("donald" in m and "tusk" in m for m in matches)
+
+
+def test_has_name_column(graph):
+    assert "person_id" in graph.columns
