@@ -71,9 +71,6 @@ export function useNodeData(options: UseNodeDataOptions) {
       try {
         const snap = await getDoc(doc(db, "nodes", id));
         if (snap.exists()) {
-          const data = snap.data();
-          const type = data.type || "person";
-
           const { node } = await $fetch<{ node: Node }>(`/api/nodes/${id}`, {
             query: { latest: user.value ? "true" : undefined },
             headers: authHeaders.value,

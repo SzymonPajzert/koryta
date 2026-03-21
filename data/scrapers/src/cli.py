@@ -86,15 +86,18 @@ class Uploader:
             "Authorization": f"Bearer {token}",
         }
 
-    def submit_payload(self, url, payload, fail=True):
+    def submit_payload(self, url, payload, fail=True, verbose=False):
         print(
             f"Uploading {payload['name']}... to {url}",
             end=" ",
             file=sys.stderr,
         )
+        request = json.dumps(payload, cls=NumpyEncoder)
+        if verbose:
+            print(request, file=sys.stderr)
         resp = requests.post(
             url,
-            data=json.dumps(payload, cls=NumpyEncoder),
+            data=request,
             headers=self.headers,
         )
         if resp.status_code in [200, 201]:
