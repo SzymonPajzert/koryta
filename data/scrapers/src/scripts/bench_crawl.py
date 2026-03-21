@@ -17,6 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
+import plotly.graph_objects as go
+import plotly.io as pio
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS_ROOT = PROJECT_ROOT / "versioned" / "benchmarks"
 
@@ -407,6 +410,108 @@ def _summarize_pg_stats(
     out_path.write_text("\n".join(lines) + "\n")
 
 
+def _load_history() -> list[dict[str, object]]:
+    candidates = []
+    if not ARTIFACTS_ROOT.exists():
+        return []
+    for child in ARTIFACTS_ROOT.iterdir():
+        if not child.is_dir():
+            continue
+        history_path = child / "timing_history.json"
+        if history_path.exists():
+            candidates.append(history_path)
+    if not candidates:
+        return []
+    candidates.sort(key=lambda path: path.parent.name)
+    latest = candidates[-1]
+    return json.loads(latest.read_text(encoding="utf-8"))
+
+
+def _write_plotly_chart(
+    history: list[dict[str, object]],
+    label_map: dict[str, str],
+    filename: str,
+    yaxis_title: str,
+    plot_dir: Path,
+) -> None:
+    if go is None or pio is None or not history:
+        return
+
+    timestamps = [datetime.fromisoformat(entry["finished_at"]) for entry in history]
+    fig = go.Figure()
+    for label, key in label_map.items():
+        values = [float(entry.get(key) or 0.0) for entry in history]
+        fig.add_trace(
+            go.Scatter(
+                x=timestamps,
+                y=values,
+                name=label,
+                mode="lines+markers",
+                marker=dict(size=6),
+            )
+        )
+    fig.update_layout(
+        title="Benchmark timing history",
+        xaxis_title="Finished at",
+        yaxis_title=yaxis_title,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        template="plotly_white",
+    )
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pio.write_html(fig, plot_dir / filename, include_plotlyjs="cdn")
+
+
+def _record_timing_history(run_dir: Path, summary: dict) -> None:
+    finished = summary.get("finished_at")
+    if not finished:
+        return
+    timing = summary.get("aggregate", {}).get("timing", {})
+    entry = {
+        "dir": run_dir.name,
+        "finished_at": finished,
+        "request_time_s": timing.get("request_time_s", 0.0),
+        "parse_time_s": timing.get("parse_time_s", 0.0),
+        "upload_time_s": timing.get("upload_time_s", 0.0),
+        "other_time_s": timing.get("other_time_s", 0.0),
+        "total_runtime_s": timing.get("total_runtime_s", 0.0),
+        "request_time_pct": timing.get("request_time_pct"),
+        "parse_time_pct": timing.get("parse_time_pct"),
+        "upload_time_pct": timing.get("upload_time_pct"),
+        "other_time_pct": timing.get("other_time_pct"),
+        "total_crawls": summary.get("aggregate", {}).get("total"),
+    }
+    history = [item for item in _load_history() if item.get("dir") != run_dir.name]
+    history.append(entry)
+    history.sort(key=lambda item: datetime.fromisoformat(item["finished_at"]))
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "timing_history.json").write_text(json.dumps(history, indent=2) + "\n")
+    plot_dir = run_dir / "plots"
+    _write_plotly_chart(
+        history,
+        {
+            "Request time (s)": "request_time_s",
+            "Parse time (s)": "parse_time_s",
+            "Upload time (s)": "upload_time_s",
+            "Other time (s)": "other_time_s",
+        },
+        "timing_seconds.html",
+        "Seconds",
+        plot_dir,
+    )
+    _write_plotly_chart(
+        history,
+        {
+            "Request %": "request_time_pct",
+            "Parse %": "parse_time_pct",
+            "Upload %": "upload_time_pct",
+            "Other %": "other_time_pct",
+        },
+        "timing_percent.html",
+        "Percent",
+        plot_dir,
+    )
+
+
 def _reset_queue() -> None:
     cmd = [
         sys.executable,
@@ -525,6 +630,7 @@ def main() -> int:
         run_dir / "pg_summary.txt",
         summary=summary,
     )
+    _record_timing_history(run_dir, summary)
 
     return 0
 
