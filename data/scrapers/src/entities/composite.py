@@ -24,6 +24,6 @@ class Person:
 
     companies: list[Company]
     elections: list[Election]
-    party: list[str] | None = None
+    parties: list[str] | None = None
     wikipedia_url: str | None = None
     rejestr_io_url: str | None = None

@@ -81,7 +81,7 @@ def map_person_payload(row: pd.Series) -> Person:
         name=name,
         companies=companies,
         elections=elections,
-        party=party,
+        parties=party,
         wikipedia_url=wikipedia_url,
         rejestr_io_url=rejestr_io_url,
     )
