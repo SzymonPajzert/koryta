@@ -69,12 +69,6 @@ class CommitteeParties(Pipeline):
     filename = "committee_parties"
     people_pkw_merged: PeoplePKWMerged
 
-    def read_or_process(self, ctx) -> pd.DataFrame:
-        df = super().read_or_process(ctx)
-        if df is not None and "subgroup_id" in df.columns:
-            df = df.set_index("subgroup_id")
-        return df
-
     def process(self, ctx: Context):
         df = self.people_pkw_merged.read_or_process(ctx)
         df = flatten_parties(df)

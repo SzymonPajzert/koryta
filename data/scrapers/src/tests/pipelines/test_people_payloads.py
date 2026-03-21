@@ -55,6 +55,20 @@ def test_non_empty_wikipedia(outputs_df):
     assert some_wiki_entries > 0
 
 
+@pytest.mark.parametrize("outputs_list", [("3061"), ("3063"), ("3064")], indirect=True)
+def test_elections_to_parties_ratio(outputs_list):
+    has_elections = 0
+    has_party = 0
+    for payload in outputs_list:
+        if payload.elections:
+            has_elections += 1
+        if payload.parties:
+            has_party += 1
+
+    assert has_party > has_elections / 2, (
+        f"has_party={has_party}, has_elections={has_elections}"
+    )
+
 
 @pytest.mark.parametrize("outputs_list", [("3061"), ("3063"), ("3064")], indirect=True)
 def test_roles_non_empty(outputs_list):
