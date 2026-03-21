@@ -30,12 +30,18 @@ export default authCachedEventHandler(async (event) => {
     : getEntity(db, id));
 
   if (!node) {
-    throw createError({ statusCode: 404, message: "Node not found" });
+    throw createError({
+      statusCode: 404,
+      message: `Node not found for id=${id} and latest=${query.latest}`,
+    });
   }
   // TODO how to check the response has a correct shape
   const response: Node = responseValidator.parse(node);
   if (!pageIsPublic(response) && !query.latest) {
-    throw createError({ statusCode: 404, message: "Page not approved" });
+    throw createError({
+      statusCode: 404,
+      message: `Page ${id} is not approved`,
+    });
   }
 
   return { node };
