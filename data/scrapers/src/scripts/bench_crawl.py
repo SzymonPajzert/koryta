@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
 import csv
 import hashlib
+import io
 import json
 import os
-import re
+import pstats
 import shutil
 import signal
 import subprocess
@@ -17,16 +17,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-import plotly.graph_objects as go
-import plotly.io as pio
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS_ROOT = PROJECT_ROOT / "versioned" / "benchmarks"
-
-SUCCESS_RE = re.compile(r"\[(?P<duration>[0-9.]+)s\] Crawl succeeded: (?P<url>.+)$")
-FAIL_RE = re.compile(
-    r"\[(?P<duration>[0-9.]+)s\] Crawl failed \((?P<error>.+)\): (?P<url>.+)$"
-)
 
 
 @dataclass
@@ -85,7 +77,7 @@ def _git_rev() -> str | None:
 
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    path.write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def _psql_available() -> bool:
@@ -122,7 +114,7 @@ def _ensure_pg_stat_statements(run_dir: Path) -> bool:
     if not _psql_available():
         return False
     result = _psql_query("CREATE EXTENSION IF NOT EXISTS pg_stat_statements;")
-    out_path = run_dir / "pg" / "pg_stat_statements_setup.txt"
+    out_path = run_dir / "pg_stat_statements_setup.txt"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(result.stdout + result.stderr)
     return result.returncode == 0
@@ -132,7 +124,7 @@ def _reset_pg_stat_statements(run_dir: Path) -> None:
     if not _psql_available():
         return
     result = _psql_query("SELECT pg_stat_statements_reset();")
-    out_path = run_dir / "pg" / "pg_stat_statements_reset.txt"
+    out_path = run_dir / "pg_stat_statements_reset.txt"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(result.stdout + result.stderr)
 
@@ -212,109 +204,7 @@ def _stop_workers(procs: Iterable[subprocess.Popen[str]]) -> None:
             handle.close()
 
 
-def _summarize_durations(durations: list[float]) -> dict:
-    durations.sort()
-    if durations:
-        p95 = durations[int(0.95 * (len(durations) - 1))]
-        avg = sum(durations) / len(durations)
-    else:
-        p95 = None
-        avg = None
-    return {
-        "avg_duration_s": avg,
-        "p95_duration_s": p95,
-    }
-
-
-def _summarize_logs(logs_dir: Path) -> dict:
-    aggregate_successes = 0
-    aggregate_failures = 0
-    aggregate_durations: list[float] = []
-    aggregate_timing = {
-        "request_time_s": 0.0,
-        "parse_time_s": 0.0,
-        "upload_time_s": 0.0,
-        "other_time_s": 0.0,
-        "total_runtime_s": 0.0,
-    }
-    per_worker: dict[str, dict] = {}
-
-    for log_path in sorted(logs_dir.glob("worker-*.log")):
-        successes = 0
-        failures = 0
-        durations: list[float] = []
-        for line in log_path.read_text(encoding="utf-8").splitlines():
-            match = SUCCESS_RE.search(line)
-            if match:
-                successes += 1
-                durations.append(float(match.group("duration")))
-                continue
-            match = FAIL_RE.search(line)
-            if match:
-                failures += 1
-                durations.append(float(match.group("duration")))
-        aggregate_successes += successes
-        aggregate_failures += failures
-        aggregate_durations.extend(durations)
-
-        worker_stats = {
-            "successes": successes,
-            "failures": failures,
-            "total": successes + failures,
-        }
-        if worker_stats["total"] > 0:
-            worker_stats["error_rate"] = worker_stats["failures"] / worker_stats["total"]
-        else:
-            worker_stats["error_rate"] = None
-        worker_stats.update(_summarize_durations(durations))
-        metrics_path = log_path.with_suffix(".metrics.json")
-        if metrics_path.exists():
-            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-            worker_stats["timing"] = metrics
-            aggregate_timing["request_time_s"] += metrics.get("request_time_s", 0.0)
-            aggregate_timing["parse_time_s"] += metrics.get("parse_time_s", 0.0)
-            aggregate_timing["upload_time_s"] += metrics.get("upload_time_s", 0.0)
-            aggregate_timing["other_time_s"] += metrics.get("other_time_s", 0.0)
-            aggregate_timing["total_runtime_s"] += metrics.get("total_runtime_s", 0.0)
-        per_worker[log_path.stem] = worker_stats
-
-    aggregate_stats = {
-        "successes": aggregate_successes,
-        "failures": aggregate_failures,
-        "total": aggregate_successes + aggregate_failures,
-    }
-    if aggregate_stats["total"] > 0:
-        aggregate_stats["error_rate"] = aggregate_stats["failures"] / aggregate_stats["total"]
-    else:
-        aggregate_stats["error_rate"] = None
-    aggregate_stats.update(_summarize_durations(aggregate_durations))
-    if aggregate_timing["total_runtime_s"] > 0:
-        aggregate_timing["request_time_pct"] = (
-            aggregate_timing["request_time_s"] / aggregate_timing["total_runtime_s"]
-        )
-        aggregate_timing["parse_time_pct"] = (
-            aggregate_timing["parse_time_s"] / aggregate_timing["total_runtime_s"]
-        )
-        aggregate_timing["upload_time_pct"] = (
-            aggregate_timing["upload_time_s"] / aggregate_timing["total_runtime_s"]
-        )
-        aggregate_timing["other_time_pct"] = (
-            aggregate_timing["other_time_s"] / aggregate_timing["total_runtime_s"]
-        )
-    aggregate_stats["timing"] = aggregate_timing
-
-    return {
-        "aggregate": aggregate_stats,
-        "per_worker": per_worker,
-    }
-
-
 def _summarize_profiles(profile_dir: Path, out_path: Path, limit: int = 25) -> None:
-    try:
-        import pstats
-    except ImportError:
-        return
-
     sections: list[str] = []
     for profile_path in sorted(profile_dir.glob("worker-*.pstats")):
         stats = pstats.Stats(str(profile_path))
@@ -324,7 +214,6 @@ def _summarize_profiles(profile_dir: Path, out_path: Path, limit: int = 25) -> N
         # Capture top N lines.
         buf.append(f"Top {limit} by cumulative time")
         stats.stream = None  # type: ignore[assignment]
-        import io
 
         stream = io.StringIO()
         stats.stream = stream  # type: ignore[assignment]
@@ -332,16 +221,14 @@ def _summarize_profiles(profile_dir: Path, out_path: Path, limit: int = 25) -> N
         buf.append(stream.getvalue().rstrip())
         sections.append("\n".join(buf))
 
-    if sections:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text("\n\n".join(sections) + "\n")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n\n".join(sections) + "\n")
 
 
 def _summarize_pg_stats(
-    after_path: Path,
-    out_path: Path,
-    summary: dict | None = None,
-    limit: int = 10,
+        after_path: Path,
+        out_path: Path,
+        limit: int = 10,
 ) -> None:
     if not after_path.exists():
         return
@@ -396,120 +283,8 @@ def _summarize_pg_stats(
             f"total={row['total_exec_time']} ms | {row['query']}"
         )
 
-    if summary is not None and "per_worker" in summary:
-        lines.append("")
-        lines.append("Per-worker crawl summary")
-        for worker, stats in summary["per_worker"].items():
-            lines.append(
-                f"{worker}: total={stats['total']} success={stats['successes']} "
-                f"failures={stats['failures']} error_rate={stats['error_rate']} "
-                f"avg={stats['avg_duration_s']} p95={stats['p95_duration_s']}"
-            )
-
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n")
-
-
-def _load_history() -> list[dict[str, object]]:
-    candidates = []
-    if not ARTIFACTS_ROOT.exists():
-        return []
-    for child in ARTIFACTS_ROOT.iterdir():
-        if not child.is_dir():
-            continue
-        history_path = child / "timing_history.json"
-        if history_path.exists():
-            candidates.append(history_path)
-    if not candidates:
-        return []
-    candidates.sort(key=lambda path: path.parent.name)
-    latest = candidates[-1]
-    return json.loads(latest.read_text(encoding="utf-8"))
-
-
-def _write_plotly_chart(
-    history: list[dict[str, object]],
-    label_map: dict[str, str],
-    filename: str,
-    yaxis_title: str,
-    plot_dir: Path,
-) -> None:
-    if go is None or pio is None or not history:
-        return
-
-    timestamps = [datetime.fromisoformat(entry["finished_at"]) for entry in history]
-    fig = go.Figure()
-    for label, key in label_map.items():
-        values = [float(entry.get(key) or 0.0) for entry in history]
-        fig.add_trace(
-            go.Scatter(
-                x=timestamps,
-                y=values,
-                name=label,
-                mode="lines+markers",
-                marker=dict(size=6),
-            )
-        )
-    fig.update_layout(
-        title="Benchmark timing history",
-        xaxis_title="Finished at",
-        yaxis_title=yaxis_title,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        template="plotly_white",
-    )
-    plot_dir.mkdir(parents=True, exist_ok=True)
-    pio.write_html(fig, plot_dir / filename, include_plotlyjs="cdn")
-
-
-def _record_timing_history(run_dir: Path, summary: dict) -> None:
-    finished = summary.get("finished_at")
-    if not finished:
-        return
-    timing = summary.get("aggregate", {}).get("timing", {})
-    entry = {
-        "dir": run_dir.name,
-        "finished_at": finished,
-        "request_time_s": timing.get("request_time_s", 0.0),
-        "parse_time_s": timing.get("parse_time_s", 0.0),
-        "upload_time_s": timing.get("upload_time_s", 0.0),
-        "other_time_s": timing.get("other_time_s", 0.0),
-        "total_runtime_s": timing.get("total_runtime_s", 0.0),
-        "request_time_pct": timing.get("request_time_pct"),
-        "parse_time_pct": timing.get("parse_time_pct"),
-        "upload_time_pct": timing.get("upload_time_pct"),
-        "other_time_pct": timing.get("other_time_pct"),
-        "total_crawls": summary.get("aggregate", {}).get("total"),
-    }
-    history = [item for item in _load_history() if item.get("dir") != run_dir.name]
-    history.append(entry)
-    history.sort(key=lambda item: datetime.fromisoformat(item["finished_at"]))
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "timing_history.json").write_text(json.dumps(history, indent=2) + "\n")
-    plot_dir = run_dir / "plots"
-    _write_plotly_chart(
-        history,
-        {
-            "Request time (s)": "request_time_s",
-            "Parse time (s)": "parse_time_s",
-            "Upload time (s)": "upload_time_s",
-            "Other time (s)": "other_time_s",
-        },
-        "timing_seconds.html",
-        "Seconds",
-        plot_dir,
-    )
-    _write_plotly_chart(
-        history,
-        {
-            "Request %": "request_time_pct",
-            "Parse %": "parse_time_pct",
-            "Upload %": "upload_time_pct",
-            "Other %": "other_time_pct",
-        },
-        "timing_percent.html",
-        "Percent",
-        plot_dir,
-    )
 
 
 def _reset_queue() -> None:
@@ -563,8 +338,8 @@ def _parse_args() -> RunConfig:
 def main() -> int:
     cfg = _parse_args()
     run_dir = ARTIFACTS_ROOT / _now_stamp()
-    logs_dir = run_dir / "workers"
-    pg_dir = run_dir / "pg"
+    logs_dir = run_dir / "worker_logs"
+    pg_dir = run_dir / "postgres"
     cfg.profile_dir = logs_dir
     print(f"Benchmark artifacts: {run_dir}")
 
@@ -574,6 +349,7 @@ def main() -> int:
         "workers": cfg.workers,
         "seed": str(cfg.seed),
         "seed_sha256": _hash_file(cfg.seed),
+        "seed_count": _count_seed_urls(cfg.seed),
         "blocked": str(cfg.blocked) if cfg.blocked else None,
         "blocked_sha256": _hash_file(cfg.blocked) if cfg.blocked else None,
         "rate_limit_qpm": cfg.rate_limit_qpm,
@@ -581,22 +357,17 @@ def main() -> int:
         "storage_type": cfg.storage_type,
         "local_output": str(cfg.local_output),
         "extra_args": cfg.extra_args,
+        "pg_stat_statements_enabled": _ensure_pg_stat_statements(pg_dir),
+        "pg_stat_statements_active": _pg_stat_statements_active()
     }
-    seed_count = _count_seed_urls(cfg.seed)
-    run_meta["seed_count"] = seed_count
-    if seed_count < 8:
+
+    if run_meta["seed_count"] <= cfg.workers:
         raise ValueError(
-            f"Seed file must contain at least 8 URLs, got {seed_count}."
-        )
-    if seed_count <= cfg.workers:
-        raise ValueError(
-            f"Seed file must contain more URLs ({seed_count}) than workers "
+            f"Seed file must contain more URLs ({run_meta['seed_count']}) than workers "
             f"({cfg.workers})."
         )
-    run_meta["runtime_seconds"] = cfg.runtime_seconds
-    run_meta["pg_stat_statements_enabled"] = _ensure_pg_stat_statements(run_dir)
-    run_meta["pg_stat_statements_active"] = _pg_stat_statements_active()
-    _reset_pg_stat_statements(run_dir)
+
+    _reset_pg_stat_statements(pg_dir)
     _write_json(run_dir / "run.json", run_meta)
 
     _dump_pg_stat_statements(pg_dir / "pg_stat_statements_before.tsv")
@@ -612,28 +383,16 @@ def main() -> int:
 
     _dump_pg_stat_statements(pg_dir / "pg_stat_statements_after.tsv")
 
-    summary = _summarize_logs(logs_dir)
-    runtime_seconds = cfg.runtime_seconds
-    if runtime_seconds > 0:
-        summary["aggregate"]["throughput_per_s"] = (
-            summary["aggregate"]["total"] / runtime_seconds
-        )
-        for worker_stats in summary["per_worker"].values():
-            worker_stats["throughput_per_s"] = (
-                worker_stats["total"] / runtime_seconds
-            )
-    summary["finished_at"] = datetime.now().isoformat()
-    _write_json(run_dir / "summary.json", summary)
+    summary = {}
+
+    # TODO summarize times from sql and put it in json and plot
+
     _summarize_profiles(logs_dir, run_dir / "profile_summary.txt")
     _summarize_pg_stats(
         pg_dir / "pg_stat_statements_after.tsv",
         run_dir / "pg_summary.txt",
-        summary=summary,
     )
-    _record_timing_history(run_dir, summary)
-
-    return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
