@@ -124,7 +124,9 @@ const { data: allEdges, pending: allEdgesLoading } = authFetch<Edge[]>(() =>
 // 3. Articles (for 'articles-no-edges')
 const { data: allArticles, pending: allArticlesLoading } = authFetch<{
   entities: Record<string, Node>;
-}>(() => (props.type === "articles-no-edges" ? "/api/nodes/article" : null));
+}>(() =>
+  props.type === "articles-no-edges" ? "/api/nodes?type=article" : null,
+);
 
 // 4. My Revisions
 const {

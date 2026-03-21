@@ -18,7 +18,7 @@ describe("Revisions Logic", () => {
 
       cy.logout();
 
-      cy.request("/api/nodes/person").then((response) => {
+      cy.request("/api/nodes?type=person").then((response) => {
         const visibleEntities = Object.values(response.body["entities"]).filter(
           (e: any) => e.visibility !== false,
         );

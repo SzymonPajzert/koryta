@@ -53,7 +53,7 @@ const { authFetch } = useAuthState();
 
 const { data: response, refresh } = authFetch<{
   entities: Record<string, Person | Company | Article>;
-}>(`/api/nodes/${props.entity}`, {
+}>(`/api/nodes?type=${props.entity}`, {
   lazy: true,
 });
 
