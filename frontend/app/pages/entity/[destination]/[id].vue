@@ -210,9 +210,12 @@ const handleEdit = () => {
   }
 };
 
+const sourcePath = computed(
+  () => `/api/nodes/${node}` + (user.value ? "?latest=true" : ""),
+);
 const { data: response } = await authFetch<{
   node: Person | Company | Article | Region;
-}>(`/api/nodes/${node}`);
+}>(sourcePath);
 const entity = computed(() => response.value?.node);
 
 // Calculate edges and relationships
