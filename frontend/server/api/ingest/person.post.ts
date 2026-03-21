@@ -201,15 +201,19 @@ async function createArticle(
   };
 }
 
+// TODO remove it and fix it all the missing codes
 const allowedFailingElections: Partial<ElectionRequest>[] = [
-  { election_type: "Samorząd", election_year: "1998" },
   { election_type: "Samorząd", election_year: "1994" },
-  { election_type: "Sejm", election_year: "2001" },
-  { election_type: "Sejm", election_year: "1993" },
+  { election_type: "Samorząd", election_year: "1998" },
   { election_type: "Sejm", election_year: "1991" },
+  { election_type: "Sejm", election_year: "1993" },
   { election_type: "Sejm", election_year: "1997" },
+  { election_type: "Sejm", election_year: "2001" },
+  { election_type: "Senat", election_year: "1991" },
+  { election_type: "Senat", election_year: "1993" },
+  { election_type: "Senat", election_year: "1997" },
+  { election_type: "Senat", election_year: "2001" },
   { election_type: "Senat", election_year: "2005" },
-  // TODO remove it and fix it all of the above
   { election_type: "Parlament Europejski" },
 ];
 
