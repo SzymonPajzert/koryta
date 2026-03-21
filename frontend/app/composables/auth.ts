@@ -75,14 +75,12 @@ export function useAuthState() {
   });
 
   const authFetch = <T>(
-    url: string | (() => string | null),
+    url: string | (() => string | null) | Ref<string>,
     options: any = {},
   ) => {
     const key = computed(() => {
       return (
-        (typeof url === "string" ? url : url()) +
-        "-auth-fetch" +
-        (idToken.value ? "-auth" : "-public")
+        toValue(url) + "-auth-fetch" + (idToken.value ? "-auth" : "-public")
       );
     });
     return useFetch<T>(url as any, {
