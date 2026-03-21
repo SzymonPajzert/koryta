@@ -15,20 +15,25 @@ def ctx():
 
 
 @pytest.fixture
-def outputs_df(ctx):
+def outputs_df(ctx, request):
     # TODO this should be handled by the pipeline migration
-    with patch.object(sys, "argv", ["koryta", "PeoplePayloads", "--region", "3061"]):
+    with patch.object(
+        sys, "argv", ["koryta", "PeoplePayloads", "--region", request.param]
+    ):
         pipeline = PeoplePayloads()
         return pipeline.read_or_process(ctx)
 
 
 @pytest.fixture
-def outputs_list(ctx) -> typing.Iterable[Person]:
-    with patch.object(sys, "argv", ["koryta", "PeoplePayloads", "--region", "3061"]):
+def outputs_list(ctx, request) -> typing.Iterable[Person]:
+    with patch.object(
+        sys, "argv", ["koryta", "PeoplePayloads", "--region", request.param]
+    ):
         pipeline = PeoplePayloads()
         return pipeline.read_or_process_list(ctx)
 
 
+@pytest.mark.parametrize("outputs_df", [("3061"), ("3063"), ("3064")], indirect=True)
 def test_non_empty_elections(outputs_df):
     elections_lengths = outputs_df["elections"].apply(
         lambda x: len(x) if isinstance(x, list) else 0
@@ -39,6 +44,7 @@ def test_non_empty_elections(outputs_df):
     assert some_elections / len(elections_lengths) > 0.2
 
 
+@pytest.mark.parametrize("outputs_df", [("3061"), ("3063"), ("3064")], indirect=True)
 def test_non_empty_wikipedia(outputs_df):
     has_wiki_entries = outputs_df["wikipedia_url"].apply(
         lambda x: len(x) > 0 if isinstance(x, str) else False
@@ -49,6 +55,8 @@ def test_non_empty_wikipedia(outputs_df):
     assert some_wiki_entries > 0
 
 
+
+@pytest.mark.parametrize("outputs_list", [("3061"), ("3063"), ("3064")], indirect=True)
 def test_roles_non_empty(outputs_list):
     for person in outputs_list:
         for company in person.companies:
