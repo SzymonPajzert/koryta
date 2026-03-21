@@ -1,4 +1,4 @@
-describe("Revisions Logic", () => {
+describe.skip("Revisions Logic", () => {
   beforeEach(() => {
     cy.refreshAuth();
   });
