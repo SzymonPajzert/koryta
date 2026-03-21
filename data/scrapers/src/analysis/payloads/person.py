@@ -5,15 +5,22 @@ import numpy as np
 import pandas as pd
 
 from analysis.extract import Extract
-from analysis.payloads.election import get_election_type, get_party_from_elections
+from analysis.graph import CommitteeParties, PeopleParties
+from analysis.payloads.election import get_election_type
 from entities.composite import Company, Election, Person
 from scrapers.stores import Context, Pipeline
+
+PARTY_CONFIDENCE_TRESHOLD = 0.4
 
 
 class PeoplePayloads(Pipeline[Person]):
     filename = None
 
     people: Extract
+    people_parties: PeopleParties
+    committee_parties: CommitteeParties
+    person_to_party: pd.DataFrame | None = None
+    committee_to_party: pd.DataFrame | None = None
 
     @property
     def output_class(self) -> typing.Type:
@@ -23,7 +30,7 @@ class PeoplePayloads(Pipeline[Person]):
         people_df = self.people.read_or_process(ctx)
         result = []
         for _, row in people_df.iterrows():
-            person = map_person_payload(row)
+            person = self.map_person_payload(ctx, row)
             ctx.io.output_entity(person)
             result.append(person)
         return (
@@ -41,50 +48,82 @@ class PeoplePayloads(Pipeline[Person]):
             )
         )
 
+    def lookup_party(self, ctx, name, elections: list[Election]) -> list[str]:
+        if self.person_to_party is None:
+            self.person_to_party = self.people_parties.read_or_process(ctx)
+        if self.committee_to_party is None:
+            self.committee_to_party = self.committee_parties.read_or_process(ctx)
 
-def map_person_payload(row: pd.Series) -> Person:
-    def get_scalar(key):
-        val = row.get(key)
-        if isinstance(val, (list, np.ndarray)):
-            if len(val) > 0:
-                return val[0]
-            return None
-        return val
+        name = name.lower()
+        m = self.person_to_party[self.person_to_party["person_id"] == name]
 
-    name = (
-        get_scalar("name")
-        or get_scalar("full_name")
-        or get_scalar("fullname")
-        or get_scalar("krs_name")
-        or get_scalar("base_full_name")
-        or "Unknown Payload"
-    )
+        if len(m) == 1:
+            return party_scores_to_list(m.iloc[0], "person_id")
+        for e in elections:
+            m = self.committee_to_party[
+                self.committee_to_party["subgroup_id"] == e.committee.lower()
+            ]
+            if len(m) == 1:
+                # TODO aggregate the scores here
+                return party_scores_to_list(m.iloc[0], "subgroup_id")
+        return []
 
-    companies = _extract_companies(row)
-    elections = _extract_elections(row)
+    def map_person_payload(self, ctx: Context, row: pd.Series) -> Person:
+        def get_scalar(key):
+            val = row.get(key)
+            if isinstance(val, (list, np.ndarray)):
+                if len(val) > 0:
+                    return val[0]
+                return None
+            return val
 
-    wiki_name = get_scalar("wiki_name")
-    wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
-    if not wikipedia_url and wiki_name and isinstance(wiki_name, str):
-        wikipedia_url = f"https://pl.wikipedia.org/wiki/{wiki_name.replace(' ', '_')}"
+        name = (
+            get_scalar("name")
+            or get_scalar("full_name")
+            or get_scalar("fullname")
+            or get_scalar("krs_name")
+            or get_scalar("base_full_name")
+            or "Unknown Payload"
+        )
 
-    rejestr_io_url = get_scalar("rejestrIo")
-    rejestr_id = get_scalar("rejestrio_id")
-    if not rejestr_io_url and rejestr_id and isinstance(rejestr_id, str):
-        rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
+        companies = _extract_companies(row)
+        elections = _extract_elections(row)
 
-    party = None
-    if elections:
-        party = get_party_from_elections(elections)
+        wiki_name = get_scalar("wiki_name")
+        wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
+        if not wikipedia_url and wiki_name and isinstance(wiki_name, str):
+            wikipedia_url = (
+                f"https://pl.wikipedia.org/wiki/{wiki_name.replace(' ', '_')}"
+            )
 
-    return Person(
-        name=name,
-        companies=companies,
-        elections=elections,
-        parties=party,
-        wikipedia_url=wikipedia_url,
-        rejestr_io_url=rejestr_io_url,
-    )
+        rejestr_io_url = get_scalar("rejestrIo")
+        rejestr_id = get_scalar("rejestrio_id")
+        if not rejestr_io_url and rejestr_id and isinstance(rejestr_id, str):
+            rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
+
+        party: list[str] = []
+        if len(elections) > 0:
+            party = self.lookup_party(
+                ctx,
+                get_scalar("pkw_name"),
+                elections,
+            )
+
+        return Person(
+            name=name,
+            companies=companies,
+            elections=elections,
+            parties=party,
+            wikipedia_url=wikipedia_url,
+            rejestr_io_url=rejestr_io_url,
+        )
+
+
+def party_scores_to_list(
+    row: pd.Series, remove: typing.Literal["person_id", "subgroup_id"]
+) -> list[str]:
+    row = row.drop(remove)
+    return row[row > PARTY_CONFIDENCE_TRESHOLD].index.tolist()
 
 
 def _extract_companies(row: pd.Series) -> list[Company]:
@@ -107,7 +146,7 @@ def _extract_companies(row: pd.Series) -> list[Company]:
     return companies
 
 
-def _extract_elections(row: pd.Series) -> list[typing.Any]:
+def _extract_elections(row: pd.Series) -> list[Election]:
     elections = []
     elec_list = row.get("elections")
     if isinstance(elec_list, (list, np.ndarray)):
@@ -131,11 +170,9 @@ def _extract_elections(row: pd.Series) -> list[typing.Any]:
                     teryt_val = str(e.get("teryt"))
 
                 election_payload = Election(
-                    election_type=get_election_type(str(e.get("election_type")))
+                    election_type=get_election_type(str(e.get("election_type"))),
+                    committee=str(e.get("party")),
                 )
-                if e.get("party"):
-                    # TODO handle this nicer and add some checks
-                    election_payload.committee = str(e.get("party"))
                 if e.get("election_year"):
                     election_payload.election_year = str(e.get("election_year"))
                 if teryt_val:

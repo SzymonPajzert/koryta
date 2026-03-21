@@ -13,7 +13,7 @@ class Company:
 @dataclass
 class Election:
     election_type: typing.Any
-    committee: str | None = None
+    committee: str
     election_year: str | None = None
     teryt: str | None = None
 
