@@ -115,6 +115,7 @@ dependencies = [
     "scipy (>=1.16.3,<2.0.0)",
     "leveldb-export @ git+https://github.com/SzymonPajzert/leveldb-export.git@upgrade",
     "stanza (>=1.11.0,<2.0.0)",
+    "plotly (>=6.6.0,<7.0.0)",
 ]
 
 [project.scripts]

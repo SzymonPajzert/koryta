@@ -1,7 +1,9 @@
 from __future__ import annotations
-
+from contextlib import contextmanager
+import cProfile
 import argparse
 import csv
+import json
 import logging
 import os
 from argparse import ArgumentParser
@@ -33,6 +35,10 @@ def _build_parser() -> ArgumentParser:
     parser.add_argument("--append-blocked", type=Path,
                         help='CSV file with columns "Domena" and "Powód" to append '
                              "blocked domains.")
+    parser.add_argument("--setup-only", action="store_true",
+                        help="Only apply seed/blocked/reset actions, then exit.")
+    parser.add_argument("--profile-path", type=Path, default=None,
+                        help="Enable cProfile and write them to that path")
     return parser
 
 
@@ -49,6 +55,8 @@ def _build_options(args: argparse.Namespace) -> CrawlOptions:
 
 
 def _confirm_reset() -> bool:
+    if os.getenv("CRAWL_RESET_CONFIRM") == "1":
+        return True
     answer = input("Reset crawl DB? Type 'reset' to confirm: ").strip()
     return answer.lower() == "reset"
 
@@ -114,6 +122,20 @@ def _setup_logging():
     )
 
 
+@contextmanager
+def profile_scope(enabled: bool, path: Path):
+    if not enabled:
+        yield
+    profiler = cProfile.Profile()
+    profiler.enable()
+    try:
+        yield
+    finally:
+        profiler.disable()
+        profiler.dump_stats(str(path))
+        logging.info("Wrote profile to %s", path)
+
+
 def main() -> None:
     _setup_logging()
     parser = _build_parser()
@@ -149,8 +171,16 @@ def main() -> None:
         queue.put(rows)
         logging.info("Seeded %d URLs.", len(rows))
 
+    if args.setup_only:
+        logging.info("Setup-only requested, exiting.")
+        return
+
+    profile_enabled = args.profile_path is not None
+    profile_path = args.profile_path / f"worker-{args.worker_id}.pstats" if args.profile_path else None
     ctx, _ = _setup_context(False, crawl_queue=queue)
-    run_crawler(ctx, options)
+
+    with profile_scope(profile_enabled, profile_path):
+        run_crawler(ctx, options)
 
 
 if __name__ == "__main__":
