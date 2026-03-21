@@ -20,7 +20,12 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const { companyIDs, missingKRS } = await lookupCompanyIDs(db, body.companies);
+  const ctx = new Context(db, user);
+
+  const { companyIDs, missingKRS } = await lookupCompanyIDs(
+    ctx,
+    body.companies,
+  );
   if (missingKRS.length > 0) {
     console.info("[404] Missing companies:", missingKRS);
     setResponseStatus(
@@ -37,7 +42,7 @@ export default defineEventHandler(async (event) => {
   const batch = db.batch();
 
   try {
-    let personId: string | undefined = await lookupNode(db, "name", body.name);
+    let personId: string | undefined = await lookupNode(ctx, "name", body.name);
     if (!personId) {
       const personRef = db.collection("nodes").doc();
       personId = personRef.id;
@@ -71,32 +76,25 @@ export default defineEventHandler(async (event) => {
           throw new Error(
             `Missing company ID idx=${index}, krs=${company.krs}`,
           );
-        return await createEmployment(
-          db,
-          batch,
-          user,
-          personId,
-          company,
-          companyID,
-        ).catch((e) => {
-          console.error("Error creating employment", e);
-          return {
-            nodeId: companyID,
-            krs: company.krs,
-            created: false,
-            edgeId: undefined,
-          };
-        });
+        return await createEmployment(ctx, personId, company, companyID).catch(
+          (e) => {
+            console.error("Error creating employment", e);
+            return {
+              nodeId: companyID,
+              krs: company.krs,
+              created: false,
+              edgeId: undefined,
+            };
+          },
+        );
       }),
     );
 
     for (const article of assertArray(body.articles, "articles")) {
-      articlesResult.push(
-        await createArticle(db, batch, user, personId, article),
-      );
+      articlesResult.push(await createArticle(ctx, personId, article));
     }
     for (const election of assertArray(body.elections, "elections")) {
-      const result = await createElection(db, batch, user, personId, election);
+      const result = await createElection(ctx, personId, election);
       if (!result) continue; // TODO handle missing teryt for sejm etc.
       electionsResult.push(result);
     }
@@ -149,10 +147,21 @@ function createPerson(body: Partial<Person>): Person {
   return person;
 }
 
+class Context {
+  readonly batch: FirebaseFirestore.WriteBatch;
+
+  constructor(
+    readonly db: FirebaseFirestore.Firestore,
+    readonly user: { uid: string },
+  ) {
+    this.db = db;
+    this.user = user;
+    this.batch = db.batch();
+  }
+}
+
 async function createEmployment(
-  db: FirebaseFirestore.Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  user: { uid: string },
+  ctx: Context,
   personId: string,
   employment: EmploymentRequest,
   companyId: string,
@@ -166,7 +175,7 @@ async function createEmployment(
   if (employment.start) edgeData.start_date = employment.start;
   if (employment.end) edgeData.end_date = employment.end;
 
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  const edgeId = await findEdgeOrCreate(ctx, edgeData);
 
   return {
     nodeId: companyId,
@@ -177,28 +186,32 @@ async function createEmployment(
 }
 
 async function createArticle(
-  db: FirebaseFirestore.Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  user: { uid: string },
+  ctx: Context,
   personId: string,
   article: ArticleRequest,
 ): Promise<EntityResult> {
   if (!article.url) throw badRequest(`Article must have a URL`);
 
   let articleId: string | undefined = undefined;
-  articleId = await lookupNode(db, "sourceURL", article.url);
+  articleId = await lookupNode(ctx, "sourceURL", article.url);
 
   let created = false;
   if (!articleId) {
-    const articleRef = db.collection("nodes").doc();
+    const articleRef = ctx.db.collection("nodes").doc();
     articleId = articleRef.id;
     const revisionData: Article = {
       name: article.url,
       type: "article",
       sourceURL: article.url,
     };
-    batch.set(articleRef, revisionData);
-    createRevisionTransaction(db, batch, user, articleRef, revisionData);
+    ctx.batch.set(articleRef, revisionData);
+    createRevisionTransaction(
+      ctx.db,
+      ctx.batch,
+      ctx.user,
+      articleRef,
+      revisionData,
+    );
     created = true;
   }
 
@@ -208,7 +221,7 @@ async function createArticle(
     target: articleId,
     type: "mentions",
   };
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  const edgeId = await findEdgeOrCreate(ctx, edgeData);
 
   return {
     nodeId: articleId,
@@ -234,7 +247,7 @@ const allowedFailingElections: Partial<ElectionRequest>[] = [
 ];
 
 async function lookupRegionId(
-  db: FirebaseFirestore.Firestore,
+  ctx: Context,
   election: ElectionRequest,
 ): Promise<string | undefined> {
   if (!election.teryt) {
@@ -257,15 +270,13 @@ async function lookupRegionId(
         election.election_year,
     );
   }
-  const regionId = await lookupNode(db, "teryt", election.teryt);
+  const regionId = await lookupNode(ctx, "teryt", election.teryt);
   if (!regionId) throw new Error(`Region not found: ${election.teryt}`);
   return regionId;
 }
 
 async function createElection(
-  db: FirebaseFirestore.Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  user: { uid: string },
+  ctx: Context,
   personId: string,
   election: ElectionRequest,
 ): Promise<EntityResult | undefined> {
@@ -276,7 +287,7 @@ async function createElection(
     );
   }
 
-  const regionId = await lookupRegionId(db, election);
+  const regionId = await lookupRegionId(ctx, election);
   if (!regionId) {
     return undefined;
   }
@@ -292,7 +303,7 @@ async function createElection(
     edgeData.start_date = `${election.election_year}-01-01`;
   }
 
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  const edgeId = await findEdgeOrCreate(ctx, edgeData);
   if (!edgeId) throw new Error("Failed to create edge");
   return {
     nodeId: regionId,
@@ -312,13 +323,13 @@ async function createElection(
  * @returns
  */
 async function lookupCompanyIDs(
-  db: FirebaseFirestore.Firestore,
+  ctx: Context,
   employments: EmploymentRequest[],
 ): Promise<{ companyIDs: string[]; missingKRS: string[] }> {
   const failingLookup: string[] = [];
   const companyIDsUnfiltered: (string | undefined)[] = await Promise.all(
     employments.map(async (employment) => {
-      const node = await lookupNode(db, "krsNumber", employment.krs);
+      const node = await lookupNode(ctx, "krsNumber", employment.krs);
       if (!node) {
         failingLookup.push(employment.krs);
       }
@@ -342,11 +353,11 @@ async function lookupCompanyIDs(
  * @returns
  */
 async function lookupNode(
-  db: FirebaseFirestore.Firestore,
+  ctx: Context,
   field: string,
   value: string,
 ): Promise<string | undefined> {
-  const snap = await db
+  const snap = await ctx.db
     .collection("nodes")
     .where(field, "==", value)
     .limit(1)
@@ -357,13 +368,8 @@ async function lookupNode(
   return undefined;
 }
 
-async function findEdgeOrCreate(
-  db: FirebaseFirestore.Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  user: { uid: string },
-  edge: Edge,
-) {
-  const edgeSnap = await db
+async function findEdgeOrCreate(ctx: Context, edge: Edge) {
+  const edgeSnap = await ctx.db
     .collection("edges")
     .where("source", "==", edge.source)
     .where("target", "==", edge.target)
@@ -371,9 +377,9 @@ async function findEdgeOrCreate(
     .get();
 
   if (edgeSnap.empty) {
-    const edgeRef = db.collection("edges").doc();
-    batch.set(edgeRef, edge);
-    createRevisionTransaction(db, batch, user, edgeRef, edge);
+    const edgeRef = ctx.db.collection("edges").doc();
+    ctx.batch.set(edgeRef, edge);
+    createRevisionTransaction(ctx.db, ctx.batch, ctx.user, edgeRef, edge);
     return edgeRef.id;
   }
   return edgeSnap.docs[0]?.id;
