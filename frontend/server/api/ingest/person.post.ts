@@ -43,7 +43,21 @@ export default defineEventHandler(async (event) => {
       personId = personRef.id;
       const personData = createPerson(body);
       batch.set(personRef, personData);
-      createRevisionTransaction(db, batch, user, personRef, personData);
+      console.info(
+        "Created node with path",
+        personRef.path,
+        "and data",
+        personData,
+      );
+      const { revisionRef, targetRef } = createRevisionTransaction(
+        db,
+        batch,
+        user,
+        personRef,
+        personData,
+      );
+      console.info("Created revision with path", revisionRef.path);
+      console.info("Created target with path", targetRef.path);
     }
 
     // Track results
@@ -99,7 +113,9 @@ export default defineEventHandler(async (event) => {
       status: "ok",
     };
   } finally {
+    console.info("Committing batch");
     await batch.commit();
+    console.info("Commit successful");
   }
 });
 

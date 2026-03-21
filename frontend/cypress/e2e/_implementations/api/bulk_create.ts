@@ -113,7 +113,7 @@ describe("API /api/person/bulk_create", () => {
       // 2. Verify Person Created via GET API
       cy.request({
         method: "GET",
-        url: `/api/nodes/entry/${personId}`,
+        url: `/api/nodes/${personId}`,
         headers: { Authorization: `Bearer ${authToken}` },
       }).then((res) => {
         expect(res.status).to.eq(200);

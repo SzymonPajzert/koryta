@@ -212,7 +212,7 @@ const handleEdit = () => {
 
 const { data: response } = await authFetch<{
   node: Person | Company | Article | Region;
-}>(`/api/nodes/entry/${node}`);
+}>(`/api/nodes/${node}`);
 const entity = computed(() => response.value?.node);
 
 // Calculate edges and relationships

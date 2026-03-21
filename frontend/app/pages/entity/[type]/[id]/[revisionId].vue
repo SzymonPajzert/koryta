@@ -68,6 +68,7 @@ const revisionId = route.params.revisionId as string;
 
 const { authFetch } = useAuthState();
 
+// TODO this is broken for now
 // Fetch Revision
 const {
   data: revisionData,
@@ -80,7 +81,7 @@ const {
   data: nodeData,
   pending: nodeLoading,
   error: nodeError,
-} = await authFetch<Node>(`/api/nodes/entry/${nodeId}`);
+} = await authFetch<Node>(`/api/nodes/${nodeId}`);
 
 const loading = computed(() => revLoading.value || nodeLoading.value);
 const error = computed(() => revError.value || nodeError.value);
@@ -100,7 +101,7 @@ async function applyRevision() {
     const targetType =
       revisionData.value?.data?.type || nodeData.value?.type || "person";
     // Clear cache for the node entry to ensure fresh data is fetched
-    clearNuxtData((key) => key.includes(`/api/nodes/entry/${nodeId}`));
+    clearNuxtData((key) => key.includes(`/api/nodes/${nodeId}`));
 
     useRouter().push(`/entity/${targetType}/${nodeId}`);
   } catch (e) {

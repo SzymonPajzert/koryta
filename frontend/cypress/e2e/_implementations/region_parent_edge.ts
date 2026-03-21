@@ -7,7 +7,7 @@ describe("Region Parent Edge", () => {
     cy.login();
 
     // Mock company page
-    cy.intercept("GET", `/api/nodes/entry/${COMPANY_ID}`, {
+    cy.intercept("GET", `/api/nodes/${COMPANY_ID}`, {
       body: {
         node: {
           id: COMPANY_ID,
