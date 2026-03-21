@@ -14,7 +14,6 @@ from conductor import _setup_context
 from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
-    CrawlMetrics
 )
 from scrapers.article.postgres_queue import PostgresCrawlQueue
 
@@ -39,7 +38,7 @@ def _build_parser() -> ArgumentParser:
     parser.add_argument("--setup-only", action="store_true",
                         help="Only apply seed/blocked/reset actions, then exit.")
     parser.add_argument("--profile-path", type=Path, default=None,
-                        help="Enable cProfile and metrics and write them to that path")
+                        help="Enable cProfile and write them to that path")
     return parser
 
 
@@ -122,12 +121,11 @@ def _setup_logging():
         ]
     )
 
+
 @contextmanager
 def profile_scope(enabled: bool, path: Path):
     if not enabled:
         yield
-        return
-
     profiler = cProfile.Profile()
     profiler.enable()
     try:
@@ -136,35 +134,6 @@ def profile_scope(enabled: bool, path: Path):
         profiler.disable()
         profiler.dump_stats(str(path))
         logging.info("Wrote profile to %s", path)
-        
-        
-def _save_crawler_metrics(metrics: CrawlMetrics, path: Path):
-    payload = {
-        "worker_id": metrics.worker_id,
-        "started_at": metrics.started_at.isoformat(),
-        "finished_at": metrics.finished_at.isoformat() if metrics.finished_at else None,
-        "total_entries": metrics.total_entries,
-        "successes": metrics.successes,
-        "failures": metrics.failures,
-        "rate_limit_skips": metrics.rate_limit_skips,
-        "request_time_s": metrics.request_time_s,
-        "parse_time_s": metrics.parse_time_s,
-        "upload_time_s": metrics.upload_time_s,
-        "total_runtime_s": metrics.total_runtime_s,
-    }
-
-    total = metrics.total_runtime_s
-    if total > 0:
-        payload.update({
-            "request_time_pct": metrics.request_time_s / total,
-            "parse_time_pct": metrics.parse_time_s / total,
-            "upload_time_pct": metrics.upload_time_s / total,
-            "other_time_s": total - (metrics.request_time_s + metrics.parse_time_s + metrics.upload_time_s),
-        })
-        payload["other_time_pct"] = payload["other_time_s"] / total
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def main() -> None:
@@ -207,13 +176,12 @@ def main() -> None:
         return
 
     profile_enabled = args.profile_path is not None
+    profile_path = args.profile_path / f"worker-{args.worker_id}.pstats" if args.profile_path else None
     ctx, _ = _setup_context(False, crawl_queue=queue)
 
-    with profile_scope(profile_enabled, args.profile_path / f"worker-{args.worker_id}.pstats"):
-        metrics = run_crawler(ctx, options)
+    with profile_scope(profile_enabled, profile_path):
+        run_crawler(ctx, options)
 
-    if profile_enabled:
-        _save_crawler_metrics(metrics, args.profile_path / f"worker-{args.worker_id}.metrics.json")
 
 if __name__ == "__main__":
     main()
