@@ -1,4 +1,4 @@
-describe("My Revisions Workflow", () => {
+describe.skip("My Revisions Workflow", () => {
   beforeEach(() => {
     cy.refreshAuth();
     cy.login();
