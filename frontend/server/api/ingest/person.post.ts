@@ -20,7 +20,19 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const companyIDs = await lookupCompanyIDs(db, body.companies);
+  const { companyIDs, missingKRS } = await lookupCompanyIDs(db, body.companies);
+  if (missingKRS.length > 0) {
+    console.info("[404] Missing companies:", missingKRS);
+    setResponseStatus(
+      event,
+      404,
+      `Missing companies: ${missingKRS.join(", ")}`,
+    );
+    return {
+      message: `Missing companies: ${missingKRS.join(", ")}`,
+      data: missingKRS,
+    };
+  }
 
   const batch = db.batch();
 
@@ -282,7 +294,7 @@ async function createElection(
 async function lookupCompanyIDs(
   db: FirebaseFirestore.Firestore,
   employments: EmploymentRequest[],
-): Promise<string[]> {
+): Promise<{ companyIDs: string[]; missingKRS: string[] }> {
   const failingLookup: string[] = [];
   const companyIDsUnfiltered: (string | undefined)[] = await Promise.all(
     employments.map(async (employment) => {
@@ -293,17 +305,12 @@ async function lookupCompanyIDs(
       return node;
     }),
   );
-  if (failingLookup.length > 0) {
-    console.info("[404] Missing companies:", failingLookup);
-    throw createError({
-      statusCode: 404,
-      message: `Missing companies: ${failingLookup.join(", ")}`,
-      data: failingLookup,
-    });
-  }
-  return companyIDsUnfiltered.filter(
-    (id: string | undefined): id is string => id !== undefined,
-  );
+  return {
+    companyIDs: companyIDsUnfiltered.filter(
+      (id: string | undefined): id is string => id !== undefined,
+    ),
+    missingKRS: failingLookup,
+  };
 }
 
 // TODO move this to general utils
