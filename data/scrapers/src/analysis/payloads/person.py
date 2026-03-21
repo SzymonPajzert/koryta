@@ -96,10 +96,11 @@ class PeoplePayloads(Pipeline[Person]):
                 f"https://pl.wikipedia.org/wiki/{wiki_name.replace(' ', '_')}"
             )
 
-        rejestr_io_url = get_scalar("rejestrIo")
-        rejestr_id = get_scalar("rejestrio_id")
-        if not rejestr_io_url and rejestr_id and isinstance(rejestr_id, str):
-            rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
+        rejestr_ids = row["rejestrio_id"]
+        if len(rejestr_ids) > 2:
+            print(f"Found duplicated rejestr_ids: {rejestr_ids}")
+        rejestr_id = rejestr_ids[0]
+        rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
 
         party: list[str] = []
         if len(elections) > 0:
