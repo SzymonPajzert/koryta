@@ -244,6 +244,7 @@ def run_crawler(ctx: Context, options: CrawlOptions):
                 "parse_duration_s": result.parse_duration_s,
                 "upload_duration_s": result.upload_duration_s,
                 "total_duration_s": result.total_duration_s,
+                "worker_id": options.worker_id,
             })
             queue.put(
                 [
