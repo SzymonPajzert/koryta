@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
-from psycopg2.extras import Json
+from psycopg2.extras import Json, execute_values
 
 import psycopg2  # type: ignore
 from uuid_extensions import uuid7str  # type: ignore
@@ -139,6 +139,14 @@ class PostgresCrawlQueue(CrawlQueue):
                 );
                 """
             )
+            transaction.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_website_index_ready
+                    ON website_index (done, priority, num_retries);
+                CREATE INDEX IF NOT EXISTS idx_website_index_locked
+                    ON website_index (locked_by_worker_id, locked_at);
+                """
+            )
 
         logger.info("Database initialization complete.")
 
@@ -198,7 +206,7 @@ class PostgresCrawlQueue(CrawlQueue):
                           WHERE wi.url = bd.domain
                              OR wi.url LIKE bd.domain || '/%%'
                       )
-                    ORDER BY wi.priority ASC, RANDOM()
+                    ORDER BY wi.priority ASC, wi.id ASC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 )
