@@ -17,6 +17,7 @@ export function createRevisionTransaction(
   user: { uid: string },
   targetRef: DocumentReference,
   data: Record<string, unknown> | Node | Edge, // TODO unify this
+  automatic: boolean = false,
 ): BatchResult {
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
@@ -27,6 +28,7 @@ export function createRevisionTransaction(
     data,
     update_time: timestamp,
     update_user: user.uid,
+    update_automatic: automatic ? true : undefined,
   };
 
   batch.set(revisionRef, revision);

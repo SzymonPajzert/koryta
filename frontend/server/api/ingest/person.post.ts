@@ -60,6 +60,7 @@ export default defineEventHandler(async (event) => {
         user,
         personRef,
         personData,
+        true,
       );
       console.info("Created revision with path", revisionRef.path);
       console.info("Created target with path", targetRef.path);
@@ -212,6 +213,7 @@ async function createArticle(
       ctx.user,
       articleRef,
       revisionData,
+      true,
     );
     created = true;
   }
@@ -380,7 +382,7 @@ async function findEdgeOrCreate(ctx: Context, edge: Edge) {
   if (edgeSnap.empty) {
     const edgeRef = ctx.db.collection("edges").doc();
     ctx.batch.set(edgeRef, edge);
-    createRevisionTransaction(ctx.db, ctx.batch, ctx.user, edgeRef, edge);
+    createRevisionTransaction(ctx.db, ctx.batch, ctx.user, edgeRef, edge, true);
     return edgeRef.id;
   }
   return edgeSnap.docs[0]?.id;
