@@ -11,6 +11,7 @@ import pstats
 import signal
 import subprocess
 import sys
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -36,6 +37,12 @@ class RunConfig:
     local_output: Path
     extra_args: list[str]
     profile_dir: Path
+
+
+@dataclass
+class PgStatSnapshot:
+    timestamp: datetime
+    query_map: dict[str, tuple[float, int]]
 
 
 def _now_stamp() -> str:
@@ -123,6 +130,122 @@ def _write_text(path: Path, content: str) -> None:
     path.write_text(content)
 
 
+def _take_pg_stat_snapshot(pg_client: PostgresClient) -> PgStatSnapshot | None:
+    query = (
+        "SELECT query, calls, total_exec_time FROM pg_stat_statements;"
+    )
+    try:
+        _, rows = _run_sql(pg_client, query)
+    except Exception as exc:
+        logging.warning("Failed to sample pg_stat_statements: %s", exc)
+        return None
+    if not rows:
+        return None
+    query_map: dict[str, tuple[float, int]] = {}
+    for row in rows:
+        query_text = row[0] or ""
+        calls = row[1] if row[1] is not None else 0
+        total_time = row[2] if row[2] is not None else 0.0
+        try:
+            calls = int(calls)
+        except (TypeError, ValueError):
+            calls = 0
+        try:
+            total_time = float(total_time)
+        except (TypeError, ValueError):
+            total_time = 0.0
+        query_map[query_text] = (total_time, calls)
+    return PgStatSnapshot(datetime.now(), query_map)
+
+
+def _aggregate_pg_snapshots(
+    samples: list[PgStatSnapshot],
+) -> tuple[list[dict[str, float | str]], dict[str, list[dict[str, float | str]]]]:
+    if len(samples) < 2:
+        return [], {}
+    total_buckets: dict[str, dict[str, float]] = defaultdict(
+        lambda: {"sql_time_s": 0.0, "queries": 0.0, "wall_seconds": 0.0}
+    )
+    query_buckets: dict[str, dict[str, dict[str, float]]] = defaultdict(
+        lambda: defaultdict(lambda: {"sql_time_s": 0.0, "queries": 0.0})
+    )
+    prev = samples[0]
+    for current in samples[1:]:
+        interval = (current.timestamp - prev.timestamp).total_seconds()
+        if interval <= 0:
+            prev = current
+            continue
+        minute_key = current.timestamp.replace(second=0, microsecond=0).isoformat()
+        prev_map = prev.query_map
+        curr_map = current.query_map
+        minute_total = total_buckets[minute_key]
+        minute_total["wall_seconds"] += interval
+        for query in set(prev_map) | set(curr_map):
+            prev_time, prev_calls = prev_map.get(query, (0.0, 0))
+            curr_time, curr_calls = curr_map.get(query, (0.0, 0))
+            delta_time = max(curr_time - prev_time, 0.0)
+            delta_calls = max(curr_calls - prev_calls, 0.0)
+            minute_total["sql_time_s"] += delta_time / 1000
+            minute_total["queries"] += delta_calls
+            query_bucket = query_buckets[minute_key][query]
+            query_bucket["sql_time_s"] += delta_time / 1000
+            query_bucket["queries"] += delta_calls
+        prev = current
+    totals: list[dict[str, float | str]] = []
+    for minute in sorted(total_buckets):
+        bucket = total_buckets[minute]
+        totals.append(
+            {
+                "minute": minute,
+                "sql_time_s": bucket["sql_time_s"],
+                "queries": bucket["queries"],
+                "wall_seconds": bucket["wall_seconds"],
+            }
+        )
+    per_query: dict[str, list[dict[str, float | str]]] = {}
+    for minute in sorted(query_buckets):
+        for query, bucket in query_buckets[minute].items():
+            per_query.setdefault(query, []).append(
+                {
+                    "minute": minute,
+                    "sql_time_s": bucket["sql_time_s"],
+                    "queries": bucket["queries"],
+                }
+            )
+    return totals, per_query
+
+
+class _PgStatSampler:
+    def __init__(self, pg_client: PostgresClient, interval: float = 1.0):
+        self.pg_client = pg_client
+        self.interval = interval
+        self.snapshots: list[PgStatSnapshot] = []
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _append_snapshot(self) -> None:
+        snapshot = _take_pg_stat_snapshot(self.pg_client)
+        if snapshot:
+            self.snapshots.append(snapshot)
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(self.interval):
+            self._append_snapshot()
+
+    def start(self) -> None:
+        self._append_snapshot()
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        self._thread.join(timeout=self.interval + 1)
+        self._append_snapshot()
+
+
+def _start_pg_stat_sampler(pg_client: PostgresClient, interval: float = 1.0) -> _PgStatSampler:
+    sampler = _PgStatSampler(pg_client, interval)
+    sampler.start()
+    return sampler
 def _ensure_pg_stat_statements(run_dir: Path, pg_client: PostgresClient | None) -> bool:
     out_path = run_dir / "pg_stat_statements_setup.txt"
     if pg_client is None:
@@ -434,6 +557,18 @@ def _normalize_per_minute(rows: list[dict[str, str]]) -> list[dict[str, float | 
     return normalized
 
 
+def _augment_sql_stats_with_percent(
+    sql_stats: list[dict[str, float | str]],
+    per_minute: list[dict[str, float | str]],
+) -> list[dict[str, float | str]]:
+    totals = {entry["minute"]: _coerce_float(entry.get("total_time_s")) for entry in per_minute}
+    augmented: list[dict[str, float | str]] = []
+    for entry in sql_stats:
+        total = totals.get(entry["minute"], 0.0)
+        copy = dict(entry)
+        copy["sql_pct"] = (copy["sql_time_s"] / total * 100) if total else 0.0
+        augmented.append(copy)
+    return augmented
 def _collect_query_stats(run_dir: Path) -> list[dict[str, float | int]]:
     logs_dir = run_dir / "worker_logs"
     if not logs_dir.exists():
@@ -669,8 +804,112 @@ def _plot_query_metrics(run_dir: Path, query_stats: list[dict[str, float | int]]
     )
 
 
+def _short_query_label(query: str) -> str:
+    normalized = " ".join(query.split())
+    return normalized if len(normalized) <= 90 else normalized[:90].rstrip() + "..."
+
+
+def _plot_sql_metrics(
+    run_dir: Path,
+    sql_stats: list[dict[str, float | str]],
+    sql_per_query: dict[str, list[dict[str, float | str]]],
+) -> None:
+    if not go or not pio or not sql_stats:
+        return
+    plot_dir = run_dir / "plots"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    timestamps = [datetime.fromisoformat(entry["minute"]) for entry in sql_stats]
+    fig_time = go.Figure()
+    fig_time.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=[entry["sql_time_s"] for entry in sql_stats],
+            mode="lines+markers",
+            name="SQL time (s)",
+        )
+    )
+    fig_time.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=[entry["queries"] for entry in sql_stats],
+            mode="lines+markers",
+            name="Queries",
+            yaxis="y2",
+        )
+    )
+    fig_time.update_layout(
+        title="SQL activity per minute",
+        xaxis_title="Minute",
+        yaxis_title="SQL time (s)",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        yaxis2=dict(overlaying="y", side="right", title="Queries"),
+    )
+    pio.write_html(
+        fig_time,
+        plot_dir / "sql_time_per_minute.html",
+        include_plotlyjs="cdn",
+    )
+
+    fig_pct = go.Figure()
+    fig_pct.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=[entry.get("sql_pct", 0.0) for entry in sql_stats],
+            mode="lines+markers",
+            name="SQL time %",
+        )
+    )
+    fig_pct.update_layout(
+        title="SQL time percentage per minute",
+        xaxis_title="Minute",
+        yaxis_title="Percent",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    pio.write_html(
+        fig_pct,
+        plot_dir / "sql_time_pct_per_minute.html",
+        include_plotlyjs="cdn",
+    )
+
+    if sql_per_query:
+        minute_order = [entry["minute"] for entry in sql_stats]
+        minute_timestamps = [datetime.fromisoformat(m) for m in minute_order]
+        fig_query = go.Figure()
+        for query, entries in sql_per_query.items():
+            minute_map = {entry["minute"]: entry for entry in entries}
+            fig_query.add_trace(
+                go.Scatter(
+                    x=minute_timestamps,
+                    y=[
+                        minute_map.get(minute, {"sql_time_s": 0.0})["sql_time_s"]
+                        for minute in minute_order
+                    ],
+                    mode="lines+markers",
+                    name=_short_query_label(query),
+                )
+            )
+        fig_query.update_layout(
+            title="SQL time per query (per minute)",
+            xaxis_title="Minute",
+            yaxis_title="SQL time (s)",
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        pio.write_html(
+            fig_query,
+            plot_dir / "sql_time_by_query.html",
+            include_plotlyjs="cdn",
+        )
+
+
 def _collect_duration_stats(
-    run_dir: Path, started_at: str, pg_client: PostgresClient | None
+    run_dir: Path,
+    started_at: str,
+    pg_client: PostgresClient | None,
+    sql_totals: list[dict[str, float | str]],
+    sql_per_query: dict[str, list[dict[str, float | str]]],
 ):
     if pg_client is None:
         logging.warning("Postgres unavailable; skipping duration stats.")
@@ -679,17 +918,21 @@ def _collect_duration_stats(
     per_minute = _normalize_per_minute(per_minute_rows)
     worker_rows = _fetch_rows(pg_client, _worker_stats_query(started_at))
     per_worker, average = _normalize_worker_rows(worker_rows)
+    sql_augmented = _augment_sql_stats_with_percent(sql_totals, per_minute)
     query_stats = _collect_query_stats(run_dir)
     stats = {
         "per_minute": per_minute,
         "per_worker": per_worker,
         "average_per_worker": average,
         "queries_per_minute": query_stats,
+        "sql_per_minute": sql_augmented,
+        "sql_per_query": sql_per_query,
     }
     duration_path = run_dir / "duration_summary.json"
     _write_json(duration_path, stats)
     _plot_per_minute(run_dir, per_minute)
     _plot_query_metrics(run_dir, query_stats)
+    _plot_sql_metrics(run_dir, sql_augmented, sql_per_query)
 
 
 def _reset_queue() -> None:
@@ -782,15 +1025,26 @@ def main() -> int:
     _reset_queue()
     _seed_queue(cfg)
 
+    sampler: _PgStatSampler | None = None
+    if pg_client and run_meta["pg_stat_statements_active"]:
+        sampler = _start_pg_stat_sampler(pg_client)
+
     procs = _start_workers(cfg, logs_dir)
     try:
         time.sleep(cfg.runtime_seconds)
     finally:
         _stop_workers(procs)
+        if sampler:
+            sampler.stop()
 
     _dump_pg_stat_statements(pg_dir / "pg_stat_statements_after.tsv", pg_client)
 
-    _collect_duration_stats(run_dir, run_meta["started_at"], pg_client)
+    sql_samples = sampler.snapshots if sampler else []
+    sql_totals, sql_per_query = _aggregate_pg_snapshots(sql_samples)
+
+    _collect_duration_stats(
+        run_dir, run_meta["started_at"], pg_client, sql_totals, sql_per_query
+    )
 
 
     _summarize_profiles(logs_dir, run_dir / "profile_summary.txt")
