@@ -37,6 +37,7 @@ class RunConfig:
     local_output: Path
     extra_args: list[str]
     profile_dir: Path
+    workdir_suffix: str
 
 
 @dataclass
@@ -969,6 +970,7 @@ def _parse_args() -> RunConfig:
     parser.add_argument("--storage-type", choices=["local", "gcs"], default="local")
     parser.add_argument("--local-output", type=Path, default=Path("crawler_output"))
     parser.add_argument("--extra-arg", action="append", default=[])
+    parser.add_argument("--workdir-suffix", type=str, detault="")
     args = parser.parse_args()
     return RunConfig(
         workers=args.workers,
@@ -980,12 +982,13 @@ def _parse_args() -> RunConfig:
         local_output=args.local_output,
         extra_args=args.extra_arg,
         profile_dir=Path("."),
+        workdir_suffix=args.workdif_suffix,
     )
 
 
 def main() -> int:
     cfg = _parse_args()
-    run_dir = ARTIFACTS_ROOT / _now_stamp()
+    run_dir = ARTIFACTS_ROOT / (_now_stamp() + cfg.workdir_suffix)
     logs_dir = run_dir / "worker_logs"
     pg_dir = run_dir / "postgres"
     cfg.profile_dir = logs_dir
