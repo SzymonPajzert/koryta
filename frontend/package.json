@@ -52,7 +52,7 @@
     "firebase": "^12.1.0",
     "firebase-admin": "^13.6.0",
     "firebase-functions": "^6.4.0",
-    "nuxt": "^4.0.1",
+    "nuxt": "^4.4.0",
     "nuxt-vuefire": "^1.1.0",
     "string-similarity": "^4.0.4",
     "v-network-graph": "^0.9.21",
