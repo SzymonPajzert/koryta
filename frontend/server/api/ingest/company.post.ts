@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
 
   const batch = db.batch();
   batch.set(nodeRef, revisionData, { merge: true });
-  createRevisionTransaction(db, batch, user, nodeRef, revisionData);
+  createRevisionTransaction(db, batch, user, nodeRef, revisionData, true);
 
   // Process 'owns' relationships
   if (body.owners && Array.isArray(body.owners)) {
@@ -62,7 +62,7 @@ function createEdge(dbb: DBB, source: string, target: string, type: string) {
   };
 
   batch.set(edgeRef, edgeData);
-  createRevisionTransaction(db, batch, user, edgeRef, edgeData);
+  createRevisionTransaction(db, batch, user, edgeRef, edgeData, true);
 }
 
 async function findCompanyByKRS(
