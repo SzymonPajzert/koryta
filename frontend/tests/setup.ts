@@ -1,5 +1,9 @@
 import { vi } from "vitest";
 import { ref } from "vue";
+import Long from "long";
+import * as protobuf from "protobufjs/minimal";
+protobuf.util.Long = Long;
+protobuf.configure();
 
 vi.mock("vuefire", async (importOriginal) => {
   const actual = await importOriginal<typeof import("vuefire")>();

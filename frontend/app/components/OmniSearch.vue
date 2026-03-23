@@ -41,6 +41,7 @@
 import type { GraphLayout } from "~~/shared/graph/util";
 import { parties } from "~~/shared/misc";
 import { useEntityFiltering } from "@/composables/useEntityFiltering";
+import { authFetch } from "@/composables/auth";
 
 const { push, currentRoute } = useRouter();
 
@@ -80,7 +81,6 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { authFetch } = useAuthState();
 const { data: graph, refresh } = await authFetch<GraphLayout>("/api/graph", {
   lazy: true,
 });

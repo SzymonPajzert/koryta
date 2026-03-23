@@ -16,6 +16,7 @@ vi.mock("~/composables/auth", () => ({
     user: ref({ uid: "test-user" }),
     authHeaders: ref({ Authorization: "Bearer test-token" }),
   })),
+  authFetch: vi.fn(() => ({ data: ref({}), refresh: vi.fn() })),
 }));
 
 const EditEdgeWrapper = defineComponent({

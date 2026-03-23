@@ -1,10 +1,14 @@
 import {
-  onIdTokenChanged,
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  type User,
 } from "firebase/auth";
+import { computedAsync } from "@vueuse/core";
+import {
+  useCurrentUser,
+  useFirebaseAuth,
+  useIsCurrentUserLoaded,
+} from "vuefire";
 import { collection, doc } from "firebase/firestore";
 
 type UserConfig = {
@@ -12,39 +16,21 @@ type UserConfig = {
 };
 
 export function useAuthState() {
-  const user = useState<User | null>("user", () => null);
-  const isAdmin = useState<boolean>("isAdmin", () => false);
-  const idToken = useState<string>("idToken", () => "");
-  const auth = useFirebaseAuth()!;
   const router = useRouter();
   const db = useFirestore();
+
+  const user = useCurrentUser();
+  const isAdmin = computedAsync(
+    async () =>
+      await user.value?.getIdTokenResult().then((r) => !!r.claims.admin),
+  );
+  const idToken = computed(() => user.value?.getIdToken());
+  const auth = useFirebaseAuth()!;
+
   const userConfigRef = computed(() =>
     user.value ? doc(collection(db, "users"), user.value.uid) : null,
   );
   const userConfig = useDocument<UserConfig>(userConfigRef);
-
-  // If the auth state is resolved from hydration, we can make API calls
-  const isAuthResolved = useState<boolean>(
-    "isAuthResolved",
-    () => !!idToken.value,
-  );
-
-  // Initialize listener only once on the client
-  if (import.meta.client && !useState("authListenerInitialized").value) {
-    useState("authListenerInitialized", () => true);
-    onIdTokenChanged(auth, async (userIn) => {
-      user.value = userIn;
-      if (userIn) {
-        const idTokenResult = await userIn.getIdTokenResult();
-        isAdmin.value = !!idTokenResult.claims.admin;
-        idToken.value = idTokenResult.token;
-      } else {
-        isAdmin.value = false;
-        idToken.value = "";
-      }
-      isAuthResolved.value = true;
-    });
-  }
 
   const logout = async () => {
     try {
@@ -64,49 +50,42 @@ export function useAuthState() {
     return await createUserWithEmailAndPassword(auth, email, pass);
   };
 
-  const authHeaders = computed(() => {
-    const h: Record<string, string> = {};
-    if (idToken.value) {
-      h["Cache-Control"] = "no-cache";
-      h.Pragma = "no-cache";
-      h.Authorization = `Bearer ${idToken.value}`;
-    }
-    return h;
-  });
-
-  const authFetch = <T>(
-    url: string | (() => string | null) | Ref<string>,
-    options: any = {},
-  ) => {
-    const key = computed(() => {
-      return (
-        toValue(url) + "-auth-fetch" + (idToken.value ? "-auth" : "-public")
-      );
-    });
-    return useFetch<T>(url as any, {
-      key,
-      headers: authHeaders,
-      watch: [idToken],
-      onRequest: async ({ options }) => {
-        options.headers = new Headers(options.headers);
-        if (auth.currentUser) {
-          const token = await auth.currentUser.getIdToken();
-          options.headers.set("Authorization", `Bearer ${token}`);
-        }
-      },
-      ...options,
-    });
-  };
-
   return {
     user,
     isAdmin,
     idToken,
     userConfig,
-    authHeaders,
     logout,
     login,
     register,
-    authFetch,
   };
 }
+
+export const authFetch = createUseFetch({
+  onRequest: async function ({ options }) {
+    const isAuthReady = useIsCurrentUserLoaded();
+    const user = useCurrentUser();
+    // 1. If on the client and Firebase is still checking auth, PAUSE the request
+    if (import.meta.client && !isAuthReady.value) {
+      await new Promise<void>((resolve) => {
+        const unwatch = watch(
+          isAuthReady,
+          (ready) => {
+            if (ready) {
+              unwatch();
+              resolve(); // Release the pause!
+            }
+          },
+          { immediate: true },
+        );
+      });
+    }
+
+    if (user.value) {
+      options.query = { ...options.query, latest: true };
+      const token = await user.value.getIdToken();
+      options.headers = new Headers(options.headers);
+      options.headers.set("Authorization", `Bearer ${token}`);
+    }
+  },
+});
