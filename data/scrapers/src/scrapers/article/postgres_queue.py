@@ -201,7 +201,7 @@ class PostgresCrawlQueue(CrawlQueue):
                     WHERE wi.done = FALSE
                       AND wi.num_retries < %s
                       AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
-                    ORDER BY wi.priority ASC, wi.id ASC
+                    ORDER BY wi.priority ASC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 )
