@@ -5,17 +5,21 @@ import csv
 import hashlib
 import io
 import json
+import logging
 import os
 import pstats
-import shutil
 import signal
 import subprocess
 import sys
 import time
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
+from scrapers.article.postgres_queue import PostgresClient
+import plotly.graph_objects as go
+import plotly.io as pio
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS_ROOT = PROJECT_ROOT / "versioned" / "benchmarks"
@@ -80,74 +84,122 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n")
 
 
-def _psql_available() -> bool:
-    return shutil.which("psql") is not None
+def _pg_client_from_env() -> PostgresClient | None:
+    try:
+        port = int(os.getenv("POSTGRES_PORT", "5432"))
+    except ValueError:
+        port = 5432
+    host = os.getenv("POSTGRESS_HOST") or os.getenv("POSTGRES_HOST") or "localhost"
+    password = (
+        os.getenv("POSTGRES_PASSWORD")
+        or os.getenv("POSTGRESS_PASSWORD")
+        or "crawler_password"
+    )
+    try:
+        return PostgresClient.from_env(
+            host=host,
+            database=os.getenv("POSTGRES_DB", "crawler_db"),
+            user=os.getenv("POSTGRES_USER", "crawler_user"),
+            password=password,
+            port=port,
+        )
+    except Exception as exc:
+        logging.warning("Failed to create Postgres client: %s", exc)
+        return None
 
 
-def _pg_env() -> dict[str, str]:
-    return {
-        "PGHOST": os.getenv("POSTGRESS_HOST", "localhost"),
-        "PGDATABASE": os.getenv("POSTGRES_DB", "crawler_db"),
-        "PGUSER": os.getenv("POSTGRES_USER", "crawler_user"),
-        "PGPASSWORD": os.getenv("POSTGRESS_PASSWORD", "crawler_password"),
-        "PGPORT": os.getenv("POSTGRES_PORT", "5432"),
-    }
+def _run_sql(pg_client: PostgresClient, query: str) -> tuple[list[str], list[tuple]]:
+    with pg_client.transaction() as transaction:
+        transaction.execute(query)
+        columns = [desc[0] for desc in (transaction.description or [])]
+        rows: list[tuple] = []
+        if columns:
+            rows = transaction.fetchall()
+    return columns, rows
 
 
-def _psql_query(query: str) -> subprocess.CompletedProcess[str]:
-    cmd = [
-        "psql",
-        "-c",
-        query,
-        "-P",
-        "pager=off",
-        "-A",
-        "-F",
-        "\t",
-    ]
-    env = os.environ.copy()
-    env.update(_pg_env())
-    return subprocess.run(cmd, text=True, capture_output=True, env=env)
+def _write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
 
 
-def _ensure_pg_stat_statements(run_dir: Path) -> bool:
-    if not _psql_available():
-        return False
-    result = _psql_query("CREATE EXTENSION IF NOT EXISTS pg_stat_statements;")
+def _ensure_pg_stat_statements(run_dir: Path, pg_client: PostgresClient | None) -> bool:
     out_path = run_dir / "pg_stat_statements_setup.txt"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(result.stdout + result.stderr)
-    return result.returncode == 0
-
-
-def _reset_pg_stat_statements(run_dir: Path) -> None:
-    if not _psql_available():
-        return
-    result = _psql_query("SELECT pg_stat_statements_reset();")
-    out_path = run_dir / "pg_stat_statements_reset.txt"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(result.stdout + result.stderr)
-
-
-def _pg_stat_statements_active() -> bool:
-    if not _psql_available():
+    if pg_client is None:
+        _write_text(out_path, "Postgres client unavailable; skipping setup.\n")
         return False
-    result = _psql_query("SHOW shared_preload_libraries;")
-    libs = result.stdout.strip()
-    return "pg_stat_statements" in libs
+    try:
+        _run_sql(pg_client, "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;")
+    except Exception as exc:
+        _write_text(out_path, f"ERROR: {exc}\n")
+        return False
+    _write_text(out_path, "OK\n")
+    return True
 
 
-def _dump_pg_stat_statements(out_path: Path) -> None:
-    if not _psql_available():
+def _reset_pg_stat_statements(run_dir: Path, pg_client: PostgresClient | None) -> None:
+    out_path = run_dir / "pg_stat_statements_reset.txt"
+    if pg_client is None:
+        _write_text(out_path, "Postgres client unavailable; skipping reset.\n")
+        return
+    try:
+        _run_sql(pg_client, "SELECT pg_stat_statements_reset();")
+    except Exception as exc:
+        _write_text(out_path, f"ERROR: {exc}\n")
+        return
+    _write_text(out_path, "OK\n")
+
+
+def _pg_stat_statements_active(pg_client: PostgresClient | None) -> bool:
+    if pg_client is None:
+        return False
+    try:
+        columns, rows = _run_sql(pg_client, "SHOW shared_preload_libraries;")
+    except Exception as exc:
+        logging.warning("Failed to check shared_preload_libraries: %s", exc)
+        return False
+    if not rows or not columns:
+        return False
+    libs = rows[0][0]
+    return libs is not None and "pg_stat_statements" in str(libs)
+
+
+def _dump_pg_stat_statements(out_path: Path, pg_client: PostgresClient | None) -> None:
+    if pg_client is None:
         return
     query = (
         "SELECT replace(query, E'\\n', ' ') AS query, "
         "calls, total_exec_time, mean_exec_time, rows "
         "FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 50;"
     )
-    result = _psql_query(query)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(result.stdout)
+    try:
+        columns, rows = _run_sql(pg_client, query)
+    except Exception as exc:
+        _write_text(out_path, f"ERROR: {exc}\n")
+        return
+    lines: list[str] = []
+    if columns:
+        lines.append("\t".join(columns))
+    for row in rows:
+        lines.append("\t".join("" if value is None else str(value) for value in row))
+    _write_text(out_path, "\n".join(lines) + ("\n" if lines else ""))
+
+
+def _fetch_rows(pg_client: PostgresClient, query: str) -> list[dict[str, str]]:
+    try:
+        columns, rows = _run_sql(pg_client, query)
+    except Exception as exc:
+        logging.warning("Failed to run metadata query: %s", exc)
+        return []
+    results: list[dict[str, str]] = []
+    for row in rows:
+        entry: dict[str, str] = {}
+        for idx, column in enumerate(columns):
+            value = row[idx] if idx < len(row) else None
+            entry[column] = "" if value is None else str(value)
+        if entry:
+            results.append(entry)
+    return results
 
 
 def _build_worker_cmd(idx: int, cfg: RunConfig) -> list[str]:
@@ -162,11 +214,8 @@ def _build_worker_cmd(idx: int, cfg: RunConfig) -> list[str]:
         cfg.storage_type,
         "--local-output",
         str(cfg.local_output),
-        "--profile",
-        "--profile-out",
-        str(cfg.profile_dir / f"worker-{idx}.pstats"),
-        "--metrics-out",
-        str(cfg.profile_dir / f"worker-{idx}.metrics.json"),
+        "--profile-path",
+        str(cfg.profile_dir),
     ]
     base += cfg.extra_args
     return base
@@ -287,6 +336,362 @@ def _summarize_pg_stats(
     out_path.write_text("\n".join(lines) + "\n")
 
 
+
+def _coerce_float(value: str | None) -> float:
+    if value is None or value == "":
+        return 0.0
+    try:
+        return float(value)
+    except ValueError:
+        return 0.0
+
+
+def _coerce_int(value: str | None) -> int:
+    if value is None or value == "":
+        return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
+
+def _duration_minute_query(start_iso: str) -> str:
+    escaped = start_iso.replace("'", "''")
+    return f"""
+        SELECT minute_epoch, request_time_s, parse_time_s, upload_time_s, other_time_s, total_time_s
+        FROM (
+            SELECT
+                extract(epoch FROM date_trunc('minute', date_finished))::bigint AS minute_epoch,
+                sum(coalesce((metadata->>'request_duration_s')::double precision, 0)) AS request_time_s,
+                sum(coalesce((metadata->>'parse_duration_s')::double precision, 0)) AS parse_time_s,
+                sum(coalesce((metadata->>'upload_duration_s')::double precision, 0)) AS upload_time_s,
+                sum(coalesce((metadata->>'total_duration_s')::double precision, 0)) AS total_time_s,
+                sum(coalesce((metadata->>'total_duration_s')::double precision, 0))
+                  - sum(coalesce((metadata->>'request_duration_s')::double precision, 0))
+                  - sum(coalesce((metadata->>'parse_duration_s')::double precision, 0))
+                  - sum(coalesce((metadata->>'upload_duration_s')::double precision, 0))
+                  AS other_time_s
+            FROM website_index
+            WHERE done = TRUE
+              AND date_finished >= TIMESTAMP '{escaped}'
+            GROUP BY minute_epoch
+        ) aggregated
+        ORDER BY minute_epoch;
+    """
+
+
+def _worker_stats_query(start_iso: str) -> str:
+    escaped = start_iso.replace("'", "''")
+    return f"""
+        SELECT worker_id, crawls, request_time_s, parse_time_s, upload_time_s, total_time_s
+        FROM (
+            SELECT
+                coalesce(metadata->>'worker_id', 'unknown') AS worker_id,
+                count(*) AS crawls,
+                sum(coalesce((metadata->>'request_duration_s')::double precision, 0)) AS request_time_s,
+                sum(coalesce((metadata->>'parse_duration_s')::double precision, 0)) AS parse_time_s,
+                sum(coalesce((metadata->>'upload_duration_s')::double precision, 0)) AS upload_time_s,
+                sum(coalesce((metadata->>'total_duration_s')::double precision, 0)) AS total_time_s,
+                sum(coalesce((metadata->>'total_duration_s')::double precision, 0))
+                  - sum(coalesce((metadata->>'request_duration_s')::double precision, 0))
+                  - sum(coalesce((metadata->>'parse_duration_s')::double precision, 0))
+                  - sum(coalesce((metadata->>'upload_duration_s')::double precision, 0))
+                  AS other_time_s
+            FROM website_index
+            WHERE done = TRUE
+              AND date_finished >= TIMESTAMP '{escaped}'
+            GROUP BY worker_id
+        ) aggregated
+        ORDER BY worker_id;
+    """
+
+
+def _normalize_per_minute(rows: list[dict[str, str]]) -> list[dict[str, float | str]]:
+    normalized: list[dict[str, float | str]] = []
+    for row in rows:
+        minute_epoch = _coerce_int(row.get("minute_epoch"))
+        minute = datetime.fromtimestamp(minute_epoch).isoformat()
+        request = _coerce_float(row.get("request_time_s"))
+        parse = _coerce_float(row.get("parse_time_s"))
+        upload = _coerce_float(row.get("upload_time_s"))
+        total = _coerce_float(row.get("total_time_s"))
+        other = max(total - (request + parse + upload), 0.0)
+        total = max(total, request + parse + upload + other)
+        normalized.append(
+            {
+                "minute": minute,
+                "request_time_s": request,
+                "parse_time_s": parse,
+                "upload_time_s": upload,
+                "other_time_s": other,
+                "total_time_s": total,
+                "request_pct": request / total if total else 0.0,
+                "parse_pct": parse / total if total else 0.0,
+                "upload_pct": upload / total if total else 0.0,
+                "other_pct": other / total if total else 0.0,
+            }
+        )
+    return normalized
+
+
+def _collect_query_stats(run_dir: Path) -> list[dict[str, float | int]]:
+    logs_dir = run_dir / "worker_logs"
+    if not logs_dir.exists():
+        return []
+    counts: defaultdict[datetime, dict[str, int]] = defaultdict(
+        lambda: {"queries": 0, "errors": 0}
+    )
+    time_fmt = "%Y-%m-%d %H:%M:%S,%f"
+    for log_path in sorted(logs_dir.glob("worker-*.log")):
+        with log_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if "Crawl succeeded" not in line and "Crawl failed" not in line:
+                    continue
+                try:
+                    timestamp = datetime.strptime(line[:23], time_fmt)
+                except ValueError:
+                    continue
+                minute = timestamp.replace(second=0, microsecond=0)
+                counts[minute]["queries"] += 1
+                if "Crawl failed" in line:
+                    counts[minute]["errors"] += 1
+    entries = []
+    for minute, data in sorted(counts.items()):
+        total = data["queries"]
+        errors = data["errors"]
+        entries.append(
+            {
+                "minute": minute.isoformat(),
+                "queries": total,
+                "errors": errors,
+                "error_rate": errors / total if total else 0.0,
+            }
+        )
+    return entries
+
+
+def _normalize_worker_rows(
+    rows: list[dict[str, str]]
+) -> tuple[dict[str, dict[str, float | int]], dict[str, float | int]]:
+    per_worker: dict[str, dict[str, float | int]] = {}
+    percent_acc: list[tuple[float, float, float, float]] = []
+    for row in rows:
+        worker_id = row.get("worker_id", "unknown")
+        request = _coerce_float(row.get("request_time_s"))
+        parse = _coerce_float(row.get("parse_time_s"))
+        upload = _coerce_float(row.get("upload_time_s"))
+        total = _coerce_float(row.get("total_time_s"))
+        other = max(total - (request + parse + upload), 0.0)
+        total = max(total, request + parse + upload + other)
+        percent_acc.append(
+            (
+                request / total if total else 0.0,
+                parse / total if total else 0.0,
+                upload / total if total else 0.0,
+                other / total if total else 0.0,
+            )
+        )
+        per_worker[worker_id] = {
+            "worker_id": worker_id,
+            "total_crawls": _coerce_int(row.get("crawls")),
+            "request_time_s": request,
+            "parse_time_s": parse,
+            "upload_time_s": upload,
+            "other_time_s": other,
+            "total_time_s": total,
+            "request_pct": request / total if total else 0.0,
+            "parse_pct": parse / total if total else 0.0,
+            "upload_pct": upload / total if total else 0.0,
+            "other_pct": other / total if total else 0.0,
+        }
+    if not per_worker:
+        return per_worker, {}
+
+    num_workers = len(per_worker)
+    avg_totals = {
+        "worker_id": "average",
+        "total_crawls": sum(
+            data["total_crawls"] for data in per_worker.values()
+        )
+        / num_workers,
+        "request_time_s": sum(
+            data["request_time_s"] for data in per_worker.values()
+        )
+        / num_workers,
+        "parse_time_s": sum(
+            data["parse_time_s"] for data in per_worker.values()
+        )
+        / num_workers,
+        "upload_time_s": sum(
+            data["upload_time_s"] for data in per_worker.values()
+        )
+        / num_workers,
+        "other_time_s": sum(
+            data["other_time_s"] for data in per_worker.values()
+        )
+        / num_workers,
+        "total_time_s": sum(
+            data["total_time_s"] for data in per_worker.values()
+        )
+        / num_workers,
+    }
+    avg_percents = tuple(
+        sum(values[idx] for values in percent_acc) / num_workers
+        for idx in range(4)
+    )
+    (
+        avg_totals["request_pct"],
+        avg_totals["parse_pct"],
+        avg_totals["upload_pct"],
+        avg_totals["other_pct"],
+    ) = avg_percents
+    return per_worker, avg_totals
+
+
+def _plot_per_minute(run_dir: Path, per_minute: list[dict[str, float | str]]) -> None:
+    if not go or not pio or not per_minute:
+        return
+    timestamps = [datetime.fromisoformat(entry["minute"]) for entry in per_minute]
+    plot_dir = run_dir / "plots"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    def _plot(
+        title: str,
+        y_axis: str,
+        suffix: str,
+        keys: dict[str, tuple[str, float]],
+    ) -> None:
+        fig = go.Figure()
+        for label, (entry_key, scale) in keys.items():
+            fig.add_trace(
+                go.Scatter(
+                    x=timestamps,
+                    y=[entry[entry_key] * scale for entry in per_minute],
+                    mode="lines+markers",
+                    name=label,
+                )
+            )
+        fig.update_layout(
+            title=title,
+            xaxis_title="Minute",
+            yaxis_title=y_axis,
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        pio.write_html(
+            fig,
+            plot_dir / suffix,
+            include_plotlyjs="cdn",
+        )
+
+    _plot(
+        "Duration breakdown per minute",
+        "Seconds",
+        "duration_split_per_minute.html",
+        {
+            "Request": ("request_time_s", 1.0),
+            "Parse": ("parse_time_s", 1.0),
+            "Upload": ("upload_time_s", 1.0),
+            "Other": ("other_time_s", 1.0),
+        },
+    )
+
+    _plot(
+        "Duration percentage per minute",
+        "Percent",
+        "duration_percent_per_minute.html",
+        {
+            "Request": ("request_pct", 100.0),
+            "Parse": ("parse_pct", 100.0),
+            "Upload": ("upload_pct", 100.0),
+            "Other": ("other_pct", 100.0),
+        },
+    )
+
+
+def _plot_query_metrics(run_dir: Path, query_stats: list[dict[str, float | int]]) -> None:
+    if not go or not pio or not query_stats:
+        return
+    timestamps = [datetime.fromisoformat(entry["minute"]) for entry in query_stats]
+    plot_dir = run_dir / "plots"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    fig_queries = go.Figure()
+    fig_queries.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=[entry["queries"] for entry in query_stats],
+            mode="lines+markers",
+            name="Queries",
+        )
+    )
+    fig_queries.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=[entry["errors"] for entry in query_stats],
+            mode="lines+markers",
+            name="Errors",
+        )
+    )
+    fig_queries.update_layout(
+        title="Queries per minute",
+        xaxis_title="Minute",
+        yaxis_title="Count",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    pio.write_html(
+        fig_queries,
+        plot_dir / "queries_count.html",
+        include_plotlyjs="cdn",
+    )
+
+    fig_error_rate = go.Figure()
+    fig_error_rate.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=[entry["error_rate"] * 100 for entry in query_stats],
+            mode="lines+markers",
+            name="Error rate (%)",
+        )
+    )
+    fig_error_rate.update_layout(
+        title="Per-minute error rate",
+        xaxis_title="Minute",
+        yaxis_title="Error rate (%)",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    pio.write_html(
+        fig_error_rate,
+        plot_dir / "error_rate.html",
+        include_plotlyjs="cdn",
+    )
+
+
+def _collect_duration_stats(
+    run_dir: Path, started_at: str, pg_client: PostgresClient | None
+):
+    if pg_client is None:
+        logging.warning("Postgres unavailable; skipping duration stats.")
+        return {}
+    per_minute_rows = _fetch_rows(pg_client, _duration_minute_query(started_at))
+    per_minute = _normalize_per_minute(per_minute_rows)
+    worker_rows = _fetch_rows(pg_client, _worker_stats_query(started_at))
+    per_worker, average = _normalize_worker_rows(worker_rows)
+    query_stats = _collect_query_stats(run_dir)
+    stats = {
+        "per_minute": per_minute,
+        "per_worker": per_worker,
+        "average_per_worker": average,
+        "queries_per_minute": query_stats,
+    }
+    duration_path = run_dir / "duration_summary.json"
+    _write_json(duration_path, stats)
+    _plot_per_minute(run_dir, per_minute)
+    _plot_query_metrics(run_dir, query_stats)
+
+
 def _reset_queue() -> None:
     cmd = [
         sys.executable,
@@ -343,6 +748,8 @@ def main() -> int:
     cfg.profile_dir = logs_dir
     print(f"Benchmark artifacts: {run_dir}")
 
+    pg_client = _pg_client_from_env()
+
     run_meta = {
         "started_at": datetime.now().isoformat(),
         "git_rev": _git_rev(),
@@ -357,8 +764,8 @@ def main() -> int:
         "storage_type": cfg.storage_type,
         "local_output": str(cfg.local_output),
         "extra_args": cfg.extra_args,
-        "pg_stat_statements_enabled": _ensure_pg_stat_statements(pg_dir),
-        "pg_stat_statements_active": _pg_stat_statements_active()
+        "pg_stat_statements_enabled": _ensure_pg_stat_statements(pg_dir, pg_client),
+        "pg_stat_statements_active": _pg_stat_statements_active(pg_client),
     }
 
     if run_meta["seed_count"] <= cfg.workers:
@@ -367,10 +774,10 @@ def main() -> int:
             f"({cfg.workers})."
         )
 
-    _reset_pg_stat_statements(pg_dir)
+    _reset_pg_stat_statements(pg_dir, pg_client)
     _write_json(run_dir / "run.json", run_meta)
 
-    _dump_pg_stat_statements(pg_dir / "pg_stat_statements_before.tsv")
+    _dump_pg_stat_statements(pg_dir / "pg_stat_statements_before.tsv", pg_client)
 
     _reset_queue()
     _seed_queue(cfg)
@@ -381,11 +788,10 @@ def main() -> int:
     finally:
         _stop_workers(procs)
 
-    _dump_pg_stat_statements(pg_dir / "pg_stat_statements_after.tsv")
+    _dump_pg_stat_statements(pg_dir / "pg_stat_statements_after.tsv", pg_client)
 
-    summary = {}
+    _collect_duration_stats(run_dir, run_meta["started_at"], pg_client)
 
-    # TODO summarize times from sql and put it in json and plot
 
     _summarize_profiles(logs_dir, run_dir / "profile_summary.txt")
     _summarize_pg_stats(
