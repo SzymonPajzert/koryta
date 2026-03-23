@@ -3,7 +3,13 @@
     class="position-absolute top-0 ma-4"
     style="max-width: 800px; width: 100%"
   >
-    <v-card width="100%" style="overflow: visible">
+    <v-card
+      v-if="status != 'success'"
+      class="mb-4"
+      :title="status"
+      :text="error ?? ''"
+    />
+    <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">
         <div v-if="type === 'place'" class="mb-4 d-flex">
           <v-btn
@@ -22,7 +28,7 @@
             Graf połączeń
           </v-btn>
         </div>
-        <EntityDetailsCard :entity="entity" :type="type" />
+        <EntityDetailsCard :key="sourcePath" :entity="entity" :type="type" />
 
         <div
           class="mt-4"
@@ -173,7 +179,7 @@
 
 <script setup lang="ts">
 import { useEdges } from "~/composables/edges";
-import { useAuthState } from "~/composables/auth";
+import { useAuthState, authFetch } from "@/composables/auth";
 import type {
   Person,
   Company,
@@ -189,7 +195,7 @@ const route = useRoute<"/entity/[destination]/[id]">();
 const node = route.params.id as string;
 const type = route.params.destination as NodeType;
 
-const { authFetch, user } = useAuthState();
+const { user } = useAuthState();
 const router = useRouter();
 
 const handleLoginRedirect = () => {
@@ -210,16 +216,30 @@ const handleEdit = () => {
   }
 };
 
-const sourcePath = computed(
-  () => `/api/nodes/${node}` + (user.value ? "?latest=true" : ""),
-);
-const { data: response } = await authFetch<{
+const sourcePath = computed(() => `/api/nodes/${node}`);
+const {
+  data: response,
+  status,
+  error,
+  refresh,
+} = await authFetch<{
   node: Person | Company | Article | Region;
-}>(sourcePath);
+}>(sourcePath, { lazy: true, immediate: false });
+watch(user, (focused) => {
+  if (focused) {
+    refresh();
+  }
+});
+
 const entity = computed(() => response.value?.node);
 
 // Calculate edges and relationships
-const { sources, targets, referencedIn, refresh } = await useEdges(node);
+const {
+  sources,
+  targets,
+  referencedIn,
+  refresh: refreshEdges,
+} = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");
@@ -241,6 +261,6 @@ function quickAddEdge(btn: NewEdgeButton) {
 }
 function onEdgeUpdate() {
   editedEdge.value = undefined;
-  refresh();
+  refreshEdges();
 }
 </script>

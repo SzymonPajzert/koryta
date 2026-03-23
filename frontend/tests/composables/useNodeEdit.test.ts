@@ -21,6 +21,15 @@ vi.mock("~/composables/edges", () => ({
   useEdges: mockedUseEdges,
 }));
 
+vi.mock("~/composables/auth", () => ({
+  useAuthState: () => ({
+    idToken: ref(null),
+    authHeaders: ref({ Authorization: "Bearer test" }),
+    user: ref(null),
+  }),
+  authFetch: mockedFetch,
+}));
+
 vi.mock("firebase/firestore", () => ({
   getFirestore: vi.fn(),
   doc: vi.fn(),

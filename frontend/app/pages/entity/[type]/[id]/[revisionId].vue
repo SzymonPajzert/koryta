@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
+import { useAuthState, authFetch } from "@/composables/auth";
 import type { Node, Revision } from "~~/shared/model";
 
 definePageMeta({
@@ -65,8 +65,6 @@ definePageMeta({
 const route = useRoute();
 const nodeId = route.params.id as string;
 const revisionId = route.params.revisionId as string;
-
-const { authFetch } = useAuthState();
 
 // TODO this is broken for now
 // Fetch Revision

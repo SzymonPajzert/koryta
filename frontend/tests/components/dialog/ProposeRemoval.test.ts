@@ -8,9 +8,8 @@ import * as directives from "vuetify/directives";
 // Mock auth
 const authFetchMock = vi.fn();
 vi.mock("@/composables/auth", () => ({
-  useAuthState: () => ({
-    authFetch: authFetchMock,
-  }),
+  useAuthState: () => ({}),
+  authFetch: authFetchMock,
 }));
 
 const vuetify = createVuetify({

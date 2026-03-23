@@ -8,6 +8,10 @@ vi.stubGlobal("$fetch", mockedFetch);
 vi.stubGlobal("alert", vi.fn());
 
 const mockOnUpdate = vi.fn();
+vi.stubGlobal("useAuthState", () => ({
+  user: ref(null),
+  idToken: ref("token"),
+}));
 
 // Mock useState with actual shared state behavior
 const stateMap = new Map<string, any>();

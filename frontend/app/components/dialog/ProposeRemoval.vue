@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
+import { authFetch } from "@/composables/auth";
 
 const props = defineProps<{
   id: string; // node_id or edge_id
@@ -63,7 +63,6 @@ const dialog = ref(false);
 const reason = ref("");
 const loading = ref(false);
 const error = ref<string | null>(null);
-const { authFetch } = useAuthState();
 
 async function submit() {
   loading.value = true;

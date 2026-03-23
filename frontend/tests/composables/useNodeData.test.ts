@@ -10,6 +10,9 @@ vi.stubGlobal("useFirebaseApp", () => ({}));
 vi.stubGlobal("useState", (key: string, init: () => any) => {
   return ref(init());
 });
+vi.stubGlobal("useAuthState", () => ({
+  user: ref(null),
+}));
 
 vi.mock("firebase/firestore", () => ({
   getFirestore: vi.fn(),

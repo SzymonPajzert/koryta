@@ -49,7 +49,7 @@
 
 <script setup lang="ts">
 import type { Comment } from "~~/shared/model";
-import { useAuthState } from "@/composables/auth";
+import { useAuthState, authFetch } from "@/composables/auth";
 import CommentItem from "./CommentItem.vue";
 import CommentForm from "./CommentForm.vue";
 
@@ -59,7 +59,7 @@ const props = defineProps<{
   leadMode?: boolean;
 }>();
 
-const { authFetch, user } = useAuthState();
+const { user } = useAuthState();
 const showForm = ref(false);
 
 const query = computed(() => {

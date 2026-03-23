@@ -114,6 +114,7 @@ describe("api/ingest/company", () => {
         type: "place",
         krsNumber: "12345",
       },
+      true,
     );
     // ref.id is accessed in handler return statement
     expect(result).toEqual({ id: "doc-ref-id", code: 200 });
@@ -149,6 +150,7 @@ describe("api/ingest/company", () => {
         type: "place",
         krsNumber: "12345",
       },
+      true,
     );
     expect(result).toEqual({ id: "existing-id", code: 200 });
   });
@@ -190,6 +192,7 @@ describe("api/ingest/company", () => {
         target: "parent-id",
         type: "owns",
       },
+      true,
     );
   });
 
@@ -226,6 +229,7 @@ describe("api/ingest/company", () => {
         target: "company-id",
         type: "owns",
       },
+      true,
     );
   });
 });

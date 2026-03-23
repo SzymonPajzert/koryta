@@ -5,7 +5,7 @@ import type { Person } from "~~/shared/model";
 export const usePartyStatistics = async (
   existingPeople?: Ref<Record<string, Person>>,
 ) => {
-  const people = existingPeople || (await useEntity("person")).entities;
+  const people = existingPeople || useEntity("person").entities;
 
   const results = computed<number[]>(() => {
     const p = people.value;

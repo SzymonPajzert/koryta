@@ -75,7 +75,8 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
+import { useAuthState, authFetch } from "@/composables/auth";
+
 import type { Node, Edge } from "~~/shared/model";
 import { nodeTypeIcon } from "~~/shared/model";
 
@@ -87,7 +88,7 @@ const props = defineProps<{
     | "my-revisions";
 }>();
 
-const { user, authFetch, idToken } = useAuthState();
+const { user, idToken } = useAuthState();
 const revertingId = ref<string | null>(null);
 
 // Data Types
@@ -108,25 +109,22 @@ type AuditItem = {
 // 1. Pending Revisions
 const { data: pendingNodes, pending: pendingNodesLoading } = authFetch<
   Record<string, any>
->(() => (props.type === "pending-revisions" ? "/api/nodes/pending" : null));
+>("/api/nodes/pending", {
+  // immediate: computed(() => props.type === "pending-revisions"),
+});
 
-const { data: pendingEdges, pending: pendingEdgesLoading } = authFetch<
-  Record<string, any>
->(() => (props.type === "pending-revisions" ? "/api/edges/pending" : null));
+const { data: pendingEdges, pending: pendingEdgesLoading } =
+  authFetch<Record<string, any>>("/api/edges/pending"); // "pending-revisions" ?
 
 // 2. Edges (shared by 'edges-no-source' and 'articles-no-edges')
-const { data: allEdges, pending: allEdgesLoading } = authFetch<Edge[]>(() =>
-  ["edges-no-source", "articles-no-edges"].includes(props.type)
-    ? "/api/graph/edges"
-    : null,
-);
+const { data: allEdges, pending: allEdgesLoading } = authFetch<Edge[]>(
+  () => "/api/graph/edges",
+); // ["edges-no-source", "articles-no-edges"]
 
 // 3. Articles (for 'articles-no-edges')
 const { data: allArticles, pending: allArticlesLoading } = authFetch<{
   entities: Record<string, Node>;
-}>(() =>
-  props.type === "articles-no-edges" ? "/api/nodes?type=article" : null,
-);
+}>("/api/nodes?type=article"); // "articles-no-edges"
 
 // 4. My Revisions
 const {
@@ -135,11 +133,7 @@ const {
   refresh: refreshMyRevisions,
 } = authFetch<{
   items: any[];
-}>(() =>
-  props.type === "my-revisions" && user.value
-    ? `/api/revisions/user/${user.value.uid}`
-    : null,
-);
+}>(() => `/api/revisions/user/${user.value?.uid}`);
 
 // --- Computed Logic ---
 

@@ -1,5 +1,6 @@
 import type { Node, Edge, EdgeType, ElectionPosition } from "~~/shared/model";
 import type { TraversePolicy } from "~~/shared/graph/model";
+import { authFetch } from "@/composables/auth";
 
 export type EdgeNode = {
   richNode: Node;
@@ -29,8 +30,6 @@ const edgeTypeLabels: Record<string, string> = {
 };
 
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
-  const { authFetch } = useAuthState();
-
   const { data: edgesData, refresh: refreshEdges } =
     await authFetch<Edge[]>("/api/graph/edges");
 
