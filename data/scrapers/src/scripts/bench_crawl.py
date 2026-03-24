@@ -38,6 +38,7 @@ class RunConfig:
     extra_args: list[str]
     profile_dir: Path
     workdir_suffix: str
+    threads_per_worker: int
 
 
 @dataclass
@@ -340,6 +341,8 @@ def _build_worker_cmd(idx: int, cfg: RunConfig) -> list[str]:
         str(cfg.local_output),
         "--profile-path",
         str(cfg.profile_dir),
+        "--worker-threads",
+        str(cfg.threads_per_worker),
     ]
     base += cfg.extra_args
     return base
@@ -971,6 +974,7 @@ def _parse_args() -> RunConfig:
     parser.add_argument("--local-output", type=Path, default=Path("crawler_output"))
     parser.add_argument("--extra-arg", action="append", default=[])
     parser.add_argument("--workdir-suffix", type=str, default="")
+    parser.add_argument("--threads-per-worker", type=int, default=1)
     args = parser.parse_args()
     return RunConfig(
         workers=args.workers,
@@ -983,6 +987,7 @@ def _parse_args() -> RunConfig:
         extra_args=args.extra_arg,
         profile_dir=Path("."),
         workdir_suffix=args.workdir_suffix,
+        threads_per_worker=args.threads_per_worker,
     )
 
 
@@ -1013,12 +1018,6 @@ def main() -> int:
         "pg_stat_statements_enabled": _ensure_pg_stat_statements(pg_dir, pg_client),
         "pg_stat_statements_active": _pg_stat_statements_active(pg_client),
     }
-
-    if run_meta["seed_count"] <= cfg.workers:
-        raise ValueError(
-            f"Seed file must contain more URLs ({run_meta['seed_count']}) than workers "
-            f"({cfg.workers})."
-        )
 
     _reset_pg_stat_statements(pg_dir, pg_client)
     _write_json(run_dir / "run.json", run_meta)

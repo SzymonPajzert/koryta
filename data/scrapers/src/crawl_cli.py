@@ -39,6 +39,8 @@ def _build_parser() -> ArgumentParser:
                         help="Only apply seed/blocked/reset actions, then exit.")
     parser.add_argument("--profile-path", type=Path, default=None,
                         help="Enable cProfile and write them to that path")
+    parser.add_argument("--worker-threads", type=int, default=1,
+                        help="Number of concurrent threads inside a worker.")
     return parser
 
 
@@ -51,6 +53,7 @@ def _build_options(args: argparse.Namespace) -> CrawlOptions:
         lock_timeout_seconds=args.lock_timeout_seconds,
         per_domain_rate_limit_seconds=args.per_domain_rate_limit_qpm,
         url_scoring_function=args.url_scoring_function,
+        worker_threads=max(1, args.worker_threads),
     )
 
 

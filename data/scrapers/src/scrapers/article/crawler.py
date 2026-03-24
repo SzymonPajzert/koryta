@@ -1,4 +1,5 @@
 from __future__ import annotations
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from types import SimpleNamespace
 import io
@@ -40,6 +41,7 @@ class CrawlOptions:
     per_domain_rate_limit_seconds: int
     url_scoring_function: str
     request_timeout_seconds: float = 10
+    worker_threads: int = 1
 
 
 @dataclass
@@ -232,45 +234,63 @@ def run_crawler(ctx: Context, options: CrawlOptions):
         raise ValueError("Context has no crawl_queue set")
 
     logging.info("Starting to crawl in worker: %s", options.worker_id)
-    while True:
-        entry = queue.get(
-            options.worker_id,
-            max_retries=options.per_url_max_retries,
-            timeout_seconds=options.lock_timeout_seconds,
-        )
-        if entry is None:
-            logging.info("Closing crawl queue. Nothing more to do.")
-            break
 
+    def _handle_entry(entry: tuple[str, str]):
         uid, url = entry
         parsed_url = NormalizedParse.parse(url)
-
         result = crawl_url(ctx, parsed_url, options)
 
         if result.hit_rate_limit:
             logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
-        elif result.error:
+            return
+
+        if result.error:
             logging.error(
                 f"[{result.request_duration_s:.2f}s] "
                 f"Crawl failed ({result.error}): {parsed_url.full_url}"
             )
             queue.mark_error(uid, result.error)
-        else:
-            logging.info(
-                f"[{result.request_duration_s:.2f}s] "
-                f"Crawl succeeded: {parsed_url.full_url}"
+            return
+
+        logging.info(
+            f"[{result.request_duration_s:.2f}s] "
+            f"Crawl succeeded: {parsed_url.full_url}"
+        )
+        queue.mark_done(uid, result.storage_path, {
+            "request_duration_s": result.request_duration_s,
+            "parse_duration_s": result.parse_duration_s,
+            "upload_duration_s": result.upload_duration_s,
+            "total_duration_s": result.total_duration_s,
+            "worker_id": options.worker_id,
+            "media_type": result.media_type,
+        })
+        queue.put(
+            [
+                (url, _priority_for_url(options, url))
+                for url in result.discovered_urls
+            ]
+        )
+
+    def _worker_thread(thread_index: int):
+        logging.info("Starting crawler thread %s for worker %s", thread_index, options.worker_id)
+        while True:
+            entry = queue.get(
+                options.worker_id,
+                max_retries=options.per_url_max_retries,
+                timeout_seconds=options.lock_timeout_seconds,
             )
-            queue.mark_done(uid, result.storage_path, {
-                "request_duration_s": result.request_duration_s,
-                "parse_duration_s": result.parse_duration_s,
-                "upload_duration_s": result.upload_duration_s,
-                "total_duration_s": result.total_duration_s,
-                "worker_id": options.worker_id,
-                "media_type": result.media_type,
-            })
-            queue.put(
-                [
-                    (url, _priority_for_url(options, url))
-                    for url in result.discovered_urls
-                ]
-            )
+            if entry is None:
+                time.sleep(0.1)
+                logging.info(f"Crawler thread {thread_index} sleeping")
+                continue
+
+            _handle_entry(entry)
+
+    if options.worker_threads <= 1:
+        _worker_thread(0)
+        return
+
+    with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
+        futures = [executor.submit(_worker_thread, idx) for idx in range(options.worker_threads)]
+        for future in futures:
+            future.result()
