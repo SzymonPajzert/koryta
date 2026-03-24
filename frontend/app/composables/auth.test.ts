@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockNuxtImport } from "@nuxt/test-utils/runtime";
-import { authFetch } from "@/composables/auth";
+import { ref } from "vue";
+import { authFetchInterceptor } from "@/composables/auth";
 
 // Hoisted variables for mocks
 const { mockIdTokenFn, mockAuth, mockUseFetchSpy, mockUseDocumentSpy } =
@@ -49,18 +50,10 @@ vi.mock("vuefire", () => ({
   useFirebaseAuth: () => mockAuth,
   useFirestore: vi.fn(),
   useDocument: mockUseDocumentSpy,
+  useIsCurrentUserLoaded: () => ref(true),
+  useCurrentUser: () => ref(mockAuth.currentUser),
 }));
 vi.mock("nuxt-vuefire", () => ({}));
-
-// Mock Nuxt imports
-let capturedFetchOptions: any;
-
-mockNuxtImport("createUseFetch", () => {
-  return (options: any) => {
-    capturedFetchOptions = options;
-    return mockUseFetchSpy;
-  };
-});
 
 mockNuxtImport("useFirebaseAuth", () => {
   return () => mockAuth;
@@ -82,12 +75,8 @@ describe("useAuthState", () => {
   it("authFetch should call getIdToken before request", async () => {
     const mockOptions = { headers: {} };
 
-    // Simulate authFetch call
-    authFetch("/api/test", mockOptions);
-
-    // Verify useFetch was called
     // Execute the interceptor
-    await capturedFetchOptions.onRequest({ options: mockOptions });
+    await authFetchInterceptor({ options: mockOptions });
 
     // Verify logic
     expect(mockIdTokenFn).toHaveBeenCalled();
@@ -97,9 +86,7 @@ describe("useAuthState", () => {
     mockIdTokenFn.mockResolvedValue("new-token");
     const mockOptions = { headers: {} as any };
 
-    authFetch("/api/test", mockOptions);
-
-    await capturedFetchOptions.onRequest({ options: mockOptions });
+    await authFetchInterceptor({ options: mockOptions });
 
     expect((mockOptions.headers as Headers).get("Authorization")).toBe(
       "Bearer new-token",
