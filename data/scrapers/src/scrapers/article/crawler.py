@@ -176,7 +176,7 @@ def crawl_url(
 
     with stopwatch() as t_parsed:
         if _is_html_response(response):
-            discovered_urls = _extract_urls(ctx, parsed_url, response)
+            discovered_urls = _extract_urls(ctx, response)
         else:
             discovered_urls = set()
             logging.info(f"Not parsing the file, because it's not HTML {parsed_url.full_url}")
@@ -194,31 +194,28 @@ def crawl_url(
 
 def _extract_urls(
     ctx: Context,
-    parsed: NormalizedParse,
     response: requests.Response,
 ) -> set[str]:
     discovered = set()
-    for parser in ["html.parser", "lxml", "html5lib"]:
-        soup = BeautifulSoup(response.text, parser)
+    soup = BeautifulSoup(response.text, "lxml")
 
-        for link_el in soup.find_all("a", href=True):
-            if not isinstance(link_el, Tag):
-                continue
-            link = link_el.get("href")
-            if not isinstance(link, str):
-                continue
-            if link in ("", "#", "/"):
-                continue
-            if any(
-                link.startswith(p)
-                for p in ("mailto", "url", "tel", "sms", "ftp", "javascript", "data")
-            ):
-                continue
-            absolute_link = ctx.utils.join_url(parsed.domain, link)
-            absolute_link = absolute_link.split("#")[0]
-            absolute_link = absolute_link.split("?")[0]
-            absolute_link = absolute_link.rstrip("/")
-            discovered.add(absolute_link)
+    base_tag = soup.find("base", href=True)
+    base_url = base_tag.get("href") if base_tag else response.url
+
+    for link_el in soup.find_all("a", href=True):
+        if not isinstance(link_el, Tag):
+            continue
+
+        link = link_el.get("href").strip()
+
+        if not link or link.startswith(("#", "mailto:", "tel:", "javascript:", "data:")):
+            continue
+
+        absolute_link = ctx.utils.join_url(base_url, link)
+        clean_link = absolute_link.split("#")[0].rstrip("/")
+
+        if clean_link.startswith(("http://", "https://")):
+            discovered.add(clean_link)
 
     return discovered
 
