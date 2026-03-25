@@ -181,23 +181,20 @@
           </p>
         </v-col>
         <v-col cols="12" md="7">
-          <h3 class="text-h5 font-weight-bold mb-6">Nasz Zespół</h3>
-          <v-card
-            variant="flat"
-            class="mb-4 d-flex flex-column flex-sm-row bg-transparent"
-          >
-            <v-avatar
-              size="80"
-              color="grey-lighten-2"
-              class="mr-sm-4 mb-4 mb-sm-0 mt-2 elevation-2"
-              image="@/assets/pajzert.jpeg"
-            />
-
-            <div>
-              <div class="text-h6 font-weight-bold">Szymon Pajzert</div>
-              <div class="text-subtitle-2 text-primary mb-2">
-                Założyciel / pierwszy wolontariusz
+          <v-card variant="flat" class="mb-4 bg-transparent">
+            <v-card-title class="d-flex align-center flex-column flex-sm-row">
+              <v-avatar
+                size="80"
+                color="grey-lighten-2"
+                class="mr-sm-4 mb-4 mb-sm-0 mt-2 elevation-2"
+                image="@/assets/pajzert.jpeg"
+              />
+              <div class="">
+                <div class="text-h6 font-weight-bold">Szymon Pajzert</div>
+                <div class="text-subtitle-2 text-primary mb-2">Założyciel</div>
               </div>
+            </v-card-title>
+            <v-card-text>
               <p class="text-body-2 text-justify text-sm-left">
                 Kandydował z list Lewicy do samorządu w 2024 roku, ale po
                 przegranych wyborach nie dostał nigdzie ciepłej posadki. Z
@@ -205,7 +202,7 @@
                 się na zwalczaniu nadużyć władzy. Wcześniej walczył z
                 samochodozą i ocieplającą się planetą.
               </p>
-            </div>
+            </v-card-text>
           </v-card>
         </v-col>
 
