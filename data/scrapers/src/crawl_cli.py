@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from uuid import uuid4
 
-from conductor import _setup_context
+from conductor import setup_context
 from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
@@ -149,7 +149,7 @@ def main() -> None:
         queue.put(rows)
         logging.info("Seeded %d URLs.", len(rows))
 
-    ctx, _ = _setup_context(False, crawl_queue=queue)
+    ctx, _ = setup_context(False, crawl_queue=queue)
     run_crawler(ctx, options)
 
 
