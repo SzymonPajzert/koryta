@@ -47,22 +47,7 @@ export default defineEventHandler(async (event) => {
       personId = personRef.id;
       const personData = createPerson(body);
       batch.set(personRef, personData);
-      console.info(
-        "Created node with path",
-        personRef.path,
-        "and data",
-        personData,
-      );
-      const { revisionRef, targetRef } = createRevisionTransaction(
-        db,
-        batch,
-        user,
-        personRef,
-        personData,
-        true,
-      );
-      console.info("Created revision with path", revisionRef.path);
-      console.info("Created target with path", targetRef.path);
+      createRevisionTransaction(db, batch, user, personRef, personData, true);
     }
 
     // Track results
@@ -101,8 +86,7 @@ export default defineEventHandler(async (event) => {
 
     // Invalidate cache
     await useStorage("cache").clear("nitro:handlers");
-    console.log("Invalidated cache");
-
+    console.info(`Uploaded person ${body.name}`);
     return {
       personId,
       companies: companiesResult,
@@ -111,9 +95,7 @@ export default defineEventHandler(async (event) => {
       status: "ok",
     };
   } finally {
-    console.info("Committing batch");
     await batch.commit();
-    console.info("Commit successful");
   }
 });
 
@@ -143,7 +125,10 @@ function createPerson(body: Partial<Person>): Person {
     parties: body.parties || [],
   };
   if (body.content) person.content = body.content;
-  if (body.wikipedia) person.wikipedia = body.wikipedia;
+  if (body.wikipedia) {
+    console.log("Setting wikipedia", body.wikipedia);
+    person.wikipedia = body.wikipedia;
+  }
   if (body.rejestrIo) person.rejestrIo = body.rejestrIo;
   return person;
 }
