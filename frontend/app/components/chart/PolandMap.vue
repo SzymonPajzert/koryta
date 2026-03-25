@@ -16,7 +16,6 @@ const voivodeships = computed(() => {
 });
 
 const hover = (region: Voivodeship) => {
-  console.log("Clicked region:", region);
   hoveredDistrict.value = region;
 };
 
