@@ -20,6 +20,7 @@ interface nodeData {
 
 export interface FetchNodesOptions {
   nodeId?: string;
+  personParty?: string;
 }
 
 export async function fetchNodes<N extends NodeType>(
@@ -28,9 +29,12 @@ export async function fetchNodes<N extends NodeType>(
 ): Promise<Record<string, nodeData[N]>> {
   const { nodeId } = options;
   const db = getFirestore("koryta-pl");
-  const query: FirebaseFirestore.Query = db
+  let query: FirebaseFirestore.Query = db
     .collection("nodes")
     .where("type", "==", path);
+  if (options.personParty) {
+    query = query.where("parties", "array-contains", options.personParty);
+  }
 
   if (nodeId) {
     const docRef = db.collection("nodes").doc(nodeId);
