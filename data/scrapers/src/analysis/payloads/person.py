@@ -10,7 +10,7 @@ from analysis.payloads.election import get_election_type
 from entities.composite import Company, Election, Person
 from scrapers.stores import Context, Pipeline
 
-PARTY_CONFIDENCE_TRESHOLD = 0.4
+PARTY_CONFIDENCE_TRESHOLD = 0.8
 
 
 class PeoplePayloads(Pipeline[Person]):
