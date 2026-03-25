@@ -205,17 +205,7 @@ def main() -> None:
     )
     ctx, _ = setup_context(False, crawl_queue=queue)
     with profile_scope(profile_enabled, profile_path):
-        metrics = run_crawler(ctx, options)
-
-    if profile_enabled:
-        metrics_path = (
-            args.profile_path / f"worker-{args.worker_id}.metrics.json"
-            if args.profile_path
-            else None
-        )
-        if metrics_path is None:
-            raise ValueError("profile path is required when profiling is enabled")
-        _save_crawler_metrics(metrics, metrics_path)
+        run_crawler(ctx, options)
 
 if __name__ == "__main__":
     main()
