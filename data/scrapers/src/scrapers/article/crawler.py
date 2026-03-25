@@ -1,9 +1,10 @@
 from __future__ import annotations
-import threading
+
 import hashlib
 import io
 import logging
 import mimetypes
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -72,6 +73,7 @@ def stopwatch():
 _next_request_time: dict[str, float] = {}
 _next_req_lock = threading.Lock()
 
+
 def _can_crawl(parsed: NormalizedParse, wait_till_next_s: float) -> bool:
     with _next_req_lock:
         domain = parsed.hostname_normalized
@@ -88,7 +90,7 @@ def _compress_long_segments(path: str, max_segment_length: int) -> str:
 
     safe_segments = []
     for segment in path_segments:
-        if len(segment.encode('utf-8')) > max_segment_length:
+        if len(segment.encode("utf-8")) > max_segment_length:
             hash_suffix = hashlib.md5(segment.encode()).hexdigest()[:10]
             truncated = segment[:max_segment_length - 12]
             segment = f"{truncated}_{hash_suffix}"
@@ -98,8 +100,8 @@ def _compress_long_segments(path: str, max_segment_length: int) -> str:
 
 
 def _storage_path(
-        parsed: NormalizedParse,
-        suffix: str | None = None,
+    parsed: NormalizedParse,
+    suffix: str | None = None,
 ) -> str:
     path = parsed.path or ""
     path = path.strip("/")
@@ -110,7 +112,8 @@ def _storage_path(
     if suffix:
         base = f"{base}/{suffix}"
     storage_path = base.replace("//", "/").rstrip("/")
-    # We compress the segments because otherwise we can get "OSError: [Errno 36] File name too long"
+    # We compress the segments because otherwise we can get
+    # "OSError: [Errno 36] File name too long"
     return _compress_long_segments(storage_path, 200)
 
 
@@ -126,14 +129,14 @@ def _is_html_response(response: requests.Response) -> bool:
         return False
 
     extension = mimetypes.guess_extension(media_type)
-    return extension in {'.html', '.htm'}
+    return extension in {".html", ".htm"}
 
 
 def _upload_response(
-        ctx: Context,
-        parsed: NormalizedParse,
-        response: requests.Response,
-        options: CrawlOptions,
+    ctx: Context,
+    parsed: NormalizedParse,
+    response: requests.Response,
+    options: CrawlOptions,
 ) -> str:
     binary_payload = response.content
     path = _storage_path(parsed)
@@ -159,16 +162,16 @@ def _upload_response(
 
 
 def crawl_url(
-        ctx: Context,
-        parsed_url: NormalizedParse,
-        options: CrawlOptions,
+    ctx: Context,
+    parsed_url: NormalizedParse,
+    options: CrawlOptions,
 ) -> CrawlResult:
     start_time = time.time()
     if not ctx.web.robot_txt_allowed(
-            ctx,
-            parsed_url.full_url,
-            parsed_url,
-            HEADERS["User-Agent"],
+        ctx,
+        parsed_url.full_url,
+        parsed_url,
+        HEADERS["User-Agent"],
     ):
         return CrawlResult(error="disallowed by robots")
 
@@ -185,7 +188,7 @@ def crawl_url(
         except requests.RequestException as exc:
             return CrawlResult(
                 error=str(exc),
-                request_duration_s=t_request.duration
+                request_duration_s=t_request.duration,
             )
 
     if response.status_code != 200:
@@ -202,7 +205,10 @@ def crawl_url(
             discovered_urls = _extract_urls(ctx, response)
         else:
             discovered_urls = set()
-            logging.info(f"Not parsing the file, because it's not HTML {parsed_url.full_url}")
+            logging.info(
+                "Not parsing the file, because it's not HTML %s",
+                parsed_url.full_url,
+            )
 
     return CrawlResult(
         storage_path=storage_path,
@@ -216,22 +222,31 @@ def crawl_url(
 
 
 def _extract_urls(
-        ctx: Context,
-        response: requests.Response,
+    ctx: Context,
+    response: requests.Response,
 ) -> set[str]:
     discovered = set()
     soup = BeautifulSoup(response.text, "lxml")
 
     base_tag = soup.find("base", href=True)
-    base_url = base_tag.get("href") if base_tag else response.url
+    base_url = response.url
+    if isinstance(base_tag, Tag):
+        base_href = base_tag.get("href")
+        if isinstance(base_href, str) and base_href:
+            base_url = base_href
 
     for link_el in soup.find_all("a", href=True):
         if not isinstance(link_el, Tag):
             continue
 
-        link = link_el.get("href").strip()
+        href = link_el.get("href")
+        if not isinstance(href, str):
+            continue
+        link = href.strip()
 
-        if not link or link.startswith(("#", "mailto:", "tel:", "javascript:", "data:")):
+        if not link or link.startswith(
+            ("#", "mailto:", "tel:", "javascript:", "data:")
+        ):
             continue
 
         absolute_link = ctx.utils.join_url(base_url, link)
@@ -249,8 +264,17 @@ def _priority_for_url(options: CrawlOptions, url: str) -> int:
     return max(0, min(100, 100 - score))
 
 
-def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, ctx: Context):
-    logging.info("Starting crawler thread %s for worker %s", thread_index, options.worker_id)
+def _worker_thread(
+    thread_index: int,
+    options: CrawlOptions,
+    queue: CrawlQueue,
+    ctx: Context,
+) -> None:
+    logging.info(
+        "Starting crawler thread %s for worker %s",
+        thread_index,
+        options.worker_id,
+    )
     worker_name = f"{options.worker_id}_{thread_index}"
 
     while True:
@@ -269,8 +293,12 @@ def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, 
         result = crawl_url(ctx, parsed_url, options)
 
         if result.hit_rate_limit:
-            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
-            # NOTE: We do not release the lock here, because we rely on lock timeout mechanism to make it available again
+            logging.info(
+                "Skipping because of hit rate limit: %s",
+                parsed_url.full_url,
+            )
+            # NOTE: We do not release the lock here, because we rely on the lock
+            # timeout mechanism to make it available again.
             # This way it won't be queried over and over again if it has a high priority
         elif result.error:
             logging.error(
@@ -283,14 +311,18 @@ def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, 
                 f"[{result.request_duration_s:.2f}s] "
                 f"Crawl succeeded: {parsed_url.full_url}"
             )
-            queue.mark_done(uid, result.storage_path, {
-                "request_duration_s": result.request_duration_s,
-                "parse_duration_s": result.parse_duration_s,
-                "upload_duration_s": result.upload_duration_s,
-                "total_duration_s": result.total_duration_s,
-                "worker_id": worker_name,
-                "media_type": result.media_type,
-            })
+            queue.mark_done(
+                uid,
+                result.storage_path,
+                {
+                    "request_duration_s": result.request_duration_s,
+                    "parse_duration_s": result.parse_duration_s,
+                    "upload_duration_s": result.upload_duration_s,
+                    "total_duration_s": result.total_duration_s,
+                    "worker_id": worker_name,
+                    "media_type": result.media_type,
+                },
+            )
             queue.put(
                 [
                     (url, _priority_for_url(options, url))
@@ -299,7 +331,7 @@ def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, 
             )
 
 
-def run_crawler(ctx: Context, options: CrawlOptions):
+def run_crawler(ctx: Context, options: CrawlOptions) -> None:
     queue = ctx.crawl_queue
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
@@ -310,6 +342,9 @@ def run_crawler(ctx: Context, options: CrawlOptions):
         return
 
     with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
-        futures = [executor.submit(_worker_thread, idx, options, queue, ctx) for idx in range(options.worker_threads)]
+        futures = [
+            executor.submit(_worker_thread, idx, options, queue, ctx)
+            for idx in range(options.worker_threads)
+        ]
         for future in futures:
             future.result()

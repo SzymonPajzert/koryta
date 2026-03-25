@@ -18,9 +18,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
+
+import plotly.graph_objects as go  # type: ignore[import-untyped]
+import plotly.io as pio  # type: ignore[import-untyped]
+
 from scrapers.article.postgres_queue import PostgresClient
-import plotly.graph_objects as go
-import plotly.io as pio
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS_ROOT = PROJECT_ROOT / "versioned" / "benchmarks"
@@ -244,11 +246,19 @@ class _PgStatSampler:
         self._append_snapshot()
 
 
-def _start_pg_stat_sampler(pg_client: PostgresClient, interval: float = 1.0) -> _PgStatSampler:
+def _start_pg_stat_sampler(
+    pg_client: PostgresClient,
+    interval: float = 1.0,
+) -> _PgStatSampler:
     sampler = _PgStatSampler(pg_client, interval)
     sampler.start()
     return sampler
-def _ensure_pg_stat_statements(run_dir: Path, pg_client: PostgresClient | None) -> bool:
+
+
+def _ensure_pg_stat_statements(
+    run_dir: Path,
+    pg_client: PostgresClient | None,
+) -> bool:
     out_path = run_dir / "pg_stat_statements_setup.txt"
     if pg_client is None:
         _write_text(out_path, "Postgres client unavailable; skipping setup.\n")
@@ -389,10 +399,10 @@ def _summarize_profiles(profile_dir: Path, out_path: Path, limit: int = 25) -> N
         buf.append(f"== {profile_path.name} ==")
         # Capture top N lines.
         buf.append(f"Top {limit} by cumulative time")
-        stats.stream = None  # type: ignore[assignment]
+        setattr(stats, "stream", None)
 
         stream = io.StringIO()
-        stats.stream = stream  # type: ignore[assignment]
+        setattr(stats, "stream", stream)
         stats.print_stats(limit)
         buf.append(stream.getvalue().rstrip())
         sections.append("\n".join(buf))
@@ -402,9 +412,9 @@ def _summarize_profiles(profile_dir: Path, out_path: Path, limit: int = 25) -> N
 
 
 def _summarize_pg_stats(
-        after_path: Path,
-        out_path: Path,
-        limit: int = 10,
+    after_path: Path,
+    out_path: Path,
+    limit: int = 10,
 ) -> None:
     if not after_path.exists():
         return
@@ -462,9 +472,7 @@ def _summarize_pg_stats(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n")
 
-
-
-def _coerce_float(value: str | None) -> float:
+def _coerce_float(value: str | float | int | None) -> float:
     if value is None or value == "":
         return 0.0
     try:
@@ -473,7 +481,7 @@ def _coerce_float(value: str | None) -> float:
         return 0.0
 
 
-def _coerce_int(value: str | None) -> int:
+def _coerce_int(value: str | float | int | None) -> int:
     if value is None or value == "":
         return 0
     try:
@@ -485,19 +493,66 @@ def _coerce_int(value: str | None) -> int:
 def _duration_minute_query(start_iso: str) -> str:
     escaped = start_iso.replace("'", "''")
     return f"""
-        SELECT minute_epoch, request_time_s, parse_time_s, upload_time_s, other_time_s, total_time_s
+        SELECT
+            minute_epoch,
+            request_time_s,
+            parse_time_s,
+            upload_time_s,
+            other_time_s,
+            total_time_s
         FROM (
             SELECT
-                extract(epoch FROM date_trunc('minute', date_finished))::bigint AS minute_epoch,
-                sum(coalesce((metadata->>'request_duration_s')::double precision, 0)) AS request_time_s,
-                sum(coalesce((metadata->>'parse_duration_s')::double precision, 0)) AS parse_time_s,
-                sum(coalesce((metadata->>'upload_duration_s')::double precision, 0)) AS upload_time_s,
-                sum(coalesce((metadata->>'total_duration_s')::double precision, 0)) AS total_time_s,
-                sum(coalesce((metadata->>'total_duration_s')::double precision, 0))
-                  - sum(coalesce((metadata->>'request_duration_s')::double precision, 0))
-                  - sum(coalesce((metadata->>'parse_duration_s')::double precision, 0))
-                  - sum(coalesce((metadata->>'upload_duration_s')::double precision, 0))
-                  AS other_time_s
+                extract(
+                    epoch FROM date_trunc('minute', date_finished)
+                )::bigint AS minute_epoch,
+                sum(
+                    coalesce(
+                        (metadata->>'request_duration_s')::double precision,
+                        0
+                    )
+                ) AS request_time_s,
+                sum(
+                    coalesce(
+                        (metadata->>'parse_duration_s')::double precision,
+                        0
+                    )
+                ) AS parse_time_s,
+                sum(
+                    coalesce(
+                        (metadata->>'upload_duration_s')::double precision,
+                        0
+                    )
+                ) AS upload_time_s,
+                sum(
+                    coalesce(
+                        (metadata->>'total_duration_s')::double precision,
+                        0
+                    )
+                ) AS total_time_s,
+                sum(
+                    coalesce(
+                        (metadata->>'total_duration_s')::double precision,
+                        0
+                    )
+                )
+                  - sum(
+                    coalesce(
+                        (metadata->>'request_duration_s')::double precision,
+                        0
+                    )
+                  )
+                  - sum(
+                    coalesce(
+                        (metadata->>'parse_duration_s')::double precision,
+                        0
+                    )
+                  )
+                  - sum(
+                    coalesce(
+                        (metadata->>'upload_duration_s')::double precision,
+                        0
+                    )
+                  ) AS other_time_s
             FROM website_index
             WHERE done = TRUE
               AND date_finished >= TIMESTAMP '{escaped}'
@@ -510,20 +565,65 @@ def _duration_minute_query(start_iso: str) -> str:
 def _worker_stats_query(start_iso: str) -> str:
     escaped = start_iso.replace("'", "''")
     return f"""
-        SELECT worker_id, crawls, request_time_s, parse_time_s, upload_time_s, total_time_s
+        SELECT
+            worker_id,
+            crawls,
+            request_time_s,
+            parse_time_s,
+            upload_time_s,
+            total_time_s
         FROM (
             SELECT
                 coalesce(metadata->>'worker_id', 'unknown') AS worker_id,
                 count(*) AS crawls,
-                sum(coalesce((metadata->>'request_duration_s')::double precision, 0)) AS request_time_s,
-                sum(coalesce((metadata->>'parse_duration_s')::double precision, 0)) AS parse_time_s,
-                sum(coalesce((metadata->>'upload_duration_s')::double precision, 0)) AS upload_time_s,
-                sum(coalesce((metadata->>'total_duration_s')::double precision, 0)) AS total_time_s,
-                sum(coalesce((metadata->>'total_duration_s')::double precision, 0))
-                  - sum(coalesce((metadata->>'request_duration_s')::double precision, 0))
-                  - sum(coalesce((metadata->>'parse_duration_s')::double precision, 0))
-                  - sum(coalesce((metadata->>'upload_duration_s')::double precision, 0))
-                  AS other_time_s
+                sum(
+                    coalesce(
+                        (metadata->>'request_duration_s')::double precision,
+                        0
+                    )
+                ) AS request_time_s,
+                sum(
+                    coalesce(
+                        (metadata->>'parse_duration_s')::double precision,
+                        0
+                    )
+                ) AS parse_time_s,
+                sum(
+                    coalesce(
+                        (metadata->>'upload_duration_s')::double precision,
+                        0
+                    )
+                ) AS upload_time_s,
+                sum(
+                    coalesce(
+                        (metadata->>'total_duration_s')::double precision,
+                        0
+                    )
+                ) AS total_time_s,
+                sum(
+                    coalesce(
+                        (metadata->>'total_duration_s')::double precision,
+                        0
+                    )
+                )
+                  - sum(
+                    coalesce(
+                        (metadata->>'request_duration_s')::double precision,
+                        0
+                    )
+                  )
+                  - sum(
+                    coalesce(
+                        (metadata->>'parse_duration_s')::double precision,
+                        0
+                    )
+                  )
+                  - sum(
+                    coalesce(
+                        (metadata->>'upload_duration_s')::double precision,
+                        0
+                    )
+                  ) AS other_time_s
             FROM website_index
             WHERE done = TRUE
               AND date_finished >= TIMESTAMP '{escaped}'
@@ -565,15 +665,22 @@ def _augment_sql_stats_with_percent(
     sql_stats: list[dict[str, float | str]],
     per_minute: list[dict[str, float | str]],
 ) -> list[dict[str, float | str]]:
-    totals = {entry["minute"]: _coerce_float(entry.get("total_time_s")) for entry in per_minute}
+    totals = {
+        str(entry.get("minute", "")): _coerce_float(entry.get("total_time_s"))
+        for entry in per_minute
+    }
     augmented: list[dict[str, float | str]] = []
     for entry in sql_stats:
-        total = totals.get(entry["minute"], 0.0)
+        minute_key = str(entry.get("minute", ""))
+        total = totals.get(minute_key, 0.0)
         copy = dict(entry)
-        copy["sql_pct"] = (copy["sql_time_s"] / total * 100) if total else 0.0
+        sql_time = _coerce_float(copy.get("sql_time_s"))
+        copy["sql_pct"] = (sql_time / total * 100) if total else 0.0
         augmented.append(copy)
     return augmented
-def _collect_query_stats(run_dir: Path) -> list[dict[str, float | int]]:
+
+
+def _collect_query_stats(run_dir: Path) -> list[dict[str, float | int | str]]:
     logs_dir = run_dir / "worker_logs"
     if not logs_dir.exists():
         return []
@@ -594,7 +701,7 @@ def _collect_query_stats(run_dir: Path) -> list[dict[str, float | int]]:
                 counts[minute]["queries"] += 1
                 if "Crawl failed" in line:
                     counts[minute]["errors"] += 1
-    entries = []
+    entries: list[dict[str, float | int | str]] = []
     for minute, data in sorted(counts.items()):
         total = data["queries"]
         errors = data["errors"]
@@ -610,9 +717,12 @@ def _collect_query_stats(run_dir: Path) -> list[dict[str, float | int]]:
 
 
 def _normalize_worker_rows(
-    rows: list[dict[str, str]]
-) -> tuple[dict[str, dict[str, float | int]], dict[str, float | int]]:
-    per_worker: dict[str, dict[str, float | int]] = {}
+    rows: list[dict[str, str]],
+) -> tuple[
+    dict[str, dict[str, float | int | str]],
+    dict[str, float | int | str],
+]:
+    per_worker: dict[str, dict[str, float | int | str]] = {}
     percent_acc: list[tuple[float, float, float, float]] = []
     for row in rows:
         worker_id = row.get("worker_id", "unknown")
@@ -647,30 +757,30 @@ def _normalize_worker_rows(
         return per_worker, {}
 
     num_workers = len(per_worker)
-    avg_totals = {
+    avg_totals: dict[str, float | int | str] = {
         "worker_id": "average",
         "total_crawls": sum(
-            data["total_crawls"] for data in per_worker.values()
+            _coerce_int(data["total_crawls"]) for data in per_worker.values()
         )
         / num_workers,
         "request_time_s": sum(
-            data["request_time_s"] for data in per_worker.values()
+            _coerce_float(data["request_time_s"]) for data in per_worker.values()
         )
         / num_workers,
         "parse_time_s": sum(
-            data["parse_time_s"] for data in per_worker.values()
+            _coerce_float(data["parse_time_s"]) for data in per_worker.values()
         )
         / num_workers,
         "upload_time_s": sum(
-            data["upload_time_s"] for data in per_worker.values()
+            _coerce_float(data["upload_time_s"]) for data in per_worker.values()
         )
         / num_workers,
         "other_time_s": sum(
-            data["other_time_s"] for data in per_worker.values()
+            _coerce_float(data["other_time_s"]) for data in per_worker.values()
         )
         / num_workers,
         "total_time_s": sum(
-            data["total_time_s"] for data in per_worker.values()
+            _coerce_float(data["total_time_s"]) for data in per_worker.values()
         )
         / num_workers,
     }
@@ -690,7 +800,15 @@ def _normalize_worker_rows(
 def _plot_per_minute(run_dir: Path, per_minute: list[dict[str, float | str]]) -> None:
     if not go or not pio or not per_minute:
         return
-    timestamps = [datetime.fromisoformat(entry["minute"]) for entry in per_minute]
+    timestamps: list[datetime] = []
+    for entry in per_minute:
+        minute = entry.get("minute")
+        if not isinstance(minute, str):
+            continue
+        try:
+            timestamps.append(datetime.fromisoformat(minute))
+        except ValueError:
+            continue
     plot_dir = run_dir / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -705,7 +823,10 @@ def _plot_per_minute(run_dir: Path, per_minute: list[dict[str, float | str]]) ->
             fig.add_trace(
                 go.Scatter(
                     x=timestamps,
-                    y=[entry[entry_key] * scale for entry in per_minute],
+                    y=[
+                        _coerce_float(entry[entry_key]) * scale
+                        for entry in per_minute
+                    ],
                     mode="lines+markers",
                     name=label,
                 )
@@ -715,7 +836,13 @@ def _plot_per_minute(run_dir: Path, per_minute: list[dict[str, float | str]]) ->
             xaxis_title="Minute",
             yaxis_title=y_axis,
             template="plotly_white",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+            ),
         )
         pio.write_html(
             fig,
@@ -748,10 +875,21 @@ def _plot_per_minute(run_dir: Path, per_minute: list[dict[str, float | str]]) ->
     )
 
 
-def _plot_query_metrics(run_dir: Path, query_stats: list[dict[str, float | int]]) -> None:
+def _plot_query_metrics(
+    run_dir: Path,
+    query_stats: list[dict[str, float | int | str]],
+) -> None:
     if not go or not pio or not query_stats:
         return
-    timestamps = [datetime.fromisoformat(entry["minute"]) for entry in query_stats]
+    timestamps: list[datetime] = []
+    for entry in query_stats:
+        minute = entry.get("minute")
+        if not isinstance(minute, str):
+            continue
+        try:
+            timestamps.append(datetime.fromisoformat(minute))
+        except ValueError:
+            continue
     plot_dir = run_dir / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -777,7 +915,13 @@ def _plot_query_metrics(run_dir: Path, query_stats: list[dict[str, float | int]]
         xaxis_title="Minute",
         yaxis_title="Count",
         template="plotly_white",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
     )
     pio.write_html(
         fig_queries,
@@ -789,7 +933,7 @@ def _plot_query_metrics(run_dir: Path, query_stats: list[dict[str, float | int]]
     fig_error_rate.add_trace(
         go.Scatter(
             x=timestamps,
-            y=[entry["error_rate"] * 100 for entry in query_stats],
+            y=[_coerce_float(entry["error_rate"]) * 100 for entry in query_stats],
             mode="lines+markers",
             name="Error rate (%)",
         )
@@ -799,7 +943,13 @@ def _plot_query_metrics(run_dir: Path, query_stats: list[dict[str, float | int]]
         xaxis_title="Minute",
         yaxis_title="Error rate (%)",
         template="plotly_white",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
     )
     pio.write_html(
         fig_error_rate,
@@ -822,7 +972,15 @@ def _plot_sql_metrics(
         return
     plot_dir = run_dir / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
-    timestamps = [datetime.fromisoformat(entry["minute"]) for entry in sql_stats]
+    timestamps: list[datetime] = []
+    for entry in sql_stats:
+        minute = entry.get("minute")
+        if not isinstance(minute, str):
+            continue
+        try:
+            timestamps.append(datetime.fromisoformat(minute))
+        except ValueError:
+            continue
     fig_time = go.Figure()
     fig_time.add_trace(
         go.Scatter(
@@ -846,7 +1004,13 @@ def _plot_sql_metrics(
         xaxis_title="Minute",
         yaxis_title="SQL time (s)",
         template="plotly_white",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
         yaxis2=dict(overlaying="y", side="right", title="Queries"),
     )
     pio.write_html(
@@ -869,7 +1033,13 @@ def _plot_sql_metrics(
         xaxis_title="Minute",
         yaxis_title="Percent",
         template="plotly_white",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
     )
     pio.write_html(
         fig_pct,
@@ -879,7 +1049,14 @@ def _plot_sql_metrics(
 
     if sql_per_query:
         minute_order = [entry["minute"] for entry in sql_stats]
-        minute_timestamps = [datetime.fromisoformat(m) for m in minute_order]
+        minute_timestamps: list[datetime] = []
+        for minute in minute_order:
+            if not isinstance(minute, str):
+                continue
+            try:
+                minute_timestamps.append(datetime.fromisoformat(minute))
+            except ValueError:
+                continue
         fig_query = go.Figure()
         for query, entries in sql_per_query.items():
             minute_map = {entry["minute"]: entry for entry in entries}
@@ -899,7 +1076,13 @@ def _plot_sql_metrics(
             xaxis_title="Minute",
             yaxis_title="SQL time (s)",
             template="plotly_white",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+            ),
         )
         pio.write_html(
             fig_query,
@@ -914,7 +1097,7 @@ def _collect_duration_stats(
     pg_client: PostgresClient | None,
     sql_totals: list[dict[str, float | str]],
     sql_per_query: dict[str, list[dict[str, float | str]]],
-):
+) -> dict[str, object]:
     if pg_client is None:
         logging.warning("Postgres unavailable; skipping duration stats.")
         return {}
@@ -924,7 +1107,7 @@ def _collect_duration_stats(
     per_worker, average = _normalize_worker_rows(worker_rows)
     sql_augmented = _augment_sql_stats_with_percent(sql_totals, per_minute)
     query_stats = _collect_query_stats(run_dir)
-    stats = {
+    stats: dict[str, object] = {
         "per_minute": per_minute,
         "per_worker": per_worker,
         "average_per_worker": average,
@@ -937,6 +1120,7 @@ def _collect_duration_stats(
     _plot_per_minute(run_dir, per_minute)
     _plot_query_metrics(run_dir, query_stats)
     _plot_sql_metrics(run_dir, sql_augmented, sql_per_query)
+    return stats
 
 
 def _reset_queue() -> None:
@@ -1044,8 +1228,15 @@ def main() -> int:
     sql_samples = sampler.snapshots if sampler else []
     sql_totals, sql_per_query = _aggregate_pg_snapshots(sql_samples)
 
+    started_at = run_meta.get("started_at")
+    if not isinstance(started_at, str):
+        raise ValueError("run metadata missing started_at")
     _collect_duration_stats(
-        run_dir, run_meta["started_at"], pg_client, sql_totals, sql_per_query
+        run_dir,
+        started_at,
+        pg_client,
+        sql_totals,
+        sql_per_query,
     )
 
 
@@ -1054,6 +1245,7 @@ def main() -> int:
         pg_dir / "pg_stat_statements_after.tsv",
         run_dir / "pg_summary.txt",
     )
+    return 0
 
 
 if __name__ == "__main__":

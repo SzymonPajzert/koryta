@@ -12,9 +12,9 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
-from psycopg2.extras import Json, execute_values
 
 import psycopg2  # type: ignore
+from psycopg2.extras import Json
 from uuid_extensions import uuid7str  # type: ignore
 
 from scrapers.stores import CrawlQueue
@@ -130,7 +130,7 @@ class PostgresCrawlQueue(CrawlQueue):
                     locked_at TIMESTAMP WITH TIME ZONE,
                     storage_path TEXT,
                     mined_from_url TEXT,
-                    metadata JSONB DEFAULT '{}'::jsonb 
+                    metadata JSONB DEFAULT '{}'::jsonb
                 );
 
                 CREATE TABLE IF NOT EXISTS blocked_domains (
@@ -225,8 +225,15 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             return transaction.fetchone()
 
-    def mark_done(self, uid: str, storage_path: str | None, metadata: dict[str, str] = {}) -> None:
+    def mark_done(
+        self,
+        uid: str,
+        storage_path: str | None,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
         """Mark a URL as successfully crawled."""
+        if metadata is None:
+            metadata = {}
         self.pg.execute(
             "UPDATE website_index SET done = TRUE, date_finished = %s, "
             "locked_by_worker_id = NULL, locked_at = NULL, "

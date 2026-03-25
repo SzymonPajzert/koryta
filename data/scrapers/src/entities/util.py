@@ -65,5 +65,9 @@ class NormalizedParse:
             hostname=hostname,
             hostname_normalized=hostname_normalized,
             domain=domain,
-            full_url=domain + parsed.path + ("?" + parsed.query if parsed.query != "" else ""),
+            full_url=(
+                domain
+                + parsed.path
+                + ("?" + parsed.query if parsed.query != "" else "")
+            ),
         )
