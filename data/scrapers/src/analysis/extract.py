@@ -17,18 +17,35 @@ from scrapers.stores import Context, Pipeline
 
 
 def check_auto_approved():
-    tlustekotyset = set(tlustekoty)
-    listawstyduset = set(listawstydu)
+    tlustekoty_content = {line[0]: line[1] for line in tlustekoty}
+    listawsty_content = {line[0]: line[1] for line in listawstydu}
 
-    def check_row(row) -> int:
+    def check_row(row) -> tuple[int, list[str], str, list[str]]:
         full_name = row["krs_name"]
         first_name = full_name.split(" ")[0]
         last_name = full_name.split(" ")[-1]
         name = f"{first_name} {last_name}"
-        # TODO remove this hardcoding
-        return (2 if name in tlustekotyset else 0) | (
-            1 if name in listawstyduset else 0
-        )
+
+        count = 0
+        content = ""
+        sources = []
+        parties = []
+        if name in tlustekoty_content:
+            count += 1
+            content += tlustekoty_content[name]
+            sources.append(
+                "https://www.psl.pl/mamy-liste-357tlustych-kotow-z-pis-w-spolkach-skarbu-panstwa"
+            )
+            parties.append("PiS")
+        if name in listawsty_content:
+            count += 1
+            content += listawsty_content[name]
+            sources.append(
+                "https://www.pb.pl/lista-wstydu-platformy-obywatelskiej-691425"
+            )
+            parties.append("PO")
+
+        return count, sources, content, parties
 
     return check_row
 
@@ -161,7 +178,8 @@ class Extract(Pipeline):
 
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
-        auto_approved = people.apply(check_auto_approved(), axis=1)
+        auto_approved_func = check_auto_approved()
+        auto_approved = people.apply(lambda row: auto_approved_func(row)[0], axis=1)
 
         people["total_elections"] = people["elections"].apply(list_length)
         people["total_employments"] = people["employment"].apply(list_length)

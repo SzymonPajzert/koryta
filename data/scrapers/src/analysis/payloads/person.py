@@ -88,7 +88,7 @@ class PeoplePayloads(Pipeline[Person]):
 
         companies = _extract_companies(row)
         elections = _extract_elections(row)
-        sources = _hardcoded_sources(row)
+        sources, content, party = _hardcoded_sources_content_parties(row)
 
         wiki_name = get_scalar("wiki_name")
         wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
@@ -103,16 +103,17 @@ class PeoplePayloads(Pipeline[Person]):
         rejestr_id = rejestr_ids[0]
         rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
 
-        party: list[str] = []
-        if len(elections) > 0:
-            party = self.lookup_party(
-                ctx,
-                get_scalar("pkw_name"),
-                elections,
-            )
+        # TODO reenable after mapping is better
+        # if len(elections) > 0:
+        #     party = self.lookup_party(
+        #         ctx,
+        #         get_scalar("pkw_name"),
+        #         elections,
+        #     )
 
         return Person(
             name=name,
+            content=content,
             companies=companies,
             elections=elections,
             sources=sources,
@@ -132,19 +133,12 @@ def party_scores_to_list(
 auto_approved = check_auto_approved()
 
 
-def _hardcoded_sources(row: pd.Series) -> list[str]:
+def _hardcoded_sources_content_parties(
+    row: pd.Series,
+) -> tuple[list[str], str, list[str]]:
     result = []
-    matching = auto_approved(row)
-    # TODO this is ugly and hardcoded, but I want to go to sleep
-    if matching % 2 == 1:
-        # Lista wstydu PO
-        result.append("https://www.pb.pl/lista-wstydu-platformy-obywatelskiej-691425")
-    if (matching // 2) % 2 == 1:
-        result.append(
-            "https://www.psl.pl/mamy-liste-357tlustych-kotow-z-pis-w-spolkach-skarbu-panstwa"
-        )
-
-    return result
+    result = auto_approved(row)
+    return result[1], result[2], result[3]
 
 
 def _extract_companies(row: pd.Series) -> list[Company]:
