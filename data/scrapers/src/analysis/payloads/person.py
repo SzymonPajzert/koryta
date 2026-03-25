@@ -4,7 +4,7 @@ from dataclasses import asdict
 import numpy as np
 import pandas as pd
 
-from analysis.extract import Extract
+from analysis.extract import Extract, check_auto_approved
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.payloads.election import get_election_type
 from entities.composite import Company, Election, Person
@@ -88,6 +88,7 @@ class PeoplePayloads(Pipeline[Person]):
 
         companies = _extract_companies(row)
         elections = _extract_elections(row)
+        sources = _hardcoded_sources(row)
 
         wiki_name = get_scalar("wiki_name")
         wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
@@ -114,6 +115,7 @@ class PeoplePayloads(Pipeline[Person]):
             name=name,
             companies=companies,
             elections=elections,
+            sources=sources,
             parties=party,
             wikipedia_url=wikipedia_url,
             rejestr_io_url=rejestr_io_url,
@@ -125,6 +127,24 @@ def party_scores_to_list(
 ) -> list[str]:
     row = row.drop(remove)
     return row[row > PARTY_CONFIDENCE_TRESHOLD].index.tolist()
+
+
+auto_approved = check_auto_approved()
+
+
+def _hardcoded_sources(row: pd.Series) -> list[str]:
+    result = []
+    matching = auto_approved(row)
+    # TODO this is ugly and hardcoded, but I want to go to sleep
+    if matching % 2 == 1:
+        # Lista wstydu PO
+        result.append("https://www.pb.pl/lista-wstydu-platformy-obywatelskiej-691425")
+    if (matching // 2) % 2 == 1:
+        result.append(
+            "https://www.psl.pl/mamy-liste-357tlustych-kotow-z-pis-w-spolkach-skarbu-panstwa"
+        )
+
+    return result
 
 
 def _extract_companies(row: pd.Series) -> list[Company]:
