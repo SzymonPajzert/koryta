@@ -9,17 +9,12 @@ definePageMeta({
   title: "Lista",
 });
 
-const { entities: peopleUnfiltered } = await useEntity("person");
-
-const { filtered } = useParams();
+const { filters } = useParams();
+const { entities: peopleMaybe } = useEntity("person", filters);
 
 const people = computed(() => {
-  const unfiltered = peopleUnfiltered.value;
+  const unfiltered = peopleMaybe.value;
   if (!unfiltered) return {};
-  return Object.fromEntries(
-    Object.entries(unfiltered).filter((person) =>
-      filtered.value.includes(person[0]),
-    ),
-  );
+  return unfiltered;
 });
 </script>
