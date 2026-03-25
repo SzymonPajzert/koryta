@@ -122,7 +122,8 @@ function createPerson(body: Partial<Person>): Person {
   const person: Person = {
     name: body.name,
     type: "person",
-    parties: body.parties || [],
+    // TODO parties don't work yet
+    // parties: body.parties || [],
   };
   if (body.content) person.content = body.content;
   if (body.wikipedia) {
