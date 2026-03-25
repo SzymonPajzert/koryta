@@ -270,7 +270,8 @@ def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, 
 
         if result.hit_rate_limit:
             logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
-            queue.release(uid)
+            # NOTE: We do not release the lock here, because we rely on lock timeout mechanism to make it available again
+            # This way it won't be queried over and over again if it has a high priority
         elif result.error:
             logging.error(
                 f"[{result.request_duration_s:.2f}s] "
