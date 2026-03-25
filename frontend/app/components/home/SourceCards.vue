@@ -59,9 +59,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useHomeStats } from "@/composables/useHomeStats";
 
-const { sourceStats: sources } = useHomeStats();
+const { data: sources } = await authFetch("/api/nodes/articles");
 
 const showAll = ref(false);
 

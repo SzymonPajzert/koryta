@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import type { SourceStat } from "@/composables/useHomeStats";
+import type { SourceStat } from "~~/server/api/nodes/articles.get";
 
 defineProps<{
   source: SourceStat;
