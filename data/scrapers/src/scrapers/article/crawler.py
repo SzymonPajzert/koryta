@@ -41,7 +41,7 @@ class CrawlOptions:
     local_output: Path | None
     per_url_max_retries: int
     lock_timeout_seconds: int
-    per_domain_rate_limit_seconds: int
+    per_domain_wait_between_requests_s: float
     url_scoring_function: str
     request_timeout_seconds: float = 10
     worker_threads: int = 1
@@ -72,14 +72,14 @@ def stopwatch():
 _next_request_time: dict[str, float] = {}
 _next_req_lock = threading.Lock()
 
-def _can_crawl(parsed: NormalizedParse, rate_limit: int) -> bool:
+def _can_crawl(parsed: NormalizedParse, wait_till_next_s: float) -> bool:
     with _next_req_lock:
         domain = parsed.hostname_normalized
         next_time = _next_request_time.get(domain, 0)
         now = time.time()
         if now < next_time:
             return False
-        _next_request_time[domain] = time.time() + rate_limit
+        _next_request_time[domain] = time.time() + wait_till_next_s
         return True
 
 
@@ -172,7 +172,7 @@ def crawl_url(
     ):
         return CrawlResult(error="disallowed by robots")
 
-    if not _can_crawl(parsed_url, options.per_domain_rate_limit_seconds):
+    if not _can_crawl(parsed_url, options.per_domain_wait_between_requests_s):
         return CrawlResult(hit_rate_limit=True)
 
     with stopwatch() as t_request:

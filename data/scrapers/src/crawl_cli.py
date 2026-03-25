@@ -51,7 +51,7 @@ def _build_options(args: argparse.Namespace) -> CrawlOptions:
         local_output=args.local_output if args.storage_type == "local" else None,
         per_url_max_retries=args.per_url_max_retries,
         lock_timeout_seconds=args.lock_timeout_seconds,
-        per_domain_rate_limit_seconds=args.per_domain_rate_limit_qpm,
+        per_domain_wait_between_requests_s=60 / args.per_domain_rate_limit_qpm,
         url_scoring_function=args.url_scoring_function,
         worker_threads=max(1, args.worker_threads),
     )
