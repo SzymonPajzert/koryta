@@ -1,12 +1,12 @@
 from __future__ import annotations
-from contextlib import contextmanager
 
-from types import SimpleNamespace
 import logging
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
