@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Literal, Union, overload
 
 import numpy as np
 import pandas as pd
-from dacite import from_dict
+from dacite import from_dict  # type: ignore[import-not-found]
 
 from entities.ner import NEREntities
 
@@ -390,7 +390,6 @@ class Context:
     utils: Utils
     web: Web
     nlp: NLP
-    crawl_queue: CrawlQueue | None = None
     crawl_queue: CrawlQueue | None = None
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
 
