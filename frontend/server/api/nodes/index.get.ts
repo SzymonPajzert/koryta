@@ -14,8 +14,10 @@ export default authCachedEventHandler(async (event) => {
     queryValidator.parse(query),
   );
 
+  const opts = { personParty: query.party };
+
   if (query.type) {
-    return { nodes: await fetchNodes(query.type) };
+    return { nodes: await fetchNodes(query.type, opts) };
   }
 
   const [people, places, articles, regions] = await Promise.all([
