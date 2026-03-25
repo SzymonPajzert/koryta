@@ -10,8 +10,6 @@ export type GraphOptions = {
 };
 
 export function useGraph(opts: GraphOptions = {}) {
-  console.log(opts);
-
   const { data: graph } = useAsyncData<GraphLayout>(
     "graph",
     () => $fetch("/api/graph"),
@@ -47,7 +45,6 @@ export function useGraph(opts: GraphOptions = {}) {
         if (!node) return false;
         // Only show circles (people), documents (articles/regions) or rects (places) with people
         if (node.type === "rect") {
-          console.log(node);
           return node.stats?.people > 0;
         }
         return true;
@@ -57,7 +54,6 @@ export function useGraph(opts: GraphOptions = {}) {
 
   // TODO move it to the backend
   const nodesFiltered = computed(() => {
-    // console.log("Canvas.vue: focusNodeId", props.focusNodeId, "maxDepth", props.maxDepth);
     if (opts.focusNodeId) {
       if (!graph.value) return {};
       const depth = opts.maxDepth ?? 1;
@@ -65,13 +61,6 @@ export function useGraph(opts: GraphOptions = {}) {
 
       const expandedSet =
         opts.expandedNodes?.value || new Set([opts.focusNodeId]);
-
-      console.log(
-        "interestingNodes",
-        Object.keys(interestingNodes.value),
-        "expandedSet",
-        Array.from(expandedSet),
-      );
 
       const queue: { id: string; d: number }[] = [];
       for (const id of expandedSet) {
@@ -81,22 +70,17 @@ export function useGraph(opts: GraphOptions = {}) {
 
       while (queue.length > 0 && !!edges.value) {
         const current = queue.shift()!;
-        console.log(current);
         if (current.d >= depth) continue;
 
         const neighbors = edges.value
           .filter((e) => e.source === current.id || e.target === current.id)
           .map((e) => (e.source === current.id ? e.target : e.source));
-        console.log(neighbors);
 
         for (const neighborId of neighbors) {
           // Skip nodes that represent empty places or are otherwise filtered out
-          console.log(`neighborId: ${neighborId}`);
           if (!interestingNodes.value[neighborId]) {
-            console.log(`skipping ${neighborId}`);
             continue;
           }
-          console.log("not skipping");
 
           if (!visited.has(neighborId)) {
             visited.set(neighborId, 1);
@@ -141,15 +125,6 @@ export function useGraph(opts: GraphOptions = {}) {
       }
     }
     return Array.from(unique.values());
-  });
-
-  watch([edges, nodesFiltered1], () => {
-    console.log(edges.value);
-    console.log(nodesFiltered1.value);
-    console.log(interestingNodes.value);
-    console.log(nodesFiltered.value);
-    console.log(edgesFilteredDuplicates.value);
-    console.log(edgesFiltered.value);
   });
 
   return {

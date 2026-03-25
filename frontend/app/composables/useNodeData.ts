@@ -46,10 +46,10 @@ export function useNodeData(options: UseNodeDataOptions) {
   async function fetchRevisions() {
     if (!nodeId.value) return;
     try {
-      const res = await authFetch<{ revisions: Revision[] }>(
+      const { data: res } = await authFetch<{ revisions: Revision[] }>(
         `/api/revisions/node/${nodeId.value}`,
       );
-      revisions.value = res.revisions;
+      revisions.value = res.value?.revisions || [];
     } catch (e) {
       console.error("Error fetching revisions", e);
     }
@@ -65,7 +65,6 @@ export function useNodeData(options: UseNodeDataOptions) {
       try {
         const snap = await getDoc(doc(db, "nodes", id));
         if (snap.exists()) {
-          console.log("fetchData");
           const { node } = await authFetch<{ node: Node }>(`/api/nodes/${id}`);
 
           const v: EditablePage = {
