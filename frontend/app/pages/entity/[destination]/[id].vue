@@ -92,62 +92,73 @@
           </v-row>
         </div>
 
-        <div class="mt-4">
-          <v-btn
-            v-if="type !== 'region'"
-            variant="tonal"
-            prepend-icon="mdi-pencil-outline"
-            @click="handleEdit"
-          >
-            <template #prepend>
-              <v-icon color="warning" />
-            </template>
-            Zaproponuj zmianę
-          </v-btn>
-          <DialogProposeRemoval
-            v-if="entity && type !== 'region'"
-            :id="node"
-            :type="type"
-            :name="entity.name"
-          >
-            <template #activator="{ props }">
+        <template v-if="user && entity">
+          <template v-if="userWantsEdit">
+            <div class="mt-4">
               <v-btn
-                v-bind="user ? props : {}"
+                v-if="type !== 'region'"
                 variant="tonal"
-                class="ml-2"
-                @click="!user && handleLoginRedirect()"
+                prepend-icon="mdi-pencil-outline"
+                @click="handleEdit"
               >
                 <template #prepend>
-                  <v-icon color="error" icon="mdi-delete-outline" />
+                  <v-icon color="warning" />
                 </template>
-                Zaproponuj usunięcie
+                Zaproponuj zmianę
               </v-btn>
-            </template>
-          </DialogProposeRemoval>
-          <QuickAddArticleButton
-            v-if="type !== 'article' && type !== 'region'"
-            :node-id="node"
-            class="ml-2"
-          />
-        </div>
+              <DialogProposeRemoval
+                v-if="entity && type !== 'region'"
+                :id="node"
+                :type="type"
+                :name="entity.name"
+              >
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="user ? props : {}"
+                    variant="tonal"
+                    class="ml-2"
+                    @click="!user && handleLoginRedirect()"
+                  >
+                    <template #prepend>
+                      <v-icon color="error" icon="mdi-delete-outline" />
+                    </template>
+                    Zaproponuj usunięcie
+                  </v-btn>
+                </template>
+              </DialogProposeRemoval>
+              <QuickAddArticleButton
+                v-if="type !== 'article' && type !== 'region'"
+                :node-id="node"
+                class="ml-2"
+              />
+            </div>
 
-        <div v-if="user && entity" class="mt-4">
-          <h4 class="text-subtitle-2 mb-2">Szybkie dodawanie</h4>
-          <div class="d-flex flex-column gap-2">
-            <v-btn
-              v-for="btn in quickAddButtons"
-              :key="btn.text"
-              variant="tonal"
-              size="small"
-              :prepend-icon="btn.icon"
-              class="mr-2 mb-2"
-              :data-testid="'edge-picker-' + btn.edgeType"
-              @click="quickAddEdge(btn)"
-            >
-              {{ btn.text }}
+            <div class="mt-4">
+              <h4 class="text-subtitle-2 mb-2">Szybkie dodawanie</h4>
+              <div class="d-flex flex-column gap-2">
+                <v-btn
+                  v-for="btn in quickAddButtons"
+                  :key="btn.text"
+                  variant="tonal"
+                  size="small"
+                  :prepend-icon="btn.icon"
+                  class="mr-2 mb-2"
+                  :data-testid="'edge-picker-' + btn.edgeType"
+                  @click="quickAddEdge(btn)"
+                >
+                  {{ btn.text }}
+                </v-btn>
+              </div>
+            </div>
+          </template>
+          <div v-else class="d-flex mt-4">
+            <v-spacer />
+            <v-btn color="primary" @click="userWantsEdit = true">
+              Edytuj stronę
             </v-btn>
+            <v-spacer />
           </div>
-        </div>
+        </template>
       </div>
 
       <div v-if="editedEdge" class="pa-4">
@@ -194,6 +205,8 @@ const route = useRoute<"/entity/[destination]/[id]">();
 
 const node = route.params.id as string;
 const type = route.params.destination as NodeType;
+
+const userWantsEdit = ref(false);
 
 const { user } = useAuthState();
 const router = useRouter();
