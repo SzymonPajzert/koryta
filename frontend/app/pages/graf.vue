@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { useParams } from "~/composables/params";
 
-const { filtered } = useParams("Graf ");
+const { filtered } = useParams();
 
 definePageMeta({
   title: "Graf",

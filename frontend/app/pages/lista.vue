@@ -11,7 +11,7 @@ definePageMeta({
 
 const { entities: peopleUnfiltered } = await useEntity("person");
 
-const { filtered } = useParams("Lista ");
+const { filtered } = useParams();
 
 const people = computed(() => {
   const unfiltered = peopleUnfiltered.value;
