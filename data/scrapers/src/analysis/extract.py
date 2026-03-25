@@ -7,11 +7,30 @@ from memoized_property import memoized_property  # type:ignore
 
 from analysis.people import PeopleEnriched
 from analysis.utils import drop_duplicates, empty_list_if_nan
+from scrapers.article.hardcoded.listawstydupo import hardcoded as listawstydu
+from scrapers.article.hardcoded.tlustekotypisu import hardcoded as tlustekoty
 from scrapers.krs.data import PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
 from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
+
+
+def check_auto_approved():
+    tlustekotyset = set(tlustekoty)
+    listawstyduset = set(listawstydu)
+
+    def check_row(row) -> int:
+        full_name = row["krs_name"]
+        first_name = full_name.split(" ")[0]
+        last_name = full_name.split(" ")[-1]
+        name = f"{first_name} {last_name}"
+        # TODO remove this hardcoding
+        return (2 if name in tlustekotyset else 0) | (
+            1 if name in listawstyduset else 0
+        )
+
+    return check_row
 
 
 class Extract(Pipeline):
@@ -40,10 +59,19 @@ class Extract(Pipeline):
             default=None,
             required=False,
         )
+        parser.add_argument(
+            "--approved",
+            help="Extract people already approved",
+            default=None,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
         args, _ = parser.parse_known_args()
 
-        if not args.region and not args.krs:
-            raise ValueError("Either region or krs must be provided")
+        if not args.region and not args.krs and not args.approved:
+            raise ValueError(
+                "[Extract]: Either --region or --krs or --approved must be provided"
+            )
 
         return args
 
@@ -55,11 +83,20 @@ class Extract(Pipeline):
     def krs(self):
         return self.args.krs
 
+    @property
+    def approved(self) -> bool:
+        return self.args.approved
+
     @memoized_property
     def filename(self):
+        result = "people_extracted"
+        if self.approved:
+            result += "_approved"
         if self.krs:
-            return f"people_extracted_krs_{self.krs}"
-        return f"people_extracted_{self.region}"
+            result += f"_krs_{self.krs}"
+        if self.region:
+            result += f"_region_{self.region}"
+        return result
 
     def process_graph(self, ctx: Context):
         companies_df = self.companies.read_or_process(ctx)
@@ -124,9 +161,11 @@ class Extract(Pipeline):
 
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
+        auto_approved = people.apply(check_auto_approved(), axis=1)
+
         people["total_elections"] = people["elections"].apply(list_length)
         people["total_employments"] = people["employment"].apply(list_length)
-        relevant = (relevant_employment + relevant_elections) > 0
+        relevant = (relevant_employment + relevant_elections + auto_approved) > 0
         people["relevance_ratio"] = (relevant_employment + relevant_elections) / (
             people["total_elections"] + people["total_employments"]
         )
