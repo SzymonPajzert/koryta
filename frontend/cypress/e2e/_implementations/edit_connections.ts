@@ -27,7 +27,7 @@ describe("Edit Node Connections", () => {
     cy.contains("Zaproponuj zmianę").click();
 
     cy.get(".v-btn").contains("zna").click();
-    cy.pickEntity(targetName);
+    cy.pickEntity(targetName, "entity-picker-target");
     let alertFired1 = false;
     cy.on("window:alert", (str) => {
       if (str.includes("Dodano powiązanie!")) alertFired1 = true;
@@ -50,7 +50,7 @@ describe("Edit Node Connections", () => {
     cy.verifyLabelExists("Wyszukaj firmę");
     cy.verifyLabelDoesNotExist("Wyszukaj osobę");
 
-    cy.pickEntity("Orlen");
+    cy.pickEntity("Orlen", "entity-picker-target");
     cy.fillField("Nazwa relacji", "Zatrudnienie");
 
     let alertFired2 = false;

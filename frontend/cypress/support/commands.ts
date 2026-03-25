@@ -277,14 +277,18 @@ Cypress.Commands.add(
       .clear({ force: true })
       .type(name, { delay: 100 });
 
-    // Wait for overlay item and click it
-    cy.get(".v-overlay:visible", { timeout: 15000 })
-      .filter(":visible")
+    // Wait for overlay item to appear and click the list item itself
+    cy.get(".v-overlay-container", { timeout: 15000 })
+      .find(".v-list-item")
+      .not('[data-testid="entity-picker-add-new-entity"]')
       .contains(name)
-      .first()
       .should("be.visible")
-      .click({ force: true });
+      .closest(".v-list-item") // Walk back up to the list item to ensure we click the clickable target
+      .first()
+      .click();
 
+    cy.wait(500); // Give vuetify time to register the selection and close the menu
+    
     cy.task("log", `--- END pickEntity for ${name} ---`);
   },
 );

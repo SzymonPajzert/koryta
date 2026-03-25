@@ -221,15 +221,9 @@ const {
   data: response,
   status,
   error,
-  refresh,
 } = await authFetch<{
   node: Person | Company | Article | Region;
-}>(sourcePath, { lazy: true, immediate: false });
-watch(user, (focused) => {
-  if (focused) {
-    refresh();
-  }
-});
+}>(sourcePath);
 
 const entity = computed(() => response.value?.node);
 

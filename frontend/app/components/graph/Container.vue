@@ -16,7 +16,6 @@ import { useGraph } from "~/composables/graph";
 const props = defineProps<{
   focusNodeId?: string;
   maxDepth?: number;
-  filtered?: string[];
 }>();
 
 const expandedNodes = ref(

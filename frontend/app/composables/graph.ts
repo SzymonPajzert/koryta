@@ -10,6 +10,8 @@ export type GraphOptions = {
 };
 
 export function useGraph(opts: GraphOptions = {}) {
+  console.log(opts);
+
   const { data: graph } = useAsyncData<GraphLayout>(
     "graph",
     () => $fetch("/api/graph"),
@@ -19,11 +21,8 @@ export function useGraph(opts: GraphOptions = {}) {
     nodes: Record<string, { x: number; y: number }>;
   }>("layout", () => $fetch("/api/graph/layout"), { lazy: true });
 
-  const { data } = useAsyncData<GraphLayout>("graph", () =>
-    $fetch("/api/graph"),
-  );
   const nodeGroupsMap = computed(() => {
-    const groups = data.value?.nodeGroups;
+    const groups = graph.value?.nodeGroups;
     if (!Array.isArray(groups)) return {};
     return groups.reduce(
       (acc, curr) => {
@@ -48,6 +47,7 @@ export function useGraph(opts: GraphOptions = {}) {
         if (!node) return false;
         // Only show circles (people), documents (articles/regions) or rects (places) with people
         if (node.type === "rect") {
+          console.log(node);
           return node.stats?.people > 0;
         }
         return true;
@@ -81,15 +81,22 @@ export function useGraph(opts: GraphOptions = {}) {
 
       while (queue.length > 0 && !!edges.value) {
         const current = queue.shift()!;
+        console.log(current);
         if (current.d >= depth) continue;
 
         const neighbors = edges.value
           .filter((e) => e.source === current.id || e.target === current.id)
           .map((e) => (e.source === current.id ? e.target : e.source));
+        console.log(neighbors);
 
         for (const neighborId of neighbors) {
           // Skip nodes that represent empty places or are otherwise filtered out
-          if (!interestingNodes.value[neighborId]) continue;
+          console.log(`neighborId: ${neighborId}`);
+          if (!interestingNodes.value[neighborId]) {
+            console.log(`skipping ${neighborId}`);
+            continue;
+          }
+          console.log("not skipping");
 
           if (!visited.has(neighborId)) {
             visited.set(neighborId, 1);
@@ -134,6 +141,15 @@ export function useGraph(opts: GraphOptions = {}) {
       }
     }
     return Array.from(unique.values());
+  });
+
+  watch([edges, nodesFiltered1], () => {
+    console.log(edges.value);
+    console.log(nodesFiltered1.value);
+    console.log(interestingNodes.value);
+    console.log(nodesFiltered.value);
+    console.log(edgesFilteredDuplicates.value);
+    console.log(edgesFiltered.value);
   });
 
   return {

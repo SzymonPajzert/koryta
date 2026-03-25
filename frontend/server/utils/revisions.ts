@@ -22,14 +22,17 @@ export function createRevisionTransaction(
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
 
-  const revision = {
+  const revision: Record<string, any> = {
     // TODO test it is always set correctly and check if the DB has wrong entries there
     node_id: targetRef.id,
     data,
     update_time: timestamp,
     update_user: user.uid,
-    update_automatic: automatic ? true : undefined,
   };
+
+  if (automatic) {
+    revision.update_automatic = true;
+  }
 
   batch.set(revisionRef, revision);
 

@@ -28,23 +28,13 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
   // State keys should include node_id to avoid sharing across different nodes if navigated
   const stateKey = computed(() => `node-edit-${node_id.value || "new"}`);
 
-  const authHeaders = computed<Record<string, string>>(() => {
-    const headers: Record<string, string> = {};
-    if (idToken.value) {
-      headers.Authorization = `Bearer ${idToken.value}`;
-    }
-    return headers;
-  });
-
   const { save } = useEntityMutation();
 
   const { current, revisions, loading, fetchData, fetchRevisions } =
     useNodeData({
       nodeId: node_id,
       isNew,
-      authHeaders,
       stateKey,
-      idToken,
       initialType: (route.query.type as NodeType | undefined) ?? "person",
     });
 
@@ -147,7 +137,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     loading,
     revisions,
     allEdges,
-    authHeaders,
     refreshEdges,
     partiesDefault,
     idToken,
