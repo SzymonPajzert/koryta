@@ -64,6 +64,12 @@ export function getNodeGroups(
           if (!id) return false;
           return !nodesNoStats[id]?.hide;
         }) as string[];
+
+      if (placeID == "teryt3061") {
+        console.log(place);
+        console.log(children);
+      }
+
       return {
         id: placeID,
         name: place.name,
@@ -120,6 +126,8 @@ export function getNodesNoStats(
   Object.entries(regions).forEach(([key, region]) => {
     result[key] = regionNode(region);
   });
+
+  console.log("getNodesNoStats", result["loYgy9nSmuevSAbYz1ME"]);
 
   return result;
 }

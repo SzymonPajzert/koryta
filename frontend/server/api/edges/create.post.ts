@@ -36,6 +36,11 @@ export default defineEventHandler(async (event) => {
     by_election: !!body.by_election,
   };
 
+  // Add update_automatic to revisionData only if it's explicitly provided in the body
+  if (body.update_automatic !== undefined) {
+    revisionData.update_automatic = body.update_automatic;
+  }
+
   const batch = db.batch();
   createRevisionTransaction(db, batch, user, edgeRef, revisionData);
 

@@ -9,7 +9,6 @@ interface MutationParams<Payload = unknown, Result = any> {
 
 export function useEntityMutation() {
   const isSaving = ref(false);
-  const { idToken } = useAuthState(); // Ensure auth state is ready
 
   async function save<
     Result = { id: string },
@@ -28,15 +27,9 @@ export function useEntityMutation() {
     try {
       const endpoint = isNew ? createEndpoint : revisionEndpoint;
 
-      const headers: Record<string, string> = {};
-      if (idToken.value) {
-        headers["Authorization"] = `Bearer ${idToken.value}`;
-      }
-
-      const response = await $fetch<Result>(endpoint, {
+      const response = await authFetch<Result>(endpoint, {
         method: "POST",
         body: payload,
-        headers,
       });
 
       if (successMessage) {

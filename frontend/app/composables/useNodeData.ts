@@ -10,7 +10,7 @@ import type {
 } from "~~/shared/model";
 import { getPageTitle } from "~/composables/useFunctions";
 import { anyNode } from "~~/shared/empty";
-import { useAuthState } from "./auth";
+import { useAuthState, authFetch } from "./auth";
 
 export type EditablePage = Partial<Node> &
   Partial<Omit<Person, "type">> &
@@ -20,14 +20,12 @@ export type EditablePage = Partial<Node> &
 interface UseNodeDataOptions {
   nodeId: Ref<string | undefined>;
   isNew: Ref<boolean>;
-  authHeaders: Ref<Record<string, string>>;
   initialType?: NodeType;
   stateKey: Ref<string>;
-  idToken: Ref<string>;
 }
 
 export function useNodeData(options: UseNodeDataOptions) {
-  const { nodeId, isNew, authHeaders, stateKey, idToken } = options;
+  const { nodeId, isNew, stateKey } = options;
   const db = getFirestore(useFirebaseApp(), "koryta-pl");
   const { user } = useAuthState();
 
@@ -48,12 +46,8 @@ export function useNodeData(options: UseNodeDataOptions) {
   async function fetchRevisions() {
     if (!nodeId.value) return;
     try {
-      // TODO don't use fetch, use authFetch here
-      const res = await $fetch<{ revisions: Revision[] }>(
+      const res = await authFetch<{ revisions: Revision[] }>(
         `/api/revisions/node/${nodeId.value}`,
-        {
-          headers: authHeaders.value,
-        },
       );
       revisions.value = res.revisions;
     } catch (e) {
@@ -67,15 +61,12 @@ export function useNodeData(options: UseNodeDataOptions) {
     if (loading.value) return; // Basic guard
     if (id === lastFetchedId.value && id !== undefined) return;
 
-    if (!isNew.value && id && idToken.value) {
+    if (!isNew.value && id) {
       try {
         const snap = await getDoc(doc(db, "nodes", id));
         if (snap.exists()) {
           console.log("fetchData");
-          const { node } = await $fetch<{ node: Node }>(`/api/nodes/${id}`, {
-            query: { latest: user.value ? "true" : undefined },
-            headers: authHeaders.value,
-          });
+          const { node } = await authFetch<{ node: Node }>(`/api/nodes/${id}`);
 
           const v: EditablePage = {
             name: node.name || "",
