@@ -20,7 +20,8 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const ctx = new Context(db, user);
+  const batch = db.batch();
+  const ctx = new Context(db, user, batch);
 
   const { companyIDs, missingKRS } = await lookupCompanyIDs(
     ctx,
@@ -38,8 +39,6 @@ export default defineEventHandler(async (event) => {
       data: missingKRS,
     };
   }
-
-  const batch = db.batch();
 
   try {
     let personId: string | undefined = await lookupNode(ctx, "name", body.name);
@@ -155,10 +154,11 @@ class Context {
   constructor(
     readonly db: FirebaseFirestore.Firestore,
     readonly user: { uid: string },
+    batch?: FirebaseFirestore.WriteBatch,
   ) {
     this.db = db;
     this.user = user;
-    this.batch = db.batch();
+    this.batch = batch || db.batch();
   }
 }
 
