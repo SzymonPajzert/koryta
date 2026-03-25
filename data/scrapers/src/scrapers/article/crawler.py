@@ -1,4 +1,5 @@
 from __future__ import annotations
+import threading
 import hashlib
 import io
 import logging
@@ -19,7 +20,7 @@ from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
-from scrapers.stores import CloudStorage, Context, DataRef, LocalFile
+from scrapers.stores import CloudStorage, Context, CrawlQueue, DataRef, LocalFile
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
@@ -66,18 +67,20 @@ def stopwatch():
     yield stats
     stats.duration = time.perf_counter() - start
 
-# Per each hostname we do on-worker rate limitng.
-next_request_time: dict[str, float] = {}
 
+# Per each hostname we do on-worker rate limitng.
+_next_request_time: dict[str, float] = {}
+_next_req_lock = threading.Lock()
 
 def _can_crawl(parsed: NormalizedParse, rate_limit: int) -> bool:
-    domain = parsed.hostname_normalized
-    next_time = next_request_time.get(domain, 0)
-    now = time.time()
-    if now < next_time:
-        return False
-    next_request_time[domain] = time.time() + rate_limit
-    return True
+    with _next_req_lock:
+        domain = parsed.hostname_normalized
+        next_time = _next_request_time.get(domain, 0)
+        now = time.time()
+        if now < next_time:
+            return False
+        _next_request_time[domain] = time.time() + rate_limit
+        return True
 
 
 def _compress_long_segments(path: str, max_segment_length: int) -> str:
@@ -95,8 +98,8 @@ def _compress_long_segments(path: str, max_segment_length: int) -> str:
 
 
 def _storage_path(
-    parsed: NormalizedParse,
-    suffix: str | None = None,
+        parsed: NormalizedParse,
+        suffix: str | None = None,
 ) -> str:
     path = parsed.path or ""
     path = path.strip("/")
@@ -127,10 +130,10 @@ def _is_html_response(response: requests.Response) -> bool:
 
 
 def _upload_response(
-    ctx: Context,
-    parsed: NormalizedParse,
-    response: requests.Response,
-    options: CrawlOptions,
+        ctx: Context,
+        parsed: NormalizedParse,
+        response: requests.Response,
+        options: CrawlOptions,
 ) -> str:
     binary_payload = response.content
     path = _storage_path(parsed)
@@ -156,16 +159,16 @@ def _upload_response(
 
 
 def crawl_url(
-    ctx: Context,
-    parsed_url: NormalizedParse,
-    options: CrawlOptions,
+        ctx: Context,
+        parsed_url: NormalizedParse,
+        options: CrawlOptions,
 ) -> CrawlResult:
     start_time = time.time()
     if not ctx.web.robot_txt_allowed(
-        ctx,
-        parsed_url.full_url,
-        parsed_url,
-        HEADERS["User-Agent"],
+            ctx,
+            parsed_url.full_url,
+            parsed_url,
+            HEADERS["User-Agent"],
     ):
         return CrawlResult(error="disallowed by robots")
 
@@ -213,8 +216,8 @@ def crawl_url(
 
 
 def _extract_urls(
-    ctx: Context,
-    response: requests.Response,
+        ctx: Context,
+        response: requests.Response,
 ) -> set[str]:
     discovered = set()
     soup = BeautifulSoup(response.text, "lxml")
@@ -246,66 +249,68 @@ def _priority_for_url(options: CrawlOptions, url: str) -> int:
     return max(0, min(100, 100 - score))
 
 
+def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, ctx: Context):
+    logging.info("Starting crawler thread %s for worker %s", thread_index, options.worker_id)
+    worker_name = f"{options.worker_id}_{thread_index}"
+
+    while True:
+        entry = queue.get(
+            worker_name,
+            max_retries=options.per_url_max_retries,
+            timeout_seconds=options.lock_timeout_seconds,
+        )
+        if entry is None:
+            time.sleep(0.1)
+            logging.info(f"Crawler thread {thread_index} sleeping")
+            continue
+
+        uid, url = entry
+        parsed_url = NormalizedParse.parse(url)
+        result = crawl_url(ctx, parsed_url, options)
+
+        if result.hit_rate_limit:
+            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
+            return
+
+        if result.error:
+            logging.error(
+                f"[{result.request_duration_s:.2f}s] "
+                f"Crawl failed ({result.error}): {parsed_url.full_url}"
+            )
+            queue.mark_error(uid, result.error)
+            return
+
+        logging.info(
+            f"[{result.request_duration_s:.2f}s] "
+            f"Crawl succeeded: {parsed_url.full_url}"
+        )
+        queue.mark_done(uid, result.storage_path, {
+            "request_duration_s": result.request_duration_s,
+            "parse_duration_s": result.parse_duration_s,
+            "upload_duration_s": result.upload_duration_s,
+            "total_duration_s": result.total_duration_s,
+            "worker_id": worker_name,
+            "media_type": result.media_type,
+        })
+        queue.put(
+            [
+                (url, _priority_for_url(options, url))
+                for url in result.discovered_urls
+            ]
+        )
+
+
 def run_crawler(ctx: Context, options: CrawlOptions):
     queue = ctx.crawl_queue
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
 
-    def _worker_thread(thread_index: int):
-        logging.info("Starting crawler thread %s for worker %s", thread_index, options.worker_id)
-        worker_name = f"{options.worker_id}_{thread_index}"
-        while True:
-            entry = queue.get(
-                worker_name,
-                max_retries=options.per_url_max_retries,
-                timeout_seconds=options.lock_timeout_seconds,
-            )
-            if entry is None:
-                time.sleep(0.1)
-                logging.info(f"Crawler thread {thread_index} sleeping")
-                continue
-
-            uid, url = entry
-            parsed_url = NormalizedParse.parse(url)
-            result = crawl_url(ctx, parsed_url, options)
-
-            if result.hit_rate_limit:
-                logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
-                return
-
-            if result.error:
-                logging.error(
-                    f"[{result.request_duration_s:.2f}s] "
-                    f"Crawl failed ({result.error}): {parsed_url.full_url}"
-                )
-                queue.mark_error(uid, result.error)
-                return
-
-            logging.info(
-                f"[{result.request_duration_s:.2f}s] "
-                f"Crawl succeeded: {parsed_url.full_url}"
-            )
-            queue.mark_done(uid, result.storage_path, {
-                "request_duration_s": result.request_duration_s,
-                "parse_duration_s": result.parse_duration_s,
-                "upload_duration_s": result.upload_duration_s,
-                "total_duration_s": result.total_duration_s,
-                "worker_id": worker_name,
-                "media_type": result.media_type,
-            })
-            queue.put(
-                [
-                    (url, _priority_for_url(options, url))
-                    for url in result.discovered_urls
-                ]
-            )
-
     logging.info("Starting to crawl in worker: %s", options.worker_id)
     if options.worker_threads <= 1:
-        _worker_thread(0)
+        _worker_thread(0, options, queue, ctx)
         return
 
     with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
-        futures = [executor.submit(_worker_thread, idx) for idx in range(options.worker_threads)]
+        futures = [executor.submit(_worker_thread, idx, options, queue, ctx) for idx in range(options.worker_threads)]
         for future in futures:
             future.result()
