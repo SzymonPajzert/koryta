@@ -34,7 +34,6 @@ export function getNodeGroups(
 
   edges.forEach((edge: Edge) => {
     if (!edge.traverse) {
-      // TODO console.error("no traverse policy in ", edge);
       return;
     }
     // If the edge should spread the node group, either map it to active node or dead_end
@@ -64,11 +63,6 @@ export function getNodeGroups(
           if (!id) return false;
           return !nodesNoStats[id]?.hide;
         }) as string[];
-
-      if (placeID == "teryt3061") {
-        console.log(place);
-        console.log(children);
-      }
 
       return {
         id: placeID,
@@ -126,8 +120,6 @@ export function getNodesNoStats(
   Object.entries(regions).forEach(([key, region]) => {
     result[key] = regionNode(region);
   });
-
-  console.log("getNodesNoStats", result["loYgy9nSmuevSAbYz1ME"]);
 
   return result;
 }

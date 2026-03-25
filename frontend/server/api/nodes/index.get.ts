@@ -5,6 +5,8 @@ import { z } from "zod";
 
 const queryValidator = z.object({
   type: z.enum(["person", "place", "article", "region"]).optional(),
+  party: z.string().optional(),
+  place: z.string().optional(),
 });
 
 export default authCachedEventHandler(async (event) => {
