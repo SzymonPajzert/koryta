@@ -112,17 +112,6 @@ const baseItems = computed<ListItem[]>(() => {
       content_type: "nodeGroup",
     },
   });
-  result.push({
-    title: "Graf wszystkich osób",
-    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people ?? 0} powiązanych osób`,
-    icon: "mdi-graph-outline",
-    path: "/graf",
-    logEventKey: {
-      content_id: graph.value?.nodeGroups?.[0]?.id || "",
-      content_type: "nodeGroup",
-    },
-  });
-
   parties.forEach((item) => {
     result.push({
       title: item,
