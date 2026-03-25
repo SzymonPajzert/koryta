@@ -137,6 +137,9 @@ class Uploader:
         self.success_count = 0
         self.total = len(entities)
         for idx, payload in enumerate(entities):
+            if self.args.limit is not None and idx >= self.args.limit:
+                print(f"Reached limit {self.args.limit}")
+                break
             time.sleep(0.3)
             name = payload.get("name", None) if payload is not None else None
             if payload is None or name is None:
