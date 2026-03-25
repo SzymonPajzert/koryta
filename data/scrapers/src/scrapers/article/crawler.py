@@ -1,14 +1,15 @@
 from __future__ import annotations
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
-from types import SimpleNamespace
+import hashlib
 import io
 import logging
 import mimetypes
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
@@ -19,6 +20,7 @@ from uuid_extensions import uuid7str  # type: ignore
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
 from scrapers.stores import CloudStorage, Context, DataRef, LocalFile
+
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
 
@@ -78,6 +80,20 @@ def _can_crawl(parsed: NormalizedParse, rate_limit: int) -> bool:
     return True
 
 
+def _compress_long_segments(path: str, max_segment_length: int) -> str:
+    path_segments = [s for s in path.split("/") if s]
+
+    safe_segments = []
+    for segment in path_segments:
+        if len(segment.encode('utf-8')) > max_segment_length:
+            hash_suffix = hashlib.md5(segment.encode()).hexdigest()[:10]
+            truncated = segment[:max_segment_length - 12]
+            segment = f"{truncated}_{hash_suffix}"
+        safe_segments.append(segment)
+
+    return "/".join(safe_segments)
+
+
 def _storage_path(
     parsed: NormalizedParse,
     suffix: str | None = None,
@@ -90,7 +106,9 @@ def _storage_path(
     base = f"hostname={parsed.hostname}/{path}/date={date}"
     if suffix:
         base = f"{base}/{suffix}"
-    return base.replace("//", "/").rstrip("/")
+    storage_path = base.replace("//", "/").rstrip("/")
+    # We compress the segments because otherwise we can get "OSError: [Errno 36] File name too long"
+    return _compress_long_segments(storage_path, 200)
 
 
 def _content_type_from_response(response: requests.Response) -> str:
@@ -233,49 +251,12 @@ def run_crawler(ctx: Context, options: CrawlOptions):
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
 
-    logging.info("Starting to crawl in worker: %s", options.worker_id)
-
-    def _handle_entry(entry: tuple[str, str]):
-        uid, url = entry
-        parsed_url = NormalizedParse.parse(url)
-        result = crawl_url(ctx, parsed_url, options)
-
-        if result.hit_rate_limit:
-            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
-            return
-
-        if result.error:
-            logging.error(
-                f"[{result.request_duration_s:.2f}s] "
-                f"Crawl failed ({result.error}): {parsed_url.full_url}"
-            )
-            queue.mark_error(uid, result.error)
-            return
-
-        logging.info(
-            f"[{result.request_duration_s:.2f}s] "
-            f"Crawl succeeded: {parsed_url.full_url}"
-        )
-        queue.mark_done(uid, result.storage_path, {
-            "request_duration_s": result.request_duration_s,
-            "parse_duration_s": result.parse_duration_s,
-            "upload_duration_s": result.upload_duration_s,
-            "total_duration_s": result.total_duration_s,
-            "worker_id": options.worker_id,
-            "media_type": result.media_type,
-        })
-        queue.put(
-            [
-                (url, _priority_for_url(options, url))
-                for url in result.discovered_urls
-            ]
-        )
-
     def _worker_thread(thread_index: int):
         logging.info("Starting crawler thread %s for worker %s", thread_index, options.worker_id)
+        worker_name = f"{options.worker_id}_{thread_index}"
         while True:
             entry = queue.get(
-                options.worker_id,
+                worker_name,
                 max_retries=options.per_url_max_retries,
                 timeout_seconds=options.lock_timeout_seconds,
             )
@@ -284,8 +265,42 @@ def run_crawler(ctx: Context, options: CrawlOptions):
                 logging.info(f"Crawler thread {thread_index} sleeping")
                 continue
 
-            _handle_entry(entry)
+            uid, url = entry
+            parsed_url = NormalizedParse.parse(url)
+            result = crawl_url(ctx, parsed_url, options)
 
+            if result.hit_rate_limit:
+                logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
+                return
+
+            if result.error:
+                logging.error(
+                    f"[{result.request_duration_s:.2f}s] "
+                    f"Crawl failed ({result.error}): {parsed_url.full_url}"
+                )
+                queue.mark_error(uid, result.error)
+                return
+
+            logging.info(
+                f"[{result.request_duration_s:.2f}s] "
+                f"Crawl succeeded: {parsed_url.full_url}"
+            )
+            queue.mark_done(uid, result.storage_path, {
+                "request_duration_s": result.request_duration_s,
+                "parse_duration_s": result.parse_duration_s,
+                "upload_duration_s": result.upload_duration_s,
+                "total_duration_s": result.total_duration_s,
+                "worker_id": worker_name,
+                "media_type": result.media_type,
+            })
+            queue.put(
+                [
+                    (url, _priority_for_url(options, url))
+                    for url in result.discovered_urls
+                ]
+            )
+
+    logging.info("Starting to crawl in worker: %s", options.worker_id)
     if options.worker_threads <= 1:
         _worker_thread(0)
         return
