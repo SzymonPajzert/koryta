@@ -270,34 +270,32 @@ def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, 
 
         if result.hit_rate_limit:
             logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
-            return
-
-        if result.error:
+            queue.release(uid)
+        elif result.error:
             logging.error(
                 f"[{result.request_duration_s:.2f}s] "
                 f"Crawl failed ({result.error}): {parsed_url.full_url}"
             )
             queue.mark_error(uid, result.error)
-            return
-
-        logging.info(
-            f"[{result.request_duration_s:.2f}s] "
-            f"Crawl succeeded: {parsed_url.full_url}"
-        )
-        queue.mark_done(uid, result.storage_path, {
-            "request_duration_s": result.request_duration_s,
-            "parse_duration_s": result.parse_duration_s,
-            "upload_duration_s": result.upload_duration_s,
-            "total_duration_s": result.total_duration_s,
-            "worker_id": worker_name,
-            "media_type": result.media_type,
-        })
-        queue.put(
-            [
-                (url, _priority_for_url(options, url))
-                for url in result.discovered_urls
-            ]
-        )
+        else:
+            logging.info(
+                f"[{result.request_duration_s:.2f}s] "
+                f"Crawl succeeded: {parsed_url.full_url}"
+            )
+            queue.mark_done(uid, result.storage_path, {
+                "request_duration_s": result.request_duration_s,
+                "parse_duration_s": result.parse_duration_s,
+                "upload_duration_s": result.upload_duration_s,
+                "total_duration_s": result.total_duration_s,
+                "worker_id": worker_name,
+                "media_type": result.media_type,
+            })
+            queue.put(
+                [
+                    (url, _priority_for_url(options, url))
+                    for url in result.discovered_urls
+                ]
+            )
 
 
 def run_crawler(ctx: Context, options: CrawlOptions):
