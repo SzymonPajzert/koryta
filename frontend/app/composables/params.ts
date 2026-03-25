@@ -1,4 +1,4 @@
-export function useParams(title: string) {
+export function useParams() {
   const route = useRoute();
   const { nodesFiltered: nodes, nodeGroupsMap } = useGraph();
 
@@ -8,12 +8,10 @@ export function useParams(title: string) {
     let keys = Object.keys(nodes.value);
 
     if (route.query.miejsce && typeof route.query.miejsce === "string") {
-      document.title = title + nodeGroupsMap.value[route.query.miejsce]?.name;
       keys = nodeGroupsMap.value[route.query.miejsce]?.connected ?? [];
     }
 
     if (route.query.partia && typeof route.query.partia === "string") {
-      document.title = title + route.query.partia;
       keys = Object.keys(nodes.value).filter((key) => {
         const node = nodes.value[key];
         return node?.parties?.includes(route.query.partia as string);
