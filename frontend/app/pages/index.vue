@@ -24,9 +24,9 @@
     </v-col>
     <v-col cols="12" md="6">
       <HomeHeading
-        id="bezpartyjny"
+        id="niezalezny"
         class="scroll-topic"
-        title="Bezpartyjny"
+        title="Niezależny"
         center
       />
       <v-card class="py-4" color="surface-variant" variant="tonal" rounded="lg">
