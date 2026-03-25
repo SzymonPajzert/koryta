@@ -53,10 +53,8 @@
             >ogólnopolski</a
           >
           i
-          <a
-            href="#bezpartyjny"
-            class="text-decoration-none text-info hero-link"
-            >bezpartyjny</a
+          <a href="#niezalezny" class="text-decoration-none text-info hero-link"
+            >niezależny</a
           >
           <a
             href="#agregator"
