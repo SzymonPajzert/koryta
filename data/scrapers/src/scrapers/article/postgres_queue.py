@@ -198,7 +198,7 @@ class PostgresCrawlQueue(CrawlQueue):
                           WHERE wi.url = bd.domain
                              OR wi.url LIKE bd.domain || '/%%'
                       )
-                    ORDER BY wi.priority ASC, RANDOM()
+                    ORDER BY wi.priority ASC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 )
