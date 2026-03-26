@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import logging
-import threading
 import hashlib
-import io
+import logging
 import mimetypes
-from concurrent.futures import ThreadPoolExecutor
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo
 
 import requests
@@ -21,7 +20,7 @@ from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
-from scrapers.stores import CloudStorage, Context, DataRef, LocalFile, CrawlQueue
+from scrapers.stores import CloudStorage, Context, CrawlQueue, DataRef, LocalFile
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
@@ -74,7 +73,7 @@ _next_request_time: dict[str, float] = {}
 
 
 
-def _can_crawl(parsed: NormalizedParse, rate_limit: int) -> bool:
+def _can_crawl(parsed: NormalizedParse, rate_limit: float) -> bool:
     with _next_req_lock:
         domain = parsed.hostname_normalized
         next_time = _next_request_time.get(domain, 0)
@@ -110,7 +109,8 @@ def _storage_path(
     if suffix:
         base = f"{base}/{suffix}"
     storage_path = base.replace("//", "/").rstrip("/")
-    # We compress the segments because otherwise we can get "OSError: [Errno 36] File name too long"
+    # We compress the segments because otherwise we can
+    # get "OSError: [Errno 36] File name too long"
     return _compress_long_segments(storage_path, 200)
 
 
@@ -135,7 +135,7 @@ def _upload_response(
     response: requests.Response,
     options: CrawlOptions,
 ) -> str:
-    binary_payload = response.text
+    binary_payload = response.content
     path = _storage_path(parsed)
     ref: DataRef
     if options.storage_type == "gcs":
@@ -151,11 +151,12 @@ def _upload_response(
     else:
         raise ValueError("Unknown storage type")
 
-    def _write_bytes(stream: io.BufferedWriter):
+    def _write_payload(stream: Any):
         stream.write(binary_payload)
 
-    ctx.io.write_file(ref, _write_bytes)
+    ctx.io.write_file(ref, _write_payload)
     return path
+
 
 
 def crawl_url(
@@ -202,7 +203,8 @@ def crawl_url(
             discovered_urls = _extract_urls(ctx, response)
         else:
             discovered_urls = set()
-            logging.info(f"Not parsing the file, because it's not HTML {parsed_url.full_url}")
+            logging.info(f"Not parsing the file, because it's not HTML "
+                         f"{parsed_url.full_url}")
 
     return CrawlResult(
         storage_path=storage_path,
@@ -216,27 +218,36 @@ def crawl_url(
 
 
 def _extract_urls(
-    ctx: Context,
-    response: requests.Response,
+        ctx: Context,
+        response: requests.Response,
 ) -> set[str]:
     discovered = set()
     soup = BeautifulSoup(response.text, "lxml")
 
     base_tag = soup.find("base", href=True)
-    base_url = base_tag.get("href") if base_tag else response.url
+    base_url = response.url
+
+    if isinstance(base_tag, Tag):
+        base_href = base_tag.get("href")
+        if isinstance(base_href, str):
+            base_url = base_href
 
     for link_el in soup.find_all("a", href=True):
         if not isinstance(link_el, Tag):
             continue
 
-        link = link_el.get("href").strip()
+        href_attr = link_el.get("href")
+        if not isinstance(href_attr, str):
+            continue
 
-        if not link or link.startswith(("#", "mailto:", "tel:", "javascript:", "data:")):
+        link = href_attr.strip()
+
+        if not link or link.startswith(("#", "mailto:", "tel:",
+                                        "javascript:", "data:")):
             continue
 
         absolute_link = ctx.utils.join_url(base_url, link)
         clean_link = absolute_link.split("#")[0].rstrip("/")
-
 
         if clean_link.startswith(("http://", "https://")):
             discovered.add(clean_link)
@@ -249,7 +260,8 @@ def _priority_for_url(options: CrawlOptions, url: str) -> int:
     score = scorer(url)
     return max(0, min(100, 100 - score))
 
-def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, ctx: Context):
+def _worker_thread(thread_index: int, options: CrawlOptions,
+                   queue: CrawlQueue, ctx: Context):
     logging.info("Starting to crawl in worker: %s", options.worker_id)
     worker_name = f"{options.worker_id}_{thread_index}"
 
@@ -270,8 +282,9 @@ def _worker_thread(thread_index: int, options: CrawlOptions, queue: CrawlQueue, 
 
         if result.hit_rate_limit:
             logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url})")
-            # NOTE: We do not release the lock here, because we rely on lock timeout mechanism to make it available again
-            # This way it won't be queried over and over again if it has a high priority
+            # NOTE: We do not release the lock here, because we rely on lock timeout
+            # mechanism to make it available again. This way it won't be queried over
+            # and over again if it has a high priority
         elif result.error:
             logging.error(
                 f"[{result.request_duration_s:.2f}s] "
@@ -309,7 +322,8 @@ def run_crawler(ctx: Context, options: CrawlOptions):
         return
 
     with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
-        futures = [executor.submit(_worker_thread, idx, options, queue, ctx) for idx in range(options.worker_threads)]
+        futures = [executor.submit(_worker_thread, idx, options, queue, ctx)
+                   for idx in range(options.worker_threads)]
         for future in futures:
             future.result()
 
