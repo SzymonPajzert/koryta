@@ -18,7 +18,7 @@ export default authCachedEventHandler(async () => {
   const [edgesFromDB] = await Promise.all([fetchEdges()]);
   const edges = getEdges(edgesFromDB);
 
-  const counts: Record<string, number> = {};
+  const articleCounts: Record<string, number> = {};
   const domainMap: Record<string, string> = {}; // domain -> full url sample
   const domainPeople: Record<string, Set<string>> = {};
   const articleToDomain = new Map<string, string>();
@@ -30,7 +30,7 @@ export default authCachedEventHandler(async () => {
     const url = new URL(art.sourceURL);
     const domain = url.hostname.replace("www.", "");
 
-    counts[domain] = (counts[domain] || 0) + 1;
+    articleCounts[domain] = (articleCounts[domain] || 0) + 1;
     if (!domainMap[domain]) domainMap[domain] = url.origin;
     if (!domainPeople[domain]) domainPeople[domain] = new Set();
 
@@ -48,14 +48,14 @@ export default authCachedEventHandler(async () => {
     }
   });
 
-  // Convert to array and sort
-  const sourceStats: SourceStat[] = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1]) // Sort desc
-    .map(([domain, articleCount]) => ({
+  // Convert to array and sort by the number of people
+  const sourceStats: SourceStat[] = Object.entries(domainPeople)
+    .sort((a, b) => b[1].size - a[1].size) // Sort desc
+    .map(([domain, domainPeople]) => ({
       domain,
-      articleCount,
-      peopleCount: domainPeople[domain]?.size || 0,
-      people: Array.from(domainPeople[domain]?.values() ?? []),
+      articleCount: articleCounts[domain] || 0,
+      peopleCount: domainPeople.size || 0,
+      people: Array.from(domainPeople.values() ?? []),
       url: domainMap[domain],
     }));
 
