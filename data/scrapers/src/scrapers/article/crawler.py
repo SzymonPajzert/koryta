@@ -158,7 +158,6 @@ def _upload_response(
     return path
 
 
-
 def crawl_url(
     ctx: Context,
     parsed_url: NormalizedParse,
@@ -260,6 +259,7 @@ def _priority_for_url(options: CrawlOptions, url: str) -> int:
     score = scorer(url)
     return max(0, min(100, 100 - score))
 
+
 def _worker_thread(thread_index: int, options: CrawlOptions,
                    queue: CrawlQueue, ctx: Context):
     worker_name = f"{options.worker_id}_{thread_index}"
@@ -311,12 +311,12 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
                 ]
             )
 
+
 def run_crawler(ctx: Context, options: CrawlOptions):
     queue = ctx.crawl_queue
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
 
-    logging.info("Starting to crawl in worker: %s", options.worker_id)
     if options.worker_threads <= 1:
         _worker_thread(0, options, queue, ctx)
         return

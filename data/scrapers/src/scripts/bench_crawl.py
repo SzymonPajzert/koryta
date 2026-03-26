@@ -377,7 +377,7 @@ def _stop_workers(procs: Iterable[subprocess.Popen[str]]) -> None:
     for proc in procs:
         if proc.poll() is None:
             proc.send_signal(signal.SIGINT)
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     for proc in procs:
         remaining = max(0, deadline - time.time())
         try:
