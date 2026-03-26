@@ -18,6 +18,7 @@ export function createRevisionTransaction(
   targetRef: DocumentReference,
   data: Record<string, unknown> | Node | Edge, // TODO unify this
   automatic: boolean = false,
+  approve: boolean = false,
 ): BatchResult {
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
@@ -35,6 +36,14 @@ export function createRevisionTransaction(
   }
 
   batch.set(revisionRef, revision);
+  // If approve, set the current revision.
+  if (approve) {
+    console.info(
+      `Approving node=${targetRef.id} revision_id=${revisionRef.id}`,
+    );
+    revision.data.revision_id = revisionRef;
+  }
+  batch.set(targetRef, revision.data);
 
   return { revisionRef, targetRef };
 }
