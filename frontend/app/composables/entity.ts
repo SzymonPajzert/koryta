@@ -6,6 +6,7 @@ import { useEntityFiltering } from "./useEntityFiltering";
 export type Filters = {
   party?: string;
   place?: string;
+  source?: string;
 };
 
 export function useEntity<N extends NodeType>(
