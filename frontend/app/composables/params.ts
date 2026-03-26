@@ -13,6 +13,9 @@ export function useParams() {
     if (route.query.partia && typeof route.query.partia === "string") {
       result.party = route.query.partia;
     }
+    if (route.query.source && typeof route.query.source === "string") {
+      result.source = route.query.source;
+    }
     return result;
   });
 

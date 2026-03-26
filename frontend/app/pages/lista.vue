@@ -11,10 +11,26 @@ definePageMeta({
 
 const { filters } = useParams();
 const { entities: peopleMaybe } = useEntity("person", filters);
+const { data: articles } = await authFetch("/api/nodes/articles");
 
 const people = computed(() => {
-  const unfiltered = peopleMaybe.value;
+  let unfiltered = peopleMaybe.value;
   if (!unfiltered) return {};
+
+  if (filters.value.source) {
+    for (const article of articles.value) {
+      if (article.domain === filters.value.source) {
+        return Object.fromEntries(
+          Object.entries(unfiltered).filter(([key, person]) =>
+            article.people.includes(key),
+          ),
+        );
+      }
+    }
+  }
+
+  console.error("returning");
+
   return unfiltered;
 });
 </script>
