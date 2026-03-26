@@ -15,7 +15,7 @@ def authenticate_user(endpoint_url: str) -> str:
     )
     server_thread.start()
 
-    auth_url = f"{endpoint_url}/auth/login?redirect=http://localhost:{auth_port}"
+    auth_url = f"{endpoint_url}/login?redirect=http://localhost:{auth_port}"
     print(f"Opening browser for authentication: {auth_url}", file=sys.stderr)
     webbrowser.open(auth_url)
 
