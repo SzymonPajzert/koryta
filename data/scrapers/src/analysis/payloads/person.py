@@ -88,7 +88,7 @@ class PeoplePayloads(Pipeline[Person]):
 
         companies = _extract_companies(row)
         elections = _extract_elections(row)
-        sources, content, party = _hardcoded_sources_content_parties(row)
+        count, sources, content, party = _hardcoded_sources_content_parties(row)
 
         wiki_name = get_scalar("wiki_name")
         wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
@@ -120,6 +120,7 @@ class PeoplePayloads(Pipeline[Person]):
             parties=party,
             wikipedia_url=wikipedia_url,
             rejestr_io_url=rejestr_io_url,
+            autoapprove=count > 0,
         )
 
 
@@ -135,10 +136,10 @@ auto_approved = check_auto_approved()
 
 def _hardcoded_sources_content_parties(
     row: pd.Series,
-) -> tuple[list[str], str, list[str]]:
+):
     result = []
     result = auto_approved(row)
-    return result[1], result[2], result[3]
+    return result
 
 
 def _extract_companies(row: pd.Series) -> list[Company]:

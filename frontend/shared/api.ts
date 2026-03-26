@@ -18,22 +18,26 @@ export type CompanyRequest = {
 export const personRequestSchema = z.object({
   name: z.string(),
   content: z.string().optional(),
+  autoapprove: z.boolean().optional(),
+
   wikipedia: z.string().optional(),
   rejestrIo: z.string().optional(),
   parties: z.array(z.string()).optional(),
+  sources: z.array(z.string()).optional(),
   companies: z.array(z.any()),
-  articles: z.array(z.any()).optional(),
   elections: z.array(z.any()).optional(),
 });
 
 export type PersonRequest = {
   name: string;
   content?: string;
+  autoapprove?: boolean;
+
   wikipedia?: string;
   rejestrIo?: string;
   parties?: Array<string>;
+  sources?: Array<string>;
   companies: Array<EmploymentRequest>;
-  articles?: Array<ArticleRequest>;
   elections?: Array<ElectionRequest>;
 };
 
@@ -42,10 +46,6 @@ export type EmploymentRequest = {
   role?: string;
   start?: string;
   end?: string;
-};
-
-export type ArticleRequest = {
-  url: string;
 };
 
 export type ElectionRequest = {

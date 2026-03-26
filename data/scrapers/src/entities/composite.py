@@ -29,3 +29,4 @@ class Person:
     parties: list[str] | None = None
     wikipedia_url: str | None = None
     rejestr_io_url: str | None = None
+    autoapprove: bool = False

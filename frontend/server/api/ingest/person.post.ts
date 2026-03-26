@@ -9,7 +9,6 @@ import {
   type EntityResult,
   type ElectionRequest,
   type EmploymentRequest,
-  type ArticleRequest,
   type PersonRequest,
 } from "#shared/api";
 
@@ -21,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const db = getFirestore(getApp(), "koryta-pl");
 
   const batch = db.batch();
-  const ctx = new Context(db, user, batch);
+  const ctx = new Context(db, user, batch, body.autoapprove ?? false);
 
   const { companyIDs, missingKRS } = await lookupCompanyIDs(
     ctx,
@@ -46,8 +45,15 @@ export default defineEventHandler(async (event) => {
       const personRef = db.collection("nodes").doc();
       personId = personRef.id;
       const personData = createPerson(body);
-      batch.set(personRef, personData);
-      createRevisionTransaction(db, batch, user, personRef, personData, true);
+      createRevisionTransaction(
+        db,
+        batch,
+        user,
+        personRef,
+        personData,
+        true,
+        ctx.autoapprove,
+      );
     }
 
     // Track results
@@ -75,7 +81,7 @@ export default defineEventHandler(async (event) => {
       }),
     );
 
-    for (const article of assertArray(body.articles, "articles")) {
+    for (const article of assertArray(body.sources, "articles")) {
       articlesResult.push(await createArticle(ctx, personId, article));
     }
     for (const election of assertArray(body.elections, "elections")) {
@@ -134,16 +140,16 @@ function createPerson(body: Partial<Person>): Person {
 }
 
 class Context {
-  readonly batch: FirebaseFirestore.WriteBatch;
-
   constructor(
     readonly db: FirebaseFirestore.Firestore,
     readonly user: { uid: string },
-    batch?: FirebaseFirestore.WriteBatch,
+    readonly batch: FirebaseFirestore.WriteBatch,
+    readonly autoapprove: boolean,
   ) {
     this.db = db;
     this.user = user;
-    this.batch = batch || db.batch();
+    this.batch = batch;
+    this.autoapprove = autoapprove;
   }
 }
 
@@ -175,23 +181,20 @@ async function createEmployment(
 async function createArticle(
   ctx: Context,
   personId: string,
-  article: ArticleRequest,
+  articleURL: string,
 ): Promise<EntityResult> {
-  if (!article.url) throw badRequest(`Article must have a URL`);
-
   let articleId: string | undefined = undefined;
-  articleId = await lookupNode(ctx, "sourceURL", article.url);
+  articleId = await lookupNode(ctx, "sourceURL", articleURL);
 
   let created = false;
   if (!articleId) {
     const articleRef = ctx.db.collection("nodes").doc();
     articleId = articleRef.id;
     const revisionData: Article = {
-      name: article.url,
+      name: "",
       type: "article",
-      sourceURL: article.url,
+      sourceURL: articleURL,
     };
-    ctx.batch.set(articleRef, revisionData);
     createRevisionTransaction(
       ctx.db,
       ctx.batch,
@@ -199,6 +202,7 @@ async function createArticle(
       articleRef,
       revisionData,
       true,
+      ctx.autoapprove,
     );
     created = true;
   }
@@ -366,8 +370,15 @@ async function findEdgeOrCreate(ctx: Context, edge: Edge) {
 
   if (edgeSnap.empty) {
     const edgeRef = ctx.db.collection("edges").doc();
-    ctx.batch.set(edgeRef, edge);
-    createRevisionTransaction(ctx.db, ctx.batch, ctx.user, edgeRef, edge, true);
+    createRevisionTransaction(
+      ctx.db,
+      ctx.batch,
+      ctx.user,
+      edgeRef,
+      edge,
+      true,
+      ctx.autoapprove,
+    );
     return edgeRef.id;
   }
   return edgeSnap.docs[0]?.id;
