@@ -262,8 +262,8 @@ def _priority_for_url(options: CrawlOptions, url: str) -> int:
 
 def _worker_thread(thread_index: int, options: CrawlOptions,
                    queue: CrawlQueue, ctx: Context):
-    logging.info("Starting to crawl in worker: %s", options.worker_id)
     worker_name = f"{options.worker_id}_{thread_index}"
+    logging.info(f"Starting to crawl in worker {worker_name}")
 
     while True:
         entry = queue.get(
