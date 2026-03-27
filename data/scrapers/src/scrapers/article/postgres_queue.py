@@ -10,10 +10,11 @@ import time
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, TypeVar
 from zoneinfo import ZoneInfo
 
 import psycopg2  # type: ignore
+from psycopg2 import pool as pg_pool
 from psycopg2.extras import Json
 from uuid_extensions import uuid7str  # type: ignore
 
@@ -22,6 +23,8 @@ from scrapers.stores import CrawlQueue
 logger = logging.getLogger(__name__)
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
+
+T = TypeVar("T")
 
 
 class PostgresClient:
@@ -32,21 +35,70 @@ class PostgresClient:
         user: str,
         password: str | None,
         port: int = 5432,
+        *,
+        minconn: int = 1,
+        maxconn: int = 128,
+        connect_timeout: int = 10,
+        keepalives: int = 1,
+        keepalives_idle: int = 30,
+        keepalives_interval: int = 10,
+        keepalives_count: int = 5,
+        max_retries: int = 5,
+        base_backoff: float = 0.2,
     ):
         self.host = host
         self.database = database
         self.user = user
         self.password = password
         self.port = port
-
-    def connect(self):
-        return psycopg2.connect(
-            host=self.host,
-            port=self.port,
-            database=self.database,
-            user=self.user,
-            password=self.password,
+        self.minconn = minconn
+        self.maxconn = maxconn
+        self.connect_timeout = connect_timeout
+        self.keepalives = keepalives
+        self.keepalives_idle = keepalives_idle
+        self.keepalives_interval = keepalives_interval
+        self.keepalives_count = keepalives_count
+        self.max_retries = max_retries
+        self.base_backoff = base_backoff
+        self.pool = pg_pool.ThreadedConnectionPool(
+            self.minconn,
+            self.maxconn,
+            **self._connect_kwargs(),
         )
+
+    def _connect_kwargs(self) -> dict[str, object]:
+        return {
+            "host": self.host,
+            "port": self.port,
+            "database": self.database,
+            "user": self.user,
+            "password": self.password,
+            "connect_timeout": self.connect_timeout,
+            "keepalives": self.keepalives,
+            "keepalives_idle": self.keepalives_idle,
+            "keepalives_interval": self.keepalives_interval,
+            "keepalives_count": self.keepalives_count,
+        }
+
+    def _run_with_retry(self, label: str, fn: Callable[[], T]) -> T:
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                return fn()
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
+                if attempt == self.max_retries:
+                    raise
+                backoff = self.base_backoff * 2 ** attempt
+                logger.warning(
+                    "PG connection error during %s (attempt %d/%d). "
+                    "Retrying after %.2fs. Error: %s",
+                    label,
+                    attempt,
+                    self.max_retries,
+                    backoff,
+                    exc,
+                )
+                time.sleep(backoff)
+        raise RuntimeError(f"Failed after {self.max_retries} retries")
 
     @classmethod
     def from_env(
@@ -57,6 +109,15 @@ class PostgresClient:
         user: str = "crawler_user",
         password: str | None = "crawler_password",
         port: int = 5432,
+        minconn: int = 1,
+        maxconn: int = 64,
+        connect_timeout: int = 10,
+        keepalives: int = 1,
+        keepalives_idle: int = 30,
+        keepalives_interval: int = 10,
+        keepalives_count: int = 5,
+        max_retries: int = 5,
+        base_backoff: float = 0.2,
     ) -> "PostgresClient":
         return cls(
             host,
@@ -64,37 +125,67 @@ class PostgresClient:
             user,
             password,
             port,
+            minconn=minconn,
+            maxconn=maxconn,
+            connect_timeout=connect_timeout,
+            keepalives=keepalives,
+            keepalives_idle=keepalives_idle,
+            keepalives_interval=keepalives_interval,
+            keepalives_count=keepalives_count,
+            max_retries=max_retries,
+            base_backoff=base_backoff,
         )
 
     @contextmanager
     def transaction(self):
-        conn = self.connect()
+        conn = self.pool.getconn()
+        returned_conn = False
         try:
             with conn:
-                with conn.cursor() as transaction:
-                    yield transaction
+                with conn.cursor() as cur:
+                    yield cur
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            try:
+                self.pool.putconn(conn, close=True)
+                returned_conn = True
+            finally:
+                raise
         finally:
-            conn.close()
+            if returned_conn or conn.closed:
+                return
+            self.pool.putconn(conn, close=False)
 
     def execute(self, sql: str, params=None) -> None:
-        with self.transaction() as transaction:
-            transaction.execute(sql, params)
+        def op() -> None:
+            with self.transaction() as transaction:
+                transaction.execute(sql, params)
+
+        self._run_with_retry("execute", op)
 
     def executemany(self, sql: str, rows: list[tuple]) -> None:
         if not rows:
             return
-        with self.transaction() as transaction:
-            transaction.executemany(sql, rows)
+        def op() -> None:
+            with self.transaction() as transaction:
+                transaction.executemany(sql, rows)
+
+        self._run_with_retry("executemany", op)
 
     def fetchone(self, sql: str, params=None):
-        with self.transaction() as transaction:
-            transaction.execute(sql, params)
-            return transaction.fetchone()
+        def op():
+            with self.transaction() as transaction:
+                transaction.execute(sql, params)
+                return transaction.fetchone()
+
+        return self._run_with_retry("fetchone", op)
 
     def fetchall(self, sql: str, params=None) -> list[tuple]:
-        with self.transaction() as transaction:
-            transaction.execute(sql, params)
-            return transaction.fetchall()
+        def op() -> list[tuple]:
+            with self.transaction() as transaction:
+                transaction.execute(sql, params)
+                return transaction.fetchall()
+
+        return self._run_with_retry("fetchall", op)
 
 
 class PostgresCrawlQueue(CrawlQueue):
