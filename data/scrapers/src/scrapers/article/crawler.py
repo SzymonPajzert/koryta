@@ -272,8 +272,9 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
             timeout_seconds=options.lock_timeout_seconds,
         )
         if entry is None:
-            logging.info("Closing crawl queue. Nothing more to do.")
-            break
+            logging.info(f"Waiting for entries in db in worker {worker_name}")
+            time.sleep(1)
+            continue
 
         uid, url = entry
         parsed_url = NormalizedParse.parse(url)
@@ -281,7 +282,7 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
         result = crawl_url(ctx, parsed_url, options)
 
         if result.hit_rate_limit:
-            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url})")
+            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
             # NOTE: We do not release the lock here, because we rely on lock timeout
             # mechanism to make it available again. This way it won't be queried over
             # and over again if it has a high priority
@@ -301,7 +302,7 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
                 "parse_duration_s": result.parse_duration_s,
                 "upload_duration_s": result.upload_duration_s,
                 "total_duration_s": result.total_duration_s,
-                "worker_id": options.worker_id,
+                "worker_id": worker_name,
                 "media_type": result.media_type,
             })
             queue.put(

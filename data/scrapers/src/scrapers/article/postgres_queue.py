@@ -193,11 +193,6 @@ class PostgresCrawlQueue(CrawlQueue):
                     WHERE wi.done = FALSE
                       AND wi.num_retries < %s
                       AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
-                      AND NOT EXISTS (
-                          SELECT 1 FROM blocked_domains bd
-                          WHERE wi.url = bd.domain
-                             OR wi.url LIKE bd.domain || '/%%'
-                      )
                     ORDER BY wi.priority ASC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
@@ -310,7 +305,7 @@ class PostgresCrawlQueue(CrawlQueue):
                         max_attempts,
                     )
                     raise
-                backoff = 0.1 * attempt
+                backoff = 0.1 * 2 ** attempt
                 logger.warning(
                     "Deadlock detected while inserting URLs (attempt %d/%d). "
                     "Retrying after %.2fs. Error: %s",
