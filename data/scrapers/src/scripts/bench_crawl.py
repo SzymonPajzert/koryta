@@ -67,13 +67,10 @@ def _count_seed_urls(path: Path) -> int:
         if reader.fieldnames is None:
             raise ValueError(f"{path} is missing a header row")
         fieldnames = [name.strip() for name in reader.fieldnames]
-        if fieldnames != ["Url"]:
-            raise ValueError(
-                f"{path} must have exactly one column named 'Url'. Got: {fieldnames}"
-            )
+        assert "Domena" in fieldnames
         count = 0
         for row in reader:
-            value = row.get("Url", "")
+            value = row.get("Domena", "")
             if isinstance(value, str) and value.strip():
                 count += 1
         return count

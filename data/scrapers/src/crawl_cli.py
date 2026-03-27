@@ -101,11 +101,9 @@ def _read_csv_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 def _load_seed_urls(path: Path) -> list[str]:
     fieldnames, rows = _read_csv_rows(path)
-    if fieldnames != ["Url"]:
-        raise ValueError(
-            f"{path} must have exactly one column named 'Url'. Got: {fieldnames}"
-        )
-    urls = [row.get("Url", "").strip() for row in rows if row.get("Url")]
+    if fieldnames != ["Domena", "Kategoria"]:
+        raise ValueError(f"{path} got {fieldnames} columns")
+    urls = [row.get("Domena", "").strip() for row in rows if row.get("Domena")]
     if not urls:
         raise ValueError(f"{path} has no URLs to seed.")
     return urls
