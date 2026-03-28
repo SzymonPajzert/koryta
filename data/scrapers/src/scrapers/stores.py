@@ -341,6 +341,11 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    def get_blocked_domains(self) -> set[str]:
+        """Return blocked domains (normalized) for in-memory filtering."""
+        raise NotImplementedError()
+
+    @abstractmethod
     def reprioritize(
         self, priority_fn: Callable[[str], int], batch_size: int = 5000
     ) -> None:

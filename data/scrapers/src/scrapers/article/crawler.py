@@ -259,9 +259,17 @@ def _priority_for_url(options: CrawlOptions, url: str) -> int:
     score = scorer(url)
     return max(0, min(100, 100 - score))
 
+def _normalize_blocked(blocked: set[str]) -> set[str]:
+    return {NormalizedParse.parse(url).hostname_normalized for url in blocked}
+
+def _filter_blocked(result: CrawlResult, blocked: set[str]):
+    result.discovered_urls = [
+        url for url in result.discovered_urls
+        if NormalizedParse.parse(url).hostname_normalized not in blocked
+    ]
 
 def _worker_thread(thread_index: int, options: CrawlOptions,
-                   queue: CrawlQueue, ctx: Context):
+                   queue: CrawlQueue, ctx: Context, blocked_normalized: set[str]):
     worker_name = f"{options.worker_id}_{thread_index}"
     logging.info(f"Starting to crawl in worker {worker_name}")
 
@@ -293,6 +301,7 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
             )
             queue.mark_error(uid, result.error)
         else:
+            _filter_blocked(result, blocked_normalized)
             logging.info(
                 f"[{result.request_duration_s:.2f}s] "
                 f"Crawl succeeded: {parsed_url.full_url}"
@@ -315,15 +324,18 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
 
 def run_crawler(ctx: Context, options: CrawlOptions):
     queue = ctx.crawl_queue
+    blocked = queue.get_blocked_domains()
+    blocked_normalized = _normalize_blocked(blocked)
+
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
 
     if options.worker_threads <= 1:
-        _worker_thread(0, options, queue, ctx)
+        _worker_thread(0, options, queue, ctx, blocked_normalized)
         return
 
     with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
-        futures = [executor.submit(_worker_thread, idx, options, queue, ctx)
+        futures = [executor.submit(_worker_thread, idx, options, queue, ctx, blocked_normalized)
                    for idx in range(options.worker_threads)]
         for future in futures:
             future.result()

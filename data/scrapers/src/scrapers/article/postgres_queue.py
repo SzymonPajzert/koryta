@@ -267,6 +267,11 @@ class PostgresCrawlQueue(CrawlQueue):
             else:
                 logger.info("No blocked domains to load.")
 
+    def get_blocked_domains(self) -> set[str]:
+        """Return normalized blocked domains for in-memory filtering."""
+        rows = self.pg.fetchall("SELECT domain FROM blocked_domains;")
+        return {row[0] for row in rows}
+
     def get(
         self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
     ) -> tuple[str, str] | None:
