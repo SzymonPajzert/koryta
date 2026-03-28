@@ -59,6 +59,9 @@ def _build_parser() -> ArgumentParser:
     )
     parser.add_argument("--worker-threads", type=int, default=1,
                         help="Number of concurrent threads inside a worker.")
+    parser.add_argument("--grafana", action="store_true",
+                        help="Enable grafana monitoring. Should be launched in process"
+                             " seperate to the worker.")
     return parser
 
 
