@@ -170,10 +170,10 @@ def crawl_url(
         parsed_url,
         HEADERS["User-Agent"],
     ):
-        return CrawlResult(error="disallowed by robots")
+        return CrawlResult(error="disallowed by robots", request_duration_s=0)
 
     if not _can_crawl(parsed_url, options.per_domain_wait_between_requests_s):
-        return CrawlResult(hit_rate_limit=True)
+        return CrawlResult(hit_rate_limit=True, request_duration_s=0)
 
     with stopwatch() as t_request:
         try:

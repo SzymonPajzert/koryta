@@ -1192,8 +1192,8 @@ def main() -> int:
 
     _dump_pg_stat_statements(pg_dir / "pg_stat_statements_before.tsv", pg_client)
 
-    _reset_queue()
-    _seed_queue(cfg)
+    # _reset_queue()
+    # _seed_queue(cfg)
 
     sampler: _PgStatSampler | None = None
     if pg_client and run_meta["pg_stat_statements_active"]:
