@@ -324,18 +324,19 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
 
 def run_crawler(ctx: Context, options: CrawlOptions):
     queue = ctx.crawl_queue
-    blocked = queue.get_blocked_domains()
-    blocked_normalized = _normalize_blocked(blocked)
-
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
+
+    blocked = queue.get_blocked_domains()
+    blocked_normalized = _normalize_blocked(blocked)
 
     if options.worker_threads <= 1:
         _worker_thread(0, options, queue, ctx, blocked_normalized)
         return
 
     with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
-        futures = [executor.submit(_worker_thread, idx, options, queue, ctx, blocked_normalized)
+        futures = [executor.submit(_worker_thread, idx, options, queue, ctx,
+                                   blocked_normalized)
                    for idx in range(options.worker_threads)]
         for future in futures:
             future.result()
