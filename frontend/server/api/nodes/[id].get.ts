@@ -73,8 +73,10 @@ async function getEntity(db: FirebaseFirestore.Firestore, id: string) {
     ...nodeDoc.data(),
   };
   if (result["revision_id"]) {
-    const refId: DocumentReference = result["revision_id"] as any;
-    result["revision_id"] = refId.path;
+    // TODO this is ugly
+    const refId: DocumentReference | undefined = result["revision_id"] as any;
+    // Keep it in case it's a string
+    result["revision_id"] = refId?.path ?? (result["revision_id"] as string);
   }
   return result;
 }
