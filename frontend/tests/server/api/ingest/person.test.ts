@@ -161,6 +161,7 @@ describe("api/ingest/person", () => {
         start_date: "2023-01-01",
       },
       true,
+      false, // approve
     );
     expect(result.elections).toHaveLength(1);
   });

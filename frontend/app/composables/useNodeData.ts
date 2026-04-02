@@ -1,5 +1,4 @@
 import { watch, type Ref } from "vue";
-import { doc, getDoc, getFirestore } from "firebase/firestore";
 import type {
   Person,
   Node,
@@ -26,7 +25,6 @@ interface UseNodeDataOptions {
 
 export function useNodeData(options: UseNodeDataOptions) {
   const { nodeId, isNew, stateKey } = options;
-  const db = getFirestore(useFirebaseApp(), "koryta-pl");
   const { user } = useAuthState();
 
   const current = useState<EditablePage>(`${stateKey.value}-current`, () =>
@@ -52,51 +50,6 @@ export function useNodeData(options: UseNodeDataOptions) {
       revisions.value = res.value?.revisions || [];
     } catch (e) {
       console.error("Error fetching revisions", e);
-    }
-  }
-
-  async function fetchData() {
-    const id = nodeId.value;
-
-    if (loading.value) return; // Basic guard
-    if (id === lastFetchedId.value && id !== undefined) return;
-
-    if (!isNew.value && id) {
-      try {
-        const snap = await getDoc(doc(db, "nodes", id));
-        if (snap.exists()) {
-          const { node } = await authFetch<{ node: Node }>(`/api/nodes/${id}`);
-
-          const v: EditablePage = {
-            name: node.name || "",
-            type: node.type,
-            content: node.content || "",
-            visibility: node.visibility,
-          };
-          if (node.type === "person") {
-            v.parties = (node as Partial<Person>).parties || [];
-            v.wikipedia = (node as Partial<Person>).wikipedia || "";
-            v.rejestrIo = (node as Partial<Person>).rejestrIo || "";
-          }
-          if (node.type === "article") {
-            v.sourceURL = (node as Partial<Article>).sourceURL || "";
-            v.shortName = (node as Partial<Article>).shortName || "";
-          }
-          if (node.type === "place") {
-            v.krsNumber = (node as Partial<Company>).krsNumber || "";
-          }
-          current.value = v;
-          lastFetchedId.value = id;
-        }
-      } catch (e) {
-        console.error("Error fetching node data", e);
-      }
-      await fetchRevisions();
-    } else if (isNew.value && lastFetchedId.value !== undefined) {
-      lastFetchedId.value = undefined;
-      // Reset for new
-      current.value = anyNode({ type: options.initialType });
-      revisions.value = [];
     }
   }
 
@@ -150,7 +103,6 @@ export function useNodeData(options: UseNodeDataOptions) {
     revisions,
     loading,
     lastFetchedId,
-    fetchData,
     fetchRevisions,
   };
 }

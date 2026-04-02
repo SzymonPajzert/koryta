@@ -1,4 +1,4 @@
-import { computed, ref, watch, onMounted, type Ref } from "vue";
+import { computed, ref, watch, type Ref } from "vue";
 import type { NodeType } from "~~/shared/model";
 import { parties } from "~~/shared/misc";
 import { useEdges } from "~/composables/edges";
@@ -30,13 +30,12 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
 
   const { save } = useEntityMutation();
 
-  const { current, revisions, loading, fetchData, fetchRevisions } =
-    useNodeData({
-      nodeId: node_id,
-      isNew,
-      stateKey,
-      initialType: (route.query.type as NodeType | undefined) ?? "person",
-    });
+  const { current, revisions, loading, fetchRevisions } = useNodeData({
+    nodeId: node_id,
+    isNew,
+    stateKey,
+    initialType: (route.query.type as NodeType | undefined) ?? "person",
+  });
 
   const {
     sources,
@@ -62,22 +61,6 @@ export async function useNodeEdit(options: UseNodeEditOptions = {}) {
     },
     { immediate: true },
   );
-
-  watch(
-    [() => node_id.value, () => idToken.value],
-    () => {
-      if (idToken.value) {
-        fetchData();
-      }
-    },
-    { immediate: true },
-  );
-
-  onMounted(() => {
-    if (idToken.value) {
-      fetchData();
-    }
-  });
 
   async function saveNode() {
     if (!idToken.value) {

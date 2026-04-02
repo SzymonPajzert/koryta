@@ -40,7 +40,7 @@ export const electionTerms = ["2024-2029", "2018-2024", "2014-2018"];
 const breakpoint = /\.|-/;
 
 // uses a list of defined markers to split the title
-export function splitTitle(title: string, limit?: number): string[] {
+function splitTitle(title: string, limit?: number): string[] {
   return title.split(breakpoint, limit);
 }
 
