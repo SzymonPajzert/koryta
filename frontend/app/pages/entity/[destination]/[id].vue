@@ -44,8 +44,13 @@
         </div>
 
         <div class="mt-4">
-          <template v-if="type === 'place' || type === 'region'">
+          <template v-if="type === 'place'">
             <CardConnectionList :edges="owners" title="Właściciele" />
+            <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
+          </template>
+          <template v-if="type === 'region'">
+            <CardConnectionList :edges="owners" title="Część regionu" />
+            <CardConnectionList :edges="subregions" title="Regiony" />
             <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
           </template>
 
@@ -251,8 +256,15 @@ const edges = computed(() => [...sources.value, ...targets.value]);
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");
 });
+const subregions = computed(() => {
+  return targets.value.filter(
+    (e) => e.type === "owns" && e.richNode.type === "region",
+  );
+});
 const subsidiaries = computed(() => {
-  return targets.value.filter((e) => e.type === "owns");
+  return targets.value.filter(
+    (e) => e.type === "owns" && e.richNode.type == "place",
+  );
 });
 
 // Edge modification buttons
