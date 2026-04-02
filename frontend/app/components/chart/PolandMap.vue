@@ -55,7 +55,6 @@ const hover = (region: Powiat) => {
 // const emit = defineEmits(["click", "update:hovered"]);
 // below:   emit("click", region);
 const click = (region: Powiat) => {
-  // TODO use the link from the stats - some don't have regular teryt code
   router.push(`/entity/region/teryt${region.teryt}`);
 };
 
