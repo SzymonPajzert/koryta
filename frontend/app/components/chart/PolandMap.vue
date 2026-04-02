@@ -56,7 +56,7 @@ const hover = (region: Powiat) => {
 // below:   emit("click", region);
 const click = (region: Powiat) => {
   // TODO use the link from the stats - some don't have regular teryt code
-  router.push(`/entity/place/teryt${region.teryt}`);
+  router.push(`/entity/region/teryt${region.teryt}`);
 };
 
 const getFillColor = (item: Powiat) => {
