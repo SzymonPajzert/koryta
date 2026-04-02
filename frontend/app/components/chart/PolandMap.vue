@@ -4,15 +4,47 @@ import powiatyPaths from "@/assets/poland_powiaty.json";
 
 const router = useRouter();
 
-type Powiat = { teryt: string; d: string; original_id?: string };
+type Powiat = {
+  teryt: string;
+  d: string;
+  original_id?: string;
+  id?: string;
+  people?: number;
+  name?: string;
+};
 
 const hoveredDistrict = ref<Powiat | null>(null);
 
+const { data: nodeGroups } = await useFetch<any[]>("/api/graph/nodeGroups");
+
+const groupData = computed(() => {
+  const map: Record<string, any> = {};
+  for (const g of nodeGroups.value || []) {
+    map[g.id] = g;
+  }
+  return map;
+});
+
 const powiaty = computed(() => {
-  return powiatyPaths.map((p) => ({
-    ...p,
-    id: p.teryt,
-  }));
+  let maxPeople = 1;
+  const list = powiatyPaths.map((p) => {
+    const terytId = "teryt" + p.teryt;
+    const group = groupData.value[terytId] || groupData.value[p.teryt];
+    const people = group?.people || 0;
+    const name = group?.name || `Powiat ${p.teryt}`;
+
+    if (people > maxPeople) {
+      maxPeople = people;
+    }
+
+    return {
+      ...p,
+      id: p.teryt,
+      people,
+      name,
+    };
+  });
+  return { list, maxPeople };
 });
 
 const hover = (region: Powiat) => {
@@ -28,11 +60,17 @@ const click = (region: Powiat) => {
 };
 
 const getFillColor = (item: Powiat) => {
-  // TODO add color based on the number of people
   if (hoveredDistrict.value?.teryt === item.teryt) {
     return "#e0e0e0";
   }
-  return "#fff6d5";
+  if (!item.people || item.people === 0) {
+    return "#fff6d5";
+  }
+
+  const ratio = item.people / powiaty.value.maxPeople;
+  const opacity = 0.2 + 0.8 * ratio;
+
+  return `rgba(204, 0, 0, ${opacity})`;
 };
 </script>
 
@@ -45,7 +83,7 @@ const getFillColor = (item: Powiat) => {
     >
       <g>
         <path
-          v-for="item in powiaty"
+          v-for="item in powiaty.list"
           :key="item.teryt"
           :d="item.d"
           :fill="getFillColor(item)"
@@ -55,7 +93,7 @@ const getFillColor = (item: Powiat) => {
           @mouseenter="hover(item)"
           @click="click(item)"
         >
-          <title>{{ item.teryt }}</title>
+          <title>{{ item.name }} ({{ item.people || 0 }} osób)</title>
         </path>
       </g>
     </svg>
