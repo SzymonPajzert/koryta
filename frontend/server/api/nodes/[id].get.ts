@@ -12,7 +12,8 @@ const queryValidator = z.object({
 const responseValidator = z.object({
   name: z.string(),
   type: z.enum(["person", "place", "article", "region"]),
-  revision_id: z.string().optional(),
+  // TODO revision elements are either string or complex object
+  revision_id: z.union([z.string(), z.object({ path: z.string() })]).optional(),
 });
 
 export default authCachedEventHandler(async (event) => {
