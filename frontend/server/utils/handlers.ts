@@ -10,7 +10,7 @@ export const authCachedEventHandler = (handler: EventHandler, options = {}) => {
   // 1. Create the cached version of the handler
   const cachedHandler = defineCachedEventHandler(handler, {
     swr: true,
-    maxAge: 60, // 1 minute
+    maxAge: 21600, // 6 hours
     ...options,
     shouldBypassCache: eventIsAuthenticated,
   });
