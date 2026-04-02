@@ -1,33 +1,33 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import voivodeshipPaths from "@/assets/poland_voivodeships.json";
+import powiatyPaths from "@/assets/poland_powiaty.json";
 
 const router = useRouter();
 
-type Voivodeship = { teryt: string; d: string; original_id: string };
+type Powiat = { teryt: string; d: string; original_id?: string };
 
-const hoveredDistrict = ref<Voivodeship | null>(null);
+const hoveredDistrict = ref<Powiat | null>(null);
 
-const voivodeships = computed(() => {
-  return voivodeshipPaths.map((p) => ({
+const powiaty = computed(() => {
+  return powiatyPaths.map((p) => ({
     ...p,
     id: p.teryt,
   }));
 });
 
-const hover = (region: Voivodeship) => {
+const hover = (region: Powiat) => {
   hoveredDistrict.value = region;
 };
 
 // TODO enable emit
 // const emit = defineEmits(["click", "update:hovered"]);
 // below:   emit("click", region);
-const click = (region: Voivodeship) => {
+const click = (region: Powiat) => {
   // TODO use the link from the stats - some don't have regular teryt code
   router.push(`/entity/place/teryt${region.teryt}`);
 };
 
-const getFillColor = (item: Voivodeship) => {
+const getFillColor = (item: Powiat) => {
   // TODO add color based on the number of people
   if (hoveredDistrict.value?.teryt === item.teryt) {
     return "#e0e0e0";
@@ -39,18 +39,18 @@ const getFillColor = (item: Voivodeship) => {
 <template>
   <div class="poland-map-container relative">
     <svg
-      viewBox="240 180 480 360"
+      viewBox="0 0 800 744"
       xmlns="http://www.w3.org/2000/svg"
       class="w-full h-auto max-w-[800px] mx-auto"
     >
-      <g transform="matrix(0.13333333,0,0,-0.13333333,0,720)">
+      <g>
         <path
-          v-for="item in voivodeships"
+          v-for="item in powiaty"
           :key="item.teryt"
           :d="item.d"
           :fill="getFillColor(item)"
           stroke="#333333"
-          stroke-width="5"
+          stroke-width="1"
           class="transition-colors duration-200 cursor-pointer hover:brightness-95"
           @mouseenter="hover(item)"
           @click="click(item)"
