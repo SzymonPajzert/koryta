@@ -156,7 +156,7 @@ const edgeTraverse: Record<EdgeType, TraversePolicy> = {
   },
   election: {
     forward: "dead_end",
-    backward: "active",
+    backward: "dead_end",
   },
 };
 
