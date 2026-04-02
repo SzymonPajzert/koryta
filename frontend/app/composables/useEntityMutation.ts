@@ -27,8 +27,8 @@ export function useEntityMutation() {
     try {
       const endpoint = isNew ? createEndpoint : revisionEndpoint;
 
+      // TODO does editing work now?
       const response = await authFetch<Result>(endpoint, {
-        method: "POST",
         body: payload,
       });
 

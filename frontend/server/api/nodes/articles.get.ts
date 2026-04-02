@@ -55,7 +55,7 @@ export default authCachedEventHandler(async () => {
       domain,
       articleCount: articleCounts[domain] || 0,
       peopleCount: domainPeople.size || 0,
-      people: Array.from(domainPeople.values() ?? []),
+      people: Array.from(domainPeople.values()),
       url: domainMap[domain],
     }));
 

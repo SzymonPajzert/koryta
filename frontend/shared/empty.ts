@@ -11,6 +11,7 @@ export function anyNode(node: any) {
   };
 }
 
+// TODO sync it with api/edges/create POST
 export function anyEdge(node: any) {
   return {
     name: node.name || "",

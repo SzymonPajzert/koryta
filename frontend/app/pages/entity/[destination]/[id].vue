@@ -7,7 +7,7 @@
       v-if="status != 'success'"
       class="mb-4"
       :title="status"
-      :text="error ?? ''"
+      :text="JSON.stringify(error) ?? ''"
     />
     <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">

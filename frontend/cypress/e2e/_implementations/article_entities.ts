@@ -16,7 +16,7 @@ describe("Article Entities and Edge References", () => {
     cy.get("[data-testid=edge-picker-mentioned_person]").click();
 
     cy.pickEntity("Jan Kowalski", "entity-picker-target");
-    
+
     cy.contains("button", "Dodaj powiązanie").should("be.visible").click();
 
     cy.on("window:alert", (str) => {

@@ -288,7 +288,7 @@ Cypress.Commands.add(
       .click();
 
     cy.wait(500); // Give vuetify time to register the selection and close the menu
-    
+
     cy.task("log", `--- END pickEntity for ${name} ---`);
   },
 );

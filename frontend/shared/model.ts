@@ -2,7 +2,7 @@ type PageBase<PageType> = {
   id?: string;
   type: PageType;
   content?: string;
-  revision_id?: string;
+  revision_id?: string | { path: string };
   votes?: Votes;
   deleted?: boolean;
   delete_reason?: string;
@@ -22,15 +22,6 @@ export type Votes = Record<
 export type Node = PageBase<NodeType> & {
   name: string;
 };
-
-/**
- * PageRevisioned adds revisions array to the base page types
- * and makes sure the id is present.
- *
- * This is used for pages that have revisions pending review
- * and were enriched during the lookup.
- */
-export type PageRevisioned = { id: string; revisions: Revision[] };
 
 export interface Edge extends PageBase<EdgeType> {
   name?: string;
@@ -60,7 +51,7 @@ export type ElectionPosition =
   | "Senat"
   | "Parlament Europejski";
 
-export function pageIsPublic(node: { revision_id?: string }) {
+export function pageIsPublic(node: { revision_id?: unknown }) {
   return !!node.revision_id;
 }
 
@@ -150,14 +141,6 @@ export interface Link<T extends NodeType> {
   type: T;
   id: string;
   name: string;
-}
-
-export type Destination = NodeType;
-
-export interface Connection<T extends Destination> {
-  relation?: string;
-  connection?: Link<T>;
-  content?: string;
 }
 
 export interface Comment {

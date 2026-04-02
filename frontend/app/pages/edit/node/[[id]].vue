@@ -202,7 +202,6 @@
               :node-id="node_id!"
               :node-type="current.type || 'person'"
               :node-name="current.name || ''"
-              :auth-headers="authHeaders"
               :edge-type-ext="activeEdgeTypeExt!"
               :initial-direction="activeDirection"
               :edited-edge="isEditingEdge ? editedEdgeId : undefined"
@@ -255,7 +254,6 @@ const {
   fetchRevisions,
   node_id,
   refreshEdges,
-  authHeaders,
 } = await useNodeEdit();
 const editEdgeForm = ref<InstanceType<typeof FormEditEdge> | null>(null);
 
