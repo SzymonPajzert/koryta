@@ -56,4 +56,6 @@ export interface Edge {
   elected?: boolean;
   term?: string;
   by_election?: boolean;
+  start_date?: string;
+  end_date?: string;
 }
