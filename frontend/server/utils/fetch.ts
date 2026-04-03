@@ -23,10 +23,10 @@ export interface FetchNodesOptions {
   personParty?: string;
 }
 
-export async function fetchNodes<N extends NodeType>(
+const _fetchNodes = async <N extends NodeType>(
   path: N,
   options: FetchNodesOptions = {},
-): Promise<Record<string, nodeData[N]>> {
+): Promise<Record<string, nodeData[N]>> => {
   const { nodeId } = options;
   const db = getFirestore("koryta-pl");
   let query: FirebaseFirestore.Query = db
@@ -64,9 +64,16 @@ export async function fetchNodes<N extends NodeType>(
   });
 
   return Object.fromEntries(nodesData.map((node) => [node.id, node]));
-}
+};
 
-export async function fetchEdges(): Promise<Edge[]> {
+export const fetchNodes = defineCachedFunction(_fetchNodes, {
+  maxAge: 21600, // 6 hours
+  name: "fetchNodes",
+  getKey: (path, options) =>
+    `${path}:${options?.nodeId || ""}:${options?.personParty || ""}`,
+});
+
+const _fetchEdges = async (): Promise<Edge[]> => {
   const db = getFirestore("koryta-pl");
   const edges = (await db.collection("edges").get()).docs.map((doc) => {
     const data = doc.data();
@@ -79,7 +86,13 @@ export async function fetchEdges(): Promise<Edge[]> {
     } as Edge;
   });
   return edges as unknown as Edge[];
-}
+};
+
+export const fetchEdges = defineCachedFunction(_fetchEdges, {
+  maxAge: 21600, // 6 hours
+  name: "fetchEdges",
+  getKey: () => "all",
+});
 
 export async function fetchFirestore<T>(path: string): Promise<T> {
   const db = getDatabase();
