@@ -179,6 +179,8 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       elected: edge.elected,
       term: edge.term,
       by_election: edge.by_election,
+      start_date: edge.start_date,
+      end_date: edge.end_date,
     };
     return result;
   });
