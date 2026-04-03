@@ -172,18 +172,29 @@ class Extract(Pipeline):
 
         return check
 
+    def auto_approved_func(self):
+        if not self.approved:
+            return lambda row: 0
+
+        func = check_auto_approved()
+
+        def check(row):
+            return func(row)[0]
+
+        return check
+
     def process(self, ctx: Context):
         people = self.people.read_or_process(ctx)
         self.teryt.read_or_process(ctx)
 
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
-        auto_approved_func = check_auto_approved()
-        auto_approved = people.apply(lambda row: auto_approved_func(row)[0], axis=1)
+        auto_approved = people.apply(self.auto_approved_func(), axis=1)
 
         people["total_elections"] = people["elections"].apply(list_length)
         people["total_employments"] = people["employment"].apply(list_length)
-        relevant = (relevant_employment + relevant_elections + auto_approved) > 0
+        # TODO control if we want to have both of them or one of them satisfied
+        relevant = (relevant_employment * relevant_elections + auto_approved) > 0
         people["relevance_ratio"] = (relevant_employment + relevant_elections) / (
             people["total_elections"] + people["total_employments"]
         )
