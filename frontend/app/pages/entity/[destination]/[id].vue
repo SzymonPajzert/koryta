@@ -243,6 +243,15 @@ const {
   node: Person | Company | Article | Region;
 }>(sourcePath);
 
+useHead({
+  title: computed(() => {
+    if (status.value !== "success") {
+      return "Strona nieznaleziona";
+    }
+    return response.value?.node?.name ?? "Strona nieznaleziona";
+  }),
+});
+
 const entity = computed(() => response.value?.node);
 
 // Calculate edges and relationships
