@@ -1,31 +1,28 @@
 <template>
   <v-layout>
     <v-navigation-drawer
-      v-model="drawer"
+      v-model="openDrawer"
       location="end"
       temporary
-      :width="$vuetify.display.mdAndUp ? 420 : 280"
+      :width="$vuetify.display.mdAndUp ? 600 : 280"
     >
-      <v-card-item title="Panel title">
+      <v-card-item title="Analiza osoby">
         <template #append>
           <v-btn
             density="compact"
             icon="$close"
             variant="text"
-            @click="drawer = false"
+            @click="openDrawer = false"
           />
         </template>
       </v-card-item>
 
-      <div class="pa-4">
-        <v-sheet
-          border="dashed md"
-          color="surface-light"
-          height="365"
-          rounded="lg"
-          width="100%"
-        />
-      </div>
+      <CardExplorePerson
+        :key="drawer?.id"
+        :person="drawer"
+        :region="region"
+        :company="company"
+      />
     </v-navigation-drawer>
     <div class="pa-4">
       <h1 class="text-h4 mb-4">Eksploruj powiązania</h1>
@@ -100,7 +97,10 @@ import { getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
 import type { Edge } from "~~/shared/model";
 
-definePageMeta({ title: "Eksploruj - Tabela", fullWidth: true });
+definePageMeta({ fullWidth: true });
+useHead({
+  title: "Eksploruj - Tabela - koryta.pl",
+});
 
 const route = useRoute();
 const router = useRouter();
@@ -109,7 +109,7 @@ const itemsPerPage = ref(
   parseInt((route.query.itemsPerPage as string) || "50"),
 );
 const page = ref(parseInt((route.query.page as string) || "1"));
-const sortBy = ref<{ key: string; order: string }[]>(
+const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
   route.query.sortBy
     ? [
         {
@@ -146,8 +146,29 @@ const loading = computed(() => {
   );
 });
 
-const regionNameState = ref<string | undefined>(undefined);
-const companyNameState = ref<string | undefined>(undefined);
+const region = computed<[string, string] | undefined>(() => {
+  const terytParam = route.query.teryt as string | undefined;
+  if (terytParam) {
+    for (const [id, region] of Object.entries(regions.value ?? {})) {
+      if (region.teryt === terytParam) {
+        return [id, region.name];
+      }
+    }
+  }
+  return undefined;
+});
+
+const company = computed<[string, string] | undefined>(() => {
+  const krsParam = route.query.krs as string | undefined;
+  if (krsParam) {
+    for (const [id, place] of Object.entries(places.value ?? {})) {
+      if (place.krsNumber === krsParam) {
+        return [id, place.name];
+      }
+    }
+  }
+  return undefined;
+});
 
 const computedItems = computed(() => {
   if (loading.value) return [];
@@ -155,32 +176,10 @@ const computedItems = computed(() => {
   const terytParam = route.query.teryt as string | undefined;
   const krsParam = route.query.krs as string | undefined;
 
-  const peopleObj = people.value;
-  const placesObj = places.value;
-  const regionsObj = regions.value;
+  const peopleObj = people.value ?? {};
+  const placesObj = places.value ?? {};
+  const regionsObj = regions.value ?? {};
   const edgesArray = edgesData.value || [];
-
-  let regionId: string | undefined;
-  if (terytParam) {
-    for (const [id, region] of Object.entries(regionsObj)) {
-      if (region.teryt === terytParam) {
-        regionId = id;
-        regionNameState.value = region.name;
-        break;
-      }
-    }
-  }
-
-  let companyId: string | undefined;
-  if (krsParam) {
-    for (const [id, place] of Object.entries(placesObj)) {
-      if (place.krsNumber === krsParam) {
-        companyId = id;
-        companyNameState.value = place.name;
-        break;
-      }
-    }
-  }
 
   const nodesNoStats = getNodesNoStats(
     peopleObj,
@@ -202,19 +201,17 @@ const computedItems = computed(() => {
   );
 
   let allowedIdsFromRegion = new Set<string>();
-  if (regionId) {
-    const rGroup = nodeGroupsRaw.find((g) => g.id === regionId);
+  if (region.value) {
+    const regionID = region.value[0];
+    const rGroup = nodeGroupsRaw.find((g) => g.id === regionID);
     if (rGroup) allowedIdsFromRegion = new Set(rGroup.connected);
-  } else if (terytParam) {
-    allowedIdsFromRegion = new Set(["_none_"]);
   }
 
   let allowedIdsFromCompany = new Set<string>();
-  if (companyId) {
-    const cGroup = nodeGroupsRaw.find((g) => g.id === companyId);
+  if (company.value) {
+    const companyID = company.value[0];
+    const cGroup = nodeGroupsRaw.find((g) => g.id === companyID);
     if (cGroup) allowedIdsFromCompany = new Set(cGroup.connected);
-  } else if (krsParam) {
-    allowedIdsFromCompany = new Set(["_none_"]);
   }
 
   const edgeSourceMap = new Map<string, Edge[]>();
@@ -223,7 +220,7 @@ const computedItems = computed(() => {
     edgeSourceMap.get(edge.source)!.push(edge);
   }
 
-  let items = [];
+  const items = [];
 
   for (const [personId, person] of Object.entries(peopleObj)) {
     if (krsParam && !allowedIdsFromCompany.has(personId)) continue;
@@ -236,19 +233,19 @@ const computedItems = computed(() => {
 
     for (const edge of personEdges) {
       if (edge.type === "employed" && placesObj[edge.target]) {
-        companiesList.push(placesObj[edge.target].name);
+        companiesList.push(placesObj[edge.target]?.name);
 
         const startStr =
           edge.start_date && typeof edge.start_date === "string"
             ? edge.start_date.split("T")[0]
             : null;
-        let endStr =
+        const endStr =
           edge.end_date && typeof edge.end_date === "string"
             ? edge.end_date.split("T")[0]
             : null;
 
-        let start = startStr ? new Date(startStr) : null;
-        let end = endStr ? new Date(endStr) : new Date();
+        const start = startStr ? new Date(startStr) : null;
+        const end = endStr ? new Date(endStr) : new Date();
 
         if (start && !isNaN(start.getTime()) && !isNaN(end.getTime())) {
           const diffMs = end.getTime() - start.getTime();
@@ -264,6 +261,7 @@ const computedItems = computed(() => {
     items.push({
       id: personId,
       name: person.name,
+      originalNode: person,
       parties: person.parties || [],
       companies: Array.from(new Set(companiesList)),
       elections: Array.from(new Set(electionsList)),
@@ -296,25 +294,12 @@ const updateQueryParams = async (options: any) => {
   });
 };
 
-const drawer = shallowRef(false);
+const openDrawer = shallowRef(false);
+const drawer = shallowRef(undefined);
 
 const focusPerson = (item: any) => {
   console.log("focus person");
-  drawer.value = true;
-};
-
-const searchInGoogle = (item: any) => {
-  const queryParts = [item.name];
-
-  if (regionNameState.value) {
-    queryParts.push(regionNameState.value);
-  }
-
-  if (companyNameState.value) {
-    queryParts.push(companyNameState.value);
-  }
-
-  const searchQuery = encodeURIComponent(queryParts.join(" "));
-  window.open(`https://www.google.com/search?q=${searchQuery}`, "_blank");
+  drawer.value = item;
+  openDrawer.value = true;
 };
 </script>

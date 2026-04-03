@@ -28,6 +28,15 @@
             Graf połączeń
           </v-btn>
         </div>
+        <div v-if="type === 'region'" class="mb-4 d-flex">
+          <v-btn
+            variant="tonal"
+            prepend-icon="mdi-format-list-bulleted"
+            :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
+          >
+            Eksploruj region
+          </v-btn>
+        </div>
         <EntityDetailsCard :key="sourcePath" :entity="entity" :type="type" />
 
         <div
@@ -253,6 +262,12 @@ useHead({
 });
 
 const entity = computed(() => response.value?.node);
+const regionTeryt = computed(() => {
+  if (entity.value && entity.value.type === "region") {
+    return entity.value.teryt;
+  }
+  return undefined;
+});
 
 // Calculate edges and relationships
 const {
