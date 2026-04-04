@@ -31,7 +31,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useEntityFiltering } from "@/composables/useEntityFiltering";
+import { useEntityFiltering } from "@/composables/entity";
 import { authFetch } from "~/composables/auth";
 import type { NodeType, Link, Person, Company, Article } from "~~/shared/model";
 
