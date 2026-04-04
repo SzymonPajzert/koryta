@@ -1,7 +1,6 @@
 import type { NodeTypeMap, NodeType } from "~~/shared/model";
-
-import { authFetch } from "@/composables/auth";
-import { useEntityFiltering } from "./useEntityFiltering";
+import { computed, type Ref, type ComputedRef } from "vue";
+import { authFetch, useAuthState } from "@/composables/auth";
 
 export type Filters = {
   party?: string;
@@ -20,15 +19,43 @@ export function useEntity<N extends NodeType>(
   });
 
   const entitiesRaw = computed(() => response?.value?.nodes ?? {});
+
   const entities = useEntityFiltering(entitiesRaw);
 
-  function submit<N extends NodeType>(
-    _value: Partial<NodeTypeMap[N]>,
-    _d: N,
-    _editKey: string | undefined,
-  ) {
-    return { key: "0" };
-  }
+  return { entities };
+}
 
-  return { entities, submit };
+export interface EntityWithVisibility {
+  visibility?: boolean;
+}
+
+export function useEntityFiltering<
+  T extends EntityWithVisibility,
+  C extends T[] | Record<string, T>,
+>(entities: Ref<C | undefined> | ComputedRef<C | undefined>) {
+  const { user } = useAuthState();
+
+  const filtered = computed(() => {
+    const raw = entities.value;
+    if (!raw) return raw as C | undefined;
+
+    if (Array.isArray(raw)) {
+      return (raw as T[]).filter((entity) => {
+        if (user.value) return true;
+        return entity.visibility !== false;
+      }) as C;
+    } else {
+      return Object.fromEntries(
+        Object.entries(raw as Record<string, T | undefined>).filter(
+          ([_, entity]) => {
+            if (!entity) return false;
+            if (user.value) return true;
+            return entity.visibility !== false;
+          },
+        ),
+      ) as C;
+    }
+  });
+
+  return filtered;
 }
