@@ -1,7 +1,10 @@
+// TODO properly type this
 export function anyNode(node: any) {
   return {
     name: node.name || "",
     type: node.type,
+    birthDate: node.birthDate || "",
+    krsNumber: node.krsNumber || "",
     parties: node.parties || [],
     content: node.content || "",
     sourceURL: node.sourceURL || "",
