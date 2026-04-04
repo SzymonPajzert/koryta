@@ -12,6 +12,7 @@ export function personNode(
   const color = (party != "" ? partyColors[party] : "#4466cc") as Node["color"];
   return {
     ...person,
+    entityType: person.type,
     type: "circle",
     color: color,
     visibility: person.visibility,
@@ -21,6 +22,7 @@ export function personNode(
 export function companyNode(company: Company): Node {
   return {
     ...company,
+    entityType: company.type,
     type: "rect",
     color: "gray",
     visibility: company.visibility,
@@ -30,6 +32,7 @@ export function companyNode(company: Company): Node {
 export function regionNode(region: Region): Node {
   return {
     ...region,
+    entityType: region.type,
     type: "document",
     color: "green",
     visibility: region.visibility,

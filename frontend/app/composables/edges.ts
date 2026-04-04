@@ -55,7 +55,10 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
       .map((e: Edge) => ({
         ...e,
         label: e.name || edgeTypeLabels[e.type] || e.type,
-        richNode: nodes.value[e.source] as Node,
+        richNode: {
+          ...nodes.value[e.source],
+          type: nodes.value[e.source].entityType,
+        } as Node,
       }));
   });
   const targets = computed<EdgeNode[]>(() => {
@@ -66,7 +69,10 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
       .map((e: Edge) => ({
         ...e,
         label: e.name || edgeTypeLabels[e.type] || e.type,
-        richNode: nodes.value[e.target] as Node,
+        richNode: {
+          ...nodes.value[e.target],
+          type: nodes.value[e.target].entityType,
+        } as Node,
       }));
   });
   const referencedIn = computed<EdgeNode[]>(() => {
@@ -77,7 +83,10 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
       .map((e: Edge) => ({
         ...e,
         label: e.name || edgeTypeLabels[e.type] || e.type,
-        richNode: nodes.value[e.source] as Node, // We show source node for referenced edges
+        richNode: {
+          ...nodes.value[e.source],
+          type: nodes.value[e.source].entityType,
+        } as Node, // We show source node for referenced edges
       }));
   });
 

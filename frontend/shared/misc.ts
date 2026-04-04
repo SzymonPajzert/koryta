@@ -22,6 +22,7 @@ export const partyColors: Record<string, string> = {
 };
 
 export const electionPositions: ElectionPosition[] = [
+  "Samorząd", // TODO remove it
   "Sejmik",
   "Rada miasta",
   "Rada gminy",
