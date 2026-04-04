@@ -20,6 +20,7 @@
     "postinstall": "nuxt prepare",
     "test:ci": "vitest run",
     "test:e2e": "start-server-and-test dev:local http://127.0.0.1:3000 'cypress run'",
+    "test:e2e:prod": "start-server-and-test dev:prod-data http://127.0.0.1:3000 'cypress run -s cypress/e2e/prod'",
     "test:e2e:open": "start-server-and-test dev:local http://127.0.0.1:3000 'cypress open'",
     "test:e2e:build": "start-server-and-test dev:build http://127.0.0.1:3000 'cypress run'",
     "backstop:test": "backstop test",

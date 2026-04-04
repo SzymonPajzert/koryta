@@ -3,7 +3,8 @@
     "target": "es5",
     "lib": ["es5", "dom", "es2017"],
     "types": ["cypress"],
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["**/*.ts"]
 }
