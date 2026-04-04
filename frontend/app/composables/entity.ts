@@ -8,7 +8,7 @@ export type Filters = {
   source?: string;
 };
 
-export function useEntity<N extends NodeType>(
+export function useEntities<N extends NodeType>(
   nodeType: N,
   filters: Filters | Ref<Filters> = {},
 ) {
@@ -20,7 +20,7 @@ export function useEntity<N extends NodeType>(
 
   const entitiesRaw = computed(() => response?.value?.nodes ?? {});
 
-  const entities = useEntityFiltering(entitiesRaw);
+  const entities = useEntitiesFiltering(entitiesRaw);
 
   return { entities };
 }
@@ -29,7 +29,7 @@ export interface EntityWithVisibility {
   visibility?: boolean;
 }
 
-export function useEntityFiltering<
+export function useEntitiesFiltering<
   T extends EntityWithVisibility,
   C extends T[] | Record<string, T>,
 >(entities: Ref<C | undefined> | ComputedRef<C | undefined>) {

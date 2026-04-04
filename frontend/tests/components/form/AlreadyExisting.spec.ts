@@ -12,7 +12,7 @@ const vuetify = createVuetify({
 });
 
 vi.mock("~/composables/entity", () => ({
-  useEntity: async () => ({
+  useEntities: () => ({
     entities: ref({
       "1": { name: "Similar Name", type: "company" },
       "2": { name: "Different", type: "company" },

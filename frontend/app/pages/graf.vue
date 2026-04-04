@@ -6,7 +6,7 @@
 import { useParams } from "~/composables/params";
 
 const { filters } = useParams();
-const { entities: filtered } = useEntity("person", filters);
+const { entities: filtered } = useEntities("person", filters);
 
 definePageMeta({
   title: "Graf",

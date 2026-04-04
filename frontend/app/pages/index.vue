@@ -78,7 +78,7 @@
 import { useFeminatyw } from "@/composables/feminatyw";
 definePageMeta({ affineLink: "7CDdAj6z8PUAFNWT-phhD" });
 
-const { entities: people } = useEntity("person");
+const { entities: people } = useEntities("person");
 const { koryciarz } = useFeminatyw();
 </script>
 

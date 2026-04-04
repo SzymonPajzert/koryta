@@ -91,7 +91,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useEntity } from "@/composables/entity";
 import { authFetch } from "@/composables/auth";
 import { getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
@@ -130,9 +129,9 @@ const headers = [
   { title: "Zobacz", key: "explore", sortable: false },
 ];
 
-const { entities: people } = useEntity("person");
-const { entities: places } = useEntity("place");
-const { entities: regions } = useEntity("region");
+const { entities: people } = useEntities("person");
+const { entities: places } = useEntities("place");
+const { entities: regions } = useEntities("region");
 const { data: edgesData, pending: edgesPending } =
   await authFetch<Edge[]>("/api/graph/edges");
 
