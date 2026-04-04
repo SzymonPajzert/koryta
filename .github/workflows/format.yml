@@ -33,7 +33,7 @@ jobs:
 
       - name: Install Frontend Dependencies
         working-directory: frontend
-        run: pnpm install
+        run: pnpm install && pnpm rebuild better-sqlite3
 
       - name: Check format
         run: pnpm run format:check

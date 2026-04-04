@@ -35,11 +35,11 @@ jobs:
 
       - name: Install Frontend Dependencies
         working-directory: frontend
-        run: pnpm install
+        run: pnpm install && pnpm rebuild better-sqlite3
 
       - name: Install Functions Dependencies
         working-directory: functions
-        run: pnpm install
+        run: pnpm install && pnpm rebuild better-sqlite3
 
       - name: Install Java (for Emulators)
         uses: actions/setup-java@v4

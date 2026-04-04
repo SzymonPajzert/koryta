@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: pnpm install
+        run: pnpm install && pnpm rebuild better-sqlite3
 
       - name: Run Tests
         working-directory: frontend
@@ -55,7 +55,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: pnpm install
+        run: pnpm install && pnpm rebuild better-sqlite3
 
       - name: Build
         working-directory: frontend

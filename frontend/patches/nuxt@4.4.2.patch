@@ -1,0 +1,13 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 30bcabbd3a989e99499b26de68e1c1306ce7c2c9..53e35053b38a2093bd956f01d53a6adb40e076c7 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1345,7 +1345,7 @@ const pagesModule = defineNuxtModule({
+       references.push({ types: useExperimentalTypedPages ? "vue-router/auto-routes" : "vue-router" });
+       tsConfig.vueCompilerOptions ||= {};
+       tsConfig.vueCompilerOptions.plugins ||= [];
+-      tsConfig.vueCompilerOptions.plugins.push("vue-router/volar/sfc-route-blocks");
++      // Removed vue-router volar plugin injection for vue-tsc 2 compatibility
+       if (useExperimentalTypedPages) {
+         tsConfig.vueCompilerOptions.plugins.push({
+           name: "vue-router/volar/sfc-typed-router",

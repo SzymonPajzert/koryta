@@ -1,0 +1,2 @@
+patchedDependencies:
+  nuxt@4.4.2: patches/nuxt@4.4.2.patch
