@@ -36,7 +36,7 @@ export interface Edge {
   id?: string;
   source: string;
   target: string;
-  label: string;
+  label?: string;
   type:
     | "employed"
     | "connection"

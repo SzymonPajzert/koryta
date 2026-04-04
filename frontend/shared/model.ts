@@ -26,6 +26,7 @@ export type Node = PageBase<NodeType> & {
 export interface Edge extends PageBase<EdgeType> {
   name?: string;
   source: string;
+  label?: string; // a derivative of name, see graph/model.ts
   target: string;
   start_date?: string;
   end_date?: string;
