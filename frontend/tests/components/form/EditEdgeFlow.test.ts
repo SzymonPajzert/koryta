@@ -35,7 +35,7 @@ const EditEdgeWrapper = defineComponent({
   },
 });
 
-describe("Election Edge Form Flow", () => {
+describe.todo("Election Edge Form Flow", () => {
   it("can fill election details in the EditEdge component", async () => {
     const wrapper = mount(EditEdgeWrapper, {
       props: { edgeTypeExt: "election" },

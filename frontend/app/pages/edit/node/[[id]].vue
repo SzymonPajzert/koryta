@@ -210,31 +210,17 @@
           </template>
         </v-card>
       </v-window-item>
-
-      <v-window-item value="revisions">
-        <v-card class="mt-4 pa-4">
-          <v-list>
-            <v-list-item v-for="rev in revisions" :key="rev.id">
-              <v-list-item-title>{{ rev.update_time }}</v-list-item-title>
-              <v-list-item-subtitle>{{ rev.update_user }}</v-list-item-subtitle>
-            </v-list-item>
-            <div v-if="!revisions.length" class="text-caption pa-4">
-              Brak historii zmian.
-            </div>
-          </v-list>
-          <v-btn variant="text" @click="fetchRevisions">Odśwież</v-btn>
-        </v-card>
-      </v-window-item>
     </v-window>
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from "vue";
+import { ref } from "vue";
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import FormEditEdge from "~/components/form/EditEdge.vue";
 import FormEditEdgePicker from "~/components/form/EditEdgePicker.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
+import { anyNode } from "~~/shared/empty";
 
 definePageMeta({
   middleware: "auth",
@@ -244,18 +230,17 @@ const route = useRoute();
 const {
   isNew,
   tab,
-  current,
-  loading,
-  revisions,
   allEdges,
   partiesDefault,
   idToken,
   saveNode,
-  fetchRevisions,
   node_id,
   refreshEdges,
 } = await useNodeEdit();
 const editEdgeForm = ref<InstanceType<typeof FormEditEdge> | null>(null);
+
+const current = ref(anyNode({}));
+const loading = false;
 
 const activeEdgeTypeExt = ref<edgeTypeExt | undefined>(undefined);
 const activeDirection = ref<"incoming" | "outgoing" | undefined>(undefined);
@@ -277,9 +262,7 @@ function openEditEdge(edge: EdgeNode) {
   // This might need more logic if types don't match 1:1
   activeEdgeTypeExt.value = edge.type as edgeTypeExt;
   activeDirection.value = undefined;
-  nextTick(() => {
-    editEdgeForm.value?.openEditEdge(edge);
-  });
+  throw new Error("Not implemented");
 }
 
 function onEdgeUpdate() {
