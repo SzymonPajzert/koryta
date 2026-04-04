@@ -5,6 +5,8 @@ export default defineConfig({
     baseUrl: "http://127.0.0.1:3000",
     pageLoadTimeout: 10000,
     defaultCommandTimeout: 10000,
+    allowCypressEnv: false,
+    testIsolation: false,
     setupNodeEvents(on, _config) {
       on("task", {
         log(message: string) {
