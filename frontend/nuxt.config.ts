@@ -67,9 +67,7 @@ export default defineNuxtConfig({
 
   modules: [
     "@pinia/nuxt",
-    "@nuxt/content", // TODO what do I need it for '@nuxt/icon',
-    // TODO what do I need it for '@nuxt/image',
-    // TODO what do I need it for '@nuxt/scripts',
+    "@nuxt/content",
     "@nuxt/fonts",
     "@nuxt/eslint",
     "nuxt-vuefire",

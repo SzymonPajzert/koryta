@@ -6,7 +6,6 @@
       najwięcej? Koryta.pl to największy, ogólnopolski i niezależny agregator
       informacji o politycznych układach. Znajdziesz w nim polityków i ich
       bliskich, którzy pracują w publicznych spółkach.
-      <!-- TODO VSCode is autoadding breaks here, I don't know why -->
       <br /><br />
       Te dane są oficjalnie publiczne i dostępne, jednak trzeba wiedzieć, czego
       szukać. My wiemy i szukamy. Zobacz film o projekcie na
