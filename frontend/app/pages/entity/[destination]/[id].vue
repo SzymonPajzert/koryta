@@ -215,6 +215,10 @@ import type {
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import { useEdgeButtons, type NewEdgeButton } from "~/composables/useEdgeTypes";
 
+definePageMeta({
+  affineLink: "0Jk7aUVzpBbKpnGw-NNqZ",
+});
+
 const route = useRoute<"/entity/[destination]/[id]">();
 
 const node = route.params.id as string;

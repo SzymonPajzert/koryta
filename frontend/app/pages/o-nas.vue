@@ -403,6 +403,10 @@ useSeoMeta({
   description:
     "Przekształcamy rozproszone dane w czytelną mapę powiązań, by każdy obywatel mógł świadomie oceniać jakość zarządzania majątkiem publicznym.",
 });
+
+definePageMeta({
+  affineLink: "yzo0TKrnnYO59pbFuoaFq",
+});
 </script>
 
 <style scoped>

@@ -104,7 +104,16 @@
         href="https://github.com/users/SzymonPajzert/projects/2/views/3"
         target="_blank"
       >
-        Zgłoś problem
+        Nowy bug w GitHubie
+      </v-btn>
+      <v-btn
+        v-if="affineLink"
+        prepend-icon="mdi-lightning-bolt"
+        variant="text"
+        :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
+        target="_blank"
+      >
+        Dyskusja w affine
       </v-btn>
       <v-spacer icon />
     </v-toolbar>
@@ -130,5 +139,6 @@ const route = useRoute();
 const safeQuery = computed(() => route?.query || {});
 const maxWidth = computed(() => (route?.meta?.fullWidth ? "none" : 900));
 const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
+const affineLink = computed(() => route?.meta?.affineLink);
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
