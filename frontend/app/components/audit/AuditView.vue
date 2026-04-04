@@ -77,7 +77,6 @@
 <script setup lang="ts">
 import { useAuthState, authFetch } from "@/composables/auth";
 
-import type { Node, Edge } from "~~/shared/model";
 import { nodeTypeIcon } from "~~/shared/model";
 
 const props = defineProps<{
@@ -116,15 +115,10 @@ const { data: pendingNodes, pending: pendingNodesLoading } = authFetch<
 const { data: pendingEdges, pending: pendingEdgesLoading } =
   authFetch<Record<string, any>>("/api/edges/pending"); // "pending-revisions" ?
 
-// 2. Edges (shared by 'edges-no-source' and 'articles-no-edges')
-const { data: allEdges, pending: allEdgesLoading } = authFetch<Edge[]>(
-  () => "/api/graph/edges",
-); // ["edges-no-source", "articles-no-edges"]
-
 // 3. Articles (for 'articles-no-edges')
-const { data: allArticles, pending: allArticlesLoading } = authFetch<{
-  entities: Record<string, Node>;
-}>("/api/nodes?type=article"); // "articles-no-edges"
+// const { data: allArticles } = authFetch<{
+//   entities: Record<string, Node>;
+// }>("/api/nodes?type=article"); // "articles-no-edges"
 
 // 4. My Revisions
 const {
@@ -142,9 +136,11 @@ const loading = computed(() => {
     case "pending-revisions":
       return pendingNodesLoading.value || pendingEdgesLoading.value;
     case "edges-no-source":
-      return allEdgesLoading.value;
+      // TODO reimplement
+      return [];
     case "articles-no-edges":
-      return allEdgesLoading.value || allArticlesLoading.value;
+      // TODO reimplement
+      return [];
     case "my-revisions":
       return myRevisionsLoading.value;
     default:
@@ -169,39 +165,6 @@ const items = computed<AuditItem[]>(() => {
         subtitle: `Autor: ${rev.update_user}`,
         link: `/entity/${p.type}/${p.id}/${rev.id}`,
       })),
-    }));
-  } else if (props.type === "edges-no-source") {
-    const list = (allEdges.value || []).filter(
-      (e) => !e.references || e.references.length === 0,
-    );
-    return list.map((e) => ({
-      id: e.id || "",
-      title: `${e.source} -> ${e.target}`,
-      subtitle: e.type,
-      icon: "mdi-connection",
-      href: `/edit/node/${e.source}`,
-      actionIcon: "mdi-pencil",
-    }));
-  } else if (props.type === "articles-no-edges") {
-    const ents = allArticles.value?.entities || {};
-    const articles = Object.entries(ents).map(([id, data]) => ({
-      id,
-      ...data,
-    }));
-
-    const referencedArticleIds = new Set<string>();
-    (allEdges.value || []).forEach((e) => {
-      e.references?.forEach((refId) => referencedArticleIds.add(refId));
-    });
-
-    const list = articles.filter((a) => !referencedArticleIds.has(a.id));
-    return list.map((a) => ({
-      id: a.id,
-      title: a.name,
-      subtitle: a.id,
-      icon: "mdi-file-document-outline",
-      href: `/entity/article/${a.id}`,
-      actionIcon: "mdi-eye",
     }));
   } else {
     return (
