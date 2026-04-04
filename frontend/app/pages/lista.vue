@@ -10,7 +10,7 @@ definePageMeta({
 });
 
 const { filters } = useParams();
-const { entities: peopleMaybe } = useEntity("person", filters);
+const { entities: peopleMaybe } = useEntities("person", filters);
 const { data: articles } = await authFetch("/api/nodes/articles");
 
 const people = computed(() => {

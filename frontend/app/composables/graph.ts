@@ -47,8 +47,8 @@ export function useGraph(opts: GraphOptions = {}) {
   const nodes = computed(() => graph.value?.nodes);
   const ready = computed(() => !!nodes.value);
   const edgesRaw = computed(() => graph.value?.edges);
-  const edges = useEntityFiltering(edgesRaw);
-  const nodesFiltered1 = useEntityFiltering(nodes);
+  const edges = useEntitiesFiltering(edgesRaw);
+  const nodesFiltered1 = useEntitiesFiltering(nodes);
 
   const interestingNodes = computed<
     Record<string, GraphNode & { stats: NodeStats }>
