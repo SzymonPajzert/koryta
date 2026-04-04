@@ -97,7 +97,7 @@ import { getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
 import type { Edge } from "~~/shared/model";
 
-definePageMeta({ fullWidth: true });
+definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
   title: "Eksploruj - Tabela - koryta.pl",
 });
