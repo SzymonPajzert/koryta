@@ -11,7 +11,7 @@
     />
     <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">
-        <div v-if="type === 'place'" class="mb-4 d-flex">
+        <div v-if="entity?.type === 'place'" class="mb-4 d-flex">
           <v-btn
             variant="tonal"
             prepend-icon="mdi-format-list-bulleted"
@@ -28,7 +28,7 @@
             Graf połączeń
           </v-btn>
         </div>
-        <div v-if="type === 'region'" class="mb-4 d-flex">
+        <div v-if="entity?.type === 'region'" class="mb-4 d-flex">
           <v-btn
             variant="tonal"
             prepend-icon="mdi-format-list-bulleted"
@@ -53,11 +53,11 @@
         </div>
 
         <div class="mt-4">
-          <template v-if="type === 'place'">
+          <template v-if="entity?.type === 'place'">
             <CardConnectionList :edges="owners" title="Właściciele" />
             <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
           </template>
-          <template v-if="type === 'region'">
+          <template v-if="entity?.type === 'region'">
             <CardConnectionList :edges="owners" title="Część regionu" />
             <CardConnectionList :edges="subregions" title="Regiony" />
             <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
@@ -66,7 +66,8 @@
           <v-row>
             <v-col
               v-for="edge in edges.filter((edge) => {
-                if (type === 'place' || type === 'region') {
+                const t = entity?.type || type;
+                if (t === 'place' || t === 'region') {
                   return ['employed', 'connection'].includes(edge.type);
                 }
                 return ['employed', 'connection', 'owns', 'election'].includes(
@@ -110,7 +111,7 @@
           <template v-if="userWantsEdit">
             <div class="mt-4">
               <v-btn
-                v-if="type !== 'region'"
+                v-if="entity?.type !== 'region'"
                 variant="tonal"
                 prepend-icon="mdi-pencil-outline"
                 @click="handleEdit"
@@ -121,7 +122,7 @@
                 Zaproponuj zmianę
               </v-btn>
               <DialogProposeRemoval
-                v-if="entity && type !== 'region'"
+                v-if="entity && entity.type !== 'region'"
                 :id="node"
                 :type="type"
                 :name="entity.name"
@@ -141,7 +142,7 @@
                 </template>
               </DialogProposeRemoval>
               <QuickAddArticleButton
-                v-if="type !== 'article' && type !== 'region'"
+                v-if="entity?.type !== 'article' && entity?.type !== 'region'"
                 :node-id="node"
                 class="ml-2"
               />
@@ -222,6 +223,7 @@ definePageMeta({
 const route = useRoute<"/entity/[destination]/[id]">();
 
 const node = route.params.id as string;
+// TODO move to the entity type as read from the db
 const type = route.params.destination as NodeType;
 
 const userWantsEdit = ref(false);

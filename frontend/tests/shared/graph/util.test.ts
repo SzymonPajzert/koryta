@@ -77,4 +77,35 @@ describe("graph utils", () => {
       expect(regionGroup?.connected).not.toContain("p2");
     });
   });
+
+  describe("getNodesNoStats", () => {
+    it("should preserve original DB type via entityType and overwrite Graph type for visual rendering", () => {
+      const people: Record<string, Person> = {
+        p1: { name: "Person A", type: "person" } as Person,
+      };
+      const companies: Record<string, Company> = {
+        c1: { name: "Company B", type: "place" } as Company,
+      };
+      const regions: Record<string, Region> = {
+        r1: { name: "Region C", type: "region" } as Region,
+      };
+
+      const nodesNoStats = getNodesNoStats(people, companies, regions, {});
+
+      // Verify the person node
+      expect(nodesNoStats["p1"]).toBeDefined();
+      expect(nodesNoStats["p1"].type).toBe("circle");
+      expect((nodesNoStats["p1"] as any).entityType).toBe("person");
+
+      // Verify the company/place node
+      expect(nodesNoStats["c1"]).toBeDefined();
+      expect(nodesNoStats["c1"].type).toBe("rect");
+      expect((nodesNoStats["c1"] as any).entityType).toBe("place");
+
+      // Verify the region node
+      expect(nodesNoStats["r1"]).toBeDefined();
+      expect(nodesNoStats["r1"].type).toBe("document");
+      expect((nodesNoStats["r1"] as any).entityType).toBe("region");
+    });
+  });
 });
