@@ -118,9 +118,6 @@ export default defineNuxtConfig({
       authDomain: isLocal
         ? "demo-koryta-pl.firebaseapp.com"
         : "koryta-pl.firebaseapp.com",
-      databaseURL: isLocal
-        ? "http://localhost:9000?ns=demo-koryta-pl"
-        : "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
       projectId: isLocal ? "demo-koryta-pl" : "koryta-pl",
       storageBucket: isLocal ? undefined : "koryta-pl.firebasestorage.app",
       messagingSenderId: isLocal ? undefined : "735903577811",

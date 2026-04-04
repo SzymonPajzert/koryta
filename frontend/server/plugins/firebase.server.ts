@@ -16,13 +16,11 @@ export default defineNitroPlugin(() => {
 
     console.log("Initializing Firebase:", {
       projectId: config.public.vuefire.config.projectId,
-      databaseURL: config.public.vuefire.config.databaseURL,
       authEmulatorHost: process.env.FIREBASE_AUTH_EMULATOR_HOST,
     });
 
     initializeApp({
       projectId: config.public.vuefire.config.projectId,
-      databaseURL: config.public.vuefire.config.databaseURL,
     });
   }
 });
