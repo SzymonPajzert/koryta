@@ -10,14 +10,27 @@ export type GraphOptions = {
 };
 
 export function useGraph(opts: GraphOptions = {}) {
+  const url = computed(() => {
+    if (opts.focusNodeId) {
+      let u = `/api/graph/local/${opts.focusNodeId}?distance=${opts.maxDepth ?? 1}`;
+      if (opts.expandedNodes?.value && opts.expandedNodes.value.size > 0) {
+        const expand = Array.from(opts.expandedNodes.value)
+          .filter((id) => id !== opts.focusNodeId)
+          .join(",");
+        if (expand) {
+          u += `&expand=${expand}`;
+        }
+      }
+      return u;
+    }
+    return "/api/graph";
+  });
+
   const { data: graph } = useAsyncData<GraphLayout>(
     "graph",
-    () => $fetch("/api/graph"),
-    { lazy: true },
+    () => $fetch(url.value),
+    { lazy: true, watch: [url] },
   );
-  const { data: layout } = useAsyncData<{
-    nodes: Record<string, { x: number; y: number }>;
-  }>("layout", () => $fetch("/api/graph/layout"), { lazy: true });
 
   const nodeGroupsMap = computed(() => {
     const groups = graph.value?.nodeGroups;
@@ -52,50 +65,9 @@ export function useGraph(opts: GraphOptions = {}) {
     );
   });
 
-  // TODO move it to the backend
   const nodesFiltered = computed(() => {
     if (opts.focusNodeId) {
-      if (!graph.value) return {};
-      const depth = opts.maxDepth ?? 1;
-      const visited = new Map<string, number>();
-
-      const expandedSet =
-        opts.expandedNodes?.value || new Set([opts.focusNodeId]);
-
-      const queue: { id: string; d: number }[] = [];
-      for (const id of expandedSet) {
-        queue.push({ id, d: 0 });
-        visited.set(id, 1);
-      }
-
-      while (queue.length > 0 && !!edges.value) {
-        const current = queue.shift()!;
-        if (current.d >= depth) continue;
-
-        const neighbors = edges.value
-          .filter((e) => e.source === current.id || e.target === current.id)
-          .map((e) => (e.source === current.id ? e.target : e.source));
-
-        for (const neighborId of neighbors) {
-          // Skip nodes that represent empty places or are otherwise filtered out
-          if (!interestingNodes.value[neighborId]) {
-            continue;
-          }
-
-          if (!visited.has(neighborId)) {
-            visited.set(neighborId, 1);
-            queue.push({ id: neighborId, d: current.d + 1 });
-          } else {
-            visited.set(neighborId, (visited.get(neighborId) ?? 0) + 1);
-          }
-        }
-      }
-
-      return Object.fromEntries(
-        Object.entries(interestingNodes.value).filter(([key]) =>
-          visited.has(key),
-        ),
-      );
+      return interestingNodes.value;
     }
 
     return Object.fromEntries(
@@ -107,10 +79,7 @@ export function useGraph(opts: GraphOptions = {}) {
 
   const edgesFilteredDuplicates = computed(() => {
     if (opts.focusNodeId && graph.value) {
-      const validNodeIds = new Set(Object.keys(nodesFiltered.value));
-      return graph.value.edges.filter(
-        (e) => validNodeIds.has(e.source) && validNodeIds.has(e.target),
-      );
+      return graph.value.edges;
     }
     return edges.value;
   });
@@ -131,7 +100,7 @@ export function useGraph(opts: GraphOptions = {}) {
     nodesFiltered,
     nodeGroupsMap,
     edgesFiltered,
-    layout,
     ready,
+    url,
   };
 }

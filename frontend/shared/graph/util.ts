@@ -185,3 +185,42 @@ export function getEdges(edgesFromDB: DBEdge[]) {
     return result;
   });
 }
+
+export function getGraphBFS(
+  focusNodeIds: Set<string>,
+  maxDepth: number,
+  edges: Edge[],
+  interestingNodes: Record<string, Node & { stats: NodeStats }>,
+) {
+  const visited = new Set<string>();
+
+  const queue: { id: string; d: number }[] = [];
+  for (const id of focusNodeIds) {
+    queue.push({ id, d: 0 });
+    visited.add(id);
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.d >= maxDepth) continue;
+
+    const neighbors = edges
+      .filter((e) => e.source === current.id || e.target === current.id)
+      .map((e) => (e.source === current.id ? e.target : e.source));
+
+    for (const neighborId of neighbors) {
+      if (!interestingNodes[neighborId]) {
+        continue;
+      }
+
+      if (!visited.has(neighborId)) {
+        visited.add(neighborId);
+        queue.push({ id: neighborId, d: current.d + 1 });
+      }
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(interestingNodes).filter(([key]) => visited.has(key)),
+  );
+}
