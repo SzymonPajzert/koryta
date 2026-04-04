@@ -81,19 +81,8 @@ export async function fetchEdges(): Promise<Edge[]> {
   return edges as unknown as Edge[];
 }
 
-export async function fetchRTDB(path: string) {
-  const db = getDatabase();
-  const snapshot = await db.ref(path).once("value");
-  return snapshot.val() || {};
-}
-
 export async function fetchFirestore<T>(path: string): Promise<T> {
   const db = getDatabase();
   const snapshot = await db.ref(path).once("value");
   return snapshot.val() || {};
-}
-
-export async function setRTDB<T>(path: string, value: T): Promise<void> {
-  const db = getDatabase();
-  await db.ref(path).set(value);
 }
