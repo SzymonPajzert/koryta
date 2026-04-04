@@ -3,7 +3,6 @@
     <FormTypeSimulator
       ref="simulator"
       :lines="[
-        // TODO { text: 'Andrzej Sebastian Duda', link: '/pomoc' },
         {
           text: 'Rafał Trzaskowski',
           link: '/entity/person/8rg6MrDfdiRR7YaAvE5O',
