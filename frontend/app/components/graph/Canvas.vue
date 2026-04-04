@@ -46,7 +46,6 @@ import type { Node as GraphNode, Edge } from "~~/shared/graph/model";
 const props = defineProps<{
   nodes: Record<string, GraphNode>;
   edges: Edge[];
-  layout?: { nodes: Record<string, { x: number; y: number; fixed?: boolean }> };
   ready: boolean;
   focusNodeId?: string;
 }>();
@@ -55,11 +54,11 @@ const simulationStore = useSimulationStore();
 const router = useRouter();
 
 const layoutCentered = computed(() => {
-  if (!props.layout) return {};
-  if (!props.focusNodeId) return props.layout;
-
-  const layout = {
-    nodes: Object.fromEntries(Object.entries(props.layout.nodes)),
+  if (!props.focusNodeId) return {};
+  const layout: {
+    nodes: Record<string, { x: number; y: number; fixed?: boolean }>;
+  } = {
+    nodes: {},
   };
   layout.nodes[props.focusNodeId] = { x: 0, y: 0, fixed: true };
   return layout;

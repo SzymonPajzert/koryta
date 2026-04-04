@@ -2,7 +2,6 @@
   <GraphCanvas
     :nodes="nodesFiltered"
     :edges="edgesFiltered || []"
-    :layout="layout || undefined"
     :ready="ready"
     :focus-node-id="focusNodeId"
     @expand="onExpandNode"
@@ -34,5 +33,5 @@ const opts = computed(() => ({
   expandedNodes,
 }));
 
-const { nodesFiltered, edgesFiltered, layout, ready } = useGraph(opts.value);
+const { nodesFiltered, edgesFiltered, ready } = useGraph(opts.value);
 </script>
