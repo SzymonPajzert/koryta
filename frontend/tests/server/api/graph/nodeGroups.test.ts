@@ -37,8 +37,7 @@ describe("Graph NodeGroups API", () => {
       { source: "p1", target: "p2", type: "connection" },
     ]);
 
-    const handlerModule =
-      await import("../../../server/api/graph/nodeGroups.get");
+    const handlerModule = await import("~~/server/api/graph/nodeGroups.get");
     const result = await handlerModule.default({} as any);
 
     // The handler returns a list of {id, name, people}

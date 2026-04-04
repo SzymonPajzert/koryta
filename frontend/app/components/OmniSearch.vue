@@ -38,9 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import type { GraphLayout } from "~~/shared/graph/util";
 import { parties } from "~~/shared/misc";
-import { useEntityFiltering } from "@/composables/useEntityFiltering";
 import { authFetch } from "@/composables/auth";
 
 const { push, currentRoute } = useRouter();
@@ -81,12 +79,11 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { data: graph, refresh } = await authFetch<GraphLayout>("/api/graph", {
+const { data: nodeGroups, refresh } = await authFetch<
+  { id: string; name: string; people: number }[]
+>("/api/graph/nodeGroups", {
   lazy: true,
 });
-
-const nodes = computed(() => graph.value?.nodes);
-const nodesFiltered = useEntityFiltering(nodes);
 
 watch(autocompleteFocus, (focused) => {
   if (focused) {
@@ -95,20 +92,15 @@ watch(autocompleteFocus, (focused) => {
 });
 
 const baseItems = computed<ListItem[]>(() => {
-  if (
-    !graph.value ||
-    !graph.value.nodeGroups ||
-    graph.value.nodeGroups.length === 0
-  )
-    return [];
+  if (!nodeGroups.value || nodeGroups.value.length === 0) return [];
   const result: ListItem[] = [];
   result.push({
     title: "Lista wszystkich osób",
-    subtitle: `${graph.value?.nodeGroups?.[0]?.stats?.people ?? 0} powiązanych osób`,
+    subtitle: `${nodeGroups.value?.[0]?.people ?? 0} powiązanych osób`,
     icon: "mdi-format-list-bulleted-type",
     path: "/lista",
     logEventKey: {
-      content_id: graph.value?.nodeGroups?.[0]?.id || "",
+      content_id: nodeGroups.value?.[0]?.id || "",
       content_type: "nodeGroup",
     },
   });
@@ -130,18 +122,11 @@ const baseItems = computed<ListItem[]>(() => {
 
   const addedIds = new Set<string>();
 
-  graph.value.nodeGroups.slice(1).forEach((item) => {
-    // Check if the group ID (which is a place/region ID) is in pending/hidden state
-    // If the group corresponds to a node that is filtered out, skip it.
-    // The group ID is `item.id`.
-    if (item.id && !nodesFiltered.value?.[item.id]) {
-      return;
-    }
-
+  nodeGroups.value.slice(1).forEach((item) => {
     addedIds.add(item.id);
     result.push({
       title: item.name,
-      subtitle: `${item.stats?.people ?? 0} powiązanych osób`,
+      subtitle: `${item.people ?? 0} powiązanych osób`,
       icon: "mdi-domain",
       logEventKey: {
         content_id: item.id,
@@ -151,33 +136,6 @@ const baseItems = computed<ListItem[]>(() => {
     });
   });
 
-  // Now iterate over filtered nodes
-  Object.entries(nodesFiltered.value || {}).forEach(([key, value]) => {
-    if (addedIds.has(key)) {
-      return;
-    }
-    if (value.type == "circle") {
-      result.push({
-        title: value.name,
-        icon: "mdi-account",
-        logEventKey: {
-          content_id: key,
-          content_type: "person",
-        },
-        path: "/entity/person/" + key,
-      });
-    } else if (value.type == "rect") {
-      result.push({
-        title: value.name,
-        icon: "mdi-domain",
-        logEventKey: {
-          content_id: key,
-          content_type: "place",
-        },
-        path: "/entity/place/" + key,
-      });
-    }
-  });
   return result;
 });
 
