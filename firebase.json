@@ -13,7 +13,7 @@
       }
     ],
     "predeploy": [
-      "npm run build"
+      "pnpm run build"
     ]
   },
   "emulators": {
@@ -28,7 +28,7 @@
     "apphosting": {
       "port": 5002,
       "rootDirectory": "frontend",
-      "startCommand": "npm run dev"
+      "startCommand": "pnpm run dev"
     },
     "functions": {
       "port": 5001
