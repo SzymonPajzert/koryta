@@ -82,7 +82,7 @@ export const destinationAddText: Record<NodeType, string> = {
   region: "Dodaj region",
 };
 
-export interface Person {
+export type Person = {
   name: string;
   type: "person";
   parties?: string[];
@@ -92,7 +92,14 @@ export interface Person {
   rejestrIo?: string;
   votes?: Votes;
   visibility?: boolean;
-}
+};
+
+export type PersonRich = Person & {
+  id: string;
+  companies: (string | undefined)[];
+  elections: string[];
+  experience: number;
+};
 
 export interface Company {
   name: string;

@@ -18,8 +18,8 @@
       </v-card-item>
 
       <CardExplorePerson
-        :key="drawer?.id"
-        :person="drawer"
+        :key="focusedPerson?.id"
+        :person="focusedPerson"
         :region="region"
         :company="company"
       />
@@ -95,7 +95,7 @@ import { useEntity } from "@/composables/entity";
 import { authFetch } from "@/composables/auth";
 import { getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
-import type { Edge } from "~~/shared/model";
+import type { Edge, PersonRich } from "~~/shared/model";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -220,7 +220,7 @@ const computedItems = computed(() => {
     edgeSourceMap.get(edge.source)!.push(edge);
   }
 
-  const items = [];
+  const items: Array<PersonRich> = [];
 
   for (const [personId, person] of Object.entries(peopleObj)) {
     if (krsParam && !allowedIdsFromCompany.has(personId)) continue;
@@ -259,10 +259,8 @@ const computedItems = computed(() => {
     }
 
     items.push({
+      ...person,
       id: personId,
-      name: person.name,
-      originalNode: person,
-      parties: person.parties || [],
       companies: Array.from(new Set(companiesList)),
       elections: Array.from(new Set(electionsList)),
       experience: Math.floor((experienceMonths / 12) * 10) / 10,
@@ -295,11 +293,10 @@ const updateQueryParams = async (options: any) => {
 };
 
 const openDrawer = shallowRef(false);
-const drawer = shallowRef(undefined);
+const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
 
-const focusPerson = (item: any) => {
-  console.log("focus person");
-  drawer.value = item;
+const focusPerson = (item: PersonRich) => {
+  focusedPerson.value = item;
   openDrawer.value = true;
 };
 </script>

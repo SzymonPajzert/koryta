@@ -31,9 +31,9 @@
       <!-- Action: Interesting Vote -->
       <div>
         <VoteWidget
-          v-if="person.originalNode"
+          v-if="person"
           :id="person.id"
-          :entity="person.originalNode"
+          :entity="person"
           type="node"
         />
       </div>
@@ -49,11 +49,10 @@
 <script setup lang="ts">
 import VoteWidget from "@/components/VoteWidget.vue";
 import QuickAddArticleButton from "@/components/QuickAddArticleButton.vue";
+import type { PersonRich } from "~~/shared/model";
 
 const { person, region, company } = defineProps<{
-  person:
-    | undefined
-    | { id: string; name: string; parties: string[]; originalNode: any };
+  person: undefined | PersonRich;
   region: undefined | [string, string];
   company: undefined | [string, string];
 }>();
