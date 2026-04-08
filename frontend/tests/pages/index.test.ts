@@ -63,6 +63,8 @@ describe("IndexPage", () => {
 
     await flushPromises();
     expect(wrapper.html()).not.toContain("fallback");
-    expect(wrapper.html()).toContain("Agregator koryciarstwa");
+    expect(wrapper.html()).toContain(
+      "Jesteśmy największym, ogólnopolskim i niezależnym agregatorem",
+    );
   });
 });

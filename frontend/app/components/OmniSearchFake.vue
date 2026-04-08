@@ -14,7 +14,8 @@
     <omni-search
       :search-text="simulator?.currentText"
       :fake="true"
-      width="100%"
+      width="400px"
+      class="justify-center"
     />
   </div>
 </template>
