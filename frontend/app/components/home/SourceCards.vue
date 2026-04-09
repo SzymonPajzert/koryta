@@ -60,7 +60,8 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 
-const { data: sources } = await authFetch("/api/nodes/articles");
+const { data: sourcesRaw } = await authFetch("/api/nodes/articles");
+const sources = computed(() => sourcesRaw.value ?? []);
 
 const showAll = ref(false);
 
