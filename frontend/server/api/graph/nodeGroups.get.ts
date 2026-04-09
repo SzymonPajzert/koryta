@@ -31,5 +31,6 @@ export default authCachedEventHandler(async () => {
     id: g.id,
     name: g.name,
     people: g.stats.people,
+    type: nodesNoStats[g.id]?.entityType ?? "place",
   }));
 });

@@ -80,7 +80,7 @@ type ListItem = {
 };
 
 const { data: nodeGroups, refresh } = await authFetch<
-  { id: string; name: string; people: number }[]
+  { id: string; name: string; people: number; type: string }[]
 >("/api/graph/nodeGroups", {
   lazy: true,
 });
@@ -124,15 +124,22 @@ const baseItems = computed<ListItem[]>(() => {
 
   nodeGroups.value.slice(1).forEach((item) => {
     addedIds.add(item.id);
+    const itemType = item.type || "place";
+
+    // Choose icon based on type
+    let icon = "mdi-domain";
+    if (itemType === "person") icon = "mdi-account-outline";
+    else if (itemType === "region") icon = "mdi-map-marker-radius-outline";
+
     result.push({
       title: item.name,
       subtitle: `${item.people ?? 0} powiązanych osób`,
-      icon: "mdi-domain",
+      icon,
       logEventKey: {
         content_id: item.id,
         content_type: "nodeGroup",
       },
-      path: "/entity/place/" + item.id,
+      path: `/entity/${itemType}/` + item.id,
     });
   });
 
