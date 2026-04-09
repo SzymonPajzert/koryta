@@ -6,9 +6,22 @@
     <v-card
       v-if="status != 'success'"
       class="mb-4"
-      :title="status"
-      :text="JSON.stringify(error) ?? ''"
-    />
+      :title="!user ? 'Dostęp zastrzeżony' : status"
+    >
+      <v-card-text v-if="!user" class="pt-0">
+        <p class="mb-4">
+          Ta strona nie została znaleziona lub oczekuje na zatwierdzenie.
+          Niezaakceptowane strony są widoczne tylko dla zalogowanych
+          użytkowników.
+        </p>
+        <v-btn color="primary" @click="handleLoginRedirect()">
+          Zaloguj się
+        </v-btn>
+      </v-card-text>
+      <v-card-text v-else class="pt-0">
+        {{ JSON.stringify(error) ?? "" }}
+      </v-card-text>
+    </v-card>
     <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">
         <div v-if="entity?.type === 'place'" class="mb-4 d-flex">
