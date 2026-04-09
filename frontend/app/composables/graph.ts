@@ -1,6 +1,7 @@
 import type { Ref } from "vue";
 import type { GraphLayout } from "~~/shared/graph/util";
 import type { Node as GraphNode, NodeStats, Edge } from "~~/shared/graph/model";
+import { authFetch } from "@/composables/auth";
 
 export type GraphOptions = {
   focusNodeId?: string;
@@ -26,11 +27,7 @@ export function useGraph(opts: GraphOptions = {}) {
     return "/api/graph";
   });
 
-  const { data: graph } = useAsyncData<GraphLayout>(
-    "graph",
-    () => $fetch(url.value),
-    { lazy: true, watch: [url] },
-  );
+  const { data: graph } = authFetch<GraphLayout>(url, { lazy: true });
 
   const nodeGroupsMap = computed(() => {
     const groups = graph.value?.nodeGroups;
