@@ -29,29 +29,13 @@ const edgeTypeLabels: Record<string, string> = {
 };
 
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
-  const url = computed(() => {
-    const id = toValue(nodeID);
-    return id ? `/api/graph/local/${id}?distance=1` : null;
-  });
-
   const { user } = useAuthState();
-  const { data: localData, refresh: refreshLocal } = await useAsyncData<any>(
-    "local-graph" + (toValue(nodeID) || ""),
-    async () => {
-      const u = url.value;
-      if (!u) return Promise.resolve(null);
-
-      const headers = new Headers();
-      if (user.value) {
-        const token = await user.value.getIdToken();
-        headers.set("Authorization", `Bearer ${token}`);
-      }
-      return $fetch(u, {
-        headers,
-        query: { latest: !!user.value },
-      });
+  const { data: localData, refresh: refreshLocal } = await authFetch(
+    () => `/api/graph/local/${toValue(nodeID)}`,
+    {
+      query: { latest: !!user.value, distance: 1, center: toValue(nodeID) },
+      watch: [toRef(nodeID)],
     },
-    { watch: [url] },
   );
 
   const nodes = computed(() => localData.value?.nodes || {});
@@ -67,7 +51,7 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
         label: e.name || edgeTypeLabels[e.type] || e.type,
         richNode: {
           ...nodes.value[e.source],
-          type: nodes.value[e.source].entityType,
+          type: nodes.value[e.source]?.entityType,
         } as Node,
       }));
   });
@@ -81,7 +65,7 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
         label: e.name || edgeTypeLabels[e.type] || e.type,
         richNode: {
           ...nodes.value[e.target],
-          type: nodes.value[e.target].entityType,
+          type: nodes.value[e.target]?.entityType,
         } as Node,
       }));
   });
@@ -95,7 +79,7 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
         label: e.name || edgeTypeLabels[e.type] || e.type,
         richNode: {
           ...nodes.value[e.source],
-          type: nodes.value[e.source].entityType,
+          type: nodes.value[e.source]?.entityType,
         } as Node, // We show source node for referenced edges
       }));
   });
