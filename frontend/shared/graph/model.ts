@@ -8,6 +8,7 @@ export interface Node {
   hide?: boolean;
   parties?: string[];
   visibility?: boolean;
+  entityType?: string;
 }
 
 export interface NodeStats {

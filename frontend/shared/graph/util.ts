@@ -52,7 +52,7 @@ export function getNodeGroups(
     }
   });
 
-  const entries = Object.entries({ ...companies, ...regions }).map(
+  const entries = Object.entries({ ...companies, ...regions, ...people }).map(
     ([placeID, place]) => {
       const children = [
         ...placeConnection.getDeepChildren(placeID + SPLIT + "active"),
