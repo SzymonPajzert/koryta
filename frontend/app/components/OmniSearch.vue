@@ -79,9 +79,7 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { data: nodeGroups, refresh } = await authFetch<
-  { id: string; name: string; people: number; type: string }[]
->("/api/graph/nodeGroups", {
+const { data: nodeGroups, refresh } = await authFetch("/api/graph/nodeGroups", {
   lazy: true,
 });
 

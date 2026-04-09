@@ -18,6 +18,8 @@ const people = computed(() => {
   if (!unfiltered) return {};
 
   if (filters.value.source) {
+    if (!articles.value) return unfiltered;
+
     for (const article of articles.value) {
       if (article.domain === filters.value.source) {
         return Object.fromEntries(

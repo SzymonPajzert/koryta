@@ -6,7 +6,10 @@ async function eventIsAuthenticated(event: H3Event): Promise<boolean> {
   return !!user;
 }
 
-export const authCachedEventHandler = (handler: EventHandler, options = {}) => {
+export function authCachedEventHandler<T>(
+  handler: EventHandler<EventHandlerRequest, Promise<T>>,
+  options = {},
+) {
   // 1. Create the cached version of the handler
   const cachedHandler = defineCachedEventHandler(handler, {
     swr: true,
@@ -31,4 +34,4 @@ export const authCachedEventHandler = (handler: EventHandler, options = {}) => {
     // Public / Unauthenticated. Use cache.
     return cachedHandler(event);
   });
-};
+}
