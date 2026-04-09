@@ -1,3 +1,5 @@
+import type { ElectionPosition } from "~~/shared/model";
+
 export interface Node {
   name: string;
   prettyURL?: string;
@@ -53,7 +55,7 @@ export interface Edge {
   visibility?: boolean;
   party?: string;
   committee?: string;
-  position?: string;
+  position?: ElectionPosition;
   elected?: boolean;
   term?: string;
   by_election?: boolean;
