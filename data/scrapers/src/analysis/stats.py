@@ -45,8 +45,12 @@ class Statistics(Pipeline):
         df["kazdymusi"] = df["pkw_name"].apply(
             lambda x: x if x in kazdymusi_set else None
         )
-        df["tlustekoty"] = df["krs_name"].apply(check_name_in_list(tlustekoty))
-        df["listawstydu"] = df["krs_name"].apply(check_name_in_list(wstydu))
+        df["tlustekoty"] = df["krs_name"].apply(
+            check_name_in_list([name for name, _ in tlustekoty])
+        )
+        df["listawstydu"] = df["krs_name"].apply(
+            check_name_in_list([name for name, _ in wstydu])
+        )
         df["epidemia"] = df["krs_name"].apply(lambda x: x if x in epidemia else None)
         df["approve"] = (
             df["kazdymusi"].notnull()

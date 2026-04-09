@@ -79,7 +79,7 @@ class Extract(Pipeline):
         parser.add_argument(
             "--approved",
             help="Extract people already approved",
-            default=None,
+            default=False,
             required=False,
             action=argparse.BooleanOptionalAction,
         )

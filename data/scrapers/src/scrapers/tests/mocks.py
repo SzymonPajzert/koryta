@@ -247,7 +247,7 @@ def get_test_context() -> Context:
 def setup_test_context(ctx: Context, files: nested_dict = {}):
     for filename, content in files.items():
         if isinstance(content, str):
-            if content.startswith("/") and os.path.exists(content):
+            if os.path.isfile(content):
                 with open(content, "rb") as f:
                     if isinstance(ctx.io, MockIO):
                         ctx.io.files[filename] = MockFile(f.read())
