@@ -34,12 +34,22 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
     return id ? `/api/graph/local/${id}?distance=1` : null;
   });
 
+  const { user } = useAuthState();
   const { data: localData, refresh: refreshLocal } = await useAsyncData<any>(
     "local-graph" + (toValue(nodeID) || ""),
-    () => {
+    async () => {
       const u = url.value;
       if (!u) return Promise.resolve(null);
-      return $fetch(u);
+
+      const headers = new Headers();
+      if (user.value) {
+        const token = await user.value.getIdToken();
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+      return $fetch(u, {
+        headers,
+        query: { latest: !!user.value },
+      });
     },
     { watch: [url] },
   );
