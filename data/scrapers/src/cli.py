@@ -92,9 +92,12 @@ class Uploader:
             end=" ",
             file=sys.stderr,
         )
-        request = json.dumps(payload, cls=NumpyEncoder)
+        cleaned_payload = {k: v for k, v in payload.items() if v is not None}
+        request = json.dumps(cleaned_payload, cls=NumpyEncoder)
         if verbose:
             print(request, file=sys.stderr)
+            print(payload, file=sys.stderr)
+            print(cleaned_payload, file=sys.stderr)
         resp = requests.post(
             url,
             data=request,
