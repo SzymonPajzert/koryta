@@ -43,7 +43,7 @@ class PeoplePayloads(Pipeline[Person]):
                     "elections",
                     "party",
                     "wikipedia_url",
-                    "rejestr_io_url",
+                    "rejestrIo",
                 ]
             )
         )
@@ -101,7 +101,7 @@ class PeoplePayloads(Pipeline[Person]):
         if len(rejestr_ids) > 2:
             print(f"Found duplicated rejestr_ids: {rejestr_ids}")
         rejestr_id = rejestr_ids[0]
-        rejestr_io_url = f"https://rejestr.io/osoby/{rejestr_id}"
+        rejestrIo = f"https://rejestr.io/osoby/{rejestr_id}"
 
         # TODO reenable after mapping is better
         # if len(elections) > 0:
@@ -118,8 +118,8 @@ class PeoplePayloads(Pipeline[Person]):
             elections=elections,
             sources=sources,
             parties=party,
-            wikipedia_url=wikipedia_url,
-            rejestr_io_url=rejestr_io_url,
+            wikipedia=wikipedia_url,
+            rejestrIo=rejestrIo,
             autoapprove=count > 0,
         )
 
