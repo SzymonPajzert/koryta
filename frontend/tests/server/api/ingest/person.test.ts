@@ -157,6 +157,7 @@ describe("api/ingest/person", () => {
         target: "region-id-02",
         type: "election",
         name: "kandydatura",
+        position: "Sejmik",
         party: "Test Party",
         start_date: "2023-01-01",
       },

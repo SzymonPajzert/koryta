@@ -94,10 +94,17 @@ export type Person = {
   visibility?: boolean;
 };
 
+export interface ElectionRich {
+  year?: string;
+  location?: string;
+  position: string;
+  committee?: string;
+}
+
 export type PersonRich = Person & {
   id: string;
   companies: (string | undefined)[];
-  elections: string[];
+  elections: ElectionRich[];
   experience: number;
 };
 

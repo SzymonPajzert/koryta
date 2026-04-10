@@ -54,9 +54,23 @@
           </template>
 
           <template #[`item.elections`]="{ item }">
-            <span v-for="(election, i) in item.elections" :key="election">
-              {{ election }}<span v-if="i < item.elections.length - 1">, </span>
-            </span>
+            <template v-for="(election, i) in item.elections" :key="i">
+              <v-chip size="small" class="mr-1 mb-1" variant="outlined">
+                <template v-if="election.year">
+                  <span class="font-weight-bold mr-1">{{ election.year }}</span>
+                </template>
+                <template v-if="election.location">
+                  {{ election.location }}
+                  <span class="mx-1 text-grey-darken-1">-</span>
+                </template>
+                {{ election.position }}
+                <template v-if="election.committee">
+                  <span class="text-caption ml-1"
+                    >({{ election.committee }})</span
+                  >
+                </template> </v-chip
+              ><br v-if="i < item.elections.length - 1" />
+            </template>
           </template>
 
           <template #[`item.visibility`]="{ item }">
@@ -251,9 +265,22 @@ const computedItems = computed(() => {
           experienceMonths += diffMs / (1000 * 60 * 60 * 24 * 30.44);
         }
       } else if (edge.type === "election") {
-        const electionName = edge.name || edge.position || "Wybory";
-        const committee = edge.committee ? ` (${edge.committee})` : "";
-        electionsList.push(`${electionName}${committee}`);
+        const listYear =
+          edge.start_date && typeof edge.start_date === "string"
+            ? edge.start_date.split("-")[0]
+            : undefined;
+        const listLocation =
+          regionsObj[edge.target]?.name || placesObj[edge.target]?.name;
+        const listPosition = edge.position || edge.name || "Wybory";
+
+        electionsList.push(
+          JSON.stringify({
+            year: listYear,
+            location: listLocation,
+            position: listPosition,
+            committee: edge.committee,
+          }),
+        );
       }
     }
 
@@ -261,7 +288,9 @@ const computedItems = computed(() => {
       ...person,
       id: personId,
       companies: Array.from(new Set(companiesList)),
-      elections: Array.from(new Set(electionsList)),
+      elections: Array.from(new Set(electionsList))
+        .map((e) => JSON.parse(e))
+        .sort((a, b) => a.year - b.year),
       experience: Math.floor((experienceMonths / 12) * 10) / 10,
       visibility: person.visibility || false,
     });
