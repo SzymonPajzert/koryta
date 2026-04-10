@@ -3,7 +3,7 @@ import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { electionPositions } from "~~/shared/misc";
-import type { Edge, Article, Person } from "~~/shared/model";
+import type { Edge, Article, Person, ElectionPosition } from "~~/shared/model";
 import {
   personRequestSchema,
   type EntityResult,
@@ -289,6 +289,7 @@ async function createElection(
     target: regionId,
     type: "election",
     name: "kandydatura",
+    position: election.election_type as ElectionPosition,
   };
   if (election.party) edgeData.party = election.party;
   if (election.election_year) {
