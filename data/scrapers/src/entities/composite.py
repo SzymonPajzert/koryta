@@ -27,6 +27,6 @@ class Person:
     sources: list[str]
     content: str | None = None
     parties: list[str] | None = None
-    wikipedia_url: str | None = None
-    rejestr_io_url: str | None = None
+    wikipedia: str | None = None
+    rejestrIo: str | None = None
     autoapprove: bool = False
