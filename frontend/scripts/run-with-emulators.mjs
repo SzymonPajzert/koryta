@@ -1,27 +1,20 @@
 import { spawn } from 'node:child_process';
 
-const [, , ...args] = process.argv;
+const [, , command, ...args] = process.argv;
 
-if (args.length === 0) {
+if (!command) {
   console.error('Usage: node scripts/run-with-emulators.mjs <command> [args...]');
   process.exit(1);
 }
 
-const command = args
-  .map((arg) => {
-    if (/[\s"]/u.test(arg)) {
-      return `"${arg.replaceAll('"', '\\"')}"`;
-    }
-
-    return arg;
-  })
-  .join(' ');
-
 const isWindows = process.platform === 'win32';
 
-const child = spawn(isWindows ? 'cmd.exe' : '/bin/sh', isWindows ? ['/s', '/c', `"${command}"`] : ['-c', command], {
+// On Windows, npm-installed executables (e.g. nuxt, firebase) are .cmd wrappers
+// and cannot be spawned directly without the extension.
+const resolvedCommand = isWindows ? `${command}.cmd` : command;
+
+const child = spawn(resolvedCommand, args, {
   stdio: 'inherit',
-  windowsVerbatimArguments: isWindows,
   env: {
     ...process.env,
     USE_EMULATORS: 'true',
