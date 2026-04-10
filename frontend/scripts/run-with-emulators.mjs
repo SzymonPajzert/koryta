@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { extname } from 'node:path';
 
 const [, , command, ...args] = process.argv;
 
@@ -11,7 +12,8 @@ const isWindows = process.platform === 'win32';
 
 // On Windows, npm-installed executables (e.g. nuxt, firebase) are .cmd wrappers
 // and cannot be spawned directly without the extension.
-const resolvedCommand = isWindows ? `${command}.cmd` : command;
+// Only append .cmd if the command doesn't already have a file extension.
+const resolvedCommand = isWindows && !extname(command) ? `${command}.cmd` : command;
 
 const child = spawn(resolvedCommand, args, {
   stdio: 'inherit',
