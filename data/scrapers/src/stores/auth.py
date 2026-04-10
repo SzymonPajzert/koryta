@@ -7,7 +7,10 @@ import urllib.parse
 import webbrowser
 
 
+# TODO this function doesn't work
 def authenticate_user(endpoint_url: str) -> str:
+    raise ValueError("Not implemented")
+
     auth_port = 8085
     stop_event = threading.Event()
     server_thread = threading.Thread(
