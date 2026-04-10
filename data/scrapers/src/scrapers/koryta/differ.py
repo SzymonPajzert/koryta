@@ -89,7 +89,7 @@ class KorytaDiffer(Pipeline):
             self.id_map.update(
                 pd.Series(
                     df_valid["name"].values, index=df_valid["id"].astype(str)
-                ).to_dict()
+                ).to_dict(into=dict[str, str])
             )
 
         if not dates:
