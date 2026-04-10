@@ -288,7 +288,7 @@ def test_second_names_match(df_all):
 
 
 def file_lines(filename):
-    with open(tests.get_path(filename)) as people_list:
+    with open(tests.get_path(filename), encoding="utf-8") as people_list:
         for line in people_list:
             yield line.strip()
 

@@ -5,7 +5,7 @@ file operations, data references, and pipeline execution contexts.
 """
 
 import io
-import os.path
+import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
@@ -590,7 +590,7 @@ class Pipeline(typing.Generic[Output]):
     @property
     def output_path(self) -> str:
         if self.filename:
-            return os.path.join(self.filename, self.filename + "." + self.format)
+            return posixpath.join(self.filename, self.filename + "." + self.format)
         return ""
 
     @property
