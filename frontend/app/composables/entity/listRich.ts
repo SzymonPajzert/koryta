@@ -24,13 +24,8 @@ export async function useEntityListRich(
     );
   });
 
-  const route = useRoute();
-
   const peopleRich = computed<PersonRich[]>(() => {
     if (loading.value) return [];
-
-    const terytParam = route.query.teryt as string | undefined;
-    const krsParam = route.query.krs as string | undefined;
 
     const peopleObj = people.value ?? {};
     const placesObj = places.value ?? {};
@@ -79,8 +74,13 @@ export async function useEntityListRich(
     const items: Array<PersonRich> = [];
 
     for (const [personId, person] of Object.entries(peopleObj)) {
-      if (krsParam && !allowedIdsFromCompany.has(personId)) continue;
-      if (terytParam && !allowedIdsFromRegion.has(personId)) continue;
+      if (
+        allowedIdsFromCompany.size > 0 &&
+        !allowedIdsFromCompany.has(personId)
+      )
+        continue;
+      if (allowedIdsFromRegion.size > 0 && !allowedIdsFromRegion.has(personId))
+        continue;
 
       const personEdges = edgeSourceMap.get(personId) || [];
       const companiesList = [];
