@@ -31,12 +31,12 @@
         </v-tabs-window>
       </v-col>
       <v-col cols="12" md="4">
-        <v-tabs v-model="search" color="primary">
+        <v-tabs v-model="search" color="primary" grow>
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="parties">Partie</v-tab>
         </v-tabs>
 
-        <CardPeopleList v-if="region" :region="region" />
+        <CardPeopleList :region="region" />
       </v-col>
     </v-row>
   </v-container>
