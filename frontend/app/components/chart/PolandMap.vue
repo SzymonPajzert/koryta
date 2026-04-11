@@ -7,6 +7,10 @@ const hoveredDistrict = ref<Powiat | null>(null);
 
 const { data: nodeGroups } = await useFetch("/api/graph/nodeGroups");
 
+const hover = (region: Powiat | null) => {
+  hoveredDistrict.value = region;
+};
+
 const groupData = computed(() => {
   const map: Record<string, any> = {};
   for (const g of nodeGroups.value || []) {
@@ -36,11 +40,6 @@ const powiaty = computed(() => {
   });
   return { list, maxPeople };
 });
-
-const hover = (region: Powiat) => {
-  hoveredDistrict.value = region;
-};
-
 const emit = defineEmits(["click", "update:hovered"]);
 const click = (region: Powiat) => {
   emit("click", region);
@@ -67,6 +66,7 @@ const getFillColor = (item: Powiat) => {
       viewBox="0 0 800 744"
       xmlns="http://www.w3.org/2000/svg"
       class="w-full h-auto max-w-[800px] mx-auto"
+      @mouseleave="hover(null)"
     >
       <g>
         <path
