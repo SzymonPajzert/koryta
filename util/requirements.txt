@@ -2,7 +2,7 @@ anyio==4.9.0
 CacheControl==0.14.3
 cachetools==5.5.2
 certifi==2025.6.15
-cffi==1.17.1
+cffi==2.0.0
 charset-normalizer==3.4.2
 cryptography==45.0.4
 firebase-admin==6.9.0
