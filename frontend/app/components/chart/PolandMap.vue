@@ -22,10 +22,14 @@ const groupData = computed(() => {
 const powiaty = computed(() => {
   let maxPeople = 1;
   const list = powiatyPaths.map((p) => {
-    const terytId = "teryt" + p.teryt;
-    const group = groupData.value[terytId] || groupData.value[p.teryt];
+    const paddedTeryt = p.teryt.padStart(4, "0");
+    const terytId = "teryt" + paddedTeryt;
+    const group =
+      groupData.value[terytId] ||
+      groupData.value[p.teryt] ||
+      groupData.value[paddedTeryt];
     const people = group?.people || 0;
-    const name = group?.name || `Powiat ${p.teryt}`;
+    const name = group?.name || `Powiat ${paddedTeryt}`;
 
     if (people > maxPeople) {
       maxPeople = people;
