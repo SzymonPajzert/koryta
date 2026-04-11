@@ -12,6 +12,8 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/frontend"
+    ignore:
+      - dependency-name: "digraph-js"
     schedule:
       interval: "weekly"
     groups:
