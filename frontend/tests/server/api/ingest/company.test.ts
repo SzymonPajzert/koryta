@@ -236,4 +236,90 @@ describe("api/ingest/company", () => {
       true, // approve
     );
   });
+
+  it("should throw 404 if owned parent company does not exist", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "12345",
+      name: "Child Company",
+      owners: ["99999"],
+    });
+
+    // Mock Child get (will create new)
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "child-id" });
+
+    // Mock Parent get -> returns empty
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 404,
+      message: "Company with KRS 99999 not found",
+    });
+  });
+
+  it("should truncate teryt if length > 4", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "123456",
+      name: "Regional Company",
+      teryt: "1061999", // > 4 chars
+    });
+
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    const companyRef = { id: "company-id" };
+    mockDoc.mockReturnValueOnce(companyRef);
+
+    // Mock region existence true for 'teryt1061'
+    const regionSnapshot = { exists: true, ref: { id: "teryt1061" } };
+    const regionRefMock = {
+      id: "teryt1061",
+      get: vi.fn().mockResolvedValue(regionSnapshot),
+    };
+    mockDoc.mockReturnValueOnce(regionRefMock);
+
+    const edgeRef = { id: "edge-region-id" };
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
+      mockDb,
+      expect.anything(),
+      { uid: "test-user-id" },
+      edgeRef,
+      {
+        source: "teryt1061", // Must have correctly sliced
+        target: "company-id",
+        type: "owns",
+      },
+      true,
+      true,
+    );
+  });
+
+  it("should throw 400 if region with teryt code does not exist", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "123456",
+      name: "Unknown Region Company",
+      teryt: "9999",
+    });
+
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "company-id" });
+
+    // Mock region missing
+    const missingRegionSnapshot = { exists: false };
+    const regionRefMock = {
+      get: vi.fn().mockResolvedValue(missingRegionSnapshot),
+    };
+    mockDoc.mockReturnValueOnce(regionRefMock);
+
+    // Mock the fallback query missing
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Region with TERYT code 9999 not found",
+    });
+  });
 });
