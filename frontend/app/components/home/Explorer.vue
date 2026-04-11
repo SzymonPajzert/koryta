@@ -1,0 +1,49 @@
+<template>
+  <v-container :style="{ background: 'white' }">
+    <v-row>
+      <v-col cols="12" md="8">
+        <v-tabs-window v-model="search">
+          <v-tabs-window-item value="map">
+            <HomeHeading title="Mapa koryciarstwa" center />
+            <ChartPolandMap />
+          </v-tabs-window-item>
+          <v-tabs-window-item value="parties">
+            <HomeHeading title="Podział na partie" center />
+            <v-card
+              class="py-4"
+              color="surface-variant"
+              variant="tonal"
+              rounded="lg"
+            >
+              <v-card-title>
+                <h2 class="text-h5 font-weight-bold">
+                  Łącznie {{ people ? Object.values(people).length : 0 }}
+                  {{ koryciarz.plural.genitive }}
+                </h2>
+              </v-card-title>
+              <v-card-text>
+                <ClientOnly>
+                  <ChartTreemapParty />
+                </ClientOnly>
+              </v-card-text>
+            </v-card>
+          </v-tabs-window-item>
+        </v-tabs-window>
+      </v-col>
+      <v-col cols="12" md="4">
+        <v-tabs v-model="search" color="primary">
+          <v-tab value="map">Mapa</v-tab>
+          <v-tab value="parties">Partie</v-tab>
+        </v-tabs>
+      </v-col>
+    </v-row>
+  </v-container>
+</template>
+
+<script lang="ts" setup>
+import { useFeminatyw } from "@/composables/feminatyw";
+const { entities: people } = useEntities("person");
+const { koryciarz } = useFeminatyw();
+
+const search = ref("map");
+</script>

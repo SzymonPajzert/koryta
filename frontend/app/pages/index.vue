@@ -27,7 +27,7 @@
         </v-col>
       </v-row>
     </v-container>
-    <v-row>
+    <v-row class="justify-center">
       <v-col cols="12">
         <div
           class="ga-4 d-flex align-center justify-center flex-wrap"
@@ -56,68 +56,13 @@
           />
         </div>
       </v-col>
+      <v-col cols="12" md="8" class="d-flex pa-8">
+        <omni-search width="400px" />
+      </v-col>
     </v-row>
   </HomeSection>
   <HomeSection>
-    <v-row>
-      <v-col cols="12">
-        <h1
-          class="text-h5 text-sm-h3 text-md-h4 font-weight-bold mb-6 lh-title justify-center"
-        >
-          Zobacz, co udało nam się znależć
-        </h1>
-      </v-col>
-      <v-col cols="12" md="8" class="d-flex">
-        <omni-search width="400px" class="justify-center" />
-      </v-col>
-      <v-col cols="12" md="4">
-        <h1
-          class="text-h5 text-sm-h3 text-md-h4 font-weight-bold mb-6 lh-title justify-center"
-        >
-          Szukaj osób, spółek, regionów...
-        </h1>
-      </v-col>
-    </v-row>
-  </HomeSection>
-  <HomeSection color>
-    <v-row>
-      <v-col cols="12">
-        <v-tabs v-model="search" color="primary">
-          <v-tab value="map">Mapa</v-tab>
-          <v-tab value="parties">Partie</v-tab>
-        </v-tabs>
-
-        <v-divider></v-divider>
-
-        <v-tabs-window v-model="search">
-          <v-tabs-window-item value="map">
-            <HomeHeading title="Mapa koryciarstwa" center />
-            <ChartPolandMap />
-          </v-tabs-window-item>
-          <v-tabs-window-item value="parties">
-            <HomeHeading title="Podział na partie" center />
-            <v-card
-              class="py-4"
-              color="surface-variant"
-              variant="tonal"
-              rounded="lg"
-            >
-              <v-card-title>
-                <h2 class="text-h5 font-weight-bold">
-                  Łącznie {{ people ? Object.values(people).length : 0 }}
-                  {{ koryciarz.plural.genitive }}
-                </h2>
-              </v-card-title>
-              <v-card-text>
-                <ClientOnly>
-                  <ChartTreemapParty />
-                </ClientOnly>
-              </v-card-text>
-            </v-card>
-          </v-tabs-window-item>
-        </v-tabs-window>
-      </v-col>
-    </v-row>
+    <HomeExplorer />
   </HomeSection>
   <HomeSection>
     <v-row>
@@ -140,17 +85,11 @@
 </template>
 
 <script setup lang="ts">
-import { useFeminatyw } from "@/composables/feminatyw";
 definePageMeta({
   affineLink: "7CDdAj6z8PUAFNWT-phhD",
   fullWidth: true,
   hideSearch: true,
 });
-
-const { entities: people } = useEntities("person");
-const { koryciarz } = useFeminatyw();
-
-const search = ref("map");
 </script>
 
 <style scoped>
