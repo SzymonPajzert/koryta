@@ -17,7 +17,7 @@ dependencies = [
     "certifi==2025.7.14",
     "cffi==1.17.1",
     "charset-normalizer==3.4.2",
-    "click==8.3.0",
+    "click==8.3.2",
     "cloudpathlib==0.22.0",
     "confection==0.1.5",
     "cryptography==45.0.5",
