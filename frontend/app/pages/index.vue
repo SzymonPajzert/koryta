@@ -27,37 +27,22 @@
         </v-col>
       </v-row>
     </v-container>
-    <v-row class="justify-center">
-      <v-col cols="12">
-        <div
-          class="ga-4 d-flex align-center justify-center flex-wrap"
-          style="max-width: 100%"
-        >
-          <v-btn
-            class="text-none"
-            color="secondary"
-            flat
-            rounded="lg"
-            text="Wesprzyj projekt"
-            to="/pomoc"
-          />
-
-          <span>lub</span>
-
-          <v-btn
-            append-icon="mdi-chevron-right"
-            border
-            class="text-none"
-            flat
-            rounded="lg"
-            slim
-            text="Zobacz jak działa"
-            to="/o-nas"
-          />
-        </div>
-      </v-col>
+    <v-row class="align-center">
       <v-col cols="12" md="8" class="d-flex pa-8">
         <omni-search width="400px" />
+      </v-col>
+      <v-col cols="12" md="4">
+        <v-btn
+          append-icon="mdi-chevron-right"
+          color="secondary"
+          border
+          class="text-none"
+          flat
+          rounded="lg"
+          slim
+          text="Dowiedz się więcej"
+          to="/o-nas"
+        />
       </v-col>
     </v-row>
   </HomeSection>

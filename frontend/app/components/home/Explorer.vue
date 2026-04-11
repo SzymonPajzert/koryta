@@ -35,16 +35,8 @@
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="parties">Partie</v-tab>
         </v-tabs>
-        <v-card
-          v-if="region"
-          class="py-4"
-          color="surface-variant"
-          variant="tonal"
-          rounded="lg"
-        >
-          {{ region.name }} <br />
-          {{ region.teryt }}
-        </v-card>
+
+        <CardPeopleList v-if="region" :region="region" />
       </v-col>
     </v-row>
   </v-container>
