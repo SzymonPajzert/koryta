@@ -16,7 +16,7 @@
       >koryta.pl</v-app-bar-title
     >
     <v-spacer />
-    <omni-search />
+    <omni-search v-if="!route?.meta.hideSearch" />
     <v-spacer />
 
     <template #append>

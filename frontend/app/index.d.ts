@@ -3,6 +3,7 @@ declare module "#app" {
     fullWidth?: boolean;
     maxWidth?: number;
     affineLink?: string;
+    hideSearch?: boolean;
   }
 }
 
