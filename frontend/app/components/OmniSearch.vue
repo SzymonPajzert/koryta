@@ -4,7 +4,7 @@
     v-model="nodeGroupPicked"
     v-model:focused="autocompleteFocus"
     v-model:search="search"
-    label="Szukaj osoby albo miejsca"
+    label="Szukaj osób, spółek, regionów..."
     :items="items"
     item-title="title"
     return-object
