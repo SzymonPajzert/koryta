@@ -128,7 +128,11 @@
 
 <script setup lang="ts">
 import { useFeminatyw } from "@/composables/feminatyw";
-definePageMeta({ affineLink: "7CDdAj6z8PUAFNWT-phhD", fullWidth: true });
+definePageMeta({
+  affineLink: "7CDdAj6z8PUAFNWT-phhD",
+  fullWidth: true,
+  hideSearch: true,
+});
 
 const { entities: people } = useEntities("person");
 const { koryciarz } = useFeminatyw();
