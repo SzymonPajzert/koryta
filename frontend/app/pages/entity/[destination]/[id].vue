@@ -62,7 +62,7 @@
             border: 1px solid #ccc;
           "
         >
-          <GraphContainer :focus-node-id="node" :max-depth="1" />
+          <GraphContainer :key="node" :focus-node-id="node" :max-depth="1" />
         </div>
 
         <div class="mt-4">
