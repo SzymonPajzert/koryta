@@ -137,7 +137,9 @@ const { user, userConfig, logout } = useAuthState();
 const router = useRouter();
 const route = useRoute();
 const safeQuery = computed(() => route?.query || {});
-const maxWidth = computed(() => (route?.meta?.fullWidth ? "none" : 900));
+const maxWidth = computed(() =>
+  route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 900),
+);
 const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const affineLink = computed(() => route?.meta?.affineLink);
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
