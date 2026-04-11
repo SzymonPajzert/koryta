@@ -48,7 +48,7 @@
     "cac": "^6.7.14",
     "commander": "^13.1.0",
     "d3-force": "^3.0.0",
-    "digraph-js": "==2.2.4",
+    "digraph-js": "==2.2.3",
     "eslint": "^9.32.0",
     "eslint-plugin-cypress": "^5.2.1",
     "firebase": "^12.12.0",
