@@ -74,6 +74,7 @@ export default defineNuxtConfig({
     "vuetify-nuxt-module",
     "@sentry/nuxt/module",
     "@nuxt/test-utils/module",
+    "@nuxthub/core",
   ],
 
   eslint: {
