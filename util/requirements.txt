@@ -1,6 +1,6 @@
 anyio==4.13.0
 CacheControl==0.14.4
-cachetools==5.5.2
+cachetools==7.0.5
 certifi==2025.6.15
 cffi==1.17.1
 charset-normalizer==3.4.7
