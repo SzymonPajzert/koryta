@@ -5,7 +5,7 @@
         <v-tabs-window v-model="search">
           <v-tabs-window-item value="map">
             <HomeHeading title="Mapa koryciarstwa" center />
-            <ChartPolandMap />
+            <ChartPolandMap @click="region = $event" />
           </v-tabs-window-item>
           <v-tabs-window-item value="parties">
             <HomeHeading title="Podział na partie" center />
@@ -35,6 +35,16 @@
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="parties">Partie</v-tab>
         </v-tabs>
+        <v-card
+          v-if="region"
+          class="py-4"
+          color="surface-variant"
+          variant="tonal"
+          rounded="lg"
+        >
+          {{ region.name }} <br />
+          {{ region.teryt }}
+        </v-card>
       </v-col>
     </v-row>
   </v-container>
@@ -42,8 +52,11 @@
 
 <script lang="ts" setup>
 import { useFeminatyw } from "@/composables/feminatyw";
+import type { Powiat } from "@/composables/entity/regions";
+
 const { entities: people } = useEntities("person");
 const { koryciarz } = useFeminatyw();
 
 const search = ref("map");
+const region = ref<Powiat | undefined>(undefined);
 </script>

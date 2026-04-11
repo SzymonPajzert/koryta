@@ -1,21 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import powiatyPaths from "@/assets/poland_powiaty.json";
-
-const router = useRouter();
-
-type Powiat = {
-  teryt: string;
-  d: string;
-  original_id?: string;
-  id?: string;
-  people?: number;
-  name?: string;
-};
+import type { Powiat } from "@/composables/entity/regions";
 
 const hoveredDistrict = ref<Powiat | null>(null);
 
-const { data: nodeGroups } = await useFetch<any[]>("/api/graph/nodeGroups");
+const { data: nodeGroups } = await useFetch("/api/graph/nodeGroups");
 
 const groupData = computed(() => {
   const map: Record<string, any> = {};
@@ -51,11 +41,9 @@ const hover = (region: Powiat) => {
   hoveredDistrict.value = region;
 };
 
-// TODO enable emit
-// const emit = defineEmits(["click", "update:hovered"]);
-// below:   emit("click", region);
+const emit = defineEmits(["click", "update:hovered"]);
 const click = (region: Powiat) => {
-  router.push(`/entity/region/teryt${region.teryt}`);
+  emit("click", region);
 };
 
 const getFillColor = (item: Powiat) => {
