@@ -61,16 +61,26 @@
   <HomeSection>
     <v-row>
       <v-col cols="12">
-        <omni-search-fake />
-      </v-col>
-      <v-col cols="12">
         <h1
           class="text-h5 text-sm-h3 text-md-h4 font-weight-bold mb-6 lh-title justify-center"
         >
           Zobacz, co udało nam się znależć
         </h1>
       </v-col>
-
+      <v-col cols="12" md="8" class="d-flex">
+        <omni-search width="400px" class="justify-center" />
+      </v-col>
+      <v-col cols="12" md="4">
+        <h1
+          class="text-h5 text-sm-h3 text-md-h4 font-weight-bold mb-6 lh-title justify-center"
+        >
+          Szukaj osób, spółek, regionów...
+        </h1>
+      </v-col>
+    </v-row>
+  </HomeSection>
+  <HomeSection color>
+    <v-row>
       <v-col cols="12">
         <v-tabs v-model="search" color="primary">
           <v-tab value="map">Mapa</v-tab>
@@ -107,7 +117,10 @@
           </v-tabs-window-item>
         </v-tabs-window>
       </v-col>
-
+    </v-row>
+  </HomeSection>
+  <HomeSection>
+    <v-row>
       <v-col cols="12" class="mt-4">
         <HomeHeading class="scroll-topic" title="Zobacz źródła" center />
         <HomeSourceCards />
