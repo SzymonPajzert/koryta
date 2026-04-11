@@ -11,12 +11,7 @@
         { text: 'PKP', link: '/lista?miejsce=0qGH8AL9bwUCQvrLNwiO' },
       ]"
     />
-    <omni-search
-      :search-text="simulator?.currentText"
-      :fake="true"
-      width="400px"
-      class="justify-center"
-    />
+    <omni-search :search-text="simulator?.currentText" :fake="true" />
   </div>
 </template>
 

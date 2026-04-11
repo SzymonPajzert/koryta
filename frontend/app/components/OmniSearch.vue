@@ -60,12 +60,6 @@ if (props.fake) {
     () => props.searchText,
     (newValue) => {
       search.value = newValue;
-      search.value = newValue;
-      nodeGroupPicked.value = {
-        title: newValue || "",
-        icon: "mdi-account",
-        logEventKey: { content_id: "", content_type: "" },
-      };
     },
   );
 }
@@ -177,31 +171,28 @@ const items = computed<ListItem[]>(() => {
   return list;
 });
 
-// Monitor the state only if the bar is not fake
-if (!props.fake) {
-  watch(nodeGroupPicked, (value) => {
-    if (!value) {
-      push("/");
-      return;
-    }
-    let path = value?.path ?? currentRoute.value.path;
-    const allowedPath =
-      path == "/lista" ||
-      path == "/graf" ||
-      path.startsWith("/entity/person/") ||
-      path.startsWith("/entity/place/") ||
-      path.startsWith("/edit/");
-    if (!allowedPath) {
-      path = "/lista";
-    }
-    push({
-      path: path,
-      query: {
-        ...currentRoute.value.query,
-        ...value.query,
-      },
-    });
-    autocompleteFocus.value = false;
+watch(nodeGroupPicked, (value) => {
+  if (!value) {
+    push("/");
+    return;
+  }
+  let path = value?.path ?? currentRoute.value.path;
+  const allowedPath =
+    path == "/lista" ||
+    path == "/graf" ||
+    path.startsWith("/entity/person/") ||
+    path.startsWith("/entity/place/") ||
+    path.startsWith("/edit/");
+  if (!allowedPath) {
+    path = "/lista";
+  }
+  push({
+    path: path,
+    query: {
+      ...currentRoute.value.query,
+      ...value.query,
+    },
   });
-}
+  autocompleteFocus.value = false;
+});
 </script>
