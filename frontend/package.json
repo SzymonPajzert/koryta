@@ -33,7 +33,7 @@
     "quick-check": "npm run format; npm run format:check && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication"
   },
   "dependencies": {
-    "@firebase/app-types": "^0.9.3",
+    "@firebase/app-types": "^0.9.4",
     "@nuxt/content": "^3.6.3",
     "@nuxt/eslint": "^1.7.1",
     "@nuxt/fonts": "^0.11.4",
