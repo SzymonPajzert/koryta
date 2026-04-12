@@ -75,8 +75,10 @@
             <CardConnectionList :edges="subregions" title="Regiony" />
             <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
           </template>
-
-          <v-row>
+          <template v-if="entity?.type === 'person'">
+            <CardEmploymentHistory :edges="edges" />
+          </template>
+          <v-row v-else>
             <v-col
               v-for="edge in edges.filter((edge) => {
                 const t = entity?.type || type;

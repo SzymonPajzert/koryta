@@ -58,6 +58,19 @@ export function pageIsPublic(node: { revision_id?: unknown }) {
 
 export type NodeType = "person" | "place" | "article" | "record" | "region";
 
+export function nodeIcon(type: NodeType) {
+  switch (type) {
+    case "person":
+      return "mdi-account-outline";
+    case "place":
+      return "mdi-office-building-outline";
+    case "article":
+      return "mdi-file-document-outline";
+    default:
+      return "mdi-comment-arrow-right-outline";
+  }
+}
+
 export type EdgeType =
   | "employed"
   | "connection"
