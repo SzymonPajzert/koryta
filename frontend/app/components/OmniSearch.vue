@@ -182,6 +182,7 @@ watch(nodeGroupPicked, (value) => {
     path == "/graf" ||
     path.startsWith("/entity/person/") ||
     path.startsWith("/entity/place/") ||
+    path.startsWith("/entity/region/") ||
     path.startsWith("/edit/");
   if (!allowedPath) {
     path = "/lista";
