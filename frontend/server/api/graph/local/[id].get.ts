@@ -89,16 +89,9 @@ export default authCachedEventHandler(async (event) => {
   const validLocalIds = new Set(Object.keys(localNodes));
 
   // Determine local edges
-  const localEdgesRaw = edges.filter(
+  const localEdges = edges.filter(
     (e) => validLocalIds.has(e.source) && validLocalIds.has(e.target),
   );
-
-  // De-duplicate local edges
-  const uniqueEdges = new Map<string, any>();
-  for (const edge of localEdgesRaw) {
-    uniqueEdges.set(edge.source + edge.target + edge.type, edge);
-  }
-  const localEdges = Array.from(uniqueEdges.values());
 
   return {
     edges: localEdges,
