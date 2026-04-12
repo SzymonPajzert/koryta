@@ -72,8 +72,6 @@ const maxEnd = computed(() => {
 });
 
 function edgeLabel(edge: EdgeNode) {
-  return (
-    edge.label + " " + edge.start_date + " - " + (edge.end_date || "obecnie")
-  );
+  return edge.label;
 }
 </script>
