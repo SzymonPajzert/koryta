@@ -6,7 +6,22 @@
     max-width="400"
     rounded="lg"
   >
-    <v-card-title> Wybierz w grafie po lewej </v-card-title>
+    <v-card-title> Analizuj powiązania </v-card-title>
+    <v-card-text>
+      Wybierz region z mapy po lewej stronie, by zobaczyć powiązane osoby.
+    </v-card-text>
+  </v-card>
+  <v-card
+    v-else-if="!loading && people.length === 0"
+    border
+    class="pt-2 mt-2 mx-auto"
+    max-width="400"
+    rounded="lg"
+  >
+    <v-card-title>
+      {{ props.region.name }}
+    </v-card-title>
+    <v-card-text> Nie znaleźliśmy jeszcze osób w tym regionie.</v-card-text>
   </v-card>
   <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400" rounded="lg">
     <v-card-title>
