@@ -5,7 +5,6 @@ explicit connection parameters (no os.getenv).
 """
 
 import logging
-import re
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -15,6 +14,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 from uuid_extensions import uuid7str  # type: ignore
 
+from entities.util import NormalizedParse
 from scrapers.stores import CrawlQueue
 
 logger = logging.getLogger(__name__)
@@ -170,7 +170,7 @@ class PostgresCrawlQueue(CrawlQueue):
                     SELECT wi.id
                     FROM website_index wi
                     WHERE wi.done = FALSE
-                      AND wi.num_retries <= %s
+                      AND wi.num_retries < %s
                       AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
                       AND NOT EXISTS (
                           SELECT 1 FROM blocked_domains bd
@@ -319,6 +319,5 @@ class PostgresCrawlQueue(CrawlQueue):
     @classmethod
     def _normalize_url(cls, value: str) -> str:
         value = value.strip()
-        value = re.sub(r"^https?://", "", value)
-        value = value.removeprefix("www.")
-        return value.rstrip("/")
+        parsed = NormalizedParse.parse(value)
+        return f"{parsed.hostname_normalized}{parsed.path}"

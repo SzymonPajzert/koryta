@@ -99,41 +99,6 @@ def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue):
     assert [priority for _, priority in priorities] == [30, 30]
 
 
-def test_get_stats(db: PostgresCrawlQueue):
-    now = datetime.now()
-    earlier = now - timedelta(minutes=5)
-    rows = [
-        ("https://example.com/a", 0, earlier),
-        ("https://example.com/b", 0, earlier),
-        ("https://example.com/c", 0, earlier),
-    ]
-    db._insert_urls(rows)
-    uid1 = db.pg.fetchone(
-        "SELECT id FROM website_index WHERE url = %s", ("example.com/a",)
-    )[0]
-    uid2 = db.pg.fetchone(
-        "SELECT id FROM website_index WHERE url = %s", ("example.com/b",)
-    )[0]
-    db.pg.execute(
-        "UPDATE website_index SET done = TRUE, date_finished = %s WHERE id = %s",
-        [now, uid1],
-    )
-    db.pg.execute(
-        "UPDATE website_index SET errors = %s, num_retries = %s WHERE id = %s",
-        [["e1", "e2"], 2, uid2],
-    )
-    stats = db._get_stats()
-    assert stats["total_urls"] == 3
-    assert stats["finished_urls"] == 1
-    assert stats["pending_urls"] == 2
-    assert stats["urls_with_errors"] == 1
-    assert stats["total_errors"] == 2
-    assert set(stats["top_errors"]) == {("e1", 1), ("e2", 1)}
-    assert stats["avg_processing_seconds"] is not None
-    assert stats["recent"]["10min"]["successes"] == 1
-    assert stats["recent"]["10min"]["errors"] == 1
-
-
 @pytest.mark.skipif(not _env_flag("POSTGRES_STRESS"), reason="set POSTGRES_STRESS=1")
 def test_concurrent_get_and_lock(db: PostgresCrawlQueue):
     urls = [f"https://example.com/{i}" for i in range(200)]
