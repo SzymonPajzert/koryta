@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-
 from pytest_postgresql import factories  # type: ignore[import-not-found]
 
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue

@@ -5,7 +5,6 @@ explicit connection parameters (no os.getenv).
 """
 
 import logging
-from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
