@@ -1,6 +1,6 @@
 """PostgreSQL-backed crawl queue for the article crawler.
 
-All direct psycopg2 access is encapsulated here. The constructor takes
+All direct psycopg access is encapsulated here. The constructor takes
 explicit connection parameters (no os.getenv).
 """
 
@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-import psycopg2  # type: ignore
+import psycopg
 from uuid_extensions import uuid7str  # type: ignore
 
 from scrapers.stores import CrawlQueue
@@ -38,10 +38,10 @@ class PostgresClient:
         self.port = port
 
     def connect(self):
-        return psycopg2.connect(
+        return psycopg.connect(
             host=self.host,
             port=self.port,
-            database=self.database,
+            dbname=self.database,
             user=self.user,
             password=self.password,
         )
