@@ -170,7 +170,7 @@ class PostgresCrawlQueue(CrawlQueue):
                     SELECT wi.id
                     FROM website_index wi
                     WHERE wi.done = FALSE
-                      AND wi.num_retries < %s
+                      AND wi.num_retries <= %s
                       AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
                       AND NOT EXISTS (
                           SELECT 1 FROM blocked_domains bd
