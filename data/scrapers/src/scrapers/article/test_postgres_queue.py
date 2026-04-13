@@ -9,6 +9,7 @@ import pytest
 from pytest_postgresql import factories  # type: ignore[import-not-found]
 
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
+from scrapers.stores import DoneUrl
 
 postgresql_proc = factories.postgresql_proc()
 postgresql = factories.postgresql("postgresql_proc")
@@ -59,8 +60,7 @@ def test_get_skips_blocked(db: PostgresCrawlQueue):
 
     row = db.get("worker-1", max_retries=3)
     assert row is not None
-    _, url = row
-    assert url == "ok.test/b"
+    assert row.url == "ok.test/b"
 
 
 def test_load_blocked_domains_upserts(db: PostgresCrawlQueue):
@@ -77,7 +77,7 @@ def test_mark_done_and_get_pages(db: PostgresCrawlQueue):
     uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
     db.mark_done(uid, "s3://bucket/a")
     rows = db.get_done_urls(limit=5)
-    assert rows == [(uid, "example.com/a", "s3://bucket/a")]
+    assert rows == [DoneUrl(uid, "example.com/a", "s3://bucket/a")]
 
 
 def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue):
@@ -103,7 +103,7 @@ def test_concurrent_get_and_lock(db: PostgresCrawlQueue):
 
     def worker(idx: int):
         row = db.get(f"worker-{idx}", max_retries=1)
-        return row[0] if row else None
+        return row.uid if row else None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(worker, i) for i in range(100)]

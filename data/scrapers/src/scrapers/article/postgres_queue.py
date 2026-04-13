@@ -14,7 +14,7 @@ import psycopg
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
-from scrapers.stores import CrawlQueue
+from scrapers.stores import CrawlQueue, CrawlQueueItem, DoneUrl
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +156,10 @@ class PostgresCrawlQueue(CrawlQueue):
 
     def get(
         self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
-    ) -> tuple[str, str] | None:
+    ) -> CrawlQueueItem | None:
         """Atomically select and lock a URL for crawling.
 
-        Returns (id, url) or None if nothing available.
+        Returns CrawlQueueItem or None if nothing available.
         """
         now = datetime.now(warsaw_tz)
         with self.pg.transaction() as transaction:
@@ -193,7 +193,10 @@ class PostgresCrawlQueue(CrawlQueue):
                     now,
                 ),
             )
-            return transaction.fetchone()
+            row = transaction.fetchone()
+            if row is None:
+                return None
+            return CrawlQueueItem(row[0], row[1])
 
     def mark_done(self, uid: str, storage_path: str | None) -> None:
         """Mark a URL as successfully crawled."""
@@ -306,14 +309,15 @@ class PostgresCrawlQueue(CrawlQueue):
             updated += len(batch)
         logger.info("Reprioritized %d URLs.", updated)
 
-    def get_done_urls(self, limit: int) -> list[tuple]:
+    def get_done_urls(self, limit: int) -> list[DoneUrl]:
         """Fetch crawled pages that have a storage_path, for parsing."""
-        return self.pg.fetchall(
+        rows = self.pg.fetchall(
             "SELECT id, url, storage_path FROM website_index "
             "WHERE done = TRUE AND storage_path IS NOT NULL "
             "ORDER BY date_finished DESC LIMIT %s;",
             (limit,),
         )
+        return [DoneUrl(row[0], row[1], row[2]) for row in rows]
 
     @classmethod
     def _normalize_url(cls, value: str) -> str:

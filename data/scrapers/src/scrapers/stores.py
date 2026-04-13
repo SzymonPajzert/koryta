@@ -288,6 +288,19 @@ class NLP(metaclass=ABCMeta):
         pass
 
 
+@dataclass(frozen=True)
+class CrawlQueueItem:
+    uid: str
+    url: str
+
+
+@dataclass(frozen=True)
+class DoneUrl:
+    uid: str
+    url: str
+    storage_path: str
+
+
 class CrawlQueue(metaclass=ABCMeta):
     """Abstract interface for crawler URL queue."""
 
@@ -302,13 +315,13 @@ class CrawlQueue(metaclass=ABCMeta):
     @abstractmethod
     def get(
         self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
-    ) -> tuple[str, str] | None:
+    ) -> CrawlQueueItem | None:
         """Atomically claim a URL for processing.
 
         max_retries filters url that were retried more than $max_retries.
         timeout_seconds controls when a previously locked URL is retried.
 
-        Returns (id, url) or None.
+        Returns CrawlQueueItem or None.
         """
         raise NotImplementedError()
 
@@ -343,8 +356,8 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_done_urls(self, limit: int) -> list[tuple]:
-        """Return done URLs with storage_path (id, url, storage_path)."""
+    def get_done_urls(self, limit: int) -> list[DoneUrl]:
+        """Return done URLs with storage_path."""
         raise NotImplementedError()
 
     @abstractmethod
