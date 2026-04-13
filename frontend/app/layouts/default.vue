@@ -117,8 +117,9 @@
       </v-btn>
       <v-spacer icon />
     </v-toolbar>
+    <!-- TODO restore fill-height here if possible, it just adds weird gaps -->
     <v-container
-      class="fill-height position-relative"
+      class="position-relative"
       :max-width="maxWidth"
       :style="{ padding: rootPadding }"
     >
