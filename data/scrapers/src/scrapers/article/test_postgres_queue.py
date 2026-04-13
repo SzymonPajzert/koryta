@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-try:
-    from pytest_postgresql import factories  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover - local env without test deps
-    pytest.skip("pytest-postgresql not installed", allow_module_level=True)
+from pytest_postgresql import factories  # type: ignore[import-not-found]
 
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
 
@@ -23,8 +20,8 @@ def _env_flag(name: str) -> bool:
         data = Path("/proc/self/environ").read_bytes()
     except FileNotFoundError:
         return False
-    return f"{name}=1".encode() in data
-
+    target = f"{name}=1".encode()
+    return target in data.split(b"\0")
 
 @pytest.fixture
 def db(postgresql) -> PostgresCrawlQueue:
