@@ -289,6 +289,8 @@ class PostgresCrawlQueue(CrawlQueue):
         batch: list[tuple[int, str]] = []
         for uid, url in rows:
             priority = priority_fn(url)
+            if not 0 <= priority <= 100:
+                raise ValueError(f"Priority must be 0-100, got {priority}")
             batch.append((priority, uid))
             if len(batch) >= batch_size:
                 self.pg.executemany(
