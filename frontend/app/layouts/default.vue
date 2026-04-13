@@ -13,8 +13,9 @@
       v-if="mdAndUp"
       style="cursor: pointer"
       @click="$router.push('/')"
-      >koryta.pl</v-app-bar-title
     >
+      koryta.pl
+    </v-app-bar-title>
     <v-spacer />
     <omni-search v-if="!route?.meta.hideSearch" />
     <v-spacer />
@@ -117,8 +118,9 @@
       </v-btn>
       <v-spacer icon />
     </v-toolbar>
+    <!-- TODO restore fill-height here if possible, it just adds weird gaps -->
     <v-container
-      class="fill-height position-relative"
+      class="position-relative"
       :max-width="maxWidth"
       :style="{ padding: rootPadding }"
     >
