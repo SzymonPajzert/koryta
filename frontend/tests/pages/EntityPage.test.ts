@@ -5,6 +5,7 @@ import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
+import type { MockAuthState } from "../shared/types";
 
 const vuetify = createVuetify({
   components,
@@ -95,7 +96,7 @@ describe.todo("Entity Page - Add Article Button Visibility", () => {
       vi.mocked(useAuthState).mockReturnValue({
         authFetch: mockAuthFetch,
         user: ref(null),
-      } as any);
+      } as MockAuthState);
       let wrapper = await mountPage("person");
       expect(wrapper.text()).not.toContain("Szybkie dodawanie");
 
@@ -103,7 +104,7 @@ describe.todo("Entity Page - Add Article Button Visibility", () => {
       vi.mocked(useAuthState).mockReturnValue({
         authFetch: mockAuthFetch,
         user: ref({ uid: "123" }),
-      } as any);
+      } as MockAuthState);
       wrapper = await mountPage("person");
       expect(wrapper.text()).toContain("Szybkie dodawanie");
       expect(wrapper.find('[data-testid^="edge-picker-"]').exists()).toBe(true);
@@ -113,7 +114,7 @@ describe.todo("Entity Page - Add Article Button Visibility", () => {
       vi.mocked(useAuthState).mockReturnValue({
         authFetch: mockAuthFetch,
         user: ref({ uid: "123" }),
-      } as any);
+      } as MockAuthState);
       const wrapper = await mountPage("person");
 
       // Find the button "Dodaj gdzie ... pracuje" which is "edge-picker-employed"

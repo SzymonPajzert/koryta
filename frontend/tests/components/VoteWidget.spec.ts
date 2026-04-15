@@ -13,9 +13,8 @@ const vuetify = createVuetify({
   directives,
 });
 
-// Mock auth
-const userRef = ref({ uid: "test-user" });
-const idTokenRef = ref("mock-token");
+const userRef = ref<{ uid: string } | null>({ uid: "test-user" });
+const idTokenRef = ref<string | null>("mock-token");
 
 vi.mock("@/composables/auth", () => ({
   useAuthState: () => ({
@@ -168,6 +167,6 @@ describe("VoteWidget", () => {
     });
 
     // Cleanup mocks
-    userRef.value = { uid: "test-user" } as any;
+    userRef.value = { uid: "test-user" };
   });
 });

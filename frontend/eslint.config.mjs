@@ -23,7 +23,6 @@ export default withNuxt(
     rules: {
       "vue/no-multiple-template-root": "off",
       "vue/no-mutating-props": "error",
-      "@typescript-eslint/no-explicit-any": "warn",
       "vue/html-self-closing": "off",
     },
   },
@@ -35,8 +34,15 @@ export default withNuxt(
     },
   })
   .append({
-    files: ["cypress/**/*.ts", "cypress.config.ts"],
+    files: [
+      "cypress/**/*.ts",
+      "cypress.config.ts",
+      "**/*.test.ts",
+      "tests/**",
+      "**/sentry.client.config.ts",
+    ],
     rules: {
       "@typescript-eslint/no-unused-expressions": "warn",
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   });

@@ -3,7 +3,7 @@ import type {
   DocumentReference,
   WriteBatch,
 } from "firebase-admin/firestore";
-import type { Edge, Node } from "~~/shared/model";
+import type { Edge, Node, Revision } from "~~/shared/model";
 import { Timestamp } from "firebase-admin/firestore";
 
 export interface BatchResult {
@@ -23,7 +23,7 @@ export function createRevisionTransaction(
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
 
-  const revision: Record<string, any> = {
+  const revision: Revision = {
     // TODO test it is always set correctly and check if the DB has wrong entries there
     node_id: targetRef.id,
     data,

@@ -80,7 +80,7 @@
 import type { Person, Company, Article, Region } from "~~/shared/model";
 
 const props = defineProps<{
-  entity: any;
+  entity: Company | Person | Article | Region;
   type: string;
 }>();
 

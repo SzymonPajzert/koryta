@@ -161,6 +161,7 @@ export interface Revision {
   id: string;
   nodeId: string;
   data: Omit<Node, "revision_id"> | Omit<Edge, "revision_id">;
+  revision_id: string;
   update_time: string; // ISO string
   update_user: string;
 }

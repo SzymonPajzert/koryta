@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { useAuthState } from "../../app/composables/auth";
 import { mount } from "@vue/test-utils";
 import DefaultLayout from "../../app/layouts/default.vue";
+import type { MockAuthState } from "../shared/types";
 
 import { createVuetify } from "vuetify";
 
@@ -31,7 +32,7 @@ describe("DefaultLayout", () => {
       user: ref({ uid: "test-admin" }),
       userConfig: { data: ref({}) },
       logout: vi.fn(),
-    } as any);
+    } as MockAuthState);
 
     const wrapper = mount(DefaultLayout, {
       global: {
@@ -72,7 +73,7 @@ describe("DefaultLayout", () => {
       user: ref(null),
       userConfig: { data: ref({}) },
       logout: vi.fn(),
-    } as any);
+    } as MockAuthState);
 
     const wrapper = mount(DefaultLayout, {
       global: {
