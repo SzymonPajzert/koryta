@@ -6990,7 +6990,7 @@ version = "2026.1"
 description = "Provider of IANA time zone data"
 optional = false
 python-versions = ">=2"
-groups = ["main", "dev", "ml"]
+groups = ["main", "dev", "ml", "test"]
 files = [
     {file = "tzdata-2026.1-py2.py3-none-any.whl", hash = "sha256:4b1d2be7ac37ceafd7327b961aa3a54e467efbdb563a23655fbfe0d39cfc42a9"},
     {file = "tzdata-2026.1.tar.gz", hash = "sha256:67658a1903c75917309e753fdc349ac0efd8c27db7a0cb406a25be4840f87f98"},
@@ -7047,7 +7047,7 @@ files = [
 ]
 
 [package.dependencies]
-regex = ">=2020.09.27"
+regex = ">=2020.9.27"
 udapi = ">=0.5.0"
 
 [[package]]
@@ -7329,4 +7329,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "902ef06a24c138ce954cbfd969f11479635d48ff56d9984623e850783c9ead89"
+content-hash = "63ee8dae1c40c427f0ace46450d0ecf969552f284bdaea0ef42ab5e370cae610"
