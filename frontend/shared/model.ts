@@ -95,17 +95,13 @@ export const destinationAddText: Record<NodeType, string> = {
   region: "Dodaj region",
 };
 
-export type Person = {
-  name: string;
+export interface Person extends Omit<Node, "type"> {
   type: "person";
   parties?: string[];
-  content?: string;
   birthDate?: string;
   wikipedia?: string;
   rejestrIo?: string;
-  votes?: Votes;
-  visibility?: boolean;
-};
+}
 
 export interface ElectionRich {
   year?: string;
@@ -121,32 +117,20 @@ export type PersonRich = Person & {
   experience: number;
 };
 
-export interface Company {
-  name: string;
+export interface Company extends Omit<Node, "type"> {
   type: "place";
   krsNumber?: string;
-  content?: string;
-  votes?: Votes;
-  visibility?: boolean;
 }
 
-export interface Article {
-  name: string;
+export interface Article extends Omit<Node, "type"> {
   type: "article";
   sourceURL: string;
   shortName?: string;
-  content?: string;
-  votes?: Votes;
-  visibility?: boolean;
 }
 
-export interface Region {
-  name: string;
+export interface Region extends Omit<Node, "type"> {
   type: "region";
   teryt: string;
-  content?: string;
-  votes?: Votes;
-  visibility?: boolean;
 }
 
 export interface NodeTypeMap {
@@ -158,12 +142,14 @@ export interface NodeTypeMap {
 }
 
 export interface Revision {
-  id: string;
-  nodeId: string;
-  data: Omit<Node, "revision_id"> | Omit<Edge, "revision_id">;
-  revision_id: string;
-  update_time: string; // ISO string
+  id?: string;
+  nodeId?: string;
+  node_id?: string;
+  data: Node | Edge | Record<string, unknown>;
+  revision_id?: string | { path: string } | any;
+  update_time: string | any; // ISO string
   update_user: string;
+  update_automatic?: boolean;
 }
 
 export interface Link<T extends NodeType> {
