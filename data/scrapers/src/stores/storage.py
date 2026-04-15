@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Generator
 from zoneinfo import ZoneInfo
 
-from google.cloud import storage
+import google.cloud.storage as storage
 from tqdm import tqdm
 
 from entities.util import NormalizedParse
