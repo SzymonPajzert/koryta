@@ -1,0 +1,84 @@
+<template>
+  <v-footer
+    class="pt-6 pt-md-16 pb-0 d-flex flex-column"
+    :style="{ background: '#a8c79f' }"
+    border
+  >
+    <v-row max-width="1000" justify="center">
+      <v-col cols="12" lg="6" md="12">
+        <div class="d-flex align-columns">
+          <v-img
+            class="mt-1 mb-6"
+            width="120"
+            src="@/assets/logo_small.png"
+            contain
+          />
+
+          <p class="ml-4">
+            Koryta.pl to projekt społeczny i open-source budujący bazę powiązań
+            w przestrzeni publicznej.
+          </p>
+        </div>
+
+        <div class="mt-3">
+          <v-btn
+            v-for="[icon, link] in icons"
+            :key="icon"
+            :icon="icon"
+            size="small"
+            variant="text"
+            :href="link"
+            target="_blank"
+          />
+        </div>
+      </v-col>
+
+      <v-col v-for="(section, i) in sections" :key="i" cols="6" md="3">
+        <p class="text-body-1 font-weight-bold mb-3">{{ section.title }}</p>
+
+        <div v-for="item in section.items" :key="item.title">
+          <v-btn
+            class="text-none px-0 justify-start"
+            exact
+            :to="item.link"
+            :ripple="false"
+            :text="item.title"
+            variant="plain"
+          />
+        </div>
+      </v-col>
+    </v-row>
+
+    <p class="py-4 text-caption text-right w-100">
+      &copy; {{ new Date().getFullYear() }} Koryta.pl. Wszelkie prawa
+      zastrzeżone.
+    </p>
+  </v-footer>
+</template>
+
+<script lang="ts" setup>
+const sections = [
+  {
+    title: "O projekcie",
+    items: [
+      { title: "O nas", link: "/o-nas" },
+      { title: "Źródła", link: "/zrodla" },
+    ],
+  },
+  {
+    title: "Informacje prawne",
+    items: [
+      { title: "Regulamin", link: "/plik/regulamin" },
+      { title: "Polityka prywatności", link: "/plik/polityka_prywatnosci" },
+    ],
+  },
+];
+
+const icons = [
+  ["mdi-github", "https://github.com/SzymonPajzert/koryta"],
+  ["mdi-twitter", "https://twitter.com/korytapl"],
+  ["mdi-facebook", "https://www.facebook.com/people/Korytapl/61581508966044/"],
+  ["mdi-facebook", "https://www.facebook.com/groups/korytapl"],
+  ["mdi-instagram", "https://www.instagram.com/szymon.pajzert"],
+];
+</script>
