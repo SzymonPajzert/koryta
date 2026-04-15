@@ -46,7 +46,7 @@
       <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
     </template>
   </v-app-bar>
-  <v-main>
+  <v-main class="d-flex flex-column">
     <v-toolbar v-if="user" density="compact" color="primary">
       <v-spacer />
       <v-menu>
@@ -115,14 +115,14 @@
       </v-btn>
       <v-spacer icon />
     </v-toolbar>
-    <!-- TODO restore fill-height here if possible, it just adds weird gaps -->
     <v-container
-      class="position-relative"
+      class="position-relative fill-height"
       :max-width="maxWidth"
       :style="{ padding: rootPadding }"
     >
       <NuxtPage />
     </v-container>
+    <HomeAppFooter class="mt-auto w-100" />
   </v-main>
 </template>
 
@@ -135,7 +135,6 @@ const { mdAndUp } = useDisplay();
 const { user, userConfig, logout } = useAuthState();
 const router = useRouter();
 const route = useRoute();
-const safeQuery = computed(() => route?.query || {});
 const maxWidth = computed(() =>
   route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 900),
 );
