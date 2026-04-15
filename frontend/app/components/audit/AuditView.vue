@@ -106,14 +106,15 @@ type AuditItem = {
 // --- Data Fetching ---
 
 // 1. Pending Revisions
-const { data: pendingNodes, pending: pendingNodesLoading } = authFetch<
-  Record<string, any>
->("/api/nodes/pending", {
-  // immediate: computed(() => props.type === "pending-revisions"),
-});
+const { data: pendingNodes, pending: pendingNodesLoading } = authFetch(
+  "/api/nodes/pending",
+  {
+    // immediate: computed(() => props.type === "pending-revisions"),
+  },
+);
 
 const { data: pendingEdges, pending: pendingEdgesLoading } =
-  authFetch<Record<string, any>>("/api/edges/pending"); // "pending-revisions" ?
+  authFetch("/api/edges/pending"); // "pending-revisions" ?
 
 // 3. Articles (for 'articles-no-edges')
 // const { data: allArticles } = authFetch<{
@@ -125,9 +126,7 @@ const {
   data: myRevisionsData,
   pending: myRevisionsLoading,
   refresh: refreshMyRevisions,
-} = authFetch<{
-  items: any[];
-}>(() => `/api/revisions/user/${user.value?.uid}`);
+} = authFetch(() => `/api/revisions/user/${user.value?.uid}`);
 
 // --- Computed Logic ---
 
@@ -147,6 +146,8 @@ const loading = computed(() => {
       return false;
   }
 });
+
+type auditItem = {};
 
 // TODO this needs a simplification
 const items = computed<AuditItem[]>(() => {
@@ -218,7 +219,7 @@ const iconMap: Record<string, string> = {
   comment: "mdi-comment-outline",
 };
 
-function getDefaultTitle(item: any) {
+function getDefaultTitle(item: auditItem) {
   if (item.source && item.target) {
     const s = item.source_name || item.source;
     const t = item.target_name || item.target;
@@ -227,7 +228,7 @@ function getDefaultTitle(item: any) {
   return "Bez nazwy";
 }
 
-function getSubtitle(item: any) {
+function getSubtitle(item: auditItem) {
   if (item.source && item.target) {
     const s = item.source_name || item.source;
     const t = item.target_name || item.target;

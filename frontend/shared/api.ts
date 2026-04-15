@@ -15,6 +15,46 @@ export type CompanyRequest = {
   teryt?: string;
 };
 
+const employmentRequestSchema = z.object({
+  krs: z.string(),
+  role: z.string().optional(),
+  start: z.string().optional(),
+  end: z.string().optional(),
+});
+
+export type EmploymentRequest = {
+  krs: string;
+  role?: string;
+  start?: string;
+  end?: string;
+};
+
+const electionRequestSchema = z.object({
+  party: z.string().optional(),
+  election_year: z.string().optional(),
+  election_type: z.enum([
+    "Samorząd",
+    "Sejmik",
+    "Rada miasta",
+    "Rada gminy",
+    "Rada powiatu",
+    "Burmistrz",
+    "Wójt",
+    "Prezydent",
+    "Sejm",
+    "Senat",
+    "Parlament Europejski",
+  ]),
+  teryt: z.string().optional(),
+});
+
+export type ElectionRequest = {
+  party?: string;
+  election_year?: string;
+  election_type: ElectionPosition;
+  teryt?: string;
+};
+
 export const personRequestSchema = z.object({
   name: z.string(),
   content: z.string().optional(),
@@ -24,8 +64,8 @@ export const personRequestSchema = z.object({
   rejestrIo: z.string().optional(),
   parties: z.array(z.string()).optional(),
   sources: z.array(z.string()).optional(),
-  companies: z.array(z.any()),
-  elections: z.array(z.any()).optional(),
+  companies: z.array(employmentRequestSchema),
+  elections: z.array(electionRequestSchema).optional(),
 });
 
 export type PersonRequest = {
@@ -39,20 +79,6 @@ export type PersonRequest = {
   sources?: Array<string>;
   companies: Array<EmploymentRequest>;
   elections?: Array<ElectionRequest>;
-};
-
-export type EmploymentRequest = {
-  krs: string;
-  role?: string;
-  start?: string;
-  end?: string;
-};
-
-export type ElectionRequest = {
-  party?: string;
-  election_year?: string;
-  election_type: ElectionPosition;
-  teryt?: string;
 };
 
 export type EntityResult = {

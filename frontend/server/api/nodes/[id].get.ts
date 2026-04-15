@@ -3,7 +3,7 @@ import { getApp } from "firebase-admin/app";
 import { pageIsPublic } from "~~/shared/model";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { z } from "zod";
-import type { Node } from "~~/shared/model";
+import type { Node, Revision } from "~~/shared/model";
 
 const queryValidator = z.object({
   latest: z.string().optional(),
@@ -69,13 +69,13 @@ async function getEntity(db: FirebaseFirestore.Firestore, id: string) {
   if (!nodeDoc.exists) {
     return undefined;
   }
-  const result: Record<string, unknown> = {
+  const result: Revision = {
     id: nodeDoc.id,
     ...nodeDoc.data(),
   };
   if (result["revision_id"]) {
     // TODO this is ugly
-    const refId: DocumentReference | undefined = result["revision_id"] as any;
+    const refId: DocumentReference | undefined = result["revision_id"];
     // Keep it in case it's a string
     result["revision_id"] = refId?.path ?? (result["revision_id"] as string);
   }
