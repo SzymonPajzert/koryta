@@ -115,6 +115,7 @@ dependencies = [
     "leveldb-export @ git+https://github.com/SzymonPajzert/leveldb-export.git@upgrade",
     "stanza (>=1.11.0,<2.0.0)",
     "dacite (>=1.9.2,<2.0.0)",
+    "pytest-postgresql (>=8.0.0,<9.0.0)",
 ]
 
 [project.scripts]
