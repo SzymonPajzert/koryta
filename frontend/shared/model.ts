@@ -146,8 +146,8 @@ export interface Revision {
   nodeId?: string;
   node_id?: string;
   data: Node | Edge | Record<string, unknown>;
-  revision_id?: string | { path: string } | any;
-  update_time: string | any; // ISO string
+  revision_id?: string | { path: string } | unknown;
+  update_time: string | unknown; // ISO string
   update_user: string;
   update_automatic?: boolean;
 }

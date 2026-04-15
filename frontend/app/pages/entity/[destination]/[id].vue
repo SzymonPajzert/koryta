@@ -47,7 +47,12 @@
             Eksploruj region
           </v-btn>
         </div>
-        <EntityDetailsCard :key="sourcePath" :entity="entity" :type="type" />
+        <EntityDetailsCard
+          v-if="entity"
+          :key="sourcePath"
+          :entity="entity"
+          :type="type"
+        />
 
         <div
           class="mt-4"

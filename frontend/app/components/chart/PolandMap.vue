@@ -12,7 +12,8 @@ const hover = (region: Powiat | null) => {
 };
 
 const groupData = computed(() => {
-  const map: Record<string, any> = {};
+  const map: Record<string, { id: string; people?: number; name?: string }> =
+    {};
   for (const g of nodeGroups.value || []) {
     map[g.id] = g;
   }

@@ -61,33 +61,32 @@ export function useAuthState() {
   };
 }
 
-export const authFetchInterceptor = async function ({ options }: any) {
-  const isAuthReady = useIsCurrentUserLoaded();
-  const user = useCurrentUser();
-  // 1. If on the client and Firebase is still checking auth, PAUSE the request
-  if (import.meta.client && !isAuthReady.value) {
-    await new Promise<void>((resolve) => {
-      const unwatch = watch(
-        isAuthReady,
-        (ready) => {
-          if (ready) {
-            unwatch();
-            resolve(); // Release the pause!
-          }
-        },
-        { immediate: true },
-      );
-    });
-  }
-
-  if (user.value) {
-    options.query = { ...options.query, latest: true };
-    const token = await user.value.getIdToken();
-    options.headers = new Headers(options.headers);
-    options.headers.set("Authorization", `Bearer ${token}`);
-  }
-};
-
 export const authFetch = createUseFetch({
-  onRequest: authFetchInterceptor,
+  onRequest: async function ({ options }) {
+    const isAuthReady = useIsCurrentUserLoaded();
+    const user = useCurrentUser();
+    // 1. If on the client and Firebase is still checking auth, PAUSE the request
+    if (import.meta.client && !isAuthReady.value) {
+      await new Promise<void>((resolve) => {
+        const unwatch = watch(
+          isAuthReady,
+          (ready) => {
+            if (ready) {
+              unwatch();
+              resolve(); // Release the pause!
+            }
+          },
+          { immediate: true },
+        );
+      });
+    }
+
+    if (user.value) {
+      options.query = { ...options.query, latest: true };
+      const token = await user.value.getIdToken();
+      const headers = toValue(options.headers) || new Headers();
+      headers.set("Authorization", `Bearer ${token}`);
+      options.headers = headers;
+    }
+  },
 });

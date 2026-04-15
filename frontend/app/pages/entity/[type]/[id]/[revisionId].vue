@@ -23,8 +23,8 @@
           <v-card-text>
             <h3 class="text-h6 mb-2">Podgląd wersji:</h3>
             <EntityDetailsCard
-              :entity="revisionData.data"
-              :type="revisionData.data.type"
+              :entity="revisionData.data as any"
+              :type="revisionData.data.type as string"
             />
           </v-card-text>
           <v-card-actions>
@@ -42,8 +42,8 @@
             <v-expansion-panel-text>
               <EntityDetailsCard
                 v-if="nodeData"
-                :entity="nodeData"
-                :type="nodeData.type"
+                :entity="nodeData as any"
+                :type="nodeData.type as string"
               />
               <div v-else>Brak danych o aktualnej wersji.</div>
             </v-expansion-panel-text>

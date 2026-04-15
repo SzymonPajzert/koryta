@@ -86,7 +86,7 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
         destination = "person";
         break;
       case "document":
-        destination = (nodeWhole as any).teryt ? "region" : "article";
+        destination = "teryt" in nodeWhole ? "region" : "article";
         break;
     }
 

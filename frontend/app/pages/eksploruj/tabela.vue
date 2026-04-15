@@ -175,12 +175,16 @@ const { people: computedItems, loading } = await useEntityListRich(
   regions,
 );
 
-const updateQueryParams = async (options: any) => {
+const updateQueryParams = async (options: {
+  sortBy: { key: string; order: string }[];
+  page: number;
+  itemsPerPage: number;
+}) => {
   const sortParam =
-    options.sortBy.length > 0 ? options.sortBy[0].key : undefined;
+    options.sortBy.length > 0 ? options.sortBy[0]?.key : undefined;
   const sortDescParam =
     options.sortBy.length > 0
-      ? options.sortBy[0].order === "desc"
+      ? options.sortBy[0]?.order === "desc"
         ? "true"
         : "false"
       : undefined;
