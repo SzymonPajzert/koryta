@@ -21,19 +21,15 @@
     <v-spacer />
 
     <template #append>
-      <v-btn icon :to="{ path: '/lista', query: safeQuery }"
-        ><v-icon>mdi-format-list-bulleted-type</v-icon></v-btn
+      <v-btn v-if="mdAndUp" text to="/o-nas">O nas</v-btn>
+      <v-btn v-if="mdAndUp" text to="/pomoc">Wesprzyj</v-btn>
+      <v-btn
+        v-if="mdAndUp"
+        text
+        href="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
+        target="_blank"
+        >Dołącz</v-btn
       >
-      <!-- TODO reenable -->
-      <!-- <v-btn icon :to="{ path: '/graf', query: { miejsce: safeQuery.miejsce } }"
-        ><v-icon>mdi-graph-outline</v-icon></v-btn
-      > -->
-      <v-btn :icon="!mdAndUp" :to="user ? '/edit/node/new' : '/login'">
-        <v-icon :start="mdAndUp">mdi-plus</v-icon>
-        <!-- This span will be hidden on 'sm' and smaller screens -->
-        <span class="d-none d-md-inline">{{ user ? "Dodaj" : "Działaj" }}</span>
-      </v-btn>
-      <v-btn v-if="mdAndUp" text to="/zrodla">Źródła</v-btn>
       <v-avatar
         v-if="user && pictureURL"
         :image="pictureURL"
@@ -43,8 +39,9 @@
       <v-btn v-if="user && !pictureURL" icon to="/profil">
         <v-icon>mdi-account</v-icon>
       </v-btn>
-      <v-btn v-if="!user" icon to="/login">
-        <v-icon>mdi-account</v-icon>
+      <v-btn v-if="!user" :icon="!mdAndUp" to="/login">
+        <v-icon v-if="!mdAndUp">mdi-account</v-icon>
+        <span class="d-none d-md-inline">Zaloguj się</span>
       </v-btn>
       <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
     </template>
