@@ -1,9 +1,9 @@
-import { getFirestore, type DocumentReference } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { pageIsPublic } from "~~/shared/model";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { z } from "zod";
-import type { Node, Revision } from "~~/shared/model";
+import type { Node } from "~~/shared/model";
 
 const queryValidator = z.object({
   latest: z.string().optional(),
@@ -69,15 +69,14 @@ async function getEntity(db: FirebaseFirestore.Firestore, id: string) {
   if (!nodeDoc.exists) {
     return undefined;
   }
-  const result: Revision = {
+  const result = {
     id: nodeDoc.id,
     ...nodeDoc.data(),
-  };
-  if (result["revision_id"]) {
-    // TODO this is ugly
-    const refId: DocumentReference | undefined = result["revision_id"];
-    // Keep it in case it's a string
-    result["revision_id"] = refId?.path ?? (result["revision_id"] as string);
+  } as Node;
+  if (result.revision_id) {
+    if (typeof result.revision_id === "object") {
+      result.revision_id = (result.revision_id as { path: string }).path;
+    }
   }
   return result;
 }
