@@ -78,7 +78,6 @@ def crawl_website(ctx: Context, uid, current_url):
 
     try:
         print(f"Crawling: {current_url}")
-        print("haha test")
         started = datetime.now(warsaw_tz)
         response = requests.get(current_url, headers=HEADERS, timeout=10)
 
