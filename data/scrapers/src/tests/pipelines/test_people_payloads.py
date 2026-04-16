@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from entities.composite import Person
-from main import setup_context
+from koryta import setup_context
 from pipelines import PeoplePayloads
 
 
