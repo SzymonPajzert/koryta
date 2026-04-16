@@ -18,6 +18,7 @@
     menu-icon="mdi-magnify"
     clearable
     single-line
+    variant="solo-filled"
     @click:clear="nodeGroupPicked = null"
   >
     <template #item="{ props: itemProps, item }">
