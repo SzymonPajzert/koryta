@@ -28,7 +28,7 @@ hyperframe==6.1.0
 idna==3.11
 msgpack==1.1.2
 proto-plus==1.27.2
-protobuf==6.31.1
+protobuf==7.34.1
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
 pycparser==3.0
