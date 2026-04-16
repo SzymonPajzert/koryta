@@ -1,7 +1,7 @@
 import pytest
 
 from entities.company import Company, Source
-from main import setup_context
+from koryta import setup_context
 from pipelines import Companies
 
 
