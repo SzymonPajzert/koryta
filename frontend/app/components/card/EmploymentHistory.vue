@@ -6,6 +6,7 @@
       <v-list-item
         v-for="edge in edgesSorted"
         :key="edge.id"
+        :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
         base-color="surface-light"
         class="mt-2"
         rounded
