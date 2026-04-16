@@ -25,7 +25,7 @@
       />
     </v-navigation-drawer>
     <div class="pa-4">
-      <h1 class="text-h4 mb-4">Eksploruj powiązania</h1>
+      <h1 class="text-h4 mb-4">Eksploruj powiązania dla {{ region?.[1] }}</h1>
       <v-card>
         <v-data-table
           v-model:items-per-page="itemsPerPage"
