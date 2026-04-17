@@ -3,6 +3,8 @@
     <v-img
       class="mx-2"
       src="@/assets/logo_small.png"
+      width="40"
+      height="40"
       max-height="40"
       max-width="40"
       contain

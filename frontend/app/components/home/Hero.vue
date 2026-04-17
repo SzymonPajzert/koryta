@@ -11,7 +11,12 @@
           target="_blank"
           class="d-inline-block mb-8"
         >
-          <v-img width="200" src="@/assets/logo.png" class="mx-auto" />
+          <v-img
+            width="200"
+            height="200"
+            src="@/assets/logo.png"
+            class="mx-auto"
+          />
         </a>
         <div class="d-flex ga-4 align-center justify-start flex-wrap">
           <v-btn

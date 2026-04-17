@@ -30,7 +30,10 @@ export default defineNuxtConfig({
       htmlAttrs: {
         lang: "pl",
       },
-      link: [],
+      link: [
+        { rel: "preconnect", href: "https://cdn.jsdelivr.net" },
+        { rel: "preconnect", href: "https://firestore.googleapis.com" },
+      ],
       style: [],
       script: [],
       noscript: [],
@@ -147,10 +150,7 @@ export default defineNuxtConfig({
       },
     },
     options: {
-      firestore: {
-        experimentalForceLongPolling: true,
-        experimentalAutoDetectLongPolling: true,
-      },
+      firestore: {},
     },
   },
 
