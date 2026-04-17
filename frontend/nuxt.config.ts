@@ -48,8 +48,7 @@ export default defineNuxtConfig({
 
   devtools: { enabled: true },
 
-  // TODO enable SSR
-  ssr: false,
+  ssr: true,
 
   components: [
     {
