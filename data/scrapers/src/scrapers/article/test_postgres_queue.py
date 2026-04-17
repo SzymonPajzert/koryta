@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 from pytest_postgresql import factories  # type: ignore[import-not-found]
@@ -16,12 +16,8 @@ postgresql = factories.postgresql("postgresql_proc")
 
 
 def _env_flag(name: str) -> bool:
-    try:
-        data = Path("/proc/self/environ").read_bytes()
-    except FileNotFoundError:
-        return False
-    target = f"{name}=1".encode()
-    return target in data.split(b"\0")
+    return name in os.environ and os.environ[name] == "1"
+
 
 @pytest.fixture
 def db(postgresql) -> PostgresCrawlQueue:
