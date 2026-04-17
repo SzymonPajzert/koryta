@@ -61,7 +61,7 @@ dependencies = [
     "murmurhash==1.0.15",
     "networkx==3.6.1",
     "numpy==2.4.4",
-    "packaging==25.0",
+    "packaging==26.1",
     "pluggy==1.6.0",
     "preshed==3.0.13",
     "proto-plus==1.27.2",
