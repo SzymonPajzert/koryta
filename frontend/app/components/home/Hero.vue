@@ -33,7 +33,12 @@
             rounded="lg"
             slim
             text="Zobacz jak działa"
+            to="/o-nas"
           />
+        </div>
+        <div class="ma-6">
+          Masz uwagi? Napisz na
+          <a href="mailto:kontakt@koryta.pl">kontakt@koryta.pl</a>
         </div>
       </v-col>
       <v-col cols="12" md="6">
@@ -52,10 +57,8 @@
             >ogólnopolski</a
           >
           i
-          <a
-            href="#bezpartyjny"
-            class="text-decoration-none text-info hero-link"
-            >bezpartyjny</a
+          <a href="#niezalezny" class="text-decoration-none text-info hero-link"
+            >niezależny</a
           >
           <a
             href="#agregator"

@@ -49,5 +49,5 @@
 </template>
 
 <script lang="ts" setup>
-const { entities: articles } = await useEntity("article");
+const { entities: articles } = useEntities("article");
 </script>

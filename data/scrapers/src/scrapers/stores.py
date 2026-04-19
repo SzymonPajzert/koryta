@@ -5,7 +5,7 @@ file operations, data references, and pipeline execution contexts.
 """
 
 import io
-import os.path
+import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
@@ -288,27 +288,52 @@ class NLP(metaclass=ABCMeta):
         pass
 
 
+@dataclass(frozen=True)
+class CrawlQueueItem:
+    uid: str
+    url: str
+
+
+@dataclass(frozen=True)
+class DoneUrl:
+    uid: str
+    url: str
+    storage_path: str
+
+
+@dataclass(frozen=True)
+class NewUrl:
+    url: str
+    priority: int
+
+
+@dataclass(frozen=True)
+class BlockedDomain:
+    domain: str
+    reason: str
+
+
 class CrawlQueue(metaclass=ABCMeta):
     """Abstract interface for crawler URL queue."""
 
     @abstractmethod
-    def put(self, urls: list[tuple[str, int]]) -> None:
+    def put(self, urls: list[NewUrl]) -> None:
         """Insert/enqueue URLs (idempotent).
 
-        Each entry is (url, priority) with priority in [0, 100].
+        Each entry contains a URL and its priority in [0, 100].
         """
         raise NotImplementedError()
 
     @abstractmethod
     def get(
         self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
-    ) -> tuple[str, str] | None:
+    ) -> CrawlQueueItem | None:
         """Atomically claim a URL for processing.
 
         max_retries filters url that were retried more than $max_retries.
         timeout_seconds controls when a previously locked URL is retried.
 
-        Returns (id, url) or None.
+        Returns CrawlQueueItem or None.
         """
         raise NotImplementedError()
 
@@ -328,8 +353,8 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
-        """Add or update blocked domains (domain, reason).
+    def add_blocked_domains(self, rows: list[BlockedDomain]) -> None:
+        """Add or update blocked domains.
 
         Domain can be a bare hostname or URL; matching ignores scheme/www.
         """
@@ -343,8 +368,8 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_done_urls(self, limit: int) -> list[tuple]:
-        """Return done URLs with storage_path (id, url, storage_path)."""
+    def get_done_urls(self, limit: int) -> list[DoneUrl]:
+        """Return done URLs with storage_path."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -626,7 +651,7 @@ class Pipeline(typing.Generic[Output]):
     @property
     def output_path(self) -> str:
         if self.filename:
-            return os.path.join(self.filename, self.filename + "." + self.format)
+            return posixpath.join(self.filename, self.filename + "." + self.format)
         return ""
 
     @property

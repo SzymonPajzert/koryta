@@ -41,6 +41,7 @@ def test_calculate_ppr_scores():
     scores = calculate_ppr_scores(
         df_people_subgroups, df_subgroups_groups, alpha=0.85, normalize_rows=False
     )
+    scores = scores.set_index("person_id")
 
     assert isinstance(scores, pd.DataFrame)
     assert "G1" in scores.columns
@@ -66,6 +67,7 @@ def test_calculate_ppr_scores_disconnected():
     )
 
     scores = calculate_ppr_scores(df_people_subgroups, df_subgroups_groups)
+    scores = scores.set_index("person_id")
 
     print(f"Scores for P2: {scores.loc['P2']}")
     print(f"Scores for P3: {scores.loc['P3']}")

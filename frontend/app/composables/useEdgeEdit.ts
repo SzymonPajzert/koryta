@@ -1,7 +1,9 @@
-import { computed, ref, unref, type Ref } from "vue";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// TODO remove this disable
+
+import type { Ref } from "vue";
 import type { NodeType, Edge, Link } from "~~/shared/model";
-import { edgeTypeOptions, type edgeTypeExt } from "./useEdgeTypes";
-import { useEntityMutation } from "./useEntityMutation";
+import type { edgeTypeExt } from "./useEdgeTypes";
 
 export type InternalEdge = Partial<Edge> & {
   direction?: "outgoing" | "incoming";
@@ -35,184 +37,45 @@ export function useEdgeEdit({
   editedEdge,
   onUpdate = async () => {},
 }: Partial<UseEdgeEditOptions>) {
-  const { save } = useEntityMutation();
+  throw new Error("Not implemented");
 
-  const newEdge = ref<InternalEdge>(
-    initialDirection
-      ? { ...emptyEdge(), direction: initialDirection }
-      : emptyEdge(),
-  );
-  const internalEdgeType = ref(edgeType);
-  const currentOption = computed(() => edgeTypeOptions[internalEdgeType.value]);
-
-  const matches = (position: "source" | "target") => {
-    // currentOption is guaranteed by type
-    const direction = newEdge.value.direction;
-    const expectedPosition = direction === "outgoing" ? "source" : "target";
-    if (position !== expectedPosition) return false;
-
-    const expectedType =
-      position === "source"
-        ? currentOption.value.sourceType
-        : currentOption.value.targetType;
-    return unref(fixedNode)?.type === expectedType;
+  const newEdge = {
+    id: "",
+    name: "",
+    content: "",
+    start_date: "",
+    end_date: "",
+    party: "",
+    committee: "",
+    position: undefined,
+    elected: false,
+    term: "",
+    by_election: false,
   };
-
   const layout = {
-    source: {
-      id: computed(() =>
-        matches("source") ? unref(fixedNode)?.id : undefined,
-      ),
-      type: computed(() => currentOption.value.sourceType),
-      ref: ref<Link<NodeType> | undefined>(undefined),
-    },
     target: {
-      id: computed(() =>
-        matches("target") ? unref(fixedNode)?.id : undefined,
-      ),
-      type: computed(() => currentOption.value.targetType),
       ref: ref<Link<NodeType> | undefined>(undefined),
+      type: ref<NodeType>("person"),
+      id: ref(fixedNode?.id),
+    },
+    source: {
+      ref: ref<Link<NodeType> | undefined>(undefined),
+      type: ref<NodeType>("person"),
+      id: ref(fixedNode?.type),
     },
   };
-
-  const pickedNode = computed({
-    get: () => {
-      if (matches("source")) return layout.target.ref.value;
-      if (matches("target")) return layout.source.ref.value;
-      return undefined;
-    },
-    set: (val) => {
-      if (matches("source")) layout.target.ref.value = val;
-      else if (matches("target")) layout.source.ref.value = val;
-    },
-  });
-
-  const sourceId = computed(() => {
-    return layout.source.ref.value?.id ?? layout.source.id.value;
-  });
-  const targetId = computed(() => {
-    return layout.target.ref.value?.id ?? layout.target.id.value;
-  });
-
-  const readyToSubmit = computed(() => {
-    return !!sourceId.value && !!targetId.value;
-  });
-
-  const edgeLabel = computed(() => currentOption.value.label);
-
-  async function processEdge() {
-    if (!readyToSubmit.value) {
-      return;
-    }
-
-    const payload = {
-      source: sourceId.value,
-      target: targetId.value,
-      type: currentOption.value.realType,
-      name: newEdge.value.name,
-      content: newEdge.value.content,
-      start_date: newEdge.value.start_date,
-      end_date: newEdge.value.end_date,
-      references: [
-        ...(newEdge.value.references || []),
-        ...(unref(_referenceNode?.ref)?.id
-          ? [unref(_referenceNode?.ref)?.id]
-          : []),
-      ],
-      party: newEdge.value.party,
-      committee: newEdge.value.committee,
-      position: newEdge.value.position,
-      elected: newEdge.value.elected,
-      term: newEdge.value.term,
-      by_election: newEdge.value.by_election,
-    };
-
-    const payloadFull = editedEdge
-      ? {
-          ...payload,
-          id: editedEdge,
-        }
-      : payload;
-
-    await save({
-      isNew: editedEdge ? false : true,
-      createEndpoint: editedEdge ? "" : "/api/edges/create",
-      revisionEndpoint: editedEdge ? "/api/revisions/create" : "",
-      payload: payloadFull,
-      successMessage: editedEdge
-        ? "Zapisano propozycję zmiany!"
-        : "Dodano powiązanie!",
-      onSuccess: async () => {
-        await onUpdate();
-      },
-    });
-  }
-
-  const availableEdgeTypes = computed(() => {
-    const fn = unref(fixedNode);
-    if (!fn) return [];
-    return Object.values(edgeTypeOptions).filter((option) => {
-      const direction = newEdge.value.direction || "outgoing";
-      if (
-        option.allowedDirections &&
-        !option.allowedDirections.includes(direction)
-      ) {
-        return false;
-      }
-      if (direction === "outgoing") {
-        return option.sourceType === fn.type;
-      } else {
-        return option.targetType === fn.type;
-      }
-    });
-  });
-
-  function openEditEdge(edge: Edge) {
-    const internalEdge = edge as InternalEdge;
-    newEdge.value = { ...internalEdge };
-    const fn = unref(fixedNode);
-
-    // Determine direction based on fixedNode.id
-    if (fn?.id) {
-      if (edge.source === fn.id) {
-        newEdge.value.direction = "outgoing";
-      } else if (edge.target === fn.id) {
-        newEdge.value.direction = "incoming";
-      }
-    }
-
-    // Try to detect edgeTypeExt
-    if (edge.type === "owns") {
-      // Determine if it's owns_parent, owns_child or owns_region
-      if (internalEdge.richNode?.type === "region") {
-        internalEdgeType.value = "owns_region";
-      } else if (edge.source === fn?.id) {
-        internalEdgeType.value = "owns_child";
-      } else {
-        internalEdgeType.value = "owns_parent";
-      }
-    } else {
-      internalEdgeType.value = edge.type as edgeTypeExt;
-    }
-
-    if (matches("source")) {
-      layout.target.ref.value = {
-        id: edge.target,
-        type: layout.target.type.value,
-        name: internalEdge.richNode?.name,
-      } as any;
-    } else if (matches("target")) {
-      layout.source.ref.value = {
-        id: edge.source,
-        type: layout.source.type.value,
-        name: internalEdge.richNode?.name,
-      } as any;
-    }
-  }
+  const readyToSubmit = null;
+  const availableEdgeTypes = null;
+  const pickedNode = null;
+  // Methods
+  const processEdge = () => {};
+  const openEditEdge = null;
+  const edgeLabel = "";
+  const edgeTypeRef = ref(edgeType);
 
   return {
     newEdge,
-    edgeType: internalEdgeType,
+    edgeType: edgeTypeRef,
     edgeLabel,
     layout,
     readyToSubmit,
@@ -221,20 +84,5 @@ export function useEdgeEdit({
     // Methods
     processEdge,
     openEditEdge,
-  };
-}
-
-function emptyEdge(): InternalEdge {
-  return {
-    type: "connection",
-    target: "",
-    name: "",
-    content: "",
-    start_date: "",
-    end_date: "",
-    direction: "outgoing",
-    references: [],
-    elected: false,
-    by_election: false,
   };
 }

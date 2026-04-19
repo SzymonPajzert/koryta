@@ -193,7 +193,7 @@
         </v-btn>
         <DialogProposeRemoval
           v-if="editedEdge"
-          :id="newEdge.id!"
+          :id="newEdge.id"
           collection="edges"
           class="ml-2"
           @success="emit('update')"

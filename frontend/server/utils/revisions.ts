@@ -3,7 +3,7 @@ import type {
   DocumentReference,
   WriteBatch,
 } from "firebase-admin/firestore";
-import type { Edge, Node } from "~~/shared/model";
+import type { Edge, Node, Revision } from "~~/shared/model";
 import { Timestamp } from "firebase-admin/firestore";
 
 export interface BatchResult {
@@ -17,11 +17,13 @@ export function createRevisionTransaction(
   user: { uid: string },
   targetRef: DocumentReference,
   data: Record<string, unknown> | Node | Edge, // TODO unify this
+  automatic: boolean = false,
+  approve: boolean = false,
 ): BatchResult {
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
 
-  const revision = {
+  const revision: Revision = {
     // TODO test it is always set correctly and check if the DB has wrong entries there
     node_id: targetRef.id,
     data,
@@ -29,7 +31,19 @@ export function createRevisionTransaction(
     update_user: user.uid,
   };
 
+  if (automatic) {
+    revision.update_automatic = true;
+  }
+
   batch.set(revisionRef, revision);
+  // If approve, set the current revision.
+  if (approve) {
+    console.info(
+      `Approving node=${targetRef.id} revision_id=${revisionRef.id}`,
+    );
+    revision.data.revision_id = revisionRef;
+  }
+  batch.set(targetRef, revision.data);
 
   return { revisionRef, targetRef };
 }

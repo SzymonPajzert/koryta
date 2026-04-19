@@ -1,11 +1,27 @@
 <template>
-  <div
-    class="position-absolute top-0 ma-4"
-    style="max-width: 800px; width: 100%"
-  >
-    <v-card width="100%" style="overflow: visible">
+  <div style="max-width: 800px; width: 100%">
+    <v-card
+      v-if="status != 'success'"
+      class="mb-4"
+      :title="!user ? 'Dostęp zastrzeżony' : status"
+    >
+      <v-card-text v-if="!user" class="pt-0">
+        <p class="mb-4">
+          Ta strona nie została znaleziona lub oczekuje na zatwierdzenie.
+          Niezaakceptowane strony są widoczne tylko dla zalogowanych
+          użytkowników.
+        </p>
+        <v-btn color="primary" @click="handleLoginRedirect()">
+          Zaloguj się
+        </v-btn>
+      </v-card-text>
+      <v-card-text v-else class="pt-0">
+        {{ JSON.stringify(error) ?? "" }}
+      </v-card-text>
+    </v-card>
+    <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">
-        <div v-if="type === 'place'" class="mb-4 d-flex">
+        <div v-if="entity?.type === 'place'" class="mb-4 d-flex">
           <v-btn
             variant="tonal"
             prepend-icon="mdi-format-list-bulleted"
@@ -22,7 +38,16 @@
             Graf połączeń
           </v-btn>
         </div>
-        <EntityDetailsCard :entity="entity" :type="type" />
+        <div v-if="entity?.type === 'region'" class="mb-4 d-flex">
+          <v-btn
+            variant="tonal"
+            prepend-icon="mdi-format-list-bulleted"
+            :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
+          >
+            Eksploruj region
+          </v-btn>
+        </div>
+        <EntityDetailsCard :key="sourcePath" :entity="entity" :type="type" />
 
         <div
           class="mt-4"
@@ -34,19 +59,27 @@
             border: 1px solid #ccc;
           "
         >
-          <GraphContainer :focus-node-id="node" :max-depth="1" />
+          <GraphContainer :key="node" :focus-node-id="node" :max-depth="1" />
         </div>
 
         <div class="mt-4">
-          <template v-if="type === 'place' || type === 'region'">
+          <template v-if="entity?.type === 'place'">
             <CardConnectionList :edges="owners" title="Właściciele" />
             <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
           </template>
-
-          <v-row>
+          <template v-if="entity?.type === 'region'">
+            <CardConnectionList :edges="owners" title="Część regionu" />
+            <CardConnectionList :edges="subregions" title="Regiony" />
+            <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
+          </template>
+          <template v-if="entity?.type === 'person'">
+            <CardEmploymentHistory :edges="edges" />
+          </template>
+          <v-row v-else>
             <v-col
               v-for="edge in edges.filter((edge) => {
-                if (type === 'place' || type === 'region') {
+                const t = entity?.type || type;
+                if (t === 'place' || t === 'region') {
                   return ['employed', 'connection'].includes(edge.type);
                 }
                 return ['employed', 'connection', 'owns', 'election'].includes(
@@ -86,62 +119,73 @@
           </v-row>
         </div>
 
-        <div class="mt-4">
-          <v-btn
-            v-if="type !== 'region'"
-            variant="tonal"
-            prepend-icon="mdi-pencil-outline"
-            @click="handleEdit"
-          >
-            <template #prepend>
-              <v-icon color="warning" />
-            </template>
-            Zaproponuj zmianę
-          </v-btn>
-          <DialogProposeRemoval
-            v-if="entity && type !== 'region'"
-            :id="node"
-            :type="type"
-            :name="entity.name"
-          >
-            <template #activator="{ props }">
+        <template v-if="user && entity">
+          <template v-if="userWantsEdit">
+            <div class="mt-4">
               <v-btn
-                v-bind="user ? props : {}"
+                v-if="entity?.type !== 'region'"
                 variant="tonal"
-                class="ml-2"
-                @click="!user && handleLoginRedirect()"
+                prepend-icon="mdi-pencil-outline"
+                @click="handleEdit"
               >
                 <template #prepend>
-                  <v-icon color="error" icon="mdi-delete-outline" />
+                  <v-icon color="warning" />
                 </template>
-                Zaproponuj usunięcie
+                Zaproponuj zmianę
               </v-btn>
-            </template>
-          </DialogProposeRemoval>
-          <QuickAddArticleButton
-            v-if="type !== 'article' && type !== 'region'"
-            :node-id="node"
-            class="ml-2"
-          />
-        </div>
+              <DialogProposeRemoval
+                v-if="entity && entity.type !== 'region'"
+                :id="node"
+                :type="type"
+                :name="entity.name"
+              >
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="user ? props : {}"
+                    variant="tonal"
+                    class="ml-2"
+                    @click="!user && handleLoginRedirect()"
+                  >
+                    <template #prepend>
+                      <v-icon color="error" icon="mdi-delete-outline" />
+                    </template>
+                    Zaproponuj usunięcie
+                  </v-btn>
+                </template>
+              </DialogProposeRemoval>
+              <QuickAddArticleButton
+                v-if="entity?.type !== 'article' && entity?.type !== 'region'"
+                :node-id="node"
+                class="ml-2"
+              />
+            </div>
 
-        <div v-if="user && entity" class="mt-4">
-          <h4 class="text-subtitle-2 mb-2">Szybkie dodawanie</h4>
-          <div class="d-flex flex-column gap-2">
-            <v-btn
-              v-for="btn in quickAddButtons"
-              :key="btn.text"
-              variant="tonal"
-              size="small"
-              :prepend-icon="btn.icon"
-              class="mr-2 mb-2"
-              :data-testid="'edge-picker-' + btn.edgeType"
-              @click="quickAddEdge(btn)"
-            >
-              {{ btn.text }}
+            <div class="mt-4">
+              <h4 class="text-subtitle-2 mb-2">Szybkie dodawanie</h4>
+              <div class="d-flex flex-column gap-2">
+                <v-btn
+                  v-for="btn in quickAddButtons"
+                  :key="btn.text"
+                  variant="tonal"
+                  size="small"
+                  :prepend-icon="btn.icon"
+                  class="mr-2 mb-2"
+                  :data-testid="'edge-picker-' + btn.edgeType"
+                  @click="quickAddEdge(btn)"
+                >
+                  {{ btn.text }}
+                </v-btn>
+              </div>
+            </div>
+          </template>
+          <div v-else class="d-flex mt-4">
+            <v-spacer />
+            <v-btn color="primary" @click="userWantsEdit = true">
+              Edytuj stronę
             </v-btn>
+            <v-spacer />
           </div>
-        </div>
+        </template>
       </div>
 
       <div v-if="editedEdge" class="pa-4">
@@ -173,7 +217,7 @@
 
 <script setup lang="ts">
 import { useEdges } from "~/composables/edges";
-import { useAuthState } from "~/composables/auth";
+import { useAuthState, authFetch } from "@/composables/auth";
 import type {
   Person,
   Company,
@@ -184,12 +228,19 @@ import type {
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import { useEdgeButtons, type NewEdgeButton } from "~/composables/useEdgeTypes";
 
+definePageMeta({
+  affineLink: "0Jk7aUVzpBbKpnGw-NNqZ",
+});
+
 const route = useRoute<"/entity/[destination]/[id]">();
 
 const node = route.params.id as string;
+// TODO move to the entity type as read from the db
 const type = route.params.destination as NodeType;
 
-const { authFetch, user } = useAuthState();
+const userWantsEdit = ref(false);
+
+const { user } = useAuthState();
 const router = useRouter();
 
 const handleLoginRedirect = () => {
@@ -210,19 +261,52 @@ const handleEdit = () => {
   }
 };
 
-const { data: response } = await authFetch<{
+const sourcePath = computed(() => `/api/nodes/${node}`);
+const {
+  data: response,
+  status,
+  error,
+} = await authFetch<{
   node: Person | Company | Article | Region;
-}>(`/api/nodes/entry/${node}`);
+}>(sourcePath);
+
+useHead({
+  title: computed(() => {
+    if (status.value !== "success") {
+      return "Strona nieznaleziona";
+    }
+    return response.value?.node?.name ?? "Strona nieznaleziona";
+  }),
+});
+
 const entity = computed(() => response.value?.node);
+const regionTeryt = computed(() => {
+  if (entity.value && entity.value.type === "region") {
+    return entity.value.teryt;
+  }
+  return undefined;
+});
 
 // Calculate edges and relationships
-const { sources, targets, referencedIn, refresh } = await useEdges(node);
+const {
+  sources,
+  targets,
+  referencedIn,
+  refresh: refreshEdges,
+} = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");
 });
+const subregions = computed(() => {
+  return targets.value.filter(
+    (e) => e.type === "owns" && e.richNode.type === "region",
+  );
+});
 const subsidiaries = computed(() => {
-  return targets.value.filter((e) => e.type === "owns");
+  return targets.value.filter(
+    (e) => e.type === "owns" && e.richNode.type == "place",
+  );
 });
 
 // Edge modification buttons
@@ -238,6 +322,6 @@ function quickAddEdge(btn: NewEdgeButton) {
 }
 function onEdgeUpdate() {
   editedEdge.value = undefined;
-  refresh();
+  refreshEdges();
 }
 </script>

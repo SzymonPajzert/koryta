@@ -32,8 +32,8 @@ vi.mock("~/composables/useNodeEdit", () => ({
 vi.mock("~/composables/auth", () => ({
   useAuthState: vi.fn(() => ({
     user: ref(null),
-    authFetch: vi.fn(() => ({ data: ref({}), refresh: vi.fn() })),
   })),
+  authFetch: vi.fn(() => ({ data: ref({}), refresh: vi.fn() })),
 }));
 
 vi.stubGlobal("definePageMeta", vi.fn());

@@ -67,9 +67,7 @@ export default defineNuxtConfig({
 
   modules: [
     "@pinia/nuxt",
-    "@nuxt/content", // TODO what do I need it for '@nuxt/icon',
-    // TODO what do I need it for '@nuxt/image',
-    // TODO what do I need it for '@nuxt/scripts',
+    "@nuxt/content",
     "@nuxt/fonts",
     "@nuxt/eslint",
     "nuxt-vuefire",
@@ -87,7 +85,7 @@ export default defineNuxtConfig({
     defaults: {
       weights: [100, 300, 400, 500, 700, 900],
       styles: ["normal", "italic"],
-      subsets: ["latin"],
+      subsets: ["latin", "latin-ext"],
     },
   },
 
@@ -120,9 +118,6 @@ export default defineNuxtConfig({
       authDomain: isLocal
         ? "demo-koryta-pl.firebaseapp.com"
         : "koryta-pl.firebaseapp.com",
-      databaseURL: isLocal
-        ? "http://localhost:9000?ns=demo-koryta-pl"
-        : "https://koryta-pl-default-rtdb.europe-west1.firebasedatabase.app",
       projectId: isLocal ? "demo-koryta-pl" : "koryta-pl",
       storageBucket: isLocal ? undefined : "koryta-pl.firebasestorage.app",
       messagingSenderId: isLocal ? undefined : "735903577811",

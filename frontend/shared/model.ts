@@ -2,7 +2,7 @@ type PageBase<PageType> = {
   id?: string;
   type: PageType;
   content?: string;
-  revision_id?: string;
+  revision_id?: string | { path: string };
   votes?: Votes;
   deleted?: boolean;
   delete_reason?: string;
@@ -23,18 +23,10 @@ export type Node = PageBase<NodeType> & {
   name: string;
 };
 
-/**
- * PageRevisioned adds revisions array to the base page types
- * and makes sure the id is present.
- *
- * This is used for pages that have revisions pending review
- * and were enriched during the lookup.
- */
-export type PageRevisioned = { id: string; revisions: Revision[] };
-
 export interface Edge extends PageBase<EdgeType> {
   name?: string;
   source: string;
+  label?: string; // a derivative of name, see graph/model.ts
   target: string;
   start_date?: string;
   end_date?: string;
@@ -60,11 +52,24 @@ export type ElectionPosition =
   | "Senat"
   | "Parlament Europejski";
 
-export function pageIsPublic(node: { revision_id?: string }) {
+export function pageIsPublic(node: { revision_id?: unknown }) {
   return !!node.revision_id;
 }
 
 export type NodeType = "person" | "place" | "article" | "record" | "region";
+
+export function nodeIcon(type: NodeType) {
+  switch (type) {
+    case "person":
+      return "mdi-account-outline";
+    case "place":
+      return "mdi-office-building-outline";
+    case "article":
+      return "mdi-file-document-outline";
+    default:
+      return "mdi-comment-arrow-right-outline";
+  }
+}
 
 export type EdgeType =
   | "employed"
@@ -90,7 +95,7 @@ export const destinationAddText: Record<NodeType, string> = {
   region: "Dodaj region",
 };
 
-export interface Person {
+export type Person = {
   name: string;
   type: "person";
   parties?: string[];
@@ -100,7 +105,21 @@ export interface Person {
   rejestrIo?: string;
   votes?: Votes;
   visibility?: boolean;
+};
+
+export interface ElectionRich {
+  year?: string;
+  location?: string;
+  position: string;
+  committee?: string;
 }
+
+export type PersonRich = Person & {
+  id: string;
+  companies: (string | undefined)[];
+  elections: ElectionRich[];
+  experience: number;
+};
 
 export interface Company {
   name: string;
@@ -142,6 +161,7 @@ export interface Revision {
   id: string;
   nodeId: string;
   data: Omit<Node, "revision_id"> | Omit<Edge, "revision_id">;
+  revision_id: string;
   update_time: string; // ISO string
   update_user: string;
 }
@@ -150,14 +170,6 @@ export interface Link<T extends NodeType> {
   type: T;
   id: string;
   name: string;
-}
-
-export type Destination = NodeType;
-
-export interface Connection<T extends Destination> {
-  relation?: string;
-  connection?: Link<T>;
-  content?: string;
 }
 
 export interface Comment {

@@ -1,6 +1,6 @@
 import json
 
-from google.cloud import storage
+import google.cloud.storage as storage
 
 
 def fix_name(name: str) -> str:

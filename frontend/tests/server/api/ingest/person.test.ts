@@ -51,7 +51,10 @@ vi.mock("../../../../server/utils/auth", () => ({
 }));
 
 vi.mock("../../../../server/utils/revisions", () => ({
-  createRevisionTransaction: vi.fn(),
+  createRevisionTransaction: vi.fn(() => ({
+    revisionRef: { id: "mock-revision-id", path: "mock/path" },
+    targetRef: { id: "mock-target-id", path: "mock/target/path" },
+  })),
 }));
 
 // TODO can I use nuxt integrated tests here instead?
@@ -143,7 +146,8 @@ describe("api/ingest/person", () => {
 
     expect(createRevisionTransaction).toHaveBeenCalled();
 
-    expect(createRevisionTransaction).toHaveBeenCalledWith(
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
       mockDb,
       expect.anything(),
       { uid: "test-user-id" },
@@ -153,9 +157,12 @@ describe("api/ingest/person", () => {
         target: "region-id-02",
         type: "election",
         name: "kandydatura",
+        position: "Sejmik",
         party: "Test Party",
         start_date: "2023-01-01",
       },
+      true,
+      false, // approve
     );
     expect(result.elections).toHaveLength(1);
   });

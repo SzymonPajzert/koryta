@@ -1,6 +1,6 @@
 """PostgreSQL-backed crawl queue for the article crawler.
 
-All direct psycopg2 access is encapsulated here. The constructor takes
+All direct psycopg access is encapsulated here. The constructor takes
 explicit connection parameters (no os.getenv).
 """
 
@@ -13,10 +13,17 @@ from datetime import datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-import psycopg2  # type: ignore
+import psycopg
 from uuid_extensions import uuid7str  # type: ignore
 
-from scrapers.stores import CrawlQueue
+from entities.util import NormalizedParse
+from scrapers.stores import (
+    BlockedDomain,
+    CrawlQueue,
+    CrawlQueueItem,
+    DoneUrl,
+    NewUrl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +46,10 @@ class PostgresClient:
         self.port = port
 
     def connect(self):
-        return psycopg2.connect(
+        return psycopg.connect(
             host=self.host,
             port=self.port,
-            database=self.database,
+            dbname=self.database,
             user=self.user,
             password=self.password,
         )
@@ -144,11 +151,11 @@ class PostgresCrawlQueue(CrawlQueue):
         """Drop and recreate queue tables so the queue is empty."""
         self._init_tables(reset=True)
 
-    def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
+    def add_blocked_domains(self, rows: list[BlockedDomain]) -> None:
         """Create blocked_domains table and upsert rows.
 
         Args:
-            rows: List of (domain, reason) tuples (CSV parsing done by caller).
+            rows: List of blocked domains to upsert.
         """
         logger.info("Loading blocked domains...")
         with self.pg.transaction() as transaction:
@@ -162,8 +169,8 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             if rows:
                 normalized = [
-                    (self._normalize_url(domain), reason)
-                    for domain, reason in rows
+                    (self._normalize_url(row.domain), row.reason)
+                    for row in rows
                 ]
                 transaction.executemany(
                     "INSERT INTO blocked_domains (domain, reason) VALUES (%s, %s) "
@@ -176,10 +183,10 @@ class PostgresCrawlQueue(CrawlQueue):
 
     def get(
         self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
-    ) -> tuple[str, str] | None:
+    ) -> CrawlQueueItem | None:
         """Atomically select and lock a URL for crawling.
 
-        Returns (id, url) or None if nothing available.
+        Returns CrawlQueueItem or None if nothing available.
         """
         now = datetime.now(warsaw_tz)
         with self.pg.transaction() as transaction:
@@ -213,7 +220,10 @@ class PostgresCrawlQueue(CrawlQueue):
                     now,
                 ),
             )
-            return transaction.fetchone()
+            row = transaction.fetchone()
+            if row is None:
+                return None
+            return CrawlQueueItem(row[0], row[1])
 
     def mark_done(self, uid: str, storage_path: str | None) -> None:
         """Mark a URL as successfully crawled."""
@@ -241,13 +251,15 @@ class PostgresCrawlQueue(CrawlQueue):
             [uid],
         )
 
-    def put(self, urls: list[tuple[str, int]]) -> None:
+    def put(self, urls: list[NewUrl]) -> None:
         """Insert/enqueue URLs (idempotent)."""
         if not urls:
             return
         now = datetime.now(warsaw_tz)
         rows: list[tuple[str, int, datetime]] = []
-        for url, priority in urls:
+        for new_url in urls:
+            url = new_url.url
+            priority = new_url.priority
             if not 0 <= priority <= 100:
                 raise ValueError(f"Priority must be 0-100, got {priority}")
             normalized = self._normalize_url(url)
@@ -257,6 +269,7 @@ class PostgresCrawlQueue(CrawlQueue):
     def _insert_urls(
         self,
         rows: list[tuple[str, int, datetime]],
+        transaction=None,
     ) -> None:
         """Batch insert discovered URLs.
 
@@ -280,37 +293,24 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             for url, priority, date_added in rows
         ]
-        sql = (
+        if transaction is None:
+            self.pg.executemany(
+                "INSERT INTO website_index ("
+                "id, url, priority, done, errors, num_retries, "
+                "date_added, date_finished, mined_from_url) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT(url) DO NOTHING",
+                prepared,
+            )
+            return
+        transaction.executemany(
             "INSERT INTO website_index ("
             "id, url, priority, done, errors, num_retries, "
             "date_added, date_finished, mined_from_url) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-            "ON CONFLICT(url) DO NOTHING"
+            "ON CONFLICT(url) DO NOTHING",
+            prepared,
         )
-        max_attempts = 5
-        for attempt in range(1, max_attempts + 1):
-            try:
-                self.pg.executemany(sql, prepared)
-                return
-            except psycopg2.errors.DeadlockDetected as exc:
-                if attempt == max_attempts:
-                    logger.error(
-                        "Deadlock detected while inserting URLs (attempt %d/%d). "
-                        "Giving up.",
-                        attempt,
-                        max_attempts,
-                    )
-                    raise
-                backoff = 0.1 * attempt
-                logger.warning(
-                    "Deadlock detected while inserting URLs (attempt %d/%d). "
-                    "Retrying after %.2fs. Error: %s",
-                    attempt,
-                    max_attempts,
-                    backoff,
-                    exc,
-                )
-                time.sleep(backoff)
 
     def reprioritize(self, priority_fn: Callable[[str], int], batch_size: int = 5000):
         """Recalculate priority for all pending URLs using priority function."""
@@ -320,6 +320,8 @@ class PostgresCrawlQueue(CrawlQueue):
         batch: list[tuple[int, str]] = []
         for uid, url in rows:
             priority = priority_fn(url)
+            if not 0 <= priority <= 100:
+                raise ValueError(f"Priority must be 0-100, got {priority}")
             batch.append((priority, uid))
             if len(batch) >= batch_size:
                 self.pg.executemany(
@@ -336,78 +338,18 @@ class PostgresCrawlQueue(CrawlQueue):
             updated += len(batch)
         logger.info("Reprioritized %d URLs.", updated)
 
-    def get_done_urls(self, limit: int) -> list[tuple]:
+    def get_done_urls(self, limit: int) -> list[DoneUrl]:
         """Fetch crawled pages that have a storage_path, for parsing."""
-        return self.pg.fetchall(
+        rows = self.pg.fetchall(
             "SELECT id, url, storage_path FROM website_index "
             "WHERE done = TRUE AND storage_path IS NOT NULL "
             "ORDER BY date_finished DESC LIMIT %s;",
             (limit,),
         )
-
-    def _get_stats(self) -> dict:
-        """Return crawler statistics as a dict (printing happens in the entrypoint)."""
-        stats: dict = {}
-
-        stats["total_urls"] = self.pg.fetchone(
-            "SELECT COUNT(*) FROM website_index;"
-        )[0]
-        stats["finished_urls"] = self.pg.fetchone(
-            "SELECT COUNT(*) FROM website_index WHERE done = TRUE;"
-        )[0]
-        stats["pending_urls"] = self.pg.fetchone(
-            "SELECT COUNT(*) FROM website_index WHERE done = FALSE;"
-        )[0]
-        stats["urls_with_errors"] = self.pg.fetchone(
-            "SELECT COUNT(*) FROM website_index WHERE array_length(errors, 1) > 0;"
-        )[0]
-        stats["total_errors"] = self.pg.fetchone(
-            "SELECT SUM(array_length(errors, 1)) FROM website_index "
-            "WHERE array_length(errors, 1) > 0;"
-        )[0] or 0
-
-        all_errors = self.pg.fetchall(
-            "SELECT unnest(errors) AS error_msg FROM website_index "
-            "WHERE array_length(errors, 1) > 0;"
-        )
-        if all_errors:
-            stats["top_errors"] = Counter([row[0] for row in all_errors]).most_common(5)
-        else:
-            stats["top_errors"] = []
-
-        stats["avg_processing_seconds"] = self.pg.fetchone(
-            "SELECT AVG(EXTRACT(EPOCH FROM (date_finished - date_added))) "
-            "FROM website_index "
-            "WHERE done = TRUE AND date_finished IS NOT NULL;"
-        )[0]
-
-        now = datetime.now()
-        timeframes = {"1min": 1, "10min": 10, "60min": 60}
-        stats["recent"] = {}
-        for label, minutes in timeframes.items():
-            start_time = now - timedelta(minutes=minutes)
-            successes = self.pg.fetchone(
-                "SELECT COUNT(*) FROM website_index "
-                "WHERE done = TRUE AND date_finished >= %s;",
-                (start_time,),
-            )[0]
-            errors = self.pg.fetchone(
-                "SELECT COUNT(*) FROM website_index "
-                "WHERE array_length(errors, 1) > 0 AND date_added >= %s;",
-                (start_time,),
-            )[0]
-            stats["recent"][label] = {"successes": successes, "errors": errors}
-
-        return stats
+        return [DoneUrl(row[0], row[1], row[2]) for row in rows]
 
     @classmethod
     def _normalize_url(cls, value: str) -> str:
         value = value.strip()
-        value = re.sub(r"^https?://", "", value)
-        value = value.removeprefix("www.")
-        return value.rstrip("/")
-
-    @classmethod
-    def from_env(cls, **kwargs) -> "PostgresCrawlQueue":
-        client = PostgresClient.from_env(**kwargs)
-        return cls(client)
+        parsed = NormalizedParse.parse(value)
+        return f"{parsed.hostname_normalized}{parsed.path}"

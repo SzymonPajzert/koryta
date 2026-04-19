@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import os
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
+from datetime import datetime
+
+import pytest
+from pytest_postgresql import factories  # type: ignore[import-not-found]
+
+from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
+from scrapers.stores import BlockedDomain, DoneUrl, NewUrl
+
+postgresql_proc = factories.postgresql_proc()
+postgresql = factories.postgresql("postgresql_proc")
+
+
+def _env_flag(name: str) -> bool:
+    return name in os.environ and os.environ[name] == "1"
+
+
+@pytest.fixture
+def db(postgresql) -> PostgresCrawlQueue:
+    params = postgresql.info.get_parameters()
+    pg = PostgresClient(
+        params.get("host", "localhost"),
+        params.get("dbname", "postgres"),
+        params.get("user", "postgres"),
+        params.get("password"),
+        port=int(params.get("port", 5432)),
+    )
+    queue = PostgresCrawlQueue(pg)  # type: ignore[arg-type]
+    queue.reset()
+    return queue
+
+
+def test_put_populates_urls(db: PostgresCrawlQueue):
+    db.put(
+        [
+            NewUrl("https://example.com", 0),
+            NewUrl("https://example.org", 0),
+        ]
+    )
+    count = db.pg.fetchone("SELECT COUNT(*) FROM website_index;")[0]
+    assert count == 2
+
+
+def test_get_skips_blocked(db: PostgresCrawlQueue):
+    db.put(
+        [
+            NewUrl("https://blocked.test/a", 0),
+            NewUrl("https://ok.test/b", 0),
+        ]
+    )
+    db.add_blocked_domains([BlockedDomain("blocked.test", "testing")])
+
+    row = db.get("worker-1", max_retries=3)
+    assert row is not None
+    assert row.url == "ok.test/b"
+
+
+def test_load_blocked_domains_upserts(db: PostgresCrawlQueue):
+    db.add_blocked_domains([BlockedDomain("blocked.test", "first")])
+    db.add_blocked_domains([BlockedDomain("blocked.test", "second")])
+    reason = db.pg.fetchone(
+        "SELECT reason FROM blocked_domains WHERE domain = %s", ("blocked.test",)
+    )[0]
+    assert reason == "second"
+
+
+def test_mark_done_and_get_pages(db: PostgresCrawlQueue):
+    db.put([NewUrl("https://example.com/a", 0)])
+    uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
+    db.mark_done(uid, "s3://bucket/a")
+    rows = db.get_done_urls(limit=5)
+    assert rows == [DoneUrl(uid, "example.com/a", "s3://bucket/a")]
+
+
+def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue):
+    now = datetime.now()
+    rows: list[tuple] = [
+        ("https://example.com/a", 0, now),
+        ("https://example.com/b", 0, now),
+    ]
+    db._insert_urls(rows)
+    db.reprioritize(lambda url: 30)
+    priorities = db.pg.fetchall(
+        "SELECT id, priority FROM website_index ORDER BY id;"
+    )
+    assert len(priorities) == 2
+    assert [priority for _, priority in priorities] == [30, 30]
+
+
+@pytest.mark.skipif(not _env_flag("POSTGRES_STRESS"), reason="set POSTGRES_STRESS=1")
+def test_concurrent_get_and_lock(db: PostgresCrawlQueue):
+    urls = [f"https://example.com/{i}" for i in range(200)]
+    now = datetime.now()
+    db._insert_urls([(url, 0, now) for url in urls])
+
+    def worker(idx: int):
+        row = db.get(f"worker-{idx}", max_retries=1)
+        return row.uid if row else None
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(worker, i) for i in range(100)]
+        results = []
+        for f in futures:
+            try:
+                results.append(f.result(timeout=10))
+            except FutureTimeout:
+                pytest.fail("Concurrent get timed out")
+
+    ids = [r for r in results if r is not None]
+    assert len(ids) == len(set(ids))

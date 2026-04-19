@@ -3,13 +3,12 @@ import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import { electionPositions } from "~~/shared/misc";
-import type { Edge, Article, Person } from "~~/shared/model";
+import type { Edge, Article, Person, ElectionPosition } from "~~/shared/model";
 import {
   personRequestSchema,
   type EntityResult,
   type ElectionRequest,
   type EmploymentRequest,
-  type ArticleRequest,
   type PersonRequest,
 } from "#shared/api";
 
@@ -20,18 +19,41 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const companyIDs = await lookupCompanyIDs(db, body.companies);
-
   const batch = db.batch();
+  const ctx = new Context(db, user, batch, body.autoapprove ?? false);
+
+  const { companyIDs, missingKRS } = await lookupCompanyIDs(
+    ctx,
+    body.companies,
+  );
+  if (missingKRS.length > 0) {
+    console.info("[404] Missing companies:", missingKRS);
+    setResponseStatus(
+      event,
+      404,
+      `Missing companies: ${missingKRS.join(", ")}`,
+    );
+    return {
+      message: `Missing companies: ${missingKRS.join(", ")}`,
+      data: missingKRS,
+    };
+  }
 
   try {
-    let personId: string | undefined = await lookupNode(db, "name", body.name);
+    let personId: string | undefined = await lookupNode(ctx, "name", body.name);
     if (!personId) {
       const personRef = db.collection("nodes").doc();
       personId = personRef.id;
       const personData = createPerson(body);
-      batch.set(personRef, personData);
-      createRevisionTransaction(db, batch, user, personRef, personData);
+      createRevisionTransaction(
+        db,
+        batch,
+        user,
+        personRef,
+        personData,
+        true,
+        ctx.autoapprove,
+      );
     }
 
     // Track results
@@ -45,40 +67,32 @@ export default defineEventHandler(async (event) => {
           throw new Error(
             `Missing company ID idx=${index}, krs=${company.krs}`,
           );
-        return await createEmployment(
-          db,
-          batch,
-          user,
-          personId,
-          company,
-          companyID,
-        ).catch((e) => {
-          console.error("Error creating employment", e);
-          return {
-            nodeId: companyID,
-            krs: company.krs,
-            created: false,
-            edgeId: undefined,
-          };
-        });
+        return await createEmployment(ctx, personId, company, companyID).catch(
+          (e) => {
+            console.error("Error creating employment", e);
+            return {
+              nodeId: companyID,
+              krs: company.krs,
+              created: false,
+              edgeId: undefined,
+            };
+          },
+        );
       }),
     );
 
-    for (const article of assertArray(body.articles, "articles")) {
-      articlesResult.push(
-        await createArticle(db, batch, user, personId, article),
-      );
+    for (const article of assertArray(body.sources, "articles")) {
+      articlesResult.push(await createArticle(ctx, personId, article));
     }
     for (const election of assertArray(body.elections, "elections")) {
-      const result = await createElection(db, batch, user, personId, election);
+      const result = await createElection(ctx, personId, election);
       if (!result) continue; // TODO handle missing teryt for sejm etc.
       electionsResult.push(result);
     }
 
     // Invalidate cache
     await useStorage("cache").clear("nitro:handlers");
-    console.log("Invalidated cache");
-
+    console.info(`Uploaded person ${body.name}`);
     return {
       personId,
       companies: companiesResult,
@@ -114,17 +128,33 @@ function createPerson(body: Partial<Person>): Person {
   const person: Person = {
     name: body.name,
     type: "person",
+    parties: body.parties || [],
   };
   if (body.content) person.content = body.content;
-  if (body.wikipedia) person.wikipedia = body.wikipedia;
+  if (body.wikipedia) {
+    console.log("Setting wikipedia", body.wikipedia);
+    person.wikipedia = body.wikipedia;
+  }
   if (body.rejestrIo) person.rejestrIo = body.rejestrIo;
   return person;
 }
 
+class Context {
+  constructor(
+    readonly db: FirebaseFirestore.Firestore,
+    readonly user: { uid: string },
+    readonly batch: FirebaseFirestore.WriteBatch,
+    readonly autoapprove: boolean,
+  ) {
+    this.db = db;
+    this.user = user;
+    this.batch = batch;
+    this.autoapprove = autoapprove;
+  }
+}
+
 async function createEmployment(
-  db: FirebaseFirestore.Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  user: { uid: string },
+  ctx: Context,
   personId: string,
   employment: EmploymentRequest,
   companyId: string,
@@ -138,7 +168,7 @@ async function createEmployment(
   if (employment.start) edgeData.start_date = employment.start;
   if (employment.end) edgeData.end_date = employment.end;
 
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  const edgeId = await findEdgeOrCreate(ctx, edgeData);
 
   return {
     nodeId: companyId,
@@ -149,28 +179,31 @@ async function createEmployment(
 }
 
 async function createArticle(
-  db: FirebaseFirestore.Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  user: { uid: string },
+  ctx: Context,
   personId: string,
-  article: ArticleRequest,
+  articleURL: string,
 ): Promise<EntityResult> {
-  if (!article.url) throw badRequest(`Article must have a URL`);
-
   let articleId: string | undefined = undefined;
-  articleId = await lookupNode(db, "sourceURL", article.url);
+  articleId = await lookupNode(ctx, "sourceURL", articleURL);
 
   let created = false;
   if (!articleId) {
-    const articleRef = db.collection("nodes").doc();
+    const articleRef = ctx.db.collection("nodes").doc();
     articleId = articleRef.id;
     const revisionData: Article = {
-      name: article.url,
+      name: "",
       type: "article",
-      sourceURL: article.url,
+      sourceURL: articleURL,
     };
-    batch.set(articleRef, revisionData);
-    createRevisionTransaction(db, batch, user, articleRef, revisionData);
+    createRevisionTransaction(
+      ctx.db,
+      ctx.batch,
+      ctx.user,
+      articleRef,
+      revisionData,
+      true,
+      ctx.autoapprove,
+    );
     created = true;
   }
 
@@ -180,7 +213,7 @@ async function createArticle(
     target: articleId,
     type: "mentions",
   };
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  const edgeId = await findEdgeOrCreate(ctx, edgeData);
 
   return {
     nodeId: articleId,
@@ -189,20 +222,24 @@ async function createArticle(
   };
 }
 
+// TODO remove it and fix it all the missing codes
 const allowedFailingElections: Partial<ElectionRequest>[] = [
-  { election_type: "Samorząd", election_year: "1998" },
   { election_type: "Samorząd", election_year: "1994" },
-  { election_type: "Sejm", election_year: "2001" },
-  { election_type: "Sejm", election_year: "1993" },
+  { election_type: "Samorząd", election_year: "1998" },
   { election_type: "Sejm", election_year: "1991" },
+  { election_type: "Sejm", election_year: "1993" },
   { election_type: "Sejm", election_year: "1997" },
+  { election_type: "Sejm", election_year: "2001" },
+  { election_type: "Senat", election_year: "1991" },
+  { election_type: "Senat", election_year: "1993" },
+  { election_type: "Senat", election_year: "1997" },
+  { election_type: "Senat", election_year: "2001" },
   { election_type: "Senat", election_year: "2005" },
-  // TODO remove it and fix it all of the above
   { election_type: "Parlament Europejski" },
 ];
 
 async function lookupRegionId(
-  db: FirebaseFirestore.Firestore,
+  ctx: Context,
   election: ElectionRequest,
 ): Promise<string | undefined> {
   if (!election.teryt) {
@@ -225,15 +262,13 @@ async function lookupRegionId(
         election.election_year,
     );
   }
-  const regionId = await lookupNode(db, "teryt", election.teryt);
+  const regionId = await lookupNode(ctx, "teryt", election.teryt);
   if (!regionId) throw new Error(`Region not found: ${election.teryt}`);
   return regionId;
 }
 
 async function createElection(
-  db: FirebaseFirestore.Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  user: { uid: string },
+  ctx: Context,
   personId: string,
   election: ElectionRequest,
 ): Promise<EntityResult | undefined> {
@@ -244,7 +279,7 @@ async function createElection(
     );
   }
 
-  const regionId = await lookupRegionId(db, election);
+  const regionId = await lookupRegionId(ctx, election);
   if (!regionId) {
     return undefined;
   }
@@ -254,13 +289,14 @@ async function createElection(
     target: regionId,
     type: "election",
     name: "kandydatura",
+    position: election.election_type as ElectionPosition,
   };
   if (election.party) edgeData.party = election.party;
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }
 
-  const edgeId = await findEdgeOrCreate(db, batch, user, edgeData);
+  const edgeId = await findEdgeOrCreate(ctx, edgeData);
   if (!edgeId) throw new Error("Failed to create edge");
   return {
     nodeId: regionId,
@@ -280,30 +316,25 @@ async function createElection(
  * @returns
  */
 async function lookupCompanyIDs(
-  db: FirebaseFirestore.Firestore,
+  ctx: Context,
   employments: EmploymentRequest[],
-): Promise<string[]> {
+): Promise<{ companyIDs: string[]; missingKRS: string[] }> {
   const failingLookup: string[] = [];
   const companyIDsUnfiltered: (string | undefined)[] = await Promise.all(
     employments.map(async (employment) => {
-      const node = await lookupNode(db, "krsNumber", employment.krs);
+      const node = await lookupNode(ctx, "krsNumber", employment.krs);
       if (!node) {
         failingLookup.push(employment.krs);
       }
       return node;
     }),
   );
-  if (failingLookup.length > 0) {
-    console.info("[404] Missing companies:", failingLookup);
-    throw createError({
-      statusCode: 404,
-      message: `Missing companies: ${failingLookup.join(", ")}`,
-      data: failingLookup,
-    });
-  }
-  return companyIDsUnfiltered.filter(
-    (id: string | undefined): id is string => id !== undefined,
-  );
+  return {
+    companyIDs: companyIDsUnfiltered.filter(
+      (id: string | undefined): id is string => id !== undefined,
+    ),
+    missingKRS: failingLookup,
+  };
 }
 
 // TODO move this to general utils
@@ -315,11 +346,11 @@ async function lookupCompanyIDs(
  * @returns
  */
 async function lookupNode(
-  db: FirebaseFirestore.Firestore,
+  ctx: Context,
   field: string,
   value: string,
 ): Promise<string | undefined> {
-  const snap = await db
+  const snap = await ctx.db
     .collection("nodes")
     .where(field, "==", value)
     .limit(1)
@@ -330,13 +361,8 @@ async function lookupNode(
   return undefined;
 }
 
-async function findEdgeOrCreate(
-  db: FirebaseFirestore.Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  user: { uid: string },
-  edge: Edge,
-) {
-  const edgeSnap = await db
+async function findEdgeOrCreate(ctx: Context, edge: Edge) {
+  const edgeSnap = await ctx.db
     .collection("edges")
     .where("source", "==", edge.source)
     .where("target", "==", edge.target)
@@ -344,9 +370,16 @@ async function findEdgeOrCreate(
     .get();
 
   if (edgeSnap.empty) {
-    const edgeRef = db.collection("edges").doc();
-    batch.set(edgeRef, edge);
-    createRevisionTransaction(db, batch, user, edgeRef, edge);
+    const edgeRef = ctx.db.collection("edges").doc();
+    createRevisionTransaction(
+      ctx.db,
+      ctx.batch,
+      ctx.user,
+      edgeRef,
+      edge,
+      true,
+      ctx.autoapprove,
+    );
     return edgeRef.id;
   }
   return edgeSnap.docs[0]?.id;

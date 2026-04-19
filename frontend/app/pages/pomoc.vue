@@ -152,7 +152,6 @@ import { HomeCard } from "#components";
 definePageMeta({
   title: "Działaj z nami",
   isHelp: true,
-  middleware: "auth",
 });
 </script>
 

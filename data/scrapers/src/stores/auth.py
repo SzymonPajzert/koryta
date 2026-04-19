@@ -7,7 +7,10 @@ import urllib.parse
 import webbrowser
 
 
+# TODO this function doesn't work
 def authenticate_user(endpoint_url: str) -> str:
+    raise ValueError("Not implemented")
+
     auth_port = 8085
     stop_event = threading.Event()
     server_thread = threading.Thread(
@@ -15,7 +18,7 @@ def authenticate_user(endpoint_url: str) -> str:
     )
     server_thread.start()
 
-    auth_url = f"{endpoint_url}/auth/login?redirect=http://localhost:{auth_port}"
+    auth_url = f"{endpoint_url}/login?redirect=http://localhost:{auth_port}"
     print(f"Opening browser for authentication: {auth_url}", file=sys.stderr)
     webbrowser.open(auth_url)
 

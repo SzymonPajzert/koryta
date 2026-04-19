@@ -86,15 +86,21 @@ class Uploader:
             "Authorization": f"Bearer {token}",
         }
 
-    def submit_payload(self, url, payload, fail=True):
+    def submit_payload(self, url, payload, fail=True, verbose=False):
         print(
             f"Uploading {payload['name']}... to {url}",
             end=" ",
             file=sys.stderr,
         )
+        cleaned_payload = {k: v for k, v in payload.items() if v is not None}
+        request = json.dumps(cleaned_payload, cls=NumpyEncoder)
+        if verbose:
+            print(request, file=sys.stderr)
+            print(payload, file=sys.stderr)
+            print(cleaned_payload, file=sys.stderr)
         resp = requests.post(
             url,
-            data=json.dumps(payload, cls=NumpyEncoder),
+            data=request,
             headers=self.headers,
         )
         if resp.status_code in [200, 201]:
@@ -134,6 +140,9 @@ class Uploader:
         self.success_count = 0
         self.total = len(entities)
         for idx, payload in enumerate(entities):
+            if self.args.limit is not None and idx >= self.args.limit:
+                print(f"Reached limit {self.args.limit}")
+                break
             time.sleep(0.3)
             name = payload.get("name", None) if payload is not None else None
             if payload is None or name is None:

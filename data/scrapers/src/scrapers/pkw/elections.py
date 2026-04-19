@@ -44,6 +44,6 @@ committee_to_party = {
     "koalicyjny komitet wyborczy sld+sdpl+pd+up lewica i demokraci": "SLD",
     "komitet wyborczy nowa prawica — janusza korwin-mikke": "Konfederacja",
     "kkw lewica": "SLD",
-    "kww konfederacja i bezpartyjni samorządowcy": "Konfederacja",
+    # "kww konfederacja i bezpartyjni samorządowcy": "Konfederacja",
     "kw platforma obywatelska rzeczypospolitej polskiej": "PO",
 }

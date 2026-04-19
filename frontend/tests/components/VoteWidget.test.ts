@@ -5,6 +5,7 @@ import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import { ref } from "vue";
+import type { Mock } from "vitest";
 
 const vuetify = createVuetify({
   components,
@@ -39,7 +40,7 @@ vi.mock("vue-router", () => ({
 }));
 
 describe("VoteWidget", () => {
-  let mockFetch: any;
+  let mockFetch: Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -63,7 +64,7 @@ describe("VoteWidget", () => {
             quality: { total: 0 },
           },
           ...entityProps,
-        } as any,
+        } as import("~~/shared/model").Node,
       },
       global: {
         plugins: [vuetify],

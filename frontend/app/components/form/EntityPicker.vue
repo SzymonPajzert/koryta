@@ -31,8 +31,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useEntityFiltering } from "@/composables/useEntityFiltering";
-
+import { useEntitiesFiltering } from "@/composables/entity";
+import { authFetch } from "~/composables/auth";
 import type { NodeType, Link, Person, Company, Article } from "~~/shared/model";
 
 defineOptions({
@@ -49,16 +49,14 @@ const model = defineModel<Link<NodeType> | undefined>();
 
 const search = ref("");
 
-const { authFetch } = useAuthState();
-
 const { data: response, refresh } = authFetch<{
   entities: Record<string, Person | Company | Article>;
-}>(`/api/nodes/${props.entity}`, {
+}>(`/api/nodes?type=${props.entity}`, {
   lazy: true,
 });
 
 const entities = computed(() => response.value?.entities);
-const filteredEntities = useEntityFiltering(entities);
+const filteredEntities = useEntitiesFiltering(entities);
 
 const entitiesList = computed(() => {
   const ents = filteredEntities.value ?? {};

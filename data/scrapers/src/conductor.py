@@ -153,8 +153,8 @@ def setup_context(
         con=duckdb.connect(),
         utils=UtilsImpl(),
         web=WebImpl(),
-        nlp=NLPImpl(),
         crawl_queue=crawl_queue,
+        nlp=NLPImpl(),
         refresh_policy=policy,
     )
 

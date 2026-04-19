@@ -23,26 +23,36 @@ def test_extract_by_krs():
             "name": "Parent",
             "children": ["0000000002", "0000000004"],
             "parents": [],
+            "teryt_code": "1400",
         },
         {
             "krs": "0000000002",
             "name": "Child1",
             "children": ["0000000003"],
             "parents": ["0000000001"],
+            "teryt_code": "1400",
         },
         {
             "krs": "0000000003",
             "name": "GrandChild1",
             "children": [],
             "parents": ["0000000002"],
+            "teryt_code": "1400",
         },
         {
             "krs": "0000000004",
             "name": "Child2",
             "children": [],
             "parents": ["0000000001"],
+            "teryt_code": "1400",
         },
-        {"krs": "0000000099", "name": "Other", "children": [], "parents": []},
+        {
+            "krs": "0000000099",
+            "name": "Other",
+            "children": [],
+            "parents": [],
+            "teryt_code": "9900",
+        },
     ]
 
     # Times for 2024 and 2025 in ms
@@ -60,7 +70,12 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000001"}],
-            "elections": [],
+            "elections": [
+                {
+                    "teryt_powiat": [],
+                    "teryt_wojewodztwo": ["1400"],
+                }
+            ],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
@@ -78,7 +93,12 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000002"}],
-            "elections": [],
+            "elections": [
+                {
+                    "teryt_powiat": [],
+                    "teryt_wojewodztwo": ["1400"],
+                }
+            ],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
@@ -94,7 +114,12 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000003"}],
-            "elections": [],
+            "elections": [
+                {
+                    "teryt_powiat": [],
+                    "teryt_wojewodztwo": ["1400"],
+                }
+            ],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
@@ -110,7 +135,12 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000004"}],
-            "elections": [],
+            "elections": [
+                {
+                    "teryt_powiat": [],
+                    "teryt_wojewodztwo": ["1400"],
+                }
+            ],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
@@ -126,7 +156,12 @@ def test_extract_by_krs():
             "first_employed": ts_2024,
             "last_employed": ts_2025,
             "employment": [{"employed_krs": "0000000099"}],
-            "elections": [],
+            "elections": [
+                {
+                    "teryt_powiat": [],
+                    "teryt_wojewodztwo": ["1400"],
+                }
+            ],
             "teryt_wojewodztwo": [],
             "overall_score": 20,
             "unique_chance": 0.0,
@@ -171,7 +206,8 @@ def test_extract_by_krs():
     # 3. Inject args
     class MockArgs:
         krs = "0000000001"
-        region = None
+        region = "14"
+        approved = False
 
     extract.args = MockArgs()
 

@@ -91,19 +91,23 @@ const router = useRouter();
 const route = useRoute();
 
 const { redirect, reason } = route.query;
+const {
+  login: authLogin,
+  register: authRegister,
+  logout,
+  idToken,
+} = useAuthState();
 
 const user = ref<User | null>();
 onAuthStateChanged(auth, (userIn) => {
   user.value = userIn;
   if (userIn) {
-    console.log("User logged in:", userIn.uid, userIn.email);
+    console.log("User logged in:", userIn.uid, idToken.value, userIn.email);
     set(dbRef(db, `user/${userIn.uid}/displayName`), userIn.displayName);
     set(dbRef(db, `user/${userIn.uid}/email`), userIn.email);
     set(dbRef(db, `user/${userIn.uid}/photoURL`), userIn.photoURL);
   }
 });
-
-const { login: authLogin, register: authRegister, logout } = useAuthState();
 
 const logoutForced = async () => {
   await logout();

@@ -13,26 +13,23 @@
       v-if="mdAndUp"
       style="cursor: pointer"
       @click="$router.push('/')"
-      >koryta.pl</v-app-bar-title
     >
+      koryta.pl
+    </v-app-bar-title>
     <v-spacer />
-    <omni-search />
+    <omni-search v-if="!route?.meta.hideSearch" />
     <v-spacer />
 
     <template #append>
-      <v-btn icon :to="{ path: '/lista', query: safeQuery }"
-        ><v-icon>mdi-format-list-bulleted-type</v-icon></v-btn
+      <v-btn v-if="mdAndUp" text to="/o-nas">O nas</v-btn>
+      <v-btn v-if="mdAndUp" text to="/pomoc">Wesprzyj</v-btn>
+      <v-btn
+        v-if="mdAndUp"
+        text
+        href="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
+        target="_blank"
+        >Dołącz</v-btn
       >
-      <!-- TODO reenable -->
-      <!-- <v-btn icon :to="{ path: '/graf', query: { miejsce: safeQuery.miejsce } }"
-        ><v-icon>mdi-graph-outline</v-icon></v-btn
-      > -->
-      <v-btn :icon="!mdAndUp" :to="user ? '/edit/node/new' : '/login'">
-        <v-icon :start="mdAndUp">mdi-plus</v-icon>
-        <!-- This span will be hidden on 'sm' and smaller screens -->
-        <span class="d-none d-md-inline">{{ user ? "Dodaj" : "Działaj" }}</span>
-      </v-btn>
-      <v-btn v-if="mdAndUp" text to="/zrodla">Źródła</v-btn>
       <v-avatar
         v-if="user && pictureURL"
         :image="pictureURL"
@@ -42,13 +39,14 @@
       <v-btn v-if="user && !pictureURL" icon to="/profil">
         <v-icon>mdi-account</v-icon>
       </v-btn>
-      <v-btn v-if="!user" icon to="/login">
-        <v-icon>mdi-account</v-icon>
+      <v-btn v-if="!user" :icon="!mdAndUp" to="/login">
+        <v-icon v-if="!mdAndUp">mdi-account</v-icon>
+        <span class="d-none d-md-inline">Zaloguj się</span>
       </v-btn>
       <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
     </template>
   </v-app-bar>
-  <v-main>
+  <v-main class="d-flex flex-column">
     <v-toolbar v-if="user" density="compact" color="primary">
       <v-spacer />
       <v-menu>
@@ -104,17 +102,27 @@
         href="https://github.com/users/SzymonPajzert/projects/2/views/3"
         target="_blank"
       >
-        Zgłoś problem
+        Nowy bug w GitHubie
+      </v-btn>
+      <v-btn
+        v-if="affineLink"
+        prepend-icon="mdi-lightning-bolt"
+        variant="text"
+        :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
+        target="_blank"
+      >
+        Dyskusja w affine
       </v-btn>
       <v-spacer icon />
     </v-toolbar>
     <v-container
-      class="fill-height position-relative"
+      class="position-relative fill-height"
       :max-width="maxWidth"
       :style="{ padding: rootPadding }"
     >
       <NuxtPage />
     </v-container>
+    <HomeAppFooter class="mt-auto w-100" />
   </v-main>
 </template>
 
@@ -127,8 +135,10 @@ const { mdAndUp } = useDisplay();
 const { user, userConfig, logout } = useAuthState();
 const router = useRouter();
 const route = useRoute();
-const safeQuery = computed(() => route?.query || {});
-const maxWidth = computed(() => (route?.meta?.fullWidth ? "none" : 900));
+const maxWidth = computed(() =>
+  route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 900),
+);
 const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
+const affineLink = computed(() => route?.meta?.affineLink);
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
