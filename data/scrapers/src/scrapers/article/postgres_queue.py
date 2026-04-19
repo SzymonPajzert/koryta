@@ -182,7 +182,7 @@ class PostgresCrawlQueue(CrawlQueue):
                 logger.info("No blocked domains to load.")
 
     def get(
-        self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
+        self, worker_id: str, max_retries: int = 3, timeout_seconds: float = 60
     ) -> CrawlQueueItem | None:
         """Atomically select and lock a URL for crawling.
 
