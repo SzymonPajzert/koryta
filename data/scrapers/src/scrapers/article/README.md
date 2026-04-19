@@ -5,14 +5,14 @@ Distributed web crawler for discovering and downloading news articles.
 ## Module structure
 
 - `crawler.py` - Crawl business logic: HTTP requests, link extraction, rate limiting, main loop
-- `postgress_queue.py` - Implementation of CrawlerQueue backed by postgress
+- `postgres_queue.py` - Implementation of CrawlerQueue backed by postgress
 - `scoring.py` - URL priority scoring based on keyword relevance
 - `parse.py` - HTML article content extraction (title, date, body text)
 
 ## DB setup
 
-You need postgress locally, you also need to setup a user. Default credentials are as below. 
-If your credentials are different, you should put use following env vars:
+You need postgres locally, you also need to setup a user. Default credentials are as below. 
+If your credentials are different, you can use following env vars:
 
 ```bash
 export POSTGRES_HOST='localhost'

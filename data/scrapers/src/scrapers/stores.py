@@ -9,7 +9,7 @@ import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, List, Literal, Union, overload
+from typing import TYPE_CHECKING, Any, Callable, List, Literal, NewType, Union, overload
 
 import numpy as np
 import pandas as pd
@@ -36,6 +36,7 @@ class Extractor(metaclass=ABCMeta):
 
 
 type Formats = Literal["jsonl", "csv", "parquet"]
+Priority = NewType("Priority", int)
 
 
 class File(metaclass=ABCMeta):
@@ -304,7 +305,13 @@ class DoneUrl:
 @dataclass(frozen=True)
 class NewUrl:
     url: str
-    priority: int
+    priority: Priority
+
+    @classmethod
+    def create(cls, url: str, priority: int) -> "NewUrl":
+        if not 0 <= priority <= 100:
+            raise ValueError(f"Priority must be 0-100, got {priority}")
+        return cls(url=url, priority=Priority(priority))
 
 
 @dataclass(frozen=True)

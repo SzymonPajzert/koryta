@@ -5,9 +5,6 @@ explicit connection parameters (no os.getenv).
 """
 
 import logging
-import re
-import time
-from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
@@ -237,8 +234,8 @@ class PostgresCrawlQueue(CrawlQueue):
     def mark_error(self, uid: str, error: str) -> None:
         """Record an error and increment retries."""
         self.pg.execute(
-            "UPDATE website_index SET num_retries = num_retries + 1, "
-            "errors = array_append(errors, %s), "
+            "UPDATE website_index SET num_retries = COALESCE(num_retries, 0) + 1, "
+            "errors = array_append(COALESCE(errors, '{}'::text[]), %s), "
             "locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
             [error, uid],
         )
@@ -259,9 +256,7 @@ class PostgresCrawlQueue(CrawlQueue):
         rows: list[tuple[str, int, datetime]] = []
         for new_url in urls:
             url = new_url.url
-            priority = new_url.priority
-            if not 0 <= priority <= 100:
-                raise ValueError(f"Priority must be 0-100, got {priority}")
+            priority = int(new_url.priority)
             normalized = self._normalize_url(url)
             rows.append((normalized, priority, now))
         self._insert_urls(rows)

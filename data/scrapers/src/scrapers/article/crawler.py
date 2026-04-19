@@ -14,7 +14,7 @@ from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
-from scrapers.stores import CloudStorage, Context, DataRef, LocalFile
+from scrapers.stores import CloudStorage, Context, DataRef, LocalFile, NewUrl, Priority
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
@@ -134,7 +134,7 @@ def crawl_url(
             )
 
         storage_path = _upload_response(ctx, parsed_url, response, options)
-        discovered_urls = _extract_urls(ctx, parsed_url, response)
+        discovered_urls = _extract_urls(ctx, response)
 
         return CrawlResult(
             storage_path=storage_path,
@@ -147,7 +147,6 @@ def crawl_url(
 
 def _extract_urls(
     ctx: Context,
-    parsed: NormalizedParse,
     response: requests.Response,
 ) -> set[str]:
     discovered = set()
@@ -164,10 +163,18 @@ def _extract_urls(
                 continue
             if any(
                 link.startswith(p)
-                for p in ("mailto", "url", "tel", "sms", "ftp", "javascript", "data")
+                for p in (
+                    "mailto:",
+                    "url:",
+                    "tel:",
+                    "sms:",
+                    "ftp:",
+                    "javascript:",
+                    "data:",
+                )
             ):
                 continue
-            absolute_link = ctx.utils.join_url(parsed.domain, link)
+            absolute_link = ctx.utils.join_url(response.url, link)
             absolute_link = absolute_link.split("#")[0]
             absolute_link = absolute_link.split("?")[0]
             absolute_link = absolute_link.rstrip("/")
@@ -176,10 +183,10 @@ def _extract_urls(
     return discovered
 
 
-def _priority_for_url(options: CrawlOptions, url: str) -> int:
+def _priority_for_url(options: CrawlOptions, url: str) -> Priority:
     scorer = get_scoring_function(options.url_scoring_function)
     score = scorer(url)
-    return max(0, min(100, 100 - score))
+    return Priority(max(0, min(100, 100 - score)))
 
 
 def run_crawler(ctx: Context, options: CrawlOptions) -> None:
@@ -199,12 +206,16 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
             logging.info("Closing crawl queue. Nothing more to do.")
             return
 
-        uid, url = entry
+        uid = entry.uid
+        url = entry.url
         parsed_url = NormalizedParse.parse(url)
         result = crawl_url(ctx, parsed_url, options)
 
         if result.hit_rate_limit:
-            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url})")
+            # We intentionally do not release the url in db with queue.release
+            # because we have a timeout mechanism that will make the link available
+            # anyway, and we because we hit rate limit, we can rely on it
+            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
         elif result.error:
             logging.error(
                 f"[{result.response_duration_s:.2f}s] "
@@ -219,7 +230,7 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
             queue.mark_done(uid, result.storage_path)
             queue.put(
                 [
-                    (url, _priority_for_url(options, url))
+                    NewUrl(url, _priority_for_url(options, url))
                     for url in result.discovered_urls
                 ]
             )

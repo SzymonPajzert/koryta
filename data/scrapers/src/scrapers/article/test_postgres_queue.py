@@ -37,8 +37,8 @@ def db(postgresql) -> PostgresCrawlQueue:
 def test_put_populates_urls(db: PostgresCrawlQueue):
     db.put(
         [
-            NewUrl("https://example.com", 0),
-            NewUrl("https://example.org", 0),
+            NewUrl.create("https://example.com", 0),
+            NewUrl.create("https://example.org", 0),
         ]
     )
     count = db.pg.fetchone("SELECT COUNT(*) FROM website_index;")[0]
@@ -48,8 +48,8 @@ def test_put_populates_urls(db: PostgresCrawlQueue):
 def test_get_skips_blocked(db: PostgresCrawlQueue):
     db.put(
         [
-            NewUrl("https://blocked.test/a", 0),
-            NewUrl("https://ok.test/b", 0),
+            NewUrl.create("https://blocked.test/a", 0),
+            NewUrl.create("https://ok.test/b", 0),
         ]
     )
     db.add_blocked_domains([BlockedDomain("blocked.test", "testing")])
@@ -69,7 +69,7 @@ def test_load_blocked_domains_upserts(db: PostgresCrawlQueue):
 
 
 def test_mark_done_and_get_pages(db: PostgresCrawlQueue):
-    db.put([NewUrl("https://example.com/a", 0)])
+    db.put([NewUrl.create("https://example.com/a", 0)])
     uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
     db.mark_done(uid, "s3://bucket/a")
     rows = db.get_done_urls(limit=5)

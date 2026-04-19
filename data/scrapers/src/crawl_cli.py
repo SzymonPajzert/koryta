@@ -13,7 +13,8 @@ from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
 )
-from scrapers.article.postgres_queue import PostgresCrawlQueue
+from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
+from scrapers.stores import BlockedDomain, NewUrl
 
 
 def _build_parser() -> ArgumentParser:
@@ -79,28 +80,28 @@ def _load_seed_urls(path: Path) -> list[str]:
     return urls
 
 
-def _load_blocked_domains(path: Path) -> list[tuple[str, str]]:
+def _load_blocked_domains(path: Path) -> list[BlockedDomain]:
     fieldnames, rows = _read_csv_rows(path)
     expected = ["Domena", "Powód"]
     if fieldnames != expected:
         raise ValueError(
             f"{path} must have columns {expected}. Got: {fieldnames}"
         )
-    blocked = []
+    blocked: list[BlockedDomain] = []
     for row in rows:
         domain = row.get("Domena", "").strip()
         reason = row.get("Powód", "").strip()
         if domain:
-            blocked.append((domain, reason))
+            blocked.append(BlockedDomain(domain, reason))
     if not blocked:
         raise ValueError(f"{path} has no blocked domains to append.")
     return blocked
 
 
-def _build_seed_rows(urls: list[str]) -> list[tuple[str, int]]:
-    rows = []
+def _build_seed_rows(urls: list[str]) -> list[NewUrl]:
+    rows: list[NewUrl] = []
     for url in urls:
-        rows.append((url, 0))
+        rows.append(NewUrl.create(url, 0))
     return rows
 
 
@@ -121,13 +122,13 @@ def main() -> None:
     options = _build_options(args)
     logging.info("Running crawler with options: %s", options)
 
-    queue = PostgresCrawlQueue.from_env(
-        host=os.getenv("POSTGRESS_HOST", "localhost"),
+    pg_client = PostgresClient.from_env(
+        host=os.getenv("POSTGRES_HOST", "localhost"),
         database=os.getenv("POSTGRES_DB", "crawler_db"),
         user=os.getenv("POSTGRES_USER", "crawler_user"),
-        password=os.getenv("POSTGRESS_PASSWORD", "crawler_password"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        password=os.getenv("POSTGRES_PASSWORD", "crawler_password"),
     )
+    queue = PostgresCrawlQueue(pg_client)
     logging.info("Initializing crawling queue")
 
     if args.reset:
