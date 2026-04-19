@@ -262,6 +262,7 @@ forbidden_modules = [
 ]
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.interesting",
+    "scrapers.article.test_postgres_queue -> os",
     "entities.util -> urllib",
     "scrapers.stores -> io",
 ]

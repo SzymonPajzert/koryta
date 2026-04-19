@@ -326,7 +326,7 @@ class CrawlQueue(metaclass=ABCMeta):
 
     @abstractmethod
     def get(
-        self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
+        self, worker_id: str, max_retries: int = 3, timeout_seconds: float = 60
     ) -> CrawlQueueItem | None:
         """Atomically claim a URL for processing.
 
