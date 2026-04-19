@@ -9,7 +9,7 @@ import pytest
 from pytest_postgresql import factories  # type: ignore[import-not-found]
 
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
-from scrapers.stores import DoneUrl
+from scrapers.stores import BlockedDomain, DoneUrl, NewUrl
 
 postgresql_proc = factories.postgresql_proc()
 postgresql = factories.postgresql("postgresql_proc")
@@ -37,8 +37,8 @@ def db(postgresql) -> PostgresCrawlQueue:
 def test_put_populates_urls(db: PostgresCrawlQueue):
     db.put(
         [
-            ("https://example.com", 0),
-            ("https://example.org", 0),
+            NewUrl("https://example.com", 0),
+            NewUrl("https://example.org", 0),
         ]
     )
     count = db.pg.fetchone("SELECT COUNT(*) FROM website_index;")[0]
@@ -48,11 +48,11 @@ def test_put_populates_urls(db: PostgresCrawlQueue):
 def test_get_skips_blocked(db: PostgresCrawlQueue):
     db.put(
         [
-            ("https://blocked.test/a", 0),
-            ("https://ok.test/b", 0),
+            NewUrl("https://blocked.test/a", 0),
+            NewUrl("https://ok.test/b", 0),
         ]
     )
-    db.add_blocked_domains([("blocked.test", "testing")])
+    db.add_blocked_domains([BlockedDomain("blocked.test", "testing")])
 
     row = db.get("worker-1", max_retries=3)
     assert row is not None
@@ -60,8 +60,8 @@ def test_get_skips_blocked(db: PostgresCrawlQueue):
 
 
 def test_load_blocked_domains_upserts(db: PostgresCrawlQueue):
-    db.add_blocked_domains([("blocked.test", "first")])
-    db.add_blocked_domains([("blocked.test", "second")])
+    db.add_blocked_domains([BlockedDomain("blocked.test", "first")])
+    db.add_blocked_domains([BlockedDomain("blocked.test", "second")])
     reason = db.pg.fetchone(
         "SELECT reason FROM blocked_domains WHERE domain = %s", ("blocked.test",)
     )[0]
@@ -69,7 +69,7 @@ def test_load_blocked_domains_upserts(db: PostgresCrawlQueue):
 
 
 def test_mark_done_and_get_pages(db: PostgresCrawlQueue):
-    db.put([("https://example.com/a", 0)])
+    db.put([NewUrl("https://example.com/a", 0)])
     uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
     db.mark_done(uid, "s3://bucket/a")
     rows = db.get_done_urls(limit=5)

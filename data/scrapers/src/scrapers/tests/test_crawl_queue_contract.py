@@ -2,11 +2,17 @@ import time
 
 import pytest
 
-from scrapers.stores import CrawlQueue, CrawlQueueItem, DoneUrl
+from scrapers.stores import (
+    BlockedDomain,
+    CrawlQueue,
+    CrawlQueueItem,
+    DoneUrl,
+    NewUrl,
+)
 
 
 def test_put_get_roundtrip(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/a", 10)])
+    crawl_queue.put([NewUrl("https://example.com/a", 10)])
     row = crawl_queue.get("worker-1", max_retries=1)
     assert row is not None
     assert isinstance(row, CrawlQueueItem)
@@ -16,7 +22,7 @@ def test_put_get_roundtrip(crawl_queue: CrawlQueue):
 
 
 def test_mark_done_removes_from_queue(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/a", 10)])
+    crawl_queue.put([NewUrl("https://example.com/a", 10)])
     row = crawl_queue.get("worker-1", max_retries=1)
     assert row is not None
     crawl_queue.mark_done(row.uid, None)
@@ -24,7 +30,7 @@ def test_mark_done_removes_from_queue(crawl_queue: CrawlQueue):
 
 
 def test_mark_error_retries_until_max(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/a", 10)])
+    crawl_queue.put([NewUrl("https://example.com/a", 10)])
     row = crawl_queue.get("worker-1", max_retries=2)
     assert row is not None
     crawl_queue.mark_error(row.uid, "boom")
@@ -37,7 +43,7 @@ def test_mark_error_retries_until_max(crawl_queue: CrawlQueue):
 
 
 def test_release_allows_reget(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/a", 10)])
+    crawl_queue.put([NewUrl("https://example.com/a", 10)])
     row = crawl_queue.get("worker-1", max_retries=1)
     assert row is not None
     crawl_queue.release(row.uid)
@@ -47,14 +53,14 @@ def test_release_allows_reget(crawl_queue: CrawlQueue):
 
 def test_put_rejects_out_of_range_priority(crawl_queue: CrawlQueue):
     with pytest.raises(ValueError):
-        crawl_queue.put([("https://example.com/a", 101)])
+        crawl_queue.put([NewUrl("https://example.com/a", 101)])
 
 
 def test_priority_affects_order(crawl_queue: CrawlQueue):
     crawl_queue.put(
         [
-            ("https://example.com/low", 5),
-            ("https://example.com/high", 80),
+            NewUrl("https://example.com/low", 5),
+            NewUrl("https://example.com/high", 80),
         ]
     )
     first = crawl_queue.get("worker-1", max_retries=1)
@@ -65,11 +71,11 @@ def test_priority_affects_order(crawl_queue: CrawlQueue):
 
 
 def test_blocked_domains_are_skipped(crawl_queue: CrawlQueue):
-    crawl_queue.add_blocked_domains([("blocked.test", "nope")])
+    crawl_queue.add_blocked_domains([BlockedDomain("blocked.test", "nope")])
     crawl_queue.put(
         [
-            ("https://blocked.test/a", 10),
-            ("https://ok.test/b", 20),
+            NewUrl("https://blocked.test/a", 10),
+            NewUrl("https://ok.test/b", 20),
         ]
     )
     row = crawl_queue.get("worker-1", max_retries=1)
@@ -78,13 +84,13 @@ def test_blocked_domains_are_skipped(crawl_queue: CrawlQueue):
 
 
 def test_blocked_domain_normalizes_scheme(crawl_queue: CrawlQueue):
-    crawl_queue.add_blocked_domains([("https://blocked.test", "nope")])
-    crawl_queue.put([("blocked.test/path", 10)])
+    crawl_queue.add_blocked_domains([BlockedDomain("https://blocked.test", "nope")])
+    crawl_queue.put([NewUrl("blocked.test/path", 10)])
     assert crawl_queue.get("worker-1", max_retries=1) is None
 
 
 def test_timeout_allows_reget(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/a", 10)])
+    crawl_queue.put([NewUrl("https://example.com/a", 10)])
     row = crawl_queue.get("worker-1", max_retries=1)
     assert row is not None
     row2 = crawl_queue.get("worker-2", max_retries=1, timeout_seconds=0)
@@ -92,7 +98,7 @@ def test_timeout_allows_reget(crawl_queue: CrawlQueue):
 
 
 def test_timeout_blocks_until_expired(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/locked", 10)])
+    crawl_queue.put([NewUrl("https://example.com/locked", 10)])
     row = crawl_queue.get("worker-1", max_retries=1)
     assert row is not None
 
@@ -110,7 +116,7 @@ def test_timeout_blocks_until_expired(crawl_queue: CrawlQueue):
 
 
 def test_late_mark_done_is_accepted_after_timeout(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/late", 10)])
+    crawl_queue.put([NewUrl("https://example.com/late", 10)])
     timeout_seconds: int = 0.1
     row = crawl_queue.get("worker-1", max_retries=1, timeout_seconds=timeout_seconds)
     assert row is not None
@@ -134,8 +140,8 @@ def test_late_mark_done_is_accepted_after_timeout(crawl_queue: CrawlQueue):
 
 
 def test_put_is_idempotent(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/a", 10)])
-    crawl_queue.put([("https://example.com/a", 20)])
+    crawl_queue.put([NewUrl("https://example.com/a", 10)])
+    crawl_queue.put([NewUrl("https://example.com/a", 20)])
     row1 = crawl_queue.get("worker-1", max_retries=1)
     row2 = crawl_queue.get("worker-2", max_retries=1)
     assert row1 is not None
@@ -146,8 +152,8 @@ def test_put_is_idempotent(crawl_queue: CrawlQueue):
 def test_reprioritize_updates_order(crawl_queue: CrawlQueue):
     crawl_queue.put(
         [
-            ("https://example.com/low", 10),
-            ("https://example.com/high", 90),
+            NewUrl("https://example.com/low", 10),
+            NewUrl("https://example.com/high", 90),
         ]
     )
     crawl_queue.reprioritize(lambda url: 1 if "high" in url else 99)
@@ -159,7 +165,7 @@ def test_reprioritize_updates_order(crawl_queue: CrawlQueue):
 
 
 def test_get_done_urls_returns_done(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/a", 10)])
+    crawl_queue.put([NewUrl("https://example.com/a", 10)])
     row = crawl_queue.get("worker-1", max_retries=1)
     assert row is not None
     crawl_queue.mark_done(row.uid, "s3://bucket/a")
@@ -168,7 +174,7 @@ def test_get_done_urls_returns_done(crawl_queue: CrawlQueue):
 
 
 def test_reset_clears_queue(crawl_queue: CrawlQueue):
-    crawl_queue.put([("https://example.com/reset", 10)])
+    crawl_queue.put([NewUrl("https://example.com/reset", 10)])
     assert crawl_queue.get("worker-1", max_retries=1) is not None
     crawl_queue.reset()
     assert crawl_queue.get("worker-1", max_retries=1) is None

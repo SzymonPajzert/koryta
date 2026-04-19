@@ -14,7 +14,13 @@ import psycopg
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
-from scrapers.stores import CrawlQueue, CrawlQueueItem, DoneUrl
+from scrapers.stores import (
+    BlockedDomain,
+    CrawlQueue,
+    CrawlQueueItem,
+    DoneUrl,
+    NewUrl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,11 +130,11 @@ class PostgresCrawlQueue(CrawlQueue):
         """Drop and recreate queue tables so the queue is empty."""
         self._init_tables(reset=True)
 
-    def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
+    def add_blocked_domains(self, rows: list[BlockedDomain]) -> None:
         """Create blocked_domains table and upsert rows.
 
         Args:
-            rows: List of (domain, reason) tuples (CSV parsing done by caller).
+            rows: List of blocked domains to upsert.
         """
         logger.info("Loading blocked domains...")
         with self.pg.transaction() as transaction:
@@ -142,8 +148,8 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             if rows:
                 normalized = [
-                    (self._normalize_url(domain), reason)
-                    for domain, reason in rows
+                    (self._normalize_url(row.domain), row.reason)
+                    for row in rows
                 ]
                 transaction.executemany(
                     "INSERT INTO blocked_domains (domain, reason) VALUES (%s, %s) "
@@ -224,13 +230,15 @@ class PostgresCrawlQueue(CrawlQueue):
             [uid],
         )
 
-    def put(self, urls: list[tuple[str, int]]) -> None:
+    def put(self, urls: list[NewUrl]) -> None:
         """Insert/enqueue URLs (idempotent)."""
         if not urls:
             return
         now = datetime.now(warsaw_tz)
         rows: list[tuple[str, int, datetime]] = []
-        for url, priority in urls:
+        for new_url in urls:
+            url = new_url.url
+            priority = new_url.priority
             if not 0 <= priority <= 100:
                 raise ValueError(f"Priority must be 0-100, got {priority}")
             normalized = self._normalize_url(url)

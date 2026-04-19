@@ -301,14 +301,26 @@ class DoneUrl:
     storage_path: str
 
 
+@dataclass(frozen=True)
+class NewUrl:
+    url: str
+    priority: int
+
+
+@dataclass(frozen=True)
+class BlockedDomain:
+    domain: str
+    reason: str
+
+
 class CrawlQueue(metaclass=ABCMeta):
     """Abstract interface for crawler URL queue."""
 
     @abstractmethod
-    def put(self, urls: list[tuple[str, int]]) -> None:
+    def put(self, urls: list[NewUrl]) -> None:
         """Insert/enqueue URLs (idempotent).
 
-        Each entry is (url, priority) with priority in [0, 100].
+        Each entry contains a URL and its priority in [0, 100].
         """
         raise NotImplementedError()
 
@@ -341,8 +353,8 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
-        """Add or update blocked domains (domain, reason).
+    def add_blocked_domains(self, rows: list[BlockedDomain]) -> None:
+        """Add or update blocked domains.
 
         Domain can be a bare hostname or URL; matching ignores scheme/www.
         """
