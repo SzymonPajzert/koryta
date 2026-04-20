@@ -23,6 +23,19 @@ export interface FetchNodesOptions {
   personParty?: string;
 }
 
+function logEventPath(func: string, args: string) {
+  try {
+    const event = useEvent();
+    console.info(
+      `[Firestore Read][${func}] [${func}(${args}) triggered by: ${event?.path || "unknown"}`,
+    );
+  } catch {
+    console.info(
+      `[Firestore Read][${func}] [${func}(${args}) triggered outside request context`,
+    );
+  }
+}
+
 export async function fetchNodes<N extends NodeType>(
   path: N,
   options: FetchNodesOptions = {},
@@ -35,6 +48,8 @@ export async function fetchNodes<N extends NodeType>(
   if (options.personParty) {
     query = query.where("parties", "array-contains", options.personParty);
   }
+
+  logEventPath("fetchNodes", path);
 
   if (nodeId) {
     const docRef = db.collection("nodes").doc(nodeId);
@@ -95,6 +110,7 @@ const electionConcreteDate: Record<string, string> = {
 
 export async function fetchEdges(): Promise<Edge[]> {
   const db = getFirestore("koryta-pl");
+  logEventPath("fetchEdges", "");
   const edges = (await db.collection("edges").get()).docs.map((doc) => {
     const data = doc.data();
 
