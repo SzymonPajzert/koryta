@@ -77,6 +77,7 @@ export default defineNuxtConfig({
     "@sentry/nuxt/module",
     "@nuxt/test-utils/module",
     "@nuxtjs/sitemap",
+    "@nuxtjs/robots",
   ],
 
   site: {

@@ -3,6 +3,10 @@ import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { getAuth } from "firebase/auth";
 
+definePageMeta({
+  robots: false,
+});
+
 const route = useRoute();
 const router = useRouter();
 const status = ref("Checking authentication...");
