@@ -41,6 +41,8 @@
 <script setup lang="ts">
 import { parties } from "~~/shared/misc";
 import { authFetch } from "@/composables/auth";
+import { generateEntityUrl } from "~/composables/slugs";
+import type { NodeType } from "~~/shared/model";
 
 const { push, currentRoute } = useRouter();
 
@@ -133,7 +135,7 @@ const baseItems = computed<ListItem[]>(() => {
         content_id: item.id,
         content_type: "nodeGroup",
       },
-      path: `/entity/${itemType}/` + item.id,
+      path: generateEntityUrl(itemType, item.id, item.name),
     });
   });
 
@@ -185,6 +187,10 @@ watch(nodeGroupPicked, (value) => {
     path.startsWith("/entity/person/") ||
     path.startsWith("/entity/place/") ||
     path.startsWith("/entity/region/") ||
+    path.startsWith("/osoba/") ||
+    path.startsWith("/instytucja/") ||
+    path.startsWith("/region/") ||
+    path.startsWith("/artykul/") ||
     path.startsWith("/edit/");
   if (!allowedPath) {
     path = "/lista";
