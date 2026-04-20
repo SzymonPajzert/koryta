@@ -76,7 +76,16 @@ export default defineNuxtConfig({
     "vuetify-nuxt-module",
     "@sentry/nuxt/module",
     "@nuxt/test-utils/module",
+    "@nuxtjs/sitemap",
   ],
+
+  site: {
+    url: isLocal ? "http://localhost:3000" : "https://koryta.pl",
+  },
+
+  sitemap: {
+    sources: ["/api/_sitemap-urls"],
+  },
 
   eslint: {
     checker: true,
