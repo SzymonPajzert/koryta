@@ -75,6 +75,7 @@ type ListItem = {
 };
 
 const { data: nodeGroups, refresh } = await authFetch("/api/graph/nodeGroups", {
+  key: "omnisearch-node-groups",
   lazy: true,
 });
 

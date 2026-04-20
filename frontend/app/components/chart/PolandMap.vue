@@ -7,6 +7,8 @@ import { authFetch } from "@/composables/auth";
 const hoveredDistrict = ref<Powiat | null>(null);
 
 const { data: nodeGroups } = await authFetch("/api/graph/nodeGroups", {
+  lazy: true,
+  key: "polandmap-node-groups",
   default: () => [],
 });
 
