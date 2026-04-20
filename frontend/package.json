@@ -57,6 +57,7 @@
     "firebase-functions": "^6.4.0",
     "nuxt": "^4.4.0",
     "nuxt-vuefire": "^1.1.0",
+    "sharp": "^0.34.5",
     "string-similarity": "^4.0.4",
     "v-network-graph": "^0.9.21",
     "vue": "^3.5.18",
