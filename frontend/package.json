@@ -30,7 +30,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:duplication": "jscpd app server --ignore app/coverage",
-    "quick-check": "npm run format; npm run format:check && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:e2e:prod"
+    "quick-check": "npm run format; npm run format:check && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:e2e:prod",
+    "quick-check:failsafe": "npm run format; npm run format:check; npm run test:ci; npm run typecheck; npx eslint; npm run check:duplication; npm run test:e2e:prod"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.4",
