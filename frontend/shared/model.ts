@@ -58,6 +58,13 @@ export function pageIsPublic(node: { revision_id?: unknown }) {
 
 export type NodeType = "person" | "place" | "article" | "record" | "region";
 
+export const nodeTypes: readonly NodeType[] = [
+  "person",
+  "place",
+  "region",
+  "article",
+] as const;
+
 export function nodeIcon(type: NodeType) {
   switch (type) {
     case "person":
