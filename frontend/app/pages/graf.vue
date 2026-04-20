@@ -12,5 +12,6 @@ definePageMeta({
   title: "Graf",
   isGraph: true,
   fullWidth: true,
+  robots: false,
 });
 </script>
