@@ -118,7 +118,7 @@ const baseItems = computed<ListItem[]>(() => {
 
   nodeGroups.value.slice(1).forEach((item) => {
     addedIds.add(item.id);
-    const itemType = item.type || "place";
+    const itemType = (item.type || "place") as NodeType;
 
     // Choose icon based on type
     let icon = "mdi-domain";
