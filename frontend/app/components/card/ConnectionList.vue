@@ -26,7 +26,9 @@ const { edges, title } = defineProps<{
   edges: EdgeNode[];
 }>();
 
-const { data: nodeGroups } = await authFetch("/api/graph/nodeGroups");
+const { data: nodeGroups } = await authFetch("/api/graph/nodeGroups", {
+  key: "connectionlist-node-groups",
+});
 
 const edgesSorted = computed(() => {
   const nodeGroupsSafe = nodeGroups.value

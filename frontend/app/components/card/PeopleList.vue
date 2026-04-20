@@ -79,7 +79,9 @@ import type { Powiat } from "~/composables/entity/regions";
 import type { PersonRich } from "~~/shared/model";
 
 const props = defineProps<{ region: Powiat | undefined }>();
-const { data: nodeGroups } = await authFetch("/api/graph/nodeGroups");
+const { data: nodeGroups } = await authFetch("/api/graph/nodeGroups", {
+  key: "peoplelist-node-groups",
+});
 
 function subtitle(person: Partial<PersonRich>) {
   if (person.experience) {
