@@ -74,7 +74,7 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { data: nodeGroups, refresh } = await authFetch("/api/graph/nodeGroups", {
+const { data: nodeGroups, refresh } = authFetch("/api/graph/nodeGroups", {
   key: "omnisearch-node-groups",
   lazy: true,
 });
