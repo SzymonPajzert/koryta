@@ -7,11 +7,13 @@
     <v-row max-width="1000" justify="center">
       <v-col cols="12" lg="6" md="12">
         <div class="d-flex align-columns">
-          <v-img
+          <NuxtImg
             class="mt-1 mb-6"
             width="120"
-            src="@/assets/logo_small.png"
-            contain
+            src="/logo_small.png"
+            style="object-fit: contain"
+            alt="Koryta.pl"
+            loading="lazy"
           />
 
           <p class="ml-4">

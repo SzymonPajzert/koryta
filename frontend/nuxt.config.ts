@@ -78,6 +78,7 @@ export default defineNuxtConfig({
     "@nuxt/test-utils/module",
     "@nuxtjs/sitemap",
     "@nuxtjs/robots",
+    "@nuxt/image",
   ],
 
   site: {

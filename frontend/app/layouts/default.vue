@@ -1,14 +1,14 @@
 <template>
   <v-app-bar>
-    <v-img
+    <NuxtImg
       class="mx-2"
-      src="@/assets/logo_small.png"
+      src="/logo_small.png"
       width="40"
       height="40"
-      max-height="40"
-      max-width="40"
-      contain
-      style="cursor: pointer"
+      fetchpriority="high"
+      preload
+      style="cursor: pointer; object-fit: contain"
+      alt="Koryta.pl"
       @click="$router.push('/')"
     />
     <v-app-bar-title
