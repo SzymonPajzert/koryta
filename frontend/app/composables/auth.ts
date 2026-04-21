@@ -63,10 +63,13 @@ export function useAuthState() {
 
 export const authFetch = createUseFetch({
   onRequest: async function ({ options }) {
+    if (import.meta.server) {
+      return;
+    }
+
     const isAuthReady = useIsCurrentUserLoaded();
     const user = useCurrentUser();
-    // 1. If on the client and Firebase is still checking auth, PAUSE the request
-    if (import.meta.client && !isAuthReady.value) {
+    if (!isAuthReady.value) {
       await new Promise<void>((resolve) => {
         const unwatch = watch(
           isAuthReady,
