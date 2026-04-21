@@ -122,6 +122,7 @@ dependencies = [
 koryta = "koryta:main"
 koryta_uploader = "uploader:main"
 koryta_pipelines = "pipelines:main"
+koryta_scraper = "scraper:main"
 
 
 [build-system]
