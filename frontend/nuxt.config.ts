@@ -57,10 +57,6 @@ export default defineNuxtConfig({
     },
   ],
 
-  routeRules: {
-    "/": { prerender: true },
-  },
-
   runtimeConfig: {
     public: {
       isLocal,
