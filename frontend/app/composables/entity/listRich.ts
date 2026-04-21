@@ -16,7 +16,6 @@ export function useEntityListRich(
     {
       key: "rich-entities-edges",
       lazy: true,
-      server: false,
       default: () => [],
     },
   );
