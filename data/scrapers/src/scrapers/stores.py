@@ -201,7 +201,12 @@ class IO(metaclass=ABCMeta):
 
     # TODO remove this as well - it should just be a write_file
     @abstractmethod
-    def upload(self, source: Any, data: Any, content_type: str):
+    def upload(
+        self,
+        source: Any,
+        data: Any,
+        content_type: Literal["text/html", "application/json", "text/plain"],
+    ):
         """Uploads data to storage (e.g. GCS)."""
         raise NotImplementedError()
 
