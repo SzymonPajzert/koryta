@@ -1,10 +1,10 @@
 """PostgreSQL-backed crawl queue for the article crawler.
 
-All direct psycopg access is encapsulated here. The constructor takes
-explicit connection parameters (no os.getenv).
+All direct psycopg access is encapsulated here.
 """
 
 import logging
+import os
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
@@ -52,21 +52,13 @@ class PostgresClient:
         )
 
     @classmethod
-    def from_env(
-        cls,
-        *,
-        host: str = "localhost",
-        database: str = "crawler_db",
-        user: str = "crawler_user",
-        password: str | None = "crawler_password",
-        port: int = 5432,
-    ) -> "PostgresClient":
+    def from_env(cls) -> "PostgresClient":
         return cls(
-            host,
-            database,
-            user,
-            password,
-            port,
+            host=os.getenv("POSTGRES_HOST", "localhost"),
+            database=os.getenv("POSTGRES_DB", "crawler_db"),
+            user=os.getenv("POSTGRES_USER", "crawler_user"),
+            password=os.getenv("POSTGRES_PASSWORD", "crawler_password"),
+            port=int(os.getenv("POSTGRES_PORT", "5432")),
         )
 
     @contextmanager

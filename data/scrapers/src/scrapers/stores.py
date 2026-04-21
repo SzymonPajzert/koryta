@@ -307,11 +307,9 @@ class NewUrl:
     url: str
     priority: Priority
 
-    @classmethod
-    def create(cls, url: str, priority: int) -> "NewUrl":
-        if not 0 <= priority <= 100:
-            raise ValueError(f"Priority must be 0-100, got {priority}")
-        return cls(url=url, priority=Priority(priority))
+    def __post_init__(self) -> None:
+        if not 0 <= self.priority <= 100:
+            raise ValueError(f"Priority must be 0-100, got {self.priority}")
 
 
 @dataclass(frozen=True)

@@ -49,7 +49,7 @@ class CrawlResult:
     response_duration_s: float | None = None
 
 
-# Per each hostname we do on-worker rate limitng.
+# Per each hostname we do on-worker rate limiting.
 next_request_time: dict[str, float] = {}
 
 

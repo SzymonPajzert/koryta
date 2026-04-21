@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
-import os
 from argparse import ArgumentParser
 from pathlib import Path
 from uuid import uuid4
@@ -101,7 +100,7 @@ def _load_blocked_domains(path: Path) -> list[BlockedDomain]:
 def _build_seed_rows(urls: list[str]) -> list[NewUrl]:
     rows: list[NewUrl] = []
     for url in urls:
-        rows.append(NewUrl.create(url, 0))
+        rows.append(NewUrl(url, 0))
     return rows
 
 
@@ -122,12 +121,7 @@ def main() -> None:
     options = _build_options(args)
     logging.info("Running crawler with options: %s", options)
 
-    pg_client = PostgresClient.from_env(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        database=os.getenv("POSTGRES_DB", "crawler_db"),
-        user=os.getenv("POSTGRES_USER", "crawler_user"),
-        password=os.getenv("POSTGRES_PASSWORD", "crawler_password"),
-    )
+    pg_client = PostgresClient.from_env()
     queue = PostgresCrawlQueue(pg_client)
     logging.info("Initializing crawling queue")
 
