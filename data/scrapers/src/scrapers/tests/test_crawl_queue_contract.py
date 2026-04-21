@@ -8,6 +8,7 @@ from scrapers.stores import (
     CrawlQueueItem,
     DoneUrl,
     NewUrl,
+    Priority,
 )
 
 

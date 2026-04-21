@@ -9,7 +9,7 @@ import pytest
 from pytest_postgresql import factories  # type: ignore[import-not-found]
 
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
-from scrapers.stores import BlockedDomain, DoneUrl, NewUrl
+from scrapers.stores import BlockedDomain, DoneUrl, NewUrl, Priority
 
 postgresql_proc = factories.postgresql_proc()
 postgresql = factories.postgresql("postgresql_proc")

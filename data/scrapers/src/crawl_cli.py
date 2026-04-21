@@ -13,7 +13,7 @@ from scrapers.article.crawler import (
     run_crawler,
 )
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
-from scrapers.stores import BlockedDomain, NewUrl
+from scrapers.stores import BlockedDomain, NewUrl, Priority
 
 
 def _build_parser() -> ArgumentParser:

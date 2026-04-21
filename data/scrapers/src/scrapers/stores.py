@@ -305,7 +305,7 @@ class DoneUrl:
 @dataclass(frozen=True)
 class NewUrl:
     url: str
-    priority: Priority
+    priority: int
 
     def __post_init__(self) -> None:
         if not 0 <= self.priority <= 100:
