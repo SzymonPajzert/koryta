@@ -175,9 +175,13 @@ def process_pkw(ctx: Context, csv_headers, limit: int | None, year: str | None):
         print("🎉 Processing complete.")
 
 
-class PeoplePKW(Pipeline):
+class PeoplePKW(Pipeline[Person]):
     filename = "person_pkw"
     teryt: Teryt
+
+    @property
+    def output_class(self):
+        return Person
 
     def process(self, ctx: Context):
         assert self.teryt is not None
