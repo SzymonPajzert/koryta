@@ -98,7 +98,7 @@ function subtitle(person: Partial<PersonRich>) {
 }
 const { entities: places } = useEntities("place");
 const { entities: regions } = useEntities("region");
-const { people: peopleUnsorted, loading } = await useEntityListRich(
+const { people: peopleUnsorted, loading } = useEntityListRich(
   ref(undefined),
   computed(() => {
     if (!props.region) return undefined;
