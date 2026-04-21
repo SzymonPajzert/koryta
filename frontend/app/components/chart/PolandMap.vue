@@ -8,7 +8,6 @@ const hoveredDistrict = ref<Powiat | null>(null);
 
 const { data: nodeGroups } = authFetch("/api/graph/nodeGroups", {
   lazy: true,
-  server: false,
   key: "polandmap-node-groups",
   default: () => [],
 });

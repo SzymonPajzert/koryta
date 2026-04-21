@@ -82,7 +82,6 @@ const props = defineProps<{ region: Powiat | undefined }>();
 const { data: nodeGroups } = authFetch("/api/graph/nodeGroups", {
   key: "peoplelist-node-groups",
   lazy: true,
-  server: false,
   default: () => [],
 });
 
