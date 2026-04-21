@@ -20,8 +20,29 @@ class PeopleKMGP(Pipeline[Person]):
 
     people_pkw: PeoplePKW
 
+    @property
+    def output_class(self):
+        return Person
+
     def lookup_election(self, person_name: str, teryt: str) -> list[Election]:
-        return []
+        name_key = person_name.lower().strip()
+        matches = getattr(self, "pkw_index", {}).get(name_key, [])
+        elections = []
+        for pkw_person in matches:
+            pkw_teryt = pkw_person.teryt_candidacy
+            if not pkw_teryt:
+                continue
+
+            if pkw_teryt.startswith(teryt) or teryt.startswith(pkw_teryt):
+                elections.append(
+                    Election(
+                        election_type=pkw_person.election_type,
+                        committee=pkw_person.party or "",
+                        election_year=pkw_person.election_year,
+                        teryt=pkw_person.teryt_candidacy,
+                    )
+                )
+        return elections
 
     def lookup_companies(self, teryt: str, entity_name: str) -> list[Company]:
         return []
@@ -44,6 +65,25 @@ class PeopleKMGP(Pipeline[Person]):
                 )
 
     def process(self, ctx):
+        self.pkw_index: dict[str, list[Person]] = {}
+        for pkw_person in self.people_pkw.read_or_process_list(ctx):
+            if str(pkw_person.election_year) != "2024":
+                continue
+            if not pkw_person.first_name or not pkw_person.last_name:
+                continue
+
+            first = pkw_person.first_name.strip()
+            last = pkw_person.last_name.strip()
+            names_to_index = [f"{first} {last}".lower()]
+            if pkw_person.middle_name:
+                full_name = f"{first} {pkw_person.middle_name.strip()} {last}".lower()
+                names_to_index.append(full_name)
+
+            for n in names_to_index:
+                if n not in self.pkw_index:
+                    self.pkw_index[n] = []
+                self.pkw_index[n].append(pkw_person)
+
         for payload in self.list_people(ctx):
             ctx.io.output_entity(
                 Person(
