@@ -180,7 +180,7 @@ const company = computed<[string, string] | undefined>(() => {
   return undefined;
 });
 
-const { people: fetchedItems, loading } = await useEntityListRich(
+const { people: fetchedItems, loading } = useEntityListRich(
   company,
   region,
   places,
