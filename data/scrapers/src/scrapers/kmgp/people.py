@@ -53,6 +53,8 @@ class PeopleKMGP(Pipeline[Person]):
         ):
             blob = ctx.io.read_data(blob_ref)
             assert isinstance(blob_ref, DownloadableFile)
+            if "bir12" in blob_ref.url:
+                continue
             content = blob.read_string()
             j = json.loads(content)
 

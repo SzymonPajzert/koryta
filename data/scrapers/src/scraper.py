@@ -5,7 +5,7 @@ import time
 import requests
 
 from conductor import setup_context
-from scrapers.kmgp.kmgp import PeopleKMGP
+from scrapers.kmgp.people import PeopleKMGP
 
 
 def get_urls_to_scrape(ctx):
@@ -15,12 +15,13 @@ def get_urls_to_scrape(ctx):
         if payload.teryt:
             teryts.add(payload.teryt)
 
-    urls = [
-        "https://kazdymusigdziespracowac.pl/wp-json/kmgp-map/v1/employment-stats"
-    ]
+    urls = ["https://kazdymusigdziespracowac.pl/wp-json/kmgp-map/v1/employment-stats"]
     for teryt in sorted(teryts):
-        urls.append(f"https://kazdymusigdziespracowac.pl/wp-json/kmgp-map/v1/bir12?teryt={teryt}")
+        urls.append(
+            f"https://kazdymusigdziespracowac.pl/wp-json/kmgp-map/v1/bir12?teryt={teryt}"
+        )
     return urls
+
 
 def main():
     parser = argparse.ArgumentParser(
