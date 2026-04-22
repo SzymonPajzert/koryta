@@ -10,6 +10,12 @@ export type GraphOptions = {
   expandedNodes?: Ref<Set<string>>;
 };
 
+/**
+ * useGraph is a composable that fetches and processes graph data from the backend.
+ * It supports fetching a subgraph centered around a focus node with a specified maximum depth.
+ * @param opts
+ * @returns
+ */
 export function useGraph(opts: GraphOptions = {}) {
   const url = computed(() => {
     if (opts.focusNodeId) {
