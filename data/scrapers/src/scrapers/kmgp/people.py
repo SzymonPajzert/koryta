@@ -1,8 +1,11 @@
+import difflib
 import json
+import re
 import typing
 from dataclasses import dataclass
 
 from entities.composite import Company, Election, Person
+from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import CloudStorage, DownloadableFile, Pipeline
 
@@ -19,6 +22,7 @@ class PeopleKMGP(Pipeline[Person]):
     filename = "people_kmgp"
 
     people_pkw: PeoplePKW
+    companies_kmgp: CompaniesKMGP
 
     @property
     def output_class(self):
@@ -45,6 +49,45 @@ class PeopleKMGP(Pipeline[Person]):
         return elections
 
     def lookup_companies(self, teryt: str, entity_name: str) -> list[Company]:
+        if not entity_name:
+            return []
+
+        def normalize_text(text: str) -> str:
+            if not text:
+                return ""
+            t = text.lower()
+            t = re.sub(r"[^\w\s]", " ", t)
+            t = re.sub(r"\s+", " ", t).strip()
+            return t
+
+        ent_norm = normalize_text(entity_name)
+        ent_exact = entity_name.strip().lower()
+
+        # 1. Exact match (case insensitive)
+        key = (teryt, ent_exact)
+        krs = self.companies_index.get(key)
+        if krs:
+            return [Company(krs=krs)]
+
+        # 2. Fuzzy match
+        best_krs = None
+        best_score = 0.0
+
+        for (t, name), krs in self.companies_index.items():
+            name_norm = normalize_text(name)
+            score = difflib.SequenceMatcher(None, ent_norm, name_norm).ratio()
+
+            # Boost score if TERYT matches exactly
+            if t == teryt:
+                score += 0.1
+
+            if score > best_score:
+                best_score = score
+                best_krs = krs
+
+        if best_krs and best_score >= 0.75:
+            return [Company(krs=best_krs)]
+
         return []
 
     def list_people(self, ctx) -> typing.Iterator[Payload]:
@@ -85,6 +128,12 @@ class PeopleKMGP(Pipeline[Person]):
                 if n not in self.pkw_index:
                     self.pkw_index[n] = []
                 self.pkw_index[n].append(pkw_person)
+
+        self.companies_index: dict[tuple[str, str], str] = {}
+        for c in self.companies_kmgp.read_or_process_list(ctx):
+            if c.name and c.teryt_code:
+                key = (c.teryt_code, c.name.strip().lower())
+                self.companies_index[key] = c.krs
 
         for payload in self.list_people(ctx):
             ctx.io.output_entity(
