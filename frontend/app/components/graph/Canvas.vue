@@ -147,6 +147,7 @@ watch(
       configs.view.layoutHandler = simulationStore.newForceLayout();
     }
   },
+  { immediate: true },
 );
 
 watch(
