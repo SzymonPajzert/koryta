@@ -2,7 +2,7 @@ import pytest
 
 from conductor import setup_context
 from koryta import Pipeline
-from scrapers.kmgp.kmgp import PeopleKMGP
+from scrapers.kmgp.people import PeopleKMGP
 
 
 @pytest.fixture(scope="module")
