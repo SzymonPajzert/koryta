@@ -78,6 +78,16 @@
 </template>
 
 <script setup lang="ts">
+useSeoMeta({
+  title: "Największy, niezależny agregator koryciarstwa",
+  description:
+    "Jesteśmy największym, ogólnopolskim, niezależnym agregatorem koryciarstwa. Sprawdź którymi stanowiskami w publicznych spółkach podzielili się politycy.",
+  ogTitle: "Największy, niezależny agregator koryciarstwa",
+  ogDescription:
+    "Jesteśmy największym, ogólnopolskim i niezależnym agregatorem koryciarstwa. Sprawdź którymi stanowiskami w publicznych spółkach podzielili się politycy.",
+  ogImage: "/logo.png",
+});
+
 definePageMeta({
   affineLink: "7CDdAj6z8PUAFNWT-phhD",
   fullWidth: true,
