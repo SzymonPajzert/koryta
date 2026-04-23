@@ -1,82 +1,94 @@
 <template>
-  <div class="vote-widget d-flex align-center">
-    <span v-if="user" data-cy="user-logged-in" class="d-none" />
-    <div class="mr-4">
-      <div class="text-caption text-medium-emphasis mb-1">Ciekawe?</div>
-      <v-btn-group density="compact" rounded="pill" variant="outlined" divided>
-        <v-btn
-          :color="userVoteInteresting > 0 ? 'primary' : undefined"
-          :variant="userVoteInteresting > 0 ? 'flat' : 'outlined'"
-          size="small"
-          prepend-icon="mdi-thumb-up"
-          @click="vote('interesting', 1)"
+  <client-only>
+    <div class="vote-widget d-flex align-center">
+      <span v-if="user" data-cy="user-logged-in" class="d-none" />
+      <div class="mr-4">
+        <div class="text-caption text-medium-emphasis mb-1">Ciekawe?</div>
+        <v-btn-group
+          density="compact"
+          rounded="pill"
+          variant="outlined"
+          divided
         >
-          Tak
-        </v-btn>
-        <v-btn
-          :color="
-            userVoteInteresting > 0
-              ? 'primary'
-              : userVoteInteresting < 0
-                ? 'error'
-                : undefined
-          "
-          :disabled="true"
-          variant="flat"
-          size="small"
-        >
-          {{ userVoteInteresting }}
-        </v-btn>
-        <v-btn
-          :color="userVoteInteresting < 0 ? 'error' : undefined"
-          :variant="userVoteInteresting < 0 ? 'flat' : 'outlined'"
-          size="small"
-          prepend-icon="mdi-thumb-down"
-          @click="vote('interesting', -1)"
-        >
-          Nie
-        </v-btn>
-      </v-btn-group>
-    </div>
+          <v-btn
+            :color="userVoteInteresting > 0 ? 'primary' : undefined"
+            :variant="userVoteInteresting > 0 ? 'flat' : 'outlined'"
+            size="small"
+            prepend-icon="mdi-thumb-up"
+            @click="vote(interestingKey, 1)"
+          >
+            Tak
+          </v-btn>
+          <v-btn
+            :color="
+              userVoteInteresting > 0
+                ? 'primary'
+                : userVoteInteresting < 0
+                  ? 'error'
+                  : undefined
+            "
+            :disabled="true"
+            variant="flat"
+            size="small"
+          >
+            {{ totalInteresting }}
+          </v-btn>
+          <v-btn
+            :color="userVoteInteresting < 0 ? 'error' : undefined"
+            :variant="userVoteInteresting < 0 ? 'flat' : 'outlined'"
+            size="small"
+            prepend-icon="mdi-thumb-down"
+            @click="vote(interestingKey, -1)"
+          >
+            Nie
+          </v-btn>
+        </v-btn-group>
+      </div>
 
-    <div>
-      <div class="text-caption text-medium-emphasis mb-1">Jakość</div>
-      <v-btn-group density="compact" rounded="pill" variant="outlined" divided>
-        <v-btn
-          :color="userVoteQuality > 0 ? 'success' : undefined"
-          :variant="userVoteQuality > 0 ? 'flat' : 'outlined'"
-          size="small"
-          prepend-icon="mdi-check-circle"
-          @click="vote('quality', 1)"
+      <div>
+        <div class="text-caption text-medium-emphasis mb-1">Jakość</div>
+        <v-btn-group
+          density="compact"
+          rounded="pill"
+          variant="outlined"
+          divided
         >
-          Gotowe
-        </v-btn>
-        <v-btn
-          :color="
-            userVoteQuality > 0
-              ? 'success'
-              : userVoteQuality < 0
-                ? 'warning'
-                : undefined
-          "
-          :disabled="true"
-          variant="flat"
-          size="small"
-        >
-          {{ userVoteQuality }}
-        </v-btn>
-        <v-btn
-          :color="userVoteQuality < 0 ? 'warning' : undefined"
-          :variant="userVoteQuality < 0 ? 'flat' : 'outlined'"
-          size="small"
-          prepend-icon="mdi-alert-circle"
-          @click="vote('quality', -1)"
-        >
-          Popraw
-        </v-btn>
-      </v-btn-group>
+          <v-btn
+            :color="userVoteQuality > 0 ? 'success' : undefined"
+            :variant="userVoteQuality > 0 ? 'flat' : 'outlined'"
+            size="small"
+            prepend-icon="mdi-check-circle"
+            @click="vote(qualityKey, 1)"
+          >
+            Gotowe
+          </v-btn>
+          <v-btn
+            :color="
+              userVoteQuality > 0
+                ? 'success'
+                : userVoteQuality < 0
+                  ? 'warning'
+                  : undefined
+            "
+            :disabled="true"
+            variant="flat"
+            size="small"
+          >
+            {{ totalQuality }}
+          </v-btn>
+          <v-btn
+            :color="userVoteQuality < 0 ? 'warning' : undefined"
+            :variant="userVoteQuality < 0 ? 'flat' : 'outlined'"
+            size="small"
+            prepend-icon="mdi-alert-circle"
+            @click="vote(qualityKey, -1)"
+          >
+            Popraw
+          </v-btn>
+        </v-btn-group>
+      </div>
     </div>
-  </div>
+  </client-only>
 </template>
 
 <script setup lang="ts">
@@ -84,58 +96,44 @@ import { computed, reactive, ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthState } from "@/composables/auth";
 import type { Node, Edge, VoteCategory } from "~~/shared/model";
-import { getFirestore, collection, doc } from "firebase/firestore";
-import { useDocument, useFirebaseApp } from "vuefire";
+import { useVotes } from "~/composables/votes";
+import { ClientOnly } from "#components";
 
 const props = defineProps<{
   entity: Node | Edge;
   type: "node" | "edge";
-  id?: string;
+  id: string;
 }>();
 
-const { idToken, user } = useAuthState();
-
-const firebaseApp = useFirebaseApp();
-const db = getFirestore(firebaseApp, "koryta-pl");
+const { user } = useAuthState();
+const router = useRouter();
+const route = useRoute();
 
 const shouldSubscribe = ref(false);
 
-const docSource = computed(() => {
-  if (!shouldSubscribe.value) return null;
-  return doc(collection(db, props.type + "s"), props.id || props.entity.id);
+const { userCategoryVotes, nodeCategoryVotes, castVote } = useVotes(props.id);
+
+const interestingKey: VoteCategory = "interesting";
+const qualityKey: VoteCategory = "quality";
+
+const totalInteresting = computed(() => {
+  console.log("nodeCategoryVotes", nodeCategoryVotes.value);
+  return nodeCategoryVotes.value.interesting || 0;
 });
 
-const entityDocument = useDocument(docSource);
-
-const displayedVotes = computed(() => {
-  if (entityDocument.value) {
-    return (
-      entityDocument.value.votes || {
-        interesting: { total: 0 },
-        quality: { total: 0 },
-      }
-    );
-  }
-  return (
-    props.entity.votes || { interesting: { total: 0 }, quality: { total: 0 } }
-  );
+const totalQuality = computed(() => {
+  return nodeCategoryVotes.value.quality || 0;
 });
 
-const getUserVote = (category: VoteCategory) => {
-  if (!user.value) return 0;
-  return displayedVotes.value[category]?.[user.value.uid] || 0;
-};
-
-const userVoteInteresting = computed(() => getUserVote("interesting"));
-const userVoteQuality = computed(() => getUserVote("quality"));
+const userVoteInteresting = computed(
+  () => userCategoryVotes.value.interesting || 0,
+);
+const userVoteQuality = computed(() => userCategoryVotes.value.quality || 0);
 
 const loading = reactive({
   interesting: false,
   quality: false,
 });
-
-const router = useRouter();
-const route = useRoute();
 
 async function vote(category: VoteCategory, delta: number) {
   if (!user.value) {
@@ -147,25 +145,14 @@ async function vote(category: VoteCategory, delta: number) {
   }
 
   shouldSubscribe.value = true;
-  loading[category] = true;
+  loading[category as keyof typeof loading] = true;
   try {
-    await $fetch("/api/votes/vote", {
-      method: "POST",
-      body: {
-        id: props.id || props.entity.id,
-        type: props.type,
-        category,
-        vote: delta,
-      },
-      headers: {
-        Authorization: `Bearer ${idToken.value}`,
-      },
-    });
+    await castVote(category, delta);
   } catch (e) {
     console.error("Failed to vote", e);
-    alert("Wystąpił błąd podczas głosowania.");
+    alert("Wystąpił błąd podczas zapisywania głosu.");
   } finally {
-    loading[category] = false;
+    loading[category as keyof typeof loading] = false;
   }
 }
 </script>

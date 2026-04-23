@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { useDocument, useFirebaseApp } from "vuefire";
 import { useAuthState } from "./auth";
+import type { DocumentData } from "firebase-admin/firestore";
 
 type AggregatedVotes = Record<string, number>;
 
@@ -43,14 +44,18 @@ export function useVotes(nodeID: MaybeRef<string>) {
     wait: true,
   });
   const nodeCategoryVotes = computed(() => {
-    return votesNodeCollection.value.reduce((acc: AggregatedVotes, doc) => {
-      const data = doc.data() as VoteDocument;
-      const categoryVotes = data.categoryVotes;
-      Object.entries(categoryVotes).forEach(([category, value]) => {
-        acc[category] = (acc[category] || 0) + value;
-      });
-      return acc;
-    }, {} as AggregatedVotes);
+    return votesNodeCollection.value.reduce(
+      (acc: AggregatedVotes, doc: DocumentData) => {
+        console.log("Processing vote document:", doc.id, doc);
+        const data = doc as VoteDocument;
+        const categoryVotes = data.categoryVotes;
+        Object.entries(categoryVotes).forEach(([category, value]) => {
+          acc[category] = (acc[category] || 0) + value;
+        });
+        return acc;
+      },
+      {} as AggregatedVotes,
+    );
   });
 
   // Expose function to cast or toggle a vote
