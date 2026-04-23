@@ -15,5 +15,12 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
     }
+
+    match /votes/{voteId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null 
+          && voteId.matches('.*_' + request.auth.uid)
+          && request.resource.data.userUid == request.auth.uid;
+      }
+    }
   }
-}
