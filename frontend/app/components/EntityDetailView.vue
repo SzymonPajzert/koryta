@@ -1,5 +1,5 @@
 <template>
-  <div style="max-width: 800px; width: 100%">
+  <div style="width: 100%">
     <v-card
       v-if="status != 'success'"
       class="mb-4"
