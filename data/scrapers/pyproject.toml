@@ -14,7 +14,7 @@ dependencies = [
     "CacheControl==0.14.4",
     "cachetools==5.5.2",
     "catalogue==2.0.10",
-    "certifi==2025.7.14",
+    "certifi==2026.4.22",
     "cffi==2.0.0",
     "charset-normalizer==3.4.7",
     "click==8.3.2",
