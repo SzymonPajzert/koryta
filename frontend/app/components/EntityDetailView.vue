@@ -124,7 +124,7 @@
           </v-row>
         </div>
 
-        <template v-if="user && entity">
+        <!-- template v-if="user && entity">
           <template v-if="userWantsEdit">
             <div class="mt-4">
               <v-btn
@@ -190,10 +190,10 @@
             </v-btn>
             <v-spacer />
           </div>
-        </template>
+        </template-->
       </div>
 
-      <div v-if="editedEdge" class="pa-4">
+      <!--div v-if="editedEdge" class="pa-4">
         <FormEditEdge
           :key="node"
           :node-id="node"
@@ -204,7 +204,7 @@
           :edited-edge="undefined"
           @update="onEdgeUpdate"
         />
-      </div>
+      </div -->
 
       <v-divider />
 
@@ -231,7 +231,6 @@ import type {
   NodeType,
 } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
-import { useEdgeButtons, type NewEdgeButton } from "~/composables/useEdgeTypes";
 
 definePageMeta({
   affineLink: "0Jk7aUVzpBbKpnGw-NNqZ",
@@ -246,7 +245,6 @@ const node = props.node;
 const type = props.type;
 
 const route = useRoute();
-const userWantsEdit = ref(false);
 
 const { user } = useAuthState();
 const router = useRouter();
@@ -256,17 +254,6 @@ const handleLoginRedirect = () => {
     path: "/login",
     query: { redirect: route.fullPath },
   });
-};
-
-const handleEdit = () => {
-  if (!user.value) {
-    handleLoginRedirect();
-  } else {
-    router.push({
-      path: `/edit/node/${node}`,
-      query: { type },
-    });
-  }
 };
 
 const sourcePath = computed(() => `/api/nodes/${node}`);
@@ -296,12 +283,7 @@ const regionTeryt = computed(() => {
 });
 
 // Calculate edges and relationships
-const {
-  sources,
-  targets,
-  referencedIn,
-  refresh: refreshEdges,
-} = await useEdges(node);
+const { sources, targets, referencedIn } = await useEdges(node);
 const edges = computed(() => [...sources.value, ...targets.value]);
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");
@@ -316,20 +298,4 @@ const subsidiaries = computed(() => {
     (e) => e.type === "owns" && e.richNode.type == "place",
   );
 });
-
-// Edge modification buttons
-const quickAddButtons = computed(() => {
-  if (!entity.value) return [];
-  // Filter buttons relevant for this node type
-  return useEdgeButtons(entity.value.name).filter((b) => b.nodeType === type);
-});
-
-const editedEdge = ref<NewEdgeButton | undefined>(undefined);
-function quickAddEdge(btn: NewEdgeButton) {
-  editedEdge.value = btn;
-}
-function onEdgeUpdate() {
-  editedEdge.value = undefined;
-  refreshEdges();
-}
 </script>
