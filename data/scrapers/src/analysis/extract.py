@@ -156,7 +156,8 @@ class Extract(Pipeline):
             if not isinstance(elections, list):
                 return 0
             if not self.region or len(self.region) == "":
-                return 0
+                # Every election is relevant, we don't filter
+                return 1
             result = 0
             for election in elections:
                 teryt = (
