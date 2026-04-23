@@ -57,12 +57,6 @@ export default defineNuxtConfig({
     },
   ],
 
-  routeRules: {
-    "/": { prerender: true },
-    "/instytucja/**": { prerender: true },
-    "/osoba/**": { prerender: true },
-  },
-
   runtimeConfig: {
     public: {
       isLocal,
