@@ -29,7 +29,7 @@ def db(postgresql) -> PostgresCrawlQueue:
         params.get("password"),
         port=int(params.get("port", 5432)),
     )
-    queue = PostgresCrawlQueue(pg)  # type: ignore[arg-type]
+    queue = PostgresCrawlQueue(pg)
     queue.reset()
     return queue
 

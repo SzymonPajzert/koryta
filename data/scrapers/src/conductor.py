@@ -134,6 +134,7 @@ class Conductor(IO):
 
 def setup_context(
     use_rejestr_io: bool,
+    use_nlp: bool = False,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
 ) -> tuple[Context, EntityDumper]:
@@ -146,6 +147,10 @@ def setup_context(
         print("Initializing RejestrIO as a data source")
         rejestr_io = Rejestr()
 
+    nlp = None
+    if use_nlp:
+        nlp = NLPImpl()
+
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
@@ -153,7 +158,7 @@ def setup_context(
         utils=UtilsImpl(),
         web=WebImpl(),
         crawl_queue=crawl_queue,
-        nlp=NLPImpl(),
+        nlp=nlp,                # type: ignore
         refresh_policy=policy,
     )
 
