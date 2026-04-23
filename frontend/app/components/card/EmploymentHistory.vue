@@ -62,14 +62,7 @@ const minStart = computed(() => {
 });
 
 const maxEnd = computed(() => {
-  const hasCurrent = edgesSorted.value.some((e) => !e.end_date);
-  if (hasCurrent) {
-    return new Date().toISOString().split("T")[0];
-  }
-  return edgesSorted.value
-    .map((e) => e.end_date)
-    .filter((d): d is string => !!d)
-    .toSorted((a, b) => b?.localeCompare(a))[0];
+  return new Date().toISOString().split("T")[0];
 });
 
 function edgeLabel(edge: EdgeNode) {
