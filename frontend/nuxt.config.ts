@@ -78,13 +78,15 @@ export default defineNuxtConfig({
     "vuetify-nuxt-module",
     "@sentry/nuxt/module",
     "@nuxt/test-utils/module",
-    "@nuxtjs/sitemap",
-    "@nuxtjs/robots",
+    "@nuxtjs/seo",
     "@nuxt/image",
   ],
 
   site: {
     url: isLocal ? "http://localhost:3000" : "https://koryta.pl",
+    name: "Koryta.pl",
+    description: "Największy, niezależny agregator koryciarstwa",
+    defaultLocale: "pl",
   },
 
   sitemap: {
