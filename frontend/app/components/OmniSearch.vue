@@ -51,8 +51,13 @@ const props = defineProps<{
   fake?: boolean;
   width?: string;
   autofocus?: boolean;
+  noNavigate?: boolean;
 }>();
 const { width = "300px" } = props;
+
+const emit = defineEmits<{
+  (e: "select", item: ListItem): void;
+}>();
 
 const search = ref(props.searchText);
 const nodeGroupPicked = ref<ListItem | null>();
@@ -177,9 +182,21 @@ const items = computed<ListItem[]>(() => {
 
 watch(nodeGroupPicked, (value) => {
   if (!value) {
-    push("/");
+    if (!props.noNavigate) push("/");
     return;
   }
+  
+  if (props.noNavigate) {
+    emit("select", value);
+    // Clear selections to allow picking another right away
+    setTimeout(() => {
+      nodeGroupPicked.value = null;
+      search.value = "";
+      autocompleteFocus.value = false;
+    }, 50);
+    return;
+  }
+
   let path = value?.path ?? currentRoute.value.path;
   const allowedPath =
     path == "/lista" ||
