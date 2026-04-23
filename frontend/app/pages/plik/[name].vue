@@ -17,7 +17,9 @@ useSeoMeta({
   <v-container max-width="900" class="py-12">
     <v-sheet elevation="1" rounded="xl" class="pa-8 pa-md-12 content-styles">
       <ContentRenderer v-if="file" :value="file" />
-      <div v-else class="text-center text-h5 text-medium-emphasis">Nie znaleziono strony</div>
+      <div v-else class="text-center text-h5 text-medium-emphasis">
+        Nie znaleziono strony
+      </div>
     </v-sheet>
   </v-container>
 </template>
@@ -56,7 +58,8 @@ useSeoMeta({
   margin-bottom: 20px;
 }
 
-.content-styles ul, .content-styles ol {
+.content-styles ul,
+.content-styles ol {
   margin-bottom: 20px;
   padding-left: 28px;
   font-size: 1.05rem;
@@ -103,7 +106,8 @@ useSeoMeta({
   transition: all 0.2s ease;
 }
 
-.content-styles a:not(h1 a):not(h2 a):not(h3 a):not(h4 a):not(h5 a):not(h6 a):hover {
+.content-styles
+  a:not(h1 a):not(h2 a):not(h3 a):not(h4 a):not(h5 a):not(h6 a):hover {
   text-decoration: underline;
   opacity: 0.8;
 }
