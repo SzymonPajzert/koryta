@@ -127,3 +127,6 @@ export const scheduledFirestoreExport = onSchedule(
     }
   },
 );
+
+export * from "./votes";
+
