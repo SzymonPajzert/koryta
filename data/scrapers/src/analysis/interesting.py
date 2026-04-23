@@ -112,7 +112,9 @@ class Companies(Pipeline[Company]):
         # This is actually a set[KRS] and if we don't cast it to str,
         # sets will contain wrong values
         children_of_hardcoded_set: set[ManualKRS] = graph.all_descendants(
-            self.hardcoded_companies.read_or_process_list(ctx)
+            # I added an ID here, but maybe it's wrong?
+            krs.id
+            for krs in self.hardcoded_companies.read_or_process_list(ctx)
         )  # type: ignore
         return list((krs.id for krs in children_of_hardcoded_set))
 

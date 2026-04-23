@@ -171,6 +171,8 @@ test = [
 python_version = "3.13"
 mypy_path = "src"
 
+disallow_any_generics = true
+
 [[tool.mypy.overrides]]
 module = [
     "duckdb",

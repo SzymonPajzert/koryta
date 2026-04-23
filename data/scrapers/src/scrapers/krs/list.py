@@ -133,7 +133,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
 
     @property
-    def output_class(self) -> Type:
+    def output_class(self):
         return KrsCompany
 
     def add_company(self, company: KrsCompany):

@@ -605,7 +605,7 @@ class Pipeline(typing.Generic[Output]):
 
         return df
 
-    def read_or_process_list(self, ctx: Context):
+    def read_or_process_list(self, ctx: Context) -> typing.Iterable[Output]:
         return iterate_pipeline(self.read_or_process(ctx), self.output_class)
 
     def preprocess_sources(self, ctx: Context, policy: ProcessPolicy) -> bool:

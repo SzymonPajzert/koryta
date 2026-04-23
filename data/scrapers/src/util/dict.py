@@ -5,7 +5,10 @@ def single_value_diff(prev, after):
     return f"  current: {prev}\n  new: {after}"
 
 
-def something_removed(prev: dict, after: dict) -> list[tuple[str, str]]:
+type nested_dict = dict[str, Any]
+
+
+def something_removed(prev: nested_dict, after: nested_dict) -> list[tuple[str, str]]:
     def diff_pair(k, v):
         if k not in after:
             return [(k, "removed")]
@@ -20,7 +23,9 @@ def something_removed(prev: dict, after: dict) -> list[tuple[str, str]]:
     ]
 
 
-def diff_maybe_dict(prev: dict | Any, after: dict | Any) -> tuple[bool, str]:
+def diff_maybe_dict(
+    prev: nested_dict | Any, after: nested_dict | Any
+) -> tuple[bool, str]:
     if isinstance(prev, dict) and isinstance(after, dict):
         diff = something_removed(prev, after)
         return len(diff) > 0, "\n".join([k + " " + v for (k, v) in diff])
