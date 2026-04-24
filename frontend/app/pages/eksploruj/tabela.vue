@@ -25,14 +25,26 @@
       />
     </v-navigation-drawer>
     <div class="pa-4">
-      <h1 class="text-h4 mb-4">Eksploruj powiązania</h1>
+      <h1 class="text-h4 mb-4">
+        Eksploruj powiązania dla
+        {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
+      </h1>
+
+      <FormEksplorujTabelaFilters
+        v-model:visibility="filterVisibility"
+        v-model:party="filterParty"
+        v-model:election-location="filterElectionLocation"
+        :available-parties="availableParties"
+        :available-election-locations="availableElectionLocations"
+      />
+
       <v-card>
         <v-data-table
           v-model:items-per-page="itemsPerPage"
           v-model:page="page"
           v-model:sort-by="sortBy"
           :headers="headers"
-          :items="computedItems"
+          :items="filteredItems"
           :loading="loading"
           @update:options="updateQueryParams"
         >
@@ -103,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { PersonRich } from "~~/shared/model";
 import { useEntityListRich } from "~/composables/entity/listRich";
@@ -168,19 +180,93 @@ const company = computed<[string, string] | undefined>(() => {
   return undefined;
 });
 
-const { people: computedItems, loading } = await useEntityListRich(
+const { people: fetchedItems, loading } = useEntityListRich(
   company,
   region,
   places,
   regions,
 );
 
-const updateQueryParams = async (options: any) => {
+const filterVisibility = ref<"all" | "public" | "private">(
+  (route.query.visibility as "all" | "public" | "private" | undefined) || "all",
+);
+const filterParty = ref<string | null>((route.query.party as string) || null);
+const filterElectionLocation = ref<string | null>(
+  (route.query.electionLocation as string) || null,
+);
+
+const availableParties = computed(() => {
+  const parties = new Set<string>();
+  for (const item of fetchedItems.value || []) {
+    if (item.parties) {
+      for (const p of item.parties) {
+        parties.add(p);
+      }
+    }
+  }
+  return Array.from(parties).sort();
+});
+
+const availableElectionLocations = computed(() => {
+  const locations = new Set<string>();
+  for (const item of fetchedItems.value || []) {
+    if (item.elections) {
+      for (const e of item.elections) {
+        if (e.location) {
+          locations.add(e.location);
+        }
+      }
+    }
+  }
+  return Array.from(locations).sort();
+});
+
+const filteredItems = computed(() => {
+  let items = fetchedItems.value || [];
+
+  if (filterVisibility.value !== "all") {
+    const isPublic = filterVisibility.value === "public";
+    items = items.filter((item) => !!item.visibility === isPublic);
+  }
+
+  if (filterParty.value) {
+    items = items.filter((item) => item.parties?.includes(filterParty.value!));
+  }
+
+  if (filterElectionLocation.value) {
+    items = items.filter((item) =>
+      item.elections?.some((e) => e.location === filterElectionLocation.value),
+    );
+  }
+
+  return items;
+});
+
+watch([filterVisibility, filterParty, filterElectionLocation], () => {
+  console.log([filterVisibility, filterParty, filterElectionLocation]);
+  page.value = 1;
+  router.replace({
+    query: {
+      ...route.query,
+      page: 1,
+      visibility:
+        filterVisibility.value !== "all" ? filterVisibility.value : undefined,
+      party: filterParty.value || undefined,
+      electionLocation: filterElectionLocation.value || undefined,
+    },
+  });
+});
+
+const updateQueryParams = async (options: {
+  sortBy: { key: string; order: string }[];
+  page: number;
+  itemsPerPage: number;
+}) => {
   const sortParam =
-    options.sortBy.length > 0 ? options.sortBy[0].key : undefined;
+    options.sortBy.length > 0 ? options.sortBy[0]?.key : undefined;
   const sortDescParam =
     options.sortBy.length > 0
-      ? options.sortBy[0].order === "desc"
+      ? options.sortBy[0]?.order === "desc"
         ? "true"
         : "false"
       : undefined;

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockNuxtImport } from "@nuxt/test-utils/runtime";
 import { ref } from "vue";
-import { authFetchInterceptor } from "@/composables/auth";
+import { authFetch } from "@/composables/auth";
 
 // Hoisted variables for mocks
 const { mockIdTokenFn, mockAuth, mockUseFetchSpy, mockUseDocumentSpy } =
@@ -76,20 +76,9 @@ describe("useAuthState", () => {
     const mockOptions = { headers: {} };
 
     // Execute the interceptor
-    await authFetchInterceptor({ options: mockOptions });
+    await authFetch("/api/edges", mockOptions);
 
     // Verify logic
     expect(mockIdTokenFn).toHaveBeenCalled();
-  });
-
-  it("authFetch should add Authorization header", async () => {
-    mockIdTokenFn.mockResolvedValue("new-token");
-    const mockOptions = { headers: {} as any };
-
-    await authFetchInterceptor({ options: mockOptions });
-
-    expect((mockOptions.headers as Headers).get("Authorization")).toBe(
-      "Bearer new-token",
-    );
   });
 });

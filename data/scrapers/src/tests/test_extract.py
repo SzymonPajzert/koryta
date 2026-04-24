@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from conductor import setup_context
-from main import Pipeline
+from koryta import Pipeline
 from pipelines import Extract
 
 

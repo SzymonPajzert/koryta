@@ -46,6 +46,15 @@ def parse_args():
     return parser.parse_known_args()[0]
 
 
+def clean_payload(payload):
+    if isinstance(payload, dict):
+        return {k: clean_payload(v) for k, v in payload.items() if v is not None}
+    elif isinstance(payload, list):
+        return [clean_payload(v) for v in payload if v is not None]
+    else:
+        return payload
+
+
 def print_company(company):
     if company["created"]:
         print(
@@ -92,7 +101,7 @@ class Uploader:
             end=" ",
             file=sys.stderr,
         )
-        cleaned_payload = {k: v for k, v in payload.items() if v is not None}
+        cleaned_payload = clean_payload(payload)
         request = json.dumps(cleaned_payload, cls=NumpyEncoder)
         if verbose:
             print(request, file=sys.stderr)

@@ -1,12 +1,14 @@
 <template>
   <v-app-bar>
-    <v-img
+    <NuxtImg
       class="mx-2"
-      src="@/assets/logo_small.png"
-      max-height="40"
-      max-width="40"
-      contain
-      style="cursor: pointer"
+      src="/logo_small.png"
+      width="40"
+      height="40"
+      fetchpriority="high"
+      preload
+      style="cursor: pointer; object-fit: contain"
+      alt="Koryta.pl"
       @click="$router.push('/')"
     />
     <v-app-bar-title
@@ -136,7 +138,7 @@ const { user, userConfig, logout } = useAuthState();
 const router = useRouter();
 const route = useRoute();
 const maxWidth = computed(() =>
-  route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 900),
+  route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 1200),
 );
 const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const affineLink = computed(() => route?.meta?.affineLink);
