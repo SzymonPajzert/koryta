@@ -23,48 +23,71 @@ export interface FetchNodesOptions {
   personParty?: string;
 }
 
+function logEventPath(func: string, args: string) {
+  try {
+    const event = useEvent();
+    console.info(
+      `[Firestore Read][${func}] [${func}(${args}) triggered by: ${event?.path || "unknown"}`,
+    );
+  } catch {
+    console.info(
+      `[Firestore Read][${func}] [${func}(${args}) triggered outside request context`,
+    );
+  }
+}
+
 export async function fetchNodes<N extends NodeType>(
   path: N,
   options: FetchNodesOptions = {},
 ): Promise<Record<string, nodeData[N]>> {
-  const { nodeId } = options;
-  const db = getFirestore("koryta-pl");
-  let query: FirebaseFirestore.Query = db
-    .collection("nodes")
-    .where("type", "==", path);
-  if (options.personParty) {
-    query = query.where("parties", "array-contains", options.personParty);
-  }
-
-  if (nodeId) {
-    const docRef = db.collection("nodes").doc(nodeId);
-    const docSnap = await docRef.get();
-    if (!docSnap.exists) return {};
-    if (docSnap.data()?.type !== path) return {};
-
-    const nodeData = { id: docSnap.id, ...docSnap.data() } as nodeData[N] & {
-      id: string;
-      revision_id?: string;
-    };
-
-    return { [nodeId]: nodeData };
-  }
-
-  const nodes = await query.get();
-  const nodesData = nodes.docs.map((doc) => {
-    return {
-      id: doc.id,
-      ...doc.data(),
-      visibility: pageIsPublic(doc.data()),
-    } as nodeData[N] & {
-      id: string;
-      revision_id?: string;
-      visibility: boolean;
-    };
-  });
-
-  return Object.fromEntries(nodesData.map((node) => [node.id, node]));
+  return (await _cachedFetchNodes(path, options)) as Record<
+    string,
+    nodeData[N]
+  >;
 }
+
+const _cachedFetchNodes = defineCachedFunction(
+  async (path: string, options: FetchNodesOptions = {}) => {
+    logEventPath("fetchNodes", path);
+
+    const { nodeId } = options;
+    const db = getFirestore("koryta-pl");
+    let query: FirebaseFirestore.Query = db
+      .collection("nodes")
+      .where("type", "==", path);
+    if (options.personParty) {
+      query = query.where("parties", "array-contains", options.personParty);
+    }
+
+    if (nodeId) {
+      const docRef = db.collection("nodes").doc(nodeId);
+      const docSnap = await docRef.get();
+      if (!docSnap.exists) return {};
+      if (docSnap.data()?.type !== path) return {};
+      logEventPath("fetchNodes", path);
+
+      return { [nodeId]: { id: docSnap.id, ...docSnap.data() } };
+    }
+
+    const nodes = await query.get();
+    const nodesData = nodes.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        visibility: pageIsPublic(data),
+      };
+    });
+
+    return Object.fromEntries(nodesData.map((node) => [node.id, node]));
+  },
+  {
+    maxAge: 3600, // 1 hour
+    name: "fetchNodes",
+    getKey: (path: string, options?: FetchNodesOptions) =>
+      `${path}-${options?.nodeId || "all"}-${options?.personParty || "all"}`,
+  },
+);
 
 const electionConcreteDate: Record<string, string> = {
   "1989": "1989-06-04",
@@ -94,31 +117,42 @@ const electionConcreteDate: Record<string, string> = {
 };
 
 export async function fetchEdges(): Promise<Edge[]> {
-  const db = getFirestore("koryta-pl");
-  const edges = (await db.collection("edges").get()).docs.map((doc) => {
-    const data = doc.data();
-
-    // TODO this should be organized somewhere else.
-    if (data.type === "election") {
-      if (data["start_date"]) {
-        const year = String(data["start_date"]).substring(0, 4);
-        if (electionConcreteDate[year]) {
-          data["start_date"] = electionConcreteDate[year];
-        }
-      }
-      data["end_date"] = data["start_date"];
-    }
-
-    return {
-      id: doc.id,
-      ...data,
-      content: data.content || data.text || "",
-      references: data.references || [],
-      visibility: pageIsPublic(data),
-    } as Edge;
-  });
-  return edges as unknown as Edge[];
+  return await _cachedFetchEdges();
 }
+
+const _cachedFetchEdges = defineCachedFunction(
+  async () => {
+    logEventPath("fetchEdges", "all");
+    const db = getFirestore("koryta-pl");
+    const edges = (await db.collection("edges").get()).docs.map((doc) => {
+      const data = doc.data();
+
+      // TODO this should be organized somewhere else.
+      if (data.type === "election") {
+        if (data["start_date"]) {
+          const year = String(data["start_date"]).substring(0, 4);
+          if (electionConcreteDate[year]) {
+            data["start_date"] = electionConcreteDate[year];
+          }
+        }
+        data["end_date"] = data["start_date"];
+      }
+
+      return {
+        id: doc.id,
+        ...data,
+        content: data.content || data.text || "",
+        references: data.references || [],
+        visibility: pageIsPublic(data),
+      } as Edge;
+    });
+    return edges as unknown as Edge[];
+  },
+  {
+    maxAge: 3600, // 1 hour
+    name: "fetchEdges",
+  },
+);
 
 export async function fetchFirestore<T>(path: string): Promise<T> {
   const db = getDatabase();

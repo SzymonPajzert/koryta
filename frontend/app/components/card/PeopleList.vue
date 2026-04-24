@@ -79,7 +79,11 @@ import type { Powiat } from "~/composables/entity/regions";
 import type { PersonRich } from "~~/shared/model";
 
 const props = defineProps<{ region: Powiat | undefined }>();
-const { data: nodeGroups } = await authFetch("/api/graph/nodeGroups");
+const { data: nodeGroups } = authFetch("/api/graph/nodeGroups", {
+  key: "peoplelist-node-groups",
+  lazy: true,
+  default: () => [],
+});
 
 function subtitle(person: Partial<PersonRich>) {
   if (person.experience) {
@@ -93,7 +97,7 @@ function subtitle(person: Partial<PersonRich>) {
 }
 const { entities: places } = useEntities("place");
 const { entities: regions } = useEntities("region");
-const { people: peopleUnsorted, loading } = await useEntityListRich(
+const { people: peopleUnsorted, loading } = useEntityListRich(
   ref(undefined),
   computed(() => {
     if (!props.region) return undefined;

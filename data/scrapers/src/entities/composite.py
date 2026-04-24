@@ -12,6 +12,7 @@ class Company:
 
 @dataclass
 class Election:
+    # TODO we need a proper typing of the election types
     election_type: typing.Any
     committee: str
     election_year: str | None = None

@@ -32,6 +32,7 @@ class PeoplePKWMerged(Pipeline):
             party,
             election_year,
             election_type,
+            candidacy_success,
         FROM pkw_data
         WHERE first_name IS NOT NULL AND last_name IS NOT NULL
         """
@@ -51,6 +52,7 @@ class PeoplePKWMerged(Pipeline):
                 "election_type": "election_type",
                 "teryt_wojewodztwo": "teryt_wojewodztwo",
                 "teryt_powiat": "teryt_powiat",
+                "candidacy_success": "candidacy_success",
             },
         )
 

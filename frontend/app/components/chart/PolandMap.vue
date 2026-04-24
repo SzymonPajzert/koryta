@@ -2,17 +2,23 @@
 import { computed, ref } from "vue";
 import powiatyPaths from "@/assets/poland_powiaty.json";
 import type { Powiat } from "@/composables/entity/regions";
+import { authFetch } from "@/composables/auth";
 
 const hoveredDistrict = ref<Powiat | null>(null);
 
-const { data: nodeGroups } = await useFetch("/api/graph/nodeGroups");
+const { data: nodeGroups } = authFetch("/api/graph/nodeGroups", {
+  lazy: true,
+  key: "polandmap-node-groups",
+  default: () => [],
+});
 
 const hover = (region: Powiat | null) => {
   hoveredDistrict.value = region;
 };
 
 const groupData = computed(() => {
-  const map: Record<string, any> = {};
+  const map: Record<string, { id: string; people?: number; name?: string }> =
+    {};
   for (const g of nodeGroups.value || []) {
     map[g.id] = g;
   }

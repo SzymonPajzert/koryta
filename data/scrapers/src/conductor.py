@@ -3,7 +3,7 @@ import os
 import typing
 
 import duckdb
-from duckdb.typing import VARCHAR  # type: ignore
+from duckdb.sqltypes import VARCHAR
 from tqdm import tqdm
 
 from scrapers.article.crawler import parse_hostname, uuid7

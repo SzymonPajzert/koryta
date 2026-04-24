@@ -18,6 +18,7 @@
     menu-icon="mdi-magnify"
     clearable
     single-line
+    variant="solo-filled"
     @click:clear="nodeGroupPicked = null"
   >
     <template #item="{ props: itemProps, item }">
@@ -40,6 +41,8 @@
 <script setup lang="ts">
 import { parties } from "~~/shared/misc";
 import { authFetch } from "@/composables/auth";
+import { generateEntityUrl } from "~/composables/slugs";
+import type { NodeType } from "~~/shared/model";
 
 const { push, currentRoute } = useRouter();
 
@@ -48,8 +51,13 @@ const props = defineProps<{
   fake?: boolean;
   width?: string;
   autofocus?: boolean;
+  noNavigate?: boolean;
 }>();
 const { width = "300px" } = props;
+
+const emit = defineEmits<{
+  (e: "select", item: ListItem): void;
+}>();
 
 const search = ref(props.searchText);
 const nodeGroupPicked = ref<ListItem | null>();
@@ -73,7 +81,8 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { data: nodeGroups, refresh } = await authFetch("/api/graph/nodeGroups", {
+const { data: nodeGroups, refresh } = authFetch("/api/graph/nodeGroups", {
+  key: "omnisearch-node-groups",
   lazy: true,
 });
 
@@ -116,7 +125,7 @@ const baseItems = computed<ListItem[]>(() => {
 
   nodeGroups.value.slice(1).forEach((item) => {
     addedIds.add(item.id);
-    const itemType = item.type || "place";
+    const itemType = (item.type || "place") as NodeType;
 
     // Choose icon based on type
     let icon = "mdi-domain";
@@ -131,7 +140,7 @@ const baseItems = computed<ListItem[]>(() => {
         content_id: item.id,
         content_type: "nodeGroup",
       },
-      path: `/entity/${itemType}/` + item.id,
+      path: generateEntityUrl(itemType, item.id, item.name),
     });
   });
 
@@ -173,9 +182,21 @@ const items = computed<ListItem[]>(() => {
 
 watch(nodeGroupPicked, (value) => {
   if (!value) {
-    push("/");
+    if (!props.noNavigate) push("/");
     return;
   }
+
+  if (props.noNavigate) {
+    emit("select", value);
+    // Clear selections to allow picking another right away
+    setTimeout(() => {
+      nodeGroupPicked.value = null;
+      search.value = "";
+      autocompleteFocus.value = false;
+    }, 50);
+    return;
+  }
+
   let path = value?.path ?? currentRoute.value.path;
   const allowedPath =
     path == "/lista" ||
@@ -183,6 +204,10 @@ watch(nodeGroupPicked, (value) => {
     path.startsWith("/entity/person/") ||
     path.startsWith("/entity/place/") ||
     path.startsWith("/entity/region/") ||
+    path.startsWith("/osoba/") ||
+    path.startsWith("/instytucja/") ||
+    path.startsWith("/region/") ||
+    path.startsWith("/artykul/") ||
     path.startsWith("/edit/");
   if (!allowedPath) {
     path = "/lista";

@@ -3,7 +3,7 @@ import { getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
 import type { Company, Edge, PersonRich, Region } from "~~/shared/model";
 
-export async function useEntityListRich(
+export function useEntityListRich(
   // TODO this is badly typed
   company: Ref<[string, string] | undefined>,
   region: Ref<[string, string] | undefined>,
@@ -11,8 +11,14 @@ export async function useEntityListRich(
   regions: Ref<Record<string, Region> | undefined>,
 ) {
   const { entities: people } = useEntities("person");
-  const { data: edgesData, pending: edgesPending } =
-    await authFetch<Edge[]>("/api/graph/edges");
+  const { data: edgesData, pending: edgesPending } = authFetch<Edge[]>(
+    "/api/graph/edges",
+    {
+      key: "rich-entities-edges",
+      lazy: true,
+      default: () => [],
+    },
+  );
 
   const loading = computed(() => {
     return (

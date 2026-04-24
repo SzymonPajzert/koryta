@@ -30,7 +30,10 @@ export default defineNuxtConfig({
       htmlAttrs: {
         lang: "pl",
       },
-      link: [],
+      link: [
+        { rel: "preconnect", href: "https://cdn.jsdelivr.net" },
+        { rel: "preconnect", href: "https://firestore.googleapis.com" },
+      ],
       style: [],
       script: [],
       noscript: [],
@@ -45,8 +48,7 @@ export default defineNuxtConfig({
 
   devtools: { enabled: true },
 
-  // TODO enable SSR
-  ssr: false,
+  ssr: true,
 
   components: [
     {
@@ -54,10 +56,6 @@ export default defineNuxtConfig({
       pathPrefix: true,
     },
   ],
-
-  routeRules: {
-    "/": { prerender: true },
-  },
 
   runtimeConfig: {
     public: {
@@ -74,7 +72,25 @@ export default defineNuxtConfig({
     "vuetify-nuxt-module",
     "@sentry/nuxt/module",
     "@nuxt/test-utils/module",
+    "@nuxtjs/seo",
+    "@nuxt/image",
+    "@nuxtjs/plausible",
   ],
+
+  site: {
+    url: isLocal ? "http://localhost:3000" : "https://koryta.pl",
+    name: "Koryta.pl",
+    description: "Największy, niezależny agregator koryciarstwa",
+    defaultLocale: "pl",
+  },
+
+  sitemap: {
+    sources: ["/api/_sitemap-urls"],
+  },
+  plausible: {
+    // Prevent tracking on localhost
+    ignoredHostnames: ["localhost"],
+  },
 
   eslint: {
     checker: true,
@@ -147,10 +163,7 @@ export default defineNuxtConfig({
       },
     },
     options: {
-      firestore: {
-        experimentalForceLongPolling: true,
-        experimentalAutoDetectLongPolling: true,
-      },
+      firestore: {},
     },
   },
 
@@ -170,6 +183,9 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: "firebase_app_hosting", // or 'firebase-functions'
+    experimental: {
+      asyncContext: true,
+    },
   },
   devServer: {
     host: "127.0.0.1",

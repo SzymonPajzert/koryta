@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Literal, Union, overload
 
 import numpy as np
 import pandas as pd
-from dacite import from_dict  # type: ignore[import-not-found]
+from dacite import Config, from_dict  # type: ignore[import-not-found]
 
 from entities.ner import NEREntities
 
@@ -201,7 +201,12 @@ class IO(metaclass=ABCMeta):
 
     # TODO remove this as well - it should just be a write_file
     @abstractmethod
-    def upload(self, source: Any, data: Any, content_type: str):
+    def upload(
+        self,
+        source: Any,
+        data: Any,
+        content_type: Literal["text/html", "application/json", "text/plain"],
+    ):
         """Uploads data to storage (e.g. GCS)."""
         raise NotImplementedError()
 
@@ -673,4 +678,9 @@ def iterate_pipeline[T](
     df = df.replace({np.nan: None})
     for row in df.to_dict(orient="records"):
         records = typing.cast(dict[str, typing.Any], row)
-        yield from_dict(data_class=constructor, data=records)
+        yield from_dict(
+            data_class=constructor,
+            data=records,
+            # TODO - I don't think we need this, try to remove it.
+            config=Config(cast=[int, float, str, bool]),
+        )

@@ -12,9 +12,17 @@
           <a
             href="https://zrzutka.pl/rd7ssx/award/g3z29z/przypinka-z-podziekowaniami"
             target="_blank"
-            class="d-inline-block mb-8"
+            class="d-inline-block mb-8 mx-auto"
+            style="width: 200px"
           >
-            <v-img width="200" src="@/assets/logo.png" class="mx-auto" />
+            <NuxtImg
+              width="200"
+              src="/logo.png"
+              class="d-block"
+              fetchpriority="high"
+              preload
+              alt="Koryta.pl logo"
+            />
           </a>
         </v-col>
         <v-col cols="12" md="9">
@@ -70,6 +78,16 @@
 </template>
 
 <script setup lang="ts">
+useSeoMeta({
+  title: "Największy, niezależny agregator koryciarstwa",
+  description:
+    "Jesteśmy największym, ogólnopolskim, niezależnym agregatorem koryciarstwa. Sprawdź którymi stanowiskami w publicznych spółkach podzielili się politycy.",
+  ogTitle: "Największy, niezależny agregator koryciarstwa",
+  ogDescription:
+    "Jesteśmy największym, ogólnopolskim i niezależnym agregatorem koryciarstwa. Sprawdź którymi stanowiskami w publicznych spółkach podzielili się politycy.",
+  ogImage: "/logo.png",
+});
+
 definePageMeta({
   affineLink: "7CDdAj6z8PUAFNWT-phhD",
   fullWidth: true,

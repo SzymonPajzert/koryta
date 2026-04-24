@@ -41,9 +41,9 @@ export function createRevisionTransaction(
     console.info(
       `Approving node=${targetRef.id} revision_id=${revisionRef.id}`,
     );
-    revision.data.revision_id = revisionRef;
+    (revision.data as Record<string, unknown>).revision_id = revisionRef;
   }
-  batch.set(targetRef, revision.data);
+  batch.set(targetRef, revision.data as Record<string, unknown>);
 
   return { revisionRef, targetRef };
 }
