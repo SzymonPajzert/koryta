@@ -185,7 +185,7 @@ watch(nodeGroupPicked, (value) => {
     if (!props.noNavigate) push("/");
     return;
   }
-  
+
   if (props.noNavigate) {
     emit("select", value);
     // Clear selections to allow picking another right away
