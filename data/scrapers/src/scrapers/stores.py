@@ -287,6 +287,7 @@ class NLP(metaclass=ABCMeta):
         """Lemmatize text or list of texts."""
         pass
 
+
 @dataclass(frozen=True)
 class NewUrl:
     url: str
