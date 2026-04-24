@@ -1,6 +1,6 @@
 <template>
   <v-list class="px-2" lines="one" variant="flat">
-    <v-list-header>Historia powiązań</v-list-header>
+    <h3 class="text-h6 mb-2">Historia powiązań</h3>
 
     <div class="pa-3">
       <v-list-item

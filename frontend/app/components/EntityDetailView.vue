@@ -67,12 +67,6 @@
           <GraphContainer :key="node" :focus-node-id="node" :max-depth="1" />
         </div>
 
-        <div v-if="!!user" class="d-flex">
-          <v-spacer />
-          <VoteWidget v-if="entity" :id="node" category="interesting" />
-          <VoteWidget v-if="entity" :id="node" category="quality" />
-        </div>
-
         <div class="mt-4">
           <template v-if="entity?.type === 'place'">
             <CardConnectionList :edges="owners" title="Właściciele" />
