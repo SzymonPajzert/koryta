@@ -1,20 +1,29 @@
 <template>
-  <span class="chip" :style>
-    {{ props.party }}
-  </span>
+  <div>
+    <span class="chip" :style>
+      {{ party }}
+    </span>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
 import { partyColors } from "~~/shared/misc";
 
-const props = defineProps<{
+const partyFontColor: Record<string, string> = {
+  PiS: "#fff",
+  PO: "#fff",
+  "Nowa Lewica": "#fff",
+};
+
+const { party } = defineProps<{
   party: string;
 }>();
 
 const style = computed(() => {
   return {
-    backgroundColor: partyColors[props.party],
+    backgroundColor: partyColors[party],
+    color: partyFontColor[party] ?? "#090707",
   };
 });
 </script>
@@ -27,6 +36,5 @@ const style = computed(() => {
   white-space: nowrap;
   border-radius: 0.3rem;
   font-weight: 550;
-  color: #090707;
 }
 </style>
