@@ -41,6 +41,7 @@
     "@nuxt/icon": "^1.15.0",
     "@nuxt/image": "^1.11.0",
     "@nuxt/scripts": "^0.13.2",
+    "@nuxtjs/plausible": "^3.0.2",
     "@pinia/nuxt": "^0.11.2",
     "@sentry/nuxt": "^10.48.0",
     "@unhead/vue": "^2.0.13",
