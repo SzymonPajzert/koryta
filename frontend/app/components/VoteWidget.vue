@@ -1,141 +1,92 @@
 <template>
   <client-only>
-    <div class="vote-widget d-flex align-center">
-      <span v-if="user" data-cy="user-logged-in" class="d-none" />
-      <div class="mr-4">
-        <div class="text-caption text-medium-emphasis mb-1">Ciekawe?</div>
-        <v-btn-group
-          density="compact"
-          rounded="pill"
-          variant="outlined"
-          divided
+    <v-hover>
+      <template #default="{ isHovering, props }">
+        <v-btn
+          v-bind="props"
+          border="sm current"
+          class="text-none pa-1"
+          :color="config.color"
+          rounded="lg"
+          size="isHovering ? 'large' : '44'"
+          variant="tonal"
+          :icon="isHovering ? undefined : config.icon"
         >
-          <v-btn
-            :color="userVoteInteresting > 0 ? 'primary' : undefined"
-            :variant="userVoteInteresting > 0 ? 'flat' : 'outlined'"
-            size="small"
-            prepend-icon="mdi-thumb-up"
-            @click="vote(interestingKey, 1)"
+          <template v-if="isHovering">
+            {{ config.text }}
+          </template>
+          <v-avatar
+            v-else
+            :icon="config.icon"
+            :color="config.color"
+            rounded
+            size="36"
+            variant="tonal"
           >
-            Tak
-          </v-btn>
-          <v-btn
-            :color="
-              userVoteInteresting > 0
-                ? 'primary'
-                : userVoteInteresting < 0
-                  ? 'error'
-                  : undefined
-            "
-            :disabled="true"
-            variant="flat"
-            size="small"
-          >
-            {{ totalInteresting }}
-          </v-btn>
-          <v-btn
-            :color="userVoteInteresting < 0 ? 'error' : undefined"
-            :variant="userVoteInteresting < 0 ? 'flat' : 'outlined'"
-            size="small"
-            prepend-icon="mdi-thumb-down"
-            @click="vote(interestingKey, -1)"
-          >
-            Nie
-          </v-btn>
-        </v-btn-group>
-      </div>
-
-      <div>
-        <div class="text-caption text-medium-emphasis mb-1">Jakość</div>
-        <v-btn-group
-          density="compact"
-          rounded="pill"
-          variant="outlined"
-          divided
-        >
-          <v-btn
-            :color="userVoteQuality > 0 ? 'success' : undefined"
-            :variant="userVoteQuality > 0 ? 'flat' : 'outlined'"
-            size="small"
-            prepend-icon="mdi-check-circle"
-            @click="vote(qualityKey, 1)"
-          >
-            Gotowe
-          </v-btn>
-          <v-btn
-            :color="
-              userVoteQuality > 0
-                ? 'success'
-                : userVoteQuality < 0
-                  ? 'warning'
-                  : undefined
-            "
-            :disabled="true"
-            variant="flat"
-            size="small"
-          >
-            {{ totalQuality }}
-          </v-btn>
-          <v-btn
-            :color="userVoteQuality < 0 ? 'warning' : undefined"
-            :variant="userVoteQuality < 0 ? 'flat' : 'outlined'"
-            size="small"
-            prepend-icon="mdi-alert-circle"
-            @click="vote(qualityKey, -1)"
-          >
-            Popraw
-          </v-btn>
-        </v-btn-group>
-      </div>
-    </div>
+            <v-icon size="24" />
+          </v-avatar>
+          <template #prepend>
+            <v-avatar
+              v-if="isHovering"
+              v-bind="props"
+              :icon="config.icon"
+              rounded
+              size="36"
+              variant="tonal"
+            >
+              <v-icon size="24" />
+            </v-avatar>
+          </template>
+        </v-btn>
+      </template>
+    </v-hover>
   </client-only>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthState } from "@/composables/auth";
-import type { Node, Edge, VoteCategory } from "~~/shared/model";
+import type { VoteCategory } from "~~/shared/model";
 import { useVotes } from "~/composables/votes";
 import { ClientOnly } from "#components";
 
-const props = defineProps<{
-  entity: Node | Edge;
-  type: "node" | "edge";
+const { id, category } = defineProps<{
   id: string;
+  category: VoteCategory;
 }>();
+
+const configMap: Record<
+  VoteCategory,
+  { text: string; icon: string; color: string }
+> = {
+  interesting: {
+    text: "Dobre znalezisko",
+    icon: "mdi-lightbulb-outline",
+    color: "success",
+  },
+  quality: {
+    text: "Znaleziony problem",
+    icon: "mdi-alert-circle-outline",
+    color: "error",
+  },
+};
+
+const config = configMap[category];
+
+const { userCategoryVotes, nodeCategoryVotes, castVote } = useVotes(id);
+
+const total = computed(() => {
+  return nodeCategoryVotes.value[category] || 0;
+});
+const userVoteResult = computed(() => userCategoryVotes.value[category] || 0);
+
+const loading = ref(false);
 
 const { user } = useAuthState();
 const router = useRouter();
 const route = useRoute();
-
-const shouldSubscribe = ref(false);
-
-const { userCategoryVotes, nodeCategoryVotes, castVote } = useVotes(props.id);
-
-const interestingKey: VoteCategory = "interesting";
-const qualityKey: VoteCategory = "quality";
-
-const totalInteresting = computed(() => {
-  console.log("nodeCategoryVotes", nodeCategoryVotes.value);
-  return nodeCategoryVotes.value.interesting || 0;
-});
-
-const totalQuality = computed(() => {
-  return nodeCategoryVotes.value.quality || 0;
-});
-
-const userVoteInteresting = computed(
-  () => userCategoryVotes.value.interesting || 0,
-);
-const userVoteQuality = computed(() => userCategoryVotes.value.quality || 0);
-
-const loading = reactive({
-  interesting: false,
-  quality: false,
-});
-
-async function vote(category: VoteCategory, delta: number) {
+async function vote(delta: number) {
   if (!user.value) {
     router.push({
       path: "/login",
@@ -144,21 +95,14 @@ async function vote(category: VoteCategory, delta: number) {
     return;
   }
 
-  shouldSubscribe.value = true;
-  loading[category as keyof typeof loading] = true;
+  loading.value = true;
   try {
     await castVote(category, delta);
   } catch (e) {
     console.error("Failed to vote", e);
     alert("Wystąpił błąd podczas zapisywania głosu.");
   } finally {
-    loading[category as keyof typeof loading] = false;
+    loading.value = false;
   }
 }
 </script>
-
-<style scoped>
-.vote-widget {
-  gap: 16px;
-}
-</style>
