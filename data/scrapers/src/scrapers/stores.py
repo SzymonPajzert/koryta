@@ -287,6 +287,11 @@ class NLP(metaclass=ABCMeta):
         """Lemmatize text or list of texts."""
         pass
 
+@dataclass(frozen=True)
+class NewUrl:
+    url: str
+    priority: int
+
 
 @dataclass(frozen=True)
 class CrawlQueueItem:
@@ -299,12 +304,6 @@ class DoneUrl:
     uid: str
     url: str
     storage_path: str
-
-
-@dataclass(frozen=True)
-class NewUrl:
-    url: str
-    priority: int
 
 
 @dataclass(frozen=True)
