@@ -30,11 +30,10 @@
 
       <!-- Action: Interesting Vote -->
       <div>
-        <VoteWidget
+        <ButtonVoteWidget
           v-if="person"
           :id="person.id"
-          :entity="person"
-          type="node"
+          category="interesting"
         />
       </div>
     </v-card-text>
@@ -47,7 +46,6 @@
 </template>
 
 <script setup lang="ts">
-import VoteWidget from "@/components/VoteWidget.vue";
 import QuickAddArticleButton from "@/components/QuickAddArticleButton.vue";
 import type { PersonRich } from "~~/shared/model";
 

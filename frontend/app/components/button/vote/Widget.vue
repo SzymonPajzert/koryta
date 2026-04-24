@@ -9,33 +9,27 @@
           :color="config.color"
           rounded="lg"
           size="isHovering ? 'large' : '44'"
-          variant="tonal"
+          :variant="userVoteResult > 0 ? 'tonal' : 'outlined'"
           :icon="isHovering ? undefined : config.icon"
+          @click="vote(userVoteResult === 1 ? -1 : 1)"
         >
           <template v-if="isHovering">
             {{ config.text }}
           </template>
-          <v-avatar
+          <button-vote-icon
             v-else
             :icon="config.icon"
             :color="config.color"
-            rounded
-            size="36"
-            variant="tonal"
-          >
-            <v-icon size="24" />
-          </v-avatar>
+            :highlight="userVoteResult > 0"
+          />
           <template #prepend>
-            <v-avatar
+            <button-vote-icon
               v-if="isHovering"
               v-bind="props"
               :icon="config.icon"
-              rounded
-              size="36"
-              variant="tonal"
-            >
-              <v-icon size="24" />
-            </v-avatar>
+              :color="config.color"
+              :highlight="userVoteResult > 0"
+            />
           </template>
         </v-btn>
       </template>
@@ -49,7 +43,7 @@ import { useRouter, useRoute } from "vue-router";
 import { useAuthState } from "@/composables/auth";
 import type { VoteCategory } from "~~/shared/model";
 import { useVotes } from "~/composables/votes";
-import { ClientOnly } from "#components";
+import { ButtonVoteIcon, ClientOnly } from "#components";
 
 const { id, category } = defineProps<{
   id: string;
@@ -74,11 +68,8 @@ const configMap: Record<
 
 const config = configMap[category];
 
-const { userCategoryVotes, nodeCategoryVotes, castVote } = useVotes(id);
+const { userCategoryVotes, castVote } = useVotes(id);
 
-const total = computed(() => {
-  return nodeCategoryVotes.value[category] || 0;
-});
 const userVoteResult = computed(() => userCategoryVotes.value[category] || 0);
 
 const loading = ref(false);

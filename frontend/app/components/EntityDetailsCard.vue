@@ -12,12 +12,16 @@
       <v-spacer />
       <div>
         <v-spacer />
-        <VoteWidget
+        <ButtonVoteWidget
           v-if="entity"
           :id="entity.id ?? ''"
           category="interesting"
         />
-        <VoteWidget v-if="entity" :id="entity.id ?? ''" category="quality" />
+        <ButtonVoteWidget
+          v-if="entity"
+          :id="entity.id ?? ''"
+          category="quality"
+        />
       </div>
     </v-card-title>
     <template #append> </template>
