@@ -47,7 +47,7 @@
     "@vueuse/firebase": "^14.2.1",
     "better-sqlite3": "^12.2.0",
     "cac": "^6.7.14",
-    "commander": "^13.1.0",
+    "commander": "^14.0.3",
     "d3-force": "^3.0.0",
     "digraph-js": "==2.2.3",
     "eslint": "^9.32.0",
