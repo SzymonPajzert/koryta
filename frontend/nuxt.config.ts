@@ -74,6 +74,7 @@ export default defineNuxtConfig({
     "@nuxt/test-utils/module",
     "@nuxtjs/seo",
     "@nuxt/image",
+    "@nuxtjs/plausible",
   ],
 
   site: {
@@ -85,6 +86,10 @@ export default defineNuxtConfig({
 
   sitemap: {
     sources: ["/api/_sitemap-urls"],
+  },
+  plausible: {
+    // Prevent tracking on localhost
+    ignoredHostnames: ["localhost"],
   },
 
   eslint: {
