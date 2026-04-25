@@ -23,6 +23,7 @@ from stores.config import PROJECT_ROOT
 from stores.download import FileSource
 from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
+from stores.nlp import NLPImpl
 from stores.rejestr import Rejestr
 from stores.storage import Client as CloudStorageClient
 from stores.utils import UtilsImpl
@@ -133,6 +134,7 @@ class Conductor(IO):
 
 def setup_context(
     use_rejestr_io: bool,
+    use_nlp: bool = False,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
 ) -> tuple[Context, EntityDumper]:
@@ -145,14 +147,18 @@ def setup_context(
         print("Initializing RejestrIO as a data source")
         rejestr_io = Rejestr()
 
+    nlp = None
+    if use_nlp:
+        nlp = NLPImpl()
+
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
         con=duckdb.connect(),
         utils=UtilsImpl(),
         web=WebImpl(),
-        nlp=None,  # type: ignore
         crawl_queue=crawl_queue,
+        nlp=nlp,                # type: ignore
         refresh_policy=policy,
     )
 

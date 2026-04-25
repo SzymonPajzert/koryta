@@ -9,11 +9,11 @@ import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, List, Literal, Union, overload
+from typing import TYPE_CHECKING, Any, Callable, List, Literal, Union, overload
 
 import numpy as np
 import pandas as pd
-from dacite import Config, from_dict
+from dacite import Config, from_dict  # type: ignore[import-not-found]
 
 from entities.ner import NEREntities
 
@@ -293,21 +293,57 @@ class NLP(metaclass=ABCMeta):
         pass
 
 
+@dataclass(frozen=True)
+class NewUrl:
+    url: str
+    priority: int
+
+
+@dataclass(frozen=True)
+class CrawlQueueItem:
+    uid: str
+    url: str
+
+
+@dataclass(frozen=True)
+class DoneUrl:
+    uid: str
+    url: str
+    storage_path: str
+
+
+@dataclass(frozen=True)
+class BlockedDomain:
+    domain: str
+    reason: str
+
+
 class CrawlQueue(metaclass=ABCMeta):
     """Abstract interface for crawler URL queue."""
 
     @abstractmethod
-    def put(self, urls: list[str]) -> None:
-        """Insert/enqueue URLs (idempotent)."""
+    def put(self, urls: list[NewUrl]) -> None:
+        """Insert/enqueue URLs (idempotent).
+
+        Each entry contains a URL and its priority in [0, 100].
+        """
         raise NotImplementedError()
 
     @abstractmethod
-    def get(self, worker_id: str, max_retries: int):
-        """Atomically claim a URL for processing."""
+    def get(
+        self, worker_id: str, max_retries: int = 3, timeout_seconds: float = 60
+    ) -> CrawlQueueItem | None:
+        """Atomically claim a URL for processing.
+
+        max_retries filters url that were retried more than $max_retries.
+        timeout_seconds controls when a previously locked URL is retried.
+
+        Returns CrawlQueueItem or None.
+        """
         raise NotImplementedError()
 
     @abstractmethod
-    def mark_done(self, uid: str, storage_path: str) -> None:
+    def mark_done(self, uid: str, storage_path: str | None) -> None:
         """Mark a URL as successfully crawled."""
         raise NotImplementedError()
 
@@ -319,6 +355,31 @@ class CrawlQueue(metaclass=ABCMeta):
     @abstractmethod
     def release(self, uid: str) -> None:
         """Release a lock without marking done or error."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def add_blocked_domains(self, rows: list[BlockedDomain]) -> None:
+        """Add or update blocked domains.
+
+        Domain can be a bare hostname or URL; matching ignores scheme/www.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def reprioritize(
+        self, priority_fn: Callable[[str], int], batch_size: int = 5000
+    ) -> None:
+        """Update priorities using priority_fn(url) -> priority."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_done_urls(self, limit: int) -> list[DoneUrl]:
+        """Return done URLs with storage_path."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def reset(self) -> None:
+        """Reset the queue tables/state to an empty clean slate."""
         raise NotImplementedError()
 
 
