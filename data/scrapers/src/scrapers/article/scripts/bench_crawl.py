@@ -1148,7 +1148,7 @@ def _parse_args() -> RunConfig:
         storage_type=args.storage_type,
         local_output=args.local_output,
         extra_args=args.extra_arg,
-        profile_dir=Path("."),
+        profile_dir=Path("../../../scripts"),
         workdir_suffix=args.workdir_suffix,
     )
 
