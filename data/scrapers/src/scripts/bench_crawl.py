@@ -106,7 +106,7 @@ def _pg_client_from_env() -> PostgresClient | None:
         or "crawler_password"
     )
     try:
-        return PostgresClient.from_env(
+        return PostgresClient(
             host=host,
             database=os.getenv("POSTGRES_DB", "crawler_db"),
             user=os.getenv("POSTGRES_USER", "crawler_user"),

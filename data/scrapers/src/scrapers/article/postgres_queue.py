@@ -5,8 +5,6 @@ All direct psycopg access is encapsulated here.
 
 import logging
 import os
-import re
-import time
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta

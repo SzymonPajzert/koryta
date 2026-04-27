@@ -203,6 +203,13 @@ ignore = [
     "PLW0602",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"src/scripts/fix_jsonl.py" = ["PLR0402"]
+"src/scripts/text_gemini_on_ner.py" = ["PLR0402"]
+"src/scrapers/article/hardcoded/listawstydupo.py" = ["E501"]
+"src/scrapers/article/hardcoded/kazdymusigdziespracowac.py" = ["E501"]
+"src/stores/storage.py" = ["PLR0402"]
+
 [tool.ruff.lint.mccabe]
 max-complexity = 20
 
@@ -259,7 +266,8 @@ forbidden_modules = [
 ]
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.interesting",
+    "scrapers.article.test_postgres_queue -> os",
+    "scrapers.article.postgres_queue -> os",
     "entities.util -> urllib",
-    "scrapers.stores -> os",
     "scrapers.stores -> io",
 ]
