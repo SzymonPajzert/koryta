@@ -155,6 +155,7 @@ def profile_scope(enabled: bool, path: Path | None):
         yield
     finally:
         profiler.disable()
+        path.parent.mkdir(parents=True, exist_ok=True)
         profiler.dump_stats(str(path))
         logging.info("Wrote profile to %s", path)
 

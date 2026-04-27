@@ -58,8 +58,10 @@ class CrawlResult:
 def stopwatch():
     stats = SimpleNamespace(duration=0.0)
     start = time.perf_counter()
-    yield stats
-    stats.duration = time.perf_counter() - start
+    try:
+        yield stats
+    finally:
+        stats.duration = time.perf_counter() - start
 
 
 # Per each hostname we do on-worker rate limiting.
