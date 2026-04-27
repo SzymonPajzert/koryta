@@ -35,8 +35,7 @@
   },
   "h1": {
     "name": "Not approved person",
-    "type": "person",
-    "revision_id": null
+    "type": "person"
   },
   "6": {
     "name": "Sample Article",
@@ -47,8 +46,7 @@
   "7": {
     "name": "Not approved article",
     "type": "article",
-    "sourceURL": "http://google.com",
-    "revision_id": null
+    "sourceURL": "http://google.com"
   },
   "8": {
     "name": "Artykuł bez krawędzi",

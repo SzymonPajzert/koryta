@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
+import { authFetch } from "@/composables/auth";
 
 const props = defineProps<{
   nodeId?: string;
@@ -50,7 +50,6 @@ const emit = defineEmits<{
 
 const content = ref("");
 const loading = ref(false);
-const { authFetch } = useAuthState();
 
 async function submit() {
   if (!content.value.trim()) return;

@@ -7,11 +7,47 @@ from memoized_property import memoized_property  # type:ignore
 
 from analysis.people import PeopleEnriched
 from analysis.utils import drop_duplicates, empty_list_if_nan
+from scrapers.article.hardcoded.listawstydupo import hardcoded as listawstydu
+from scrapers.article.hardcoded.tlustekotypisu import hardcoded as tlustekoty
 from scrapers.krs.data import PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
 from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
+
+
+def check_auto_approved():
+    tlustekoty_content = {line[0]: line[1] for line in tlustekoty}
+    listawsty_content = {line[0]: line[1] for line in listawstydu}
+
+    def check_row(row) -> tuple[int, list[str], str, list[str]]:
+        full_name = row["krs_name"]
+        first_name = full_name.split(" ")[0]
+        last_name = full_name.split(" ")[-1]
+        name = f"{first_name} {last_name}"
+
+        count = 0
+        content = ""
+        sources = []
+        parties = []
+        if name in tlustekoty_content:
+            count += 1
+            content += tlustekoty_content[name]
+            sources.append(
+                "https://www.psl.pl/mamy-liste-357tlustych-kotow-z-pis-w-spolkach-skarbu-panstwa"
+            )
+            parties.append("PiS")
+        if name in listawsty_content:
+            count += 1
+            content += listawsty_content[name]
+            sources.append(
+                "https://www.pb.pl/lista-wstydu-platformy-obywatelskiej-691425"
+            )
+            parties.append("PO")
+
+        return count, sources, content, parties
+
+    return check_row
 
 
 class Extract(Pipeline):
@@ -40,10 +76,19 @@ class Extract(Pipeline):
             default=None,
             required=False,
         )
+        parser.add_argument(
+            "--approved",
+            help="Extract people already approved",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
         args, _ = parser.parse_known_args()
 
-        if not args.region and not args.krs:
-            raise ValueError("Either region or krs must be provided")
+        if not args.region and not args.krs and not args.approved:
+            raise ValueError(
+                "[Extract]: Either --region or --krs or --approved must be provided"
+            )
 
         return args
 
@@ -55,11 +100,20 @@ class Extract(Pipeline):
     def krs(self):
         return self.args.krs
 
+    @property
+    def approved(self) -> bool:
+        return self.args.approved
+
     @memoized_property
     def filename(self):
+        result = "people_extracted"
+        if self.approved:
+            result += "_approved"
         if self.krs:
-            return f"people_extracted_krs_{self.krs}"
-        return f"people_extracted_{self.region}"
+            result += f"_krs_{self.krs}"
+        if self.region:
+            result += f"_region_{self.region}"
+        return result
 
     def process_graph(self, ctx: Context):
         companies_df = self.companies.read_or_process(ctx)
@@ -118,15 +172,29 @@ class Extract(Pipeline):
 
         return check
 
+    def auto_approved_func(self):
+        if not self.approved:
+            return lambda row: 0
+
+        func = check_auto_approved()
+
+        def check(row):
+            return func(row)[0]
+
+        return check
+
     def process(self, ctx: Context):
         people = self.people.read_or_process(ctx)
         self.teryt.read_or_process(ctx)
 
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
+        auto_approved = people.apply(self.auto_approved_func(), axis=1)
+
         people["total_elections"] = people["elections"].apply(list_length)
         people["total_employments"] = people["employment"].apply(list_length)
-        relevant = (relevant_employment + relevant_elections) > 0
+        # TODO control if we want to have both of them or one of them satisfied
+        relevant = (relevant_employment * relevant_elections + auto_approved) > 0
         people["relevance_ratio"] = (relevant_employment + relevant_elections) / (
             people["total_elections"] + people["total_employments"]
         )

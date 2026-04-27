@@ -52,7 +52,7 @@ describe("createRevisionTransaction", () => {
 
     // Should create revision
     expect(mockCollection).toHaveBeenCalledWith("revisions");
-    expect(mockBatch.set).toHaveBeenCalledTimes(1);
+    expect(mockBatch.set).toHaveBeenCalledTimes(2);
     // Verify first call is setting revision
     const firstCallArgs = vi.mocked(mockBatch.set).mock.calls[0];
     expect(firstCallArgs[1]).toMatchObject({

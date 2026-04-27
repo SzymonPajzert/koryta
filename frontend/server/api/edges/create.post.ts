@@ -34,6 +34,7 @@ export default defineEventHandler(async (event) => {
     elected: !!body.elected,
     term: body.term || "",
     by_election: !!body.by_election,
+    update_automatic: body.update_automatic || undefined,
   };
 
   const batch = db.batch();

@@ -1,9 +1,9 @@
 <template>
   <v-dialog v-model="dialog" max-width="500">
-    <template #activator="{ props }">
-      <slot name="activator" :props="props">
+    <template #activator="{ props: activatorProps }">
+      <slot name="activator" :props="activatorProps">
         <v-btn
-          v-bind="props"
+          v-bind="activatorProps"
           color="error"
           variant="tonal"
           prepend-icon="mdi-delete-outline"
@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
+import { authFetch } from "@/composables/auth";
 
 const props = defineProps<{
   id: string; // node_id or edge_id
@@ -63,14 +63,13 @@ const dialog = ref(false);
 const reason = ref("");
 const loading = ref(false);
 const error = ref<string | null>(null);
-const { authFetch } = useAuthState();
 
 async function submit() {
   loading.value = true;
   error.value = null;
 
   try {
-    const body: any = {
+    const body: Record<string, unknown> = {
       node_id: props.id,
       deleted: true,
       delete_reason: reason.value,
@@ -87,8 +86,8 @@ async function submit() {
     dialog.value = false;
     reason.value = "";
     emit("success");
-  } catch (e: any) {
-    error.value = e.message || "Wystąpił błąd";
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : "Wystąpił błąd";
   } finally {
     loading.value = false;
   }

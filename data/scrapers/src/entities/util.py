@@ -65,5 +65,5 @@ class NormalizedParse:
             hostname=hostname,
             hostname_normalized=hostname_normalized,
             domain=domain,
-            full_url=domain + parsed.path
+            full_url=parsed.geturl(),
         )

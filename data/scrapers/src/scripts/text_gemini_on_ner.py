@@ -5,9 +5,9 @@ It defines metrics like recall for data person_wikipedia_ner.jsonl.
 
 import os
 
+import google.genai as genai
 import IPython
 import pandas as pd
-from google import genai
 from joblib import Memory
 from tqdm import tqdm
 

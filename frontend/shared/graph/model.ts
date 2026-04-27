@@ -1,3 +1,5 @@
+import type { ElectionPosition } from "~~/shared/model";
+
 export interface Node {
   name: string;
   prettyURL?: string;
@@ -8,6 +10,7 @@ export interface Node {
   hide?: boolean;
   parties?: string[];
   visibility?: boolean;
+  entityType?: string;
 }
 
 export interface NodeStats {
@@ -36,7 +39,7 @@ export interface Edge {
   id?: string;
   source: string;
   target: string;
-  label: string;
+  label?: string;
   type:
     | "employed"
     | "connection"
@@ -52,8 +55,10 @@ export interface Edge {
   visibility?: boolean;
   party?: string;
   committee?: string;
-  position?: string;
+  position?: ElectionPosition;
   elected?: boolean;
   term?: string;
   by_election?: boolean;
+  start_date?: string;
+  end_date?: string;
 }

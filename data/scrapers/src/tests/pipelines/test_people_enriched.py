@@ -6,7 +6,7 @@ import regex as re
 from analysis.people import PeopleEnriched
 from conductor import setup_context
 from entities.company import ManualKRS as KRS
-from main import Pipeline
+from koryta import Pipeline
 from scrapers.stores import CloudStorage, DownloadableFile
 from stores.config import tests
 
@@ -288,7 +288,7 @@ def test_second_names_match(df_all):
 
 
 def file_lines(filename):
-    with open(tests.get_path(filename)) as people_list:
+    with open(tests.get_path(filename), encoding="utf-8") as people_list:
         for line in people_list:
             yield line.strip()
 

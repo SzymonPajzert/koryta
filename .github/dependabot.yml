@@ -1,0 +1,53 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-updates:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    ignore:
+      - dependency-name: "digraph-js"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-updates:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/functions"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-updates:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pip"
+    directory: "/util"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-updates:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pip"
+    directory: "/data/scrapers"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-updates:
+        update-types:
+          - "minor"
+          - "patch"

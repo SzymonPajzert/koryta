@@ -5,11 +5,13 @@
 <script setup lang="ts">
 import { useParams } from "~/composables/params";
 
-const { filtered } = useParams("Graf ");
+const { filters } = useParams();
+const { entities: filtered } = useEntities("person", filters);
 
 definePageMeta({
   title: "Graf",
   isGraph: true,
   fullWidth: true,
+  robots: false,
 });
 </script>

@@ -69,4 +69,4 @@ def get_party_from_elections(elections: list[Election]) -> list[str]:
                 # TODO support it at one point
                 continue
 
-    return list(party)
+    return list(p for p in party if p != "")

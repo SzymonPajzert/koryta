@@ -1,15 +1,30 @@
 <template>
   <v-card v-if="type == 'person'" width="100%" variant="flat">
-    <v-card-title class="headline px-0">
+    <v-card-title class="px-0 d-flex">
+      <h2 class="text-h5 font-weight-bold mr-2">
+        {{ entity?.name }}
+      </h2>
       <PartyChip
         v-for="party in personEntity?.parties"
         :key="party"
         :party="party"
       />
-      <h2 class="text-h5 font-weight-bold">
-        {{ entity?.name }}
-      </h2>
+      <v-spacer />
+      <div>
+        <v-spacer />
+        <ButtonVoteWidget
+          v-if="entity"
+          :id="entity.id ?? ''"
+          category="interesting"
+        />
+        <ButtonVoteWidget
+          v-if="entity"
+          :id="entity.id ?? ''"
+          category="quality"
+        />
+      </div>
     </v-card-title>
+    <template #append> </template>
     <v-card-subtitle v-if="personEntity?.birthDate" class="px-0">
       Data urodzenia: {{ personEntity.birthDate }}
     </v-card-subtitle>
@@ -80,7 +95,7 @@
 import type { Person, Company, Article, Region } from "~~/shared/model";
 
 const props = defineProps<{
-  entity: any;
+  entity: Company | Person | Article | Region;
   type: string;
 }>();
 

@@ -1,7 +1,7 @@
 import typing
 
 from conductor import setup_context
-from main import Pipeline
+from koryta import Pipeline
 
 
 def run_pipeline(p_type: typing.Type):

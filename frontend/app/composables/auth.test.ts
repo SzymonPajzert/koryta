@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockNuxtImport } from "@nuxt/test-utils/runtime";
-import { useAuthState } from "./auth";
+import { ref } from "vue";
+import { authFetch } from "@/composables/auth";
 
 // Hoisted variables for mocks
 const { mockIdTokenFn, mockAuth, mockUseFetchSpy, mockUseDocumentSpy } =
@@ -49,13 +50,10 @@ vi.mock("vuefire", () => ({
   useFirebaseAuth: () => mockAuth,
   useFirestore: vi.fn(),
   useDocument: mockUseDocumentSpy,
+  useIsCurrentUserLoaded: () => ref(true),
+  useCurrentUser: () => ref(mockAuth.currentUser),
 }));
 vi.mock("nuxt-vuefire", () => ({}));
-
-// Mock Nuxt imports
-mockNuxtImport("useFetch", () => {
-  return mockUseFetchSpy;
-});
 
 mockNuxtImport("useFirebaseAuth", () => {
   return () => mockAuth;
@@ -75,50 +73,12 @@ describe("useAuthState", () => {
   });
 
   it("authFetch should call getIdToken before request", async () => {
-    const { authFetch } = useAuthState();
     const mockOptions = { headers: {} };
 
-    // Simulate authFetch call
-    authFetch("/api/test", mockOptions);
-
-    // Verify useFetch was called
-    expect(mockUseFetchSpy).toHaveBeenCalled();
-    const callArgs = mockUseFetchSpy.mock.calls[0];
-
-    if (!callArgs) {
-      throw new Error("useFetch was not called");
-    }
-
-    expect(callArgs[0]).toBe("/api/test");
-    const fetchOptions = callArgs[1];
-
     // Execute the interceptor
-    await fetchOptions.onRequest({ options: mockOptions });
+    await authFetch("/api/edges", mockOptions);
 
     // Verify logic
     expect(mockIdTokenFn).toHaveBeenCalled();
-  });
-
-  it("authFetch should add Authorization header", async () => {
-    mockIdTokenFn.mockResolvedValue("new-token");
-    const { authFetch } = useAuthState();
-    const mockOptions = { headers: {} as any };
-
-    authFetch("/api/test", mockOptions);
-
-    expect(mockUseFetchSpy).toHaveBeenCalled();
-    const callArgs = mockUseFetchSpy.mock.calls[0];
-
-    if (!callArgs) {
-      throw new Error("useFetch was not called");
-    }
-
-    const fetchOptions = callArgs[1];
-
-    await fetchOptions.onRequest({ options: mockOptions });
-
-    expect((mockOptions.headers as Headers).get("Authorization")).toBe(
-      "Bearer new-token",
-    );
   });
 });

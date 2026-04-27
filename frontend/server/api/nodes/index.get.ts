@@ -1,8 +1,25 @@
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 
 import { fetchNodes } from "~~/server/utils/fetch";
+import { z } from "zod";
 
-export default authCachedEventHandler(async () => {
+const queryValidator = z.object({
+  type: z.enum(["person", "place", "article", "region"]).optional(),
+  party: z.string().optional(),
+  place: z.string().optional(),
+});
+
+export default authCachedEventHandler(async (event) => {
+  const query = await getValidatedQuery(event, (query) =>
+    queryValidator.parse(query),
+  );
+
+  const opts = { personParty: query.party };
+
+  if (query.type) {
+    return { nodes: await fetchNodes(query.type, opts) };
+  }
+
   const [people, places, articles, regions] = await Promise.all([
     fetchNodes("person"),
     fetchNodes("place"),

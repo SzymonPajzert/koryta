@@ -3,7 +3,7 @@ import os
 import typing
 
 import duckdb
-from duckdb.typing import VARCHAR  # type: ignore
+from duckdb.sqltypes import VARCHAR
 from tqdm import tqdm
 
 from scrapers.article.crawler import parse_hostname, uuid7
@@ -99,7 +99,7 @@ class Conductor(IO):
         # If it doesn't have absolute path
         # The filename passed from Pipeline is "something.jsonl"
         if hasattr(fs, "filename"):
-            folder = getattr(fs, "folder") or "versioned"
+            folder = getattr(fs, "folder", None) or "versioned"
             path = os.path.join(PROJECT_ROOT, folder, fs.filename)  # type: ignore
         else:
             raise ValueError(f"Cannot write to {fs} - missing filename")
@@ -135,6 +135,7 @@ class Conductor(IO):
 
 def setup_context(
     use_rejestr_io: bool,
+    use_nlp: bool = False,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
 ) -> tuple[Context, EntityDumper]:
@@ -147,14 +148,18 @@ def setup_context(
         print("Initializing RejestrIO as a data source")
         rejestr_io = Rejestr()
 
+    nlp = None
+    if use_nlp:
+        nlp = NLPImpl()
+
     ctx = Context(
         io=conductor,
         rejestr_io=rejestr_io,  # type: ignore
         con=duckdb.connect(),
         utils=UtilsImpl(),
         web=WebImpl(),
-        nlp=NLPImpl(),
         crawl_queue=crawl_queue,
+        nlp=nlp,                # type: ignore
         refresh_policy=policy,
     )
 

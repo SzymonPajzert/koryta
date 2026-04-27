@@ -1,7 +1,6 @@
 <template>
   <v-card
-    :href="source.url"
-    target="_blank"
+    :to="`/lista?source=${source.domain}`"
     height="100%"
     class="pa-4 hover-card"
     elevation="1"
@@ -29,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import type { SourceStat } from "@/composables/useHomeStats";
+import type { SourceStat } from "~~/server/api/nodes/articles.get";
 
 defineProps<{
   source: SourceStat;

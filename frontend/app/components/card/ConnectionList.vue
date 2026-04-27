@@ -4,12 +4,14 @@
     <v-card>
       <v-list density="compact">
         <v-list-item
-          v-for="edge in edges"
+          v-for="edge in edgesSorted"
           :key="edge.richNode.id"
           :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
           :prepend-icon="nodeTypeIcon[edge.richNode.type]"
         >
-          <v-list-item-title>{{ edge.richNode.name }}</v-list-item-title>
+          <v-list-item-title
+            >{{ edge.richNode.name }} ({{ edge.people }})</v-list-item-title
+          >
         </v-list-item>
       </v-list>
     </v-card>
@@ -23,4 +25,23 @@ const { edges, title } = defineProps<{
   title: string;
   edges: EdgeNode[];
 }>();
+
+const { data: nodeGroups } = await authFetch("/api/graph/nodeGroups", {
+  key: "connectionlist-node-groups",
+});
+
+const edgesSorted = computed(() => {
+  const nodeGroupsSafe = nodeGroups.value
+    ? Object.fromEntries(
+        nodeGroups.value.map((x: { id: string; people: number }) => [x.id, x]),
+      )
+    : {};
+
+  const edgesWithCount = edges.map((edge) => ({
+    ...edge,
+    people: nodeGroupsSafe[edge.target]?.people ?? 0,
+  }));
+
+  return edgesWithCount.sort((a, b) => b.people - a.people);
+});
 </script>

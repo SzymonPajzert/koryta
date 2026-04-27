@@ -12,8 +12,9 @@ class Company:
 
 @dataclass
 class Election:
+    # TODO we need a proper typing of the election types
     election_type: typing.Any
-    committee: str | None = None
+    committee: str
     election_year: str | None = None
     teryt: str | None = None
 
@@ -24,6 +25,9 @@ class Person:
 
     companies: list[Company]
     elections: list[Election]
-    party: list[str] | None = None
-    wikipedia_url: str | None = None
-    rejestr_io_url: str | None = None
+    sources: list[str]
+    content: str | None = None
+    parties: list[str] | None = None
+    wikipedia: str | None = None
+    rejestrIo: str | None = None
+    autoapprove: bool = False
