@@ -12,6 +12,7 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 import psycopg
+from psycopg.types.json import Jsonb
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
@@ -229,7 +230,7 @@ class PostgresCrawlQueue(CrawlQueue):
             "UPDATE website_index SET done = TRUE, date_finished = %s, "
             "locked_by_worker_id = NULL, locked_at = NULL, "
             "storage_path = %s, metadata = %s WHERE id = %s",
-            [datetime.now(warsaw_tz), storage_path, metadata, uid],
+            [datetime.now(warsaw_tz), storage_path, Jsonb(metadata), uid],
         )
 
     def mark_error(self, uid: str, error: str) -> None:

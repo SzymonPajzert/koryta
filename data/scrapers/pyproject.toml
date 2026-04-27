@@ -172,6 +172,7 @@ mypy_path = "src"
 [[tool.mypy.overrides]]
 module = [
     "duckdb",
+    "duckdb.*",
     "firebase_admin.*",
     "google.*",
     "scipy.*",
