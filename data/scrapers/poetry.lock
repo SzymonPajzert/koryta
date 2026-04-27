@@ -7033,6 +7033,18 @@ files = [
 numpy = ">=1.20"
 
 [[package]]
+name = "types-psycopg2"
+version = "2.9.21.20260422"
+description = "Typing stubs for psycopg2"
+optional = false
+python-versions = ">=3.10"
+groups = ["dev"]
+files = [
+    {file = "types_psycopg2-2.9.21.20260422-py3-none-any.whl", hash = "sha256:e240684ac37946c5a2a058b04ea1f2fd0e4ee2655719b8c3ec9abf37f96da5ba"},
+    {file = "types_psycopg2-2.9.21.20260422.tar.gz", hash = "sha256:ad7574fa8e25d9aa96ab96cd280c4dee20872725cd1fe6a6d3facc354f2644d4"},
+]
+
+[[package]]
 name = "types-pytz"
 version = "2026.1.1.20260408"
 description = "Typing stubs for pytz"
