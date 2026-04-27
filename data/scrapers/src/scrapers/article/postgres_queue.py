@@ -5,7 +5,6 @@ All direct psycopg access is encapsulated here.
 
 import logging
 import os
-from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
@@ -345,60 +344,6 @@ class PostgresCrawlQueue(CrawlQueue):
         )
         return [DoneUrl(row[0], row[1], row[2]) for row in rows]
 
-    def _get_stats(self) -> dict:
-        """Return crawler statistics as a dict (printing happens in the entrypoint)."""
-        stats: dict = {}
-
-        stats["total_urls"] = self.pg.fetchone(
-            "SELECT COUNT(*) FROM website_index;"
-        )[0]
-        stats["finished_urls"] = self.pg.fetchone(
-            "SELECT COUNT(*) FROM website_index WHERE done = TRUE;"
-        )[0]
-        stats["pending_urls"] = self.pg.fetchone(
-            "SELECT COUNT(*) FROM website_index WHERE done = FALSE;"
-        )[0]
-        stats["urls_with_errors"] = self.pg.fetchone(
-            "SELECT COUNT(*) FROM website_index WHERE array_length(errors, 1) > 0;"
-        )[0]
-        stats["total_errors"] = self.pg.fetchone(
-            "SELECT SUM(array_length(errors, 1)) FROM website_index "
-            "WHERE array_length(errors, 1) > 0;"
-        )[0] or 0
-
-        all_errors = self.pg.fetchall(
-            "SELECT unnest(errors) AS error_msg FROM website_index "
-            "WHERE array_length(errors, 1) > 0;"
-        )
-        if all_errors:
-            stats["top_errors"] = Counter([row[0] for row in all_errors]).most_common(5)
-        else:
-            stats["top_errors"] = []
-
-        stats["avg_processing_seconds"] = self.pg.fetchone(
-            "SELECT AVG(EXTRACT(EPOCH FROM (date_finished - date_added))) "
-            "FROM website_index "
-            "WHERE done = TRUE AND date_finished IS NOT NULL;"
-        )[0]
-
-        now = datetime.now()
-        timeframes = {"1min": 1, "10min": 10, "60min": 60}
-        stats["recent"] = {}
-        for label, minutes in timeframes.items():
-            start_time = now - timedelta(minutes=minutes)
-            successes = self.pg.fetchone(
-                "SELECT COUNT(*) FROM website_index "
-                "WHERE done = TRUE AND date_finished >= %s;",
-                (start_time,),
-            )[0]
-            errors = self.pg.fetchone(
-                "SELECT COUNT(*) FROM website_index "
-                "WHERE array_length(errors, 1) > 0 AND date_added >= %s;",
-                (start_time,),
-            )[0]
-            stats["recent"][label] = {"successes": successes, "errors": errors}
-
-        return stats
 
     @classmethod
     def _normalize_url(cls, value: str) -> str:
