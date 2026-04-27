@@ -129,9 +129,6 @@ class PostgresCrawlQueue(CrawlQueue):
                     metadata JSONB DEFAULT '{}'::jsonb
                 );
 
-                ALTER TABLE website_index
-                ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
-
                 CREATE TABLE IF NOT EXISTS blocked_domains (
                     domain TEXT PRIMARY KEY,
                     reason TEXT
