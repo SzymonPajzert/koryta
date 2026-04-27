@@ -15,7 +15,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, cast
 
@@ -1164,7 +1164,7 @@ def main() -> int:
     pg_client = _pg_client_from_env()
 
     run_meta = {
-        "started_at": datetime.now().isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "git_rev": _git_rev(),
         "workers": cfg.workers,
         "seed": str(cfg.seed),

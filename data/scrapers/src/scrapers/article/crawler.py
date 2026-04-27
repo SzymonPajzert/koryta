@@ -244,13 +244,13 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
             logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
         elif result.error:
             logging.error(
-                f"[{result.request_duration_s:.2f}s] "
+                f"[{result.request_duration_s or 0:.2f}s] "
                 f"Crawl failed ({result.error}): {parsed_url.full_url}"
             )
             queue.mark_error(uid, result.error)
         else:
             logging.info(
-                f"[{result.request_duration_s:.2f}s] "
+                f"[{result.request_duration_s or 0:.2f}s] "
                 f"Crawl succeeded: {parsed_url.full_url}"
             )
             queue.mark_done(uid, result.storage_path, {
