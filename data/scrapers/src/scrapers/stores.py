@@ -9,7 +9,7 @@ import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, List, Literal, Union, overload
+from typing import TYPE_CHECKING, Any, Callable, List, Literal, NewType, Union, overload
 
 import numpy as np
 import pandas as pd
@@ -36,6 +36,7 @@ class Extractor(metaclass=ABCMeta):
 
 
 type Formats = Literal["jsonl", "csv", "parquet"]
+Priority = NewType("Priority", int)
 
 
 class File(metaclass=ABCMeta):
@@ -120,7 +121,7 @@ class LocalFile(DataRef):
     """A reference to a file on the local filesystem."""
 
     filename: str
-    folder: Literal["downloaded", "tests", "versioned"]
+    folder: Literal["downloaded", "tests", "versioned", "crawler_output"]
 
 
 @dataclass
@@ -294,12 +295,6 @@ class NLP(metaclass=ABCMeta):
 
 
 @dataclass(frozen=True)
-class NewUrl:
-    url: str
-    priority: int
-
-
-@dataclass(frozen=True)
 class CrawlQueueItem:
     uid: str
     url: str
@@ -310,6 +305,16 @@ class DoneUrl:
     uid: str
     url: str
     storage_path: str
+
+
+@dataclass(frozen=True)
+class NewUrl:
+    url: str
+    priority: int
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.priority <= 100:
+            raise ValueError(f"Priority must be 0-100, got {self.priority}")
 
 
 @dataclass(frozen=True)

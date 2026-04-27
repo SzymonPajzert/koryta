@@ -123,6 +123,7 @@ dependencies = [
 koryta = "koryta:main"
 koryta_uploader = "uploader:main"
 koryta_pipelines = "pipelines:main"
+koryta_crawl = "crawl_cli:main"
 koryta_scraper = "scraper:main"
 
 
@@ -266,6 +267,7 @@ forbidden_modules = [
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.interesting",
     "scrapers.article.test_postgres_queue -> os",
+    "scrapers.article.postgres_queue -> os",
     "entities.util -> urllib",
     "scrapers.stores -> io",
 ]
