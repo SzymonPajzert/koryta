@@ -9,19 +9,11 @@ import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
-<<<<<<< HEAD
-from typing import TYPE_CHECKING, Any, Callable, List, Literal, Union, overload
-
-import numpy as np
-import pandas as pd
-from dacite import from_dict  # type: ignore[import-not-found]
-=======
 from typing import TYPE_CHECKING, Any, Callable, List, Literal, NewType, Union, overload
 
 import numpy as np
 import pandas as pd
 from dacite import Config, from_dict  # type: ignore[import-not-found]
->>>>>>> origin/main
 
 from entities.ner import NEREntities
 
