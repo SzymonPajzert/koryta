@@ -29,54 +29,63 @@ const edgeTypeLabels: Record<string, string> = {
 };
 
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
-  const { authFetch } = useAuthState();
+  const { user } = useAuthState();
+  const { data: localData, refresh: refreshLocal } = await authFetch(
+    () => `/api/graph/local/${toValue(nodeID)}`,
+    {
+      query: { latest: !!user.value, distance: 1, center: toValue(nodeID) },
+      watch: [toRef(nodeID)],
+    },
+  );
 
-  const { data: edgesData, refresh: refreshEdges } =
-    await authFetch<Edge[]>("/api/graph/edges");
-
-  const { data: nodesResponse, refresh: refreshNodes } = await authFetch<{
-    nodes: Record<string, unknown>;
-  }>("/api/nodes");
-
-  const nodes = computed(() => nodesResponse.value?.nodes || {});
-  const edges = computed(() => edgesData.value || []);
+  const nodes = computed(() => localData.value?.nodes || {});
+  const edges = computed(() => localData.value?.edges || []);
 
   const sources = computed<EdgeNode[]>(() => {
     const id = toValue(nodeID);
     if (!id) return [];
     return (edges.value || [])
-      .filter((e) => e.target == id && nodes.value[e.source])
-      .map((e) => ({
+      .filter((e: Edge) => e.target == id && nodes.value[e.source])
+      .map((e: Edge) => ({
         ...e,
         label: e.name || edgeTypeLabels[e.type] || e.type,
-        richNode: nodes.value[e.source] as Node,
+        richNode: {
+          ...nodes.value[e.source],
+          type: nodes.value[e.source]?.entityType,
+        } as Node,
       }));
   });
   const targets = computed<EdgeNode[]>(() => {
     const id = toValue(nodeID);
     if (!id) return [];
     return (edges.value || [])
-      .filter((e) => e.source == id && nodes.value[e.target])
-      .map((e) => ({
+      .filter((e: Edge) => e.source == id && nodes.value[e.target])
+      .map((e: Edge) => ({
         ...e,
         label: e.name || edgeTypeLabels[e.type] || e.type,
-        richNode: nodes.value[e.target] as Node,
+        richNode: {
+          ...nodes.value[e.target],
+          type: nodes.value[e.target]?.entityType,
+        } as Node,
       }));
   });
   const referencedIn = computed<EdgeNode[]>(() => {
     const id = toValue(nodeID);
     if (!id) return [];
     return (edges.value || [])
-      .filter((e) => e.references?.includes(id))
-      .map((e) => ({
+      .filter((e: Edge) => e.references?.includes(id))
+      .map((e: Edge) => ({
         ...e,
         label: e.name || edgeTypeLabels[e.type] || e.type,
-        richNode: nodes.value[e.source] as Node, // We show source node for referenced edges
+        richNode: {
+          ...nodes.value[e.source],
+          type: nodes.value[e.source]?.entityType,
+        } as Node, // We show source node for referenced edges
       }));
   });
 
   async function refresh() {
-    await Promise.all([refreshEdges(), refreshNodes()]);
+    await refreshLocal();
   }
 
   return { sources, targets, referencedIn, refresh };

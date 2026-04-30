@@ -20,7 +20,15 @@ from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
-from scrapers.stores import CloudStorage, Context, CrawlQueue, DataRef, LocalFile
+from scrapers.stores import (
+    CloudStorage,
+    Context,
+    CrawlQueue,
+    DataRef,
+    LocalFile,
+    NewUrl,
+    Priority,
+)
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
@@ -64,13 +72,15 @@ class CrawlResult:
 def stopwatch():
     stats = SimpleNamespace(duration=0.0)
     start = time.perf_counter()
-    yield stats
-    stats.duration = time.perf_counter() - start
+    try:
+        yield stats
+    finally:
+        stats.duration = time.perf_counter() - start
 
-# Per each hostname we do on-worker rate limitng.
+
+# Per each hostname we do on-worker rate limiting.
 _next_req_lock = threading.Lock()
 _next_request_time: dict[str, float] = {}
-
 
 
 def _can_crawl(parsed: NormalizedParse, rate_limit: float) -> bool:
@@ -83,18 +93,18 @@ def _can_crawl(parsed: NormalizedParse, rate_limit: float) -> bool:
         _next_request_time[domain] = time.time() + rate_limit
         return True
 
+
 def _compress_long_segments(path: str, max_segment_length: int) -> str:
     path_segments = [s for s in path.split("/") if s]
-
     safe_segments = []
     for segment in path_segments:
-        if len(segment.encode('utf-8')) > max_segment_length:
+        if len(segment.encode("utf-8")) > max_segment_length:
             hash_suffix = hashlib.md5(segment.encode()).hexdigest()[:10]
             truncated = segment[:max_segment_length - 12]
             segment = f"{truncated}_{hash_suffix}"
         safe_segments.append(segment)
-
     return "/".join(safe_segments)
+
 
 def _storage_path(
     parsed: NormalizedParse,
@@ -109,8 +119,7 @@ def _storage_path(
     if suffix:
         base = f"{base}/{suffix}"
     storage_path = base.replace("//", "/").rstrip("/")
-    # We compress the segments because otherwise we can
-    # get "OSError: [Errno 36] File name too long"
+    # Compress long segments to avoid "OSError: [Errno 36] File name too long"
     return _compress_long_segments(storage_path, 200)
 
 
@@ -124,9 +133,8 @@ def _is_html_response(response: requests.Response) -> bool:
     media_type = content_type.split(";")[0].strip()
     if not media_type:
         return False
-
     extension = mimetypes.guess_extension(media_type)
-    return extension in {'.html', '.htm'}
+    return extension in {".html", ".htm"}
 
 
 def _upload_response(
@@ -185,7 +193,7 @@ def crawl_url(
         except requests.RequestException as exc:
             return CrawlResult(
                 error=str(exc),
-                request_duration_s=t_request.duration
+                request_duration_s=t_request.duration,
             )
 
     if response.status_code != 200:
@@ -202,8 +210,10 @@ def crawl_url(
             discovered_urls = _extract_urls(ctx, response)
         else:
             discovered_urls = set()
-            logging.info(f"Not parsing the file, because it's not HTML "
-                         f"{parsed_url.full_url}")
+            logging.info(
+                "Not parsing the file, because it's not HTML: %s",
+                parsed_url.full_url,
+            )
 
     return CrawlResult(
         storage_path=storage_path,
@@ -217,15 +227,14 @@ def crawl_url(
 
 
 def _extract_urls(
-        ctx: Context,
-        response: requests.Response,
+    ctx: Context,
+    response: requests.Response,
 ) -> set[str]:
     discovered = set()
     soup = BeautifulSoup(response.text, "lxml")
 
     base_tag = soup.find("base", href=True)
     base_url = response.url
-
     if isinstance(base_tag, Tag):
         base_href = base_tag.get("href")
         if isinstance(base_href, str):
@@ -234,44 +243,49 @@ def _extract_urls(
     for link_el in soup.find_all("a", href=True):
         if not isinstance(link_el, Tag):
             continue
-
         href_attr = link_el.get("href")
         if not isinstance(href_attr, str):
             continue
-
         link = href_attr.strip()
-
-        if not link or link.startswith(("#", "mailto:", "tel:",
-                                        "javascript:", "data:")):
+        if not link or link.startswith(
+            ("#", "mailto:", "tel:", "javascript:", "data:")
+        ):
             continue
-
         absolute_link = ctx.utils.join_url(base_url, link)
         clean_link = absolute_link.split("#")[0].rstrip("/")
-
         if clean_link.startswith(("http://", "https://")):
             discovered.add(clean_link)
 
     return discovered
 
 
-def _priority_for_url(options: CrawlOptions, url: str) -> int:
+def _priority_for_url(options: CrawlOptions, url: str) -> Priority:
     scorer = get_scoring_function(options.url_scoring_function)
     score = scorer(url)
-    return max(0, min(100, 100 - score))
+    return Priority(max(0, min(100, 100 - score)))
+
 
 def _normalize_blocked(blocked: set[str]) -> set[str]:
     return {NormalizedParse.parse(url).hostname_normalized for url in blocked}
 
-def _filter_blocked(result: CrawlResult, blocked: set[str]):
+
+def _filter_blocked(result: CrawlResult, blocked: set[str]) -> None:
     result.discovered_urls = [
-        url for url in result.discovered_urls
+        url
+        for url in result.discovered_urls
         if NormalizedParse.parse(url).hostname_normalized not in blocked
     ]
 
-def _worker_thread(thread_index: int, options: CrawlOptions,
-                   queue: CrawlQueue, ctx: Context, blocked_normalized: set[str]):
+
+def _worker_thread(
+    thread_index: int,
+    options: CrawlOptions,
+    queue: CrawlQueue,
+    ctx: Context,
+    blocked_normalized: set[str],
+) -> None:
     worker_name = f"{options.worker_id}_{thread_index}"
-    logging.info(f"Starting to crawl in worker {worker_name}")
+    logging.info("Starting to crawl in worker: %s", worker_name)
 
     while True:
         entry = queue.get(
@@ -280,31 +294,32 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
             timeout_seconds=options.lock_timeout_seconds,
         )
         if entry is None:
-            logging.info(f"Waiting for entries in db in worker {worker_name}")
-            time.sleep(1)
-            continue
+            logging.info("Closing crawl queue. Nothing more to do.")
+            return
 
-        uid, url = entry
+        uid = entry.uid
+        url = entry.url
         parsed_url = NormalizedParse.parse(url)
-
         result = crawl_url(ctx, parsed_url, options)
 
         if result.hit_rate_limit:
-            logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
-            # NOTE: We do not release the lock here, because we rely on lock timeout
-            # mechanism to make it available again. This way it won't be queried over
-            # and over again if it has a high priority
+            # Do not release — rely on lock timeout so high-priority URLs
+            # aren't re-queried immediately after hitting the rate limit.
+            logging.info("Skipping because of hit rate limit: %s", parsed_url.full_url)
         elif result.error:
             logging.error(
-                f"[{result.request_duration_s:.2f}s] "
-                f"Crawl failed ({result.error}): {parsed_url.full_url}"
+                "[%.2fs] Crawl failed (%s): %s",
+                result.request_duration_s or 0,
+                result.error,
+                parsed_url.full_url,
             )
             queue.mark_error(uid, result.error)
         else:
             _filter_blocked(result, blocked_normalized)
             logging.info(
-                f"[{result.request_duration_s:.2f}s] "
-                f"Crawl succeeded: {parsed_url.full_url}"
+                "[%.2fs] Crawl succeeded: %s",
+                result.request_duration_s or 0,
+                parsed_url.full_url,
             )
             queue.mark_done(uid, result.storage_path, {
                 "request_duration_s": result.request_duration_s,
@@ -314,15 +329,13 @@ def _worker_thread(thread_index: int, options: CrawlOptions,
                 "worker_id": worker_name,
                 "media_type": result.media_type,
             })
-            queue.put(
-                [
-                    (url, _priority_for_url(options, url))
-                    for url in result.discovered_urls
-                ]
-            )
+            queue.put([
+                NewUrl(url, _priority_for_url(options, url))
+                for url in result.discovered_urls
+            ])
 
 
-def run_crawler(ctx: Context, options: CrawlOptions):
+def run_crawler(ctx: Context, options: CrawlOptions) -> None:
     queue = ctx.crawl_queue
     if queue is None:
         raise ValueError("Context has no crawl_queue set")
@@ -335,9 +348,11 @@ def run_crawler(ctx: Context, options: CrawlOptions):
         return
 
     with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
-        futures = [executor.submit(_worker_thread, idx, options, queue, ctx,
-                                   blocked_normalized)
-                   for idx in range(options.worker_threads)]
+        futures = [
+            executor.submit(
+                _worker_thread, idx, options, queue, ctx, blocked_normalized
+            )
+            for idx in range(options.worker_threads)
+        ]
         for future in futures:
             future.result()
-

@@ -5,7 +5,7 @@
     :nodes="nodes"
     :edges="edges"
     :configs="configs"
-    :layouts="layout"
+    :layouts="layoutCentered"
     :event-handlers="eventHandlers"
   >
     <template #node="{ node, config }">
@@ -46,13 +46,23 @@ import type { Node as GraphNode, Edge } from "~~/shared/graph/model";
 const props = defineProps<{
   nodes: Record<string, GraphNode>;
   edges: Edge[];
-  layout?: { nodes: Record<string, { x: number; y: number }> };
   ready: boolean;
   focusNodeId?: string;
 }>();
 
 const simulationStore = useSimulationStore();
 const router = useRouter();
+
+const layoutCentered = computed(() => {
+  if (!props.focusNodeId) return {};
+  const layout: {
+    nodes: Record<string, { x: number; y: number; fixed?: boolean }>;
+  } = {
+    nodes: {},
+  };
+  layout.nodes[props.focusNodeId] = { x: 0, y: 0, fixed: true };
+  return layout;
+});
 
 const emit = defineEmits<{
   (e: "expand", nodeId: string): void;
@@ -76,7 +86,7 @@ const handleNodeClick = ({ node, event }: NodeEvent<MouseEvent>) => {
         destination = "person";
         break;
       case "document":
-        destination = (nodeWhole as any).teryt ? "region" : "article";
+        destination = "teryt" in nodeWhole ? "region" : "article";
         break;
     }
 
@@ -119,7 +129,7 @@ const configs = reactive(
     },
 
     view: {
-      autoPanAndZoomOnLoad: "fit-content",
+      autoPanAndZoomOnLoad: "center-zero",
       scalingObjects: true,
       doubleClickZoomEnabled: false,
     },

@@ -1,17 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ref } from "vue";
-import { flushPromises } from "@vue/test-utils";
 import { useGraph } from "~/composables/graph";
-
-// Mock Nuxt / Vue composables
-vi.mock("#app", () => ({
-  useAsyncData: vi.fn((key, fetcher) => {
-    return { data: ref(fetcher()) };
-  }),
-}));
+import { clearNuxtData } from "#imports";
 
 const mockEdges = ref([
-  { source: "A", target: "B" }, // A-B
   { source: "A", target: "C" }, // A-C
   { source: "C", target: "D" }, // C-D
   { source: "D", target: "E" }, // D-E
@@ -25,10 +17,6 @@ const mockNodes = ref({
   E: { type: "circle", stats: { people: 1 } },
 });
 
-vi.mock("~/composables/useEntityFiltering", () => ({
-  useEntityFiltering: (r: any) => r,
-}));
-
 // We must override $fetch locally
 global.$fetch = vi.fn(() => ({
   nodes: mockNodes.value,
@@ -38,44 +26,31 @@ global.$fetch = vi.fn(() => ({
 
 describe("useGraph node expansion", () => {
   beforeEach(() => {
+    // try specifically clearing $fetch
+    (global.$fetch as any).mockClear();
     vi.clearAllMocks();
+    clearNuxtData();
   });
 
-  it("should return immediate neighbors when expandedNodes has 1 element (simulate single node click/focus)", async () => {
+  it("should evaluate local endpoint correctly based on single expanded node", async () => {
+    // 1. Single node focus
     const expandedNodes = ref(new Set(["A"]));
-    const { nodesFiltered, edgesFiltered } = useGraph({
+    const { url } = useGraph({
       focusNodeId: "A",
       expandedNodes,
     } as any);
 
-    await flushPromises();
-
-    // Should include A, B, C. D and E are too far.
-    expect(Object.keys(nodesFiltered.value)).toEqual(["A", "B", "C"]);
-
-    // Edges between A,B and A,C
-    expect(edgesFiltered.value.length).toBe(2);
+    expect(url.value).toBe("/api/graph/local/A?distance=1");
   });
 
-  it("should expand graph when new nodes are added to expandedNodes", async () => {
-    const expandedNodes = ref(new Set(["A"]));
-    const { nodesFiltered, edgesFiltered } = useGraph({
+  it("should evaluate local endpoint correctly based on multiple expanded nodes", async () => {
+    // 2. Multiple expanded nodes focus
+    const expandedNodes2 = ref(new Set(["A", "C", "D"]));
+    const { url } = useGraph({
       focusNodeId: "A",
-      expandedNodes,
+      expandedNodes: expandedNodes2,
     } as any);
 
-    await flushPromises();
-    expect(Object.keys(nodesFiltered.value)).toEqual(["A", "B", "C"]);
-
-    expandedNodes.value = new Set(["A", "C"]);
-    await flushPromises();
-
-    expect(Object.keys(nodesFiltered.value).sort()).toEqual([
-      "A",
-      "B",
-      "C",
-      "D",
-    ]);
-    expect(edgesFiltered.value.length).toBe(3);
+    expect(url.value).toBe("/api/graph/local/A?distance=1&expand=C,D");
   });
 });

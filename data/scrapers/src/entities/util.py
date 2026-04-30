@@ -57,7 +57,7 @@ class NormalizedParse:
             hostname_normalized = hostname_normalized[4:]
 
         domain = f"{parsed.scheme}://{hostname}"
-        query = ("?" + parsed.query) if parsed.query != "" else ""
+
         return NormalizedParse(
             scheme=parsed.scheme,
             netloc=parsed.netloc,
@@ -65,5 +65,5 @@ class NormalizedParse:
             hostname=hostname,
             hostname_normalized=hostname_normalized,
             domain=domain,
-            full_url=domain + parsed.path + query,
+            full_url=parsed.geturl(),
         )

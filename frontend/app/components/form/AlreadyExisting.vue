@@ -76,7 +76,7 @@ watch(model, () => {
   showSuggestions.value = true;
 });
 
-const { entities } = await useEntity(entity);
+const { entities } = useEntities(entity);
 
 function onSelect(key: string) {
   navigateTo(`/edit/node/${key}`);

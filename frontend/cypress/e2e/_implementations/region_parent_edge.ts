@@ -7,7 +7,7 @@ describe("Region Parent Edge", () => {
     cy.login();
 
     // Mock company page
-    cy.intercept("GET", `/api/nodes/entry/${COMPANY_ID}`, {
+    cy.intercept("GET", `/api/nodes/${COMPANY_ID}`, {
       body: {
         node: {
           id: COMPANY_ID,
@@ -18,9 +18,9 @@ describe("Region Parent Edge", () => {
     }).as("getCompany");
 
     // Mock search for "region" type nodes (which might map to generic node search or specific type)
-    // The component uses `/api/nodes/${props.entity}`
-    // If props.entity is "region", it calls `/api/nodes/region`
-    cy.intercept("GET", "/api/nodes/region*", (req) => {
+    // The component uses `/api/nodes?type=${props.entity}`
+    // If props.entity is "region", it calls `/api/nodes?type=region`
+    cy.intercept("GET", "/api/nodes?type=region*", (req) => {
       req.reply({
         body: {
           entities: {

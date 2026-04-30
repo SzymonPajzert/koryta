@@ -1,25 +1,61 @@
 import type { NodeTypeMap, NodeType } from "~~/shared/model";
+import { computed, type Ref, type ComputedRef } from "vue";
+import { authFetch, useAuthState } from "@/composables/auth";
 
-import { useAuthState } from "@/composables/auth";
-import { useEntityFiltering } from "./useEntityFiltering";
+export type Filters = {
+  party?: string;
+  place?: string;
+  source?: string;
+};
 
-export function useEntity<N extends NodeType>(nodeType: N) {
-  const { authFetch } = useAuthState();
-
+export function useEntities<N extends NodeType>(
+  nodeType: N,
+  filters: Filters | Ref<Filters> = {},
+) {
   const { data: response } = authFetch<{
-    entities: Record<string, NodeTypeMap[N]>;
-  }>(`/api/nodes/${nodeType}`);
+    nodes: Record<string, NodeTypeMap[N]>;
+  }>(`/api/nodes?type=${nodeType}`, {
+    query: filters,
+  });
 
-  const entitiesRaw = computed(() => response?.value?.entities ?? {});
-  const entities = useEntityFiltering(entitiesRaw);
+  const entitiesRaw = computed(() => response?.value?.nodes ?? {});
 
-  function submit<N extends NodeType>(
-    _value: Partial<NodeTypeMap[N]>,
-    _d: N,
-    _editKey: string | undefined,
-  ) {
-    return { key: "0" };
-  }
+  const entities = useEntitiesFiltering(entitiesRaw);
 
-  return { entities, submit };
+  return { entities };
+}
+
+export interface EntityWithVisibility {
+  visibility?: boolean;
+}
+
+export function useEntitiesFiltering<
+  T extends EntityWithVisibility,
+  C extends T[] | Record<string, T>,
+>(entities: Ref<C | undefined> | ComputedRef<C | undefined>) {
+  const { user } = useAuthState();
+
+  const filtered = computed(() => {
+    const raw = entities.value;
+    if (!raw) return raw as C | undefined;
+
+    if (Array.isArray(raw)) {
+      return (raw as T[]).filter((entity) => {
+        if (user.value) return true;
+        return entity.visibility !== false;
+      }) as C;
+    } else {
+      return Object.fromEntries(
+        Object.entries(raw as Record<string, T | undefined>).filter(
+          ([_, entity]) => {
+            if (!entity) return false;
+            if (user.value) return true;
+            return entity.visibility !== false;
+          },
+        ),
+      ) as C;
+    }
+  });
+
+  return filtered;
 }

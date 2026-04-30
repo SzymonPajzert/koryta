@@ -5,15 +5,23 @@ file operations, data references, and pipeline execution contexts.
 """
 
 import io
-import os.path
+import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
+<<<<<<< HEAD
 from typing import TYPE_CHECKING, Any, Callable, List, Literal, Union, overload
 
 import numpy as np
 import pandas as pd
 from dacite import from_dict  # type: ignore[import-not-found]
+=======
+from typing import TYPE_CHECKING, Any, Callable, List, Literal, NewType, Union, overload
+
+import numpy as np
+import pandas as pd
+from dacite import Config, from_dict  # type: ignore[import-not-found]
+>>>>>>> origin/main
 
 from entities.ner import NEREntities
 
@@ -36,6 +44,7 @@ class Extractor(metaclass=ABCMeta):
 
 
 type Formats = Literal["jsonl", "csv", "parquet"]
+Priority = NewType("Priority", int)
 
 
 class File(metaclass=ABCMeta):
@@ -201,7 +210,12 @@ class IO(metaclass=ABCMeta):
 
     # TODO remove this as well - it should just be a write_file
     @abstractmethod
-    def upload(self, source: Any, data: Any, content_type: str):
+    def upload(
+        self,
+        source: Any,
+        data: Any,
+        content_type: Literal["text/html", "application/json", "text/plain"],
+    ):
         """Uploads data to storage (e.g. GCS)."""
         raise NotImplementedError()
 
@@ -288,27 +302,56 @@ class NLP(metaclass=ABCMeta):
         pass
 
 
+@dataclass(frozen=True)
+class CrawlQueueItem:
+    uid: str
+    url: str
+
+
+@dataclass(frozen=True)
+class DoneUrl:
+    uid: str
+    url: str
+    storage_path: str
+
+
+@dataclass(frozen=True)
+class NewUrl:
+    url: str
+    priority: int
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.priority <= 100:
+            raise ValueError(f"Priority must be 0-100, got {self.priority}")
+
+
+@dataclass(frozen=True)
+class BlockedDomain:
+    domain: str
+    reason: str
+
+
 class CrawlQueue(metaclass=ABCMeta):
     """Abstract interface for crawler URL queue."""
 
     @abstractmethod
-    def put(self, urls: list[tuple[str, int]]) -> None:
+    def put(self, urls: list[NewUrl]) -> None:
         """Insert/enqueue URLs (idempotent).
 
-        Each entry is (url, priority) with priority in [0, 100].
+        Each entry contains a URL and its priority in [0, 100].
         """
         raise NotImplementedError()
 
     @abstractmethod
     def get(
-        self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
-    ) -> tuple[str, str] | None:
+        self, worker_id: str, max_retries: int = 3, timeout_seconds: float = 60
+    ) -> CrawlQueueItem | None:
         """Atomically claim a URL for processing.
 
         max_retries filters url that were retried more than $max_retries.
         timeout_seconds controls when a previously locked URL is retried.
 
-        Returns (id, url) or None.
+        Returns CrawlQueueItem or None.
         """
         raise NotImplementedError()
 
@@ -333,8 +376,8 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
-        """Add or update blocked domains (domain, reason).
+    def add_blocked_domains(self, rows: list[BlockedDomain]) -> None:
+        """Add or update blocked domains.
 
         Domain can be a bare hostname or URL; matching ignores scheme/www.
         """
@@ -342,7 +385,7 @@ class CrawlQueue(metaclass=ABCMeta):
 
     @abstractmethod
     def get_blocked_domains(self) -> set[str]:
-        """Return blocked domains (normalized) for in-memory filtering."""
+        """Return normalized blocked domain hostnames for in-memory filtering."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -353,8 +396,8 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_done_urls(self, limit: int) -> list[tuple]:
-        """Return done URLs with storage_path (id, url, storage_path)."""
+    def get_done_urls(self, limit: int) -> list[DoneUrl]:
+        """Return done URLs with storage_path."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -636,7 +679,7 @@ class Pipeline(typing.Generic[Output]):
     @property
     def output_path(self) -> str:
         if self.filename:
-            return os.path.join(self.filename, self.filename + "." + self.format)
+            return posixpath.join(self.filename, self.filename + "." + self.format)
         return ""
 
     @property
@@ -658,4 +701,9 @@ def iterate_pipeline[T](
     df = df.replace({np.nan: None})
     for row in df.to_dict(orient="records"):
         records = typing.cast(dict[str, typing.Any], row)
-        yield from_dict(data_class=constructor, data=records)
+        yield from_dict(
+            data_class=constructor,
+            data=records,
+            # TODO - I don't think we need this, try to remove it.
+            config=Config(cast=[int, float, str, bool]),
+        )

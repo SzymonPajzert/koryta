@@ -86,11 +86,11 @@ class KorytaDiffer(Pipeline):
             df_sorted = df.sort_values("date")
             df_valid = df_sorted[df_sorted["name"].notna()]
             # Update map
-            self.id_map.update(
-                pd.Series(
-                    df_valid["name"].values, index=df_valid["id"].astype(str)
-                ).to_dict()
-            )
+            latest_names = {
+                str(row["id"]): str(row["name"])
+                for _, row in df_valid.iterrows()
+            }
+            self.id_map.update(latest_names)
 
         if not dates:
             print("  No export dates found.")

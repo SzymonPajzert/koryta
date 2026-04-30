@@ -1,11 +1,10 @@
 """PostgreSQL-backed crawl queue for the article crawler.
 
-All direct psycopg2 access is encapsulated here. The constructor takes
-explicit connection parameters (no os.getenv).
+All direct psycopg access is encapsulated here.
 """
 
 import logging
-import re
+import os
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -13,12 +12,18 @@ from datetime import datetime, timedelta
 from typing import Callable, TypeVar
 from zoneinfo import ZoneInfo
 
-import psycopg2  # type: ignore
-from psycopg2 import pool as pg_pool
-from psycopg2.extras import Json
+import psycopg
+from psycopg.types.json import Jsonb
 from uuid_extensions import uuid7str  # type: ignore
 
-from scrapers.stores import CrawlQueue
+from entities.util import NormalizedParse
+from scrapers.stores import (
+    BlockedDomain,
+    CrawlQueue,
+    CrawlQueueItem,
+    DoneUrl,
+    NewUrl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +41,6 @@ class PostgresClient:
         password: str | None,
         port: int = 5432,
         *,
-        minconn: int = 1,
-        maxconn: int = 128,
-        connect_timeout: int = 10,
-        keepalives: int = 1,
-        keepalives_idle: int = 30,
-        keepalives_interval: int = 10,
-        keepalives_count: int = 5,
         max_retries: int = 5,
         base_backoff: float = 0.2,
     ):
@@ -51,40 +49,23 @@ class PostgresClient:
         self.user = user
         self.password = password
         self.port = port
-        self.minconn = minconn
-        self.maxconn = maxconn
-        self.connect_timeout = connect_timeout
-        self.keepalives = keepalives
-        self.keepalives_idle = keepalives_idle
-        self.keepalives_interval = keepalives_interval
-        self.keepalives_count = keepalives_count
         self.max_retries = max_retries
         self.base_backoff = base_backoff
-        self.pool = pg_pool.ThreadedConnectionPool(
-            self.minconn,
-            self.maxconn,
-            **self._connect_kwargs(),
-        )
 
-    def _connect_kwargs(self) -> dict[str, object]:
-        return {
-            "host": self.host,
-            "port": self.port,
-            "database": self.database,
-            "user": self.user,
-            "password": self.password,
-            "connect_timeout": self.connect_timeout,
-            "keepalives": self.keepalives,
-            "keepalives_idle": self.keepalives_idle,
-            "keepalives_interval": self.keepalives_interval,
-            "keepalives_count": self.keepalives_count,
-        }
+    def connect(self):
+        return psycopg.connect(
+            host=self.host,
+            port=self.port,
+            dbname=self.database,
+            user=self.user,
+            password=self.password,
+        )
 
     def _run_with_retry(self, label: str, fn: Callable[[], T]) -> T:
         for attempt in range(1, self.max_retries + 1):
             try:
                 return fn()
-            except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
+            except (psycopg.OperationalError, psycopg.InterfaceError) as exc:
                 if attempt == self.max_retries:
                     raise
                 backoff = self.base_backoff * 2 ** attempt
@@ -101,59 +82,24 @@ class PostgresClient:
         raise RuntimeError(f"Failed after {self.max_retries} retries")
 
     @classmethod
-    def from_env(
-        cls,
-        *,
-        host: str = "localhost",
-        database: str = "crawler_db",
-        user: str = "crawler_user",
-        password: str | None = "crawler_password",
-        port: int = 5432,
-        minconn: int = 1,
-        maxconn: int = 64,
-        connect_timeout: int = 10,
-        keepalives: int = 1,
-        keepalives_idle: int = 30,
-        keepalives_interval: int = 10,
-        keepalives_count: int = 5,
-        max_retries: int = 5,
-        base_backoff: float = 0.2,
-    ) -> "PostgresClient":
+    def from_env(cls) -> "PostgresClient":
         return cls(
-            host,
-            database,
-            user,
-            password,
-            port,
-            minconn=minconn,
-            maxconn=maxconn,
-            connect_timeout=connect_timeout,
-            keepalives=keepalives,
-            keepalives_idle=keepalives_idle,
-            keepalives_interval=keepalives_interval,
-            keepalives_count=keepalives_count,
-            max_retries=max_retries,
-            base_backoff=base_backoff,
+            host=os.getenv("POSTGRES_HOST", "localhost"),
+            database=os.getenv("POSTGRES_DB", "crawler_db"),
+            user=os.getenv("POSTGRES_USER", "crawler_user"),
+            password=os.getenv("POSTGRES_PASSWORD", "crawler_password"),
+            port=int(os.getenv("POSTGRES_PORT", "5432")),
         )
 
     @contextmanager
     def transaction(self):
-        conn = self.pool.getconn()
-        returned_conn = False
+        conn = self.connect()
         try:
             with conn:
-                with conn.cursor() as cur:
-                    yield cur
-        except (psycopg2.OperationalError, psycopg2.InterfaceError):
-            try:
-                self.pool.putconn(conn, close=True)
-                returned_conn = True
-            finally:
-                raise
+                with conn.cursor() as transaction:
+                    yield transaction
         finally:
-            if returned_conn or conn.closed:
-                return
-            self.pool.putconn(conn, close=False)
+            conn.close()
 
     def execute(self, sql: str, params=None) -> None:
         def op() -> None:
@@ -165,6 +111,7 @@ class PostgresClient:
     def executemany(self, sql: str, rows: list[tuple]) -> None:
         if not rows:
             return
+
         def op() -> None:
             with self.transaction() as transaction:
                 transaction.executemany(sql, rows)
@@ -221,9 +168,18 @@ class PostgresCrawlQueue(CrawlQueue):
                     locked_at TIMESTAMP WITH TIME ZONE,
                     storage_path TEXT,
                     mined_from_url TEXT,
-                    metadata JSONB DEFAULT '{}'::jsonb 
+                    metadata JSONB DEFAULT '{}'::jsonb
                 );
-
+                """
+            )
+            transaction.execute(
+                """
+                ALTER TABLE website_index
+                ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+                """
+            )
+            transaction.execute(
+                """
                 CREATE TABLE IF NOT EXISTS blocked_domains (
                     domain TEXT PRIMARY KEY,
                     reason TEXT
@@ -237,11 +193,11 @@ class PostgresCrawlQueue(CrawlQueue):
         """Drop and recreate queue tables so the queue is empty."""
         self._init_tables(reset=True)
 
-    def add_blocked_domains(self, rows: list[tuple[str, str]]) -> None:
+    def add_blocked_domains(self, rows: list[BlockedDomain]) -> None:
         """Create blocked_domains table and upsert rows.
 
         Args:
-            rows: List of (domain, reason) tuples (CSV parsing done by caller).
+            rows: List of blocked domains to upsert.
         """
         logger.info("Loading blocked domains...")
         with self.pg.transaction() as transaction:
@@ -255,8 +211,8 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             if rows:
                 normalized = [
-                    (self._normalize_url(domain), reason)
-                    for domain, reason in rows
+                    (self._normalize_url(row.domain), row.reason)
+                    for row in rows
                 ]
                 transaction.executemany(
                     "INSERT INTO blocked_domains (domain, reason) VALUES (%s, %s) "
@@ -268,16 +224,16 @@ class PostgresCrawlQueue(CrawlQueue):
                 logger.info("No blocked domains to load.")
 
     def get_blocked_domains(self) -> set[str]:
-        """Return normalized blocked domains for in-memory filtering."""
+        """Return normalized blocked domain hostnames for in-memory filtering."""
         rows = self.pg.fetchall("SELECT domain FROM blocked_domains;")
         return {row[0] for row in rows}
 
     def get(
-        self, worker_id: str, max_retries: int = 3, timeout_seconds: int = 60
-    ) -> tuple[str, str] | None:
+        self, worker_id: str, max_retries: int = 3, timeout_seconds: float = 60
+    ) -> CrawlQueueItem | None:
         """Atomically select and lock a URL for crawling.
 
-        Returns (id, url) or None if nothing available.
+        Returns CrawlQueueItem or None if nothing available.
         """
         now = datetime.now(warsaw_tz)
         with self.pg.transaction() as transaction:
@@ -289,7 +245,12 @@ class PostgresCrawlQueue(CrawlQueue):
                     WHERE wi.done = FALSE
                       AND wi.num_retries < %s
                       AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
-                    ORDER BY wi.priority ASC
+                      AND NOT EXISTS (
+                          SELECT 1 FROM blocked_domains bd
+                          WHERE wi.url = bd.domain
+                             OR wi.url LIKE bd.domain || '/%%'
+                      )
+                    ORDER BY wi.priority ASC, RANDOM()
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 )
@@ -306,7 +267,10 @@ class PostgresCrawlQueue(CrawlQueue):
                     now,
                 ),
             )
-            return transaction.fetchone()
+            row = transaction.fetchone()
+            if row is None:
+                return None
+            return CrawlQueueItem(row[0], row[1])
 
     def mark_done(
         self,
@@ -321,14 +285,14 @@ class PostgresCrawlQueue(CrawlQueue):
             "UPDATE website_index SET done = TRUE, date_finished = %s, "
             "locked_by_worker_id = NULL, locked_at = NULL, "
             "storage_path = %s, metadata = %s WHERE id = %s",
-            [datetime.now(warsaw_tz), storage_path, Json(metadata), uid],
+            [datetime.now(warsaw_tz), storage_path, Jsonb(metadata), uid],
         )
 
     def mark_error(self, uid: str, error: str) -> None:
         """Record an error and increment retries."""
         self.pg.execute(
-            "UPDATE website_index SET num_retries = num_retries + 1, "
-            "errors = array_append(errors, %s), "
+            "UPDATE website_index SET num_retries = COALESCE(num_retries, 0) + 1, "
+            "errors = array_append(COALESCE(errors, '{}'::text[]), %s), "
             "locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
             [error, uid],
         )
@@ -341,15 +305,15 @@ class PostgresCrawlQueue(CrawlQueue):
             [uid],
         )
 
-    def put(self, urls: list[tuple[str, int]]) -> None:
+    def put(self, urls: list[NewUrl]) -> None:
         """Insert/enqueue URLs (idempotent)."""
         if not urls:
             return
         now = datetime.now(warsaw_tz)
         rows: list[tuple[str, int, datetime]] = []
-        for url, priority in urls:
-            if not 0 <= priority <= 100:
-                raise ValueError(f"Priority must be 0-100, got {priority}")
+        for new_url in urls:
+            url = new_url.url
+            priority = int(new_url.priority)
             normalized = self._normalize_url(url)
             rows.append((normalized, priority, now))
         self._insert_urls(rows)
@@ -357,6 +321,7 @@ class PostgresCrawlQueue(CrawlQueue):
     def _insert_urls(
         self,
         rows: list[tuple[str, int, datetime]],
+        transaction=None,
     ) -> None:
         """Batch insert discovered URLs.
 
@@ -390,9 +355,12 @@ class PostgresCrawlQueue(CrawlQueue):
         max_attempts = 5
         for attempt in range(1, max_attempts + 1):
             try:
-                self.pg.executemany(sql, prepared)
+                if transaction is None:
+                    self.pg.executemany(sql, prepared)
+                else:
+                    transaction.executemany(sql, prepared)
                 return
-            except psycopg2.errors.DeadlockDetected as exc:
+            except psycopg.errors.DeadlockDetected as exc:
                 if attempt == max_attempts:
                     logger.error(
                         "Deadlock detected while inserting URLs (attempt %d/%d). "
@@ -420,6 +388,8 @@ class PostgresCrawlQueue(CrawlQueue):
         batch: list[tuple[int, str]] = []
         for uid, url in rows:
             priority = priority_fn(url)
+            if not 0 <= priority <= 100:
+                raise ValueError(f"Priority must be 0-100, got {priority}")
             batch.append((priority, uid))
             if len(batch) >= batch_size:
                 self.pg.executemany(
@@ -436,17 +406,18 @@ class PostgresCrawlQueue(CrawlQueue):
             updated += len(batch)
         logger.info("Reprioritized %d URLs.", updated)
 
-    def get_done_urls(self, limit: int) -> list[tuple]:
+    def get_done_urls(self, limit: int) -> list[DoneUrl]:
         """Fetch crawled pages that have a storage_path, for parsing."""
-        return self.pg.fetchall(
+        rows = self.pg.fetchall(
             "SELECT id, url, storage_path FROM website_index "
             "WHERE done = TRUE AND storage_path IS NOT NULL "
             "ORDER BY date_finished DESC LIMIT %s;",
             (limit,),
         )
+        return [DoneUrl(row[0], row[1], row[2]) for row in rows]
 
     def _get_stats(self) -> dict:
-        """Return crawler statistics as a dict (printing happens in the entrypoint)."""
+        """Return crawler statistics as a dict."""
         stats: dict = {}
 
         stats["total_urls"] = self.pg.fetchone(
@@ -481,7 +452,7 @@ class PostgresCrawlQueue(CrawlQueue):
             "WHERE done = TRUE AND date_finished IS NOT NULL;"
         )[0]
 
-        now = datetime.now()
+        now = datetime.now(warsaw_tz)
         timeframes = {"1min": 1, "10min": 10, "60min": 60}
         stats["recent"] = {}
         for label, minutes in timeframes.items():
@@ -503,11 +474,10 @@ class PostgresCrawlQueue(CrawlQueue):
     @classmethod
     def _normalize_url(cls, value: str) -> str:
         value = value.strip()
-        value = re.sub(r"^https?://", "", value)
-        value = value.removeprefix("www.")
-        return value.rstrip("/")
+        parsed = NormalizedParse.parse(value)
+        return f"{parsed.hostname_normalized}{parsed.path}"
 
     @classmethod
-    def from_env(cls, **kwargs) -> "PostgresCrawlQueue":
-        client = PostgresClient.from_env(**kwargs)
+    def from_env(cls) -> "PostgresCrawlQueue":
+        client = PostgresClient.from_env()
         return cls(client)

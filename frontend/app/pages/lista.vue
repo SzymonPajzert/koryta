@@ -9,17 +9,30 @@ definePageMeta({
   title: "Lista",
 });
 
-const { entities: peopleUnfiltered } = await useEntity("person");
-
-const { filtered } = useParams("Lista ");
+const { filters } = useParams();
+const { entities: peopleMaybe } = useEntities("person", filters);
+const { data: articles } = await authFetch("/api/nodes/articles");
 
 const people = computed(() => {
-  const unfiltered = peopleUnfiltered.value;
+  const unfiltered = peopleMaybe.value;
   if (!unfiltered) return {};
-  return Object.fromEntries(
-    Object.entries(unfiltered).filter((person) =>
-      filtered.value.includes(person[0]),
-    ),
-  );
+
+  if (filters.value.source) {
+    if (!articles.value) return unfiltered;
+
+    for (const article of articles.value) {
+      if (article.domain === filters.value.source) {
+        return Object.fromEntries(
+          Object.entries(unfiltered).filter(([key]) =>
+            article.people.includes(key),
+          ),
+        );
+      }
+    }
+  }
+
+  console.error("returning");
+
+  return unfiltered;
 });
 </script>

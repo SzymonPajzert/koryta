@@ -1,16 +1,24 @@
 import type { EventHandler, H3Event } from "h3";
-import { getUser } from "~~/server/utils/auth";
 
-async function eventIsAuthenticated(event: H3Event): Promise<boolean> {
-  const user = await getUser(event).catch(() => null);
-  return !!user;
+async function eventIsAuthenticated(): Promise<boolean> {
+  return false;
 }
 
-export const authCachedEventHandler = (handler: EventHandler, options = {}) => {
+// TODO maybe restore
+// import { getUser } from "~~/server/utils/auth";
+// async function eventIsAuthenticated(event: H3Event): Promise<boolean> {
+//   const user = await getUser(event).catch(() => null);
+//   return !!user;
+// }
+
+export function authCachedEventHandler<T>(
+  handler: EventHandler<EventHandlerRequest, Promise<T>>,
+  options = {},
+) {
   // 1. Create the cached version of the handler
   const cachedHandler = defineCachedEventHandler(handler, {
     swr: true,
-    maxAge: 60, // 1 minute
+    maxAge: 21600, // 6 hours
     ...options,
     shouldBypassCache: eventIsAuthenticated,
   });
@@ -31,4 +39,4 @@ export const authCachedEventHandler = (handler: EventHandler, options = {}) => {
     // Public / Unauthenticated. Use cache.
     return cachedHandler(event);
   });
-};
+}

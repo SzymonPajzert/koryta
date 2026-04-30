@@ -23,8 +23,8 @@
           <v-card-text>
             <h3 class="text-h6 mb-2">Podgląd wersji:</h3>
             <EntityDetailsCard
-              :entity="revisionData.data"
-              :type="revisionData.data.type"
+              :entity="revisionData.data as any"
+              :type="revisionData.data.type as string"
             />
           </v-card-text>
           <v-card-actions>
@@ -42,8 +42,8 @@
             <v-expansion-panel-text>
               <EntityDetailsCard
                 v-if="nodeData"
-                :entity="nodeData"
-                :type="nodeData.type"
+                :entity="nodeData as any"
+                :type="nodeData.type as string"
               />
               <div v-else>Brak danych o aktualnej wersji.</div>
             </v-expansion-panel-text>
@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthState } from "@/composables/auth";
+import { useAuthState, authFetch } from "@/composables/auth";
 import type { Node, Revision } from "~~/shared/model";
 
 definePageMeta({
@@ -66,8 +66,7 @@ const route = useRoute();
 const nodeId = route.params.id as string;
 const revisionId = route.params.revisionId as string;
 
-const { authFetch } = useAuthState();
-
+// TODO this is broken for now
 // Fetch Revision
 const {
   data: revisionData,
@@ -80,7 +79,7 @@ const {
   data: nodeData,
   pending: nodeLoading,
   error: nodeError,
-} = await authFetch<Node>(`/api/nodes/entry/${nodeId}`);
+} = await authFetch<Node>(`/api/nodes/${nodeId}`);
 
 const loading = computed(() => revLoading.value || nodeLoading.value);
 const error = computed(() => revError.value || nodeError.value);
@@ -100,7 +99,7 @@ async function applyRevision() {
     const targetType =
       revisionData.value?.data?.type || nodeData.value?.type || "person";
     // Clear cache for the node entry to ensure fresh data is fetched
-    clearNuxtData((key) => key.includes(`/api/nodes/entry/${nodeId}`));
+    clearNuxtData((key) => key.includes(`/api/nodes/${nodeId}`));
 
     useRouter().push(`/entity/${targetType}/${nodeId}`);
   } catch (e) {

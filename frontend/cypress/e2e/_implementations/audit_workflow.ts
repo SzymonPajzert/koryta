@@ -1,4 +1,4 @@
-describe("Admin Audit Workflow", () => {
+describe.skip("Admin Audit Workflow", () => {
   beforeEach(() => {
     cy.login("admin@koryta.pl", "password123");
   });

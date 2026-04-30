@@ -15,7 +15,8 @@ from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
 )
-from scrapers.article.postgres_queue import PostgresCrawlQueue
+from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
+from scrapers.stores import BlockedDomain, NewUrl
 
 
 def _build_parser() -> ArgumentParser:
@@ -57,8 +58,12 @@ def _build_parser() -> ArgumentParser:
         default=None,
         help="Enable cProfile and write them to that path",
     )
-    parser.add_argument("--worker-threads", type=int, default=1,
-                        help="Number of concurrent threads inside a worker.")
+    parser.add_argument(
+        "--worker-threads",
+        type=int,
+        default=1,
+        help="Number of concurrent threads inside a worker.",
+    )
     return parser
 
 
@@ -101,37 +106,36 @@ def _read_csv_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 def _load_seed_urls(path: Path) -> list[str]:
     fieldnames, rows = _read_csv_rows(path)
-    if fieldnames != ["Domena", "Kategoria"]:
-        raise ValueError(f"{path} got {fieldnames} columns")
-    urls = [row.get("Domena", "").strip() for row in rows if row.get("Domena")]
+    if fieldnames != ["Url"]:
+        raise ValueError(
+            f"{path} must have exactly one column named 'Url'. Got: {fieldnames}"
+        )
+    urls = [row.get("Url", "").strip() for row in rows if row.get("Url")]
     if not urls:
         raise ValueError(f"{path} has no URLs to seed.")
     return urls
 
 
-def _load_blocked_domains(path: Path) -> list[tuple[str, str]]:
+def _load_blocked_domains(path: Path) -> list[BlockedDomain]:
     fieldnames, rows = _read_csv_rows(path)
     expected = ["Domena", "Powód"]
     if fieldnames != expected:
         raise ValueError(
             f"{path} must have columns {expected}. Got: {fieldnames}"
         )
-    blocked = []
+    blocked: list[BlockedDomain] = []
     for row in rows:
         domain = row.get("Domena", "").strip()
         reason = row.get("Powód", "").strip()
         if domain:
-            blocked.append((domain, reason))
+            blocked.append(BlockedDomain(domain, reason))
     if not blocked:
         raise ValueError(f"{path} has no blocked domains to append.")
     return blocked
 
 
-def _build_seed_rows(urls: list[str]) -> list[tuple[str, int]]:
-    rows = []
-    for url in urls:
-        rows.append((url, 0))
-    return rows
+def _build_seed_rows(urls: list[str]) -> list[NewUrl]:
+    return [NewUrl(url, 0) for url in urls]
 
 
 def _setup_logging():
@@ -155,6 +159,7 @@ def profile_scope(enabled: bool, path: Path | None):
         yield
     finally:
         profiler.disable()
+        path.parent.mkdir(parents=True, exist_ok=True)
         profiler.dump_stats(str(path))
         logging.info("Wrote profile to %s", path)
 
@@ -166,13 +171,8 @@ def main() -> None:
     options = _build_options(args)
     logging.info("Running crawler with options: %s", options)
 
-    queue = PostgresCrawlQueue.from_env(
-        host=os.getenv("POSTGRESS_HOST", "localhost"),
-        database=os.getenv("POSTGRES_DB", "crawler_db"),
-        user=os.getenv("POSTGRES_USER", "crawler_user"),
-        password=os.getenv("POSTGRESS_PASSWORD", "crawler_password"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-    )
+    pg_client = PostgresClient.from_env()
+    queue = PostgresCrawlQueue(pg_client)
     logging.info("Initializing crawling queue")
 
     if args.reset:
@@ -207,6 +207,7 @@ def main() -> None:
     ctx, _ = setup_context(False, crawl_queue=queue)
     with profile_scope(profile_enabled, profile_path):
         run_crawler(ctx, options)
+
 
 if __name__ == "__main__":
     main()

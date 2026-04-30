@@ -1,7 +1,7 @@
 <template>
   <v-card
     :key="edge.richNode.id"
-    :prepend-icon="icon(edge.richNode.type)"
+    :prepend-icon="nodeIcon(edge.richNode.type)"
     :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
   >
     <template #title>{{ edge.richNode.name }}</template>
@@ -27,21 +27,8 @@
 </template>
 
 <script setup lang="ts">
-import type { NodeType } from "~~/shared/model";
 import type { EdgeNode } from "~/composables/edges";
+import { nodeIcon } from "~~/shared/model";
 
 const { edge } = defineProps<{ edge: EdgeNode }>();
-
-function icon(type: NodeType) {
-  switch (type) {
-    case "person":
-      return "mdi-account-outline";
-    case "place":
-      return "mdi-office-building-outline";
-    case "article":
-      return "mdi-file-document-outline";
-    default:
-      return "mdi-comment-arrow-right-outline";
-  }
-}
 </script>

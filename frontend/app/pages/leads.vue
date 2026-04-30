@@ -23,5 +23,6 @@ import CommentsSection from "@/components/comment/CommentsSection.vue";
 
 definePageMeta({
   middleware: "auth",
+  robots: false,
 });
 </script>

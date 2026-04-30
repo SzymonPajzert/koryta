@@ -34,7 +34,6 @@ export function getNodeGroups(
 
   edges.forEach((edge: Edge) => {
     if (!edge.traverse) {
-      // TODO console.error("no traverse policy in ", edge);
       return;
     }
     // If the edge should spread the node group, either map it to active node or dead_end
@@ -53,7 +52,7 @@ export function getNodeGroups(
     }
   });
 
-  const entries = Object.entries({ ...companies, ...regions }).map(
+  const entries = Object.entries({ ...companies, ...regions, ...people }).map(
     ([placeID, place]) => {
       const children = [
         ...placeConnection.getDeepChildren(placeID + SPLIT + "active"),
@@ -64,6 +63,7 @@ export function getNodeGroups(
           if (!id) return false;
           return !nodesNoStats[id]?.hide;
         }) as string[];
+
       return {
         id: placeID,
         name: place.name,
@@ -156,7 +156,7 @@ const edgeTraverse: Record<EdgeType, TraversePolicy> = {
   },
   election: {
     forward: "dead_end",
-    backward: "active",
+    backward: "dead_end",
   },
 };
 
@@ -179,7 +179,48 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       elected: edge.elected,
       term: edge.term,
       by_election: edge.by_election,
+      start_date: edge.start_date,
+      end_date: edge.end_date,
     };
     return result;
   });
+}
+
+export function getGraphBFS(
+  focusNodeIds: Set<string>,
+  maxDepth: number,
+  edges: Edge[],
+  interestingNodes: Record<string, Node & { stats: NodeStats }>,
+) {
+  const visited = new Set<string>();
+
+  const queue: { id: string; d: number }[] = [];
+  for (const id of focusNodeIds) {
+    queue.push({ id, d: 0 });
+    visited.add(id);
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.d >= maxDepth) continue;
+
+    const neighbors = edges
+      .filter((e) => e.source === current.id || e.target === current.id)
+      .map((e) => (e.source === current.id ? e.target : e.source));
+
+    for (const neighborId of neighbors) {
+      if (!interestingNodes[neighborId]) {
+        continue;
+      }
+
+      if (!visited.has(neighborId)) {
+        visited.add(neighborId);
+        queue.push({ id: neighborId, d: current.d + 1 });
+      }
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(interestingNodes).filter(([key]) => visited.has(key)),
+  );
 }

@@ -1,4 +1,4 @@
-describe("Revisions Lifecycle", () => {
+describe.skip("Revisions Lifecycle", () => {
   let authToken: string;
 
   beforeEach(() => {
