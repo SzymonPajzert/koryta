@@ -348,7 +348,12 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def mark_done(self, uid: str, storage_path: str | None) -> None:
+    def mark_done(
+        self,
+        uid: str,
+        storage_path: str | None,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
         """Mark a URL as successfully crawled."""
         raise NotImplementedError()
 

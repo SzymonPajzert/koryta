@@ -76,6 +76,15 @@ def test_mark_done_and_get_pages(db: PostgresCrawlQueue):
     assert rows == [DoneUrl(uid, "example.com/a", "s3://bucket/a")]
 
 
+def test_mark_done_persists_metadata(db: PostgresCrawlQueue):
+    db.put([NewUrl("https://example.com/a", 0)])
+    uid = db.pg.fetchone("SELECT id FROM website_index LIMIT 1;")[0]
+    db.mark_done(uid, "s3://bucket/a", {"worker_id": "w1", "duration": 1.5})
+    row = db.pg.fetchone("SELECT metadata FROM website_index WHERE id = %s", (uid,))
+    assert row is not None
+    assert row[0] == {"worker_id": "w1", "duration": 1.5}
+
+
 def test_insert_urls_and_reprioritize(db: PostgresCrawlQueue):
     now = datetime.now()
     rows: list[tuple] = [

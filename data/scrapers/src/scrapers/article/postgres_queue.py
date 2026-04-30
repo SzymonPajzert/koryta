@@ -11,6 +11,7 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 import psycopg
+from psycopg.types.json import Jsonb
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
@@ -60,7 +61,6 @@ class PostgresClient:
             password=os.getenv("POSTGRES_PASSWORD", "crawler_password"),
             port=int(os.getenv("POSTGRES_PORT", "5432")),
         )
-
 
     @contextmanager
     def transaction(self):
@@ -125,7 +125,8 @@ class PostgresCrawlQueue(CrawlQueue):
                     locked_by_worker_id TEXT,
                     locked_at TIMESTAMP WITH TIME ZONE,
                     storage_path TEXT,
-                    mined_from_url TEXT
+                    mined_from_url TEXT,
+                    metadata JSONB DEFAULT '{}'::jsonb
                 );
 
                 CREATE TABLE IF NOT EXISTS blocked_domains (
@@ -215,13 +216,20 @@ class PostgresCrawlQueue(CrawlQueue):
                 return None
             return CrawlQueueItem(row[0], row[1])
 
-    def mark_done(self, uid: str, storage_path: str | None) -> None:
+    def mark_done(
+        self,
+        uid: str,
+        storage_path: str | None,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
         """Mark a URL as successfully crawled."""
+        if metadata is None:
+            metadata = {}
         self.pg.execute(
             "UPDATE website_index SET done = TRUE, date_finished = %s, "
             "locked_by_worker_id = NULL, locked_at = NULL, "
-            "storage_path = %s WHERE id = %s",
-            [datetime.now(warsaw_tz), storage_path, uid],
+            "storage_path = %s, metadata = %s WHERE id = %s",
+            [datetime.now(warsaw_tz), storage_path, Jsonb(metadata), uid],
         )
 
     def mark_error(self, uid: str, error: str) -> None:
@@ -336,8 +344,14 @@ class PostgresCrawlQueue(CrawlQueue):
         )
         return [DoneUrl(row[0], row[1], row[2]) for row in rows]
 
+
     @classmethod
     def _normalize_url(cls, value: str) -> str:
         value = value.strip()
         parsed = NormalizedParse.parse(value)
         return f"{parsed.hostname_normalized}{parsed.path}"
+
+    @classmethod
+    def from_env(cls) -> "PostgresCrawlQueue":
+        client = PostgresClient.from_env()
+        return cls(client)

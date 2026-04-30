@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
@@ -46,7 +48,20 @@ class CrawlResult:
     error: str | None = None
     hit_rate_limit: bool = False
     discovered_urls: list[str] = field(default_factory=list)
-    response_duration_s: float | None = None
+    request_duration_s: float | None = None
+    parse_duration_s: float | None = None
+    upload_duration_s: float | None = None
+    total_duration_s: float | None = None
+
+
+@contextmanager
+def stopwatch():
+    stats = SimpleNamespace(duration=0.0)
+    start = time.perf_counter()
+    try:
+        yield stats
+    finally:
+        stats.duration = time.perf_counter() - start
 
 
 # Per each hostname we do on-worker rate limiting.
@@ -109,40 +124,51 @@ def crawl_url(
     parsed_url: NormalizedParse,
     options: CrawlOptions,
 ) -> CrawlResult:
+    start_time = time.time()
     if not ctx.web.robot_txt_allowed(
         ctx,
         parsed_url.full_url,
         parsed_url,
         HEADERS["User-Agent"],
     ):
-        return CrawlResult(error="disallowed by robots", response_duration_s=0)
+        return CrawlResult(error="disallowed by robots")
 
     if not _can_crawl(parsed_url, options.per_domain_rate_limit_seconds):
         return CrawlResult(hit_rate_limit=True)
 
-    try:
-        response = requests.get(
-            parsed_url.full_url,
-            headers=HEADERS,
-            timeout=options.request_timeout_seconds,
-        )
-        duration = response.elapsed.total_seconds()
-        if response.status_code != 200:
+    with stopwatch() as t_request:
+        try:
+            response = requests.get(
+                parsed_url.full_url,
+                headers=HEADERS,
+                timeout=options.request_timeout_seconds,
+            )
+        except requests.RequestException as exc:
             return CrawlResult(
-                error=f"http {response.status_code}",
-                response_duration_s=duration,
+                error=str(exc),
+                request_duration_s=t_request.duration,
             )
 
+    if response.status_code != 200:
+        return CrawlResult(
+            error=f"http {response.status_code}",
+            request_duration_s=t_request.duration,
+        )
+
+    with stopwatch() as t_upload:
         storage_path = _upload_response(ctx, parsed_url, response, options)
+
+    with stopwatch() as t_parsed:
         discovered_urls = _extract_urls(ctx, response)
 
-        return CrawlResult(
-            storage_path=storage_path,
-            discovered_urls=list(discovered_urls),
-            response_duration_s=duration,
-        )
-    except requests.RequestException as exc:
-        return CrawlResult(error=str(exc), response_duration_s=0)
+    return CrawlResult(
+        storage_path=storage_path,
+        discovered_urls=list(discovered_urls),
+        request_duration_s=t_request.duration,
+        parse_duration_s=t_parsed.duration,
+        upload_duration_s=t_upload.duration,
+        total_duration_s=time.time() - start_time,
+    )
 
 
 def _extract_urls(
@@ -218,16 +244,22 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
             logging.info(f"Skipping because of hit rate limit: {parsed_url.full_url}")
         elif result.error:
             logging.error(
-                f"[{result.response_duration_s:.2f}s] "
+                f"[{result.request_duration_s or 0:.2f}s] "
                 f"Crawl failed ({result.error}): {parsed_url.full_url}"
             )
             queue.mark_error(uid, result.error)
         else:
             logging.info(
-                f"[{result.response_duration_s:.2f}s] "
+                f"[{result.request_duration_s or 0:.2f}s] "
                 f"Crawl succeeded: {parsed_url.full_url}"
             )
-            queue.mark_done(uid, result.storage_path)
+            queue.mark_done(uid, result.storage_path, {
+                "request_duration_s": result.request_duration_s,
+                "parse_duration_s": result.parse_duration_s,
+                "upload_duration_s": result.upload_duration_s,
+                "total_duration_s": result.total_duration_s,
+                "worker_id": options.worker_id,
+            })
             queue.put(
                 [
                     NewUrl(url, _priority_for_url(options, url))

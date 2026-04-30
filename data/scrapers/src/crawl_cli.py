@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import cProfile
 import csv
 import logging
+import os
 from argparse import ArgumentParser
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,15 +27,37 @@ def _build_parser() -> ArgumentParser:
     parser.add_argument("--per-url-max-retries", type=int, default=3)
     parser.add_argument("--lock-timeout-seconds", type=int, default=60)
     parser.add_argument("--per-domain-rate-limit-qpm", type=int, default=20)
-    parser.add_argument("--url-scoring-function", choices=["default", "kalisz"],
-                        default="default")  # TODO hook registered function here
-    parser.add_argument("--reset", action="store_true",
-                        help="Reset the crawl DB and exit (requires confirmation).")
-    parser.add_argument("--seed", type=Path,
-                        help='CSV file with one column "Url" to seed the crawl queue.')
-    parser.add_argument("--append-blocked", type=Path,
-                        help='CSV file with columns "Domena" and "Powód" to append '
-                             "blocked domains.")
+    parser.add_argument(
+        "--url-scoring-function",
+        choices=["default", "kalisz"],
+        default="default",
+    )  # TODO hook registered function here
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Reset the crawl DB and exit (requires confirmation).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=Path,
+        help='CSV file with one column "Url" to seed the crawl queue.',
+    )
+    parser.add_argument(
+        "--append-blocked",
+        type=Path,
+        help='CSV file with columns "Domena" and "Powód" to append blocked domains.',
+    )
+    parser.add_argument(
+        "--setup-only",
+        action="store_true",
+        help="Only apply seed/blocked/reset actions, then exit.",
+    )
+    parser.add_argument(
+        "--profile-path",
+        type=Path,
+        default=None,
+        help="Enable cProfile and write them to that path",
+    )
     return parser
 
 
@@ -49,6 +74,8 @@ def _build_options(args: argparse.Namespace) -> CrawlOptions:
 
 
 def _confirm_reset() -> bool:
+    if os.getenv("CRAWL_RESET_CONFIRM") == "1":
+        return True
     answer = input("Reset crawl DB? Type 'reset' to confirm: ").strip()
     return answer.lower() == "reset"
 
@@ -61,8 +88,11 @@ def _read_csv_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
         fieldnames = [name.strip() for name in reader.fieldnames]
         rows = []
         for row in reader:
-            cleaned = {k.strip(): (v.strip() if isinstance(v, str) else v)
-                       for k, v in row.items() if k is not None}
+            cleaned = {
+                k.strip(): (v.strip() if isinstance(v, str) else v)
+                for k, v in row.items()
+                if k is not None
+            }
             rows.append(cleaned)
         return fieldnames, rows
 
@@ -108,10 +138,27 @@ def _setup_logging():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.StreamHandler()
-        ]
+        handlers=[logging.StreamHandler()],
     )
+
+
+@contextmanager
+def profile_scope(enabled: bool, path: Path | None):
+    if not enabled:
+        yield
+        return
+    if path is None:
+        raise ValueError("profile path is required when profiling is enabled")
+    profiler = cProfile.Profile()
+    profiler.enable()
+    try:
+        yield
+    finally:
+        profiler.disable()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        profiler.dump_stats(str(path))
+        logging.info("Wrote profile to %s", path)
+
 
 
 def main() -> None:
@@ -144,8 +191,19 @@ def main() -> None:
         queue.put(rows)
         logging.info("Seeded %d URLs.", len(rows))
 
+    if args.setup_only:
+        logging.info("Setup-only requested, exiting.")
+        return
+
+    profile_enabled = args.profile_path is not None
+    profile_path = (
+        args.profile_path / f"worker-{args.worker_id}.pstats"
+        if args.profile_path
+        else None
+    )
     ctx, _ = setup_context(False, crawl_queue=queue)
-    run_crawler(ctx, options)
+    with profile_scope(profile_enabled, profile_path):
+        run_crawler(ctx, options)
 
 
 if __name__ == "__main__":

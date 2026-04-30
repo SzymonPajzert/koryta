@@ -116,6 +116,7 @@ dependencies = [
     "stanza (>=1.11.0,<2.0.0)",
     "dacite (>=1.9.2,<2.0.0)",
     "psycopg[binary] (>=3.0.0,<4.0.0)",
+    "plotly (>=6.6.0,<7.0.0)",
 ]
 
 [project.scripts]
@@ -172,6 +173,7 @@ mypy_path = "src"
 [[tool.mypy.overrides]]
 module = [
     "duckdb",
+    "duckdb.*",
     "firebase_admin.*",
     "google.*",
     "scipy.*",
@@ -268,6 +270,10 @@ ignore_imports = [
     "scrapers.krs.scrape -> analysis.interesting",
     "scrapers.article.test_postgres_queue -> os",
     "scrapers.article.postgres_queue -> os",
+    "scrapers.article.scripts.bench_crawl -> sys",
+    "scrapers.article.scripts.bench_crawl -> os",
+    "scrapers.article.scripts.bench_crawl -> io",
+    "scrapers.article.scripts.bench_crawl -> csv",
     "entities.util -> urllib",
     "scrapers.stores -> io",
 ]
