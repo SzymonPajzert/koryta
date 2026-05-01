@@ -1,6 +1,6 @@
 import type { EventHandler, H3Event } from "h3";
 
-async function eventIsAuthenticated(): Promise<boolean> {
+async function eventIsAuthenticated(_event?: H3Event): Promise<boolean> {
   return false;
 }
 
