@@ -13,5 +13,9 @@ export default defineVitestConfig({
         inline: ["vuefire", "nuxt-vuefire", "firebase"],
       },
     },
+    alias: {
+      "@plausible-analytics/tracker":
+        "/Users/szymonpajzert/Programming/koryta/frontend/tests/plausible-mock.js",
+    },
   },
 });
