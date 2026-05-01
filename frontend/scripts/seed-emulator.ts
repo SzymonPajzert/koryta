@@ -9,12 +9,15 @@ import nodes from "./nodes.json";
 import edges from "./edges.json";
 import revisions from "./revisions.json";
 
+const projectId =
+  process.env.USE_PROD_PROJECT === "true" ? "koryta-pl" : "demo-koryta-pl";
+
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
-process.env.GCLOUD_PROJECT = "demo-koryta-pl";
+process.env.GCLOUD_PROJECT = projectId;
 
 const app = initializeApp({
-  projectId: "demo-koryta-pl",
+  projectId: projectId,
 });
 
 /**
@@ -88,7 +91,7 @@ async function seedAuth() {
   });
   const auth = getAuth(app);
 
-  if (auth.app.options.projectId !== "demo-koryta-pl") {
+  if (auth.app.options.projectId !== projectId) {
     throw "this is not a test environment";
   }
 
@@ -130,7 +133,6 @@ async function seedAuth() {
 async function seedRules() {
   const rulesPath = resolve(process.cwd(), "../firestore.rules");
   const rulesContent = readFileSync(rulesPath, "utf8");
-  const projectId = "demo-koryta-pl";
 
   const rulesUrl = `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${projectId}:securityRules`;
 

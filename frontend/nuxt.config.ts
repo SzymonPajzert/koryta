@@ -8,6 +8,7 @@ const isLocal =
   !!process.env.VITEST ||
   process.env.USE_EMULATORS === "true" ||
   process.env.NODE_ENV === "development";
+const useProdProject = process.env.USE_PROD_PROJECT === "true";
 console.log(
   "Nuxt Config - isLocal:",
   isLocal,
@@ -131,12 +132,17 @@ export default defineNuxtConfig({
     // TODO parametrize in the env, so I can pass autopush and local test config
     config: {
       apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
-      authDomain: isLocal
-        ? "demo-koryta-pl.firebaseapp.com"
-        : "koryta-pl.firebaseapp.com",
-      projectId: isLocal ? "demo-koryta-pl" : "koryta-pl",
-      storageBucket: isLocal ? undefined : "koryta-pl.firebasestorage.app",
-      messagingSenderId: isLocal ? undefined : "735903577811",
+      authDomain:
+        isLocal && !useProdProject
+          ? "demo-koryta-pl.firebaseapp.com"
+          : "koryta-pl.firebaseapp.com",
+      projectId: isLocal && !useProdProject ? "demo-koryta-pl" : "koryta-pl",
+      storageBucket:
+        isLocal && !useProdProject
+          ? undefined
+          : "koryta-pl.firebasestorage.app",
+      messagingSenderId:
+        isLocal && !useProdProject ? undefined : "735903577811",
       appId: "1:735903577811:web:53e6461c641b947a4e8626",
     },
     emulators: {
