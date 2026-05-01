@@ -23,6 +23,10 @@
         :region="region"
         :company="company"
       />
+
+      <div v-if="focusedPerson" class="pa-4 pt-0">
+        <NoteEditor :node-id="focusedPerson.id" />
+      </div>
     </v-navigation-drawer>
     <div class="pa-4">
       <h1 class="text-h4 mb-4">
