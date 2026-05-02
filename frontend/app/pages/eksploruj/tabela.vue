@@ -43,13 +43,14 @@
       />
 
       <v-card>
-        <v-data-table
+        <v-data-table-server
           v-model:items-per-page="itemsPerPage"
           v-model:page="page"
           v-model:sort-by="sortBy"
           :headers="headers"
-          :items="filteredItems"
-          :loading="loading"
+          :items="tableItems"
+          :items-length="totalItems"
+          :loading="pending || loadingSubgraph"
           @update:options="updateQueryParams"
         >
           <template #[`item.name`]="{ item }">
@@ -199,13 +200,6 @@ const company = computed<[string, string] | undefined>(() => {
   return undefined;
 });
 
-const { people: fetchedItems, loading } = useEntityListRich(
-  company,
-  region,
-  places,
-  regions,
-);
-
 const filterVisibility = ref<"all" | "public" | "private">(
   (route.query.visibility as "all" | "public" | "private" | undefined) || "all",
 );
@@ -214,51 +208,102 @@ const filterElectionLocation = ref<string | null>(
   (route.query.electionLocation as string) || null,
 );
 
+// We fetch available options from a separate endpoint or cached data,
+// but for now we'll just leave them empty or fetch them differently.
+// Since we paginate, we can't easily compute all available options on the client.
 const availableParties = computed(() => {
-  const parties = new Set<string>();
-  for (const item of fetchedItems.value || []) {
-    if (item.parties) {
-      for (const p of item.parties) {
-        parties.add(p);
-      }
-    }
-  }
-  return Array.from(parties).sort();
+  return []; // Could be populated via a separate API call if needed
 });
 
 const availableElectionLocations = computed(() => {
-  const locations = new Set<string>();
-  for (const item of fetchedItems.value || []) {
-    if (item.elections) {
-      for (const e of item.elections) {
-        if (e.location) {
-          locations.add(e.location);
-        }
-      }
-    }
-  }
-  return Array.from(locations).sort();
+  return [];
 });
 
-const filteredItems = computed(() => {
-  let items = fetchedItems.value || [];
+const apiQuery = computed(() => ({
+  type: 'person',
+  limit: itemsPerPage.value,
+  page: page.value,
+  sortBy: sortBy.value.length > 0 ? sortBy.value[0].key : undefined,
+  sortDesc: sortBy.value.length > 0 ? (sortBy.value[0].order === 'desc' ? 'true' : 'false') : undefined,
+  party: filterParty.value || undefined,
+  visibility: filterVisibility.value !== 'all' ? filterVisibility.value : undefined,
+  // Note: teryt, krs, and electionLocation require specialized backend support or denormalization
+}));
 
-  if (filterVisibility.value !== "all") {
-    const isPublic = filterVisibility.value === "public";
-    items = items.filter((item) => !!item.visibility === isPublic);
+const { data: nodesData, pending } = useFetch('/api/nodes', {
+  query: apiQuery,
+  watch: [apiQuery]
+});
+
+const fetchedItems = computed(() => nodesData.value?.nodes ? Object.values(nodesData.value.nodes) : []);
+const totalItems = computed(() => nodesData.value?.total || 0);
+
+const loadingSubgraph = ref(false);
+const subgraphEdges = ref<any[]>([]);
+const subgraphNodes = ref<Record<string, any>>({});
+
+watch(fetchedItems, async (newItems) => {
+  if (!newItems || newItems.length === 0) {
+    subgraphEdges.value = [];
+    subgraphNodes.value = {};
+    return;
   }
-
-  if (filterParty.value) {
-    items = items.filter((item) => item.parties?.includes(filterParty.value!));
+  
+  loadingSubgraph.value = true;
+  try {
+    const firstId = newItems[0].id;
+    const otherIds = newItems.slice(1).map(n => n.id).join(',');
+    
+    const res = await $fetch(`/api/graph/local/${firstId}?expand=${otherIds}&distance=1`);
+    if (res) {
+      subgraphEdges.value = res.edges || [];
+      subgraphNodes.value = res.nodes || {};
+    }
+  } catch (e) {
+    console.error("Failed to fetch subgraph", e);
+  } finally {
+    loadingSubgraph.value = false;
   }
+}, { immediate: true });
 
-  if (filterElectionLocation.value) {
-    items = items.filter((item) =>
-      item.elections?.some((e) => e.location === filterElectionLocation.value),
-    );
-  }
+const tableItems = computed(() => {
+  return fetchedItems.value.map(person => {
+    // Reconstruct companies and elections from subgraph
+    const companies = new Set<string>();
+    const elections: any[] = [];
+    
+    const personEdges = subgraphEdges.value.filter(e => e.source === person.id || e.target === person.id);
+    
+    for (const edge of personEdges) {
+      const targetNode = subgraphNodes.value[edge.target];
+      if (edge.type === "employed" && targetNode?.type === "place") {
+        companies.add(targetNode.name);
+      } else if (edge.type === "election") {
+        const listYear = edge.start_date && typeof edge.start_date === "string" ? edge.start_date.split("-")[0] : undefined;
+        const listLocation = subgraphNodes.value[edge.target]?.name || "";
+        const listPosition = edge.position || edge.name || "Wybory";
+        
+        elections.push({
+          year: listYear,
+          location: listLocation,
+          position: listPosition,
+          committee: edge.committee,
+        });
+      }
+    }
+    
+    elections.sort((a, b) => (a.year || 0) - (b.year || 0));
 
-  return items;
+    // Get experience from the new stats object
+    const exp = person.stats?.edges?.approved?.experienceMonths || 0;
+
+    return {
+      ...person,
+      companies: Array.from(companies),
+      elections,
+      experience: Math.floor(exp * 10) / 10
+    };
+  });
 });
 
 watch([filterVisibility, filterParty, filterElectionLocation], () => {
