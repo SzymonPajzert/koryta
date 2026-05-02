@@ -128,5 +128,11 @@ export const scheduledFirestoreExport = onSchedule(
   },
 );
 
+export { onVoteWritten } from "./votes";
+export { onNoteWritten } from "./notes";
+export { onEdgeWritten } from "./edges";
+export { onNodeWritten } from "./nodes";
+
+
 export * from "./votes";
 

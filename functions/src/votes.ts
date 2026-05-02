@@ -56,7 +56,7 @@ export const onVoteWritten = onDocumentWritten(
       const delta = newVal - oldVal;
 
       if (delta !== 0) {
-        updatePayload[`aggregatedVotes.${category}`] = FieldValue.increment(delta);
+        updatePayload[`stats.votes.${category}`] = FieldValue.increment(delta);
       }
     }
 
