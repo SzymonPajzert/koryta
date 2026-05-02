@@ -37,7 +37,7 @@ def test_krs_numbers_unique(companies_df):
 
 def test_sources_non_empty(companies_df):
     has_name = companies_df["name"].notna()
-    empty_sources = companies_df["sources"].apply(lambda x: len(x)) == 0
+    empty_sources = companies_df["sources"].apply(len) == 0
 
     expect_empty = companies_df[empty_sources & has_name]
     print(expect_empty[["krs", "name"]].head(10))

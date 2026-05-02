@@ -73,7 +73,9 @@ class ManualKRS:
     @staticmethod
     def from_blob_name(blob_name: str) -> "ManualKRS":
         """Creates a ManualKRS instance from a GCS blob name."""
-        return ManualKRS(blob_name.split("org/")[1].split("/")[0])
+        return ManualKRS(
+            blob_name.split("org/", maxsplit=1)[1].split("/", maxsplit=1)[0]
+        )
 
     def merge(self, other: "ManualKRS") -> "ManualKRS":
         """
