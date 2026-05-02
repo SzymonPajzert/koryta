@@ -109,11 +109,10 @@ class Client:
             source = NormalizedParse.parse(source)
         try:
             now = datetime.now(warsaw_tz)
-            if source.path == "":
-                source.path = "index"  # type: ignore
+            path = source.path or "index"
             date = f"{now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}"
             destination_blob_name = (
-                f"hostname={source.hostname}/{source.path}/date={date}"
+                f"hostname={source.hostname}/{path}/date={date}"
             )
             destination_blob_name = destination_blob_name.replace("//", "/")
             destination_blob_name = destination_blob_name.rstrip("/")

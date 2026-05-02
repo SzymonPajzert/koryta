@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Literal, cast
+from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
 import requests
@@ -21,10 +21,8 @@ from uuid_extensions import uuid7str  # type: ignore
 from entities.util import NormalizedParse
 from scrapers.article.scoring import get_scoring_function
 from scrapers.stores import (
-    CloudStorage,
     Context,
     CrawlQueue,
-    DataRef,
     LocalFile,
     NewUrl,
     Priority,
@@ -51,6 +49,7 @@ class CrawlOptions:
     lock_timeout_seconds: int
     per_domain_wait_between_requests_s: float
     url_scoring_function: str
+    domains_of_interest: frozenset[str] = field(default_factory=frozenset)
     request_timeout_seconds: float = 10
     worker_threads: int = 1
 
@@ -143,11 +142,10 @@ def _upload_response(
     response: requests.Response,
     options: CrawlOptions,
 ) -> str:
-    binary_payload = response.content
     path = _storage_path(parsed)
-    ref: DataRef
     if options.storage_type == "gcs":
-        ref = CloudStorage(prefix=path)
+        content_type = _content_type_from_response(response)
+        ctx.io.upload(parsed.full_url, response.content, content_type)
     elif options.storage_type == "local":
         if options.local_output is None:
             raise ValueError("local_output is required for local storage")
@@ -155,14 +153,13 @@ def _upload_response(
             Literal["downloaded", "tests", "versioned", "crawler_output"],
             str(options.local_output),
         )
-        ref = LocalFile(filename=path, folder=folder)
+        binary_payload = response.content
+        ctx.io.write_file(
+            LocalFile(filename=path, folder=folder),
+            lambda s: s.write(binary_payload),
+        )
     else:
         raise ValueError("Unknown storage type")
-
-    def _write_payload(stream: Any):
-        stream.write(binary_payload)
-
-    ctx.io.write_file(ref, _write_payload)
     return path
 
 
@@ -260,7 +257,9 @@ def _extract_urls(
 
 
 def _priority_for_url(options: CrawlOptions, url: str) -> Priority:
-    scorer = get_scoring_function(options.url_scoring_function)
+    scorer = get_scoring_function(
+        options.url_scoring_function, options.domains_of_interest
+    )
     score = scorer(url)
     return Priority(max(0, min(100, 100 - score)))
 
