@@ -1,16 +1,18 @@
 <template>
   <v-app-bar>
-    <NuxtImg
-      class="mx-2"
-      src="/logo_small.png"
-      width="40"
-      height="40"
-      fetchpriority="high"
-      preload
-      style="cursor: pointer; object-fit: contain"
-      alt="Koryta.pl"
-      @click="$router.push('/')"
-    />
+    <NuxtLink to="/">
+      <NuxtImg
+        class="mx-2"
+        src="/logo_small.png"
+        width="40"
+        height="40"
+        fetchpriority="high"
+        preload
+        style="cursor: pointer; object-fit: contain"
+        alt="Koryta.pl"
+      />
+    </NuxtLink>
+
     <v-app-bar-title
       v-if="mdAndUp"
       style="cursor: pointer"
