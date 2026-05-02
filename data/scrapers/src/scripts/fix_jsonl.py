@@ -9,7 +9,7 @@ def fix_name(name: str) -> str:
     # Into
     # gs://koryta-pl-external-raw/source=this-is-url/method=detailed/year=2025/month=08/day=31/240487.json
 
-    substring = name.split("method=")[1].split("/year")[0]
+    substring = name.split("method=", maxsplit=1)[1].split("/year", maxsplit=1)[0]
     return name.replace(substring, substring.replace("/", "-"))
 
 

@@ -318,21 +318,21 @@ def test_missing(person, find_column_match):
         "Krzysztof Czeszejko-Sochacki",
     ],
 )
-@pytest.mark.parametrize_skip_if(lambda person: should_skip(person))
+@pytest.mark.parametrize_skip_if(should_skip)
 def test_exists(person, find_column_match):
     person = Person(any=person)
     assert exists_in_output(find_column_match, False, person)
 
 
 @pytest.mark.parametrize("person", file_lines("psl_lista.txt"))
-@pytest.mark.parametrize_skip_if(lambda person: should_skip(person))
+@pytest.mark.parametrize_skip_if(should_skip)
 def test_list_psl(person, find_column_match):
     person = Person(any=person)
     assert exists_in_output(find_column_match, True, person)
 
 
 @pytest.mark.parametrize("person", file_lines("stop_pato_lista.txt"))
-@pytest.mark.parametrize_skip_if(lambda person: should_skip(person))
+@pytest.mark.parametrize_skip_if(should_skip)
 def test_list_stop_pato(person, find_column_match):
     person = Person(any=person)
     assert exists_in_output(find_column_match, True, person)
