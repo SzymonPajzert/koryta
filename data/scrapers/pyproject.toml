@@ -103,7 +103,7 @@ dependencies = [
     "weasel==0.4.1",
     "webencodings==0.5.1",
     "wrapt==2.1.2",
-    "pandas (>=2.3.2,<3.0.0)",
+    "pandas (>=3.0.2,<4.0.0)",
     "matplotlib (>=3.10.6,<4.0.0)",
     "xlrd (>=2.0.2,<3.0.0)",
     "pyarrow (>=21.0.0,<22.0.0)",
