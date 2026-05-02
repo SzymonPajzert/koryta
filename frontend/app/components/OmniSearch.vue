@@ -182,7 +182,6 @@ const items = computed<ListItem[]>(() => {
 
 watch(nodeGroupPicked, (value) => {
   if (!value) {
-    if (!props.noNavigate) push("/");
     return;
   }
 
