@@ -7,7 +7,22 @@ type PageBase<PageType> = {
   deleted?: boolean;
   delete_reason?: string;
   visibility?: boolean;
+  stats?: NodeStats;
 };
+
+export interface NodeStats {
+  isApproved: boolean;
+  notesCount: number;
+  votes: Record<string, number>;
+  edges: {
+    all: {
+      experienceMonths: number;
+    };
+    approved: {
+      experienceMonths: number;
+    };
+  };
+}
 
 export type VoteCategory = "interesting" | "quality";
 
