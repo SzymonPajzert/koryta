@@ -11,7 +11,7 @@
           size="isHovering ? 'large' : '44'"
           :variant="userVoteResult > 0 ? 'tonal' : 'outlined'"
           :icon="isHovering ? undefined : config.icon"
-          @click="vote(userVoteResult === 1 ? -1 : 1)"
+          @click="castVote(userVoteResult === 1 ? -1 : 1)"
         >
           <template v-if="isHovering">
             {{ config.text }}
@@ -39,8 +39,6 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { useRouter, useRoute } from "vue-router";
-import { useAuthState } from "@/composables/auth";
 import type { VoteCategory } from "~~/shared/model";
 import { useVotes } from "~/composables/votes";
 import { ButtonVoteIcon, ClientOnly } from "#components";
@@ -50,50 +48,7 @@ const { id, category } = defineProps<{
   category: VoteCategory;
 }>();
 
-const configMap: Record<
-  VoteCategory,
-  { text: string; icon: string; color: string }
-> = {
-  interesting: {
-    text: "Dobre znalezisko",
-    icon: "mdi-lightbulb-outline",
-    color: "success",
-  },
-  quality: {
-    text: "Znaleziony problem",
-    icon: "mdi-alert-circle-outline",
-    color: "error",
-  },
-};
-
-const config = configMap[category];
-
-const { userCategoryVotes, castVote } = useVotes(id);
+const { userCategoryVotes, castVote, config } = useVotes(id, category);
 
 const userVoteResult = computed(() => userCategoryVotes.value[category] || 0);
-
-const loading = ref(false);
-
-const { user } = useAuthState();
-const router = useRouter();
-const route = useRoute();
-async function vote(delta: number) {
-  if (!user.value) {
-    router.push({
-      path: "/login",
-      query: { redirect: route.fullPath },
-    });
-    return;
-  }
-
-  loading.value = true;
-  try {
-    await castVote(category, delta);
-  } catch (e) {
-    console.error("Failed to vote", e);
-    alert("Wystąpił błąd podczas zapisywania głosu.");
-  } finally {
-    loading.value = false;
-  }
-}
 </script>
