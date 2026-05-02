@@ -52,6 +52,17 @@
           :loading="loading"
           @update:options="updateQueryParams"
         >
+          <template #[`item.name`]="{ item }">
+            <div style="max-width: 150px">
+              <NuxtLink
+                :to="`/entity/person/${item.id}`"
+                class="text-decoration-none text-primary"
+              >
+                {{ item.name }}
+              </NuxtLink>
+            </div>
+          </template>
+
           <template #[`item.parties`]="{ item }">
             <v-chip
               v-for="party in item.parties"
@@ -64,9 +75,23 @@
           </template>
 
           <template #[`item.companies`]="{ item }">
-            <span v-for="(company, i) in item.companies" :key="company">
-              {{ company }}<br v-if="i < item.companies.length - 1" />
-            </span>
+            <div class="d-flex flex-wrap gap-1 py-1" style="max-width: 300px">
+              <span v-for="companyName in item.companies" :key="companyName">
+                <v-tooltip :text="shortCompanyName(companyName)" location="top">
+                  <template #activator="{ props }">
+                    <v-chip
+                      v-bind="props"
+                      size="small"
+                      class="mr-1 mb-1 text-truncate d-flex"
+                      variant="outlined"
+                      style="max-width: 300px"
+                    >
+                      {{ shortCompanyName(companyName) }}
+                    </v-chip>
+                  </template>
+                </v-tooltip>
+              </span>
+            </div>
           </template>
 
           <template #[`item.elections`]="{ item }">
@@ -77,15 +102,14 @@
                 </template>
                 <template v-if="election.location">
                   {{ election.location }}
-                  <span class="mx-1 text-grey-darken-1">-</span>
                 </template>
-                {{ election.position }}
                 <template v-if="election.committee">
                   <span class="text-caption ml-1"
                     >({{ election.committee }})</span
                   >
-                </template> </v-chip
-              ><br v-if="i < item.elections.length - 1" />
+                </template>
+              </v-chip>
+              <br v-if="i < item.elections.length - 1" />
             </template>
           </template>
 
@@ -102,15 +126,6 @@
               color="primary"
               @click="focusPerson(item)"
             />
-          </template>
-
-          <template #[`item.name`]="{ item }">
-            <NuxtLink
-              :to="`/entity/person/${item.id}`"
-              class="text-decoration-none text-primary"
-            >
-              {{ item.name }}
-            </NuxtLink>
           </template>
         </v-data-table>
       </v-card>
@@ -247,9 +262,8 @@ const filteredItems = computed(() => {
 });
 
 watch([filterVisibility, filterParty, filterElectionLocation], () => {
-  console.log([filterVisibility, filterParty, filterElectionLocation]);
   page.value = 1;
-  router.replace({
+  router.push({
     query: {
       ...route.query,
       page: 1,
@@ -275,7 +289,7 @@ const updateQueryParams = async (options: {
         : "false"
       : undefined;
 
-  await router.replace({
+  await router.push({
     query: {
       ...route.query,
       page: options.page,
@@ -292,5 +306,17 @@ const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
 const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
   openDrawer.value = true;
+};
+
+const shortCompanyName = (companyName: string | undefined) => {
+  if (!companyName) return "";
+  const spolkaIndex = companyName.indexOf(
+    "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+  );
+  if (spolkaIndex !== -1) {
+    companyName =
+      companyName.slice(0, spolkaIndex) + companyName.slice(spolkaIndex + 39);
+  }
+  return companyName;
 };
 </script>
