@@ -28,7 +28,10 @@ export function calculateExperience(edges: Edge[]): number {
 export function computeVoteStats(
   nodeVotes: VoteDocument[],
 ): Record<string, number> {
-  const aggregatedVotes: Record<string, number> = {};
+  const aggregatedVotes: Record<string, number> = {
+    interesting: 0,
+    quality: 0,
+  };
   for (const v of nodeVotes) {
     for (const [category, value] of Object.entries(v.categoryVotes)) {
       aggregatedVotes[category] =
