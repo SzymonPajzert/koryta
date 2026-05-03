@@ -21,6 +21,8 @@ const queryValidator = z.object({
   sortDesc: z.enum(["true", "false"]).optional(),
 });
 
+export type Query = z.infer<typeof queryValidator>;
+
 // We wrap the original logic in a cached handler to preserve the caching
 // for endpoints that rely on the old behavior (e.g. useEntities).
 const cachedHandler = authCachedEventHandler(async (event) => {
@@ -69,7 +71,7 @@ export default defineEventHandler(async (event) => {
         .limit(1)
         .get();
       if (!places.empty) {
-        const placeId = places.docs[0].id;
+        const placeId = places.docs[0]?.id;
         const arrayField = user
           ? "stats.edges.all.targetNodeIds"
           : "stats.edges.approved.targetNodeIds";
@@ -86,7 +88,7 @@ export default defineEventHandler(async (event) => {
         .limit(1)
         .get();
       if (!regions.empty) {
-        const regionId = regions.docs[0].id;
+        const regionId = regions.docs[0]?.id;
         const arrayField = user
           ? "stats.edges.all.targetNodeIds"
           : "stats.edges.approved.targetNodeIds";
@@ -127,10 +129,12 @@ export default defineEventHandler(async (event) => {
       fsQuery = fsQuery.orderBy(sortField, direction);
     }
 
-    const page = query.page || 1;
-    const offset = (page - 1) * query.limit;
-
-    const paginatedQuery = fsQuery.offset(offset).limit(query.limit);
+    let paginatedQuery = fsQuery;
+    if (query.limit) {
+      const page = query.page || 1;
+      const offset = (page - 1) * query.limit;
+      paginatedQuery = paginatedQuery.offset(offset).limit(query.limit);
+    }
 
     // Also return the total count (run in parallel with data fetch)
     const [snapshot, countSnapshot] = await Promise.all([
@@ -138,7 +142,7 @@ export default defineEventHandler(async (event) => {
       fsQuery.count().get(),
     ]);
 
-    const nodesRecord: Record<string, any> = {};
+    const nodesRecord: Record<string, unknown> = {};
     for (const doc of snapshot.docs) {
       const data = doc.data();
       if (data.revision_id) {
