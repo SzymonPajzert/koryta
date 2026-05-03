@@ -1,7 +1,8 @@
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
+import { computeVoteStats } from "./stats";
 
 // Ensure the Firebase Admin SDK is initialized
 if (getApps().length === 0) {
@@ -34,45 +35,36 @@ export const onVoteWritten = onDocumentWritten(
     }
 
     if (!nodeId) {
-      logger.warn(`Could not determine nodeId for vote doc: ${event.params.voteId}`);
+      logger.warn(
+        `Could not determine nodeId for vote doc: ${event.params.voteId}`,
+      );
       return;
     }
 
-    const beforeVotes = beforeData?.categoryVotes || {};
-    const afterVotes = afterData?.categoryVotes || {};
+    const db = getFirestore("koryta-pl");
 
-    const updatePayload: Record<string, any> = {};
+    try {
+      const votesSnapshot = await db
+        .collection("votes")
+        .where("nodeId", "==", nodeId)
+        .get();
+      const allVotes = votesSnapshot.docs.map((doc) => doc.data());
 
-    // Get a unique set of all categories impacted (voted before or voted after)
-    const allCategories = new Set([
-      ...Object.keys(beforeVotes),
-      ...Object.keys(afterVotes),
-    ]);
+      const voteStats = computeVoteStats(allVotes);
 
-    for (const category of allCategories) {
-      const oldVal = typeof beforeVotes[category] === "number" ? beforeVotes[category] : 0;
-      const newVal = typeof afterVotes[category] === "number" ? afterVotes[category] : 0;
-
-      const delta = newVal - oldVal;
-
-      if (delta !== 0) {
-        updatePayload[`stats.votes.${category}`] = FieldValue.increment(delta);
-      }
-    }
-
-    // Only commit an update if there's an actual change in the votes
-    if (Object.keys(updatePayload).length > 0) {
-      const db = getFirestore("koryta-pl");
       const nodeRef = db.collection("nodes").doc(nodeId);
+      await nodeRef.update({
+        "stats.votes": voteStats,
+      });
 
-      try {
-        await nodeRef.update(updatePayload);
-        logger.info(`Successfully updated aggregatedVotes for node: ${nodeId}`, updatePayload);
-      } catch (error) {
-        logger.error(`Error updating aggregatedVotes for node: ${nodeId}`, error);
-        // Note: FieldValue.increment on update() throws if the document does not exist.
-        // Assuming node document is always created prior to someone voting.
-      }
+      logger.info(
+        `Successfully recalculated aggregatedVotes for node: ${nodeId}`,
+      );
+    } catch (error) {
+      logger.error(
+        `Error recalculating aggregatedVotes for node: ${nodeId}`,
+        error,
+      );
     }
-  }
+  },
 );

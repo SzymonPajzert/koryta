@@ -36,6 +36,12 @@ export type Votes = Record<
   }
 >;
 
+export type VoteDocument = {
+  nodeId: string;
+  userUid: string;
+  categoryVotes: Record<string, number>;
+};
+
 export type Node = PageBase<NodeType> & {
   name: string;
 };

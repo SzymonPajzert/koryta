@@ -1,6 +1,6 @@
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 
 // Ensure the Firebase Admin SDK is initialized
@@ -24,31 +24,31 @@ export const onNoteWritten = onDocumentWritten(
     const nodeId = afterData?.nodeId || beforeData?.nodeId;
 
     if (!nodeId) {
-      logger.warn(`Could not determine nodeId for note doc: ${event.params.noteId}`);
+      logger.warn(
+        `Could not determine nodeId for note doc: ${event.params.noteId}`,
+      );
       return;
     }
 
-    let delta = 0;
-    if (!beforeData && afterData) {
-      // Note created
-      delta = 1;
-    } else if (beforeData && !afterData) {
-      // Note deleted
-      delta = -1;
-    }
+    const db = getFirestore("koryta-pl");
 
-    if (delta !== 0) {
-      const db = getFirestore("koryta-pl");
+    try {
+      const notesSnapshot = await db
+        .collection("notes")
+        .where("nodeId", "==", nodeId)
+        .get();
+      const notesCount = notesSnapshot.size;
+
       const nodeRef = db.collection("nodes").doc(nodeId);
+      await nodeRef.update({
+        "stats.notesCount": notesCount,
+      });
 
-      try {
-        await nodeRef.update({
-          "stats.notesCount": FieldValue.increment(delta),
-        });
-        logger.info(`Successfully updated notesCount by ${delta} for node: ${nodeId}`);
-      } catch (error) {
-        logger.error(`Error updating notesCount for node: ${nodeId}`, error);
-      }
+      logger.info(
+        `Successfully recalculated notesCount to ${notesCount} for node: ${nodeId}`,
+      );
+    } catch (error) {
+      logger.error(`Error recalculating notesCount for node: ${nodeId}`, error);
     }
-  }
+  },
 );

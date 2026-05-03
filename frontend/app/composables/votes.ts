@@ -10,7 +10,7 @@ import {
 import { useDocument, useFirebaseApp } from "vuefire";
 import { useAuthState } from "./auth";
 import type { DocumentData } from "firebase-admin/firestore";
-import type { VoteCategory } from "~~/shared/model";
+import type { VoteCategory, VoteDocument } from "~~/shared/model";
 
 const configMap: Record<
   VoteCategory,
@@ -31,12 +31,6 @@ const configMap: Record<
 };
 
 type AggregatedVotes = Record<string, number>;
-
-type VoteDocument = {
-  nodeId: string;
-  userUid: string;
-  categoryVotes: Record<string, number>;
-};
 
 export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
   const { user } = useAuthState();
