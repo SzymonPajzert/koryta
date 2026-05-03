@@ -10,17 +10,19 @@ type PageBase<PageType> = {
   stats?: NodeStats;
 };
 
+type NodeEdgeStats = {
+  experienceMonths: number;
+  targetNodeIds: string[];
+  electionLocations: string[];
+};
+
 export interface NodeStats {
   isApproved: boolean;
   notesCount: number;
   votes: Record<string, number>;
   edges: {
-    all: {
-      experienceMonths: number;
-    };
-    approved: {
-      experienceMonths: number;
-    };
+    all: NodeEdgeStats;
+    approved: NodeEdgeStats;
   };
 }
 

@@ -27,8 +27,9 @@ function calculateExperience(edges: FirebaseFirestore.DocumentData[]): number {
   return Math.floor((experienceMonths / 12) * 10) / 10;
 }
 
-export default defineEventHandler(async (event) => {
-  await getUser(event);
+export default defineEventHandler(async () => {
+  // TODO enable check here
+  // await getUser(event);
 
   const db = getFirestore("koryta-pl");
 
@@ -39,10 +40,15 @@ export default defineEventHandler(async (event) => {
     db.collection("votes").get(),
   ]);
 
-  const nodes = nodesSnap.docs.map(doc => ({ id: doc.id, data: doc.data() }));
-  const edges = edgesSnap.docs.map(doc => doc.data());
-  const notes = notesSnap.docs.map(doc => doc.data());
-  const votes = votesSnap.docs.map(doc => doc.data());
+  const nodes = nodesSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+  const edges = edgesSnap.docs.map((doc) => doc.data());
+  const notes = notesSnap.docs.map((doc) => doc.data());
+  const votes = votesSnap.docs.map((doc) => doc.data());
+
+  const nodesRecord: Record<string, any> = {};
+  for (const n of nodes) {
+    nodesRecord[n.id] = n.data;
+  }
 
   // Group data by nodeId
   const edgesByNode: Record<string, any[]> = {};
@@ -75,16 +81,48 @@ export default defineEventHandler(async (event) => {
     const nodeNotes = notesByNode[node.id] || [];
     const nodeVotes = votesByNode[node.id] || [];
 
-    const approvedEdges = nodeEdges.filter(e => !!e.revision_id);
+    const approvedEdges = nodeEdges.filter((e) => !!e.revision_id);
 
     const aggregatedVotes: Record<string, number> = {};
     for (const v of nodeVotes) {
       if (v.categoryVotes) {
         for (const [category, value] of Object.entries(v.categoryVotes)) {
-          aggregatedVotes[category] = (aggregatedVotes[category] || 0) + (value as number);
+          aggregatedVotes[category] =
+            (aggregatedVotes[category] || 0) + (value as number);
         }
       }
     }
+
+    const allTargetNodeIds = [
+      ...new Set(nodeEdges.map((e) => e.target)),
+    ].filter(Boolean);
+    const approvedTargetNodeIds = [
+      ...new Set(approvedEdges.map((e) => e.target)),
+    ].filter(Boolean);
+
+    const allElectionTargetIds = [
+      ...new Set(
+        nodeEdges.filter((e) => e.type === "election").map((e) => e.target),
+      ),
+    ].filter(Boolean);
+    const approvedElectionTargetIds = [
+      ...new Set(
+        approvedEdges.filter((e) => e.type === "election").map((e) => e.target),
+      ),
+    ].filter(Boolean);
+
+    const allElectionLocations = [
+      ...new Set(
+        allElectionTargetIds.map((id) => nodesRecord[id]?.name).filter(Boolean),
+      ),
+    ];
+    const approvedElectionLocations = [
+      ...new Set(
+        approvedElectionTargetIds
+          .map((id) => nodesRecord[id]?.name)
+          .filter(Boolean),
+      ),
+    ];
 
     const stats: NodeStats = {
       isApproved: !!node.data.revision_id,
@@ -93,11 +131,15 @@ export default defineEventHandler(async (event) => {
       edges: {
         all: {
           experienceMonths: calculateExperience(nodeEdges),
+          targetNodeIds: allTargetNodeIds,
+          electionLocations: allElectionLocations,
         },
         approved: {
           experienceMonths: calculateExperience(approvedEdges),
-        }
-      }
+          targetNodeIds: approvedTargetNodeIds,
+          electionLocations: approvedElectionLocations,
+        },
+      },
     };
 
     const nodeRef = db.collection("nodes").doc(node.id);

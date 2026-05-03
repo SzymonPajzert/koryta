@@ -65,10 +65,45 @@ export const onEdgeWritten = onDocumentWritten(
       const allExperience = calculateExperience(allEdges);
       const approvedExperience = calculateExperience(approvedEdges);
 
+      const allTargetNodeIds = [...new Set(allEdges.map(e => e.target))].filter(Boolean);
+      const approvedTargetNodeIds = [...new Set(approvedEdges.map(e => e.target))].filter(Boolean);
+
+      const allElectionTargetIds = [...new Set(allEdges.filter(e => e.type === "election").map(e => e.target))].filter(Boolean);
+      const approvedElectionTargetIds = [...new Set(approvedEdges.filter(e => e.type === "election").map(e => e.target))].filter(Boolean);
+
+      const nodeCache: Record<string, string> = {};
+
+      const fetchNodeNames = async (ids: string[]) => {
+        const toFetch = ids.filter(id => !nodeCache[id]);
+        if (toFetch.length === 0) return;
+        const chunks = [];
+        for (let i = 0; i < toFetch.length; i += 100) {
+          chunks.push(toFetch.slice(i, i + 100));
+        }
+        for (const chunk of chunks) {
+          const refs = chunk.map(id => db.collection("nodes").doc(id));
+          const snapshots = await db.getAll(...refs);
+          for (const snap of snapshots) {
+            if (snap.exists) {
+               nodeCache[snap.id] = snap.data()?.name || "";
+            }
+          }
+        }
+      };
+
+      await fetchNodeNames(allElectionTargetIds);
+
+      const allElectionLocations = [...new Set(allElectionTargetIds.map(id => nodeCache[id]).filter(Boolean))];
+      const approvedElectionLocations = [...new Set(approvedElectionTargetIds.map(id => nodeCache[id]).filter(Boolean))];
+
       const nodeRef = db.collection("nodes").doc(sourceId);
       await nodeRef.update({
         "stats.edges.all.experienceMonths": allExperience,
+        "stats.edges.all.targetNodeIds": allTargetNodeIds,
+        "stats.edges.all.electionLocations": allElectionLocations,
         "stats.edges.approved.experienceMonths": approvedExperience,
+        "stats.edges.approved.targetNodeIds": approvedTargetNodeIds,
+        "stats.edges.approved.electionLocations": approvedElectionLocations,
       });
 
       logger.info(`Successfully recalculated edge stats for node: ${sourceId}`);
