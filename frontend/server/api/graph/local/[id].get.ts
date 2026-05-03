@@ -14,31 +14,31 @@ import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
 export async function getLocalGraph(
   focusNodeId: string,
-  latest: boolean,
+  bypassCache: boolean,
   distance: number,
   expansions: string[],
 ) {
   const [peopleRaw, placesRaw, regionsRaw, edgesFromDBRaw] = await Promise.all([
-    fetchNodes("person"),
-    fetchNodes("place"),
-    fetchNodes("region"),
-    fetchEdges(),
+    fetchNodes("person", { bypassCache }),
+    fetchNodes("place", { bypassCache }),
+    fetchNodes("region", { bypassCache }),
+    fetchEdges(bypassCache),
   ]);
 
   // Handle visibility filtering
   const people = Object.fromEntries(
     Object.entries(peopleRaw).filter(([_, n]) =>
-      latest ? true : n.visibility,
+      bypassCache ? true : n.visibility,
     ),
   );
   const places = Object.fromEntries(
     Object.entries(placesRaw).filter(([_, n]) =>
-      latest ? true : n.visibility,
+      bypassCache ? true : n.visibility,
     ),
   );
   const regions = Object.fromEntries(
     Object.entries(regionsRaw).filter(([_, n]) =>
-      latest ? true : n.visibility,
+      bypassCache ? true : n.visibility,
     ),
   );
 
@@ -47,7 +47,7 @@ export async function getLocalGraph(
 
   const edgesFiltered = edgesFromDBRaw.filter(
     (e: Edge) =>
-      (latest ? true : e.visibility) &&
+      (bypassCache ? true : e.visibility) &&
       validNodeIds.has(e.source) &&
       validNodeIds.has(e.target),
   );

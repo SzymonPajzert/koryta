@@ -1,8 +1,7 @@
-import { authCachedEventHandler } from "~~/server/utils/handlers";
-import { readBody, getRouterParam } from "h3";
+import { defineEventHandler, readBody, getRouterParam } from "h3";
 import { getLocalGraph } from "./[id].get";
 
-export default authCachedEventHandler(async (event) => {
+export default defineEventHandler(async (event) => {
   const body = (await readBody(event)) || {};
   const latest = body.latest !== undefined && body.latest !== false;
   const distance = body.distance ? parseInt(body.distance as string, 10) : 1;
