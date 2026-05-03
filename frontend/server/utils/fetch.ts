@@ -66,12 +66,20 @@ const _cachedFetchNodes = defineCachedFunction(
       if (docSnap.data()?.type !== path) return {};
       logEventPath("fetchNodes", path);
 
-      return { [nodeId]: { id: docSnap.id, ...docSnap.data() } };
+      const data = docSnap.data() || {};
+      if (data.revision_id && typeof data.revision_id.path === "string") {
+        data.revision_id = data.revision_id.path;
+      }
+
+      return { [nodeId]: { id: docSnap.id, ...data } };
     }
 
     const nodes = await query.get();
     const nodesData = nodes.docs.map((doc) => {
       const data = doc.data();
+      if (data.revision_id && typeof data.revision_id.path === "string") {
+        data.revision_id = data.revision_id.path;
+      }
       return {
         id: doc.id,
         ...data,
@@ -126,6 +134,9 @@ const _cachedFetchEdges = defineCachedFunction(
     const db = getFirestore("koryta-pl");
     const edges = (await db.collection("edges").get()).docs.map((doc) => {
       const data = doc.data();
+      if (data.revision_id && typeof data.revision_id.path === "string") {
+        data.revision_id = data.revision_id.path;
+      }
 
       // TODO this should be organized somewhere else.
       if (data.type === "election") {
