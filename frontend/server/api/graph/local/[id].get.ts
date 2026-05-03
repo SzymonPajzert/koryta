@@ -12,7 +12,12 @@ import type { Edge } from "~~/shared/model";
 import { getQuery, getRouterParam } from "h3";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
-export async function getLocalGraph(focusNodeId: string, latest: boolean, distance: number, expansions: string[]) {
+export async function getLocalGraph(
+  focusNodeId: string,
+  latest: boolean,
+  distance: number,
+  expansions: string[],
+) {
   const [peopleRaw, placesRaw, regionsRaw, edgesFromDBRaw] = await Promise.all([
     fetchNodes("person"),
     fetchNodes("place"),

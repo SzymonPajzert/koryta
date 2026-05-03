@@ -38,8 +38,11 @@ export function computeVoteStats(
   return aggregatedVotes;
 }
 
+const stringNotUndefined = (item: string | undefined): item is string =>
+  item !== undefined;
+
 export function computeEdgeStats(
-  nodeEdges: any[],
+  nodeEdges: Edge[],
   getNodeName: (id: string) => string | undefined,
 ) {
   const approvedEdges = nodeEdges.filter((e) => !!e.revision_id);
@@ -49,27 +52,31 @@ export function computeEdgeStats(
   );
   const approvedTargetNodeIds = [
     ...new Set(approvedEdges.map((e) => e.target)),
-  ].filter(Boolean);
+  ];
 
   const allElectionTargetIds = [
     ...new Set(
       nodeEdges.filter((e) => e.type === "election").map((e) => e.target),
     ),
-  ].filter(Boolean);
+  ];
   const approvedElectionTargetIds = [
     ...new Set(
       approvedEdges.filter((e) => e.type === "election").map((e) => e.target),
     ),
-  ].filter(Boolean);
+  ];
 
   const allElectionLocations = [
     ...new Set(
-      allElectionTargetIds.map((id) => getNodeName(id)).filter(Boolean),
+      allElectionTargetIds
+        .map((id) => getNodeName(id))
+        .filter(stringNotUndefined),
     ),
   ];
   const approvedElectionLocations = [
     ...new Set(
-      approvedElectionTargetIds.map((id) => getNodeName(id)).filter(Boolean),
+      approvedElectionTargetIds
+        .map((id) => getNodeName(id))
+        .filter(stringNotUndefined),
     ),
   ];
 
@@ -91,12 +98,15 @@ export function computeNodeStats(
   nodeIsApproved: boolean,
   nodeEdges: Edge[],
   nodeNotes: Note[],
-  nodeVotes: Votes[],
+  nodeVotes: VoteDocument[],
   getNodeName: (id: string) => string | undefined,
 ): NodeStats {
   return {
     isApproved: nodeIsApproved,
-    notesCount: nodeNotes.length,
+    // We're interested in the total number of sources
+    notesCount: nodeNotes
+      .map((n) => n.sources?.length || 0)
+      .reduce((a, b) => a + b, 0),
     votes: computeVoteStats(nodeVotes),
     edges: computeEdgeStats(nodeEdges, getNodeName),
   };
