@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     } catch {
       return; // Invalid URLs are skipped
     }
-    
+
     const domain = url.hostname.replace("www.", "");
 
     articleCounts[domain] = (articleCounts[domain] || 0) + 1;
@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
     }));
 
   const db = getFirestore("koryta-pl");
-  
+
   // Firestore batches are limited to 500 writes
   const chunks = [];
   for (let i = 0; i < sourceStats.length; i += 500) {
@@ -77,7 +77,7 @@ export default defineEventHandler(async (event) => {
       batch.set(docRef, {
         id: stat.domain,
         type: "domain_articles",
-        ...stat
+        ...stat,
       });
     }
     await batch.commit();

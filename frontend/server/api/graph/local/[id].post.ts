@@ -3,7 +3,7 @@ import { readBody, getRouterParam } from "h3";
 import { getLocalGraph } from "./[id].get";
 
 export default authCachedEventHandler(async (event) => {
-  const body = await readBody(event) || {};
+  const body = (await readBody(event)) || {};
   const latest = body.latest !== undefined && body.latest !== false;
   const distance = body.distance ? parseInt(body.distance as string, 10) : 1;
   const focusNodeId = getRouterParam(event, "id");
@@ -14,7 +14,8 @@ export default authCachedEventHandler(async (event) => {
 
   let expansions: string[] = [];
   if (body.expand) {
-    expansions = typeof body.expand === "string" ? body.expand.split(",") : body.expand;
+    expansions =
+      typeof body.expand === "string" ? body.expand.split(",") : body.expand;
   }
 
   return getLocalGraph(focusNodeId, latest, distance, expansions);
