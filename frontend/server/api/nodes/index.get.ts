@@ -10,6 +10,9 @@ const queryValidator = z.object({
   type: z.enum(["person", "place", "article", "region"]).optional(),
   party: z.string().optional(),
   place: z.string().optional(),
+  teryt: z.string().optional(),
+  krs: z.string().optional(),
+  electionLocation: z.string().optional(),
   
   // Pagination & Sorting parameters
   limit: z.coerce.number().optional(),
@@ -48,7 +51,7 @@ export default defineEventHandler(async (event) => {
   );
 
   // If pagination/sorting is requested, query Firestore directly for uncached results
-  if (query.limit && query.sortBy) {
+  if (query.limit || query.sortBy) {
     const user = await getUser(event).catch(() => null);
     const db = getFirestore("koryta-pl");
     
@@ -60,42 +63,77 @@ export default defineEventHandler(async (event) => {
     if (query.party) {
       fsQuery = fsQuery.where("parties", "array-contains", query.party);
     }
+    if (query.krs) {
+      const places = await db.collection("nodes").where("type", "==", "place").where("krsNumber", "==", query.krs).limit(1).get();
+      if (!places.empty) {
+        const placeId = places.docs[0].id;
+        const arrayField = user ? "stats.edges.all.targetNodeIds" : "stats.edges.approved.targetNodeIds";
+        fsQuery = fsQuery.where(arrayField, "array-contains", placeId);
+      } else {
+        return { nodes: {}, total: 0 };
+      }
+    }
+    if (query.teryt) {
+      const regions = await db.collection("nodes").where("type", "==", "region").where("teryt", "==", query.teryt).limit(1).get();
+      if (!regions.empty) {
+        const regionId = regions.docs[0].id;
+        const arrayField = user ? "stats.edges.all.targetNodeIds" : "stats.edges.approved.targetNodeIds";
+        fsQuery = fsQuery.where(arrayField, "array-contains", regionId);
+      } else {
+        return { nodes: {}, total: 0 };
+      }
+    }
+    if (query.electionLocation) {
+      const arrayField = user ? "stats.edges.all.electionLocations" : "stats.edges.approved.electionLocations";
+      fsQuery = fsQuery.where(arrayField, "array-contains", query.electionLocation);
+    }
     
     // For non-authenticated users, only show approved nodes
     if (!user) {
       fsQuery = fsQuery.where("stats.isApproved", "==", true);
     }
 
-    let sortField = query.sortBy;
-    if (sortField === "experience") {
-      sortField = user 
-        ? "stats.edges.all.experienceMonths" 
-        : "stats.edges.approved.experienceMonths";
-    } else if (sortField === "notesCount") {
-      sortField = "stats.notesCount";
-    } else if (sortField.startsWith("votes.")) {
-      sortField = `stats.votes.${sortField.split(".")[1]}`;
-    }
+    if (query.sortBy) {
+      let sortField = query.sortBy;
+      if (sortField === "experience") {
+        sortField = user 
+          ? "stats.edges.all.experienceMonths" 
+          : "stats.edges.approved.experienceMonths";
+      } else if (sortField === "notesCount") {
+        sortField = "stats.notesCount";
+      } else if (sortField.startsWith("votes.")) {
+        sortField = `stats.votes.${sortField.split(".")[1]}`;
+      }
 
-    const direction = query.sortDesc === "true" ? "desc" : "asc";
-    fsQuery = fsQuery.orderBy(sortField, direction);
+      const direction = query.sortDesc === "true" ? "desc" : "asc";
+      fsQuery = fsQuery.orderBy(sortField, direction);
+    }
 
     const page = query.page || 1;
     const offset = (page - 1) * query.limit;
     
-    fsQuery = fsQuery.offset(offset).limit(query.limit);
+    const paginatedQuery = fsQuery.offset(offset).limit(query.limit);
     
-    const snapshot = await fsQuery.get();
+    // Also return the total count (run in parallel with data fetch)
+    const [snapshot, countSnapshot] = await Promise.all([
+      paginatedQuery.get(),
+      fsQuery.count().get()
+    ]);
     
     const nodesRecord: Record<string, any> = {};
     for (const doc of snapshot.docs) {
       const data = doc.data();
+      if (data.revision_id) {
+        if (typeof data.revision_id.path === "string") {
+          data.revision_id = data.revision_id.path;
+        } else if (data.revision_id._path && Array.isArray(data.revision_id._path.segments)) {
+          data.revision_id = data.revision_id._path.segments.join("/");
+        }
+      }
       const visibility = pageIsPublic(data);
       nodesRecord[doc.id] = { id: doc.id, ...data, visibility };
     }
     
-    // Also return the total count
-    const countSnapshot = await fsQuery.count().get();
     const total = countSnapshot.data().count;
 
     return { nodes: nodesRecord, total };
