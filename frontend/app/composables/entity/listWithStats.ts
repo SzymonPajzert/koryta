@@ -2,18 +2,45 @@ import type { ElectionRich, PersonRich, Person } from "~~/shared/model";
 import type { Edge, Node } from "~~/shared/graph/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 
+import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
+
 export async function useListWithStats(
   apiQuery: Ref<Query> | ComputedRef<Query>,
 ) {
+  const user = useCurrentUser();
+  const isAuthReady = useIsCurrentUserLoaded();
+
   const { data: pageData, pending } = await useAsyncData(
     "tabela-data",
     async () => {
+      if (!isAuthReady.value) {
+        await new Promise<void>((resolve) => {
+          const unwatch = watch(
+            isAuthReady,
+            (ready) => {
+              if (ready) {
+                unwatch();
+                resolve();
+              }
+            },
+            { immediate: true },
+          );
+        });
+      }
+
+      const headers: HeadersInit = {};
+      if (user.value) {
+        const token = await user.value.getIdToken();
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       // 1. Fetch nodes
       const nodesRes = await $fetch<{
         nodes: Record<string, Person>;
         total?: number;
       }>("/api/nodes", {
         query: apiQuery.value,
+        headers,
       });
       const nodes = Object.values(nodesRes.nodes);
       const total: number = nodesRes.total || 0;
@@ -32,6 +59,7 @@ export async function useListWithStats(
           const subRes = await $fetch(`/api/graph/local/${firstId}`, {
             method: "POST",
             body: { expand: otherIds, distance: 1, latest: true },
+            headers,
           });
           if (subRes) {
             sEdges = subRes.edges || [];
@@ -45,7 +73,7 @@ export async function useListWithStats(
       return { nodes, total, subgraphEdges: sEdges, subgraphNodes: sNodes };
     },
     {
-      watch: [apiQuery],
+      watch: [apiQuery, user],
     },
   );
 
