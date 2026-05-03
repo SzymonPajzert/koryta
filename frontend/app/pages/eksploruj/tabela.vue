@@ -39,7 +39,7 @@
           v-model:visibility="filterVisibility"
           v-model:party="filterParty"
           v-model:election-location="filterElectionLocation"
-          :available-parties="availableParties"
+          :available-parties="parties"
           :available-election-locations="availableElectionLocations"
         />
 
@@ -156,7 +156,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useListWithStats } from "~/composables/entity/listWithStats";
+import { parties } from "~~/shared/misc";
 import type { PersonRich } from "~~/shared/model";
+import type { Query } from "~~/server/api/nodes/index.get";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -170,16 +173,6 @@ const itemsPerPage = ref(
   parseInt((route.query.itemsPerPage as string) || "50"),
 );
 const page = ref(parseInt((route.query.page as string) || "1"));
-const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
-  route.query.sortBy
-    ? [
-        {
-          key: route.query.sortBy as string,
-          order: route.query.sortDesc === "true" ? "desc" : "asc",
-        },
-      ]
-    : [],
-);
 
 const headers = [
   { title: "Imię i nazwisko", key: "name", sortable: true },
@@ -229,140 +222,53 @@ const filterElectionLocation = ref<string | null>(
   (route.query.electionLocation as string) || null,
 );
 
-// We fetch available options from a separate endpoint or cached data,
-// but for now we'll just leave them empty or fetch them differently.
-// Since we paginate, we can't easily compute all available options on the client.
-const availableParties = computed(() => {
-  return []; // Could be populated via a separate API call if needed
-});
-
 const availableElectionLocations = computed(() => {
   return [];
 });
 
-const apiQuery = computed(() => ({
-  type: "person",
-  limit: itemsPerPage.value,
-  page: page.value,
-  sortBy: sortBy.value.length > 0 ? sortBy.value[0].key : undefined,
-  sortDesc:
-    sortBy.value.length > 0
-      ? sortBy.value[0].order === "desc"
-        ? "true"
-        : "false"
-      : undefined,
-  party: filterParty.value || undefined,
-  visibility:
-    filterVisibility.value !== "all" ? filterVisibility.value : undefined,
-  krs: route.query.krs as string | undefined,
-  teryt: route.query.teryt as string | undefined,
-  electionLocation: filterElectionLocation.value || undefined,
-}));
-
-const { data: pageData, pending } = await useAsyncData(
-  "tabela-data",
-  async () => {
-    // 1. Fetch nodes
-    const nodesRes = (await $fetch("/api/nodes", {
-      query: apiQuery.value,
-    })) as any;
-    const nodes: any[] = nodesRes.nodes ? Object.values(nodesRes.nodes) : [];
-    const total: number = nodesRes.total || 0;
-
-    // 2. Fetch subgraph
-    let sEdges: any[] = [];
-    let sNodes: Record<string, any> = {};
-
-    if (nodes.length > 0) {
-      const firstId = nodes[0].id;
-      const otherIds = nodes
-        .slice(1)
-        .map((n) => n.id)
-        .join(",");
-      try {
-        const subRes = (await $fetch(`/api/graph/local/${firstId}`, {
-          method: "POST",
-          body: { expand: otherIds, distance: 1, latest: true },
-        })) as any;
-        if (subRes) {
-          sEdges = subRes.edges || [];
-          sNodes = subRes.nodes || {};
-        }
-      } catch (e) {
-        console.error("Failed to fetch subgraph", e);
-      }
-    }
-
-    return { nodes, total, subgraphEdges: sEdges, subgraphNodes: sNodes };
-  },
-  {
-    watch: [apiQuery],
+const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
+  route.query.sortBy
+    ? [
+        {
+          key: route.query.sortBy as string,
+          order: route.query.sortDesc === "true" ? "desc" : "asc",
+        },
+      ]
+    : [],
+);
+const sortByOpt = computed<{ key: string; order: "asc" | "desc" } | undefined>(
+  () => {
+    return sortBy.value[0];
   },
 );
 
-const fetchedItems = computed(() => pageData.value?.nodes || []);
-const totalItems = computed(() => pageData.value?.total || 0);
-const subgraphEdges = computed(() => pageData.value?.subgraphEdges || []);
-const subgraphNodes = computed(() => pageData.value?.subgraphNodes || {});
-
-const tableItems = computed(() => {
-  return fetchedItems.value.map((person) => {
-    // Reconstruct companies and elections from subgraph
-    const companies = new Set<string>();
-    const elections: any[] = [];
-
-    const personEdges = subgraphEdges.value.filter(
-      (e) => e.source === person.id || e.target === person.id,
-    );
-
-    for (const edge of personEdges) {
-      const targetNode = subgraphNodes.value[edge.target];
-      if (edge.type === "employed" && targetNode?.entityType === "place") {
-        companies.add(targetNode.name);
-      } else if (edge.type === "election") {
-        const listYear =
-          edge.start_date && typeof edge.start_date === "string"
-            ? edge.start_date.split("-")[0]
-            : undefined;
-        const listLocation = subgraphNodes.value[edge.target]?.name || "";
-        const listPosition = edge.position || edge.name || "Wybory";
-
-        elections.push({
-          year: listYear,
-          location: listLocation,
-          position: listPosition,
-          committee: edge.committee,
-        });
-      }
-    }
-
-    elections.sort((a, b) => (a.year || 0) - (b.year || 0));
-
-    // Get experience from the new stats object
-    const exp = person.stats?.edges?.approved?.experienceMonths || 0;
-
-    return {
-      ...person,
-      companies: Array.from(companies),
-      elections,
-      experience: Math.floor(exp * 10) / 10,
-    };
-  });
-});
-
-watch([filterVisibility, filterParty, filterElectionLocation], () => {
-  page.value = 1;
-  router.push({
-    query: {
-      ...route.query,
-      page: 1,
+const apiQuery = computed(
+  () =>
+    ({
+      type: "person",
+      limit: itemsPerPage.value,
+      page: page.value,
+      sortBy: sortByOpt.value?.key,
+      sortDesc: sortByOpt.value
+        ? sortByOpt.value.order === "desc"
+          ? "true"
+          : "false"
+        : undefined,
+      party: filterParty.value || undefined,
       visibility:
         filterVisibility.value !== "all" ? filterVisibility.value : undefined,
-      party: filterParty.value || undefined,
+      krs: route.query.krs as string | undefined,
+      teryt: route.query.teryt as string | undefined,
       electionLocation: filterElectionLocation.value || undefined,
-    },
-  });
-});
+    }) as Query,
+);
+
+// TODO maybe it shouldn't be await?
+
+// We perform a double join in the composible
+// We query /api/nodes/uncached and /api/graph/local
+// to join the stats info with the node neighborhood.
+const { tableItems, totalItems, pending } = await useListWithStats(apiQuery);
 
 const updateQueryParams = async (options: {
   sortBy: { key: string; order: string }[];
@@ -388,6 +294,20 @@ const updateQueryParams = async (options: {
     },
   });
 };
+
+watch([filterVisibility, filterParty, filterElectionLocation], () => {
+  page.value = 1;
+  router.push({
+    query: {
+      ...route.query,
+      page: 1,
+      visibility:
+        filterVisibility.value !== "all" ? filterVisibility.value : undefined,
+      party: filterParty.value || undefined,
+      electionLocation: filterElectionLocation.value || undefined,
+    },
+  });
+});
 
 const openDrawer = shallowRef(false);
 const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
