@@ -121,6 +121,8 @@ export default defineEventHandler(async (event) => {
           : "stats.edges.approved.experienceMonths";
       } else if (sortField === "notesCount") {
         sortField = "stats.notesCount";
+      } else if (sortField === "visibility") {
+        sortField = "stats.isApproved";
       } else if (sortField.startsWith("votes.")) {
         sortField = `stats.votes.${sortField.split(".")[1]}`;
       }
