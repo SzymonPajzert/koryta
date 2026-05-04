@@ -77,9 +77,12 @@ class Extract(Pipeline):
         )
         parser.add_argument(
             "--krs",
+            dest="krss",
             help="KRS of the company to export the data for",
             default=None,
             required=False,
+            nargs="*",
+            action="extend",
         )
         parser.add_argument(
             "--approved",
@@ -104,7 +107,7 @@ class Extract(Pipeline):
         )
         args, _ = parser.parse_known_args()
 
-        if not args.region and not args.krs and not args.approved:
+        if not args.region and not args.krss and not args.approved:
             raise ValueError(
                 "[Extract]: Either --region or --krs or --approved must be provided"
             )
@@ -116,8 +119,8 @@ class Extract(Pipeline):
         return self.args.region
 
     @property
-    def krs(self):
-        return self.args.krs
+    def krss(self) -> list[str]:
+        return self.args.krss
 
     @property
     def approved(self) -> bool:
@@ -141,9 +144,9 @@ class Extract(Pipeline):
         """Returns KRS IDs of companies that match one of the passed requirements."""
         result = set()
 
-        if self.krs:
+        for krs in self.krss:
             graph = self.process_graph(ctx)
-            result = set.union(graph.all_descendants([self.krs]))
+            result |= set.union(graph.all_descendants([krs]))
 
         if self.region:
             for company in self.companies.read_or_process(ctx).itertuples():
