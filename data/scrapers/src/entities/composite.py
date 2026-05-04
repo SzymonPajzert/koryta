@@ -20,12 +20,18 @@ class Election:
 
 
 @dataclass
+class Source:
+    url: str
+    note: str | None = None
+
+
+@dataclass
 class Person:
     name: str
 
     companies: list[Company]
     elections: list[Election]
-    sources: list[str]
+    sources: list[Source]
     content: str | None = None
     parties: list[str] | None = None
     wikipedia: str | None = None
