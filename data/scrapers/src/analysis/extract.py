@@ -50,6 +50,9 @@ def check_auto_approved():
     return check_row
 
 
+RECENT_TRESHOLD = "2023-10-15"
+
+
 class Extract(Pipeline):
     people: PeopleEnriched
     companies: CompaniesKRS
@@ -83,6 +86,13 @@ class Extract(Pipeline):
             required=False,
             action=argparse.BooleanOptionalAction,
         )
+        parser.add_argument(
+            "--recent",
+            help="Extract people who were employed after 2023-10-15",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
         args, _ = parser.parse_known_args()
 
         if not args.region and not args.krs and not args.approved:
@@ -103,6 +113,10 @@ class Extract(Pipeline):
     @property
     def approved(self) -> bool:
         return self.args.approved
+
+    @property
+    def recent(self) -> bool:
+        return self.args.recent
 
     @memoized_property
     def filename(self):
@@ -146,7 +160,12 @@ class Extract(Pipeline):
             result = 0
             for emp in employment_list:
                 if emp.get("employed_krs") in relevant_companies:
-                    result += 1
+                    if self.recent:
+                        start_date = emp.get("employed_start")
+                        if start_date is not None and start_date > RECENT_TRESHOLD:
+                            result += 1
+                    else:
+                        result += 1
             return result
 
         return works_in_relevant
