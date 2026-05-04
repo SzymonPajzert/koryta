@@ -54,6 +54,8 @@ RECENT_TRESHOLD = "2023-10-15"
 
 
 class Extract(Pipeline):
+    filename = None
+
     people: PeopleEnriched
     companies: CompaniesKRS
     teryt: Teryt
@@ -128,17 +130,6 @@ class Extract(Pipeline):
     @property
     def ignore_elections(self) -> bool:
         return self.args.ignore_elections
-
-    @memoized_property
-    def filename(self):
-        result = "people_extracted"
-        if self.approved:
-            result += "_approved"
-        if self.krs:
-            result += f"_krs_{self.krs}"
-        if self.region:
-            result += f"_region_{self.region}"
-        return result
 
     def process_graph(self, ctx: Context):
         companies_df = self.companies.read_or_process(ctx)
