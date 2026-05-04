@@ -208,6 +208,7 @@ def test_extract_by_krs():
         krs = "0000000001"
         region = "14"
         approved = False
+        recent = False
 
     extract.args = MockArgs()
 
