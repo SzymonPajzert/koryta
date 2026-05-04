@@ -93,6 +93,13 @@ class Extract(Pipeline):
             required=False,
             action=argparse.BooleanOptionalAction,
         )
+        parser.add_argument(
+            "--ignore-elections",
+            help="Ignore elections information, listing people without them",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
         args, _ = parser.parse_known_args()
 
         if not args.region and not args.krs and not args.approved:
@@ -117,6 +124,10 @@ class Extract(Pipeline):
     @property
     def recent(self) -> bool:
         return self.args.recent
+
+    @property
+    def ignore_elections(self) -> bool:
+        return self.args.ignore_elections
 
     @memoized_property
     def filename(self):
@@ -172,6 +183,8 @@ class Extract(Pipeline):
 
     def relevant_elections(self):
         def check(elections) -> int:
+            if self.ignore_elections:
+                return 1
             if not isinstance(elections, list):
                 return 0
             if not self.region or len(self.region) == "":
