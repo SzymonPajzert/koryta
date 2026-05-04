@@ -33,7 +33,11 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   const { data: localData, refresh: refreshLocal } = await authFetch(
     () => `/api/graph/local/${toValue(nodeID)}`,
     {
-      query: { latest: !!user.value, distance: 1, center: toValue(nodeID) },
+      query: computed(() => ({
+        latest: !!user.value,
+        distance: 1,
+        center: toValue(nodeID),
+      })),
       watch: [toRef(nodeID)],
     },
   );
