@@ -3,7 +3,6 @@ from hashlib import sha256
 from pathlib import Path
 
 import pandas as pd
-import pytest
 import requests
 
 from scrapers.article import parse
@@ -40,7 +39,6 @@ def normalize_quotes(text: str) -> str:
 
 def pytest_generate_tests(metafunc):
     """Dynamically generates test cases from the CSV file."""
-    pytest.skip("recreate these test files")
     df = pd.read_csv(URL_DF_PATH)
     assert set(df.columns) == {
         "Link",
