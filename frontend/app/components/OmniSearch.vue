@@ -28,6 +28,14 @@
         :title="item.raw.title"
         max-width="400px"
         :prepend-icon="item.raw.icon"
+        :to="
+          noNavigate
+            ? undefined
+            : {
+                path: item.raw.path || currentRoute.path,
+                query: { ...currentRoute.query, ...item.raw.query },
+              }
+        "
       />
     </template>
     <template #no-data>
