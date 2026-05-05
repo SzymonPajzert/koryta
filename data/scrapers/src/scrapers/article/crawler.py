@@ -93,13 +93,17 @@ def _can_crawl(parsed: NormalizedParse, rate_limit: float) -> bool:
         return True
 
 
+_HASH_SUFFIX_LEN = 10  # chars taken from md5 hexdigest
+
+
 def _compress_long_segments(path: str, max_segment_length: int) -> str:
     path_segments = [s for s in path.split("/") if s]
     safe_segments = []
     for segment in path_segments:
         if len(segment.encode("utf-8")) > max_segment_length:
-            hash_suffix = hashlib.md5(segment.encode()).hexdigest()[:10]
-            truncated = segment[:max_segment_length - 12]
+            hash_suffix = hashlib.md5(segment.encode()).hexdigest()[:_HASH_SUFFIX_LEN]
+            # +2: 1 for '_' separator, 1 safety (check is bytes, truncation is chars)
+            truncated = segment[:max_segment_length - _HASH_SUFFIX_LEN - 2]
             segment = f"{truncated}_{hash_suffix}"
         safe_segments.append(segment)
     return "/".join(safe_segments)
