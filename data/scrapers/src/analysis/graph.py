@@ -24,14 +24,16 @@ def flatten_parties(df):
     print("Flattening parties...")
 
     def extract_parties(group):
+        name = group.name  # group key, pandas 3.0 excludes it from group columns
         row = group.iloc[0]
-        name = row["person_id"]
         parties = list(set(e["party"].lower() for e in row["elections"] if e["party"]))
         return pd.DataFrame(
             {"person_id": [name] * len(parties), "subgroup_id": parties}
         )
 
-    flattened = df.groupby("person_id", group_keys=False).apply(extract_parties)
+    flattened = df.groupby("person_id", group_keys=False).apply(
+        extract_parties, include_groups=False
+    )
     flattened.reset_index(inplace=True)
 
     print("Done.")
