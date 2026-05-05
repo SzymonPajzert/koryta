@@ -132,7 +132,7 @@ export async function fetchEdges(bypassCache?: boolean): Promise<Edge[]> {
 }
 
 const _cachedFetchEdges = defineCachedFunction(
-  async (bypassCache?: boolean) => {
+  async (_bypassCache?: boolean) => {
     logEventPath("fetchEdges", "all");
     const db = getFirestore("koryta-pl");
     const edges = (await db.collection("edges").get()).docs.map((doc) => {

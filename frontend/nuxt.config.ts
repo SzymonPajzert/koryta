@@ -45,6 +45,11 @@ export default defineNuxtConfig({
 
   typescript: {
     strict: true,
+    tsConfig: {
+      vueCompilerOptions: {
+        plugins: [],
+      },
+    },
   },
 
   devtools: { enabled: true },

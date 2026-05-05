@@ -136,7 +136,6 @@ import { useDisplay } from "vuetify";
 
 const { mdAndUp } = useDisplay();
 const { user, userConfig, logout } = useAuthState();
-const router = useRouter();
 const route = useRoute();
 const maxWidth = computed(() =>
   route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 1200),
