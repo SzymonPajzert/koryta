@@ -254,7 +254,7 @@ def _extract_urls(
         ):
             continue
         absolute_link = ctx.utils.join_url(base_url, link)
-        clean_link = absolute_link.split("#")[0].rstrip("/")
+        clean_link = absolute_link.split("?")[0].split("#")[0].rstrip("/")
         if clean_link.startswith(("http://", "https://")):
             discovered.add(clean_link)
 
