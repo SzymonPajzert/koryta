@@ -57,7 +57,7 @@
             <template #[`item.name`]="{ item }">
               <div style="max-width: 150px">
                 <NuxtLink
-                  :to="`/entity/person/${item.id}`"
+                  :to="generateEntityUrl('person', item.id, item.name)"
                   class="text-decoration-none text-primary"
                 >
                   {{ item.name }}
@@ -160,6 +160,7 @@ import { useListWithStats } from "~/composables/entity/listWithStats";
 import { parties } from "~~/shared/misc";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
+import { generateEntityUrl } from "~/composables/slugs";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -173,6 +174,21 @@ const itemsPerPage = ref(
   parseInt((route.query.itemsPerPage as string) || "50"),
 );
 const page = ref(parseInt((route.query.page as string) || "1"));
+
+watch(
+  () => route.query.page,
+  (newPage) => {
+    const p = parseInt((newPage as string) || "1");
+    if (page.value !== p) page.value = p;
+  },
+);
+watch(
+  () => route.query.itemsPerPage,
+  (newItems) => {
+    const i = parseInt((newItems as string) || "50");
+    if (itemsPerPage.value !== i) itemsPerPage.value = i;
+  },
+);
 
 const headers = [
   { title: "Imię i nazwisko", key: "name", sortable: true },
@@ -214,13 +230,36 @@ const company = computed<[string, string] | undefined>(() => {
   return undefined;
 });
 
-const filterVisibility = ref<"all" | "public" | "private">(
-  (route.query.visibility as "all" | "public" | "private" | undefined) || "all",
-);
-const filterParty = ref<string | null>((route.query.party as string) || null);
-const filterElectionLocation = ref<string | null>(
-  (route.query.electionLocation as string) || null,
-);
+const filterVisibility = computed<"all" | "public" | "private">({
+  get: () =>
+    (route.query.visibility as "all" | "public" | "private" | undefined) ||
+    "all",
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        visibility: val !== "all" ? val : undefined,
+      },
+    });
+  },
+});
+const filterParty = computed<string | null>({
+  get: () => (route.query.party as string) || null,
+  set: (val) => {
+    router.push({
+      query: { ...route.query, page: 1, party: val || undefined },
+    });
+  },
+});
+const filterElectionLocation = computed<string | null>({
+  get: () => (route.query.electionLocation as string) || null,
+  set: (val) => {
+    router.push({
+      query: { ...route.query, page: 1, electionLocation: val || undefined },
+    });
+  },
+});
 
 const availableElectionLocations = computed(() => {
   return [];
@@ -284,30 +323,35 @@ const updateQueryParams = async (options: {
         : "false"
       : undefined;
 
-  await router.push({
-    query: {
-      ...route.query,
-      page: options.page,
-      itemsPerPage: options.itemsPerPage,
-      sortBy: sortParam,
-      sortDesc: sortDescParam,
-    },
-  });
-};
+  const currentQuery = route.query;
+  const rawQuery = {
+    ...currentQuery,
+    page: String(options.page),
+    itemsPerPage: String(options.itemsPerPage),
+    sortBy: sortParam,
+    sortDesc: sortDescParam,
+  };
 
-watch([filterVisibility, filterParty, filterElectionLocation], () => {
-  page.value = 1;
-  router.push({
-    query: {
-      ...route.query,
-      page: 1,
-      visibility:
-        filterVisibility.value !== "all" ? filterVisibility.value : undefined,
-      party: filterParty.value || undefined,
-      electionLocation: filterElectionLocation.value || undefined,
-    },
-  });
-});
+  const newQuery = Object.fromEntries(
+    Object.entries(rawQuery).filter(([_, value]) => value !== undefined),
+  );
+
+  const isChanged =
+    String(currentQuery.page || "1") !== String(options.page) ||
+    String(currentQuery.itemsPerPage || "50") !==
+      String(options.itemsPerPage) ||
+    currentQuery.sortBy !== sortParam ||
+    currentQuery.sortDesc !== sortDescParam;
+
+  if (!isChanged) {
+    if (!currentQuery.page || !currentQuery.itemsPerPage) {
+      await router.replace({ query: newQuery });
+    }
+    return;
+  }
+
+  await router.push({ query: newQuery });
+};
 
 const openDrawer = shallowRef(false);
 const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
