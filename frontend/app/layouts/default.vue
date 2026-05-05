@@ -13,12 +13,14 @@
       />
     </NuxtLink>
 
-    <v-app-bar-title
-      v-if="mdAndUp"
-      style="cursor: pointer"
-      @click="$router.push('/')"
-    >
-      koryta.pl
+    <v-app-bar-title v-if="mdAndUp">
+      <NuxtLink
+        to="/"
+        class="text-decoration-none"
+        style="color: inherit; cursor: pointer"
+      >
+        koryta.pl
+      </NuxtLink>
     </v-app-bar-title>
     <v-spacer />
     <omni-search v-if="!route?.meta.hideSearch" />
@@ -34,12 +36,9 @@
         target="_blank"
         >Dołącz</v-btn
       >
-      <v-avatar
-        v-if="user && pictureURL"
-        :image="pictureURL"
-        size="32"
-        @click="router.push('/profil')"
-      />
+      <v-btn v-if="user && pictureURL" icon to="/profil" size="32">
+        <v-avatar :image="pictureURL" size="32" />
+      </v-btn>
       <v-btn v-if="user && !pictureURL" icon to="/profil">
         <v-icon>mdi-account</v-icon>
       </v-btn>
