@@ -134,12 +134,6 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             transaction.execute(
                 """
-                ALTER TABLE website_index
-                ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
-                """
-            )
-            transaction.execute(
-                """
                 CREATE TABLE IF NOT EXISTS blocked_domains (
                     domain TEXT PRIMARY KEY,
                     reason TEXT
