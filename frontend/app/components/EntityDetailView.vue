@@ -67,6 +67,8 @@
           <GraphContainer :key="node" :focus-node-id="node" :max-depth="1" />
         </div>
 
+        <NoteEditor :node-id="node" class="mt-4" />
+
         <div class="mt-4">
           <template v-if="entity?.type === 'place'">
             <CardConnectionList :edges="owners" title="Właściciele" />

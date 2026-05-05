@@ -112,8 +112,8 @@ class Conductor(IO):
             with open(path, "wb") as f:
                 content(f)
 
-    def upload(self, source, data, content_type):
-        self.storage.upload(source, data, content_type)
+    def upload(self, source, data, content_type, include_query=False):
+        self.storage.upload(source, data, content_type, include_query=include_query)
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)

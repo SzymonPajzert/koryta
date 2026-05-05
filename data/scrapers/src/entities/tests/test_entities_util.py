@@ -64,6 +64,36 @@ class TestUtil(unittest.TestCase):
         with self.assertRaises(TypeError):
             NormalizedParse.parse(123)  # type: ignore
 
+    def test_normalized_parse_query_args(self):
+        """Tests parsing of query arguments."""
+        url = "http://example.com/path?a=1&b=2"
+        parsed = NormalizedParse.parse(url)
+        self.assertEqual(parsed.query, {"a": "1", "b": "2"})
+
+    def test_normalized_parse_empty_query(self):
+        """Tests parsing when there is no query."""
+        url = "http://example.com/path"
+        parsed = NormalizedParse.parse(url)
+        self.assertEqual(parsed.query, {})
+
+    def test_normalized_parse_query_without_value(self):
+        """Tests parsing when a query variable has no value."""
+        url = "http://example.com/path?a=&b=2"
+        parsed = NormalizedParse.parse(url)
+        self.assertEqual(parsed.query, {"a": "", "b": "2"})
+
+    def test_normalized_parse_query_with_no_equals(self):
+        """Tests parsing when a query variable doesn't have an equal sign."""
+        url = "http://example.com/path?a&b=2"
+        with self.assertRaises(ValueError):
+            NormalizedParse.parse(url)
+
+    def test_normalized_parse_query_with_multiple_equals(self):
+        """Tests parsing when a query variable has multiple equal signs."""
+        url = "http://example.com/path?a=1=2"
+        with self.assertRaises(ValueError):
+            NormalizedParse.parse(url)
+
 
 if __name__ == "__main__":
     unittest.main()

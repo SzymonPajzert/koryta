@@ -117,7 +117,14 @@ export const scheduledFirestoreExport = onSchedule(
       const [response] = await adminClient.exportDocuments({
         name: databaseName,
         outputUriPrefix: outputUriPrefix,
-        collectionIds: ["nodes", "edges", "revisions", "comments", "votes"],
+        collectionIds: [
+          "nodes",
+          "edges",
+          "revisions",
+          "comments",
+          "votes",
+          "notes",
+        ],
       });
 
       logger.info(`Operation Name: ${response.name}`);
@@ -127,3 +134,10 @@ export const scheduledFirestoreExport = onSchedule(
     }
   },
 );
+
+export { onVoteWritten } from "./votes";
+export { onNoteWritten } from "./notes";
+export { onEdgeWritten } from "./edges";
+export { onNodeWritten } from "./nodes";
+
+export * from "./votes";

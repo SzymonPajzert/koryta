@@ -207,6 +207,7 @@ class IO(metaclass=ABCMeta):
         source: Any,
         data: Any,
         content_type: Literal["text/html", "application/json", "text/plain"],
+        include_query=False,
     ):
         """Uploads data to storage (e.g. GCS)."""
         raise NotImplementedError()

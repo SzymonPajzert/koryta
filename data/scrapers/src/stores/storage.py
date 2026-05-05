@@ -104,16 +104,19 @@ class Client:
         source: NormalizedParse | str,
         data,
         content_type,
+        include_query=False,
     ):
         if isinstance(source, str):
             source = NormalizedParse.parse(source)
         try:
             now = datetime.now(warsaw_tz)
-            path = source.path or "index"
+            path = source.path if source.path else "index"
+            if include_query:
+                for k, v in sorted(source.query.items(), key=lambda item: item[0]):
+                    # We split the keys, so they create folders as well
+                    path += f"/?{k}={v}"
             date = f"{now.strftime('%Y')}-{now.strftime('%m')}-{now.strftime('%d')}"
-            destination_blob_name = (
-                f"hostname={source.hostname}/{path}/date={date}"
-            )
+            destination_blob_name = f"hostname={source.hostname}/{path}/date={date}"
             destination_blob_name = destination_blob_name.replace("//", "/")
             destination_blob_name = destination_blob_name.rstrip("/")
             bucket = self.storage_client.bucket(BUCKET)

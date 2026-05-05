@@ -26,6 +26,7 @@ class NormalizedParse:
     hostname: str
     hostname_normalized: str
     domain: str
+    query: dict[str, str]
     full_url: str
 
     @staticmethod
@@ -58,6 +59,14 @@ class NormalizedParse:
 
         domain = f"{parsed.scheme}://{hostname}"
 
+        if parsed.query:
+            query = {}
+            for pair in parsed.query.split("&"):
+                key, value = pair.split("=")
+                query[key] = value
+        else:
+            query = {}
+
         return NormalizedParse(
             scheme=parsed.scheme,
             netloc=parsed.netloc,
@@ -65,5 +74,6 @@ class NormalizedParse:
             hostname=hostname,
             hostname_normalized=hostname_normalized,
             domain=domain,
+            query=query,
             full_url=parsed.geturl(),
         )

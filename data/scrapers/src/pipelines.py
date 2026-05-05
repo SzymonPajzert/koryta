@@ -4,7 +4,8 @@ from analysis.interesting import Companies
 from analysis.payloads import PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.stats import Statistics
-from scrapers.kmgp.kmgp import PeopleKMGP
+from scrapers.kmgp.companies import CompaniesKMGP
+from scrapers.kmgp.people import PeopleKMGP
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -19,6 +20,7 @@ PIPELINES = [
     CommitteeParties,
     CompaniesKRS,
     Companies,
+    CompaniesKMGP,
     Extract,
     KorytaDiffer,
     KorytaPeople,

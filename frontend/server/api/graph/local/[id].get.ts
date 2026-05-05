@@ -12,37 +12,33 @@ import type { Edge } from "~~/shared/model";
 import { getQuery, getRouterParam } from "h3";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 
-export default authCachedEventHandler(async (event) => {
-  const query = getQuery(event);
-  const latest = query.latest !== undefined && query.latest !== "false";
-  const distance = query.distance ? parseInt(query.distance as string, 10) : 1;
-  const focusNodeId = getRouterParam(event, "id");
-
-  if (!focusNodeId) {
-    throw createError({ statusCode: 400, statusMessage: "id is required" });
-  }
-
+export async function getLocalGraph(
+  focusNodeId: string,
+  bypassCache: boolean,
+  distance: number,
+  expansions: string[],
+) {
   const [peopleRaw, placesRaw, regionsRaw, edgesFromDBRaw] = await Promise.all([
-    fetchNodes("person"),
-    fetchNodes("place"),
-    fetchNodes("region"),
-    fetchEdges(),
+    fetchNodes("person", { bypassCache }),
+    fetchNodes("place", { bypassCache }),
+    fetchNodes("region", { bypassCache }),
+    fetchEdges(bypassCache),
   ]);
 
   // Handle visibility filtering
   const people = Object.fromEntries(
     Object.entries(peopleRaw).filter(([_, n]) =>
-      latest ? true : n.visibility,
+      bypassCache ? true : n.visibility,
     ),
   );
   const places = Object.fromEntries(
     Object.entries(placesRaw).filter(([_, n]) =>
-      latest ? true : n.visibility,
+      bypassCache ? true : n.visibility,
     ),
   );
   const regions = Object.fromEntries(
     Object.entries(regionsRaw).filter(([_, n]) =>
-      latest ? true : n.visibility,
+      bypassCache ? true : n.visibility,
     ),
   );
 
@@ -51,7 +47,7 @@ export default authCachedEventHandler(async (event) => {
 
   const edgesFiltered = edgesFromDBRaw.filter(
     (e: Edge) =>
-      (latest ? true : e.visibility) &&
+      (bypassCache ? true : e.visibility) &&
       validNodeIds.has(e.source) &&
       validNodeIds.has(e.target),
   );
@@ -77,11 +73,8 @@ export default authCachedEventHandler(async (event) => {
   );
 
   const focusIds = new Set([focusNodeId]);
-  if (query.expand) {
-    const expansions = (query.expand as string).split(",");
-    for (const id of expansions) {
-      if (id) focusIds.add(id);
-    }
+  for (const id of expansions) {
+    if (id) focusIds.add(id);
   }
 
   // Actually perform BFS from backend
@@ -99,4 +92,22 @@ export default authCachedEventHandler(async (event) => {
     // Filter node groups based on the fetched subgraph nodes if needed, or simply return empty if they aren't utilized.
     nodeGroups: nodeGroupsRaw.filter((g) => validLocalIds.has(g.id)),
   } as GraphLayout;
+}
+
+export default authCachedEventHandler(async (event) => {
+  const query = getQuery(event);
+  const latest = query.latest !== undefined && query.latest !== "false";
+  const distance = query.distance ? parseInt(query.distance as string, 10) : 1;
+  const focusNodeId = getRouterParam(event, "id");
+
+  if (!focusNodeId) {
+    throw createError({ statusCode: 400, statusMessage: "id is required" });
+  }
+
+  let expansions: string[] = [];
+  if (query.expand) {
+    expansions = (query.expand as string).split(",");
+  }
+
+  return getLocalGraph(focusNodeId, latest, distance, expansions);
 });

@@ -30,6 +30,8 @@ class Company:
     name: str | None = None
     city: str | None = None
     teryt_code: str | None = None
+    nip: str | None = None
+    regon: str | None = None
     sources: list[Source] = field(default_factory=list)
     children: list[str] = field(default_factory=list)
     parents: list[Owner] = field(default_factory=list)
@@ -73,7 +75,9 @@ class ManualKRS:
     @staticmethod
     def from_blob_name(blob_name: str) -> "ManualKRS":
         """Creates a ManualKRS instance from a GCS blob name."""
-        return ManualKRS(blob_name.split("org/")[1].split("/")[0])
+        return ManualKRS(
+            blob_name.split("org/", maxsplit=1)[1].split("/", maxsplit=1)[0]
+        )
 
     def merge(self, other: "ManualKRS") -> "ManualKRS":
         """

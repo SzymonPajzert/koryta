@@ -248,7 +248,12 @@ def company_from_rejestrio(data: dict, pcs: DataFrame | None = None) -> KrsCompa
         postal_code = data.get("adres", {}).get("kodPocztowy")
         teryt_code = get_teryt(pcs, city.lower(), postal_code)
 
-    return KrsCompany(krs=krs, name=name, city=city, teryt_code=teryt_code)
+    nip = data.get("numery", {}).get("nip")
+    regon = data.get("numery", {}).get("regon")
+
+    return KrsCompany(
+        krs=krs, name=name, city=city, teryt_code=teryt_code, nip=nip, regon=regon
+    )
 
 
 def get_teryt(pcs: DataFrame, city: str, code: str | None):
@@ -308,11 +313,17 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
                     owners.append(Owner(krs=None, teryt=teryt_code[:teryt_length]))
                     break
 
+        identyfikatory = dzial1.get("danePodmiotu", {}).get("identyfikatory", {})
+        nip = identyfikatory.get("nip")
+        regon = identyfikatory.get("regon")
+
         return KrsCompany(
             krs=krs,
             name=nazwa,
             city=miejscowosc,
             teryt_code=teryt_code,
+            nip=nip,
+            regon=regon,
             parents=owners,
         )
     except KeyError as e:

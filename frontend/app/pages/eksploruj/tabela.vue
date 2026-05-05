@@ -1,124 +1,165 @@
 <template>
-  <v-layout>
-    <v-navigation-drawer
-      v-model="openDrawer"
-      location="end"
-      temporary
-      :width="$vuetify.display.mdAndUp ? 600 : 280"
-    >
-      <v-card-item title="Analiza osoby">
-        <template #append>
-          <v-btn
-            density="compact"
-            icon="$close"
-            variant="text"
-            @click="openDrawer = false"
-          />
-        </template>
-      </v-card-item>
-
-      <CardExplorePerson
-        :key="focusedPerson?.id"
-        :person="focusedPerson"
-        :region="region"
-        :company="company"
-      />
-    </v-navigation-drawer>
-    <div class="pa-4">
-      <h1 class="text-h4 mb-4">
-        Eksploruj powiązania dla
-        {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
-      </h1>
-
-      <FormEksplorujTabelaFilters
-        v-model:visibility="filterVisibility"
-        v-model:party="filterParty"
-        v-model:election-location="filterElectionLocation"
-        :available-parties="availableParties"
-        :available-election-locations="availableElectionLocations"
-      />
-
-      <v-card>
-        <v-data-table
-          v-model:items-per-page="itemsPerPage"
-          v-model:page="page"
-          v-model:sort-by="sortBy"
-          :headers="headers"
-          :items="filteredItems"
-          :loading="loading"
-          @update:options="updateQueryParams"
-        >
-          <template #[`item.parties`]="{ item }">
-            <v-chip
-              v-for="party in item.parties"
-              :key="party"
-              size="small"
-              class="mr-1"
-            >
-              {{ party }}
-            </v-chip>
-          </template>
-
-          <template #[`item.companies`]="{ item }">
-            <span v-for="(company, i) in item.companies" :key="company">
-              {{ company }}<br v-if="i < item.companies.length - 1" />
-            </span>
-          </template>
-
-          <template #[`item.elections`]="{ item }">
-            <template v-for="(election, i) in item.elections" :key="i">
-              <v-chip size="small" class="mr-1 mb-1" variant="outlined">
-                <template v-if="election.year">
-                  <span class="font-weight-bold mr-1">{{ election.year }}</span>
-                </template>
-                <template v-if="election.location">
-                  {{ election.location }}
-                  <span class="mx-1 text-grey-darken-1">-</span>
-                </template>
-                {{ election.position }}
-                <template v-if="election.committee">
-                  <span class="text-caption ml-1"
-                    >({{ election.committee }})</span
-                  >
-                </template> </v-chip
-              ><br v-if="i < item.elections.length - 1" />
-            </template>
-          </template>
-
-          <template #[`item.visibility`]="{ item }">
-            <v-icon :color="item.visibility ? 'success' : 'error'">
-              {{ item.visibility ? "mdi-check-circle" : "mdi-close-circle" }}
-            </v-icon>
-          </template>
-
-          <template #[`item.explore`]="{ item }">
+  <ClientOnly>
+    <v-layout>
+      <v-navigation-drawer
+        v-model="openDrawer"
+        location="end"
+        temporary
+        :width="$vuetify.display.mdAndUp ? 600 : 280"
+      >
+        <v-card-item title="Analiza osoby">
+          <template #append>
             <v-btn
-              icon="mdi-magnify"
+              density="compact"
+              icon="$close"
               variant="text"
-              color="primary"
-              @click="focusPerson(item)"
+              @click="openDrawer = false"
             />
           </template>
+        </v-card-item>
 
-          <template #[`item.name`]="{ item }">
-            <NuxtLink
-              :to="`/entity/person/${item.id}`"
-              class="text-decoration-none text-primary"
-            >
-              {{ item.name }}
-            </NuxtLink>
-          </template>
-        </v-data-table>
-      </v-card>
-    </div>
-  </v-layout>
+        <CardExplorePerson
+          :key="focusedPerson?.id"
+          :person="focusedPerson"
+          :region="region"
+          :company="company"
+        />
+
+        <div v-if="focusedPerson" class="pa-4 pt-0">
+          <NoteEditor :node-id="focusedPerson.id" />
+        </div>
+      </v-navigation-drawer>
+      <div class="pa-4">
+        <h1 class="text-h4 mb-4">
+          Eksploruj powiązania dla
+          {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
+        </h1>
+
+        <FormEksplorujTabelaFilters
+          v-model:visibility="filterVisibility"
+          v-model:party="filterParty"
+          v-model:election-location="filterElectionLocation"
+          :available-parties="parties"
+          :available-election-locations="availableElectionLocations"
+        />
+
+        <v-card>
+          <v-data-table-server
+            v-model:items-per-page="itemsPerPage"
+            v-model:page="page"
+            v-model:sort-by="sortBy"
+            :headers="headers"
+            :items="tableItems"
+            :items-length="totalItems"
+            :loading="pending"
+            @update:options="updateQueryParams"
+          >
+            <template #[`item.name`]="{ item }">
+              <div style="max-width: 150px">
+                <NuxtLink
+                  :to="`/entity/person/${item.id}`"
+                  class="text-decoration-none text-primary"
+                >
+                  {{ item.name }}
+                </NuxtLink>
+              </div>
+            </template>
+
+            <template #[`item.parties`]="{ item }">
+              <v-chip
+                v-for="party in item.parties"
+                :key="party"
+                size="small"
+                class="mr-1"
+              >
+                {{ party }}
+              </v-chip>
+            </template>
+
+            <template #[`item.companies`]="{ item }">
+              <div class="d-flex flex-wrap gap-1 py-1" style="max-width: 300px">
+                <span v-for="companyName in item.companies" :key="companyName">
+                  <v-tooltip
+                    :text="shortCompanyName(companyName)"
+                    location="top"
+                  >
+                    <template #activator="{ props }">
+                      <v-chip
+                        v-bind="props"
+                        size="small"
+                        class="mr-1 mb-1 text-truncate d-flex"
+                        variant="outlined"
+                        style="max-width: 300px"
+                      >
+                        {{ shortCompanyName(companyName) }}
+                      </v-chip>
+                    </template>
+                  </v-tooltip>
+                </span>
+              </div>
+            </template>
+
+            <template #[`item.elections`]="{ item }">
+              <template v-for="(election, i) in item.elections" :key="i">
+                <v-chip size="small" class="mr-1 mb-1" variant="outlined">
+                  <template v-if="election.year">
+                    <span class="font-weight-bold mr-1">{{
+                      election.year
+                    }}</span>
+                  </template>
+                  <template v-if="election.location">
+                    {{ election.location }}
+                  </template>
+                  <template v-if="election.committee">
+                    <span class="text-caption ml-1"
+                      >({{ election.committee }})</span
+                    >
+                  </template>
+                </v-chip>
+                <br v-if="i < item.elections.length - 1" />
+              </template>
+            </template>
+
+            <template #[`item.visibility`]="{ item }">
+              <v-icon :color="item.visibility ? 'success' : 'error'">
+                {{ item.visibility ? "mdi-check-circle" : "mdi-close-circle" }}
+              </v-icon>
+            </template>
+
+            <template #[`item.notesCount`]="{ item }">
+              {{ item.stats?.notesCount || 0 }}
+            </template>
+
+            <template #[`item.votes.interesting`]="{ item }">
+              {{ item.stats?.votes?.interesting || 0 }}
+            </template>
+
+            <template #[`item.userVote`]="{ item }">
+              <ButtonVoteNumber :id="item.id" category="interesting" />
+            </template>
+
+            <template #[`item.explore`]="{ item }">
+              <v-btn
+                icon="mdi-magnify"
+                variant="text"
+                color="primary"
+                @click="focusPerson(item)"
+              />
+            </template>
+          </v-data-table-server>
+        </v-card>
+      </div>
+    </v-layout>
+  </ClientOnly>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useListWithStats } from "~/composables/entity/listWithStats";
+import { parties } from "~~/shared/misc";
 import type { PersonRich } from "~~/shared/model";
-import { useEntityListRich } from "~/composables/entity/listRich";
+import type { Query } from "~~/server/api/nodes/index.get";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -132,16 +173,6 @@ const itemsPerPage = ref(
   parseInt((route.query.itemsPerPage as string) || "50"),
 );
 const page = ref(parseInt((route.query.page as string) || "1"));
-const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
-  route.query.sortBy
-    ? [
-        {
-          key: route.query.sortBy as string,
-          order: route.query.sortDesc === "true" ? "desc" : "asc",
-        },
-      ]
-    : [],
-);
 
 const headers = [
   { title: "Imię i nazwisko", key: "name", sortable: true },
@@ -149,6 +180,9 @@ const headers = [
   { title: "Firmy", key: "companies", sortable: false },
   { title: "Wybory", key: "elections", sortable: false },
   { title: "Lata pracy", key: "experience", sortable: true },
+  { title: "Notatki", key: "notesCount", sortable: true },
+  { title: "Głosy łącznie", key: "votes.interesting", sortable: true },
+  { title: "Twój głos", key: "userVote", sortable: false },
   { title: "Publiczne", key: "visibility", sortable: true },
   { title: "Zobacz", key: "explore", sortable: false },
 ];
@@ -180,13 +214,6 @@ const company = computed<[string, string] | undefined>(() => {
   return undefined;
 });
 
-const { people: fetchedItems, loading } = useEntityListRich(
-  company,
-  region,
-  places,
-  regions,
-);
-
 const filterVisibility = ref<"all" | "public" | "private">(
   (route.query.visibility as "all" | "public" | "private" | undefined) || "all",
 );
@@ -195,67 +222,53 @@ const filterElectionLocation = ref<string | null>(
   (route.query.electionLocation as string) || null,
 );
 
-const availableParties = computed(() => {
-  const parties = new Set<string>();
-  for (const item of fetchedItems.value || []) {
-    if (item.parties) {
-      for (const p of item.parties) {
-        parties.add(p);
-      }
-    }
-  }
-  return Array.from(parties).sort();
-});
-
 const availableElectionLocations = computed(() => {
-  const locations = new Set<string>();
-  for (const item of fetchedItems.value || []) {
-    if (item.elections) {
-      for (const e of item.elections) {
-        if (e.location) {
-          locations.add(e.location);
-        }
-      }
-    }
-  }
-  return Array.from(locations).sort();
+  return [];
 });
 
-const filteredItems = computed(() => {
-  let items = fetchedItems.value || [];
+const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
+  route.query.sortBy
+    ? [
+        {
+          key: route.query.sortBy as string,
+          order: route.query.sortDesc === "true" ? "desc" : "asc",
+        },
+      ]
+    : [],
+);
+const sortByOpt = computed<{ key: string; order: "asc" | "desc" } | undefined>(
+  () => {
+    return sortBy.value[0];
+  },
+);
 
-  if (filterVisibility.value !== "all") {
-    const isPublic = filterVisibility.value === "public";
-    items = items.filter((item) => !!item.visibility === isPublic);
-  }
-
-  if (filterParty.value) {
-    items = items.filter((item) => item.parties?.includes(filterParty.value!));
-  }
-
-  if (filterElectionLocation.value) {
-    items = items.filter((item) =>
-      item.elections?.some((e) => e.location === filterElectionLocation.value),
-    );
-  }
-
-  return items;
-});
-
-watch([filterVisibility, filterParty, filterElectionLocation], () => {
-  console.log([filterVisibility, filterParty, filterElectionLocation]);
-  page.value = 1;
-  router.replace({
-    query: {
-      ...route.query,
-      page: 1,
+const apiQuery = computed(
+  () =>
+    ({
+      type: "person",
+      limit: itemsPerPage.value,
+      page: page.value,
+      sortBy: sortByOpt.value?.key,
+      sortDesc: sortByOpt.value
+        ? sortByOpt.value.order === "desc"
+          ? "true"
+          : "false"
+        : undefined,
+      party: filterParty.value || undefined,
       visibility:
         filterVisibility.value !== "all" ? filterVisibility.value : undefined,
-      party: filterParty.value || undefined,
+      krs: route.query.krs as string | undefined,
+      teryt: route.query.teryt as string | undefined,
       electionLocation: filterElectionLocation.value || undefined,
-    },
-  });
-});
+    }) as Query,
+);
+
+// TODO maybe it shouldn't be await?
+
+// We perform a double join in the composible
+// We query /api/nodes/uncached and /api/graph/local
+// to join the stats info with the node neighborhood.
+const { tableItems, totalItems, pending } = await useListWithStats(apiQuery);
 
 const updateQueryParams = async (options: {
   sortBy: { key: string; order: string }[];
@@ -271,7 +284,7 @@ const updateQueryParams = async (options: {
         : "false"
       : undefined;
 
-  await router.replace({
+  await router.push({
     query: {
       ...route.query,
       page: options.page,
@@ -282,11 +295,37 @@ const updateQueryParams = async (options: {
   });
 };
 
+watch([filterVisibility, filterParty, filterElectionLocation], () => {
+  page.value = 1;
+  router.push({
+    query: {
+      ...route.query,
+      page: 1,
+      visibility:
+        filterVisibility.value !== "all" ? filterVisibility.value : undefined,
+      party: filterParty.value || undefined,
+      electionLocation: filterElectionLocation.value || undefined,
+    },
+  });
+});
+
 const openDrawer = shallowRef(false);
 const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
 
 const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
   openDrawer.value = true;
+};
+
+const shortCompanyName = (companyName: string | undefined) => {
+  if (!companyName) return "";
+  const spolkaIndex = companyName.indexOf(
+    "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+  );
+  if (spolkaIndex !== -1) {
+    companyName =
+      companyName.slice(0, spolkaIndex) + companyName.slice(spolkaIndex + 39);
+  }
+  return companyName;
 };
 </script>

@@ -7,7 +7,24 @@ type PageBase<PageType> = {
   deleted?: boolean;
   delete_reason?: string;
   visibility?: boolean;
+  stats?: NodeStats;
 };
+
+type NodeEdgeStats = {
+  experienceMonths: number;
+  targetNodeIds: string[];
+  electionLocations: string[];
+};
+
+export interface NodeStats {
+  isApproved: boolean;
+  notesCount: number;
+  votes: Record<string, number>;
+  edges: {
+    all: NodeEdgeStats;
+    approved: NodeEdgeStats;
+  };
+}
 
 export type VoteCategory = "interesting" | "quality";
 
@@ -18,6 +35,12 @@ export type Votes = Record<
     [userUid: string]: number;
   }
 >;
+
+export type VoteDocument = {
+  nodeId: string;
+  userUid: string;
+  categoryVotes: Record<string, number>;
+};
 
 export type Node = PageBase<NodeType> & {
   name: string;
@@ -175,3 +198,22 @@ export interface Comment {
   edgeId?: string; // Optional: attached to an edge
   parentId?: string; // Optional: reply to another comment
 }
+
+export type NoteSource = {
+  url: string;
+  note: string;
+  // TODO enable users associating with a source node.
+  // source_id: string;
+};
+
+/** Note allows users to collaborate on a node content without accessing the node itself.
+ * A node can have multiple notes but one per user.
+ * User can view/edit their own note and admins can view all notes.
+ */
+export type Note = {
+  userUid: string;
+  nodeId: string;
+
+  // Users can easily add sources they encounter and annotate what they found interesting in them.
+  sources?: NoteSource[];
+};

@@ -21,6 +21,7 @@ interface nodeData {
 export interface FetchNodesOptions {
   nodeId?: string;
   personParty?: string;
+  bypassCache?: boolean;
 }
 
 function logEventPath(func: string, args: string) {
@@ -66,12 +67,20 @@ const _cachedFetchNodes = defineCachedFunction(
       if (docSnap.data()?.type !== path) return {};
       logEventPath("fetchNodes", path);
 
-      return { [nodeId]: { id: docSnap.id, ...docSnap.data() } };
+      const data = docSnap.data() || {};
+      if (data.revision_id && typeof data.revision_id.path === "string") {
+        data.revision_id = data.revision_id.path;
+      }
+
+      return { [nodeId]: { id: docSnap.id, ...data } };
     }
 
     const nodes = await query.get();
     const nodesData = nodes.docs.map((doc) => {
       const data = doc.data();
+      if (data.revision_id && typeof data.revision_id.path === "string") {
+        data.revision_id = data.revision_id.path;
+      }
       return {
         id: doc.id,
         ...data,
@@ -86,6 +95,8 @@ const _cachedFetchNodes = defineCachedFunction(
     name: "fetchNodes",
     getKey: (path: string, options?: FetchNodesOptions) =>
       `${path}-${options?.nodeId || "all"}-${options?.personParty || "all"}`,
+    shouldBypassCache: (path: string, options?: FetchNodesOptions) =>
+      !!options?.bypassCache,
   },
 );
 
@@ -116,16 +127,19 @@ const electionConcreteDate: Record<string, string> = {
   "2024": "2024-04-07",
 };
 
-export async function fetchEdges(): Promise<Edge[]> {
-  return await _cachedFetchEdges();
+export async function fetchEdges(bypassCache?: boolean): Promise<Edge[]> {
+  return await _cachedFetchEdges(bypassCache);
 }
 
 const _cachedFetchEdges = defineCachedFunction(
-  async () => {
+  async (bypassCache?: boolean) => {
     logEventPath("fetchEdges", "all");
     const db = getFirestore("koryta-pl");
     const edges = (await db.collection("edges").get()).docs.map((doc) => {
       const data = doc.data();
+      if (data.revision_id && typeof data.revision_id.path === "string") {
+        data.revision_id = data.revision_id.path;
+      }
 
       // TODO this should be organized somewhere else.
       if (data.type === "election") {
@@ -151,6 +165,7 @@ const _cachedFetchEdges = defineCachedFunction(
   {
     maxAge: 3600, // 1 hour
     name: "fetchEdges",
+    shouldBypassCache: (bypassCache?: boolean) => !!bypassCache,
   },
 );
 

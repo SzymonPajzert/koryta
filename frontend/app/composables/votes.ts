@@ -10,19 +10,33 @@ import {
 import { useDocument, useFirebaseApp } from "vuefire";
 import { useAuthState } from "./auth";
 import type { DocumentData } from "firebase-admin/firestore";
+import type { VoteCategory, VoteDocument } from "~~/shared/model";
+
+const configMap: Record<
+  VoteCategory,
+  { text: string; icon: string; color: string; downColor: string }
+> = {
+  interesting: {
+    text: "Dobre znalezisko",
+    icon: "mdi-lightbulb-outline",
+    color: "success",
+    downColor: "error",
+  },
+  quality: {
+    text: "Znaleziony problem",
+    icon: "mdi-alert-circle-outline",
+    color: "error",
+    downColor: "success",
+  },
+};
 
 type AggregatedVotes = Record<string, number>;
 
-type VoteDocument = {
-  nodeId: string;
-  userUid: string;
-  categoryVotes: Record<string, number>;
-};
-
-export function useVotes(nodeID: MaybeRef<string>) {
+export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
   const { user } = useAuthState();
   const firebaseApp = useFirebaseApp();
   const db = getFirestore(firebaseApp, "koryta-pl");
+  const config = configMap[category];
 
   const nodeRef = toValue(nodeID);
 
@@ -58,14 +72,25 @@ export function useVotes(nodeID: MaybeRef<string>) {
     );
   });
 
-  // Expose function to cast or toggle a vote
-  const castVote = async (category: string, value: number) => {
-    if (!user.value) throw new Error("User needs to log in");
+  const router = useRouter();
+  const route = useRoute();
+  const loading = ref(false);
 
+  // Expose function to cast or toggle a vote
+  const castVote = async (value: number) => {
+    if (!user.value) {
+      router.push({
+        path: "/login",
+        query: { redirect: route.fullPath },
+      });
+      return;
+    }
+
+    loading.value = true;
     const currentVote = userCategoryVotes.value[category];
     const newValue = (currentVote ?? 0) + value;
 
-    await setDoc(
+    setDoc(
       doc(db, "votes", `${nodeRef}_${user.value.uid}`),
       {
         nodeId: nodeRef,
@@ -77,11 +102,14 @@ export function useVotes(nodeID: MaybeRef<string>) {
       // Use merge:true to preserve existing votes
       { merge: true },
     );
+    loading.value = false;
   };
 
   return {
     userCategoryVotes,
     nodeCategoryVotes,
+    config,
+    loading,
     castVote,
   };
 }
