@@ -8,13 +8,16 @@ from typing import Callable
 from entities.util import NormalizedParse
 from util.polish import remove_polish_diacritics
 
+# Internal type: all registered scorers accept domains_of_interest
+_RawScorer = Callable[[str, frozenset[str]], int]
+# Public type returned by get_scoring_function (domains already bound)
 ScoringFunction = Callable[[str], int]
 
-SCORING_FUNCTIONS: dict[str, ScoringFunction] = {}
+SCORING_FUNCTIONS: dict[str, _RawScorer] = {}
 
 
 def score_function(name: str):
-    def decorator(fn: ScoringFunction) -> ScoringFunction:
+    def decorator(fn: _RawScorer) -> _RawScorer:
         SCORING_FUNCTIONS[name] = fn
         return fn
 
@@ -32,9 +35,7 @@ def get_scoring_function(
         available = ", ".join(SCORING_FUNCTIONS.keys())
         raise ValueError(f"Unknown scoring function: {name!r}. Available: {available}")
     fn = SCORING_FUNCTIONS[name]
-    if not domains_of_interest:
-        return fn
-    return lambda url: fn(url, domains_of_interest=domains_of_interest)
+    return lambda url: fn(url, domains_of_interest)
 
 
 def tag_in_url(tag: str, url: str) -> bool:
@@ -77,7 +78,9 @@ def url_score(url: str, domains_of_interest: frozenset[str] = frozenset()) -> in
 
 
 @score_function("kalisz")
-def url_score_kalisz(url: str) -> int:
+def url_score_kalisz(
+    url: str, domains_of_interest: frozenset[str] = frozenset()
+) -> int:
     score = 0
 
     wrong_ends = [
