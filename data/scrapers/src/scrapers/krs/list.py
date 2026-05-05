@@ -30,13 +30,18 @@ def start_time(item):
 
 def end_time(item):
     max_end = "1900-01-01"
+    has_ongoing = False
     for conn in item["krs_powiazania_kwerendowane"]:
         assert isinstance(conn, dict)
-        v = conn.get("data_koniec", curr_date)
+        v = conn.get("data_koniec")
         if v is None:
-            v = curr_date
-        max_end = max(max_end, v)
-    return max_end
+            has_ongoing = True
+        else:
+            max_end = max(max_end, v)
+            
+    if has_ongoing:
+        return None
+    return max_end if max_end != "1900-01-01" else None
 
 
 def employment_duration(item) -> str:

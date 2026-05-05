@@ -50,7 +50,12 @@ def check_auto_approved():
     return check_row
 
 
+RECENT_TRESHOLD = "2023-10-15"
+
+
 class Extract(Pipeline):
+    filename = None
+
     people: PeopleEnriched
     companies: CompaniesKRS
     teryt: Teryt
@@ -72,9 +77,12 @@ class Extract(Pipeline):
         )
         parser.add_argument(
             "--krs",
+            dest="krss",
             help="KRS of the company to export the data for",
             default=None,
             required=False,
+            nargs="*",
+            action="extend",
         )
         parser.add_argument(
             "--approved",
@@ -83,9 +91,23 @@ class Extract(Pipeline):
             required=False,
             action=argparse.BooleanOptionalAction,
         )
+        parser.add_argument(
+            "--recent",
+            help="Extract people who were employed after 2023-10-15",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
+        parser.add_argument(
+            "--ignore-elections",
+            help="Ignore elections information, listing people without them",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
         args, _ = parser.parse_known_args()
 
-        if not args.region and not args.krs and not args.approved:
+        if not args.region and not args.krss and not args.approved:
             raise ValueError(
                 "[Extract]: Either --region or --krs or --approved must be provided"
             )
@@ -97,23 +119,20 @@ class Extract(Pipeline):
         return self.args.region
 
     @property
-    def krs(self):
-        return self.args.krs
+    def krss(self) -> list[str]:
+        return self.args.krss
 
     @property
     def approved(self) -> bool:
         return self.args.approved
 
-    @memoized_property
-    def filename(self):
-        result = "people_extracted"
-        if self.approved:
-            result += "_approved"
-        if self.krs:
-            result += f"_krs_{self.krs}"
-        if self.region:
-            result += f"_region_{self.region}"
-        return result
+    @property
+    def recent(self) -> bool:
+        return self.args.recent
+
+    @property
+    def ignore_elections(self) -> bool:
+        return self.args.ignore_elections
 
     def process_graph(self, ctx: Context):
         companies_df = self.companies.read_or_process(ctx)
@@ -125,9 +144,9 @@ class Extract(Pipeline):
         """Returns KRS IDs of companies that match one of the passed requirements."""
         result = set()
 
-        if self.krs:
+        for krs in self.krss:
             graph = self.process_graph(ctx)
-            result = set.union(graph.all_descendants([self.krs]))
+            result |= set.union(graph.all_descendants([krs]))
 
         if self.region:
             for company in self.companies.read_or_process(ctx).itertuples():
@@ -146,13 +165,20 @@ class Extract(Pipeline):
             result = 0
             for emp in employment_list:
                 if emp.get("employed_krs") in relevant_companies:
-                    result += 1
+                    if self.recent:
+                        start_date = emp.get("employed_start")
+                        if start_date is not None and start_date > RECENT_TRESHOLD:
+                            result += 1
+                    else:
+                        result += 1
             return result
 
         return works_in_relevant
 
     def relevant_elections(self):
         def check(elections) -> int:
+            if self.ignore_elections:
+                return 1
             if not isinstance(elections, list):
                 return 0
             if not self.region or len(self.region) == "":

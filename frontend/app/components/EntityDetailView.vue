@@ -16,7 +16,30 @@
         </v-btn>
       </v-card-text>
       <v-card-text v-else class="pt-0">
-        {{ JSON.stringify(error) ?? "" }}
+        <v-alert type="warning" variant="tonal" class="mb-4">
+          <p class="mb-2">Strona nie mogła zostać załadowana.</p>
+          <p class="text-caption">
+            Prawdopodobnie strona nie istnieje, została usunięta lub nie masz do
+            niej dostępu. Upewnij się, że adres URL jest prawidłowy.
+          </p>
+        </v-alert>
+        <v-btn
+          color="primary"
+          variant="tonal"
+          prepend-icon="mdi-refresh"
+          @click="refreshNode()"
+        >
+          Odśwież stronę
+        </v-btn>
+        <v-btn
+          color="secondary"
+          variant="text"
+          to="/"
+          prepend-icon="mdi-home"
+          class="ml-2"
+        >
+          Strona główna
+        </v-btn>
       </v-card-text>
     </v-card>
     <v-card v-else width="100%" style="overflow: visible">
@@ -260,9 +283,20 @@ const {
   data: response,
   status,
   error,
+  refresh: refreshNode,
 } = await authFetch<{
   node: Person | Company | Article | Region;
 }>(sourcePath);
+
+watch(
+  user,
+  (newUser) => {
+    if (newUser && status.value === "error") {
+      refreshNode();
+    }
+  },
+  { immediate: true },
+);
 
 useHead({
   title: computed(() => {
