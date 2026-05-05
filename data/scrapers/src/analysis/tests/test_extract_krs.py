@@ -205,11 +205,10 @@ def test_extract_by_krs():
 
     # 3. Inject args
     class MockArgs:
-        krss = ["0000000001"]
+        krs = "0000000001"
         region = "14"
         approved = False
         recent = False
-        ignore_elections = False
 
     extract.args = MockArgs()
 

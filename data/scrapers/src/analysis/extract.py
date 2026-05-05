@@ -3,6 +3,7 @@ from datetime import date
 from functools import cached_property
 
 import pandas as pd
+from memoized_property import memoized_property  # type:ignore
 
 from analysis.people import PeopleEnriched
 from analysis.utils import drop_duplicates, empty_list_if_nan
