@@ -282,7 +282,6 @@ const sourcePath = computed(() => `/api/nodes/${node}`);
 const {
   data: response,
   status,
-  error,
   refresh: refreshNode,
 } = await authFetch<{
   node: Person | Company | Article | Region;

@@ -34,4 +34,7 @@ service_account.json
 # Sentry Config File
 .env.sentry-build-plugin
 
+# Testing
 coverage
+playwright-report
+test-results

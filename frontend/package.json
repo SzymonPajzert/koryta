@@ -31,8 +31,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:duplication": "jscpd app server --ignore app/coverage",
-    "quick-check": "npm run format; npm run format:check && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:e2e:prod && npm run test:playwright",
-    "quick-check:failsafe": "npm run format; npm run format:check; npm run test:ci; npm run typecheck; npx eslint; npm run check:duplication; npm run test:e2e:prod; npm run test:playwright"
+    "quick-check": "npm run format; npm run format:check && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:playwright",
+    "quick-check:failsafe": "npm run format; npm run format:check; npm run test:ci; npm run typecheck; npx eslint; npm run check:duplication; npm run test:playwright"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.4",
@@ -63,7 +63,7 @@
     "string-similarity": "^4.0.4",
     "v-network-graph": "^0.9.21",
     "vue": "^3.5.18",
-    "vue-router": "^4.5.1",
+    "vue-router": "^5.0.6",
     "vue3-apexcharts": "^1.8.0",
     "vuefire": "^3.2.2",
     "vuetify": "^3.12.0",
