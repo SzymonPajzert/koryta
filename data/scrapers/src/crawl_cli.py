@@ -174,7 +174,7 @@ def main() -> None:
     options = _build_options(args, seed_urls)
     logging.info("Running crawler with options: %s", options)
 
-    pg_client = PostgresClient.from_env()
+    pg_client = PostgresClient.from_env(max_size=max(args.worker_threads, 1))
     queue = PostgresCrawlQueue(pg_client)
     logging.info("Initializing crawling queue")
 
@@ -207,8 +207,11 @@ def main() -> None:
         else None
     )
     ctx, _ = setup_context(False, crawl_queue=queue)
-    with profile_scope(profile_enabled, profile_path):
-        run_crawler(ctx, options)
+    try:
+        with profile_scope(profile_enabled, profile_path):
+            run_crawler(ctx, options)
+    finally:
+        pg_client.close()
 
 
 if __name__ == "__main__":

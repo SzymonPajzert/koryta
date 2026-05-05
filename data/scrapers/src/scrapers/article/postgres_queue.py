@@ -6,14 +6,14 @@ All direct psycopg access is encapsulated here.
 import logging
 import os
 import time
-from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Callable, TypeVar
+from typing import Callable
 from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
@@ -29,8 +29,6 @@ logger = logging.getLogger(__name__)
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
-T = TypeVar("T")
-
 
 class PostgresClient:
     def __init__(
@@ -41,98 +39,60 @@ class PostgresClient:
         password: str | None,
         port: int = 5432,
         *,
-        max_retries: int = 5,
-        base_backoff: float = 0.2,
+        max_size: int = 4,
     ):
-        self.host = host
-        self.database = database
-        self.user = user
-        self.password = password
-        self.port = port
-        self.max_retries = max_retries
-        self.base_backoff = base_backoff
-
-    def connect(self):
-        return psycopg.connect(
-            host=self.host,
-            port=self.port,
-            dbname=self.database,
-            user=self.user,
-            password=self.password,
+        self._pool = ConnectionPool(
+            kwargs={
+                "host": host,
+                "port": port,
+                "dbname": database,
+                "user": user,
+                "password": password,
+            },
+            min_size=1,
+            max_size=max_size,
+            open=True,
         )
 
-    def _run_with_retry(self, label: str, fn: Callable[[], T]) -> T:
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                return fn()
-            except (psycopg.OperationalError, psycopg.InterfaceError) as exc:
-                if attempt == self.max_retries:
-                    raise
-                backoff = self.base_backoff * 2 ** attempt
-                logger.warning(
-                    "PG connection error during %s (attempt %d/%d). "
-                    "Retrying after %.2fs. Error: %s",
-                    label,
-                    attempt,
-                    self.max_retries,
-                    backoff,
-                    exc,
-                )
-                time.sleep(backoff)
-        raise RuntimeError(f"Failed after {self.max_retries} retries")
+    @contextmanager
+    def transaction(self):
+        with self._pool.connection() as conn:
+            with conn.cursor() as cursor:
+                yield cursor
+
+    def execute(self, sql: str, params=None) -> None:
+        with self.transaction() as cursor:
+            cursor.execute(sql, params)
+
+    def executemany(self, sql: str, rows: list[tuple]) -> None:
+        if not rows:
+            return
+        with self.transaction() as cursor:
+            cursor.executemany(sql, rows)
+
+    def fetchone(self, sql: str, params=None):
+        with self.transaction() as cursor:
+            cursor.execute(sql, params)
+            return cursor.fetchone()
+
+    def fetchall(self, sql: str, params=None) -> list[tuple]:
+        with self.transaction() as cursor:
+            cursor.execute(sql, params)
+            return cursor.fetchall()
+
+    def close(self) -> None:
+        self._pool.close()
 
     @classmethod
-    def from_env(cls) -> "PostgresClient":
+    def from_env(cls, max_size: int = 4) -> "PostgresClient":
         return cls(
             host=os.getenv("POSTGRES_HOST", "localhost"),
             database=os.getenv("POSTGRES_DB", "crawler_db"),
             user=os.getenv("POSTGRES_USER", "crawler_user"),
             password=os.getenv("POSTGRES_PASSWORD", "crawler_password"),
             port=int(os.getenv("POSTGRES_PORT", "5432")),
+            max_size=max_size,
         )
-
-    @contextmanager
-    def transaction(self):
-        conn = self.connect()
-        try:
-            with conn:
-                with conn.cursor() as transaction:
-                    yield transaction
-        finally:
-            conn.close()
-
-    def execute(self, sql: str, params=None) -> None:
-        def op() -> None:
-            with self.transaction() as transaction:
-                transaction.execute(sql, params)
-
-        self._run_with_retry("execute", op)
-
-    def executemany(self, sql: str, rows: list[tuple]) -> None:
-        if not rows:
-            return
-
-        def op() -> None:
-            with self.transaction() as transaction:
-                transaction.executemany(sql, rows)
-
-        self._run_with_retry("executemany", op)
-
-    def fetchone(self, sql: str, params=None):
-        def op():
-            with self.transaction() as transaction:
-                transaction.execute(sql, params)
-                return transaction.fetchone()
-
-        return self._run_with_retry("fetchone", op)
-
-    def fetchall(self, sql: str, params=None) -> list[tuple]:
-        def op() -> list[tuple]:
-            with self.transaction() as transaction:
-                transaction.execute(sql, params)
-                return transaction.fetchall()
-
-        return self._run_with_retry("fetchall", op)
 
 
 class PostgresCrawlQueue(CrawlQueue):
@@ -318,11 +278,7 @@ class PostgresCrawlQueue(CrawlQueue):
             rows.append((normalized, priority, now))
         self._insert_urls(rows)
 
-    def _insert_urls(
-        self,
-        rows: list[tuple[str, int, datetime]],
-        transaction=None,
-    ) -> None:
+    def _insert_urls(self, rows: list[tuple[str, int, datetime]]) -> None:
         """Batch insert discovered URLs.
 
         Each row: (url, priority, date_added)
@@ -355,10 +311,7 @@ class PostgresCrawlQueue(CrawlQueue):
         max_attempts = 5
         for attempt in range(1, max_attempts + 1):
             try:
-                if transaction is None:
-                    self.pg.executemany(sql, prepared)
-                else:
-                    transaction.executemany(sql, prepared)
+                self.pg.executemany(sql, prepared)
                 return
             except psycopg.errors.DeadlockDetected as exc:
                 if attempt == max_attempts:
