@@ -158,10 +158,11 @@ def _upload_response(
             str(options.local_output),
         )
         binary_payload = response.content
-        ctx.io.write_file(
-            LocalFile(filename=path, folder=folder),
-            lambda s: s.write(binary_payload),
-        )
+
+        def _write(s) -> None:  # type: ignore[no-untyped-def]
+            s.write(binary_payload)
+
+        ctx.io.write_file(LocalFile(filename=path, folder=folder), _write)
     else:
         raise ValueError("Unknown storage type")
     return path
