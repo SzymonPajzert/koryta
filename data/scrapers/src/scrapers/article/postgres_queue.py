@@ -352,15 +352,19 @@ class PostgresCrawlQueue(CrawlQueue):
             updated += len(batch)
         logger.info("Reprioritized %d URLs.", updated)
 
-    def get_done_urls(self, limit: int) -> list[DoneUrl]:
+    def get_done_urls(self, limit: int | None = None) -> list[DoneUrl]:
         """Fetch crawled pages that have a storage_path, for parsing."""
-        rows = self.pg.fetchall(
-            "SELECT id, url, storage_path FROM website_index "
-            "WHERE done = TRUE AND storage_path IS NOT NULL "
-            "ORDER BY date_finished DESC LIMIT %s;",
-            (limit,),
+        _base = (
+            "SELECT id, url, storage_path, metadata->>'media_type'"
+            " FROM website_index"
+            " WHERE done = TRUE AND storage_path IS NOT NULL"
+            " ORDER BY date_finished DESC"
         )
-        return [DoneUrl(row[0], row[1], row[2]) for row in rows]
+        if limit is None:
+            rows = self.pg.fetchall(_base + ";")
+        else:
+            rows = self.pg.fetchall(_base + " LIMIT %s;", (limit,))
+        return [DoneUrl(row[0], row[1], row[2], row[3]) for row in rows]
 
     @classmethod
     def _normalize_url(cls, value: str) -> str:

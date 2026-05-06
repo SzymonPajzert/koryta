@@ -306,6 +306,7 @@ class DoneUrl:
     uid: str
     url: str
     storage_path: str
+    media_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -389,8 +390,8 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_done_urls(self, limit: int) -> list[DoneUrl]:
-        """Return done URLs with storage_path."""
+    def get_done_urls(self, limit: int | None = None) -> list[DoneUrl]:
+        """Return done URLs with storage_path. If limit is None, returns all."""
         raise NotImplementedError()
 
     @abstractmethod

@@ -15,8 +15,10 @@ from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
 )
+from scrapers.article.parse_runner import run_parse
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
-from scrapers.stores import BlockedDomain, NewUrl
+from scrapers.stores import BlockedDomain, LocalFile, NewUrl
+from stores.storage import Client as GCSClient
 
 
 def _build_parser() -> ArgumentParser:
@@ -63,6 +65,17 @@ def _build_parser() -> ArgumentParser:
         type=int,
         default=1,
         help="Number of concurrent threads inside a worker.",
+    )
+    parser.add_argument(
+        "--parse",
+        action="store_true",
+        help="Parse done URLs from DB: print stats and write article_parsed.jsonl.",
+    )
+    parser.add_argument(
+        "--parse-limit",
+        type=int,
+        default=1000,
+        help="Max number of done URLs to parse (default: 1000).",
     )
     return parser
 
@@ -169,6 +182,30 @@ def main() -> None:
     _setup_logging()
     parser = _build_parser()
     args = parser.parse_args()
+
+    if args.parse:
+        pg_client = PostgresClient.from_env(max_size=1)
+        queue = PostgresCrawlQueue(pg_client)
+        ctx, dumper = setup_context(False, crawl_queue=queue)
+        if args.storage_type == "gcs":
+            _gcs = GCSClient()
+            def _read_html(storage_path: str) -> bytes:
+                return (
+                    ctx.io.read_data(_gcs.cached_storage(storage_path, binary=True))
+                    .read_bytes()
+                )
+        else:
+            def _read_html(storage_path: str) -> bytes:
+                return (
+                    ctx.io.read_data(LocalFile(storage_path, "crawler_output"))
+                    .read_bytes()
+                )
+        try:
+            run_parse(queue, ctx, args.parse_limit, _read_html)
+        finally:
+            dumper.dump_pandas()
+            pg_client.close()
+        return
 
     seed_urls = _load_seed_urls(args.seed) if args.seed else []
     options = _build_options(args, seed_urls)
