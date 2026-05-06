@@ -52,6 +52,9 @@
           :items="tableItems"
           :items-length="totalItems"
           :loading="pending"
+          items-per-page-text="Wierszy na stronę:"
+          no-data-text="Brak danych"
+          loading-text="Ładowanie..."
           @update:options="updateQueryParams"
         >
           <template #[`header.experience`]="{ column }">
