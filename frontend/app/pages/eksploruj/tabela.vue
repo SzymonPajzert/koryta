@@ -107,10 +107,7 @@
 
           <template #[`item.name`]="{ item }">
             <div style="max-width: 150px">
-              <NuxtLink
-                :to="generateEntityUrl('person', item.id, item.name)"
-                class="text-decoration-none text-primary"
-              >
+              <NuxtLink class="text-primary cursor-pointer" @click="focusPerson(item)">
                 {{ item.name }}
               </NuxtLink>
             </div>
