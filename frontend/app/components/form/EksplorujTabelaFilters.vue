@@ -5,8 +5,8 @@
         v-model="visibility"
         :items="[
           { title: 'Wszystkie', value: 'all' },
-          { title: 'Publiczne', value: 'public' },
-          { title: 'Prywatne', value: 'private' },
+          { title: 'Opublikowane', value: 'public' },
+          { title: 'Szkice', value: 'private' },
         ]"
         label="Widoczność"
         variant="outlined"
