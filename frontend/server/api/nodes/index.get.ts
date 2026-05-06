@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getFirestore, Filter } from "firebase-admin/firestore";
-import { fetchNodes } from "~~/server/utils/fetch";
+import { fetchNodes, applyPartiesFilter } from "~~/server/utils/fetch";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { getUser } from "~~/server/utils/auth";
 import { pageIsPublic } from "~~/shared/model";
@@ -64,28 +64,7 @@ export default defineEventHandler(async (event) => {
 
     const partiesToFilter = query.parties || query.party;
     if (partiesToFilter) {
-      const partiesToSearch = Array.isArray(partiesToFilter)
-        ? partiesToFilter
-        : [partiesToFilter];
-      const hasNone = partiesToSearch.includes("__NONE__");
-      const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
-
-      const partyFilters = [];
-
-      if (normalParties.length > 0) {
-        partyFilters.push(
-          Filter.where("parties", "array-contains-any", normalParties),
-        );
-      }
-      if (hasNone) {
-        partyFilters.push(Filter.where("parties", "==", []));
-      }
-
-      if (partyFilters.length === 1) {
-        fsQuery = fsQuery.where(partyFilters[0]!);
-      } else if (partyFilters.length > 1) {
-        fsQuery = fsQuery.where(Filter.or(...partyFilters));
-      }
+      fsQuery = applyPartiesFilter(fsQuery, partiesToFilter);
     }
     if (query.krs) {
       const places = await db
