@@ -1,4 +1,5 @@
 import { defineConfig } from "cypress";
+import viteConfig from "./cypress/vite.config";
 
 export default defineConfig({
   e2e: {
@@ -21,9 +22,8 @@ export default defineConfig({
     devServer: {
       framework: "vue",
       bundler: "vite",
-      viteConfig: async () => {
-        const config = await import("./cypress/vite.config");
-        return config.default;
+      viteConfig: () => {
+        return viteConfig;
       },
     },
   },

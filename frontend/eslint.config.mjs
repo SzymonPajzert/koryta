@@ -36,6 +36,10 @@ export default withNuxt(
           message:
             "⚠️ Nuxt Documentation strictly forbids awaiting a lazy fetch. Using 'await' with 'lazy: true' suspends the setup function during SSR, breaks hydration, and defeats the purpose of background fetching. Drop the 'await'!",
         },
+        {
+          selector: "AwaitExpression > ImportExpression",
+          message: "⚠️ Using `await import()` is banned in this codebase.",
+        },
       ],
     },
   },

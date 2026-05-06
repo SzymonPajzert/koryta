@@ -1,13 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
+import handlerModule from "~~/server/api/graph/nodeGroups.get";
 
-vi.stubGlobal("defineEventHandler", (handler: any) => handler);
-vi.stubGlobal(
-  "defineCachedEventHandler",
-  (handler: any, _options: any) => handler,
-);
-vi.stubGlobal("getUser", async (_event: any) => {
-  return true;
+vi.hoisted(() => {
+  globalThis.defineEventHandler = (handler: any) => handler;
+  globalThis.defineCachedEventHandler = (handler: any, _options: any) =>
+    handler;
+  globalThis.getUser = async (_event: any) => {
+    return true;
+  };
 });
 
 // Assuming authCachedEventHandler is imported and wrappers are there
@@ -37,8 +38,7 @@ describe("Graph NodeGroups API", () => {
       { source: "p1", target: "p2", type: "connection" },
     ]);
 
-    const handlerModule = await import("~~/server/api/graph/nodeGroups.get");
-    const result = await handlerModule.default({} as any);
+    const result = await handlerModule({} as any);
 
     // The handler returns a list of {id, name, people}
     const regionObj = result.find((g: any) => g.id === "r1");
