@@ -367,3 +367,17 @@ const shortCompanyName = (companyName: string | undefined) => {
   return companyName;
 };
 </script>
+
+<style scoped>
+@media (min-width: 960px) {
+  .table-card,
+  .table-card :deep(.v-data-table),
+  .table-card :deep(.v-table),
+  .table-card :deep(.v-table__wrapper) {
+    overflow: visible !important;
+  }
+  .table-card :deep(.v-data-table__th) {
+    top: var(--v-layout-top) !important;
+  }
+}
+</style>
