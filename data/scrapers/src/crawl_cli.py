@@ -40,7 +40,7 @@ def _build_parser() -> ArgumentParser:
     parser.add_argument(
         "--seed",
         type=Path,
-        help='CSV file with one column "Url" to seed the crawl queue.',
+        help='CSV file with a "Domena" column to seed the crawl queue.',
     )
     parser.add_argument(
         "--append-blocked",
@@ -58,18 +58,26 @@ def _build_parser() -> ArgumentParser:
         default=None,
         help="Enable cProfile and write them to that path",
     )
+    parser.add_argument(
+        "--worker-threads",
+        type=int,
+        default=1,
+        help="Number of concurrent threads inside a worker.",
+    )
     return parser
 
 
-def _build_options(args: argparse.Namespace) -> CrawlOptions:
+def _build_options(args: argparse.Namespace, seed_urls: list[str]) -> CrawlOptions:
     return CrawlOptions(
         worker_id=args.worker_id,
         storage_type=args.storage_type,
         local_output=args.local_output if args.storage_type == "local" else None,
         per_url_max_retries=args.per_url_max_retries,
         lock_timeout_seconds=args.lock_timeout_seconds,
-        per_domain_rate_limit_seconds=args.per_domain_rate_limit_qpm,
+        per_domain_wait_between_requests_s=60 / args.per_domain_rate_limit_qpm,
         url_scoring_function=args.url_scoring_function,
+        domains_of_interest=frozenset(seed_urls),
+        worker_threads=max(1, args.worker_threads),
     )
 
 
@@ -99,11 +107,11 @@ def _read_csv_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 def _load_seed_urls(path: Path) -> list[str]:
     fieldnames, rows = _read_csv_rows(path)
-    if fieldnames != ["Url"]:
+    if "Domena" not in fieldnames:
         raise ValueError(
-            f"{path} must have exactly one column named 'Url'. Got: {fieldnames}"
+            f"{path} must have a 'Domena' column. Got: {fieldnames}"
         )
-    urls = [row.get("Url", "").strip() for row in rows if row.get("Url")]
+    urls = [row.get("Domena", "").strip() for row in rows if row.get("Domena")]
     if not urls:
         raise ValueError(f"{path} has no URLs to seed.")
     return urls
@@ -128,10 +136,7 @@ def _load_blocked_domains(path: Path) -> list[BlockedDomain]:
 
 
 def _build_seed_rows(urls: list[str]) -> list[NewUrl]:
-    rows: list[NewUrl] = []
-    for url in urls:
-        rows.append(NewUrl(url, 0))
-    return rows
+    return [NewUrl(url, 0) for url in urls]
 
 
 def _setup_logging():
@@ -160,15 +165,16 @@ def profile_scope(enabled: bool, path: Path | None):
         logging.info("Wrote profile to %s", path)
 
 
-
 def main() -> None:
     _setup_logging()
     parser = _build_parser()
     args = parser.parse_args()
-    options = _build_options(args)
+
+    seed_urls = _load_seed_urls(args.seed) if args.seed else []
+    options = _build_options(args, seed_urls)
     logging.info("Running crawler with options: %s", options)
 
-    pg_client = PostgresClient.from_env()
+    pg_client = PostgresClient.from_env(max_size=max(args.worker_threads, 1))
     queue = PostgresCrawlQueue(pg_client)
     logging.info("Initializing crawling queue")
 
@@ -185,9 +191,8 @@ def main() -> None:
         queue.add_blocked_domains(blocked)
         logging.info("Appended %d blocked domains.", len(blocked))
 
-    if args.seed:
-        urls = _load_seed_urls(args.seed)
-        rows = _build_seed_rows(urls)
+    if seed_urls:
+        rows = _build_seed_rows(seed_urls)
         queue.put(rows)
         logging.info("Seeded %d URLs.", len(rows))
 
@@ -202,8 +207,11 @@ def main() -> None:
         else None
     )
     ctx, _ = setup_context(False, crawl_queue=queue)
-    with profile_scope(profile_enabled, profile_path):
-        run_crawler(ctx, options)
+    try:
+        with profile_scope(profile_enabled, profile_path):
+            run_crawler(ctx, options)
+    finally:
+        pg_client.close()
 
 
 if __name__ == "__main__":

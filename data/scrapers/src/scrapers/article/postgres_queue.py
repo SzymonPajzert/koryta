@@ -5,6 +5,7 @@ All direct psycopg access is encapsulated here.
 
 import logging
 import os
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
@@ -12,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
@@ -36,61 +38,61 @@ class PostgresClient:
         user: str,
         password: str | None,
         port: int = 5432,
+        *,
+        max_size: int = 4,
     ):
-        self.host = host
-        self.database = database
-        self.user = user
-        self.password = password
-        self.port = port
-
-    def connect(self):
-        return psycopg.connect(
-            host=self.host,
-            port=self.port,
-            dbname=self.database,
-            user=self.user,
-            password=self.password,
+        self._pool = ConnectionPool(
+            kwargs={
+                "host": host,
+                "port": port,
+                "dbname": database,
+                "user": user,
+                "password": password,
+            },
+            min_size=1,
+            max_size=max_size,
+            open=True,
         )
 
+    @contextmanager
+    def transaction(self):
+        with self._pool.connection() as conn:
+            with conn.cursor() as cursor:
+                yield cursor
+
+    def execute(self, sql: str, params=None) -> None:
+        with self.transaction() as cursor:
+            cursor.execute(sql, params)
+
+    def executemany(self, sql: str, rows: list[tuple]) -> None:
+        if not rows:
+            return
+        with self.transaction() as cursor:
+            cursor.executemany(sql, rows)
+
+    def fetchone(self, sql: str, params=None):
+        with self.transaction() as cursor:
+            cursor.execute(sql, params)
+            return cursor.fetchone()
+
+    def fetchall(self, sql: str, params=None) -> list[tuple]:
+        with self.transaction() as cursor:
+            cursor.execute(sql, params)
+            return cursor.fetchall()
+
+    def close(self) -> None:
+        self._pool.close()
+
     @classmethod
-    def from_env(cls) -> "PostgresClient":
+    def from_env(cls, max_size: int = 4) -> "PostgresClient":
         return cls(
             host=os.getenv("POSTGRES_HOST", "localhost"),
             database=os.getenv("POSTGRES_DB", "crawler_db"),
             user=os.getenv("POSTGRES_USER", "crawler_user"),
             password=os.getenv("POSTGRES_PASSWORD", "crawler_password"),
             port=int(os.getenv("POSTGRES_PORT", "5432")),
+            max_size=max_size,
         )
-
-    @contextmanager
-    def transaction(self):
-        conn = self.connect()
-        try:
-            with conn:
-                with conn.cursor() as transaction:
-                    yield transaction
-        finally:
-            conn.close()
-
-    def execute(self, sql: str, params=None) -> None:
-        with self.transaction() as transaction:
-            transaction.execute(sql, params)
-
-    def executemany(self, sql: str, rows: list[tuple]) -> None:
-        if not rows:
-            return
-        with self.transaction() as transaction:
-            transaction.executemany(sql, rows)
-
-    def fetchone(self, sql: str, params=None):
-        with self.transaction() as transaction:
-            transaction.execute(sql, params)
-            return transaction.fetchone()
-
-    def fetchall(self, sql: str, params=None) -> list[tuple]:
-        with self.transaction() as transaction:
-            transaction.execute(sql, params)
-            return transaction.fetchall()
 
 
 class PostgresCrawlQueue(CrawlQueue):
@@ -128,7 +130,10 @@ class PostgresCrawlQueue(CrawlQueue):
                     mined_from_url TEXT,
                     metadata JSONB DEFAULT '{}'::jsonb
                 );
-
+                """
+            )
+            transaction.execute(
+                """
                 CREATE TABLE IF NOT EXISTS blocked_domains (
                     domain TEXT PRIMARY KEY,
                     reason TEXT
@@ -171,6 +176,11 @@ class PostgresCrawlQueue(CrawlQueue):
                 logger.info("Loaded %d blocked domains.", len(rows))
             else:
                 logger.info("No blocked domains to load.")
+
+    def get_blocked_domains(self) -> set[str]:
+        """Return normalized blocked domain hostnames for in-memory filtering."""
+        rows = self.pg.fetchall("SELECT domain FROM blocked_domains;")
+        return {row[0] for row in rows}
 
     def get(
         self, worker_id: str, max_retries: int = 3, timeout_seconds: float = 60
@@ -262,11 +272,7 @@ class PostgresCrawlQueue(CrawlQueue):
             rows.append((normalized, priority, now))
         self._insert_urls(rows)
 
-    def _insert_urls(
-        self,
-        rows: list[tuple[str, int, datetime]],
-        transaction=None,
-    ) -> None:
+    def _insert_urls(self, rows: list[tuple[str, int, datetime]]) -> None:
         """Batch insert discovered URLs.
 
         Each row: (url, priority, date_added)
@@ -289,24 +295,37 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             for url, priority, date_added in rows
         ]
-        if transaction is None:
-            self.pg.executemany(
-                "INSERT INTO website_index ("
-                "id, url, priority, done, errors, num_retries, "
-                "date_added, date_finished, mined_from_url) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT(url) DO NOTHING",
-                prepared,
-            )
-            return
-        transaction.executemany(
+        sql = (
             "INSERT INTO website_index ("
             "id, url, priority, done, errors, num_retries, "
             "date_added, date_finished, mined_from_url) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-            "ON CONFLICT(url) DO NOTHING",
-            prepared,
+            "ON CONFLICT(url) DO NOTHING"
         )
+        max_attempts = 5
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self.pg.executemany(sql, prepared)
+                return
+            except psycopg.errors.DeadlockDetected as exc:
+                if attempt == max_attempts:
+                    logger.error(
+                        "Deadlock detected while inserting URLs (attempt %d/%d). "
+                        "Giving up.",
+                        attempt,
+                        max_attempts,
+                    )
+                    raise
+                backoff = 0.1 * 2 ** attempt
+                logger.warning(
+                    "Deadlock detected while inserting URLs (attempt %d/%d). "
+                    "Retrying after %.2fs. Error: %s",
+                    attempt,
+                    max_attempts,
+                    backoff,
+                    exc,
+                )
+                time.sleep(backoff)
 
     def reprioritize(self, priority_fn: Callable[[str], int], batch_size: int = 5000):
         """Recalculate priority for all pending URLs using priority function."""
@@ -343,7 +362,6 @@ class PostgresCrawlQueue(CrawlQueue):
             (limit,),
         )
         return [DoneUrl(row[0], row[1], row[2]) for row in rows]
-
 
     @classmethod
     def _normalize_url(cls, value: str) -> str:

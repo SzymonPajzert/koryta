@@ -15,3 +15,4 @@ koryta-pl*.json
 .ipynb_checkpoints
 # Allow for test_data
 !src/scrapers/article/test_data/*
+crawler_output

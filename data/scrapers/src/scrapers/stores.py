@@ -206,7 +206,7 @@ class IO(metaclass=ABCMeta):
         self,
         source: Any,
         data: Any,
-        content_type: Literal["text/html", "application/json", "text/plain"],
+        content_type: str,
         include_query=False,
     ):
         """Uploads data to storage (e.g. GCS)."""
@@ -374,6 +374,11 @@ class CrawlQueue(metaclass=ABCMeta):
 
         Domain can be a bare hostname or URL; matching ignores scheme/www.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_blocked_domains(self) -> set[str]:
+        """Return normalized blocked domain hostnames for in-memory filtering."""
         raise NotImplementedError()
 
     @abstractmethod
