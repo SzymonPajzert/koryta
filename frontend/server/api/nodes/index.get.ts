@@ -9,6 +9,7 @@ import { defineEventHandler } from "h3";
 const queryValidator = z.object({
   type: z.enum(["person", "place", "article", "region"]).optional(),
   party: z.string().optional(),
+  parties: z.union([z.string(), z.array(z.string())]).optional(),
   place: z.string().optional(),
   teryt: z.string().optional(),
   krs: z.string().optional(),
@@ -30,7 +31,7 @@ const cachedHandler = authCachedEventHandler(async (event) => {
     queryValidator.parse(query),
   );
 
-  const opts = { personParty: query.party };
+  const opts = { personParties: query.parties || query.party };
 
   if (query.type) {
     return { nodes: await fetchNodes(query.type, opts) };
@@ -60,8 +61,32 @@ export default defineEventHandler(async (event) => {
     if (query.type) {
       fsQuery = fsQuery.where("type", "==", query.type);
     }
-    if (query.party) {
-      fsQuery = fsQuery.where("parties", "array-contains", query.party);
+
+    const partiesToFilter = query.parties || query.party;
+    if (partiesToFilter) {
+      const partiesToSearch = Array.isArray(partiesToFilter)
+        ? partiesToFilter
+        : [partiesToFilter];
+      const hasNone = partiesToSearch.includes("__NONE__");
+      const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
+
+      const { Filter } = await import("firebase-admin/firestore");
+      const partyFilters = [];
+
+      if (normalParties.length > 0) {
+        partyFilters.push(
+          Filter.where("parties", "array-contains-any", normalParties),
+        );
+      }
+      if (hasNone) {
+        partyFilters.push(Filter.where("parties", "==", []));
+      }
+
+      if (partyFilters.length === 1) {
+        fsQuery = fsQuery.where(partyFilters[0]!);
+      } else if (partyFilters.length > 1) {
+        fsQuery = fsQuery.where(Filter.or(...partyFilters));
+      }
     }
     if (query.krs) {
       const places = await db

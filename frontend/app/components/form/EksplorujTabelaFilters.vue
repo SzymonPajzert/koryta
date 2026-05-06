@@ -23,6 +23,9 @@
         density="comfortable"
         hide-details
         clearable
+        multiple
+        chips
+        closable-chips
       />
     </v-col>
     <v-col cols="12" md="4">
@@ -41,11 +44,11 @@
 
 <script setup lang="ts">
 const visibility = defineModel<"all" | "public" | "private">("visibility");
-const party = defineModel<string | null>("party");
+const party = defineModel<string[] | null>("party");
 const electionLocation = defineModel<string | null>("electionLocation");
 
 defineProps<{
-  availableParties: string[];
+  availableParties: { title: string; value: string }[] | string[];
   availableElectionLocations: string[];
 }>();
 </script>

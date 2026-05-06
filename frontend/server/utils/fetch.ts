@@ -20,7 +20,7 @@ interface nodeData {
 
 export interface FetchNodesOptions {
   nodeId?: string;
-  personParty?: string;
+  personParties?: string | string[];
   bypassCache?: boolean;
 }
 
@@ -56,8 +56,31 @@ const _cachedFetchNodes = defineCachedFunction(
     let query: FirebaseFirestore.Query = db
       .collection("nodes")
       .where("type", "==", path);
-    if (options.personParty) {
-      query = query.where("parties", "array-contains", options.personParty);
+
+    if (options.personParties) {
+      const partiesToSearch = Array.isArray(options.personParties)
+        ? options.personParties
+        : [options.personParties];
+      const hasNone = partiesToSearch.includes("__NONE__");
+      const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
+
+      const { Filter } = await import("firebase-admin/firestore");
+      const partyFilters = [];
+
+      if (normalParties.length > 0) {
+        partyFilters.push(
+          Filter.where("parties", "array-contains-any", normalParties),
+        );
+      }
+      if (hasNone) {
+        partyFilters.push(Filter.where("parties", "==", []));
+      }
+
+      if (partyFilters.length === 1) {
+        query = query.where(partyFilters[0]!);
+      } else if (partyFilters.length > 1) {
+        query = query.where(Filter.or(...partyFilters));
+      }
     }
 
     if (nodeId) {
@@ -93,8 +116,14 @@ const _cachedFetchNodes = defineCachedFunction(
   {
     maxAge: 3600, // 1 hour
     name: "fetchNodes",
-    getKey: (path: string, options?: FetchNodesOptions) =>
-      `${path}-${options?.nodeId || "all"}-${options?.personParty || "all"}`,
+    getKey: (path: string, options?: FetchNodesOptions) => {
+      const p = options?.personParties
+        ? Array.isArray(options.personParties)
+          ? options.personParties.join(",")
+          : options.personParties
+        : "all";
+      return `${path}-${options?.nodeId || "all"}-${p}`;
+    },
     shouldBypassCache: (path: string, options?: FetchNodesOptions) =>
       !!options?.bypassCache,
   },

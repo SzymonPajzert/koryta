@@ -38,7 +38,7 @@
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
         v-model:election-location="filterElectionLocation"
-        :available-parties="parties"
+        :available-parties="availableParties"
         :available-election-locations="availableElectionLocations"
       />
 
@@ -290,11 +290,19 @@ const filterVisibility = computed<"all" | "public" | "private">({
     });
   },
 });
-const filterParty = computed<string | null>({
-  get: () => (route.query.party as string) || null,
+const filterParty = computed<string[] | null>({
+  get: () => {
+    const p = route.query.party;
+    if (!p) return null;
+    return Array.isArray(p) ? (p as string[]) : [p as string];
+  },
   set: (val) => {
     router.push({
-      query: { ...route.query, page: 1, party: val || undefined },
+      query: {
+        ...route.query,
+        page: 1,
+        party: val && val.length > 0 ? val : undefined,
+      },
     });
   },
 });
@@ -309,6 +317,13 @@ const filterElectionLocation = computed<string | null>({
 
 const availableElectionLocations = computed(() => {
   return [];
+});
+
+const availableParties = computed(() => {
+  return [
+    { title: "Brak partii", value: "__NONE__" },
+    ...parties.map((p) => ({ title: p, value: p })),
+  ];
 });
 
 const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
@@ -339,7 +354,10 @@ const apiQuery = computed(
           ? "true"
           : "false"
         : undefined,
-      party: filterParty.value || undefined,
+      parties:
+        filterParty.value && filterParty.value.length > 0
+          ? filterParty.value
+          : undefined,
       visibility:
         filterVisibility.value !== "all" ? filterVisibility.value : undefined,
       krs: route.query.krs as string | undefined,
