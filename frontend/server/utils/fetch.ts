@@ -37,6 +37,33 @@ function logEventPath(func: string, args: string) {
   }
 }
 
+export function applyPartiesFilter(
+  query: FirebaseFirestore.Query,
+  parties: string | string[],
+): FirebaseFirestore.Query {
+  const partiesToSearch = Array.isArray(parties) ? parties : [parties];
+  const hasNone = partiesToSearch.includes("__NONE__");
+  const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
+
+  const partyFilters = [];
+
+  if (normalParties.length > 0) {
+    partyFilters.push(
+      Filter.where("parties", "array-contains-any", normalParties),
+    );
+  }
+  if (hasNone) {
+    partyFilters.push(Filter.where("parties", "==", []));
+  }
+
+  if (partyFilters.length === 1) {
+    return query.where(partyFilters[0]!);
+  } else if (partyFilters.length > 1) {
+    return query.where(Filter.or(...partyFilters));
+  }
+  return query;
+}
+
 export async function fetchNodes<N extends NodeType>(
   path: N,
   options: FetchNodesOptions = {},
@@ -58,28 +85,7 @@ const _cachedFetchNodes = defineCachedFunction(
       .where("type", "==", path);
 
     if (options.personParties) {
-      const partiesToSearch = Array.isArray(options.personParties)
-        ? options.personParties
-        : [options.personParties];
-      const hasNone = partiesToSearch.includes("__NONE__");
-      const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
-
-      const partyFilters = [];
-
-      if (normalParties.length > 0) {
-        partyFilters.push(
-          Filter.where("parties", "array-contains-any", normalParties),
-        );
-      }
-      if (hasNone) {
-        partyFilters.push(Filter.where("parties", "==", []));
-      }
-
-      if (partyFilters.length === 1) {
-        query = query.where(partyFilters[0]!);
-      } else if (partyFilters.length > 1) {
-        query = query.where(Filter.or(...partyFilters));
-      }
+      query = applyPartiesFilter(query, options.personParties);
     }
 
     if (nodeId) {
