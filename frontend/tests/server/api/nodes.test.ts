@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fetchNodes } from "../../../server/utils/fetch";
+import handlerModule from "../../../server/api/nodes/index.get";
 
 const {
   mockFilterWhere,
@@ -163,12 +164,11 @@ describe("index.get.ts handler", () => {
     vi.clearAllMocks();
     mockGet.mockResolvedValue({ docs: [] });
 
-    // Important: getValidatedQuery is mocked in vi.hoisted to return parser(event.query)
-    const handlerModule = await import("../../../server/api/nodes/index.get");
-
     // Call the handler. Since type="person" is provided, it hits the cached path
     // which calls fetchNodes(query.type, opts)
-    await handlerModule.default({
+    // @ts-expect-error default export might be undefined
+    const handler = handlerModule.default || handlerModule;
+    await handler({
       query: { type: "person", party: "PO" },
     } as any);
 

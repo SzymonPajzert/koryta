@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
-vi.stubGlobal("defineEventHandler", (handler: any) => handler);
-vi.stubGlobal(
-  "defineCachedEventHandler",
-  (handler: any, _options: any) => handler,
-);
-vi.stubGlobal("getUser", async (_event: any) => {
-  return true;
+import handlerModule from "../../../server/api/graph/index.get";
+vi.hoisted(() => {
+  globalThis.defineEventHandler = (handler: any) => handler;
+  globalThis.defineCachedEventHandler = (handler: any, _options: any) =>
+    handler;
+  globalThis.getUser = async (_event: any) => {
+    return true;
+  };
 });
 vi.mock("~~/server/utils/fetch", () => ({
   fetchNodes: vi.fn(),
@@ -28,8 +29,7 @@ describe("Graph API", () => {
       { source: "p1", target: "c1", type: "employed" },
     ]);
 
-    const handlerModule = await import("../../../server/api/graph/index.get");
-    const result = await handlerModule.default({} as any);
+    const result = await handlerModule({} as any);
 
     expect(result).toHaveProperty("nodes");
     expect(result).toHaveProperty("edges");
@@ -53,8 +53,7 @@ describe("Graph API", () => {
 
     vi.mocked(fetchEdges).mockResolvedValue([]);
 
-    const handlerModule = await import("../../../server/api/graph/index.get");
-    const result = await handlerModule.default({} as any);
+    const result = await handlerModule({} as any);
 
     // Filter should drop c1 and r1 from nodeGroups and nodes because they have 0 people connected
     expect(result.nodeGroups.find((g: any) => g.id === "c1")).toBeUndefined();

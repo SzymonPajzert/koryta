@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Filter } from "firebase-admin/firestore";
 import { fetchNodes } from "~~/server/utils/fetch";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { getUser } from "~~/server/utils/auth";
@@ -70,7 +70,6 @@ export default defineEventHandler(async (event) => {
       const hasNone = partiesToSearch.includes("__NONE__");
       const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
 
-      const { Filter } = await import("firebase-admin/firestore");
       const partyFilters = [];
 
       if (normalParties.length > 0) {

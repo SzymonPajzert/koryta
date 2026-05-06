@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createRevisionTransaction } from "../../../../server/utils/revisions";
+import handler from "../../../../server/api/ingest/company.post";
 
 // Mock dependencies
 const mockGet = vi.fn();
@@ -54,34 +55,29 @@ vi.mock("../../../../server/utils/revisions", () => ({
   createRevisionTransaction: vi.fn(),
 }));
 
-// Stub global readBody
-const mockReadBody = vi.fn();
-vi.stubGlobal("readBody", mockReadBody);
-vi.stubGlobal("createError", (err: any) => err); // Mock createError to just return the error object/string
-vi.stubGlobal("defineEventHandler", (fn: any) => fn); // Stub defineEventHandler to return the function as is
-
-vi.stubGlobal("readValidatedBody", async (event: any, parse: any) => {
-  const body = await mockReadBody();
-  try {
-    return parse(body);
-  } catch {
-    throw { statusCode: 400, message: "Missing required fields (krs, name)" };
-  }
+const { mockReadBody } = vi.hoisted(() => {
+  const mockReadBody = vi.fn();
+  globalThis.readBody = mockReadBody;
+  globalThis.createError = (err: any) => err;
+  globalThis.defineEventHandler = (fn: any) => fn;
+  globalThis.readValidatedBody = async (event: any, parse: any) => {
+    const body = await mockReadBody();
+    try {
+      return parse(body);
+    } catch {
+      throw { statusCode: 400, message: "Missing required fields (krs, name)" };
+    }
+  };
+  return { mockReadBody };
 });
 
 describe("api/ingest/company", () => {
-  let handler: any;
-
   beforeEach(async () => {
     vi.clearAllMocks();
     // Reset query chain mocks
     mockWhere.mockReturnValue(queryMock);
     queryMock.where.mockReturnValue(queryMock);
     queryMock.limit.mockReturnValue(queryMock);
-
-    // Dynamic import to ensure globals are stubbed before execution
-    const mod = await import("../../../../server/api/ingest/company.post");
-    handler = mod.default;
   });
 
   it("should throw 400 if krs is missing", async () => {
