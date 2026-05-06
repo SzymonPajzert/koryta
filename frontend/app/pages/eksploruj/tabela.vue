@@ -1,155 +1,149 @@
 <template>
   <ClientOnly>
-    <v-layout>
-      <v-navigation-drawer
-        v-model="openDrawer"
-        location="end"
-        temporary
-        :width="$vuetify.display.mdAndUp ? 600 : 280"
-      >
-        <v-card-item title="Analiza osoby">
-          <template #append>
+    <v-navigation-drawer
+      v-model="openDrawer"
+      location="end"
+      temporary
+      :width="$vuetify.display.mdAndUp ? 600 : 280"
+    >
+      <v-card-item title="Analiza osoby">
+        <template #append>
+          <v-btn
+            density="compact"
+            icon="$close"
+            variant="text"
+            @click="openDrawer = false"
+          />
+        </template>
+      </v-card-item>
+
+      <CardExplorePerson
+        :key="focusedPerson?.id"
+        :person="focusedPerson"
+        :region="region"
+        :company="company"
+      />
+
+      <div v-if="focusedPerson" class="pa-4 pt-0">
+        <NoteEditor :node-id="focusedPerson.id" />
+      </div>
+    </v-navigation-drawer>
+    <div class="pa-4">
+      <h1 class="text-h4 mb-4">
+        Eksploruj powiązania dla
+        {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
+      </h1>
+
+      <FormEksplorujTabelaFilters
+        v-model:visibility="filterVisibility"
+        v-model:party="filterParty"
+        v-model:election-location="filterElectionLocation"
+        :available-parties="parties"
+        :available-election-locations="availableElectionLocations"
+      />
+
+      <v-card class="table-card">
+        <v-data-table-server
+          v-model:items-per-page="itemsPerPage"
+          v-model:page="page"
+          v-model:sort-by="sortBy"
+          fixed-header
+          :headers="headers"
+          :items="tableItems"
+          :items-length="totalItems"
+          :loading="pending"
+          @update:options="updateQueryParams"
+        >
+          <template #[`item.name`]="{ item }">
+            <div style="max-width: 150px">
+              <NuxtLink
+                :to="generateEntityUrl('person', item.id, item.name)"
+                class="text-decoration-none text-primary"
+              >
+                {{ item.name }}
+              </NuxtLink>
+            </div>
+          </template>
+
+          <template #[`item.parties`]="{ item }">
+            <v-chip
+              v-for="party in item.parties"
+              :key="party"
+              size="small"
+              class="mr-1"
+            >
+              {{ party }}
+            </v-chip>
+          </template>
+
+          <template #[`item.companies`]="{ item }">
+            <div class="d-flex flex-wrap gap-1 py-1" style="max-width: 300px">
+              <span v-for="companyName in item.companies" :key="companyName">
+                <v-tooltip :text="shortCompanyName(companyName)" location="top">
+                  <template #activator="{ props }">
+                    <v-chip
+                      v-bind="props"
+                      size="small"
+                      class="mr-1 mb-1 text-truncate d-flex"
+                      variant="outlined"
+                      style="max-width: 300px"
+                    >
+                      {{ shortCompanyName(companyName) }}
+                    </v-chip>
+                  </template>
+                </v-tooltip>
+              </span>
+            </div>
+          </template>
+
+          <template #[`item.elections`]="{ item }">
+            <template v-for="(election, i) in item.elections" :key="i">
+              <v-chip size="small" class="mr-1 mb-1" variant="outlined">
+                <template v-if="election.year">
+                  <span class="font-weight-bold mr-1">{{ election.year }}</span>
+                </template>
+                <template v-if="election.location">
+                  {{ election.location }}
+                </template>
+                <template v-if="election.committee">
+                  <span class="text-caption ml-1"
+                    >({{ election.committee }})</span
+                  >
+                </template>
+              </v-chip>
+              <br v-if="i < item.elections.length - 1" />
+            </template>
+          </template>
+
+          <template #[`item.visibility`]="{ item }">
+            <v-icon :color="item.visibility ? 'success' : 'error'">
+              {{ item.visibility ? "mdi-check-circle" : "mdi-close-circle" }}
+            </v-icon>
+          </template>
+
+          <template #[`item.notesCount`]="{ item }">
+            {{ item.stats?.notesCount || 0 }}
+          </template>
+
+          <template #[`item.votes.interesting`]="{ item }">
+            {{ item.stats?.votes?.interesting || 0 }}
+          </template>
+
+          <template #[`item.userVote`]="{ item }">
+            <ButtonVoteNumber :id="item.id" category="interesting" />
+          </template>
+
+          <template #[`item.explore`]="{ item }">
             <v-btn
-              density="compact"
-              icon="$close"
+              icon="mdi-magnify"
               variant="text"
-              @click="openDrawer = false"
+              color="primary"
+              @click="focusPerson(item)"
             />
           </template>
-        </v-card-item>
-
-        <CardExplorePerson
-          :key="focusedPerson?.id"
-          :person="focusedPerson"
-          :region="region"
-          :company="company"
-        />
-
-        <div v-if="focusedPerson" class="pa-4 pt-0">
-          <NoteEditor :node-id="focusedPerson.id" />
-        </div>
-      </v-navigation-drawer>
-      <div class="pa-4">
-        <h1 class="text-h4 mb-4">
-          Eksploruj powiązania dla
-          {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
-        </h1>
-
-        <FormEksplorujTabelaFilters
-          v-model:visibility="filterVisibility"
-          v-model:party="filterParty"
-          v-model:election-location="filterElectionLocation"
-          :available-parties="parties"
-          :available-election-locations="availableElectionLocations"
-        />
-
-        <v-card>
-          <v-data-table-server
-            v-model:items-per-page="itemsPerPage"
-            v-model:page="page"
-            v-model:sort-by="sortBy"
-            :headers="headers"
-            :items="tableItems"
-            :items-length="totalItems"
-            :loading="pending"
-            @update:options="updateQueryParams"
-          >
-            <template #[`item.name`]="{ item }">
-              <div style="max-width: 150px">
-                <NuxtLink
-                  :to="generateEntityUrl('person', item.id, item.name)"
-                  class="text-decoration-none text-primary"
-                >
-                  {{ item.name }}
-                </NuxtLink>
-              </div>
-            </template>
-
-            <template #[`item.parties`]="{ item }">
-              <v-chip
-                v-for="party in item.parties"
-                :key="party"
-                size="small"
-                class="mr-1"
-              >
-                {{ party }}
-              </v-chip>
-            </template>
-
-            <template #[`item.companies`]="{ item }">
-              <div class="d-flex flex-wrap gap-1 py-1" style="max-width: 300px">
-                <span v-for="companyName in item.companies" :key="companyName">
-                  <v-tooltip
-                    :text="shortCompanyName(companyName)"
-                    location="top"
-                  >
-                    <template #activator="{ props }">
-                      <v-chip
-                        v-bind="props"
-                        size="small"
-                        class="mr-1 mb-1 text-truncate d-flex"
-                        variant="outlined"
-                        style="max-width: 300px"
-                      >
-                        {{ shortCompanyName(companyName) }}
-                      </v-chip>
-                    </template>
-                  </v-tooltip>
-                </span>
-              </div>
-            </template>
-
-            <template #[`item.elections`]="{ item }">
-              <template v-for="(election, i) in item.elections" :key="i">
-                <v-chip size="small" class="mr-1 mb-1" variant="outlined">
-                  <template v-if="election.year">
-                    <span class="font-weight-bold mr-1">{{
-                      election.year
-                    }}</span>
-                  </template>
-                  <template v-if="election.location">
-                    {{ election.location }}
-                  </template>
-                  <template v-if="election.committee">
-                    <span class="text-caption ml-1"
-                      >({{ election.committee }})</span
-                    >
-                  </template>
-                </v-chip>
-                <br v-if="i < item.elections.length - 1" />
-              </template>
-            </template>
-
-            <template #[`item.visibility`]="{ item }">
-              <v-icon :color="item.visibility ? 'success' : 'error'">
-                {{ item.visibility ? "mdi-check-circle" : "mdi-close-circle" }}
-              </v-icon>
-            </template>
-
-            <template #[`item.notesCount`]="{ item }">
-              {{ item.stats?.notesCount || 0 }}
-            </template>
-
-            <template #[`item.votes.interesting`]="{ item }">
-              {{ item.stats?.votes?.interesting || 0 }}
-            </template>
-
-            <template #[`item.userVote`]="{ item }">
-              <ButtonVoteNumber :id="item.id" category="interesting" />
-            </template>
-
-            <template #[`item.explore`]="{ item }">
-              <v-btn
-                icon="mdi-magnify"
-                variant="text"
-                color="primary"
-                @click="focusPerson(item)"
-              />
-            </template>
-          </v-data-table-server>
-        </v-card>
-      </div>
-    </v-layout>
+        </v-data-table-server>
+      </v-card>
+    </div>
   </ClientOnly>
 </template>
 
