@@ -54,6 +54,54 @@
           :loading="pending"
           @update:options="updateQueryParams"
         >
+          <template #[`header.experience`]="{ column }">
+            <ExploreTableColumnHeader
+              tooltip="Sumaryczna liczba lat przepracowanych w publicznych spółkach"
+              :column
+              :sort-by
+            />
+          </template>
+
+          <template #[`header.notesCount`]="{ column }">
+            <ExploreTableColumnHeader
+              tooltip="Liczba notatek stworzonych przez społeczność na temat powiązań tej osoby"
+              :column
+              :sort-by
+            />
+          </template>
+
+          <template #[`header.votes.interesting`]="{ column }">
+            <ExploreTableColumnHeader
+              tooltip="Suma głosów społeczności określających jak interesująca jest ta osoba"
+              :column
+              :sort-by
+            />
+          </template>
+
+          <template #[`header.userVote`]="{ column }">
+            <ExploreTableColumnHeader
+              tooltip="Twój osobisty głos dla tej osoby (widoczny tylko dla Ciebie)"
+              :column
+              :sort-by
+            />
+          </template>
+
+          <template #[`header.visibility`]="{ column }">
+            <ExploreTableColumnHeader
+              tooltip="Czy strona osoby jest już opublikowana, czy jest w fazie szkicu (widoczna tylko dla zalogowanych)"
+              :column
+              :sort-by
+            />
+          </template>
+
+          <template #[`header.explore`]="{ column }">
+            <ExploreTableColumnHeader
+              tooltip="Wyświetla panel boczny z większą ilością informacji i opcją interakcji"
+              :column
+              :sort-by
+            />
+          </template>
+
           <template #[`item.name`]="{ item }">
             <div style="max-width: 150px">
               <NuxtLink
@@ -116,9 +164,13 @@
           </template>
 
           <template #[`item.visibility`]="{ item }">
-            <v-icon :color="item.visibility ? 'success' : 'error'">
-              {{ item.visibility ? "mdi-check-circle" : "mdi-close-circle" }}
-            </v-icon>
+            <v-chip
+              size="small"
+              :color="item.visibility ? 'success' : 'warning'"
+              variant="tonal"
+            >
+              {{ item.visibility ? "Opublikowane" : "Szkic" }}
+            </v-chip>
           </template>
 
           <template #[`item.notesCount`]="{ item }">
@@ -193,8 +245,8 @@ const headers = [
   { title: "Notatki", key: "notesCount", sortable: true },
   { title: "Głosy łącznie", key: "votes.interesting", sortable: true },
   { title: "Twój głos", key: "userVote", sortable: false },
-  { title: "Publiczne", key: "visibility", sortable: true },
-  { title: "Zobacz", key: "explore", sortable: false },
+  { title: "Widoczność", key: "visibility", sortable: true },
+  { title: "Eksploruj", key: "explore", sortable: false },
 ];
 
 const { entities: places } = useEntities("place");
