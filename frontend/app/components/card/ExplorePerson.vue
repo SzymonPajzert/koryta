@@ -5,26 +5,21 @@
     }}</v-card-title>
 
     <v-card-text>
-      <!-- Quick Add Article button -->
-      <div class="mb-6">
-        <div class="text-caption text-medium-emphasis mb-2">
-          Znalazłaś informacje w internecie i chcesz je dodać na stronę?
-        </div>
-        <QuickAddArticleButton :node-id="person.id" class="ml-0" />
-      </div>
-
       <!-- Action: Google Search -->
       <div class="mb-6">
         <div class="text-caption text-medium-emphasis mb-2">
-          Poszukaj w internecie innych artykułów
+          Wyszukaj w internecie informacji:
         </div>
         <v-btn
+          v-for="query in queries"
+          :key="query"
           prepend-icon="mdi-google"
           variant="tonal"
           color="primary"
-          @click="searchInGoogle()"
+          class="ma-1"
+          @click="searchInGoogle(query)"
         >
-          Szukaj w Google
+          {{ query }}
         </v-btn>
       </div>
 
@@ -46,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import QuickAddArticleButton from "@/components/QuickAddArticleButton.vue";
+import { computed } from "vue";
 import type { PersonRich } from "~~/shared/model";
 
 const { person, region, company } = defineProps<{
@@ -66,9 +61,38 @@ const getQueryParts = () => {
   return parts.filter(Boolean) as string[];
 };
 
-const searchInGoogle = () => {
-  const parts = getQueryParts();
-  const searchQuery = encodeURIComponent(parts.join(" "));
+const uniqueLocations = computed(() => {
+  if (!person?.elections) return [];
+  const locations = person.elections
+    .map((e) => e.location)
+    .filter(Boolean) as string[];
+  return Array.from(new Set(locations));
+});
+
+const queries = computed(() => {
+  const result = [];
+  if (person?.name) {
+    result.push(person.name);
+    result.push(person.name + " PKW");
+
+    if (uniqueLocations.value.length > 0) {
+      const nameParts = person.name.trim().split(/\s+/);
+      let nameWithoutMiddle = person.name;
+      if (nameParts.length > 2) {
+        nameWithoutMiddle = `${nameParts[0]} ${nameParts[nameParts.length - 1]}`;
+      }
+
+      for (const loc of uniqueLocations.value) {
+        result.push(`${nameWithoutMiddle} ${loc}`);
+      }
+    }
+  }
+
+  return result;
+});
+
+const searchInGoogle = (query?: string) => {
+  const searchQuery = encodeURIComponent(query || getQueryParts().join(" "));
   window.open(`https://www.google.com/search?q=${searchQuery}`, "_blank");
 };
 </script>
