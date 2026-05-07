@@ -15,6 +15,7 @@ from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
 )
+from scrapers.article.scoring import get_scoring_function
 from scrapers.article.parse_runner import run_parse
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
 from scrapers.stores import BlockedDomain, LocalFile, NewUrl
@@ -76,6 +77,11 @@ def _build_parser() -> ArgumentParser:
         type=int,
         default=1000,
         help="Max number of done URLs to parse (default: 1000).",
+    )
+    parser.add_argument(
+        "--reprioritize",
+        action="store_true",
+        help="Rescore all not-done URLs using the configured scoring function, then exit.",
     )
     return parser
 
@@ -204,6 +210,20 @@ def main() -> None:
             run_parse(queue, ctx, args.parse_limit, _read_html)
         finally:
             dumper.dump_pandas()
+            pg_client.close()
+        return
+
+    if args.reprioritize:
+        seed_urls = _load_seed_urls(args.seed) if args.seed else []
+        scorer = get_scoring_function(
+            args.url_scoring_function, frozenset(seed_urls)
+        )
+        priority_fn = lambda url: max(0, min(100, 100 - scorer(url)))  # noqa: E731
+        pg_client = PostgresClient.from_env(max_size=1)
+        queue = PostgresCrawlQueue(pg_client)
+        try:
+            queue.reprioritize(priority_fn)
+        finally:
             pg_client.close()
         return
 
