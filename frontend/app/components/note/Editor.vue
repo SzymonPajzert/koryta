@@ -2,7 +2,7 @@
   <v-card v-if="user" class="mb-4">
     <v-card-title>Notatki</v-card-title>
 
-    <v-card-text v-if="!userNote">
+    <v-card-text v-if="!userNote && !isEditing">
       <div>
         <p class="text-body-1 mb-4">
           Notatki pozwalają na prywatne gromadzenie informacji, powiązań i
@@ -43,12 +43,6 @@
 
       <div class="d-flex justify-end mt-4">
         <v-btn
-          v-if="!userNote && !isEditing"
-          color="primary"
-          @click="startEditing"
-          >Stwórz notatkę</v-btn
-        >
-        <v-btn
           v-if="userNote && !isEditing"
           variant="tonal"
           @click="startEditing"
@@ -78,7 +72,7 @@ const props = defineProps<{
 }>();
 
 const { user } = useAuthState();
-const { userNote, saveNote } = useNotes(computed(() => props.nodeId));
+const { userNote, otherNotes, saveNote } = useNotes(computed(() => props.nodeId));
 
 const isEditing = ref(false);
 const saving = ref(false);
@@ -114,6 +108,9 @@ const cancelEdit = () => {
 };
 
 const addSource = () => {
+  if (!isEditing.value) {
+    startEditing();
+  }
   if (!formData.value.sources) {
     formData.value.sources = [];
   }
