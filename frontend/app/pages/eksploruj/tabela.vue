@@ -315,16 +315,29 @@ const filterParty = computed<string[] | null>({
   },
 });
 const filterElectionLocation = computed<string | null>({
-  get: () => (route.query.electionLocation as string) || null,
+  get: () => {
+    if (route.query.teryt && region.value) {
+      return region.value[1];
+    }
+    return (route.query.electionLocation as string) || null;
+  },
   set: (val) => {
-    router.push({
-      query: { ...route.query, page: 1, electionLocation: val || undefined },
-    });
+    const query = {
+      ...route.query,
+      page: 1,
+      electionLocation: val || undefined,
+    };
+    if (query.teryt) {
+      delete query.teryt;
+    }
+    router.push({ query });
   },
 });
 
 const availableElectionLocations = computed(() => {
-  return [];
+  return Object.values(regions.value ?? {})
+    .map((r) => r.name)
+    .sort((a, b) => a.localeCompare(b));
 });
 
 const availableParties = computed(() => {

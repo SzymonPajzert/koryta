@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getFirestore, Filter } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { fetchNodes, applyPartiesFilter } from "~~/server/utils/fetch";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { getUser } from "~~/server/utils/auth";
@@ -14,6 +14,7 @@ const queryValidator = z.object({
   teryt: z.string().optional(),
   krs: z.string().optional(),
   electionLocation: z.string().optional(),
+  visibility: z.enum(["public", "private"]).optional(),
 
   // Pagination & Sorting parameters
   limit: z.coerce.number().optional(),
@@ -111,9 +112,17 @@ export default defineEventHandler(async (event) => {
       );
     }
 
-    // For non-authenticated users, only show approved nodes
     if (!user) {
+      if (query.visibility === "private") {
+        return { nodes: {}, total: 0 };
+      }
       fsQuery = fsQuery.where("stats.isApproved", "==", true);
+    } else {
+      if (query.visibility === "public") {
+        fsQuery = fsQuery.where("stats.isApproved", "==", true);
+      } else if (query.visibility === "private") {
+        fsQuery = fsQuery.where("stats.isApproved", "==", false);
+      }
     }
 
     if (query.sortBy) {
