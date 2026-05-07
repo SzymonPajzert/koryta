@@ -18,7 +18,11 @@ const { data, status } = await authFetch<{ node: Node }>(`/api/nodes/${id}`);
 if (status.value === "success" && data.value?.node?.name) {
   const newUrl = generateEntityUrl(destination, id, data.value.node.name);
   if (route.path !== newUrl) {
-    await navigateTo(newUrl, { redirectCode: 301 });
+    if (import.meta.server) {
+      await navigateTo(newUrl, { redirectCode: 301 });
+    } else {
+      await navigateTo(newUrl, { replace: true });
+    }
   }
 }
 </script>

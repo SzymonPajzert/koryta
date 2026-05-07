@@ -107,7 +107,10 @@
 
           <template #[`item.name`]="{ item }">
             <div style="max-width: 150px">
-              <NuxtLink class="text-primary cursor-pointer" @click="focusPerson(item)">
+              <NuxtLink
+                class="text-primary cursor-pointer"
+                @click="focusPerson(item)"
+              >
                 {{ item.name }}
               </NuxtLink>
             </div>
@@ -206,7 +209,6 @@ import { useListWithStats } from "~/composables/entity/listWithStats";
 import { parties } from "~~/shared/misc";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
-import { generateEntityUrl } from "~/composables/slugs";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
