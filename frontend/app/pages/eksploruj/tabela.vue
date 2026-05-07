@@ -6,7 +6,7 @@
       temporary
       :width="$vuetify.display.mdAndUp ? 600 : 280"
     >
-      <v-card-item title="Analiza osoby">
+      <v-card-item>
         <template #append>
           <v-btn
             density="compact"
@@ -26,6 +26,12 @@
 
       <div v-if="focusedPerson" class="pa-4 pt-0">
         <NoteEditor :node-id="focusedPerson.id" />
+        <v-divider class="my-4" />
+        <EntityDetailView
+          :key="focusedPerson.id"
+          :node="focusedPerson.id"
+          type="person"
+        />
       </div>
     </v-navigation-drawer>
     <div class="pa-4">
