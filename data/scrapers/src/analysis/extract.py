@@ -143,9 +143,10 @@ class Extract(Pipeline):
         """Returns KRS IDs of companies that match one of the passed requirements."""
         result = set()
 
-        for krs in self.krss:
-            graph = self.process_graph(ctx)
-            result |= set.union(graph.all_descendants([krs]))
+        if self.krss:
+            for krs in self.krss:
+                graph = self.process_graph(ctx)
+                result |= set.union(graph.all_descendants([krs]))
 
         if self.region:
             for company in self.companies.read_or_process(ctx).itertuples():
