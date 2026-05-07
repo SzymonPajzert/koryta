@@ -72,7 +72,7 @@ const props = defineProps<{
 }>();
 
 const { user } = useAuthState();
-const { userNote, otherNotes, saveNote } = useNotes(computed(() => props.nodeId));
+const { userNote, saveNote } = useNotes(computed(() => props.nodeId));
 
 const isEditing = ref(false);
 const saving = ref(false);
