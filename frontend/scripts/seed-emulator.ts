@@ -59,8 +59,11 @@ async function seedDatabase() {
   const batch = db.batch();
 
   for (const [id, node] of Object.entries(nodes)) {
+    const nodeData = { ...node };
+    if (!nodeData.stats) nodeData.stats = {};
+    nodeData.stats.isApproved = true;
     const ref = db.collection("nodes").doc(id);
-    batch.set(ref, node);
+    batch.set(ref, nodeData);
   }
 
   for (const edge of edges) {

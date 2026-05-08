@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mountSuspended } from "@nuxt/test-utils/runtime";
 import NoteEditor from "../../app/components/note/Editor.vue";
 import { ref } from "vue";
 import { useAuthState } from "~/composables/auth";
@@ -28,7 +28,7 @@ describe("NoteEditor", () => {
     vi.clearAllMocks();
   });
 
-  it("shows create note button when logged in but no note exists", () => {
+  it("shows add source button when logged in but no note exists", async () => {
     (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
     (useNotes as any).mockReturnValue({
       userNote: ref(null),
@@ -36,26 +36,14 @@ describe("NoteEditor", () => {
       saveNote: vi.fn(),
     });
 
-    const wrapper = mount(NoteEditor, {
+    const wrapper = await mountSuspended(NoteEditor, {
       props: { nodeId: "node-123" },
-      shallow: true,
-      global: {
-        stubs: {
-          VCard: { template: "<div><slot /></div>" },
-          VCardTitle: { template: "<div><slot /></div>" },
-          VCardText: { template: "<div><slot /></div>" },
-          VBtn: {
-            template:
-              "<button class='create-btn' @click=\"$emit('click')\"><slot /></button>",
-          },
-        },
-      },
     });
 
-    expect(wrapper.text()).toContain("Stwórz notatkę");
+    expect(wrapper.text()).toContain("Dodaj źródło");
   });
 
-  it("shows the form when create note button is clicked", async () => {
+  it("shows the form when add source button is clicked", async () => {
     (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
     (useNotes as any).mockReturnValue({
       userNote: ref(null),
@@ -63,30 +51,17 @@ describe("NoteEditor", () => {
       saveNote: vi.fn(),
     });
 
-    const wrapper = mount(NoteEditor, {
+    const wrapper = await mountSuspended(NoteEditor, {
       props: { nodeId: "node-123" },
-      shallow: true,
-      global: {
-        stubs: {
-          VCard: { template: "<div><slot /></div>" },
-          VCardTitle: { template: "<div><slot /></div>" },
-          VCardText: { template: "<div><slot /></div>" },
-          VBtn: {
-            template:
-              "<button class='btn' @click=\"$emit('click')\"><slot /></button>",
-          },
-          VTextField: true,
-          VTextarea: true,
-          VRow: true,
-          VCol: true,
-        },
-      },
     });
 
-    await wrapper.find(".btn").trigger("click");
+    const addSourceBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("Dodaj źródło"));
+    await addSourceBtn?.trigger("click");
 
-    // Check if form is visible by checking if Twoja notatka is rendered
-    expect(wrapper.html()).toContain("Notatki pozwalają");
+    expect(wrapper.html()).not.toContain("Notatki pozwalają");
+    expect(wrapper.html()).toContain("Zapisz");
   });
 
   it("calls saveNote when save is clicked", async () => {
@@ -98,41 +73,25 @@ describe("NoteEditor", () => {
       saveNote: mockSaveNote,
     });
 
-    const wrapper = mount(NoteEditor, {
+    const wrapper = await mountSuspended(NoteEditor, {
       props: { nodeId: "node-123" },
-      shallow: true,
-      global: {
-        stubs: {
-          VCard: { template: "<div><slot /></div>" },
-          VCardTitle: { template: "<div><slot /></div>" },
-          VCardText: { template: "<div><slot /></div>" },
-          VBtn: {
-            template:
-              "<button class='btn' @click=\"$emit('click')\"><slot /></button>",
-          },
-          VTextField: true,
-          VTextarea: true,
-          VRow: true,
-          VCol: true,
-        },
-      },
     });
 
     // Start editing
-    await wrapper.find(".btn").trigger("click");
+    const addSourceBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("Dodaj źródło"));
+    await addSourceBtn?.trigger("click");
 
-    // Find save button (second button, since first might be Anuluj if editing existing, or only one if creating)
-    // Actually when creating new, there is no "Anuluj" button according to our template: `v-if="userNote"`
-    // So there's only "Zapisz" button + "plus" button for sources.
     const saveBtn = wrapper
-      .findAll(".btn")
+      .findAll("button")
       .find((b) => b.text().includes("Zapisz"));
     expect(saveBtn).toBeTruthy();
 
     await saveBtn?.trigger("click");
 
     expect(mockSaveNote).toHaveBeenCalledWith({
-      sources: [],
+      sources: [{ url: "", note: "" }],
     });
   });
 });

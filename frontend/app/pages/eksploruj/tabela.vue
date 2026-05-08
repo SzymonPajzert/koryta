@@ -322,14 +322,12 @@ const filterElectionLocation = computed<string | null>({
     return (route.query.electionLocation as string) || null;
   },
   set: (val) => {
+    const { teryt, ...restQuery } = route.query;
     const query = {
-      ...route.query,
+      ...restQuery,
       page: 1,
       electionLocation: val || undefined,
     };
-    if (query.teryt) {
-      delete query.teryt;
-    }
     router.push({ query });
   },
 });
