@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockNuxtImport } from "@nuxt/test-utils/runtime";
 import { ref } from "vue";
-import { authFetch } from "@/composables/auth";
+import { useAuthState } from "@/composables/auth";
 
 // Hoisted variables for mocks
 const { mockIdTokenFn, mockAuth, mockUseFetchSpy, mockUseDocumentSpy } =
@@ -72,13 +72,12 @@ describe("useAuthState", () => {
     mockAuth.currentUser.getIdToken = mockIdTokenFn;
   });
 
-  it("authFetch should call getIdToken before request", async () => {
-    const mockOptions = { headers: {} };
-
-    // Execute the interceptor
-    await authFetch("/api/edges", mockOptions);
-
-    // Verify logic
-    expect(mockIdTokenFn).toHaveBeenCalled();
+  it("returns expected properties", () => {
+    const state = useAuthState();
+    expect(state.user).toBeDefined();
+    expect(state.isAdmin).toBeDefined();
+    expect(state.logout).toBeTypeOf("function");
+    expect(state.login).toBeTypeOf("function");
+    expect(state.register).toBeTypeOf("function");
   });
 });

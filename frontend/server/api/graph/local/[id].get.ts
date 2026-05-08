@@ -10,35 +10,46 @@ import {
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import type { Edge } from "~~/shared/model";
 import { getQuery, getRouterParam } from "h3";
-import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
+import { fetchNodes, fetchEdges, fetchEdgesClose } from "~~/server/utils/fetch";
+
+async function fetchEdgesSmaller(
+  centerNodeId: string,
+  distance: number,
+): Promise<Edge[]> {
+  if (distance == 1) {
+    return fetchEdgesClose(centerNodeId);
+  }
+
+  return fetchEdges();
+}
 
 export async function getLocalGraph(
   focusNodeId: string,
-  bypassCache: boolean,
+  showUnapproved: boolean,
   distance: number,
   expansions: string[],
 ) {
   const [peopleRaw, placesRaw, regionsRaw, edgesFromDBRaw] = await Promise.all([
-    fetchNodes("person", { bypassCache }),
-    fetchNodes("place", { bypassCache }),
-    fetchNodes("region", { bypassCache }),
-    fetchEdges(bypassCache),
+    fetchNodes("person", { bypassCache: false }),
+    fetchNodes("place", { bypassCache: false }),
+    fetchNodes("region", { bypassCache: false }),
+    fetchEdgesSmaller(focusNodeId, distance),
   ]);
 
   // Handle visibility filtering
   const people = Object.fromEntries(
     Object.entries(peopleRaw).filter(([_, n]) =>
-      bypassCache ? true : n.visibility,
+      showUnapproved ? true : n.visibility,
     ),
   );
   const places = Object.fromEntries(
     Object.entries(placesRaw).filter(([_, n]) =>
-      bypassCache ? true : n.visibility,
+      showUnapproved ? true : n.visibility,
     ),
   );
   const regions = Object.fromEntries(
     Object.entries(regionsRaw).filter(([_, n]) =>
-      bypassCache ? true : n.visibility,
+      showUnapproved ? true : n.visibility,
     ),
   );
 
@@ -47,7 +58,7 @@ export async function getLocalGraph(
 
   const edgesFiltered = edgesFromDBRaw.filter(
     (e: Edge) =>
-      (bypassCache ? true : e.visibility) &&
+      (showUnapproved ? true : e.visibility) &&
       validNodeIds.has(e.source) &&
       validNodeIds.has(e.target),
   );

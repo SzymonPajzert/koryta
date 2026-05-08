@@ -43,7 +43,7 @@ function logEventPath(
 ) {
   const event = getEventSafe();
   logger.info(
-    `[Firestore Read][${func}] [${func}(${args}] triggered by: ${event?.path ?? "unknown path"}]`,
+    `[Firestore Read][${func}(${args})] triggered by: ${event?.path ?? "unknown path"}]`,
     {
       ...opts,
       eventPath: event?.path,
@@ -182,6 +182,27 @@ const electionConcreteDate: Record<string, string> = {
   "2023": "2023-10-15",
   "2024": "2024-04-07",
 };
+
+/** Fetches edges connected to a specific node */
+export async function fetchEdgesClose(centerNodeId: string): Promise<Edge[]> {
+  const db = getFirestore("koryta-pl");
+  const edges = (
+    await db
+      .collection("edges")
+      .where(
+        Filter.or(
+          Filter.where("source", "==", centerNodeId),
+          Filter.where("target", "==", centerNodeId),
+        ),
+      )
+      .get()
+  ).docs.map((doc: FirebaseFirestore.DocumentSnapshot) => doc.data() as Edge);
+  logEventPath("fetchEdges", "close", {
+    collection: "edges",
+    size: edges.length,
+  });
+  return edges;
+}
 
 export async function fetchEdges(bypassCache?: boolean): Promise<Edge[]> {
   return await _cachedFetchEdges(bypassCache);
