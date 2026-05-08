@@ -9,6 +9,7 @@ import {
 } from "~~/shared/model";
 import { getDatabase } from "firebase-admin/database";
 import { getFirestore, Filter } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/logger";
 
 interface nodeData {
   person: Person;
@@ -24,17 +25,30 @@ export interface FetchNodesOptions {
   bypassCache?: boolean;
 }
 
-function logEventPath(func: string, args: string) {
+function getEventSafe() {
   try {
     const event = useEvent();
-    console.info(
-      `[Firestore Read][${func}] [${func}(${args}) triggered by: ${event?.path || "unknown"}`,
-    );
+    return {
+      path: event?.path,
+    };
   } catch {
-    console.info(
-      `[Firestore Read][${func}] [${func}(${args}) triggered outside request context`,
-    );
+    return undefined;
   }
+}
+
+function logEventPath(
+  func: string,
+  args: string,
+  opts: { type?: string; collection: string },
+) {
+  const event = getEventSafe();
+  logger.info(
+    `[Firestore Read][${func}] [${func}(${args}] triggered by: ${event ?? "unknown path"}]`,
+    {
+      ...opts,
+      eventPath: event?.path,
+    },
+  );
 }
 
 export function applyPartiesFilter(
@@ -76,7 +90,7 @@ export async function fetchNodes<N extends NodeType>(
 
 const _cachedFetchNodes = defineCachedFunction(
   async (path: string, options: FetchNodesOptions = {}) => {
-    logEventPath("fetchNodes", path);
+    logEventPath("fetchNodes", path, { type: path, collection: "nodes" });
 
     const { nodeId } = options;
     const db = getFirestore("koryta-pl");
@@ -93,7 +107,7 @@ const _cachedFetchNodes = defineCachedFunction(
       const docSnap = await docRef.get();
       if (!docSnap.exists) return {};
       if (docSnap.data()?.type !== path) return {};
-      logEventPath("fetchNodes", path);
+      logEventPath("fetchNodes", path, { type: path, collection: "nodes" });
 
       const data = docSnap.data() || {};
       if (data.revision_id && typeof data.revision_id.path === "string") {
