@@ -39,11 +39,11 @@ function getEventSafe() {
 function logEventPath(
   func: string,
   args: string,
-  opts: { type?: string; collection: string },
+  opts: { type?: string; collection: string; size?: number },
 ) {
   const event = getEventSafe();
   logger.info(
-    `[Firestore Read][${func}] [${func}(${args}] triggered by: ${event ?? "unknown path"}]`,
+    `[Firestore Read][${func}] [${func}(${args}] triggered by: ${event?.path ?? "unknown path"}]`,
     {
       ...opts,
       eventPath: event?.path,
@@ -90,8 +90,6 @@ export async function fetchNodes<N extends NodeType>(
 
 const _cachedFetchNodes = defineCachedFunction(
   async (path: string, options: FetchNodesOptions = {}) => {
-    logEventPath("fetchNodes", path, { type: path, collection: "nodes" });
-
     const { nodeId } = options;
     const db = getFirestore("koryta-pl");
     let query: FirebaseFirestore.Query = db
@@ -114,6 +112,11 @@ const _cachedFetchNodes = defineCachedFunction(
         data.revision_id = data.revision_id.path;
       }
 
+      logEventPath("fetchNodes", path, {
+        type: path,
+        collection: "nodes",
+        size: 1,
+      });
       return { [nodeId]: { id: docSnap.id, ...data } };
     }
 
@@ -130,6 +133,11 @@ const _cachedFetchNodes = defineCachedFunction(
       };
     });
 
+    logEventPath("fetchNodes", path, {
+      type: path,
+      collection: "nodes",
+      size: nodesData.length,
+    });
     return Object.fromEntries(nodesData.map((node) => [node.id, node]));
   },
   {
@@ -181,7 +189,6 @@ export async function fetchEdges(bypassCache?: boolean): Promise<Edge[]> {
 
 const _cachedFetchEdges = defineCachedFunction(
   async (_bypassCache?: boolean) => {
-    logEventPath("fetchEdges", "all");
     const db = getFirestore("koryta-pl");
     const edges = (await db.collection("edges").get()).docs.map((doc) => {
       const data = doc.data();
@@ -208,7 +215,12 @@ const _cachedFetchEdges = defineCachedFunction(
         visibility: pageIsPublic(data),
       } as Edge;
     });
-    return edges as unknown as Edge[];
+    const result = edges as unknown as Edge[];
+    logEventPath("fetchEdges", "all", {
+      collection: "edges",
+      size: result.length,
+    });
+    return result;
   },
   {
     maxAge: 3600, // 1 hour
