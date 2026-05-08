@@ -86,10 +86,13 @@ export const authFetch = createUseFetch({
 
     if (user.value) {
       options.query = { ...options.query, latest: true };
-      const token = await user.value.getIdToken();
-      const headers = toValue(options.headers) || new Headers();
-      headers.set("Authorization", `Bearer ${token}`);
-      options.headers = headers;
+      // TODO restore only for user-specific content.
+      // If passing authorization, we will never hit cache
+      // https://firebase.google.com/docs/app-hosting/optimize-cache#cacheable-content
+      // const token = await user.value.getIdToken();
+      // const headers = toValue(options.headers) || new Headers();
+      // headers.set("Authorization", `Bearer ${token}`);
+      // options.headers = headers;
     }
   },
 });
