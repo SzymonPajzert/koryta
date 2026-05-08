@@ -96,7 +96,7 @@ export async function getLocalGraph(
 
 export default authCachedEventHandler(async (event) => {
   const query = getQuery(event);
-  const latest = query.latest !== undefined && query.latest !== "false";
+  const _latest = query.latest !== undefined && query.latest !== "false";
   const distance = query.distance ? parseInt(query.distance as string, 10) : 1;
   const focusNodeId = getRouterParam(event, "id");
 
@@ -109,5 +109,6 @@ export default authCachedEventHandler(async (event) => {
     expansions = (query.expand as string).split(",");
   }
 
-  return getLocalGraph(focusNodeId, latest, distance, expansions);
+  // TODO actually propagate the information about the latest
+  return getLocalGraph(focusNodeId, false, distance, expansions);
 });
