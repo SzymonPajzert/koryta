@@ -74,9 +74,11 @@
 </template>
 
 <script lang="ts" setup>
-import { useEntityListRich } from "~/composables/entity/listRich";
+import { computed } from "vue";
 import type { Powiat } from "~/composables/entity/regions";
 import type { PersonRich } from "~~/shared/model";
+import { useListWithStats } from "~/composables/entity/listWithStats";
+import type { Query } from "~~/server/api/nodes/index.get";
 
 const props = defineProps<{ region: Powiat | undefined }>();
 const { data: nodeGroups } = authFetch("/api/graph/nodeGroups", {
@@ -95,24 +97,17 @@ function subtitle(person: Partial<PersonRich>) {
   }
   return "";
 }
-const { entities: places } = useEntities("place");
-const { entities: regions } = useEntities("region");
-const { people: peopleUnsorted, loading } = useEntityListRich(
-  ref(undefined),
-  computed(() => {
-    if (!props.region) return undefined;
-    if (!props.region.id) return undefined;
-    if (!props.region.name) return undefined;
-    return ["teryt" + props.region.id, props.region.name];
-  }),
-  places,
-  regions,
-);
 
-const people = computed(() => {
-  const sorted = peopleUnsorted.value.toSorted((a, b) => {
-    return b.experience - a.experience;
-  });
-  return sorted.slice(0, 9);
+const apiQuery = computed(() => {
+  return {
+    type: "person",
+    limit: 9,
+    page: 1,
+    teryt: props.region?.id ? props.region.id : undefined,
+    sortBy: "experience",
+    sortDesc: "true",
+  } as Query;
 });
+
+const { tableItems: people, pending: loading } = await useListWithStats(apiQuery);
 </script>
