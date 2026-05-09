@@ -30,8 +30,8 @@
     </v-col>
     <v-col cols="12" md="4">
       <v-autocomplete
-        v-model="electionLocation"
-        :items="availableElectionLocations"
+        v-model="teryt"
+        :items="availableRegions"
         label="Okręg wyborczy"
         variant="outlined"
         density="comfortable"
@@ -45,10 +45,10 @@
 <script setup lang="ts">
 const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
-const electionLocation = defineModel<string | null>("electionLocation");
+const teryt = defineModel<string | null>("teryt");
 
 defineProps<{
   availableParties: { title: string; value: string }[] | string[];
-  availableElectionLocations: string[];
+  availableRegions: { title: string; value: string }[];
 }>();
 </script>

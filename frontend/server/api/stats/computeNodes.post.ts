@@ -49,7 +49,6 @@ export default defineEventHandler(async () => {
       nodeEdges,
       nodeNotes,
       nodeVotes,
-      (id) => nodesRecord[id]?.name,
     );
 
     const nodeRef = db.collection("nodes").doc(node.id);

@@ -43,9 +43,9 @@
       <FormEksplorujTabelaFilters
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
-        v-model:election-location="filterElectionLocation"
+        v-model:teryt="filterTeryt"
         :available-parties="availableParties"
-        :available-election-locations="availableElectionLocations"
+        :available-regions="availableRegions"
       />
 
       <v-card class="table-card">
@@ -314,28 +314,25 @@ const filterParty = computed<string[] | null>({
     });
   },
 });
-const filterElectionLocation = computed<string | null>({
+const filterTeryt = computed<string | null>({
   get: () => {
-    if (route.query.teryt && region.value) {
-      return region.value[1];
-    }
-    return (route.query.electionLocation as string) || null;
+    return (route.query.teryt as string) || null;
   },
   set: (val) => {
-    const { teryt, ...restQuery } = route.query;
-    const query = {
-      ...restQuery,
-      page: 1,
-      electionLocation: val || undefined,
-    };
-    router.push({ query });
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        teryt: val || undefined,
+      },
+    });
   },
 });
 
-const availableElectionLocations = computed(() => {
+const availableRegions = computed(() => {
   return Object.values(regions.value ?? {})
-    .map((r) => r.name)
-    .sort((a, b) => a.localeCompare(b));
+    .map((r) => ({ title: r.name, value: r.teryt }))
+    .sort((a, b) => a.title.localeCompare(b.title));
 });
 
 const availableParties = computed(() => {
@@ -380,8 +377,7 @@ const apiQuery = computed(
       visibility:
         filterVisibility.value !== "all" ? filterVisibility.value : undefined,
       krs: route.query.krs as string | undefined,
-      teryt: route.query.teryt as string | undefined,
-      electionLocation: filterElectionLocation.value || undefined,
+      teryt: filterTeryt.value || undefined,
     }) as Query,
 );
 

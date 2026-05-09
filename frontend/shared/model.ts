@@ -13,7 +13,6 @@ type PageBase<PageType> = {
 type NodeEdgeStats = {
   experienceMonths: number;
   targetNodeIds: string[];
-  electionLocations: string[];
 };
 
 export interface NodeStats {

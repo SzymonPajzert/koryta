@@ -99,32 +99,9 @@ describe("shared/stats.ts", () => {
         "node3",
         "node4",
       ]);
-      expect(stats.all.electionLocations).toEqual([
-        "Name for node3",
-        "Name for node4",
-      ]);
 
       // 'approved' expectations
       expect(stats.approved.targetNodeIds).toEqual(["node2", "node4"]);
-      expect(stats.approved.electionLocations).toEqual(["Name for node4"]);
-    });
-
-    it("should filter out undefined node names", () => {
-      const edges: Edge[] = [
-        { target: "validNode", type: "election", revision_id: "rev1" } as Edge,
-        {
-          target: "invalidNode",
-          type: "election",
-          revision_id: "rev2",
-        } as Edge,
-      ];
-
-      const getNodeName = (id: string) =>
-        id === "validNode" ? "Valid" : undefined;
-      const stats = computeEdgeStats(edges, getNodeName);
-
-      expect(stats.all.electionLocations).toEqual(["Valid"]);
-      expect(stats.approved.electionLocations).toEqual(["Valid"]);
     });
   });
 
@@ -140,9 +117,7 @@ describe("shared/stats.ts", () => {
         { categoryVotes: { quality: 5 } } as unknown as VoteDocument,
       ];
 
-      const getNodeName = () => "MockName";
-
-      const stats = computeNodeStats(true, edges, notes, votes, getNodeName);
+      const stats = computeNodeStats(true, edges, notes, votes);
 
       expect(stats.isApproved).toBe(true);
       expect(stats.notesCount).toBe(3);
