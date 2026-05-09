@@ -6,9 +6,9 @@ import { authFetch } from "@/composables/auth";
 
 const hoveredDistrict = ref<Powiat | null>(null);
 
-const { data: nodeGroups } = authFetch("/api/graph/nodeGroups", {
+const { data: regionStats } = authFetch("/api/stats/regions", {
   lazy: true,
-  key: "polandmap-node-groups",
+  key: "polandmap-region-stats",
   default: () => [],
 });
 
@@ -19,8 +19,19 @@ const hover = (region: Powiat | null) => {
 const groupData = computed(() => {
   const map: Record<string, { id: string; people?: number; name?: string }> =
     {};
-  for (const g of nodeGroups.value || []) {
-    map[g.id] = g;
+  for (const g of regionStats.value || []) {
+    if (!g.id) continue;
+
+    const item = {
+      id: g.id as string,
+      people: g.people,
+      name: g.name,
+    };
+
+    map[g.id] = item;
+    if (g.teryt) {
+      map[g.teryt] = item;
+    }
   }
   return map;
 });
