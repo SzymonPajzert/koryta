@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// TODO remove this and fix the typing
+
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import {
