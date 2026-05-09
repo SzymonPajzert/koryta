@@ -51,6 +51,7 @@ function getEventSafe() {
     const event = useEvent();
     return {
       path: event?.path,
+      route: event?.context?.matchedRoute?.path,
     };
   } catch {
     return undefined;
@@ -67,7 +68,8 @@ function logEventPath(
     `[Firestore Read][${func}(${args})] triggered by: ${event?.path ?? "unknown path"}]`,
     {
       ...opts,
-      eventPath: event?.path,
+      ...event,
+      eventPath: event?.route,
     },
   );
 }
