@@ -10,6 +10,27 @@ import {
 import { getDatabase } from "firebase-admin/database";
 import { getFirestore, Filter } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/logger";
+import { z } from "zod";
+
+export const fetchOptionsValidator = z.object({
+  limit: z.coerce.number().optional(),
+  page: z.coerce.number().optional(),
+});
+
+export type FetchOptions = z.infer<typeof fetchOptionsValidator>;
+
+export function paginate(
+  query: FirebaseFirestore.Query,
+  options: FetchOptions,
+): FirebaseFirestore.Query {
+  let paginatedQuery = query;
+  if (options.limit) {
+    const page = options.page || 1;
+    const offset = (page - 1) * options.limit;
+    paginatedQuery = paginatedQuery.offset(offset).limit(options.limit);
+  }
+  return paginatedQuery;
+}
 
 interface nodeData {
   person: Person;

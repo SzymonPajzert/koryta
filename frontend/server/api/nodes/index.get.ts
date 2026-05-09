@@ -1,12 +1,20 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
-import { fetchNodes, applyPartiesFilter } from "~~/server/utils/fetch";
+import {
+  fetchNodes,
+  applyPartiesFilter,
+  fetchOptionsValidator,
+  paginate,
+} from "~~/server/utils/fetch";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { getUser } from "~~/server/utils/auth";
 import { pageIsPublic } from "~~/shared/model";
 import { defineEventHandler } from "h3";
 
 const queryValidator = z.object({
+  // We use generic fetch options for pagination
+  ...fetchOptionsValidator.shape,
+
   type: z.enum(["person", "place", "article", "region"]).optional(),
   party: z.string().optional(),
   parties: z.union([z.string(), z.array(z.string())]).optional(),
@@ -16,9 +24,7 @@ const queryValidator = z.object({
   electionLocation: z.string().optional(),
   visibility: z.enum(["public", "private"]).optional(),
 
-  // Pagination & Sorting parameters
-  limit: z.coerce.number().optional(),
-  page: z.coerce.number().optional(),
+  // Sorting parameters
   sortBy: z.string().optional(),
   sortDesc: z.enum(["true", "false"]).optional(),
 });
@@ -143,12 +149,7 @@ export default defineEventHandler(async (event) => {
       fsQuery = fsQuery.orderBy(sortField, direction);
     }
 
-    let paginatedQuery = fsQuery;
-    if (query.limit) {
-      const page = query.page || 1;
-      const offset = (page - 1) * query.limit;
-      paginatedQuery = paginatedQuery.offset(offset).limit(query.limit);
-    }
+    const paginatedQuery = paginate(fsQuery, query);
 
     // Also return the total count (run in parallel with data fetch)
     const [snapshot, countSnapshot] = await Promise.all([
