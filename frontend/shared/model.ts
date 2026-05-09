@@ -29,6 +29,7 @@ export interface NodeStats {
     all: NodeEdgeStats;
     approved: NodeEdgeStats;
   };
+  nodeGroupSize?: number;
 }
 
 export type VoteCategory = "interesting" | "quality";
