@@ -1,9 +1,5 @@
 import { authCachedEventHandler } from "~~/server/utils/handlers";
-
-import { getEdges } from "~~/shared/graph/util";
-import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
-
-import type { Article } from "~~/shared/model";
+import { getFirestore } from "firebase-admin/firestore";
 
 export type SourceStat = {
   domain: string;
@@ -14,50 +10,25 @@ export type SourceStat = {
 };
 
 export default authCachedEventHandler(async () => {
-  const articles = await fetchNodes("article");
-  const [edgesFromDB] = await Promise.all([fetchEdges()]);
-  const edges = getEdges(edgesFromDB);
+  const db = getFirestore("koryta-pl");
+  const statsSnap = await db
+    .collection("stats")
+    .where("type", "==", "domain_articles")
+    .get();
 
-  const articleCounts: Record<string, number> = {};
-  const domainMap: Record<string, string> = {}; // domain -> full url sample
-  const domainPeople: Record<string, Set<string>> = {};
-  const articleToDomain = new Map<string, string>();
-
-  Object.entries(articles).forEach(([id, article]) => {
-    const art = article as Article;
-    if (!art.sourceURL) return;
-
-    const url = new URL(art.sourceURL);
-    const domain = url.hostname.replace("www.", "");
-
-    articleCounts[domain] = (articleCounts[domain] || 0) + 1;
-    if (!domainMap[domain]) domainMap[domain] = url.origin;
-    if (!domainPeople[domain]) domainPeople[domain] = new Set();
-
-    articleToDomain.set(id, domain);
+  const sourceStats: SourceStat[] = statsSnap.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      domain: data.domain,
+      articleCount: data.articleCount,
+      peopleCount: data.peopleCount,
+      people: data.people || [],
+      url: data.url,
+    };
   });
 
-  edges.forEach((edge) => {
-    if (articleToDomain.has(edge.source)) {
-      const domain = articleToDomain.get(edge.source)!;
-      domainPeople[domain]?.add(edge.target);
-    }
-    if (articleToDomain.has(edge.target)) {
-      const domain = articleToDomain.get(edge.target)!;
-      domainPeople[domain]?.add(edge.source);
-    }
-  });
-
-  // Convert to array and sort by the number of people
-  const sourceStats: SourceStat[] = Object.entries(domainPeople)
-    .sort((a, b) => b[1].size - a[1].size) // Sort desc
-    .map(([domain, domainPeople]) => ({
-      domain,
-      articleCount: articleCounts[domain] || 0,
-      peopleCount: domainPeople.size || 0,
-      people: Array.from(domainPeople.values()),
-      url: domainMap[domain],
-    }));
+  // Sort descending by the number of people
+  sourceStats.sort((a, b) => b.peopleCount - a.peopleCount);
 
   return sourceStats;
 });
