@@ -9,9 +9,12 @@
           :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
           :prepend-icon="nodeTypeIcon[edge.richNode.type]"
         >
-          <v-list-item-title
-            >{{ edge.richNode.name }} ({{ edge.people }})</v-list-item-title
-          >
+          <v-list-item-title>
+            {{ edge.richNode.name }}
+            <span v-if="getPeopleCount(edge) > 0" class="text-medium-emphasis">
+              ({{ getPeopleCount(edge) }})
+            </span>
+          </v-list-item-title>
         </v-list-item>
       </v-list>
     </v-card>
@@ -19,29 +22,30 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { nodeTypeIcon } from "~~/shared/model";
+import type { EdgeNode } from "~~/app/composables/edges";
 
 const { edges, title } = defineProps<{
   title: string;
   edges: EdgeNode[];
 }>();
 
-const { data: nodeGroups } = await authFetch("/api/graph/nodeGroups", {
-  key: "connectionlist-node-groups",
-});
+function getPeopleCount(edge: EdgeNode) {
+  const stats = edge.richNode.stats as
+    | {
+        nodeGroupSize?: number;
+        people?: number;
+      }
+    | undefined;
+  return stats?.nodeGroupSize ?? stats?.people ?? 0;
+}
 
 const edgesSorted = computed(() => {
-  const nodeGroupsSafe = nodeGroups.value
-    ? Object.fromEntries(
-        nodeGroups.value.map((x: { id: string; people: number }) => [x.id, x]),
-      )
-    : {};
-
-  const edgesWithCount = edges.map((edge) => ({
-    ...edge,
-    people: nodeGroupsSafe[edge.target]?.people ?? 0,
-  }));
-
-  return edgesWithCount.sort((a, b) => b.people - a.people);
+  return [...edges].sort((a, b) => {
+    const countDiff = getPeopleCount(b) - getPeopleCount(a);
+    if (countDiff !== 0) return countDiff;
+    return (a.richNode.name || "").localeCompare(b.richNode.name || "");
+  });
 });
 </script>

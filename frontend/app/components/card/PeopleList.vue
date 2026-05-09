@@ -81,19 +81,12 @@ import { useListWithStats } from "~/composables/entity/listWithStats";
 import type { Query } from "~~/server/api/nodes/index.get";
 
 const props = defineProps<{ region: Powiat | undefined }>();
-const { data: nodeGroups } = authFetch("/api/graph/nodeGroups", {
-  key: "peoplelist-node-groups",
-  lazy: true,
-  default: () => [],
-});
-
 function subtitle(person: Partial<PersonRich>) {
   if (person.experience) {
     return `${person.experience} lat pracy`;
   }
-  const nodeGroup = nodeGroups.value?.find((group) => group.id == person.id);
-  if (nodeGroup) {
-    return `${nodeGroup.people} powiązanych osób`;
+  if (person.stats?.nodeGroupSize) {
+    return `${person.stats.nodeGroupSize} powiązanych osób`;
   }
   return "";
 }

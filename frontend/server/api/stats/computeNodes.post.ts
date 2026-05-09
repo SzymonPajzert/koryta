@@ -1,6 +1,15 @@
 import { getFirestore } from "firebase-admin/firestore";
-import type { Edge, Note, VoteDocument } from "~~/shared/model";
+import type {
+  Edge,
+  Note,
+  VoteDocument,
+  Person,
+  Company,
+  Region,
+} from "~~/shared/model";
 import { computeNodeStats } from "~~/shared/stats";
+import { getEdges, getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
+import { partyColors } from "~~/shared/misc";
 
 export default defineEventHandler(async () => {
   // TODO enable check here
@@ -27,13 +36,48 @@ export default defineEventHandler(async () => {
 
   // Group data by nodeId
   const edgesByNode: Record<string, Edge[]> = {
-    ...extractByNode(edges, (edge) => [edge.source, edge.target]),
+    ...extractByNode(edges as Edge[], (edge) => [edge.source, edge.target]),
   };
 
-  const notesByNode = extractByNode<Note>(notes, (note) => [note.nodeId]);
-  const votesByNode = extractByNode<VoteDocument>(votes, (vote) => [
-    vote.nodeId,
+  const notesByNode = extractByNode<Note>(notes as Note[], (note) => [
+    note.nodeId,
   ]);
+  const votesByNode = extractByNode<VoteDocument>(
+    votes as VoteDocument[],
+    (vote) => [vote.nodeId],
+  );
+
+  // Compute Node Groups
+
+  const peopleMap: Record<string, Person> = {};
+  const placesMap: Record<string, Company> = {};
+  const regionsMap: Record<string, Region> = {};
+
+  for (const n of nodes) {
+    if (n.data.type === "person") peopleMap[n.id] = n.data as Person;
+    else if (n.data.type === "place") placesMap[n.id] = n.data as Company;
+    else if (n.data.type === "region") regionsMap[n.id] = n.data as Region;
+  }
+
+  const nodesNoStats = getNodesNoStats(
+    peopleMap,
+    placesMap,
+    regionsMap,
+    partyColors,
+  );
+  const formattedEdges = getEdges(edges as Edge[]);
+  const nodeGroups = getNodeGroups(
+    nodesNoStats,
+    formattedEdges,
+    peopleMap,
+    placesMap,
+    regionsMap,
+  );
+
+  const nodeGroupSizeMap: Record<string, number> = {};
+  for (const group of nodeGroups) {
+    nodeGroupSizeMap[group.id] = group.stats.people;
+  }
 
   const placeToRegions: Record<string, string[]> = {};
   const placeToParentCompanies: Record<string, string[]> = {};
@@ -103,6 +147,7 @@ export default defineEventHandler(async () => {
       nodeVotes,
       transitiveTargets,
     );
+    stats.nodeGroupSize = nodeGroupSizeMap[node.id] || 0;
 
     const nodeRef = db.collection("nodes").doc(node.id);
     currentBatch.update(nodeRef, { stats });
