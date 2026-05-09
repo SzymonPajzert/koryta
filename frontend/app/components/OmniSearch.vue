@@ -52,6 +52,7 @@ import { parties } from "~~/shared/misc";
 import { authFetch } from "@/composables/auth";
 import { generateEntityUrl } from "~/composables/slugs";
 import type { NodeType } from "~~/shared/model";
+import { refDebounced } from "@vueuse/core";
 
 const { push, currentRoute } = useRouter();
 
@@ -71,6 +72,7 @@ const emit = defineEmits<{
 const search = ref(props.searchText);
 const nodeGroupPicked = ref<ListItem | null>(null);
 const autocompleteFocus = ref(false);
+const debouncedSearch = refDebounced(search, 300);
 
 if (props.fake) {
   watch(
@@ -91,9 +93,12 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { data: nodeGroups, refresh } = authFetch("/api/graph/nodeGroups", {
-  key: "omnisearch-node-groups",
+const { data: searchData, refresh } = authFetch("/api/search", {
+  key: "omnisearch-data",
   lazy: true,
+  query: computed(() => ({
+    q: debouncedSearch.value,
+  })),
 });
 
 watch(autocompleteFocus, (focused) => {
@@ -102,23 +107,19 @@ watch(autocompleteFocus, (focused) => {
   }
 });
 
-const connectedPeopleString = (n: number) =>
-  polishCounting(n, "powiązana osoba", "powiązane osoby", "powiązanych osób");
-
 const baseItems = computed<ListItem[]>(() => {
-  if (!nodeGroups.value || nodeGroups.value.length === 0) return [];
   const result: ListItem[] = [];
   result.push({
     id: "all-persons",
     title: "Lista wszystkich osób",
-    subtitle: `${connectedPeopleString(nodeGroups.value?.[0]?.people ?? 0)}`,
     icon: "mdi-format-list-bulleted-type",
     path: "/eksploruj/tabela",
     logEventKey: {
-      content_id: nodeGroups.value?.[0]?.id || "",
+      content_id: "",
       content_type: "nodeGroup",
     },
   });
+
   parties.forEach((item) => {
     result.push({
       id: `party-${item}`,
@@ -136,29 +137,27 @@ const baseItems = computed<ListItem[]>(() => {
     });
   });
 
-  const addedIds = new Set<string>();
+  if (searchData.value) {
+    searchData.value.forEach((item) => {
+      const itemType = (item.type || "place") as NodeType;
 
-  nodeGroups.value.slice(1).forEach((item) => {
-    addedIds.add(item.id);
-    const itemType = (item.type || "place") as NodeType;
+      // Choose icon based on type
+      let icon = "mdi-domain";
+      if (itemType === "person") icon = "mdi-account-outline";
+      else if (itemType === "region") icon = "mdi-map-marker-radius-outline";
 
-    // Choose icon based on type
-    let icon = "mdi-domain";
-    if (itemType === "person") icon = "mdi-account-outline";
-    else if (itemType === "region") icon = "mdi-map-marker-radius-outline";
-
-    result.push({
-      id: `entity-${item.id}`,
-      title: item.name,
-      subtitle: `${connectedPeopleString(item.people ?? 0)}`,
-      icon,
-      logEventKey: {
-        content_id: item.id,
-        content_type: "nodeGroup",
-      },
-      path: generateEntityUrl(itemType, item.id, item.name),
+      result.push({
+        id: `entity-${item.id}`,
+        title: item.name,
+        icon,
+        logEventKey: {
+          content_id: item.id!,
+          content_type: "nodeGroup",
+        },
+        path: generateEntityUrl(itemType, item.id!, item.name),
+      });
     });
-  });
+  }
 
   return result;
 });
