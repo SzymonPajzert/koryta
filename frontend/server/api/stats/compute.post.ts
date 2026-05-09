@@ -1,14 +1,13 @@
 import { getFirestore } from "firebase-admin/firestore";
-import { getUser } from "~~/server/utils/auth";
 import { getEdges } from "~~/shared/graph/util";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 import type { Article } from "~~/shared/model";
 import type { SourceStat } from "~~/server/api/nodes/articles/index.get";
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async () => {
   // Only authenticated or authorized actors should trigger a recalculation.
   // When setting up the Cloud Function later, ensure it passes a valid Identity Token.
-  await getUser(event);
+  // TODO await getUser(event);
 
   const articles = await fetchNodes("article");
   const [edgesFromDB] = await Promise.all([fetchEdges()]);
