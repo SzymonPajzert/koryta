@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import type { SourceStat } from "~~/server/api/nodes/articles.get";
+import type { SourceStat } from "~~/server/api/nodes/articles/index.get";
 
 defineProps<{
   source: SourceStat;

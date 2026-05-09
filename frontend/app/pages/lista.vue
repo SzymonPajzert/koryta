@@ -16,7 +16,7 @@
 
 <script lang="ts" setup>
 import { useParams } from "@/composables/params";
-import type { SourceStat } from "~~/server/api/nodes/articles.get";
+import type { SourceStat } from "~~/server/api/nodes/articles/index.get";
 
 definePageMeta({
   title: "Lista",
