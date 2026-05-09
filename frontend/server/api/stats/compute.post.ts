@@ -3,7 +3,7 @@ import { getUser } from "~~/server/utils/auth";
 import { getEdges } from "~~/shared/graph/util";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 import type { Article } from "~~/shared/model";
-import type { SourceStat } from "~~/server/api/nodes/articles.get";
+import type { SourceStat } from "~~/server/api/nodes/articles/index.get";
 
 export default defineEventHandler(async (event) => {
   // Only authenticated or authorized actors should trigger a recalculation.
