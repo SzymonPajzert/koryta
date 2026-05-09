@@ -14,7 +14,6 @@ export default authCachedEventHandler(async (event) => {
   );
 
   const db = getFirestore("koryta-pl");
-
   const articlesQuery = db.collection("nodes").where("type", "==", "article");
   const paginatedArticles = paginate(articlesQuery, query);
   const articlesSnap = await paginatedArticles.get();

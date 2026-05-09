@@ -1,4 +1,5 @@
 import { defineVitestConfig } from "@nuxt/test-utils/config";
+import { fileURLToPath } from "node:url";
 
 export default defineVitestConfig({
   test: {
@@ -14,8 +15,9 @@ export default defineVitestConfig({
       },
     },
     alias: {
-      "@plausible-analytics/tracker":
-        "/Users/szymonpajzert/Programming/koryta/frontend/tests/plausible-mock.js",
+      "@plausible-analytics/tracker": fileURLToPath(
+        new URL("./tests/plausible-mock.js", import.meta.url),
+      ),
     },
   },
 });
