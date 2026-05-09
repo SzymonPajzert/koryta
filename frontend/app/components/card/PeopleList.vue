@@ -109,5 +109,6 @@ const apiQuery = computed(() => {
   } as Query;
 });
 
-const { tableItems: people, pending: loading } = await useListWithStats(apiQuery);
+const { tableItems: people, pending: loading } =
+  await useListWithStats(apiQuery);
 </script>
