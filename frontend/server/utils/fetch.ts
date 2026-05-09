@@ -49,10 +49,17 @@ export interface FetchNodesOptions {
 function getEventSafe() {
   try {
     const event = useEvent();
-    return {
+    const result = {
       path: event?.path,
       route: event?.context?.matchedRoute?.path,
     };
+    if (result.path && result.route) {
+      const queryStr = event.path.split("?", 2)[1];
+      if (queryStr) {
+        result.route = result.route + "?" + queryStr;
+      }
+    }
+    return result;
   } catch {
     return undefined;
   }
