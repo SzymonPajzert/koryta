@@ -41,13 +41,7 @@ export function computeVoteStats(
   return aggregatedVotes;
 }
 
-const stringNotUndefined = (item: string | undefined): item is string =>
-  item !== undefined;
-
-export function computeEdgeStats(
-  nodeEdges: Edge[],
-  getNodeName: (id: string) => string | undefined,
-) {
+export function computeEdgeStats(nodeEdges: Edge[]) {
   const approvedEdges = nodeEdges.filter((e) => !!e.revision_id);
 
   const allTargetNodeIds = [...new Set(nodeEdges.map((e) => e.target))].filter(
@@ -57,42 +51,14 @@ export function computeEdgeStats(
     ...new Set(approvedEdges.map((e) => e.target)),
   ];
 
-  const allElectionTargetIds = [
-    ...new Set(
-      nodeEdges.filter((e) => e.type === "election").map((e) => e.target),
-    ),
-  ];
-  const approvedElectionTargetIds = [
-    ...new Set(
-      approvedEdges.filter((e) => e.type === "election").map((e) => e.target),
-    ),
-  ];
-
-  const allElectionLocations = [
-    ...new Set(
-      allElectionTargetIds
-        .map((id) => getNodeName(id))
-        .filter(stringNotUndefined),
-    ),
-  ];
-  const approvedElectionLocations = [
-    ...new Set(
-      approvedElectionTargetIds
-        .map((id) => getNodeName(id))
-        .filter(stringNotUndefined),
-    ),
-  ];
-
   return {
     all: {
       experienceMonths: calculateExperience(nodeEdges),
       targetNodeIds: allTargetNodeIds,
-      electionLocations: allElectionLocations,
     },
     approved: {
       experienceMonths: calculateExperience(approvedEdges),
       targetNodeIds: approvedTargetNodeIds,
-      electionLocations: approvedElectionLocations,
     },
   };
 }
@@ -102,7 +68,6 @@ export function computeNodeStats(
   nodeEdges: Edge[],
   nodeNotes: Note[],
   nodeVotes: VoteDocument[],
-  getNodeName: (id: string) => string | undefined,
 ): NodeStats {
   return {
     isApproved: nodeIsApproved,
@@ -111,6 +76,6 @@ export function computeNodeStats(
       .map((n) => n.sources?.length || 0)
       .reduce((a, b) => a + b, 0),
     votes: computeVoteStats(nodeVotes),
-    edges: computeEdgeStats(nodeEdges, getNodeName),
+    edges: computeEdgeStats(nodeEdges),
   };
 }

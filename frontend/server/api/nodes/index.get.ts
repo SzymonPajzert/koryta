@@ -16,12 +16,11 @@ const queryValidator = z.object({
   ...fetchOptionsValidator.shape,
 
   type: z.enum(["person", "place", "article", "region"]).optional(),
+  // TODO: remove party in the future
   party: z.string().optional(),
   parties: z.union([z.string(), z.array(z.string())]).optional(),
-  place: z.string().optional(),
   teryt: z.string().optional(),
   krs: z.string().optional(),
-  electionLocation: z.string().optional(),
   visibility: z.enum(["public", "private"]).optional(),
 
   // Sorting parameters
@@ -106,16 +105,6 @@ export default defineEventHandler(async (event) => {
       } else {
         return { nodes: {}, total: 0 };
       }
-    }
-    if (query.electionLocation) {
-      const arrayField = user
-        ? "stats.edges.all.electionLocations"
-        : "stats.edges.approved.electionLocations";
-      fsQuery = fsQuery.where(
-        arrayField,
-        "array-contains",
-        query.electionLocation,
-      );
     }
 
     if (!user) {
