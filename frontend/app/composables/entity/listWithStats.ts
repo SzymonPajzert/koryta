@@ -93,15 +93,18 @@ export async function useListWithStats(
       );
 
       for (const edge of personEdges) {
-        const targetNode = subgraphNodes.value[edge.target];
-        if (edge.type === "employed" && targetNode?.entityType === "place") {
-          companies.add(targetNode.name);
+        const otherNodeId =
+          edge.source === person.id ? edge.target : edge.source;
+        const otherNode = subgraphNodes.value[otherNodeId];
+
+        if (edge.type === "employed" && otherNode?.entityType === "place") {
+          companies.add(otherNode.name);
         } else if (edge.type === "election") {
           const listYear =
             edge.start_date && typeof edge.start_date === "string"
               ? edge.start_date.split("-")[0]
               : undefined;
-          const listLocation = subgraphNodes.value[edge.target]?.name || "";
+          const listLocation = otherNode?.name || "";
           const listPosition = edge.position || edge.name || "Wybory";
 
           elections.push({
