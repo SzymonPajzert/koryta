@@ -13,11 +13,11 @@ import { getQuery, getRouterParam } from "h3";
 import { fetchNodes, fetchEdges, fetchEdgesClose } from "~~/server/utils/fetch";
 
 async function fetchEdgesSmaller(
-  centerNodeId: string,
+  centerNodeIds: string[],
   distance: number,
 ): Promise<Edge[]> {
   if (distance == 1) {
-    return fetchEdgesClose(centerNodeId);
+    return fetchEdgesClose(centerNodeIds);
   }
 
   return fetchEdges();
@@ -29,11 +29,16 @@ export async function getLocalGraph(
   distance: number,
   expansions: string[],
 ) {
+  const focusIds = new Set([focusNodeId]);
+  for (const id of expansions) {
+    if (id) focusIds.add(id);
+  }
+
   const [peopleRaw, placesRaw, regionsRaw, edgesFromDBRaw] = await Promise.all([
     fetchNodes("person", { bypassCache: false }),
     fetchNodes("place", { bypassCache: false }),
     fetchNodes("region", { bypassCache: false }),
-    fetchEdgesSmaller(focusNodeId, distance),
+    fetchEdgesSmaller(Array.from(focusIds), distance),
   ]);
 
   // Handle visibility filtering
@@ -82,11 +87,6 @@ export async function getLocalGraph(
       return true;
     }),
   );
-
-  const focusIds = new Set([focusNodeId]);
-  for (const id of expansions) {
-    if (id) focusIds.add(id);
-  }
 
   // Actually perform BFS from backend
   const localNodes = getGraphBFS(focusIds, distance, edges, interestingNodes);
