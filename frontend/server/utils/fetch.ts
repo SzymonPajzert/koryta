@@ -245,24 +245,58 @@ function edgeFromDB(doc: FirebaseFirestore.QueryDocumentSnapshot): Edge {
   } as Edge;
 }
 
-/** Fetches edges connected to a specific node */
-export async function fetchEdgesClose(centerNodeId: string): Promise<Edge[]> {
+/** Fetches edges connected to specific nodes */
+export async function fetchEdgesClose(
+  centerNodeIds: string | string[],
+): Promise<Edge[]> {
+  const ids = Array.isArray(centerNodeIds) ? centerNodeIds : [centerNodeIds];
+  if (ids.length === 0) return [];
+
   const db = getFirestore("koryta-pl");
-  const edges = (
-    await db
+  const chunkSize = 30; // Firestore 'in' query limit is 30
+
+  const edgesMap = new Map<string, Edge>();
+
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+
+    // Fetch edges where these nodes are the source
+    const sourceQuery = db
       .collection("edges")
-      .where(
-        Filter.or(
-          Filter.where("source", "==", centerNodeId),
-          Filter.where("target", "==", centerNodeId),
-        ),
-      )
-      .get()
-  ).docs.map(edgeFromDB);
-  logEventPath("fetchEdges", "close", {
+      .where("source", "in", chunk)
+      .get();
+
+    // Fetch edges where these nodes are the target
+    const targetQuery = db
+      .collection("edges")
+      .where("target", "in", chunk)
+      .get();
+
+    const [sourceSnap, targetSnap] = await Promise.all([
+      sourceQuery,
+      targetQuery,
+    ]);
+
+    for (const doc of sourceSnap.docs) {
+      if (!edgesMap.has(doc.id)) {
+        edgesMap.set(doc.id, edgeFromDB(doc));
+      }
+    }
+
+    for (const doc of targetSnap.docs) {
+      if (!edgesMap.has(doc.id)) {
+        edgesMap.set(doc.id, edgeFromDB(doc));
+      }
+    }
+  }
+
+  const edges = Array.from(edgesMap.values());
+
+  logEventPath("fetchEdges", "close_batch", {
     collection: "edges",
     size: edges.length,
   });
+
   return edges;
 }
 
