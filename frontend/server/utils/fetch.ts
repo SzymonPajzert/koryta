@@ -56,7 +56,13 @@ function getEventSafe() {
     if (result.path && result.route) {
       const queryStr = event.path.split("?", 2)[1];
       if (queryStr) {
-        result.route = result.route + "?" + queryStr;
+        let safeQueryStr = queryStr;
+        const paramsToSanitize = ["place", "center", "nodeId", "teryt", "id"];
+        for (const param of paramsToSanitize) {
+          const regex = new RegExp(`(^|&)(${param}=)[^&]*`, "g");
+          safeQueryStr = safeQueryStr.replace(regex, "$1$2id");
+        }
+        result.route = result.route + "?" + safeQueryStr;
       }
     }
     return result;
