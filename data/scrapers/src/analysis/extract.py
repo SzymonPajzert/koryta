@@ -98,6 +98,13 @@ class Extract(Pipeline):
             action=argparse.BooleanOptionalAction,
         )
         parser.add_argument(
+            "--currently-employed",
+            help="Extract people who are currently employed",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
+        parser.add_argument(
             "--ignore-elections",
             help="Ignore elections information, listing people without them",
             default=False,
@@ -128,6 +135,10 @@ class Extract(Pipeline):
     @property
     def recent(self) -> bool:
         return self.args.recent
+
+    @property
+    def currently_employed(self) -> bool:
+        return self.args.currently_employed
 
     @property
     def ignore_elections(self) -> bool:
@@ -168,6 +179,10 @@ class Extract(Pipeline):
                     if self.recent:
                         start_date = emp.get("employed_start")
                         if start_date is not None and start_date > RECENT_TRESHOLD:
+                            result += 1
+                    if self.currently_employed:
+                        end_date = emp.get("employed_end")
+                        if end_date is None or end_date > RECENT_TRESHOLD:
                             result += 1
                     else:
                         result += 1
