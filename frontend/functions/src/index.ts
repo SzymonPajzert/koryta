@@ -22,7 +22,7 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
   {
     region: "europe-west1",
   },
-  async (request, context) => {
+  async (request, _context) => {
     let url = request.data.url;
     if (!url) {
       throw new functions.https.HttpsError(
@@ -57,7 +57,7 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
       }
 
       return { title: title };
-    } catch (error: any) {
+    } catch (error: unknown) {
       functions.logger.error(
         `Error fetching page title for URL: ${url}`,
         error,
@@ -101,7 +101,7 @@ export const scheduledFirestoreExport = onSchedule(
     schedule: "every 12 hours",
     region: "europe-west1",
   },
-  async (event: any) => {
+  async () => {
     const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
     if (!projectId) {
       logger.error("No project ID found");
