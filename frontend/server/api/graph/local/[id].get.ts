@@ -77,19 +77,10 @@ export async function getLocalGraph(
     regions,
   );
 
-  // Replicate interestingNodes filtering from frontend
   const nodesAll = getNodes(nodeGroupsRaw, nodesNoStats);
-  const interestingNodes = Object.fromEntries(
-    Object.entries(nodesAll).filter(([_, node]) => {
-      if (node.type === "rect") {
-        return node.stats.people > 0;
-      }
-      return true;
-    }),
-  );
 
   // Actually perform BFS from backend
-  const localNodes = getGraphBFS(focusIds, distance, edges, interestingNodes);
+  const localNodes = getGraphBFS(focusIds, distance, edges, nodesAll);
   const validLocalIds = new Set(Object.keys(localNodes));
 
   // Determine local edges
