@@ -466,6 +466,7 @@ class Pipeline(typing.Generic[Output]):
     """
 
     filename: str | None | property
+    volatile: bool = False
     nested: int
     format: Formats = "jsonl"
     dtype: dict[str, Any] | None = None
@@ -555,7 +556,7 @@ class Pipeline(typing.Generic[Output]):
             return True
 
         for dep_name, dep in self.dependencies.items():
-            if dep.filename is None:
+            if dep.volatile:
                 print(f"Dependency {self.pipeline_name} is volatile, skipping")
                 continue
 
