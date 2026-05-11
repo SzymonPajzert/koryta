@@ -107,7 +107,7 @@ class KorytaPeople(Pipeline):
 
     def __init__(self, date: str | None = None) -> None:
         super().__init__()
-        self.date = date
+        self.date = date or "2026-05-11"
 
     @memoized_property
     def filename(self) -> str:
@@ -124,12 +124,17 @@ class KorytaPeople(Pipeline):
 
         for data in tqdm(df.to_dict(orient="records")):
             if data.get("type") == "person":
+                votes_interesting = (
+                    data.get("stats", {}).get("votes", {}).get("interesting", None)
+                )
                 ctx.io.output_entity(
                     Person(
                         full_name=data.get("name", ""),
-                        party=data.get("parties", [None])[0],
+                        parties=data.get("parties", []),
                         id=data["id"],
                         data=data,
+                        is_public=data.get("stats", {}).get("isApproved", False),
+                        votes_interesting=votes_interesting,
                     )
                 )
 

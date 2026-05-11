@@ -9,8 +9,10 @@ class Koryta:
 
     id: str
     full_name: str
-    party: str
+    parties: list[str]
     data: dict
+    is_public: bool = False
+    votes_interesting: int | None = None
 
 
 @dataclass
