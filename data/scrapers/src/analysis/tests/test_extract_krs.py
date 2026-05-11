@@ -210,6 +210,8 @@ def test_extract_by_krs():
         approved = False
         recent = False
         ignore_elections = False
+        currently_employed = False
+        all = False
 
     extract.args = MockArgs()
 

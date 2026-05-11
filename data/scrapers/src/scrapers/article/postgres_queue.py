@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool  # type: ignore
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
@@ -165,8 +165,7 @@ class PostgresCrawlQueue(CrawlQueue):
             )
             if rows:
                 normalized = [
-                    (self._normalize_url(row.domain), row.reason)
-                    for row in rows
+                    (self._normalize_url(row.domain), row.reason) for row in rows
                 ]
                 transaction.executemany(
                     "INSERT INTO blocked_domains (domain, reason) VALUES (%s, %s) "
@@ -316,7 +315,7 @@ class PostgresCrawlQueue(CrawlQueue):
                         max_attempts,
                     )
                     raise
-                backoff = 0.1 * 2 ** attempt
+                backoff = 0.1 * 2**attempt
                 logger.warning(
                     "Deadlock detected while inserting URLs (attempt %d/%d). "
                     "Retrying after %.2fs. Error: %s",
