@@ -111,11 +111,18 @@ class Extract(Pipeline):
             required=False,
             action=argparse.BooleanOptionalAction,
         )
+        parser.add_argument(
+            "--all",
+            help="Extract all people",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
         args, _ = parser.parse_known_args()
 
-        if not args.region and not args.krss and not args.approved:
+        if not args.region and not args.krss and not args.approved and not args.all:
             raise ValueError(
-                "[Extract]: Either --region or --krs or --approved must be provided"
+                "[Extract]: Needed one of: --region, --krs, --approved, --all"
             )
 
         return args
@@ -131,6 +138,10 @@ class Extract(Pipeline):
     @property
     def approved(self) -> bool:
         return self.args.approved
+
+    @property
+    def all(self) -> bool:
+        return self.args.all
 
     @property
     def recent(self) -> bool:
@@ -231,11 +242,14 @@ class Extract(Pipeline):
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
         auto_approved = people.apply(self.auto_approved_func(), axis=1)
+        use_all = 1 if self.all else 0
 
         people["total_elections"] = people["elections"].apply(list_length)
         people["total_employments"] = people["employment"].apply(list_length)
         # TODO control if we want to have both of them or one of them satisfied
-        relevant = (relevant_employment * relevant_elections + auto_approved) > 0
+        relevant = (
+            relevant_employment * relevant_elections + auto_approved + use_all
+        ) > 0
         people["relevance_ratio"] = (relevant_employment + relevant_elections) / (
             people["total_elections"] + people["total_employments"]
         )
