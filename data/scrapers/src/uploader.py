@@ -1,13 +1,17 @@
 import argparse
 import json
+import os
 import sys
 import time
 
+import firebase_admin
 import numpy as np
 import requests
+from firebase_admin import firestore
 
 from analysis.interesting import Companies
 from conductor import setup_context
+from entities.composite import PersonScore
 from scrapers.stores import iterate_pipeline_dict
 from stores.auth import authenticate_user
 
@@ -29,11 +33,14 @@ def parse_args():
     parser.add_argument("--submit", action="store_true", help="Submit data to the API")
     parser.add_argument(
         "--type",
-        choices=["person", "company", "region"],
+        choices=["person", "company", "region", "score"],
         help="Entity type to query",
     )
     parser.add_argument("--region", type=str, help="Filter by teryt prefix (e.g. 3061)")
     parser.add_argument("--krs", type=str, help="Filter by KRS and all its descendants")
+    parser.add_argument(
+        "--database", type=str, default="koryta-pl", help="Firebase Database ID"
+    )
     parser.add_argument(
         "--limit", type=int, help="Maximum number of entities to upload."
     )
@@ -77,23 +84,80 @@ def company_payloads():
     return {c["krs"]: c for c in iterate_pipeline_dict(df)}
 
 
+class Firestore:
+    def __init__(self, args):
+        project_id = getattr(args, "project", None)
+        if not args.prod or args.endpoint.startswith("http://localhost"):
+            os.environ["FIRESTORE_EMULATOR_HOST"] = "localhost:8080"
+            if not project_id:
+                try:
+                    resp = requests.get("http://127.0.0.1:4000/api/config", timeout=2)
+                    if resp.status_code == 200:
+                        project_id = resp.json().get("projectId")
+                except Exception as e:
+                    print(
+                        f"Warning: Could not detect emulator project ID: {e}",
+                        file=sys.stderr,
+                    )
+                if not project_id:
+                    project_id = "demo-koryta-pl"
+
+        options = {}
+        if project_id:
+            options["projectId"] = project_id
+
+        try:
+            app = firebase_admin.get_app("uploader")
+        except ValueError:
+            app = firebase_admin.initialize_app(options=options, name="uploader")
+
+        database_id = getattr(args, "database", "koryta-pl")
+        self.db = firestore.client(app=app, database_id=database_id)
+        self.user_id = "pipeline"
+
+    def submit_score(self, p: dict | PersonScore):
+        if isinstance(p, dict):
+            p = PersonScore(**p)
+
+        print(
+            f"Uploading score for {p.name} (nodeId: {p.node_id})...",
+            end=" ",
+            file=sys.stderr,
+        )
+
+        doc_ref = self.db.collection("votes").document(f"{p.node_id}_{self.user_id}")
+        doc_ref.set(
+            {
+                "nodeId": p.node_id,
+                "userUid": self.user_id,
+                "categoryVotes": {"interesting": p.score},
+            },
+            merge=True,
+        )
+        print(f"  OK: {doc_ref.id}", file=sys.stderr)
+
+
 class Uploader:
     def __init__(self, args, companies=None):
         self.args = args
-        if companies is None:
-            self.company_payloads = company_payloads()
-        else:
-            self.company_payloads = companies
 
-        if not args.prod and args.endpoint.startswith("http://localhost"):
-            token = "test-token"
+        if args.type in ["score"]:
+            self.firestore = Firestore(args)
         else:
-            token = authenticate_user(args.endpoint)
+            if companies is None:
+                self.company_payloads = company_payloads()
+            else:
+                self.company_payloads = companies
 
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-        }
+            if not args.prod and args.endpoint.startswith("http://localhost"):
+                token = "test-token"
+            else:
+                token = authenticate_user(args.endpoint)
+
+            self.headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            }
 
     def submit_payload(self, url, payload, fail=True, verbose=False):
         print(
@@ -166,6 +230,9 @@ class Uploader:
                 self.check_success(
                     self.submit_company(mapped_payload["krs"], mapped_payload)
                 )
+            elif self.args.type == "score":
+                self.firestore.submit_score(payload)
+                self.success_count += 1
             else:
                 current_target_url = f"{self.args.endpoint}/api/ingest/person"
                 resp = self.check_success(
