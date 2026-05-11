@@ -5,7 +5,12 @@ export default defineVitestConfig({
   test: {
     environment: "nuxt",
     setupFiles: ["./tests/polyfill.ts", "./tests/setup.ts"],
-    exclude: ["node_modules", "tests/integration/**", "tests/e2e/**"],
+    exclude: [
+      "node_modules",
+      "functions/node_modules",
+      "tests/integration/**",
+      "tests/e2e/**",
+    ],
     coverage: {
       enabled: true,
     },
