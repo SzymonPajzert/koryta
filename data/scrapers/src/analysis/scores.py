@@ -111,4 +111,6 @@ class PeopleScores(Pipeline):
 
         df = pd.DataFrame.from_records(records)
         df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
+        df["score"] /= df["score"].max()
+        df["score"] *= 5
         return df

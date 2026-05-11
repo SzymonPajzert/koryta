@@ -1,9 +1,9 @@
-from analysis.company_scores import CompanyScores, PeopleScores
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
 from analysis.payloads import PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
+from analysis.scores import CompanyScores, PeopleScores
 from analysis.stats import Statistics
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.kmgp.people import PeopleKMGP
