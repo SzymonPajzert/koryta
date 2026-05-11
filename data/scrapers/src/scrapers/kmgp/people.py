@@ -4,7 +4,7 @@ import re
 import typing
 from dataclasses import dataclass
 
-from entities.composite import Company, Election, Person
+from entities.composite import Company, Election, Person, Source
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import CloudStorage, DownloadableFile, Pipeline
@@ -142,6 +142,6 @@ class PeopleKMGP(Pipeline[Person]):
                     elections=self.lookup_election(payload.name, payload.teryt),
                     companies=self.lookup_companies(payload.teryt, payload.entity_name),
                     # TODO we need to download it and mirror it just in case.
-                    sources=[payload.source],
+                    sources=[Source(url=payload.source)],
                 )
             )

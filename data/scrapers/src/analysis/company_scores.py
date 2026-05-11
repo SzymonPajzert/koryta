@@ -63,7 +63,7 @@ class CompanyScores(Pipeline):
             return pd.DataFrame(columns=["krs", "sum_score"])
 
         df = pd.DataFrame.from_records(records)
-        scores_df = df.groupby("krs", as_index=False)["score"].sum()
+        scores_df = df.groupby("krs", as_index=False)[["score"]].sum()
         scores_df = scores_df.rename(columns={"score": "sum_score"})
 
         return scores_df
