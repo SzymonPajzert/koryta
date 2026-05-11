@@ -1,6 +1,9 @@
+import dataclasses
+
 import pandas as pd
 
 from analysis.payloads.person import PeoplePayloads
+from entities.composite import PersonScore
 from scrapers.koryta.download import KorytaPeople
 from scrapers.stores import Context, Pipeline
 
@@ -74,43 +77,63 @@ class PeopleScores(Pipeline):
 
     company_scores: CompanyScores
     people_payloads: PeoplePayloads
+    people_koryta: KorytaPeople
 
     def process(self, ctx: Context):
         company_scores_df = self.company_scores.read_or_process(ctx)
         people_df = self.people_payloads.read_or_process(ctx)
+        koryta_people_df = self.people_koryta.read_or_process(ctx)
 
         company_score_map = dict(
             zip(company_scores_df["krs"], company_scores_df["sum_score"])
         )
+        name_to_node_id: dict[str, str] = dict(
+            zip(koryta_people_df["full_name"], koryta_people_df["id"])
+        )
 
         records = []
         for _, row in people_df.iterrows():
-            person_name = row.get("name")
-            companies = row.get("companies", [])
-            total_person_score = 0
-
-            if (
-                isinstance(companies, list)
-                or isinstance(companies, pd.Series)
-                or hasattr(companies, "__iter__")
-            ):
-                for company in companies:
-                    krs = None
-                    if isinstance(company, dict):
-                        krs = company.get("krs")
-                    else:
-                        krs = getattr(company, "krs", None)
-
-                    if krs and krs in company_score_map:
-                        total_person_score += company_score_map[krs]
-
-            records.append({"name": person_name, "score": total_person_score})
+            person_name = str(row.get("name"))
+            node_id = name_to_node_id.get(person_name)
+            total_score = self.total_person_score(row, company_score_map)
+            if node_id is not None and total_score > 0:
+                records.append(
+                    dataclasses.asdict(
+                        PersonScore(
+                            node_id=node_id,
+                            name=str(person_name),
+                            score=total_score,
+                        )
+                    )
+                )
 
         if not records:
-            return pd.DataFrame(columns=["name", "score"])
+            return pd.DataFrame(columns=["node_id", "name", "score"])
 
         df = pd.DataFrame.from_records(records)
         df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
         df["score"] /= df["score"].max()
         df["score"] *= 5
+        df["score"] = df["score"].round()
         return df
+
+    def total_person_score(self, row, company_score_map):
+        companies = row.get("companies", [])
+        total_person_score = 0
+
+        if (
+            isinstance(companies, list)
+            or isinstance(companies, pd.Series)
+            or hasattr(companies, "__iter__")
+        ):
+            for company in companies:
+                krs = None
+                if isinstance(company, dict):
+                    krs = company.get("krs")
+                else:
+                    krs = getattr(company, "krs", None)
+
+                if krs and krs in company_score_map:
+                    total_person_score += company_score_map[krs]
+
+        return total_person_score

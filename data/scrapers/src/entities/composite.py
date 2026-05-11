@@ -37,3 +37,10 @@ class Person:
     wikipedia: str | None = None
     rejestrIo: str | None = None
     autoapprove: bool = False
+
+
+@dataclass
+class PersonScore:
+    node_id: str
+    name: str
+    score: float
