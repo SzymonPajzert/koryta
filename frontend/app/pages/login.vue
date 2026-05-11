@@ -99,15 +99,17 @@ const {
 } = useAuthState();
 
 const user = ref<User | null>();
-onAuthStateChanged(auth, (userIn) => {
-  user.value = userIn;
-  if (userIn) {
-    console.log("User logged in:", userIn.uid, idToken.value, userIn.email);
-    set(dbRef(db, `user/${userIn.uid}/displayName`), userIn.displayName);
-    set(dbRef(db, `user/${userIn.uid}/email`), userIn.email);
-    set(dbRef(db, `user/${userIn.uid}/photoURL`), userIn.photoURL);
-  }
-});
+if (auth) {
+  onAuthStateChanged(auth, (userIn) => {
+    user.value = userIn;
+    if (userIn) {
+      console.log("User logged in:", userIn.uid, idToken.value, userIn.email);
+      set(dbRef(db, `user/${userIn.uid}/displayName`), userIn.displayName);
+      set(dbRef(db, `user/${userIn.uid}/email`), userIn.email);
+      set(dbRef(db, `user/${userIn.uid}/photoURL`), userIn.photoURL);
+    }
+  });
+}
 
 const logoutForced = async () => {
   await logout();
