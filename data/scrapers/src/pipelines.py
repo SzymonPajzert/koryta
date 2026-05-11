@@ -1,3 +1,4 @@
+from analysis.company_scores import CompanyScores
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
@@ -21,6 +22,7 @@ PIPELINES = [
     CompaniesKRS,
     Companies,
     CompaniesKMGP,
+    CompanyScores,
     Extract,
     KorytaDiffer,
     KorytaPeople,
