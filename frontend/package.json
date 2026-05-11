@@ -27,6 +27,7 @@
     "backstop:approve": "backstop approve",
     "test:visual": "start-server-and-test dev:build http://localhost:3000 'backstop test'",
     "test:playwright": "start-server-and-test dev:local http://127.0.0.1:3000 'playwright test'",
+    "test:playwright:prod": "start-server-and-test dev:prod-data http://127.0.0.1:3000 'playwright test tests/e2e/private_visibility.spec.ts'",
     "test": "npm run test:ci && npm run test:e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

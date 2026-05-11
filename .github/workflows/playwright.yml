@@ -32,7 +32,7 @@ jobs:
         run: npm ci
 
       - name: Install Functions Dependencies
-        working-directory: functions
+        working-directory: frontend/functions
         run: npm ci
 
       - name: Install Java (for Emulators)
