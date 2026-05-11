@@ -88,9 +88,7 @@ describe("shared/stats.ts", () => {
         { target: "node4", type: "election", revision_id: "rev2" } as Edge, // approved election
       ];
 
-      const getNodeName = (id: string) => `Name for ${id}`;
-
-      const stats = computeEdgeStats(edges, getNodeName);
+      const stats = computeEdgeStats(edges);
 
       // 'all' expectations
       expect(stats.all.targetNodeIds).toEqual([
@@ -102,6 +100,36 @@ describe("shared/stats.ts", () => {
 
       // 'approved' expectations
       expect(stats.approved.targetNodeIds).toEqual(["node2", "node4"]);
+    });
+
+    it("should include transitive targets for companies", () => {
+      const edges: Edge[] = [
+        { target: "company1", type: "employed", revision_id: "rev1" } as Edge,
+        { target: "company2", type: "employed" } as Edge, // unapproved
+      ];
+
+      const transitiveTargets = {
+        company1: ["region-A", "region-B"],
+        company2: ["region-C"],
+      };
+
+      const stats = computeEdgeStats(edges, transitiveTargets);
+
+      // 'all' expectations should include all companies and their regions
+      expect(stats.all.targetNodeIds).toEqual([
+        "company1",
+        "region-A",
+        "region-B",
+        "company2",
+        "region-C",
+      ]);
+
+      // 'approved' expectations should only include approved companies and their regions
+      expect(stats.approved.targetNodeIds).toEqual([
+        "company1",
+        "region-A",
+        "region-B",
+      ]);
     });
   });
 
@@ -117,12 +145,22 @@ describe("shared/stats.ts", () => {
         { categoryVotes: { quality: 5 } } as unknown as VoteDocument,
       ];
 
-      const stats = computeNodeStats(true, edges, notes, votes);
+      const transitiveTargets = {
+        t1: ["region-XYZ"],
+      };
+
+      const stats = computeNodeStats(
+        true,
+        edges,
+        notes,
+        votes,
+        transitiveTargets,
+      );
 
       expect(stats.isApproved).toBe(true);
       expect(stats.notesCount).toBe(3);
       expect(stats.votes.quality).toBe(5);
-      expect(stats.edges.all.targetNodeIds).toEqual(["t1"]);
+      expect(stats.edges.all.targetNodeIds).toEqual(["t1", "region-XYZ"]);
     });
   });
 });

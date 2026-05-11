@@ -42,7 +42,37 @@ export const onEdgeWritten = onDocumentWritten(
         .get();
       const allEdges = edgesSnapshot.docs.map((doc) => doc.data() as Edge);
 
-      const edgeStats = computeEdgeStats(allEdges);
+      const targetIds = [
+        ...new Set(allEdges.map((e) => e.target).filter(Boolean)),
+      ] as string[];
+      const transitiveTargets: Record<string, string[]> = {};
+
+      if (targetIds.length > 0) {
+        // Chunk targetIds into groups of 30 for the 'in' query
+        for (let i = 0; i < targetIds.length; i += 30) {
+          const chunk = targetIds.slice(i, i + 30);
+          const ownsEdgesSnapshot = await db
+            .collection("edges")
+            .where("target", "in", chunk)
+            .where("type", "==", "owns")
+            .get();
+
+          for (const doc of ownsEdgesSnapshot.docs) {
+            const edge = doc.data() as Edge;
+            if (edge.source && edge.target) {
+              if (!transitiveTargets[edge.target]) {
+                transitiveTargets[edge.target] = [];
+              }
+              // Ideally we would verify edge.source is a region here.
+              // Assuming all 'owns' edges targeting a company are from regions/parent companies.
+              // For now, any 'owns' source will be included.
+              transitiveTargets[edge.target].push(edge.source);
+            }
+          }
+        }
+      }
+
+      const edgeStats = computeEdgeStats(allEdges, transitiveTargets);
 
       const nodeRef = db.collection("nodes").doc(sourceId);
       await nodeRef.update({

@@ -41,15 +41,29 @@ export function computeVoteStats(
   return aggregatedVotes;
 }
 
-export function computeEdgeStats(nodeEdges: Edge[]) {
+export function computeEdgeStats(
+  nodeEdges: Edge[],
+  transitiveTargets: Record<string, string[]> = {},
+) {
   const approvedEdges = nodeEdges.filter((e) => !!e.revision_id);
 
-  const allTargetNodeIds = [...new Set(nodeEdges.map((e) => e.target))].filter(
-    Boolean,
-  );
+  const allTargetNodeIds = [
+    ...new Set(
+      nodeEdges.flatMap((e) => [
+        e.target,
+        ...(transitiveTargets[e.target] || []),
+      ]),
+    ),
+  ].filter(Boolean);
+
   const approvedTargetNodeIds = [
-    ...new Set(approvedEdges.map((e) => e.target)),
-  ];
+    ...new Set(
+      approvedEdges.flatMap((e) => [
+        e.target,
+        ...(transitiveTargets[e.target] || []),
+      ]),
+    ),
+  ].filter(Boolean);
 
   return {
     all: {
@@ -68,6 +82,7 @@ export function computeNodeStats(
   nodeEdges: Edge[],
   nodeNotes: Note[],
   nodeVotes: VoteDocument[],
+  transitiveTargets: Record<string, string[]> = {},
 ): NodeStats {
   return {
     isApproved: nodeIsApproved,
@@ -76,6 +91,6 @@ export function computeNodeStats(
       .map((n) => n.sources?.length || 0)
       .reduce((a, b) => a + b, 0),
     votes: computeVoteStats(nodeVotes),
-    edges: computeEdgeStats(nodeEdges),
+    edges: computeEdgeStats(nodeEdges, transitiveTargets),
   };
 }

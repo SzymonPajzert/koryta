@@ -35,6 +35,19 @@ export default defineEventHandler(async () => {
     vote.nodeId,
   ]);
 
+  const placeToRegions: Record<string, string[]> = {};
+  for (const edge of edges) {
+    if (
+      edge.type === "owns" &&
+      edge.source &&
+      edge.target &&
+      nodesRecord[edge.source]?.type === "region"
+    ) {
+      if (!placeToRegions[edge.target]) placeToRegions[edge.target] = [];
+      placeToRegions[edge.target]!.push(edge.source);
+    }
+  }
+
   const chunks = [];
   let currentBatch = db.batch();
   let operationCount = 0;
@@ -44,11 +57,19 @@ export default defineEventHandler(async () => {
     const nodeNotes = notesByNode[node.id] || [];
     const nodeVotes = votesByNode[node.id] || [];
 
+    const transitiveTargets: Record<string, string[]> = {};
+    for (const edge of nodeEdges) {
+      if (edge.target && placeToRegions[edge.target]) {
+        transitiveTargets[edge.target] = placeToRegions[edge.target]!;
+      }
+    }
+
     const stats = computeNodeStats(
       !!node.data.revision_id,
       nodeEdges,
       nodeNotes,
       nodeVotes,
+      transitiveTargets,
     );
 
     const nodeRef = db.collection("nodes").doc(node.id);
