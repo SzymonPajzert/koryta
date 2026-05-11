@@ -1,1 +1,0 @@
-../../frontend/shared/model.ts

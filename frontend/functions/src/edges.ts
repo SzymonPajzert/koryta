@@ -2,14 +2,13 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
+import { computeEdgeStats } from "./stats";
+import type { Edge } from "./model";
 
 // Ensure the Firebase Admin SDK is initialized
 if (getApps().length === 0) {
   initializeApp();
 }
-
-import { computeEdgeStats } from "./stats";
-import type { Edge } from "./model";
 
 export const onEdgeWritten = onDocumentWritten(
   {

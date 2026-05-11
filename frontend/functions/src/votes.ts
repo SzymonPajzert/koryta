@@ -49,7 +49,9 @@ export const onVoteWritten = onDocumentWritten(
         .collection("votes")
         .where("nodeId", "==", nodeId)
         .get();
-      const allVotes = votesSnapshot.docs.map((doc) => doc.data() as VoteDocument);
+      const allVotes = votesSnapshot.docs.map(
+        (doc) => doc.data() as VoteDocument,
+      );
 
       const voteStats = computeVoteStats(allVotes);
 

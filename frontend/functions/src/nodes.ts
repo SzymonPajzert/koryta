@@ -27,11 +27,16 @@ export const onNodeWritten = onDocumentWritten(
           await event.data?.after?.ref?.update({
             "stats.isApproved": afterRev,
           });
-          logger.info(`Updated stats.isApproved to ${afterRev} for node: ${event.params.nodeId}`);
+          logger.info(
+            `Updated stats.isApproved to ${afterRev} for node: ${event.params.nodeId}`,
+          );
         } catch (error) {
-          logger.error(`Failed to update stats.isApproved for node: ${event.params.nodeId}`, error);
+          logger.error(
+            `Failed to update stats.isApproved for node: ${event.params.nodeId}`,
+            error,
+          );
         }
       }
     }
-  }
+  },
 );

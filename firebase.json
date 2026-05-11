@@ -1,20 +1,14 @@
 {
   "hosting": {
     "public": "dist",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
         "source": "**",
         "destination": "/index.html"
       }
     ],
-    "predeploy": [
-      "npm run build"
-    ]
+    "predeploy": ["npm run build"]
   },
   "emulators": {
     "firestore": {
@@ -52,7 +46,7 @@
   },
   "functions": [
     {
-      "source": "functions",
+      "source": "frontend/functions",
       "codebase": "default",
       "ignore": [
         "node_modules",
@@ -61,9 +55,7 @@
         "firebase-debug.*.log",
         "*.local"
       ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run build"
-      ]
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
     }
   ],
   "apphosting": {
