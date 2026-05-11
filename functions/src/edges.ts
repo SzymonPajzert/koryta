@@ -9,6 +9,7 @@ if (getApps().length === 0) {
 }
 
 import { computeEdgeStats } from "./stats";
+import type { Edge } from "./model";
 
 export const onEdgeWritten = onDocumentWritten(
   {
@@ -40,37 +41,9 @@ export const onEdgeWritten = onDocumentWritten(
         .collection("edges")
         .where("source", "==", sourceId)
         .get();
-      const allEdges = edgesSnapshot.docs.map((doc) => doc.data());
+      const allEdges = edgesSnapshot.docs.map((doc) => doc.data() as Edge);
 
-      const allElectionTargetIds = [
-        ...new Set(
-          allEdges.filter((e) => e.type === "election").map((e) => e.target),
-        ),
-      ].filter(Boolean);
-
-      const nodeCache: Record<string, string> = {};
-
-      const fetchNodeNames = async (ids: string[]) => {
-        const toFetch = ids.filter((id) => !nodeCache[id]);
-        if (toFetch.length === 0) return;
-        const chunks = [];
-        for (let i = 0; i < toFetch.length; i += 100) {
-          chunks.push(toFetch.slice(i, i + 100));
-        }
-        for (const chunk of chunks) {
-          const refs = chunk.map((id) => db.collection("nodes").doc(id));
-          const snapshots = await db.getAll(...refs);
-          for (const snap of snapshots) {
-            if (snap.exists) {
-              nodeCache[snap.id] = snap.data()?.name || "";
-            }
-          }
-        }
-      };
-
-      await fetchNodeNames(allElectionTargetIds);
-
-      const edgeStats = computeEdgeStats(allEdges, (id) => nodeCache[id]);
+      const edgeStats = computeEdgeStats(allEdges);
 
       const nodeRef = db.collection("nodes").doc(sourceId);
       await nodeRef.update({

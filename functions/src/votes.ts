@@ -3,6 +3,7 @@ import * as logger from "firebase-functions/logger";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { computeVoteStats } from "./stats";
+import type { VoteDocument } from "./model";
 
 // Ensure the Firebase Admin SDK is initialized
 if (getApps().length === 0) {
@@ -48,7 +49,7 @@ export const onVoteWritten = onDocumentWritten(
         .collection("votes")
         .where("nodeId", "==", nodeId)
         .get();
-      const allVotes = votesSnapshot.docs.map((doc) => doc.data());
+      const allVotes = votesSnapshot.docs.map((doc) => doc.data() as VoteDocument);
 
       const voteStats = computeVoteStats(allVotes);
 
