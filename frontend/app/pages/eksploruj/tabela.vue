@@ -25,7 +25,7 @@
       />
 
       <div v-if="focusedPerson" class="pa-4 pt-0">
-        <NoteEditor :node-id="focusedPerson.id" />
+        <NoteEditor :key="focusedPerson.id" :node-id="focusedPerson.id" />
         <v-divider class="my-4" />
         <EntityDetailView
           :key="focusedPerson.id"
