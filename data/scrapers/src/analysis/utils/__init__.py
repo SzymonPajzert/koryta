@@ -61,7 +61,9 @@ def append_nice_history(ctx: Context, df, company_names, teryt: Teryt):
             start_employed: date = date.fromisoformat(emp_end_str) - duration
             if first_work is None or start_employed < first_work:
                 first_work = start_employed
-            if last_employed is None or emp["employed_end"] > str(last_employed):
+            if last_employed is None or (
+                emp["employed_end"] and emp["employed_end"] > str(last_employed)
+            ):
                 last_employed = emp["employed_end"]
             employed_total += duration
 
