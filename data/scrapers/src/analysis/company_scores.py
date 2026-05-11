@@ -38,8 +38,6 @@ class CompanyScores(Pipeline):
 
     def process(self, ctx: Context):
         scores = self.person_scores(ctx)
-        print(scores)
-
         people_df = self.people_payloads.read_or_process(ctx)
 
         records = []
@@ -69,3 +67,48 @@ class CompanyScores(Pipeline):
         scores_df = scores_df.rename(columns={"score": "sum_score"})
 
         return scores_df
+
+
+class PeopleScores(Pipeline):
+    filename = "people_scores"
+
+    company_scores: CompanyScores
+    people_payloads: PeoplePayloads
+
+    def process(self, ctx: Context):
+        company_scores_df = self.company_scores.read_or_process(ctx)
+        people_df = self.people_payloads.read_or_process(ctx)
+
+        company_score_map = dict(
+            zip(company_scores_df["krs"], company_scores_df["sum_score"])
+        )
+
+        records = []
+        for _, row in people_df.iterrows():
+            person_name = row.get("name")
+            companies = row.get("companies", [])
+            total_person_score = 0
+
+            if (
+                isinstance(companies, list)
+                or isinstance(companies, pd.Series)
+                or hasattr(companies, "__iter__")
+            ):
+                for company in companies:
+                    krs = None
+                    if isinstance(company, dict):
+                        krs = company.get("krs")
+                    else:
+                        krs = getattr(company, "krs", None)
+
+                    if krs and krs in company_score_map:
+                        total_person_score += company_score_map[krs]
+
+            records.append({"name": person_name, "score": total_person_score})
+
+        if not records:
+            return pd.DataFrame(columns=["name", "score"])
+
+        df = pd.DataFrame.from_records(records)
+        df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
+        return df
