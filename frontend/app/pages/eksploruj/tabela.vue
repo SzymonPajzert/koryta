@@ -40,12 +40,15 @@
         {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
       </h1>
 
+      <ExploreLoginBanner v-if="!user" :hidden-count="hiddenCount" />
+
       <FormEksplorujTabelaFilters
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
         v-model:teryt="filterTeryt"
         :available-parties="availableParties"
         :available-regions="availableRegions"
+        :show-visibility="!!user"
       />
 
       <v-card class="table-card">
@@ -215,6 +218,7 @@ import { useListWithStats } from "~/composables/entity/listWithStats";
 import { parties } from "~~/shared/misc";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
+import { useCurrentUser } from "vuefire";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -244,18 +248,50 @@ watch(
   },
 );
 
-const headers = [
-  { title: "Imię i nazwisko", key: "name", sortable: true },
-  { title: "Partie", key: "parties", sortable: false },
-  { title: "Firmy", key: "companies", sortable: false },
-  { title: "Wybory", key: "elections", sortable: false },
-  { title: "Lata pracy", key: "experience", sortable: true },
-  { title: "Notatki", key: "notesCount", sortable: true },
-  { title: "Głosy łącznie", key: "votes.interesting", sortable: true },
-  { title: "Twój głos", key: "userVote", sortable: false },
-  { title: "Widoczność", key: "visibility", sortable: true },
-  { title: "Eksploruj", key: "explore", sortable: false },
-];
+const user = useCurrentUser();
+
+const headers = computed(() => {
+  const baseHeaders = [
+    { title: "Imię i nazwisko", key: "name", sortable: true },
+    { title: "Partie", key: "parties", sortable: false },
+    { title: "Firmy", key: "companies", sortable: false },
+    { title: "Wybory", key: "elections", sortable: false },
+    { title: "Lata pracy", key: "experience", sortable: true },
+    { title: "Notatki", key: "notesCount", sortable: true },
+    { title: "Głosy łącznie", key: "votes.interesting", sortable: true },
+    { title: "Twój głos", key: "userVote", sortable: false },
+  ];
+  if (user.value) {
+    baseHeaders.push({
+      title: "Widoczność",
+      key: "visibility",
+      sortable: true,
+    });
+  }
+  baseHeaders.push({ title: "Eksploruj", key: "explore", sortable: false });
+  return baseHeaders;
+});
+
+// TODO calculate the hidden count
+const hiddenCount = computed(() => {
+  let stats;
+  if (region.value) {
+    stats = regions.value?.[region.value[0]]?.stats;
+  } else if (company.value) {
+    stats = places.value?.[company.value[0]]?.stats;
+  }
+
+  if (
+    stats?.edges?.all?.targetNodeIds &&
+    stats?.edges?.approved?.targetNodeIds
+  ) {
+    const diff =
+      stats.edges.all.targetNodeIds.length -
+      stats.edges.approved.targetNodeIds.length;
+    return diff > 0 ? diff : 0;
+  }
+  return 0;
+});
 
 const { entities: places } = useEntities("place");
 const { entities: regions } = useEntities("region");
