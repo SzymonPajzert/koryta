@@ -1,6 +1,6 @@
 <template>
   <v-row class="mb-4">
-    <v-col cols="12" md="4">
+    <v-col v-if="showVisibility" cols="12" md="4">
       <v-select
         v-model="visibility"
         :items="[
@@ -14,7 +14,7 @@
         hide-details
       />
     </v-col>
-    <v-col cols="12" md="4">
+    <v-col cols="12" :md="showVisibility ? 4 : 6">
       <v-autocomplete
         v-model="party"
         :items="availableParties"
@@ -28,7 +28,7 @@
         closable-chips
       />
     </v-col>
-    <v-col cols="12" md="4">
+    <v-col cols="12" :md="showVisibility ? 4 : 6">
       <v-autocomplete
         v-model="teryt"
         :items="availableRegions"
@@ -47,8 +47,14 @@ const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
 const teryt = defineModel<string | null>("teryt");
 
-defineProps<{
-  availableParties: { title: string; value: string }[] | string[];
-  availableRegions: { title: string; value: string }[];
-}>();
+withDefaults(
+  defineProps<{
+    availableParties: { title: string; value: string }[] | string[];
+    availableRegions: { title: string; value: string }[];
+    showVisibility?: boolean;
+  }>(),
+  {
+    showVisibility: true,
+  },
+);
 </script>
