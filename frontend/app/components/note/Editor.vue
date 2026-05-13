@@ -5,9 +5,9 @@
     <v-card-text v-if="!userNote && !isEditing">
       <div>
         <p class="text-body-1 mb-4">
-          Notatki pozwalają na prywatne gromadzenie informacji, powiązań i
-          źródeł, a inni użytkownicy mogą przeglądać twoje notatki. Dodaj własną
-          notatkę do tego obiektu!
+          Wiesz więcej na temat tej osoby? Podziel się dodatkowymi informacjami
+          i dodaj linki do źródeł. Twoje notatki będą publiczne - w ten sposób
+          pomożesz innym w znajdowaniu powiązań.
         </p>
       </div>
     </v-card-text>
