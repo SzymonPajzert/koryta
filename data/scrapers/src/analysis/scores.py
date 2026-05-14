@@ -1,13 +1,28 @@
+"""
+We have source of truth from two sources:
+node_id -> public - from KorytaPeople
+node_id -> interesting - from KorytaVotes
+
+We can additionally map
+node_id to rejest_io_person_id using KorytaPeople to match them with their companies
+
+We are therefore mapping the person scores to companies
+and then try to spread it again to people
+
+We output final scores along with the most recent votes we aggregated,
+so the uplaoder can diff if we need/have to update the scores or not.
+"""
+
 import dataclasses
 
 import pandas as pd
 
 from analysis.payloads.person import PeoplePayloads
 from entities.composite import PersonScore
-from scrapers.koryta.download import KorytaPeople
+from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.stores import Context, Pipeline
 
-IS_PUBLIC_SCORE = 5
+IS_PUBLIC_SCORE = 3
 
 
 class CompanyScores(Pipeline):
@@ -15,37 +30,64 @@ class CompanyScores(Pipeline):
 
     people_payloads: PeoplePayloads
     people_scored: KorytaPeople
+    people_votes: KorytaVotes
 
-    def person_scores(self, ctx: Context) -> dict[str, int]:
+    def get_person_names(self, ctx: Context) -> dict[str, str]:
+        koryta_people_df = self.people_scored.read_or_process(ctx)
+        return dict(zip(koryta_people_df["id"], koryta_people_df["full_name"]))
+
+    def person_scores(
+        self, ctx: Context, koryta_id_to_name: dict[str, str]
+    ) -> dict[str, int]:
         scores = {}
+
+        for _, row in self.people_votes.read_or_process(ctx).iterrows():
+            person_koryta_id = row.get("person_koryta_id")
+            if not person_koryta_id or person_koryta_id == "":
+                continue
+            person_koryta_id = str(person_koryta_id)
+            interesting = row.get("interesting", 0)
+            if interesting == 0:
+                continue
+
+            scores[koryta_id_to_name[person_koryta_id]] = interesting
+
         for _, row in self.people_scored.read_or_process(ctx).iterrows():
             is_public = row.get("is_public", False)
             if pd.isna(is_public):
                 is_public = False
 
-            votes_interesting = row.get("votes_interesting")
-            if pd.isna(votes_interesting):
-                votes_interesting = 0
-
-            is_public_score = IS_PUBLIC_SCORE if is_public else 0
-            person_score = is_public_score + votes_interesting
-            if person_score == 0:
+            if not is_public:
                 continue
-            try:
-                scores[row["full_name"]] = person_score
-            except KeyError:
-                print(row)
-                raise
+
+            scores[row["full_name"]] = IS_PUBLIC_SCORE
 
         return scores
 
+    @staticmethod
+    def company_aggregate(x) -> pd.Series:
+        if len(x) == 0:
+            return pd.Series({"score": 0})
+
+        any_negative = x["score"].apply(lambda v: v < 0).any()
+        if any_negative:
+            ratio = x["score"].apply(
+                lambda v: 1 if v > 0 else -1 if v < 0 else 0
+            ).sum() / len(x)
+            return pd.Series({"score": ratio})
+
+        return x.sum() / IS_PUBLIC_SCORE
+
     def process(self, ctx: Context):
-        scores = self.person_scores(ctx)
+        person_names = self.get_person_names(ctx)
+        scores = self.person_scores(ctx, person_names)
         people_df = self.people_payloads.read_or_process(ctx)
 
         records = []
         for _, row in people_df.iterrows():
             person_score = scores.get(row["name"], 0)
+            if person_score == 0:
+                continue
 
             companies = row.get("companies", [])
             if (
@@ -66,8 +108,13 @@ class CompanyScores(Pipeline):
             return pd.DataFrame(columns=["krs", "sum_score"])
 
         df = pd.DataFrame.from_records(records)
-        scores_df = df.groupby("krs", as_index=False)[["score"]].sum()
+        scores_df = df.groupby("krs", as_index=False)[["score"]].apply(
+            self.company_aggregate
+        )
         scores_df = scores_df.rename(columns={"score": "sum_score"})
+        scores_df = scores_df.sort_values(by="sum_score", ascending=False).reset_index(
+            drop=True
+        )
 
         return scores_df
 
@@ -115,7 +162,7 @@ class PeopleScores(Pipeline):
         df["score"] /= df["score"].max()
         df["score"] *= 5
         df["score"] = df["score"].round()
-        return df
+        return df.astype({"score": "int32"})
 
     def total_person_score(self, row, company_score_map):
         companies = row.get("companies", [])

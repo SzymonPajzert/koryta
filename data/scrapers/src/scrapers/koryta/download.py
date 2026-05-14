@@ -9,11 +9,9 @@ It defines two main pipelines:
   within them by processing 'edges' data from Firestore.
 """
 
-from matplotlib import category
 import pandas as pd
 from leveldb_export import parse_leveldb_documents  # type: ignore
 from memoized_property import memoized_property  # type:ignore
-from regex import P
 from tqdm import tqdm
 
 from entities.person import Koryta as Person
