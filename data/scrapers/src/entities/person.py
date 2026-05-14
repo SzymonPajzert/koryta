@@ -73,6 +73,14 @@ class Wikipedia:
 
 
 @dataclass
+class PersonVote:
+    """Represents a vote associated with a person."""
+
+    person_koryta_id: str
+    interesting: int | None
+
+
+@dataclass
 class RejestrIOKey:
     """Represents a person from the RejestrIO dataset."""
 
