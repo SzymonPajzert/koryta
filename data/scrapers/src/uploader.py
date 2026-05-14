@@ -120,7 +120,7 @@ class Firestore:
             p = PersonScore(**p)
 
         print(
-            f"Uploading score for {p.name} (nodeId: {p.node_id})...",
+            f"Uploading score {p.score} for {p.name} (nodeId: {p.node_id})...",
             end=" ",
             file=sys.stderr,
         )
