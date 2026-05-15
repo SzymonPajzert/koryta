@@ -42,8 +42,13 @@ def test_upload_payloads_person_shape(mock_ctx):
         [
             {
                 "full_name": "Jan Kowalski",
+                "krs_name": "Jan Kowalski",
+                "pkw_name": "Jan Kowalski",
+                "wiki_name": "Jan Kowalski",
                 "first_name": "Jan",
                 "last_name": "Kowalski",
+                "rejestrio_id": ["123"],
+                "employment": [],
                 "elections": [
                     {
                         "election_type": "sejmu",
@@ -98,7 +103,7 @@ def test_upload_payloads_person_shape(mock_ctx):
     payload = result_df.iloc[0]
     print(f"keys: {payload.keys()}")
     assert payload["name"] == "Jan Kowalski"
-    assert payload["wikipedia_url"] == "https://pl.wikipedia.org/wiki/Jan_Kowalski"
+    assert payload["wikipedia"] == "https://pl.wikipedia.org/wiki/Jan_Kowalski"
     assert len(payload["companies"]) == 1
     assert payload["companies"][0]["krs"] == "0000123456"
     assert payload["companies"][0]["role"] == "Prezes"

@@ -2,6 +2,7 @@ import typing
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 
 from entities.company import Company, ManualKRS, Owner, Source, Wikipedia
 from scrapers.krs.data import CompaniesHardcoded
@@ -20,6 +21,7 @@ class Companies(Pipeline[Company]):
     """
 
     filename = "companies_merged"
+    dtype = {"krs": str, "teryt_code": str}
 
     scraped_companies: CompaniesKRS
     hardcoded_companies: CompaniesHardcoded
@@ -39,7 +41,11 @@ class Companies(Pipeline[Company]):
         graph = self.graph(ctx)
 
         children_of_hardcoded = self.children_of_hardcoded(ctx, graph)
-        wiki_companies = {c.krs: c for c in self.wiki_companies(ctx)}
+        wiki_companies = {
+            str(c.krs).zfill(10): c
+            for c in self.wiki_companies(ctx)
+            if not pd.isna(c.krs)
+        }
         krs_companies = {
             c.krs: c for c in self.scraped_companies.read_or_process_list(ctx)
         }
@@ -51,7 +57,7 @@ class Companies(Pipeline[Company]):
         )
 
         for krs_id in all_krs:
-            if krs_id is None or (isinstance(krs_id, float) and np.isnan(krs_id)):
+            if pd.isna(krs_id):
                 continue
             assert isinstance(krs_id, str), " ".join(
                 [
