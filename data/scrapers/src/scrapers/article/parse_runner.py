@@ -5,8 +5,9 @@ from __future__ import annotations
 import csv
 import logging
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from tqdm import tqdm
 
@@ -15,7 +16,49 @@ from entities.util import NormalizedParse
 from scrapers.article.parse import extract_article_content
 from scrapers.stores import Context, CrawlQueue
 
+if TYPE_CHECKING:
+    pass
+
 _URL_PARSING_CSV = Path(__file__).parent / "test_data" / "url_parsing.csv"
+
+# Per-process GCS client, initialized once per worker process.
+_process_gcs_client = None
+
+
+def _init_worker(storage_type: str) -> None:
+    global _process_gcs_client
+    if storage_type == "gcs":
+        from google.cloud import storage as gcs
+        _process_gcs_client = gcs.Client()
+
+
+def _parse_worker(
+    storage_path: str,
+    storage_type: str,
+    local_output_str: str,
+    uid: str,
+    url: str,
+) -> ParsedArticle:
+    global _process_gcs_client
+    if storage_type == "gcs":
+        from stores.storage import BUCKET  # type: ignore[import]
+        blob = _process_gcs_client.bucket(BUCKET).blob(storage_path)
+        html_bytes = blob.download_as_bytes()
+    else:
+        from stores.config import PROJECT_ROOT  # type: ignore[import]
+        html_bytes = (Path(PROJECT_ROOT) / local_output_str / storage_path).read_bytes()
+
+    result = extract_article_content(html_bytes)
+    pub_date = result.get("publication_date")
+    return ParsedArticle(
+        uid=uid,
+        url=url,
+        storage_path=storage_path,
+        is_article=result.get("is_article"),
+        title=result.get("title"),
+        publication_date=pub_date.isoformat() if pub_date else None,
+        article_content=result.get("article_content", ""),
+    )
 
 
 def _load_test_domains() -> set[str]:
@@ -70,7 +113,9 @@ def run_parse(
     queue: CrawlQueue,
     ctx: Context,
     parse_limit: int,
-    read_html: Callable[[str], bytes],
+    storage_type: str,
+    local_output: Path | None = None,
+    worker_processes: int = 1,
 ) -> None:
     """Fetch done URLs, print stats, parse HTML, emit ParsedArticle entities.
 
@@ -95,27 +140,28 @@ def run_parse(
     _print_coverage(domain_counts, test_domains)
 
     to_parse = all_done[:parse_limit]
-    print(f"\nParsing {len(to_parse)} URLs (limit={parse_limit})...")
+    print(f"\nParsing {len(to_parse)} URLs (limit={parse_limit}, workers={worker_processes})...")
 
+    local_output_str = str(local_output) if local_output else "crawler_output"
     errors = 0
-    for done in tqdm(to_parse, desc="Parsing HTML", unit="page"):
-        try:
-            html_bytes = read_html(done.storage_path)
-            result = extract_article_content(html_bytes)
-            pub_date = result.get("publication_date")
-            ctx.io.output_entity(
-                ParsedArticle(
-                    uid=done.uid,
-                    url=done.url,
-                    storage_path=done.storage_path,
-                    is_article=result.get("is_article"),
-                    title=result.get("title"),
-                    publication_date=pub_date.isoformat() if pub_date else None,
-                    article_content=result.get("article_content", ""),
-                )
-            )
-        except Exception as exc:
-            logging.warning("Failed to parse %s: %s", done.url, exc)
-            errors += 1
+
+    with ProcessPoolExecutor(
+        max_workers=worker_processes,
+        initializer=_init_worker,
+        initargs=(storage_type,),
+    ) as executor:
+        futures = {
+            executor.submit(_parse_worker, done.storage_path, storage_type, local_output_str, done.uid, done.url): done
+            for done in to_parse
+        }
+        with tqdm(total=len(to_parse), desc="Parsing HTML", unit="page") as bar:
+            for future in as_completed(futures):
+                done = futures[future]
+                try:
+                    ctx.io.output_entity(future.result())
+                except Exception as exc:
+                    logging.warning("Failed to parse %s: %s", done.url, exc)
+                    errors += 1
+                bar.update(1)
 
     logging.info("Parsed %d pages (%d errors).", len(to_parse) - errors, errors)

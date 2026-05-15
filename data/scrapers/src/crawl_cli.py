@@ -18,8 +18,7 @@ from scrapers.article.crawler import (
 from scrapers.article.scoring import get_scoring_function
 from scrapers.article.parse_runner import run_parse
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
-from scrapers.stores import BlockedDomain, LocalFile, NewUrl
-from stores.storage import Client as GCSClient
+from scrapers.stores import BlockedDomain, NewUrl
 
 
 def _build_parser() -> ArgumentParser:
@@ -198,24 +197,17 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.parse:
+        worker_processes = max(1, args.worker_threads)
         pg_client = PostgresClient.from_env(max_size=1)
         queue = PostgresCrawlQueue(pg_client)
         ctx, dumper = setup_context(False, crawl_queue=queue)
-        if args.storage_type == "gcs":
-            _gcs = GCSClient()
-            def _read_html(storage_path: str) -> bytes:
-                return (
-                    ctx.io.read_data(_gcs.cached_storage(storage_path, binary=True))
-                    .read_bytes()
-                )
-        else:
-            def _read_html(storage_path: str) -> bytes:
-                return (
-                    ctx.io.read_data(LocalFile(storage_path, "crawler_output"))
-                    .read_bytes()
-                )
         try:
-            run_parse(queue, ctx, args.parse_limit, _read_html)
+            run_parse(
+                queue, ctx, args.parse_limit,
+                storage_type=args.storage_type,
+                local_output=args.local_output if args.storage_type == "local" else None,
+                worker_processes=worker_processes,
+            )
         finally:
             dumper.dump_pandas()
             pg_client.close()
