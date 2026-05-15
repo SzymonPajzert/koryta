@@ -8,25 +8,65 @@ from bs4 import BeautifulSoup, Tag
 
 from util.polish import parse_polish_date
 
+_UTF8_CHARSET_RE = re.compile(rb'charset=["\']?utf-8["\']?', re.I)
+
+
+_NORM_REPLACEMENTS = [
+    ("\xa0", " "),
+    ("\u2026", "..."),
+    ("\u201e", chr(34)),
+    ("\u201c", chr(34)),
+    ("\u201d", chr(34)),
+    ("\u2019", chr(39)),
+]
+
+
+def _desc_in_content(desc: str, content: str) -> bool:
+    def _norm(t: str) -> str:
+        for old, new in _NORM_REPLACEMENTS:
+            t = t.replace(old, new)
+        return " ".join(t.split())
+    return _norm(desc) in _norm(content)
+
+def _make_soup(html_bytes: bytes) -> BeautifulSoup:
+    if _UTF8_CHARSET_RE.search(html_bytes[:2048]):
+        return BeautifulSoup(html_bytes.decode("utf-8", errors="replace"), "html.parser")
+    return BeautifulSoup(html_bytes, "html.parser")
+
+
+def _is_homepage(soup: BeautifulSoup) -> bool:
+    for tag_name, attrs, key in [
+        ("meta", {"property": "og:url"}, "content"),
+        ("link", {"rel": "canonical"}, "href"),
+    ]:
+        tag = soup.find(tag_name, attrs)
+        if isinstance(tag, Tag):
+            href = tag.get(key)
+            if isinstance(href, str):
+                parts = href.split("//", 1)[-1].split("/", 1)
+                if len(parts) < 2 or not parts[1].strip("/"):
+                    return True
+    return False
+
 
 def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
     header = html_bytes[:16]
     if any(header.startswith(sig) for sig in BINARY_SIGNATURES):
         return dict(_EMPTY_RESULT)
 
-    soup = BeautifulSoup(html_bytes, "html.parser")
+    soup = _make_soup(html_bytes)
 
-    title = extract_title_from_meta(soup)
+    title = extract_title_from_meta(soup) or extract_title_from_html_title(soup)
 
     publication_date = (
         extract_date_from_ldjson(soup)
         or extract_date_from_meta_tags(soup)
         or extract_date_from_time_tags(soup)
+        or extract_date_from_text_elements(soup)
     )
 
     article_content = extract_article_text(soup)
 
-    # Prepend meta description when it's a short lead not already in content
     desc = extract_description_from_ldjson(soup)
     if not desc:
         meta_desc = soup.find("meta", attrs={"name": "description"})
@@ -38,15 +78,19 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
             c = og_desc["content"]
             desc = c.strip() if isinstance(c, str) else None
 
+    if desc and "<" in desc:
+        desc = BeautifulSoup(desc, "html.parser").get_text(separator=" ", strip=True)
+        desc = re.sub(r" +", " ", desc).strip()
+
     if (
         desc
         and len(desc) > 40
-        and desc not in article_content
+        and not _desc_in_content(desc, article_content)
         and len(article_content) < 20000
     ):
         article_content = f"{desc} {article_content}"
 
-    article_content = article_content.replace("\xa0", " ")
+    article_content = article_content.replace("\xa0", " ").replace("&nbsp;", " ")
     article_content = re.sub(r"\s*\n\s*", "\n", article_content).strip()
     article_content = re.sub(r" {2,}", " ", article_content).strip()
     article_content = re.sub(r" ([.,:;!?])", r"\1", article_content)
@@ -80,15 +124,21 @@ def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    if is_schema_article:
+    is_home = _is_homepage(soup)
+    og_type_val = og_type.get("content") if isinstance(og_type, Tag) else None
+
+    if is_schema_article and not is_home:
         is_article = True
-    elif has_article_og_type:
+    elif has_article_og_type and not is_home:
         is_article = True
-    elif is_listing_page:
+    elif is_listing_page or len(all_article_tags) > 3:
         is_article = False
     elif len(all_article_tags) > 0:
-        is_article = bool(publication_date or len(article_content) > 500)
-    elif title and publication_date and len(article_content) > 1500:
+        if og_type_val == "website":
+            is_article = False
+        else:
+            is_article = bool(publication_date or len(article_content) > 1500)
+    elif title and publication_date and len(article_content) > 1000 and not is_home:
         is_article = True
     else:
         is_article = False
@@ -124,6 +174,7 @@ def find_main_content_element(soup: BeautifulSoup) -> Optional[Any]:
         "td-post-content",
         "shortcode-content",
         "full-content__main__body",
+        "trescnews",
     )
     tight_candidates = soup.find_all(
         ["div", "section"],
@@ -217,6 +268,9 @@ def clean_main_content_element(main_content_element: Any) -> str:
         "radio-program-widget",
         "list-summary",
         "article-foot",
+        "link-gallery-container",
+        "thank-u-note",
+        "print-page-link",
     ]
     unwanted_class_pattern = re.compile(
         r"^(" + "|".join(map(re.escape, unwanted_classes)) + r")$", re.I
@@ -225,6 +279,22 @@ def clean_main_content_element(main_content_element: Any) -> str:
         class_=unwanted_class_pattern, recursive=True
     ):
         unwanted_class.extract()
+
+    # Remove video player widget wrappers (detected by data-scope on the figure)
+    for figure in main_content_element.find_all(
+        "figure", attrs={"data-scope": re.compile("multimedium", re.I)}
+    ):
+        parent = figure.parent
+        if parent and parent.name == "div" and parent != main_content_element:
+            parent.extract()
+        else:
+            figure.extract()
+
+    # Remove UI control bars (listen/share buttons) via partial class match
+    for el in main_content_element.find_all(
+        class_=re.compile(r"action-buttons", re.I)
+    ):
+        el.extract()
 
     return main_content_element.get_text(separator=" ", strip=True)
 
@@ -239,13 +309,16 @@ def extract_article_text(soup: BeautifulSoup) -> str:
     selectors = [
         "article",
         "main",
+        "div#article-content",
+        "div.layout_2",
         "div#content",
         "div.content",
         "div#main",
         "div.main",
     ]
     for selector in selectors:
-        element = soup.select_one(selector)
+        elements = soup.select(selector)
+        element = pick_longest(elements) if elements else None
         if element:
             text = clean_main_content_element(element)
             if len(text) > 200:
@@ -255,11 +328,26 @@ def extract_article_text(soup: BeautifulSoup) -> str:
 
 
 def trim_trailing_markers(text: str) -> str:
+    for marker in ("Dziękujemy, że przeczytałaś/eś nasz artykuł do końca",):
+        idx = text.find(marker)
+        if idx != -1:
+            return text[:idx].rstrip()
+
     markers = [
         "Polecany artykuł:",
         "Dostęp na",
         "Porównaj dostępne pakiety",
         "Wyłącz AdBlock",
+        "Autopromocja",
+        "Galeria zdjęć",
+        "Oceń artykuł",
+        "przejdź do galerii",
+        "Dodaj komentarz",
+        "Płatny dostęp do treści",
+        "Bądź na bieżąco",
+        "REKLAMA",
+        "© Materiał chroniony prawem autorskim",
+        "Źródło: tvn24.pl",
     ]
     for marker in markers:
         idx = text.find(marker)
@@ -274,20 +362,37 @@ def extract_title_from_meta(soup: BeautifulSoup) -> Optional[str]:
         content = og_title["content"]
         if isinstance(content, list):
             content = " ".join(content)
-        title = content
+        title = content.replace("\xa0", " ")
         title = re.sub(
             r"(\s*[:|—–-]\s*|\s*)\s*(Niezalezna\.pl|RadioZET\.pl|PortalPłock\.pl|"
             r"oko\.press|polityka\.se\.pl|zpleszewa\.pl|radomszczanska\.pl|"
             r"Jawny Lublin|Swidnica24\.pl|Swidnica24\.pl - wydarzenia, informacje, "
-            r"rozrywka, kultura, polityka, wywiady, wypadki)\s*$",
+            r"rozrywka, kultura, polityka, wywiady, wypadki|"
+            r"Radom24\.pl|Forsal\.pl)\s*$",
             "",
             title,
             flags=re.I,
         )
-
         title = re.sub(r"\s{2,}", " ", title)
-        return title.strip()
+        return title.strip() or None
     return None
+
+
+def extract_title_from_html_title(soup: BeautifulSoup) -> Optional[str]:
+    title_tag = soup.find("title")
+    if not isinstance(title_tag, Tag):
+        return None
+    title = title_tag.get_text().replace("\xa0", " ").strip()
+    title = re.sub(
+        r"\s*[-|–—]\s*(?:wiadomości\s+\S+|[A-Za-z0-9][A-Za-z0-9\-\s]*"
+        r"\.(?:pl|tv|com\.pl|eu|info|net|press|org))\s*$",
+        "",
+        title,
+        flags=re.I,
+    )
+    title = re.sub(r"^[A-Za-z0-9][A-Za-z0-9\-\.]*\.[a-z]{2,}\s*[|]\s*", "", title)
+    title = re.sub(r"\s{2,}", " ", title).strip()
+    return title if len(title) > 10 else None
 
 
 def extract_date_from_ldjson(soup: BeautifulSoup) -> Optional[date]:
@@ -370,6 +475,37 @@ def extract_date_from_time_tags(soup: BeautifulSoup) -> Optional[date]:
         if isinstance(datetime_attr, str):
             parsed = parse_polish_date(datetime_attr)
             if parsed:
+                return parsed
+    return None
+
+
+_ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?")
+_PUB_PREFIX_RE = re.compile(
+    r"(Dodane?|Opublikowano|Data|Dodał|Dodała|Czas|Publikacja)\s*:?\s*", re.I
+)
+_DATE_CLASS_RE = re.compile(r"\b(?:date|data|pub)\b|czas|metainfo", re.I)
+
+
+def extract_date_from_text_elements(soup: BeautifulSoup) -> Optional[date]:
+    current_year = date.today().year
+    for tag in soup.find_all(True):
+        text = tag.get_text(strip=True)
+        if len(text) > 150 or len(text) < 5:
+            continue
+        if _PUB_PREFIX_RE.search(text):
+            m = _ISO_DATE_RE.search(text)
+            if m:
+                parsed = parse_polish_date(m.group(0))
+                if parsed and abs(parsed.year - current_year) < 5:
+                    return parsed
+    for tag in soup.find_all(True, class_=_DATE_CLASS_RE):
+        text = tag.get_text(strip=True)
+        if len(text) > 100 or len(text) < 5:
+            continue
+        m = _ISO_DATE_RE.search(text)
+        if m:
+            parsed = parse_polish_date(m.group(0))
+            if parsed and abs(parsed.year - current_year) < 5:
                 return parsed
     return None
 
