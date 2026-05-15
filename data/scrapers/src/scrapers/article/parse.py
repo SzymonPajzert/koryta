@@ -30,9 +30,7 @@ def _desc_in_content(desc: str, content: str) -> bool:
 
 def _make_soup(html_bytes: bytes) -> BeautifulSoup:
     if _UTF8_CHARSET_RE.search(html_bytes[:2048]):
-        return BeautifulSoup(
-            html_bytes.decode("utf-8", errors="replace"), "html.parser"
-        )
+        return BeautifulSoup(html_bytes.decode("utf-8", errors="replace"), "html.parser")
     return BeautifulSoup(html_bytes, "html.parser")
 
 
@@ -41,7 +39,7 @@ def _is_homepage(soup: BeautifulSoup) -> bool:
         ("meta", {"property": "og:url"}, "content"),
         ("link", {"rel": "canonical"}, "href"),
     ]:
-        tag = soup.find(tag_name, attrs)  # type: ignore[arg-type]
+        tag = soup.find(tag_name, attrs)
         if isinstance(tag, Tag):
             href = tag.get(key)
             if isinstance(href, str):
@@ -51,7 +49,7 @@ def _is_homepage(soup: BeautifulSoup) -> bool:
     return False
 
 
-def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:  # noqa: PLR0912, PLR0915
+def extract_article_content(html_bytes: bytes) -> Dict[str, Any]:
     header = html_bytes[:16]
     if any(header.startswith(sig) for sig in BINARY_SIGNATURES):
         return dict(_EMPTY_RESULT)
