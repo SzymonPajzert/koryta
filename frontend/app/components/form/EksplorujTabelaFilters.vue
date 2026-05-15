@@ -39,6 +39,14 @@
         clearable
       />
     </v-col>
+    <v-col cols="12" class="pt-0">
+      <v-checkbox
+        v-model="hideVoted"
+        label="Ukryj osoby, na które już głosowano"
+        density="compact"
+        hide-details
+      />
+    </v-col>
   </v-row>
 </template>
 
@@ -46,6 +54,7 @@
 const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
 const teryt = defineModel<string | null>("teryt");
+const hideVoted = defineModel<boolean>("hideVoted");
 
 withDefaults(
   defineProps<{

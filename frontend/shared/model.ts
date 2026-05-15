@@ -18,7 +18,13 @@ type NodeEdgeStats = {
 export interface NodeStats {
   isApproved: boolean;
   notesCount: number;
-  votes: Record<string, number>;
+  votes: {
+    interesting?: number;
+    quality?: number;
+    humanVoted?: boolean;
+    lastVotedAt?: string;
+    [key: string]: any;
+  };
   edges: {
     all: NodeEdgeStats;
     approved: NodeEdgeStats;
@@ -39,6 +45,7 @@ export type VoteDocument = {
   nodeId: string;
   userUid: string;
   categoryVotes: Record<string, number>;
+  updatedAt?: string;
 };
 
 export type Node = PageBase<NodeType> & {

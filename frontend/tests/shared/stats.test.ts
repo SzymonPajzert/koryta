@@ -75,7 +75,7 @@ describe("shared/stats.ts", () => {
 
     it("should handle empty votes with default keys", () => {
       const stats = computeVoteStats([]);
-      expect(stats).toEqual({ interesting: 0, quality: 0 });
+      expect(stats).toEqual({ interesting: 0, quality: 0, humanVoted: false });
     });
   });
 

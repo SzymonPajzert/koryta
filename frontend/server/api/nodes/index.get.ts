@@ -22,6 +22,7 @@ const queryValidator = z.object({
   teryt: z.string().optional(),
   krs: z.string().optional(),
   visibility: z.enum(["public", "private"]).optional(),
+  hideVoted: z.enum(["true", "false"]).optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),
@@ -118,6 +119,10 @@ export default defineEventHandler(async (event) => {
       } else if (query.visibility === "private") {
         fsQuery = fsQuery.where("stats.isApproved", "==", false);
       }
+    }
+
+    if (query.hideVoted === "true") {
+      fsQuery = fsQuery.where("stats.votes.humanVoted", "==", false);
     }
 
     if (query.sortBy) {
