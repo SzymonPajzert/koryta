@@ -27,17 +27,36 @@ export function calculateExperience(edges: Edge[]): number {
 
 export function computeVoteStats(
   nodeVotes: VoteDocument[],
-): Record<string, number> {
-  const aggregatedVotes: Record<string, number> = {
+): Record<string, any> {
+  const aggregatedVotes: Record<string, any> = {
     interesting: 0,
     quality: 0,
+    humanVoted: false,
   };
+
+  let latestDate: Date | null = null;
+
   for (const v of nodeVotes) {
+    if (v.userUid !== "pipeline") {
+      aggregatedVotes.humanVoted = true;
+    }
+    if (v.updatedAt) {
+      const d = new Date(v.updatedAt);
+      if (!latestDate || d > latestDate) {
+        latestDate = d;
+      }
+    }
+
     for (const [category, value] of Object.entries(v.categoryVotes)) {
       aggregatedVotes[category] =
         (aggregatedVotes[category] || 0) + (value as number);
     }
   }
+
+  if (latestDate) {
+    aggregatedVotes.lastVotedAt = latestDate.toISOString();
+  }
+
   return aggregatedVotes;
 }
 

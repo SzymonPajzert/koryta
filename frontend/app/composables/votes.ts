@@ -98,6 +98,7 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
         categoryVotes: {
           [category]: newValue,
         },
+        updatedAt: new Date().toISOString(),
       } as VoteDocument,
       // Use merge:true to preserve existing votes
       { merge: true },

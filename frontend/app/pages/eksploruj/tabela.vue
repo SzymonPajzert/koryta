@@ -46,6 +46,7 @@
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
         v-model:teryt="filterTeryt"
+        v-model:hideVoted="filterHideVoted"
         :available-parties="availableParties"
         :available-regions="availableRegions"
         :show-visibility="!!user"
@@ -365,6 +366,19 @@ const filterTeryt = computed<string | null>({
   },
 });
 
+const filterHideVoted = computed<boolean>({
+  get: () => route.query.hideVoted === "true",
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        hideVoted: val ? "true" : undefined,
+      },
+    });
+  },
+});
+
 const availableRegions = computed(() => {
   return Object.values(regions.value ?? {})
     .map((r) => ({ title: r.name, value: r.teryt }))
@@ -414,6 +428,7 @@ const apiQuery = computed(
         filterVisibility.value !== "all" ? filterVisibility.value : undefined,
       krs: route.query.krs as string | undefined,
       teryt: filterTeryt.value || undefined,
+      hideVoted: filterHideVoted.value ? "true" : undefined,
     }) as Query,
 );
 
