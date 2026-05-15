@@ -299,6 +299,7 @@ class NLP(metaclass=ABCMeta):
 class CrawlQueueItem:
     uid: str
     url: str
+    priority: int
 
 
 @dataclass(frozen=True)

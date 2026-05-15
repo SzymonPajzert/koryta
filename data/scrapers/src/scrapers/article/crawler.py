@@ -197,6 +197,11 @@ def crawl_url(
                 error=str(exc),
                 request_duration_s=t_request.duration,
             )
+        except Exception as exc:
+            return CrawlResult(
+                error=f"unexpected: {exc}",
+                request_duration_s=t_request.duration,
+            )
 
     if response.status_code != 200:
         return CrawlResult(
@@ -303,16 +308,19 @@ def _worker_thread(
 
         uid = entry.uid
         url = entry.url
+        priority = entry.priority
         parsed_url = NormalizedParse.parse(url)
+        logging.info("[p=%d] Crawling: %s", priority, parsed_url.full_url)
         result = crawl_url(ctx, parsed_url, options)
 
         if result.hit_rate_limit:
             # Do not release — rely on lock timeout so high-priority URLs
             # aren't re-queried immediately after hitting the rate limit.
-            logging.info("Skipping because of hit rate limit: %s", parsed_url.full_url)
+            logging.info("[p=%d] Skipping because of hit rate limit: %s", priority, parsed_url.full_url)
         elif result.error:
             logging.error(
-                "[%.2fs] Crawl failed (%s): %s",
+                "[p=%d][%.2fs] Crawl failed (%s): %s",
+                priority,
                 result.request_duration_s or 0,
                 result.error,
                 parsed_url.full_url,
@@ -321,7 +329,8 @@ def _worker_thread(
         else:
             _filter_blocked(result, blocked_normalized)
             logging.info(
-                "[%.2fs] Crawl succeeded: %s",
+                "[p=%d][%.2fs] Crawl succeeded: %s",
+                priority,
                 result.request_duration_s or 0,
                 parsed_url.full_url,
             )

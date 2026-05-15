@@ -83,6 +83,14 @@ def _build_parser() -> ArgumentParser:
         action="store_true",
         help="Rescore all not-done URLs using the configured scoring function, then exit.",
     )
+    parser.add_argument(
+        "--bump-small-domains",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Set priority=0 for pending URLs on domains with fewer than N done links, "
+             "so that done + bumped = N per domain. Then exit.",
+    )
     return parser
 
 
@@ -210,6 +218,21 @@ def main() -> None:
             run_parse(queue, ctx, args.parse_limit, _read_html)
         finally:
             dumper.dump_pandas()
+            pg_client.close()
+        return
+
+    if args.bump_small_domains is not None:
+        if not args.seed:
+            parser.error("--bump-small-domains requires --seed")
+        seed_urls = _load_seed_urls(args.seed)
+        pg_client = PostgresClient.from_env(max_size=1)
+        queue = PostgresCrawlQueue(pg_client)
+        try:
+            bumped, by_domain = queue.bump_small_domains(args.bump_small_domains, seed_urls)
+            for domain, count in sorted(by_domain.items(), key=lambda x: -x[1]):
+                logging.info("  %s: +%d", domain, count)
+            logging.info("Bumped %d URLs to priority 0 (target=%d).", bumped, args.bump_small_domains)
+        finally:
             pg_client.close()
         return
 
