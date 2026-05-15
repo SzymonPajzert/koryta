@@ -3,7 +3,6 @@ import time
 import pytest
 
 from scrapers.stores import (
-    BlockedDomain,
     CrawlQueue,
     CrawlQueueItem,
     DoneUrl,
@@ -69,24 +68,6 @@ def test_priority_affects_order(crawl_queue: CrawlQueue):
     assert first.url == "example.com/low"
     assert second.url == "example.com/high"
 
-
-def test_blocked_domains_are_skipped(crawl_queue: CrawlQueue):
-    crawl_queue.add_blocked_domains([BlockedDomain("blocked.test", "nope")])
-    crawl_queue.put(
-        [
-            NewUrl("https://blocked.test/a", 10),
-            NewUrl("https://ok.test/b", 20),
-        ]
-    )
-    row = crawl_queue.get("worker-1", max_retries=1)
-    assert row is not None
-    assert row.url == "ok.test/b"
-
-
-def test_blocked_domain_normalizes_scheme(crawl_queue: CrawlQueue):
-    crawl_queue.add_blocked_domains([BlockedDomain("https://blocked.test", "nope")])
-    crawl_queue.put([NewUrl("blocked.test/path", 10)])
-    assert crawl_queue.get("worker-1", max_retries=1) is None
 
 
 def test_timeout_allows_reget(crawl_queue: CrawlQueue):

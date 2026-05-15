@@ -316,7 +316,10 @@ def _worker_thread(
         if result.hit_rate_limit:
             # Do not release — rely on lock timeout so high-priority URLs
             # aren't re-queried immediately after hitting the rate limit.
-            logging.info("[p=%d] Skipping because of hit rate limit: %s", priority, parsed_url.full_url)
+            logging.info(
+                "[p=%d] Skipping because of hit rate limit: %s",
+                priority, parsed_url.full_url,
+            )
         elif result.error:
             logging.error(
                 "[p=%d][%.2fs] Crawl failed (%s): %s",

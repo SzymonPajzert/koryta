@@ -28,7 +28,7 @@ _process_gcs_client = None
 def _init_worker(storage_type: str) -> None:
     global _process_gcs_client
     if storage_type == "gcs":
-        from google.cloud import storage as gcs
+        from google.cloud import storage as gcs  # noqa: PLC0415
         _process_gcs_client = gcs.Client()
 
 
@@ -41,11 +41,11 @@ def _parse_worker(
 ) -> ParsedArticle:
     global _process_gcs_client
     if storage_type == "gcs":
-        from stores.storage import BUCKET  # type: ignore[import]
-        blob = _process_gcs_client.bucket(BUCKET).blob(storage_path)
+        from stores.storage import BUCKET  # type: ignore[import]  # noqa: PLC0415
+        blob = _process_gcs_client.bucket(BUCKET).blob(storage_path)  # type: ignore[union-attr]
         html_bytes = blob.download_as_bytes()
     else:
-        from stores.config import PROJECT_ROOT  # type: ignore[import]
+        from stores.config import PROJECT_ROOT  # type: ignore[import]  # noqa: PLC0415
         html_bytes = (Path(PROJECT_ROOT) / local_output_str / storage_path).read_bytes()
 
     result = extract_article_content(html_bytes)
@@ -140,7 +140,10 @@ def run_parse(
     _print_coverage(domain_counts, test_domains)
 
     to_parse = all_done[:parse_limit]
-    print(f"\nParsing {len(to_parse)} URLs (limit={parse_limit}, workers={worker_processes})...")
+    print(
+        f"\nParsing {len(to_parse)} URLs "
+        f"(limit={parse_limit}, workers={worker_processes})..."
+    )
 
     local_output_str = str(local_output) if local_output else "crawler_output"
     errors = 0
@@ -151,7 +154,10 @@ def run_parse(
         initargs=(storage_type,),
     ) as executor:
         futures = {
-            executor.submit(_parse_worker, done.storage_path, storage_type, local_output_str, done.uid, done.url): done
+            executor.submit(
+                _parse_worker,
+                done.storage_path, storage_type, local_output_str, done.uid, done.url,
+            ): done
             for done in to_parse
         }
         with tqdm(total=len(to_parse), desc="Parsing HTML", unit="page") as bar:

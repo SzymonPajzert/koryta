@@ -80,8 +80,12 @@ _ARTICLE_KEYWORDS = [
     "wybory",
 ]
 
-_LISTING_SEGMENTS = ("/tag/", "/tagi/", "/kategoria/", "/autor/", "/strona/", "/page/", "/feed", "/rss")
-_OFFPATH_SECTIONS = ("/sport/", "/rozrywka/", "/pogoda/", "/moda/", "/kuchnia/", "/lifestyle/")
+_LISTING_SEGMENTS = (
+    "/tag/", "/tagi/", "/kategoria/", "/autor/", "/strona/", "/page/", "/feed", "/rss"
+)
+_OFFPATH_SECTIONS = (
+    "/sport/", "/rozrywka/", "/pogoda/", "/moda/", "/kuchnia/", "/lifestyle/"
+)
 _SKIP_EXTENSIONS = (".pdf", ".jpg", ".jpeg", ".png", ".webp", ".gif")
 
 

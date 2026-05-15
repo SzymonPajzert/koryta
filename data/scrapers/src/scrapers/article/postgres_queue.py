@@ -10,12 +10,12 @@ from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
-from uuid import uuid4
 
 from entities.util import NormalizedParse
 from scrapers.stores import (
@@ -192,13 +192,18 @@ class PostgresCrawlQueue(CrawlQueue):
         now = datetime.now(warsaw_tz)
         with self.pg.transaction() as transaction:
             transaction.execute(
-                """
+                r"""
                 WITH candidate AS (
                     SELECT wi.id
                     FROM website_index wi
                     WHERE wi.done = FALSE
                       AND wi.num_retries < %s
                       AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM blocked_domains bd
+                          WHERE wi.url = bd.domain
+                             OR wi.url LIKE bd.domain || '/%%'
+                      )
                     ORDER BY wi.priority ASC, wi.id ASC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
@@ -368,7 +373,8 @@ class PostgresCrawlQueue(CrawlQueue):
         """Set priority=0 for pending URLs on under-crawled seed domains.
 
         For each domain in seed_domains with fewer than target_count done URLs,
-        promotes enough pending URLs to priority 0 so that done + promoted = target_count.
+        promotes enough pending URLs to priority 0 so that
+        done + promoted = target_count.
         Selection is random via UUID4 id ordering.
 
         Returns (total bumped, per-domain counter).

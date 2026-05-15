@@ -15,9 +15,9 @@ from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
 )
-from scrapers.article.scoring import get_scoring_function
 from scrapers.article.parse_runner import run_parse
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
+from scrapers.article.scoring import get_scoring_function
 from scrapers.stores import BlockedDomain, NewUrl
 
 
@@ -80,7 +80,10 @@ def _build_parser() -> ArgumentParser:
     parser.add_argument(
         "--reprioritize",
         action="store_true",
-        help="Rescore all not-done URLs using the configured scoring function, then exit.",
+        help=(
+            "Rescore all not-done URLs using the configured scoring function,"
+            " then exit."
+        ),
     )
     parser.add_argument(
         "--bump-small-domains",
@@ -191,7 +194,7 @@ def profile_scope(enabled: bool, path: Path | None):
         logging.info("Wrote profile to %s", path)
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915
     _setup_logging()
     parser = _build_parser()
     args = parser.parse_args()
@@ -205,7 +208,9 @@ def main() -> None:
             run_parse(
                 queue, ctx, args.parse_limit,
                 storage_type=args.storage_type,
-                local_output=args.local_output if args.storage_type == "local" else None,
+                local_output=(
+                    args.local_output if args.storage_type == "local" else None
+                ),
                 worker_processes=worker_processes,
             )
         finally:
@@ -220,10 +225,15 @@ def main() -> None:
         pg_client = PostgresClient.from_env(max_size=1)
         queue = PostgresCrawlQueue(pg_client)
         try:
-            bumped, by_domain = queue.bump_small_domains(args.bump_small_domains, seed_urls)
+            bumped, by_domain = queue.bump_small_domains(
+                args.bump_small_domains, seed_urls
+            )
             for domain, count in sorted(by_domain.items(), key=lambda x: -x[1]):
                 logging.info("  %s: +%d", domain, count)
-            logging.info("Bumped %d URLs to priority 0 (target=%d).", bumped, args.bump_small_domains)
+            logging.info(
+                "Bumped %d URLs to priority 0 (target=%d).",
+                bumped, args.bump_small_domains,
+            )
         finally:
             pg_client.close()
         return
