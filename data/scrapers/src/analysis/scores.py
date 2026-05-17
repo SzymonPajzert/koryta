@@ -126,6 +126,7 @@ class PeopleScores(Pipeline):
     people_payloads: PeoplePayloads
     people_koryta: KorytaPeople
 
+    # TODO turn it into a flag
     # Don't produce scores for people who are already public
     ignore_public = True
     # Don't produce scores for people who have votes
@@ -155,6 +156,8 @@ class PeopleScores(Pipeline):
                 continue
             koryta_entry = koryta_people_df[koryta_people_df["id"] == node_id].iloc[0]
             if self.ignore_public and koryta_entry.get("is_public", False):
+                continue
+            if self.ignore_votes and koryta_entry.get("votes_interesting", 0) > 0:
                 continue
 
             records.append(
