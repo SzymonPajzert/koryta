@@ -173,9 +173,7 @@ class PeopleScores(Pipeline):
 
         df = pd.DataFrame.from_records(records)
         df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
-        df["score"] /= df["score"].max()
-        df["score"] *= 5
-        df["score"] = df["score"].round()
+        df["score"] = pd.qcut(df["score"].rank(method="first"), q=6, labels=False)
         print(df.head())
 
         print(df["score"].describe())
