@@ -126,10 +126,16 @@ class PeopleScores(Pipeline):
     people_payloads: PeoplePayloads
     people_koryta: KorytaPeople
 
+    # Don't produce scores for people who are already public
+    ignore_public = True
+    # Don't produce scores for people who have votes
+    ignore_votes = True
+
     def process(self, ctx: Context):
         company_scores_df = self.company_scores.read_or_process(ctx)
         people_df = self.people_payloads.read_or_process(ctx)
         koryta_people_df = self.people_koryta.read_or_process(ctx)
+        print(koryta_people_df.head())
 
         company_score_map = dict(
             zip(company_scores_df["krs"], company_scores_df["sum_score"])
@@ -143,25 +149,38 @@ class PeopleScores(Pipeline):
             person_name = str(row.get("name"))
             node_id = name_to_node_id.get(person_name)
             total_score = self.total_person_score(row, company_score_map)
-            if node_id is not None and total_score > 0:
-                records.append(
-                    dataclasses.asdict(
-                        PersonScore(
-                            node_id=node_id,
-                            name=str(person_name),
-                            score=total_score,
-                        )
+            if node_id is None:
+                continue
+            if total_score <= 0:
+                continue
+            koryta_entry = koryta_people_df[koryta_people_df["id"] == node_id].iloc[0]
+            if self.ignore_public and koryta_entry.get("is_public", False):
+                continue
+
+            records.append(
+                dataclasses.asdict(
+                    PersonScore(
+                        node_id=node_id,
+                        name=str(person_name),
+                        score=total_score,
                     )
                 )
+            )
 
         if not records:
             return pd.DataFrame(columns=["node_id", "name", "score"])
+        print("Found scores for", len(records), "people")
 
         df = pd.DataFrame.from_records(records)
         df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
         df["score"] /= df["score"].max()
         df["score"] *= 5
         df["score"] = df["score"].round()
+        print(df.head())
+
+        print(df["score"].describe())
+        print(df["score"].value_counts())
+
         return df.astype({"score": "int32"})
 
     def total_person_score(self, row, company_score_map):
