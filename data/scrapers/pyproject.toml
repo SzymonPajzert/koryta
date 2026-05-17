@@ -127,6 +127,7 @@ koryta_uploader = "uploader:main"
 koryta_pipelines = "pipelines:main"
 koryta_crawl = "crawl_cli:main"
 koryta_scraper = "scraper:main"
+koryta_scrape_krs = "scraper:scrape_krs"
 
 
 [build-system]
