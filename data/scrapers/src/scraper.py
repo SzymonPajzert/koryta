@@ -1,11 +1,14 @@
 import argparse
+import json
 import sys
 import time
+from time import sleep
 
 import requests
 
 from conductor import setup_context
 from scrapers.kmgp.people import PeopleKMGP
+from scrapers.krs.scrape import ScrapeRejestrIO
 
 
 def get_urls_to_scrape(ctx):
@@ -57,5 +60,47 @@ def main():
         time.sleep(0.3)
 
 
-if __name__ == "__main__":
-    main()
+def scrape_krs():
+    ctx, _ = setup_context(use_rejestr_io=True)
+    pipeline = ScrapeRejestrIO()
+    urls = pipeline.read_or_process_list(ctx)
+    print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
+    input("Press enter to continue...")
+
+    skip = 0
+    for url, _, skip_on_fail in urls:
+        if skip > 0:
+            print(f"Skipping {url} (skipping {skip} more)")
+            skip -= 1
+            continue
+        if "rejestr.io" in url:
+            result = ctx.rejestr_io.get_rejestr_io(url)
+        else:
+            print(f"Requesting: {url}")
+            try:
+                response = requests.get(url)
+                result = response.json()
+            except requests.exceptions.JSONDecodeError:
+                print(f"Failed to decode JSON from {url}, skipping")
+                print(f"Response: {response.text}")
+                skip = skip_on_fail
+                continue
+            if "odpis" not in result:
+                print(f"Unexpected response for {url}: {result}, skipping")
+                skip = skip_on_fail
+                continue
+            dzial1 = result["odpis"]["dane"]["dzial1"]
+            dane = dzial1["danePodmiotu"]
+            miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
+            print(f"{dane.get('nazwa', dane)} - {miasto}")
+            result = json.dumps(result)
+        sleep(0.3)
+
+        if result is None:
+            print(f"Skipping {url}")
+            continue
+
+        # We're discarding query params, so it's a hotfix for this
+        url = url.replace("?aktualnosc=", "/aktualnosc_")
+        url = url.replace("?rejestr=P&format=json", "")
+        ctx.io.upload(url, result, "application/json")
