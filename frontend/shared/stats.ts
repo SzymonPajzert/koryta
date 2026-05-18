@@ -27,8 +27,8 @@ export function calculateExperience(edges: Edge[]): number {
 
 export function computeVoteStats(
   nodeVotes: VoteDocument[],
-): Record<string, any> {
-  const aggregatedVotes: Record<string, any> = {
+): Record<string, unknown> {
+  const aggregatedVotes: Record<string, unknown> = {
     interesting: 0,
     quality: 0,
     humanVoted: false,
@@ -49,7 +49,7 @@ export function computeVoteStats(
 
     for (const [category, value] of Object.entries(v.categoryVotes)) {
       aggregatedVotes[category] =
-        (aggregatedVotes[category] || 0) + (value as number);
+        ((aggregatedVotes[category] as number) || 0) + (value as number);
     }
   }
 
