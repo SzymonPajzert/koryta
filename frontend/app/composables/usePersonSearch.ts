@@ -22,6 +22,18 @@ export const usePersonSearch = (
     return parts.filter(Boolean) as string[];
   };
 
+  const nameWithoutMiddle = computed(() => {
+    if (!personRef.value?.name) {
+      return undefined;
+    }
+    const nameParts = personRef.value.name.trim().split(/\s+/);
+    let nameWithoutMiddle = personRef.value.name;
+    if (nameParts.length > 2) {
+      nameWithoutMiddle = `${nameParts[0]} ${nameParts[nameParts.length - 1]}`;
+    }
+    return nameWithoutMiddle;
+  });
+
   const uniqueLocations = computed(() => {
     if (!personRef.value?.elections) return [];
     const locations = personRef.value.elections
@@ -37,12 +49,6 @@ export const usePersonSearch = (
       result.push(personRef.value.name + " PKW");
 
       if (uniqueLocations.value.length > 0) {
-        const nameParts = personRef.value.name.trim().split(/\s+/);
-        let nameWithoutMiddle = personRef.value.name;
-        if (nameParts.length > 2) {
-          nameWithoutMiddle = `${nameParts[0]} ${nameParts[nameParts.length - 1]}`;
-        }
-
         for (const loc of uniqueLocations.value) {
           result.push(`${nameWithoutMiddle} ${loc}`);
         }
@@ -76,6 +82,10 @@ export const usePersonSearch = (
     } else {
       window.open(
         `https://pl.wikipedia.org/wiki/Special:Search?search=${name}`,
+        "_blank",
+      );
+      window.open(
+        `https://pl.wikipedia.org/wiki/Special:Search?search=${nameWithoutMiddle.value}`,
         "_blank",
       );
     }
