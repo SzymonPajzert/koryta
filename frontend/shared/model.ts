@@ -23,7 +23,7 @@ export interface NodeStats {
     quality?: number;
     humanVoted?: boolean;
     lastVotedAt?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   edges: {
     all: NodeEdgeStats;

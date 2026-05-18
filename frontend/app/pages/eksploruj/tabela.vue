@@ -495,8 +495,12 @@ const updateQueryParams = async (options: {
 const openDrawer = shallowRef(false);
 const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
 const focusedPersonId = computed(() => focusedPerson.value?.id);
-const { sources: focusedSources, targets: focusedTargets } = await useEdges(focusedPersonId);
-const focusedEdges = computed(() => [...focusedSources.value, ...focusedTargets.value]);
+const { sources: focusedSources, targets: focusedTargets } =
+  await useEdges(focusedPersonId);
+const focusedEdges = computed(() => [
+  ...focusedSources.value,
+  ...focusedTargets.value,
+]);
 
 const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
