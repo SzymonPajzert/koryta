@@ -27,11 +27,7 @@
       <div v-if="focusedPerson" class="pa-4 pt-0">
         <NoteEditor :key="focusedPerson.id" :node-id="focusedPerson.id" />
         <v-divider class="my-4" />
-        <EntityDetailView
-          :key="focusedPerson.id"
-          :node="focusedPerson.id"
-          type="person"
-        />
+        <CardEmploymentHistory :edges="focusedEdges" />
       </div>
     </v-navigation-drawer>
     <div class="pa-4">
@@ -232,6 +228,7 @@ import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 import { executeSearchAll } from "~/composables/usePersonSearch";
+import { useEdges } from "~/composables/edges";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -497,6 +494,9 @@ const updateQueryParams = async (options: {
 
 const openDrawer = shallowRef(false);
 const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
+const focusedPersonId = computed(() => focusedPerson.value?.id);
+const { sources: focusedSources, targets: focusedTargets } = await useEdges(focusedPersonId);
+const focusedEdges = computed(() => [...focusedSources.value, ...focusedTargets.value]);
 
 const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
