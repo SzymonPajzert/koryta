@@ -50,7 +50,7 @@ export const usePersonSearch = (
 
       if (uniqueLocations.value.length > 0) {
         for (const loc of uniqueLocations.value) {
-          result.push(`${nameWithoutMiddle} ${loc}`);
+          result.push(`${nameWithoutMiddle.value} ${loc}`);
         }
       }
     }
