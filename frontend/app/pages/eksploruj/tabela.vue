@@ -46,7 +46,7 @@
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
         v-model:teryt="filterTeryt"
-        v-model:hideVoted="filterHideVoted"
+        v-model:hide-voted="filterHideVoted"
         :available-parties="availableParties"
         :available-regions="availableRegions"
         :show-visibility="!!user"
@@ -199,12 +199,23 @@
           </template>
 
           <template #[`item.explore`]="{ item }">
-            <v-btn
-              icon="mdi-magnify"
-              variant="text"
-              color="primary"
-              @click="focusPerson(item)"
-            />
+            <div class="d-flex flex-nowrap">
+              <v-btn
+                icon="mdi-open-in-new"
+                variant="text"
+                color="secondary"
+                @click.stop="
+                  executeSearchAll(item, region, company);
+                  focusPerson(item);
+                "
+              />
+              <v-btn
+                icon="mdi-magnify"
+                variant="text"
+                color="primary"
+                @click.stop="focusPerson(item)"
+              />
+            </div>
           </template>
         </v-data-table-server>
       </v-card>
@@ -220,6 +231,7 @@ import { parties } from "~~/shared/misc";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
+import { executeSearchAll } from "~/composables/usePersonSearch";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({

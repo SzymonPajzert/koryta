@@ -61,11 +61,24 @@ export const usePersonSearch = (
     if (!personRef.value?.name) return;
 
     const name = encodeURIComponent(personRef.value.name);
-    window.open(`https://rejestr.io/krs?q=${name}`, "_blank");
-    window.open(
-      `https://pl.wikipedia.org/wiki/Special:Search?search=${name}`,
-      "_blank",
-    );
+
+    const rejestrIo = personRef.value.rejestrIo;
+    const wikipedia = personRef.value.wikipedia;
+
+    if (rejestrIo) {
+      window.open(rejestrIo, "_blank");
+    } else {
+      window.open(`https://rejestr.io/krs?q=${name}`, "_blank");
+    }
+
+    if (wikipedia) {
+      window.open(wikipedia, "_blank");
+    } else {
+      window.open(
+        `https://pl.wikipedia.org/wiki/Special:Search?search=${name}`,
+        "_blank",
+      );
+    }
 
     for (const query of queries.value) {
       searchInGoogle(query);
