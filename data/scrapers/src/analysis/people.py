@@ -230,7 +230,6 @@ def people_merged(
             AND max_scores.birth_date = scored.birth_date
             AND max_scores.max_score = scored.overall_score
         )
-        WHERE overall_score >= 8
         QUALIFY ROW_NUMBER() OVER (
             PARTITION BY krs_name, birth_year
             ORDER BY overall_score DESC,
