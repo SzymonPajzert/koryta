@@ -63,16 +63,43 @@ export default defineEventHandler(async (event) => {
     const user = await getUser(event).catch(() => null);
     const db = getFirestore("koryta-pl");
 
-    let fsQuery: FirebaseFirestore.Query = db.collection("nodes");
+    type Op = {
+      applyFs: (q: FirebaseFirestore.Query) => FirebaseFirestore.Query;
+      applyMem: (nodes: any[]) => any[];
+    };
+    const ops: Op[] = [];
 
     if (query.type) {
-      fsQuery = fsQuery.where("type", "==", query.type);
+      ops.push({
+        applyFs: (q) => q.where("type", "==", query.type),
+        applyMem: (nodes) => nodes.filter((n) => n.type === query.type),
+      });
     }
 
     const partiesToFilter = query.parties || query.party;
     if (partiesToFilter) {
-      fsQuery = applyPartiesFilter(fsQuery, partiesToFilter);
+      ops.push({
+        applyFs: (q) => applyPartiesFilter(q, partiesToFilter),
+        applyMem: (nodes) => {
+          const partiesToSearch = Array.isArray(partiesToFilter)
+            ? partiesToFilter
+            : [partiesToFilter];
+          const hasNone = partiesToSearch.includes("__NONE__");
+          const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
+          return nodes.filter((n) => {
+            const p = n.parties || [];
+            if (hasNone && p.length === 0) return true;
+            if (
+              normalParties.length > 0 &&
+              p.some((party: string) => normalParties.includes(party))
+            )
+              return true;
+            return false;
+          });
+        },
+      });
     }
+
     if (query.krs) {
       const places = await db
         .collection("nodes")
@@ -85,11 +112,21 @@ export default defineEventHandler(async (event) => {
         const arrayField = user
           ? "stats.edges.all.targetNodeIds"
           : "stats.edges.approved.targetNodeIds";
-        fsQuery = fsQuery.where(arrayField, "array-contains", placeId);
+        ops.push({
+          applyFs: (q) => q.where(arrayField, "array-contains", placeId),
+          applyMem: (nodes) =>
+            nodes.filter((n) => {
+              const arr = user
+                ? n.stats?.edges?.all?.targetNodeIds
+                : n.stats?.edges?.approved?.targetNodeIds;
+              return Array.isArray(arr) && arr.includes(placeId);
+            }),
+        });
       } else {
         return { nodes: {}, total: 0 };
       }
     }
+
     if (query.teryt) {
       const regions = await db
         .collection("nodes")
@@ -102,7 +139,16 @@ export default defineEventHandler(async (event) => {
         const arrayField = user
           ? "stats.edges.all.targetNodeIds"
           : "stats.edges.approved.targetNodeIds";
-        fsQuery = fsQuery.where(arrayField, "array-contains", regionId);
+        ops.push({
+          applyFs: (q) => q.where(arrayField, "array-contains", regionId),
+          applyMem: (nodes) =>
+            nodes.filter((n) => {
+              const arr = user
+                ? n.stats?.edges?.all?.targetNodeIds
+                : n.stats?.edges?.approved?.targetNodeIds;
+              return Array.isArray(arr) && arr.includes(regionId);
+            }),
+        });
       } else {
         return { nodes: {}, total: 0 };
       }
@@ -112,17 +158,32 @@ export default defineEventHandler(async (event) => {
       if (query.visibility === "private") {
         return { nodes: {}, total: 0 };
       }
-      fsQuery = fsQuery.where("stats.isApproved", "==", true);
+      ops.push({
+        applyFs: (q) => q.where("stats.isApproved", "==", true),
+        applyMem: (nodes) => nodes.filter((n) => n.stats?.isApproved === true),
+      });
     } else {
       if (query.visibility === "public") {
-        fsQuery = fsQuery.where("stats.isApproved", "==", true);
+        ops.push({
+          applyFs: (q) => q.where("stats.isApproved", "==", true),
+          applyMem: (nodes) =>
+            nodes.filter((n) => n.stats?.isApproved === true),
+        });
       } else if (query.visibility === "private") {
-        fsQuery = fsQuery.where("stats.isApproved", "==", false);
+        ops.push({
+          applyFs: (q) => q.where("stats.isApproved", "==", false),
+          applyMem: (nodes) =>
+            nodes.filter((n) => n.stats?.isApproved === false),
+        });
       }
     }
 
     if (query.hideVoted === "true") {
-      fsQuery = fsQuery.where("stats.votes.humanVoted", "==", false);
+      ops.push({
+        applyFs: (q) => q.where("stats.votes.humanVoted", "==", false),
+        applyMem: (nodes) =>
+          nodes.filter((n) => n.stats?.votes?.humanVoted === false),
+      });
     }
 
     if (query.sortBy) {
@@ -140,19 +201,72 @@ export default defineEventHandler(async (event) => {
       }
 
       const direction = query.sortDesc === "true" ? "desc" : "asc";
-      fsQuery = fsQuery.orderBy(sortField, direction);
+      ops.push({
+        applyFs: (q) => q.orderBy(sortField, direction),
+        applyMem: (nodes) => {
+          return [...nodes].sort((a, b) => {
+            const getVal = (obj: any, path: string) =>
+              path.split(".").reduce((o, i) => o?.[i], obj);
+            const valA = getVal(a, sortField);
+            const valB = getVal(b, sortField);
+
+            if (valA === valB) return 0;
+            if (valA === undefined || valA === null)
+              return direction === "desc" ? 1 : -1;
+            if (valB === undefined || valB === null)
+              return direction === "desc" ? -1 : 1;
+
+            const res = valA > valB ? 1 : -1;
+            return direction === "desc" ? -res : res;
+          });
+        },
+      });
     }
 
-    const paginatedQuery = paginate(fsQuery, query);
+    let executedSuccessfully = false;
+    const fsOps = [...ops];
+    const memOps: Op[] = [];
+    let snapshot: FirebaseFirestore.QuerySnapshot | null = null;
+    let total = 0;
 
-    // Also return the total count (run in parallel with data fetch)
-    const [snapshot, countSnapshot] = await Promise.all([
-      paginatedQuery.get(),
-      fsQuery.count().get(),
-    ]);
+    while (!executedSuccessfully) {
+      try {
+        let fsQuery: FirebaseFirestore.Query = db.collection("nodes");
+        for (const op of fsOps) {
+          fsQuery = op.applyFs(fsQuery);
+        }
 
-    const nodesRecord: Record<string, unknown> = {};
-    for (const doc of snapshot.docs) {
+        if (memOps.length === 0) {
+          const paginatedQuery = paginate(fsQuery, query);
+          const [snap, countSnap] = await Promise.all([
+            paginatedQuery.get(),
+            fsQuery.count().get(),
+          ]);
+          snapshot = snap;
+          total = countSnap.data().count;
+        } else {
+          snapshot = await fsQuery.get();
+        }
+        executedSuccessfully = true;
+      } catch (e: any) {
+        if (
+          e.code === 9 ||
+          (e.message && e.message.toLowerCase().includes("index"))
+        ) {
+          if (fsOps.length === 0) {
+            throw e;
+          }
+          const dropped = fsOps.pop();
+          if (dropped) {
+            memOps.unshift(dropped);
+          }
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    let nodesArray = snapshot!.docs.map((doc) => {
       const data = doc.data();
       if (data.revision_id) {
         if (typeof data.revision_id.path === "string") {
@@ -164,11 +278,25 @@ export default defineEventHandler(async (event) => {
           data.revision_id = data.revision_id._path.segments.join("/");
         }
       }
-      const visibility = pageIsPublic(data);
-      nodesRecord[doc.id] = { id: doc.id, ...data, visibility };
+      return { id: doc.id, ...data, visibility: pageIsPublic(data) };
+    });
+
+    for (const op of memOps) {
+      nodesArray = op.applyMem(nodesArray);
     }
 
-    const total = countSnapshot.data().count;
+    if (memOps.length > 0) {
+      total = nodesArray.length;
+      const page = query.page || 1;
+      const limit = query.limit || nodesArray.length;
+      const offset = (page - 1) * limit;
+      nodesArray = nodesArray.slice(offset, offset + limit);
+    }
+
+    const nodesRecord: Record<string, unknown> = {};
+    for (const node of nodesArray) {
+      nodesRecord[node.id] = node;
+    }
 
     return { nodes: nodesRecord, total };
   }
