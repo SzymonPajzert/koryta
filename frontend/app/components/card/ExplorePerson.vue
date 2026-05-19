@@ -11,6 +11,8 @@
     </v-card-title>
 
     <v-card-text>
+      <CardPersonInfo :person="person" class="mb-4" />
+
       <!-- Action: Google Search -->
       <div class="mb-6">
         <div class="text-caption text-medium-emphasis mb-2">

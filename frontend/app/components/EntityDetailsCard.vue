@@ -27,22 +27,8 @@
       </div>
     </v-card-title>
     <template #append> </template>
-    <v-card-subtitle v-if="personEntity?.birthDate" class="px-0">
-      Data urodzenia: {{ personEntity.birthDate }}
-    </v-card-subtitle>
-    <v-card-text class="px-0">
-      <div v-if="personEntity?.wikipedia" class="text-caption mb-2">
-        Wikipedia:
-        <a :href="personEntity?.wikipedia" target="_blank">{{
-          personEntity?.wikipedia
-        }}</a>
-      </div>
-      <div v-if="personEntity?.rejestrIo" class="text-caption mb-2">
-        Rejestr.io:
-        <a :href="personEntity?.rejestrIo" target="_blank">{{
-          personEntity?.rejestrIo
-        }}</a>
-      </div>
+    <v-card-text class="px-0 pt-2">
+      <CardPersonInfo :person="personEntity" class="mb-2" />
       {{ entity?.content }}
     </v-card-text>
   </v-card>
