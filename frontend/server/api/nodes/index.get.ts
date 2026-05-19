@@ -22,7 +22,7 @@ const queryValidator = z.object({
   teryt: z.string().optional(),
   krs: z.union([z.string(), z.array(z.string())]).optional(),
   visibility: z.enum(["public", "private"]).optional(),
-  hideVoted: z.enum(["true", "false"]).optional(),
+  hideVoted: z.enum(["all", "no_votes", "has_votes"]).optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),
@@ -199,11 +199,17 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    if (query.hideVoted === "true") {
+    if (query.hideVoted === "no_votes") {
       ops.push({
         applyFs: (q) => q.where("stats.votes.humanVoted", "==", false),
         applyMem: (nodes) =>
           nodes.filter((n) => n.stats?.votes?.humanVoted === false),
+      });
+    } else if (query.hideVoted === "has_votes") {
+      ops.push({
+        applyFs: (q) => q.where("stats.votes.humanVoted", "==", true),
+        applyMem: (nodes) =>
+          nodes.filter((n) => n.stats?.votes?.humanVoted === true),
       });
     }
 

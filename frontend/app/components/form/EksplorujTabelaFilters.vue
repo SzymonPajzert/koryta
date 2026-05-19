@@ -32,7 +32,7 @@
       <v-autocomplete
         v-model="teryt"
         :items="availableRegions"
-        label="Okręg wyborczy"
+        label="Powiat"
         variant="outlined"
         density="comfortable"
         hide-details
@@ -53,11 +53,17 @@
         closable-chips
       />
     </v-col>
-    <v-col cols="12" class="pt-0">
-      <v-checkbox
+    <v-col cols="12" :md="showVisibility ? 4 : 6">
+      <v-select
         v-model="hideVoted"
-        label="Ukryj osoby, na które już głosowano"
-        density="compact"
+        :items="[
+          { title: 'Wszystkie', value: 'all' },
+          { title: 'Brak głosu', value: 'no_votes' },
+          { title: 'Ocenione', value: 'has_votes' },
+        ]"
+        label="Głosy społeczności"
+        variant="outlined"
+        density="comfortable"
         hide-details
       />
     </v-col>
@@ -69,7 +75,7 @@ const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
 const teryt = defineModel<string | null>("teryt");
 const krs = defineModel<string[] | null>("krs");
-const hideVoted = defineModel<boolean>("hideVoted");
+const hideVoted = defineModel<"all" | "no_votes" | "has_votes">("hideVoted");
 
 withDefaults(
   defineProps<{

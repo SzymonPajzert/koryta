@@ -408,14 +408,16 @@ const filterKrs = computed<string[] | null>({
   },
 });
 
-const filterHideVoted = computed<boolean>({
-  get: () => route.query.hideVoted === "true",
+const filterHideVoted = computed<"all" | "no_votes" | "has_votes">({
+  get: () =>
+    (route.query.hideVoted as "all" | "no_votes" | "has_votes" | undefined) ||
+    "all",
   set: (val) => {
     router.push({
       query: {
         ...route.query,
         page: 1,
-        hideVoted: val ? "true" : undefined,
+        hideVoted: val !== "all" ? val : undefined,
       },
     });
   },
@@ -430,7 +432,7 @@ const availableRegions = computed(() => {
 const availableCompanies = computed(() => {
   return Object.values(places.value ?? {})
     .filter((p) => p.krsNumber)
-    .map((p) => ({ title: p.name, value: p.krsNumber }))
+    .map((p) => ({ title: p.name, value: p.krsNumber as string }))
     .sort((a, b) => a.title.localeCompare(b.title));
 });
 
@@ -480,7 +482,8 @@ const apiQuery = computed(
           ? filterKrs.value
           : undefined,
       teryt: filterTeryt.value || undefined,
-      hideVoted: filterHideVoted.value ? "true" : undefined,
+      hideVoted:
+        filterHideVoted.value !== "all" ? filterHideVoted.value : undefined,
     }) as Query,
 );
 
