@@ -42,9 +42,11 @@
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
         v-model:teryt="filterTeryt"
+        v-model:krs="filterKrs"
         v-model:hide-voted="filterHideVoted"
         :available-parties="availableParties"
         :available-regions="availableRegions"
+        :available-companies="availableCompanies"
         :show-visibility="!!user"
       />
 
@@ -247,8 +249,10 @@ useHead({
 const route = useRoute();
 const router = useRouter();
 
+const DEFAULT_ITEMS_PER_PAGE = "10";
+
 const itemsPerPage = ref(
-  parseInt((route.query.itemsPerPage as string) || "50"),
+  parseInt((route.query.itemsPerPage as string) || DEFAULT_ITEMS_PER_PAGE),
 );
 const page = ref(parseInt((route.query.page as string) || "1"));
 
@@ -262,7 +266,7 @@ watch(
 watch(
   () => route.query.itemsPerPage,
   (newItems) => {
-    const i = parseInt((newItems as string) || "50");
+    const i = parseInt((newItems as string) || DEFAULT_ITEMS_PER_PAGE);
     if (itemsPerPage.value !== i) itemsPerPage.value = i;
   },
 );
@@ -328,10 +332,13 @@ const region = computed<[string, string] | undefined>(() => {
 });
 
 const company = computed<[string, string] | undefined>(() => {
-  const krsParam = route.query.krs as string | undefined;
+  const krsParam = route.query.krs;
   if (krsParam) {
+    const krsToMatch = Array.isArray(krsParam)
+      ? krsParam[0]
+      : (krsParam as string);
     for (const [id, place] of Object.entries(places.value ?? {})) {
-      if (place.krsNumber === krsParam) {
+      if (place.krsNumber === krsToMatch) {
         return [id, place.name];
       }
     }
@@ -384,6 +391,23 @@ const filterTeryt = computed<string | null>({
   },
 });
 
+const filterKrs = computed<string[] | null>({
+  get: () => {
+    const k = route.query.krs;
+    if (!k) return null;
+    return Array.isArray(k) ? (k as string[]) : [k as string];
+  },
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        krs: val && val.length > 0 ? val : undefined,
+      },
+    });
+  },
+});
+
 const filterHideVoted = computed<boolean>({
   get: () => route.query.hideVoted === "true",
   set: (val) => {
@@ -400,6 +424,13 @@ const filterHideVoted = computed<boolean>({
 const availableRegions = computed(() => {
   return Object.values(regions.value ?? {})
     .map((r) => ({ title: r.name, value: r.teryt }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+});
+
+const availableCompanies = computed(() => {
+  return Object.values(places.value ?? {})
+    .filter((p) => p.krsNumber)
+    .map((p) => ({ title: p.name, value: p.krsNumber }))
     .sort((a, b) => a.title.localeCompare(b.title));
 });
 
@@ -444,7 +475,10 @@ const apiQuery = computed(
           : undefined,
       visibility:
         filterVisibility.value !== "all" ? filterVisibility.value : undefined,
-      krs: route.query.krs as string | undefined,
+      krs:
+        filterKrs.value && filterKrs.value.length > 0
+          ? filterKrs.value
+          : undefined,
       teryt: filterTeryt.value || undefined,
       hideVoted: filterHideVoted.value ? "true" : undefined,
     }) as Query,

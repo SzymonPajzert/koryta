@@ -20,7 +20,7 @@ const queryValidator = z.object({
   party: z.string().optional(),
   parties: z.union([z.string(), z.array(z.string())]).optional(),
   teryt: z.string().optional(),
-  krs: z.string().optional(),
+  krs: z.union([z.string(), z.array(z.string())]).optional(),
   visibility: z.enum(["public", "private"]).optional(),
   hideVoted: z.enum(["true", "false"]).optional(),
 
@@ -101,27 +101,48 @@ export default defineEventHandler(async (event) => {
     }
 
     if (query.krs) {
-      const places = await db
-        .collection("nodes")
-        .where("type", "==", "place")
-        .where("krsNumber", "==", query.krs)
-        .limit(1)
-        .get();
-      if (!places.empty) {
-        const placeId = places.docs[0]?.id;
+      const krsArray = Array.isArray(query.krs) ? query.krs : [query.krs];
+      const places: any[] = [];
+      for (let i = 0; i < krsArray.length; i += 30) {
+        const chunk = krsArray.slice(i, i + 30);
+        const chunkPlaces = await db
+          .collection("nodes")
+          .where("type", "==", "place")
+          .where("krsNumber", "in", chunk)
+          .get();
+        places.push(...chunkPlaces.docs);
+      }
+
+      if (places.length > 0) {
+        const placeIds = places.map((doc) => doc.id);
         const arrayField = user
           ? "stats.edges.all.targetNodeIds"
           : "stats.edges.approved.targetNodeIds";
-        ops.push({
-          applyFs: (q) => q.where(arrayField, "array-contains", placeId),
-          applyMem: (nodes) =>
-            nodes.filter((n) => {
-              const arr = user
-                ? n.stats?.edges?.all?.targetNodeIds
-                : n.stats?.edges?.approved?.targetNodeIds;
-              return Array.isArray(arr) && arr.includes(placeId);
-            }),
-        });
+
+        const applyMemOp = (nodes: any[]) =>
+          nodes.filter((n) => {
+            const arr = user
+              ? n.stats?.edges?.all?.targetNodeIds
+              : n.stats?.edges?.approved?.targetNodeIds;
+            return (
+              Array.isArray(arr) &&
+              arr.some((id: string) => placeIds.includes(id))
+            );
+          });
+
+        if (placeIds.length <= 10) {
+          ops.push({
+            applyFs: (q) => q.where(arrayField, "array-contains-any", placeIds),
+            applyMem: applyMemOp,
+          });
+        } else {
+          ops.push({
+            applyFs: () => {
+              throw new Error("index: array-contains-any limit exceeded");
+            },
+            applyMem: applyMemOp,
+          });
+        }
       } else {
         return { nodes: {}, total: 0 };
       }
