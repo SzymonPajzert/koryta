@@ -51,7 +51,7 @@ class Companies(Pipeline[Company]):
         )
 
         for krs_id in all_krs:
-            if krs_id is None:
+            if krs_id is None or (isinstance(krs_id, float) and np.isnan(krs_id)):
                 continue
             assert isinstance(krs_id, str), " ".join(
                 [

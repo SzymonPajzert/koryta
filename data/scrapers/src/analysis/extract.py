@@ -59,6 +59,7 @@ class Extract(Pipeline):
     companies: CompaniesKRS
     teryt: Teryt
     hardcoded_people: PeopleRejestrIOHardcoded
+    _relevant_companies: set[str] | None = None
 
     MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
     EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
@@ -163,6 +164,9 @@ class Extract(Pipeline):
 
     def relevant_companies(self, ctx) -> set[str]:
         """Returns KRS IDs of companies that match one of the passed requirements."""
+        if self._relevant_companies is not None:
+            return self._relevant_companies
+
         result = set()
 
         if self.krss:
@@ -176,6 +180,7 @@ class Extract(Pipeline):
                 if company.teryt_code.startswith(self.region):
                     result.add(company.krs)
 
+        self._relevant_companies = result
         return result
 
     def relevant_employment(self, ctx):
@@ -238,6 +243,8 @@ class Extract(Pipeline):
     def process(self, ctx: Context):
         people = self.people.read_or_process(ctx)
         self.teryt.read_or_process(ctx)
+
+        print(f"Relevant companies are: {self.relevant_companies(ctx)}")
 
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
