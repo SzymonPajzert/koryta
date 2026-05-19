@@ -196,15 +196,24 @@
 
           <template #[`item.explore`]="{ item }">
             <div class="d-flex flex-nowrap">
-              <v-btn
-                icon="mdi-open-in-new"
-                variant="text"
-                color="secondary"
-                @click.stop="
-                  executeSearchAll(item, region, company);
-                  focusPerson(item);
-                "
-              />
+              <v-tooltip
+                text="Otwiera wiele kart wyszukiwania jednocześnie. Upewnij się, że blokowanie okienek (pop-up) jest wyłączone."
+                open-delay="2000"
+                location="top"
+              >
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    icon="mdi-open-in-new"
+                    variant="text"
+                    color="secondary"
+                    @click.stop="
+                      executeSearchAll(item, region, company);
+                      focusPerson(item);
+                    "
+                  />
+                </template>
+              </v-tooltip>
               <v-btn
                 icon="mdi-magnify"
                 variant="text"
