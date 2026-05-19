@@ -6,15 +6,16 @@ All direct psycopg access is encapsulated here.
 import logging
 import os
 import time
+from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Callable
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
-from psycopg_pool import ConnectionPool  # type: ignore
-from uuid_extensions import uuid7str  # type: ignore
+from psycopg_pool import ConnectionPool
 
 from entities.util import NormalizedParse
 from scrapers.stores import (
@@ -191,19 +192,14 @@ class PostgresCrawlQueue(CrawlQueue):
         now = datetime.now(warsaw_tz)
         with self.pg.transaction() as transaction:
             transaction.execute(
-                r"""
+                """
                 WITH candidate AS (
                     SELECT wi.id
                     FROM website_index wi
                     WHERE wi.done = FALSE
                       AND wi.num_retries < %s
                       AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
-                      AND NOT EXISTS (
-                          SELECT 1 FROM blocked_domains bd
-                          WHERE wi.url = bd.domain
-                             OR wi.url LIKE bd.domain || '/%%'
-                      )
-                    ORDER BY wi.priority ASC, RANDOM()
+                    ORDER BY wi.priority ASC, wi.id ASC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 )
@@ -211,7 +207,7 @@ class PostgresCrawlQueue(CrawlQueue):
                 SET locked_by_worker_id = %s, locked_at = %s
                 FROM candidate
                 WHERE wi.id = candidate.id
-                RETURNING wi.id, wi.url;
+                RETURNING wi.id, wi.url, wi.priority;
                 """,
                 (
                     max_retries,
@@ -223,7 +219,7 @@ class PostgresCrawlQueue(CrawlQueue):
             row = transaction.fetchone()
             if row is None:
                 return None
-            return CrawlQueueItem(row[0], row[1])
+            return CrawlQueueItem(row[0], row[1], row[2])
 
     def mark_done(
         self,
@@ -282,7 +278,7 @@ class PostgresCrawlQueue(CrawlQueue):
             tuple[str, str, int, bool, list[str], int, datetime, None, None]
         ] = [
             (
-                uuid7str(),
+                str(uuid4()),
                 self._normalize_url(url),
                 priority,
                 False,
@@ -352,15 +348,74 @@ class PostgresCrawlQueue(CrawlQueue):
             updated += len(batch)
         logger.info("Reprioritized %d URLs.", updated)
 
-    def get_done_urls(self, limit: int) -> list[DoneUrl]:
+    def get_done_urls(self, limit: int | None = None) -> list[DoneUrl]:
         """Fetch crawled pages that have a storage_path, for parsing."""
-        rows = self.pg.fetchall(
-            "SELECT id, url, storage_path FROM website_index "
-            "WHERE done = TRUE AND storage_path IS NOT NULL "
-            "ORDER BY date_finished DESC LIMIT %s;",
-            (limit,),
+        _base = (
+            "SELECT id, url, storage_path, metadata->>'media_type'"
+            " FROM website_index"
+            " WHERE done = TRUE AND storage_path IS NOT NULL"
+            " ORDER BY date_finished DESC"
         )
-        return [DoneUrl(row[0], row[1], row[2]) for row in rows]
+        if limit is None:
+            rows = self.pg.fetchall(_base + ";")
+        else:
+            rows = self.pg.fetchall(_base + " LIMIT %s;", (limit,))
+        return [DoneUrl(row[0], row[1], row[2], row[3]) for row in rows]
+
+    def bump_small_domains(
+        self, target_count: int, seed_domains: list[str]
+    ) -> tuple[int, Counter]:
+        """Set priority=0 for pending URLs on under-crawled seed domains.
+
+        For each domain in seed_domains with fewer than target_count done URLs,
+        promotes enough pending URLs to priority 0 so that
+        done + promoted = target_count.
+        Selection is random via UUID4 id ordering.
+
+        Returns (total bumped, per-domain counter).
+        """
+        rows = self.pg.fetchall(
+            """
+            WITH seed AS (
+                SELECT unnest(%s::text[]) AS domain
+            ),
+            domain_stats AS (
+                SELECT
+                    split_part(url, '/', 1) AS domain,
+                    COUNT(*) FILTER (WHERE done = TRUE) AS done_count
+                FROM website_index
+                WHERE split_part(url, '/', 1) = ANY(%s::text[])
+                GROUP BY split_part(url, '/', 1)
+            ),
+            ranked_pending AS (
+                SELECT
+                    wi.id,
+                    split_part(wi.url, '/', 1) AS domain,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY split_part(wi.url, '/', 1)
+                        ORDER BY wi.id
+                    ) AS rn
+                FROM website_index wi
+                WHERE wi.done = FALSE
+                  AND wi.priority != 0
+                  AND split_part(wi.url, '/', 1) = ANY(%s::text[])
+            ),
+            to_bump AS (
+                SELECT rp.id
+                FROM ranked_pending rp
+                LEFT JOIN domain_stats ds ON rp.domain = ds.domain
+                WHERE COALESCE(ds.done_count, 0) < %s
+                  AND rp.rn <= (%s - COALESCE(ds.done_count, 0))
+            )
+            UPDATE website_index
+            SET priority = 0
+            FROM to_bump
+            WHERE website_index.id = to_bump.id
+            RETURNING split_part(website_index.url, '/', 1) AS domain
+            """,
+            (seed_domains, seed_domains, seed_domains, target_count, target_count),
+        )
+        return len(rows), Counter(row[0] for row in rows)
 
     @classmethod
     def _normalize_url(cls, value: str) -> str:
