@@ -7,8 +7,8 @@
           text: 'Rafał Trzaskowski',
           link: '/entity/person/8rg6MrDfdiRR7YaAvE5O',
         },
-        { text: 'Warszawa', link: '/lista?miejsce=90LglYsGKu7JLEPGAmoD' },
-        { text: 'PKP', link: '/lista?miejsce=0qGH8AL9bwUCQvrLNwiO' },
+        { text: 'Warszawa', link: '/eksploruj/tabela?teryt=1465' },
+        { text: 'PKP', link: '/eksploruj/tabela?krs=0000019193' },
       ]"
     />
     <omni-search :search-text="simulator?.currentText" :fake="true" />

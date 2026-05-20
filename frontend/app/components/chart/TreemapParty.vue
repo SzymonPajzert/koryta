@@ -51,8 +51,8 @@ const chartOptions = computed(() => ({
       ) {
         console.log(opts.dataPointIndex);
         router.push({
-          path: "/lista",
-          query: { partia: parties.value[opts.dataPointIndex] },
+          path: "/eksploruj/tabela",
+          query: { party: parties.value[opts.dataPointIndex] },
         });
       },
     },
