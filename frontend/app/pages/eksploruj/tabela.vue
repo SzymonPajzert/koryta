@@ -25,7 +25,11 @@
       />
 
       <div v-if="focusedPerson" class="pa-4 pt-0">
-        <NoteEditor :key="focusedPerson.id" :node-id="focusedPerson.id" />
+        <NoteEditor
+          :key="focusedPerson.id"
+          :node-id="focusedPerson.id"
+          single-column
+        />
         <v-divider class="my-4" />
         <CardEmploymentHistory :edges="focusedEdges" />
       </div>
