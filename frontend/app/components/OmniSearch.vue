@@ -107,7 +107,7 @@ const baseItems = computed<ListItem[]>(() => {
     title: "Lista wszystkich osób",
     subtitle: `${nodeGroups.value?.[0]?.people ?? 0} powiązanych osób`,
     icon: "mdi-format-list-bulleted-type",
-    path: "/lista",
+    path: "/eksploruj/tabela",
     logEventKey: {
       content_id: nodeGroups.value?.[0]?.id || "",
       content_type: "nodeGroup",
@@ -118,9 +118,9 @@ const baseItems = computed<ListItem[]>(() => {
       title: item,
       icon: "mdi-flag",
       subtitle: "Partia",
-      path: "/lista",
+      path: "/eksploruj/tabela",
       query: {
-        partia: item,
+        party: item,
       },
       logEventKey: {
         content_id: item,
@@ -206,18 +206,14 @@ watch(nodeGroupPicked, (value) => {
 
   let path = value?.path ?? currentRoute.value.path;
   const allowedPath =
-    path == "/lista" ||
+    path == "/eksploruj/tabela" ||
     path == "/graf" ||
     path.startsWith("/entity/person/") ||
-    path.startsWith("/entity/place/") ||
-    path.startsWith("/entity/region/") ||
     path.startsWith("/osoba/") ||
-    path.startsWith("/instytucja/") ||
-    path.startsWith("/region/") ||
     path.startsWith("/artykul/") ||
     path.startsWith("/edit/");
   if (!allowedPath) {
-    path = "/lista";
+    path = "/eksploruj/tabela";
   }
   push({
     path: path,

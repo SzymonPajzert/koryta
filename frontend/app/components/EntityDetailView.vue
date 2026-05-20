@@ -46,13 +46,6 @@
       <div class="pa-4">
         <div v-if="entity?.type === 'place'" class="mb-4 d-flex">
           <v-btn
-            variant="tonal"
-            prepend-icon="mdi-format-list-bulleted"
-            :to="`/lista?miejsce=${node}`"
-          >
-            Lista pracowników
-          </v-btn>
-          <v-btn
             class="ml-2"
             variant="tonal"
             prepend-icon="mdi-graph-outline"
