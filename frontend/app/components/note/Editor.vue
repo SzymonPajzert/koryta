@@ -17,7 +17,7 @@
           v-for="(source, index) in formData.sources"
           :key="source.url || index"
           cols="12"
-          md="6"
+          :md="singleColumn ? '12' : '6'"
         >
           <NoteSourceCard
             :model-value="source"
@@ -28,7 +28,7 @@
             @remove="removeSource(index)"
           />
         </v-col>
-        <v-col cols="12" md="6">
+        <v-col cols="12" :md="singleColumn ? '12' : '6'">
           <v-btn
             variant="outlined"
             size="small"
@@ -69,6 +69,7 @@ import { NoteSourceCard } from "#components";
 
 const props = defineProps<{
   nodeId: string;
+  singleColumn?: boolean;
 }>();
 
 const { user } = useAuthState();
