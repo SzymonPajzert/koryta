@@ -37,17 +37,17 @@ interface Segment {
 }
 
 const segments: Segment[] = [
-  { value: 200, color: "#4caf50", label: "Dodane", link: "/lista" },
+  { value: 846, color: "#4caf50", label: "Dodane", link: "/lista" },
   {
-    value: 100,
+    value: 126,
     color: "#2196f3",
-    label: "Do sprawdzenia",
+    label: "Ciekawe",
     link: "/pomoc",
   },
   {
-    value: 431,
+    value: 1200,
     color: "#f44336",
-    label: "Znalezione",
+    label: "Do sprawdzenia",
     link: "/revisions",
   },
 ];
