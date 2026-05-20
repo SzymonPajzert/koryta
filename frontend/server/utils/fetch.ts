@@ -71,7 +71,7 @@ function getEventSafe() {
   }
 }
 
-function logEventPath(
+export function logEventPath(
   func: string,
   args: string,
   opts: { type?: string; collection: string; size?: number },
