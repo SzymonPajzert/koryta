@@ -140,6 +140,7 @@ export interface Person extends Omit<Node, "type"> {
 export interface ElectionRich {
   year?: string;
   location?: string;
+  teryt?: string;
   position: string;
   committee?: string;
 }
