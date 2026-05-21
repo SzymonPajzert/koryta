@@ -6,7 +6,7 @@
 import {
   parseEntityUrlSlug,
   slugPrefixToNodeType,
-  generateEntityUrl,
+  generateNodeUrl,
   seoTypes,
   type SeoType,
 } from "~/composables/slugs";
@@ -27,7 +27,7 @@ const type = slugPrefixToNodeType(route.params.seoType as SeoType) as NodeType;
 const { data, status } = await authFetch<{ node: Node }>(`/api/nodes/${id}`);
 
 if (status.value === "success" && data.value?.node?.name) {
-  const expectedUrl = generateEntityUrl(type, id, data.value.node.name);
+  const expectedUrl = generateNodeUrl(data.value.node);
   if (route.path !== expectedUrl) {
     if (import.meta.server) {
       await navigateTo(expectedUrl, { redirectCode: 301 });

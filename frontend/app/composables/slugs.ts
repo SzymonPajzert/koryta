@@ -1,4 +1,4 @@
-import type { NodeType } from "~~/shared/model";
+import type { NodeType, Node } from "~~/shared/model";
 
 export type SeoType = "osoba" | "instytucja" | "region" | "artykul";
 
@@ -65,6 +65,18 @@ export function generateEntityUrl(
   const prefix = nodeTypeToSlugPrefix(type);
   const slug = createSlug(name);
   return `/${prefix}/${slug}-${id}`;
+}
+
+export function generateNodeUrl(node: Node): string | undefined {
+  if (!node.id) return undefined;
+
+  if (node.type === "person") {
+    return generateEntityUrl(node.type, node.id, node.name);
+  }
+
+  if (node.type === "place") {
+    return "/eksploruj/tabela?";
+  }
 }
 
 export function parseEntityUrlSlug(slugWithId: string): {
