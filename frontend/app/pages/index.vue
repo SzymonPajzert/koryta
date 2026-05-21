@@ -67,8 +67,6 @@
       <v-col cols="12" class="text-center">
         <CardCallToAction />
       </v-col>
-
-
     </v-row>
   </HomeSection>
 </template>
