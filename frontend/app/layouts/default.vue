@@ -52,39 +52,7 @@
   <v-main class="d-flex flex-column">
     <v-toolbar v-if="user" density="compact" color="primary">
       <v-spacer />
-      <v-menu>
-        <template #activator="{ props }">
-          <v-btn v-bind="props" prepend-icon="mdi-plus" variant="text">
-            Dodaj nowe
-          </v-btn>
-        </template>
-        <v-list>
-          <v-list-item
-            prepend-icon="mdi-plus"
-            :to="{ path: '/edit/node/new', query: { type: 'article' } }"
-            :active="
-              route.path === '/edit/node/new' && route.query.type === 'article'
-            "
-            title="Dodaj artykuł"
-          />
-          <v-list-item
-            prepend-icon="mdi-plus"
-            :to="{ path: '/edit/node/new', query: { type: 'person' } }"
-            :active="
-              route.path === '/edit/node/new' && route.query.type === 'person'
-            "
-            title="Dodaj osobę"
-          />
-          <v-list-item
-            prepend-icon="mdi-plus"
-            :to="{ path: '/edit/node/new', query: { type: 'place' } }"
-            :active="
-              route.path === '/edit/node/new' && route.query.type === 'place'
-            "
-            title="Dodaj firmę"
-          />
-        </v-list>
-      </v-menu>
+
       <v-btn
         prepend-icon="mdi-comment-text-multiple-outline"
         variant="text"
