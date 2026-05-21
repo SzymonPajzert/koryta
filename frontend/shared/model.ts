@@ -8,6 +8,11 @@ type PageBase<PageType> = {
   delete_reason?: string;
   visibility?: boolean;
   stats?: NodeStats;
+  draft?: {
+    content?: string;
+    parties?: string[];
+    [key: string]: unknown;
+  };
 };
 
 type NodeEdgeStats = {
@@ -176,11 +181,17 @@ export interface NodeTypeMap {
   region: Region;
 }
 
+export type Operation = {
+  op: "add" | "remove" | "replace";
+  field: string;
+  value: unknown;
+};
+
 export interface Revision {
   id?: string;
   nodeId?: string;
   node_id?: string;
-  data: Node | Edge | Record<string, unknown>;
+  data: Node | Edge | Record<string, unknown> | Operation[];
   revision_id?: string | { path: string } | unknown;
   update_time: string | unknown; // ISO string
   update_user: string;

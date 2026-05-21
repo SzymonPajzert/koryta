@@ -78,8 +78,9 @@ export default defineEventHandler(async (event) => {
 
     const partiesToFilter = query.parties || query.party;
     if (partiesToFilter) {
+      const partiesField = user ? "draft.parties" : "parties";
       ops.push({
-        applyFs: (q) => applyPartiesFilter(q, partiesToFilter),
+        applyFs: (q) => applyPartiesFilter(q, partiesToFilter, partiesField),
         applyMem: (nodes) => {
           const partiesToSearch = Array.isArray(partiesToFilter)
             ? partiesToFilter
@@ -87,7 +88,7 @@ export default defineEventHandler(async (event) => {
           const hasNone = partiesToSearch.includes("__NONE__");
           const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
           return nodes.filter((n) => {
-            const p = n.parties || [];
+            const p = (user ? n.draft?.parties : n.parties) || [];
             if (hasNone && p.length === 0) return true;
             if (
               normalParties.length > 0 &&
@@ -304,6 +305,11 @@ export default defineEventHandler(async (event) => {
         ) {
           data.revision_id = data.revision_id._path.segments.join("/");
         }
+      }
+      // If user is logged in, promote draft state to main fields for UI convenience
+      if (user && data.draft) {
+        if (data.draft.parties !== undefined) data.parties = data.draft.parties;
+        if (data.draft.content !== undefined) data.content = data.draft.content;
       }
       return { id: doc.id, ...data, visibility: pageIsPublic(data) };
     });
