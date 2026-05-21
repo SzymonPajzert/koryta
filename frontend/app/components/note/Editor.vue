@@ -1,8 +1,8 @@
 <template>
-  <v-card v-if="user" class="mb-4">
+  <v-card v-if="user || otherSources.length > 0" class="mb-4">
     <v-card-title>Notatki</v-card-title>
 
-    <v-card-text v-if="!userNote && !isEditing">
+    <v-card-text v-if="user && !userNote && !isEditing">
       <div>
         <p class="text-body-1 mb-4">
           Wiesz więcej na temat tej osoby? Podziel się dodatkowymi informacjami
@@ -11,8 +11,27 @@
         </p>
       </div>
     </v-card-text>
+
+    <v-card-text v-if="!user && otherSources.length > 0">
+      <div>
+        <p class="text-body-1 mb-4">
+          Zaloguj się, aby dodać własną notatkę i pomóc innym w znajdowaniu
+          powiązań.
+        </p>
+      </div>
+    </v-card-text>
+
     <v-card-text>
       <v-row>
+        <v-col
+          v-for="(source, index) in otherSources"
+          :key="'other-' + index"
+          cols="12"
+          :md="singleColumn ? '12' : '6'"
+        >
+          <NoteSourceCard :model-value="source" :is-editing="false" />
+        </v-col>
+
         <v-col
           v-for="(source, index) in formData.sources"
           :key="source.url || index"
@@ -28,7 +47,7 @@
             @remove="removeSource(index)"
           />
         </v-col>
-        <v-col cols="12" :md="singleColumn ? '12' : '6'">
+        <v-col v-if="user" cols="12" :md="singleColumn ? '12' : '6'">
           <v-btn
             variant="outlined"
             size="small"
@@ -41,7 +60,7 @@
         </v-col>
       </v-row>
 
-      <div class="d-flex justify-end mt-4">
+      <div v-if="user" class="d-flex justify-end mt-4">
         <v-btn
           v-if="userNote && !isEditing"
           variant="tonal"
@@ -61,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, toRaw } from "vue";
+import { ref, toRaw, computed } from "vue";
 import { useNotes } from "~/composables/notes";
 import { useAuthState } from "~/composables/auth";
 import type { Note } from "~~/shared/model";
@@ -73,7 +92,13 @@ const props = defineProps<{
 }>();
 
 const { user } = useAuthState();
-const { userNote, saveNote } = useNotes(computed(() => props.nodeId));
+const { userNote, otherNotes, saveNote } = useNotes(
+  computed(() => props.nodeId),
+);
+
+const otherSources = computed(() => {
+  return otherNotes.value.flatMap((n) => n.sources || []);
+});
 
 const isEditing = ref(false);
 const saving = ref(false);
