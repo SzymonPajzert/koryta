@@ -2,9 +2,8 @@ import argparse
 import json
 import typing
 from functools import cached_property
-from time import sleep
 
-import requests
+from attr import dataclass
 
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
@@ -16,11 +15,63 @@ from scrapers.krs.list import KRS, CompaniesKRS, PeopleKRS
 from scrapers.stores import CloudStorage, Context, Pipeline, iterate_pipeline_dict
 
 
+@dataclass
+class RejestrIOQuery:
+    krs: KRS | None = None
+    person: RejestrIOKey | None = None
+    api_krs_odpis_aktualny_p: bool = False
+    api_krs_odpis_aktualny_s: bool = False
+    api_rejestrio_org: bool = False
+    api_rejestrio_org_krs_powiazania_aktualne: bool = False
+    api_rejestrio_org_krs_powiazania_historyczne: bool = False
+    api_rejestrio_osoby_krs_powiazania_aktualne: bool = False
+    api_rejestrio_osoby_krs_powiazania_historyczne: bool = False
+
+    def __post_init__(self):
+        if self.krs is None and self.person is None:
+            raise ValueError("Either krs or person must be provided")
+        # TODO add a check that if you list KRS connections, you need to provide a KRS
+
+    def cost(self) -> float:
+        """Calculate the cost of this query based on which APIs it will call."""
+        calls = [
+            self.api_rejestrio_org,
+            self.api_rejestrio_org_krs_powiazania_aktualne,
+            self.api_rejestrio_org_krs_powiazania_historyczne,
+            self.api_rejestrio_osoby_krs_powiazania_aktualne,
+            self.api_rejestrio_osoby_krs_powiazania_historyczne,
+        ]
+        return sum(calls) * 0.05
+
+    def urls(self) -> typing.Iterable[str]:
+        if self.api_krs_odpis_aktualny_p:
+            assert self.krs is not None
+            yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=P&format=json"
+        if self.api_krs_odpis_aktualny_s:
+            assert self.krs is not None
+            yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=S&format=json"
+        if self.api_rejestrio_org:
+            assert self.krs is not None
+            yield f"https://rejestr.io/api/v2/org/{self.krs}"
+        if self.api_rejestrio_org_krs_powiazania_aktualne:
+            assert self.krs is not None
+            yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=aktualne"
+        if self.api_rejestrio_org_krs_powiazania_historyczne:
+            assert self.krs is not None
+            yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=historyczne"
+        if self.api_rejestrio_osoby_krs_powiazania_aktualne:
+            assert self.person is not None
+            yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=aktualne"
+        if self.api_rejestrio_osoby_krs_powiazania_historyczne:
+            assert self.person is not None
+            yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=historyczne"
+
+
 def save_org_connections(
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
     people: typing.Iterable[RejestrIOKey],
-):
+) -> typing.Iterable[RejestrIOQuery]:
     connections = list(connections)
     names = list(names)
     people = list(people)
@@ -28,39 +79,26 @@ def save_org_connections(
     print(f"len(connections): {len(connections)}")
     print(f"len(names): {len(names)}")
     print(f"len(people): {len(people)}")
-    for krs in names:
-        yield (
-            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
-            0,
-            0,
-        )
-        yield (
-            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=S&format=json",
-            0,
-            0,
-        )
-        yield (f"https://rejestr.io/api/v2/org/{krs}", 0.05, 0)
     for krs in connections:
-        yield (
-            f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=aktualne",
-            0.05,
-            1,
+        yield RejestrIOQuery(
+            krs=krs,
+            api_rejestrio_org_krs_powiazania_aktualne=True,
+            api_rejestrio_org_krs_powiazania_historyczne=True,
         )
-        yield (
-            f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne",
-            0.05,
-            0,
+
+    for krs in names:
+        yield RejestrIOQuery(
+            krs=krs,
+            api_krs_odpis_aktualny_p=True,
+            api_krs_odpis_aktualny_s=True,
+            api_rejestrio_org=True,
         )
+
     for person in people:
-        yield (
-            f"https://rejestr.io/api/v2/osoby/{person.id}/krs-powiazania?aktualnosc=aktualne",
-            0.05,
-            1,
-        )
-        yield (
-            f"https://rejestr.io/api/v2/osoby/{person.id}/krs-powiazania?aktualnosc=historyczne",
-            0.05,
-            0,
+        yield RejestrIOQuery(
+            person=person,
+            api_rejestrio_osoby_krs_powiazania_aktualne=True,
+            api_rejestrio_osoby_krs_powiazania_historyczne=True,
         )
 
 
@@ -101,7 +139,9 @@ class ScrapeRejestrIO(Pipeline):
 
     def already_scraped_companies(self, ctx: Context) -> set[KRS]:
         scraped_companies = self.companies.read_or_process(ctx)
-        return self.series_to_set(scraped_companies["krs"])
+        return set(
+            KRS(id=str(krs).zfill(10)) for krs in scraped_companies["krs"].tolist()
+        )
 
     def companies_to_scrape(self, ctx: Context) -> set[KRS]:
         self.hardcoded_companies.process(ctx)
@@ -140,6 +180,12 @@ class ScrapeRejestrIO(Pipeline):
             f"Already scraped: {len(already_scraped)} {get_head(already_scraped, 10)}"
         )
         print(f"To scrape: {len(to_scrape)} {get_head(to_scrape, 10)}")
+        # It's already been scraped - fail if pipeline tries to read it again.
+
+        # This should list in the sources that it's been scraped
+        print([s.full_str() for s in to_scrape if s.id == "0000607833"])
+
+        assert KRS(id="0000607833") not in to_scrape
 
         return to_scrape
 
@@ -208,13 +254,12 @@ class ScrapeRejestrIO(Pipeline):
         return scraped_people
 
     def process(self, ctx: Context):
-        urls = list(
-            save_org_connections(
-                connections=self.companies_to_scrape(ctx),
-                names=self.companies_without_names(ctx),
-                people=self.people_to_scrape(ctx),
-            )
-        )
+        for url in save_org_connections(
+            connections=self.companies_to_scrape(ctx),
+            names=self.companies_without_names(ctx),
+            people=self.people_to_scrape(ctx),
+        ):
+            ctx.io.output_entity(url)
 
 
 def get_head(s: typing.Iterable[KRS | RejestrIOKey], n: int):

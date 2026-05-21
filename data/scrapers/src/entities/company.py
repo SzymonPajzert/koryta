@@ -60,6 +60,7 @@ class ManualKRS:
 
     # TODO migrate id to krs for consistency
     id: str
+
     sources: set[str] = field(default_factory=set)
     teryts: set[str] = field(default_factory=set)
     ministry: str | None = None
@@ -104,6 +105,9 @@ class ManualKRS:
 
     def __str__(self) -> str:
         return f"{self.id}"
+
+    def full_str(self) -> str:
+        return f"ManualKRS(id={self.id}, sources={self.sources}, teryts={self.teryts}"
 
     def __repr__(self) -> str:
         return self.__str__()
