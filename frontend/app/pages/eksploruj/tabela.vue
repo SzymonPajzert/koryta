@@ -162,6 +162,13 @@
           <template #[`item.elections`]="{ item }">
             <template v-for="(election, i) in item.elections" :key="i">
               <v-chip size="small" class="mr-1 mb-1" variant="outlined">
+                <v-tooltip activator="parent" location="top" open-delay="200">
+                  {{
+                    getWojewodztwo(election.teryt)
+                      ? `woj. ${getWojewodztwo(election.teryt)}`
+                      : "Brak informacji o województwie"
+                  }}
+                </v-tooltip>
                 <template v-if="election.year">
                   <span class="font-weight-bold mr-1">{{ election.year }}</span>
                 </template>
@@ -567,6 +574,30 @@ const shortCompanyName = (companyName: string | undefined) => {
       companyName.slice(0, spolkaIndex) + companyName.slice(spolkaIndex + 39);
   }
   return companyName;
+};
+
+const terytToWojewodztwo: Record<string, string> = {
+  "02": "dolnośląskie",
+  "04": "kujawsko-pomorskie",
+  "06": "lubelskie",
+  "08": "lubuskie",
+  "10": "łódzkie",
+  "12": "małopolskie",
+  "14": "mazowieckie",
+  "16": "opolskie",
+  "18": "podkarpackie",
+  "20": "podlaskie",
+  "22": "pomorskie",
+  "24": "śląskie",
+  "26": "świętokrzyskie",
+  "28": "warmińsko-mazurskie",
+  "30": "wielkopolskie",
+  "32": "zachodniopomorskie",
+};
+
+const getWojewodztwo = (teryt?: string) => {
+  if (!teryt || teryt.length < 2) return undefined;
+  return terytToWojewodztwo[teryt.substring(0, 2)];
 };
 </script>
 
