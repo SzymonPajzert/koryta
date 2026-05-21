@@ -5,18 +5,18 @@ from koryta import setup_context
 from pipelines import Companies
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def ctx():
     return setup_context(False)[0]
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def companies_df(ctx):
     stats = Companies()
     return stats.read_or_process(ctx)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def companies_map(ctx):
     stats = Companies()
     return {c.krs: c for c in stats.read_or_process_list(ctx)}
