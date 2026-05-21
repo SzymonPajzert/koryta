@@ -19,7 +19,6 @@ export function useNotes(nodeID: MaybeRef<string>) {
   const nodeRef = computed(() => toValue(nodeID));
 
   const notesQuery = computed(() => {
-    if (!user.value) return null;
     return query(collection(db, "notes"), where("nodeId", "==", nodeRef.value));
   });
 
@@ -31,7 +30,7 @@ export function useNotes(nodeID: MaybeRef<string>) {
   });
 
   const otherNotes = computed(() => {
-    if (!user.value) return [];
+    if (!user.value) return allNotes.value;
     return allNotes.value.filter((n) => n.userUid !== user.value?.uid);
   });
 
