@@ -1,11 +1,11 @@
 from conductor import setup_context
+from entities.company import ManualKRS
 from entities.person import RejestrIOKey
 from scrapers.krs.scrape import ScrapeRejestrIO
-from scrapers.stores import ProcessPolicy
 
 
 def test_people_to_scrape():
-    ctx, dumper = setup_context(True, ProcessPolicy.with_default([]))
+    ctx = setup_context(False)[0]
     scraper = ScrapeRejestrIO()
     scraped = scraper.people_to_scrape(ctx)
 
@@ -53,3 +53,14 @@ def test_people_to_scrape():
     ]
     print("\nVote for Zaradny:")
     print(vote)
+
+
+def test_companies_to_scrape_filtering():
+    ctx = setup_context(False)[0]
+    scraper = ScrapeRejestrIO()
+    scraped = scraper.companies_to_scrape(ctx)
+
+    # Test that 0000607833 which is already scraped is correctly filtered out
+    assert ManualKRS(id="0000607833") not in scraped, (
+        "ManualKRS(0000607833) was NOT filtered out of companies_to_scrape!"
+    )
