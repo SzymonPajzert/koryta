@@ -10,6 +10,7 @@ from entities.company import Company as KrsCompany
 from entities.company import ManualKRS as KRS
 from entities.company import Owner, Source
 from entities.person import KRS as KrsPerson
+from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import QueryRelation
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
@@ -38,7 +39,7 @@ def end_time(item):
             has_ongoing = True
         else:
             max_end = max(max_end, v)
-            
+
     if has_ongoing:
         return None
     return max_end if max_end != "1900-01-01" else None
@@ -125,6 +126,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     filename = "company_krs"
     dtype = {"krs": str}
     postal_codes: PostalCodes
+    hardcoded_companies: CompaniesHardcoded
 
     def __init__(self) -> None:
         super().__init__()
@@ -192,10 +194,11 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         and extracts information about companies.
         """
         postal_codes = self.postal_codes.read_or_process(ctx)
+        self.hardcoded_companies.process(ctx)
+        hardcoded = self.hardcoded_companies.all_companies_krs
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             if "org" not in blob_name:
-                print("Skipping non-org file: ", blob_name)
                 continue
 
             if "aktualnosc_" in blob_name:
@@ -224,10 +227,16 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             self.add_company_source(c.krs, blob_name)
 
         for company in self.companies.values():
+            company_sources = self.company_sources.get(company.krs, set())
+            hc = hardcoded.get(company.krs)
+            if hc:
+                for src in hc.sources:
+                    company_sources.add(Source(source="hardcoded", reason=src))
+
             ctx.io.output_entity(
                 dataclasses.replace(
                     company,
-                    sources=list(self.company_sources.get(company.krs, set())),
+                    sources=list(company_sources),
                 )
             )
 
