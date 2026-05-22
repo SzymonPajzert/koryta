@@ -60,7 +60,7 @@
       link
       title="Zobacz cały region"
       :subtitle="`(${props.region.people} powiązań)`"
-      :to="`/entity/region/teryt${String(props.region.teryt).padStart(4, '0')}`"
+      :to="`/eksploruj/tabela?teryt=${String(props.region.teryt).padStart(4, '0')}`"
     >
       <template #append>
         <v-icon
