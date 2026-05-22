@@ -43,26 +43,26 @@ class RejestrIOQuery:
         ]
         return sum(calls) * 0.05
 
-    def urls(self) -> typing.Iterable[str]:
+    def urls(self, only_free=False) -> typing.Iterable[str]:
         if self.api_krs_odpis_aktualny_p:
             assert self.krs is not None
             yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=P&format=json"
         if self.api_krs_odpis_aktualny_s:
             assert self.krs is not None
             yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=S&format=json"
-        if self.api_rejestrio_org:
+        if self.api_rejestrio_org and not only_free:
             assert self.krs is not None
             yield f"https://rejestr.io/api/v2/org/{self.krs}"
-        if self.api_rejestrio_org_krs_powiazania_aktualne:
+        if self.api_rejestrio_org_krs_powiazania_aktualne and not only_free:
             assert self.krs is not None
             yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=aktualne"
-        if self.api_rejestrio_org_krs_powiazania_historyczne:
+        if self.api_rejestrio_org_krs_powiazania_historyczne and not only_free:
             assert self.krs is not None
             yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=historyczne"
-        if self.api_rejestrio_osoby_krs_powiazania_aktualne:
+        if self.api_rejestrio_osoby_krs_powiazania_aktualne and not only_free:
             assert self.person is not None
             yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=aktualne"
-        if self.api_rejestrio_osoby_krs_powiazania_historyczne:
+        if self.api_rejestrio_osoby_krs_powiazania_historyczne and not only_free:
             assert self.person is not None
             yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=historyczne"
 

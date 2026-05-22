@@ -159,7 +159,7 @@ def setup_context(
         utils=UtilsImpl(),
         web=WebImpl(),
         crawl_queue=crawl_queue,
-        nlp=nlp,                # type: ignore
+        nlp=nlp,  # type: ignore
         refresh_policy=policy,
     )
 
