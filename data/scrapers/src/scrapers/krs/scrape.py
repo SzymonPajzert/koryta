@@ -154,8 +154,32 @@ def get_krs_scraped(ctx: Context) -> dict[str, list[str]]:
     return krs_scraped
 
 
+def get_osoby_scraped(ctx: Context) -> dict[str, list[str]]:
+    osoby_scraped: dict[str, list[str]] = {}
+    for blob_name in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
+        assert isinstance(blob_name, DownloadableFile)
+        split = blob_name.url.split("osoby/", 1)
+        if len(split) < 2:
+            continue
+
+        person_id = split[1].split("/", 1)[0]
+        if "aktualnosc_aktualne" in blob_name.url:
+            osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + [
+                "aktualnosc_aktualne"
+            ]
+        elif "aktualnosc_historyczne" in blob_name.url:
+            osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + [
+                "aktualnosc_historyczne"
+            ]
+        else:
+            osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + ["main"]
+
+    return osoby_scraped
+
+
 def save_org_connections(
     already_scraped_krs: dict[str, list[str]],
+    already_scraped_people: dict[str, list[str]],
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
     people: typing.Iterable[RejestrIOKey],
@@ -189,11 +213,16 @@ def save_org_connections(
         )
 
     for person in people:
-        yield RejestrIOQuery(
+        data = already_scraped_people.get(person.id, [])
+        query = RejestrIOQuery(
             person=person,
-            api_rejestrio_osoby_krs_powiazania_aktualne=True,
-            api_rejestrio_osoby_krs_powiazania_historyczne=True,
+            api_rejestrio_osoby_krs_powiazania_aktualne="aktualnosc_aktualne"
+            not in data,
+            api_rejestrio_osoby_krs_powiazania_historyczne="aktualnosc_historyczne"
+            not in data,
         )
+        if len(list(query.urls())) > 0:
+            yield query
 
 
 class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
@@ -348,6 +377,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
     def process(self, ctx: Context):
         for url in save_org_connections(
             already_scraped_krs=get_krs_scraped(ctx),
+            already_scraped_people=get_osoby_scraped(ctx),
             connections=self.companies_to_scrape(ctx),
             names=self.companies_without_names(ctx),
             people=self.people_to_scrape(ctx),
