@@ -7,6 +7,7 @@ from attr import dataclass
 
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
+from entities.company import ManualKRS
 from entities.person import RejestrIOKey
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
@@ -67,6 +68,54 @@ class RejestrIOQuery:
             yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=historyczne"
 
 
+class KRSSet:
+    """
+    Represents a set of KRS entries, merging and handling duplicates.
+    """
+
+    def __init__(
+        self, initial_entries: typing.Optional[typing.Iterable[ManualKRS]] = None
+    ):
+        self.entries: dict[str, ManualKRS] = {}
+        if initial_entries:
+            for krs in initial_entries:
+                self.add(krs)
+
+    def add(self, krs: ManualKRS):
+        """Adds a ManualKRS entry to the set or merges if the same ID already exists."""
+        if krs.id in self.entries:
+            self.entries[krs.id] = self.entries[krs.id].merge(krs)
+        else:
+            self.entries[krs.id] = krs
+
+    def __or__(self, other: "KRSSet") -> "KRSSet":
+        """Returns a new KRSSet containing the union of both sets."""
+        result = KRSSet(self.entries.values())
+        for entry in other.entries.values():
+            result.add(entry)
+        return result
+
+    def __sub__(self, other: "KRSSet") -> "KRSSet":
+        """Returns a new KRSSet containing differences between the sets."""
+        result = KRSSet()
+        for id, entry in self.entries.items():
+            if id not in other.entries:
+                result.add(entry)
+        return result
+
+    def __iter__(self):
+        return iter(self.entries.values())
+
+    def __len__(self):
+        return len(self.entries)
+
+    def __getitem__(self, key):
+        return self.entries[key]
+
+    def __contains__(self, key):
+        return key in self.entries
+
+
 def save_org_connections(
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
@@ -103,7 +152,7 @@ def save_org_connections(
 
 
 class ScrapeRejestrIO(Pipeline):
-    filename = "scrape_rejestr_io"
+    volatile = True
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
@@ -133,20 +182,20 @@ class ScrapeRejestrIO(Pipeline):
 
         return args
 
-    def series_to_set(self, series) -> set[KRS]:
-        return set(KRS(krs) for krs in series.tolist())
+    def series_to_set(self, series) -> KRSSet:
+        return KRSSet(KRS(krs) for krs in series.tolist())
 
-    def already_scraped_companies(self, ctx: Context) -> set[KRS]:
+    def already_scraped_companies(self, ctx: Context) -> KRSSet:
         scraped_companies = self.companies.read_or_process(ctx)
-        return set(
+        return KRSSet(
             KRS(id=str(krs).zfill(10)) for krs in scraped_companies["krs"].tolist()
         )
 
-    def companies_to_scrape(self, ctx: Context) -> set[KRS]:
+    def companies_to_scrape(self, ctx: Context) -> KRSSet:
         self.hardcoded_companies.process(ctx)
         already_scraped = self.already_scraped_companies(ctx)
 
-        starters = set(self.hardcoded_companies.all_companies_krs.values())
+        starters = KRSSet(self.hardcoded_companies.all_companies_krs.values())
 
         for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
             blob_name = getattr(blob_ref, "url", str(blob_ref))
@@ -167,7 +216,7 @@ class ScrapeRejestrIO(Pipeline):
         graph = CompanyGraph()
 
         if self.args.children:
-            children = set(
+            children = KRSSet(
                 KRS(krs) for krs in graph.all_descendants(set(s.id for s in starters))
             )
         else:
@@ -182,11 +231,11 @@ class ScrapeRejestrIO(Pipeline):
 
         return to_scrape
 
-    def companies_without_names(self, ctx: Context) -> set[KRS]:
+    def companies_without_names(self, ctx: Context) -> KRSSet:
         encountered_companies = self.series_to_set(
             self.people.read_or_process(ctx)["employed_krs"]
         )
-        results = set()
+        results = KRSSet()
         companies = {
             c["krs"]: c
             for c in iterate_pipeline_dict(self.companies_all.read_or_process(ctx))
