@@ -1,9 +1,8 @@
 import argparse
 import json
 import typing
+from dataclasses import dataclass
 from functools import cached_property
-
-from attr import dataclass
 
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
@@ -131,6 +130,8 @@ def save_org_connections(
     for krs in connections:
         yield RejestrIOQuery(
             krs=krs,
+            api_krs_odpis_aktualny_p=True,
+            api_krs_odpis_aktualny_s=True,
             api_rejestrio_org_krs_powiazania_aktualne=True,
             api_rejestrio_org_krs_powiazania_historyczne=True,
         )
@@ -151,7 +152,8 @@ def save_org_connections(
         )
 
 
-class ScrapeRejestrIO(Pipeline):
+class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
+    filename = None
     volatile = True
 
     hardcoded_companies: CompaniesHardcoded
@@ -162,6 +164,10 @@ class ScrapeRejestrIO(Pipeline):
     people_all: PeopleMerged
     koryta_votes: KorytaVotes
     koryta_people: KorytaPeople
+
+    @property
+    def output_class(self):
+        return RejestrIOQuery
 
     @cached_property
     def args(self):
