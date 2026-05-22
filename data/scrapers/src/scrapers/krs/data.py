@@ -12,6 +12,7 @@ from scrapers.stores import DownloadableFile as FileSource
 
 class CompaniesHardcoded(Pipeline[KRS]):
     filename = None
+    volatile = True
 
     all_companies_krs: dict[str, KRS] = dict()
     teryt: Teryt
@@ -105,6 +106,7 @@ class CompaniesHardcoded(Pipeline[KRS]):
 
 class PeopleRejestrIOHardcoded(Pipeline):
     filename = None
+    volatile = True
 
     def process(self, ctx: Context):
         for url in PEOPLE_LIST:

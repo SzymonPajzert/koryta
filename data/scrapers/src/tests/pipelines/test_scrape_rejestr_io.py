@@ -62,5 +62,6 @@ def test_companies_to_scrape_filtering():
 
     # Test that 0000607833 which is already scraped is correctly filtered out
     assert ManualKRS(id="0000607833") not in scraped, (
-        "ManualKRS(0000607833) was NOT filtered out of companies_to_scrape!"
+        f"ManualKRS(0000607833) was NOT filtered out of companies_to_scrape: \
+            {[c for c in scraped if c.id == '0000607833'][0].full_str()}"
     )
