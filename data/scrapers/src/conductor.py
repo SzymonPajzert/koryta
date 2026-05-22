@@ -134,7 +134,7 @@ class Conductor(IO):
 
 
 def setup_context(
-    use_rejestr_io: bool,
+    use_rejestr_io: bool = False,
     use_nlp: bool = False,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
