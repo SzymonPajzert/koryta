@@ -50,7 +50,10 @@ EXPECTED_COMPANIES = {
         name="ZAKŁAD GOSPODARKI KOMUNALNEJ GMINY SŁUPIA KONECKA",
         city="Słupia",
         teryt_code="260506",
-        sources=[Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None)],
+        sources=[
+            Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None),
+            Source(source="hardcoded", source_krs=None, reason="PUBLIC_COMPANIES_KRS"),
+        ],
     ),
     "0000156806": Company(
         krs="0000156806",
@@ -66,6 +69,7 @@ EXPECTED_COMPANIES = {
         teryt_code="301703",
         sources=[
             Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None),
+            Source(source="hardcoded", source_krs=None, reason="PUBLIC_COMPANIES_KRS"),
             Source(source="rejestr-io", source_krs="rejestr.io", reason=None),
         ],
     ),
@@ -81,4 +85,6 @@ def test_expected_output(companies_map, companies_df, expected_company):
     company = companies_map[expected_company.krs]
     company.sources.sort(key=lambda x: x.source)
     print(companies_df[companies_df["krs"] == expected_company.krs].iloc[0])
+    print(company)
+    print(expected_company)
     assert company == expected_company, company

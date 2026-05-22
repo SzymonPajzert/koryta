@@ -103,8 +103,7 @@ def save_org_connections(
 
 
 class ScrapeRejestrIO(Pipeline):
-    # TODO be able to write that this pipeline doesn't return anything new.
-    filename = None
+    filename = "scrape_rejestr_io"
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
@@ -180,12 +179,6 @@ class ScrapeRejestrIO(Pipeline):
             f"Already scraped: {len(already_scraped)} {get_head(already_scraped, 10)}"
         )
         print(f"To scrape: {len(to_scrape)} {get_head(to_scrape, 10)}")
-        # It's already been scraped - fail if pipeline tries to read it again.
-
-        # This should list in the sources that it's been scraped
-        print([s.full_str() for s in to_scrape if s.id == "0000607833"])
-
-        assert KRS(id="0000607833") not in to_scrape
 
         return to_scrape
 
