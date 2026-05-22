@@ -198,12 +198,11 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         hardcoded = self.hardcoded_companies.all_companies_krs
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
-            if "org" not in blob_name:
-                continue
-
             if "aktualnosc_" in blob_name:
-                parent = KRS.from_blob_name(blob_name)
-                self.add_company_source(parent.id, blob_name)
+                parent: KRS | None = None
+                if "/org" in blob_name:
+                    parent = KRS.from_blob_name(blob_name)
+                    self.add_company_source(parent.id, blob_name)
 
                 for item in data:
                     if item.get("typ") != "organizacja":
@@ -213,10 +212,10 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     conn_type = QueryRelation.from_rejestrio(
                         item["krs_powiazania_kwerendowane"][0]
                     )
-                    if conn_type.is_child():
+                    if parent is not None and conn_type.is_child():
                         self.add_relation(parent.id, c.krs)
 
-            else:
+            elif "/org" in blob_name:
                 c = company_from_rejestrio(data, postal_codes)
                 self.add_company(c)
                 self.add_company_source(c.krs, blob_name)
@@ -251,7 +250,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
 def company_from_rejestrio(data: dict, pcs: DataFrame | None = None) -> KrsCompany:
     krs = data["numery"]["krs"]
     name = data["nazwy"]["skrocona"]
-    city = data["adres"]["miejscowosc"]
+    city = data.get("adres", {}).get("miejscowosc", "")
     teryt_code = None
     if "adres" in data and "teryt" in data["adres"] and data["adres"]["teryt"]:
         t = data["adres"]["teryt"]
