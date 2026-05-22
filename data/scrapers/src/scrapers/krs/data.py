@@ -258,6 +258,7 @@ PEOPLE_LIST = [
     "https://rejestr.io/osoby/946510",
     "https://rejestr.io/osoby/961186",
     "https://rejestr.io/osoby/977265",
+    "https://rejestr.io/osoby/3396675",
 ]
 
 
