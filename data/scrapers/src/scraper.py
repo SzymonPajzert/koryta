@@ -10,6 +10,7 @@ from tqdm import tqdm
 from conductor import setup_context
 from scrapers.kmgp.people import PeopleKMGP
 from scrapers.krs.scrape import ScrapeRejestrIO
+from scrapers.stores import Context
 
 
 def get_urls_to_scrape(ctx):
@@ -88,7 +89,7 @@ def query_krs_api(url, verbose=True) -> str | None:
     return json.dumps(result)
 
 
-def upload_result(ctx, url, result):
+def upload_result(ctx: Context, url, result):
     # We're discarding query params, so it's a hotfix for this
     url = url.replace("?aktualnosc=", "/aktualnosc_")
     url = url.replace("?rejestr=P&format=json", "")

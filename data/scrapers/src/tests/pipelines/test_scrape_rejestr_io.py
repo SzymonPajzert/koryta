@@ -1,7 +1,8 @@
+import pytest
+
 from conductor import setup_context
-from entities.company import ManualKRS
 from entities.person import RejestrIOKey
-from scrapers.krs.scrape import ScrapeRejestrIO
+from scrapers.krs.scrape import ScrapeRejestrIO, get_krs_scraped
 
 
 def test_people_to_scrape():
@@ -55,13 +56,38 @@ def test_people_to_scrape():
     print(vote)
 
 
-def test_companies_to_scrape_filtering():
+@pytest.mark.parametrize("krs", ["0000607833", "0000001920"])
+def test_companies_to_scrape_specific(krs):
     ctx = setup_context(False)[0]
     scraper = ScrapeRejestrIO()
-    scraped = scraper.companies_to_scrape(ctx)
+    to_scrape = scraper.companies_to_scrape(ctx)
 
-    # Test that 0000607833 which is already scraped is correctly filtered out
-    assert ManualKRS(id="0000607833") not in scraped, (
-        f"ManualKRS(0000607833) was NOT filtered out of companies_to_scrape: \
-            {[c for c in scraped if c.id == '0000607833'][0].full_str()}"
+    print(f"Companies to scrape: {len(to_scrape)}")
+    assert krs not in to_scrape, (
+        f"Should be filtered: {[c for c in to_scrape if c.id == krs][0].full_str()}"
     )
+
+
+def test_companies_to_scrape_filtering():
+    """
+    This test checks that companies to be scraped
+    don't have specific blobs already uploaded.
+    """
+
+    ctx = setup_context(False)[0]
+    scraper = ScrapeRejestrIO()
+    to_scrape = scraper.read_or_process_list(ctx)
+    krs_scraped = get_krs_scraped(ctx)
+
+    for query in to_scrape:
+        if query.krs is None:
+            continue
+
+        scraped = krs_scraped.get(query.krs.id, [])
+        for data in scraped:
+            if "aktualnosc_aktualne" in data:
+                assert not query.api_rejestrio_org_krs_powiazania_aktualne
+            if "aktualnosc_historyczne" in data:
+                assert not query.api_rejestrio_org_krs_powiazania_historyczne
+            if "main" in data:
+                assert not query.api_rejestrio_org
