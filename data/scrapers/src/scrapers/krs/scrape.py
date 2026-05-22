@@ -12,7 +12,13 @@ from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import KRS, CompaniesKRS, PeopleKRS
-from scrapers.stores import CloudStorage, Context, Pipeline, iterate_pipeline_dict
+from scrapers.stores import (
+    CloudStorage,
+    Context,
+    DownloadableFile,
+    Pipeline,
+    iterate_pipeline_dict,
+)
 
 
 @dataclass
@@ -108,14 +114,48 @@ class KRSSet:
     def __len__(self):
         return len(self.entries)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         return self.entries[key]
 
-    def __contains__(self, key):
+    def __contains__(self, key: str):
         return key in self.entries
 
 
+def get_krs_scraped(ctx: Context) -> dict[str, list[str]]:
+    krs_scraped: dict[str, list[str]] = {}
+    for blob_name in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
+        assert isinstance(blob_name, DownloadableFile)
+        split = blob_name.url.split("org/", 1)
+        if len(split) < 2:
+            continue
+
+        krs = split[1].split("/", 1)[0]
+        # date = blob_name.url.split("/")[-1]
+        if "aktualnosc_aktualne" in blob_name.url:
+            krs_scraped[krs] = krs_scraped.get(krs, []) + ["aktualnosc_aktualne"]
+        elif "aktualnosc_historyczne" in blob_name.url:
+            krs_scraped[krs] = krs_scraped.get(krs, []) + ["aktualnosc_historyczne"]
+        else:
+            krs_scraped[krs] = krs_scraped.get(krs, []) + ["main"]
+
+    for blob_name in ctx.io.list_files(
+        CloudStorage(prefix="hostname=api-krs.ms.gov.pl")
+    ):
+        assert isinstance(blob_name, DownloadableFile)
+        split = blob_name.url.split("OdpisAktualny/", 1)
+        if len(split) < 2:
+            continue
+
+        krs = split[1].split("/", 1)[0]
+        # date = blob_name.url.split("/")[-1]
+        if "OdpisAktualny" in blob_name.url:
+            krs_scraped[krs] = krs_scraped.get(krs, []) + ["api-krs"]
+
+    return krs_scraped
+
+
 def save_org_connections(
+    already_scraped_krs: dict[str, list[str]],
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
     people: typing.Iterable[RejestrIOKey],
@@ -128,20 +168,24 @@ def save_org_connections(
     print(f"len(names): {len(names)}")
     print(f"len(people): {len(people)}")
     for krs in connections:
-        yield RejestrIOQuery(
+        data = already_scraped_krs.get(krs.id, [])
+        query = RejestrIOQuery(
             krs=krs,
-            api_krs_odpis_aktualny_p=True,
-            api_krs_odpis_aktualny_s=True,
-            api_rejestrio_org_krs_powiazania_aktualne=True,
-            api_rejestrio_org_krs_powiazania_historyczne=True,
+            api_krs_odpis_aktualny_p="api-krs" not in data,
+            api_krs_odpis_aktualny_s="api-krs" not in data,
+            api_rejestrio_org_krs_powiazania_aktualne="aktualnosc_aktualne" not in data,
+            api_rejestrio_org_krs_powiazania_historyczne="aktualnosc_historyczne"
+            not in data,
         )
+        if len(list(query.urls())) > 0:
+            # If there's nothing to query, don't send it
+            yield query
 
     for krs in names:
         yield RejestrIOQuery(
             krs=krs,
             api_krs_odpis_aktualny_p=True,
             api_krs_odpis_aktualny_s=True,
-            api_rejestrio_org=True,
         )
 
     for person in people:
@@ -303,6 +347,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
     def process(self, ctx: Context):
         for url in save_org_connections(
+            already_scraped_krs=get_krs_scraped(ctx),
             connections=self.companies_to_scrape(ctx),
             names=self.companies_without_names(ctx),
             people=self.people_to_scrape(ctx),
