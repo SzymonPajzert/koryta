@@ -77,9 +77,8 @@ def main():
             else:
                 refresh.append(r)
 
-    rejestr_io = "ScrapeRejestrIO" in args.pipeline
     policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
-    ctx, dumper = setup_context(rejestr_io, policy)
+    ctx, dumper = setup_context(False, policy=policy)
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:
