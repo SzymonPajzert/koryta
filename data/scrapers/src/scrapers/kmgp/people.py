@@ -127,7 +127,14 @@ class PeopleKMGP(Pipeline[Person]):
             for n in names_to_index:
                 if n not in self.pkw_index:
                     self.pkw_index[n] = []
-                self.pkw_index[n].append(pkw_person)
+                self.pkw_index[n].append(
+                    Person(
+                        name=pkw_person.pkw_name or "",
+                        companies=[],
+                        elections=[],
+                        sources=[],
+                    )
+                )
 
         self.companies_index: dict[tuple[str, str], str] = {}
         for c in self.companies_kmgp.read_or_process_list(ctx):
