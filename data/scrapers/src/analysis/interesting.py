@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from entities.company import Company, ManualKRS, Owner, Source, Wikipedia
+from entities.company import Company, Owner, Source, Wikipedia
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
@@ -115,12 +115,10 @@ class Companies(Pipeline[Company]):
             yield Wikipedia(*row)
 
     def children_of_hardcoded(self, ctx: Context, graph: CompanyGraph) -> list[str]:
-        # This is actually a set[KRS] and if we don't cast it to str,
-        # sets will contain wrong values
-        children_of_hardcoded_set: set[ManualKRS] = graph.all_descendants(
-            self.hardcoded_companies.read_or_process_list(ctx)
-        )  # type: ignore
-        return list((krs.id for krs in children_of_hardcoded_set))
+        children_of_hardcoded_set = graph.all_descendants(
+            company.id for company in self.hardcoded_companies.read_or_process_list(ctx)
+        )
+        return list((krs for krs in children_of_hardcoded_set))
 
     def company_graph(self, ctx: Context):
         graph = CompanyGraph()
