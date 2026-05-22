@@ -83,9 +83,10 @@ def query_krs_api(url, verbose=True) -> str | None:
         print_filtered(f"Unexpected response for {url}: {result}, skipping this KRS")
         return None
     dzial1 = result["odpis"]["dane"]["dzial1"]
-    dane = dzial1["danePodmiotu"]
-    miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
-    print_filtered(f"{dane.get('nazwa', dane)} - {miasto}")
+    dane = dzial1.get("danePodmiotu", {})
+    if "siedzibaIAdres" in dzial1:
+        miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
+        print_filtered(f"{dane.get('nazwa', dane)} - {miasto}")
     return json.dumps(result)
 
 

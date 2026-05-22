@@ -308,9 +308,9 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
         krs = odpis.get("naglowekA").get("numerKRS")
         dane = odpis.get("dane", {})
         dzial1 = dane.get("dzial1", {})
-        nazwa = dzial1.get("danePodmiotu").get("nazwa")
+        nazwa = dzial1.get("danePodmiotu", {}).get("nazwa")
         siedziba = dzial1.get("siedzibaIAdres", {})
-        miejscowosc = siedziba.get("adres", {}).get("miejscowosc").lower()
+        miejscowosc = siedziba.get("adres", {}).get("miejscowosc", "").lower()
         postal_code = siedziba.get("adres", {}).get("kodPocztowy")
 
         teryt_code = get_teryt(pcs, miejscowosc, postal_code)
