@@ -90,7 +90,11 @@ const getFillColor = (item: Powiat) => {
           @mouseenter="hover(item)"
           @click="click(item)"
         >
-          <title>{{ item.name }} ({{ item.people || 0 }} osób)</title>
+          <title>
+            {{ item.name }} ({{
+              polishCounting(item.people, "osoba", "osoby", "osób")
+            }})
+          </title>
         </path>
       </g>
     </svg>

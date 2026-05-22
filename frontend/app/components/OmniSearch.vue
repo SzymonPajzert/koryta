@@ -100,12 +100,15 @@ watch(autocompleteFocus, (focused) => {
   }
 });
 
+const connectedPeopleString = (n: number) =>
+  polishCounting(n, "powiązana osoba", "powiązane osoby", "powiązanych osób");
+
 const baseItems = computed<ListItem[]>(() => {
   if (!nodeGroups.value || nodeGroups.value.length === 0) return [];
   const result: ListItem[] = [];
   result.push({
     title: "Lista wszystkich osób",
-    subtitle: `${nodeGroups.value?.[0]?.people ?? 0} powiązanych osób`,
+    subtitle: `${connectedPeopleString(nodeGroups.value?.[0]?.people ?? 0)}`,
     icon: "mdi-format-list-bulleted-type",
     path: "/eksploruj/tabela",
     logEventKey: {
@@ -142,7 +145,7 @@ const baseItems = computed<ListItem[]>(() => {
 
     result.push({
       title: item.name,
-      subtitle: `${item.people ?? 0} powiązanych osób`,
+      subtitle: `${connectedPeopleString(item.people ?? 0)}`,
       icon,
       logEventKey: {
         content_id: item.id,
