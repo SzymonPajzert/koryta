@@ -609,6 +609,7 @@ class Pipeline(typing.Generic[Output]):
     def read_or_process_list(self, ctx: Context) -> typing.Iterable[Output]:
         return iterate_pipeline(self.read_or_process(ctx), self.output_class)
 
+    # TODO the policy is ignored now
     def preprocess_sources(self, ctx: Context, policy: ProcessPolicy) -> bool:
         """
         Runs read_or_process on all dependencies.

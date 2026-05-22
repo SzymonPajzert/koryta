@@ -63,44 +63,47 @@ def main():
 def scrape_krs():
     ctx, _ = setup_context(use_rejestr_io=True)
     pipeline = ScrapeRejestrIO()
-    urls = pipeline.read_or_process_list(ctx)
-    print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
+    queries = list(pipeline.read_or_process_list(ctx))
+    print(f"Will cost: {sum(map(lambda x: x.cost(), queries))} PLN")
     input("Press enter to continue...")
 
-    skip = 0
-    for url, _, skip_on_fail in urls:
-        if skip > 0:
-            print(f"Skipping {url} (skipping {skip} more)")
-            skip -= 1
-            continue
-        if "rejestr.io" in url:
-            result = ctx.rejestr_io.get_rejestr_io(url)
-        else:
-            print(f"Requesting: {url}")
-            try:
-                response = requests.get(url)
-                result = response.json()
-            except requests.exceptions.JSONDecodeError:
-                print(f"Failed to decode JSON from {url}, skipping")
-                print(f"Response: {response.text}")
-                skip = skip_on_fail
-                continue
-            if "odpis" not in result:
-                print(f"Unexpected response for {url}: {result}, skipping")
-                skip = skip_on_fail
-                continue
-            dzial1 = result["odpis"]["dane"]["dzial1"]
-            dane = dzial1["danePodmiotu"]
-            miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
-            print(f"{dane.get('nazwa', dane)} - {miasto}")
-            result = json.dumps(result)
-        sleep(0.3)
+    for query in queries:
+        for url in query.urls():
+            api_krs_failed = False
+            if "rejestr.io" in url:
+                if api_krs_failed:
+                    print(f"Skipping {url} due to previous KRS API failure")
+                    continue
+                result = ctx.rejestr_io.get_rejestr_io(url)
+            else:
+                print(f"Requesting: {url}")
+                response = None
+                result = {}
+                try:
+                    response = requests.get(url)
+                    result = response.json()
+                except requests.exceptions.JSONDecodeError:
+                    print(f"Failed to decode JSON from {url}, skipping")
+                    if response is not None:
+                        print(f"Response: {response.text}")
+                    api_krs_failed = True
 
-        if result is None:
-            print(f"Skipping {url}")
-            continue
+                if "odpis" not in result:
+                    print(f"Unexpected response for {url}: {result}, skipping this KRS")
+                    api_krs_failed = True
+                dzial1 = result["odpis"]["dane"]["dzial1"]
+                dane = dzial1["danePodmiotu"]
+                miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
+                print(f"{dane.get('nazwa', dane)} - {miasto}")
+                result = json.dumps(result)
+            sleep(0.3)
 
-        # We're discarding query params, so it's a hotfix for this
-        url = url.replace("?aktualnosc=", "/aktualnosc_")
-        url = url.replace("?rejestr=P&format=json", "")
-        ctx.io.upload(url, result, "application/json")
+            if result is None:
+                print(f"Skipping {url}")
+                continue
+
+            # We're discarding query params, so it's a hotfix for this
+            url = url.replace("?aktualnosc=", "/aktualnosc_")
+            url = url.replace("?rejestr=P&format=json", "")
+            url = url.replace("?rejestr=S&format=json", "")
+            ctx.io.upload(url, result, "application/json")
