@@ -23,6 +23,27 @@ from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.stores import Context, Pipeline
 
 IS_PUBLIC_SCORE = 3
+# Penalize companies with not enough votes
+CONFIDENCE_FACTOR = 2
+
+
+@dataclasses.dataclass
+class NormalizationFactors:
+    min_score: int
+    max_score: int
+
+
+def normalized_scores(scores: pd.DataFrame, n: NormalizationFactors) -> pd.Series:
+    """Normalize the score with min/max scores and adding a confidence factor."""
+    if len(scores) == 0:
+        return pd.Series({"score": 0})
+
+    ratio = (
+        scores["score"]
+        .apply(lambda v: v / abs(n.min_score) if v < 0 else v / abs(n.max_score))
+        .sum()
+    ) / (len(scores) + CONFIDENCE_FACTOR)
+    return pd.Series({"score": ratio})
 
 
 class CompanyScores(Pipeline):
@@ -39,7 +60,17 @@ class CompanyScores(Pipeline):
     def person_scores(
         self, ctx: Context, koryta_id_to_name: dict[str, str]
     ) -> dict[str, int]:
+        # TODO use koryta_ids here instead of people names
+        # names could lead to collisions
         scores = {}
+
+        for _, row in self.people_scored.read_or_process(ctx).iterrows():
+            is_public = row.get("is_public", False)
+            if pd.isna(is_public):
+                is_public = False
+
+            if is_public:
+                scores[row["full_name"]] = IS_PUBLIC_SCORE
 
         for _, row in self.people_votes.read_or_process(ctx).iterrows():
             person_koryta_id = row.get("person_koryta_id")
@@ -47,36 +78,15 @@ class CompanyScores(Pipeline):
                 continue
             person_koryta_id = str(person_koryta_id)
             interesting = row.get("interesting", 0)
-            if interesting == 0:
-                continue
 
-            scores[koryta_id_to_name[person_koryta_id]] = interesting
-
-        for _, row in self.people_scored.read_or_process(ctx).iterrows():
-            is_public = row.get("is_public", False)
-            if pd.isna(is_public):
-                is_public = False
-
-            if not is_public:
-                continue
-
-            scores[row["full_name"]] = IS_PUBLIC_SCORE
+            # TODO we're overriding votes of multiple people right now
+            name = koryta_id_to_name[person_koryta_id]
+            current = scores.get(name, None)
+            if current is not None:
+                scores[name] = max(interesting, current)
+            scores[name] = interesting
 
         return scores
-
-    @staticmethod
-    def company_aggregate(x) -> pd.Series:
-        if len(x) == 0:
-            return pd.Series({"score": 0})
-
-        any_negative = x["score"].apply(lambda v: v < 0).any()
-        if any_negative:
-            ratio = x["score"].apply(
-                lambda v: 1 if v > 0 else -1 if v < 0 else 0
-            ).sum() / len(x)
-            return pd.Series({"score": ratio})
-
-        return x.sum() / IS_PUBLIC_SCORE
 
     def process(self, ctx: Context):
         person_names = self.get_person_names(ctx)
@@ -108,9 +118,14 @@ class CompanyScores(Pipeline):
             return pd.DataFrame(columns=["krs", "sum_score"])
 
         df = pd.DataFrame.from_records(records)
-        scores_df = df.groupby("krs", as_index=False)[["score"]].apply(
-            self.company_aggregate
+
+        statistics = NormalizationFactors(
+            min_score=df["score"].min(), max_score=df["score"].max()
         )
+        scores_df = df.groupby("krs", as_index=False)[["score"]].apply(
+            lambda s: normalized_scores(s, statistics)
+        )
+
         scores_df = scores_df.rename(columns={"score": "sum_score"})
         scores_df = scores_df.sort_values(by="sum_score", ascending=False).reset_index(
             drop=True
@@ -149,10 +164,7 @@ class PeopleScores(Pipeline):
         for _, row in people_df.iterrows():
             person_name = str(row.get("name"))
             node_id = name_to_node_id.get(person_name)
-            total_score = self.total_person_score(row, company_score_map)
             if node_id is None:
-                continue
-            if total_score <= 0:
                 continue
             koryta_entry = koryta_people_df[koryta_people_df["id"] == node_id].iloc[0]
             if self.ignore_public and koryta_entry.get("is_public", False):
@@ -160,15 +172,22 @@ class PeopleScores(Pipeline):
             if self.ignore_votes and koryta_entry.get("votes_interesting", 0) > 0:
                 continue
 
-            records.append(
-                dataclasses.asdict(
-                    PersonScore(
-                        node_id=node_id,
-                        name=str(person_name),
-                        score=total_score,
+            company_score = self.total_company_score(row, company_score_map)
+            election_score = self.elections_score(row)
+            total_score = self.calculate_weighted(
+                (company_score, 0.6), (election_score, 0.4)
+            )
+
+            if total_score >= 0:
+                records.append(
+                    dataclasses.asdict(
+                        PersonScore(
+                            node_id=node_id,
+                            name=str(person_name),
+                            score=total_score,
+                        )
                     )
                 )
-            )
 
         if not records:
             return pd.DataFrame(columns=["node_id", "name", "score"])
@@ -184,7 +203,16 @@ class PeopleScores(Pipeline):
 
         return df.astype({"score": "int32"})
 
-    def total_person_score(self, row, company_score_map):
+    def calculate_weighted(self, *args: tuple[float, float]):
+        result = 0
+        weights = 0
+        for value, weight in args:
+            assert value < 1.1 and value >= -1.1, f"Invalid value: {value}"
+            result += value * weight
+            weights += weight
+        return result / weights
+
+    def total_company_score(self, row, company_score_map):
         companies = row.get("companies", [])
         total_person_score = 0
 
@@ -206,3 +234,7 @@ class PeopleScores(Pipeline):
             total_person_score /= len(companies)
 
         return total_person_score
+
+    def elections_score(self, row):
+        elections = row.get("elections", [])
+        return 1 - (2 / 3) ** len(elections)
