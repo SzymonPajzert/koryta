@@ -66,7 +66,7 @@ EXPECTED_COMPANIES = {
         krs="0000459347",
         name="ODOLANOWSKI ZAKŁAD KOMUNALNY",
         city="Odolanów",
-        teryt_code="301703",
+        teryt_code="3017",
         sources=[
             Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None),
             Source(source="hardcoded", source_krs=None, reason="PUBLIC_COMPANIES_KRS"),
