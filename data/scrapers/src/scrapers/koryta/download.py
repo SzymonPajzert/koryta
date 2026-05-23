@@ -9,6 +9,8 @@ It defines two main pipelines:
   within them by processing 'edges' data from Firestore.
 """
 
+from datetime import datetime
+
 import pandas as pd
 from leveldb_export import parse_leveldb_documents  # type: ignore
 from memoized_property import memoized_property  # type:ignore
@@ -23,7 +25,8 @@ from scrapers.stores import (
     Pipeline,
 )
 
-CURRENT_DATE = "2026-05-14"
+CURRENT_DATE = datetime.now().strftime("%Y-%m-%d")
+
 
 KORYTA_DUMP = CloudStorage(
     prefix="hostname=koryta.pl", max_namespaces=["date"], binary=True
