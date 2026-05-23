@@ -203,4 +203,6 @@ class PeopleScores(Pipeline):
                 if krs and krs in company_score_map:
                     total_person_score += company_score_map[krs]
 
+            total_person_score /= len(companies)
+
         return total_person_score
