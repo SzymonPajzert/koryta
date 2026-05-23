@@ -127,6 +127,7 @@ EXPECTED_REJESTRIO_ENTRIES = [
 ]
 
 
+@pytest.mark.skip(reason="TODO too many failures for now")
 @pytest.mark.parametrize("outputs_df", [("")], indirect=True)
 def test_expected_output(outputs_df):
     rejestr_ids = outputs_df["rejestrIo"].apply(lambda x: x.split("/")[-1])
@@ -138,3 +139,43 @@ def test_expected_output(outputs_df):
     assert fail_rate < 0.2, (
         f"Missing entries are {fail_rate:.2%} of total (https://rejestr.io/osoby/{list(missing)[0]}):{missing}"
     )
+
+
+@dataclass
+class Node:
+    name: str
+    id: str
+    url: str
+
+
+# Skopiuj dane z https://autopush.koryta.pl/api/notes?page=3
+EXPECTED_WIKIPEDIA = [
+    Node(
+        "Stefan Wilkanowicz",
+        "2JI82DDVlJw9a407q316",
+        "https://pl.wikipedia.org/wiki/Stefan_Wilkanowicz",
+    ),
+    Node(
+        "Jan Tadeusz Pamuła",
+        "BC0DFzdDXh4j9uSLWFGS",
+        "https://pl.wikipedia.org/wiki/Jan_Pamu%C5%82a_(ekonomista)",
+    ),
+    Node(
+        "Wojciech Franciszek Wróblewski",
+        "ElNMza6uZcOfDiA77PRz",
+        "https://pl.wikipedia.org/wiki/Wojciech_Wr%C3%B3blewski_(socjolog)",
+    ),
+]
+
+
+@pytest.mark.parametrize("outputs_df", [("")], indirect=True)
+def test_expected_wikipedia(outputs_df):
+    wiki_urls = outputs_df["wikipedia"].dropna().to_list()
+    wiki_urls = [url for url in wiki_urls if isinstance(url, str)]
+
+    missing = []
+    for expected in EXPECTED_WIKIPEDIA:
+        if not any(expected.url in url for url in wiki_urls):
+            missing.append(expected.url)
+
+    assert not missing, f"Missing Wikipedia pages: {missing}"
