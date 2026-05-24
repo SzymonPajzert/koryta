@@ -87,7 +87,23 @@ class Infobox:
                 str(link.title) for link in param.value.filter_wikilinks()
             ]
 
-        self.person_related = "imię i nazwisko" in self.fields
+        self.person_related = (
+            "imię i nazwisko" in self.fields
+            or "polityk" in self.fields
+            or "osoba" in self.fields
+            or self.inf_type
+            in [
+                "Biogram",
+                "Polityk",
+                "Naukowiec",
+                "Duchowny",
+                "Artysta",
+                "Sportowiec",
+                "Pisarz",
+                "Dziennikarz",
+                "Menedżer",
+            ]
+        )
         self.links = [v for vs in self.field_links.values() for v in vs]
 
     @memoized_property
