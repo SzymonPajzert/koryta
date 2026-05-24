@@ -208,7 +208,7 @@ def list_test_files():
 
 @pytest.mark.parametrize("filename", list_test_files())
 def test_links(filename, ctx):
-    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
+    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests/wiki")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
 
