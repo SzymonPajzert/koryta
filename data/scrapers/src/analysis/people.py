@@ -164,6 +164,7 @@ def people_merged(
         SELECT
             kp.*,
             w.full_name as wiki_name,
+            w.source as wiki_url,
             w.is_polityk,
             w.wiki_score,
         FROM krs_pkw kp
