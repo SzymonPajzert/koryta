@@ -3,7 +3,58 @@
     <v-progress-circular indeterminate></v-progress-circular>
   </v-card>
   <v-card v-else-if="data" class="pa-4">
-    <v-card-title class="text-h5 mb-4">{{ data.regionName }}</v-card-title>
+    <v-row>
+      <v-col cols="12" md="6" height="260">
+        <apexchart
+          v-if="currentChartOptions && currentSeries"
+          type="donut"
+          height="500"
+          :options="currentChartOptions"
+          :series="currentSeries"
+        />
+      </v-col>
+      <v-col cols="12" md="6" class="d-flex align-center justify-center">
+        <div>
+          <v-card-title class="text-h5 mb-1 text-center">
+            {{ data.regionName }}
+          </v-card-title>
+          <v-list
+            bg-color="background"
+            class="mx-auto ga-4 d-flex flex-column"
+            item-props
+            :items="items"
+            lines="two"
+            mandatory
+            v-model:selected="selectedChart"
+          >
+            <template #item="{ props: itemProps }">
+              <v-list-item
+                v-bind="itemProps"
+                base-color="medium-emphasis"
+                rounded="lg"
+                variant="outlined"
+              >
+                <template #title>
+                  <div
+                    class="d-flex justify-space-between align-center text-body-medium"
+                  >
+                    <strong>{{ itemProps.title }}</strong>
+
+                    <div>{{ itemProps.price }} osób</div>
+                  </div>
+                </template>
+
+                <template #subtitle>
+                  <div class="d-flex justify-space-between align-center">
+                    {{ itemProps.subtitle }}
+                  </div>
+                </template>
+              </v-list-item>
+            </template>
+          </v-list>
+        </div>
+      </v-col>
+    </v-row>
 
     <v-expansion-panels class="mb-6">
       <v-expansion-panel>
@@ -143,39 +194,11 @@
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
-
-    <v-row>
-      <v-col cols="12" md="6">
-        <h3 class="text-center text-subtitle-1 mb-2">
-          Zatrudnieni z podziałem na partię (Obecnie)
-        </h3>
-        <apexchart
-          v-if="currentChartOptions && currentSeries"
-          type="donut"
-          height="350"
-          end-angle="180"
-          :options="currentChartOptions"
-          :series="currentSeries"
-        />
-      </v-col>
-      <v-col cols="12" md="6">
-        <h3 class="text-center text-subtitle-1 mb-2">
-          Zatrudnieni z podziałem na partię (Obecnie + W przeszłości)
-        </h3>
-        <apexchart
-          v-if="everChartOptions && everSeries"
-          type="donut"
-          height="350"
-          :options="everChartOptions"
-          :series="everSeries"
-        />
-      </v-col>
-    </v-row>
   </v-card>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { parties as allParties, partyColors } from "~~/shared/misc";
 import type { Person } from "~/composables/useRegionStatistics";
 
@@ -211,6 +234,21 @@ const everEmployed = computed(() => {
   );
 });
 
+const items = computed(() => [
+  {
+    title: "Aktualnie zatrudnieni",
+    subtitle: "Osoby aktualnie zatrudnione w publicznych spółkach",
+    price: currentlyEmployed.value.length,
+    value: "current",
+  },
+  {
+    title: "Kiedykolwiek zatrudnieni",
+    subtitle: "Osoby kiedykolwiek zatrudnione w publicznych spółkach",
+    price: everEmployed.value.length,
+    value: "all",
+  },
+]);
+
 function reportPerson(person: Person) {
   // W przyszłości zostanie zaimplementowany mechanizm dodawania notatki
   alert(`Zgłaszasz podejrzenie koryciarstwa dla: ${person.name}`);
@@ -236,7 +274,7 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
   // Reszta (niezatrudnieni)
   const notEmployedCount = notEmployedPeople.length;
   if (notEmployedCount > 0) {
-    counts["Niezatrudnieni / Reszta"] = notEmployedCount;
+    counts["Niezatrudnieni"] = notEmployedCount;
   }
 
   const labels = Object.keys(counts);
@@ -258,7 +296,7 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
       labels,
       colors,
       legend: {
-        position: "bottom",
+        position: "top",
       },
       dataLabels: {
         enabled: true,
@@ -268,7 +306,6 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
         pie: {
           startAngle: -90,
           endAngle: 90,
-          offsetY: 10,
           donut: {
             size: "65%",
           },
@@ -276,7 +313,7 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
       },
       grid: {
         padding: {
-          bottom: -220,
+          bottom: -280,
         },
       },
     },
@@ -291,16 +328,22 @@ const currentChartData = computed(() => {
   );
 });
 
-const currentSeries = computed(() => currentChartData.value?.series);
-const currentChartOptions = computed(() => currentChartData.value?.options);
-
 const everChartData = computed(() => {
   if (!data.value) return null;
   return buildChartData(everEmployed.value, notEmployed.value);
 });
 
-const everSeries = computed(() => everChartData.value?.series);
-const everChartOptions = computed(() => everChartData.value?.options);
+const selectedChart = ref(["current"]);
+
+const activeChartData = computed(() => {
+  if (selectedChart.value.includes("current")) {
+    return currentChartData.value;
+  }
+  return everChartData.value;
+});
+
+const currentSeries = computed(() => activeChartData.value?.series);
+const currentChartOptions = computed(() => activeChartData.value?.options);
 </script>
 
 <style scoped>
