@@ -43,7 +43,7 @@ NORMALIZED_LINKS_EXPECTED = {
 
 PEOPLE_EXPECTED = {
     "Józef Śliwa": People(
-        source=("https://pl.wikipedia.org/wiki/Józef Andrzej Śliwa"),
+        source=("https://pl.wikipedia.org/wiki/Józef_Śliwa"),
         full_name="Józef Andrzej Śliwa",
         party="Sojusz Lewicy Demokratycznej",
         birth_iso8601="1954-11-17",
@@ -53,7 +53,7 @@ PEOPLE_EXPECTED = {
         links=[],
     ),
     "Grzegorz Michał Pastuszko": People(
-        source=("https://pl.wikipedia.org/wiki/Grzegorz Michał Pastuszko"),
+        source=("https://pl.wikipedia.org/wiki/Grzegorz_Pastuszko"),
         full_name="Grzegorz Michał Pastuszko",
         party="",
         birth_iso8601="1981-09-17",
@@ -63,7 +63,7 @@ PEOPLE_EXPECTED = {
         links=[],
     ),
     "Marcin Chludziński": People(
-        source=("https://pl.wikipedia.org/wiki/Marcin Chludziński"),
+        source=("https://pl.wikipedia.org/wiki/Marcin_Chludziński"),
         full_name="Marcin Chludziński",
         party="",
         birth_iso8601="1979-00-00",
@@ -194,7 +194,7 @@ COMPANIES_EXPECTED = {
 
 @pytest.fixture
 def ctx():
-    base_path = Path(__file__).parent.parent.parent.parent.parent / "tests"
+    base_path = Path(__file__).parent.parent.parent.parent.parent / "tests" / "wiki"
     mapping: nested_dict = {
         str(LocalFile(f"{file}.xml", "tests")): str(base_path / f"{file}.xml")
         for file in list_test_files()
