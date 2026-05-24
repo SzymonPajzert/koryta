@@ -25,6 +25,12 @@ WIKI_DUMP = DownloadableFile(
 
 DUMP_SIZE = 12314670146  # TODO remove it and look it up
 
+SAVE_ARTICLES = [
+    "Stefan Wilkanowicz",
+    "Jan Pamuła (ekonomista)",
+    "Wojciech Wróblewski (socjolog)",
+]
+
 # Heurisic used to ignore some articles without parsing (expensive operation)
 REQUIRED_WORDS = [
     "Naukowiec",
@@ -369,6 +375,10 @@ def scrape_wiki(ctx: Context):
                     revision = elem.find(
                         "{http://www.mediawiki.org/xml/export-0.11/}revision"
                     )
+                    if title in SAVE_ARTICLES:
+                        with open(f"tests/wiki/{title}.xml", "w") as out:
+                            out.write(ET.tostring(elem, encoding="unicode"))
+
                     if title and revision:
                         wikitext = revision.findtext(
                             "{http://www.mediawiki.org/xml/export-0.11/}text"
