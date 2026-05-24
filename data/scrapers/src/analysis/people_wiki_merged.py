@@ -34,7 +34,7 @@ class PeopleWikiMerged(Pipeline):
             atan(content_score) AS wiki_score,
             full_name
         FROM wiki_data
-        WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year > 1930
+        WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year >= 1920
         """
         )
 

@@ -226,7 +226,7 @@ class WikiArticle:
         for infobox in self.infoboxes:
             if infobox.person_related:
                 year = infobox.birth_year
-                if year and year < 1930:
+                if year and year < 1920:
                     return False
                 return True
         return False
