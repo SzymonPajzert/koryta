@@ -6,7 +6,7 @@
 
 .coverage
 
-downloaded
+downloaded*
 versioned*
 
 # JSON credentials
