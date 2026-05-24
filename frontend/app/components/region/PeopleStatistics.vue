@@ -1,0 +1,310 @@
+<template>
+  <v-card v-if="loading" class="pa-4 d-flex justify-center">
+    <v-progress-circular indeterminate></v-progress-circular>
+  </v-card>
+  <v-card v-else-if="data" class="pa-4">
+    <v-card-title class="text-h5 mb-4">{{ data.regionName }}</v-card-title>
+
+    <v-expansion-panels class="mb-6">
+      <v-expansion-panel>
+        <v-expansion-panel-title class="text-h6">
+          Lista radnych
+        </v-expansion-panel-title>
+        <v-expansion-panel-text>
+          <div v-if="currentlyEmployed.length">
+            <h3 class="text-subtitle-1 font-weight-bold mt-4 mb-2">
+              Osoby z obecnym publicznym zatrudnieniem
+            </h3>
+            <v-list density="compact">
+              <v-list-item
+                v-for="(person, idx) in currentlyEmployed"
+                :key="idx"
+              >
+                <v-list-item-title
+                  class="d-flex align-center flex-wrap gap-2 py-1"
+                >
+                  <NuxtLink
+                    v-if="person.accountId"
+                    :to="`/osoba/${person.accountId}`"
+                    class="text-decoration-none font-weight-medium text-primary"
+                  >
+                    {{ person.name }}
+                  </NuxtLink>
+                  <span v-else class="font-weight-medium">{{
+                    person.name
+                  }}</span>
+
+                  <PartyChip
+                    v-if="person.party"
+                    :party="person.party"
+                    class="ml-2"
+                  />
+
+                  <span class="mx-2 text-grey-darken-1">&mdash;</span>
+
+                  <span class="text-body-2">
+                    <NuxtLink
+                      v-if="person.currentEmployment?.nodeId"
+                      :to="`/miejsce/${person.currentEmployment.nodeId}`"
+                      class="text-decoration-none text-secondary"
+                    >
+                      {{ person.currentEmployment.name }}
+                    </NuxtLink>
+                    <span v-else>{{ person.currentEmployment?.name }}</span>
+                  </span>
+                </v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </div>
+
+          <div v-if="pastEmployed.length">
+            <h3 class="text-subtitle-1 font-weight-bold mt-4 mb-2">
+              Osoby z zatrudnieniem w przeszłości
+            </h3>
+            <v-list density="compact">
+              <v-list-item v-for="(person, idx) in pastEmployed" :key="idx">
+                <v-list-item-title
+                  class="d-flex align-center flex-wrap gap-2 py-1"
+                >
+                  <NuxtLink
+                    v-if="person.accountId"
+                    :to="`/osoba/${person.accountId}`"
+                    class="text-decoration-none font-weight-medium text-primary"
+                  >
+                    {{ person.name }}
+                  </NuxtLink>
+                  <span v-else class="font-weight-medium">{{
+                    person.name
+                  }}</span>
+
+                  <PartyChip
+                    v-if="person.party"
+                    :party="person.party"
+                    class="ml-2"
+                  />
+
+                  <span class="mx-2 text-grey-darken-1">&mdash;</span>
+
+                  <span class="text-body-2 text-grey">
+                    W przeszłości:
+                    <NuxtLink
+                      v-if="person.pastEmployment?.nodeId"
+                      :to="`/miejsce/${person.pastEmployment.nodeId}`"
+                      class="text-decoration-none text-secondary"
+                    >
+                      {{ person.pastEmployment.name }}
+                    </NuxtLink>
+                    <span v-else>{{ person.pastEmployment?.name }}</span>
+                  </span>
+                </v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </div>
+
+          <div v-if="notEmployed.length">
+            <h3 class="text-subtitle-1 font-weight-bold mt-4 mb-2">
+              Osoby bez publicznego zatrudnienia
+            </h3>
+            <v-list density="compact">
+              <v-list-item v-for="(person, idx) in notEmployed" :key="idx">
+                <v-list-item-title
+                  class="d-flex align-center justify-space-between flex-wrap gap-2 py-1"
+                >
+                  <div class="d-flex align-center">
+                    <NuxtLink
+                      v-if="person.accountId"
+                      :to="`/osoba/${person.accountId}`"
+                      class="text-decoration-none font-weight-medium text-primary"
+                    >
+                      {{ person.name }}
+                    </NuxtLink>
+                    <span v-else class="font-weight-medium">{{
+                      person.name
+                    }}</span>
+                    <PartyChip
+                      v-if="person.party"
+                      :party="person.party"
+                      class="ml-2"
+                    />
+                  </div>
+                  <v-btn
+                    size="small"
+                    color="primary"
+                    variant="tonal"
+                    prepend-icon="mdi-alert-circle-outline"
+                    @click="reportPerson(person)"
+                  >
+                    Zgłoś notatkę
+                  </v-btn>
+                </v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </div>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+    </v-expansion-panels>
+
+    <v-row>
+      <v-col cols="12" md="6">
+        <h3 class="text-center text-subtitle-1 mb-2">
+          Zatrudnieni z podziałem na partię (Obecnie)
+        </h3>
+        <apexchart
+          v-if="currentChartOptions && currentSeries"
+          type="donut"
+          height="350"
+          end-angle="180"
+          :options="currentChartOptions"
+          :series="currentSeries"
+        />
+      </v-col>
+      <v-col cols="12" md="6">
+        <h3 class="text-center text-subtitle-1 mb-2">
+          Zatrudnieni z podziałem na partię (Obecnie + W przeszłości)
+        </h3>
+        <apexchart
+          v-if="everChartOptions && everSeries"
+          type="donut"
+          height="350"
+          :options="everChartOptions"
+          :series="everSeries"
+        />
+      </v-col>
+    </v-row>
+  </v-card>
+</template>
+
+<script setup lang="ts">
+import { computed } from "vue";
+import { parties as allParties, partyColors } from "~~/shared/misc";
+import type { Person } from "~/composables/useRegionStatistics";
+
+const props = defineProps<{
+  teryt: string;
+}>();
+
+const { data, loading } = useRegionStatistics(props.teryt);
+
+const currentlyEmployed = computed(() => {
+  if (!data.value) return [];
+  return data.value.people.filter((p) => !!p.currentEmployment);
+});
+
+const pastEmployed = computed(() => {
+  if (!data.value) return [];
+  return data.value.people.filter(
+    (p) => !p.currentEmployment && !!p.pastEmployment,
+  );
+});
+
+const notEmployed = computed(() => {
+  if (!data.value) return [];
+  return data.value.people.filter(
+    (p) => !p.currentEmployment && !p.pastEmployment,
+  );
+});
+
+const everEmployed = computed(() => {
+  if (!data.value) return [];
+  return data.value.people.filter(
+    (p) => !!p.currentEmployment || !!p.pastEmployment,
+  );
+});
+
+function reportPerson(person: Person) {
+  // W przyszłości zostanie zaimplementowany mechanizm dodawania notatki
+  alert(`Zgłaszasz podejrzenie koryciarstwa dla: ${person.name}`);
+}
+
+function explicitValuesFormatter(val: number, { seriesIndex, w }) {
+  return w.config.series[seriesIndex];
+}
+
+function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
+  const counts: Record<string, number> = {};
+
+  // Osoby z zatrudnieniem dzielone na partie
+  for (const person of employedPeople) {
+    if (person.party && allParties.includes(person.party)) {
+      counts[person.party] = (counts[person.party] || 0) + 1;
+    } else {
+      counts["Zatrudnieni (inne / brak partii)"] =
+        (counts["Zatrudnieni (inne / brak partii)"] || 0) + 1;
+    }
+  }
+
+  // Reszta (niezatrudnieni)
+  const notEmployedCount = notEmployedPeople.length;
+  if (notEmployedCount > 0) {
+    counts["Niezatrudnieni / Reszta"] = notEmployedCount;
+  }
+
+  const labels = Object.keys(counts);
+  const series = Object.values(counts);
+
+  const colors = labels.map((label) => {
+    if (partyColors[label]) return partyColors[label];
+    if (label === "Zatrudnieni (inne / brak partii)") return "#888888";
+    if (label === "Niezatrudnieni / Reszta") return "#e0e0e0";
+    return "#cccccc";
+  });
+
+  return {
+    series,
+    options: {
+      chart: {
+        type: "donut",
+      },
+      labels,
+      colors,
+      legend: {
+        position: "bottom",
+      },
+      dataLabels: {
+        enabled: true,
+        formatter: explicitValuesFormatter,
+      },
+      plotOptions: {
+        pie: {
+          startAngle: -90,
+          endAngle: 90,
+          offsetY: 10,
+          donut: {
+            size: "65%",
+          },
+        },
+      },
+      grid: {
+        padding: {
+          bottom: -220,
+        },
+      },
+    },
+  };
+}
+
+const currentChartData = computed(() => {
+  if (!data.value) return null;
+  return buildChartData(
+    currentlyEmployed.value,
+    data.value.people.filter((p) => !p.currentEmployment),
+  );
+});
+
+const currentSeries = computed(() => currentChartData.value?.series);
+const currentChartOptions = computed(() => currentChartData.value?.options);
+
+const everChartData = computed(() => {
+  if (!data.value) return null;
+  return buildChartData(everEmployed.value, notEmployed.value);
+});
+
+const everSeries = computed(() => everChartData.value?.series);
+const everChartOptions = computed(() => everChartData.value?.options);
+</script>
+
+<style scoped>
+.gap-2 {
+  gap: 0.5rem;
+}
+</style>
