@@ -1,5 +1,6 @@
 import sys
 import typing
+from dataclasses import dataclass
 from unittest.mock import patch
 
 import pytest

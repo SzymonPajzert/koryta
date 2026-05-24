@@ -206,8 +206,8 @@ class PeopleScores(Pipeline):
         return df.astype({"score": "int32"})
 
     def calculate_weighted(self, *args: tuple[float, float]):
-        result = 0
-        weights = 0
+        result: float = 0
+        weights: float = 0
         for value, weight in args:
             assert value < 1.1 and value >= -1.1, f"Invalid value: {value}"
             result += value * weight
@@ -216,7 +216,7 @@ class PeopleScores(Pipeline):
 
     def total_company_score(self, row, company_score_map):
         companies = row.get("companies", [])
-        total_person_score = 0
+        total_person_score: float = 0
 
         if (
             isinstance(companies, list)
