@@ -91,6 +91,7 @@
             <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
           </template>
           <template v-if="entity?.type === 'region'">
+            <RegionPeopleStatistics :teryt="regionTeryt!" />
             <CardConnectionList :edges="owners" title="Część regionu" />
             <CardConnectionList :edges="subregions" title="Regiony" />
             <CardConnectionList :edges="subsidiaries" title="Spółki zależne" />
@@ -246,6 +247,7 @@ import type {
   NodeType,
 } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
+import PeopleList from "./card/PeopleList.vue";
 
 definePageMeta({
   affineLink: "0Jk7aUVzpBbKpnGw-NNqZ",
