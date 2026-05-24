@@ -3,19 +3,19 @@
     <ns0:ns>0</ns0:ns>
     <ns0:id>1090003</ns0:id>
     <ns0:revision>
-      <ns0:id>77446773</ns0:id>
-      <ns0:parentid>72529289</ns0:parentid>
-      <ns0:timestamp>2025-08-21T13:12:37Z</ns0:timestamp>
+      <ns0:id>79402694</ns0:id>
+      <ns0:parentid>77446773</ns0:parentid>
+      <ns0:timestamp>2026-03-27T09:43:24Z</ns0:timestamp>
       <ns0:contributor>
-        <ns0:username>Alan ffm</ns0:username>
-        <ns0:id>357169</ns0:id>
+        <ns0:username>SchlurcherBot</ns0:username>
+        <ns0:id>1371053</ns0:id>
       </ns0:contributor>
       <ns0:minor />
-      <ns0:comment>Alan ffm przeniósł stronę [[Wojciech Wróblewski (dyplomata)]] do [[Wojciech Wróblewski (socjolog)]]: bardziej adekwatnie</ns0:comment>
-      <ns0:origin>72529289</ns0:origin>
+      <ns0:comment>Bot: http → https</ns0:comment>
+      <ns0:origin>79402694</ns0:origin>
       <ns0:model>wikitext</ns0:model>
       <ns0:format>text/x-wiki</ns0:format>
-      <ns0:text bytes="10320" sha1="kngh5slbbsmss5lw87nuzmhbbdo12oj" xml:space="preserve">{{Polityk infobox
+      <ns0:text bytes="10321" sha1="8hu1msj2x3sip010d3cnxp0fdg7sbab" xml:space="preserve">{{Polityk infobox
  | polityk             = Wojciech Wróblewski
  | grafika             = 
  | opis grafiki        = 
@@ -65,7 +65,7 @@ W latach 2005–2009 doradca ds. strategii w [[Polski Koncern Naftowy Orlen|Pols
 * Złoty [[Medal „Opiekun Miejsc Pamięci Narodowej”]] (1997, za remont kwatery wojennej na [[Cmentarz Na Rossie|Cmentarzu Na Rossie]])
 * [[Order Gwiazdy Białej]] II klasy (Estonia, 2002)&lt;ref&gt;{{Cytuj stronę|url=http://www.president.ee/et/vabariik/teenetemargid/kavaler/4107/wojciech-wroblewski|tytuł=Eesti Vabariigi teenetemärgid|opublikowany=president.ee|język=et|data dostępu=2014-12-15|rok=2002|archiwum=https://web.archive.org/web/20160325233744/https://www.president.ee/et/vabariik/teenetemargid/kavaler/4107/wojciech-wroblewski|zarchiwizowano=2016-03-25}}&lt;/ref&gt;
 * Złota Odznaka Zasługi dla MSW Estonii (Estonia 2005)
-* [[Order Krzyża Ziemi Maryjnej]] I klasy (Estonia, 2005)&lt;ref&gt;{{Cytuj stronę|url=http://www.president.ee/et/vabariik/teenetemargid/kavaler/607/wojciech-wroblewski|tytuł=Eesti Vabariigi teenetemärgid|opublikowany=president.ee|język=et|data dostępu=2014-12-15|rok=2005|archiwum=https://web.archive.org/web/20141220092612/https://www.president.ee/et/vabariik/teenetemargid/kavaler/607/wojciech-wroblewski|zarchiwizowano=2014-12-20}}&lt;/ref&gt;
+* [[Order Krzyża Ziemi Maryjnej]] I klasy (Estonia, 2005)&lt;ref&gt;{{Cytuj stronę|url=https://www.president.ee/et/vabariik/teenetemargid/kavaler/607/wojciech-wroblewski|tytuł=Eesti Vabariigi teenetemärgid|opublikowany=president.ee|język=et|data dostępu=2014-12-15|rok=2005|archiwum=https://web.archive.org/web/20141220092612/https://www.president.ee/et/vabariik/teenetemargid/kavaler/607/wojciech-wroblewski|zarchiwizowano=2014-12-20}}&lt;/ref&gt;
 * Krzyż Zasługi dla Policji i Straży Granicznej Estonii (Estonia 2005)
 * Medal Tysiąclecia Państwa Litewskiego (Litwa, 2008)
 * Gwiazda Dyplomacji Litwy (litewskie odznaczenie resortowe, 2011)&lt;ref&gt;{{cytuj stronę|url=http://www.gazetaprawna.pl/wiadomosci/artykuly/545271,litewskie_odznaczenia_dla_pierwszych_polskich_dyplomatow_na_litwie.html|tytuł=Litewskie odznaczenia dla pierwszych polskich dyplomatów na Litwie|data=2011-09-06|opublikowany=gazetaprawna.pl|data dostępu=2012-01-10|archiwum=https://web.archive.org/web/20150924040544/http://www.gazetaprawna.pl/wiadomosci/artykuly/545271,litewskie_odznaczenia_dla_pierwszych_polskich_dyplomatow_na_litwie.html|zarchiwizowano=2015-09-24}}&lt;/ref&gt;
@@ -99,7 +99,7 @@ W latach 2005–2009 doradca ds. strategii w [[Polski Koncern Naftowy Orlen|Pols
 [[Kategoria:Przedstawiciele dyplomatyczni III Rzeczypospolitej na Litwie]]
 [[Kategoria:Uczestnicy Okrągłego Stołu (strona solidarnościowa)]]
 [[Kategoria:Urodzeni w 1958]]</ns0:text>
-      <ns0:sha1>kngh5slbbsmss5lw87nuzmhbbdo12oj</ns0:sha1>
+      <ns0:sha1>8hu1msj2x3sip010d3cnxp0fdg7sbab</ns0:sha1>
     </ns0:revision>
   </ns0:page>
   

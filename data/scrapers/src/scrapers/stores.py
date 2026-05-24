@@ -121,7 +121,7 @@ class LocalFile(DataRef):
     """A reference to a file on the local filesystem."""
 
     filename: str
-    folder: Literal["downloaded", "tests", "versioned", "crawler_output"]
+    folder: Literal["downloaded", "tests", "versioned", "crawler_output", "tests/wiki"]
 
 
 @dataclass
