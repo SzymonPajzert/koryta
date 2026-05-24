@@ -32,7 +32,8 @@ class PeopleWikiMerged(Pipeline):
                 ELSE NULL    
             END as is_polityk,
             atan(content_score) AS wiki_score,
-            full_name
+            full_name,
+            source
         FROM wiki_data
         WHERE birth_year IS NOT NULL AND full_name IS NOT NULL AND birth_year >= 1920
         """
@@ -41,7 +42,7 @@ class PeopleWikiMerged(Pipeline):
         create_people_table(
             con,
             "wiki_people",
-            any_vals=["is_polityk", "full_name", "wiki_score", "birth_date"],
+            any_vals=["is_polityk", "full_name", "wiki_score", "birth_date", "source"],
         )
 
         return con.sql("SELECT * FROM wiki_people").df()

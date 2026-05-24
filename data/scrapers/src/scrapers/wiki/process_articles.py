@@ -143,12 +143,14 @@ def safe_middle_name_pattern(title):
 
 class WikiArticle:
     title: str
+    original_title: str
     categories: list[str]
     links: list[str]
     infoboxes: list[Infobox]
 
-    def __init__(self, title, categories, links, infoboxes):
+    def __init__(self, title, categories, links, infoboxes, original_title=None):
         self.title = title
+        self.original_title = original_title if original_title is not None else title
         self.categories = categories
         self.links = links
         self.infoboxes = infoboxes
@@ -175,10 +177,11 @@ class WikiArticle:
 
         parsed = mwparserfromhell.parse(wikitext)
         infoboxes = Infobox.parse(parsed)
-        title = WikiArticle.extend_name(title, wikitext)
+        extended_title = WikiArticle.extend_name(title, wikitext)
 
         return WikiArticle(
-            title=title,
+            title=extended_title,
+            original_title=title,
             categories=get_links(parsed, prefix="Kategoria:"),
             links=get_links(parsed),
             infoboxes=infoboxes,
@@ -296,8 +299,9 @@ def extract_from_article(article: WikiArticle) -> People | Company | None:
         # raise ValueError("Conflict of mapping to both person and company")
         return None
     elif person:
+        title_escaped = article.original_title.replace(" ", "_")
         return People(
-            source=f"https://pl.wikipedia.org/wiki/{article.title}",
+            source=f"https://pl.wikipedia.org/wiki/{title_escaped}",
             full_name=article.title,
             party=article.get_infobox(lambda i: i.fields.get("partia", "")),
             birth_iso8601=article.get_infobox(lambda i: i.birth_iso),
