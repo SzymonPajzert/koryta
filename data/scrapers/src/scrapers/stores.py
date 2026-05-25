@@ -153,6 +153,13 @@ class DownloadableFile(DataRef):
 
 
 @dataclass
+class GCSBlob(DataRef):
+    """A reference to a single blob in GCS by its blob name."""
+
+    blob_name: str
+
+
+@dataclass
 class CloudStorage(DataRef):
     """A reference to a collection of objects in cloud storage"""
 

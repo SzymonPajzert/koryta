@@ -1,3 +1,4 @@
+import json
 import os
 from dataclasses import asdict
 from typing import Any
@@ -14,6 +15,7 @@ class EntityDumper:
     sort_keys: dict[str, list[str]] = dict()
 
     _last_written_cache: tuple[str, list] | None = None
+    _has_flushed: bool = False
 
     def get_output(self, name: str) -> list[Any] | None:
         """Returns the in-memory output for a given entity name."""
@@ -39,8 +41,26 @@ class EntityDumper:
         # Update cache on write
         self._last_written_cache = (n, self.inmemory[n])
 
+    def flush(self) -> None:
+        """Append current in-memory entities to JSONL files and clear memory."""
+        for k, v in self.inmemory.items():
+            if not v:
+                continue
+            assert not self.sort_keys[k], "flush() cannot be used with sort_by"
+            name = k.lower()
+            path = os.path.join(VERSIONED_DIR, f"{name}/{name}.jsonl")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a") as f:
+                for item in v:
+                    f.write(json.dumps(asdict(item)) + "\n")
+        self.inmemory = {}
+        self._has_flushed = True
+
     def dump_pandas(self):
-        # Update cache before dumping
+        if self._has_flushed:
+            self.flush()
+            return
+
         if self.inmemory:
             name, data = list(self.inmemory.items())[-1]
             self._last_written_cache = (name, data)
@@ -68,7 +88,7 @@ class EntityDumper:
             )
 
         # Clean up the dict
-        self.inmemory = dict()
+        self.inmemory = {}
 
     def get_last_written(self) -> tuple[str, list] | None:
         """Returns the name and data of the last written entity type."""

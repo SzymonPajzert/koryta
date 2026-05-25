@@ -78,6 +78,13 @@ def _build_parser() -> ArgumentParser:
         help="Max number of done URLs to parse (default: 1000).",
     )
     parser.add_argument(
+        "--dump-every",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Flush parsed entities to disk every N records to bound memory usage.",
+    )
+    parser.add_argument(
         "--reprioritize",
         action="store_true",
         help=(
@@ -203,7 +210,9 @@ def main() -> None:  # noqa: PLR0915
         worker_processes = max(1, args.worker_threads)
         pg_client = PostgresClient.from_env(max_size=1)
         queue = PostgresCrawlQueue(pg_client)
-        ctx, dumper = setup_context(False, crawl_queue=queue)
+        ctx, dumper = setup_context(
+            False, crawl_queue=queue, flush_every=args.dump_every
+        )
         try:
             run_parse(
                 queue, ctx, args.parse_limit,

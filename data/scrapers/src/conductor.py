@@ -15,6 +15,7 @@ from scrapers.stores import (
     DataRef,
     DownloadableFile,
     File,
+    GCSBlob,
     LocalFile,
     ProcessPolicy,
 )
@@ -31,12 +32,14 @@ from stores.web import WebImpl
 
 
 class Conductor(IO):
-    def __init__(self, dumper: EntityDumper):
+    def __init__(self, dumper: EntityDumper, flush_every: int | None = None):
         self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
+        self._flush_every = flush_every
+        self._insert_count = 0
 
     def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, DownloadableFile):
@@ -59,6 +62,11 @@ class Conductor(IO):
         self.progress_bar = None
         # Print what we're reading instead
         print(f"Reading {fs}")
+
+        if isinstance(fs, GCSBlob):
+            return self.read_data(
+                self.storage.cached_storage(fs.blob_name, binary=True)
+            )
 
         if isinstance(fs, CloudStorage):
             raise NotImplementedError(
@@ -91,6 +99,10 @@ class Conductor(IO):
 
     def output_entity(self, entity, sort_by=[]):
         self.dumper.insert_into(entity, sort_by)
+        if self._flush_every is not None:
+            self._insert_count += 1
+            if self._insert_count % self._flush_every == 0:
+                self.dumper.flush()
 
     def write_file(
         self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
@@ -138,11 +150,12 @@ def setup_context(
     use_nlp: bool = False,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
+    flush_every: int | None = None,
 ) -> tuple[Context, EntityDumper]:
     if policy is None:
         policy = ProcessPolicy.with_default()
     dumper = EntityDumper()
-    conductor = Conductor(dumper)
+    conductor = Conductor(dumper, flush_every=flush_every)
     rejestr_io = None
     if use_rejestr_io:
         print("Initializing RejestrIO as a data source")

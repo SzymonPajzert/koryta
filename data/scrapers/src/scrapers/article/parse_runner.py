@@ -7,29 +7,24 @@ import logging
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from tqdm import tqdm
 
+from conductor import Conductor, make_reader_conductor  # type: ignore[attr-defined]
 from entities.article import ParsedArticle
 from entities.util import NormalizedParse
 from scrapers.article.parse import extract_article_content
-from scrapers.stores import Context, CrawlQueue
-
-if TYPE_CHECKING:
-    pass
+from scrapers.stores import Context, CrawlQueue, GCSBlob, LocalFile
 
 _URL_PARSING_CSV = Path(__file__).parent / "test_data" / "url_parsing.csv"
 
-# Per-process GCS client, initialized once per worker process.
-_process_gcs_client = None
+# Per-process Conductor, created once in _init_worker and reused for reads.
+_process_conductor: Conductor | None = None
 
 
-def _init_worker(storage_type: str) -> None:
-    global _process_gcs_client
-    if storage_type == "gcs":
-        from google.cloud import storage as gcs  # noqa: PLC0415
-        _process_gcs_client = gcs.Client()
+def _init_worker() -> None:
+    global _process_conductor
+    _process_conductor = make_reader_conductor()
 
 
 def _parse_worker(
@@ -39,14 +34,11 @@ def _parse_worker(
     uid: str,
     url: str,
 ) -> ParsedArticle:
-    global _process_gcs_client
-    if storage_type == "gcs":
-        from stores.storage import BUCKET  # type: ignore[import]  # noqa: PLC0415
-        blob = _process_gcs_client.bucket(BUCKET).blob(storage_path)  # type: ignore[union-attr]
-        html_bytes = blob.download_as_bytes()
-    else:
-        from stores.config import PROJECT_ROOT  # type: ignore[import]  # noqa: PLC0415
-        html_bytes = (Path(PROJECT_ROOT) / local_output_str / storage_path).read_bytes()
+    ref = (
+        GCSBlob(storage_path) if storage_type == "gcs"
+        else LocalFile(storage_path, local_output_str)  # type: ignore[arg-type]
+    )
+    html_bytes = _process_conductor.read_data(ref).read_bytes()  # type: ignore[union-attr]
 
     result = extract_article_content(html_bytes)
     pub_date = result.get("publication_date")
@@ -140,10 +132,8 @@ def run_parse(
     _print_coverage(domain_counts, test_domains)
 
     to_parse = all_done[:parse_limit]
-    print(
-        f"\nParsing {len(to_parse)} URLs "
-        f"(limit={parse_limit}, workers={worker_processes})..."
-    )
+    print(f"\nParsing {len(to_parse)} URLs "
+          f"(limit={parse_limit}, workers={worker_processes})...")
 
     local_output_str = str(local_output) if local_output else "crawler_output"
     errors = 0
@@ -151,18 +141,18 @@ def run_parse(
     with ProcessPoolExecutor(
         max_workers=worker_processes,
         initializer=_init_worker,
-        initargs=(storage_type,),
     ) as executor:
         futures = {
             executor.submit(
-                _parse_worker,
-                done.storage_path, storage_type, local_output_str, done.uid, done.url,
+                _parse_worker, done.storage_path, storage_type,
+                local_output_str, done.uid, done.url,
             ): done
             for done in to_parse
         }
         with tqdm(total=len(to_parse), desc="Parsing HTML", unit="page") as bar:
             for future in as_completed(futures):
                 done = futures[future]
+                del futures[future]
                 try:
                     ctx.io.output_entity(future.result())
                 except Exception as exc:
