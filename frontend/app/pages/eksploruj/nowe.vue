@@ -1,16 +1,27 @@
 <template>
   <ClientOnly>
-    <div class="pa-4 align-self-center">
-      <h1 class="text-h4 mb-4">Eksploruj nowe powiązania</h1>
+    <div class="align-self-center">
+      <h1 class="text-h4 mb-4">Eksploruj nowe osoby</h1>
 
       <v-alert
+        v-if="!showInstructions"
+        class="mb-4 cursor-pointer"
+        variant="tonal"
+        icon="mdi-information"
+        @click="showInstructions = true"
+      >
+        <div class="text-subtitle-1 font-weight-bold">Pokaż instrukcje</div>
+      </v-alert>
+
+      <v-alert
+        v-model="showInstructions"
         closable
         type="info"
         variant="tonal"
         class="mb-4"
         icon="mdi-information"
       >
-        <div class="text-subtitle-1 font-weight-bold mb-2">Instrukcje:</div>
+        <div class="text-subtitle-1 font-weight-bold">Instrukcje:</div>
         <ol class="pl-6">
           <li>
             Kliknij ikonkę "Eksploruj" w tabeli poniżej aby otworzyć odnośniki
@@ -206,7 +217,7 @@
         </v-data-table-server>
       </v-card>
 
-      <div class="d-flex justify-center mb-8">
+      <div class="d-flex justify-center mb-8 ga-3">
         <v-btn
           color="primary"
           size="large"
@@ -216,12 +227,28 @@
         >
           Następna osoba
         </v-btn>
+        <v-btn
+          color="secondary"
+          size="large"
+          prepend-icon="mdi-table"
+          to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=votes.interesting&sortDesc=true"
+        >
+          Przeglądaj w tabeli
+        </v-btn>
+        <v-btn
+          color="blue"
+          size="large"
+          prepend-icon="mdi-chart-line"
+          to="/eksploruj/statystyki"
+        >
+          Zobacz statystyki
+        </v-btn>
       </div>
 
       <template v-if="focusedPerson">
         <v-row>
-          <v-col cols="12" md="6" class="d-flex flex-column">
-            <v-card class="mb-4 flex-grow-1">
+          <v-col cols="12" md="6">
+            <v-card class="mb-4">
               <CardExplorePerson
                 :key="focusedPerson.id"
                 :person="focusedPerson"
@@ -231,7 +258,7 @@
             </v-card>
           </v-col>
 
-          <v-col cols="12" md="6" class="d-flex flex-column" height="100%">
+          <v-col cols="12" md="6">
             <NoteEditor
               :key="focusedPerson.id"
               :node-id="focusedPerson.id"
@@ -261,12 +288,16 @@ import { useEdges } from "~/composables/edges";
 definePageMeta({
   affineLink: "BYOEeL1iG0mvIR3yz2pOs",
   middleware: "auth",
+  maxWidth: 1300,
 });
 useHead({
   title: "Eksploruj Nowe - koryta.pl",
 });
 
 const page = ref(1);
+const showInstructions = useCookie<boolean>("show-explore-new-instructions", {
+  default: () => true,
+});
 const user = useCurrentUser();
 
 const sortBy = ref([{ key: "votes.interesting", order: "desc" as const }]);
