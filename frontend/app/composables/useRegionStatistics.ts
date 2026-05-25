@@ -58,15 +58,13 @@ export function useRegionStatistics(terytCode: string) {
           {
             name: "Marek Hohenauer",
             party: "PO",
-            accountId:
-              "https://autopush.koryta.pl/osoba/marek-jan-hohenauer-0KlvIX9iK39SdVANgV3d",
+            accountId: "/osoba/marek-jan-hohenauer-0KlvIX9iK39SdVANgV3d",
             pastEmployment: { name: "KRAKÓW NOWA HUTA PRZYSZŁOŚCI" },
           },
           {
             name: "Mariusz Kękuś",
             party: "PiS",
-            accountId:
-              "https://autopush.koryta.pl/osoba/mariusz-boguslaw-kekus-Im3MD1urbcD6A4fJakUP",
+            accountId: "/osoba/mariusz-boguslaw-kekus-Im3MD1urbcD6A4fJakUP",
             pastEmployment: { name: "MAŁOPOLSKA AGENCJA ROZWOJU REGIONALNEGO" },
           },
           {
@@ -99,8 +97,7 @@ export function useRegionStatistics(terytCode: string) {
           {
             name: "Piotr Moskała",
             party: "PO",
-            accountId:
-              "https://autopush.koryta.pl/osoba/piotr-marian-moskala-NdUyWl4iQl2AdkidUZsI",
+            accountId: "/osoba/piotr-marian-moskala-NdUyWl4iQl2AdkidUZsI",
             currentEmployment: {
               name: "ZAKŁAD DOŚWIADCZALNY INSTYTUTU ZOOTECHNIKI",
             },
@@ -145,8 +142,7 @@ export function useRegionStatistics(terytCode: string) {
           {
             name: "Grzegorz Stawowy",
             party: "PO",
-            accountId:
-              "https://autopush.koryta.pl/osoba/grzegorz-klaudiusz-stawowy-Hops3RkW6zqYIRo459V1",
+            accountId: "/osoba/grzegorz-klaudiusz-stawowy-Hops3RkW6zqYIRo459V1",
             pastEmployment: { name: "KOLEJE MAŁOPOLSKIE" },
           },
           { name: "Grzegorz Wojciech Stawowy" },
@@ -154,8 +150,7 @@ export function useRegionStatistics(terytCode: string) {
           {
             name: "Alicja Szczepańska",
             party: "PO",
-            accountId:
-              "https://autopush.koryta.pl/osoba/alicja-anna-szczepanska-dmdAWj2WQBstahqMEDrC",
+            accountId: "/osoba/alicja-anna-szczepanska-dmdAWj2WQBstahqMEDrC",
             currentEmployment: {
               name: "MIEJSKIE CENTRUM OPIEKI DLA OSÓB STARSZYCH",
             },
@@ -199,8 +194,7 @@ export function useRegionStatistics(terytCode: string) {
           {
             name: "Grzegorz Biedroń",
             party: "PiS",
-            accountId:
-              "https://autopush.koryta.pl/osoba/grzegorz-janusz-biedron-DttvDV3r6ghAo5eKJ8Yd",
+            accountId: "/osoba/grzegorz-janusz-biedron-DttvDV3r6ghAo5eKJ8Yd",
             currentEmployment: {
               name: 'SZPITAL SPECJALISTYCZNY CHORÓB PŁUC "ODRODZENIE"',
             },
@@ -239,8 +233,7 @@ export function useRegionStatistics(terytCode: string) {
           {
             name: "Józef Gawron",
             party: "PiS",
-            accountId:
-              "https://autopush.koryta.pl/osoba/jozef-wojciech-gawron-LgQnJ4z624WY4lcxE2xr",
+            accountId: "/osoba/jozef-wojciech-gawron-LgQnJ4z624WY4lcxE2xr",
             currentEmployment: {
               name: "SZPITAL WOJEWÓDZKI IM.ŚW.ŁUKASZA SAMODZIELNY",
             },
@@ -268,8 +261,7 @@ export function useRegionStatistics(terytCode: string) {
           {
             name: "Grzegorz Lipiec",
             party: "PO",
-            accountId:
-              "https://autopush.koryta.pl/osoba/grzegorz-cezary-lipiec-qqTjGbVcTgcHcdUuANJ2",
+            accountId: "/osoba/grzegorz-cezary-lipiec-qqTjGbVcTgcHcdUuANJ2",
             currentEmployment: { name: "WOJEWÓDZKI SZPITAL OKULISTYCZNY" },
           },
           {
@@ -282,7 +274,7 @@ export function useRegionStatistics(terytCode: string) {
             name: "Grzegorz Małodobry",
             party: "PO",
             accountId:
-              "https://autopush.koryta.pl/osoba/grzegorz-franciszek-malodobry-wNiDCSSBFsWCDLtegyCt",
+              "/osoba/grzegorz-franciszek-malodobry-wNiDCSSBFsWCDLtegyCt",
             currentEmployment: {
               name: "MIEJSKIE PRZEDSIĘBIORSTWO KOMUNIKACYJNE",
             },
@@ -310,15 +302,13 @@ export function useRegionStatistics(terytCode: string) {
           {
             name: "Bogdan Pęk",
             party: "PiS",
-            accountId:
-              "https://autopush.koryta.pl/osoba/bogdan-marek-pek-KBIsuBFM00sRYowmBdvb",
+            accountId: "/osoba/bogdan-marek-pek-KBIsuBFM00sRYowmBdvb",
             currentEmployment: { name: "MAŁOPOLSKI SZPITAL ORTOPEDYCZNO" },
           },
           {
             name: "Jan Piczura",
             party: "PiS",
-            accountId:
-              "https://autopush.koryta.pl/osoba/jan-piczura-aQASMiUY2niPzj93nlZ3",
+            accountId: "/osoba/jan-piczura-aQASMiUY2niPzj93nlZ3",
             currentEmployment: { name: "WOJEWÓDZKI SZPITAL REHABILITACYJNY" },
           },
           { name: "Tomasz Płatek", party: "PiS" },

@@ -76,7 +76,7 @@
                 >
                   <NuxtLink
                     v-if="person.accountId"
-                    :to="`/osoba/${person.accountId}`"
+                    :to="getPersonLink(person.accountId)"
                     class="text-decoration-none font-weight-medium text-primary"
                   >
                     {{ person.name }}
@@ -119,7 +119,10 @@
                 >
                   <NuxtLink
                     v-if="person.accountId"
-                    :to="`/osoba/${person.accountId}`"
+                    :to="getPersonLink(person.accountId)"
+                    :target="
+                      isExternalLink(person.accountId) ? '_blank' : undefined
+                    "
                     class="text-decoration-none font-weight-medium text-primary"
                   >
                     {{ person.name }}
@@ -164,7 +167,7 @@
                   <div class="d-flex align-center">
                     <NuxtLink
                       v-if="person.accountId"
-                      :to="`/osoba/${person.accountId}`"
+                      :to="getPersonLink(person.accountId)"
                       class="text-decoration-none font-weight-medium text-primary"
                     >
                       {{ person.name }}
@@ -252,6 +255,14 @@ const items = computed(() => [
 function reportPerson(person: Person) {
   // W przyszłości zostanie zaimplementowany mechanizm dodawania notatki
   alert(`Zgłaszasz podejrzenie koryciarstwa dla: ${person.name}`);
+}
+
+function isExternalLink(accountId: string) {
+  return accountId.includes("rejestr.io") || accountId.startsWith("http");
+}
+
+function getPersonLink(accountId: string) {
+  return isExternalLink(accountId) ? accountId : `/osoba/${accountId}`;
 }
 
 function explicitValuesFormatter(val: number, { seriesIndex, w }) {
