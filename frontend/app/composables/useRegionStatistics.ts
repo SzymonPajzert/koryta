@@ -2,7 +2,7 @@ import { ref } from "vue";
 
 export type Company = {
   // TODO implement it and link it
-  // nodeId: string;
+  nodeId?: string;
   name: string;
 };
 
@@ -87,7 +87,13 @@ export function useRegionStatistics(terytCode: string) {
           { name: "Tomasz Leśniak" },
           { name: "Agnieszka Łętocha" },
           { name: "Łukasz Maślona" },
-          { name: "Magdalena Mazurkiewicz", party: "PO" },
+          {
+            name: "Magdalena Mazurkiewicz",
+            party: "PO",
+            accountId:
+              "https://krakow.wyborcza.pl/krakow/7,44425,32804881,kolejna-krakowska-polityczka-tym-razem-nauczycielka-pada.html",
+            currentEmployment: { name: "Teatr Słowackiego w Krakowie" },
+          },
           {
             name: "Maciej Michałowski",
             party: "PiS",
