@@ -93,14 +93,6 @@ def _build_parser() -> ArgumentParser:
         help="Set priority=0 for pending URLs on domains with fewer than N done links, "
              "so that done + bumped = N per domain. Then exit.",
     )
-    parser.add_argument(
-        "--bump-small-domains",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Set priority=0 for pending URLs on domains with fewer than N done links, "
-             "so that done + bumped = N per domain. Then exit.",
-    )
     return parser
 
 
