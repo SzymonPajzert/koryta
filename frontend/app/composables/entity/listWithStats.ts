@@ -6,12 +6,13 @@ import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
 
 export async function useListWithStats(
   apiQuery: Ref<Query> | ComputedRef<Query>,
+  cacheKey: string = "tabela-data",
 ) {
   const user = useCurrentUser();
   const isAuthReady = useIsCurrentUserLoaded();
 
   const { data: pageData, pending } = await useAsyncData(
-    "tabela-data",
+    cacheKey,
     async () => {
       if (!isAuthReady.value) {
         await new Promise<void>((resolve) => {
@@ -74,6 +75,7 @@ export async function useListWithStats(
     },
     {
       watch: [apiQuery, user],
+      server: apiQuery.value.visibility !== "private",
     },
   );
 
