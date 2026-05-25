@@ -45,8 +45,8 @@
     <tempalte v-else-if="node == 'teryt1261'">
       <v-row>
         <v-col cols="12" sm="9">
-          <v-card class="mb-4">
-            <v-card-title class="d-flex justify-center mt-3">
+          <v-card>
+            <v-card-title class="d-flex justify-center mt-3 text-wrap">
               <h2 class="text-h4 font-weight-bold mr-2">
                 Statystyki koryciarstwa Krakowa
               </h2>
@@ -57,7 +57,12 @@
             </v-card-text>
           </v-card>
         </v-col>
-        <v-col cols="12" sm="3" height="100%" class="d-flex align-center">
+        <v-col
+          cols="12"
+          sm="3"
+          height="100%"
+          class="d-flex align-center justify-center"
+        >
           <v-hover v-slot="{ isHovering, props: hoverProps }">
             <v-btn
               v-bind="hoverProps"
@@ -89,7 +94,7 @@
         </v-col>
       </v-row>
 
-      <RegionPeopleStatistics teryt="1261" />
+      <RegionPeopleStatistics teryt="1261" class="mt-2" />
       <RegionPeopleStatistics teryt="12" />
     </tempalte>
     <v-card v-else width="100%" style="overflow: visible">

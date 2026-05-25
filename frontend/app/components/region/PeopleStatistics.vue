@@ -8,14 +8,13 @@
         <apexchart
           v-if="currentChartOptions && currentSeries"
           type="donut"
-          height="500"
           :options="currentChartOptions"
           :series="currentSeries"
         />
       </v-col>
       <v-col cols="12" md="6" class="d-flex align-center justify-center">
         <div>
-          <v-card-title class="text-h5 mb-1 text-center">
+          <v-card-title class="text-h5 mb-1 text-center text-wrap">
             {{ data.regionName }}
           </v-card-title>
           <v-list
@@ -262,7 +261,13 @@ function getPersonLink(accountId: string) {
   return isExternalLink(accountId) ? accountId : `/osoba/${accountId}`;
 }
 
-function explicitValuesFormatter(val: number, { seriesIndex, w }) {
+function explicitValuesFormatter(
+  _val: number,
+  {
+    seriesIndex,
+    w,
+  }: { seriesIndex: number; w: { config: { series: number[] } } },
+) {
   return w.config.series[seriesIndex];
 }
 
@@ -300,6 +305,7 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
     options: {
       chart: {
         type: "donut",
+        height: 400,
       },
       labels,
       colors,
@@ -321,9 +327,24 @@ function buildChartData(employedPeople: Person[], notEmployedPeople: Person[]) {
       },
       grid: {
         padding: {
-          bottom: -280,
+          bottom: -250,
         },
       },
+      responsive: [
+        {
+          breakpoint: 960,
+          options: {
+            chart: {
+              height: 320,
+            },
+            grid: {
+              padding: {
+                bottom: -180,
+              },
+            },
+          },
+        },
+      ],
     },
   };
 }
