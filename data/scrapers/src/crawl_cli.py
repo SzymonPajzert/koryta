@@ -96,22 +96,6 @@ def _build_parser() -> ArgumentParser:
         "so that done + bumped = N per domain. Then exit.",
     )
     parser.add_argument(
-        "--bump-small-domains",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Set priority=0 for pending URLs on domains with fewer than N done links, "
-        "so that done + bumped = N per domain. Then exit.",
-    )
-    parser.add_argument(
-        "--bump-small-domains",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Set priority=0 for pending URLs on domains with fewer than N done links, "
-        "so that done + bumped = N per domain. Then exit.",
-    )
-    parser.add_argument(
         "--custom-pipeline",
         action="store_true",
         help="Read url from custom pipeline instead of the default one.",
