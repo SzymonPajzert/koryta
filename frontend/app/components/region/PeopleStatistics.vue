@@ -248,11 +248,6 @@ const items = computed(() => [
   },
 ]);
 
-function reportPerson(person: Person) {
-  // W przyszłości zostanie zaimplementowany mechanizm dodawania notatki
-  alert(`Zgłaszasz podejrzenie koryciarstwa dla: ${person.name}`);
-}
-
 function isExternalLink(accountId: string) {
   return accountId.includes("rejestr.io") || accountId.startsWith("http");
 }

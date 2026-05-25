@@ -112,7 +112,10 @@ export async function useListWithStats(
           elections.push({
             year: listYear,
             location: listLocation,
-            teryt: (otherNode as any)?.teryt,
+            teryt:
+              otherNode && "teryt" in otherNode
+                ? (otherNode.teryt as string)
+                : undefined,
             position: listPosition,
             committee: edge.committee,
           });
