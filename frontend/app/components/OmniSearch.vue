@@ -212,6 +212,8 @@ watch(nodeGroupPicked, (value) => {
     path == "/eksploruj/tabela" ||
     path == "/graf" ||
     path.startsWith("/entity/person/") ||
+    path.startsWith("/entity/region/teryt1261") ||
+    path.startsWith("/region/krakow-teryt1261") ||
     path.startsWith("/osoba/") ||
     path.startsWith("/artykul/") ||
     path.startsWith("/edit/");

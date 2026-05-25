@@ -2,7 +2,7 @@
   <v-card v-if="loading" class="pa-4 d-flex justify-center">
     <v-progress-circular indeterminate></v-progress-circular>
   </v-card>
-  <v-card v-else-if="data" class="pa-4">
+  <v-card v-else-if="data" class="pa-4 mb-4">
     <v-row>
       <v-col cols="12" md="6" height="260">
         <apexchart
@@ -19,13 +19,13 @@
             {{ data.regionName }}
           </v-card-title>
           <v-list
+            v-model:selected="selectedChart"
             bg-color="background"
             class="mx-auto ga-4 d-flex flex-column"
             item-props
             :items="items"
             lines="two"
             mandatory
-            v-model:selected="selectedChart"
           >
             <template #item="{ props: itemProps }">
               <v-list-item
@@ -58,8 +58,8 @@
 
     <v-expansion-panels class="mb-6">
       <v-expansion-panel>
-        <v-expansion-panel-title class="text-h6">
-          Lista radnych
+        <v-expansion-panel-title class="text-h6" color="primary">
+          Zobacz listę urzędujących osób
         </v-expansion-panel-title>
         <v-expansion-panel-text>
           <div v-if="currentlyEmployed.length">
@@ -120,9 +120,6 @@
                   <NuxtLink
                     v-if="person.accountId"
                     :to="getPersonLink(person.accountId)"
-                    :target="
-                      isExternalLink(person.accountId) ? '_blank' : undefined
-                    "
                     class="text-decoration-none font-weight-medium text-primary"
                   >
                     {{ person.name }}
