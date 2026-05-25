@@ -40,6 +40,37 @@
         {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
       </h1>
 
+      <v-alert
+        v-if="region && !company"
+        type="warning"
+        variant="tonal"
+        class="mb-4"
+        icon="mdi-money"
+      >
+        <div class="d-flex align-center w-100">
+          <v-btn
+            href="https://zrzutka.pl/rd7ssx/pay"
+            target="_blank"
+            color="#E64164"
+          >
+            Zrzutka
+            <v-img
+              :width="30"
+              aspect-ratio="16/9"
+              cover
+              src="@/assets/zrzutka.png"
+            />
+          </v-btn>
+          <v-spacer />
+          <div class="mr-8">
+            Wesprzyj projekt na zrzutce, by przygotować podsumowania dla innych
+            miast, podobie jak to dla
+            <NuxtLink to="/entity/region/teryt1261">Krakowa</NuxtLink>
+          </div>
+          <v-spacer />
+        </div>
+      </v-alert>
+
       <ExploreLoginBanner v-if="!user" :hidden-count="hiddenCount" />
 
       <FormEksplorujTabelaFilters
