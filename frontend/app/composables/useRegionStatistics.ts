@@ -175,7 +175,7 @@ export function useRegionStatistics(terytCode: string) {
       };
     } else if (terytCode === "12") {
       data.value = {
-        regionName: "Sejmik województwa Mazowieckiego",
+        regionName: "Sejmik województwa małopolskiego",
         people: [
           {
             name: "Tadeusz Arkit",
