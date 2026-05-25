@@ -149,13 +149,18 @@
           </template>
 
           <template #[`item.name`]="{ item }">
-            <div style="max-width: 150px">
+            <div style="max-width: 150px" class="d-flex align-center">
               <NuxtLink
-                class="text-primary cursor-pointer"
+                class="text-primary cursor-pointer text-truncate"
                 @click="focusPerson(item)"
               >
                 {{ item.name }}
               </NuxtLink>
+              <v-tooltip v-if="(item as any).pending_revisions_count" text="Dane zawierają niezweryfikowane sugestie użytkowników" location="top">
+                <template #activator="{ props }">
+                  <v-icon v-bind="props" icon="mdi-alert-circle-outline" size="small" color="warning" class="ml-1" />
+                </template>
+              </v-tooltip>
             </div>
           </template>
 

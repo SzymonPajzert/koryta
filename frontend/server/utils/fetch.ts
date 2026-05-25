@@ -90,6 +90,7 @@ export function logEventPath(
 export function applyPartiesFilter(
   query: FirebaseFirestore.Query,
   parties: string | string[],
+  field: string = "parties",
 ): FirebaseFirestore.Query {
   const partiesToSearch = Array.isArray(parties) ? parties : [parties];
   const hasNone = partiesToSearch.includes("__NONE__");
@@ -99,11 +100,11 @@ export function applyPartiesFilter(
 
   if (normalParties.length > 0) {
     partyFilters.push(
-      Filter.where("parties", "array-contains-any", normalParties),
+      Filter.where(field, "array-contains-any", normalParties),
     );
   }
   if (hasNone) {
-    partyFilters.push(Filter.where("parties", "==", []));
+    partyFilters.push(Filter.where(field, "==", []));
   }
 
   if (partyFilters.length === 1) {
