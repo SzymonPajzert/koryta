@@ -208,7 +208,6 @@ watch(nodeGroupPicked, (value) => {
   }
 
   let path = value?.path ?? currentRoute.value.path;
-  console.log("going to", path);
   const allowedPath =
     path == "/graf" ||
     path.startsWith("/eksploruj/tabela") ||
@@ -219,7 +218,6 @@ watch(nodeGroupPicked, (value) => {
     path.startsWith("/artykul/") ||
     path.startsWith("/edit/");
   if (!allowedPath) {
-    console.log("Not allowed path", path);
     path = "/eksploruj/tabela";
   }
   push({
