@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import mimetypes
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -22,9 +23,9 @@ _URL_PARSING_CSV = Path(__file__).parent / "test_data" / "url_parsing.csv"
 _process_conductor: Conductor | None = None
 
 
-def _init_worker() -> None:
+def _init_worker(cache_only: bool) -> None:
     global _process_conductor
-    _process_conductor = make_reader_conductor()
+    _process_conductor = make_reader_conductor(cache_only=cache_only)
 
 
 def _parse_worker(
@@ -65,6 +66,13 @@ def _load_test_domains() -> set[str]:
                 except Exception:
                     pass
     return domains
+
+
+def _is_html(media_type: str | None) -> bool:
+    if not media_type:
+        return False
+    base_type = media_type.split(";")[0].strip()
+    return mimetypes.guess_extension(base_type) in {".html", ".htm"}
 
 
 def _print_media_type_stats(counts: Counter) -> None:
@@ -108,6 +116,7 @@ def run_parse(
     storage_type: str,
     local_output: Path | None = None,
     worker_processes: int = 1,
+    cache_only: bool = False,
 ) -> None:
     """Fetch done URLs, print stats, parse HTML, emit ParsedArticle entities.
 
@@ -131,7 +140,7 @@ def run_parse(
     _print_domain_stats(domain_counts, test_domains)
     _print_coverage(domain_counts, test_domains)
 
-    to_parse = all_done[:parse_limit]
+    to_parse = [d for d in all_done if _is_html(d.media_type)][:parse_limit]
     print(f"\nParsing {len(to_parse)} URLs "
           f"(limit={parse_limit}, workers={worker_processes})...")
 
@@ -141,6 +150,7 @@ def run_parse(
     with ProcessPoolExecutor(
         max_workers=worker_processes,
         initializer=_init_worker,
+        initargs=(cache_only,),
     ) as executor:
         futures = {
             executor.submit(

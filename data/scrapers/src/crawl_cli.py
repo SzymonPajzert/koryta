@@ -85,6 +85,11 @@ def _build_parser() -> ArgumentParser:
         help="Flush parsed entities to disk every N records to bound memory usage.",
     )
     parser.add_argument(
+        "--cache-only",
+        action="store_true",
+        help="Skip URLs not already cached locally; never download from GCS.",
+    )
+    parser.add_argument(
         "--reprioritize",
         action="store_true",
         help=(
@@ -211,7 +216,8 @@ def main() -> None:  # noqa: PLR0915
         pg_client = PostgresClient.from_env(max_size=1)
         queue = PostgresCrawlQueue(pg_client)
         ctx, dumper = setup_context(
-            False, crawl_queue=queue, flush_every=args.dump_every
+            False, crawl_queue=queue, flush_every=args.dump_every,
+            cache_only=args.cache_only,
         )
         try:
             run_parse(
@@ -221,6 +227,7 @@ def main() -> None:  # noqa: PLR0915
                     args.local_output if args.storage_type == "local" else None
                 ),
                 worker_processes=worker_processes,
+                cache_only=args.cache_only,
             )
         finally:
             dumper.dump_pandas()
