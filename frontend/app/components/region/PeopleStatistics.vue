@@ -177,7 +177,7 @@
                       class="ml-2"
                     />
                   </div>
-                  <v-btn
+                  <!-- TODO add support for adding people <v-btn
                     size="small"
                     color="primary"
                     variant="tonal"
@@ -185,7 +185,7 @@
                     @click="reportPerson(person)"
                   >
                     Zgłoś notatkę
-                  </v-btn>
+                  </v-btn> -->
                 </v-list-item-title>
               </v-list-item>
             </v-list>
