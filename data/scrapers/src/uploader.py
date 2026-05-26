@@ -149,11 +149,7 @@ class Uploader:
             else:
                 self.company_payloads = companies
 
-            if not args.prod and args.endpoint.startswith("http://localhost"):
-                token = "test-token"
-            else:
-                token = authenticate_user(args.endpoint)
-
+            token = authenticate_user(args.endpoint)
             self.headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {token}",
