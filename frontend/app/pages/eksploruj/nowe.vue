@@ -21,41 +21,11 @@
           </div>
         </v-alert>
 
-        <div class="d-flex align-center ga-2">
-          <v-tooltip text="Przeglądaj w tabeli" location="top">
-            <template #activator="{ props }">
-              <v-btn
-                v-bind="props"
-                icon="mdi-table"
-                variant="tonal"
-                color="secondary"
-                to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=votes.interesting&sortDesc=true"
-              />
-            </template>
-          </v-tooltip>
-
-          <v-tooltip text="Zobacz statystyki" location="top">
-            <template #activator="{ props }">
-              <v-btn
-                v-bind="props"
-                icon="mdi-chart-line"
-                variant="tonal"
-                color="blue"
-                to="/eksploruj/statystyki"
-              />
-            </template>
-          </v-tooltip>
-
-          <v-btn
-            color="primary"
-            prepend-icon="mdi-check-all"
-            :loading="pending"
-            :disabled="!allActionsDone"
-            @click="page += Math.round(Math.random() * 5)"
-          >
-            Następna osoba
-          </v-btn>
-        </div>
+        <ExploreNewButtons
+          :pending="pending"
+          :all-actions-done="allActionsDone"
+          @next="page += Math.round(Math.random() * 5)"
+        />
       </div>
 
       <!-- OPEN STATE -->
@@ -155,40 +125,12 @@
           </ul>
         </v-alert>
 
-        <div class="d-flex flex-column align-center ga-2 pt-1">
-          <v-tooltip text="Przeglądaj w tabeli" location="left">
-            <template #activator="{ props }">
-              <v-btn
-                v-bind="props"
-                icon="mdi-table"
-                variant="tonal"
-                color="secondary"
-                to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=votes.interesting&sortDesc=true"
-              />
-            </template>
-          </v-tooltip>
-
-          <v-tooltip text="Zobacz statystyki" location="left">
-            <template #activator="{ props }">
-              <v-btn
-                v-bind="props"
-                icon="mdi-chart-line"
-                variant="tonal"
-                color="blue"
-                to="/eksploruj/statystyki"
-              />
-            </template>
-          </v-tooltip>
-
-          <v-btn
-            color="primary"
-            icon="mdi-check-all"
-            :loading="pending"
-            :disabled="!allActionsDone"
-            class="mt-2"
-            @click="page += Math.round(Math.random() * 5)"
-          />
-        </div>
+        <ExploreNewButtons
+          vertical
+          :pending="pending"
+          :all-actions-done="allActionsDone"
+          @next="page += Math.round(Math.random() * 5)"
+        />
       </div>
 
       <v-card class="table-card mb-4">
