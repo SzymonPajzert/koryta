@@ -22,29 +22,36 @@
         icon="mdi-information"
       >
         <div class="text-subtitle-1 font-weight-bold">Instrukcje:</div>
-        <ol class="pl-6">
-          <li>
-            Kliknij ikonkę "Eksploruj" w tabeli poniżej aby otworzyć odnośniki
-            wyszukiwania do powiązanych z daną osobą informacji (wyłącz
-            blokowanie wyskakujących okien).
+        <ul class="pl-0 mt-2" style="list-style: none;">
+          <li class="d-flex align-center mb-2" :class="{ 'text-decoration-line-through text-medium-emphasis': actionExplored }">
+            <v-icon :color="actionExplored ? 'success' : 'medium-emphasis'" class="mr-2">
+              {{ actionExplored ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline' }}
+            </v-icon>
+            <span>
+              Kliknij ikonkę "Eksploruj" w tabeli poniżej aby otworzyć odnośniki wyszukiwania do powiązanych z daną osobą informacji (wyłącz blokowanie wyskakujących okien).
+            </span>
           </li>
-          <li>
-            Spróbuj znaleźć interesujące i istotne informacje na temat tej
-            osoby.
+          <li class="d-flex align-center mb-2">
+            <v-icon color="medium-emphasis" class="mr-2">mdi-circle-small</v-icon>
+            <span>Spróbuj znaleźć interesujące i istotne informacje na temat tej osoby.</span>
           </li>
-          <li>
-            Dodaj znalezione informacje jako notatki w edytorze poniżej (jeśli
-            są tego warte).
+          <li class="d-flex align-center mb-2" :class="{ 'text-decoration-line-through text-medium-emphasis': actionNoted }">
+            <v-icon :color="actionNoted ? 'success' : 'medium-emphasis'" class="mr-2">
+              {{ actionNoted ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline' }}
+            </v-icon>
+            <span>Dodaj znalezione informacje jako notatki w edytorze poniżej (jeśli są tego warte).</span>
           </li>
-          <li>
-            Na koniec, oddaj swój głos w tabeli w zależności od tego, czy ta
-            osoba jest według Ciebie interesująca czy nie.
+          <li class="d-flex align-center mb-2" :class="{ 'text-decoration-line-through text-medium-emphasis': actionVoted }">
+            <v-icon :color="actionVoted ? 'success' : 'medium-emphasis'" class="mr-2">
+              {{ actionVoted ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline' }}
+            </v-icon>
+            <span>Na koniec, oddaj swój głos w tabeli w zależności od tego, czy ta osoba jest według Ciebie interesująca czy nie.</span>
           </li>
-          <li>
-            Kiedy skończysz, kliknij przycisk "Następna osoba" aby przejść
-            dalej.
+          <li class="d-flex align-center">
+            <v-icon color="medium-emphasis" class="mr-2">mdi-circle-small</v-icon>
+            <span>Kiedy skończysz, kliknij przycisk "Następna osoba" aby przejść dalej.</span>
           </li>
-        </ol>
+        </ul>
       </v-alert>
 
       <v-card class="table-card mb-4">
@@ -192,7 +199,7 @@
           </template>
 
           <template #[`item.userVote`]="{ item }">
-            <ButtonVoteNumber :id="item.id" category="interesting" />
+            <ButtonVoteNumber :id="item.id" category="interesting" @voted="actionVoted = true" />
           </template>
 
           <template #[`item.explore`]="{ item }">
@@ -208,7 +215,10 @@
                     icon="mdi-open-in-new"
                     variant="text"
                     color="secondary"
-                    @click.stop="executeSearchAll(item, undefined, undefined)"
+                    @click.stop="
+                      executeSearchAll(item, undefined, undefined);
+                      actionExplored = true;
+                    "
                   />
                 </template>
               </v-tooltip>
@@ -263,6 +273,7 @@
               :key="focusedPerson.id"
               :node-id="focusedPerson.id"
               single-column
+              @saved="actionNoted = true"
             />
           </v-col>
         </v-row>
@@ -299,6 +310,16 @@ const showInstructions = useCookie<boolean>("show-explore-new-instructions", {
   default: () => true,
 });
 const user = useCurrentUser();
+
+const actionExplored = ref(false);
+const actionNoted = ref(false);
+const actionVoted = ref(false);
+
+watch(page, () => {
+  actionExplored.value = false;
+  actionNoted.value = false;
+  actionVoted.value = false;
+});
 
 const sortBy = ref([{ key: "votes.interesting", order: "desc" as const }]);
 
