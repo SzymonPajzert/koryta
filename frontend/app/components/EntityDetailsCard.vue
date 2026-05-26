@@ -14,14 +14,14 @@
         <v-spacer />
         <ButtonVoteWidget
           v-if="entity"
-          :key="(entity.id ?? '') + '-interesting'"
           :id="entity.id ?? ''"
+          :key="(entity.id ?? '') + '-interesting'"
           category="interesting"
         />
         <ButtonVoteWidget
           v-if="entity"
-          :key="(entity.id ?? '') + '-quality'"
           :id="entity.id ?? ''"
+          :key="(entity.id ?? '') + '-quality'"
           category="quality"
         />
       </div>

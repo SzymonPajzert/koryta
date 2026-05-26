@@ -98,9 +98,9 @@
       <div class="d-flex flex-wrap gap-1 py-1" style="max-width: 300px">
         <span v-for="companyName in item.companies" :key="companyName">
           <v-tooltip :text="shortCompanyName(companyName)" location="top">
-            <template #activator="{ props }">
+            <template #activator="{ props: shortCompanyProps }">
               <v-chip
-                v-bind="props"
+                v-bind="shortCompanyProps"
                 size="small"
                 class="mr-1 mb-1 text-truncate d-flex"
                 variant="outlined"
@@ -131,9 +131,7 @@
             {{ election.location }}
           </template>
           <template v-if="election.committee">
-            <span class="text-caption ml-1"
-              >({{ election.committee }})</span
-            >
+            <span class="text-caption ml-1">({{ election.committee }})</span>
           </template>
         </v-chip>
         <br v-if="i < item.elections.length - 1" />
@@ -159,9 +157,9 @@
     </template>
 
     <template #[`item.userVote`]="{ item }">
-      <ButtonVoteNumber 
-        :id="item.id" 
-        category="interesting" 
+      <ButtonVoteNumber
+        :id="item.id"
+        category="interesting"
         @voted="$emit('action:voted', item)"
       />
     </template>
@@ -203,40 +201,43 @@
 import { executeSearchAll } from "~/composables/usePersonSearch";
 import type { PersonRich } from "~~/shared/model";
 
-const props = withDefaults(defineProps<{
-  items: PersonRich[];
-  totalItems: number;
-  pending: boolean;
-  page?: number;
-  itemsPerPage?: number;
-  sortBy?: { key: string; order: 'asc' | 'desc' }[];
-  headers: any[];
-  noDataText?: string;
-  itemsPerPageText?: string;
-  loadingText?: string;
-  hideDefaultFooter?: boolean;
-  region?: [string, string];
-  company?: [string, string];
-  disableFocus?: boolean;
-}>(), {
-  page: 1,
-  itemsPerPage: 10,
-  sortBy: () => [],
-  noDataText: "Brak danych",
-  itemsPerPageText: "Wierszy na stronę:",
-  loadingText: "Ładowanie...",
-  hideDefaultFooter: false,
-  disableFocus: false,
-});
+withDefaults(
+  defineProps<{
+    items: PersonRich[];
+    totalItems: number;
+    pending: boolean;
+    page?: number;
+    itemsPerPage?: number;
+    sortBy?: { key: string; order: "asc" | "desc" }[];
+    headers: any[];
+    noDataText?: string;
+    itemsPerPageText?: string;
+    loadingText?: string;
+    hideDefaultFooter?: boolean;
+    region?: [string, string];
+    company?: [string, string];
+    disableFocus?: boolean;
+  }>(),
+  {
+    page: 1,
+    itemsPerPage: 10,
+    sortBy: () => [],
+    noDataText: "Brak danych",
+    itemsPerPageText: "Wierszy na stronę:",
+    loadingText: "Ładowanie...",
+    hideDefaultFooter: false,
+    disableFocus: false,
+  },
+);
 
 defineEmits<{
-  (e: 'update:page', val: number): void;
-  (e: 'update:itemsPerPage', val: number): void;
-  (e: 'update:sortBy', val: any[]): void;
-  (e: 'update:options', val: any): void;
-  (e: 'action:explored', item: PersonRich): void;
-  (e: 'action:voted', item: PersonRich): void;
-  (e: 'focus', item: PersonRich): void;
+  (e: "update:page", val: number): void;
+  (e: "update:itemsPerPage", val: number): void;
+  (e: "update:sortBy", val: any[]): void;
+  (e: "update:options", val: any): void;
+  (e: "action:explored", item: PersonRich): void;
+  (e: "action:voted", item: PersonRich): void;
+  (e: "focus", item: PersonRich): void;
 }>();
 
 const shortCompanyName = (companyName: string | undefined) => {

@@ -278,8 +278,6 @@ const focusedEdges = computed(() => [
   ...(focusedSources.value || []),
   ...(focusedTargets.value || []),
 ]);
-
-
 </script>
 
 <style scoped>
