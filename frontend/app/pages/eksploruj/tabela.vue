@@ -426,8 +426,6 @@ const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
   openDrawer.value = true;
 };
-
-
 </script>
 
 <style scoped>
