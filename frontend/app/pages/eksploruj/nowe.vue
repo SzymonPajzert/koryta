@@ -3,56 +3,193 @@
     <div class="align-self-center">
       <h1 class="text-h4 mb-4">Eksploruj nowe osoby</h1>
 
-      <v-alert
-        v-if="!showInstructions"
-        class="mb-4 cursor-pointer"
-        variant="tonal"
-        icon="mdi-information"
-        @click="showInstructions = true"
-      >
-        <div class="text-subtitle-1 font-weight-bold">Pokaż instrukcje</div>
-      </v-alert>
+      <!-- CLOSED STATE -->
+      <div v-if="!showInstructions" class="d-flex align-center ga-3 mb-4">
+        <v-alert
+          class="flex-grow-1 cursor-pointer mb-0"
+          :color="allActionsDone ? 'success' : undefined"
+          variant="tonal"
+          icon="mdi-information"
+          @click="showInstructions = true"
+        >
+          <div class="text-subtitle-1 font-weight-bold">
+            {{
+              allActionsDone
+                ? "Wszystkie akcje wykonane - gotowe!"
+                : "Pokaż instrukcje"
+            }}
+          </div>
+        </v-alert>
 
-      <v-alert
-        v-model="showInstructions"
-        closable
-        type="info"
-        variant="tonal"
-        class="mb-4"
-        icon="mdi-information"
-      >
-        <div class="text-subtitle-1 font-weight-bold">Instrukcje:</div>
-        <ul class="pl-0 mt-2" style="list-style: none;">
-          <li class="d-flex align-center mb-2" :class="{ 'text-decoration-line-through text-medium-emphasis': actionExplored }">
-            <v-icon :color="actionExplored ? 'success' : 'medium-emphasis'" class="mr-2">
-              {{ actionExplored ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline' }}
-            </v-icon>
-            <span>
-              Kliknij ikonkę "Eksploruj" w tabeli poniżej aby otworzyć odnośniki wyszukiwania do powiązanych z daną osobą informacji (wyłącz blokowanie wyskakujących okien).
-            </span>
-          </li>
-          <li class="d-flex align-center mb-2">
-            <v-icon color="medium-emphasis" class="mr-2">mdi-circle-small</v-icon>
-            <span>Spróbuj znaleźć interesujące i istotne informacje na temat tej osoby.</span>
-          </li>
-          <li class="d-flex align-center mb-2" :class="{ 'text-decoration-line-through text-medium-emphasis': actionNoted }">
-            <v-icon :color="actionNoted ? 'success' : 'medium-emphasis'" class="mr-2">
-              {{ actionNoted ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline' }}
-            </v-icon>
-            <span>Dodaj znalezione informacje jako notatki w edytorze poniżej (jeśli są tego warte).</span>
-          </li>
-          <li class="d-flex align-center mb-2" :class="{ 'text-decoration-line-through text-medium-emphasis': actionVoted }">
-            <v-icon :color="actionVoted ? 'success' : 'medium-emphasis'" class="mr-2">
-              {{ actionVoted ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline' }}
-            </v-icon>
-            <span>Na koniec, oddaj swój głos w tabeli w zależności od tego, czy ta osoba jest według Ciebie interesująca czy nie.</span>
-          </li>
-          <li class="d-flex align-center">
-            <v-icon color="medium-emphasis" class="mr-2">mdi-circle-small</v-icon>
-            <span>Kiedy skończysz, kliknij przycisk "Następna osoba" aby przejść dalej.</span>
-          </li>
-        </ul>
-      </v-alert>
+        <div class="d-flex align-center ga-2">
+          <v-tooltip text="Przeglądaj w tabeli" location="top">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-table"
+                variant="tonal"
+                color="secondary"
+                to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=votes.interesting&sortDesc=true"
+              />
+            </template>
+          </v-tooltip>
+
+          <v-tooltip text="Zobacz statystyki" location="top">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-chart-line"
+                variant="tonal"
+                color="blue"
+                to="/eksploruj/statystyki"
+              />
+            </template>
+          </v-tooltip>
+
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-check-all"
+            :loading="pending"
+            :disabled="!allActionsDone"
+            @click="page += Math.round(Math.random() * 5)"
+          >
+            Następna osoba
+          </v-btn>
+        </div>
+      </div>
+
+      <!-- OPEN STATE -->
+      <div v-else class="d-flex align-start ga-4 mb-4">
+        <v-alert
+          v-model="showInstructions"
+          closable
+          type="info"
+          variant="tonal"
+          class="mb-0 flex-grow-1"
+          icon="mdi-information"
+        >
+          <div class="text-subtitle-1 font-weight-bold mb-2">Instrukcje:</div>
+          <ul class="pl-0 mt-2" style="list-style: none">
+            <li
+              class="d-flex align-center mb-2"
+              :class="{
+                'text-medium-emphasis': actionExplored,
+              }"
+            >
+              <v-icon
+                :color="actionExplored ? 'success' : 'medium-emphasis'"
+                class="mr-2"
+              >
+                {{
+                  actionExplored
+                    ? "mdi-checkbox-marked-circle"
+                    : "mdi-checkbox-blank-circle-outline"
+                }}
+              </v-icon>
+              <span>
+                Kliknij ikonkę "Eksploruj" w tabeli poniżej aby otworzyć
+                odnośniki wyszukiwania do powiązanych z daną osobą informacji
+                (wyłącz blokowanie wyskakujących okien).
+              </span>
+            </li>
+            <li class="d-flex align-center mb-2">
+              <v-icon color="medium-emphasis" class="mr-2"
+                >mdi-circle-small</v-icon
+              >
+              <span
+                >Spróbuj znaleźć interesujące i istotne informacje na temat tej
+                osoby.</span
+              >
+            </li>
+            <li
+              class="d-flex align-center mb-2"
+              :class="{
+                'text-medium-emphasis': actionNoted,
+              }"
+            >
+              <v-icon
+                :color="actionNoted ? 'success' : 'medium-emphasis'"
+                class="mr-2"
+              >
+                {{
+                  actionNoted
+                    ? "mdi-checkbox-marked-circle"
+                    : "mdi-checkbox-blank-circle-outline"
+                }}
+              </v-icon>
+              <span
+                >Dodaj znalezione informacje jako notatki w edytorze poniżej
+                (jeśli są tego warte).</span
+              >
+            </li>
+            <li
+              class="d-flex align-center mb-2"
+              :class="{
+                'text-medium-emphasis': actionVoted,
+              }"
+            >
+              <v-icon
+                :color="actionVoted ? 'success' : 'medium-emphasis'"
+                class="mr-2"
+              >
+                {{
+                  actionVoted
+                    ? "mdi-checkbox-marked-circle"
+                    : "mdi-checkbox-blank-circle-outline"
+                }}
+              </v-icon>
+              <span
+                >Na koniec, oddaj swój głos w tabeli w zależności od tego, czy
+                ta osoba jest według Ciebie interesująca czy nie.</span
+              >
+            </li>
+            <li class="d-flex align-center">
+              <v-icon color="medium-emphasis" class="mr-2"
+                >mdi-circle-small</v-icon
+              >
+              <span
+                >Kiedy skończysz, kliknij przycisk "Następna osoba" aby przejść
+                dalej.</span
+              >
+            </li>
+          </ul>
+        </v-alert>
+
+        <div class="d-flex flex-column align-center ga-2 pt-1">
+          <v-tooltip text="Przeglądaj w tabeli" location="left">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-table"
+                variant="tonal"
+                color="secondary"
+                to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=votes.interesting&sortDesc=true"
+              />
+            </template>
+          </v-tooltip>
+
+          <v-tooltip text="Zobacz statystyki" location="left">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-chart-line"
+                variant="tonal"
+                color="blue"
+                to="/eksploruj/statystyki"
+              />
+            </template>
+          </v-tooltip>
+
+          <v-btn
+            color="primary"
+            icon="mdi-check-all"
+            :loading="pending"
+            :disabled="!allActionsDone"
+            class="mt-2"
+            @click="page += Math.round(Math.random() * 5)"
+          />
+        </div>
+      </div>
 
       <v-card class="table-card mb-4">
         <v-data-table-server
@@ -199,7 +336,11 @@
           </template>
 
           <template #[`item.userVote`]="{ item }">
-            <ButtonVoteNumber :id="item.id" category="interesting" @voted="actionVoted = true" />
+            <ButtonVoteNumber
+              :id="item.id"
+              category="interesting"
+              @voted="actionVoted = true"
+            />
           </template>
 
           <template #[`item.explore`]="{ item }">
@@ -226,34 +367,6 @@
           </template>
         </v-data-table-server>
       </v-card>
-
-      <div class="d-flex justify-center mb-8 ga-3">
-        <v-btn
-          color="primary"
-          size="large"
-          prepend-icon="mdi-check-all"
-          :loading="pending"
-          @click="page += Math.round(Math.random() * 5)"
-        >
-          Następna osoba
-        </v-btn>
-        <v-btn
-          color="secondary"
-          size="large"
-          prepend-icon="mdi-table"
-          to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=votes.interesting&sortDesc=true"
-        >
-          Przeglądaj w tabeli
-        </v-btn>
-        <v-btn
-          color="blue"
-          size="large"
-          prepend-icon="mdi-chart-line"
-          to="/eksploruj/statystyki"
-        >
-          Zobacz statystyki
-        </v-btn>
-      </div>
 
       <template v-if="focusedPerson">
         <v-row>
@@ -314,6 +427,16 @@ const user = useCurrentUser();
 const actionExplored = ref(false);
 const actionNoted = ref(false);
 const actionVoted = ref(false);
+
+const allActionsDone = computed(
+  () => actionExplored.value && actionNoted.value && actionVoted.value,
+);
+
+watch(allActionsDone, (done) => {
+  if (done) {
+    showInstructions.value = false;
+  }
+});
 
 watch(page, () => {
   actionExplored.value = false;
