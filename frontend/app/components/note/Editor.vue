@@ -91,6 +91,8 @@ const props = defineProps<{
   singleColumn?: boolean;
 }>();
 
+const emit = defineEmits(["saved"]);
+
 const { user } = useAuthState();
 const { userNote, otherNotes, saveNote } = useNotes(
   computed(() => props.nodeId),
@@ -157,6 +159,7 @@ const save = async () => {
   try {
     isEditing.value = false;
     await saveNote(toRaw(formData.value));
+    emit("saved");
   } catch (error) {
     console.error("Failed to save note", error);
   } finally {
