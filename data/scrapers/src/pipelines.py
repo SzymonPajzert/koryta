@@ -10,7 +10,7 @@ from scrapers.kmgp.people import PeopleKMGP
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
-from scrapers.krs.scrape import ScrapeRejestrIO
+from scrapers.krs.scrape import KRSAlreadyScraped, ScrapeRejestrIO
 from scrapers.krs.updates import KRSUpdates
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
@@ -26,6 +26,7 @@ PIPELINES = [
     CompanyScores,
     PeopleScores,
     Extract,
+    KRSAlreadyScraped,
     KRSUpdates,
     KorytaDiffer,
     KorytaPeople,

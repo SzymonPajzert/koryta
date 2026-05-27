@@ -121,37 +121,60 @@ class KRSSet:
         return key in self.entries
 
 
-def get_krs_scraped(ctx: Context) -> dict[str, list[str]]:
-    krs_scraped: dict[str, list[str]] = {}
-    for blob_name in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
-        assert isinstance(blob_name, DownloadableFile)
-        split = blob_name.url.split("org/", 1)
-        if len(split) < 2:
-            continue
+@dataclass
+class KRSScraped:
+    krs: str
+    method: typing.Literal[
+        "aktualnosc_aktualne", "aktualnosc_historyczne", "main", "api-krs"
+    ]
+    date: str
 
-        krs = split[1].split("/", 1)[0]
-        # date = blob_name.url.split("/")[-1]
-        if "aktualnosc_aktualne" in blob_name.url:
-            krs_scraped[krs] = krs_scraped.get(krs, []) + ["aktualnosc_aktualne"]
-        elif "aktualnosc_historyczne" in blob_name.url:
-            krs_scraped[krs] = krs_scraped.get(krs, []) + ["aktualnosc_historyczne"]
+    @staticmethod
+    def parse(url: str) -> typing.Optional["KRSScraped"]:
+        date = url.split("/date=", 1)[1].split("/", 1)[0]
+
+        if "rejestr.io" in url and "org/" in url:
+            krs = url.split("org/", 1)[1].split("/", 1)[0]
+            if "aktualnosc_aktualne" in url:
+                return KRSScraped(krs, "aktualnosc_aktualne", date)
+            elif "aktualnosc_historyczne" in url:
+                return KRSScraped(krs, "aktualnosc_aktualne", date)
+            else:
+                return KRSScraped(krs, "main", date)
+        elif "api-krs.ms.gov.pl" in url:
+            if "Biuletyn" in url:
+                return None
+            krs = url.split("OdpisAktualny/", 1)[1].split("/", 1)[0]
+            return KRSScraped(krs, "api-krs", date)
         else:
-            krs_scraped[krs] = krs_scraped.get(krs, []) + ["main"]
+            return None
 
-    for blob_name in ctx.io.list_files(
-        CloudStorage(prefix="hostname=api-krs.ms.gov.pl")
-    ):
-        assert isinstance(blob_name, DownloadableFile)
-        split = blob_name.url.split("OdpisAktualny/", 1)
-        if len(split) < 2:
-            continue
 
-        krs = split[1].split("/", 1)[0]
-        # date = blob_name.url.split("/")[-1]
-        if "OdpisAktualny" in blob_name.url:
-            krs_scraped[krs] = krs_scraped.get(krs, []) + ["api-krs"]
+class KRSAlreadyScraped(Pipeline):
+    filename = "krs_already_scraped"
 
-    return krs_scraped
+    def process(self, ctx: Context):
+        """lists krs numbers along with the method and the date it was ran on."""
+        for blob_name in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
+            assert isinstance(blob_name, DownloadableFile)
+            r = KRSScraped.parse(blob_name.url)
+            if r:
+                ctx.io.output_entity(r)
+
+        for blob_name in ctx.io.list_files(
+            CloudStorage(prefix="hostname=api-krs.ms.gov.pl")
+        ):
+            assert isinstance(blob_name, DownloadableFile)
+            r = KRSScraped.parse(blob_name.url)
+            if r:
+                ctx.io.output_entity(r)
+
+
+def get_krs_scraped(ctx: Context) -> dict[str, list[typing.Tuple[str, str]]]:
+    """Groups by krs and lists methods already used"""
+    df = KRSAlreadyScraped().read_or_process(ctx)
+    max_dates = df.groupby(["krs, method"]).aggregate("max")
+    print(max_dates.head())
 
 
 def get_osoby_scraped(ctx: Context) -> dict[str, list[str]]:
