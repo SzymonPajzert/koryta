@@ -2,6 +2,7 @@ import argparse
 import json
 import sys
 import time
+from datetime import datetime, timedelta
 from time import sleep
 
 import requests
@@ -10,6 +11,7 @@ from tqdm import tqdm
 from conductor import setup_context
 from scrapers.kmgp.people import PeopleKMGP
 from scrapers.krs.scrape import ScrapeRejestrIO
+from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import Context
 
 
@@ -147,3 +149,41 @@ def scrape_krs(sleep_time=0.2):
 
             upload_result(ctx, url, result)
             sleep(sleep_time)
+
+
+def scrape_updates_by_dates(sleep_time=0.2):
+    ctx, _ = setup_context(use_rejestr_io=False)
+
+    start_date = datetime.strptime("2025-06-01", "%Y-%m-%d").date()
+    today = datetime.now().date()
+
+    pipeline = KRSUpdates()
+    already_scraped_dates = set()
+    for update in pipeline.read_or_process_list(ctx):
+        already_scraped_dates.add(update.date)
+
+    print("already_scraped_dates: ", already_scraped_dates)
+
+    current_date = start_date
+    while current_date < today:
+        date_str = current_date.strftime("%Y-%m-%d")
+        if date_str in already_scraped_dates:
+            current_date += timedelta(days=1)
+            continue
+
+        url = f"https://api-krs.ms.gov.pl/api/Krs/Biuletyn/{date_str}"
+        print(f"Requesting: {url}")
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                # Parse to ensure it's valid JSON
+                response.json()
+                ctx.io.upload(url, response.text, "application/json")
+                print(f"Successfully scraped and uploaded for date: {date_str}")
+            else:
+                print(f"Failed to fetch {url}: HTTP {response.status_code}")
+        except Exception as e:
+            print(f"An error occurred while uploading {url}: {e}")
+        sleep(sleep_time)
+
+        current_date += timedelta(days=1)
