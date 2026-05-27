@@ -101,6 +101,7 @@ def upload_result(ctx: Context, url, result):
 
 
 def scrape_krs(sleep_time=0.2):
+    scrape_updates_by_dates(sleep_time)
     ctx, _ = setup_context(use_rejestr_io=True)
     pipeline = ScrapeRejestrIO()
     queries = list(pipeline.read_or_process_list(ctx))
