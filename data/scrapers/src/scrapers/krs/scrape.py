@@ -4,6 +4,8 @@ import typing
 from dataclasses import dataclass
 from functools import cached_property
 
+import pandas as pd
+
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
 from entities.company import ManualKRS
@@ -139,7 +141,7 @@ class KRSScraped:
             if "aktualnosc_aktualne" in url:
                 return KRSScraped(krs, "aktualnosc_aktualne", date)
             elif "aktualnosc_historyczne" in url:
-                return KRSScraped(krs, "aktualnosc_aktualne", date)
+                return KRSScraped(krs, "aktualnosc_historyczne", date)
             else:
                 return KRSScraped(krs, "main", date)
         elif "api-krs.ms.gov.pl" in url:
@@ -186,13 +188,23 @@ class KRSNeedsRefresh(Pipeline):
     def process(self, ctx):
         """Lists updates for a KRS and checks if there were any more recent updates"""
 
-        latest_scrapes = self.already_scraped.latest_scrapes(ctx)
-        latest_updates = (
-            self.updates.read_or_process(ctx).groupby(["krs"]).aggregate("max")
-        )
+        latest_scrapes = self.already_scraped.latest_scrapes(ctx).reset_index()
 
-        print(latest_scrapes.head())
-        print(latest_updates.head())
+        updates_df = self.updates.read_or_process(ctx)
+        if updates_df.empty:
+            return pd.DataFrame(columns=["krs", "method", "date", "update_date"])
+
+        updates_df["krs"] = updates_df["krs"].astype(str).str.zfill(10)
+        latest_updates = updates_df.groupby(["krs"]).aggregate("max").reset_index()
+        latest_updates = latest_updates.rename(columns={"date": "update_date"})
+
+        merged = pd.merge(latest_scrapes, latest_updates, on="krs", how="inner")
+        needs_refresh = merged[
+            (merged["update_date"] > merged["date"])
+            # | (merged["update_date"] > "2026-05-01")
+        ]
+
+        return needs_refresh.sort_values(by=["update_date"], ascending=False)
 
 
 def get_krs_scraped(ctx: Context) -> dict[str, list[str]]:
