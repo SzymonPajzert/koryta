@@ -12,6 +12,7 @@ from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import KRS, CompaniesKRS, PeopleKRS
+from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import (
     CloudStorage,
     Context,
@@ -169,12 +170,34 @@ class KRSAlreadyScraped(Pipeline):
             if r:
                 ctx.io.output_entity(r)
 
+    def latest_scrapes(self, ctx: Context):
+        """Groups by krs and lists methods already used"""
+        df = self.read_or_process(ctx)
+        max_dates = df.groupby(["krs", "method"]).aggregate("max")
+        return max_dates
 
-def get_krs_scraped(ctx: Context) -> dict[str, list[typing.Tuple[str, str]]]:
-    """Groups by krs and lists methods already used"""
-    df = KRSAlreadyScraped().read_or_process(ctx)
-    max_dates = df.groupby(["krs, method"]).aggregate("max")
-    print(max_dates.head())
+
+class KRSNeedsRefresh(Pipeline):
+    filename = "krs_needs_refresh"
+
+    already_scraped: KRSAlreadyScraped
+    updates: KRSUpdates
+
+    def process(self, ctx):
+        """Lists updates for a KRS and checks if there were any more recent updates"""
+
+        latest_scrapes = self.already_scraped.latest_scrapes(ctx)
+        latest_updates = (
+            self.updates.read_or_process(ctx).groupby(["krs"]).aggregate("max")
+        )
+
+        print(latest_scrapes.head())
+        print(latest_updates.head())
+
+
+def get_krs_scraped(ctx: Context) -> dict[str, list[str]]:
+    # TODO
+    return {}
 
 
 def get_osoby_scraped(ctx: Context) -> dict[str, list[str]]:
