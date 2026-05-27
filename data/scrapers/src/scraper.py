@@ -92,12 +92,12 @@ def query_krs_api(url, verbose=True) -> str | None:
     return json.dumps(result)
 
 
-def upload_result(ctx: Context, url, result):
+def upload_result(ctx: Context, url, result, verbose=True):
     # We're discarding query params, so it's a hotfix for this
     url = url.replace("?aktualnosc=", "/aktualnosc_")
     url = url.replace("?rejestr=P&format=json", "")
     url = url.replace("?rejestr=S&format=json", "")
-    ctx.io.upload(url, result, "application/json")
+    ctx.io.upload(url, result, "application/json", verbose=verbose)
 
 
 def scrape_krs(sleep_time=0.2):
@@ -121,7 +121,7 @@ def scrape_krs(sleep_time=0.2):
             if result is not None:
                 # TODO save somehwere that they fail, so we don't run it more
                 any_succeeded = True
-                upload_result(ctx, url, result)
+                upload_result(ctx, url, result, verbose=False)
                 sleep(sleep_time)
 
         if any_succeeded:

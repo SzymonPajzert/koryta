@@ -105,6 +105,7 @@ class Client:
         data,
         content_type,
         include_query=False,
+        verbose=True,
     ):
         if isinstance(source, str):
             source = NormalizedParse.parse(source)
@@ -126,9 +127,10 @@ class Client:
 
             full_path = f"gs://{BUCKET}/{destination_blob_name}"
             file_path = f"{BUCKET}/{destination_blob_name}"
-            print(
-                f"Successfully uploaded data to: {full_path}. Go to https://console.cloud.google.com/storage/browser/_details/{file_path}"
-            )
+            if verbose:
+                print(
+                    f"Successfully uploaded data to: {full_path}. Go to https://console.cloud.google.com/storage/browser/_details/{file_path}"
+                )
 
         except Exception as e:
             print(f"An error occurred: {e}")

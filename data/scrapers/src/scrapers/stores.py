@@ -208,6 +208,7 @@ class IO(metaclass=ABCMeta):
         data: Any,
         content_type: str,
         include_query=False,
+        verbose=True,
     ):
         """Uploads data to storage (e.g. GCS)."""
         raise NotImplementedError()
