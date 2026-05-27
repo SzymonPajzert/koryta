@@ -175,7 +175,7 @@ class KRSAlreadyScraped(Pipeline):
     def latest_scrapes(self, ctx: Context):
         """Groups by krs and lists methods already used"""
         df = self.read_or_process(ctx)
-        max_dates = df.groupby(["krs", "method"]).aggregate("max")
+        max_dates = df.groupby(["krs", "method"]).aggregate("max").reset_index()
         return max_dates
 
 
@@ -188,7 +188,7 @@ class KRSNeedsRefresh(Pipeline):
     def process(self, ctx):
         """Lists updates for a KRS and checks if there were any more recent updates"""
 
-        latest_scrapes = self.already_scraped.latest_scrapes(ctx).reset_index()
+        latest_scrapes = self.already_scraped.latest_scrapes(ctx)
 
         updates_df = self.updates.read_or_process(ctx)
         if updates_df.empty:
@@ -205,11 +205,6 @@ class KRSNeedsRefresh(Pipeline):
         ]
 
         return needs_refresh.sort_values(by=["update_date"], ascending=False)
-
-
-def get_krs_scraped(ctx: Context) -> dict[str, list[str]]:
-    # TODO
-    return {}
 
 
 def get_osoby_scraped(ctx: Context) -> dict[str, list[str]]:
@@ -235,22 +230,54 @@ def get_osoby_scraped(ctx: Context) -> dict[str, list[str]]:
     return osoby_scraped
 
 
+def series_to_list(s: pd.Series) -> list[str]:
+    return s.tolist()
+
+
 def save_org_connections(
-    already_scraped_krs: dict[str, list[str]],
+    already_scraped_krs: pd.DataFrame,
+    needs_refresh_krs: pd.DataFrame,
     already_scraped_people: dict[str, list[str]],
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
     people: typing.Iterable[RejestrIOKey],
 ) -> typing.Iterable[RejestrIOQuery]:
-    connections = list(connections)
+    con_list = list(connections)
+    con_refresh = needs_refresh_krs["krs"].unique().tolist()
+    # Join KRS ids with the ones that needs a refresh.
+    connections = set(con_list) | set(ManualKRS(krs) for krs in con_refresh)
+
     names = list(names)
     people = list(people)
 
-    print(f"len(connections): {len(connections)}")
+    print(
+        f"len(connections): {len(con_list)} + {len(con_refresh)} = {len(connections)}"
+    )
     print(f"len(names): {len(names)}")
     print(f"len(people): {len(people)}")
+
+    print(already_scraped_krs.head())
+    print(needs_refresh_krs.head())
+
+    # Remove needs refresh from already_scraped_krs, since we need to update them.
+    already_scraped = (
+        pd.merge(
+            already_scraped_krs[["krs", "method"]],
+            needs_refresh_krs[["krs", "method"]],
+            on=["krs", "method"],
+            how="outer",
+            indicator=True,
+        )
+        .query("_merge != 'both'")
+        .drop("_merge", axis=1)
+        .reset_index(drop=True)
+        .groupby("krs")
+        .aggregate(series_to_list)
+    )
+    print(already_scraped.head())
+
     for krs in connections:
-        data = already_scraped_krs.get(krs.id, [])
+        data: list[str] = already_scraped["method"].get(krs.id, [])
         query = RejestrIOQuery(
             krs=krs,
             api_krs_odpis_aktualny_p="api-krs" not in data,
@@ -434,7 +461,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
     def process(self, ctx: Context):
         for url in save_org_connections(
-            already_scraped_krs=get_krs_scraped(ctx),
+            already_scraped_krs=KRSAlreadyScraped().latest_scrapes(ctx),
+            needs_refresh_krs=KRSNeedsRefresh().read_or_process(ctx),
             already_scraped_people=get_osoby_scraped(ctx),
             connections=self.companies_to_scrape(ctx),
             names=self.companies_without_names(ctx),
