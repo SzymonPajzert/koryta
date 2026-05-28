@@ -50,6 +50,24 @@ func (c *Client) ListObjects(ctx context.Context, prefix string) ([]*storage.Obj
 	return objects, nil
 }
 
+func (c *Client) ListPrefixes(ctx context.Context, prefix string) ([]string, error) {
+	var prefixes []string
+	it := c.bucket.Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: "/"})
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to list prefixes: %w", err)
+		}
+		if attrs.Prefix != "" {
+			prefixes = append(prefixes, attrs.Prefix)
+		}
+	}
+	return prefixes, nil
+}
+
 func (c *Client) ReadObject(ctx context.Context, name string) (io.ReadCloser, error) {
 	r, err := c.bucket.Object(name).NewReader(ctx)
 	if err != nil {
