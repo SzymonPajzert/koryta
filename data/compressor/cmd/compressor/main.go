@@ -21,11 +21,17 @@ func main() {
 
 	client, err := gcs.NewClient(ctx, cfg.BucketName)
 	if err != nil {
-		log.Fatalf("Failed to initialize GCS client: %v", err)
+		log.Fatalf("Failed to initialize GCS source client: %v", err)
 	}
 	defer client.Close()
 
-	dumper := processor.NewDumper(client, cfg)
+	outClient, err := gcs.NewClient(ctx, cfg.OutBucket)
+	if err != nil {
+		log.Fatalf("Failed to initialize GCS dest client: %v", err)
+	}
+	defer outClient.Close()
+
+	dumper := processor.NewDumper(client, outClient, cfg)
 
 	if err := dumper.Run(ctx); err != nil {
 		log.Fatalf("Dumper run failed: %v", err)

@@ -18,14 +18,16 @@ import (
 )
 
 type Dumper struct {
-	client *gcs.Client
-	cfg    *config.Config
+	client    *gcs.Client
+	outClient *gcs.Client
+	cfg       *config.Config
 }
 
-func NewDumper(client *gcs.Client, cfg *config.Config) *Dumper {
+func NewDumper(client, outClient *gcs.Client, cfg *config.Config) *Dumper {
 	return &Dumper{
-		client: client,
-		cfg:    cfg,
+		client:    client,
+		outClient: outClient,
+		cfg:       cfg,
 	}
 }
 
@@ -58,9 +60,6 @@ func (d *Dumper) Run(ctx context.Context) error {
 	}
 	log.Printf("Found %d hostnames", len(hostnames))
 
-	byDate := make(map[string][]FileInfo)
-	var byDateMutex sync.Mutex
-	
 	// Worker pool
 	numWorkers := 50
 	if len(hostnames) < numWorkers {
@@ -88,7 +87,7 @@ func (d *Dumper) Run(ctx context.Context) error {
 		go func() {
 			defer wg.Done()
 			for hostname := range workCh {
-				if err := d.processHostname(ctx, hostname, today, &byDateMutex, byDate); err != nil {
+				if err := d.processHostname(ctx, hostname, today); err != nil {
 					errCh <- fmt.Errorf("failed processing %s: %w", hostname, err)
 				}
 				
@@ -119,45 +118,37 @@ func (d *Dumper) Run(ctx context.Context) error {
 		}
 	}
 	
-	log.Printf("Hostname processing complete. Generating %d date dumps...", len(byDate))
-	
-	for date, files := range byDate {
-		if err := d.processDateDump(ctx, date, files); err != nil {
-			log.Printf("Error processing date dump %s: %v", date, err)
-		}
-	}
-	
 	log.Println("Run completed successfully")
 	return nil
 }
 
-func (d *Dumper) processHostname(ctx context.Context, hostname, today string, mu *sync.Mutex, globalByDate map[string][]FileInfo) error {
-	// Find what's already processed for THIS hostname
+func (d *Dumper) processHostname(ctx context.Context, hostname, today string) error {
+	// Find what's already processed for THIS hostname in the output bucket
 	processed := make(map[string]bool)
-	dumpsPrefix := fmt.Sprintf("%sby-hostname/%s/", d.cfg.DumpPrefix, hostname)
-	dumpObjects, err := d.client.ListObjects(ctx, dumpsPrefix)
+	dumpsPrefix := fmt.Sprintf("hostname=%s/", hostname)
+	dumpObjects, err := d.outClient.ListObjects(ctx, dumpsPrefix)
 	if err != nil {
 		return err
 	}
 	
-	// Dump format: dumps/by-hostname/<hostname>/<date>.tar.gz
+	// Dump format: hostname=<hostname>/date=<date>.tar.gz
+	dumpRegex := regexp.MustCompile(`date=([^.]+)\.tar\.gz$`)
 	for _, obj := range dumpObjects {
-		parts := strings.Split(obj.Name, "/")
-		filename := parts[len(parts)-1]
-		if strings.HasSuffix(filename, ".tar.gz") {
-			date := strings.TrimSuffix(filename, ".tar.gz")
-			processed[date] = true
+		matches := dumpRegex.FindStringSubmatch(obj.Name)
+		if len(matches) == 2 {
+			processed[matches[1]] = true
 		}
 	}
 	
-	// List files for this hostname
+	// List files for this hostname in the source bucket
 	sourcePrefix := fmt.Sprintf("%shostname=%s/", d.cfg.SourcePrefix, hostname)
 	sourceObjects, err := d.client.ListObjects(ctx, sourcePrefix)
 	if err != nil {
 		return err
 	}
 	
-	sourceRegex := regexp.MustCompile(`date=([^.]+)(?:\..+)?$`)
+	// Regex stops matching at the slash or dot so it captures just the date
+	sourceRegex := regexp.MustCompile(`date=([^/.]+)`)
 	byDate := make(map[string][]FileInfo)
 	
 	for _, obj := range sourceObjects {
@@ -187,17 +178,26 @@ func (d *Dumper) processHostname(ctx context.Context, hostname, today string, mu
 	
 	// Generate missing hostname dumps
 	for date, files := range byDate {
-		if err := d.processHostnameDump(ctx, hostname, date, files); err != nil {
+		if err := d.processDump(ctx, hostname, date, files); err != nil {
 			return err
 		}
-		
-		// If successful, add to global date map
-		mu.Lock()
-		globalByDate[date] = append(globalByDate[date], files...)
-		mu.Unlock()
 	}
 	
 	return nil
+}
+
+func (d *Dumper) processDump(ctx context.Context, hostname, date string, files []FileInfo) error {
+	destPath := fmt.Sprintf("hostname=%s/date=%s.tar.gz", hostname, date)
+	
+	// List of files/dates included
+	var fileList []string
+	for _, f := range files {
+		fileList = append(fileList, f.Name)
+	}
+	
+	indexContent := strings.Join(fileList, "\n") + "\n"
+
+	return d.createTarGz(ctx, destPath, files, indexContent)
 }
 
 func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileInfo, indexContent string) error {
@@ -207,7 +207,7 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 	}
 
 	log.Printf("Creating %s...", destPath)
-	w := d.client.WriteObject(ctx, destPath)
+	w := d.outClient.WriteObject(ctx, destPath)
 	defer w.Close()
 
 	gw := gzip.NewWriter(w)
@@ -241,6 +241,21 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 	return nil
 }
 
+func getTarHeaderName(hostname, filename string) string {
+	hostnamePrefix := fmt.Sprintf("hostname=%s/", hostname)
+	idx := strings.Index(filename, hostnamePrefix)
+	
+	var relPath string
+	if idx != -1 {
+		relPath = filename[idx+len(hostnamePrefix):]
+	} else {
+		parts := strings.Split(filename, "/")
+		relPath = parts[len(parts)-1]
+	}
+	
+	return fmt.Sprintf("%s/%s", hostname, relPath)
+}
+
 func (d *Dumper) appendFileToTar(ctx context.Context, tw *tar.Writer, file FileInfo) error {
 	r, err := d.client.ReadObject(ctx, file.Name)
 	if err != nil {
@@ -248,13 +263,7 @@ func (d *Dumper) appendFileToTar(ctx context.Context, tw *tar.Writer, file FileI
 	}
 	defer r.Close()
 
-	// Extract filename from the path
-	parts := strings.Split(file.Name, "/")
-	filename := parts[len(parts)-1]
-	
-	// Create a logical structure inside the tar
-	// e.g. hostname=example.com/date=2026-05-23.json
-	headerName := fmt.Sprintf("%s/%s", file.Hostname, filename)
+	headerName := getTarHeaderName(file.Hostname, file.Name)
 
 	header := &tar.Header{
 		Name:    headerName,
@@ -272,47 +281,4 @@ func (d *Dumper) appendFileToTar(ctx context.Context, tw *tar.Writer, file FileI
 	}
 
 	return nil
-}
-
-func (d *Dumper) processDateDump(ctx context.Context, date string, files []FileInfo) error {
-	destPath := fmt.Sprintf("%sby-date/%s.tar.gz", d.cfg.DumpPrefix, date)
-	
-	// Check if already exists (might have been created but hostname dump failed)
-	exists, err := d.client.ObjectExists(ctx, destPath)
-	if err != nil {
-		return err
-	}
-	if exists && !d.cfg.DryRun {
-		log.Printf("Date dump %s already exists, skipping", destPath)
-		return nil
-	}
-
-	hostnamesMap := make(map[string]bool)
-	for _, f := range files {
-		hostnamesMap[f.Hostname] = true
-	}
-	
-	var hostnames []string
-	for h := range hostnamesMap {
-		hostnames = append(hostnames, h)
-	}
-	
-	indexContent := strings.Join(hostnames, "\n") + "\n"
-
-	return d.createTarGz(ctx, destPath, files, indexContent)
-}
-
-func (d *Dumper) processHostnameDump(ctx context.Context, hostname, date string, files []FileInfo) error {
-	destPath := fmt.Sprintf("%sby-hostname/%s/%s.tar.gz", d.cfg.DumpPrefix, hostname, date)
-	
-	// List of files/dates included
-	var fileList []string
-	for _, f := range files {
-		parts := strings.Split(f.Name, "/")
-		fileList = append(fileList, parts[len(parts)-1])
-	}
-	
-	indexContent := strings.Join(fileList, "\n") + "\n"
-
-	return d.createTarGz(ctx, destPath, files, indexContent)
 }
