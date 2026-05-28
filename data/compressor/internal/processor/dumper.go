@@ -15,6 +15,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/koryta/compressor/internal/config"
+	"golang.org/x/sync/errgroup"
 )
 
 type StorageClient interface {
@@ -316,6 +317,10 @@ func (d *Dumper) processDump(ctx context.Context, hostname, date string, files [
 
 	return d.createTarGz(ctx, destPath, files, indexContent)
 }
+type downloadedFile struct {
+	file FileInfo
+	data []byte
+}
 
 func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileInfo, indexContent string) error {
 	if d.cfg.DryRun {
@@ -349,13 +354,51 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 	}
 
 	// Write actual files
-	for _, file := range files {
-		if err := d.appendFileToTar(ctx, tw, file); err != nil {
+	workers := d.cfg.DownloadWorkers
+	if workers <= 0 {
+		workers = 10
+	}
+
+	g, gCtx := errgroup.WithContext(ctx)
+
+	jobs := make(chan FileInfo, len(files))
+	for _, f := range files {
+		jobs <- f
+	}
+	close(jobs)
+
+	results := make(chan downloadedFile, workers)
+
+	for i := 0; i < workers; i++ {
+		g.Go(func() error {
+			for file := range jobs {
+				data, err := d.downloadFile(gCtx, file.Name)
+				if err != nil {
+					return err
+				}
+
+				select {
+				case results <- downloadedFile{file: file, data: data}:
+				case <-gCtx.Done():
+					return gCtx.Err()
+				}
+			}
+			return nil
+		})
+	}
+
+	go func() {
+		g.Wait()
+		close(results)
+	}()
+
+	for res := range results {
+		if err := d.appendDataToTar(ctx, tw, res.file, res.data); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return g.Wait()
 }
 
 func getTarHeaderName(hostname, filename string) string {
@@ -373,18 +416,21 @@ func getTarHeaderName(hostname, filename string) string {
 	return fmt.Sprintf("%s/%s", hostname, relPath)
 }
 
-func (d *Dumper) appendFileToTar(ctx context.Context, tw *tar.Writer, file FileInfo) error {
-	r, err := d.client.ReadObject(ctx, file.Name)
+func (d *Dumper) downloadFile(ctx context.Context, name string) ([]byte, error) {
+	r, err := d.client.ReadObject(ctx, name)
 	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", file.Name, err)
+		return nil, fmt.Errorf("failed to read %s: %w", name, err)
 	}
 	defer r.Close()
+	return io.ReadAll(r)
+}
 
+func (d *Dumper) appendDataToTar(ctx context.Context, tw *tar.Writer, file FileInfo, data []byte) error {
 	headerName := getTarHeaderName(file.Hostname, file.Name)
 
 	header := &tar.Header{
 		Name:    headerName,
-		Size:    file.Size,
+		Size:    int64(len(data)),
 		Mode:    0644,
 		ModTime: time.Now(),
 	}
@@ -393,8 +439,8 @@ func (d *Dumper) appendFileToTar(ctx context.Context, tw *tar.Writer, file FileI
 		return fmt.Errorf("failed to write header for %s: %w", file.Name, err)
 	}
 
-	if _, err := io.Copy(tw, r); err != nil {
-		return fmt.Errorf("failed to copy content for %s: %w", file.Name, err)
+	if _, err := tw.Write(data); err != nil {
+		return fmt.Errorf("failed to write content for %s: %w", file.Name, err)
 	}
 
 	return nil
