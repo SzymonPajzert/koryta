@@ -53,14 +53,14 @@ func (d *Dumper) Run(ctx context.Context) error {
 	now := time.Now().UTC()
 	today := now.Format("2006-01-02")
 	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
-	
+
 	// Discover all hostnames using hierarchical listing
 	log.Println("Discovering hostnames...")
 	prefixes, err := d.client.ListPrefixes(ctx, d.cfg.SourcePrefix+"hostname=")
 	if err != nil {
 		return fmt.Errorf("failed to list hostnames: %w", err)
 	}
-	
+
 	var hostnames []string
 	for _, p := range prefixes {
 		// p is like "hostname=example.com/"
@@ -86,10 +86,10 @@ func (d *Dumper) Run(ctx context.Context) error {
 		workCh <- h
 	}
 	close(workCh)
-	
+
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(hostnames))
-	
+
 	var processedCount int32
 	totalHostnames := int32(len(hostnames))
 
@@ -104,11 +104,11 @@ func (d *Dumper) Run(ctx context.Context) error {
 				} else {
 					err = d.processHostname(ctx, hostname, today)
 				}
-				
+
 				if err != nil {
 					errCh <- fmt.Errorf("failed processing %s: %w", hostname, err)
 				}
-				
+
 				current := atomic.AddInt32(&processedCount, 1)
 				if current%50 == 0 || current == totalHostnames {
 					log.Printf("Progress: %d/%d hostnames scanned (%.1f%%)", current, totalHostnames, float64(current)/float64(totalHostnames)*100)
@@ -116,10 +116,10 @@ func (d *Dumper) Run(ctx context.Context) error {
 			}
 		}()
 	}
-	
+
 	wg.Wait()
 	close(errCh)
-	
+
 	var errs []error
 	for err := range errCh {
 		errs = append(errs, err)
@@ -135,7 +135,7 @@ func (d *Dumper) Run(ctx context.Context) error {
 			log.Println("... and more")
 		}
 	}
-	
+
 	log.Println("Run completed successfully")
 	return nil
 }
@@ -148,7 +148,7 @@ func (d *Dumper) processHostname(ctx context.Context, hostname, today string) er
 	if err != nil {
 		return err
 	}
-	
+
 	// Dump format: hostname=<hostname>/date=<date>.tar.gz
 	dumpRegex := regexp.MustCompile(`date=([^.]+)\.tar\.gz$`)
 	for _, obj := range dumpObjects {
@@ -157,50 +157,67 @@ func (d *Dumper) processHostname(ctx context.Context, hostname, today string) er
 			processed[matches[1]] = true
 		}
 	}
-	
+
 	// List files for this hostname in the source bucket
 	sourcePrefix := fmt.Sprintf("%shostname=%s/", d.cfg.SourcePrefix, hostname)
 	sourceObjects, err := d.client.ListObjects(ctx, sourcePrefix)
 	if err != nil {
 		return err
 	}
-	
+
 	// Regex stops matching at the slash or dot so it captures just the date
 	sourceRegex := regexp.MustCompile(`date=([^/.]+)`)
 	byDate := make(map[string][]FileInfo)
-	
+
 	for _, obj := range sourceObjects {
 		matches := sourceRegex.FindStringSubmatch(obj.Name)
 		if len(matches) != 2 {
 			continue
 		}
 		date := matches[1]
-		
+
 		if date == today || processed[date] {
 			continue
 		}
-		
+
 		info := FileInfo{
 			Name:     obj.Name,
 			Hostname: hostname,
 			Date:     date,
 			Size:     obj.Size,
 		}
-		
+
 		byDate[date] = append(byDate[date], info)
 	}
-	
+
 	if len(byDate) > 0 {
 		log.Printf("Hostname %s: found %d new dates to archive", hostname, len(byDate))
 	}
-	
+
 	// Generate missing hostname dumps
-	for date, files := range byDate {
-		if err := d.processDump(ctx, hostname, date, files); err != nil {
-			return err
-		}
+	g, gCtx := errgroup.WithContext(ctx)
+
+	compressWorkers := d.cfg.CompressWorkers
+	if compressWorkers <= 0 {
+		return fmt.Errorf("Number of compress workers is negative: %d", compressWorkers)
 	}
-	
+	g.SetLimit(compressWorkers) // Max concurrent date dumps per hostname to prevent excessive memory usage
+
+	for date, files := range byDate {
+		date := date
+		files := files
+		g.Go(func() error {
+			if err := d.processDump(gCtx, hostname, date, files); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -214,7 +231,7 @@ func (d *Dumper) processHostnameIncremental(ctx context.Context, hostname, today
 	if maxDumpDate != "" {
 		fromDate = maxDumpDate
 	}
-	
+
 	// If the fromDate is somehow today or later, we shouldn't create a dump.
 	if fromDate >= yesterday {
 		log.Printf("Hostname %s: fromDate %s is >= yesterday %s, skipping", hostname, fromDate, yesterday)
@@ -222,7 +239,7 @@ func (d *Dumper) processHostnameIncremental(ctx context.Context, hostname, today
 	}
 
 	destPath := fmt.Sprintf("hostname=%s/from=%s/date=%s.tar.gz", hostname, fromDate, yesterday)
-	
+
 	exists, err := d.outClient.ObjectExists(ctx, destPath)
 	if err != nil {
 		return err
@@ -241,22 +258,22 @@ func (d *Dumper) processHostnameIncremental(ctx context.Context, hostname, today
 
 	sourceRegex := regexp.MustCompile(`date=([^/.]+)`)
 	var allFiles []FileInfo
-	
+
 	for _, obj := range sourceObjects {
 		matches := sourceRegex.FindStringSubmatch(obj.Name)
 		if len(matches) != 2 {
 			continue
 		}
 		date := matches[1]
-		
+
 		if date == today {
 			continue
 		}
-		
+
 		if date < "2025-01-01" {
 			return fmt.Errorf("found file with date older than 2025-01-01: %s (date: %s)", obj.Name, date)
 		}
-		
+
 		if date > fromDate && date <= yesterday {
 			allFiles = append(allFiles, FileInfo{
 				Name:     obj.Name,
@@ -266,14 +283,14 @@ func (d *Dumper) processHostnameIncremental(ctx context.Context, hostname, today
 			})
 		}
 	}
-	
+
 	if len(allFiles) == 0 {
 		log.Printf("Hostname %s: no new data since %s, skipping", hostname, fromDate)
 		return nil
 	}
 
 	log.Printf("Hostname %s: found %d files for incremental dump from %s up to %s", hostname, len(allFiles), fromDate, yesterday)
-	
+
 	// Create dump
 	var fileList []string
 	for _, f := range allFiles {
@@ -290,7 +307,7 @@ func (d *Dumper) getLatestIncrementalDumpDate(ctx context.Context, hostname stri
 	if err != nil {
 		return "", err
 	}
-	
+
 	dumpRegex := regexp.MustCompile(`date=([^.]+)\.tar\.gz$`)
 	maxDate := ""
 	for _, obj := range objects {
@@ -306,17 +323,18 @@ func (d *Dumper) getLatestIncrementalDumpDate(ctx context.Context, hostname stri
 
 func (d *Dumper) processDump(ctx context.Context, hostname, date string, files []FileInfo) error {
 	destPath := fmt.Sprintf("hostname=%s/date=%s.tar.gz", hostname, date)
-	
+
 	// List of files/dates included
 	var fileList []string
 	for _, f := range files {
 		fileList = append(fileList, f.Name)
 	}
-	
+
 	indexContent := strings.Join(fileList, "\n") + "\n"
 
 	return d.createTarGz(ctx, destPath, files, indexContent)
 }
+
 type downloadedFile struct {
 	file FileInfo
 	data []byte
@@ -404,7 +422,7 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 func getTarHeaderName(hostname, filename string) string {
 	hostnamePrefix := fmt.Sprintf("hostname=%s/", hostname)
 	idx := strings.Index(filename, hostnamePrefix)
-	
+
 	var relPath string
 	if idx != -1 {
 		relPath = filename[idx+len(hostnamePrefix):]
@@ -412,7 +430,7 @@ func getTarHeaderName(hostname, filename string) string {
 		parts := strings.Split(filename, "/")
 		relPath = parts[len(parts)-1]
 	}
-	
+
 	return fmt.Sprintf("%s/%s", hostname, relPath)
 }
 

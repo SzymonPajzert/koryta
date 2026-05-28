@@ -12,6 +12,7 @@ type Config struct {
 	Incremental     bool
 	DryRun          bool
 	DownloadWorkers int
+	CompressWorkers int
 }
 
 func Parse() *Config {
@@ -23,6 +24,7 @@ func Parse() *Config {
 	flag.BoolVar(&cfg.Incremental, "incremental", false, "Create incremental block dumps per hostname")
 	flag.BoolVar(&cfg.DryRun, "dry-run", false, "Do not write any files to GCS")
 	flag.IntVar(&cfg.DownloadWorkers, "download-workers", 10, "Number of concurrent file downloads per dump")
+	flag.IntVar(&cfg.CompressWorkers, "compress-workers", 5, "Number of concurrent dump generations per hostname")
 
 	flag.Parse()
 
