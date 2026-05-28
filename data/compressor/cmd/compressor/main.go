@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"runtime"
+	"runtime/pprof"
 
 	"github.com/koryta/compressor/internal/config"
 	"github.com/koryta/compressor/internal/gcs"
@@ -12,6 +14,18 @@ import (
 
 func main() {
 	cfg := config.Parse()
+
+	if cfg.CpuProfile != "" {
+		f, err := os.Create(cfg.CpuProfile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	if cfg.BucketName == "" {
 		log.Fatal("GCS bucket name is required. Set via -bucket flag or GCS_BUCKET environment variable.")
@@ -38,5 +52,18 @@ func main() {
 	}
 
 	log.Println("Compression job finished successfully.")
+
+	if cfg.MemProfile != "" {
+		f, err := os.Create(cfg.MemProfile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+	}
+
 	os.Exit(0)
 }
