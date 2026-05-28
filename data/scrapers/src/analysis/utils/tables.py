@@ -5,15 +5,6 @@ def struct_pack(struct: dict[str, str]) -> str:
     return ", ".join(f"{k} := {v}" for k, v in struct.items())
 
 
-def init_tables(con):
-    con.execute(
-        """
-        INSTALL splink_udfs FROM community;
-        LOAD splink_udfs;
-        """
-    )
-
-
 def create_people_table(
     con,
     tbl_name,
@@ -22,8 +13,6 @@ def create_people_table(
     flatten_list: list[str] = [],
     **kwargs: dict[str, str],
 ):
-    init_tables(con)
-
     """
     Pass kwargs to struct_pack each argument according to the passed dict
     """
@@ -118,8 +107,6 @@ def create_people_table(
             coalesce(non_null.first_name, nulls.first_name) as first_name,
             coalesce(non_null.last_name, nulls.last_name) as last_name,
             non_null.derived_second_name as second_name,
-            double_metaphone(coalesce(
-                non_null.last_name, nulls.last_name)) as metaphone,
             coalesce(non_null.birth_year, nulls.birth_year) as birth_year
             {final_aggs_select}
         FROM non_null_second_names as non_null
