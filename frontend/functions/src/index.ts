@@ -118,12 +118,13 @@ export const scheduledFirestoreExport = onSchedule(
         name: databaseName,
         outputUriPrefix: outputUriPrefix,
         collectionIds: [
-          "nodes",
-          "edges",
-          "revisions",
           "comments",
-          "votes",
+          "edges",
+          "nodes",
           "notes",
+          "revisions",
+          "stats",
+          "votes",
         ],
       });
 
