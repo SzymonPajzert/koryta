@@ -2,6 +2,7 @@ package gcs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -82,10 +83,10 @@ func (c *Client) WriteObject(ctx context.Context, name string) io.WriteCloser {
 
 func (c *Client) ObjectExists(ctx context.Context, name string) (bool, error) {
 	_, err := c.bucket.Object(name).Attrs(ctx)
-	if err == storage.ErrObjectNotExist {
-		return false, nil
-	}
 	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return false, nil
+		}
 		return false, err
 	}
 	return true, nil

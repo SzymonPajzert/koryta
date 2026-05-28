@@ -13,17 +13,25 @@ import (
 	"sync/atomic"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/koryta/compressor/internal/config"
-	"github.com/koryta/compressor/internal/gcs"
 )
 
+type StorageClient interface {
+	ListObjects(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, error)
+	ListPrefixes(ctx context.Context, prefix string) ([]string, error)
+	ReadObject(ctx context.Context, name string) (io.ReadCloser, error)
+	WriteObject(ctx context.Context, name string) io.WriteCloser
+	ObjectExists(ctx context.Context, name string) (bool, error)
+}
+
 type Dumper struct {
-	client    *gcs.Client
-	outClient *gcs.Client
+	client    StorageClient
+	outClient StorageClient
 	cfg       *config.Config
 }
 
-func NewDumper(client, outClient *gcs.Client, cfg *config.Config) *Dumper {
+func NewDumper(client, outClient StorageClient, cfg *config.Config) *Dumper {
 	return &Dumper{
 		client:    client,
 		outClient: outClient,

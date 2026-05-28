@@ -1,7 +1,10 @@
 package processor
 
 import (
+	"context"
 	"testing"
+
+	"github.com/koryta/compressor/internal/config"
 )
 
 func TestGetTarHeaderName(t *testing.T) {
@@ -44,5 +47,75 @@ func TestGetTarHeaderName(t *testing.T) {
 				t.Errorf("getTarHeaderName() = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestProcessHostnameTotal(t *testing.T) {
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	data1 := []byte("data1")
+	data2 := []byte("data2")
+	todayData := []byte("today_data")
+
+	mockSrc.AddObject("hostname=example.com/date=2026-05-01.json", int64(len(data1)), data1)
+	mockSrc.AddObject("hostname=example.com/date=2026-05-02.json", int64(len(data2)), data2)
+	mockSrc.AddObject("hostname=example.com/date=2026-05-28.json", int64(len(todayData)), todayData)
+
+	cfg := &config.Config{
+		HostnameOnly: true,
+		SourcePrefix: "",
+	}
+	
+	dumper := NewDumper(mockSrc, mockDst, cfg)
+	
+	ctx := context.Background()
+	today := "2026-05-28"
+	yesterday := "2026-05-27"
+	
+	err := dumper.processHostnameTotal(ctx, "example.com", today, yesterday)
+	if err != nil {
+		t.Fatalf("processHostnameTotal failed: %v", err)
+	}
+
+	// Verify that a total dump was created
+	destPath := "hostname=example.com/total/date=2026-05-27.tar.gz"
+	exists, err := mockDst.ObjectExists(ctx, destPath)
+	if err != nil {
+		t.Fatalf("ObjectExists failed: %v", err)
+	}
+	if !exists {
+		t.Errorf("Expected total dump %s to exist, but it doesn't", destPath)
+	}
+}
+
+func TestRunConcurrency(t *testing.T) {
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	data := []byte("data")
+
+	// Add 3 hostnames
+	mockSrc.AddObject("hostname=site1.com/date=2026-05-01.json", int64(len(data)), data)
+	mockSrc.AddObject("hostname=site2.com/date=2026-05-01.json", int64(len(data)), data)
+	mockSrc.AddObject("hostname=site3.com/date=2026-05-01.json", int64(len(data)), data)
+
+	cfg := &config.Config{
+		HostnameOnly: true,
+		SourcePrefix: "",
+	}
+	
+	dumper := NewDumper(mockSrc, mockDst, cfg)
+	err := dumper.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// Because of concurrency, all 3 should have been processed.
+	mockDst.mu.RLock()
+	defer mockDst.mu.RUnlock()
+
+	if len(mockDst.WriteTracker) != 3 {
+		t.Errorf("Expected 3 tarballs to be created, got %d", len(mockDst.WriteTracker))
 	}
 }
