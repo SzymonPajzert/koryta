@@ -16,7 +16,7 @@ func TestParse(t *testing.T) {
 
 	os.Args = []string{
 		"cmd",
-		"-bucket", "my-src-bucket",
+		"-in-bucket", "my-src-bucket",
 		"-out-bucket", "my-dst-bucket",
 		"-hostname-only",
 		"-source-prefix", "raw/",
@@ -50,7 +50,7 @@ func TestParseDefaultOutBucket(t *testing.T) {
 
 	os.Args = []string{
 		"cmd",
-		"-bucket", "same-bucket",
+		"-in-bucket", "same-bucket",
 	}
 
 	cfg := Parse()
