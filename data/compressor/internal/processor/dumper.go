@@ -347,6 +347,7 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 	}
 
 	log.Printf("Creating %s...", destPath)
+	timeNow := time.Now().UTC()
 	w := d.outClient.WriteObject(ctx, destPath)
 	defer w.Close()
 
@@ -377,6 +378,29 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 		workers = 10
 	}
 
+	totalFiles := len(files)
+	var downloadedCount atomic.Int32
+	var appendedCount atomic.Int32
+
+	reportCtx, cancelReport := context.WithCancel(ctx)
+	defer cancelReport()
+
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-reportCtx.Done():
+				return
+			case <-ticker.C:
+				dCount := downloadedCount.Load()
+				aCount := appendedCount.Load()
+				elapsed := time.Since(timeNow).Round(time.Second)
+				log.Printf("[%s] running for %s: %d/%d downloaded, %d/%d appended", destPath, elapsed, dCount, totalFiles, aCount, totalFiles)
+			}
+		}
+	}()
+
 	g, gCtx := errgroup.WithContext(ctx)
 
 	jobs := make(chan FileInfo, len(files))
@@ -394,6 +418,7 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 				if err != nil {
 					return err
 				}
+				downloadedCount.Add(1)
 
 				select {
 				case results <- downloadedFile{file: file, data: data}:
@@ -414,8 +439,10 @@ func (d *Dumper) createTarGz(ctx context.Context, destPath string, files []FileI
 		if err := d.appendDataToTar(ctx, tw, res.file, res.data); err != nil {
 			return err
 		}
+		appendedCount.Add(1)
 	}
-
+	cancelReport()
+	log.Printf("Finished after %v creating %s", time.Since(timeNow), destPath)
 	return g.Wait()
 }
 
