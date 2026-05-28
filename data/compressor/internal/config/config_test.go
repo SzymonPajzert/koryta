@@ -18,7 +18,7 @@ func TestParse(t *testing.T) {
 		"cmd",
 		"-in-bucket", "my-src-bucket",
 		"-out-bucket", "my-dst-bucket",
-		"-hostname-only",
+		"-incremental",
 		"-source-prefix", "raw/",
 		"-dry-run",
 	}
@@ -31,8 +31,8 @@ func TestParse(t *testing.T) {
 	if cfg.OutBucket != "my-dst-bucket" {
 		t.Errorf("expected out-bucket my-dst-bucket, got %s", cfg.OutBucket)
 	}
-	if !cfg.HostnameOnly {
-		t.Errorf("expected HostnameOnly to be true")
+	if !cfg.Incremental {
+		t.Errorf("expected Incremental to be true")
 	}
 	if cfg.SourcePrefix != "raw/" {
 		t.Errorf("expected source-prefix raw/, got %s", cfg.SourcePrefix)

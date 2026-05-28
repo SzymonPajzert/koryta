@@ -50,7 +50,7 @@ func TestGetTarHeaderName(t *testing.T) {
 	}
 }
 
-func TestProcessHostnameTotal(t *testing.T) {
+func TestProcessHostnameIncremental(t *testing.T) {
 	mockSrc := NewMockStorageClient()
 	mockDst := NewMockStorageClient()
 
@@ -63,7 +63,7 @@ func TestProcessHostnameTotal(t *testing.T) {
 	mockSrc.AddObject("hostname=example.com/date=2026-05-28.json", int64(len(todayData)), todayData)
 
 	cfg := &config.Config{
-		HostnameOnly: true,
+		Incremental: true,
 		SourcePrefix: "",
 	}
 	
@@ -73,19 +73,19 @@ func TestProcessHostnameTotal(t *testing.T) {
 	today := "2026-05-28"
 	yesterday := "2026-05-27"
 	
-	err := dumper.processHostnameTotal(ctx, "example.com", today, yesterday)
+	err := dumper.processHostnameIncremental(ctx, "example.com", today, yesterday)
 	if err != nil {
-		t.Fatalf("processHostnameTotal failed: %v", err)
+		t.Fatalf("processHostnameIncremental failed: %v", err)
 	}
 
-	// Verify that a total dump was created
-	destPath := "hostname=example.com/total/date=2026-05-27.tar.gz"
+	// Verify that an incremental dump was created
+	destPath := "hostname=example.com/from=2025-01-01/date=2026-05-27.tar.gz"
 	exists, err := mockDst.ObjectExists(ctx, destPath)
 	if err != nil {
 		t.Fatalf("ObjectExists failed: %v", err)
 	}
 	if !exists {
-		t.Errorf("Expected total dump %s to exist, but it doesn't", destPath)
+		t.Errorf("Expected incremental dump %s to exist, but it doesn't", destPath)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestRunConcurrency(t *testing.T) {
 	mockSrc.AddObject("hostname=site3.com/date=2026-05-01.json", int64(len(data)), data)
 
 	cfg := &config.Config{
-		HostnameOnly: true,
+		Incremental: true,
 		SourcePrefix: "",
 	}
 	
@@ -120,7 +120,7 @@ func TestRunConcurrency(t *testing.T) {
 	}
 }
 
-func TestProcessHostnameTotal_SkipRedundant(t *testing.T) {
+func TestProcessHostnameIncremental_SkipRedundant(t *testing.T) {
 	mockSrc := NewMockStorageClient()
 	mockDst := NewMockStorageClient()
 
@@ -128,13 +128,13 @@ func TestProcessHostnameTotal_SkipRedundant(t *testing.T) {
 	mockSrc.AddObject("hostname=example.com/date=2026-05-25.json", 10, []byte("some data!"))
 	
 	// Destination already has a dump for 05-25
-	mockDst.AddObject("hostname=example.com/total/date=2026-05-25.tar.gz", 100, []byte("tarball"))
+	mockDst.AddObject("hostname=example.com/from=2025-01-01/date=2026-05-25.tar.gz", 100, []byte("tarball"))
 
-	cfg := &config.Config{HostnameOnly: true}
+	cfg := &config.Config{Incremental: true}
 	dumper := NewDumper(mockSrc, mockDst, cfg)
 
 	// Running for today = 05-28, yesterday = 05-27
-	err := dumper.processHostnameTotal(context.Background(), "example.com", "2026-05-28", "2026-05-27")
+	err := dumper.processHostnameIncremental(context.Background(), "example.com", "2026-05-28", "2026-05-27")
 	if err != nil {
 		t.Fatalf("Failed: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestProcessHostnameTotal_SkipRedundant(t *testing.T) {
 	}
 }
 
-func TestProcessHostnameTotal_CreatesWhenNewData(t *testing.T) {
+func TestProcessHostnameIncremental_CreatesWhenNewData(t *testing.T) {
 	mockSrc := NewMockStorageClient()
 	mockDst := NewMockStorageClient()
 
@@ -156,13 +156,13 @@ func TestProcessHostnameTotal_CreatesWhenNewData(t *testing.T) {
 	mockSrc.AddObject("hostname=example.com/date=2026-05-26.json", 10, []byte("some data!"))
 	
 	// Destination has a dump for 05-25
-	mockDst.AddObject("hostname=example.com/total/date=2026-05-25.tar.gz", 100, []byte("tarball"))
+	mockDst.AddObject("hostname=example.com/from=2025-01-01/date=2026-05-25.tar.gz", 100, []byte("tarball"))
 
-	cfg := &config.Config{HostnameOnly: true}
+	cfg := &config.Config{Incremental: true}
 	dumper := NewDumper(mockSrc, mockDst, cfg)
 
 	// Running for today = 05-28, yesterday = 05-27
-	err := dumper.processHostnameTotal(context.Background(), "example.com", "2026-05-28", "2026-05-27")
+	err := dumper.processHostnameIncremental(context.Background(), "example.com", "2026-05-28", "2026-05-27")
 	if err != nil {
 		t.Fatalf("Failed: %v", err)
 	}
@@ -173,7 +173,24 @@ func TestProcessHostnameTotal_CreatesWhenNewData(t *testing.T) {
 	if len(mockDst.WriteTracker) != 1 {
 		t.Errorf("Expected 1 tarball to be created, got %d", len(mockDst.WriteTracker))
 	}
-	if mockDst.WriteTracker[0] != "hostname=example.com/total/date=2026-05-27.tar.gz" {
-		t.Errorf("Expected dump 2026-05-27.tar.gz, got %s", mockDst.WriteTracker[0])
+	expected := "hostname=example.com/from=2026-05-25/date=2026-05-27.tar.gz"
+	if mockDst.WriteTracker[0] != expected {
+		t.Errorf("Expected dump %s, got %s", expected, mockDst.WriteTracker[0])
+	}
+}
+
+func TestProcessHostnameIncremental_OldDataException(t *testing.T) {
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	// Add file older than 2025-01-01
+	mockSrc.AddObject("hostname=example.com/date=2024-12-31.json", 10, []byte("old"))
+
+	cfg := &config.Config{Incremental: true}
+	dumper := NewDumper(mockSrc, mockDst, cfg)
+
+	err := dumper.processHostnameIncremental(context.Background(), "example.com", "2026-05-28", "2026-05-27")
+	if err == nil {
+		t.Fatalf("Expected an error for files older than 2025-01-01, but got nil")
 	}
 }
