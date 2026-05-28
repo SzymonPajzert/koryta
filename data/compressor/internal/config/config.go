@@ -7,20 +7,24 @@ import (
 
 type Config struct {
 	BucketName   string
+	OutBucket    string
 	SourcePrefix string
-	DumpPrefix   string
 	DryRun       bool
 }
 
 func Parse() *Config {
 	cfg := &Config{}
-	
-	flag.StringVar(&cfg.BucketName, "bucket", os.Getenv("GCS_BUCKET"), "GCS bucket name (or GCS_BUCKET env var)")
+
+	flag.StringVar(&cfg.BucketName, "in-bucket", os.Getenv("GCS_BUCKET"), "Source GCS bucket name (or GCS_BUCKET env var)")
+	flag.StringVar(&cfg.OutBucket, "out-bucket", os.Getenv("GCS_OUT_BUCKET"), "Destination GCS bucket name (defaults to source bucket)")
 	flag.StringVar(&cfg.SourcePrefix, "source-prefix", "", "Prefix for source files (e.g., 'raw/')")
-	flag.StringVar(&cfg.DumpPrefix, "dump-prefix", "dumps/", "Prefix for dumped archives")
 	flag.BoolVar(&cfg.DryRun, "dry-run", false, "Do not write any files to GCS")
-	
+
 	flag.Parse()
-	
+
+	if cfg.OutBucket == "" {
+		cfg.OutBucket = cfg.BucketName
+	}
+
 	return cfg
 }
