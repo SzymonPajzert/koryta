@@ -1,0 +1,29 @@
+name: Test Compressor
+
+on:
+  push:
+    paths:
+      - "data/compressor/**"
+  pull_request:
+    paths:
+      - "data/compressor/**"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: "data/compressor/go.sum"
+
+      - name: Run unit tests
+        working-directory: ./data/compressor
+        run: go test ./...
