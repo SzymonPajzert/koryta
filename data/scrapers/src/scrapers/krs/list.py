@@ -221,6 +221,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 self.add_company_source(c.krs, blob_name)
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
+            if "Biuletyn" in blob_name:
+                continue
             c = company_from_api_krs(postal_codes, data)
             self.add_company(c)
             self.add_company_source(c.krs, blob_name)
@@ -343,3 +345,6 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
         raise ValueError(
             f"Failed to extract company data from API KRS response: {e}, data: {data}"
         ) from e
+    except TypeError as e:
+        print(data)
+        raise ValueError(f"Wrong data: {data}, {e}")
