@@ -9,6 +9,7 @@ type Config struct {
 	BucketName   string
 	OutBucket    string
 	SourcePrefix string
+	HostnameOnly bool
 	DryRun       bool
 }
 
@@ -18,6 +19,7 @@ func Parse() *Config {
 	flag.StringVar(&cfg.BucketName, "in-bucket", os.Getenv("GCS_BUCKET"), "Source GCS bucket name (or GCS_BUCKET env var)")
 	flag.StringVar(&cfg.OutBucket, "out-bucket", os.Getenv("GCS_OUT_BUCKET"), "Destination GCS bucket name (defaults to source bucket)")
 	flag.StringVar(&cfg.SourcePrefix, "source-prefix", "", "Prefix for source files (e.g., 'raw/')")
+	flag.BoolVar(&cfg.HostnameOnly, "hostname-only", false, "Aggregate all files into a single total dump per hostname")
 	flag.BoolVar(&cfg.DryRun, "dry-run", false, "Do not write any files to GCS")
 
 	flag.Parse()
