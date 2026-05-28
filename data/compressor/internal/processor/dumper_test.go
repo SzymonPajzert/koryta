@@ -119,3 +119,61 @@ func TestRunConcurrency(t *testing.T) {
 		t.Errorf("Expected 3 tarballs to be created, got %d", len(mockDst.WriteTracker))
 	}
 }
+
+func TestProcessHostnameTotal_SkipRedundant(t *testing.T) {
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	// Data up to 05-25 only
+	mockSrc.AddObject("hostname=example.com/date=2026-05-25.json", 10, []byte("some data!"))
+	
+	// Destination already has a dump for 05-25
+	mockDst.AddObject("hostname=example.com/total/date=2026-05-25.tar.gz", 100, []byte("tarball"))
+
+	cfg := &config.Config{HostnameOnly: true}
+	dumper := NewDumper(mockSrc, mockDst, cfg)
+
+	// Running for today = 05-28, yesterday = 05-27
+	err := dumper.processHostnameTotal(context.Background(), "example.com", "2026-05-28", "2026-05-27")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+
+	mockDst.mu.RLock()
+	defer mockDst.mu.RUnlock()
+	// Should be no newly created tarballs because state hasn't changed since 05-25
+	if len(mockDst.WriteTracker) != 0 {
+		t.Errorf("Expected 0 tarballs to be created, got %d", len(mockDst.WriteTracker))
+	}
+}
+
+func TestProcessHostnameTotal_CreatesWhenNewData(t *testing.T) {
+	mockSrc := NewMockStorageClient()
+	mockDst := NewMockStorageClient()
+
+	// Data up to 05-26
+	mockSrc.AddObject("hostname=example.com/date=2026-05-25.json", 10, []byte("some data!"))
+	mockSrc.AddObject("hostname=example.com/date=2026-05-26.json", 10, []byte("some data!"))
+	
+	// Destination has a dump for 05-25
+	mockDst.AddObject("hostname=example.com/total/date=2026-05-25.tar.gz", 100, []byte("tarball"))
+
+	cfg := &config.Config{HostnameOnly: true}
+	dumper := NewDumper(mockSrc, mockDst, cfg)
+
+	// Running for today = 05-28, yesterday = 05-27
+	err := dumper.processHostnameTotal(context.Background(), "example.com", "2026-05-28", "2026-05-27")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+
+	mockDst.mu.RLock()
+	defer mockDst.mu.RUnlock()
+	// Should have created a dump because there was a new file on 05-26 (which is > 05-25)
+	if len(mockDst.WriteTracker) != 1 {
+		t.Errorf("Expected 1 tarball to be created, got %d", len(mockDst.WriteTracker))
+	}
+	if mockDst.WriteTracker[0] != "hostname=example.com/total/date=2026-05-27.tar.gz" {
+		t.Errorf("Expected dump 2026-05-27.tar.gz, got %s", mockDst.WriteTracker[0])
+	}
+}

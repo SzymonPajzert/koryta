@@ -215,6 +215,11 @@ func (d *Dumper) processHostnameTotal(ctx context.Context, hostname, today, yest
 		return nil
 	}
 
+	maxDumpDate, err := d.getLatestTotalDumpDate(ctx, hostname)
+	if err != nil {
+		return err
+	}
+
 	// List files for this hostname in the source bucket
 	sourcePrefix := fmt.Sprintf("%shostname=%s/", d.cfg.SourcePrefix, hostname)
 	sourceObjects, err := d.client.ListObjects(ctx, sourcePrefix)
@@ -248,6 +253,23 @@ func (d *Dumper) processHostnameTotal(ctx context.Context, hostname, today, yest
 		return nil
 	}
 
+	hasNewData := false
+	if maxDumpDate == "" {
+		hasNewData = true
+	} else {
+		for _, f := range allFiles {
+			if f.Date > maxDumpDate && f.Date <= yesterday {
+				hasNewData = true
+				break
+			}
+		}
+	}
+
+	if !hasNewData {
+		log.Printf("Hostname %s: no new data since last dump on %s, skipping", hostname, maxDumpDate)
+		return nil
+	}
+
 	log.Printf("Hostname %s: found %d files for total dump up to %s", hostname, len(allFiles), yesterday)
 	
 	// Create dump
@@ -258,6 +280,26 @@ func (d *Dumper) processHostnameTotal(ctx context.Context, hostname, today, yest
 	indexContent := strings.Join(fileList, "\n") + "\n"
 
 	return d.createTarGz(ctx, destPath, allFiles, indexContent)
+}
+
+func (d *Dumper) getLatestTotalDumpDate(ctx context.Context, hostname string) (string, error) {
+	prefix := fmt.Sprintf("hostname=%s/total/date=", hostname)
+	objects, err := d.outClient.ListObjects(ctx, prefix)
+	if err != nil {
+		return "", err
+	}
+	
+	dumpRegex := regexp.MustCompile(`date=([^.]+)\.tar\.gz$`)
+	maxDate := ""
+	for _, obj := range objects {
+		matches := dumpRegex.FindStringSubmatch(obj.Name)
+		if len(matches) == 2 {
+			if maxDate == "" || matches[1] > maxDate {
+				maxDate = matches[1]
+			}
+		}
+	}
+	return maxDate, nil
 }
 
 func (d *Dumper) processDump(ctx context.Context, hostname, date string, files []FileInfo) error {
