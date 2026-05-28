@@ -6,11 +6,12 @@ import (
 )
 
 type Config struct {
-	BucketName   string
-	OutBucket    string
-	SourcePrefix string
-	Incremental  bool
-	DryRun       bool
+	BucketName      string
+	OutBucket       string
+	SourcePrefix    string
+	Incremental     bool
+	DryRun          bool
+	DownloadWorkers int
 }
 
 func Parse() *Config {
@@ -21,6 +22,7 @@ func Parse() *Config {
 	flag.StringVar(&cfg.SourcePrefix, "source-prefix", "", "Prefix for source files (e.g., 'raw/')")
 	flag.BoolVar(&cfg.Incremental, "incremental", false, "Create incremental block dumps per hostname")
 	flag.BoolVar(&cfg.DryRun, "dry-run", false, "Do not write any files to GCS")
+	flag.IntVar(&cfg.DownloadWorkers, "download-workers", 10, "Number of concurrent file downloads per dump")
 
 	flag.Parse()
 
