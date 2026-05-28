@@ -98,8 +98,8 @@ func (d *Dumper) Run(ctx context.Context) error {
 			defer wg.Done()
 			for hostname := range workCh {
 				var err error
-				if d.cfg.HostnameOnly {
-					err = d.processHostnameTotal(ctx, hostname, today, yesterday)
+				if d.cfg.Incremental {
+					err = d.processHostnameIncremental(ctx, hostname, today, yesterday)
 				} else {
 					err = d.processHostname(ctx, hostname, today)
 				}
@@ -203,21 +203,32 @@ func (d *Dumper) processHostname(ctx context.Context, hostname, today string) er
 	return nil
 }
 
-func (d *Dumper) processHostnameTotal(ctx context.Context, hostname, today, yesterday string) error {
-	destPath := fmt.Sprintf("hostname=%s/total/date=%s.tar.gz", hostname, yesterday)
+func (d *Dumper) processHostnameIncremental(ctx context.Context, hostname, today, yesterday string) error {
+	maxDumpDate, err := d.getLatestIncrementalDumpDate(ctx, hostname)
+	if err != nil {
+		return err
+	}
+
+	fromDate := "2025-01-01"
+	if maxDumpDate != "" {
+		fromDate = maxDumpDate
+	}
+	
+	// If the fromDate is somehow today or later, we shouldn't create a dump.
+	if fromDate >= yesterday {
+		log.Printf("Hostname %s: fromDate %s is >= yesterday %s, skipping", hostname, fromDate, yesterday)
+		return nil
+	}
+
+	destPath := fmt.Sprintf("hostname=%s/from=%s/date=%s.tar.gz", hostname, fromDate, yesterday)
 	
 	exists, err := d.outClient.ObjectExists(ctx, destPath)
 	if err != nil {
 		return err
 	}
 	if exists && !d.cfg.DryRun {
-		log.Printf("Total dump %s already exists, skipping", destPath)
+		log.Printf("Incremental dump %s already exists, skipping", destPath)
 		return nil
-	}
-
-	maxDumpDate, err := d.getLatestTotalDumpDate(ctx, hostname)
-	if err != nil {
-		return err
 	}
 
 	// List files for this hostname in the source bucket
@@ -241,36 +252,26 @@ func (d *Dumper) processHostnameTotal(ctx context.Context, hostname, today, yest
 			continue
 		}
 		
-		allFiles = append(allFiles, FileInfo{
-			Name:     obj.Name,
-			Hostname: hostname,
-			Date:     date,
-			Size:     obj.Size,
-		})
+		if date < "2025-01-01" {
+			return fmt.Errorf("found file with date older than 2025-01-01: %s (date: %s)", obj.Name, date)
+		}
+		
+		if date > fromDate && date <= yesterday {
+			allFiles = append(allFiles, FileInfo{
+				Name:     obj.Name,
+				Hostname: hostname,
+				Date:     date,
+				Size:     obj.Size,
+			})
+		}
 	}
 	
 	if len(allFiles) == 0 {
+		log.Printf("Hostname %s: no new data since %s, skipping", hostname, fromDate)
 		return nil
 	}
 
-	hasNewData := false
-	if maxDumpDate == "" {
-		hasNewData = true
-	} else {
-		for _, f := range allFiles {
-			if f.Date > maxDumpDate && f.Date <= yesterday {
-				hasNewData = true
-				break
-			}
-		}
-	}
-
-	if !hasNewData {
-		log.Printf("Hostname %s: no new data since last dump on %s, skipping", hostname, maxDumpDate)
-		return nil
-	}
-
-	log.Printf("Hostname %s: found %d files for total dump up to %s", hostname, len(allFiles), yesterday)
+	log.Printf("Hostname %s: found %d files for incremental dump from %s up to %s", hostname, len(allFiles), fromDate, yesterday)
 	
 	// Create dump
 	var fileList []string
@@ -282,8 +283,8 @@ func (d *Dumper) processHostnameTotal(ctx context.Context, hostname, today, yest
 	return d.createTarGz(ctx, destPath, allFiles, indexContent)
 }
 
-func (d *Dumper) getLatestTotalDumpDate(ctx context.Context, hostname string) (string, error) {
-	prefix := fmt.Sprintf("hostname=%s/total/date=", hostname)
+func (d *Dumper) getLatestIncrementalDumpDate(ctx context.Context, hostname string) (string, error) {
+	prefix := fmt.Sprintf("hostname=%s/from=", hostname)
 	objects, err := d.outClient.ListObjects(ctx, prefix)
 	if err != nil {
 		return "", err
