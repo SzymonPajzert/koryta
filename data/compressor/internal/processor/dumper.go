@@ -41,7 +41,9 @@ type FileInfo struct {
 func (d *Dumper) Run(ctx context.Context) error {
 	log.Println("Starting discovery...")
 
-	today := time.Now().UTC().Format("2006-01-02")
+	now := time.Now().UTC()
+	today := now.Format("2006-01-02")
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
 	
 	// Discover all hostnames using hierarchical listing
 	log.Println("Discovering hostnames...")
@@ -87,7 +89,14 @@ func (d *Dumper) Run(ctx context.Context) error {
 		go func() {
 			defer wg.Done()
 			for hostname := range workCh {
-				if err := d.processHostname(ctx, hostname, today); err != nil {
+				var err error
+				if d.cfg.HostnameOnly {
+					err = d.processHostnameTotal(ctx, hostname, today, yesterday)
+				} else {
+					err = d.processHostname(ctx, hostname, today)
+				}
+				
+				if err != nil {
 					errCh <- fmt.Errorf("failed processing %s: %w", hostname, err)
 				}
 				
@@ -184,6 +193,63 @@ func (d *Dumper) processHostname(ctx context.Context, hostname, today string) er
 	}
 	
 	return nil
+}
+
+func (d *Dumper) processHostnameTotal(ctx context.Context, hostname, today, yesterday string) error {
+	destPath := fmt.Sprintf("hostname=%s/total/date=%s.tar.gz", hostname, yesterday)
+	
+	exists, err := d.outClient.ObjectExists(ctx, destPath)
+	if err != nil {
+		return err
+	}
+	if exists && !d.cfg.DryRun {
+		log.Printf("Total dump %s already exists, skipping", destPath)
+		return nil
+	}
+
+	// List files for this hostname in the source bucket
+	sourcePrefix := fmt.Sprintf("%shostname=%s/", d.cfg.SourcePrefix, hostname)
+	sourceObjects, err := d.client.ListObjects(ctx, sourcePrefix)
+	if err != nil {
+		return err
+	}
+
+	sourceRegex := regexp.MustCompile(`date=([^/.]+)`)
+	var allFiles []FileInfo
+	
+	for _, obj := range sourceObjects {
+		matches := sourceRegex.FindStringSubmatch(obj.Name)
+		if len(matches) != 2 {
+			continue
+		}
+		date := matches[1]
+		
+		if date == today {
+			continue
+		}
+		
+		allFiles = append(allFiles, FileInfo{
+			Name:     obj.Name,
+			Hostname: hostname,
+			Date:     date,
+			Size:     obj.Size,
+		})
+	}
+	
+	if len(allFiles) == 0 {
+		return nil
+	}
+
+	log.Printf("Hostname %s: found %d files for total dump up to %s", hostname, len(allFiles), yesterday)
+	
+	// Create dump
+	var fileList []string
+	for _, f := range allFiles {
+		fileList = append(fileList, f.Name)
+	}
+	indexContent := strings.Join(fileList, "\n") + "\n"
+
+	return d.createTarGz(ctx, destPath, allFiles, indexContent)
 }
 
 func (d *Dumper) processDump(ctx context.Context, hostname, date string, files []FileInfo) error {
