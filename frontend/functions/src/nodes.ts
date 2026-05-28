@@ -24,6 +24,9 @@ export const onNodeWritten = onDocumentWritten(
       const currentStatsApproved = afterData.stats?.isApproved;
       if (currentStatsApproved !== afterRev) {
         try {
+          if (!event.data) {
+            return;
+          }
           await event.data.after.ref.update({
             "stats.isApproved": afterRev,
           });
