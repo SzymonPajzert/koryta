@@ -11,6 +11,7 @@ type Config struct {
 	SourcePrefix    string
 	Incremental     bool
 	DryRun          bool
+	HostWorkers     int
 	DownloadWorkers int
 	CompressWorkers int
 	CpuProfile      string
@@ -25,6 +26,7 @@ func Parse() *Config {
 	flag.StringVar(&cfg.SourcePrefix, "source-prefix", "", "Prefix for source files (e.g., 'raw/')")
 	flag.BoolVar(&cfg.Incremental, "incremental", false, "Create incremental block dumps per hostname")
 	flag.BoolVar(&cfg.DryRun, "dry-run", false, "Do not write any files to GCS")
+	flag.IntVar(&cfg.HostWorkers, "host-workers", 5, "Number of concurrent hostnames to process")
 	flag.IntVar(&cfg.DownloadWorkers, "download-workers", 10, "Number of concurrent file downloads per dump")
 	flag.IntVar(&cfg.CompressWorkers, "compress-workers", 5, "Number of concurrent dump generations per hostname")
 	flag.StringVar(&cfg.CpuProfile, "cpuprofile", "", "Write cpu profile to file")

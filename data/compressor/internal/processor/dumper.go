@@ -72,7 +72,10 @@ func (d *Dumper) Run(ctx context.Context) error {
 	log.Printf("Found %d hostnames", len(hostnames))
 
 	// Worker pool
-	numWorkers := 50
+	numWorkers := d.cfg.HostWorkers
+	if numWorkers <= 0 {
+		numWorkers = 5
+	}
 	if len(hostnames) < numWorkers {
 		numWorkers = len(hostnames)
 	}
