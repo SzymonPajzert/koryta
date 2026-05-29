@@ -12,7 +12,7 @@ from conductor import setup_context
 from scrapers.kmgp.people import PeopleKMGP
 from scrapers.krs.scrape import ScrapeRejestrIO
 from scrapers.krs.updates import KRSUpdates
-from scrapers.stores import Context
+from scrapers.stores import Context, ProcessPolicy
 
 
 def get_urls_to_scrape(ctx):
@@ -102,7 +102,10 @@ def upload_result(ctx: Context, url, result, verbose=True):
 
 def scrape_krs(sleep_time=0.2):
     scrape_updates_by_dates(sleep_time)
-    ctx, _ = setup_context(use_rejestr_io=True)
+    ctx, _ = setup_context(
+        use_rejestr_io=True,
+        policy=ProcessPolicy({"KRSAlreadyScraped", "KRSNeedsRefresh"}),
+    )
     pipeline = ScrapeRejestrIO()
     queries = list(pipeline.read_or_process_list(ctx))
     print(f"Would cost: {sum(map(lambda x: x.cost(), queries))} PLN")
@@ -153,7 +156,7 @@ def scrape_krs(sleep_time=0.2):
 
 
 def scrape_updates_by_dates(sleep_time=0.2):
-    ctx, _ = setup_context(use_rejestr_io=False)
+    ctx, _ = setup_context(use_rejestr_io=False, policy=ProcessPolicy({"KRSUpdates"}))
 
     start_date = datetime.strptime("2025-06-01", "%Y-%m-%d").date()
     today = datetime.now().date()
