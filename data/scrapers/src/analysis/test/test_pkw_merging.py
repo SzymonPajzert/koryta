@@ -2,13 +2,12 @@ import duckdb
 import pandas as pd
 import pytest
 
-from analysis.utils.tables import create_people_table, init_tables
+from analysis.utils.tables import create_people_table
 
 
 @pytest.fixture
 def con():
     con = duckdb.connect()
-    init_tables(con)
     return con
 
 
