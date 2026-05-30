@@ -239,7 +239,8 @@ class Uploader:
                     )
                 )
                 if resp.status_code == 404:
-                    for krs in resp.json()["data"]:
+                    # Deduplicate, e.g if a person was employed there twice
+                    for krs in set(resp.json()["data"]):
                         self.submit_company(krs, None)
                     # Try submitting again
                     self.check_success(
