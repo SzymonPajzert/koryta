@@ -7,6 +7,7 @@
     label="Szukaj osób, spółek, regionów..."
     :items="items"
     item-title="title"
+    item-value="id"
     return-object
     autocomplete="off"
     class="ma-2"
@@ -68,7 +69,7 @@ const emit = defineEmits<{
 }>();
 
 const search = ref(props.searchText);
-const nodeGroupPicked = ref<ListItem | null>();
+const nodeGroupPicked = ref<ListItem | null>(null);
 const autocompleteFocus = ref(false);
 
 if (props.fake) {
@@ -81,6 +82,7 @@ if (props.fake) {
 }
 
 type ListItem = {
+  id: string;
   title: string;
   subtitle?: string;
   icon: string;
@@ -107,6 +109,7 @@ const baseItems = computed<ListItem[]>(() => {
   if (!nodeGroups.value || nodeGroups.value.length === 0) return [];
   const result: ListItem[] = [];
   result.push({
+    id: "all-persons",
     title: "Lista wszystkich osób",
     subtitle: `${connectedPeopleString(nodeGroups.value?.[0]?.people ?? 0)}`,
     icon: "mdi-format-list-bulleted-type",
@@ -118,6 +121,7 @@ const baseItems = computed<ListItem[]>(() => {
   });
   parties.forEach((item) => {
     result.push({
+      id: `party-${item}`,
       title: item,
       icon: "mdi-flag",
       subtitle: "Partia",
@@ -144,6 +148,7 @@ const baseItems = computed<ListItem[]>(() => {
     else if (itemType === "region") icon = "mdi-map-marker-radius-outline";
 
     result.push({
+      id: `entity-${item.id}`,
       title: item.name,
       subtitle: `${connectedPeopleString(item.people ?? 0)}`,
       icon,
@@ -162,6 +167,7 @@ const items = computed<ListItem[]>(() => {
   const list = [...baseItems.value];
   if (search.value) {
     list.push({
+      id: `create-person-${search.value}`,
       title: `Utwórz osobę: "${search.value}"`,
       icon: "mdi-account-plus",
       path: "/edit/node/new",
@@ -175,6 +181,7 @@ const items = computed<ListItem[]>(() => {
       },
     });
     list.push({
+      id: `create-place-${search.value}`,
       title: `Utwórz firmę: "${search.value}"`,
       icon: "mdi-office-building-plus",
       path: "/edit/node/new",
