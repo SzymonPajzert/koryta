@@ -23,7 +23,14 @@ test.describe("OmniSearch", () => {
 
     // Click the item
     await poItem.click();
-    await expect(page).toHaveURL(/.*\/lista\?.*partia=PO/);
+    await expect(page).toHaveURL(/.*\/eksploruj\/tabela\?.*party=PO/);
+
+    // Verify filter is set
+    await expect(
+      page
+        .locator(".v-autocomplete", { hasText: "Partia" })
+        .locator(".v-chip__content"),
+    ).toHaveText("PO");
   });
 
   test("should dedup companies", async ({ page }) => {
@@ -34,8 +41,18 @@ test.describe("OmniSearch", () => {
     await page.locator("input#omni-search").fill("Orlen");
 
     // We expect "Orlen" to appear
+    const orlenItem = page
+      .locator(".v-list-item", { hasText: "Orlen" })
+      .first();
+    await expect(orlenItem).toBeVisible();
+
+    await orlenItem.click();
+
+    await expect(page).toHaveURL(/.*\/eksploruj\/tabela\?.*krs=.+/);
     await expect(
-      page.locator(".v-list-item-title", { hasText: "Orlen" }).first(),
-    ).toBeVisible();
+      page
+        .locator(".v-autocomplete", { hasText: "Spółki" })
+        .locator(".v-chip__content"),
+    ).toContainText("ORLEN");
   });
 });

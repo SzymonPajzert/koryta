@@ -75,7 +75,10 @@ export function generateNodeUrl(node: Node): string | undefined {
   }
 
   if (node.type === "place") {
-    return "/eksploruj/tabela?";
+    if ("krsNumber" in node && node.krsNumber) {
+      return `/eksploruj/tabela?krs=${node.krsNumber}`;
+    }
+    return "/eksploruj/tabela";
   }
 }
 
