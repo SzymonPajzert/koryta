@@ -5,23 +5,6 @@
     </v-col>
 
     <v-col cols="12" md="6">
-      <HomeCard>
-        <template #header>Weryfikuj zmiany</template>
-        <div class="mb-4">
-          Przeglądaj ostatnie edycje i pomóż nam dbać o jakość danych.
-        </div>
-        <v-btn
-          to="/revisions"
-          color="info"
-          variant="tonal"
-          prepend-icon="mdi-format-list-bulleted"
-          block
-        >
-          Lista rewizji
-        </v-btn>
-      </HomeCard>
-    </v-col>
-    <v-col cols="12" md="6">
       <HomeCard height="100%">
         <template #header>Zgłoś błąd</template>
         <div class="mb-4">Masz pomysł na usprawnienie lub znalazłeś błąd?</div>
