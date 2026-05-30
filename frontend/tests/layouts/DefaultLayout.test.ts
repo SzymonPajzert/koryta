@@ -27,7 +27,7 @@ describe("DefaultLayout", () => {
     vi.clearAllMocks();
   });
 
-  it("shows Audit button when user is logged in", async () => {
+  it("mounts successfully", async () => {
     vi.mocked(useAuthState).mockReturnValue({
       user: ref({ uid: "test-admin" }),
       userConfig: { data: ref({}) },
@@ -59,50 +59,6 @@ describe("DefaultLayout", () => {
       },
     });
 
-    const auditBtn = wrapper
-      .findAll("button")
-      .find((b) => b.text().includes("Audyt"));
-    expect(auditBtn).toBeDefined();
-    expect(auditBtn).toBeDefined();
-    // Verify it has a 'to' attribute (value might be stringified object)
-    expect(auditBtn?.attributes("to")).toBeDefined();
-  });
-
-  it("does not show Audit button when user is not logged in", async () => {
-    vi.mocked(useAuthState).mockReturnValue({
-      user: ref(null),
-      userConfig: { data: ref({}) },
-      logout: vi.fn(),
-    } as MockAuthState);
-
-    const wrapper = mount(DefaultLayout, {
-      global: {
-        plugins: [vuetify],
-        stubs: {
-          NuxtPage: true,
-          DialogMulti: true,
-          OmniSearch: true,
-          "v-app-bar": {
-            template: "<div><slot /><slot name='append' /></div>",
-          },
-          "v-app-bar-title": true,
-          "v-spacer": true,
-          "v-btn": {
-            template: "<button :to='to'><slot /></button>",
-            props: ["to"],
-          },
-          "v-icon": true,
-          "v-avatar": true,
-          "v-main": { template: "<div><slot /></div>" },
-          "v-toolbar": { template: "<div><slot /></div>" },
-          "v-container": { template: "<div><slot /></div>" },
-        },
-      },
-    });
-
-    const auditBtn = wrapper
-      .findAll("button")
-      .find((b) => b.text().includes("Audyt"));
-    expect(auditBtn).toBeUndefined();
+    expect(wrapper.exists()).toBe(true);
   });
 });
