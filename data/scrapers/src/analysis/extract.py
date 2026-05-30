@@ -112,6 +112,12 @@ class Extract(Pipeline):
             action=argparse.BooleanOptionalAction,
         )
         parser.add_argument(
+            "--election-after",
+            help="Show people with elections after that year",
+            default=None,
+            required=False,
+        )
+        parser.add_argument(
             "--all",
             help="Extract all people",
             default=False,
@@ -154,6 +160,10 @@ class Extract(Pipeline):
     @property
     def ignore_elections(self) -> bool:
         return self.args.ignore_elections
+
+    @property
+    def election_after(self) -> bool:
+        return self.args.election_after
 
     def process_graph(self, ctx: Context):
         companies_df = self.companies.read_or_process(ctx)
@@ -209,23 +219,33 @@ class Extract(Pipeline):
 
     def relevant_elections(self):
         def check(elections) -> int:
-            if self.ignore_elections or self.all:
+            if self.ignore_elections:
                 return 1
             if not isinstance(elections, list):
                 return 0
-            if not self.region or len(self.region) == "":
-                return 1 if len(elections) > 0 else 0
+
             result = 0
             for election in elections:
-                teryt = (
-                    head_or_none(election["teryt_powiat"])
-                    or head_or_none(election["teryt_wojewodztwo"])
-                    or ""
-                )
-                if teryt == "":
-                    print(election)
-                if teryt.startswith(self.args.region):
+                election_ok = True
+                if self.region:
+                    teryt = (
+                        head_or_none(election["teryt_powiat"])
+                        or head_or_none(election["teryt_wojewodztwo"])
+                        or ""
+                    )
+                    if teryt == "":
+                        raise ValueError(f"Election without teryt {election}")
+                    if not teryt.startswith(self.args.region):
+                        election_ok = False
+
+                if self.election_after:
+                    year = election.get("election_year")
+                    if year is not None and year < self.election_after:
+                        election_ok = False
+
+                if election_ok:
                     result += 1
+
             return result
 
         return check
@@ -252,7 +272,11 @@ class Extract(Pipeline):
         auto_approved = people.apply(self.auto_approved_func(), axis=1)
         # TODO handle a condition here that --all can be just used as
         # a placeholder but it doesn't disable all the filters
-        use_all = 1 if (self.all and not self.employed_after) else 0
+        use_all = (
+            1
+            if (self.all and not self.employed_after and not self.election_after)
+            else 0
+        )
 
         people["total_elections"] = people["elections"].apply(list_length)
         people["total_employments"] = people["employment"].apply(list_length)
