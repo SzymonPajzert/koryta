@@ -11,6 +11,7 @@ export default withNuxt(
       "**/.nuxt/**",
       "**/.output/**",
       "**/dist/**",
+      "functions/lib/**",
     ],
   },
   {
