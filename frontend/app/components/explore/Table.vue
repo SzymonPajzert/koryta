@@ -209,7 +209,7 @@ withDefaults(
     page?: number;
     itemsPerPage?: number;
     sortBy?: { key: string; order: "asc" | "desc" }[];
-    headers: any[];
+    headers: Record<string, unknown>[];
     noDataText?: string;
     itemsPerPageText?: string;
     loadingText?: string;
@@ -227,17 +227,23 @@ withDefaults(
     loadingText: "Ładowanie...",
     hideDefaultFooter: false,
     disableFocus: false,
+    region: undefined,
+    company: undefined,
   },
 );
 
 defineEmits<{
-  (e: "update:page", val: number): void;
-  (e: "update:itemsPerPage", val: number): void;
-  (e: "update:sortBy", val: any[]): void;
-  (e: "update:options", val: any): void;
-  (e: "action:explored", item: PersonRich): void;
-  (e: "action:voted", item: PersonRich): void;
-  (e: "focus", item: PersonRich): void;
+  (e: "update:page" | "update:itemsPerPage", val: number): void;
+  (e: "update:sortBy", val: { key: string; order: "asc" | "desc" }[]): void;
+  (
+    e: "update:options",
+    val: {
+      sortBy: { key: string; order: string }[];
+      page: number;
+      itemsPerPage: number;
+    },
+  ): void;
+  (e: "action:explored" | "action:voted" | "focus", item: PersonRich): void;
 }>();
 
 const shortCompanyName = (companyName: string | undefined) => {

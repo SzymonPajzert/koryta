@@ -215,6 +215,7 @@ watch(nodeGroupPicked, (value) => {
     path.startsWith("/entity/region/teryt1261") ||
     path.startsWith("/region/krakow-teryt1261") ||
     path.startsWith("/osoba/") ||
+    path.startsWith("/instytucja/") ||
     path.startsWith("/artykul/") ||
     path.startsWith("/edit/");
   if (!allowedPath) {
