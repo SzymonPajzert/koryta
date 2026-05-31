@@ -114,6 +114,20 @@ export function applyPartiesFilter(
   return query;
 }
 
+export function parseNodeDoc<T extends { id: string; visibility: boolean }>(
+  doc: FirebaseFirestore.QueryDocumentSnapshot,
+): T {
+  const data = doc.data();
+  if (data.revision_id && typeof data.revision_id.path === "string") {
+    data.revision_id = data.revision_id.path;
+  }
+  return {
+    id: doc.id,
+    ...data,
+    visibility: pageIsPublic(data),
+  } as T;
+}
+
 export async function fetchNodes<N extends NodeType>(
   path: N,
   options: FetchNodesOptions = {},
@@ -157,17 +171,7 @@ const _cachedFetchNodes = defineCachedFunction(
     }
 
     const nodes = await query.get();
-    const nodesData = nodes.docs.map((doc) => {
-      const data = doc.data();
-      if (data.revision_id && typeof data.revision_id.path === "string") {
-        data.revision_id = data.revision_id.path;
-      }
-      return {
-        id: doc.id,
-        ...data,
-        visibility: pageIsPublic(data),
-      };
-    });
+    const nodesData = nodes.docs.map(parseNodeDoc);
 
     logEventPath("fetchNodes", path, {
       type: path,
