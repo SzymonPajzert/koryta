@@ -33,7 +33,7 @@ def _parse_worker(
     uid: str,
     url: str,
 ) -> ParsedArticle:
-    html_bytes = _process_conductor.read_data(MirrorRef(url)).read_bytes()
+    html_bytes = _process_conductor.read_data(MirrorRef(url)).read_bytes()  # type: ignore[union-attr]
 
     result = extract_article_content(html_bytes)
     pub_date = result.get("publication_date")
