@@ -212,6 +212,7 @@ def test_extract_by_krs():
         ignore_elections = False
         currently_employed = False
         all = False
+        election_after = None
 
     extract.args = MockArgs()
 
