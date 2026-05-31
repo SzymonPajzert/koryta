@@ -11,14 +11,12 @@ from stores.config import VERSIONED_DIR
 
 
 class EntityDumper:
-    dbs: list[Any] = []
-    used: dict[str, Any] = dict()
-    inmemory: dict[str, list[Any]] = dict()
-    sort_keys: dict[str, list[str]] = dict()
-
-    _last_written_cache: tuple[str, list] | None = None
-    _has_flushed: bool = False
-    _insert_count: int = 0
+    def __init__(self) -> None:
+        self.inmemory: dict[str, list[Any]] = {}
+        self.sort_keys: dict[str, list[str]] = {}
+        self._last_written_cache: tuple[str, list] | None = None
+        self._has_flushed: bool = False
+        self._insert_count: int = 0
 
     @cached_property
     def args(self):
