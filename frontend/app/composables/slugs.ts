@@ -55,12 +55,6 @@ export function generateEntityUrl(
   id: string,
   name?: string,
 ): string {
-  // Hardcoded Kraków here
-  if (type == "region" && id != "teryt1261") {
-    const teryt = id.replace("teryt", "");
-    return `/eksploruj/tabela?teryt=${teryt}`;
-  }
-
   if (!name) return `/entity/${type}/${id}`;
   const prefix = nodeTypeToSlugPrefix(type);
   const slug = createSlug(name);
@@ -79,6 +73,14 @@ export function generateNodeUrl(node: Node): string | undefined {
       return `/eksploruj/tabela?krs=${node.krsNumber}`;
     }
     return "/eksploruj/tabela";
+  }
+
+  if (node.type === "region") {
+    if (node.id == "teryt1261") {
+      return "/region/krakow-teryt1261";
+    }
+    const teryt = node.id.replace("teryt", "");
+    return `/eksploruj/tabela?teryt=${teryt}`;
   }
 }
 

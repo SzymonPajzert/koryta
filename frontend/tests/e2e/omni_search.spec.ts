@@ -33,6 +33,30 @@ test.describe("OmniSearch", () => {
     ).toHaveText("PO");
   });
 
+  test("allows searching for regions", async ({ page }) => {
+    // Wait for the main page content to ensure app is hydrated
+    await expect(page.locator(".v-main")).toBeVisible();
+    await page.waitForLoadState("networkidle");
+
+    // Fill the search input
+    await page.locator("input#omni-search").click();
+    await page.locator("input#omni-search").fill("Opole");
+
+    // Click Opole entry
+    const opoleItem = page
+      .locator(".v-list-item", { hasText: "Opole" })
+      .first();
+    await expect(opoleItem).toBeVisible();
+
+    // Click the item
+    await opoleItem.click();
+    await expect(page).toHaveURL(/.*\/eksploruj\/tabela\?.*teryt=1661/);
+
+    await expect(page.locator(".v-input", { hasText: "Powiat" })).toContainText(
+      "Opole",
+    );
+  });
+
   test("should dedup companies", async ({ page }) => {
     await expect(page.locator(".v-main")).toBeVisible();
     await page.waitForLoadState("networkidle");
