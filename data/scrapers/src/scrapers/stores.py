@@ -160,6 +160,17 @@ class GCSBlob(DataRef):
 
 
 @dataclass
+class MirrorRef(DataRef):
+    """A reference to a URL in the compressed HTML mirror."""
+
+    url: str
+
+
+class NotInMirrorError(Exception):
+    """Raised when a URL has no snapshot in the compressed mirror."""
+
+
+@dataclass
 class CloudStorage(DataRef):
     """A reference to a collection of objects in cloud storage"""
 

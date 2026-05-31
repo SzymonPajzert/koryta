@@ -207,10 +207,6 @@ def main() -> None:  # noqa: PLR0915
         try:
             run_parse(
                 queue, ctx, args.parse_limit,
-                storage_type=args.storage_type,
-                local_output=(
-                    args.local_output if args.storage_type == "local" else None
-                ),
                 worker_processes=worker_processes,
             )
         finally:

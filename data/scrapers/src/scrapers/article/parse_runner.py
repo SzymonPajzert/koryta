@@ -15,7 +15,7 @@ from conductor import Conductor, make_reader_conductor  # type: ignore[attr-defi
 from entities.article import ParsedArticle
 from entities.util import NormalizedParse
 from scrapers.article.parse import extract_article_content
-from scrapers.stores import Context, CrawlQueue, GCSBlob, LocalFile
+from scrapers.stores import Context, CrawlQueue, MirrorRef, NotInMirrorError
 
 _URL_PARSING_CSV = Path(__file__).parent / "test_data" / "url_parsing.csv"
 
@@ -30,16 +30,10 @@ def _init_worker() -> None:
 
 def _parse_worker(
     storage_path: str,
-    storage_type: str,
-    local_output_str: str,
     uid: str,
     url: str,
 ) -> ParsedArticle:
-    ref = (
-        GCSBlob(storage_path) if storage_type == "gcs"
-        else LocalFile(storage_path, local_output_str)  # type: ignore[arg-type]
-    )
-    html_bytes = _process_conductor.read_data(ref).read_bytes()  # type: ignore[union-attr]
+    html_bytes = _process_conductor.read_data(MirrorRef(url)).read_bytes()
 
     result = extract_article_content(html_bytes)
     pub_date = result.get("publication_date")
@@ -113,8 +107,6 @@ def run_parse(
     queue: CrawlQueue,
     ctx: Context,
     parse_limit: int,
-    storage_type: str,
-    local_output: Path | None = None,
     worker_processes: int = 1,
 ) -> None:
     """Fetch done URLs, print stats, parse HTML, emit ParsedArticle entities.
@@ -143,8 +135,8 @@ def run_parse(
     print(f"\nParsing {len(to_parse)} URLs "
           f"(limit={parse_limit}, workers={worker_processes})...")
 
-    local_output_str = str(local_output) if local_output else "crawler_output"
     errors = 0
+    not_in_mirror = 0
 
     with ProcessPoolExecutor(
         max_workers=worker_processes,
@@ -152,8 +144,7 @@ def run_parse(
     ) as executor:
         futures = {
             executor.submit(
-                _parse_worker, done.storage_path, storage_type,
-                local_output_str, done.uid, done.url,
+                _parse_worker, done.storage_path, done.uid, done.url,
             ): done
             for done in to_parse
         }
@@ -163,9 +154,14 @@ def run_parse(
                 del futures[future]
                 try:
                     ctx.io.output_entity(future.result())
+                except NotInMirrorError:
+                    not_in_mirror += 1
                 except Exception as exc:
                     logging.warning("Failed to parse %s: %s", done.url, exc)
                     errors += 1
                 bar.update(1)
 
-    logging.info("Parsed %d pages (%d errors).", len(to_parse) - errors, errors)
+    logging.info(
+        "Parsed %d pages (%d errors, %d not in mirror).",
+        len(to_parse) - errors - not_in_mirror, errors, not_in_mirror,
+    )

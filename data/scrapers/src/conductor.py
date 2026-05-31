@@ -18,11 +18,12 @@ from scrapers.stores import (
     File,
     GCSBlob,
     LocalFile,
+    MirrorRef,
     ProcessPolicy,
 )
 from stores import file
 from stores.config import PROJECT_ROOT
-from stores.download import FileSource
+from stores.download import CompressedMirror, FileSource
 from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
 from stores.nlp import NLPImpl
@@ -37,6 +38,7 @@ class Conductor(IO):
         self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
+        self.mirror = CompressedMirror()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
 
@@ -64,6 +66,9 @@ class Conductor(IO):
         self.progress_bar = None
         # Print what we're reading instead
         print(f"Reading {fs}")
+
+        if isinstance(fs, MirrorRef):
+            return file.FromBytesIO(self.mirror.get(fs.url), fs.url)
 
         if isinstance(fs, GCSBlob):
             return self.read_data(

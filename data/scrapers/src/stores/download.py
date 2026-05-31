@@ -1,15 +1,19 @@
 import argparse
 import os
 import re
+import tarfile
 import urllib.request
 from functools import cached_property
 from pathlib import Path
 from typing import Callable
 
+import google.cloud.storage as gcs_lib
 import requests
 from tqdm import tqdm
 
+from entities.util import NormalizedParse
 from scrapers.stores import DownloadableFile as FileSourceConfig
+from scrapers.stores import NotInMirrorError
 from stores.config import DOWNLOADED_DIR
 
 base_dir = Path(DOWNLOADED_DIR)
@@ -155,3 +159,86 @@ def download_teryt(destination_path):
 
 
 downloads["download_teryt"] = download_teryt
+
+
+class CompressedMirror:
+    def __init__(self) -> None:
+        self._extracted: set[str] = set()  # hosts already extracted
+
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--compressed-mirror-bucket",
+            default="gs://koryta-pl-compressed",
+            help="GCS bucket URL or local path for the compressed HTML mirror.",
+        )
+        return parser.parse_known_args()[0]
+
+    def _extract_dir(self, host: str) -> Path:
+        return base_dir / "compressed" / host
+
+    def _resolve_tar_path(self, host: str) -> Path:
+        bucket = self.args.compressed_mirror_bucket
+        if bucket.startswith("gs://"):
+            bucket_name = bucket.removeprefix("gs://")
+            blobs = sorted(
+                b.name
+                for b in gcs_lib.Client().bucket(bucket_name).list_blobs(
+                    prefix=f"hostname={host}/"
+                )
+                if b.name.endswith(".tar.gz")
+            )
+            if not blobs:
+                raise NotInMirrorError(f"{host} has no snapshot in mirror")
+            blob_name = blobs[-1]
+            df = FileSourceConfig(
+                url=f"gs://{bucket_name}/{blob_name}",
+                filename_fallback=blob_name.replace("/", "."),
+                download_lambda=lambda path: gcs_lib.Client()
+                    .bucket(bucket_name)
+                    .blob(blob_name)
+                    .download_to_filename(str(path)),
+                binary=True,
+            )
+            fs = FileSource(df)
+            if not fs.downloaded():
+                fs.download()
+            return fs.downloaded_path
+        else:
+            candidates = sorted(
+                Path(bucket).glob(f"hostname={host}/from=*/date=*.tar.gz")
+            )
+            if not candidates:
+                raise NotInMirrorError(f"{host} has no snapshot in mirror")
+            return candidates[-1]
+
+    def _ensure_extracted(self, host: str) -> Path:
+        extract_dir = self._extract_dir(host)
+        if host in self._extracted or extract_dir.exists():
+            self._extracted.add(host)
+            return extract_dir
+        tar_path = self._resolve_tar_path(host)
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(tar_path) as tf:
+            for member in tf.getmembers():
+                if not member.isfile() or member.name == "index.txt":
+                    continue
+                rel = member.name[len(host) + 1:]  # strip "host/"
+                filename = rel.replace("/", ".")
+                f = tf.extractfile(member)
+                if f is not None:
+                    (extract_dir / filename).write_bytes(f.read())
+        self._extracted.add(host)
+        return extract_dir
+
+    def get(self, url: str) -> bytes:
+        parsed = NormalizedParse.parse(url)
+        host = parsed.hostname_normalized
+        path = (parsed.path.strip("/") or "index").replace("/", ".")
+
+        extract_dir = self._ensure_extracted(host)
+        candidates = sorted(extract_dir.glob(f"{path}.date=*"))
+        if not candidates:
+            raise NotInMirrorError(f"URL not found in mirror: {url}")
+        return candidates[-1].read_bytes()
