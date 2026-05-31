@@ -55,6 +55,12 @@ export function generateEntityUrl(
   id: string,
   name?: string,
 ): string {
+  // Hardcoded Kraków here
+  if (type == "region" && id != "teryt1261") {
+    const teryt = id.replace("teryt", "");
+    return `/eksploruj/tabela?teryt=${teryt}`;
+  }
+
   if (!name) return `/entity/${type}/${id}`;
   const prefix = nodeTypeToSlugPrefix(type);
   const slug = createSlug(name);

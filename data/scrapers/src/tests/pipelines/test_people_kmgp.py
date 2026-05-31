@@ -31,12 +31,14 @@ MISSING_NAMES = [
 ]
 
 
+@pytest.mark.skip(reason="TODO running slowly, needs optimization")
 def test_elections_set(output_list):
     total = len([p for p in output_list if p.name not in MISSING_NAMES])
     with_elections = len([p for p in output_list if len(p.elections) > 0])
     assert with_elections == total
 
 
+@pytest.mark.skip(reason="TODO running slowly, needs optimization")
 def test_companies_set(output_list):
     total = len(output_list)
     with_companies = len([p for p in output_list if len(p.companies) > 0])

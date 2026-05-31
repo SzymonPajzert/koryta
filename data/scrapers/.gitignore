@@ -6,7 +6,7 @@
 
 .coverage
 
-downloaded
+downloaded*
 versioned*
 
 # JSON credentials
@@ -16,3 +16,6 @@ koryta-pl*.json
 # Allow for test_data
 !src/scrapers/article/test_data/*
 crawler_output
+
+# from pytest-fast-first
+.pytest-runtimes

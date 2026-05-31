@@ -1,71 +1,318 @@
 import argparse
 import json
 import typing
+from dataclasses import dataclass
 from functools import cached_property
-from time import sleep
 
-import requests
+import pandas as pd
 
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
+from entities.company import ManualKRS
 from entities.person import RejestrIOKey
+from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import KRS, CompaniesKRS, PeopleKRS
-from scrapers.stores import Context, Pipeline, iterate_pipeline_dict
+from scrapers.krs.updates import KRSUpdates
+from scrapers.stores import (
+    CloudStorage,
+    Context,
+    DownloadableFile,
+    Pipeline,
+    iterate_pipeline_dict,
+)
+
+
+@dataclass
+class RejestrIOQuery:
+    krs: KRS | None = None
+    person: RejestrIOKey | None = None
+    api_krs_odpis_aktualny_p: bool = False
+    api_krs_odpis_aktualny_s: bool = False
+    api_rejestrio_org: bool = False
+    api_rejestrio_org_krs_powiazania_aktualne: bool = False
+    api_rejestrio_org_krs_powiazania_historyczne: bool = False
+    api_rejestrio_osoby_krs_powiazania_aktualne: bool = False
+    api_rejestrio_osoby_krs_powiazania_historyczne: bool = False
+
+    def __post_init__(self):
+        if self.krs is None and self.person is None:
+            raise ValueError("Either krs or person must be provided")
+        # TODO add a check that if you list KRS connections, you need to provide a KRS
+
+    def cost(self) -> float:
+        """Calculate the cost of this query based on which APIs it will call."""
+        calls = [
+            self.api_rejestrio_org,
+            self.api_rejestrio_org_krs_powiazania_aktualne,
+            self.api_rejestrio_org_krs_powiazania_historyczne,
+            self.api_rejestrio_osoby_krs_powiazania_aktualne,
+            self.api_rejestrio_osoby_krs_powiazania_historyczne,
+        ]
+        return sum(calls) * 0.05
+
+    def urls(self, only_free=False) -> typing.Iterable[str]:
+        if self.api_krs_odpis_aktualny_p:
+            assert self.krs is not None
+            yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=P&format=json"
+        if self.api_krs_odpis_aktualny_s:
+            assert self.krs is not None
+            yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=S&format=json"
+        if self.api_rejestrio_org and not only_free:
+            assert self.krs is not None
+            yield f"https://rejestr.io/api/v2/org/{self.krs}"
+        if self.api_rejestrio_org_krs_powiazania_aktualne and not only_free:
+            assert self.krs is not None
+            yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=aktualne"
+        if self.api_rejestrio_org_krs_powiazania_historyczne and not only_free:
+            assert self.krs is not None
+            yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=historyczne"
+        if self.api_rejestrio_osoby_krs_powiazania_aktualne and not only_free:
+            assert self.person is not None
+            yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=aktualne"
+        if self.api_rejestrio_osoby_krs_powiazania_historyczne and not only_free:
+            assert self.person is not None
+            yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=historyczne"
+
+
+class KRSSet:
+    """
+    Represents a set of KRS entries, merging and handling duplicates.
+    """
+
+    def __init__(
+        self, initial_entries: typing.Optional[typing.Iterable[ManualKRS]] = None
+    ):
+        self.entries: dict[str, ManualKRS] = {}
+        if initial_entries:
+            for krs in initial_entries:
+                self.add(krs)
+
+    def add(self, krs: ManualKRS):
+        """Adds a ManualKRS entry to the set or merges if the same ID already exists."""
+        if krs.id in self.entries:
+            self.entries[krs.id] = self.entries[krs.id].merge(krs)
+        else:
+            self.entries[krs.id] = krs
+
+    def __or__(self, other: "KRSSet") -> "KRSSet":
+        """Returns a new KRSSet containing the union of both sets."""
+        result = KRSSet(self.entries.values())
+        for entry in other.entries.values():
+            result.add(entry)
+        return result
+
+    def __sub__(self, other: "KRSSet") -> "KRSSet":
+        """Returns a new KRSSet containing differences between the sets."""
+        result = KRSSet()
+        for id, entry in self.entries.items():
+            if id not in other.entries:
+                result.add(entry)
+        return result
+
+    def __iter__(self):
+        return iter(self.entries.values())
+
+    def __len__(self):
+        return len(self.entries)
+
+    def __getitem__(self, key: str):
+        return self.entries[key]
+
+    def __contains__(self, key: str):
+        return key in self.entries
+
+
+@dataclass
+class KRSScraped:
+    krs: str
+    method: typing.Literal[
+        "aktualnosc_aktualne", "aktualnosc_historyczne", "main", "api-krs"
+    ]
+    date: str
+
+    @staticmethod
+    def parse(url: str) -> typing.Optional["KRSScraped"]:
+        date = url.split("/date=", 1)[1].split("/", 1)[0]
+
+        if "rejestr.io" in url and "org/" in url:
+            krs = url.split("org/", 1)[1].split("/", 1)[0]
+            if "aktualnosc_aktualne" in url:
+                return KRSScraped(krs, "aktualnosc_aktualne", date)
+            elif "aktualnosc_historyczne" in url:
+                return KRSScraped(krs, "aktualnosc_historyczne", date)
+            else:
+                return KRSScraped(krs, "main", date)
+        elif "api-krs.ms.gov.pl" in url:
+            if "Biuletyn" in url:
+                return None
+            krs = url.split("OdpisAktualny/", 1)[1].split("/", 1)[0]
+            return KRSScraped(krs, "api-krs", date)
+        else:
+            return None
+
+
+class KRSAlreadyScraped(Pipeline):
+    filename = "krs_already_scraped"
+
+    def process(self, ctx: Context):
+        """lists krs numbers along with the method and the date it was ran on."""
+        for blob_name in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
+            assert isinstance(blob_name, DownloadableFile)
+            r = KRSScraped.parse(blob_name.url)
+            if r:
+                ctx.io.output_entity(r)
+
+        for blob_name in ctx.io.list_files(
+            CloudStorage(prefix="hostname=api-krs.ms.gov.pl")
+        ):
+            assert isinstance(blob_name, DownloadableFile)
+            r = KRSScraped.parse(blob_name.url)
+            if r:
+                ctx.io.output_entity(r)
+
+    def latest_scrapes(self, ctx: Context):
+        """Groups by krs and lists methods already used"""
+        df = self.read_or_process(ctx)
+        max_dates = df.groupby(["krs", "method"]).aggregate("max").reset_index()
+        return max_dates
+
+
+class KRSNeedsRefresh(Pipeline):
+    filename = "krs_needs_refresh"
+
+    already_scraped: KRSAlreadyScraped
+    updates: KRSUpdates
+
+    def process(self, ctx):
+        """Lists updates for a KRS and checks if there were any more recent updates"""
+
+        latest_scrapes = self.already_scraped.latest_scrapes(ctx)
+
+        updates_df = self.updates.read_or_process(ctx)
+        if updates_df.empty:
+            return pd.DataFrame(columns=["krs", "method", "date", "update_date"])
+
+        updates_df["krs"] = updates_df["krs"].astype(str).str.zfill(10)
+        latest_updates = updates_df.groupby(["krs"]).aggregate("max").reset_index()
+        latest_updates = latest_updates.rename(columns={"date": "update_date"})
+
+        merged = pd.merge(latest_scrapes, latest_updates, on="krs", how="inner")
+        needs_refresh = merged[
+            (merged["update_date"] > merged["date"])
+            # | (merged["update_date"] > "2026-05-01")
+        ]
+
+        return needs_refresh.sort_values(by=["update_date"], ascending=False)
+
+
+def get_osoby_scraped(ctx: Context) -> dict[str, list[str]]:
+    osoby_scraped: dict[str, list[str]] = {}
+    for blob_name in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
+        assert isinstance(blob_name, DownloadableFile)
+        split = blob_name.url.split("osoby/", 1)
+        if len(split) < 2:
+            continue
+
+        person_id = split[1].split("/", 1)[0]
+        if "aktualnosc_aktualne" in blob_name.url:
+            osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + [
+                "aktualnosc_aktualne"
+            ]
+        elif "aktualnosc_historyczne" in blob_name.url:
+            osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + [
+                "aktualnosc_historyczne"
+            ]
+        else:
+            osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + ["main"]
+
+    return osoby_scraped
+
+
+def series_to_list(s: pd.Series) -> list[str]:
+    return s.tolist()
 
 
 def save_org_connections(
+    already_scraped_krs: pd.DataFrame,
+    needs_refresh_krs: pd.DataFrame,
+    already_scraped_people: dict[str, list[str]],
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
     people: typing.Iterable[RejestrIOKey],
-):
-    connections = list(connections)
+) -> typing.Iterable[RejestrIOQuery]:
+    con_list = list(connections)
+    con_refresh = needs_refresh_krs["krs"].unique().tolist()
+    # Join KRS ids with the ones that needs a refresh.
+    connections = set(con_list) | set(ManualKRS(krs) for krs in con_refresh)
+
     names = list(names)
     people = list(people)
 
-    print(f"len(connections): {len(connections)}")
+    print(
+        f"len(connections): {len(con_list)} + {len(con_refresh)} = {len(connections)}"
+    )
     print(f"len(names): {len(names)}")
     print(f"len(people): {len(people)}")
-    for krs in names:
-        yield (
-            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=P&format=json",
-            0,
-            0,
+
+    print(already_scraped_krs.head())
+    print(needs_refresh_krs.head())
+
+    # Remove needs refresh from already_scraped_krs, since we need to update them.
+    already_scraped = (
+        pd.merge(
+            already_scraped_krs[["krs", "method"]],
+            needs_refresh_krs[["krs", "method"]],
+            on=["krs", "method"],
+            how="outer",
+            indicator=True,
         )
-        yield (
-            f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}?rejestr=S&format=json",
-            0,
-            0,
-        )
-        yield (f"https://rejestr.io/api/v2/org/{krs}", 0.05, 0)
+        .query("_merge != 'both'")
+        .drop("_merge", axis=1)
+        .reset_index(drop=True)
+        .groupby("krs")
+        .aggregate(series_to_list)
+    )
+    print(already_scraped.head())
+
     for krs in connections:
-        yield (
-            f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=aktualne",
-            0.05,
-            1,
+        data: list[str] = already_scraped["method"].get(krs.id, [])
+        query = RejestrIOQuery(
+            krs=krs,
+            api_krs_odpis_aktualny_p="api-krs" not in data,
+            api_krs_odpis_aktualny_s="api-krs" not in data,
+            api_rejestrio_org_krs_powiazania_aktualne="aktualnosc_aktualne" not in data,
+            api_rejestrio_org_krs_powiazania_historyczne="aktualnosc_historyczne"
+            not in data,
         )
-        yield (
-            f"https://rejestr.io/api/v2/org/{krs}/krs-powiazania?aktualnosc=historyczne",
-            0.05,
-            0,
+        if len(list(query.urls())) > 0:
+            # If there's nothing to query, don't send it
+            yield query
+
+    for krs in names:
+        yield RejestrIOQuery(
+            krs=krs,
+            api_krs_odpis_aktualny_p=True,
+            api_krs_odpis_aktualny_s=True,
         )
+
     for person in people:
-        yield (
-            f"https://rejestr.io/api/v2/osoby/{person.id}/krs-powiazania?aktualnosc=aktualne",
-            0.05,
-            1,
+        data = already_scraped_people.get(person.id, [])
+        query = RejestrIOQuery(
+            person=person,
+            api_rejestrio_osoby_krs_powiazania_aktualne="aktualnosc_aktualne"
+            not in data,
+            api_rejestrio_osoby_krs_powiazania_historyczne="aktualnosc_historyczne"
+            not in data,
         )
-        yield (
-            f"https://rejestr.io/api/v2/osoby/{person.id}/krs-powiazania?aktualnosc=historyczne",
-            0.05,
-            0,
-        )
+        if len(list(query.urls())) > 0:
+            yield query
 
 
-class ScrapeRejestrIO(Pipeline):
-    # TODO be able to write that this pipeline doesn't return anything new.
+class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
     filename = None
+    volatile = True
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
@@ -73,6 +320,12 @@ class ScrapeRejestrIO(Pipeline):
     hardcoded_people: PeopleRejestrIOHardcoded
     people: PeopleKRS
     people_all: PeopleMerged
+    koryta_votes: KorytaVotes
+    koryta_people: KorytaPeople
+
+    @property
+    def output_class(self):
+        return RejestrIOQuery
 
     @cached_property
     def args(self):
@@ -93,24 +346,41 @@ class ScrapeRejestrIO(Pipeline):
 
         return args
 
-    def series_to_set(self, series) -> set[KRS]:
-        return set(KRS(krs) for krs in series.tolist())
+    def series_to_set(self, series) -> KRSSet:
+        return KRSSet(KRS(krs) for krs in series.tolist())
 
-    def already_scraped_companies(self, ctx: Context) -> set[KRS]:
+    def already_scraped_companies(self, ctx: Context) -> KRSSet:
         scraped_companies = self.companies.read_or_process(ctx)
-        return self.series_to_set(scraped_companies["krs"])
+        return KRSSet(
+            KRS(id=str(krs).zfill(10)) for krs in scraped_companies["krs"].tolist()
+        )
 
-    def companies_to_scrape(self, ctx: Context) -> set[KRS]:
+    def companies_to_scrape(self, ctx: Context) -> KRSSet:
         self.hardcoded_companies.process(ctx)
         already_scraped = self.already_scraped_companies(ctx)
 
-        starters = set(self.hardcoded_companies.all_companies_krs.values())
+        starters = KRSSet(self.hardcoded_companies.all_companies_krs.values())
+
+        for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
+            blob_name = getattr(blob_ref, "url", str(blob_ref))
+            if "osoby" in blob_name and "krs-powiazania" in blob_name:
+                blob = ctx.io.read_data(blob_ref)
+                try:
+                    data = json.loads(blob.read_string())
+                    for item in data:
+                        if isinstance(item, dict) and item.get("typ") == "organizacja":
+                            krs_num = item.get("numery", {}).get("krs")
+                            if krs_num:
+                                starters.add(KRS(id=str(krs_num).zfill(10)))
+                except Exception as e:
+                    print(f"Error parsing {blob_name}: {e}")
+
         print("Starters: ", starters)
 
         graph = CompanyGraph()
 
         if self.args.children:
-            children = set(
+            children = KRSSet(
                 KRS(krs) for krs in graph.all_descendants(set(s.id for s in starters))
             )
         else:
@@ -125,11 +395,11 @@ class ScrapeRejestrIO(Pipeline):
 
         return to_scrape
 
-    def companies_without_names(self, ctx: Context) -> set[KRS]:
+    def companies_without_names(self, ctx: Context) -> KRSSet:
         encountered_companies = self.series_to_set(
             self.people.read_or_process(ctx)["employed_krs"]
         )
-        results = set()
+        results = KRSSet()
         companies = {
             c["krs"]: c
             for c in iterate_pipeline_dict(self.companies_all.read_or_process(ctx))
@@ -149,57 +419,56 @@ class ScrapeRejestrIO(Pipeline):
             RejestrIOKey(id=person_id)
             for person_id in self.hardcoded_people.read_or_process(ctx)["id"].to_list()
         )
+
+        koryta_votes_df = self.koryta_votes.read_or_process(ctx)
+        koryta_people_df = self.koryta_people.read_or_process(ctx)
+
+        koryta_id_to_name = dict(
+            zip(koryta_people_df["id"], koryta_people_df["full_name"])
+        )
+
+        # TODO this matching rejestr.io to names logic is duplicated
+        # We should merge it in one of the pipelines
+        interesting_names = set()
+        for _, row in koryta_votes_df.iterrows():
+            person_koryta_id = row.get("person_koryta_id")
+            if not person_koryta_id or person_koryta_id == "":
+                continue
+            interesting = row.get("interesting", 0)
+            if interesting > 0:
+                name = koryta_id_to_name.get(str(person_koryta_id))
+                if name:
+                    interesting_names.add(name)
+
+        people_merged_df = self.people_all.read_or_process(ctx)
+        for _, row in people_merged_df.iterrows():
+            koryta_name = row.get("koryta_name")
+            if koryta_name in interesting_names:
+                rejestr_ids = row.get("rejestrio_id", [])
+                if len(rejestr_ids) > 0:
+                    scraped_people.add(RejestrIOKey(id=str(rejestr_ids[0])))
+
+        people_krs_df = self.people.read_or_process(ctx)
+        for _, row in people_krs_df.iterrows():
+            full_name = row.get("full_name")
+            if full_name in interesting_names:
+                rejestrio_id = row.get("id")
+                if rejestrio_id:
+                    scraped_people.add(RejestrIOKey(id=str(rejestrio_id)))
+
         print(f"People to scrape: {len(scraped_people)} {get_head(scraped_people, 10)}")
         return scraped_people
 
     def process(self, ctx: Context):
-        urls = list(
-            save_org_connections(
-                connections=self.companies_to_scrape(ctx),
-                names=self.companies_without_names(ctx),
-                people=self.people_to_scrape(ctx),
-            )
-        )
-        print(f"Will cost: {sum(map(lambda x: x[1], urls))} PLN")
-        input("Press enter to continue...")
-
-        skip = 0
-        for url, _, skip_on_fail in urls:
-            if skip > 0:
-                print(f"Skipping {url} (skipping {skip} more)")
-                skip -= 1
-                continue
-            if "rejestr.io" in url:
-                result = ctx.rejestr_io.get_rejestr_io(url)
-            else:
-                print(f"Requesting: {url}")
-                try:
-                    response = requests.get(url)
-                    result = response.json()
-                except requests.exceptions.JSONDecodeError:
-                    print(f"Failed to decode JSON from {url}, skipping")
-                    print(f"Response: {response.text}")
-                    skip = skip_on_fail
-                    continue
-                if "odpis" not in result:
-                    print(f"Unexpected response for {url}: {result}, skipping")
-                    skip = skip_on_fail
-                    continue
-                dzial1 = result["odpis"]["dane"]["dzial1"]
-                dane = dzial1["danePodmiotu"]
-                miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
-                print(f"{dane.get('nazwa', dane)} - {miasto}")
-                result = json.dumps(result)
-            sleep(0.3)
-
-            if result is None:
-                print(f"Skipping {url}")
-                continue
-
-            # We're discarding query params, so it's a hotfix for this
-            url = url.replace("?aktualnosc=", "/aktualnosc_")
-            url = url.replace("?rejestr=P&format=json", "")
-            ctx.io.upload(url, result, "application/json")
+        for url in save_org_connections(
+            already_scraped_krs=KRSAlreadyScraped().latest_scrapes(ctx),
+            needs_refresh_krs=KRSNeedsRefresh().read_or_process(ctx),
+            already_scraped_people=get_osoby_scraped(ctx),
+            connections=self.companies_to_scrape(ctx),
+            names=self.companies_without_names(ctx),
+            people=self.people_to_scrape(ctx),
+        ):
+            ctx.io.output_entity(url)
 
 
 def get_head(s: typing.Iterable[KRS | RejestrIOKey], n: int):

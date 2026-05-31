@@ -25,13 +25,13 @@
       />
 
       <div v-if="focusedPerson" class="pa-4 pt-0">
-        <NoteEditor :key="focusedPerson.id" :node-id="focusedPerson.id" />
-        <v-divider class="my-4" />
-        <EntityDetailView
+        <NoteEditor
           :key="focusedPerson.id"
-          :node="focusedPerson.id"
-          type="person"
+          :node-id="focusedPerson.id"
+          single-column
         />
+        <v-divider class="my-4" />
+        <CardEmploymentHistory :edges="focusedEdges" />
       </div>
     </v-navigation-drawer>
     <div class="pa-4">
@@ -40,173 +40,65 @@
         {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
       </h1>
 
+      <v-alert
+        v-if="region && !company"
+        type="warning"
+        variant="tonal"
+        class="mb-4"
+        icon="mdi-money"
+      >
+        <div class="d-flex align-center w-100">
+          <v-btn
+            href="https://zrzutka.pl/rd7ssx/pay"
+            target="_blank"
+            color="#E64164"
+          >
+            Zrzutka
+            <v-img
+              :width="30"
+              aspect-ratio="16/9"
+              cover
+              src="@/assets/zrzutka.png"
+            />
+          </v-btn>
+          <v-spacer />
+          <div class="mr-8">
+            Wesprzyj projekt na zrzutce, by przygotować podsumowania dla innych
+            miast, podobie jak to dla
+            <NuxtLink to="/entity/region/teryt1261">Krakowa</NuxtLink>
+          </div>
+          <v-spacer />
+        </div>
+      </v-alert>
+
       <ExploreLoginBanner v-if="!user" :hidden-count="hiddenCount" />
 
       <FormEksplorujTabelaFilters
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
         v-model:teryt="filterTeryt"
-        v-model:hideVoted="filterHideVoted"
+        v-model:krs="filterKrs"
+        v-model:hide-voted="filterHideVoted"
         :available-parties="availableParties"
         :available-regions="availableRegions"
+        :available-companies="availableCompanies"
         :show-visibility="!!user"
       />
 
       <v-card class="table-card">
-        <v-data-table-server
+        <ExploreTable
           v-model:items-per-page="itemsPerPage"
           v-model:page="page"
           v-model:sort-by="sortBy"
-          fixed-header
           :headers="headers"
           :items="tableItems"
-          :items-length="totalItems"
-          :loading="pending"
-          items-per-page-text="Wierszy na stronę:"
-          no-data-text="Brak danych"
-          loading-text="Ładowanie..."
+          :total-items="totalItems"
+          :pending="pending"
+          :region="region"
+          :company="company"
           @update:options="updateQueryParams"
-        >
-          <template #[`header.experience`]="{ column }">
-            <ExploreTableColumnHeader
-              tooltip="Sumaryczna liczba lat przepracowanych w publicznych spółkach"
-              :column
-              :sort-by
-            />
-          </template>
-
-          <template #[`header.notesCount`]="{ column }">
-            <ExploreTableColumnHeader
-              tooltip="Liczba notatek stworzonych przez społeczność na temat powiązań tej osoby"
-              :column
-              :sort-by
-            />
-          </template>
-
-          <template #[`header.votes.interesting`]="{ column }">
-            <ExploreTableColumnHeader
-              tooltip="Suma głosów społeczności określających jak interesująca jest ta osoba"
-              :column
-              :sort-by
-            />
-          </template>
-
-          <template #[`header.userVote`]="{ column }">
-            <ExploreTableColumnHeader
-              tooltip="Twój osobisty głos dla tej osoby (widoczny tylko dla Ciebie)"
-              :column
-              :sort-by
-            />
-          </template>
-
-          <template #[`header.visibility`]="{ column }">
-            <ExploreTableColumnHeader
-              tooltip="Czy strona osoby jest już opublikowana, czy jest w fazie szkicu (widoczna tylko dla zalogowanych)"
-              :column
-              :sort-by
-            />
-          </template>
-
-          <template #[`header.explore`]="{ column }">
-            <ExploreTableColumnHeader
-              tooltip="Wyświetla panel boczny z większą ilością informacji i opcją interakcji"
-              :column
-              :sort-by
-            />
-          </template>
-
-          <template #[`item.name`]="{ item }">
-            <div style="max-width: 150px">
-              <NuxtLink
-                class="text-primary cursor-pointer"
-                @click="focusPerson(item)"
-              >
-                {{ item.name }}
-              </NuxtLink>
-            </div>
-          </template>
-
-          <template #[`item.parties`]="{ item }">
-            <v-chip
-              v-for="party in item.parties"
-              :key="party"
-              size="small"
-              class="mr-1"
-            >
-              {{ party }}
-            </v-chip>
-          </template>
-
-          <template #[`item.companies`]="{ item }">
-            <div class="d-flex flex-wrap gap-1 py-1" style="max-width: 300px">
-              <span v-for="companyName in item.companies" :key="companyName">
-                <v-tooltip :text="shortCompanyName(companyName)" location="top">
-                  <template #activator="{ props }">
-                    <v-chip
-                      v-bind="props"
-                      size="small"
-                      class="mr-1 mb-1 text-truncate d-flex"
-                      variant="outlined"
-                      style="max-width: 300px"
-                    >
-                      {{ shortCompanyName(companyName) }}
-                    </v-chip>
-                  </template>
-                </v-tooltip>
-              </span>
-            </div>
-          </template>
-
-          <template #[`item.elections`]="{ item }">
-            <template v-for="(election, i) in item.elections" :key="i">
-              <v-chip size="small" class="mr-1 mb-1" variant="outlined">
-                <template v-if="election.year">
-                  <span class="font-weight-bold mr-1">{{ election.year }}</span>
-                </template>
-                <template v-if="election.location">
-                  {{ election.location }}
-                </template>
-                <template v-if="election.committee">
-                  <span class="text-caption ml-1"
-                    >({{ election.committee }})</span
-                  >
-                </template>
-              </v-chip>
-              <br v-if="i < item.elections.length - 1" />
-            </template>
-          </template>
-
-          <template #[`item.visibility`]="{ item }">
-            <v-chip
-              size="small"
-              :color="item.visibility ? 'success' : 'warning'"
-              variant="tonal"
-            >
-              {{ item.visibility ? "Opublikowane" : "Szkic" }}
-            </v-chip>
-          </template>
-
-          <template #[`item.notesCount`]="{ item }">
-            {{ item.stats?.notesCount || 0 }}
-          </template>
-
-          <template #[`item.votes.interesting`]="{ item }">
-            {{ item.stats?.votes?.interesting || 0 }}
-          </template>
-
-          <template #[`item.userVote`]="{ item }">
-            <ButtonVoteNumber :id="item.id" category="interesting" />
-          </template>
-
-          <template #[`item.explore`]="{ item }">
-            <v-btn
-              icon="mdi-magnify"
-              variant="text"
-              color="primary"
-              @click="focusPerson(item)"
-            />
-          </template>
-        </v-data-table-server>
+          @focus="focusPerson"
+        />
       </v-card>
     </div>
   </ClientOnly>
@@ -221,6 +113,8 @@ import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
+import { useEdges } from "~/composables/edges";
+
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
   title: "Eksploruj - Tabela - koryta.pl",
@@ -229,8 +123,10 @@ useHead({
 const route = useRoute();
 const router = useRouter();
 
+const DEFAULT_ITEMS_PER_PAGE = "10";
+
 const itemsPerPage = ref(
-  parseInt((route.query.itemsPerPage as string) || "50"),
+  parseInt((route.query.itemsPerPage as string) || DEFAULT_ITEMS_PER_PAGE),
 );
 const page = ref(parseInt((route.query.page as string) || "1"));
 
@@ -244,7 +140,7 @@ watch(
 watch(
   () => route.query.itemsPerPage,
   (newItems) => {
-    const i = parseInt((newItems as string) || "50");
+    const i = parseInt((newItems as string) || DEFAULT_ITEMS_PER_PAGE);
     if (itemsPerPage.value !== i) itemsPerPage.value = i;
   },
 );
@@ -310,10 +206,13 @@ const region = computed<[string, string] | undefined>(() => {
 });
 
 const company = computed<[string, string] | undefined>(() => {
-  const krsParam = route.query.krs as string | undefined;
+  const krsParam = route.query.krs;
   if (krsParam) {
+    const krsToMatch = Array.isArray(krsParam)
+      ? krsParam[0]
+      : (krsParam as string);
     for (const [id, place] of Object.entries(places.value ?? {})) {
-      if (place.krsNumber === krsParam) {
+      if (place.krsNumber === krsToMatch) {
         return [id, place.name];
       }
     }
@@ -366,14 +265,33 @@ const filterTeryt = computed<string | null>({
   },
 });
 
-const filterHideVoted = computed<boolean>({
-  get: () => route.query.hideVoted === "true",
+const filterKrs = computed<string[] | null>({
+  get: () => {
+    const k = route.query.krs;
+    if (!k) return null;
+    return Array.isArray(k) ? (k as string[]) : [k as string];
+  },
   set: (val) => {
     router.push({
       query: {
         ...route.query,
         page: 1,
-        hideVoted: val ? "true" : undefined,
+        krs: val && val.length > 0 ? val : undefined,
+      },
+    });
+  },
+});
+
+const filterHideVoted = computed<"all" | "no_votes" | "has_votes">({
+  get: () =>
+    (route.query.hideVoted as "all" | "no_votes" | "has_votes" | undefined) ||
+    "all",
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        hideVoted: val !== "all" ? val : undefined,
       },
     });
   },
@@ -382,6 +300,13 @@ const filterHideVoted = computed<boolean>({
 const availableRegions = computed(() => {
   return Object.values(regions.value ?? {})
     .map((r) => ({ title: r.name, value: r.teryt }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+});
+
+const availableCompanies = computed(() => {
+  return Object.values(places.value ?? {})
+    .filter((p) => p.krsNumber)
+    .map((p) => ({ title: p.name, value: p.krsNumber as string }))
     .sort((a, b) => a.title.localeCompare(b.title));
 });
 
@@ -426,9 +351,13 @@ const apiQuery = computed(
           : undefined,
       visibility:
         filterVisibility.value !== "all" ? filterVisibility.value : undefined,
-      krs: route.query.krs as string | undefined,
+      krs:
+        filterKrs.value && filterKrs.value.length > 0
+          ? filterKrs.value
+          : undefined,
       teryt: filterTeryt.value || undefined,
-      hideVoted: filterHideVoted.value ? "true" : undefined,
+      hideVoted:
+        filterHideVoted.value !== "all" ? filterHideVoted.value : undefined,
     }) as Query,
 );
 
@@ -485,22 +414,17 @@ const updateQueryParams = async (options: {
 
 const openDrawer = shallowRef(false);
 const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
+const focusedPersonId = computed(() => focusedPerson.value?.id);
+const { sources: focusedSources, targets: focusedTargets } =
+  await useEdges(focusedPersonId);
+const focusedEdges = computed(() => [
+  ...focusedSources.value,
+  ...focusedTargets.value,
+]);
 
 const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
   openDrawer.value = true;
-};
-
-const shortCompanyName = (companyName: string | undefined) => {
-  if (!companyName) return "";
-  const spolkaIndex = companyName.indexOf(
-    "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
-  );
-  if (spolkaIndex !== -1) {
-    companyName =
-      companyName.slice(0, spolkaIndex) + companyName.slice(spolkaIndex + 39);
-  }
-  return companyName;
 };
 </script>
 

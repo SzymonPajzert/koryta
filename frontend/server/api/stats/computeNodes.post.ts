@@ -36,16 +36,39 @@ export default defineEventHandler(async () => {
   ]);
 
   const placeToRegions: Record<string, string[]> = {};
+  const placeToParentCompanies: Record<string, string[]> = {};
+
   for (const edge of edges) {
-    if (
-      edge.type === "owns" &&
-      edge.source &&
-      edge.target &&
-      nodesRecord[edge.source]?.type === "region"
-    ) {
-      if (!placeToRegions[edge.target]) placeToRegions[edge.target] = [];
-      placeToRegions[edge.target]!.push(edge.source);
+    if (edge.type === "owns" && edge.source && edge.target) {
+      const sourceType = nodesRecord[edge.source]?.type;
+      if (sourceType === "region") {
+        if (!placeToRegions[edge.target]) placeToRegions[edge.target] = [];
+        placeToRegions[edge.target]!.push(edge.source);
+      } else if (sourceType === "place") {
+        if (!placeToParentCompanies[edge.target])
+          placeToParentCompanies[edge.target] = [];
+        placeToParentCompanies[edge.target]!.push(edge.source);
+      }
     }
+  }
+
+  const resolveParents = (
+    target: string,
+    visited = new Set<string>(),
+  ): string[] => {
+    if (visited.has(target)) return [];
+    visited.add(target);
+    const parents = placeToParentCompanies[target] || [];
+    const allParents = [...parents];
+    for (const p of parents) {
+      allParents.push(...resolveParents(p, visited));
+    }
+    return allParents;
+  };
+
+  const resolvedPlaceToParentCompanies: Record<string, string[]> = {};
+  for (const target of Object.keys(placeToParentCompanies)) {
+    resolvedPlaceToParentCompanies[target] = resolveParents(target);
   }
 
   const chunks = [];
@@ -59,8 +82,17 @@ export default defineEventHandler(async () => {
 
     const transitiveTargets: Record<string, string[]> = {};
     for (const edge of nodeEdges) {
-      if (edge.target && placeToRegions[edge.target]) {
-        transitiveTargets[edge.target] = placeToRegions[edge.target]!;
+      if (edge.target) {
+        const parents = [];
+        if (placeToRegions[edge.target]) {
+          parents.push(...placeToRegions[edge.target]!);
+        }
+        if (resolvedPlaceToParentCompanies[edge.target]) {
+          parents.push(...resolvedPlaceToParentCompanies[edge.target]!);
+        }
+        if (parents.length > 0) {
+          transitiveTargets[edge.target] = parents;
+        }
       }
     }
 

@@ -10,6 +10,7 @@ from entities.company import Company as KrsCompany
 from entities.company import ManualKRS as KRS
 from entities.company import Owner, Source
 from entities.person import KRS as KrsPerson
+from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import QueryRelation
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
@@ -38,7 +39,7 @@ def end_time(item):
             has_ongoing = True
         else:
             max_end = max(max_end, v)
-            
+
     if has_ongoing:
         return None
     return max_end if max_end != "1900-01-01" else None
@@ -125,6 +126,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     filename = "company_krs"
     dtype = {"krs": str}
     postal_codes: PostalCodes
+    hardcoded_companies: CompaniesHardcoded
 
     def __init__(self) -> None:
         super().__init__()
@@ -192,15 +194,15 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         and extracts information about companies.
         """
         postal_codes = self.postal_codes.read_or_process(ctx)
+        self.hardcoded_companies.process(ctx)
+        hardcoded = self.hardcoded_companies.all_companies_krs
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
-            if "org" not in blob_name:
-                print("Skipping non-org file: ", blob_name)
-                continue
-
             if "aktualnosc_" in blob_name:
-                parent = KRS.from_blob_name(blob_name)
-                self.add_company_source(parent.id, blob_name)
+                parent: KRS | None = None
+                if "/org" in blob_name:
+                    parent = KRS.from_blob_name(blob_name)
+                    self.add_company_source(parent.id, blob_name)
 
                 for item in data:
                     if item.get("typ") != "organizacja":
@@ -210,24 +212,32 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     conn_type = QueryRelation.from_rejestrio(
                         item["krs_powiazania_kwerendowane"][0]
                     )
-                    if conn_type.is_child():
+                    if parent is not None and conn_type.is_child():
                         self.add_relation(parent.id, c.krs)
 
-            else:
+            elif "/org" in blob_name:
                 c = company_from_rejestrio(data, postal_codes)
                 self.add_company(c)
                 self.add_company_source(c.krs, blob_name)
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
+            if "Biuletyn" in blob_name:
+                continue
             c = company_from_api_krs(postal_codes, data)
             self.add_company(c)
             self.add_company_source(c.krs, blob_name)
 
         for company in self.companies.values():
+            company_sources = self.company_sources.get(company.krs, set())
+            hc = hardcoded.get(company.krs)
+            if hc:
+                for src in hc.sources:
+                    company_sources.add(Source(source="hardcoded", reason=src))
+
             ctx.io.output_entity(
                 dataclasses.replace(
                     company,
-                    sources=list(self.company_sources.get(company.krs, set())),
+                    sources=list(company_sources),
                 )
             )
 
@@ -242,7 +252,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
 def company_from_rejestrio(data: dict, pcs: DataFrame | None = None) -> KrsCompany:
     krs = data["numery"]["krs"]
     name = data["nazwy"]["skrocona"]
-    city = data["adres"]["miejscowosc"]
+    city = data.get("adres", {}).get("miejscowosc", "")
     teryt_code = None
     if "adres" in data and "teryt" in data["adres"] and data["adres"]["teryt"]:
         t = data["adres"]["teryt"]
@@ -299,9 +309,9 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
         krs = odpis.get("naglowekA").get("numerKRS")
         dane = odpis.get("dane", {})
         dzial1 = dane.get("dzial1", {})
-        nazwa = dzial1.get("danePodmiotu").get("nazwa")
+        nazwa = dzial1.get("danePodmiotu", {}).get("nazwa")
         siedziba = dzial1.get("siedzibaIAdres", {})
-        miejscowosc = siedziba.get("adres", {}).get("miejscowosc").lower()
+        miejscowosc = siedziba.get("adres", {}).get("miejscowosc", "").lower()
         postal_code = siedziba.get("adres", {}).get("kodPocztowy")
 
         teryt_code = get_teryt(pcs, miejscowosc, postal_code)
@@ -335,3 +345,6 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
         raise ValueError(
             f"Failed to extract company data from API KRS response: {e}, data: {data}"
         ) from e
+    except TypeError as e:
+        print(data)
+        raise ValueError(f"Wrong data: {data}, {e}")

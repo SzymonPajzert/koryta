@@ -17,14 +17,17 @@ export const onNodeWritten = onDocumentWritten(
     if (!afterData) return; // Node deleted
 
     const beforeRev = !!beforeData?.revision_id;
-    const afterRev = !!afterData?.revision_id;
+    const afterRev = !!afterData.revision_id;
 
     if (beforeRev !== afterRev) {
       // Avoid infinite loops by only updating if stats.isApproved doesn't match
-      const currentStatsApproved = afterData?.stats?.isApproved;
+      const currentStatsApproved = afterData.stats?.isApproved;
       if (currentStatsApproved !== afterRev) {
         try {
-          await event.data?.after?.ref?.update({
+          if (!event.data) {
+            return;
+          }
+          await event.data.after.ref.update({
             "stats.isApproved": afterRev,
           });
           logger.info(

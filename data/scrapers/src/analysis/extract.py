@@ -59,6 +59,7 @@ class Extract(Pipeline):
     companies: CompaniesKRS
     teryt: Teryt
     hardcoded_people: PeopleRejestrIOHardcoded
+    _relevant_companies: set[str] | None = None
 
     MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
     EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
@@ -91,11 +92,10 @@ class Extract(Pipeline):
             action=argparse.BooleanOptionalAction,
         )
         parser.add_argument(
-            "--recent",
-            help="Extract people who were employed after 2023-10-15",
-            default=False,
+            "--employed-after",
+            help="Extract people who were employed after the given date",
+            default=None,
             required=False,
-            action=argparse.BooleanOptionalAction,
         )
         parser.add_argument(
             "--currently-employed",
@@ -110,6 +110,12 @@ class Extract(Pipeline):
             default=False,
             required=False,
             action=argparse.BooleanOptionalAction,
+        )
+        parser.add_argument(
+            "--election-after",
+            help="Show people with elections after that year",
+            default=None,
+            required=False,
         )
         parser.add_argument(
             "--all",
@@ -144,8 +150,8 @@ class Extract(Pipeline):
         return self.args.all
 
     @property
-    def recent(self) -> bool:
-        return self.args.recent
+    def employed_after(self) -> bool:
+        return self.args.employed_after
 
     @property
     def currently_employed(self) -> bool:
@@ -155,6 +161,10 @@ class Extract(Pipeline):
     def ignore_elections(self) -> bool:
         return self.args.ignore_elections
 
+    @property
+    def election_after(self) -> bool:
+        return self.args.election_after
+
     def process_graph(self, ctx: Context):
         companies_df = self.companies.read_or_process(ctx)
         rows_num = len(companies_df)
@@ -163,6 +173,9 @@ class Extract(Pipeline):
 
     def relevant_companies(self, ctx) -> set[str]:
         """Returns KRS IDs of companies that match one of the passed requirements."""
+        if self._relevant_companies is not None:
+            return self._relevant_companies
+
         result = set()
 
         if self.krss:
@@ -176,6 +189,7 @@ class Extract(Pipeline):
                 if company.teryt_code.startswith(self.region):
                     result.add(company.krs)
 
+        self._relevant_companies = result
         return result
 
     def relevant_employment(self, ctx):
@@ -186,17 +200,19 @@ class Extract(Pipeline):
                 return 0
             result = 0
             for emp in employment_list:
-                if emp.get("employed_krs") in relevant_companies:
-                    if self.recent:
+                if emp.get("employed_krs") in relevant_companies or self.all:
+                    if self.employed_after:
                         start_date = emp.get("employed_start")
-                        if start_date is not None and start_date > RECENT_TRESHOLD:
+                        if start_date is not None and start_date > self.employed_after:
                             result += 1
-                    if self.currently_employed:
+                    elif self.currently_employed:
                         end_date = emp.get("employed_end")
                         if end_date is None or end_date > RECENT_TRESHOLD:
                             result += 1
                     else:
                         result += 1
+
+            # TODO run self.all check here if it's the only flag
             return result
 
         return works_in_relevant
@@ -207,19 +223,29 @@ class Extract(Pipeline):
                 return 1
             if not isinstance(elections, list):
                 return 0
-            if not self.region or len(self.region) == "":
-                return 1 if len(elections) > 0 else 0
+
             result = 0
             for election in elections:
-                teryt = (
-                    head_or_none(election["teryt_powiat"])
-                    or head_or_none(election["teryt_wojewodztwo"])
-                    or ""
-                )
-                if teryt == "":
-                    print(election)
-                if teryt.startswith(self.args.region):
+                election_ok = True
+                if self.region:
+                    teryt = (
+                        head_or_none(election["teryt_powiat"])
+                        or head_or_none(election["teryt_wojewodztwo"])
+                        or ""
+                    )
+                    if teryt == "":
+                        raise ValueError(f"Election without teryt {election}")
+                    if not teryt.startswith(self.args.region):
+                        election_ok = False
+
+                if self.election_after:
+                    year = election.get("election_year")
+                    if year is not None and year < self.election_after:
+                        election_ok = False
+
+                if election_ok:
                     result += 1
+
             return result
 
         return check
@@ -239,13 +265,27 @@ class Extract(Pipeline):
         people = self.people.read_or_process(ctx)
         self.teryt.read_or_process(ctx)
 
+        print(f"Relevant companies are: {self.relevant_companies(ctx)}")
+
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
         auto_approved = people.apply(self.auto_approved_func(), axis=1)
-        use_all = 1 if self.all else 0
+        # TODO handle a condition here that --all can be just used as
+        # a placeholder but it doesn't disable all the filters
+        use_all = (
+            1
+            if (self.all and not self.employed_after and not self.election_after)
+            else 0
+        )
 
         people["total_elections"] = people["elections"].apply(list_length)
         people["total_employments"] = people["employment"].apply(list_length)
+
+        print(
+            f"Found {relevant_employment.gt(0).sum()} people with relevant employment"
+        )
+        print(f"Found {relevant_elections.gt(0).sum()} people with relevant elections")
+
         # TODO control if we want to have both of them or one of them satisfied
         relevant = (
             relevant_employment * relevant_elections + auto_approved + use_all

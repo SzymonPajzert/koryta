@@ -120,7 +120,7 @@ class Firestore:
             p = PersonScore(**p)
 
         print(
-            f"Uploading score for {p.name} (nodeId: {p.node_id})...",
+            f"Uploading score {p.score} for {p.name} (nodeId: {p.node_id})...",
             end=" ",
             file=sys.stderr,
         )
@@ -149,11 +149,7 @@ class Uploader:
             else:
                 self.company_payloads = companies
 
-            if not args.prod and args.endpoint.startswith("http://localhost"):
-                token = "test-token"
-            else:
-                token = authenticate_user(args.endpoint)
-
+            token = authenticate_user(args.endpoint)
             self.headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {token}",
@@ -243,7 +239,8 @@ class Uploader:
                     )
                 )
                 if resp.status_code == 404:
-                    for krs in resp.json()["data"]:
+                    # Deduplicate, e.g if a person was employed there twice
+                    for krs in set(resp.json()["data"]):
                         self.submit_company(krs, None)
                     # Try submitting again
                     self.check_success(

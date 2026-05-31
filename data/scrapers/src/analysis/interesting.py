@@ -2,8 +2,9 @@ import typing
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 
-from entities.company import Company, ManualKRS, Owner, Source, Wikipedia
+from entities.company import Company, Owner, Source, Wikipedia
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
@@ -20,6 +21,7 @@ class Companies(Pipeline[Company]):
     """
 
     filename = "companies_merged"
+    dtype = {"krs": str, "teryt_code": str}
 
     scraped_companies: CompaniesKRS
     hardcoded_companies: CompaniesHardcoded
@@ -39,7 +41,11 @@ class Companies(Pipeline[Company]):
         graph = self.graph(ctx)
 
         children_of_hardcoded = self.children_of_hardcoded(ctx, graph)
-        wiki_companies = {c.krs: c for c in self.wiki_companies(ctx)}
+        wiki_companies = {
+            str(c.krs).zfill(10): c
+            for c in self.wiki_companies(ctx)
+            if not pd.isna(c.krs)
+        }
         krs_companies = {
             c.krs: c for c in self.scraped_companies.read_or_process_list(ctx)
         }
@@ -51,7 +57,7 @@ class Companies(Pipeline[Company]):
         )
 
         for krs_id in all_krs:
-            if krs_id is None:
+            if pd.isna(krs_id):
                 continue
             assert isinstance(krs_id, str), " ".join(
                 [
@@ -109,12 +115,10 @@ class Companies(Pipeline[Company]):
             yield Wikipedia(*row)
 
     def children_of_hardcoded(self, ctx: Context, graph: CompanyGraph) -> list[str]:
-        # This is actually a set[KRS] and if we don't cast it to str,
-        # sets will contain wrong values
-        children_of_hardcoded_set: set[ManualKRS] = graph.all_descendants(
-            self.hardcoded_companies.read_or_process_list(ctx)
-        )  # type: ignore
-        return list((krs.id for krs in children_of_hardcoded_set))
+        children_of_hardcoded_set = graph.all_descendants(
+            company.id for company in self.hardcoded_companies.read_or_process_list(ctx)
+        )
+        return list((krs for krs in children_of_hardcoded_set))
 
     def company_graph(self, ctx: Context):
         graph = CompanyGraph()

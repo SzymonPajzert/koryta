@@ -6,7 +6,15 @@
         niezweryfikowanych osób.
         <template v-if="hiddenCount > 0">
           W tym widoku znaleźliśmy jeszcze
-          <strong>{{ hiddenCount }} dodatkowych osób</strong>.
+          <strong>{{
+            polishCounting(
+              hiddenCount,
+              "dodatkowa osoba",
+              "dodatkowe osoby",
+              "dodatkowych osób",
+            )
+          }}</strong
+          >.
         </template>
       </div>
       <v-btn

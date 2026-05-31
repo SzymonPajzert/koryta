@@ -25,6 +25,12 @@ WIKI_DUMP = DownloadableFile(
 
 DUMP_SIZE = 12314670146  # TODO remove it and look it up
 
+SAVE_ARTICLES = [
+    "Stefan Wilkanowicz",
+    "Jan Pamuła (ekonomista)",
+    "Wojciech Wróblewski (socjolog)",
+]
+
 # Heurisic used to ignore some articles without parsing (expensive operation)
 REQUIRED_WORDS = [
     "Naukowiec",
@@ -81,7 +87,23 @@ class Infobox:
                 str(link.title) for link in param.value.filter_wikilinks()
             ]
 
-        self.person_related = "imię i nazwisko" in self.fields
+        self.person_related = (
+            "imię i nazwisko" in self.fields
+            or "polityk" in self.fields
+            or "osoba" in self.fields
+            or self.inf_type
+            in [
+                "Biogram",
+                "Polityk",
+                "Naukowiec",
+                "Duchowny",
+                "Artysta",
+                "Sportowiec",
+                "Pisarz",
+                "Dziennikarz",
+                "Menedżer",
+            ]
+        )
         self.links = [v for vs in self.field_links.values() for v in vs]
 
     @memoized_property
@@ -121,12 +143,14 @@ def safe_middle_name_pattern(title):
 
 class WikiArticle:
     title: str
+    original_title: str
     categories: list[str]
     links: list[str]
     infoboxes: list[Infobox]
 
-    def __init__(self, title, categories, links, infoboxes):
+    def __init__(self, title, categories, links, infoboxes, original_title=None):
         self.title = title
+        self.original_title = original_title if original_title is not None else title
         self.categories = categories
         self.links = links
         self.infoboxes = infoboxes
@@ -153,10 +177,11 @@ class WikiArticle:
 
         parsed = mwparserfromhell.parse(wikitext)
         infoboxes = Infobox.parse(parsed)
-        title = WikiArticle.extend_name(title, wikitext)
+        extended_title = WikiArticle.extend_name(title, wikitext)
 
         return WikiArticle(
-            title=title,
+            title=extended_title,
+            original_title=title,
             categories=get_links(parsed, prefix="Kategoria:"),
             links=get_links(parsed),
             infoboxes=infoboxes,
@@ -226,7 +251,7 @@ class WikiArticle:
         for infobox in self.infoboxes:
             if infobox.person_related:
                 year = infobox.birth_year
-                if year and year < 1930:
+                if year and year < 1920:
                     return False
                 return True
         return False
@@ -274,8 +299,9 @@ def extract_from_article(article: WikiArticle) -> People | Company | None:
         # raise ValueError("Conflict of mapping to both person and company")
         return None
     elif person:
+        title_escaped = article.original_title.replace(" ", "_")
         return People(
-            source=f"https://pl.wikipedia.org/wiki/{article.title}",
+            source=f"https://pl.wikipedia.org/wiki/{title_escaped}",
             full_name=article.title,
             party=article.get_infobox(lambda i: i.fields.get("partia", "")),
             birth_iso8601=article.get_infobox(lambda i: i.birth_iso),
@@ -369,6 +395,10 @@ def scrape_wiki(ctx: Context):
                     revision = elem.find(
                         "{http://www.mediawiki.org/xml/export-0.11/}revision"
                     )
+                    if title in SAVE_ARTICLES:
+                        with open(f"tests/wiki/{title}.xml", "w") as out:
+                            out.write(ET.tostring(elem, encoding="unicode"))
+
                     if title and revision:
                         wikitext = revision.findtext(
                             "{http://www.mediawiki.org/xml/export-0.11/}text"

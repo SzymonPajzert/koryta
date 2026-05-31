@@ -120,7 +120,6 @@ def people_merged(
     query = """
     WITH krs_pkw AS (
         SELECT
-            k.metaphone as metaphone,
             k.full_name[1] as krs_name,
             p.full_name[1] as pkw_name,
             k.birth_year as birth_year,
@@ -147,7 +146,6 @@ def people_merged(
         FROM krs_people k
         LEFT JOIN pkw_people p ON (
             ABS(k.birth_year - p.birth_year) <= 1 OR p.birth_year IS NULL)
-            AND k.metaphone = p.metaphone
             AND k.last_name = p.last_name
             AND k.first_name = p.first_name
             AND (k.second_name = p.second_name
@@ -164,12 +162,12 @@ def people_merged(
         SELECT
             kp.*,
             w.full_name as wiki_name,
+            w.source as wiki_url,
             w.is_polityk,
             w.wiki_score,
         FROM krs_pkw kp
         LEFT JOIN wiki_people w
             ON (kp.birth_date = w.birth_date OR w.birth_date IS NULL)
-            AND kp.metaphone = w.metaphone
             AND kp.base_last_name = w.last_name
             AND kp.base_first_name = w.first_name
     ),
@@ -204,10 +202,9 @@ def people_merged(
             base_first_name,
             base_last_name,
             birth_date,
-            metaphone,
             MAX(overall_score) as max_score
         FROM scored
-        GROUP BY base_first_name, base_last_name, metaphone, birth_date
+        GROUP BY base_first_name, base_last_name, birth_date
     ),
     unique_krs AS (
         SELECT
@@ -226,11 +223,9 @@ def people_merged(
         FROM max_scores LEFT JOIN scored ON (
             max_scores.base_first_name = scored.base_first_name
             AND max_scores.base_last_name = scored.base_last_name
-            AND max_scores.metaphone = scored.metaphone
             AND max_scores.birth_date = scored.birth_date
             AND max_scores.max_score = scored.overall_score
         )
-        WHERE overall_score >= 8
         QUALIFY ROW_NUMBER() OVER (
             PARTITION BY krs_name, birth_year
             ORDER BY overall_score DESC,

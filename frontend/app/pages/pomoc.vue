@@ -3,54 +3,7 @@
     <v-col cols="12">
       <h2>Współtwórz bazę</h2>
     </v-col>
-    <v-col cols="12">
-      <HomeCard>
-        <template #header>Dodaj artykuł</template>
-        <div class="mb-4">
-          To najważniejszy sposób w jaki możesz pomóc. Masz ciekawe źródło?
-          Dodaj artykuł i powiąż go z osobami i firmami.
-        </div>
-        <v-btn
-          :to="{ path: '/edit/node/new', query: { type: 'article' } }"
-          color="primary"
-          prepend-icon="mdi-file-document-plus"
-        >
-          Dodaj artykuł
-        </v-btn>
-      </HomeCard>
-    </v-col>
-    <v-col cols="12" md="6">
-      <HomeCard>
-        <template #header>Dodaj osobę</template>
-        <div class="mb-4">
-          Brakuje polityka lub urzędnika? Dodaj nowy profil.
-        </div>
-        <v-btn
-          :to="{ path: '/edit/node/new', query: { type: 'person' } }"
-          color="secondary"
-          variant="tonal"
-          prepend-icon="mdi-account-plus"
-          block
-        >
-          Dodaj osobę
-        </v-btn>
-      </HomeCard>
-    </v-col>
-    <v-col cols="12" md="6">
-      <HomeCard>
-        <template #header>Dodaj firmę</template>
-        <div class="mb-4">Uzupełnij bazę o brakujące spółki i instytucje.</div>
-        <v-btn
-          :to="{ path: '/edit/node/new', query: { type: 'place' } }"
-          color="secondary"
-          variant="tonal"
-          prepend-icon="mdi-domain-plus"
-          block
-        >
-          Dodaj firmę
-        </v-btn>
-      </HomeCard>
-    </v-col>
+
     <v-col cols="12" md="6">
       <HomeCard>
         <template #header>Weryfikuj zmiany</template>

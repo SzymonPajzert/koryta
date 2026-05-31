@@ -7,32 +7,6 @@ import urllib.parse
 import webbrowser
 
 
-# TODO this function doesn't work
-def authenticate_user(endpoint_url: str) -> str:
-    raise ValueError("Not implemented")
-
-    auth_port = 8085
-    stop_event = threading.Event()
-    server_thread = threading.Thread(
-        target=run_auth_server, args=(auth_port, stop_event)
-    )
-    server_thread.start()
-
-    auth_url = f"{endpoint_url}/login?redirect=http://localhost:{auth_port}"
-    print(f"Opening browser for authentication: {auth_url}", file=sys.stderr)
-    webbrowser.open(auth_url)
-
-    print("Waiting for authentication...", file=sys.stderr)
-    while True:
-        time.sleep(1)
-        token = input(
-            "Enter authentication token (or press Enter if browser succeeded): "
-        )
-        if token:
-            stop_event.set()
-            return token
-
-
 class AuthHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         query = urllib.parse.urlparse(self.path).query
@@ -41,11 +15,13 @@ class AuthHandler(http.server.BaseHTTPRequestHandler):
             self.server.token = params["token"][0]  # type: ignore
             self.send_response(200)
             self.send_header("Content-type", "text/html")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(b"Authentication successful! You can close this window.")
         else:
             self.send_response(400)
             self.send_header("Content-type", "text/html")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(b"No token found in response.")
 
@@ -56,10 +32,12 @@ class AuthHandler(http.server.BaseHTTPRequestHandler):
         if "token" in data:
             self.server.token = data["token"]  # type: ignore
             self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(b"OK")
         else:
             self.send_response(400)
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
 
     def do_OPTIONS(self):
@@ -73,9 +51,66 @@ class AuthHandler(http.server.BaseHTTPRequestHandler):
         return
 
 
-def run_auth_server(port, stop_event):
-    server = http.server.HTTPServer(("localhost", port), AuthHandler)
-    server.token = None  # type: ignore
-    while not stop_event.is_set():
-        server.handle_request()
-    return server.token  # type: ignore
+def authenticate_user(endpoint_url: str) -> str:
+    auth_port = 8085
+
+    # In case of previous bind error, allow reuse
+    class DualStackServer(http.server.HTTPServer):
+        token: str | None = None
+
+        def server_bind(self):
+            self.allow_reuse_address = True
+            super().server_bind()
+
+    server = DualStackServer(("localhost", auth_port), AuthHandler)
+
+    server_thread = threading.Thread(target=server.serve_forever)
+    server_thread.daemon = True
+    server_thread.start()
+
+    auth_url = f"{endpoint_url}/cli-login?callback=http://localhost:{auth_port}"
+    print(f"Opening browser for authentication: {auth_url}", file=sys.stderr)
+    try:
+        webbrowser.open(auth_url)
+    except Exception:
+        pass
+
+    print("Waiting for authentication via browser...", file=sys.stderr)
+
+    def manual_input_thread():
+        try:
+            if sys.stdin.isatty():
+                f = sys.stdin
+            else:
+                try:
+                    f = open("/dev/tty")
+                except Exception:
+                    return
+            print(
+                "Enter authentication token manually: ",
+                file=sys.stderr,
+                end="",
+                flush=True,
+            )
+            token = f.readline().strip()
+            if token and server.token is None:
+                server.token = token
+        except Exception:
+            pass
+
+    input_thread = threading.Thread(target=manual_input_thread)
+    input_thread.daemon = True
+    input_thread.start()
+
+    try:
+        while server.token is None:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+
+    server.shutdown()
+    server.server_close()
+
+    if server.token:
+        return server.token
+    raise Exception("Authentication failed or was cancelled.")

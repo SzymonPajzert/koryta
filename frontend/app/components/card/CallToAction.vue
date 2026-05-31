@@ -1,7 +1,7 @@
 <template>
-  <v-container class=".align-center">
+  <v-container class="text-center d-flex flex-column align-center">
     <h3>Zostało nam jeszcze dużo osób</h3>
-    <ChartPeopleProgress class="ma-2" />
+    <ChartPeopleProgress class="my-4 mx-auto" />
     <v-row>
       <v-col cols="12">
         <v-card class="">

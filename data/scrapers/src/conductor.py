@@ -122,8 +122,10 @@ class Conductor(IO):
             with open(path, "wb") as f:
                 content(f)
 
-    def upload(self, source, data, content_type, include_query=False):
-        self.storage.upload(source, data, content_type, include_query=include_query)
+    def upload(self, source, data, content_type, include_query=False, verbose=True):
+        self.storage.upload(
+            source, data, content_type, include_query=include_query, verbose=verbose
+        )
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)
@@ -144,7 +146,7 @@ class Conductor(IO):
 
 
 def setup_context(
-    use_rejestr_io: bool,
+    use_rejestr_io: bool = False,
     use_nlp: bool = False,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
@@ -169,7 +171,7 @@ def setup_context(
         utils=UtilsImpl(),
         web=WebImpl(),
         crawl_queue=crawl_queue,
-        nlp=nlp,                # type: ignore
+        nlp=nlp,  # type: ignore
         refresh_policy=policy,
     )
 

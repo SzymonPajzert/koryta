@@ -501,7 +501,7 @@ class TestPipeline(unittest.TestCase):
         """
 
         class Volatile(Pipeline):
-            filename = None
+            volatile = True
 
             def process(self, ctx: Context):
                 return pd.DataFrame({"v": [1]})

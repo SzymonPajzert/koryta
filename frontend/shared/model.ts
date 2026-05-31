@@ -23,7 +23,7 @@ export interface NodeStats {
     quality?: number;
     humanVoted?: boolean;
     lastVotedAt?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   edges: {
     all: NodeEdgeStats;
@@ -140,6 +140,7 @@ export interface Person extends Omit<Node, "type"> {
 export interface ElectionRich {
   year?: string;
   location?: string;
+  teryt?: string;
   position: string;
   committee?: string;
 }

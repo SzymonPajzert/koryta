@@ -42,16 +42,64 @@
         </v-btn>
       </v-card-text>
     </v-card>
+    <tempalte v-else-if="node == 'teryt1261'">
+      <v-row>
+        <v-col cols="12" sm="9">
+          <v-card>
+            <v-card-title class="d-flex justify-center mt-3 text-wrap">
+              <h2 class="text-h4 font-weight-bold mr-2">
+                Statystyki koryciarstwa Krakowa
+              </h2>
+            </v-card-title>
+            <v-card-text class="justify-center text-center">
+              Podsumowanie, ile osób aktualnie u władzy jest lub kiedykolwiek
+              było zatrudnionych w spółkach publicznych lub instytucjach.
+            </v-card-text>
+          </v-card>
+        </v-col>
+        <v-col
+          cols="12"
+          sm="3"
+          height="100%"
+          class="d-flex align-center justify-center"
+        >
+          <v-hover v-slot="{ isHovering, props: hoverProps }">
+            <v-btn
+              v-bind="hoverProps"
+              border="md opacity-100 primary"
+              class="text-none pl-6"
+              color="primary"
+              height="60"
+              rounded="pill"
+              spaced="end"
+              text="Zobacz wszystkie osoby"
+              variant="outlined"
+              width="250"
+              to="/eksploruj/tabela?teryt=1261"
+            >
+              <template #append>
+                <v-avatar variant="text">
+                  <v-progress-circular
+                    bg-color="transparent"
+                    color="primary"
+                    :model-value="isHovering ? 100 : 0"
+                    width="2"
+                  >
+                    <v-icon icon="mdi-arrow-right" />
+                  </v-progress-circular>
+                </v-avatar>
+              </template>
+            </v-btn>
+          </v-hover>
+        </v-col>
+      </v-row>
+
+      <RegionPeopleStatistics teryt="1261" class="mt-2" />
+      <RegionPeopleStatistics teryt="12" />
+    </tempalte>
     <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">
         <div v-if="entity?.type === 'place'" class="mb-4 d-flex">
-          <v-btn
-            variant="tonal"
-            prepend-icon="mdi-format-list-bulleted"
-            :to="`/lista?miejsce=${node}`"
-          >
-            Lista pracowników
-          </v-btn>
           <v-btn
             class="ml-2"
             variant="tonal"

@@ -67,12 +67,6 @@
       <v-col cols="12" class="text-center">
         <CardCallToAction />
       </v-col>
-
-      <CardHomeItem router="/pomoc" icon="mdi-plus-box-outline">
-        <template #header> Dodaj osoby i artykuły </template>
-        Dodaj brakujące osoby w spółkach państwa lub samorządu albo linki do
-        artykułów wypisujących je.
-      </CardHomeItem>
     </v-row>
   </HomeSection>
 </template>

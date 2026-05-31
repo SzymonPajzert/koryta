@@ -9,18 +9,24 @@ It defines two main pipelines:
   within them by processing 'edges' data from Firestore.
 """
 
+from datetime import datetime
+
 import pandas as pd
 from leveldb_export import parse_leveldb_documents  # type: ignore
 from memoized_property import memoized_property  # type:ignore
 from tqdm import tqdm
 
 from entities.person import Koryta as Person
+from entities.person import PersonVote
 from scrapers.stores import (
     CloudStorage,
     Context,
     DownloadableFile,
     Pipeline,
 )
+
+CURRENT_DATE = datetime.now().strftime("%Y-%m-%d")
+
 
 KORYTA_DUMP = CloudStorage(
     prefix="hostname=koryta.pl", max_namespaces=["date"], binary=True
@@ -33,11 +39,14 @@ class FirestoreCollection(Pipeline):
     """
 
     collection_name: str
-    type_name: str
+    type_name: str | None = None
     date: str | None = None
 
     def __init__(
-        self, collection_name: str, type_name: str, date: str | None = None
+        self,
+        collection_name: str,
+        type_name: str | None = None,
+        date: str | None = None,
     ) -> None:
         super().__init__()
         self.collection_name = collection_name
@@ -46,11 +55,16 @@ class FirestoreCollection(Pipeline):
 
     @property
     def pipeline_name(self) -> str:
-        return f"FirestoreCollection_{self.collection_name}_{self.type_name}"
+        base = f"FirestoreCollection_{self.collection_name}"
+        if self.type_name:
+            base += f"_{self.type_name}"
+        return base
 
     @memoized_property
     def filename(self) -> str:
-        base = f"firestore_{self.collection_name}_{self.type_name}"
+        base = f"firestore_{self.collection_name}"
+        if self.type_name:
+            base += f"_{self.type_name}"
         if self.date:
             base += f"_{self.date}"
         return base
@@ -92,7 +106,7 @@ class FirestoreCollection(Pipeline):
                     document_id = str(data["_key"].get("name", ""))
 
                 del data["_key"]
-                if data.get("type") != self.type_name:
+                if self.type_name and data.get("type") != self.type_name:
                     continue
                 data["id"] = document_id
                 data["date"] = date
@@ -102,12 +116,12 @@ class FirestoreCollection(Pipeline):
         return pd.DataFrame.from_records(output)
 
 
-class KorytaPeople(Pipeline):
+class KorytaPeople(Pipeline[Person]):
     date: str | None = None
 
     def __init__(self, date: str | None = None) -> None:
         super().__init__()
-        self.date = date or "2026-05-11"
+        self.date = date or CURRENT_DATE
 
     @memoized_property
     def filename(self) -> str:
@@ -120,22 +134,61 @@ class KorytaPeople(Pipeline):
         Pipeline to process and output `Person` entities.
         """
         input_documents = FirestoreCollection("nodes", "person", self.date)
-        df = input_documents.read_or_process(ctx)
+        df = input_documents.process(ctx)
 
         for data in tqdm(df.to_dict(orient="records")):
-            if data.get("type") == "person":
-                votes_interesting = (
-                    data.get("stats", {}).get("votes", {}).get("interesting", None)
+            votes_interesting = (
+                data.get("stats", {}).get("votes", {}).get("interesting", None)
+            )
+            ctx.io.output_entity(
+                Person(
+                    full_name=data.get("name", ""),
+                    parties=data.get("parties", []),
+                    id=data["id"],
+                    data=data,
+                    is_public=data.get("stats", {}).get("isApproved", False),
+                    votes_interesting=votes_interesting,
                 )
-                ctx.io.output_entity(
-                    Person(
-                        full_name=data.get("name", ""),
-                        parties=data.get("parties", []),
-                        id=data["id"],
-                        data=data,
-                        is_public=data.get("stats", {}).get("isApproved", False),
-                        votes_interesting=votes_interesting,
-                    )
-                )
+            )
 
         print("Finished processing people.")
+
+
+class KorytaVotes(Pipeline[PersonVote]):
+    date: str | None = None
+
+    def __init__(self, date: str | None = None) -> None:
+        # TODO this should be argument, passed as a flag or constructor argument
+        super().__init__()
+        self.date = date or CURRENT_DATE
+
+    @memoized_property
+    def filename(self) -> str:
+        if self.date:
+            return f"person_votes_{self.date}"
+        return "person_votes"
+
+    def process(self, ctx: Context):
+        """
+        Pipeline to process and output `Person` entities.
+        """
+        input_documents = FirestoreCollection("votes", date=self.date)
+        df = input_documents.process(ctx)
+
+        for data in tqdm(df.to_dict(orient="records")):
+            if data["userUid"] == "pipeline":
+                # Skip pipeline's own votes
+                continue
+            category_votes = data.get("categoryVotes", {})
+            if isinstance(category_votes, float):
+                # The vote is not matching the format
+                continue
+            person_koryta_id = data["nodeId"]
+            if not person_koryta_id or person_koryta_id == "":
+                continue
+            ctx.io.output_entity(
+                PersonVote(
+                    person_koryta_id=data["nodeId"],
+                    interesting=category_votes.get("interesting", None),
+                )
+            )

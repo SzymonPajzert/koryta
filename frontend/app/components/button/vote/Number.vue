@@ -15,7 +15,7 @@
         class="rounded-0"
         :disabled="loading"
         :title="'Głosuj na plus'"
-        @click="castVote(1)"
+        @click="handleVote(1)"
       />
       <div
         class="text-caption font-weight-bold px-1 text-center"
@@ -35,7 +35,7 @@
         class="rounded-0"
         :disabled="loading"
         :title="'Głosuj na minus'"
-        @click="castVote(-1)"
+        @click="handleVote(-1)"
       />
     </div>
   </client-only>
@@ -54,6 +54,13 @@ const { id, category } = defineProps<{
 const { userCategoryVotes, castVote, config, loading } = useVotes(id, category);
 
 const userVoteResult = computed(() => userCategoryVotes.value[category] || 0);
+
+const emit = defineEmits(["voted"]);
+
+const handleVote = async (value: number) => {
+  await castVote(value);
+  emit("voted");
+};
 
 const isHoveringContainer = ref(false);
 </script>
