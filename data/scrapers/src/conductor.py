@@ -61,11 +61,9 @@ class Conductor(IO):
                 print(f"[ERROR] UnicodeDecodeError, retrying as binary for file {fs}")
                 return file.FromPath(dfs.downloaded_path)
 
-        # Stop progress bar
         self.continous_download = False
         self.progress_bar = None
-        # Print what we're reading instead
-        print(f"Reading {fs}")
+        logging.debug("Reading %s", fs)
 
         if isinstance(fs, MirrorRef):
             return file.FromBytesIO(self.mirror.get(fs.url), fs.url)

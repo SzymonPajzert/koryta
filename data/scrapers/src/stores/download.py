@@ -1,6 +1,7 @@
 import argparse
 import os
 import re
+import shutil
 import tarfile
 import urllib.request
 from functools import cached_property
@@ -213,7 +214,7 @@ class CompressedMirror:
                 raise NotInMirrorError(f"{host} has no snapshot in mirror")
             return candidates[-1]
 
-    def _ensure_extracted(self, host: str) -> Path:
+    def ensure_extracted(self, host: str) -> Path:
         extract_dir = self._extract_dir(host)
         if host in self._extracted or extract_dir.exists():
             self._extracted.add(host)
@@ -232,12 +233,18 @@ class CompressedMirror:
         self._extracted.add(host)
         return extract_dir
 
+    def delete_extracted(self, host: str) -> None:
+        extract_dir = self._extract_dir(host)
+        if extract_dir.exists():
+            shutil.rmtree(extract_dir)
+        self._extracted.discard(host)
+
     def get(self, url: str) -> bytes:
         parsed = NormalizedParse.parse(url)
         host = parsed.hostname_normalized
         path = (parsed.path.strip("/") or "index").replace("/", ".")
 
-        extract_dir = self._ensure_extracted(host)
+        extract_dir = self.ensure_extracted(host)
         candidates = sorted(extract_dir.glob(f"{path}.date=*"))
         if not candidates:
             raise NotInMirrorError(f"URL not found in mirror: {url}")

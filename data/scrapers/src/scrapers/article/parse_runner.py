@@ -5,6 +5,8 @@ from __future__ import annotations
 import csv
 import logging
 import mimetypes
+import multiprocessing
+import queue as _queue
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -15,37 +17,60 @@ from conductor import Conductor, make_reader_conductor  # type: ignore[attr-defi
 from entities.article import ParsedArticle
 from entities.util import NormalizedParse
 from scrapers.article.parse import extract_article_content
-from scrapers.stores import Context, CrawlQueue, MirrorRef, NotInMirrorError
+from scrapers.stores import Context, CrawlQueue, DoneUrl, NotInMirrorError
 
 _URL_PARSING_CSV = Path(__file__).parent / "test_data" / "url_parsing.csv"
 
-# Per-process Conductor, created once in _init_worker and reused for reads.
+# Per-process globals, set once in _init_worker.
 _process_conductor: Conductor | None = None
+_result_queue: multiprocessing.Queue | None = None
 
 
-def _init_worker() -> None:
-    global _process_conductor
+def _init_worker(out_q: multiprocessing.Queue) -> None:
+    global _process_conductor, _result_queue
     _process_conductor = make_reader_conductor()
+    _result_queue = out_q
 
 
-def _parse_worker(
-    storage_path: str,
-    uid: str,
-    url: str,
-) -> ParsedArticle:
-    html_bytes = _process_conductor.read_data(MirrorRef(url)).read_bytes()  # type: ignore[union-attr]
+def _parse_domain_worker(host: str, batch: list[DoneUrl]) -> None:
+    """Extract a domain's tar, parse every URL in batch, delete extraction.
 
-    result = extract_article_content(html_bytes)
-    pub_date = result.get("publication_date")
-    return ParsedArticle(
-        uid=uid,
-        url=url,
-        storage_path=storage_path,
-        is_article=result.get("is_article"),
-        title=result.get("title"),
-        publication_date=pub_date.isoformat() if pub_date else None,
-        article_content=result.get("article_content", ""),
-    )
+    Puts exactly len(batch) items into out_q: a ParsedArticle on success,
+    None on any per-URL failure. Domain-level failures also put len(batch)
+    Nones so the main process always receives the expected count.
+    """
+    assert _process_conductor is not None
+    assert _result_queue is not None
+    mirror = _process_conductor.mirror
+    out_q = _result_queue
+
+    try:
+        mirror.ensure_extracted(host)
+    except NotInMirrorError as exc:
+        logging.warning("Domain %s not in mirror: %s", host, exc)
+        for _ in batch:
+            out_q.put(None)
+        return
+
+    for done in batch:
+        try:
+            html_bytes = mirror.get(done.url)
+            result = extract_article_content(html_bytes)
+            pub_date = result.get("publication_date")
+            out_q.put(ParsedArticle(
+                uid=done.uid,
+                url=done.url,
+                storage_path=done.storage_path,
+                is_article=result.get("is_article"),
+                title=result.get("title"),
+                publication_date=pub_date.isoformat() if pub_date else None,
+                article_content=result.get("article_content", ""),
+            ))
+        except Exception as exc:
+            logging.warning("Failed to parse %s: %s", done.url, exc)
+            out_q.put(None)
+
+    mirror.delete_extracted(host)
 
 
 def _load_test_domains() -> set[str]:
@@ -135,31 +160,52 @@ def run_parse(
     print(f"\nParsing {len(to_parse)} URLs "
           f"(limit={parse_limit}, workers={worker_processes})...")
 
+    by_domain: dict[str, list[DoneUrl]] = {}
+    for done in to_parse:
+        try:
+            host = NormalizedParse.parse(done.url).hostname_normalized
+        except Exception:
+            host = "(unparseable)"
+        by_domain.setdefault(host, []).append(done)
+
+    # LPT: largest domains first so workers stay busy and no big domain
+    # becomes a long-tail bottleneck.
+    domains_sorted = sorted(by_domain.items(), key=lambda x: -len(x[1]))
+
     errors = 0
     not_in_mirror = 0
+
+    result_queue: multiprocessing.Queue = multiprocessing.Queue()
 
     with ProcessPoolExecutor(
         max_workers=worker_processes,
         initializer=_init_worker,
+        initargs=(result_queue,),
     ) as executor:
-        futures = {
-            executor.submit(
-                _parse_worker, done.storage_path, done.uid, done.url,
-            ): done
-            for done in to_parse
-        }
+        futures = [
+            executor.submit(_parse_domain_worker, host, batch)
+            for host, batch in domains_sorted
+        ]
+
         with tqdm(total=len(to_parse), desc="Parsing HTML", unit="page") as bar:
-            for future in as_completed(futures):
-                done = futures[future]
-                del futures[future]
+            received = 0
+            while received < len(to_parse):
                 try:
-                    ctx.io.output_entity(future.result())
-                except NotInMirrorError:
-                    not_in_mirror += 1
-                except Exception as exc:
-                    logging.warning("Failed to parse %s: %s", done.url, exc)
-                    errors += 1
+                    item = result_queue.get(timeout=30)
+                except _queue.Empty:
+                    if all(f.done() for f in futures):
+                        break  # all workers finished; a crash dropped some items
+                    continue
+                received += 1
                 bar.update(1)
+                if item is not None:
+                    ctx.io.output_entity(item)
+
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as exc:
+                logging.error("Domain worker crashed: %s", exc)
 
     logging.info(
         "Parsed %d pages (%d errors, %d not in mirror).",
