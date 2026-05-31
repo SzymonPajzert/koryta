@@ -1,6 +1,8 @@
+import argparse
 import os
 import re
 import urllib.request
+from functools import cached_property
 from pathlib import Path
 from typing import Callable
 
@@ -41,6 +43,16 @@ class FileSource:
         else:
             self.filename = config.filename
 
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--cache-only",
+            action="store_true",
+            help="Skip files not already cached locally; never download from GCS.",
+        )
+        return parser.parse_known_args()[0]
+
     @property
     def downloaded_path(self) -> Path:
         return base_dir / self.filename
@@ -49,6 +61,10 @@ class FileSource:
         return os.path.exists(base_dir / self.filename)
 
     def download(self) -> Path:
+        if self.args.cache_only:
+            raise FileNotFoundError(
+                f"Cache miss (--cache-only): {self.filename} not in local cache"
+            )
         destination_path = base_dir / self.filename
 
         try:

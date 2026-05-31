@@ -33,29 +33,17 @@ from stores.web import WebImpl
 
 
 class Conductor(IO):
-    def __init__(
-        self,
-        dumper: EntityDumper,
-        flush_every: int | None = None,
-        cache_only: bool = False,
-    ):
+    def __init__(self, dumper: EntityDumper):
         self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
-        self._flush_every = flush_every
-        self._insert_count = 0
-        self._cache_only = cache_only
 
     def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, DownloadableFile):
             dfs = FileSource(fs)
             if not dfs.downloaded():
-                if self._cache_only:
-                    raise FileNotFoundError(
-                        f"Cache miss (--cache-only): {fs.url}"
-                    )
                 logging.info("Downloading %s", fs.url)
                 if self.progress_bar is None or not self.continous_download:
                     self.progress_bar = tqdm(desc="Downloading files")
@@ -113,10 +101,6 @@ class Conductor(IO):
 
     def output_entity(self, entity, sort_by=[]):
         self.dumper.insert_into(entity, sort_by)
-        if self._flush_every is not None:
-            self._insert_count += 1
-            if self._insert_count % self._flush_every == 0:
-                self.dumper.flush()
 
     def write_file(
         self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
@@ -164,13 +148,11 @@ def setup_context(
     use_nlp: bool = False,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
-    flush_every: int | None = None,
-    cache_only: bool = False,
 ) -> tuple[Context, EntityDumper]:
     if policy is None:
         policy = ProcessPolicy.with_default()
     dumper = EntityDumper()
-    conductor = Conductor(dumper, flush_every=flush_every, cache_only=cache_only)
+    conductor = Conductor(dumper)
     rejestr_io = None
     if use_rejestr_io:
         print("Initializing RejestrIO as a data source")
@@ -197,6 +179,5 @@ def setup_context(
     return ctx, dumper
 
 
-def make_reader_conductor(cache_only: bool = False) -> Conductor:
-    """Creates a Conductor suitable for reading only (no output/dumping)."""
-    return Conductor(EntityDumper(), cache_only=cache_only)
+def make_reader_conductor() -> Conductor:
+    return Conductor(EntityDumper())

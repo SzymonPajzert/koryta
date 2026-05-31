@@ -1,6 +1,8 @@
+import argparse
 import json
 import os
 from dataclasses import asdict
+from functools import cached_property
 from typing import Any
 
 import pandas as pd
@@ -16,6 +18,19 @@ class EntityDumper:
 
     _last_written_cache: tuple[str, list] | None = None
     _has_flushed: bool = False
+    _insert_count: int = 0
+
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--dump-every",
+            type=int,
+            default=10000,
+            metavar="N",
+            help="Flush parsed entities to disk every N records to bound memory usage.",
+        )
+        return parser.parse_known_args()[0]
 
     def get_output(self, name: str) -> list[Any] | None:
         """Returns the in-memory output for a given entity name."""
@@ -40,6 +55,10 @@ class EntityDumper:
         self.inmemory[n].append(v)
         # Update cache on write
         self._last_written_cache = (n, self.inmemory[n])
+        if self.args.dump_every is not None:
+            self._insert_count += 1
+            if self._insert_count % self.args.dump_every == 0:
+                self.flush()
 
     def flush(self) -> None:
         """Append current in-memory entities to JSONL files and clear memory."""

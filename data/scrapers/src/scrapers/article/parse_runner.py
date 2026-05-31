@@ -23,9 +23,9 @@ _URL_PARSING_CSV = Path(__file__).parent / "test_data" / "url_parsing.csv"
 _process_conductor: Conductor | None = None
 
 
-def _init_worker(cache_only: bool) -> None:
+def _init_worker() -> None:
     global _process_conductor
-    _process_conductor = make_reader_conductor(cache_only=cache_only)
+    _process_conductor = make_reader_conductor()
 
 
 def _parse_worker(
@@ -116,7 +116,6 @@ def run_parse(
     storage_type: str,
     local_output: Path | None = None,
     worker_processes: int = 1,
-    cache_only: bool = False,
 ) -> None:
     """Fetch done URLs, print stats, parse HTML, emit ParsedArticle entities.
 
@@ -150,7 +149,6 @@ def run_parse(
     with ProcessPoolExecutor(
         max_workers=worker_processes,
         initializer=_init_worker,
-        initargs=(cache_only,),
     ) as executor:
         futures = {
             executor.submit(

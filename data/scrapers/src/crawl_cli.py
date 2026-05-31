@@ -78,18 +78,6 @@ def _build_parser() -> ArgumentParser:
         help="Max number of done URLs to parse (default: 1000).",
     )
     parser.add_argument(
-        "--dump-every",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Flush parsed entities to disk every N records to bound memory usage.",
-    )
-    parser.add_argument(
-        "--cache-only",
-        action="store_true",
-        help="Skip URLs not already cached locally; never download from GCS.",
-    )
-    parser.add_argument(
         "--reprioritize",
         action="store_true",
         help=(
@@ -209,16 +197,13 @@ def profile_scope(enabled: bool, path: Path | None):
 def main() -> None:  # noqa: PLR0915
     _setup_logging()
     parser = _build_parser()
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     if args.parse:
         worker_processes = max(1, args.worker_threads)
         pg_client = PostgresClient.from_env(max_size=1)
         queue = PostgresCrawlQueue(pg_client)
-        ctx, dumper = setup_context(
-            False, crawl_queue=queue, flush_every=args.dump_every,
-            cache_only=args.cache_only,
-        )
+        ctx, dumper = setup_context(False, crawl_queue=queue)
         try:
             run_parse(
                 queue, ctx, args.parse_limit,
@@ -227,7 +212,6 @@ def main() -> None:  # noqa: PLR0915
                     args.local_output if args.storage_type == "local" else None
                 ),
                 worker_processes=worker_processes,
-                cache_only=args.cache_only,
             )
         finally:
             dumper.dump_pandas()
