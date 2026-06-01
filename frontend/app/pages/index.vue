@@ -98,6 +98,7 @@
           </v-list-item>
           <v-card-text class="text-body-1">
             Znajdź osoby, które nie są jeszcze opublikowane na naszej stronie.
+            Aktualnie jest ich jeszcze {{ toCheck }}.
           </v-card-text>
         </v-card>
       </v-col>
@@ -118,6 +119,8 @@
 </template>
 
 <script setup lang="ts">
+import { useStats } from "~/composables/stats/useStats";
+
 useSeoMeta({
   title: "Największy, niezależny agregator koryciarstwa",
   description:
@@ -133,6 +136,8 @@ definePageMeta({
   fullWidth: true,
   hideSearch: true,
 });
+
+const { toCheck } = useStats();
 </script>
 
 <style scoped>
