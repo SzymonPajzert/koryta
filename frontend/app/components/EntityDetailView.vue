@@ -42,7 +42,7 @@
         </v-btn>
       </v-card-text>
     </v-card>
-    <tempalte v-else-if="node == 'teryt1261'">
+    <template v-else-if="node == 'teryt1261'">
       <v-row>
         <v-col cols="12" sm="9">
           <v-card>
@@ -96,7 +96,7 @@
 
       <RegionPeopleStatistics teryt="1261" class="mt-2" />
       <RegionPeopleStatistics teryt="12" />
-    </tempalte>
+    </template>
     <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">
         <div v-if="entity?.type === 'place'" class="mb-4 d-flex">
