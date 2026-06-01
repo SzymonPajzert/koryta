@@ -25,6 +25,25 @@ export function calculateExperience(edges: Edge[]): number {
   return Math.floor((experienceMonths / 12) * 10) / 10;
 }
 
+export function calculateLatestEmploymentStart(edges: Edge[]): string | null {
+  let latest: string | null = null;
+  for (const edge of edges) {
+    if (edge.type === "employed") {
+      const startStr =
+        edge.start_date && typeof edge.start_date === "string"
+          ? edge.start_date.split("T")[0]
+          : null;
+
+      if (startStr) {
+        if (!latest || startStr > latest) {
+          latest = startStr;
+        }
+      }
+    }
+  }
+  return latest;
+}
+
 export function computeVoteStats(
   nodeVotes: VoteDocument[],
 ): Record<string, unknown> {
@@ -87,10 +106,12 @@ export function computeEdgeStats(
   return {
     all: {
       experienceMonths: calculateExperience(nodeEdges),
+      latestEmploymentStart: calculateLatestEmploymentStart(nodeEdges),
       targetNodeIds: allTargetNodeIds,
     },
     approved: {
       experienceMonths: calculateExperience(approvedEdges),
+      latestEmploymentStart: calculateLatestEmploymentStart(approvedEdges),
       targetNodeIds: approvedTargetNodeIds,
     },
   };

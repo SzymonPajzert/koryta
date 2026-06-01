@@ -12,6 +12,7 @@ type PageBase<PageType> = {
 
 type NodeEdgeStats = {
   experienceMonths: number;
+  latestEmploymentStart?: string | null;
   targetNodeIds: string[];
 };
 
@@ -152,6 +153,7 @@ export type PersonRich = Person & {
   companies: (string | undefined)[];
   elections: ElectionRich[];
   experience: number;
+  latestEmploymentStart?: string | null;
 };
 
 export interface Company extends Omit<Node, "type"> {
