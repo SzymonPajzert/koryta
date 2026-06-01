@@ -28,6 +28,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useStats } from "~/composables/stats/useStats";
 
 interface Segment {
   value: number;
@@ -36,16 +37,23 @@ interface Segment {
   link: string;
 }
 
+const { approved, interesting, toCheck } = useStats();
+
 const segments: Segment[] = [
-  { value: 846, color: "#4caf50", label: "Dodane", link: "/eksploruj/tabela" },
   {
-    value: 126,
+    value: approved,
+    color: "#4caf50",
+    label: "Dodane",
+    link: "/eksploruj/tabela",
+  },
+  {
+    value: interesting,
     color: "#2196f3",
     label: "Ciekawe",
     link: "/pomoc",
   },
   {
-    value: 1200,
+    value: toCheck,
     color: "#f44336",
     label: "Do sprawdzenia",
     link: "/eksploruj/tabela?visibility=private",

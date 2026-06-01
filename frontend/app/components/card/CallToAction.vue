@@ -8,7 +8,7 @@
           <v-card-text>
             Nasza baza cały czas rośnie. Dołącz do grona wolontariuszy,
             analizujących dane lub promujących projekt. Dzięki osobom jak Ty,
-            znaleźliśmy już {{ user ? "(nieoficjalnie) 4,500" : "200" }} osób.
+            znaleźliśmy już {{ interesting }} osób.
           </v-card-text>
         </v-card>
       </v-col>
@@ -33,5 +33,7 @@
 </template>
 
 <script setup lang="ts">
-const { user } = useAuthState();
+import { useStats } from "~/composables/stats/useStats";
+
+const { interesting } = useStats();
 </script>
