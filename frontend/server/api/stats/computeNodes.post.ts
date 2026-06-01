@@ -115,6 +115,32 @@ export default defineEventHandler(async () => {
     resolvedPlaceToParentCompanies[target] = resolveParents(target);
   }
 
+  const targetCounts: Record<string, Set<string>> = {};
+  for (const edge of edges as Edge[]) {
+    if (!edge.target || !edge.source) continue;
+    // We only care about approved edges
+    if (!edge.revision_id) continue;
+
+    // We only care about approved people
+    const person = peopleMap[edge.source];
+    if (!person || !person.revision_id) continue;
+
+    const targets = [edge.target];
+    if (placeToRegions[edge.target]) {
+      targets.push(...placeToRegions[edge.target]!);
+    }
+    if (resolvedPlaceToParentCompanies[edge.target]) {
+      targets.push(...resolvedPlaceToParentCompanies[edge.target]!);
+    }
+
+    for (const target of targets) {
+      if (!targetCounts[target]) {
+        targetCounts[target] = new Set();
+      }
+      targetCounts[target]!.add(edge.source);
+    }
+  }
+
   const chunks = [];
   let currentBatch = db.batch();
   let operationCount = 0;
@@ -148,6 +174,9 @@ export default defineEventHandler(async () => {
       transitiveTargets,
     );
     stats.nodeGroupSize = nodeGroupSizeMap[node.id] || 0;
+    if (node.data.type === "region") {
+      stats.people = targetCounts[node.id]?.size || 0;
+    }
 
     const nodeRef = db.collection("nodes").doc(node.id);
     currentBatch.update(nodeRef, { stats });

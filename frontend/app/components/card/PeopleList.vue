@@ -11,18 +11,6 @@
       Wybierz region z mapy po lewej stronie, by zobaczyć powiązane osoby.
     </v-card-text>
   </v-card>
-  <v-card
-    v-else-if="!loading && people.length === 0"
-    border
-    class="pt-2 mt-2 mx-auto"
-    max-width="400"
-    rounded="lg"
-  >
-    <v-card-title>
-      {{ props.region.name }}
-    </v-card-title>
-    <v-card-text> Nie znaleźliśmy jeszcze osób w tym regionie.</v-card-text>
-  </v-card>
   <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400" rounded="lg">
     <v-card-title>
       {{ props.region.name }}
@@ -59,7 +47,7 @@
       height="64"
       link
       title="Zobacz cały region"
-      :subtitle="`(${props.region.people} powiązań)`"
+      :subtitle="`(${polishCounting(props.region.people ?? 0, 'powiązanie', 'powiązania', 'powiązań')})`"
       :to="`/eksploruj/tabela?teryt=${String(props.region.teryt).padStart(4, '0')}`"
     >
       <template #append>
