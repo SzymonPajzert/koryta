@@ -153,6 +153,11 @@ const headers = computed(() => {
     { title: "Partie", key: "parties", sortable: false },
     { title: "Firmy", key: "companies", sortable: false },
     { title: "Wybory", key: "elections", sortable: false },
+    {
+      title: "Ostatnie zatrudnienie",
+      key: "latestEmploymentStart",
+      sortable: true,
+    },
     { title: "Lata pracy", key: "experience", sortable: true },
     { title: "Notatki", key: "notesCount", sortable: true },
     { title: "Głosy łącznie", key: "votes.interesting", sortable: true },

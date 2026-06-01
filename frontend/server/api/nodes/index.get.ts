@@ -222,6 +222,10 @@ export default defineEventHandler(async (event) => {
         sortField = user
           ? "stats.edges.all.experienceMonths"
           : "stats.edges.approved.experienceMonths";
+      } else if (sortField === "latestEmploymentStart") {
+        sortField = user
+          ? "stats.edges.all.latestEmploymentStart"
+          : "stats.edges.approved.latestEmploymentStart";
       } else if (sortField === "notesCount") {
         sortField = "stats.notesCount";
       } else if (sortField === "visibility") {
