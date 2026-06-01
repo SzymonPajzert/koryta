@@ -6,7 +6,7 @@ import { getValidatedQuery } from "h3";
 
 const queryValidator = z.object({
   q: z.string().optional().default(""),
-  limit: z.coerce.number().optional().default(10),
+  limit: z.coerce.number().optional().default(20),
 });
 
 type node = {
@@ -27,6 +27,7 @@ export default authCachedEventHandler(async (event) => {
     .where("type", "in", ["person", "place", "region"])
     // It's set by the function / computeNodes
     .where("nameChunksLower", "array-contains", query.q.toLowerCase())
+    .orderBy("stats.nodeGroupSize", "asc")
     .limit(query.limit);
 
   const nodes = await firebaseQuery.get();
