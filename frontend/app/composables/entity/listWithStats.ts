@@ -127,8 +127,9 @@ export async function useListWithStats(
       );
 
       // Get experience from the new stats object
-      const exp = person.stats?.edges?.approved?.experienceMonths || 0;
-      const latestEmpStr = person.stats?.edges?.approved?.latestEmploymentStart;
+      const edgeStats = user.value ? person.stats?.edges?.all : person.stats?.edges?.approved;
+      const exp = edgeStats?.experienceMonths || 0;
+      const latestEmpStr = edgeStats?.latestEmploymentStart;
 
       return {
         ...person,
