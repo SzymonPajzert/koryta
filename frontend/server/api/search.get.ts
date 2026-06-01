@@ -13,6 +13,8 @@ type node = {
   id: string;
   name: string;
   type: string;
+  krsNumber?: string;
+  teryt?: string;
   visibility: boolean;
 };
 
@@ -38,5 +40,9 @@ export default authCachedEventHandler(async (event) => {
     id: node.id,
     name: node.name,
     type: node.type,
+    query: {
+      krs: node.krsNumber,
+      teryt: node.teryt,
+    },
   }));
 });
