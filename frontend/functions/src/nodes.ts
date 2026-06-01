@@ -2,7 +2,7 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 
 const generateChunksLower = (name: string): string[] => {
-  const chunks: string[] = [];
+  const chunks: string[] = [""];
   const lowerName = name.toLowerCase();
 
   for (let i = 1; i <= lowerName.length; i++) {
