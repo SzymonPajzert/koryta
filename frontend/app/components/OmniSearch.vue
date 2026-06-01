@@ -146,6 +146,11 @@ const baseItems = computed<ListItem[]>(() => {
       if (itemType === "person") icon = "mdi-account-outline";
       else if (itemType === "region") icon = "mdi-map-marker-radius-outline";
 
+      // If the /api/search returns query - use it
+      const routing = item?.query
+        ? { path: "/eksploruj/tabela", query: item.query }
+        : { path: generateEntityUrl(itemType, item.id!, item.name) };
+
       result.push({
         id: `entity-${item.id}`,
         title: item.name,
@@ -154,7 +159,7 @@ const baseItems = computed<ListItem[]>(() => {
           content_id: item.id!,
           content_type: "nodeGroup",
         },
-        path: generateEntityUrl(itemType, item.id!, item.name),
+        ...routing,
       });
     });
   }
