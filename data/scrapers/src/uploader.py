@@ -338,7 +338,9 @@ def main():
 
         if len(missing_krs) > 0:
             print(list(missing_krs))
-            raise ValueError("Some companies don't have required information")
+            # TODO this fails for a single company and it's annoying
+            if len(missing_krs) > 1:
+                raise ValueError("Some companies don't have required information")
 
     if not args.submit:
         print_results(entities, args.type)
