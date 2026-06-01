@@ -59,7 +59,53 @@
   </HomeSection>
   <HomeSection>
     <v-row>
-      <v-col cols="12" class="mt-4">
+      <v-col cols="12" class="pa-0">
+        <HomeHeading class="scroll-topic" title="Przeglądaj osoby" center />
+      </v-col>
+      <v-col cols="12" sm="6">
+        <v-card
+          to="/eksploruj/tabela"
+          hover
+          class="h-100 pa-4"
+          color="surface-variant"
+          variant="tonal"
+          rounded="lg"
+        >
+          <v-list-item append-icon="mdi-table">
+            <template #title>
+              <strong>TABELA POWIĄZAŃ</strong>
+            </template>
+          </v-list-item>
+          <v-card-text class="text-body-1">
+            Przeglądaj pełną bazę w formie interaktywnej tabeli i samodzielnie
+            badaj powiązania między osobami, regionami i stanowiskami.
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col cols="12" sm="6">
+        <v-card
+          to="/eksploruj/nowe"
+          hover
+          class="h-100 pa-4"
+          color="surface-variant"
+          variant="tonal"
+          rounded="lg"
+        >
+          <v-list-item append-icon="mdi-layers-search-outline">
+            <template #title>
+              <strong>PRZEGLĄDAJ NOWE</strong>
+            </template>
+          </v-list-item>
+          <v-card-text class="text-body-1">
+            Znajdź osoby, które nie są jeszcze opublikowane na naszej stronie.
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </HomeSection>
+  <HomeSection>
+    <v-row>
+      <v-col cols="12">
         <HomeHeading class="scroll-topic" title="Zobacz źródła" center />
         <HomeSourceCards />
       </v-col>

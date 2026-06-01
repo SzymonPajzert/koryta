@@ -4,7 +4,10 @@
       {{ title }}
     </h1>
 
-    <div class="text-body-2 text-medium-emphasis mb-4 w-100 w-md-75">
+    <div
+      v-if="subtitle"
+      class="text-body-2 text-medium-emphasis mb-4 w-100 w-md-75"
+    >
       {{ subtitle }}
     </div>
   </div>
