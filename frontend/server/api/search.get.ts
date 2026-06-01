@@ -27,7 +27,7 @@ export default authCachedEventHandler(async (event) => {
     .where("type", "in", ["person", "place", "region"])
     // It's set by the function / computeNodes
     .where("nameChunksLower", "array-contains", query.q.toLowerCase())
-    .orderBy("stats.nodeGroupSize", "asc")
+    .orderBy("stats.nodeGroupSize", "desc")
     .limit(query.limit);
 
   const nodes = await firebaseQuery.get();
