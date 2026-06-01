@@ -25,6 +25,14 @@
       />
     </template>
 
+    <template #[`header.latestEmploymentStart`]="{ column }">
+      <ExploreTableColumnHeader
+        tooltip="Najnowsza data rozpoczęcia zatrudnienia w dostępnych powiązaniach"
+        :column="column"
+        :sort-by="sortBy"
+      />
+    </template>
+
     <template #[`header.notesCount`]="{ column }">
       <ExploreTableColumnHeader
         tooltip="Liczba notatek stworzonych przez społeczność na temat powiązań tej osoby"

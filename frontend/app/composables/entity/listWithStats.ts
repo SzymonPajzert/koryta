@@ -128,6 +128,7 @@ export async function useListWithStats(
 
       // Get experience from the new stats object
       const exp = person.stats?.edges?.approved?.experienceMonths || 0;
+      const latestEmpStr = person.stats?.edges?.approved?.latestEmploymentStart;
 
       return {
         ...person,
@@ -135,6 +136,7 @@ export async function useListWithStats(
         companies: Array.from(companies),
         elections,
         experience: Math.floor(exp * 10) / 10,
+        latestEmploymentStart: latestEmpStr,
       };
     });
   });
