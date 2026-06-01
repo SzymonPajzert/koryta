@@ -117,7 +117,7 @@ class FirestoreCollection(Pipeline):
 
 
 class KorytaPeople(Pipeline[Person]):
-    date: str | None = None
+    date: str
 
     def __init__(self, date: str | None = None) -> None:
         super().__init__()
@@ -133,8 +133,21 @@ class KorytaPeople(Pipeline[Person]):
         """
         Pipeline to process and output `Person` entities.
         """
-        input_documents = FirestoreCollection("nodes", "person", self.date)
-        df = input_documents.process(ctx)
+        date_read = self.date
+        while True:
+            print(f"Reading for {date_read}")
+            # TODO this should be probably inside of FirestoreCollection
+            input_documents = FirestoreCollection("nodes", "person", date_read)
+            df = input_documents.process(ctx)
+            print(df.head())
+
+            if len(df) > 0:
+                break
+
+            print(f"Found no people for date {date_read}. Going one day earlier")
+            date_read = (
+                datetime.strptime(date_read, "%Y-%m-%d") - pd.Timedelta(days=1)
+            ).strftime("%Y-%m-%d")
 
         for data in tqdm(df.to_dict(orient="records")):
             votes_interesting = (
