@@ -5,7 +5,7 @@ import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { getValidatedQuery } from "h3";
 
 const queryValidator = z.object({
-  q: z.string().optional(),
+  q: z.string().optional().default(""),
   limit: z.coerce.number().optional().default(10),
 });
 
@@ -26,7 +26,7 @@ export default authCachedEventHandler(async (event) => {
     .collection("nodes")
     .where("type", "in", ["person", "place", "region"])
     // It's set by the function / computeNodes
-    .where("nameChunksLower", "array-contains", query.q?.toLowerCase())
+    .where("nameChunksLower", "array-contains", query.q.toLowerCase())
     .limit(query.limit);
 
   const nodes = await firebaseQuery.get();
