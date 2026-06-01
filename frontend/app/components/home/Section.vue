@@ -1,6 +1,6 @@
 <template>
   <v-container
-    class="pa-6 pa-md-12"
+    class="pa-3 pa-md-6"
     fluid
     :style="{ background: color ? '#a8c79f' : 'transparent' }"
   >
