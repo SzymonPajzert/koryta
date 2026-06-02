@@ -94,7 +94,7 @@ type ListItem = {
 };
 
 const { data: searchData, refresh } = authFetch("/api/search", {
-  key: computed(() => `omnisearch-data-${debouncedSearch.value}`),
+  key: "omnisearch-data",
   lazy: true,
   query: computed(() => ({
     q: debouncedSearch.value,
