@@ -1,9 +1,11 @@
 from typing import Any
 from urllib.robotparser import RobotFileParser
 
-from scrapers.stores import Context, DownloadableFile, Web
+from curl_cffi import requests as cffi_requests
 
-robot_parsers = {}
+from scrapers.stores import Context, Web
+
+robot_parsers: dict[str, RobotFileParser | None] = {}
 
 
 class WebImpl(Web):
@@ -12,36 +14,31 @@ class WebImpl(Web):
     ) -> bool:
         """
         Checks if we are allowed to fetch a URL according to the site's robots.txt.
-        Caches the parsed robots.txt file for efficiency.
+        Caches the parsed robots.txt file per domain for efficiency.
         """
-        robots_url = f"{parsed_url.domain}/robots.txt"
-        if parsed_url.domain not in robot_parsers:
+        cache_key = parsed_url.hostname_normalized
+        if cache_key not in robot_parsers:
             parser = RobotFileParser()
-            # We fetch robots.txt using ctx.io to avoiddirect network I/O in scrapers
-            # but RobotFileParser usually fetches itself.
-            # However, RobotFileParser.parse(lines) allows parsing content.
-            # So we can fetch content using ctx.io and parse it.
-
+            robots_url = f"https://{parsed_url.hostname_normalized}/robots.txt"
             try:
-                # We use DownloadableFile to fetch robots.txt
-                # But read_data returns a File, we need content.
-                # read_content returns str or bytes.
-                # parser.parse expects list of lines.
-                # TODO fix, currently we used one cached robots.txt
-                content_bytes = ctx.io.read_data(
-                    DownloadableFile(robots_url)
-                ).read_string()
-                if isinstance(content_bytes, bytes):
-                    content = content_bytes.decode("utf-8")
-                else:
-                    assert isinstance(content_bytes, str)
-                    content = content_bytes
-
-                parser.parse(content.splitlines())
-                robot_parsers[parsed_url.domain] = parser
+                # Use curl_cffi so anti-bot sites don't 403 the robots.txt fetch.
+                # RobotFileParser.parse(lines) allows parsing pre-fetched content.
+                resp = cffi_requests.get(
+                    robots_url,
+                    impersonate="chrome136",
+                    headers={"User-Agent": user_agent},
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                parser.parse(resp.text.splitlines())
+                robot_parsers[cache_key] = parser
             except Exception as e:
-                print(f"Could not read robots.txt for {parsed_url.domain}: {e}")
-                # If we can't read robots.txt, it's safer to assume we can't fetch.
-                return False
+                print(f"Could not read robots.txt for {cache_key}: {e}")
+                # Cache None so we don't retry the fetch for every queued URL.
+                # None means robots.txt unavailable → disallow.
+                robot_parsers[cache_key] = None
 
-        return robot_parsers[parsed_url.domain].can_fetch(user_agent, url)
+        cached = robot_parsers[cache_key]
+        if cached is None:
+            return False
+        return cached.can_fetch(user_agent, url)

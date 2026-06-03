@@ -16,6 +16,7 @@ dependencies = [
     "catalogue==2.0.10",
     "certifi==2026.5.20",
     "cffi==2.0.0",
+    "curl-cffi==0.15.0",
     "charset-normalizer==3.4.7",
     "click==8.4.1",
     "cloudpathlib==0.24.0",

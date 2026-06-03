@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from conductor import setup_context
 from external.url_store_client import UrlStoreClient
+from entities.util import NormalizedParse
 from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
@@ -148,7 +149,7 @@ def _load_seed_urls(path: Path) -> list[str]:
     urls = [row.get("Domena", "").strip() for row in rows if row.get("Domena")]
     if not urls:
         raise ValueError(f"{path} has no URLs to seed.")
-    return urls
+    return [NormalizedParse.parse(u).hostname_normalized for u in urls]
 
 
 def _load_blocked_domains(path: Path) -> list[BlockedDomain]:
