@@ -14,8 +14,8 @@ from types import SimpleNamespace
 from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
-import requests
 from bs4 import BeautifulSoup, Tag
+from curl_cffi import requests
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
@@ -29,7 +29,7 @@ from scrapers.stores import (
 )
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
-HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
+KORYTA_UA = "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"
 
 
 def parse_hostname(url: str) -> str:
@@ -118,7 +118,7 @@ def _storage_path(
     if not path:
         path = "index"
     date = datetime.now(warsaw_tz).strftime("%Y-%m-%d")
-    base = f"hostname={parsed.hostname}/{path}/date={date}"
+    base = f"hostname={parsed.hostname_normalized}/{path}/date={date}"
     if suffix:
         base = f"{base}/{suffix}"
     storage_path = base.replace("//", "/").rstrip("/")
@@ -178,7 +178,7 @@ def crawl_url(
         ctx,
         parsed_url.full_url,
         parsed_url,
-        HEADERS["User-Agent"],
+        KORYTA_UA,
     ):
         return CrawlResult(error="disallowed by robots")
 
@@ -189,10 +189,12 @@ def crawl_url(
         try:
             response = requests.get(
                 parsed_url.full_url,
-                headers=HEADERS,
+                impersonate="chrome136",
+                headers={"User-Agent": KORYTA_UA},
                 timeout=options.request_timeout_seconds,
+                allow_redirects=True,
             )
-        except requests.RequestException as exc:
+        except requests.RequestsError as exc:
             return CrawlResult(
                 error=str(exc),
                 request_duration_s=t_request.duration,
@@ -261,6 +263,12 @@ def _extract_urls(
         absolute_link = ctx.utils.join_url(base_url, link)
         clean_link = absolute_link.split("?")[0].split("#")[0].rstrip("/")
         if clean_link.startswith(("http://", "https://")):
+            parsed_link = NormalizedParse.parse(clean_link)
+            clean_link = (
+                f"{parsed_link.scheme}://"
+                f"{parsed_link.hostname_normalized}"
+                f"{parsed_link.path}"
+            )
             discovered.add(clean_link)
 
     return discovered
