@@ -240,7 +240,9 @@ include_external_packages = true
 name = "Clean architecture"
 type = "layers"
 layers = ["analysis", "stores", "scrapers", "util", "entities"]
-ignore_imports = ["scrapers.krs.scrape -> analysis.*"]
+ignore_imports = [
+    "scrapers.krs.scrape -> analysis.*",
+]
 
 [[tool.importlinter.contracts]]
 name = "Do not import external packages"
@@ -278,6 +280,7 @@ ignore_imports = [
     "scrapers.article.scripts.bench_crawl -> os",
     "scrapers.article.scripts.bench_crawl -> io",
     "scrapers.article.scripts.bench_crawl -> csv",
+    "scrapers.article.parse_runner -> csv",
     "entities.util -> urllib",
     "scrapers.stores -> io",
 ]

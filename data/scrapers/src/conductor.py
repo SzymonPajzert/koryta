@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import typing
 
@@ -15,12 +16,14 @@ from scrapers.stores import (
     DataRef,
     DownloadableFile,
     File,
+    GCSBlob,
     LocalFile,
+    MirrorRef,
     ProcessPolicy,
 )
 from stores import file
 from stores.config import PROJECT_ROOT
-from stores.download import FileSource
+from stores.download import CompressedMirror, FileSource
 from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
 from stores.nlp import NLPImpl
@@ -35,6 +38,7 @@ class Conductor(IO):
         self.firestore = FirestoreIO()
         self.dumper = dumper
         self.storage = CloudStorageClient()
+        self.mirror = CompressedMirror()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
 
@@ -42,23 +46,32 @@ class Conductor(IO):
         if isinstance(fs, DownloadableFile):
             dfs = FileSource(fs)
             if not dfs.downloaded():
+                logging.info("Downloading %s", fs.url)
                 if self.progress_bar is None or not self.continous_download:
                     self.progress_bar = tqdm(desc="Downloading files")
                     self.continous_download = True
                 assert self.progress_bar is not None
                 self.progress_bar.update(1)
                 dfs.download()
+            else:
+                logging.info("Reading from cache %s", dfs.downloaded_path)
             try:
                 return file.FromPath(dfs.downloaded_path)
             except UnicodeDecodeError:
                 print(f"[ERROR] UnicodeDecodeError, retrying as binary for file {fs}")
                 return file.FromPath(dfs.downloaded_path)
 
-        # Stop progress bar
         self.continous_download = False
         self.progress_bar = None
-        # Print what we're reading instead
-        print(f"Reading {fs}")
+        logging.debug("Reading %s", fs)
+
+        if isinstance(fs, MirrorRef):
+            return file.FromBytesIO(self.mirror.get(fs.url), fs.url)
+
+        if isinstance(fs, GCSBlob):
+            return self.read_data(
+                self.storage.cached_storage(fs.blob_name, binary=True)
+            )
 
         if isinstance(fs, CloudStorage):
             raise NotImplementedError(
@@ -169,3 +182,7 @@ def setup_context(
     ctx.con.create_function("uuid7str", uuid7, [], VARCHAR)  # type: ignore
 
     return ctx, dumper
+
+
+def make_reader_conductor() -> Conductor:
+    return Conductor(EntityDumper())

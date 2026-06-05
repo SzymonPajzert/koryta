@@ -153,6 +153,24 @@ class DownloadableFile(DataRef):
 
 
 @dataclass
+class GCSBlob(DataRef):
+    """A reference to a single blob in GCS by its blob name."""
+
+    blob_name: str
+
+
+@dataclass
+class MirrorRef(DataRef):
+    """A reference to a URL in the compressed HTML mirror."""
+
+    url: str
+
+
+class NotInMirrorError(Exception):
+    """Raised when a URL has no snapshot in the compressed mirror."""
+
+
+@dataclass
 class CloudStorage(DataRef):
     """A reference to a collection of objects in cloud storage"""
 
@@ -300,6 +318,7 @@ class NLP(metaclass=ABCMeta):
 class CrawlQueueItem:
     uid: str
     url: str
+    priority: int
 
 
 @dataclass(frozen=True)
@@ -307,6 +326,7 @@ class DoneUrl:
     uid: str
     url: str
     storage_path: str
+    media_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -390,8 +410,8 @@ class CrawlQueue(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_done_urls(self, limit: int) -> list[DoneUrl]:
-        """Return done URLs with storage_path."""
+    def get_done_urls(self, limit: int | None = None) -> list[DoneUrl]:
+        """Return done URLs with storage_path. If limit is None, returns all."""
         raise NotImplementedError()
 
     @abstractmethod

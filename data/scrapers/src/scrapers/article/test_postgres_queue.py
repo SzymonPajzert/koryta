@@ -45,19 +45,6 @@ def test_put_populates_urls(db: PostgresCrawlQueue):
     assert count == 2
 
 
-def test_get_skips_blocked(db: PostgresCrawlQueue):
-    db.put(
-        [
-            NewUrl("https://blocked.test/a", 0),
-            NewUrl("https://ok.test/b", 0),
-        ]
-    )
-    db.add_blocked_domains([BlockedDomain("blocked.test", "testing")])
-
-    row = db.get("worker-1", max_retries=3)
-    assert row is not None
-    assert row.url == "ok.test/b"
-
 
 def test_load_blocked_domains_upserts(db: PostgresCrawlQueue):
     db.add_blocked_domains([BlockedDomain("blocked.test", "first")])

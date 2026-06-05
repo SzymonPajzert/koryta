@@ -15,7 +15,9 @@ from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
 )
+from scrapers.article.parse_runner import run_parse
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
+from scrapers.article.scoring import get_scoring_function
 from scrapers.stores import BlockedDomain, NewUrl
 
 
@@ -63,6 +65,33 @@ def _build_parser() -> ArgumentParser:
         type=int,
         default=1,
         help="Number of concurrent threads inside a worker.",
+    )
+    parser.add_argument(
+        "--parse",
+        action="store_true",
+        help="Parse done URLs from DB: print stats and write article_parsed.jsonl.",
+    )
+    parser.add_argument(
+        "--parse-limit",
+        type=int,
+        default=1000,
+        help="Max number of done URLs to parse (default: 1000).",
+    )
+    parser.add_argument(
+        "--reprioritize",
+        action="store_true",
+        help=(
+            "Rescore all not-done URLs using the configured scoring function,"
+            " then exit."
+        ),
+    )
+    parser.add_argument(
+        "--bump-small-domains",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Set priority=0 for pending URLs on domains with fewer than N done links, "
+             "so that done + bumped = N per domain. Then exit.",
     )
     return parser
 
@@ -165,10 +194,59 @@ def profile_scope(enabled: bool, path: Path | None):
         logging.info("Wrote profile to %s", path)
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915
     _setup_logging()
     parser = _build_parser()
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
+
+    if args.parse:
+        worker_processes = max(1, args.worker_threads)
+        pg_client = PostgresClient.from_env(max_size=1)
+        queue = PostgresCrawlQueue(pg_client)
+        ctx, dumper = setup_context(False, crawl_queue=queue)
+        try:
+            run_parse(
+                queue, ctx, args.parse_limit,
+                worker_processes=worker_processes,
+            )
+        finally:
+            dumper.dump_pandas()
+            pg_client.close()
+        return
+
+    if args.bump_small_domains is not None:
+        if not args.seed:
+            parser.error("--bump-small-domains requires --seed")
+        seed_urls = _load_seed_urls(args.seed)
+        pg_client = PostgresClient.from_env(max_size=1)
+        queue = PostgresCrawlQueue(pg_client)
+        try:
+            bumped, by_domain = queue.bump_small_domains(
+                args.bump_small_domains, seed_urls
+            )
+            for domain, count in sorted(by_domain.items(), key=lambda x: -x[1]):
+                logging.info("  %s: +%d", domain, count)
+            logging.info(
+                "Bumped %d URLs to priority 0 (target=%d).",
+                bumped, args.bump_small_domains,
+            )
+        finally:
+            pg_client.close()
+        return
+
+    if args.reprioritize:
+        seed_urls = _load_seed_urls(args.seed) if args.seed else []
+        scorer = get_scoring_function(
+            args.url_scoring_function, frozenset(seed_urls)
+        )
+        priority_fn = lambda url: max(0, min(100, 100 - scorer(url)))  # noqa: E731
+        pg_client = PostgresClient.from_env(max_size=1)
+        queue = PostgresCrawlQueue(pg_client)
+        try:
+            queue.reprioritize(priority_fn)
+        finally:
+            pg_client.close()
+        return
 
     seed_urls = _load_seed_urls(args.seed) if args.seed else []
     options = _build_options(args, seed_urls)

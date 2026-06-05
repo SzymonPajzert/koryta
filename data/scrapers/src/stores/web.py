@@ -27,6 +27,7 @@ class WebImpl(Web):
                 # But read_data returns a File, we need content.
                 # read_content returns str or bytes.
                 # parser.parse expects list of lines.
+                # TODO fix, currently we used one cached robots.txt
                 content_bytes = ctx.io.read_data(
                     DownloadableFile(robots_url)
                 ).read_string()

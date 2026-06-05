@@ -16,15 +16,10 @@ class TypeB:
 
 class TestEntityDumper(unittest.TestCase):
     def setUp(self):
-        # Reset shared state
-        EntityDumper.inmemory = {}
-        EntityDumper.sort_keys = {}
         self.dumper = EntityDumper()
 
     def tearDown(self):
-        # Clean up
-        EntityDumper.inmemory = {}
-        EntityDumper.sort_keys = {}
+        pass
 
     def test_get_output_multiple_types(self):
         # 1. Write Type A
