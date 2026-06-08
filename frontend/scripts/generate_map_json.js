@@ -1,9 +1,21 @@
 import fs from 'fs';
 import path from 'path';
 
-// Run from the frontend directory
-const svgPath = path.join(process.cwd(), 'app/assets/powiaty-simplified.svg');
-const jsonPath = path.join(process.cwd(), 'app/assets/poland_powiaty.json');
+const inputSvg = process.argv[2];
+const outputJson = process.argv[3];
+
+if (!inputSvg || !outputJson) {
+  console.error("Usage: node scripts/generate_map_json.js <input.svg> <output.json>");
+  process.exit(1);
+}
+
+const svgPath = path.resolve(process.cwd(), inputSvg);
+const jsonPath = path.resolve(process.cwd(), outputJson);
+
+if (!fs.existsSync(svgPath)) {
+  console.error('File not found:', svgPath);
+  process.exit(1);
+}
 
 console.log('Reading SVG file from:', svgPath);
 const svgContent = fs.readFileSync(svgPath, 'utf-8');
