@@ -51,7 +51,7 @@
         color="blue-grey-lighten-5"
       >
         <v-btn
-          icon="mdi-close"
+          :icon="mdiClose"
           variant="text"
           size="small"
           class="position-absolute"
@@ -120,7 +120,7 @@
         variant="tonal"
         size="small"
         class="mx-4 text-none text-caption text-medium-emphasis"
-        prepend-icon="mdi-filter-cog-outline"
+        :prepend-icon="mdiFilterCogOutline"
         @click="showStatusBanner = true"
       >
         {{ statusSummary }}
@@ -131,6 +131,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiClose, mdiFilterCogOutline } from "@mdi/js";
 import { ref, computed } from "vue";
 
 const showStatusBanner = ref(true);

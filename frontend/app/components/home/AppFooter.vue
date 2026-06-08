@@ -59,6 +59,7 @@
 </template>
 
 <script lang="ts" setup>
+import { mdiFacebook, mdiGithub, mdiInstagram, mdiTwitter } from "@mdi/js";
 const sections = [
   {
     title: "O projekcie",
@@ -77,10 +78,10 @@ const sections = [
 ];
 
 const icons = [
-  ["mdi-github", "https://github.com/SzymonPajzert/koryta"],
-  ["mdi-twitter", "https://twitter.com/korytapl"],
-  ["mdi-facebook", "https://www.facebook.com/people/Korytapl/61581508966044/"],
-  ["mdi-facebook", "https://www.facebook.com/groups/korytapl"],
-  ["mdi-instagram", "https://www.instagram.com/szymon.pajzert"],
+  [mdiGithub, "https://github.com/SzymonPajzert/koryta"],
+  [mdiTwitter, "https://twitter.com/korytapl"],
+  [mdiFacebook, "https://www.facebook.com/people/Korytapl/61581508966044/"],
+  [mdiFacebook, "https://www.facebook.com/groups/korytapl"],
+  [mdiInstagram, "https://www.instagram.com/szymon.pajzert"],
 ];
 </script>

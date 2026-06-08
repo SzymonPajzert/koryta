@@ -42,7 +42,7 @@
       </v-col>
       <v-col cols="12" md="4">
         <v-btn
-          append-icon="mdi-chevron-right"
+          :append-icon="mdiChevronRight"
           color="secondary"
           border
           class="text-none"
@@ -72,7 +72,7 @@
           variant="tonal"
           rounded="lg"
         >
-          <v-list-item append-icon="mdi-table">
+          <v-list-item :append-icon="mdiTable">
             <template #title>
               <strong>TABELA POWIĄZAŃ</strong>
             </template>
@@ -92,7 +92,7 @@
           variant="tonal"
           rounded="lg"
         >
-          <v-list-item append-icon="mdi-layers-search-outline">
+          <v-list-item :append-icon="mdiLayersSearchOutline">
             <template #title>
               <strong>PRZEGLĄDAJ NOWE</strong>
             </template>
@@ -120,6 +120,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiChevronRight, mdiLayersSearchOutline, mdiTable } from "@mdi/js";
 import { useStats } from "~/composables/stats/useStats";
 
 useSeoMeta({

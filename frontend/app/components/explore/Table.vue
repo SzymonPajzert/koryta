@@ -182,7 +182,7 @@
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
-              icon="mdi-open-in-new"
+              :icon="mdiOpenInNew"
               variant="text"
               color="secondary"
               @click.stop="
@@ -195,7 +195,7 @@
         </v-tooltip>
         <v-btn
           v-if="!disableFocus"
-          icon="mdi-magnify"
+          :icon="mdiMagnify"
           variant="text"
           color="primary"
           @click.stop="$emit('focus', item)"
@@ -206,6 +206,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiMagnify, mdiOpenInNew } from "@mdi/js";
 import { executeSearchAll } from "~/composables/usePersonSearch";
 import type { PersonRich } from "~~/shared/model";
 

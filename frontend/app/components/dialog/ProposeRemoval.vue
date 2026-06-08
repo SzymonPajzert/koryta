@@ -6,7 +6,7 @@
           v-bind="activatorProps"
           color="error"
           variant="tonal"
-          prepend-icon="mdi-delete-outline"
+          :prepend-icon="mdiDeleteOutline"
         >
           Zaproponuj usunięcie
         </v-btn>
@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiDeleteOutline } from "@mdi/js";
 import { authFetch } from "@/composables/auth";
 
 const props = defineProps<{

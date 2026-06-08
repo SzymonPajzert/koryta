@@ -10,7 +10,7 @@
       <template #activator="{ props }">
         <v-btn
           v-bind="props"
-          icon="mdi-table"
+          :icon="mdiTable"
           variant="tonal"
           color="secondary"
           to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=votes.interesting&sortDesc=true"
@@ -22,7 +22,7 @@
       <template #activator="{ props }">
         <v-btn
           v-bind="props"
-          icon="mdi-chart-line"
+          :icon="mdiChartLine"
           variant="tonal"
           color="blue"
           to="/eksploruj/statystyki"
@@ -32,8 +32,8 @@
 
     <v-btn
       color="primary"
-      :icon="vertical ? 'mdi-check-all' : undefined"
-      :prepend-icon="!vertical ? 'mdi-check-all' : undefined"
+      :icon="vertical ? mdiCheckAll : undefined"
+      :prepend-icon="!vertical ? mdiCheckAll : undefined"
       variant="outlined"
       :class="vertical ? 'mt-2' : undefined"
       :text="vertical ? undefined : 'Następna osoba'"
@@ -43,6 +43,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiChartLine, mdiCheckAll, mdiTable } from "@mdi/js";
 defineProps<{
   vertical?: boolean;
   pending?: boolean;

@@ -26,7 +26,7 @@
         <v-btn
           color="primary"
           variant="tonal"
-          prepend-icon="mdi-refresh"
+          :prepend-icon="mdiRefresh"
           @click="refreshNode()"
         >
           Odśwież stronę
@@ -35,7 +35,7 @@
           color="secondary"
           variant="text"
           to="/"
-          prepend-icon="mdi-home"
+          :prepend-icon="mdiHome"
           class="ml-2"
         >
           Strona główna
@@ -85,7 +85,7 @@
                     :model-value="isHovering ? 100 : 0"
                     width="2"
                   >
-                    <v-icon icon="mdi-arrow-right" />
+                    <v-icon :icon="mdiArrowRight" />
                   </v-progress-circular>
                 </v-avatar>
               </template>
@@ -103,7 +103,7 @@
           <v-btn
             class="ml-2"
             variant="tonal"
-            prepend-icon="mdi-graph-outline"
+            :prepend-icon="mdiGraphOutline"
             :to="`/graf?miejsce=${node}`"
           >
             Graf połączeń
@@ -112,7 +112,7 @@
         <div v-if="entity?.type === 'region'" class="mb-4 d-flex">
           <v-btn
             variant="tonal"
-            prepend-icon="mdi-format-list-bulleted"
+            :prepend-icon="mdiFormatListBulleted"
             :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
           >
             Eksploruj region
@@ -203,7 +203,7 @@
               <v-btn
                 v-if="entity?.type !== 'region'"
                 variant="tonal"
-                prepend-icon="mdi-pencil-outline"
+                :prepend-icon="mdiPencilOutline"
                 @click="handleEdit"
               >
                 <template #prepend>
@@ -225,7 +225,7 @@
                     @click="!user && handleLoginRedirect()"
                   >
                     <template #prepend>
-                      <v-icon color="error" icon="mdi-delete-outline" />
+                      <v-icon color="error" :icon="mdiDeleteOutline" />
                     </template>
                     Zaproponuj usunięcie
                   </v-btn>
@@ -291,6 +291,15 @@
 </template>
 
 <script setup lang="ts">
+import {
+  mdiArrowRight,
+  mdiDeleteOutline,
+  mdiFormatListBulleted,
+  mdiGraphOutline,
+  mdiHome,
+  mdiPencilOutline,
+  mdiRefresh,
+} from "@mdi/js";
 import { useEdges } from "~/composables/edges";
 import { useAuthState, authFetch } from "@/composables/auth";
 import type {

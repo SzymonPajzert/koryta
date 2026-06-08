@@ -54,7 +54,7 @@
             color="primary"
             @click="addSource"
           >
-            <v-icon start>mdi-plus</v-icon>
+            <v-icon start :icon="mdiPlus" />
             Dodaj źródło
           </v-btn>
         </v-col>
@@ -80,6 +80,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiPlus } from "@mdi/js";
 import { ref, toRaw, computed } from "vue";
 import { useNotes } from "~/composables/notes";
 import { useAuthState } from "~/composables/auth";

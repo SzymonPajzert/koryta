@@ -14,7 +14,7 @@
           target="_blank"
           color="warning"
           variant="tonal"
-          prepend-icon="mdi-github"
+          :prepend-icon="mdiGithub"
           block
         >
           Zgłoś na GitHub
@@ -83,6 +83,7 @@
 </template>
 
 <script lang="ts" setup>
+import { mdiGithub } from "@mdi/js";
 import { HomeCard } from "#components";
 
 definePageMeta({

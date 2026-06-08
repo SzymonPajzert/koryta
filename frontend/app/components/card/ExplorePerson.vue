@@ -21,7 +21,7 @@
         <v-btn
           v-for="query in queries"
           :key="query"
-          prepend-icon="mdi-google"
+          :prepend-icon="mdiGoogle"
           variant="tonal"
           color="primary"
           class="ma-1"
@@ -49,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiGoogle } from "@mdi/js";
 import { toRef } from "vue";
 import type { PersonRich } from "~~/shared/model";
 import { usePersonSearch } from "~/composables/usePersonSearch";

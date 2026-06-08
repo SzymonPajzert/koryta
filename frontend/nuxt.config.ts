@@ -113,6 +113,9 @@ export default defineNuxtConfig({
 
   vuetify: {
     vuetifyOptions: {
+      icons: {
+        defaultSet: "mdi-svg",
+      },
       theme: {
         defaultTheme: "light",
         themes: {
@@ -177,7 +180,6 @@ export default defineNuxtConfig({
       firestore: {},
     },
   },
-
 
   sentry: {
     sourceMapsUploadOptions: {

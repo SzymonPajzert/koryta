@@ -45,7 +45,7 @@
         type="warning"
         variant="tonal"
         class="mb-4"
-        icon="mdi-money"
+        :icon="mdiCash"
       >
         <div class="d-flex align-center w-100">
           <v-btn
@@ -105,6 +105,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiCash } from "@mdi/js";
 import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";

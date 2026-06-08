@@ -10,7 +10,7 @@
         <v-card
           class="py-4"
           color="surface-variant"
-          prepend-icon="mdi-account-outline"
+          :prepend-icon="mdiAccountOutline"
           rounded="lg"
           variant="tonal"
           height="100%"
@@ -33,6 +33,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiAccountOutline } from "@mdi/js";
 import type { Person } from "~~/shared/model";
 import PartyChip from "./PartyChip.vue";
 

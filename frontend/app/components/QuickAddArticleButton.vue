@@ -3,7 +3,7 @@
     <v-btn
       variant="tonal"
       color="primary"
-      prepend-icon="mdi-newspaper-plus"
+      :prepend-icon="mdiNewspaperPlus"
       @click="
         expanded = !expanded;
         checkLogin();
@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiNewspaperPlus } from "@mdi/js";
 import { ref } from "vue";
 import { useAuthState } from "~/composables/auth";
 import { getPageTitle } from "~/composables/useFunctions";

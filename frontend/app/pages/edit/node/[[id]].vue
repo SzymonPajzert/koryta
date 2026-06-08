@@ -130,9 +130,7 @@
               >
                 <template #prepend>
                   <v-icon
-                    :icon="
-                      edge.type === 'employed' ? 'mdi-briefcase' : 'mdi-link'
-                    "
+                    :icon="edge.type === 'employed' ? mdiBriefcase : mdiLink"
                     class="mr-2"
                   />
                 </template>
@@ -166,13 +164,13 @@
                 </v-list-item-subtitle>
                 <template #append>
                   <v-btn
-                    icon="mdi-pencil"
+                    :icon="mdiPencil"
                     variant="text"
                     size="small"
                     @click="openEditEdge(edge)"
                   />
                   <v-btn
-                    icon="mdi-open-in-new"
+                    :icon="mdiOpenInNew"
                     variant="text"
                     size="small"
                     target="_blank"
@@ -215,6 +213,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiBriefcase, mdiLink, mdiOpenInNew, mdiPencil } from "@mdi/js";
 import { ref } from "vue";
 import { useNodeEdit } from "~/composables/useNodeEdit";
 import FormEditEdge from "~/components/form/EditEdge.vue";

@@ -18,9 +18,9 @@
       :icon="
         sortBy[0]?.key === column.key
           ? sortBy[0]?.order === 'desc'
-            ? 'mdi-arrow-down'
-            : 'mdi-arrow-up'
-          : 'mdi-arrow-up'
+            ? mdiArrowDown
+            : mdiArrowUp
+          : mdiArrowUp
       "
       size="small"
       class="ml-1"
@@ -30,6 +30,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiArrowDown, mdiArrowUp } from "@mdi/js";
 defineProps<{
   tooltip: string;
   column: {
