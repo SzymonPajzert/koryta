@@ -199,7 +199,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { parties as allParties, partyColors } from "~~/shared/misc";
-import type { Person } from "~/composables/useRegionStatistics";
+import {
+  useRegionStatistics,
+  type Person,
+} from "~/composables/stats/useRegionStatistics";
 
 const props = defineProps<{
   teryt: string;
