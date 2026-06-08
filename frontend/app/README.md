@@ -9,8 +9,8 @@ If the website doesn't work, https://mapy.geoportal.gov.pl/imap/Imgp_2.html shou
 
 After we have shapefile files downloaded, we can submit the zip to https://mapshaper.org/.
 
+Simplify the shapefile to whatever accuracy is enough for our case.
+
 In the console you need to attach a property of the TERYT code using a command `-each 'id = JPT_KJ_I_1'`
 
-Then you can export with flags `-o id-field=id` and the teryt codes tagged as IDs should be present in the exported svg file - https://github.com/mbloch/mapshaper/issues/138.
-
-Then to simplify I used https://svgomg.net/
+Then you can export with flags `-o id-field=id` as a SVG and the teryt codes tagged as IDs should be present in the exported svg file - https://github.com/mbloch/mapshaper/issues/138.
