@@ -19,15 +19,6 @@ vi.stubGlobal("useEntity", () =>
   }),
 );
 
-// Mock useFeminatyw
-vi.stubGlobal("useFeminatyw", () => ({
-  koryciarz: {
-    plural: {
-      genitive: "koryciarzy",
-    },
-  },
-}));
-
 // Mock useHead (Nuxt)
 vi.stubGlobal("useHead", vi.fn());
 vi.stubGlobal("useSeoMeta", vi.fn());
