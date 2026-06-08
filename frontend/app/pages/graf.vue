@@ -3,10 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { useParams } from "~/composables/params";
-
-const { filters } = useParams();
-const { entities: filtered } = useEntities("person", filters);
+const filtered = {};
 
 definePageMeta({
   title: "Graf",
