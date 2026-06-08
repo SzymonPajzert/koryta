@@ -15,4 +15,8 @@ In the console you need to attach a property of the TERYT code using a command `
 
 Then you can export with flags `-o id-field=id` as a SVG and the teryt codes tagged as IDs should be present in the exported svg file - https://github.com/mbloch/mapshaper/issues/138.
 
-You can then use scripts/generate_powiaty_json.js to update the actual JSON file imported
+You can then use the following script to update the actual JSON files imported:
+
+```
+node scripts/generate_map_json.js app/assets/wojewodztwa.svg app/assets/poland_voivodeships.json
+```

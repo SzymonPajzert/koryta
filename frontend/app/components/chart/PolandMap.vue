@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import powiatyPaths from "@/assets/poland_powiaty.json";
+import wojewodztwaPaths from "@/assets/poland_voivodeships.json";
 import type { Powiat } from "@/composables/entity/regions";
 import { authFetch } from "@/composables/auth";
 
@@ -107,6 +108,17 @@ const getFillColor = (item: Powiat) => {
             }})
           </title>
         </path>
+      </g>
+      <!-- Województwa Outlines -->
+      <g class="pointer-events-none">
+        <path
+          v-for="(item, index) in wojewodztwaPaths"
+          :key="'woj-' + (item.teryt || index)"
+          :d="item.d"
+          fill="none"
+          stroke="#000000"
+          stroke-width="2"
+        />
       </g>
     </svg>
   </div>
