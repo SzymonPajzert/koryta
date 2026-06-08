@@ -14,3 +14,5 @@ Simplify the shapefile to whatever accuracy is enough for our case.
 In the console you need to attach a property of the TERYT code using a command `-each 'id = JPT_KJ_I_1'`
 
 Then you can export with flags `-o id-field=id` as a SVG and the teryt codes tagged as IDs should be present in the exported svg file - https://github.com/mbloch/mapshaper/issues/138.
+
+You can then use scripts/generate_powiaty_json.js to update the actual JSON file imported
