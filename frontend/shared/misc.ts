@@ -16,9 +16,9 @@ export const partyColors: Record<string, string> = {
   PSL: "#2ed396",
   "Polska 2050": "#FFCB03",
   "Nowa Lewica": "#D40E20",
-  SLD: "#D40E20",
+  // SLD: "#D40E20",
   Konfederacja: "#102440",
-  Razem: "#871057",
+  // Razem: "#871057",
 };
 
 export const electionPositions: ElectionPosition[] = [
