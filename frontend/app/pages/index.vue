@@ -17,6 +17,7 @@
           >
             <NuxtImg
               width="200"
+              height="200"
               src="/logo.png"
               class="d-block"
               fetchpriority="high"
