@@ -35,3 +35,7 @@ const opts = computed(() => ({
 
 const { nodesFiltered, edgesFiltered, ready } = useGraph(opts.value);
 </script>
+
+<style>
+@import "v-network-graph/lib/style.css";
+</style>
