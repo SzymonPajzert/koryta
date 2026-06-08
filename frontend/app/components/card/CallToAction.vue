@@ -20,7 +20,7 @@
           href="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
           target="_blank"
         >
-          <v-icon>mdi-pencil-plus</v-icon> Chcę pomóc! (ankieta)
+          <v-icon :icon="mdiPencilPlus" /> Chcę pomóc! (ankieta)
         </v-btn>
       </v-col>
       <v-col cols="12" md="6" class="text-center">
@@ -33,6 +33,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiPencilPlus } from "@mdi/js";
 import { useStats } from "~/composables/stats/useStats";
 
 const { interesting } = useStats();

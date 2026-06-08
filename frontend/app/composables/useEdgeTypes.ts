@@ -1,3 +1,14 @@
+import {
+  mdiAccountPlus,
+  mdiAccountPlusOutline,
+  mdiAccountStarOutline,
+  mdiBriefcasePlusOutline,
+  mdiDomain,
+  mdiDomainPlus,
+  mdiMapMarkerRadiusOutline,
+  mdiNewspaperPlus,
+  mdiVoteOutline,
+} from "@mdi/js";
 import type { NodeType, EdgeType } from "~~/shared/model";
 
 export type edgeTypeExt =
@@ -40,7 +51,7 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     buttons: {
       incoming: {
         label: (_name) => "Dodaj firmę matkę",
-        icon: "mdi-domain",
+        icon: mdiDomain,
       },
     },
   },
@@ -56,7 +67,7 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     buttons: {
       outgoing: {
         label: (_name) => "Dodaj firmę córkę",
-        icon: "mdi-domain-plus",
+        icon: mdiDomainPlus,
       },
     },
   },
@@ -71,7 +82,7 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     buttons: {
       incoming: {
         label: (_name) => "Dodaj region zarządzający firmą",
-        icon: "mdi-map-marker-radius-outline",
+        icon: mdiMapMarkerRadiusOutline,
       },
     },
   },
@@ -86,7 +97,7 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     buttons: {
       outgoing: {
         label: (name) => "Dodaj osobę, którą " + name + " zna",
-        icon: "mdi-account-plus-outline",
+        icon: mdiAccountPlusOutline,
       },
     },
   },
@@ -101,11 +112,11 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     buttons: {
       incoming: {
         label: (name) => "Dodaj artykuł wspominający " + name,
-        icon: "mdi-newspaper-plus",
+        icon: mdiNewspaperPlus,
       },
       outgoing: {
         label: (_name) => "Wspomniana osoba w artykule",
-        icon: "mdi-account-plus-outline",
+        icon: mdiAccountPlusOutline,
       },
     },
   },
@@ -120,11 +131,11 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     buttons: {
       incoming: {
         label: (name) => "Dodaj artykuł wspominający " + name,
-        icon: "mdi-newspaper-plus",
+        icon: mdiNewspaperPlus,
       },
       outgoing: {
         label: (_name) => "Wspomniane miejsce w artykule",
-        icon: "mdi-domain-plus",
+        icon: mdiDomainPlus,
       },
     },
   },
@@ -139,11 +150,11 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     buttons: {
       outgoing: {
         label: (name) => "Dodaj gdzie " + name + " pracuje",
-        icon: "mdi-briefcase-plus-outline",
+        icon: mdiBriefcasePlusOutline,
       },
       incoming: {
         label: (_name) => "Dodaj osobę, która pracuje w tej firmie", // New button
-        icon: "mdi-account-plus",
+        icon: mdiAccountPlus,
       },
     },
   },
@@ -158,11 +169,11 @@ export const edgeTypeOptions: Record<edgeTypeExt, edgeTypeOption> = {
     buttons: {
       outgoing: {
         label: (name) => "Dodaj wybory, w których brał udział " + name,
-        icon: "mdi-vote-outline",
+        icon: mdiVoteOutline,
       },
       incoming: {
         label: (_name) => "Dodaj kandydata w tym regionie",
-        icon: "mdi-account-star-outline",
+        icon: mdiAccountStarOutline,
       },
     },
   },

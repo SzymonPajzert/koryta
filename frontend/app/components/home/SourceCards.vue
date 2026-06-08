@@ -33,7 +33,7 @@
         <v-btn
           color="primary"
           variant="elevated"
-          prepend-icon="mdi-chevron-down"
+          :prepend-icon="mdiChevronDown"
           @click="showAll = true"
         >
           Pokaż wszystkie ({{ sources.length }})
@@ -47,7 +47,7 @@
       >
         <v-btn
           variant="text"
-          prepend-icon="mdi-chevron-up"
+          :prepend-icon="mdiChevronUp"
           @click="showAll = false"
         >
           Zwiń
@@ -58,6 +58,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiChevronDown, mdiChevronUp } from "@mdi/js";
 import { ref, computed } from "vue";
 
 const { data: sourcesRaw } = await authFetch("/api/nodes/articles");

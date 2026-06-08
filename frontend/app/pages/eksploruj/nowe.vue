@@ -9,7 +9,7 @@
           class="flex-grow-1 cursor-pointer mb-0"
           :color="allActionsDone ? 'success' : undefined"
           variant="tonal"
-          icon="mdi-information"
+          :icon="mdiInformation"
           @click="showInstructions = true"
         >
           <div class="text-subtitle-1 font-weight-bold">
@@ -36,7 +36,7 @@
           type="info"
           variant="tonal"
           class="mb-0 flex-grow-1"
-          icon="mdi-information"
+          :icon="mdiInformation"
         >
           <div class="text-subtitle-1 font-weight-bold mb-2">Instrukcje:</div>
           <ul class="pl-0 mt-2" style="list-style: none">
@@ -52,8 +52,8 @@
               >
                 {{
                   actionExplored
-                    ? "mdi-checkbox-marked-circle"
-                    : "mdi-checkbox-blank-circle-outline"
+                    ? mdiCheckboxMarkedCircle
+                    : mdiCheckboxBlankCircleOutline
                 }}
               </v-icon>
               <span>
@@ -83,8 +83,8 @@
               >
                 {{
                   actionNoted
-                    ? "mdi-checkbox-marked-circle"
-                    : "mdi-checkbox-blank-circle-outline"
+                    ? mdiCheckboxMarkedCircle
+                    : mdiCheckboxBlankCircleOutline
                 }}
               </v-icon>
               <span
@@ -104,8 +104,8 @@
               >
                 {{
                   actionVoted
-                    ? "mdi-checkbox-marked-circle"
-                    : "mdi-checkbox-blank-circle-outline"
+                    ? mdiCheckboxMarkedCircle
+                    : mdiCheckboxBlankCircleOutline
                 }}
               </v-icon>
               <span
@@ -183,6 +183,11 @@
 </template>
 
 <script setup lang="ts">
+import {
+  mdiCheckboxBlankCircleOutline,
+  mdiCheckboxMarkedCircle,
+  mdiInformation,
+} from "@mdi/js";
 import { ref, computed } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import type { PersonRich } from "~~/shared/model";

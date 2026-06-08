@@ -19,7 +19,7 @@
           >Podobne wpisy</span
         >
         <v-btn
-          icon="mdi-close"
+          :icon="mdiClose"
           variant="text"
           size="x-small"
           density="compact"
@@ -52,6 +52,7 @@
 </template>
 
 <script lang="ts" setup>
+import { mdiClose } from "@mdi/js";
 import type { NodeType, Article } from "~~/shared/model";
 import { compareTwoStrings } from "string-similarity";
 

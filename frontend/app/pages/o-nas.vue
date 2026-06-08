@@ -61,7 +61,7 @@
             <v-card-item>
               <template #prepend>
                 <v-icon
-                  icon="mdi-eye-outline"
+                  :icon="mdiEyeOutline"
                   size="x-large"
                   color="primary"
                   class="mb-4"
@@ -88,7 +88,7 @@
             <v-card-item>
               <template #prepend>
                 <v-icon
-                  icon="mdi-scale-balance"
+                  :icon="mdiScaleBalance"
                   size="x-large"
                   color="primary"
                   class="mb-4"
@@ -122,7 +122,7 @@
             <v-card-item>
               <template #prepend>
                 <v-icon
-                  icon="mdi-shield-check-outline"
+                  :icon="mdiShieldCheckOutline"
                   size="x-large"
                   color="primary"
                   class="mb-4"
@@ -148,7 +148,7 @@
             <v-card-item>
               <template #prepend>
                 <v-icon
-                  icon="mdi-account-group-outline"
+                  :icon="mdiAccountGroupOutline"
                   size="x-large"
                   color="primary"
                   class="mb-4"
@@ -233,7 +233,7 @@
           >
             <div class="text-center text-grey-darken-1">
               <v-icon
-                icon="mdi-account-plus-outline"
+                :icon="mdiAccountPlusOutline"
                 size="large"
                 class="mb-2"
               ></v-icon>
@@ -398,6 +398,13 @@
 </template>
 
 <script setup lang="ts">
+import {
+  mdiAccountGroupOutline,
+  mdiAccountPlusOutline,
+  mdiEyeOutline,
+  mdiScaleBalance,
+  mdiShieldCheckOutline,
+} from "@mdi/js";
 useSeoMeta({
   title: "O nas - Koryta.pl",
   description:

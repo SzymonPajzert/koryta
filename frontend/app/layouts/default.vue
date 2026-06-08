@@ -40,10 +40,10 @@
         <v-avatar :image="pictureURL" size="32" />
       </v-btn>
       <v-btn v-if="user && !pictureURL" icon to="/profil">
-        <v-icon>mdi-account</v-icon>
+        <v-icon :icon="mdiAccount" />
       </v-btn>
       <v-btn v-if="!user" :icon="!mdAndUp" to="/login">
-        <v-icon v-if="!mdAndUp">mdi-account</v-icon>
+        <v-icon v-if="!mdAndUp" :icon="mdiAccount" />
         <span class="d-none d-md-inline">Zaloguj się</span>
       </v-btn>
       <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
@@ -54,7 +54,7 @@
       <v-spacer />
 
       <v-btn
-        prepend-icon="mdi-lightning-bolt"
+        :prepend-icon="mdiLightningBolt"
         variant="text"
         href="https://github.com/users/SzymonPajzert/projects/2/views/3"
         target="_blank"
@@ -63,7 +63,7 @@
       </v-btn>
       <v-btn
         v-if="affineLink"
-        prepend-icon="mdi-lightning-bolt"
+        :prepend-icon="mdiLightningBolt"
         variant="text"
         :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
         target="_blank"
@@ -84,6 +84,7 @@
 </template>
 
 <script lang="ts" setup>
+import { mdiAccount, mdiLightningBolt } from "@mdi/js";
 import { computed } from "vue";
 import { useAuthState } from "@/composables/auth";
 import { useDisplay } from "vuetify";

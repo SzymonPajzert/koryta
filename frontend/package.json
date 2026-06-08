@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.4",
+    "@mdi/js": "^7.4.47",
     "@nuxt/content": "^3.6.3",
     "@nuxt/eslint": "^1.7.1",
     "@nuxt/fonts": "^0.14.0",

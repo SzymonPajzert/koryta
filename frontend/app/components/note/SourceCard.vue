@@ -13,7 +13,7 @@
           @keyup.enter="saveUrl()"
         />
         <v-btn
-          icon="mdi-check"
+          :icon="mdiCheck"
           size="small"
           color="success"
           variant="text"
@@ -44,7 +44,7 @@
         style="max-width: 75%; cursor: pointer"
         @click="openUrl(source.url)"
       >
-        <v-icon start>mdi-link</v-icon>
+        <v-icon start :icon="mdiLink" />
         <span class="text-truncate">{{ source.url }}</span>
       </v-chip>
       <v-chip
@@ -56,13 +56,13 @@
         style="cursor: pointer"
         @click="editUrl()"
       >
-        <v-icon start>mdi-plus</v-icon>
+        <v-icon start :icon="mdiPlus" />
         Dodaj URL
       </v-chip>
 
       <v-btn
         v-if="source.url && !editingUrl && isEditing"
-        icon="mdi-pencil"
+        :icon="mdiPencil"
         size="x-small"
         variant="text"
         class="mr-2"
@@ -73,7 +73,7 @@
 
       <v-btn
         v-if="isEditing"
-        icon="mdi-delete"
+        :icon="mdiDelete"
         size="small"
         color="error"
         variant="text"
@@ -84,6 +84,7 @@
 </template>
 
 <script lang="ts" setup>
+import { mdiCheck, mdiDelete, mdiLink, mdiPencil, mdiPlus } from "@mdi/js";
 import type { NoteSource } from "~~/shared/model";
 
 defineEmits(["remove"]);

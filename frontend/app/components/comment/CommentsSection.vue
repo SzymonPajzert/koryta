@@ -6,7 +6,7 @@
         v-if="!showForm && user"
         variant="tonal"
         size="small"
-        prepend-icon="mdi-comment-plus-outline"
+        :prepend-icon="mdiCommentPlusOutline"
         @click="showForm = true"
       >
         Dodaj komentarz
@@ -48,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiCommentPlusOutline } from "@mdi/js";
 import type { Comment } from "~~/shared/model";
 import { useAuthState, authFetch } from "@/composables/auth";
 import CommentItem from "./CommentItem.vue";

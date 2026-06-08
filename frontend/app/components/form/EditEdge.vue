@@ -4,7 +4,7 @@
       {{ editedEdge ? "Edytuj powiązanie" : "Dodaj nowe powiązanie" }}
     </h4>
     <v-btn
-      icon="mdi-close"
+      :icon="mdiClose"
       variant="text"
       size="small"
       title="Anuluj"
@@ -95,7 +95,7 @@
             density="compact"
             hide-details="auto"
             :rules="[dateRule]"
-            prepend-inner-icon="mdi-calendar"
+            :prepend-inner-icon="mdiCalendar"
           />
         </v-col>
         <v-col cols="12" md="6">
@@ -106,7 +106,7 @@
             density="compact"
             hide-details="auto"
             :rules="[dateRule]"
-            prepend-inner-icon="mdi-calendar"
+            :prepend-inner-icon="mdiCalendar"
           />
         </v-col>
       </template>
@@ -204,6 +204,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiArrowRight, mdiCalendar, mdiClose } from "@mdi/js";
 import { ref, computed } from "vue";
 import EntityPicker from "~/components/form/EntityPicker.vue";
 import type { NodeType, Link } from "~~/shared/model";
@@ -231,7 +232,7 @@ const emit = defineEmits<{
   (e: "update"): void;
 }>();
 
-const arrowIcon = computed(() => "mdi-arrow-right");
+const arrowIcon = computed(() => mdiArrowRight);
 
 const referenceNode: NodeRef = {
   type: "article",

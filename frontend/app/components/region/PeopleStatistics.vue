@@ -181,7 +181,7 @@
                     size="small"
                     color="primary"
                     variant="tonal"
-                    prepend-icon="mdi-alert-circle-outline"
+                    :prepend-icon="mdiAlertCircleOutline"
                     @click="reportPerson(person)"
                   >
                     Zgłoś notatkę

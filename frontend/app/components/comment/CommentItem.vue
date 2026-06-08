@@ -20,7 +20,7 @@
         size="x-small"
         density="compact"
         color="grey"
-        prepend-icon="mdi-reply"
+        :prepend-icon="mdiReply"
         @click="showReply = !showReply"
       >
         Odpowiedz
@@ -52,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiReply } from "@mdi/js";
 import type { Comment } from "~~/shared/model";
 import { useAuthState } from "@/composables/auth";
 import CommentForm from "./CommentForm.vue";

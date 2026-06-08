@@ -21,7 +21,7 @@
         class="text-primary text-decoration-none d-inline-flex align-center"
       >
         Artykuł z Wikipedii
-        <v-icon icon="mdi-open-in-new" size="small" class="ml-1" />
+        <v-icon :icon="mdiOpenInNew" size="small" class="ml-1" />
       </a>
     </v-col>
 
@@ -37,13 +37,14 @@
         class="text-primary text-decoration-none d-inline-flex align-center"
       >
         Profil w rejestrze
-        <v-icon icon="mdi-open-in-new" size="small" class="ml-1" />
+        <v-icon :icon="mdiOpenInNew" size="small" class="ml-1" />
       </a>
     </v-col>
   </v-row>
 </template>
 
 <script setup lang="ts">
+import { mdiOpenInNew } from "@mdi/js";
 import type { Person, PersonRich } from "~~/shared/model";
 
 defineProps<{

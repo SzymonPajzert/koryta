@@ -1,5 +1,5 @@
 <template>
-  <v-alert type="info" variant="tonal" class="mb-4" icon="mdi-account-lock">
+  <v-alert type="info" variant="tonal" class="mb-4" :icon="mdiAccountLock">
     <div class="d-flex align-center justify-space-between w-100">
       <div>
         Zaloguj się, aby uzyskać dostęp do jeszcze nieopublikowanych /
@@ -30,6 +30,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiAccountLock } from "@mdi/js";
 defineProps<{
   hiddenCount: number;
 }>();

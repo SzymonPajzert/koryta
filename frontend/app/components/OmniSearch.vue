@@ -16,7 +16,7 @@
     :width
     density="comfortable"
     :hide-details="true"
-    menu-icon="mdi-magnify"
+    :menu-icon="mdiMagnify"
     clearable
     single-line
     variant="solo-filled"
@@ -48,6 +48,16 @@
 </template>
 
 <script setup lang="ts">
+import {
+  mdiAccountOutline,
+  mdiAccountPlus,
+  mdiDomain,
+  mdiFlag,
+  mdiFormatListBulletedType,
+  mdiMagnify,
+  mdiMapMarkerRadiusOutline,
+  mdiOfficeBuildingPlus,
+} from "@mdi/js";
 import { parties } from "~~/shared/misc";
 import { authFetch } from "@/composables/auth";
 import { generateEntityUrl } from "~/composables/slugs";
@@ -112,7 +122,7 @@ const baseItems = computed<ListItem[]>(() => {
   result.push({
     id: "all-persons",
     title: "Lista wszystkich osób",
-    icon: "mdi-format-list-bulleted-type",
+    icon: mdiFormatListBulletedType,
     path: "/eksploruj/tabela",
     logEventKey: {
       content_id: "",
@@ -124,7 +134,7 @@ const baseItems = computed<ListItem[]>(() => {
     result.push({
       id: `party-${item}`,
       title: item,
-      icon: "mdi-flag",
+      icon: mdiFlag,
       subtitle: "Partia",
       path: "/eksploruj/tabela",
       query: {
@@ -142,9 +152,9 @@ const baseItems = computed<ListItem[]>(() => {
       const itemType = (item.type || "place") as NodeType;
 
       // Choose icon based on type
-      let icon = "mdi-domain";
-      if (itemType === "person") icon = "mdi-account-outline";
-      else if (itemType === "region") icon = "mdi-map-marker-radius-outline";
+      let icon = mdiDomain;
+      if (itemType === "person") icon = mdiAccountOutline;
+      else if (itemType === "region") icon = mdiMapMarkerRadiusOutline;
 
       // If the /api/search returns query - use it
       const routing: Record<string, unknown> = item?.query
@@ -173,7 +183,7 @@ const items = computed<ListItem[]>(() => {
     list.push({
       id: `create-person-${search.value}`,
       title: `Utwórz osobę: "${search.value}"`,
-      icon: "mdi-account-plus",
+      icon: mdiAccountPlus,
       path: "/edit/node/new",
       query: {
         type: "person",
@@ -187,7 +197,7 @@ const items = computed<ListItem[]>(() => {
     list.push({
       id: `create-place-${search.value}`,
       title: `Utwórz firmę: "${search.value}"`,
-      icon: "mdi-office-building-plus",
+      icon: mdiOfficeBuildingPlus,
       path: "/edit/node/new",
       query: {
         type: "place",

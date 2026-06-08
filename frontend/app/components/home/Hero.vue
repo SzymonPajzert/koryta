@@ -31,7 +31,7 @@
           <span>lub</span>
 
           <v-btn
-            append-icon="mdi-chevron-right"
+            :append-icon="mdiChevronRight"
             border
             class="text-none"
             flat
@@ -74,7 +74,7 @@
       </v-col>
 
       <v-btn
-        icon="mdi-chevron-down"
+        :icon="mdiChevronDown"
         variant="text"
         size="x-large"
         class="mt-12 animate-bounce"
@@ -86,6 +86,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiChevronDown, mdiChevronRight } from "@mdi/js";
 const scrollToContent = () => {
   const el = document.getElementById("intro");
   if (el) {

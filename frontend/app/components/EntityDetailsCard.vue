@@ -35,7 +35,7 @@
 
   <v-card v-if="type == 'place'" width="100%" variant="flat">
     <v-card-title class="headline px-0">
-      <v-icon start icon="mdi-office-building-outline" />
+      <v-icon start :icon="mdiOfficeBuildingOutline" />
       <h2 class="text-h5 font-weight-bold d-inline">
         {{ entity?.name }}
       </h2>
@@ -50,7 +50,7 @@
 
   <v-card v-if="type == 'article'" width="100%" variant="flat">
     <v-card-title class="headline px-0">
-      <v-icon start icon="mdi-file-document-outline" />
+      <v-icon start :icon="mdiFileDocumentOutline" />
       <h2 class="text-h5 font-weight-bold d-inline">
         {{ entity?.name }}
       </h2>
@@ -68,7 +68,7 @@
 
   <v-card v-if="type == 'region'" width="100%" variant="flat">
     <v-card-title class="headline px-0">
-      <v-icon start icon="mdi-map-marker-radius-outline" />
+      <v-icon start :icon="mdiMapMarkerRadiusOutline" />
       <h2 class="text-h5 font-weight-bold d-inline">
         {{ region?.name }}
       </h2>
@@ -80,6 +80,11 @@
 </template>
 
 <script setup lang="ts">
+import {
+  mdiFileDocumentOutline,
+  mdiMapMarkerRadiusOutline,
+  mdiOfficeBuildingOutline,
+} from "@mdi/js";
 import type { Person, Company, Article, Region } from "~~/shared/model";
 
 const props = defineProps<{

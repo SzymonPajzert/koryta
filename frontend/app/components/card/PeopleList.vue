@@ -35,7 +35,7 @@
               :key="party"
               :party="party"
             />
-            <v-icon color="grey-darken-1" icon="mdi-chevron-right" />
+            <v-icon color="grey-darken-1" :icon="mdiChevronRight" />
           </div>
         </template>
       </v-list-item>
@@ -54,7 +54,7 @@
         <v-icon
           class="align-self-center"
           color="grey-darken-1"
-          icon="mdi-chevron-right"
+          :icon="mdiChevronRight"
         />
       </template>
     </v-list-item>
@@ -62,6 +62,7 @@
 </template>
 
 <script lang="ts" setup>
+import { mdiChevronRight } from "@mdi/js";
 import { computed } from "vue";
 import type { Powiat } from "~/composables/entity/regions";
 import type { PersonRich } from "~~/shared/model";

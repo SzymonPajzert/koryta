@@ -8,7 +8,7 @@
       @mouseleave="isHoveringContainer = false"
     >
       <v-btn
-        icon="mdi-arrow-up-bold"
+        :icon="mdiArrowUpBold"
         size="x-small"
         variant="text"
         :color="userVoteResult > 0 ? config.color : 'medium-emphasis'"
@@ -28,7 +28,7 @@
         {{ userVoteResult > 0 ? "+" : "" }}{{ userVoteResult }}
       </div>
       <v-btn
-        icon="mdi-arrow-down-bold"
+        :icon="mdiArrowDownBold"
         size="x-small"
         variant="text"
         :color="userVoteResult < 0 ? config.downColor : 'medium-emphasis'"
@@ -42,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { mdiArrowDownBold, mdiArrowUpBold } from "@mdi/js";
 import { computed, ref } from "vue";
 import type { VoteCategory } from "~~/shared/model";
 import { useVotes } from "~/composables/votes";
