@@ -17,8 +17,15 @@
             >
               <v-card-title>
                 <h2 class="text-h5 font-weight-bold">
-                  Łącznie {{ people ? Object.values(people).length : 0 }}
-                  {{ koryciarz.plural.genitive }}
+                  Łącznie
+                  {{
+                    polishCounting(
+                      approved,
+                      "koryciarz",
+                      "koryciarze",
+                      "koryciarzy",
+                    )
+                  }}
                 </h2>
               </v-card-title>
               <v-card-text>
@@ -43,11 +50,12 @@
 </template>
 
 <script lang="ts" setup>
-import { useFeminatyw } from "@/composables/feminatyw";
+import { polishCounting } from "@/composables/feminatyw";
+import { useStats } from "~/composables/stats/useStats";
+
 import type { Powiat } from "@/composables/entity/regions";
 
-const { entities: people } = useEntities("person");
-const { koryciarz } = useFeminatyw();
+const { approved } = useStats();
 
 const search = ref("map");
 const region = ref<Powiat | undefined>(undefined);
