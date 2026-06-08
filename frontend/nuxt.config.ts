@@ -211,4 +211,16 @@ export default defineNuxtConfig({
   devServer: {
     host: "127.0.0.1",
   },
+  vite: {
+    optimizeDeps: {
+      include: [
+        "@plausible-analytics/tracker",
+        "vuefire",
+        "@vue/devtools-core",
+        "@vue/devtools-kit",
+        "vue3-apexcharts",
+        "v-network-graph",
+      ],
+    },
+  },
 });
