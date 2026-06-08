@@ -204,6 +204,9 @@ export default defineNuxtConfig({
       asyncContext: true,
     },
   },
+  routeRules: {
+    "/": { swr: 3600 },
+  },
   devServer: {
     host: "127.0.0.1",
   },
