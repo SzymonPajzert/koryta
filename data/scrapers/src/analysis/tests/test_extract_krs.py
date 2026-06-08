@@ -214,6 +214,7 @@ def test_extract_by_krs():
         all = False
         employed_after = None
         election_after = None
+        rejestrio_id = None
 
     extract.args = MockArgs()
 
