@@ -293,11 +293,9 @@
 <script setup lang="ts">
 import {
   mdiArrowRight,
-  mdiDeleteOutline,
   mdiFormatListBulleted,
   mdiGraphOutline,
   mdiHome,
-  mdiPencilOutline,
   mdiRefresh,
 } from "@mdi/js";
 import { useEdges } from "~/composables/edges";
