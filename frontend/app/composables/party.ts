@@ -1,21 +1,20 @@
-import { computed, type Ref } from "vue";
+import { computed } from "vue";
 import { partyColors } from "~~/shared/misc";
-import type { Person } from "~~/shared/model";
 
-export const usePartyStatistics = async (
-  existingPeople?: Ref<Record<string, Person>>,
-) => {
-  const people = existingPeople || useEntities("person").entities;
+export const usePartyStatistics = async () => {
+  const partyStats: Record<string, number> = {
+    PO: 360,
+    PiS: 395,
+    PSL: 62,
+    "Polska 2050": 19,
+    "Nowa Lewica": 9,
+    Konfederacja: 2,
+  };
 
   const results = computed<number[]>(() => {
-    const p = people.value;
-    if (!p) return [];
-
     return (Object.keys(partyColors) as (keyof typeof partyColors)[]).map(
       (party) => {
-        return Object.values(p).filter((person) => {
-          return (person.parties ?? []).includes(party);
-        }).length;
+        return partyStats[party] ?? 0;
       },
     );
   });
