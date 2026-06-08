@@ -124,11 +124,25 @@ class Extract(Pipeline):
             required=False,
             action=argparse.BooleanOptionalAction,
         )
+        parser.add_argument(
+            "--rejestrio-id",
+            help="Extract a person with a given RejestrIO id",
+            default=None,
+            required=False,
+        )
         args, _ = parser.parse_known_args()
 
-        if not args.region and not args.krss and not args.approved and not args.all:
+        # TODO organize how the filtering is supposed to work
+        if (
+            not args.region
+            and not args.krss
+            and not args.approved
+            and not args.all
+            and not args.rejestrio_id
+        ):
             raise ValueError(
-                "[Extract]: Needed one of: --region, --krs, --approved, --all"
+                "[Extract]: Needed one of: --region, --krs, --approved, \
+                    --all, --rejestrio-id"
             )
 
         return args
@@ -148,6 +162,10 @@ class Extract(Pipeline):
     @property
     def all(self) -> bool:
         return self.args.all
+
+    @property
+    def rejestrio_id(self) -> str | None:
+        return self.args.rejestrio_id
 
     @property
     def employed_after(self) -> bool:
@@ -290,6 +308,15 @@ class Extract(Pipeline):
         relevant = (
             relevant_employment * relevant_elections + auto_approved + use_all
         ) > 0
+
+        if self.rejestrio_id:
+
+            def check_rejestrio_id(ids_list):
+                if not isinstance(ids_list, list):
+                    return False
+                return self.rejestrio_id in ids_list
+
+            relevant = relevant | people["rejestrio_id"].apply(check_rejestrio_id)
         people["relevance_ratio"] = (relevant_employment + relevant_elections) / (
             people["total_elections"] + people["total_employments"]
         )
