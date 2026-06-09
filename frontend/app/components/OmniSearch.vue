@@ -157,7 +157,9 @@ const baseItems = computed<ListItem[]>(() => {
       else if (itemType === "region") icon = mdiMapMarkerRadiusOutline;
 
       // If the /api/search returns query - use it
-      const routing: Record<string, unknown> = item?.query
+      const hasQuery =
+        item?.query && Object.values(item.query).filter(Boolean).length > 0;
+      const routing: Record<string, unknown> = hasQuery
         ? { path: "/eksploruj/tabela", query: item.query }
         : { path: generateEntityUrl(itemType, item.id!, item.name) };
 
