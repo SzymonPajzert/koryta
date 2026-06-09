@@ -30,7 +30,7 @@
               </v-card-title>
               <v-card-text>
                 <ClientOnly>
-                  <ChartTreemapParty />
+                  <LazyChartTreemapParty />
                 </ClientOnly>
               </v-card-text>
             </v-card>
