@@ -50,7 +50,7 @@
 </template>
 
 <script lang="ts" setup>
-import { polishCounting } from "@/composables/feminatyw";
+import { polishCounting } from "@/composables/polish";
 import { useStats } from "~/composables/stats/useStats";
 
 import type { Powiat } from "@/composables/entity/regions";

@@ -7,24 +7,6 @@ export interface PolishNoun {
   locative: string;
 }
 
-export interface Feminatyw {
-  singular: PolishNoun;
-  plural: PolishNoun;
-}
-
-type InputNoun = [string, string, string, string, string, string];
-
-function toNoun(input: InputNoun): PolishNoun {
-  return {
-    nominative: input[0],
-    genitive: input[1],
-    dative: input[2],
-    accusative: input[3],
-    instrumental: input[4],
-    locative: input[5],
-  };
-}
-
 export function polishCounting(
   number: number,
   form_singular: string,
