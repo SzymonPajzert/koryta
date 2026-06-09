@@ -37,13 +37,16 @@ export default authCachedEventHandler(async (event) => {
     collection: "nodes",
     size: results.length,
   });
-  return results.map((node) => ({
-    id: node.id,
-    name: node.name,
-    type: node.type,
-    query: {
-      krs: node.krsNumber,
-      teryt: node.teryt,
-    },
-  }));
+  return results.map((node) => {
+    const query: Record<string, string> = {};
+    if (node.krsNumber) query.krs = node.krsNumber;
+    if (node.teryt) query.teryt = node.teryt;
+
+    return {
+      id: node.id,
+      name: node.name,
+      type: node.type,
+      ...(Object.keys(query).length > 0 ? { query } : {}),
+    };
+  });
 });
