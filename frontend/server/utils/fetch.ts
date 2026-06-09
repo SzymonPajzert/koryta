@@ -80,6 +80,8 @@ export function logEventPath(
   logger.info(
     `[Firestore Read][${func}(${args})] triggered by: ${event?.path ?? "unknown path"}]`,
     {
+      func,
+      args,
       ...opts,
       ...event,
       eventPath: event?.route,
