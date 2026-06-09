@@ -4,27 +4,24 @@ import type { Node as GraphNode, NodeStats, Edge } from "~~/shared/graph/model";
 import { authFetch } from "@/composables/auth";
 
 export type GraphOptions = {
-  focusNodeId?: string;
+  focusNodeId: string;
   maxDepth?: number;
   filtered?: string[];
   expandedNodes?: Ref<Set<string>>;
 };
 
-export function useGraph(opts: GraphOptions = {}) {
+export function useGraph(opts: GraphOptions) {
   const url = computed(() => {
-    if (opts.focusNodeId) {
-      let u = `/api/graph/local/${opts.focusNodeId}?distance=${opts.maxDepth ?? 1}`;
-      if (opts.expandedNodes?.value && opts.expandedNodes.value.size > 0) {
-        const expand = Array.from(opts.expandedNodes.value)
-          .filter((id) => id !== opts.focusNodeId)
-          .join(",");
-        if (expand) {
-          u += `&expand=${expand}`;
-        }
+    let u = `/api/graph/local/${opts.focusNodeId}?distance=${opts.maxDepth ?? 1}`;
+    if (opts.expandedNodes?.value && opts.expandedNodes.value.size > 0) {
+      const expand = Array.from(opts.expandedNodes.value)
+        .filter((id) => id !== opts.focusNodeId)
+        .join(",");
+      if (expand) {
+        u += `&expand=${expand}`;
       }
-      return u;
     }
-    return "/api/graph";
+    return u;
   });
 
   const { data: graph } = authFetch<GraphLayout>(url, { lazy: true });

@@ -13,7 +13,7 @@ import { ref } from "vue";
 import { useGraph } from "~/composables/graph";
 
 const props = defineProps<{
-  focusNodeId?: string;
+  focusNodeId: string;
   maxDepth?: number;
 }>();
 
@@ -28,12 +28,15 @@ const onExpandNode = (nodeId: string) => {
 };
 
 // Pass a reactive proxy combining props and expandedNodes
-const opts = computed(() => ({
+// We're currently not using expanded nodes anywhere useful
+// TODO to restore it, fix the reactivity in the useGraph
+// see the change that added this commit.
+const _opts = computed(() => ({
   ...props,
   expandedNodes,
 }));
 
-const { nodesFiltered, edgesFiltered, ready } = useGraph(opts.value);
+const { nodesFiltered, edgesFiltered, ready } = useGraph(props);
 </script>
 
 <style>
