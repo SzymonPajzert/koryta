@@ -107,7 +107,10 @@ const { data: searchData, refresh } = authFetch("/api/search", {
   key: "omnisearch-data",
   lazy: true,
   query: computed(() => ({
-    q: debouncedSearch.value,
+    // If the user clears the search, immediately use an empty string to bypass debounce
+    // This prevents stale requests with the old term when focus triggers a refresh
+    q:
+      search.value === "" || search.value === null ? "" : debouncedSearch.value,
   })),
 });
 
