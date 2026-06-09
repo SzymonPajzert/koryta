@@ -8,9 +8,13 @@ import {
   type GraphLayout,
 } from "~~/shared/graph/util";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
-import type { Edge } from "~~/shared/model";
+import type { Edge, Person, Company, Region } from "~~/shared/model";
 import { getQuery, getRouterParam } from "h3";
-import { fetchNodes, fetchEdges, fetchEdgesClose } from "~~/server/utils/fetch";
+import {
+  fetchNodesByIds,
+  fetchEdges,
+  fetchEdgesClose,
+} from "~~/server/utils/fetch";
 
 async function fetchEdgesSmaller(
   centerNodeIds: string[],
@@ -34,12 +38,28 @@ export async function getLocalGraph(
     if (id) focusIds.add(id);
   }
 
-  const [peopleRaw, placesRaw, regionsRaw, edgesFromDBRaw] = await Promise.all([
-    fetchNodes("person", { bypassCache: false }),
-    fetchNodes("place", { bypassCache: false }),
-    fetchNodes("region", { bypassCache: false }),
-    fetchEdgesSmaller(Array.from(focusIds), distance),
-  ]);
+  const edgesFromDBRaw = await fetchEdgesSmaller(
+    Array.from(focusIds),
+    distance,
+  );
+
+  const neededNodeIds = new Set<string>(focusIds);
+  for (const edge of edgesFromDBRaw) {
+    neededNodeIds.add(edge.source);
+    neededNodeIds.add(edge.target);
+  }
+
+  const nodesRaw = await fetchNodesByIds(Array.from(neededNodeIds));
+
+  const peopleRaw: Record<string, Person> = {};
+  const placesRaw: Record<string, Company> = {};
+  const regionsRaw: Record<string, Region> = {};
+
+  for (const node of nodesRaw) {
+    if (node.type === "person") peopleRaw[node.id!] = node;
+    else if (node.type === "place") placesRaw[node.id!] = node;
+    else if (node.type === "region") regionsRaw[node.id!] = node;
+  }
 
   // Handle visibility filtering
   const people = Object.fromEntries(
