@@ -37,8 +37,9 @@ interface nodeData {
   place: Company;
   article: Article;
   region: Region;
-  record: unknown;
 }
+
+export type NodeDataUnion = nodeData[keyof nodeData];
 
 export interface FetchNodesOptions {
   nodeId?: string;
@@ -321,4 +322,29 @@ export async function fetchFirestore<T>(path: string): Promise<T> {
   const db = getDatabase();
   const snapshot = await db.ref(path).once("value");
   return snapshot.val() || {};
+}
+
+export async function fetchNodesByIds(
+  nodeIds: string[],
+): Promise<NodeDataUnion[]> {
+  if (!nodeIds || nodeIds.length === 0) return [];
+  const db = getFirestore("koryta-pl");
+  const uniqueIds = Array.from(new Set(nodeIds));
+  const nodes = [];
+
+  for (let i = 0; i < uniqueIds.length; i += 100) {
+    const chunk = uniqueIds.slice(i, i + 100);
+    const refs = chunk.map((id) => db.collection("nodes").doc(id));
+    const snaps = await db.getAll(...refs);
+
+    nodes.push(
+      ...snaps
+        .filter((snap) => snap.exists)
+        .map((snap) =>
+          parseNodeDoc(snap as FirebaseFirestore.QueryDocumentSnapshot),
+        ),
+    );
+  }
+
+  return nodes;
 }
