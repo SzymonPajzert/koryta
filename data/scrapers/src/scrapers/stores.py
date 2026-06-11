@@ -660,10 +660,6 @@ class Pipeline(typing.Generic[Output]):
 
         df = self.run_pipeline(ctx, ctx.refresh_policy)
 
-        if df is not None and self.output_path != "":
-            print(f"Writing to {self.output_path}")
-            write_dataframe(ctx, df, self.output_path, self.format)
-
         if df is not None:
             ctx.refresh_policy.add_refreshed_pipeline(self.pipeline_name)
             self._cached_result = df
@@ -714,7 +710,7 @@ class Pipeline(typing.Generic[Output]):
             gracefull = False
             raise e
         finally:
-            if gracefull:
+            if gracefull and not returned_df:
                 print("Dumping...")
                 dumper.dump_pandas()
                 print("Done")
