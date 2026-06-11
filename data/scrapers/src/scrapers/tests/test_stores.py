@@ -412,6 +412,69 @@ class TestPipeline(unittest.TestCase):
             # L2 depends on L3. L3 mtime(200) > L2 mtime(100).
             mock_l2_proc.assert_called_once()
 
+    def test_deep_dependency_timestamp_refresh(self):
+        """
+        Verify that if the most upstream dependency (L3) is newer than others,
+        all downstream pipelines (L2, L1) refresh.
+        """
+        pipeline = Level1()
+
+        written_files = {
+            "level1/level1.jsonl": pd.DataFrame({"l1": [1]}),
+            "level2/level2.jsonl": pd.DataFrame({"l2": [2]}),
+            "level3/level3.jsonl": pd.DataFrame({"l3": [3]}),
+        }
+
+        mtimes = {
+            "level1/level1.jsonl": 100.0,
+            "level2/level2.jsonl": 100.0,
+            "level3/level3.jsonl": 200.0,  # Newer!
+        }
+
+        def read_data_se(ref):
+            if isinstance(ref, LocalFile) and ref.filename in written_files:
+                m = Mock()
+                m.read_dataframe.return_value = written_files[ref.filename]
+                return m
+            raise FileNotFoundError(f"File {ref.filename} not found")
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
+
+        def get_mtime_se(ref):
+            if hasattr(ref, "filename") and ref.filename in mtimes:
+                return mtimes[ref.filename]
+            return None
+
+        self.mock_ctx.io.get_mtime.side_effect = get_mtime_se
+
+        def capture_written_df(fs, content):
+            pass
+
+        self.mock_ctx.io.write_file.side_effect = capture_written_df
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default()
+
+        with (
+            patch.object(
+                Level3, "process", return_value=pd.DataFrame({"l3": [3]}), autospec=True
+            ) as mock_l3_proc,
+            patch.object(
+                Level2, "process", return_value=pd.DataFrame({"l2": [2]}), autospec=True
+            ) as mock_l2_proc,
+            patch.object(
+                Level1, "process", return_value=pd.DataFrame({"l1": [1]}), autospec=True
+            ) as mock_l1_proc,
+        ):
+            pipeline.read_or_process(self.mock_ctx)
+
+            # L3 should NOT run (it is up to date, has no dependencies)
+            mock_l3_proc.assert_not_called()
+
+            # L2 should run because its dependency L3 is newer (200 > 100)
+            mock_l2_proc.assert_called_once()
+
+            # L1 should run because its dependency L2 refreshed
+            mock_l1_proc.assert_called_once()
+
     def test_diamond_dependency_double_execution(self):
         """
         Verify that in a diamond dependency (Top->Left->Bottom, Top->Right->Bottom),

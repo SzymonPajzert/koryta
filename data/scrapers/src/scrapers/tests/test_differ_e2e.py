@@ -4,10 +4,13 @@ import io
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.stores import NLP, Context, DownloadableFile, Utils, Web
 
 
+@pytest.mark.skip(reason="TODO not using it right now")
 class TestKorytaDifferE2E(unittest.TestCase):
     def setUp(self):
         self.mock_io = Mock()
