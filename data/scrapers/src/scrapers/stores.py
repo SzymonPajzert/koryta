@@ -426,6 +426,9 @@ class ProcessPolicy:
     exclude_refresh: set[str] = field(default_factory=set)
     refreshed_pipelines: set[str] = field(default_factory=set)
 
+    execution_decisions: dict[str, tuple[bool, str]] = field(default_factory=dict)
+    tree_printed: bool = False
+
     @staticmethod
     def with_default(
         refresh: list[str] = [],
@@ -445,6 +448,66 @@ class ProcessPolicy:
 
     def add_refreshed_pipeline(self, pipeline_name: str):
         self.refreshed_pipelines.add(pipeline_name)
+
+    def build_and_print_tree(self, root_pipeline: Any, ctx: Any):
+        def evaluate(pipeline) -> tuple[bool, str]:
+            if pipeline.pipeline_name in self.execution_decisions:
+                return self.execution_decisions[pipeline.pipeline_name]
+
+            # evaluate dependencies first so they are populated
+            for dep in getattr(pipeline, "dependencies", {}).values():
+                evaluate(dep)
+
+            if pipeline.pipeline_name in self.refreshed_pipelines:
+                decision = (False, "already refreshed")
+            elif self.should_refresh(pipeline.pipeline_name):
+                decision = (True, "policy")
+            else:
+                mtime = pipeline.output_time(ctx)
+                if mtime is None:
+                    decision = (True, "missing output")
+                else:
+                    decision = (False, "up to date")
+                    for dep_name, dep in getattr(pipeline, "dependencies", {}).items():
+                        if dep.volatile:
+                            continue
+
+                        dep_run, dep_reason = self.execution_decisions[
+                            dep.pipeline_name
+                        ]
+                        if dep_run:
+                            decision = (
+                                True,
+                                f"dependency {dep.pipeline_name} refreshed",
+                            )
+                            break
+
+                        dep_mtime = dep.output_time(ctx)
+                        if dep_mtime is None or dep_mtime > mtime:
+                            decision = (
+                                True,
+                                f"dependency {dep.pipeline_name} is newer",
+                            )
+                            break
+
+            self.execution_decisions[pipeline.pipeline_name] = decision
+            return decision
+
+        evaluate(root_pipeline)
+
+        # Now print nicely
+        print("\n=== Pipeline Execution Tree ===")
+
+        def print_tree(pipeline, indent=0):
+            run, reason = self.execution_decisions[pipeline.pipeline_name]
+            status = "[RUN] " if run else "[SKIP]"
+            print(f"{'  ' * indent}{status} {pipeline.pipeline_name} ({reason})")
+            for dep in getattr(pipeline, "dependencies", {}).values():
+                print_tree(dep, indent + 1)
+
+        print_tree(root_pipeline)
+        print("===============================\n")
+        self.tree_printed = True
 
 
 @dataclass
@@ -486,7 +549,7 @@ class Pipeline(typing.Generic[Output]):
     If you implement it, the pipeline output can be just passed as an input.
     """
 
-    filename: str | None | property
+    filename: str | None | property = None
     volatile: bool = False
     nested: int
     format: Formats = "jsonl"
@@ -555,46 +618,23 @@ class Pipeline(typing.Generic[Output]):
     @confirm_if_big
     def should_refresh_with_logic(self, ctx: Context) -> bool:
         """
-        Determines if the pipeline should refresh based on:
-        1. Explicit policy.
-        2. Missing output of the dependency.
-        3. Refresh upstream (policy or newer timestamp).
+        Determines if the pipeline should refresh based on the execution tree.
         """
+        if not ctx.refresh_policy.tree_printed:
+            ctx.refresh_policy.build_and_print_tree(self, ctx)
+
         if (
-            self.filename is not None
+            getattr(self, "filename", None) is not None
             and self.pipeline_name in ctx.refresh_policy.refreshed_pipelines
         ):
             # Already refreshed
             return False
 
-        if ctx.refresh_policy.should_refresh(self.pipeline_name):
-            print(f"Refreshing {self.pipeline_name} because of policy")
-            return True
+        if self.pipeline_name not in ctx.refresh_policy.execution_decisions:
+            return False
 
-        self_mtime = self.output_time(ctx)
-        if self_mtime is None:
-            print(f"Refreshing {self.pipeline_name} because of missing output")
-            return True
-
-        for dep_name, dep in self.dependencies.items():
-            if dep.volatile:
-                print(f"Dependency {self.pipeline_name} is volatile, skipping")
-                continue
-
-            if dep.should_refresh_with_logic(ctx):
-                print(
-                    f"Refreshing {self.pipeline_name} because of dependency {dep_name}"
-                )
-                return True
-
-            dep_output_time = dep.output_time(ctx)
-            if dep_output_time is None or dep_output_time > self_mtime:
-                print(
-                    f"Refreshing {self.pipeline_name} because of dependency {dep_name}"
-                )
-                return True
-
-        return False
+        run, reason = ctx.refresh_policy.execution_decisions[self.pipeline_name]
+        return run
 
     def read_or_process(
         self,
@@ -602,6 +642,9 @@ class Pipeline(typing.Generic[Output]):
     ) -> pd.DataFrame:
         if self._cached_result is not None:
             return self._cached_result
+
+        if not ctx.refresh_policy.tree_printed:
+            ctx.refresh_policy.build_and_print_tree(self, ctx)
 
         should_refresh = self.should_refresh_with_logic(ctx)
         if not should_refresh and self.filename is not None:
