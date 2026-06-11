@@ -159,12 +159,12 @@ EXPECTED_WIKIPEDIA = [
     Node(
         "Jan Tadeusz Pamuła",
         "BC0DFzdDXh4j9uSLWFGS",
-        "https://pl.wikipedia.org/wiki/Jan_Pamu%C5%82a_(ekonomista)",
+        "https://pl.wikipedia.org/wiki/Jan_Pamuła_(ekonomista)",
     ),
     Node(
         "Wojciech Franciszek Wróblewski",
         "ElNMza6uZcOfDiA77PRz",
-        "https://pl.wikipedia.org/wiki/Wojciech_Wr%C3%B3blewski_(socjolog)",
+        "https://pl.wikipedia.org/wiki/Wojciech_Wróblewski_(socjolog)",
     ),
 ]
 
