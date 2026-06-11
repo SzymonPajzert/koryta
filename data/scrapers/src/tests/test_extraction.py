@@ -43,7 +43,7 @@ NORMALIZED_LINKS_EXPECTED = {
 
 PEOPLE_EXPECTED = {
     "Józef Śliwa": People(
-        source=("https://pl.wikipedia.org/wiki/Józef Andrzej Śliwa"),
+        source=("https://pl.wikipedia.org/wiki/Józef_Śliwa"),
         full_name="Józef Andrzej Śliwa",
         party="Sojusz Lewicy Demokratycznej",
         birth_iso8601="1954-11-17",
@@ -53,7 +53,7 @@ PEOPLE_EXPECTED = {
         links=[],
     ),
     "Grzegorz Michał Pastuszko": People(
-        source=("https://pl.wikipedia.org/wiki/Grzegorz Michał Pastuszko"),
+        source=("https://pl.wikipedia.org/wiki/Grzegorz_Pastuszko"),
         full_name="Grzegorz Michał Pastuszko",
         party="",
         birth_iso8601="1981-09-17",
@@ -63,7 +63,7 @@ PEOPLE_EXPECTED = {
         links=[],
     ),
     "Marcin Chludziński": People(
-        source=("https://pl.wikipedia.org/wiki/Marcin Chludziński"),
+        source=("https://pl.wikipedia.org/wiki/Marcin_Chludziński"),
         full_name="Marcin Chludziński",
         party="",
         birth_iso8601="1979-00-00",
@@ -203,7 +203,7 @@ def list_test_files():
 
 @pytest.mark.parametrize("filename", list_test_files())
 def test_links(filename, ctx):
-    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
+    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests/wiki")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
         assert article is not None
@@ -217,7 +217,7 @@ def test_links(filename, ctx):
 
 @pytest.mark.parametrize("filename", list_test_files())
 def test_entity_extraction(filename, ctx):
-    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
+    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests/wiki")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
         assert article is not None
@@ -244,7 +244,7 @@ def test_entity_extraction(filename, ctx):
 
 @pytest.mark.parametrize("filename", TEST_FILES)
 def test_all_tested(filename, ctx):
-    path = ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).path
+    path = ctx.io.read_data(LocalFile(f"{filename}.xml", "tests/wiki")).path
     assert os.path.exists(path)
 
     if filename in PEOPLE_EXPECTED:
