@@ -36,7 +36,7 @@ def outputs_list(ctx, request) -> typing.Iterable[Person]:
         sys, "argv", ["koryta", "PeoplePayloads", "--region", request.param]
     ):
         pipeline = PeoplePayloads()
-        return pipeline.read_list(ctx)
+        return pipeline.read_or_process_list(ctx)
 
 
 @pytest.mark.parametrize("outputs_df", [("3061"), ("3063"), ("3064")], indirect=True)
@@ -184,9 +184,6 @@ def test_expected_wikipedia(outputs_df):
 
 @pytest.mark.parametrize("outputs_df", [("")], indirect=True)
 def test_election_year_counts(outputs_df):
-
-    print(outputs_df.columns)
-
     year_counts = (
         outputs_df["elections"]
         .explode()
@@ -195,4 +192,6 @@ def test_election_year_counts(outputs_df):
         .value_counts()
     )
     print(year_counts)
-    assert False
+    assert len(year_counts) > 10, (
+        "We expect multiple election years to be present in the data"
+    )
