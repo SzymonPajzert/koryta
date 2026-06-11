@@ -53,6 +53,7 @@ EXPECTED_COMPANIES = {
         sources=[
             Source(source="api-krs", source_krs="api-krs.ms.gov.pl", reason=None),
             Source(source="hardcoded", source_krs=None, reason="PUBLIC_COMPANIES_KRS"),
+            Source(source="rejestr-io", source_krs="rejestr.io", reason=None),
         ],
     ),
     "0000156806": Company(
