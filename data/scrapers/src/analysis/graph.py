@@ -72,6 +72,8 @@ class CommitteeParties(Pipeline):
     people_pkw_merged: PeoplePKWMerged
 
     def process(self, ctx: Context):
+        return pd.DataFrame.from_records([])
+        # TODO reenable CommitteeParties
         df = self.people_pkw_merged.read_or_process(ctx)
         df = flatten_parties(df)
 
