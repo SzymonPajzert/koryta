@@ -84,7 +84,7 @@ def lookup_teryt(teryt: Teryt, s: str, context: ElectionContext) -> str:
     year = context.year
     if year < 2000:
         return ""  # Bigger than wojs
-    if year == 2005:
+    if year in [2001, 2005]:
         # https://pl.wikipedia.org/wiki/Okr%C4%99g_wyborczy_nr_1_do_Sejmu_Rzeczypospolitej_Polskiej
         year = 2007
     try:
@@ -271,7 +271,7 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Obwód": None,
     "Obywatelstwo": None,
     "Odd.": None,
-    "Okręg": None,
+    "Okręg": SetField("teryt_candidacy", skippable=True).from_teryt(lookup_teryt),
     "Opis": None,
     "Oświadczenie": None,
     "Oznaczenie": None,
