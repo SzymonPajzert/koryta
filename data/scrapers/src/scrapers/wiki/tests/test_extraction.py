@@ -196,7 +196,7 @@ COMPANIES_EXPECTED = {
 def ctx():
     base_path = Path(__file__).parent.parent.parent.parent.parent / "tests" / "wiki"
     mapping: nested_dict = {
-        str(LocalFile(f"{file}.xml", "tests")): str(base_path / f"{file}.xml")
+        str(LocalFile(f"{file}.xml", "tests/wiki")): str(base_path / f"{file}.xml")
         for file in list_test_files()
     }
     return setup_test_context(get_test_context(), mapping)
@@ -227,7 +227,7 @@ def test_links(filename, ctx):
 
 @pytest.mark.parametrize("filename", list_test_files())
 def test_entity_extraction(filename, ctx):
-    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests")).read_file() as f:
+    with ctx.io.read_data(LocalFile(f"{filename}.xml", "tests/wiki")).read_file() as f:
         elem = ET.fromstring(f.read())
         article = WikiArticle.parse(elem)
 
@@ -259,7 +259,7 @@ def test_entity_extraction(filename, ctx):
 def test_all_tested(filename, ctx):
     # Verify the file exists in the context
     try:
-        ctx.io.read_data(LocalFile(f"{filename}.xml", "tests"))
+        ctx.io.read_data(LocalFile(f"{filename}.xml", "tests/wiki"))
     except FileNotFoundError:
         pytest.fail(f"Test file {filename}.xml not found in mock context")
 
