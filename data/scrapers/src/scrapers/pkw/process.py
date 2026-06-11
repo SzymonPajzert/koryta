@@ -130,9 +130,12 @@ def process_csv(
             p = csv_headers[k]
             if p is None:
                 continue
-            mapped[p.name] = p.processor(
+            val = p.processor(
                 v, ElectionContext(config.year, config.election_type)
             )
+            # Only overwrite if the new value is truthy, or if not yet set
+            if val or p.name not in mapped:
+                mapped[p.name] = val
 
         try:
             yield extract_data(

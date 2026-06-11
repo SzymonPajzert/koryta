@@ -58,3 +58,42 @@ def test_successful_company_names(ctx, region):
     print(f"Named companies: {named_companies}/{total_companies} ({ratio:.2%})")
 
     assert ratio > 0.8, f"Less than 80% of companies have names resolved: {ratio:.2%}"
+
+
+def test_teryt_is_set_for_extracted_people(ctx):
+    # Testing that the teryt is set for elections in an extracted person
+    df = extract(ctx, "14")
+
+    people_with_relevant_elections = 0
+    for elections in df["elections"]:
+        if not isinstance(elections, list):
+            continue
+
+        has_relevant = False
+        for election in elections:
+            teryt = (
+                (
+                    election.get("teryt_powiat") and election["teryt_powiat"][0]
+                    if election.get("teryt_powiat")
+                    else None
+                )
+                or (
+                    election.get("teryt_wojewodztwo")
+                    and election["teryt_wojewodztwo"][0]
+                    if election.get("teryt_wojewodztwo")
+                    else None
+                )
+                or ""
+            )
+            if teryt != "" and teryt.startswith("14"):
+                has_relevant = True
+                people_with_relevant_elections += 1
+                break
+
+        assert has_relevant, (
+            f"Person extracted for region 14 without matching elections: {elections}"
+        )
+
+    assert people_with_relevant_elections > 0, (
+        "No people extracted with relevant elections for region 14"
+    )
