@@ -27,7 +27,7 @@ def outputs_df(ctx, request):
         sys, "argv", ["koryta", "PeoplePayloads", "--region", request.param]
     ):
         pipeline = PeoplePayloads()
-        return pipeline.read(ctx)
+        return pipeline.read_or_process(ctx)
 
 
 @pytest.fixture
@@ -180,3 +180,19 @@ def test_expected_wikipedia(outputs_df):
             missing.append(expected.url)
 
     assert not missing, f"Missing Wikipedia pages: {missing}"
+
+
+@pytest.mark.parametrize("outputs_df", [("")], indirect=True)
+def test_election_year_counts(outputs_df):
+
+    print(outputs_df.columns)
+
+    year_counts = (
+        outputs_df["elections"]
+        .explode()
+        .dropna()
+        .apply(lambda election: election.get("election_year", None))
+        .value_counts()
+    )
+    print(year_counts)
+    assert False
