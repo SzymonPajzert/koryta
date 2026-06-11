@@ -25,29 +25,33 @@ export function calculateExperience(edges: Edge[]): number {
     }
   }
 
-  if (intervals.length === 0) {
+  if (intervals.length === 0 || intervals[0] === undefined) {
     return 0;
   }
-
   intervals.sort((a, b) => a.start - b.start);
 
-  let mergedExperienceMs = 0;
-  let currentStart = intervals[0].start;
-  let currentEnd = intervals[0].end;
+  const result = intervals.reduce<{
+    mergedExperienceMs: number;
+    start: number;
+    end: number;
+  }>(
+    (acc, nextInterval) => {
+      if (nextInterval.start <= acc.end) {
+        acc.end = Math.max(acc.end, nextInterval.end);
+      } else {
+        acc.mergedExperienceMs += acc.end - acc.start;
+        acc.start = nextInterval.start;
+        acc.end = nextInterval.end;
+      }
+      return acc;
+    },
+    { mergedExperienceMs: 0, start: intervals[0].start, end: intervals[0].end },
+  );
 
-  for (let i = 1; i < intervals.length; i++) {
-    const nextInterval = intervals[i];
-    if (nextInterval.start <= currentEnd) {
-      currentEnd = Math.max(currentEnd, nextInterval.end);
-    } else {
-      mergedExperienceMs += currentEnd - currentStart;
-      currentStart = nextInterval.start;
-      currentEnd = nextInterval.end;
-    }
-  }
-  mergedExperienceMs += currentEnd - currentStart;
+  result.mergedExperienceMs += result.end - result.start;
 
-  const experienceMonths = mergedExperienceMs / (1000 * 60 * 60 * 24 * 30.44);
+  const experienceMonths =
+    result.mergedExperienceMs / (1000 * 60 * 60 * 24 * 30.44);
   return Math.floor((experienceMonths / 12) * 10) / 10;
 }
 
