@@ -8,8 +8,13 @@
   >
     <v-card-title> Analizuj powiązania </v-card-title>
     <v-card-text>
-      <span class="d-none d-md-inline">Wybierz region z mapy po lewej stronie, by zobaczyć powiązane osoby.</span>
-      <span class="d-md-none">Wybierz region z mapy na górze, by zobaczyć powiązane osoby.</span>
+      <span class="d-none d-md-inline"
+        >Wybierz region z mapy po lewej stronie, by zobaczyć powiązane
+        osoby.</span
+      >
+      <span class="d-md-none"
+        >Wybierz region z mapy na górze, by zobaczyć powiązane osoby.</span
+      >
     </v-card-text>
   </v-card>
   <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400" rounded="lg">
