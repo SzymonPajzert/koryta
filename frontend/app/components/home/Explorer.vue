@@ -1,6 +1,12 @@
 <template>
   <v-container :style="{ background: 'white' }">
     <v-row>
+      <v-col cols="12" class="d-md-none pb-0">
+        <v-tabs v-model="search" color="primary" grow>
+          <v-tab value="map">Mapa</v-tab>
+          <v-tab value="parties">Partie</v-tab>
+        </v-tabs>
+      </v-col>
       <v-col cols="12" md="8">
         <v-tabs-window v-model="search">
           <v-tabs-window-item value="map">
@@ -38,7 +44,7 @@
         </v-tabs-window>
       </v-col>
       <v-col cols="12" md="4">
-        <v-tabs v-model="search" color="primary" grow>
+        <v-tabs v-model="search" color="primary" grow class="d-none d-md-flex">
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="parties">Partie</v-tab>
         </v-tabs>
