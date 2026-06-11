@@ -54,6 +54,47 @@ describe("shared/stats.ts", () => {
       // From 2023-01-01 to 2024-01-01 is 1 year.
       expect(calculateExperience(edges)).toBeCloseTo(0.9, 1);
     });
+
+    it("should correctly handle overlapping employment periods", () => {
+      const edges: Edge[] = [
+        {
+          type: "employed",
+          start_date: "2020-01-01T00:00:00Z",
+          end_date: "2022-01-01T00:00:00Z",
+        } as Edge,
+        {
+          type: "employed", // Fully overlapping inside
+          start_date: "2020-06-01T00:00:00Z",
+          end_date: "2021-06-01T00:00:00Z",
+        } as Edge,
+        {
+          type: "employed", // Overlapping tail end
+          start_date: "2021-06-01T00:00:00Z",
+          end_date: "2023-01-01T00:00:00Z",
+        } as Edge,
+      ];
+      // Total span is 2020-01-01 to 2023-01-01. That's exactly 3 years (1096 days).
+      // 1096 / 30.44 = 36 months -> 3.0 years
+      expect(calculateExperience(edges)).toBeCloseTo(3.0, 1);
+    });
+
+    it("should correctly handle non-overlapping employment periods", () => {
+      const edges: Edge[] = [
+        {
+          type: "employed",
+          start_date: "2020-01-01T00:00:00Z",
+          end_date: "2021-01-01T00:00:00Z", // 366 days
+        } as Edge,
+        {
+          type: "employed",
+          start_date: "2022-01-01T00:00:00Z",
+          end_date: "2023-01-01T00:00:00Z", // 365 days
+        } as Edge,
+      ];
+      // Total span is 366 + 365 = 731 days
+      // 731 / 30.44 = 24.01 months -> 2.0 years
+      expect(calculateExperience(edges)).toBeCloseTo(2.0, 1);
+    });
   });
 
   describe("computeVoteStats", () => {

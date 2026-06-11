@@ -1,7 +1,8 @@
 import type { NodeStats, VoteDocument, Note, Edge } from "./model";
 
 export function calculateExperience(edges: Edge[]): number {
-  let experienceMonths = 0;
+  const intervals: { start: number; end: number }[] = [];
+
   for (const edge of edges) {
     if (edge.type === "employed") {
       const startStr =
@@ -13,15 +14,40 @@ export function calculateExperience(edges: Edge[]): number {
           ? edge.end_date.split("T")[0]
           : null;
 
-      const start = startStr ? new Date(startStr) : null;
-      const end = endStr ? new Date(endStr) : new Date();
+      const start = startStr ? new Date(startStr).getTime() : null;
+      const end = endStr ? new Date(endStr).getTime() : new Date().getTime();
 
-      if (start && !isNaN(start.getTime()) && !isNaN(end.getTime())) {
-        const diffMs = end.getTime() - start.getTime();
-        experienceMonths += diffMs / (1000 * 60 * 60 * 24 * 30.44);
+      if (start && !isNaN(start) && !isNaN(end)) {
+        if (start <= end) {
+          intervals.push({ start, end });
+        }
       }
     }
   }
+
+  if (intervals.length === 0) {
+    return 0;
+  }
+
+  intervals.sort((a, b) => a.start - b.start);
+
+  let mergedExperienceMs = 0;
+  let currentStart = intervals[0].start;
+  let currentEnd = intervals[0].end;
+
+  for (let i = 1; i < intervals.length; i++) {
+    const nextInterval = intervals[i];
+    if (nextInterval.start <= currentEnd) {
+      currentEnd = Math.max(currentEnd, nextInterval.end);
+    } else {
+      mergedExperienceMs += currentEnd - currentStart;
+      currentStart = nextInterval.start;
+      currentEnd = nextInterval.end;
+    }
+  }
+  mergedExperienceMs += currentEnd - currentStart;
+
+  const experienceMonths = mergedExperienceMs / (1000 * 60 * 60 * 24 * 30.44);
   return Math.floor((experienceMonths / 12) * 10) / 10;
 }
 
