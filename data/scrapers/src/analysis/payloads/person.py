@@ -14,7 +14,7 @@ PARTY_CONFIDENCE_TRESHOLD = 0.8
 
 
 class PeoplePayloads(Pipeline[Person]):
-    filename = None
+    filename = "people_payloads"
 
     people: Extract
     people_parties: PeopleParties

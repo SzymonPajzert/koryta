@@ -27,7 +27,7 @@ def outputs_df(ctx, request):
         sys, "argv", ["koryta", "PeoplePayloads", "--region", request.param]
     ):
         pipeline = PeoplePayloads()
-        return pipeline.read_or_process(ctx)
+        return pipeline.read(ctx)
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def outputs_list(ctx, request) -> typing.Iterable[Person]:
         sys, "argv", ["koryta", "PeoplePayloads", "--region", request.param]
     ):
         pipeline = PeoplePayloads()
-        return pipeline.read_or_process_list(ctx)
+        return pipeline.read_list(ctx)
 
 
 @pytest.mark.parametrize("outputs_df", [("3061"), ("3063"), ("3064")], indirect=True)
