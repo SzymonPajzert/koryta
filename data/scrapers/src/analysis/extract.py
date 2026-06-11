@@ -251,9 +251,7 @@ class Extract(Pipeline):
                         or head_or_none(election["teryt_wojewodztwo"])
                         or ""
                     )
-                    if teryt == "":
-                        raise ValueError(f"Election without teryt {election}")
-                    if not teryt.startswith(self.args.region):
+                    if teryt == "" or not teryt.startswith(self.args.region):
                         election_ok = False
 
                 if self.election_after:
@@ -283,7 +281,7 @@ class Extract(Pipeline):
         people = self.people.read_or_process(ctx)
         self.teryt.read_or_process(ctx)
 
-        print(f"Relevant companies are: {self.relevant_companies(ctx)}")
+        # print(f"Relevant companies are: {self.relevant_companies(ctx)}")
 
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())

@@ -34,6 +34,7 @@ def check_name_in_list(tlustekoty: list[str]):
 
 
 class Statistics(Pipeline):
+    volatile = True
     filename = None  # There's no input to be memoized
     people: PeopleEnriched
 

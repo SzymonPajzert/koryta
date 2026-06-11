@@ -5,9 +5,20 @@ from entities.person import RejestrIOKey
 from scrapers.krs.scrape import ScrapeRejestrIO
 
 
-def test_people_to_scrape():
-    ctx = setup_context(False)[0]
-    scraper = ScrapeRejestrIO()
+@pytest.fixture(scope="module")
+def ctx():
+    return setup_context(False)[0]
+
+
+@pytest.fixture(scope="module")
+def scraper_output(ctx):
+    scraper_obj = ScrapeRejestrIO()
+    df = scraper_obj.read_or_process_list(ctx)
+    return scraper_obj, df
+
+
+def test_people_to_scrape(ctx, scraper_output):
+    scraper, _ = scraper_output
     scraped = scraper.people_to_scrape(ctx)
 
     # Konrad Zaradny is 5XM9lfVLrdvBODLJIrDM in Koryta
@@ -57,9 +68,8 @@ def test_people_to_scrape():
 
 
 @pytest.mark.parametrize("krs", ["0000607833", "0000001920"])
-def test_companies_to_scrape_specific(krs):
-    ctx = setup_context(False)[0]
-    scraper = ScrapeRejestrIO()
+def test_companies_to_scrape_specific(ctx, krs, scraper_output):
+    scraper, _ = scraper_output
     to_scrape = scraper.companies_to_scrape(ctx)
 
     print(f"Companies to scrape: {len(to_scrape)}")
@@ -69,15 +79,13 @@ def test_companies_to_scrape_specific(krs):
 
 
 @pytest.mark.skip("TODO - restore krs_scraped")
-def test_companies_to_scrape_filtering():
+def test_companies_to_scrape_filtering(scraper_output):
     """
     This test checks that companies to be scraped
     don't have specific blobs already uploaded.
     """
 
-    ctx = setup_context(False)[0]
-    scraper = ScrapeRejestrIO()
-    to_scrape = scraper.read_or_process_list(ctx)
+    _, to_scrape = scraper_output
     krs_scraped = {}
 
     for query in to_scrape:

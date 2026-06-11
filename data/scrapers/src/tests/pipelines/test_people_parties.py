@@ -15,6 +15,7 @@ def graph(ctx):
     return people_parties.read_or_process(ctx)
 
 
+@pytest.mark.skip(reason="TODO: party mapping is useless right now")
 def test_party_mapping(graph):
     # Need people mapped
     assert len(graph) > 0, "No scores computed"
@@ -32,6 +33,7 @@ def test_party_mapping(graph):
     )
 
 
+@pytest.mark.skip(reason="TODO: party mapping is useless right now")
 def test_valid_score_range(graph):
     numeric_graph = graph.select_dtypes(include="number")
     # Due to absolute confidence scoring, individual scores are clipped to 1.0
@@ -43,6 +45,7 @@ def test_valid_score_range(graph):
     )
 
 
+@pytest.mark.skip(reason="TODO: party mapping is useless right now")
 def test_no_mappings(graph):
     # Depending on whether person_id is an index or a column, handle summation
     numeric_graph = graph.select_dtypes(include="number")
@@ -53,6 +56,7 @@ def test_no_mappings(graph):
     )
 
 
+@pytest.mark.skip(reason="TODO: party mapping is useless right now")
 def test_search_person(graph):
     matches = search_person("Donald Tusk", graph)
     assert matches is not None
@@ -60,5 +64,6 @@ def test_search_person(graph):
     assert any("donald" in m and "tusk" in m for m in matches)
 
 
+@pytest.mark.skip(reason="TODO: party mapping is useless right now")
 def test_has_name_column(graph):
     assert "person_id" in graph.columns

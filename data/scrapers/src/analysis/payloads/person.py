@@ -14,7 +14,8 @@ PARTY_CONFIDENCE_TRESHOLD = 0.8
 
 
 class PeoplePayloads(Pipeline[Person]):
-    filename = "people_payloads"
+    # TODO save to the same file as extract
+    volatile = True
 
     people: Extract
     people_parties: PeopleParties
