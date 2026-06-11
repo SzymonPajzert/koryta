@@ -117,7 +117,7 @@ export function applyPartiesFilter(
   return query;
 }
 
-export function parseNodeDoc<T extends { id: string; visibility: boolean }>(
+export function parseNodeDoc<T extends { id?: string; visibility?: boolean }>(
   doc: FirebaseFirestore.QueryDocumentSnapshot,
 ): T {
   const data = doc.data();
@@ -327,7 +327,7 @@ export async function fetchFirestore<T>(path: string): Promise<T> {
 export async function fetchNodesByIds(
   nodeIds: string[],
 ): Promise<NodeDataUnion[]> {
-  if (!nodeIds || nodeIds.length === 0) return [];
+  if (nodeIds.length === 0) return [];
   const db = getFirestore("koryta-pl");
   const uniqueIds = Array.from(new Set(nodeIds));
   const nodes = [];
@@ -341,7 +341,9 @@ export async function fetchNodesByIds(
       ...snaps
         .filter((snap) => snap.exists)
         .map((snap) =>
-          parseNodeDoc(snap as FirebaseFirestore.QueryDocumentSnapshot),
+          parseNodeDoc<NodeDataUnion>(
+            snap as FirebaseFirestore.QueryDocumentSnapshot,
+          ),
         ),
     );
   }

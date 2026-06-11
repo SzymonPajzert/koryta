@@ -1,5 +1,5 @@
 <template>
-  <GraphContainer :filtered="filtered" />
+  <GraphContainer :filtered="filtered" focus-node-id="0" />
 </template>
 
 <script setup lang="ts">
