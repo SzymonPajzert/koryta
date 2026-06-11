@@ -12,7 +12,7 @@
         rounded
       >
         <template #prepend>
-          <v-icon :icon="nodeIcon(edge.richNode.type)" />
+          <v-icon :icon="getIcon(edge.richNode.type)" />
         </template>
 
         <template #title>
@@ -39,7 +39,25 @@
 </template>
 
 <script lang="ts" setup>
-import { nodeIcon } from "~~/shared/model";
+import {
+  mdiAccountOutline,
+  mdiOfficeBuildingOutline,
+  mdiFileDocumentOutline,
+  mdiCommentArrowRightOutline,
+} from "@mdi/js";
+
+function getIcon(type: string) {
+  switch (type) {
+    case "person":
+      return mdiAccountOutline;
+    case "place":
+      return mdiOfficeBuildingOutline;
+    case "article":
+      return mdiFileDocumentOutline;
+    default:
+      return mdiCommentArrowRightOutline;
+  }
+}
 
 const props = defineProps<{
   edges: EdgeNode[];
