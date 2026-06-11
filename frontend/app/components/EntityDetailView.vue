@@ -136,7 +136,11 @@
             border: 1px solid #ccc;
           "
         >
-          <GraphContainer :key="node" :focus-node-id="node" :max-depth="1" />
+          <LazyGraphContainer
+            :key="node"
+            :focus-node-id="node"
+            :max-depth="1"
+          />
         </div>
         <div v-else class="mt-4 d-flex justify-center">
           <v-btn
