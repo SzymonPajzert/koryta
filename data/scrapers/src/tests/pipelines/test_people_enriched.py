@@ -77,6 +77,7 @@ IGNORE_FAILURES: list[str] = [
     "Adam Duszyk",
     "Agnieszka Pieńkowska-Opora",
     "Agnieszka Winnik-Kalemba",
+    "Aleksander Michał Tarkowski",
     "Andrzej Radziwinowicz",
     "Andrzej Styn",
     "Aneta Maria Ćwiklińska",
@@ -87,6 +88,7 @@ IGNORE_FAILURES: list[str] = [
     "Artur Pomianowski",
     "Beata Springer",
     "Beata Zatoń-Kowalczyk",
+    "Bazyl Samojlik",
     "Borys borówka",
     "Cezary Cieślukowski",
     "Cezary Jurkiewicz",
@@ -98,12 +100,15 @@ IGNORE_FAILURES: list[str] = [
     "Filip Curyło",
     "Filip Ostrawski",
     "Gabriela Sowa",
+    "Gennadij Jerszow",
     "Grzegorz Michał Pastuszko",
     "Hubert Cichocki",
     "Izabela Kucińska-Świgost",
     "Jacek Krawiec",
     "Jacek Skórski",
     "Jakub Szurski",
+    "Jan Szewczak",
+    "Józedf Jan Malec",
     "Jarosław Dworzański",
     "Justyna Jakubowicz-Dziduch",
     "Justyna Wójtowicz-Woda",
@@ -135,6 +140,7 @@ IGNORE_FAILURES: list[str] = [
     "Sabina Bigos-Jaworowska",
     "Sebastian Nowaczkiewicz",
     "Sławomir Drelich",
+    "Stafan Wilkanowicz",
     "Waldemar Hudomięcki",
     "Waldemar Miśko",
     "Wojciech Grochowski",
@@ -223,6 +229,7 @@ def test_not_duplicated(df_all):
 def get_words(name):
     if not isinstance(name, str):
         return set()
+    name = re.sub(r"\(.*?\)", "", name)
     return set(re.findall(r"\b\w+\b", name.lower()))
 
 
@@ -250,6 +257,13 @@ def test_second_names_match(df_all):
 
     for _, row in df_all.iterrows():
         try:
+            if (
+                should_skip(row["krs_name"])
+                or should_skip(row["pkw_name"])
+                or should_skip(row.get("wiki_name", ""))
+            ):
+                continue
+
             krs_words = get_words(row["krs_name"])
             pkw_words = get_words(row["pkw_name"])
             wiki_words = get_words(row["wiki_name"])

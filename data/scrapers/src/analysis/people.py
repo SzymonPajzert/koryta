@@ -169,7 +169,7 @@ def people_merged(
         LEFT JOIN wiki_people w
             ON (kp.birth_date = w.birth_date OR w.birth_date IS NULL)
             AND kp.base_last_name = w.last_name
-            AND kp.base_first_name = w.first_name
+            AND jaro_winkler_similarity(kp.base_first_name, w.first_name) > 0.85
     ),
     all_sources AS (
         SELECT
