@@ -670,6 +670,13 @@ class Pipeline(typing.Generic[Output]):
 
         return df
 
+    def read_list(self, ctx: Context) -> typing.Iterable[Output]:
+        df = self.read(ctx)
+        assert df is not None, (
+            f"Expected to read dataframe for {self.pipeline_name}, but got None"
+        )
+        return iterate_pipeline(df, self.output_class)
+
     def read_or_process_list(self, ctx: Context) -> typing.Iterable[Output]:
         return iterate_pipeline(self.read_or_process(ctx), self.output_class)
 
