@@ -1,37 +1,46 @@
 <template>
-  <v-list class="px-2" lines="one" variant="flat">
+  <v-list class="px-2" variant="flat">
     <h3 class="text-h6 mb-2">Historia powiązań</h3>
 
-    <div class="pa-3">
+    <div class="pa-1">
       <v-list-item
         v-for="edge in edgesSorted"
         :key="edge.id"
         :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
         base-color="surface-light"
-        class="mt-2"
+        class="mt-1"
         rounded
       >
         <template #prepend>
           <v-icon :icon="getIcon(edge.richNode.type)" />
         </template>
 
-        <template #title>
-          <span class="text-subtitle-2 font-weight-bold">{{
-            edge.richNode.name
-          }}</span>
-        </template>
+        <v-list-item-title class="text-subtitle-2 font-weight-bold text-wrap">
+          {{ edge.richNode.name }}
+        </v-list-item-title>
 
-        <template #subtitle>
-          <span class="text-caption">{{ edgeLabel(edge) }}</span>
-        </template>
+        <div class="text-caption text-medium-emphasis text-wrap">
+          {{ edgeLabel(edge) }}
+        </div>
 
-        <template #append>
+        <div class="d-md-none mt-2 pb-2">
           <ChipRelativeDuration
             :start="edge.start_date"
             :end="edge.end_date"
             :min-start="minStart"
             :max-end="maxEnd"
           />
+        </div>
+
+        <template #append>
+          <div class="d-none d-md-flex">
+            <ChipRelativeDuration
+              :start="edge.start_date"
+              :end="edge.end_date"
+              :min-start="minStart"
+              :max-end="maxEnd"
+            />
+          </div>
         </template>
       </v-list-item>
     </div>
