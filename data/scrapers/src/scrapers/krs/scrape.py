@@ -316,6 +316,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
+    already_scraped: KRSAlreadyScraped
     companies_all: Companies
     hardcoded_people: PeopleRejestrIOHardcoded
     people: PeopleKRS
@@ -350,10 +351,10 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         return KRSSet(KRS(krs) for krs in series.tolist())
 
     def already_scraped_companies(self, ctx: Context) -> KRSSet:
-        scraped_companies = self.companies.read_or_process(ctx)
-        return KRSSet(
-            KRS(id=str(krs).zfill(10)) for krs in scraped_companies["krs"].tolist()
-        )
+        scraped = self.already_scraped.read_or_process(ctx)
+        if scraped is None or scraped.empty:
+            return KRSSet()
+        return KRSSet(KRS(id=str(krs).zfill(10)) for krs in scraped["krs"].unique())
 
     def companies_to_scrape(self, ctx: Context) -> KRSSet:
         self.hardcoded_companies.process(ctx)
