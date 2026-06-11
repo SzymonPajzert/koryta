@@ -126,6 +126,7 @@
         />
 
         <div
+          v-if="!smAndDown || showGraph"
           class="mt-4"
           style="
             height: 500px;
@@ -136,6 +137,16 @@
           "
         >
           <GraphContainer :key="node" :focus-node-id="node" :max-depth="1" />
+        </div>
+        <div v-else class="mt-4 d-flex justify-center">
+          <v-btn
+            color="primary"
+            variant="tonal"
+            :prepend-icon="mdiGraphOutline"
+            @click="showGraph = true"
+          >
+            Pokaż graf powiązań
+          </v-btn>
         </div>
 
         <NoteEditor :node-id="node" class="mt-4" />
@@ -308,6 +319,7 @@ import type {
   NodeType,
 } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
+import { useDisplay } from "vuetify";
 
 definePageMeta({
   affineLink: "0Jk7aUVzpBbKpnGw-NNqZ",
@@ -325,6 +337,9 @@ const route = useRoute();
 
 const { user } = useAuthState();
 const router = useRouter();
+
+const { smAndDown } = useDisplay();
+const showGraph = ref(false);
 
 const handleLoginRedirect = () => {
   router.push({
