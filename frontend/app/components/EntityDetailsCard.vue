@@ -10,7 +10,7 @@
         :party="party"
       />
       <v-spacer />
-      <div>
+      <div class="d-none d-md-inline">
         <v-spacer />
         <ButtonVoteWidget
           v-if="entity"
