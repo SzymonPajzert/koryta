@@ -52,7 +52,7 @@ PEOPLE_EXPECTED = {
         content_score=1,
         links=[],
     ),
-    "Grzegorz Michał Pastuszko": People(
+    "Grzegorz Pastuszko": People(
         source=("https://pl.wikipedia.org/wiki/Grzegorz_Pastuszko"),
         full_name="Grzegorz Michał Pastuszko",
         party="",
