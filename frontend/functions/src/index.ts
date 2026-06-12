@@ -50,13 +50,24 @@ export const getPageTitle = functions.https.onCall<incomingUrl>(
       const $ = cheerio.load(html);
       const title = $("title").first().text().trim();
 
+      let meta: any = undefined;
+      const ldJsonScript = $('script[type="application/ld+json"]').first().html();
+      if (ldJsonScript) {
+        try {
+          JSON.parse(ldJsonScript); // Verify it's valid JSON
+          meta = { ldJson: ldJsonScript };
+        } catch (e) {
+          functions.logger.warn(`Failed to parse ld+json for URL: ${url}`);
+        }
+      }
+
       if (!title) {
         // Jeśli tytuł jest pusty, ale strona została pobrana
         functions.logger.warn(`No title found for URL: ${url}`);
-        return { title: "" };
+        return { title: "", ...(meta ? { meta } : {}) };
       }
 
-      return { title: title };
+      return { title: title, ...(meta ? { meta } : {}) };
     } catch (error: unknown) {
       functions.logger.error(
         `Error fetching page title for URL: ${url}`,

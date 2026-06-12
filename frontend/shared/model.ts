@@ -165,6 +165,7 @@ export interface Article extends Omit<Node, "type"> {
   type: "article";
   sourceURL: string;
   shortName?: string;
+  date?: string;
 }
 
 export interface Region extends Omit<Node, "type"> {
