@@ -370,6 +370,26 @@ class CrawlQueue(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    def get_batch(
+        self,
+        worker_id: str,
+        batch_size: int = 16,
+        max_retries: int = 3,
+        timeout_seconds: float = 60,
+    ) -> list[CrawlQueueItem]:
+        """Atomically claim up to batch_size URLs for processing.
+
+        Default implementation calls get() repeatedly; subclasses may override
+        with a single-query implementation.
+        """
+        items = []
+        for _ in range(batch_size):
+            item = self.get(worker_id, max_retries, timeout_seconds)
+            if item is None:
+                break
+            items.append(item)
+        return items
+
     @abstractmethod
     def mark_done(
         self,
@@ -380,10 +400,23 @@ class CrawlQueue(metaclass=ABCMeta):
         """Mark a URL as successfully crawled."""
         raise NotImplementedError()
 
+    def mark_done_batch(
+        self,
+        items: list[tuple[str, str | None, dict[str, object]]],
+    ) -> None:
+        """Batch-mark URLs as crawled. Default calls mark_done() per item."""
+        for uid, storage_path, metadata in items:
+            self.mark_done(uid, storage_path, metadata)
+
     @abstractmethod
     def mark_error(self, uid: str, error: str) -> None:
         """Record an error and increment retries."""
         raise NotImplementedError()
+
+    def mark_error_batch(self, items: list[tuple[str, str]]) -> None:
+        """Batch-record errors. Default calls mark_error() per item."""
+        for uid, error in items:
+            self.mark_error(uid, error)
 
     @abstractmethod
     def release(self, uid: str) -> None:

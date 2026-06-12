@@ -221,6 +221,45 @@ class PostgresCrawlQueue(CrawlQueue):
                 return None
             return CrawlQueueItem(row[0], row[1], row[2])
 
+    def get_batch(
+        self,
+        worker_id: str,
+        batch_size: int = 16,
+        max_retries: int = 3,
+        timeout_seconds: float = 60,
+    ) -> list[CrawlQueueItem]:
+        """Atomically claim up to batch_size URLs in a single query."""
+        now = datetime.now(warsaw_tz)
+        with self.pg.transaction() as transaction:
+            transaction.execute(
+                """
+                WITH candidates AS (
+                    SELECT wi.id
+                    FROM website_index wi
+                    WHERE wi.done = FALSE
+                      AND wi.num_retries < %s
+                      AND (wi.locked_by_worker_id IS NULL OR wi.locked_at <= %s)
+                    ORDER BY wi.priority ASC, wi.id ASC
+                    LIMIT %s
+                    FOR UPDATE SKIP LOCKED
+                )
+                UPDATE website_index wi
+                SET locked_by_worker_id = %s, locked_at = %s
+                FROM candidates
+                WHERE wi.id = candidates.id
+                RETURNING wi.id, wi.url, wi.priority;
+                """,
+                (
+                    max_retries,
+                    now - timedelta(seconds=timeout_seconds),
+                    batch_size,
+                    worker_id,
+                    now,
+                ),
+            )
+            rows = transaction.fetchall()
+        return [CrawlQueueItem(r[0], r[1], r[2]) for r in rows]
+
     def mark_done(
         self,
         uid: str,
@@ -244,6 +283,35 @@ class PostgresCrawlQueue(CrawlQueue):
             "errors = array_append(COALESCE(errors, '{}'::text[]), %s), "
             "locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
             [error, uid],
+        )
+
+    def mark_done_batch(
+        self,
+        items: list[tuple[str, str | None, dict]],
+    ) -> None:
+        """Batch-mark URLs done in a single executemany call."""
+        if not items:
+            return
+        now = datetime.now(warsaw_tz)
+        self.pg.executemany(
+            "UPDATE website_index SET done = TRUE, date_finished = %s, "
+            "locked_by_worker_id = NULL, locked_at = NULL, "
+            "storage_path = %s, metadata = %s WHERE id = %s",
+            [
+                (now, storage_path, Jsonb(metadata), uid)
+                for uid, storage_path, metadata in items
+            ],
+        )
+
+    def mark_error_batch(self, items: list[tuple[str, str]]) -> None:
+        """Batch-record errors in a single executemany call."""
+        if not items:
+            return
+        self.pg.executemany(
+            "UPDATE website_index SET num_retries = COALESCE(num_retries, 0) + 1, "
+            "errors = array_append(COALESCE(errors, '{}'::text[]), %s), "
+            "locked_by_worker_id = NULL, locked_at = NULL WHERE id = %s",
+            [(error, uid) for uid, error in items],
         )
 
     def release(self, uid: str) -> None:

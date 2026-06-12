@@ -2,7 +2,11 @@ from datetime import datetime
 from typing import Generator
 from zoneinfo import ZoneInfo
 
+import google.auth
+import google.auth.transport.requests
 import google.cloud.storage as storage
+import requests.adapters
+from google.api_core import exceptions as gcs_exceptions
 from tqdm import tqdm
 
 from entities.util import NormalizedParse
@@ -12,11 +16,24 @@ BUCKET = "koryta-pl-crawled"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 
+_GCS_POOL_SIZE = 256  # generous cap; pool is lazy so unused slots cost nothing
+
+
+def _make_gcs_client() -> storage.Client:
+    credentials, project = google.auth.default()
+    session = google.auth.transport.requests.AuthorizedSession(credentials)
+    adapter = requests.adapters.HTTPAdapter(
+        pool_connections=_GCS_POOL_SIZE, pool_maxsize=_GCS_POOL_SIZE
+    )
+    session.mount("https://", adapter)
+    return storage.Client(credentials=credentials, project=project, _http=session)
+
+
 class Client:
     def __init__(self):
         self.now = datetime.now(warsaw_tz)
         try:
-            self.storage_client = storage.Client()
+            self.storage_client = _make_gcs_client()
         except OSError as e:
             if "project" in str(e).lower():
                 raise ConnectionAbortedError(
@@ -129,8 +146,18 @@ class Client:
             destination_blob_name = destination_blob_name.rstrip("/")
             bucket = self.storage_client.bucket(BUCKET)
             blob = bucket.blob(destination_blob_name)
-            # Upload the string data
-            blob.upload_from_string(data, content_type=f"{content_type}; charset=utf-8")
+            try:
+                # if_generation_match=0: only upload if the object doesn't exist yet.
+                # Raises PreconditionFailed (412) if it does — treat that as success
+                # since the bytes are already there from a previous run that crashed
+                # before mark_done was written to the DB.
+                blob.upload_from_string(
+                    data,
+                    content_type=f"{content_type}; charset=utf-8",
+                    if_generation_match=0,
+                )
+            except gcs_exceptions.PreconditionFailed:
+                pass  # already uploaded, nothing to do
 
             full_path = f"gs://{BUCKET}/{destination_blob_name}"
             file_path = f"{BUCKET}/{destination_blob_name}"
