@@ -148,18 +148,19 @@ async function addArticle() {
         metaInfo.meta?.ldJson?.dateModified ||
         "";
       const token = await user.value?.getIdToken();
-      await $fetch("/api/ingest/article", {
+      const result = await $fetch("/api/ingest/article", {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: {
           url: newArticleUrl.value,
           name: metaInfo.title,
           date: date,
-          meta: metaInfo,
+          meta: metaInfo.meta,
         },
       });
       newArticleUrl.value = "";
       alertMessage.value = "Pomyślnie dodano artykuł.";
+      console.info(`Added article: ${metaInfo.title} (${result.nodeId})`);
       alertType.value = "success";
       await refreshArticles();
     } else {
