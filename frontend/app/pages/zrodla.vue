@@ -41,6 +41,16 @@
             Dodaj
           </v-btn>
         </v-form>
+
+        <v-alert
+          v-if="alertMessage"
+          :type="alertType"
+          class="mt-4"
+          closable
+          @click:close="alertMessage = ''"
+        >
+          {{ alertMessage }}
+        </v-alert>
       </v-card>
     </v-col>
 
@@ -102,10 +112,13 @@ const headers = [
 
 const newArticleUrl = ref("");
 const isAdding = ref(false);
+const alertMessage = ref("");
+const alertType = ref<"success" | "error" | "info" | "warning">("success");
 
 async function addArticle() {
   if (!newArticleUrl.value) return;
   isAdding.value = true;
+  alertMessage.value = "";
   try {
     const metaInfo = await getPageMeta(newArticleUrl.value);
     if (metaInfo?.title) {
@@ -125,12 +138,16 @@ async function addArticle() {
         },
       });
       newArticleUrl.value = "";
+      alertMessage.value = "Pomyślnie dodano artykuł.";
+      alertType.value = "success";
     } else {
-      alert("Nie udało się pobrać tytułu artykułu.");
+      alertMessage.value = "Nie udało się pobrać tytułu artykułu.";
+      alertType.value = "warning";
     }
   } catch (err) {
     console.error(err);
-    alert("Wystąpił błąd podczas dodawania artykułu.");
+    alertMessage.value = "Wystąpił błąd podczas dodawania artykułu.";
+    alertType.value = "error";
   } finally {
     isAdding.value = false;
   }
