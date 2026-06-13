@@ -61,7 +61,8 @@ def auto_label_from_validator():
             # only auto-label if every result is a hard "selector matched nothing"
             # (not an LLM judgement — those are ambiguous)
             all_not_found = all(
-                v.get("ok") is False and v.get("issue") == "selector matched nothing"
+                v.get("verdict") == "not_found" or
+                (v.get("ok") is False and v.get("issue") == "selector matched nothing")
                 for v in validations
             )
             if all_not_found:
@@ -95,8 +96,8 @@ def load_data():
     for domain, g in gen.items():
         v = val.get(domain, {})
         validations = v.get("validation", [])
-        ok_count   = sum(1 for x in validations if x.get("ok") is True)
-        fail_count = sum(1 for x in validations if x.get("ok") is False)
+        ok_count   = sum(1 for x in validations if x.get("verdict") == "ok" or x.get("ok") is True)
+        fail_count = sum(1 for x in validations if x.get("verdict") in ("too_narrow","too_broad","wrong","not_found") or x.get("ok") is False)
         domains.append({
             "domain":      domain,
             "selector":    g.get("selector"),
@@ -433,9 +434,10 @@ function dotStyle(lbl) {
 }
 
 function valBadge(d) {
-  const total = d.validation ? d.validation.length : 0;
+  const val = d.validation || [];
+  const total = val.length;
   if (!total) return `<span class="vbadge vb-none">-</span>`;
-  const ok = d.validation.filter(v => v.ok === true).length;
+  const ok = val.filter(v => v.verdict === 'ok' || v.ok === true).length;
   const cls = ok === total ? 'vb-ok' : ok === 0 ? 'vb-fail' : 'vb-part';
   return `<span class="vbadge ${cls}">${ok}/${total}</span>`;
 }
@@ -511,11 +513,10 @@ function renderUrlBar() {
 
     let comment = '', commentCls = '';
     if (v) {
-      if (v.ok === true) {
-        comment = 'LLM: ok'; commentCls = 'ok';
-      } else if (v.issue) {
-        comment = v.issue; commentCls = 'fail';
-      }
+      const verdict = v.verdict;
+      if (verdict === 'ok') { comment = 'LLM: ok'; commentCls = 'ok'; }
+      else if (verdict) { comment = `LLM: ${verdict}${v.issue ? ' — ' + v.issue : ''}`; commentCls = 'fail'; }
+      else if (v.issue) { comment = v.issue; commentCls = 'fail'; }
     }
 
     return `<button class="ub ${activeCls} ${matchCls}" onclick="loadUrl(${i})">
