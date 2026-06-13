@@ -42,7 +42,7 @@
 import { mdiNewspaperPlus } from "@mdi/js";
 import { ref } from "vue";
 import { useAuthState } from "~/composables/auth";
-import { getPageTitle } from "~/composables/useFunctions";
+import { getPageMeta } from "~/composables/useFunctions";
 
 const props = defineProps<{
   nodeId: string;
@@ -70,8 +70,15 @@ const handleAdd = async () => {
   loading.value = true;
   try {
     let title = undefined;
+    let date = undefined;
     try {
-      title = await getPageTitle(url.value);
+      const metaInfo = await getPageMeta(url.value);
+      if (metaInfo) {
+        title = metaInfo.title;
+        date =
+          metaInfo.meta?.ldJson?.datePublished ||
+          metaInfo.meta?.ldJson?.dateModified;
+      }
     } catch (e) {
       console.log("Failed to fetch", e);
     }
