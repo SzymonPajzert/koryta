@@ -166,6 +166,10 @@ export interface Article extends Omit<Node, "type"> {
   sourceURL: string;
   shortName?: string;
   date?: string;
+
+  // TODO add shape to this field
+  /** Field containing data from script[type="application/ld+json"] */
+  meta?: unknown;
 }
 
 export interface Region extends Omit<Node, "type"> {

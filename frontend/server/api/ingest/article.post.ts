@@ -9,6 +9,7 @@ const articleRequestSchema = z.object({
   url: z.string(),
   name: z.string(),
   date: z.string().optional(),
+  meta: z.any().optional(),
 });
 
 export default defineEventHandler(async (event) => {
@@ -42,6 +43,7 @@ export default defineEventHandler(async (event) => {
         name: body.name,
         type: "article",
         sourceURL: body.url,
+        meta: body.meta,
       };
 
       if (body.date) {
