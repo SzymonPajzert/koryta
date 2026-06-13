@@ -27,6 +27,57 @@ LABELS = [
 ]
 LABEL_COLORS = {k: bg for k, _, bg, _, _ in LABELS}
 
+
+def auto_label_from_validator():
+    """
+    Scan domain_selectors_validated.jsonl and write 'not_found' labels for
+    domains where every validation attempt returned 'selector matched nothing'.
+    Skips domains already in selector_labels.jsonl.
+    """
+    if not VAL_FILE.exists():
+        return 0
+
+    existing = set()
+    if LABELS_FILE.exists():
+        for line in LABELS_FILE.open():
+            try:
+                existing.add(json.loads(line)["domain"])
+            except Exception:
+                pass
+
+    written = 0
+    with LABELS_FILE.open("a") as f:
+        for line in VAL_FILE.open():
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            domain = r.get("domain")
+            if not domain or domain in existing:
+                continue
+            validations = r.get("validation", [])
+            if not validations:
+                continue
+            # only auto-label if every result is a hard "selector matched nothing"
+            # (not an LLM judgement — those are ambiguous)
+            all_not_found = all(
+                v.get("ok") is False and v.get("issue") == "selector matched nothing"
+                for v in validations
+            )
+            if all_not_found:
+                record = {
+                    "domain":    domain,
+                    "label":     "not_found",
+                    "url":       None,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "source":    "auto:validator",
+                }
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                existing.add(domain)
+                written += 1
+    return written
+
+
 # ── data ──────────────────────────────────────────────────────────────────────
 
 def load_data():
@@ -57,7 +108,7 @@ def load_data():
             "fail_count":  fail_count,
             "validation":  validations,
         })
-    domains.sort(key=lambda d: (-d["votes"], d["domain"]))
+    domains.sort(key=lambda d: (-d["votes"], -d["ok_count"], d["domain"]))
     return domains
 
 
@@ -249,14 +300,19 @@ body { font-family:system-ui,sans-serif; display:flex; height:100vh; overflow:hi
 #search  { padding:8px; background:#1c1c1c; border-bottom:1px solid #2a2a2a; }
 #search input { width:100%; padding:6px 8px; background:#252525; border:1px solid #3a3a3a; border-radius:4px; color:#eee; font-size:12px; }
 #domain-list { flex:1; overflow-y:auto; }
-.di { padding:7px 10px; cursor:pointer; border-bottom:1px solid #1e1e1e; font-size:11px; display:flex; align-items:center; gap:5px; }
+.di { padding:5px 8px; cursor:pointer; border-bottom:1px solid #1e1e1e; font-size:11px; display:grid; grid-template-columns:32px 10px 28px 28px 1fr; align-items:center; gap:5px; }
+.di-num { font-size:10px; color:#444; text-align:right; font-variant-numeric:tabular-nums; }
 .di:hover { background:#1e1e1e; }
 .di.active { background:#1e2030; }
-.badge { font-size:10px; padding:1px 5px; border-radius:3px; font-weight:bold; flex-shrink:0; }
+.badge { font-size:10px; padding:1px 4px; border-radius:3px; font-weight:bold; text-align:center; }
 .b3{background:#1a4a1a;color:#7f7} .b2{background:#3a3a10;color:#dd0}
 .b1{background:#3a2020;color:#f88} .b0{background:#2a2a2a;color:#666}
-.dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; border:1px solid #444; }
-.vi { font-size:9px; color:#555; }
+.dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; border:1px solid #444; justify-self:center; }
+.vbadge { font-size:10px; padding:1px 4px; border-radius:3px; font-weight:bold; text-align:center; }
+.vb-ok   { background:#1a3a1a; color:#7f7; }
+.vb-part { background:#3a2a00; color:#fa0; }
+.vb-fail { background:#3a1a1a; color:#f66; }
+.vb-none { background:#2a2a2a; color:#555; }
 
 /* main */
 #main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
@@ -270,13 +326,17 @@ body { font-family:system-ui,sans-serif; display:flex; height:100vh; overflow:hi
 #votes-row { font-size:11px; color:#666; }
 #check-status { font-size:11px; padding:2px 8px; border-radius:3px; margin-left:8px; }
 
-/* url tabs */
-#url-bar { display:flex; align-items:center; gap:6px; padding:6px 14px; background:#141414; border-bottom:1px solid #2a2a2a; flex-wrap:wrap; }
-.ub { font-size:11px; padding:3px 9px; background:#222; border:1px solid #383838; border-radius:3px; color:#9ab; cursor:pointer; }
-.ub:hover { background:#2a2a2a; border-color:#55f; }
-.ub.au  { border-color:#66f; background:#181830; color:#ccf; }
-.ub.matched  { border-color:#3a3 !important; }
-.ub.no-match { border-color:#833 !important; }
+/* url list */
+#url-bar { display:flex; flex-direction:column; gap:4px; padding:6px 14px; background:#141414; border-bottom:1px solid #2a2a2a; max-height:160px; overflow-y:auto; }
+.ub { font-size:11px; padding:3px 6px; background:transparent; border:none; border-left:2px solid #333; color:#9ab; cursor:pointer; text-align:left; display:flex; align-items:baseline; gap:8px; border-radius:0; }
+.ub:hover { background:#1e1e1e; border-left-color:#55f; }
+.ub.au  { border-left-color:#66f; background:#181828; color:#ccf; }
+.ub.matched  { border-left-color:#3a3 !important; }
+.ub.no-match { border-left-color:#833 !important; }
+.ub-path { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px; flex-shrink:0; }
+.ub-comment { font-size:11px; color:#aaa; white-space:normal; flex:1; line-height:1.4; }
+.ub-comment.ok { color:#6d6; font-weight:bold; }
+.ub-comment.fail { color:#fff; }
 
 /* label bar */
 #lbar { display:flex; align-items:center; gap:7px; padding:7px 14px; background:#141414; border-bottom:1px solid #2a2a2a; flex-wrap:wrap; }
@@ -372,13 +432,22 @@ function dotStyle(lbl) {
   return l ? `background:${l.border}` : 'background:transparent';
 }
 
+function valBadge(d) {
+  const total = d.validation ? d.validation.length : 0;
+  if (!total) return `<span class="vbadge vb-none">-</span>`;
+  const ok = d.validation.filter(v => v.ok === true).length;
+  const cls = ok === total ? 'vb-ok' : ok === 0 ? 'vb-fail' : 'vb-part';
+  return `<span class="vbadge ${cls}">${ok}/${total}</span>`;
+}
+
 function renderList() {
-  document.getElementById('domain-list').innerHTML = filtered.map(d => `
+  document.getElementById('domain-list').innerHTML = filtered.map((d, i) => `
     <div class="di ${cur && d.domain===cur.domain?'active':''}" onclick="selectDomain('${d.domain}')">
+      <span class="di-num">${i + 1}</span>
       <span class="dot" style="${dotStyle(labels[d.domain])}"></span>
       <span class="badge b${d.votes}">${d.votes}/3</span>
-      <span class="vi">${d.valid===true?'✓':d.valid===false?'✗':'?'}</span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.domain}</span>
+      ${valBadge(d)}
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.domain}</span>
     </div>`).join('');
 }
 
@@ -435,13 +504,24 @@ function renderUrlBar() {
 
   document.getElementById('url-bar').innerHTML = cur.sample_urls.map((u, i) => {
     const v = valMap[u];
-    const llm = v ? (v.ok ? '✓' : '✗') : '';
     const matched = checkResults[u];
     const matchCls = matched===true ? 'matched' : matched===false ? 'no-match' : '';
     const activeCls = i===curUrlIdx ? 'au' : '';
-    const short = new URL(u.startsWith('http')?u:'https://'+u).pathname.slice(0,35)||'/';
-    const title = v?.issue ? v.issue.slice(0,100) : '';
-    return `<button class="ub ${activeCls} ${matchCls}" onclick="loadUrl(${i})" title="${title}">${llm} ${short}</button>`;
+    const short = (new URL(u.startsWith('http')?u:'https://'+u).pathname || '/').slice(0,40);
+
+    let comment = '', commentCls = '';
+    if (v) {
+      if (v.ok === true) {
+        comment = 'LLM: ok'; commentCls = 'ok';
+      } else if (v.issue) {
+        comment = v.issue; commentCls = 'fail';
+      }
+    }
+
+    return `<button class="ub ${activeCls} ${matchCls}" onclick="loadUrl(${i})">
+      <span class="ub-path">${short}</span>
+      <span class="ub-comment ${commentCls}">${comment}</span>
+    </button>`;
   }).join('');
 }
 
@@ -550,5 +630,8 @@ def index():
 
 
 if __name__ == "__main__":
+    n = auto_label_from_validator()
+    if n:
+        print(f"Auto-labeled {n} domains as 'not_found' from validator")
     print(f"http://localhost:{PORT}")
     app.run(port=PORT, debug=False)

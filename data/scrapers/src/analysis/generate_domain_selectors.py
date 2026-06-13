@@ -20,6 +20,7 @@ from pathlib import Path
 
 import aiohttp
 from bs4 import BeautifulSoup, Tag
+from tqdm.asyncio import tqdm
 
 # ── config ────────────────────────────────────────────────────────────────────
 QWEN_PORTS     = [5004, 5005, 5006, 5007]
@@ -36,6 +37,8 @@ SKIP_RE = re.compile(
     r"regulamin|newsletter|rejestracja|logowanie|feed|rss)/",
     re.I,
 )
+
+SKIP_DOMAINS = re.compile(r"\.naszemiasto\.pl$", re.I)
 
 _port_cycle = itertools.cycle(QWEN_PORTS)
 
@@ -265,6 +268,8 @@ async def process_domain(
 
     # 2. extract HTMLs from tarball
     html_map = await loop.run_in_executor(executor, extract_htmls, tarball_path, member_names)
+    # drop non-HTML files (PDFs, images, etc.)
+    html_map = {k: v for k, v in html_map.items() if v and v.lstrip()[:1] in (b'<', b'\xef')}
     if not html_map:
         print(f"  [skip] {domain}: could not extract any HTML from tarball")
         return None
@@ -326,6 +331,8 @@ def find_tarballs() -> dict[str, Path]:
         if not m:
             continue
         domain = m.group(1)
+        if SKIP_DOMAINS.search(domain):
+            continue
         if domain not in result or p.name > result[domain].name:
             result[domain] = p
     return result
@@ -353,7 +360,10 @@ async def main() -> None:
                     except Exception as e:
                         print(f"  [error] {domain}: {e}")
 
-                await asyncio.gather(*[handle(d, p) for d, p in todo.items()])
+                await tqdm.gather(
+                    *[handle(d, p) for d, p in todo.items()],
+                    total=len(todo), desc="domains", unit="domain",
+                )
 
     # summary
     done_now = load_done(OUTPUT_FILE)

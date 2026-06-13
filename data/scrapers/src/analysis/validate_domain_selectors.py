@@ -2,64 +2,53 @@
 Validation pass for domain_selectors.jsonl.
 
 For each domain/selector:
-  1. Re-extract the sample HTML from the tarball
+  1. Fetch sample URLs live from the web (async)
   2. Apply the selector → get article text
-  3. Ask Qwen: "Was this extracted correctly? Is this the article body?"
-  4. Save validation results to domain_selectors_validated.jsonl
+  3. Ask Qwen: "Was this extracted correctly?"
+  4. Save to domain_selectors_validated.jsonl (resumable)
 """
 
 import asyncio
 import itertools
 import json
 import re
-import tarfile
 import textwrap
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import aiohttp
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
+from tqdm.asyncio import tqdm
 
-# ── config ────────────────────────────────────────────────────────────────────
 QWEN_PORTS      = [5004, 5005, 5006, 5007]
 MODEL           = "Qwen/Qwen3-14B"
-DOWNLOADED_DIR  = Path("/home/mp/Projects/koryta/data/scrapers/downloaded")
 INPUT_FILE      = Path("domain_selectors.jsonl")
 OUTPUT_FILE     = Path("domain_selectors_validated.jsonl")
-CONCURRENCY     = 24
-MAX_CONTENT_LEN = 1500   # chars fed to Qwen for validation
+QWEN_CONCURRENCY = 32
+WEB_CONCURRENCY  = 100   # parallel live fetches — many domains, low risk of blocks
+FETCH_TIMEOUT    = 10
+HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
 
 _port_cycle = itertools.cycle(QWEN_PORTS)
 
 
-# ── tarball helpers (shared with generator) ───────────────────────────────────
+# ── web fetch ─────────────────────────────────────────────────────────────────
 
-def find_tarballs() -> dict[str, Path]:
-    result = {}
-    for p in DOWNLOADED_DIR.glob("hostname=*.tar.gz"):
-        if p.stat().st_size < 1000:
-            continue
-        domain = p.name.split(".from=")[0].replace("hostname=", "")
-        if domain not in result or p.name > result[domain].name:
-            result[domain] = p
-    return result
-
-
-def extract_one(tarball_path: Path, url: str) -> bytes | None:
-    """Extract a single HTML by URL (strips scheme, appends /date=* match)."""
-    no_scheme  = url.split("//", 1)[-1]
-    host       = no_scheme.split("/", 1)[0]
-    path       = no_scheme.split("/", 1)[1].rstrip("/") if "/" in no_scheme else ""
-    prefix     = f"{host}/{path}"
-    try:
-        with tarfile.open(tarball_path, "r:gz") as tf:
-            for member in tf:
-                if member.name.startswith(prefix) and member.isfile():
-                    f = tf.extractfile(member)
-                    return f.read() if f else None
-    except Exception:
-        pass
-    return None
+async def fetch_html(session: aiohttp.ClientSession, web_sem: asyncio.Semaphore, url: str) -> bytes | None:
+    if not url.startswith("http"):
+        url = "https://" + url
+    async with web_sem:
+        try:
+            async with session.get(
+                url, headers=HEADERS,
+                timeout=aiohttp.ClientTimeout(total=FETCH_TIMEOUT),
+                allow_redirects=True,
+            ) as resp:
+                if resp.status >= 400:
+                    return None
+                return await resp.read()
+        except Exception as e:
+            print(f"  [fetch] {url}: {e}")
+            return None
 
 
 # ── content extraction ────────────────────────────────────────────────────────
@@ -75,8 +64,7 @@ def apply_selector(html_bytes: bytes, selector: str) -> str:
         return ""
     for tag in el.find_all(["script", "style", "nav", "aside"]):
         tag.decompose()
-    text = re.sub(r" {2,}", " ", el.get_text(" ", strip=True))
-    return text[:MAX_CONTENT_LEN]
+    return re.sub(r" {2,}", " ", el.get_text(" ", strip=True))
 
 
 # ── LLM ──────────────────────────────────────────────────────────────────────
@@ -92,7 +80,7 @@ VALIDATION_PROMPT = textwrap.dedent("""\
 
     Below is the text extracted using that selector. Judge whether it is:
     - The actual article body (main news/article text, not nav/ads/comments/related)
-    - Reasonably complete (not cut to a sentence or two when it should be longer)
+    - Reasonably complete (not cut off mid-sentence when it should be longer)
     - Free from major navigation/ad contamination
 
     Extracted text:
@@ -102,14 +90,14 @@ VALIDATION_PROMPT = textwrap.dedent("""\
     {{"ok": true/false, "issue": "short description of problem or empty string if ok"}}""")
 
 
-async def ask_qwen_validate(
+async def ask_qwen(
     session: aiohttp.ClientSession,
-    sem: asyncio.Semaphore,
+    qwen_sem: asyncio.Semaphore,
     url: str,
     selector: str,
     content: str,
 ) -> dict:
-    prompt  = VALIDATION_PROMPT.format(url=url, selector=selector, content=content)
+    prompt  = VALIDATION_PROMPT.format(url=url, selector=selector, content=content[:20000])
     payload = {
         "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
@@ -118,7 +106,7 @@ async def ask_qwen_validate(
         "chat_template_kwargs": {"enable_thinking": False},
     }
     port = next(_port_cycle)
-    async with sem:
+    async with qwen_sem:
         try:
             async with session.post(
                 f"http://localhost:{port}/v1/chat/completions",
@@ -135,54 +123,52 @@ async def ask_qwen_validate(
             return {"ok": None, "issue": str(e)}
 
 
-# ── per-domain validation ─────────────────────────────────────────────────────
+# ── per-domain ────────────────────────────────────────────────────────────────
 
 async def validate_domain(
     record: dict,
-    tarballs: dict[str, Path],
     session: aiohttp.ClientSession,
-    sem: asyncio.Semaphore,
-    executor: ThreadPoolExecutor,
+    web_sem: asyncio.Semaphore,
+    qwen_sem: asyncio.Semaphore,
 ) -> dict:
     domain   = record["domain"]
     selector = record.get("selector")
     urls     = record.get("sample_urls", [])
 
     if not selector or not urls:
-        return {**record, "validation": []}
+        return {**record, "validation": [], "valid": None}
 
-    tarball = tarballs.get(domain)
-    if not tarball:
-        return {**record, "validation": []}
+    # fetch all sample URLs in parallel
+    htmls = await asyncio.gather(*[fetch_html(session, web_sem, u) for u in urls])
 
-    loop = asyncio.get_event_loop()
-
-    # pick up to 2 sample URLs to validate (save Qwen calls)
     validation_results = []
-    for url in urls[:2]:
-        html = await loop.run_in_executor(executor, extract_one, tarball, url)
+    qwen_tasks = []
+    qwen_urls  = []
+
+    for url, html in zip(urls, htmls):
         if not html:
+            validation_results.append({"url": url, "ok": None, "issue": "fetch failed"})
             continue
         content = apply_selector(html, selector)
         if not content:
-            verdict = {"ok": False, "issue": "selector matched nothing"}
+            validation_results.append({"url": url, "ok": False, "issue": "selector matched nothing", "content": ""})
         else:
-            verdict = await ask_qwen_validate(session, sem, url, selector, content)
+            qwen_tasks.append(ask_qwen(session, qwen_sem, url, selector, content))
+            qwen_urls.append((url, content))
 
-        validation_results.append({
-            "url":     url,
-            "content": content[:300],   # store snippet for inspection
-            **verdict,
-        })
+    if qwen_tasks:
+        verdicts = await asyncio.gather(*qwen_tasks)
+        for (url, content), verdict in zip(qwen_urls, verdicts):
+            validation_results.append({"url": url, "content": content[:300], **verdict})
 
-    ok_count  = sum(1 for v in validation_results if v.get("ok") is True)
-    all_ok    = ok_count == len(validation_results) and len(validation_results) > 0
-    result    = {**record, "validation": validation_results, "valid": all_ok}
+    ok_count = sum(1 for v in validation_results if v.get("ok") is True)
+    valid    = ok_count == len(validation_results) and len(validation_results) > 0
 
-    status = "✓" if all_ok else "✗"
-    issue  = "; ".join(v.get("issue","") for v in validation_results if not v.get("ok"))
+    status = "✓" if valid else "✗"
+    issue  = "; ".join(v.get("issue", "") for v in validation_results if not v.get("ok"))
     print(f"  {status} {domain}: {selector!r}  {issue}")
-    return result
+
+    return {**record, "validation": validation_results, "valid": valid}
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -191,12 +177,11 @@ def load_done(path: Path) -> set[str]:
     if not path.exists():
         return set()
     done = set()
-    with path.open() as f:
-        for line in f:
-            try:
-                done.add(json.loads(line)["domain"])
-            except Exception:
-                pass
+    for line in path.open():
+        try:
+            done.add(json.loads(line)["domain"])
+        except Exception:
+            pass
     return done
 
 
@@ -205,42 +190,43 @@ async def main() -> None:
         print(f"{INPUT_FILE} not found — run generate_domain_selectors.py first")
         return
 
-    records  = []
-    with INPUT_FILE.open() as f:
-        for line in f:
-            try:
-                records.append(json.loads(line))
-            except Exception:
-                pass
+    records = []
+    for line in INPUT_FILE.open():
+        try:
+            records.append(json.loads(line))
+        except Exception:
+            pass
 
-    tarballs = find_tarballs()
-    done     = load_done(OUTPUT_FILE)
-    todo     = [r for r in records if r["domain"] not in done]
-
+    done = load_done(OUTPUT_FILE)
+    todo = [r for r in records if r["domain"] not in done]
     print(f"Records: {len(records)}  Done: {len(done)}  Todo: {len(todo)}")
 
-    sem = asyncio.Semaphore(CONCURRENCY)
+    web_sem  = asyncio.Semaphore(WEB_CONCURRENCY)
+    qwen_sem = asyncio.Semaphore(QWEN_CONCURRENCY)
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        async with aiohttp.ClientSession() as session:
-            with OUTPUT_FILE.open("a") as out:
-
-                async def handle(record):
-                    result = await validate_domain(record, tarballs, session, sem, executor)
+    connector = aiohttp.TCPConnector(limit=WEB_CONCURRENCY + QWEN_CONCURRENCY)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        with OUTPUT_FILE.open("a") as out:
+            async def handle(record):
+                try:
+                    result = await validate_domain(record, session, web_sem, qwen_sem)
                     out.write(json.dumps(result, ensure_ascii=False) + "\n")
                     out.flush()
+                except Exception as e:
+                    print(f"  [error] {record['domain']}: {e}")
 
-                await asyncio.gather(*[handle(r) for r in todo])
+            await tqdm.gather(
+                *[handle(r) for r in todo],
+                total=len(todo), desc="validating", unit="domain",
+            )
 
-    # print summary
     ok = fail = none = 0
-    with OUTPUT_FILE.open() as f:
-        for line in f:
-            v = json.loads(line).get("valid")
-            if v is True:   ok   += 1
-            elif v is False: fail += 1
-            else:            none += 1
-    print(f"\nValidation complete: {ok} ok / {fail} failed / {none} no-data")
+    for line in OUTPUT_FILE.open():
+        v = json.loads(line).get("valid")
+        if v is True:    ok   += 1
+        elif v is False: fail += 1
+        else:            none += 1
+    print(f"\nDone: {ok} ok / {fail} failed / {none} no-data")
 
 
 if __name__ == "__main__":
