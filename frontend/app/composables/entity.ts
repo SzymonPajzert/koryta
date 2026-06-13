@@ -6,13 +6,18 @@ export type Filters = {
   party?: string;
   place?: string;
   source?: string;
+  // TODO unify with the limit class used in other places
+  limit?: number;
+  page?: number;
+  sortBy?: string;
+  sortDesc?: string | boolean;
 };
 
 export function useEntities<N extends NodeType>(
   nodeType: N,
   filters: Filters | Ref<Filters> = {},
 ) {
-  const { data: response } = authFetch<{
+  const { data: response, refresh } = authFetch<{
     nodes: Record<string, NodeTypeMap[N]>;
   }>(`/api/nodes?type=${nodeType}`, {
     query: filters,
@@ -22,7 +27,7 @@ export function useEntities<N extends NodeType>(
 
   const entities = useEntitiesFiltering(entitiesRaw);
 
-  return { entities };
+  return { entities, refresh };
 }
 
 export interface EntityWithVisibility {
