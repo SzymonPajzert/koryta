@@ -18,7 +18,7 @@ interface incomingUrl {
   url: string;
 }
 
-export const getPageTitle = functions.https.onCall<incomingUrl>(
+export const getPageMeta = functions.https.onCall<incomingUrl>(
   {
     region: "europe-west1",
   },
