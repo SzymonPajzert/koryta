@@ -62,8 +62,20 @@
         :headers="headers"
         :items="sortedArticles"
         :items-per-page="50"
+        :sort-by="[{ key: 'date', order: 'desc' }]"
+        mobile-breakpoint="md"
         hover
       >
+        <template #[`header.date`]="{ column }">
+          <span class="d-inline-flex align-center">
+            {{ column.title }}
+            <v-icon
+              :icon="mdiArrowDown"
+              size="small"
+              class="ml-1 text-medium-emphasis"
+            ></v-icon>
+          </span>
+        </template>
         <template #[`item.name`]="{ item }">
           <a :href="item.sourceURL" target="_blank">{{ item.name }}</a>
         </template>
@@ -84,11 +96,20 @@
 
 <script lang="ts" setup>
 import { computed, ref } from "vue";
+import { mdiArrowDown } from "@mdi/js";
 import { useEntities } from "~/composables/entity";
 import { getPageMeta } from "~/composables/useFunctions";
 import { useCurrentUser } from "vuefire";
 
-const { entities: articles } = useEntities("article");
+const { entities: articles, refresh: refreshArticles } = useEntities(
+  "article",
+  {
+    limit: 100,
+    page: 1,
+    sortBy: "date",
+    sortDesc: "true",
+  },
+);
 const user = useCurrentUser();
 
 const sortedArticles = computed(() => {
@@ -106,8 +127,8 @@ const sortedArticles = computed(() => {
 });
 
 const headers = [
-  { title: "Tytuł", key: "name", sortable: true },
-  { title: "Data publikacji", key: "date", sortable: true },
+  { title: "Tytuł", key: "name", sortable: false },
+  { title: "Data publikacji", key: "date", sortable: false },
 ];
 
 const newArticleUrl = ref("");
@@ -140,6 +161,7 @@ async function addArticle() {
       newArticleUrl.value = "";
       alertMessage.value = "Pomyślnie dodano artykuł.";
       alertType.value = "success";
+      await refreshArticles();
     } else {
       alertMessage.value = "Nie udało się pobrać tytułu artykułu.";
       alertType.value = "warning";
