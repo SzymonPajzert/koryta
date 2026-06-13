@@ -76,9 +76,10 @@
 import { computed, ref } from "vue";
 import { useEntities } from "~/composables/entity";
 import { getPageMeta } from "~/composables/useFunctions";
-import { authFetch } from "~/composables/auth";
+import { useCurrentUser } from "vuefire";
 
 const { entities: articles } = useEntities("article");
+const user = useCurrentUser();
 
 const sortedArticles = computed(() => {
   return Object.values(articles.value || {})
@@ -112,12 +113,15 @@ async function addArticle() {
         metaInfo.meta?.ldJson?.datePublished ||
         metaInfo.meta?.ldJson?.dateModified ||
         "";
-      await authFetch("/api/ingest/article", {
+      const token = await user.value?.getIdToken();
+      await $fetch("/api/ingest/article", {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: {
           url: newArticleUrl.value,
           name: metaInfo.title,
           date: date,
+          meta: metaInfo,
         },
       });
       newArticleUrl.value = "";

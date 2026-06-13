@@ -30,7 +30,6 @@ export const getPageMeta = functions.https.onCall<incomingUrl>(
         `The function must be called with one argument 'url ' that is a string: ${request}`,
       );
     }
-    logger.warn(url);
     if (!url.startsWith("https://") && !url.startsWith("http://")) {
       url = "https://" + url;
     }
@@ -51,7 +50,9 @@ export const getPageMeta = functions.https.onCall<incomingUrl>(
       const title = $("title").first().text().trim();
 
       let meta: any = undefined;
-      const ldJsonScript = $('script[type="application/ld+json"]').first().html();
+      const ldJsonScript = $('script[type="application/ld+json"]')
+        .first()
+        .html();
       if (ldJsonScript) {
         try {
           JSON.parse(ldJsonScript); // Verify it's valid JSON
