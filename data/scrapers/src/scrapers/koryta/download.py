@@ -158,7 +158,7 @@ class KorytaPeople(Pipeline[Person]):
                     full_name=data.get("name", ""),
                     parties=data.get("parties", []),
                     id=data["id"],
-                    data=data,
+                    data={},  # data,
                     is_public=data.get("stats", {}).get("isApproved", False),
                     votes_interesting=votes_interesting,
                 )

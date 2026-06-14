@@ -103,7 +103,12 @@ class Conductor(IO):
             )
 
     def output_entity(self, entity, sort_by=[]):
-        self.dumper.insert_into(entity, sort_by)
+        try:
+            self.dumper.insert_into(entity, sort_by)
+        except TypeError as e:
+            logging.error(f"Error occurred while outputting entity: {e} {entity}")
+            print(entity)
+            raise
 
     def write_file(
         self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
