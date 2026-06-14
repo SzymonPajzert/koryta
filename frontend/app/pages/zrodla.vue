@@ -152,7 +152,7 @@ async function addArticle() {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: {
-          url: newArticleUrl.value,
+          url: metaInfo.url || newArticleUrl.value,
           name: metaInfo.title,
           date: date,
           meta: metaInfo.meta,
