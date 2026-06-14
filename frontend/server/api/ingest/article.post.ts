@@ -1,4 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
@@ -44,7 +44,10 @@ export default defineEventHandler(async (event) => {
         type: "article",
         sourceURL: body.url,
         meta: body.meta,
-        publishedDate: body.publishedDate,
+        publishedDate:
+          body.publishedDate && !isNaN(new Date(body.publishedDate).getTime())
+            ? Timestamp.fromDate(new Date(body.publishedDate))
+            : body.publishedDate,
       };
 
       createRevisionTransaction(

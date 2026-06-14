@@ -62,11 +62,11 @@
         :headers="headers"
         :items="sortedArticles"
         :items-per-page="50"
-        :sort-by="[{ key: 'date', order: 'desc' }]"
+        :sort-by="[{ key: 'publishedDate', order: 'desc' }]"
         mobile-breakpoint="md"
         hover
       >
-        <template #[`header.date`]="{ column }">
+        <template #[`header.publishedDate`]="{ column }">
           <span class="d-inline-flex align-center">
             {{ column.title }}
             <v-icon
@@ -79,7 +79,7 @@
         <template #[`item.name`]="{ item }">
           <a :href="item.sourceURL" target="_blank">{{ item.name }}</a>
         </template>
-        <template #[`item.date`]="{ item }">
+        <template #[`item.publishedDate`]="{ item }">
           {{ formatDate(item.publishedDate) }}
         </template>
       </v-data-table>
@@ -100,6 +100,7 @@ import { mdiArrowDown } from "@mdi/js";
 import { useEntities } from "~/composables/entity";
 import { getPageMeta } from "~/composables/useFunctions";
 import { useCurrentUser } from "vuefire";
+import type { Timestamp } from "firebase-admin/firestore";
 
 const { entities: articles, refresh: refreshArticles } = useEntities(
   "article",
@@ -112,20 +113,23 @@ const { entities: articles, refresh: refreshArticles } = useEntities(
 );
 const user = useCurrentUser();
 
+function getDateValue(dateVal: Timestamp | undefined): number {
+  if (!dateVal) return 0;
+  if (typeof dateVal.toDate === "function") return dateVal.toDate().getTime();
+  return dateVal.seconds * 1000;
+}
+
 const sortedArticles = computed(() => {
   return Object.values(articles.value || {})
     .map((article) => ({
       ...article,
-      publishedDate: article.publishedDate || "",
+      publishedDate: article.publishedDate,
     }))
     .sort((a, b) => {
       if (!a.publishedDate && !b.publishedDate) return 0;
       if (!a.publishedDate) return 1;
       if (!b.publishedDate) return -1;
-      return (
-        new Date(b.publishedDate).getTime() -
-        new Date(a.publishedDate).getTime()
-      );
+      return getDateValue(b.publishedDate) - getDateValue(a.publishedDate);
     });
 });
 
@@ -179,9 +183,21 @@ async function addArticle() {
   }
 }
 
-function formatDate(dateStr: string) {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("pl-PL");
+function formatDate(dateVal: string | FirestoreTimestamp | undefined) {
+  if (!dateVal) return "";
+  let d: Date;
+  if (typeof dateVal.toDate === "function") {
+    d = dateVal.toDate();
+  } else if (dateVal._seconds) {
+    d = new Date(dateVal._seconds * 1000);
+  } else if (dateVal.seconds) {
+    d = new Date(dateVal.seconds * 1000);
+  } else {
+    d = new Date(dateVal);
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 </script>

@@ -1,3 +1,5 @@
+import type { Timestamp } from "firebase-admin/firestore";
+
 type PageBase<PageType> = {
   id?: string;
   type: PageType;
@@ -165,7 +167,7 @@ export interface Article extends Omit<Node, "type"> {
   type: "article";
   sourceURL: string;
   shortName?: string;
-  publishedDate?: string;
+  publishedDate?: Timestamp;
 
   // TODO add shape to this field
   /** Field containing data from script[type="application/ld+json"] */
