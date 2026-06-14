@@ -9,10 +9,7 @@
       <div
         class="text-h6 font-weight-bold mb-1 w-100 text-truncate text-center"
       >
-        <v-avatar
-          :image="getDomainIcon(source.domain)"
-          size="small"
-        />
+        <v-avatar :image="getDomainIcon(source.domain)" size="small" />
         {{ source.domain }}
       </div>
       <div>
