@@ -111,6 +111,11 @@ import { useCurrentUser } from "vuefire";
 import type { Timestamp } from "firebase-admin/firestore";
 import { useDomainIcon } from "~/composables/useDomainIcon";
 
+definePageMeta({
+  title: "Źródła",
+  affineLink: "BBMIZtWOoDBTDknqC82Ms",
+});
+
 const { entities: articles, refresh: refreshArticles } = useEntities(
   "article",
   {
