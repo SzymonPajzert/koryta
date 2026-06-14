@@ -20,16 +20,24 @@ export async function getPageMeta(url: string): Promise<PageMeta | undefined> {
     functions,
     "getPageMeta",
   );
-  const result = await callGetPageMeta({ url: url });
-  if (result.data.meta?.ldJson && typeof result.data.meta.ldJson === "string") {
-    try {
-      result.data.meta.ldJson = JSON.parse(result.data.meta.ldJson);
-      // Prefer canonical URL from ld+json if available, otherwise use the provided URL
-      result.data.url = result.data.meta.ldJson?.mainEntityOfPage?.url;
-    } catch (e) {
-      console.error("Failed to parse ldJson", e);
-      return undefined;
+  try {
+    const result = await callGetPageMeta({ url: url });
+    if (
+      result.data.meta?.ldJson &&
+      typeof result.data.meta.ldJson === "string"
+    ) {
+      try {
+        result.data.meta.ldJson = JSON.parse(result.data.meta.ldJson);
+        // Prefer canonical URL from ld+json if available, otherwise use the provided URL
+        result.data.url = result.data.meta.ldJson?.mainEntityOfPage?.url;
+      } catch (e) {
+        console.error("Failed to parse ldJson", e);
+        return undefined;
+      }
     }
+    return result.data;
+  } catch (e) {
+    console.error("Failed to fetch page meta", e);
+    return undefined;
   }
-  return result.data;
 }
