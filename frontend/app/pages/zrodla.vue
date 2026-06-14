@@ -179,6 +179,16 @@ function deepSearch(
 }
 
 async function addArticle() {
+  if (!user.value) {
+    return navigateTo({
+      path: "/login",
+      query: {
+        redirect: "/zrodla",
+        reason: "unauthorized",
+      },
+    });
+  }
+
   if (!newArticleUrl.value) return;
   isAdding.value = true;
   alertMessage.value = "";
