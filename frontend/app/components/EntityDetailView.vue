@@ -246,11 +246,6 @@
                   </v-btn>
                 </template>
               </DialogProposeRemoval>
-              <QuickAddArticleButton
-                v-if="entity?.type !== 'article' && entity?.type !== 'region'"
-                :node-id="node"
-                class="ml-2"
-              />
             </div>
 
             <div class="mt-4">
