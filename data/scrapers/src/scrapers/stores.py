@@ -711,7 +711,7 @@ class Pipeline(typing.Generic[Output]):
             raise e
         finally:
             if gracefull and not returned_df:
-                print("Dumping...")
+                print(f"Dumping {self.pipeline_name} to disk...")
                 dumper.dump_pandas()
                 print("Done")
 
