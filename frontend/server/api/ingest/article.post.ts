@@ -12,6 +12,16 @@ const articleRequestSchema = z.object({
   meta: z.any().optional(),
 });
 
+function parseDate(dateStr: string | undefined): Timestamp | undefined {
+  if (!dateStr) return undefined;
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    console.error("Invalid date string:", dateStr);
+    return undefined;
+  }
+  return Timestamp.fromDate(date);
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readValidatedBody(event, (body) =>
     articleRequestSchema.parse(body),
@@ -44,10 +54,7 @@ export default defineEventHandler(async (event) => {
         type: "article",
         sourceURL: body.url,
         meta: body.meta,
-        publishedDate:
-          body.publishedDate && !isNaN(new Date(body.publishedDate).getTime())
-            ? Timestamp.fromDate(new Date(body.publishedDate))
-            : body.publishedDate,
+        publishedDate: parseDate(body.publishedDate),
       };
 
       createRevisionTransaction(

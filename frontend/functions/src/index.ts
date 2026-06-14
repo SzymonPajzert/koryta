@@ -49,7 +49,7 @@ export const getPageMeta = functions.https.onCall<incomingUrl>(
       const $ = cheerio.load(html);
       const title = $("title").first().text().trim();
 
-      let meta: any = undefined;
+      let meta: { ldJson?: string } | undefined = undefined;
       const ldJsonScript = $('script[type="application/ld+json"]')
         .first()
         .html();
@@ -57,8 +57,8 @@ export const getPageMeta = functions.https.onCall<incomingUrl>(
         try {
           JSON.parse(ldJsonScript); // Verify it's valid JSON
           meta = { ldJson: ldJsonScript };
-        } catch (e) {
-          functions.logger.warn(`Failed to parse ld+json for URL: ${url}`);
+        } catch (e: unknown) {
+          functions.logger.warn(`Failed to parse ld+json for URL: ${url}: `, e);
         }
       }
 
