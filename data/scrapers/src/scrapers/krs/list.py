@@ -49,11 +49,19 @@ def employment_duration(item) -> str:
     result = timedelta()
     for conn in item["krs_powiazania_kwerendowane"]:
         assert isinstance(conn, dict)
+        if conn.get("typ") == "BENEFICIARY" and conn.get("data_start") is None:
+            continue
         end = conn.get("data_koniec", curr_date)
         if end is None:
             end = curr_date
         start = conn["data_start"]
-        result = result + (datetime.fromisoformat(end) - datetime.fromisoformat(start))
+        try:
+            result = result + (
+                datetime.fromisoformat(end) - datetime.fromisoformat(start)
+            )
+        except TypeError as e:
+            print(f"Could not process {item}: end: {end}, start: {start}: {e}")
+            raise
     days = result.days
 
     return f"{days / 365:.2f}"
