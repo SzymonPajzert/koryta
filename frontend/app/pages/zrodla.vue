@@ -77,7 +77,15 @@
           </span>
         </template>
         <template #[`item.name`]="{ item }">
-          <a :href="item.sourceURL" target="_blank">{{ item.name }}</a>
+          <div class="d-flex align-center">
+            <v-avatar
+              v-if="item.sourceURL"
+              :image="getDomainIcon(item.sourceURL)"
+              size="x-small"
+              class="mr-2"
+            />
+            <a :href="item.sourceURL" target="_blank">{{ item.name }}</a>
+          </div>
         </template>
         <template #[`item.publishedDate`]="{ item }">
           {{ formatDate(item.publishedDate) }}
@@ -101,6 +109,7 @@ import { useEntities } from "~/composables/entity";
 import { getPageMeta } from "~/composables/useFunctions";
 import { useCurrentUser } from "vuefire";
 import type { Timestamp } from "firebase-admin/firestore";
+import { useDomainIcon } from "~/composables/useDomainIcon";
 
 const { entities: articles, refresh: refreshArticles } = useEntities(
   "article",
@@ -112,6 +121,7 @@ const { entities: articles, refresh: refreshArticles } = useEntities(
   },
 );
 const user = useCurrentUser();
+const { getDomainIcon } = useDomainIcon();
 
 function getDateValue(dateVal: Timestamp | undefined): number {
   if (!dateVal) return 0;
