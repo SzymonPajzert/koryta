@@ -199,10 +199,6 @@ def test_extract_by_krs():
     extract.dependencies["teryt"] = extract.teryt
     extract.teryt.read_or_process = lambda ctx: None
 
-    extract.hardcoded_people = Pipeline.create(type(extract.hardcoded_people))
-    extract.dependencies["hardcoded_people"] = extract.hardcoded_people
-    extract.hardcoded_people.read_or_process = lambda ctx: pd.DataFrame({"id": []})
-
     # 3. Inject args
     class MockArgs:
         krss = ["0000000001"]

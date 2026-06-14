@@ -8,7 +8,6 @@ from analysis.people import PeopleEnriched
 from analysis.utils import drop_duplicates, empty_list_if_nan
 from scrapers.article.hardcoded.listawstydupo import hardcoded as listawstydu
 from scrapers.article.hardcoded.tlustekotypisu import hardcoded as tlustekoty
-from scrapers.krs.data import PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS
 from scrapers.map.teryt import Teryt
@@ -58,7 +57,6 @@ class Extract(Pipeline):
     people: PeopleEnriched
     companies: CompaniesKRS
     teryt: Teryt
-    hardcoded_people: PeopleRejestrIOHardcoded
     _relevant_companies: set[str] | None = None
 
     MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
@@ -312,7 +310,7 @@ class Extract(Pipeline):
             def check_rejestrio_id(ids_list):
                 if not isinstance(ids_list, list):
                     return False
-                return self.rejestrio_id in ids_list
+                return self.rejestrio_id in set(map(str, ids_list))
 
             relevant = relevant | people["rejestrio_id"].apply(check_rejestrio_id)
         people["relevance_ratio"] = (relevant_employment + relevant_elections) / (
