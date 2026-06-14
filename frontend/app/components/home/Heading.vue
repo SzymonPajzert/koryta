@@ -1,6 +1,15 @@
 <template>
   <div height="100%" :class="{ 'text-center': center }">
-    <h1 class="text-title-1 font-weight-bold mb-2">
+    <NuxtLink
+      v-if="to"
+      :to="to"
+      class="text-decoration-none text-high-emphasis"
+    >
+      <h1 class="text-title-1 font-weight-bold mb-2">
+        {{ title }}
+      </h1>
+    </NuxtLink>
+    <h1 v-else class="text-title-1 font-weight-bold mb-2">
       {{ title }}
     </h1>
 
@@ -18,5 +27,6 @@ defineProps<{
   title: string;
   subtitle?: string;
   center?: boolean;
+  to?: string;
 }>();
 </script>
