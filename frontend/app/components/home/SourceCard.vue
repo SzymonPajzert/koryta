@@ -10,7 +10,7 @@
         class="text-h6 font-weight-bold mb-1 w-100 text-truncate text-center"
       >
         <v-avatar
-          :image="`https://www.google.com/s2/favicons?domain=${source.domain}&sz=128`"
+          :image="getDomainIcon(source.domain)"
           size="small"
         />
         {{ source.domain }}
@@ -29,10 +29,13 @@
 
 <script setup lang="ts">
 import type { SourceStat } from "~~/server/api/nodes/articles/index.get";
+import { useDomainIcon } from "~/composables/useDomainIcon";
 
 defineProps<{
   source: SourceStat;
 }>();
+
+const { getDomainIcon } = useDomainIcon();
 </script>
 
 <style scoped>
