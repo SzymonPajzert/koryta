@@ -29,14 +29,6 @@
         :title="item.raw.title"
         max-width="400px"
         :prepend-icon="item.raw.icon"
-        :to="
-          noNavigate
-            ? undefined
-            : {
-                path: item.raw.path || currentRoute.path,
-                query: { ...currentRoute.query, ...item.raw.query },
-              }
-        "
       />
     </template>
     <template #no-data>
@@ -256,5 +248,11 @@ watch(nodeGroupPicked, (value) => {
     },
   });
   autocompleteFocus.value = false;
+
+  // Clear selections to allow picking the same item again
+  setTimeout(() => {
+    nodeGroupPicked.value = null;
+    search.value = "";
+  }, 50);
 });
 </script>
