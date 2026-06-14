@@ -10,6 +10,13 @@ import pandas as pd
 from stores.config import VERSIONED_DIR
 
 
+class SafeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, set):
+            return list(o)
+        return super().default(o)
+
+
 class EntityDumper:
     def __init__(self) -> None:
         self.inmemory: dict[str, list[Any]] = {}
@@ -69,7 +76,11 @@ class EntityDumper:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "a") as f:
                 for item in v:
-                    f.write(json.dumps(asdict(item)) + "\n")
+                    try:
+                        f.write(json.dumps(asdict(item), cls=SafeEncoder) + "\n")
+                    except TypeError as e:
+                        print(f"Error serializing {item}: {e}")
+                        raise
         self.inmemory = {}
         self._has_flushed = True
 
