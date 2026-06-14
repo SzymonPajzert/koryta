@@ -153,6 +153,31 @@ const isAdding = ref(false);
 const alertMessage = ref("");
 const alertType = ref<"success" | "error" | "info" | "warning">("success");
 
+type nestedRecord = {
+  [key: string]: string | nestedRecord;
+};
+
+function deepSearch(
+  obj: nestedRecord | string | undefined | null,
+  key: string,
+): string | undefined {
+  if (typeof obj !== "object" || obj === null) return undefined;
+
+  const val = obj[key];
+  if (typeof val === "string") {
+    return val;
+  }
+
+  for (const k in obj) {
+    const result = deepSearch(obj[k], key);
+    if (result !== undefined) {
+      return result;
+    }
+  }
+
+  return undefined;
+}
+
 async function addArticle() {
   if (!newArticleUrl.value) return;
   isAdding.value = true;
@@ -160,10 +185,12 @@ async function addArticle() {
   try {
     const metaInfo = await getPageMeta(newArticleUrl.value);
     if (metaInfo?.title) {
+      // TODO this should be moved to somewhere else - logic heavy
       const publishedDate =
         metaInfo.meta?.ldJson?.datePublished ||
         metaInfo.meta?.ldJson?.dateModified ||
-        "";
+        deepSearch(metaInfo.meta, "datePublished") ||
+        deepSearch(metaInfo.meta, "dateModified");
       const token = await user.value?.getIdToken();
       const result = await $fetch("/api/ingest/article", {
         method: "POST",
