@@ -36,42 +36,52 @@
         target="_blank"
         >Dołącz</v-btn
       >
-      <v-btn v-if="user && pictureURL" icon to="/profil" size="32">
-        <v-avatar :image="pictureURL" size="32" />
-      </v-btn>
-      <v-btn v-if="user && !pictureURL" icon to="/profil">
-        <v-icon :icon="mdiAccount" />
-      </v-btn>
-      <v-btn v-if="!user" :icon="!mdAndUp" to="/login">
-        <v-icon v-if="!mdAndUp" :icon="mdiAccount" />
-        <span class="d-none d-md-inline">Zaloguj się</span>
-      </v-btn>
-      <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
+      <ClientOnly>
+        <v-btn v-if="user && pictureURL" icon to="/profil" size="32">
+          <v-avatar :image="pictureURL" size="32" />
+        </v-btn>
+        <v-btn v-if="user && !pictureURL" icon to="/profil">
+          <v-icon :icon="mdiAccount" />
+        </v-btn>
+        <v-btn v-if="!user" :icon="!mdAndUp" to="/login">
+          <v-icon v-if="!mdAndUp" :icon="mdiAccount" />
+          <span class="d-none d-md-inline">Zaloguj się</span>
+        </v-btn>
+        <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
+        <template #fallback>
+          <v-btn :icon="!mdAndUp" to="/login">
+            <v-icon v-if="!mdAndUp" :icon="mdiAccount" />
+            <span class="d-none d-md-inline">Zaloguj się</span>
+          </v-btn>
+        </template>
+      </ClientOnly>
     </template>
   </v-app-bar>
   <v-main class="d-flex flex-column">
-    <v-toolbar v-if="user" density="compact" color="primary">
-      <v-spacer />
+    <ClientOnly>
+      <v-toolbar v-if="user" density="compact" color="primary">
+        <v-spacer />
 
-      <v-btn
-        :prepend-icon="mdiLightningBolt"
-        variant="text"
-        href="https://github.com/users/SzymonPajzert/projects/2/views/3"
-        target="_blank"
-      >
-        Nowy bug w GitHubie
-      </v-btn>
-      <v-btn
-        v-if="affineLink"
-        :prepend-icon="mdiLightningBolt"
-        variant="text"
-        :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
-        target="_blank"
-      >
-        Dyskusja w affine
-      </v-btn>
-      <v-spacer icon />
-    </v-toolbar>
+        <v-btn
+          :prepend-icon="mdiLightningBolt"
+          variant="text"
+          href="https://github.com/users/SzymonPajzert/projects/2/views/3"
+          target="_blank"
+        >
+          Nowy bug w GitHubie
+        </v-btn>
+        <v-btn
+          v-if="affineLink"
+          :prepend-icon="mdiLightningBolt"
+          variant="text"
+          :href="`https://app.affine.pro/workspace/794db959-e4b7-4756-8db2-61cf824329fa/${affineLink}?mode=edgeless`"
+          target="_blank"
+        >
+          Dyskusja w affine
+        </v-btn>
+        <v-spacer icon />
+      </v-toolbar>
+    </ClientOnly>
     <v-container
       class="position-relative fill-height"
       :max-width="maxWidth"
