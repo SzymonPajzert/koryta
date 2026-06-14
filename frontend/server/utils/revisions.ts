@@ -11,6 +11,33 @@ export interface BatchResult {
   targetRef: DocumentReference;
 }
 
+export function sanitizeFirestoreData<T>(
+  data: Record<string, unknown> | T,
+): Record<string, unknown> | T;
+/** Overwrites nested arrays into objects with numbered keys */
+export function sanitizeFirestoreData<T>(
+  data: Record<string, unknown> | T | undefined | null,
+): Record<string, unknown> | T | undefined {
+  if (data === undefined) return undefined;
+  if (data === null) return undefined;
+  if (typeof data !== "object") return data;
+
+  if (Array.isArray(data)) {
+    const sanitizedArray = data.map((item) => sanitizeFirestoreData(item));
+    return sanitizeFirestoreData(
+      Object.fromEntries(
+        sanitizedArray.map((item, index) => [index.toString(), item]),
+      ),
+    );
+  }
+
+  return Object.fromEntries(
+    Object.entries(data)
+      .map(([key, val]) => [key, sanitizeFirestoreData(val)])
+      .filter(([_, val]) => val !== undefined),
+  );
+}
+
 export function createRevisionTransaction(
   db: Firestore,
   batch: WriteBatch,
@@ -26,7 +53,7 @@ export function createRevisionTransaction(
   const revision: Revision = {
     // TODO test it is always set correctly and check if the DB has wrong entries there
     node_id: targetRef.id,
-    data,
+    data: sanitizeFirestoreData(data),
     update_time: timestamp,
     update_user: user.uid,
   };
