@@ -1,6 +1,6 @@
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-export type PageMeta = {
+export type ArticleMeta = {
   title: string;
   meta?: {
     ldJson?: {
@@ -14,9 +14,11 @@ export type PageMeta = {
   url?: string;
 };
 
-export async function getPageMeta(url: string): Promise<PageMeta | undefined> {
+export async function getPageMeta(
+  url: string,
+): Promise<ArticleMeta | undefined> {
   const functions = getFunctions(useFirebaseApp(), "europe-west1");
-  const callGetPageMeta = httpsCallable<{ url: string }, PageMeta>(
+  const callGetPageMeta = httpsCallable<{ url: string }, ArticleMeta>(
     functions,
     "getPageMeta",
   );

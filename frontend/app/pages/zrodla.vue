@@ -123,10 +123,14 @@ const { entities: articles, refresh: refreshArticles } = useEntities(
 const user = useCurrentUser();
 const { getDomainIcon } = useDomainIcon();
 
-function getDateValue(dateVal: Timestamp | undefined): number {
+type FirestoreTimestamp = {
+  _seconds: number;
+  _nanoseconds: number;
+};
+
+function getDateValue(dateVal: FirestoreTimestamp | undefined): number {
   if (!dateVal) return 0;
-  if (typeof dateVal.toDate === "function") return dateVal.toDate().getTime();
-  return dateVal.seconds * 1000;
+  return dateVal._seconds * 1000;
 }
 
 const sortedArticles = computed(() => {
@@ -139,7 +143,11 @@ const sortedArticles = computed(() => {
       if (!a.publishedDate && !b.publishedDate) return 0;
       if (!a.publishedDate) return 1;
       if (!b.publishedDate) return -1;
-      return getDateValue(b.publishedDate) - getDateValue(a.publishedDate);
+      return (
+        // TODO the type of this field is a bit messy right now, why we have only _seconds available
+        getDateValue(b.publishedDate as unknown as FirestoreTimestamp) -
+        getDateValue(a.publishedDate as unknown as FirestoreTimestamp)
+      );
     });
 });
 
@@ -201,7 +209,7 @@ async function addArticle() {
         metaInfo.meta?.ldJson?.dateModified ||
         deepSearch(metaInfo.meta, "datePublished") ||
         deepSearch(metaInfo.meta, "dateModified");
-      const token = await user.value?.getIdToken();
+      const token = await user.value.getIdToken();
       const result = await $fetch("/api/ingest/article", {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -230,18 +238,13 @@ async function addArticle() {
   }
 }
 
-function formatDate(dateVal: string | FirestoreTimestamp | undefined) {
+function formatDate(dateVal: string | Timestamp | undefined) {
   if (!dateVal) return "";
-  let d: Date;
-  if (typeof dateVal.toDate === "function") {
-    d = dateVal.toDate();
-  } else if (dateVal._seconds) {
-    d = new Date(dateVal._seconds * 1000);
-  } else if (dateVal.seconds) {
-    d = new Date(dateVal.seconds * 1000);
-  } else {
-    d = new Date(dateVal);
+  if (typeof dateVal === "string") {
+    return dateVal;
   }
+  const dateRaw = dateVal as unknown as FirestoreTimestamp;
+  const d: Date = new Date(dateRaw._seconds * 1000);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
