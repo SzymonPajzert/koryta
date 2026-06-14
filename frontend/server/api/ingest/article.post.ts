@@ -8,7 +8,7 @@ import { z } from "zod";
 const articleRequestSchema = z.object({
   url: z.string(),
   name: z.string(),
-  date: z.string().optional(),
+  publishedDate: z.string().optional(),
   meta: z.any().optional(),
 });
 
@@ -44,11 +44,8 @@ export default defineEventHandler(async (event) => {
         type: "article",
         sourceURL: body.url,
         meta: body.meta,
+        publishedDate: body.publishedDate,
       };
-
-      if (body.date) {
-        revisionData.date = body.date;
-      }
 
       createRevisionTransaction(
         db,

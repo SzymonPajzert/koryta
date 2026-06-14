@@ -165,7 +165,7 @@ export interface Article extends Omit<Node, "type"> {
   type: "article";
   sourceURL: string;
   shortName?: string;
-  date?: string;
+  publishedDate?: string;
 
   // TODO add shape to this field
   /** Field containing data from script[type="application/ld+json"] */

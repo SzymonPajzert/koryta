@@ -80,7 +80,7 @@
           <a :href="item.sourceURL" target="_blank">{{ item.name }}</a>
         </template>
         <template #[`item.date`]="{ item }">
-          {{ formatDate(item.date) }}
+          {{ formatDate(item.publishedDate) }}
         </template>
       </v-data-table>
     </v-col>
@@ -106,7 +106,7 @@ const { entities: articles, refresh: refreshArticles } = useEntities(
   {
     limit: 100,
     page: 1,
-    sortBy: "date",
+    sortBy: "publishedDate",
     sortDesc: "true",
   },
 );
@@ -116,19 +116,22 @@ const sortedArticles = computed(() => {
   return Object.values(articles.value || {})
     .map((article) => ({
       ...article,
-      date: article.date || "",
+      publishedDate: article.publishedDate || "",
     }))
     .sort((a, b) => {
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (!a.publishedDate && !b.publishedDate) return 0;
+      if (!a.publishedDate) return 1;
+      if (!b.publishedDate) return -1;
+      return (
+        new Date(b.publishedDate).getTime() -
+        new Date(a.publishedDate).getTime()
+      );
     });
 });
 
 const headers = [
   { title: "Tytuł", key: "name", sortable: false },
-  { title: "Data publikacji", key: "date", sortable: false },
+  { title: "Data publikacji", key: "publishedDate", sortable: false },
 ];
 
 const newArticleUrl = ref("");
@@ -143,7 +146,7 @@ async function addArticle() {
   try {
     const metaInfo = await getPageMeta(newArticleUrl.value);
     if (metaInfo?.title) {
-      const date =
+      const publishedDate =
         metaInfo.meta?.ldJson?.datePublished ||
         metaInfo.meta?.ldJson?.dateModified ||
         "";
@@ -154,7 +157,7 @@ async function addArticle() {
         body: {
           url: metaInfo.url || newArticleUrl.value,
           name: metaInfo.title,
-          date: date,
+          publishedDate,
           meta: metaInfo.meta,
         },
       });
