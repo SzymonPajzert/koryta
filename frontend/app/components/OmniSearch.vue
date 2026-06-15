@@ -42,13 +42,11 @@
 <script setup lang="ts">
 import {
   mdiAccountOutline,
-  mdiAccountPlus,
   mdiDomain,
   mdiFlag,
   mdiFormatListBulletedType,
   mdiMagnify,
   mdiMapMarkerRadiusOutline,
-  mdiOfficeBuildingPlus,
 } from "@mdi/js";
 import { parties } from "~~/shared/misc";
 import { authFetch } from "@/composables/auth";
@@ -59,18 +57,11 @@ import { refDebounced } from "@vueuse/core";
 const { push, currentRoute } = useRouter();
 
 const props = defineProps<{
-  searchText?: string;
   width?: string;
-  autofocus?: boolean;
-  noNavigate?: boolean;
 }>();
 const { width = "300px" } = props;
 
-const emit = defineEmits<{
-  (e: "select", item: ListItem): void;
-}>();
-
-const search = ref(props.searchText);
+const search = ref();
 const nodeGroupPicked = ref<ListItem | null>(null);
 const autocompleteFocus = ref(false);
 const debouncedSearch = refDebounced(search, 300);
@@ -102,7 +93,7 @@ watch(autocompleteFocus, (focused) => {
   }
 });
 
-const baseItems = computed<ListItem[]>(() => {
+const items = computed<ListItem[]>(() => {
   const result: ListItem[] = [];
   result.push({
     id: "all-persons",
@@ -164,54 +155,8 @@ const baseItems = computed<ListItem[]>(() => {
   return result;
 });
 
-const items = computed<ListItem[]>(() => {
-  const list = [...baseItems.value];
-  if (search.value) {
-    list.push({
-      id: `create-person-${search.value}`,
-      title: `Utwórz osobę: "${search.value}"`,
-      icon: mdiAccountPlus,
-      path: "/edit/node/new",
-      query: {
-        type: "person",
-        name: search.value,
-      },
-      logEventKey: {
-        content_id: "new",
-        content_type: "create-person",
-      },
-    });
-    list.push({
-      id: `create-place-${search.value}`,
-      title: `Utwórz firmę: "${search.value}"`,
-      icon: mdiOfficeBuildingPlus,
-      path: "/edit/node/new",
-      query: {
-        type: "place",
-        name: search.value,
-      },
-      logEventKey: {
-        content_id: "new",
-        content_type: "create-place",
-      },
-    });
-  }
-  return list;
-});
-
 watch(nodeGroupPicked, (value) => {
   if (!value) {
-    return;
-  }
-
-  if (props.noNavigate) {
-    emit("select", value);
-    // Clear selections to allow picking another right away
-    setTimeout(() => {
-      nodeGroupPicked.value = null;
-      search.value = "";
-      autocompleteFocus.value = false;
-    }, 50);
     return;
   }
 
@@ -238,11 +183,5 @@ watch(nodeGroupPicked, (value) => {
     },
   });
   autocompleteFocus.value = false;
-
-  // Clear selections to allow picking the same item again
-  setTimeout(() => {
-    nodeGroupPicked.value = null;
-    search.value = "";
-  }, 50);
 });
 </script>
