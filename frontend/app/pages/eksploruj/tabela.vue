@@ -349,24 +349,16 @@ const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
       ]
     : [],
 );
-const sortByOpt = computed<{ key: string; order: "asc" | "desc" } | undefined>(
-  () => {
-    return sortBy.value[0];
-  },
-);
-
 const apiQuery = computed(
   () =>
     ({
       type: "person",
-      limit: itemsPerPage.value,
-      page: page.value,
-      sortBy: sortByOpt.value?.key,
-      sortDesc: sortByOpt.value
-        ? sortByOpt.value.order === "desc"
-          ? "true"
-          : "false"
-        : undefined,
+      limit: parseInt(
+        (route.query.itemsPerPage as string) || DEFAULT_ITEMS_PER_PAGE,
+      ),
+      page: parseInt((route.query.page as string) || "1"),
+      sortBy: route.query.sortBy as string | undefined,
+      sortDesc: route.query.sortDesc as "true" | "false" | undefined,
       parties:
         filterParty.value && filterParty.value.length > 0
           ? filterParty.value
