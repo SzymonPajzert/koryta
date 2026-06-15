@@ -18,6 +18,7 @@
     :hide-details="true"
     :menu-icon="mdiMagnify"
     clearable
+    :loading="loading"
     single-line
     variant="solo-filled"
     @click:clear="nodeGroupPicked = null"
@@ -49,7 +50,6 @@ import {
   mdiMapMarkerRadiusOutline,
 } from "@mdi/js";
 import { parties } from "~~/shared/misc";
-import { authFetch } from "@/composables/auth";
 import { generateEntityUrl } from "~/composables/slugs";
 import type { NodeType } from "~~/shared/model";
 import { refDebounced } from "@vueuse/core";
@@ -61,6 +61,7 @@ const props = defineProps<{
 }>();
 const { width = "300px" } = props;
 
+const loading = ref(false);
 const search = ref();
 const nodeGroupPicked = ref<ListItem | null>(null);
 const autocompleteFocus = ref(false);
@@ -76,22 +77,43 @@ type ListItem = {
   query?: Record<string, string>;
 };
 
-const { data: searchData, refresh } = authFetch("/api/search", {
-  key: "omnisearch-data",
-  lazy: true,
-  query: computed(() => ({
-    // If the user clears the search, immediately use an empty string to bypass debounce
-    // This prevents stale requests with the old term when focus triggers a refresh
-    q:
-      search.value === "" || search.value === null ? "" : debouncedSearch.value,
-  })),
-});
-
-watch(autocompleteFocus, (focused) => {
-  if (focused) {
-    refresh();
+watch(debouncedSearch, async (val) => {
+  if (!val) {
+    setTimeout(() => (nodeGroupPicked.value = null), 300);
+  } else {
+    if (val !== nodeGroupPicked.value?.title) {
+      await performSearch(val);
+    }
   }
 });
+
+const searchData = ref<
+  Array<{
+    id: string;
+    name: string;
+    type: string;
+    query?: Record<string, string>;
+  }>
+>([]);
+
+async function performSearch(searchTerm: string) {
+  loading.value = true;
+  const response = await $fetch("/api/search", {
+    query: {
+      q: searchTerm,
+      latest: true,
+    },
+  });
+  searchData.value = response;
+  loading.value = false;
+}
+
+// Not sure what it does
+// watch(autocompleteFocus, (focused) => {
+//   if (focused) {
+//     refresh();
+//   }
+// });
 
 const items = computed<ListItem[]>(() => {
   const result: ListItem[] = [];
