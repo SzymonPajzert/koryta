@@ -79,6 +79,7 @@
         v-model:teryt="filterTeryt"
         v-model:krs="filterKrs"
         v-model:hide-voted="filterHideVoted"
+        v-model:currently-employed="filterCurrentlyEmployed"
         :available-parties="availableParties"
         :available-regions="availableRegions"
         :available-companies="availableCompanies"
@@ -288,6 +289,21 @@ const filterKrs = computed<string[] | null>({
   },
 });
 
+const filterCurrentlyEmployed = computed<"all" | "any" | "selected">({
+  get: () =>
+    (route.query.currentlyEmployed as "all" | "any" | "selected" | undefined) ||
+    "all",
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        currentlyEmployed: val !== "all" ? val : undefined,
+      },
+    });
+  },
+});
+
 const filterHideVoted = computed<"all" | "no_votes" | "has_votes">({
   get: () =>
     (route.query.hideVoted as "all" | "no_votes" | "has_votes" | undefined) ||
@@ -364,6 +380,10 @@ const apiQuery = computed(
       teryt: filterTeryt.value || undefined,
       hideVoted:
         filterHideVoted.value !== "all" ? filterHideVoted.value : undefined,
+      currentlyEmployed:
+        filterCurrentlyEmployed.value !== "all"
+          ? filterCurrentlyEmployed.value
+          : undefined,
     }) as Query,
 );
 
