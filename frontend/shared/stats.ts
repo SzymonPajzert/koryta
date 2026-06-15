@@ -55,6 +55,21 @@ export function calculateExperience(edges: Edge[]): number {
   return Math.floor((experienceMonths / 12) * 10) / 10;
 }
 
+export function calculateCurrentlyEmployed(edges: Edge[]): boolean {
+  for (const edge of edges) {
+    if (edge.type === "employed") {
+      if (!edge.end_date) {
+        return true;
+      }
+      const end = new Date(edge.end_date).getTime();
+      if (!isNaN(end) && end >= new Date().getTime()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function calculateLatestEmploymentStart(edges: Edge[]): string | null {
   let latest: string | null = null;
   for (const edge of edges) {
@@ -138,11 +153,27 @@ export function computeEdgeStats(
       experienceMonths: calculateExperience(nodeEdges),
       latestEmploymentStart: calculateLatestEmploymentStart(nodeEdges),
       targetNodeIds: allTargetNodeIds,
+      currentlyEmployed: calculateCurrentlyEmployed(nodeEdges),
+      currentlyEmployedTargetNodeIds: [
+        ...new Set(
+          nodeEdges
+            .filter((e) => calculateCurrentlyEmployed([e]))
+            .flatMap((e) => [e.target, ...(transitiveTargets[e.target] || [])]),
+        ),
+      ].filter(Boolean),
     },
     approved: {
       experienceMonths: calculateExperience(approvedEdges),
       latestEmploymentStart: calculateLatestEmploymentStart(approvedEdges),
       targetNodeIds: approvedTargetNodeIds,
+      currentlyEmployed: calculateCurrentlyEmployed(approvedEdges),
+      currentlyEmployedTargetNodeIds: [
+        ...new Set(
+          approvedEdges
+            .filter((e) => calculateCurrentlyEmployed([e]))
+            .flatMap((e) => [e.target, ...(transitiveTargets[e.target] || [])]),
+        ),
+      ].filter(Boolean),
     },
   };
 }

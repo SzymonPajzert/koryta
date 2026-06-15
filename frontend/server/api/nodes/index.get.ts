@@ -26,6 +26,7 @@ const queryValidator = z.object({
   krs: z.union([z.string(), z.array(z.string())]).optional(),
   visibility: z.enum(["public", "private"]).optional(),
   hideVoted: z.enum(["all", "no_votes", "has_votes"]).optional(),
+  currentlyEmployed: z.enum(["all", "any", "selected"]).optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),
@@ -118,15 +119,25 @@ export default defineEventHandler(async (event) => {
 
       if (places.length > 0) {
         const placeIds = places.map((doc) => doc.id);
-        const arrayField = user
+        let arrayField = user
           ? "stats.edges.all.targetNodeIds"
           : "stats.edges.approved.targetNodeIds";
+
+        if (query.currentlyEmployed === "selected") {
+          arrayField = user
+            ? "stats.edges.all.currentlyEmployedTargetNodeIds"
+            : "stats.edges.approved.currentlyEmployedTargetNodeIds";
+        }
 
         const applyMemOp = (nodes: any[]) =>
           nodes.filter((n) => {
             const arr = user
-              ? n.stats?.edges?.all?.targetNodeIds
-              : n.stats?.edges?.approved?.targetNodeIds;
+              ? query.currentlyEmployed === "selected"
+                ? n.stats?.edges?.all?.currentlyEmployedTargetNodeIds
+                : n.stats?.edges?.all?.targetNodeIds
+              : query.currentlyEmployed === "selected"
+                ? n.stats?.edges?.approved?.currentlyEmployedTargetNodeIds
+                : n.stats?.edges?.approved?.targetNodeIds;
             return (
               Array.isArray(arr) &&
               arr.some((id: string) => placeIds.includes(id))
@@ -160,16 +171,27 @@ export default defineEventHandler(async (event) => {
         .get();
       if (!regions.empty) {
         const regionId = regions.docs[0]?.id;
-        const arrayField = user
+        let arrayField = user
           ? "stats.edges.all.targetNodeIds"
           : "stats.edges.approved.targetNodeIds";
+
+        if (query.currentlyEmployed === "selected") {
+          arrayField = user
+            ? "stats.edges.all.currentlyEmployedTargetNodeIds"
+            : "stats.edges.approved.currentlyEmployedTargetNodeIds";
+        }
+
         ops.push({
           applyFs: (q) => q.where(arrayField, "array-contains", regionId),
           applyMem: (nodes) =>
             nodes.filter((n) => {
               const arr = user
-                ? n.stats?.edges?.all?.targetNodeIds
-                : n.stats?.edges?.approved?.targetNodeIds;
+                ? query.currentlyEmployed === "selected"
+                  ? n.stats?.edges?.all?.currentlyEmployedTargetNodeIds
+                  : n.stats?.edges?.all?.targetNodeIds
+                : query.currentlyEmployed === "selected"
+                  ? n.stats?.edges?.approved?.currentlyEmployedTargetNodeIds
+                  : n.stats?.edges?.approved?.targetNodeIds;
               return Array.isArray(arr) && arr.includes(regionId);
             }),
         });
@@ -213,6 +235,22 @@ export default defineEventHandler(async (event) => {
         applyFs: (q) => q.where("stats.votes.humanVoted", "==", true),
         applyMem: (nodes) =>
           nodes.filter((n) => n.stats?.votes?.humanVoted === true),
+      });
+    }
+
+    if (query.currentlyEmployed === "any") {
+      const field = user
+        ? "stats.edges.all.currentlyEmployed"
+        : "stats.edges.approved.currentlyEmployed";
+      ops.push({
+        applyFs: (q) => q.where(field, "==", true),
+        applyMem: (nodes) =>
+          nodes.filter((n) => {
+            const flag = user
+              ? n.stats?.edges?.all?.currentlyEmployed
+              : n.stats?.edges?.approved?.currentlyEmployed;
+            return flag === true;
+          }),
       });
     }
 

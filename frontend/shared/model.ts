@@ -16,6 +16,8 @@ type NodeEdgeStats = {
   experienceMonths: number;
   latestEmploymentStart?: string | null;
   targetNodeIds: string[];
+  currentlyEmployed: boolean;
+  currentlyEmployedTargetNodeIds?: string[];
 };
 
 export interface NodeStats {
