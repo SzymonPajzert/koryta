@@ -1,7 +1,7 @@
 <template>
   <div class="mb-4">
     <v-row>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="3">
         <v-autocomplete
           v-model="party"
           :items="availableParties"
@@ -15,7 +15,7 @@
           closable-chips
         />
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="3">
         <v-autocomplete
           v-model="teryt"
           :items="availableRegions"
@@ -26,7 +26,7 @@
           clearable
         />
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="3">
         <v-autocomplete
           v-model="krs"
           :items="availableCompanies"
@@ -38,6 +38,21 @@
           multiple
           chips
           closable-chips
+        />
+      </v-col>
+      <v-col cols="12" md="3" class="d-flex align-center">
+        <v-select
+          v-model="currentlyEmployed"
+          :items="[
+            { title: 'Wszyscy', value: 'all' },
+            { title: 'W dowolnej firmie', value: 'any' },
+            { title: 'W wyszukanych podmiotach', value: 'selected' }
+          ]"
+          label="Zatrudnienie"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          bg-color="white"
         />
       </v-col>
     </v-row>
@@ -141,6 +156,7 @@ const party = defineModel<string[] | null>("party");
 const teryt = defineModel<string | null>("teryt");
 const krs = defineModel<string[] | null>("krs");
 const hideVoted = defineModel<"all" | "no_votes" | "has_votes">("hideVoted");
+const currentlyEmployed = defineModel<"all" | "any" | "selected">("currentlyEmployed");
 
 const statusSummary = computed(() => {
   const filters = [];
