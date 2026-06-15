@@ -49,19 +49,19 @@ export default authCachedEventHandler(async (event) => {
 });
 
 async function getLatestRevision(db: FirebaseFirestore.Firestore, id: string) {
-  const result = (
+  const revisionDoc = (
     await db
       .collection("revisions")
       .where("node_id", "==", id)
       .orderBy("update_time", "desc")
       .limit(1)
       .get()
-  ).docs.map((doc) => doc.data().data)[0];
+  ).docs[0];
   // TODO get rid of this, each node should have a revision
-  if (!result) {
+  if (!revisionDoc) {
     return await getEntity(db, id);
   }
-  return result;
+  return { id, ...revisionDoc.data().data };
 }
 
 async function getEntity(db: FirebaseFirestore.Firestore, id: string) {
