@@ -38,15 +38,30 @@
           multiple
           chips
           closable-chips
-        />
+          class="collapsible-autocomplete"
+          :class="{ 'is-expanded': showAllKrs }"
+        >
+          <template v-if="(krs?.length || 0) > 1" #append-inner>
+            <v-btn
+              variant="tonal"
+              size="small"
+              color="primary"
+              density="compact"
+              class="mt-1"
+              @click.stop="showAllKrs = !showAllKrs"
+            >
+              {{ showAllKrs ? "Zwiń" : `+${(krs?.length || 0) - 1}` }}
+            </v-btn>
+          </template>
+        </v-autocomplete>
       </v-col>
       <v-col cols="12" md="3" class="d-flex align-center">
         <v-select
           v-model="currentlyEmployed"
           :items="[
-            { title: 'Wszyscy', value: 'all' },
-            { title: 'W dowolnej firmie', value: 'any' },
-            { title: 'W wyszukanych podmiotach', value: 'selected' }
+            { title: 'Wszystkie osoby', value: 'all' },
+            { title: 'Teraz w dowolnej firmie', value: 'any' },
+            { title: 'Teraz w wyszukanych podmiotach', value: 'selected' },
           ]"
           label="Zatrudnienie"
           variant="outlined"
@@ -150,13 +165,16 @@ import { mdiClose, mdiFilterCogOutline } from "@mdi/js";
 import { ref, computed } from "vue";
 
 const showStatusBanner = ref(true);
+const showAllKrs = ref(false);
 
 const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
 const teryt = defineModel<string | null>("teryt");
 const krs = defineModel<string[] | null>("krs");
 const hideVoted = defineModel<"all" | "no_votes" | "has_votes">("hideVoted");
-const currentlyEmployed = defineModel<"all" | "any" | "selected">("currentlyEmployed");
+const currentlyEmployed = defineModel<"all" | "any" | "selected">(
+  "currentlyEmployed",
+);
 
 const statusSummary = computed(() => {
   const filters = [];
@@ -182,3 +200,12 @@ withDefaults(
   },
 );
 </script>
+
+<style scoped>
+.collapsible-autocomplete:not(.is-expanded)
+  :deep(.v-select__selection:nth-of-type(n + 2)),
+.collapsible-autocomplete:not(.is-expanded)
+  :deep(.v-autocomplete__selection:nth-of-type(n + 2)) {
+  display: none !important;
+}
+</style>
