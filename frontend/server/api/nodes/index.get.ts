@@ -105,10 +105,12 @@ export default defineEventHandler(async (event) => {
     }
 
     if (query.krs) {
-      const krsArray = Array.isArray(query.krs) ? query.krs : [query.krs];
+      const krsArray = [
+        ...new Set(Array.isArray(query.krs) ? query.krs : [query.krs]),
+      ];
       const places: any[] = [];
-      for (let i = 0; i < krsArray.length; i += 30) {
-        const chunk = krsArray.slice(i, i + 30);
+      for (let i = 0; i < krsArray.length; i += 10) {
+        const chunk = krsArray.slice(i, i + 10);
         const chunkPlaces = await db
           .collection("nodes")
           .where("type", "==", "place")

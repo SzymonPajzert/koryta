@@ -276,7 +276,7 @@ const filterKrs = computed<string[] | null>({
   get: () => {
     const k = route.query.krs;
     if (!k) return null;
-    return Array.isArray(k) ? (k as string[]) : [k as string];
+    return [...new Set(Array.isArray(k) ? (k as string[]) : [k as string])];
   },
   set: (val) => {
     router.push({
