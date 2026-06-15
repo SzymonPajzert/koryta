@@ -1,6 +1,6 @@
 <template>
   <v-autocomplete
-    :id="`omni-search${fake ? '-fake' : ''}`"
+    id="omni-search"
     v-model="nodeGroupPicked"
     v-model:focused="autocompleteFocus"
     v-model:search="search"
@@ -60,7 +60,6 @@ const { push, currentRoute } = useRouter();
 
 const props = defineProps<{
   searchText?: string;
-  fake?: boolean;
   width?: string;
   autofocus?: boolean;
   noNavigate?: boolean;
@@ -75,15 +74,6 @@ const search = ref(props.searchText);
 const nodeGroupPicked = ref<ListItem | null>(null);
 const autocompleteFocus = ref(false);
 const debouncedSearch = refDebounced(search, 300);
-
-if (props.fake) {
-  watch(
-    () => props.searchText,
-    (newValue) => {
-      search.value = newValue;
-    },
-  );
-}
 
 type ListItem = {
   id: string;
