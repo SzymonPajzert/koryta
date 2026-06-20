@@ -244,10 +244,7 @@ class Uploader:
                         self.submit_company(krs, None)
                     # Try submitting again
                     self.check_success(
-                        self.submit_payload(
-                            current_target_url,
-                            payload,
-                        )
+                        self.submit_payload(current_target_url, payload, fail=False)
                     )
 
         failures = self.total - self.success_count
