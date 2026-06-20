@@ -98,6 +98,9 @@ def extract_people(ctx: Context):
         assert isinstance(blob_ref, DownloadableFile)
         blob_name = blob_ref.url
         content = blob.read_string()
+        if content == "":
+            # Skipping files marking failures
+            continue
         try:
             if "aktualnosc_" not in blob_name:
                 continue
