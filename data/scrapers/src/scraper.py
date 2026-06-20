@@ -95,9 +95,8 @@ def query_krs_api(url, verbose=True) -> str | None:
 def upload_result(ctx: Context, url, result, verbose=True):
     # We're discarding query params, so it's a hotfix for this
     url = url.replace("?aktualnosc=", "/aktualnosc_")
-    url = url.replace("?rejestr=P&format=json", "")
-    url = url.replace("?rejestr=S&format=json", "")
-    ctx.io.upload(url, result, "application/json", verbose=verbose)
+    url = url.replace("&format=json", "")
+    ctx.io.upload(url, result, "application/json", verbose=verbose, include_query=True)
 
 
 def scrape_krs(sleep_time=0.2):
@@ -124,10 +123,13 @@ def scrape_krs(sleep_time=0.2):
             assert "rejestr.io" not in url
             result = query_krs_api(url, verbose=False)
             if result is not None:
-                # TODO save somehwere that they fail, so we don't run it more
                 any_succeeded = True
-                upload_result(ctx, url, result, verbose=False)
-                sleep(sleep_time)
+            else:
+                # Saving an empty file to not requery it each time
+                print(f"Recording failure for {url} as an empty file...")
+                result = ""
+            upload_result(ctx, url, result, verbose=False)
+            sleep(sleep_time)
 
         if any_succeeded:
             successful_krs.add(query.krs)
