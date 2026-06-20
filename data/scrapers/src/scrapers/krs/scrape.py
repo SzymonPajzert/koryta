@@ -1,10 +1,11 @@
 import argparse
 import json
 import typing
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import cached_property
 
 import pandas as pd
+from tqdm import tqdm
 
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
@@ -155,20 +156,37 @@ class KRSAlreadyScraped(Pipeline):
     filename = "krs_already_scraped"
 
     def process(self, ctx: Context):
+        output = []
+        success, fail = 0, 0
         """lists krs numbers along with the method and the date it was ran on."""
-        for blob_name in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
-            assert isinstance(blob_name, DownloadableFile)
-            r = KRSScraped.parse(blob_name.url)
-            if r:
-                ctx.io.output_entity(r)
-
-        for blob_name in ctx.io.list_files(
-            CloudStorage(prefix="hostname=api-krs.ms.gov.pl")
+        for blob_name in tqdm(
+            ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io"))
         ):
             assert isinstance(blob_name, DownloadableFile)
             r = KRSScraped.parse(blob_name.url)
             if r:
-                ctx.io.output_entity(r)
+                success += 1
+                output.append(r)
+            else:
+                fail += 1
+
+        print(f"Success: {success}, Fail: {fail}")
+
+        for blob_name in tqdm(
+            ctx.io.list_files(CloudStorage(prefix="hostname=api-krs.ms.gov.pl"))
+        ):
+            assert isinstance(blob_name, DownloadableFile)
+            r = KRSScraped.parse(blob_name.url)
+            if r:
+                success += 1
+                output.append(r)
+            else:
+                fail += 1
+
+        print(f"Success: {success}, Fail: {fail}")
+
+        print(len(output))
+        return pd.DataFrame.from_records([asdict(r) for r in output])
 
     def latest_scrapes(self, ctx: Context):
         """Groups by krs and lists methods already used"""
@@ -254,7 +272,10 @@ def save_org_connections(
     print(f"len(names): {len(names)}")
     print(f"len(people): {len(people)}")
 
+    print(f"\n\nalready_scraped_krs ({len(already_scraped_krs)}):")
     print(already_scraped_krs.head())
+
+    print(f"\n\nneeds_refresh_krs ({len(needs_refresh_krs)}):")
     print(needs_refresh_krs.head())
 
     # Remove needs refresh from already_scraped_krs, since we need to update them.
@@ -272,6 +293,8 @@ def save_org_connections(
         .groupby("krs")
         .aggregate(series_to_list)
     )
+
+    print(f"\n\nalready_scraped ({len(already_scraped)}):")
     print(already_scraped.head())
 
     for krs in connections:

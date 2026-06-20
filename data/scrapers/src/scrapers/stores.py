@@ -205,6 +205,7 @@ class IO(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    # TODO remove this method, it fails if multiple pipelines use it
     def output_entity(self, entity, sort_by=[]):
         """
         Writes a single entity of the core type to the configured output.
