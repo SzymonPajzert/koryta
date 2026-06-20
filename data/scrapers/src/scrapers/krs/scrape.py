@@ -311,8 +311,7 @@ def save_org_connections(
 
 
 class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
-    filename = None
-    volatile = True
+    filename = "scrape_rejestr_io"
 
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS

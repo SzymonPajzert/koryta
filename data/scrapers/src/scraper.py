@@ -104,7 +104,9 @@ def scrape_krs(sleep_time=0.2):
     scrape_updates_by_dates(sleep_time)
     ctx, _ = setup_context(
         use_rejestr_io=True,
-        policy=ProcessPolicy({"KRSAlreadyScraped", "KRSNeedsRefresh"}),
+        policy=ProcessPolicy(
+            {"ScrapeRejestrIO", "KRSAlreadyScraped", "KRSNeedsRefresh"}
+        ),
     )
     pipeline = ScrapeRejestrIO()
     queries = list(pipeline.read_or_process_list(ctx))
