@@ -67,7 +67,13 @@ def test_people_to_scrape(ctx, scraper_output):
     print(vote)
 
 
-@pytest.mark.parametrize("krs", ["0000607833", "0000001920"])
+@pytest.mark.parametrize(
+    "krs",
+    [
+        "0000607833",  # company has been removed in 2022
+        # "0000001920",
+    ],
+)
 def test_companies_to_scrape_specific(ctx, krs, scraper_output):
     scraper, _ = scraper_output
     to_scrape = scraper.companies_to_scrape(ctx)

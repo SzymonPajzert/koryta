@@ -1,7 +1,8 @@
 import argparse
 import json
 import typing
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from enum import Enum
 from functools import cached_property
 
 import pandas as pd
@@ -25,17 +26,25 @@ from scrapers.stores import (
 )
 
 
+class QueryType(Enum):
+    API_KRS_ODPIS_AKTUALNY_P = "api_krs_odpis_aktualny_p"
+    API_KRS_ODPIS_AKTUALNY_S = "api_krs_odpis_aktualny_s"
+    REJESTRIO_ORG = "rejestrio_org"
+    REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE = "rejestrio_org_krs_powiazania_aktualne"
+    REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE = (
+        "rejestrio_org_krs_powiazania_historyczne"
+    )
+    REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE = "rejestrio_osoby_krs_powiazania_aktualne"
+    REJESTRIO_OSOBY_KRS_POWIAZANIA_HISTORYCZNE = (
+        "rejestrio_osoby_krs_powiazania_historyczne"
+    )
+
+
 @dataclass
 class RejestrIOQuery:
     krs: KRS | None = None
     person: RejestrIOKey | None = None
-    api_krs_odpis_aktualny_p: bool = False
-    api_krs_odpis_aktualny_s: bool = False
-    api_rejestrio_org: bool = False
-    api_rejestrio_org_krs_powiazania_aktualne: bool = False
-    api_rejestrio_org_krs_powiazania_historyczne: bool = False
-    api_rejestrio_osoby_krs_powiazania_aktualne: bool = False
-    api_rejestrio_osoby_krs_powiazania_historyczne: bool = False
+    queries: list[QueryType] = field(default_factory=lambda: [])
 
     def __post_init__(self):
         if self.krs is None and self.person is None:
@@ -44,37 +53,33 @@ class RejestrIOQuery:
 
     def cost(self) -> float:
         """Calculate the cost of this query based on which APIs it will call."""
-        calls = [
-            self.api_rejestrio_org,
-            self.api_rejestrio_org_krs_powiazania_aktualne,
-            self.api_rejestrio_org_krs_powiazania_historyczne,
-            self.api_rejestrio_osoby_krs_powiazania_aktualne,
-            self.api_rejestrio_osoby_krs_powiazania_historyczne,
-        ]
-        return sum(calls) * 0.05
+        calls = [q for q in self.queries if q.value.startswith("rejestrio")]
+        return len(calls) * 0.05
 
     def urls(self, only_free=False) -> typing.Iterable[str]:
-        if self.api_krs_odpis_aktualny_p:
+        if QueryType.API_KRS_ODPIS_AKTUALNY_P in self.queries:
             assert self.krs is not None
             yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=P&format=json"
-        if self.api_krs_odpis_aktualny_s:
+        if QueryType.API_KRS_ODPIS_AKTUALNY_S in self.queries:
             assert self.krs is not None
             yield f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{self.krs}?rejestr=S&format=json"
-        if self.api_rejestrio_org and not only_free:
+        if QueryType.REJESTRIO_ORG in self.queries and not only_free:
             assert self.krs is not None
             yield f"https://rejestr.io/api/v2/org/{self.krs}"
-        if self.api_rejestrio_org_krs_powiazania_aktualne and not only_free:
-            assert self.krs is not None
-            yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=aktualne"
-        if self.api_rejestrio_org_krs_powiazania_historyczne and not only_free:
-            assert self.krs is not None
-            yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=historyczne"
-        if self.api_rejestrio_osoby_krs_powiazania_aktualne and not only_free:
-            assert self.person is not None
-            yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=aktualne"
-        if self.api_rejestrio_osoby_krs_powiazania_historyczne and not only_free:
-            assert self.person is not None
-            yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=historyczne"
+
+        if not only_free:
+            if QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE in self.queries:
+                assert self.krs is not None
+                yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=aktualne"
+            if QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE in self.queries:
+                assert self.krs is not None
+                yield f"https://rejestr.io/api/v2/org/{self.krs}/krs-powiazania?aktualnosc=historyczne"
+            if QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE in self.queries:
+                assert self.person is not None
+                yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=aktualne"
+            if QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_HISTORYCZNE in self.queries:
+                assert self.person is not None
+                yield f"https://rejestr.io/api/v2/osoby/{self.person.id}/krs-powiazania?aktualnosc=historyczne"
 
 
 class KRSSet:
@@ -126,9 +131,7 @@ class KRSSet:
 @dataclass
 class KRSScraped:
     krs: str
-    method: typing.Literal[
-        "aktualnosc_aktualne", "aktualnosc_historyczne", "main", "api-krs"
-    ]
+    method: QueryType
     date: str
 
     @staticmethod
@@ -138,16 +141,20 @@ class KRSScraped:
         if "rejestr.io" in url and "org/" in url:
             krs = url.split("org/", 1)[1].split("/", 1)[0]
             if "aktualnosc_aktualne" in url:
-                return KRSScraped(krs, "aktualnosc_aktualne", date)
+                return KRSScraped(
+                    krs, QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE, date
+                )
             elif "aktualnosc_historyczne" in url:
-                return KRSScraped(krs, "aktualnosc_historyczne", date)
+                return KRSScraped(
+                    krs, QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE, date
+                )
             else:
-                return KRSScraped(krs, "main", date)
+                return KRSScraped(krs, QueryType.REJESTRIO_ORG, date)
         elif "api-krs.ms.gov.pl" in url:
             if "Biuletyn" in url:
                 return None
             krs = url.split("OdpisAktualny/", 1)[1].split("/", 1)[0]
-            return KRSScraped(krs, "api-krs", date)
+            return KRSScraped(krs, QueryType.API_KRS_ODPIS_AKTUALNY_P, date)
         else:
             return None
 
@@ -298,14 +305,21 @@ def save_org_connections(
     print(already_scraped.head())
 
     for krs in connections:
-        data: list[str] = already_scraped["method"].get(krs.id, [])
+        connections_methods: list[QueryType] = [
+            QueryType(q) for q in already_scraped["method"].get(krs.id, [])
+        ]
         query = RejestrIOQuery(
             krs=krs,
-            api_krs_odpis_aktualny_p="api-krs" not in data,
-            api_krs_odpis_aktualny_s="api-krs" not in data,
-            api_rejestrio_org_krs_powiazania_aktualne="aktualnosc_aktualne" not in data,
-            api_rejestrio_org_krs_powiazania_historyczne="aktualnosc_historyczne"
-            not in data,
+            queries=[
+                q
+                for q in [
+                    QueryType.API_KRS_ODPIS_AKTUALNY_P,
+                    QueryType.API_KRS_ODPIS_AKTUALNY_S,
+                    QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE,
+                    QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE,
+                ]
+                if q not in connections_methods
+            ],
         )
         if len(list(query.urls())) > 0:
             # If there's nothing to query, don't send it
@@ -314,18 +328,26 @@ def save_org_connections(
     for krs in names:
         yield RejestrIOQuery(
             krs=krs,
-            api_krs_odpis_aktualny_p=True,
-            api_krs_odpis_aktualny_s=True,
+            queries=[
+                QueryType.API_KRS_ODPIS_AKTUALNY_P,
+                QueryType.API_KRS_ODPIS_AKTUALNY_S,
+            ],
         )
 
     for person in people:
-        data = already_scraped_people.get(person.id, [])
+        people_methods: list[QueryType] = [
+            QueryType(q) for q in already_scraped_people.get(person.id, [])
+        ]
         query = RejestrIOQuery(
             person=person,
-            api_rejestrio_osoby_krs_powiazania_aktualne="aktualnosc_aktualne"
-            not in data,
-            api_rejestrio_osoby_krs_powiazania_historyczne="aktualnosc_historyczne"
-            not in data,
+            queries=[
+                q
+                for q in [
+                    QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE,
+                    QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_HISTORYCZNE,
+                ]
+                if q not in people_methods
+            ],
         )
         if len(list(query.urls())) > 0:
             yield query
