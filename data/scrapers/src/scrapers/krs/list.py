@@ -85,7 +85,7 @@ class PeopleKRS(Pipeline):
     dtype = {"employed_krs": str}
 
     def process(self, ctx: Context):
-        extract_people(ctx)
+        return extract_people(ctx)
 
 
 def extract_people(ctx: Context):
@@ -93,6 +93,8 @@ def extract_people(ctx: Context):
     Iterates through GCS files from rejestr.io, parses them,
     and extracts information about people.
     """
+    outputs = []
+
     for blob_ref in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
         blob = ctx.io.read_data(blob_ref)
         assert isinstance(blob_ref, DownloadableFile)
@@ -112,7 +114,7 @@ def extract_people(ctx: Context):
             for item in data:
                 if item.get("typ") == "osoba":
                     identity = item.get("tozsamosc", {})
-                    ctx.io.output_entity(
+                    outputs.append(
                         KrsPerson(
                             id=item["id"],
                             first_name=identity.get("imie"),
@@ -130,6 +132,8 @@ def extract_people(ctx: Context):
                     )
         except KeyError as e:
             print(f"  [ERROR] Could not process {blob_name}: {e}")
+
+    return DataFrame.from_records([dataclasses.asdict(d) for d in outputs])
 
 
 class CompaniesKRS(Pipeline[KrsCompany]):
