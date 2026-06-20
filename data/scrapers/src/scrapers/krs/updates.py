@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from entities.company import ManualKRS
+from entities.company import KRS
 from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
 
 
@@ -38,7 +38,7 @@ class KRSUpdates(Pipeline[KRSUpdate]):
                 krs_list = json.loads(content)
                 for krs in krs_list:
                     if krs:
-                        results.append({"krs": ManualKRS(krs).id, "date": date_str})
+                        results.append({"krs": KRS(krs).id, "date": date_str})
             except Exception as e:
                 print(f"Failed to process {blob_ref.url}: {e}")
 

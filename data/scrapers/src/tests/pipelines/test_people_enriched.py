@@ -5,7 +5,7 @@ import regex as re
 
 from analysis.people import PeopleEnriched
 from conductor import setup_context
-from entities.company import ManualKRS as KRS
+from entities.company import KRS
 from koryta import Pipeline
 from scrapers.stores import CloudStorage, DownloadableFile
 from stores.config import tests
@@ -46,7 +46,7 @@ def ctx():
             ]
             for i in ids:
                 padded = i.zfill(10)
-                # Format expected by ManualKRS.from_blob_name: ...org/{id}/...
+                # Format expected by KRS.from_blob_name: ...org/{id}/...
                 yield DownloadableFile(
                     f"gs://bucket/hostname=rejestr.io/org/{padded}/date=2025-01-01"
                 )

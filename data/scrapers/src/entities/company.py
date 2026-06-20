@@ -52,7 +52,7 @@ class Wikipedia:
 
 
 @dataclass
-class ManualKRS:
+class KRS:
     """
     Represents a manually curated KRS entry, often from multiple sources.
     Provides methods for merging and handling different representations.
@@ -69,20 +69,18 @@ class ManualKRS:
         """Ensures the KRS ID is zero-padded to 10 digits."""
         self.id = str(self.id).zfill(10)
 
-    def parse(self, id: int | str) -> "ManualKRS":
-        """Creates a ManualKRS instance from an ID."""
-        return ManualKRS(str(id).zfill(10))
+    def parse(self, id: int | str) -> "KRS":
+        """Creates a KRS instance from an ID."""
+        return KRS(str(id).zfill(10))
 
     @staticmethod
-    def from_blob_name(blob_name: str) -> "ManualKRS":
-        """Creates a ManualKRS instance from a GCS blob name."""
-        return ManualKRS(
-            blob_name.split("org/", maxsplit=1)[1].split("/", maxsplit=1)[0]
-        )
+    def from_blob_name(blob_name: str) -> "KRS":
+        """Creates a KRS instance from a GCS blob name."""
+        return KRS(blob_name.split("org/", maxsplit=1)[1].split("/", maxsplit=1)[0])
 
-    def merge(self, other: "ManualKRS") -> "ManualKRS":
+    def merge(self, other: "KRS") -> "KRS":
         """
-        Merges another ManualKRS instance into this one.
+        Merges another KRS instance into this one.
 
         Raises:
             ValueError: If the IDs or ministries are conflicting.
@@ -96,7 +94,7 @@ class ManualKRS:
             )
         except AssertionError as e:
             raise ValueError(f"Failed to merge KRS: {self} {other}") from e
-        return ManualKRS(
+        return KRS(
             self.id,
             self.sources | other.sources,
             self.teryts | other.teryts,
@@ -107,7 +105,7 @@ class ManualKRS:
         return f"{self.id}"
 
     def full_str(self) -> str:
-        return f"ManualKRS(id={self.id}, sources={self.sources}, teryts={self.teryts}"
+        return f"KRS(id={self.id}, sources={self.sources}, teryts={self.teryts}"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -116,4 +114,4 @@ class ManualKRS:
         return hash(self.id)
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, ManualKRS) and self.id == other.id
+        return isinstance(other, KRS) and self.id == other.id
