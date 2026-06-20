@@ -3,7 +3,7 @@ from typing import Callable
 
 import pandas as pd
 
-from entities.company import ManualKRS as KRS
+from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline

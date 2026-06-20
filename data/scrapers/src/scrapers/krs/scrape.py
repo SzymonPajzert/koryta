@@ -8,12 +8,12 @@ import pandas as pd
 
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
-from entities.company import ManualKRS
+from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
-from scrapers.krs.list import KRS, CompaniesKRS, PeopleKRS
+from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import (
     CloudStorage,
@@ -81,16 +81,14 @@ class KRSSet:
     Represents a set of KRS entries, merging and handling duplicates.
     """
 
-    def __init__(
-        self, initial_entries: typing.Optional[typing.Iterable[ManualKRS]] = None
-    ):
-        self.entries: dict[str, ManualKRS] = {}
+    def __init__(self, initial_entries: typing.Optional[typing.Iterable[KRS]] = None):
+        self.entries: dict[str, KRS] = {}
         if initial_entries:
             for krs in initial_entries:
                 self.add(krs)
 
-    def add(self, krs: ManualKRS):
-        """Adds a ManualKRS entry to the set or merges if the same ID already exists."""
+    def add(self, krs: KRS):
+        """Adds a KRS entry to the set or merges if the same ID already exists."""
         if krs.id in self.entries:
             self.entries[krs.id] = self.entries[krs.id].merge(krs)
         else:
@@ -245,7 +243,7 @@ def save_org_connections(
     con_list = list(connections)
     con_refresh = needs_refresh_krs["krs"].unique().tolist()
     # Join KRS ids with the ones that needs a refresh.
-    connections = set(con_list) | set(ManualKRS(krs) for krs in con_refresh)
+    connections = set(con_list) | set(KRS(krs) for krs in con_refresh)
 
     names = list(names)
     people = list(people)

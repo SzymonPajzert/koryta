@@ -6,9 +6,8 @@ from typing import Type
 
 from pandas import DataFrame
 
+from entities.company import KRS, Owner, Source
 from entities.company import Company as KrsCompany
-from entities.company import ManualKRS as KRS
-from entities.company import Owner, Source
 from entities.person import KRS as KrsPerson
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import QueryRelation
