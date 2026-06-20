@@ -660,6 +660,10 @@ class Pipeline(typing.Generic[Output]):
 
         df = self.run_pipeline(ctx, ctx.refresh_policy)
 
+        if df is not None and self.output_path != "":
+            print(f"Writing to {self.output_path}")
+            write_dataframe(ctx, df, self.output_path, self.format)
+
         if df is not None:
             ctx.refresh_policy.add_refreshed_pipeline(self.pipeline_name)
             self._cached_result = df
@@ -701,6 +705,7 @@ class Pipeline(typing.Generic[Output]):
 
         df: pd.DataFrame | None = None
         try:
+            print(f"\n=== Started pipeline {self.pipeline_name} ===")
             df = self.process(ctx)
             self._refreshed_execution = True
         except InterruptedError:
@@ -710,8 +715,8 @@ class Pipeline(typing.Generic[Output]):
             gracefull = False
             raise e
         finally:
-            if gracefull and not returned_df:
-                print(f"Dumping {self.pipeline_name} to disk...")
+            if gracefull:
+                print("Dumping...")
                 dumper.dump_pandas()
                 print("Done")
 
@@ -725,10 +730,7 @@ class Pipeline(typing.Generic[Output]):
             else:
                 raise ValueError(f"Not found last_written for {self.pipeline_name}")
 
-        print(
-            f"{'  ' * self.nested}====== \
-                Finished pipeline {self.pipeline_name} =====\n\n"
-        )
+        print(f"=== Finished pipeline {self.pipeline_name} ===\n")
         return df
 
     def list_sources(self):
