@@ -17,14 +17,20 @@ from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
 curr_date = datetime.now().strftime("%Y-%m-%d")
 
 
+def min_none(a: int | None, b: int | None):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return min(a, b)
+
+
 def start_time(item):
-    min_start = "2100-01-01"
+    min_start = None
     for conn in item["krs_powiazania_kwerendowane"]:
         assert isinstance(conn, dict)
-        v = conn.get("data_start", curr_date)
-        if v is None:
-            v = curr_date
-        min_start = min(min_start, v)
+        v = conn.get("data_start", None)
+        min_start = min_none(min_start, v)
     return min_start
 
 
@@ -66,6 +72,7 @@ def employment_duration(item) -> str:
     return f"{days / 365:.2f}"
 
 
+# TODO we can't track if a person was employed in multiple roles
 def employment_role(item: dict) -> str | None:
     for conn in item.get("krs_powiazania_kwerendowane", []):
         assert isinstance(conn, dict)
