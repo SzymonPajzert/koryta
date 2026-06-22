@@ -75,7 +75,10 @@ def authenticate_user(endpoint_url: str) -> str:
     except Exception:
         pass
 
-    print("Waiting for authentication via browser...", file=sys.stderr)
+    print(
+        "Waiting for authentication via browser... [Click 'Authorize CLI']",
+        file=sys.stderr,
+    )
 
     def manual_input_thread():
         try:

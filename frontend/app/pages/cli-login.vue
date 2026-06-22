@@ -11,6 +11,39 @@ const route = useRoute();
 const router = useRouter();
 const status = ref("Checking authentication...");
 const error = ref("");
+const waitingForConfirmation = ref(false);
+
+const sendToken = async () => {
+  waitingForConfirmation.value = false;
+  const auth = getAuth();
+  if (!auth.currentUser) return; // Should not happen
+
+  status.value = "Getting ID token...";
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    status.value = "Sending token to CLI...";
+
+    const callback = route.query.callback as string;
+
+    const response = await fetch(callback, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    if (response.ok) {
+      status.value = "Authenticated! You can close this window now.";
+    } else {
+      error.value = `CLI rejected the token: ${response.statusText}`;
+      status.value = "Error";
+    }
+  } catch (e: unknown) {
+    error.value = `Failed: ${(e as Error).message}`;
+    status.value = "Error";
+  }
+};
 
 onMounted(async () => {
   const auth = getAuth();
@@ -48,29 +81,8 @@ onMounted(async () => {
     return;
   }
 
-  status.value = "Getting ID token...";
-  try {
-    const token = await auth.currentUser.getIdToken(true);
-    status.value = "Sending token to CLI...";
-
-    const response = await fetch(callback, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ token }),
-    });
-
-    if (response.ok) {
-      status.value = "Authenticated! You can close this window now.";
-    } else {
-      error.value = `CLI rejected the token: ${response.statusText}`;
-      status.value = "Error";
-    }
-  } catch (e: unknown) {
-    error.value = `Failed: ${(e as Error).message}`;
-    status.value = "Error";
-  }
+  status.value = "Ready to authenticate CLI.";
+  waitingForConfirmation.value = true;
 });
 </script>
 
@@ -91,9 +103,13 @@ onMounted(async () => {
         {{ error }}
       </div>
 
-      <p class="text-lg">
+      <p class="text-lg mb-4">
         {{ status }}
       </p>
+
+      <div v-if="waitingForConfirmation">
+        <v-btn color="primary" @click="sendToken"> Authorize CLI </v-btn>
+      </div>
 
       <div v-if="status.includes('Authenticated')" class="mt-6">
         <div class="text-6xl mb-4">✅</div>
