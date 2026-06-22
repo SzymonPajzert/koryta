@@ -1,3 +1,4 @@
+import abc
 import argparse
 import json
 import sys
@@ -68,45 +69,30 @@ def clean_payload(payload):
         return payload
 
 
-def print_company(company):
-    if company["created"]:
-        print(
-            f"\n  Created company with KRS: {company['krs']} node {company['nodeId']}",
-            end=" ",
-            file=sys.stderr,
-        )
-    else:
-        print(
-            f"\n  Already existed KRS: {company['krs']} node {company['nodeId']}",
-            end=" ",
-            file=sys.stderr,
-        )
-
-
-def company_payloads():
-    # TODO this looks like an ugly pattern but I don't know how to do it better
-    print("Loading company payloads from Companies pipeline")
-    df = Companies().read_or_process(setup_context(False)[0])
-    return {c["krs"]: c for c in iterate_pipeline_dict(df)}
-
-
 class Uploader:
-    def __init__(self, args: Args, companies=None):
+    def __init__(self, args: Args):
         self.args = args
 
         if args.type in ["score"]:
             self.firestore = Firestore(args)
         else:
-            if companies is None:
-                self.company_payloads = company_payloads()
-            else:
-                self.company_payloads = companies
-
             token = authenticate_user(args.endpoint)
             self.headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {token}",
             }
+
+    @staticmethod
+    def create(args: Args) -> "Uploader":
+        if args.type == "person":
+            return PersonUploader(args)
+        if args.type == "company":
+            return CompanyUploader(args)
+        return Uploader(args)
+
+    @abc.abstractmethod
+    def submit_entity(self, payload) -> requests.Response:
+        pass
 
     def submit_payload(self, url, payload, fail=True, verbose=False):
         print(
@@ -136,6 +122,58 @@ class Uploader:
 
         return resp
 
+    def submit_results(self, entities):
+        self.success_count = 0
+        self.total = len(entities)
+        for idx, payload in enumerate(entities):
+            if self.args.limit is not None and idx >= self.args.limit:
+                print(f"Reached limit {self.args.limit}")
+                break
+            time.sleep(0.3)
+            name = payload.get("name", None) if payload is not None else None
+            if payload is None or name is None:
+                print(
+                    f"[{idx + 1}/{self.total}] Skipping invalid payload ...",
+                    file=sys.stderr,
+                )
+                continue
+
+            if self.args.type == "company":
+                self.check_success(self.submit_entity(payload))
+            elif self.args.type == "score":
+                self.firestore.submit_score(payload)
+                self.success_count += 1
+            else:
+                self.check_success(self.submit_entity(payload))
+
+        failures = self.total - self.success_count
+        print(
+            f"\nUpload complete. Success: {self.success_count}, Failed: {failures}",
+            file=sys.stderr,
+        )
+
+    def check_success(self, resp):
+        if resp.status_code == 200:
+            self.success_count += 1
+        return resp
+
+
+class CompanyUploader(Uploader):
+    def __init__(self, args: Args):
+        super().__init__(args)
+        self.company_payloads = self.get_company_payloads()
+
+    @typing.override
+    def submit_entity(self, payload):
+        mapped_payload = dict(payload)
+        return self.submit_company(mapped_payload["krs"], mapped_payload)
+
+    def get_company_payloads(self):
+        # TODO this looks like an ugly pattern but I don't know how to do it better
+        print("Loading company payloads from Companies pipeline")
+        df = Companies().read_or_process(setup_context(False)[0])
+        return {c["krs"]: c for c in iterate_pipeline_dict(df)}
+
     def submit_company(self, krs: str, payload: dict | None):
         current_target_url = f"{self.args.endpoint}/api/ingest/company"
         if payload is None:
@@ -158,58 +196,31 @@ class Uploader:
             payload,
         )
 
-    def submit_results(self, entities):
-        self.success_count = 0
-        self.total = len(entities)
-        for idx, payload in enumerate(entities):
-            if self.args.limit is not None and idx >= self.args.limit:
-                print(f"Reached limit {self.args.limit}")
-                break
-            time.sleep(0.3)
-            name = payload.get("name", None) if payload is not None else None
-            if payload is None or name is None:
-                print(
-                    f"[{idx + 1}/{self.total}] Skipping invalid payload ...",
-                    file=sys.stderr,
-                )
-                continue
 
-            mapped_payload = dict(payload)
-            if self.args.type == "company":
-                self.check_success(
-                    self.submit_company(mapped_payload["krs"], mapped_payload)
-                )
-            elif self.args.type == "score":
-                self.firestore.submit_score(payload)
-                self.success_count += 1
-            else:
-                current_target_url = f"{self.args.endpoint}/api/ingest/person"
-                resp = self.check_success(
-                    self.submit_payload(
-                        current_target_url,
-                        payload,
-                        fail=False,
-                    )
-                )
-                if resp.status_code == 404:
-                    # Deduplicate, e.g if a person was employed there twice
-                    for krs in set(resp.json()["data"]):
-                        self.submit_company(krs, None)
-                    # Try submitting again
-                    self.check_success(
-                        self.submit_payload(current_target_url, payload, fail=False)
-                    )
+class PersonUploader(CompanyUploader):
+    """PersonUploader submits results for a given person.
 
-        failures = self.total - self.success_count
-        print(
-            f"\nUpload complete. Success: {self.success_count}, Failed: {failures}",
-            file=sys.stderr,
+    It inherits CompanyUplader, since it needs to upload companies
+    if they are missing."""
+
+    @typing.override
+    def submit_entity(self, payload):
+        current_target_url = f"{self.args.endpoint}/api/ingest/person"
+        resp = self.check_success(
+            self.submit_payload(
+                current_target_url,
+                payload,
+                fail=False,
+            )
         )
-
-    def check_success(self, resp):
-        if resp.status_code == 200:
-            self.success_count += 1
-        return resp
+        if resp.status_code == 404:
+            # Deduplicate, e.g if a person was employed there twice
+            for krs in set(resp.json()["data"]):
+                self.submit_company(krs, None)
+            # Try submitting again
+            return self.submit_payload(current_target_url, payload, fail=False)
+        else:
+            return resp
 
 
 def print_results(entities):
@@ -263,16 +274,6 @@ def main():
 
     if args.type == "person":
         missing_krs = set()
-        # Check that each referred KRS company has name
-        companies = company_payloads()
-        for e in entities:
-            for c in e["companies"]:
-                company = companies.get(c["krs"], None)
-                if company is None:
-                    missing_krs.add(c["krs"])
-                    continue
-                if company["name"] is None:
-                    missing_krs.add(c["krs"])
 
         if len(missing_krs) > 0:
             print(list(missing_krs))
@@ -284,7 +285,7 @@ def main():
         print_results(entities)
         print("\nUse --submit to upload.", file=sys.stderr)
     else:
-        uploader = Uploader(args)
+        uploader = Uploader.create(args)
         uploader.submit_results(entities)
 
 
