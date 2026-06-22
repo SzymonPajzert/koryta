@@ -69,6 +69,8 @@ def clean_payload(payload):
 
 
 class Uploader:
+    TYPE_URLS = {"extraction": "/api/ingest/extraction"}
+
     def __init__(self, args: Args):
         self.args = args
 
@@ -90,8 +92,14 @@ class Uploader:
         return Uploader(args)
 
     def submit_entity(self, payload) -> requests.Response:
-        print(payload)
-        raise NotImplementedError("This function is not implemented")
+        url = self.TYPE_URLS.get(self.args.type, None)
+
+        if url is None:
+            raise NotImplementedError(
+                f"This function is not implemented for ${self.args.type}"
+            )
+
+        return self.submit_payload(url, payload)
 
     def submit_payload(self, url, payload, fail=True, verbose=False):
         print(
@@ -137,9 +145,7 @@ class Uploader:
                 )
                 continue
 
-            if self.args.type == "company":
-                self.check_success(self.submit_entity(payload))
-            elif self.args.type == "score":
+            if self.args.type == "score":
                 self.firestore.submit_score(payload)
                 self.success_count += 1
             else:
