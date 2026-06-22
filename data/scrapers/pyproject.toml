@@ -26,7 +26,7 @@ dependencies = [
     "duckdb==1.5.3",
     "filelock==3.29.1",
     "firebase_admin==7.4.0",
-    "fsspec==2025.9.0",
+    "fsspec==2026.4.0",
     "google-api-core==2.31.0",
     "google-auth==2.53.0",
     "google-cloud-core==2.6.0",
