@@ -1,4 +1,3 @@
-import abc
 import argparse
 import json
 import sys
@@ -57,7 +56,7 @@ def parse_args() -> Args:
         "--prod", action="store_true", help="Production mode (requires token auth)"
     )
     args = parser.parse_known_args()[0]
-    return args
+    return args  # type: ignore
 
 
 def clean_payload(payload):
@@ -90,9 +89,9 @@ class Uploader:
             return CompanyUploader(args)
         return Uploader(args)
 
-    @abc.abstractmethod
     def submit_entity(self, payload) -> requests.Response:
-        pass
+        print(payload)
+        raise NotImplementedError("This function is not implemented")
 
     def submit_payload(self, url, payload, fail=True, verbose=False):
         print(
@@ -271,15 +270,6 @@ def main():
     if len(entities) == 0:
         print("No results.", file=sys.stderr)
         sys.exit(0)
-
-    if args.type == "person":
-        missing_krs = set()
-
-        if len(missing_krs) > 0:
-            print(list(missing_krs))
-            # TODO this fails for a single company and it's annoying
-            if len(missing_krs) > 1:
-                raise ValueError("Some companies don't have required information")
 
     if not args.submit:
         print_results(entities)
