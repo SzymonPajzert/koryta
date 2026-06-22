@@ -36,8 +36,6 @@ def parse_args():
         choices=["person", "company", "region", "score"],
         help="Entity type to query",
     )
-    parser.add_argument("--region", type=str, help="Filter by teryt prefix (e.g. 3061)")
-    parser.add_argument("--krs", type=str, help="Filter by KRS and all its descendants")
     parser.add_argument(
         "--database", type=str, default="koryta-pl", help="Firebase Database ID"
     )
@@ -87,7 +85,7 @@ def company_payloads():
 class Firestore:
     def __init__(self, args):
         project_id = getattr(args, "project", None)
-        if not args.prod or args.endpoint.startswith("http://localhost"):
+        if args.endpoint.startswith("http://localhost"):
             os.environ["FIRESTORE_EMULATOR_HOST"] = "localhost:8080"
             if not project_id:
                 try:
@@ -284,19 +282,7 @@ def read_payloads_filtered(args) -> list[dict]:
             print(f"Error parsing JSON on line: {e}", file=sys.stderr)
             continue
 
-        # Optional filtering
-        if args.type == "company" and args.krs:
-            if payload.get("krs") != args.krs:
-                pass
-
-        if args.region:
-            if args.type == "person":
-                if payload.get("teryt") != args.region:
-                    continue
-            elif args.type == "company":
-                if payload.get("teryt_code") != args.region:
-                    continue
-
+        # Allow offsetting the reads, skipping the 'offset' first entries.
         if skipped < args.offset:
             skipped += 1
             continue
