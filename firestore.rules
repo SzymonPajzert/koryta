@@ -21,6 +21,11 @@ service cloud.firestore {
       allow create: if request.auth != null;
     }
 
+    match /extractions/{extractionId} {
+      allow read: if request.auth != null && request.auth.token.datascience == true;
+      allow write: if false;
+    }
+
     match /votes/{voteId} {
       allow read: if true;
       allow create, update, delete: if request.auth != null 
