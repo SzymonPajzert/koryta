@@ -2,6 +2,7 @@ import argparse
 import json
 import sys
 import time
+import typing
 
 import numpy as np
 import requests
@@ -20,7 +21,16 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(o)
 
 
-def parse_args():
+class Args:
+    endpoint: str
+    submit: bool
+    type: typing.Literal["person", "company", "region", "score", "extraction"]
+    database: str
+    limit: int | None
+    offset: int | None
+
+
+def parse_args() -> Args:
     parser = argparse.ArgumentParser(
         description="Upload koryta data to Firestore from stdin."
     )
@@ -30,7 +40,7 @@ def parse_args():
     parser.add_argument("--submit", action="store_true", help="Submit data to the API")
     parser.add_argument(
         "--type",
-        choices=["person", "company", "region", "score"],
+        choices=["person", "company", "region", "score", "extraction"],
         help="Entity type to query",
     )
     parser.add_argument(
@@ -45,7 +55,8 @@ def parse_args():
     parser.add_argument(
         "--prod", action="store_true", help="Production mode (requires token auth)"
     )
-    return parser.parse_known_args()[0]
+    args = parser.parse_known_args()[0]
+    return args
 
 
 def clean_payload(payload):
@@ -80,7 +91,7 @@ def company_payloads():
 
 
 class Uploader:
-    def __init__(self, args, companies=None):
+    def __init__(self, args: Args, companies=None):
         self.args = args
 
         if args.type in ["score"]:
@@ -201,7 +212,7 @@ class Uploader:
         return resp
 
 
-def print_results(entities, type):
+def print_results(entities):
     print("\n--- Payload Preview (First 3) ---", file=sys.stderr)
     for i in range(min(3, len(entities))):
         print(json.dumps(entities[i], indent=2, ensure_ascii=False), file=sys.stderr)
@@ -270,7 +281,7 @@ def main():
                 raise ValueError("Some companies don't have required information")
 
     if not args.submit:
-        print_results(entities, args.type)
+        print_results(entities)
         print("\nUse --submit to upload.", file=sys.stderr)
     else:
         uploader = Uploader(args)
