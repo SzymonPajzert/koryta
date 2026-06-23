@@ -653,7 +653,7 @@ class Pipeline(typing.Generic[Output]):
                 df = self.read(ctx)
                 self._cached_result = df
                 # If read successfully, we don't need to write (it matches disk).
-                assert df is not None
+                assert df is not None, self.filename
                 return df
             except FileNotFoundError:
                 # We'll try to process
