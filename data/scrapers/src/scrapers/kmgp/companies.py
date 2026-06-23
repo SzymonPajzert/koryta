@@ -1,5 +1,8 @@
+import dataclasses
 import json
 import typing
+
+import pandas as pd
 
 from entities.company import Company as KrsCompany
 from entities.company import Source
@@ -66,8 +69,10 @@ class CompaniesKMGP(Pipeline[KrsCompany]):
         for c in self.companies_krs.read_or_process_list(ctx):
             nipmapper.add(krs=c.krs, nip=c.nip, regon=c.regon)
 
+        output = []
         for company in self.list_companies(ctx, nipmapper):
-            ctx.io.output_entity(company)
+            output.append(company)
+        return pd.DataFrame.from_records([dataclasses.asdict(c) for c in output])
 
 
 def parse_company_data(item: dict[str, str], nipmapper: NipToKrsMapper) -> KrsCompany:

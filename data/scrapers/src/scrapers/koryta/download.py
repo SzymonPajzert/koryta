@@ -9,6 +9,7 @@ It defines two main pipelines:
   within them by processing 'edges' data from Firestore.
 """
 
+import dataclasses
 from datetime import datetime
 
 import pandas as pd
@@ -149,11 +150,12 @@ class KorytaPeople(Pipeline[Person]):
                 datetime.strptime(date_read, "%Y-%m-%d") - pd.Timedelta(days=1)
             ).strftime("%Y-%m-%d")
 
+        outputs = []
         for data in tqdm(df.to_dict(orient="records")):
             votes_interesting = (
                 data.get("stats", {}).get("votes", {}).get("interesting", None)
             )
-            ctx.io.output_entity(
+            outputs.append(
                 Person(
                     full_name=data.get("name", ""),
                     parties=data.get("parties", []),
@@ -165,6 +167,7 @@ class KorytaPeople(Pipeline[Person]):
             )
 
         print("Finished processing people.")
+        return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
 
 
 class KorytaVotes(Pipeline[PersonVote]):
@@ -188,6 +191,7 @@ class KorytaVotes(Pipeline[PersonVote]):
         input_documents = FirestoreCollection("votes", date=self.date)
         df = input_documents.process(ctx)
 
+        outputs = []
         for data in tqdm(df.to_dict(orient="records")):
             if data["userUid"] == "pipeline":
                 # Skip pipeline's own votes
@@ -199,9 +203,11 @@ class KorytaVotes(Pipeline[PersonVote]):
             person_koryta_id = data["nodeId"]
             if not person_koryta_id or person_koryta_id == "":
                 continue
-            ctx.io.output_entity(
+            outputs.append(
                 PersonVote(
                     person_koryta_id=data["nodeId"],
                     interesting=category_votes.get("interesting", None),
                 )
             )
+
+        return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])

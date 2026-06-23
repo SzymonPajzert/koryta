@@ -32,7 +32,6 @@ class PeoplePayloads(Pipeline[Person]):
         result = []
         for _, row in people_df.iterrows():
             person = self.map_person_payload(ctx, row)
-            ctx.io.output_entity(person)
             result.append(person)
         return (
             pd.DataFrame.from_records([asdict(p) for p in result])
