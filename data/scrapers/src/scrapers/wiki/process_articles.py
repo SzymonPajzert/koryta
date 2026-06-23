@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from entities.company import Wikipedia as Company
 from entities.person import Wikipedia as People
-from scrapers.stores import Context, DownloadableFile, Pipeline
+from scrapers.stores import Context, DownloadableFile, Pipeline, write_dataframe
 from scrapers.wiki.util import parse_date
 from util.lists import WIKI_POLITICAL_LINKS
 from util.polish import LOWER, UPPER
@@ -357,13 +357,15 @@ class ProcessWiki(Pipeline[People]):
     confirm_run = True
 
     def process(self, ctx: Context):
-        scrape_wiki(ctx)
-        # TODO #205 - https://github.com/SzymonPajzert/koryta/issues/205
-        # support multiple output entities
-        # Return People entities as the primary result of this pipeline,
-        # cached in person_wikipedia.jsonl
-        # Companies are written to versioned/company_wikipedia via ctx.io.output_entity
-        return pd.DataFrame([asdict(p) for p in (ctx.io.get_output(People) or [])])
+        people, companies = scrape_wiki(ctx)
+        
+        people.sort(key=lambda x: x.content_score, reverse=True)
+        companies.sort(key=lambda x: x.content_score, reverse=True)
+
+        comp_df = pd.DataFrame([asdict(c) for c in companies])
+        write_dataframe(ctx, comp_df, "company_wikipedia", "jsonl")
+        
+        return pd.DataFrame([asdict(p) for p in people])
 
 
 def scrape_wiki(ctx: Context):
@@ -409,9 +411,9 @@ def scrape_wiki(ctx: Context):
 
         stats = Stats()
 
-        # Use multiprocessing to speed up parsing
-        # We use a pool of workers to process articles in parallel
-        # imap_unordered is used to keep memory usage low and process as we go
+        people = []
+        companies = []
+
         with multiprocessing.Pool(processes=8) as pool:
             for pair in pool.imap_unordered(
                 process_article_worker, article_generator(), chunksize=1000
@@ -419,8 +421,12 @@ def scrape_wiki(ctx: Context):
                 if pair:
                     entity, article = pair
                     if entity:
-                        ctx.io.output_entity(entity, sort_by=["content_score"])
+                        if isinstance(entity, People):
+                            people.append(entity)
+                        elif isinstance(entity, Company):
+                            companies.append(entity)
                         stats.ingest_article(article)
 
     print("🎉 Processing complete.")
     print(stats)
+    return people, companies
