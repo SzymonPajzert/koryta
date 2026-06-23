@@ -2,7 +2,9 @@ import difflib
 import json
 import re
 import typing
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+
+import pandas as pd
 
 from entities.composite import Company, Election, Person, Source
 from scrapers.kmgp.companies import CompaniesKMGP
@@ -142,8 +144,9 @@ class PeopleKMGP(Pipeline[Person]):
                 key = (c.teryt_code, c.name.strip().lower())
                 self.companies_index[key] = c.krs
 
+        output = []
         for payload in self.list_people(ctx):
-            ctx.io.output_entity(
+            output.append(
                 Person(
                     payload.name,
                     elections=self.lookup_election(payload.name, payload.teryt),
@@ -152,3 +155,4 @@ class PeopleKMGP(Pipeline[Person]):
                     sources=[Source(url=payload.source)],
                 )
             )
+        return pd.DataFrame.from_records([asdict(r) for r in output])

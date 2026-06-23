@@ -1,3 +1,4 @@
+import dataclasses
 import typing
 from dataclasses import dataclass
 
@@ -56,6 +57,7 @@ class Companies(Pipeline[Company]):
             | set(children_of_hardcoded)
         )
 
+        outputs = []
         for krs_id in all_krs:
             if pd.isna(krs_id):
                 continue
@@ -77,7 +79,7 @@ class Companies(Pipeline[Company]):
                 teryt_code = krs.teryt_code
             merge = CompanyMerger(krs, wiki)
 
-            ctx.io.output_entity(
+            outputs.append(
                 Company(
                     name=merge.name,
                     city=merge.city,
@@ -87,6 +89,8 @@ class Companies(Pipeline[Company]):
                     # TODO add owners=[],
                 )
             )
+
+        return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
 
     def graph(self, ctx: Context):
         graph = self.company_graph(ctx)

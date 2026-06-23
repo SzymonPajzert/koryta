@@ -1,7 +1,10 @@
 import argparse
+import dataclasses
 import math
 import typing
 from collections import Counter
+
+import pandas as pd
 
 from entities.person import PKW as Person
 from scrapers.map.teryt import Teryt
@@ -161,7 +164,7 @@ def process_pkw(ctx: Context, csv_headers, limit: int | None, year: str | None):
         source = config.source
         ctx.io.read_data(source)  # Access it, so it's downloaded already
     print("Files downloaded")
-
+    outputs = []
     for config in filtered_sources:
         reader = config.extractor.read(ctx, config.source)
 
@@ -171,12 +174,13 @@ def process_pkw(ctx: Context, csv_headers, limit: int | None, year: str | None):
                 count += 1
                 if limit is not None and count > limit:
                     break
-                ctx.io.output_entity(item)
+                outputs.append(item)
         except Exception as e:
             raise ValueError(f"Failed processing {config.source}: {e}")
 
         print("🎉 Processing complete.")
 
+    return pd.DataFrame.from_records([dataclasses.asdict(r) for r in outputs])
 
 class PeoplePKW(Pipeline[Person]):
     filename = "person_pkw"
@@ -189,7 +193,7 @@ class PeoplePKW(Pipeline[Person]):
     def process(self, ctx: Context):
         assert self.teryt is not None
         self.teryt.process(ctx)  # TODO mark teryt as autoinitializing
-        main(ctx, self.teryt)
+        return main(ctx, self.teryt)
 
 
 def main(ctx: Context, teryt: Teryt):
@@ -213,7 +217,7 @@ def main(ctx: Context, teryt: Teryt):
     # Initiate headers parsers with ctx dependent variables
     csv_headers = {k: v.set_teryt(teryt) if v else None for k, v in CSV_HEADERS.items()}
 
-    process_pkw(ctx, csv_headers, args.limit, args.year)
+    res = process_pkw(ctx, csv_headers, args.limit, args.year)
 
     print("\n\n")
 
@@ -222,3 +226,5 @@ def main(ctx: Context, teryt: Teryt):
             continue
         print(column)
         print(counter.most_common(10))
+
+    return res

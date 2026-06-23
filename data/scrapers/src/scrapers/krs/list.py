@@ -248,6 +248,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             self.add_company(c)
             self.add_company_source(c.krs, blob_name)
 
+        output = []
         for company in self.companies.values():
             company_sources = self.company_sources.get(company.krs, set())
             hc = hardcoded.get(company.krs)
@@ -255,7 +256,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 for src in hc.sources:
                     company_sources.add(Source(source="hardcoded", reason=src))
 
-            ctx.io.output_entity(
+            output.append(
                 dataclasses.replace(
                     company,
                     sources=list(company_sources),
@@ -268,6 +269,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     continue
 
                 raise ValueError(f"Awaiting relations not empty: {k} {v}")
+        return DataFrame.from_records([dataclasses.asdict(c) for c in output])
 
 
 def company_from_rejestrio(data: dict, pcs: DataFrame | None = None) -> KrsCompany:

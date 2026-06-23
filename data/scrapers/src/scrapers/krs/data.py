@@ -109,9 +109,11 @@ class PeopleRejestrIOHardcoded(Pipeline):
     volatile = True
 
     def process(self, ctx: Context):
+        output = []
         for url in PEOPLE_LIST:
             rejestr_id = url.split("/osoby/")[1].split("/")[0]
-            ctx.io.output_entity(RejestrIOKey(id=rejestr_id))
+            output.append(RejestrIOKey(id=rejestr_id))
+        return pd.DataFrame.from_records([dataclasses.asdict(r) for r in output])
 
 
 PEOPLE_LIST = [
