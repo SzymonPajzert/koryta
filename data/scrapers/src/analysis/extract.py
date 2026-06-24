@@ -223,7 +223,7 @@ class Extract(Pipeline):
                             result += 1
                     elif self.currently_employed:
                         end_date = emp.get("employed_end")
-                        if end_date is None or end_date > RECENT_TRESHOLD:
+                        if end_date is None:
                             result += 1
                     else:
                         result += 1
