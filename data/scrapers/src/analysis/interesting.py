@@ -109,6 +109,9 @@ class Companies(Pipeline[Company]):
         return graph
 
     def wiki_companies(self, ctx: Context) -> typing.Iterable[Wikipedia]:
+        # TODO reenable reading wikipedia companies
+        return
+
         self.wiki_pipeline.read_or_process(ctx)
         # TODO this could be a method on a pipeline
         wiki_companies_file = LocalFile(
