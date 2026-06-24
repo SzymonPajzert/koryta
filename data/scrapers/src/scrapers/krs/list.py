@@ -206,6 +206,9 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             blob = ctx.io.read_data(blob_ref)
             assert isinstance(blob_ref, DownloadableFile)
             content = blob.read_string()
+            if content == "":
+                # Skipping files marking failures
+                continue
             data = json.loads(content)
             yield blob_ref.url, data
 
