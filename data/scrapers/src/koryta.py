@@ -82,8 +82,7 @@ def main():
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:
-        # TODO this special handling is bad imo
-        print("No pipeline specified, will run all except ScrapeRejestrIO")
+        raise ValueError("No pipeline specified, use koryta PipelineName")
     pipeline_names = set(pt.__name__ for pt in PIPELINES)
     for p_name in args.pipeline:
         if p_name not in pipeline_names:

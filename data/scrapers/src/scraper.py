@@ -51,7 +51,6 @@ def main():
         try:
             response = requests.get(url)
             response.raise_for_status()
-            # TODO we need to detect the format of the uploaded data
             ctx.io.upload(url, response.text, "application/json", include_query=True)
             print(f"Successfully scraped and uploaded: {url}")
 
