@@ -105,7 +105,7 @@ def _compress_long_segments(path: str, max_segment_length: int) -> str:
         if len(segment.encode("utf-8")) > max_segment_length:
             hash_suffix = hashlib.md5(segment.encode()).hexdigest()[:_HASH_SUFFIX_LEN]
             # +2: 1 for '_' separator, 1 safety (check is bytes, truncation is chars)
-            truncated = segment[:max_segment_length - _HASH_SUFFIX_LEN - 2]
+            truncated = segment[: max_segment_length - _HASH_SUFFIX_LEN - 2]
             segment = f"{truncated}_{hash_suffix}"
         safe_segments.append(segment)
     return "/".join(safe_segments)
@@ -151,7 +151,7 @@ def _upload_response(
     path = _storage_path(parsed)
     if options.storage_type == "gcs":
         content_type = _content_type_from_response(response)
-        ctx.io.upload(parsed.full_url, response.content, content_type)
+        ctx.io.batch_upload(parsed.full_url, response.content, content_type)
     elif options.storage_type == "local":
         if options.local_output is None:
             raise ValueError("local_output is required for local storage")
@@ -280,7 +280,7 @@ def _extract_urls(
 
 
 _FLUSH_INTERVAL_S = 2.0  # also flush after this many seconds of inactivity
-_LOG_INTERVAL_S = 30.0   # how often to log queue stats
+_LOG_INTERVAL_S = 30.0  # how often to log queue stats
 
 
 def _priority_for_url(options: CrawlOptions, url: str) -> Priority:
@@ -314,14 +314,17 @@ def _http_worker(
         entry: CrawlQueueItem | None = work_q.get()
         if entry is None:
             work_q.task_done()
+            ctx.io.flush_all()
             return
         try:
             parsed_url = NormalizedParse.parse(entry.url)
             result = crawl_url(ctx, parsed_url, options)
         except Exception as exc:
             result = CrawlResult(error=f"unexpected: {exc}")
+            ctx.io.flush_all()
         done_q.put((entry, result))
         work_q.task_done()
+        ctx.io.flush_all()
 
 
 def _flush_batch(
@@ -344,26 +347,36 @@ def _flush_batch(
         elif result.error:
             logging.error(
                 "[p=%d][%.2fs] Crawl failed (%s): %s",
-                priority, result.request_duration_s or 0, result.error, entry.url,
+                priority,
+                result.request_duration_s or 0,
+                result.error,
+                entry.url,
             )
             error_items.append((entry.uid, result.error))
         else:
             logging.info(
                 "[p=%d][%.2fs] Crawl succeeded: %s",
-                priority, result.request_duration_s or 0, entry.url,
+                priority,
+                result.request_duration_s or 0,
+                entry.url,
             )
             _filter_blocked(result, blocked_normalized)
-            done_items.append((entry.uid, result.storage_path, {
-                "request_duration_s": result.request_duration_s,
-                "parse_duration_s": result.parse_duration_s,
-                "upload_duration_s": result.upload_duration_s,
-                "total_duration_s": result.total_duration_s,
-                "worker_id": worker_name,
-                "media_type": result.media_type,
-            }))
+            done_items.append(
+                (
+                    entry.uid,
+                    result.storage_path,
+                    {
+                        "request_duration_s": result.request_duration_s,
+                        "parse_duration_s": result.parse_duration_s,
+                        "upload_duration_s": result.upload_duration_s,
+                        "total_duration_s": result.total_duration_s,
+                        "worker_id": worker_name,
+                        "media_type": result.media_type,
+                    },
+                )
+            )
             all_discovered.extend(
-                NewUrl(u, _priority_for_url(options, u))
-                for u in result.discovered_urls
+                NewUrl(u, _priority_for_url(options, u)) for u in result.discovered_urls
             )
 
     if done_items:
@@ -458,8 +471,11 @@ def _coordinator(
             logging.info(
                 "[%s] work_q=%d done_q=%d pending=%d sent=%d received=%d",
                 worker_name,
-                work_q.qsize(), done_q.qsize(), len(pending),
-                total_sent, total_received,
+                work_q.qsize(),
+                done_q.qsize(),
+                len(pending),
+                total_sent,
+                total_received,
             )
             last_log = now
         if len(pending) >= queue_flush_size or (
