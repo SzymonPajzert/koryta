@@ -15,7 +15,14 @@ warsaw_tz = ZoneInfo("Europe/Warsaw")
 class Client:
     def __init__(self):
         self.now = datetime.now(warsaw_tz)
-        self.storage_client = storage.Client()
+        try:
+            self.storage_client = storage.Client()
+        except OSError as e:
+            if "project" in str(e).lower():
+                raise ConnectionAbortedError(
+                    "Specify the project with 'gcloud config set project koryta-pl'"
+                ) from e
+            raise
 
     def download_from_gcs(self, blob_name: str, filename: str, binary: bool):
         """Downloads a blob from GCS as a string."""
