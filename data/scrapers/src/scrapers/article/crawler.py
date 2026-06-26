@@ -149,7 +149,7 @@ def _upload_response(
     path = _storage_path(parsed)
     if options.storage_type == "gcs":
         content_type = _content_type_from_response(response)
-        ctx.io.upload(parsed.full_url, response.content, content_type)
+        ctx.io.batch_upload(parsed.full_url, response.content, content_type)
     elif options.storage_type == "local":
         if options.local_output is None:
             raise ValueError("local_output is required for local storage")
@@ -361,6 +361,7 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
 
     if options.worker_threads <= 1:
         _worker_thread(0, options, queue, ctx, blocked_normalized)
+        ctx.io.flush_all()
         return
 
     with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
@@ -372,3 +373,5 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
         ]
         for future in futures:
             future.result()
+            
+    ctx.io.flush_all()
