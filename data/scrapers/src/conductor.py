@@ -135,6 +135,14 @@ class Conductor(IO):
             source, data, content_type, include_query=include_query, verbose=verbose
         )
 
+    def batch_upload(
+        self, source, data, content_type, include_query=False, verbose=True
+    ):
+        pass
+
+    def flush_all(self):
+        pass
+
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)
 

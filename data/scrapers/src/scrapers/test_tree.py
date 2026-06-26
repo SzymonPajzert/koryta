@@ -28,6 +28,14 @@ class MockIO(IO):
     def upload(self, source, data, content_type, include_query=False, verbose=True):
         pass
 
+    def batch_upload(
+        self, source, data, content_type, include_query=False, verbose=True
+    ):
+        pass
+
+    def flush_all(self):
+        pass
+
     def list_namespaces(self, ref, namespace):
         pass
 
