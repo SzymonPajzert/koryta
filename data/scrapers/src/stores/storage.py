@@ -1,9 +1,11 @@
+import argparse
 import atexit
 import io
 import tarfile
 import threading
 from collections import defaultdict
 from datetime import datetime
+from functools import cached_property
 from typing import Generator
 from zoneinfo import ZoneInfo
 
@@ -19,9 +21,20 @@ warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 
 class Client:
-    def __init__(self, max_batch_size=50 * 1024 * 1024):
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--max_batch_size",
+            help="Size of the data to be cached until it's uploaded",
+            default=50 * 1024 * 1024,
+            required=False,
+        )
+        args, _ = parser.parse_known_args()
+        return args
+
+    def __init__(self):
         self.now = datetime.now(warsaw_tz)
-        self.max_batch_size = max_batch_size
         self._batch_locks = defaultdict(threading.Lock)
         self._batches = {}
         self._global_lock = threading.Lock()
@@ -205,7 +218,7 @@ class Client:
             batch["index"].append(rel_path)
             batch["uncompressed_size"] += len(data)
 
-            if batch["uncompressed_size"] >= self.max_batch_size:
+            if batch["uncompressed_size"] >= self.args.max_batch_size:
                 self._flush_batch(key, batch)
                 del self._batches[key]
 
