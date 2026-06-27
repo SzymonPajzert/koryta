@@ -267,7 +267,7 @@ def main() -> None:  # noqa: PLR0915
         if args.profile_path
         else None
     )
-    ctx, _ = setup_context(False, crawl_queue=queue)
+    ctx, _ = setup_context(False, crawl_queue=queue, batch_upload=True)
     try:
         with profile_scope(profile_enabled, profile_path):
             run_crawler(ctx, options)
