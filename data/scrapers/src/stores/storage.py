@@ -10,6 +10,7 @@ from typing import Generator
 from zoneinfo import ZoneInfo
 
 import google.cloud.storage as storage
+from duckdb import NotImplementedException
 from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
@@ -21,24 +22,8 @@ warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 
 class Client:
-    @cached_property
-    def args(self):
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "--max_batch_size",
-            help="Size of the data to be cached until it's uploaded",
-            default=50 * 1024 * 1024,
-            required=False,
-        )
-        args, _ = parser.parse_known_args()
-        return args
-
     def __init__(self):
         self.now = datetime.now(warsaw_tz)
-        self._batch_locks = defaultdict(threading.Lock)
-        self._batches = {}
-        self._global_lock = threading.Lock()
-        atexit.register(self.flush_all)
         try:
             self.storage_client = storage.Client()
         except OSError as e:
@@ -174,6 +159,66 @@ class Client:
         content_type,
         include_query=False,
         verbose=True,
+    ) -> None:
+        raise NotImplementedException("Use BatchClient instead")
+
+    def flush_all(self) -> None:
+        raise NotImplementedException("Use BatchClient instead")
+
+    def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
+        """Lists available values for a given namespace (e.g. 'date')."""
+        bucket = self.storage_client.bucket(BUCKET)
+        # We assume the structure is prefix/ns=val/...
+        # We list with delimiter to get folders (prefixes)
+        # The prefix should be ref.prefix + "/" if not empty
+        prefix = ref.prefix
+        if prefix and not prefix.endswith("/"):
+            prefix += "/"
+
+        blobs = bucket.list_blobs(prefix=prefix, delimiter="/")
+        # Trigger iteration to populate prefixes
+        for _ in blobs:
+            pass
+
+        values = set()
+        for p in blobs.prefixes:
+            parts = p.rstrip("/").split("/")
+            last_part = parts[-1]
+            if "=" in last_part:
+                k, v = last_part.split("=", 1)
+                if k == namespace:
+                    values.add(v)
+
+        return sorted(list(values))
+
+
+class BatchClient(Client):
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--max_batch_size",
+            help="Size of the data to be cached until it's uploaded",
+            default=50 * 1024 * 1024,
+            required=False,
+        )
+        args, _ = parser.parse_known_args()
+        return args
+
+    def __init__(self):
+        super().__init__()
+        self._batch_locks = defaultdict(threading.Lock)
+        self._batches = {}
+        self._global_lock = threading.Lock()
+        atexit.register(self.flush_all)
+
+    def batch_upload(
+        self,
+        source: NormalizedParse | str,
+        data,
+        content_type,
+        include_query=False,
+        verbose=True,
     ):
         if isinstance(source, str):
             source = NormalizedParse.parse(source)
@@ -259,29 +304,3 @@ class Client:
                     batch = self._batches[key]
                     self._flush_batch(key, batch)
                     del self._batches[key]
-
-    def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
-        """Lists available values for a given namespace (e.g. 'date')."""
-        bucket = self.storage_client.bucket(BUCKET)
-        # We assume the structure is prefix/ns=val/...
-        # We list with delimiter to get folders (prefixes)
-        # The prefix should be ref.prefix + "/" if not empty
-        prefix = ref.prefix
-        if prefix and not prefix.endswith("/"):
-            prefix += "/"
-
-        blobs = bucket.list_blobs(prefix=prefix, delimiter="/")
-        # Trigger iteration to populate prefixes
-        for _ in blobs:
-            pass
-
-        values = set()
-        for p in blobs.prefixes:
-            parts = p.rstrip("/").split("/")
-            last_part = parts[-1]
-            if "=" in last_part:
-                k, v = last_part.split("=", 1)
-                if k == namespace:
-                    values.add(v)
-
-        return sorted(list(values))
