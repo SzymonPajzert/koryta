@@ -594,6 +594,7 @@ class Pipeline(typing.Generic[Output]):
             ).read_dataframe(self.format, dtype=self.dtype)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
+            raise
         return df
 
     def output_time(self, ctx: Context):
