@@ -159,6 +159,17 @@ class KRSScraped:
             return None
 
 
+def enum_dict_factory(data):
+    """Converts enum fields to their underlying value."""
+    result = []
+    for key, value in data:
+        if isinstance(value, Enum):
+            result.append((key, value.value))
+        else:
+            result.append((key, value))
+    return dict(result)
+
+
 class KRSAlreadyScraped(Pipeline):
     filename = "krs_already_scraped"
 
@@ -193,7 +204,9 @@ class KRSAlreadyScraped(Pipeline):
         print(f"Success: {success}, Fail: {fail}")
 
         print(len(output))
-        return pd.DataFrame.from_records([asdict(r) for r in output])
+        return pd.DataFrame.from_records(
+            [asdict(r, dict_factory=enum_dict_factory) for r in output]
+        )
 
     def latest_scrapes(self, ctx: Context):
         """Groups by krs and lists methods already used"""
@@ -231,8 +244,8 @@ class KRSNeedsRefresh(Pipeline):
         return needs_refresh.sort_values(by=["update_date"], ascending=False)
 
 
-def get_osoby_scraped(ctx: Context) -> dict[str, list[str]]:
-    osoby_scraped: dict[str, list[str]] = {}
+def get_osoby_scraped(ctx: Context) -> dict[str, list[QueryType]]:
+    osoby_scraped: dict[str, list[QueryType]] = {}
     for blob_name in ctx.io.list_files(CloudStorage(prefix="hostname=rejestr.io")):
         assert isinstance(blob_name, DownloadableFile)
         split = blob_name.url.split("osoby/", 1)
@@ -242,14 +255,14 @@ def get_osoby_scraped(ctx: Context) -> dict[str, list[str]]:
         person_id = split[1].split("/", 1)[0]
         if "aktualnosc_aktualne" in blob_name.url:
             osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + [
-                "aktualnosc_aktualne"
+                QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE
             ]
         elif "aktualnosc_historyczne" in blob_name.url:
             osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + [
-                "aktualnosc_historyczne"
+                QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE
             ]
         else:
-            osoby_scraped[person_id] = osoby_scraped.get(person_id, []) + ["main"]
+            raise ValueError("Unknown url: ${blob_name.url}")
 
     return osoby_scraped
 
@@ -261,7 +274,7 @@ def series_to_list(s: pd.Series) -> list[str]:
 def save_org_connections(
     already_scraped_krs: pd.DataFrame,
     needs_refresh_krs: pd.DataFrame,
-    already_scraped_people: dict[str, list[str]],
+    already_scraped_people: dict[str, list[QueryType]],
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
     people: typing.Iterable[RejestrIOKey],
@@ -336,9 +349,7 @@ def save_org_connections(
         )
 
     for person in people:
-        people_methods: list[QueryType] = [
-            QueryType(q) for q in already_scraped_people.get(person.id, [])
-        ]
+        people_methods: list[QueryType] = already_scraped_people.get(person.id, [])
         query = RejestrIOQuery(
             person=person,
             queries=[
