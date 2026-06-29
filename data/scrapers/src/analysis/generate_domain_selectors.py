@@ -5,7 +5,7 @@ For each domain:
   1. Pick 3 article URLs from the local tarball mirror
   2. Ask Qwen for a CSS selector for each
   3. Majority-vote the winner
-  4. Save to domain_selectors.jsonl (resumable)
+  4. Save to domain_selectors.json (resumable)
 """
 
 import asyncio
@@ -23,12 +23,12 @@ from bs4 import BeautifulSoup, Tag
 from tqdm.asyncio import tqdm
 
 # ── config ────────────────────────────────────────────────────────────────────
-QWEN_PORTS     = [5004, 5005, 5006, 5007]
+QWEN_PORTS     = [6000 + i for i in range(16)]
 MODEL          = "Qwen/Qwen3-14B"
 DOWNLOADED_DIR = Path("/home/mp/Projects/koryta/data/scrapers/downloaded")
-OUTPUT_FILE    = Path("domain_selectors.jsonl")
+OUTPUT_FILE    = Path("domain_selectors.json")
 CONCURRENCY    = 24   # concurrent Qwen calls (6 per server)
-SAMPLES        = 3    # URLs per domain
+SAMPLES        = 5    # URLs per domain
 MAX_INDEX_SCAN = 500  # lines of index.txt to consider per tarball
 
 SKIP_DOMAINS = re.compile(r"\.naszemiasto\.pl$", re.I)
@@ -170,10 +170,13 @@ def get_candidates(tarball_path: Path) -> list[tuple[str, str]]:
     candidates: list[tuple[int, str, str]] = []
     try:
         with tarfile.open(tarball_path, "r:gz") as tf:
-            first = next(iter(tf))
-            if first.name != "index.txt":
+            first = next(iter(tf), None)
+            if first is None or first.name != "index.txt":
                 return []
-            raw = tf.extractfile(first).read().decode(errors="replace")
+            first_file = tf.extractfile(first)
+            if first_file is None:
+                return []
+            raw = first_file.read().decode(errors="replace")
             lines = raw.strip().splitlines()
 
         for line in lines[:MAX_INDEX_SCAN]:
@@ -368,25 +371,32 @@ async def ask_qwen(
         "max_tokens": 200,
         "chat_template_kwargs": {"enable_thinking": False},
     }
-    port = next(_port_cycle)
-    async with sem:
-        try:
-            async with session.post(
-                f"http://localhost:{port}/v1/chat/completions",
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=90),
-            ) as resp:
-                resp.raise_for_status()
-                data   = await resp.json()
-                raw    = strip_thinking(data["choices"][0]["message"]["content"])
-                # strip markdown fences if model wraps anyway
-                raw    = re.sub(r"^```[a-z]*\n?", "", raw.strip())
-                raw    = re.sub(r"\n?```$", "", raw.strip())
-                result = json.loads(raw)
-                return _clean_selector(result.get("selector"))
-        except Exception as e:
-            print(f"  [warn] Qwen error for {url}: {e}")
-            return None
+    last_error: Exception | None = None
+    for attempt in range(1, 6):
+        port = next(_port_cycle)
+        async with sem:
+            try:
+                async with session.post(
+                    f"http://localhost:{port}/v1/chat/completions",
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=90),
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+                    raw = strip_thinking(data["choices"][0]["message"]["content"])
+                    # strip markdown fences if model wraps anyway
+                    raw = re.sub(r"^```[a-z]*\n?", "", raw.strip())
+                    raw = re.sub(r"\n?```$", "", raw.strip())
+                    result = json.loads(raw)
+                    return _clean_selector(result.get("selector"))
+            except Exception as e:
+                last_error = e
+                print(f"  [warn] Qwen error for {url} (attempt {attempt}/5): {e}")
+                if attempt < 5:
+                    await asyncio.sleep(0.5 * attempt)
+
+    assert last_error is not None
+    raise RuntimeError(f"Qwen failed for {url} after 5 attempts") from last_error
 
 
 # ── per-domain pipeline ───────────────────────────────────────────────────────
@@ -467,12 +477,13 @@ async def process_domain(
     # 4. majority vote
     winner = majority_vote(list(selectors))
     votes  = Counter(s for s in selectors if s)
+    vote_count = votes.get(winner, 0) if winner else 0
 
     print(f"  {domain}: {dict(votes)} → {winner}")
     return {
         "domain":       domain,
         "selector":     winner,
-        "votes":        votes.get(winner, 0),
+        "votes":        vote_count,
         "all_votes":    dict(votes),
         "sample_urls":  used_urls,
     }
@@ -480,22 +491,36 @@ async def process_domain(
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def load_done(path: Path) -> set[str]:
+def load_state(path: Path) -> dict[str, str | None]:
     if not path.exists():
-        return set()
-    done = set()
-    with path.open() as f:
-        for line in f:
-            try:
-                done.add(json.loads(line)["domain"])
-            except Exception as e:
-                print(f"  [warn] load_done bad line: {e}")
-    return done
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    loaded: dict[str, str | None] = {}
+    for domain, selector in data.items():
+        if not isinstance(domain, str):
+            continue
+        if isinstance(selector, str) and selector.strip():
+            loaded[domain] = selector.strip()
+        else:
+            loaded[domain] = None
+    return loaded
+
+
+def _write_state_atomic(path: Path, state: dict[str, str | None]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    tmp_path.replace(path)
 
 
 def find_tarballs() -> dict[str, Path]:
     """Return {domain: tarball_path} for all non-empty tarballs."""
-    result = {}
+    result: dict[str, Path] = {}
     pat = re.compile(r"hostname=(.+?)(?:\.from=|\.total\.)")
     for p in DOWNLOADED_DIR.glob("hostname=*.tar.gz"):
         if p.stat().st_size < 1000:
@@ -513,40 +538,47 @@ def find_tarballs() -> dict[str, Path]:
 
 async def main() -> None:
     tarballs = find_tarballs()
-    done     = load_done(OUTPUT_FILE)
+    selector_state = load_state(OUTPUT_FILE)
+    done = set(selector_state)
     todo     = {d: p for d, p in tarballs.items() if d not in done}
 
     print(f"Tarballs: {len(tarballs)}  Done: {len(done)}  Todo: {len(todo)}")
 
     sem = asyncio.Semaphore(CONCURRENCY)
+    lock = asyncio.Lock()
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         async with aiohttp.ClientSession() as session:
-            with OUTPUT_FILE.open("a") as out:
+            async def handle(domain, tarball_path) -> None:
+                try:
+                    result: dict[str, object] | None = await process_domain(
+                        domain, tarball_path, session, sem, executor
+                    )
+                    async with lock:
+                        selector: str | None = None
+                        if result is not None:
+                            raw_selector = result.get("selector")
+                            if isinstance(raw_selector, str) and raw_selector.strip():
+                                selector = raw_selector.strip()
+                        selector_state[domain] = selector
+                        _write_state_atomic(OUTPUT_FILE, selector_state)
+                except Exception as e:
+                    print(f"  [error] {domain}: {e}")
 
-                async def handle(domain, tarball_path):
-                    try:
-                        result = await process_domain(domain, tarball_path, session, sem, executor)
-                        if result:
-                            out.write(json.dumps(result, ensure_ascii=False) + "\n")
-                            out.flush()
-                    except Exception as e:
-                        print(f"  [error] {domain}: {e}")
-
-                await tqdm.gather(
-                    *[handle(d, p) for d, p in todo.items()],
-                    total=len(todo), desc="domains", unit="domain",
-                )
+            await tqdm.gather(
+                *[handle(d, p) for d, p in todo.items()],
+                total=len(todo),
+                desc="domains",
+                unit="domain",
+            )
 
     # summary
-    done_now = load_done(OUTPUT_FILE)
-    no_selector = 0
-    with OUTPUT_FILE.open() as f:
-        for line in f:
-            r = json.loads(line)
-            if not r.get("selector"):
-                no_selector += 1
-    print(f"\nDone. {len(done_now)} domains saved, {no_selector} without a selector.")
+    done_now = load_state(OUTPUT_FILE)
+    no_selector = sum(1 for selector in done_now.values() if not selector)
+    print(
+        f"\nDone. {len(done_now)} domains saved, "
+        f"{no_selector} without a selector."
+    )
 
 
 if __name__ == "__main__":

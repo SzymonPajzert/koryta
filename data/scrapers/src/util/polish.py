@@ -108,15 +108,18 @@ def parse_polish_date(date_string: str) -> Optional[date]:
         except ValueError:
             pass
 
-    parsed = dateparser.parse(
-        date_string,
-        languages=["pl"],
-        settings={
-            "DATE_ORDER": "DMY",
-            "RETURN_AS_TIMEZONE_AWARE": False,
-            "PREFER_DAY_OF_MONTH": "first",
-        },
-    )
+    try:
+        parsed = dateparser.parse(
+            date_string,
+            languages=["pl"],
+            settings={
+                "DATE_ORDER": "DMY",
+                "RETURN_AS_TIMEZONE_AWARE": False,
+                "PREFER_DAY_OF_MONTH": "first",
+            },
+        )
+    except Exception:
+        return None
     return parsed.date() if parsed else None
 
 

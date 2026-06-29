@@ -95,6 +95,12 @@ def _build_parser() -> ArgumentParser:
         help="Max number of done URLs to parse (default: 1000).",
     )
     parser.add_argument(
+        "--selectors-file",
+        type=Path,
+        default=Path("domain_selectors_v5.jsonl"),
+        help="JSONL or JSON file mapping domain to CSS selector.",
+    )
+    parser.add_argument(
         "--reprioritize",
         action="store_true",
         help=(
@@ -267,7 +273,23 @@ def main() -> None:  # noqa: PLR0915
     logging.info("Logging to %s", log_file)
 
     if args.parse:
-        parse(args)
+        worker_processes = max(1, args.worker_threads)
+        pg_client = PostgresClient.from_env(max_size=1)
+        queue = PostgresCrawlQueue(pg_client)
+        try:
+            ctx, dumper = setup_context(False, crawl_queue=queue)
+            try:
+                run_parse(
+                    queue,
+                    ctx,
+                    args.parse_limit,
+                    worker_processes=worker_processes,
+                    selectors_file=args.selectors_file,
+                )
+            finally:
+                dumper.dump_pandas()
+        finally:
+            pg_client.close()
         return
 
     if args.bump_small_domains is not None:
