@@ -119,6 +119,7 @@ dependencies = [
     "psycopg-pool (>=3.0.0,<4.0.0)",
     "plotly (>=6.6.0,<7.0.0)",
     "pytest-fast-first (>=1.0.5,<2.0.0)",
+    "aiohttp (>=3.14.1,<4.0.0)",
 ]
 
 [project.scripts]
