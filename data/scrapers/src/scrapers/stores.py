@@ -134,6 +134,7 @@ class DownloadableFile(DataRef):
 
     url: str
     filename_fallback: str | None = None
+    full_url: bool = False
     complex_download: str | None = None
     download_lambda: typing.Callable | None = None
     binary: bool = True
@@ -149,6 +150,8 @@ class DownloadableFile(DataRef):
         """
         if self.filename_fallback is not None:
             return self.filename_fallback
+        if self.full_url:
+            return self.url.split("://")[1]
         return self.url.split("/")[-1]
 
 
