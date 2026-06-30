@@ -34,6 +34,10 @@ class OpenAICompatibleMultiPortLLM(LLM):
             port: asyncio.Semaphore(self.config.per_port_concurrency)
             for port in self.config.ports
         }
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_tokens = 0
+        self.request_count = 0
 
     async def check_health(self) -> None:
         async with aiohttp.ClientSession() as session:
@@ -134,4 +138,19 @@ class OpenAICompatibleMultiPortLLM(LLM):
                 resp.raise_for_status()
                 data = await resp.json()
         content = strip_thinking(data["choices"][0]["message"]["content"])
-        return LLMResponse(content=content, port=port, model=model)
+        usage = data.get("usage") or {}
+        prompt_tokens = int(usage.get("prompt_tokens") or 0)
+        completion_tokens = int(usage.get("completion_tokens") or 0)
+        total_tokens = int(usage.get("total_tokens") or 0)
+        self.prompt_tokens += prompt_tokens
+        self.completion_tokens += completion_tokens
+        self.total_tokens += total_tokens
+        self.request_count += 1
+        return LLMResponse(
+            content=content,
+            port=port,
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+        )
