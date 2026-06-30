@@ -9,7 +9,6 @@ from typing import Any, Iterable, Literal
 
 import requests
 
-
 UrlStatus = Literal["new", "in_progress", "fetched", "failed"]
 
 
@@ -73,11 +72,11 @@ class UrlStoreError(Exception):
 
 class UrlStoreClient:
     def __init__(
-        self,
-        base_url: str,
-        api_key: str | None = None,
-        timeout: float = 30.0,
-        session: requests.Session | None = None,
+            self,
+            base_url: str,
+            api_key: str | None = None,
+            timeout: float = 30.0,
+            session: requests.Session | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -104,11 +103,11 @@ class UrlStoreClient:
         return self._request("GET", "/health", auth=False)
 
     def list_urls(
-        self,
-        status: UrlStatus | None = None,
-        domain: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
+            self,
+            status: UrlStatus | None = None,
+            domain: str | None = None,
+            limit: int = 100,
+            offset: int = 0,
     ) -> list[UrlOut]:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if status is not None:
@@ -136,12 +135,12 @@ class UrlStoreClient:
         return data["exists"]
 
     def update_url(
-        self,
-        url_id: int,
-        status: UrlStatus,
-        error: str | None = None,
-        context: dict[str, Any] | None = None,
-        storage_path: str | None = None,
+            self,
+            url_id: int,
+            status: UrlStatus,
+            error: str | None = None,
+            context: dict[str, Any] | None = None,
+            storage_path: str | None = None,
     ) -> UrlOut:
         body: dict[str, Any] = {"status": status}
         if error is not None:
@@ -154,13 +153,13 @@ class UrlStoreClient:
         return UrlOut.from_payload(data)
 
     def _request(
-        self,
-        method: str,
-        path: str,
-        *,
-        params: dict[str, Any] | None = None,
-        json: Any | None = None,
-        auth: bool = True,
+            self,
+            method: str,
+            path: str,
+            *,
+            params: dict[str, Any] | None = None,
+            json: Any | None = None,
+            auth: bool = True,
     ) -> Any:
         headers: dict[str, str] = {}
         if auth and self.api_key:
