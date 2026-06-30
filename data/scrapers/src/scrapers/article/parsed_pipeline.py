@@ -69,11 +69,13 @@ class ArticleParsed(Pipeline[ParsedArticleRecord]):
 
         self.preprocess_sources(ctx, ctx.refresh_policy)
         graceful = True
+        completed = False
         try:
             df = self.process(ctx)
             self._refreshed_execution = True
+            completed = True
         except InterruptedError:
-            print("Caught interrupt signal, will save the data")
+            print("Caught interrupt signal, will save partial data")
             df = pd.DataFrame()
         except Exception:
             graceful = False
@@ -82,7 +84,10 @@ class ArticleParsed(Pipeline[ParsedArticleRecord]):
             if graceful:
                 print("Dumping...")
                 ctx.io.dumper.dump_pandas()  # type: ignore[attr-defined]
-                _finalize_temp_output()
+                if completed or _TEMP_OUTPUT_FILE.exists():
+                    _finalize_temp_output()
+                else:
+                    print(f"Partial output left at {_TEMP_OUTPUT_FILE}")
                 print("Done")
 
         ctx.refresh_policy.add_refreshed_pipeline(self.pipeline_name)

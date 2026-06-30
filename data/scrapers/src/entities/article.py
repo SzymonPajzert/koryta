@@ -59,3 +59,24 @@ class ParsedArticleRecord:
     html_sha256: str | None
     parser_version: int
     error: str | None = None
+
+
+@dataclass
+class KoryciarskiScore:
+    """Thin LLM score for parsed article content."""
+
+    __output_path__: ClassVar[Path] = Path(
+        "article_koryciarski_scores/article_koryciarski_scores.jsonl.tmp"
+    )
+
+    url: str
+    article_content_hash: str
+    koryciarski_llm_score: int | None
+    koryciarski_llm_reason: str
+    llm_is_article: bool
+    model: str
+    prompt_version: int
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    error: str | None = None

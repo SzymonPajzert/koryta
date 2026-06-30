@@ -327,6 +327,9 @@ class LLMResponse:
     content: str
     port: int | None = None
     model: str | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
 class LLM(metaclass=ABCMeta):

@@ -10,6 +10,7 @@ from scrapers.kmgp.people import PeopleKMGP
 from scrapers.article.pipelines import (
     ArticleDomainSelectors,
     ArticleDoneUrls,
+    ArticleKoryciarskiScores,
     ArticleParsed,
 )
 from scrapers.koryta.differ import KorytaDiffer
@@ -28,6 +29,7 @@ PIPELINES = [
     ArticleDoneUrls,
     ArticleDomainSelectors,
     ArticleParsed,
+    ArticleKoryciarskiScores,
     CompaniesKRS,
     Companies,
     CompaniesKMGP,

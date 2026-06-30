@@ -15,6 +15,7 @@ from scrapers.stores import (
 ARTICLE_PIPELINES = {
     "ArticleDoneUrls",
     "ArticleDomainSelectors",
+    "ArticleKoryciarskiScores",
     "ArticleParsed",
 }
 
