@@ -7,6 +7,11 @@ from analysis.scores import CompanyScores, PeopleScores
 from analysis.stats import Statistics
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.kmgp.people import PeopleKMGP
+from scrapers.article.pipelines import (
+    ArticleDomainSelectors,
+    ArticleDoneUrls,
+    ArticleParsed,
+)
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -20,6 +25,9 @@ from scrapers.wiki.process_articles_ner import ProcessWikiNer
 
 PIPELINES = [
     CommitteeParties,
+    ArticleDoneUrls,
+    ArticleDomainSelectors,
+    ArticleParsed,
     CompaniesKRS,
     Companies,
     CompaniesKMGP,
