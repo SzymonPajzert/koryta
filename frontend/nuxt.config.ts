@@ -137,7 +137,6 @@ export default defineNuxtConfig({
     appCheck: {
       enabled: !isLocal,
     },
-    // TODO parametrize in the env, so I can pass autopush and local test config
     config: {
       apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
       authDomain:

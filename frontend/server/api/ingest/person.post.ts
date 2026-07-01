@@ -132,7 +132,6 @@ function createPerson(body: Partial<Person>): Person {
   };
   if (body.content) person.content = body.content;
   if (body.wikipedia) {
-    console.log("Setting wikipedia", body.wikipedia);
     person.wikipedia = body.wikipedia;
   }
   if (body.rejestrIo) person.rejestrIo = body.rejestrIo;
