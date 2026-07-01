@@ -80,3 +80,21 @@ class KoryciarskiScore:
     completion_tokens: int = 0
     total_tokens: int = 0
     error: str | None = None
+
+
+@dataclass
+class ArticleFacts:
+    """Thin LLM-extracted facts grounded in parsed article content."""
+
+    __output_path__: ClassVar[Path] = Path("article_facts/article_facts.jsonl.tmp")
+
+    url: str
+    article_content_hash: str
+    extracted_facts: list[dict[str, Any]]
+    fact_extraction_status: str
+    fact_extraction_error: str | None
+    model: str
+    prompt_version: int
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
