@@ -3,9 +3,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import mimetypes
+import queue as _queue
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,8 +14,8 @@ from types import SimpleNamespace
 from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
-import requests
 from bs4 import BeautifulSoup, Tag
+from curl_cffi import requests
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
@@ -23,13 +23,14 @@ from scrapers.article.scoring import get_scoring_function
 from scrapers.stores import (
     Context,
     CrawlQueue,
+    CrawlQueueItem,
     LocalFile,
     NewUrl,
     Priority,
 )
 
 warsaw_tz = ZoneInfo("Europe/Warsaw")
-HEADERS = {"User-Agent": "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"}
+KORYTA_UA = "KorytaCrawler/0.1 (+http://koryta.pl/crawler)"
 
 
 def parse_hostname(url: str) -> str:
@@ -52,6 +53,7 @@ class CrawlOptions:
     domains_of_interest: frozenset[str] = field(default_factory=frozenset)
     request_timeout_seconds: float = 10
     worker_threads: int = 1
+    queue_flush_size: int = 64
 
 
 @dataclass
@@ -118,7 +120,7 @@ def _storage_path(
     if not path:
         path = "index"
     date = datetime.now(warsaw_tz).strftime("%Y-%m-%d")
-    base = f"hostname={parsed.hostname}/{path}/date={date}"
+    base = f"hostname={parsed.hostname_normalized}/{path}/date={date}"
     if suffix:
         base = f"{base}/{suffix}"
     storage_path = base.replace("//", "/").rstrip("/")
@@ -178,7 +180,7 @@ def crawl_url(
         ctx,
         parsed_url.full_url,
         parsed_url,
-        HEADERS["User-Agent"],
+        KORYTA_UA,
     ):
         return CrawlResult(error="disallowed by robots")
 
@@ -189,10 +191,12 @@ def crawl_url(
         try:
             response = requests.get(
                 parsed_url.full_url,
-                headers=HEADERS,
+                impersonate="chrome136",
+                headers={"User-Agent": KORYTA_UA},
                 timeout=options.request_timeout_seconds,
+                allow_redirects=True,
             )
-        except requests.RequestException as exc:
+        except requests.RequestsError as exc:
             return CrawlResult(
                 error=str(exc),
                 request_duration_s=t_request.duration,
@@ -258,12 +262,25 @@ def _extract_urls(
             ("#", "mailto:", "tel:", "javascript:", "data:")
         ):
             continue
-        absolute_link = ctx.utils.join_url(base_url, link)
+        try:
+            absolute_link = ctx.utils.join_url(base_url, link)
+        except ValueError:
+            continue
         clean_link = absolute_link.split("?")[0].split("#")[0].rstrip("/")
         if clean_link.startswith(("http://", "https://")):
+            parsed_link = NormalizedParse.parse(clean_link)
+            clean_link = (
+                f"{parsed_link.scheme}://"
+                f"{parsed_link.hostname_normalized}"
+                f"{parsed_link.path}"
+            )
             discovered.add(clean_link)
 
     return discovered
+
+
+_FLUSH_INTERVAL_S = 2.0  # also flush after this many seconds of inactivity
+_LOG_INTERVAL_S = 30.0   # how often to log queue stats
 
 
 def _priority_for_url(options: CrawlOptions, url: str) -> Priority:
@@ -286,89 +303,196 @@ def _filter_blocked(result: CrawlResult, blocked: set[str]) -> None:
     ]
 
 
-def _worker_thread(
-    thread_index: int,
+def _http_worker(
+    work_q: _queue.Queue,
+    done_q: _queue.Queue,
     options: CrawlOptions,
-    queue: CrawlQueue,
     ctx: Context,
-    blocked_normalized: set[str],
 ) -> None:
-    worker_name = f"{options.worker_id}_{thread_index}"
-    logging.info("Starting to crawl in worker: %s", worker_name)
-
+    """Fetch/process URLs only; DB claiming and DB writes stay in the coordinator."""
     while True:
-        entry = queue.get(
-            worker_name,
-            max_retries=options.per_url_max_retries,
-            timeout_seconds=options.lock_timeout_seconds,
-        )
+        entry: CrawlQueueItem | None = work_q.get()
         if entry is None:
-            logging.info("Closing crawl queue. Nothing more to do.")
+            work_q.task_done()
             return
+        try:
+            parsed_url = NormalizedParse.parse(entry.url)
+            result = crawl_url(ctx, parsed_url, options)
+        except Exception as exc:
+            result = CrawlResult(error=f"unexpected: {exc}")
+        done_q.put((entry, result))
+        work_q.task_done()
 
-        uid = entry.uid
-        url = entry.url
+
+def _flush_batch(
+    pending: list[tuple[CrawlQueueItem, CrawlResult]],
+    queue_store: CrawlQueue,
+    options: CrawlOptions,
+    blocked_normalized: set[str],
+    worker_name: str,
+) -> None:
+    """Write a batch of crawl results to the DB in as few transactions as possible."""
+    done_items: list[tuple[str, str | None, dict]] = []
+    error_items: list[tuple[str, str]] = []
+    all_discovered: list[NewUrl] = []
+
+    for entry, result in pending:
         priority = entry.priority
-        parsed_url = NormalizedParse.parse(url)
-        logging.info("[p=%d] Crawling: %s", priority, parsed_url.full_url)
-        result = crawl_url(ctx, parsed_url, options)
-
         if result.hit_rate_limit:
-            # Do not release — rely on lock timeout so high-priority URLs
-            # aren't re-queried immediately after hitting the rate limit.
-            logging.info(
-                "[p=%d] Skipping because of hit rate limit: %s",
-                priority, parsed_url.full_url,
-            )
+            # Do not release — rely on lock timeout so it isn't re-queued immediately.
+            logging.info("[p=%d] Skipping (rate limited): %s", priority, entry.url)
         elif result.error:
             logging.error(
                 "[p=%d][%.2fs] Crawl failed (%s): %s",
-                priority,
-                result.request_duration_s or 0,
-                result.error,
-                parsed_url.full_url,
+                priority, result.request_duration_s or 0, result.error, entry.url,
             )
-            queue.mark_error(uid, result.error)
+            error_items.append((entry.uid, result.error))
         else:
-            _filter_blocked(result, blocked_normalized)
             logging.info(
                 "[p=%d][%.2fs] Crawl succeeded: %s",
-                priority,
-                result.request_duration_s or 0,
-                parsed_url.full_url,
+                priority, result.request_duration_s or 0, entry.url,
             )
-            queue.mark_done(uid, result.storage_path, {
+            _filter_blocked(result, blocked_normalized)
+            done_items.append((entry.uid, result.storage_path, {
                 "request_duration_s": result.request_duration_s,
                 "parse_duration_s": result.parse_duration_s,
                 "upload_duration_s": result.upload_duration_s,
                 "total_duration_s": result.total_duration_s,
                 "worker_id": worker_name,
                 "media_type": result.media_type,
-            })
-            queue.put([
-                NewUrl(url, _priority_for_url(options, url))
-                for url in result.discovered_urls
-            ])
+            }))
+            all_discovered.extend(
+                NewUrl(u, _priority_for_url(options, u))
+                for u in result.discovered_urls
+            )
+
+    if done_items:
+        queue_store.mark_done_batch(done_items)
+    if error_items:
+        queue_store.mark_error_batch(error_items)
+    if all_discovered:
+        queue_store.put(all_discovered)
+
+
+def _coordinator(
+    thread_index: int,
+    options: CrawlOptions,
+    queue_store: CrawlQueue,
+    ctx: Context,
+    blocked_normalized: set[str],
+) -> None:
+    """Coordinate DB batches and HTTP workers for one crawler process.
+
+    Architecture:
+    - coordinator owns queue_store and performs all DB reads/writes;
+    - --worker-threads controls how many _http_worker threads fetch pages;
+    - --queue-flush-size controls how many URLs are claimed/flushed per queue write.
+    """
+    worker_name = f"{options.worker_id}_{thread_index}"
+    logging.info(
+        "Starting crawler coordinator: %s with %d HTTP workers and queue flush size %d",
+        worker_name,
+        options.worker_threads,
+        options.queue_flush_size,
+    )
+
+    queue_flush_size = options.queue_flush_size
+    refill_watermark = max(1, options.queue_flush_size // 2)
+
+    # work_q: bounded so the coordinator never over-fetches from DB.
+    # Refill when fewer than half a queue flush remains queued, then claim one
+    # chunk. This keeps HTTP workers busy without letting memory grow unbounded.
+    work_q: _queue.Queue[CrawlQueueItem | None] = _queue.Queue(
+        maxsize=options.queue_flush_size * 2
+    )
+    # done_q: bounded to provide backpressure — when the coordinator is busy
+    # writing to DB, workers block here instead of accumulating results in memory.
+    done_q: _queue.Queue[tuple[CrawlQueueItem, CrawlResult]] = _queue.Queue(
+        maxsize=options.worker_threads * 2
+    )
+
+    http_threads = [
+        threading.Thread(
+            target=_http_worker, args=(work_q, done_q, options, ctx), daemon=True
+        )
+        for _ in range(options.worker_threads)
+    ]
+    for t in http_threads:
+        t.start()
+
+    pending: list[tuple[CrawlQueueItem, CrawlResult]] = []
+    last_flush = time.monotonic()
+    last_log = time.monotonic()
+    db_exhausted = False
+    total_sent = 0
+    total_received = 0
+
+    while True:
+        # Refill work queue when it runs low.
+        if not db_exhausted and work_q.qsize() < refill_watermark:
+            entries = queue_store.get_batch(
+                worker_name,
+                batch_size=options.queue_flush_size,
+                max_retries=options.per_url_max_retries,
+                timeout_seconds=options.lock_timeout_seconds,
+            )
+            if entries:
+                for e in entries:
+                    work_q.put(e)
+                total_sent += len(entries)
+            else:
+                db_exhausted = True
+                logging.info("[%s] DB queue exhausted.", worker_name)
+
+        # Drain results from HTTP workers
+        try:
+            while True:
+                pending.append(done_q.get_nowait())
+                total_received += 1
+        except _queue.Empty:
+            pass
+
+        # Flush accumulated results to DB
+        now = time.monotonic()
+        if now - last_log >= _LOG_INTERVAL_S:
+            logging.info(
+                "[%s] work_q=%d done_q=%d pending=%d sent=%d received=%d",
+                worker_name,
+                work_q.qsize(), done_q.qsize(), len(pending),
+                total_sent, total_received,
+            )
+            last_log = now
+        if len(pending) >= queue_flush_size or (
+            pending and now - last_flush >= _FLUSH_INTERVAL_S
+        ):
+            _flush_batch(pending, queue_store, options, blocked_normalized, worker_name)
+            pending.clear()
+            last_flush = now
+
+        # Terminate when all dispatched URLs have returned results
+        if db_exhausted and total_sent == total_received:
+            if pending:
+                _flush_batch(
+                    pending, queue_store, options, blocked_normalized, worker_name
+                )
+                pending.clear()
+            for _ in http_threads:
+                work_q.put(None)
+            work_q.join()
+            for t in http_threads:
+                t.join()
+            logging.info("[%s] Pipeline complete.", worker_name)
+            return
+
+        time.sleep(0.005)
 
 
 def run_crawler(ctx: Context, options: CrawlOptions) -> None:
-    queue = ctx.crawl_queue
-    if queue is None:
+    queue_store = ctx.crawl_queue
+    if queue_store is None:
         raise ValueError("Context has no crawl_queue set")
 
-    blocked = queue.get_blocked_domains()
+    blocked = queue_store.get_blocked_domains()
     blocked_normalized = _normalize_blocked(blocked)
 
-    if options.worker_threads <= 1:
-        _worker_thread(0, options, queue, ctx, blocked_normalized)
-        return
-
-    with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
-        futures = [
-            executor.submit(
-                _worker_thread, idx, options, queue, ctx, blocked_normalized
-            )
-            for idx in range(options.worker_threads)
-        ]
-        for future in futures:
-            future.result()
+    _coordinator(0, options, queue_store, ctx, blocked_normalized)

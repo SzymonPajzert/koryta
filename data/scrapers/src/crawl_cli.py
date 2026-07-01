@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from conductor import setup_context
+from entities.util import NormalizedParse
 from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
@@ -64,7 +65,13 @@ def _build_parser() -> ArgumentParser:
         "--worker-threads",
         type=int,
         default=1,
-        help="Number of concurrent threads inside a worker.",
+        help="Number of concurrent HTTP worker threads used by the crawler.",
+    )
+    parser.add_argument(
+        "--queue-flush-size",
+        type=int,
+        default=64,
+        help="Number of URLs to claim from Postgres and flush back per queue write.",
     )
     parser.add_argument(
         "--parse",
@@ -107,6 +114,7 @@ def _build_options(args: argparse.Namespace, seed_urls: list[str]) -> CrawlOptio
         url_scoring_function=args.url_scoring_function,
         domains_of_interest=frozenset(seed_urls),
         worker_threads=max(1, args.worker_threads),
+        queue_flush_size=max(1, args.queue_flush_size),
     )
 
 
@@ -143,7 +151,7 @@ def _load_seed_urls(path: Path) -> list[str]:
     urls = [row.get("Domena", "").strip() for row in rows if row.get("Domena")]
     if not urls:
         raise ValueError(f"{path} has no URLs to seed.")
-    return urls
+    return [NormalizedParse.parse(u).hostname_normalized for u in urls]
 
 
 def _load_blocked_domains(path: Path) -> list[BlockedDomain]:
@@ -252,7 +260,9 @@ def main() -> None:  # noqa: PLR0915
     options = _build_options(args, seed_urls)
     logging.info("Running crawler with options: %s", options)
 
-    pg_client = PostgresClient.from_env(max_size=max(args.worker_threads, 1))
+    # Crawl mode uses one coordinator for DB operations; --worker-threads only
+    # controls HTTP fetch concurrency behind that coordinator.
+    pg_client = PostgresClient.from_env(max_size=1)
     queue = PostgresCrawlQueue(pg_client)
     logging.info("Initializing crawling queue")
 
