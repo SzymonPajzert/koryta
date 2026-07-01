@@ -20,7 +20,7 @@ from scrapers.article.parse_runner import run_parse
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
 from scrapers.article.scoring import get_scoring_function
 from scrapers.article.url_store_queue import UrlStoreQueue
-from scrapers.stores import BlockedDomain, NewUrl
+from scrapers.stores import BlockedDomain, CrawlQueue, NewUrl
 
 
 def _build_parser() -> ArgumentParser:
@@ -223,6 +223,7 @@ def main() -> None:  # noqa: PLR0915
     logging.info("Running crawler with options: %s", options)
 
     pg_client = PostgresClient.from_env(max_size=max(args.worker_threads, 1))
+    queue: CrawlQueue
     if args.custom_pipeline:
         url_client = UrlStoreClient.from_env()
         queue = UrlStoreQueue(url_client)

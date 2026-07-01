@@ -52,7 +52,11 @@ class UrlOut:
             error=data.get("error"),
             storage_path=data.get("storage_path"),
             discovered_at=_parse_dt(data["discovered_at"]),
-            last_checked_at=_parse_dt(data["last_checked_at"]) if data.get("last_checked_at") else None,
+            last_checked_at=(
+                _parse_dt(data["last_checked_at"])
+                if data.get("last_checked_at")
+                else None
+            ),
         )
 
 
@@ -117,7 +121,9 @@ class UrlStoreClient:
         data = self._request("GET", "/urls", params=params)
         return [UrlOut.from_payload(item) for item in data]
 
-    def create_urls(self, urls: Iterable[UrlIn | dict[str, Any]]) -> BatchInsertResponse:
+    def create_urls(
+        self, urls: Iterable[UrlIn | dict[str, Any]]
+    ) -> BatchInsertResponse:
         payload_urls = [u.to_payload() if isinstance(u, UrlIn) else u for u in urls]
         data = self._request("POST", "/urls", json={"urls": payload_urls})
         return BatchInsertResponse(
