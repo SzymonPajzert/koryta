@@ -70,10 +70,10 @@ def _build_parser() -> ArgumentParser:
         help="Number of concurrent HTTP worker threads used by the crawler.",
     )
     parser.add_argument(
-        "--batch-size",
+        "--queue-flush-size",
         type=int,
         default=64,
-        help="Number of URLs to claim from Postgres and flush back per DB batch.",
+        help="Number of URLs to claim from Postgres and flush back per queue write.",
     )
     parser.add_argument(
         "--parse",
@@ -121,7 +121,7 @@ def _build_options(args: argparse.Namespace, seed_urls: list[str]) -> CrawlOptio
         url_scoring_function=args.url_scoring_function,
         domains_of_interest=frozenset(seed_urls),
         worker_threads=max(1, args.worker_threads),
-        batch_size=max(1, args.batch_size),
+        queue_flush_size=max(1, args.queue_flush_size),
     )
 
 
