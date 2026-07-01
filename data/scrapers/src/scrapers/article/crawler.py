@@ -279,9 +279,7 @@ def _extract_urls(
     return discovered
 
 
-_FLUSH_SIZE = 64        # flush DB writes after accumulating this many results
 _FLUSH_INTERVAL_S = 2.0  # also flush after this many seconds of inactivity
-_REFILL_WATERMARK = 32   # fetch more URLs when work_q drops below this
 _LOG_INTERVAL_S = 30.0   # how often to log queue stats
 
 
@@ -311,7 +309,7 @@ def _http_worker(
     options: CrawlOptions,
     ctx: Context,
 ) -> None:
-    """Persistent thread: pulls CrawlQueueItems, pushes (item, result) pairs."""
+    """Fetch/process URLs only; DB claiming and DB writes stay in the coordinator."""
     while True:
         entry: CrawlQueueItem | None = work_q.get()
         if entry is None:
@@ -376,23 +374,34 @@ def _flush_batch(
         queue_store.put(all_discovered)
 
 
-def _worker_thread(
+def _coordinator(
     thread_index: int,
     options: CrawlOptions,
     queue_store: CrawlQueue,
     ctx: Context,
     blocked_normalized: set[str],
 ) -> None:
-    """Pipeline coordinator: one DB connection, N persistent HTTP worker threads.
+    """Coordinate DB batches and HTTP workers for one crawler process.
 
-    The coordinator refills work_q from the DB and drains done_q to batch-write
-    results, keeping HTTP workers busy without synchronization barriers.
+    Architecture:
+    - coordinator owns queue_store and performs all DB reads/writes;
+    - --worker-threads controls how many _http_worker threads fetch pages;
+    - --batch-size controls how many URLs are claimed/flushed per DB batch.
     """
     worker_name = f"{options.worker_id}_{thread_index}"
-    logging.info("Starting pipeline worker: %s", worker_name)
+    logging.info(
+        "Starting crawler coordinator: %s with %d HTTP workers and DB batch size %d",
+        worker_name,
+        options.worker_threads,
+        options.batch_size,
+    )
+
+    flush_size = options.batch_size
+    refill_watermark = max(1, options.batch_size // 2)
 
     # work_q: bounded so the coordinator never over-fetches from DB.
-    # Refill logic keeps qsize < _REFILL_WATERMARK + batch_size, so puts never block.
+    # Refill when fewer than half a DB batch remains queued, then claim one
+    # batch. This keeps HTTP workers busy without letting memory grow unbounded.
     work_q: _queue.Queue[CrawlQueueItem | None] = _queue.Queue(
         maxsize=options.batch_size * 2
     )
@@ -419,8 +428,8 @@ def _worker_thread(
     total_received = 0
 
     while True:
-        # Refill work queue when it runs low
-        if not db_exhausted and work_q.qsize() < _REFILL_WATERMARK:
+        # Refill work queue when it runs low.
+        if not db_exhausted and work_q.qsize() < refill_watermark:
             entries = queue_store.get_batch(
                 worker_name,
                 batch_size=options.batch_size,
@@ -453,7 +462,7 @@ def _worker_thread(
                 total_sent, total_received,
             )
             last_log = now
-        if len(pending) >= _FLUSH_SIZE or (
+        if len(pending) >= flush_size or (
             pending and now - last_flush >= _FLUSH_INTERVAL_S
         ):
             _flush_batch(pending, queue_store, options, blocked_normalized, worker_name)
@@ -486,5 +495,4 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
     blocked = queue_store.get_blocked_domains()
     blocked_normalized = _normalize_blocked(blocked)
 
-    # Single coordinator per process: one DB connection, worker_threads HTTP workers.
-    _worker_thread(0, options, queue_store, ctx, blocked_normalized)
+    _coordinator(0, options, queue_store, ctx, blocked_normalized)
