@@ -13,38 +13,22 @@ export default defineNuxtPlugin((_nuxtApp) => {
     const auth = getAuth(app);
     // connectAuthEmulator throws if already connected, but there is no public property to check.
     // However, usually this plugin runs once.
-    try {
-      connectAuthEmulator(auth, "http://127.0.0.1:9099", {
-        disableWarnings: true,
-      });
-    } catch {
-      // Warning: This can happen on HMR
-    }
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", {
+      disableWarnings: true,
+    });
 
     // Firestore
     const db = getFirestore(app, "koryta-pl");
-    try {
-      connectFirestoreEmulator(db, "127.0.0.1", 8080);
-    } catch {
-      // ignore
-    }
+    connectFirestoreEmulator(db, "127.0.0.1", 8080);
 
     // Functions
     const functions = getFunctions(app);
     const functionsEurope = getFunctions(app, "europe-west1");
-    try {
-      connectFunctionsEmulator(functions, "127.0.0.1", 5001);
-      connectFunctionsEmulator(functionsEurope, "127.0.0.1", 5001);
-    } catch {
-      // ignore
-    }
+    connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+    connectFunctionsEmulator(functionsEurope, "127.0.0.1", 5001);
 
     // Storage
     const storage = getStorage(app);
-    try {
-      connectStorageEmulator(storage, "127.0.0.1", 9199);
-    } catch {
-      // ignore
-    }
+    connectStorageEmulator(storage, "127.0.0.1", 9199);
   }
 });
