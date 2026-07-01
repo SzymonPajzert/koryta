@@ -224,6 +224,7 @@ class KRSNeedsRefresh(Pipeline):
         merged = pd.merge(latest_scrapes, latest_updates, on="krs", how="inner")
         needs_refresh = merged[
             (merged["update_date"] > merged["date"])
+            & (merged["update_date"] < "2026-06-28")  # TODO add some time backoff
             # | (merged["update_date"] > "2026-05-01")
         ]
 
