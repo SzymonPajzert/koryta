@@ -53,7 +53,7 @@ class CrawlOptions:
     domains_of_interest: frozenset[str] = field(default_factory=frozenset)
     request_timeout_seconds: float = 10
     worker_threads: int = 1
-    batch_size: int = 64
+    queue_flush_size: int = 64
 
 
 @dataclass
@@ -386,24 +386,24 @@ def _coordinator(
     Architecture:
     - coordinator owns queue_store and performs all DB reads/writes;
     - --worker-threads controls how many _http_worker threads fetch pages;
-    - --batch-size controls how many URLs are claimed/flushed per DB batch.
+    - --queue-flush-size controls how many URLs are claimed/flushed per queue write.
     """
     worker_name = f"{options.worker_id}_{thread_index}"
     logging.info(
-        "Starting crawler coordinator: %s with %d HTTP workers and DB batch size %d",
+        "Starting crawler coordinator: %s with %d HTTP workers and queue flush size %d",
         worker_name,
         options.worker_threads,
-        options.batch_size,
+        options.queue_flush_size,
     )
 
-    flush_size = options.batch_size
-    refill_watermark = max(1, options.batch_size // 2)
+    queue_flush_size = options.queue_flush_size
+    refill_watermark = max(1, options.queue_flush_size // 2)
 
     # work_q: bounded so the coordinator never over-fetches from DB.
-    # Refill when fewer than half a DB batch remains queued, then claim one
-    # batch. This keeps HTTP workers busy without letting memory grow unbounded.
+    # Refill when fewer than half a queue flush remains queued, then claim one
+    # chunk. This keeps HTTP workers busy without letting memory grow unbounded.
     work_q: _queue.Queue[CrawlQueueItem | None] = _queue.Queue(
-        maxsize=options.batch_size * 2
+        maxsize=options.queue_flush_size * 2
     )
     # done_q: bounded to provide backpressure — when the coordinator is busy
     # writing to DB, workers block here instead of accumulating results in memory.
@@ -432,7 +432,7 @@ def _coordinator(
         if not db_exhausted and work_q.qsize() < refill_watermark:
             entries = queue_store.get_batch(
                 worker_name,
-                batch_size=options.batch_size,
+                batch_size=options.queue_flush_size,
                 max_retries=options.per_url_max_retries,
                 timeout_seconds=options.lock_timeout_seconds,
             )
@@ -462,7 +462,7 @@ def _coordinator(
                 total_sent, total_received,
             )
             last_log = now
-        if len(pending) >= flush_size or (
+        if len(pending) >= queue_flush_size or (
             pending and now - last_flush >= _FLUSH_INTERVAL_S
         ):
             _flush_batch(pending, queue_store, options, blocked_normalized, worker_name)
