@@ -49,7 +49,6 @@ const chartOptions = computed(() => ({
         _chartContext: unknown,
         opts: { dataPointIndex: number },
       ) {
-        console.log(opts.dataPointIndex);
         router.push({
           path: "/eksploruj/tabela",
           query: { party: parties.value[opts.dataPointIndex] },

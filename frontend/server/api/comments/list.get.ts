@@ -18,7 +18,6 @@ export default authCachedEventHandler(async (event) => {
   } else if (query.edgeId) {
     collectionRef = collectionRef.where("edgeId", "==", query.edgeId);
   } else {
-    console.log("No filters, returning empty list.");
     return [];
   }
 

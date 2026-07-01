@@ -61,7 +61,6 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
   const nodeCategoryVotes = computed(() => {
     return votesNodeCollection.value.reduce(
       (acc: AggregatedVotes, doc: DocumentData) => {
-        console.log("Processing vote document:", doc.id, doc);
         const data = doc as VoteDocument;
         const categoryVotes = data.categoryVotes;
         Object.entries(categoryVotes).forEach(([category, value]) => {
