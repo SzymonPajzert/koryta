@@ -67,7 +67,13 @@ def _build_parser() -> ArgumentParser:
         "--worker-threads",
         type=int,
         default=1,
-        help="Number of concurrent threads inside a worker.",
+        help="Number of concurrent HTTP worker threads used by the crawler.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help="Number of URLs to claim from Postgres and flush back per DB batch.",
     )
     parser.add_argument(
         "--parse",
@@ -115,6 +121,7 @@ def _build_options(args: argparse.Namespace, seed_urls: list[str]) -> CrawlOptio
         url_scoring_function=args.url_scoring_function,
         domains_of_interest=frozenset(seed_urls),
         worker_threads=max(1, args.worker_threads),
+        batch_size=max(1, args.batch_size),
     )
 
 
@@ -219,14 +226,18 @@ def main() -> None:  # noqa: PLR0915
     options = _build_options(args, seed_urls)
     logging.info("Running crawler with options: %s", options)
 
-    pg_client = PostgresClient.from_env(max_size=max(args.worker_threads, 1))
+    # Crawl mode uses one coordinator for DB operations; --worker-threads only
+    # controls HTTP fetch concurrency behind that coordinator.
+    pg_client = PostgresClient.from_env(max_size=1)
+
+    logging.info("Initializing crawling queue")
     queue: CrawlQueue
     if args.custom_pipeline:
         url_client = UrlStoreClient.from_env()
         queue = UrlStoreQueue(url_client)
     else:
         queue = PostgresCrawlQueue(pg_client)
-    logging.info("Initializing crawling queue")
+    logging.info("Crawling queue initialized: %s", type(queue).__name__)
 
     if args.reset:
         if not _confirm_reset():
