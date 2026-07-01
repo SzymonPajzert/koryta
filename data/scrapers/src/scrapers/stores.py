@@ -315,6 +315,50 @@ class NLP(metaclass=ABCMeta):
 
 
 @dataclass(frozen=True)
+class LLMRequest:
+    prompt: str
+    max_tokens: int
+    temperature: float = 0
+    model: str | None = None
+
+
+@dataclass(frozen=True)
+class LLMResponse:
+    content: str
+    port: int | None = None
+    model: str | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class LLM(metaclass=ABCMeta):
+    """Abstract interface for OpenAI-compatible chat completion clients."""
+
+    @abstractmethod
+    async def chat(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float = 0,
+        model: str | None = None,
+    ) -> str:
+        """Return the assistant message content for a single prompt."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def map_chat(self, requests: list[LLMRequest]) -> list[LLMResponse]:
+        """Return chat completions for a batch of prompts."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def check_health(self) -> None:
+        """Verify configured LLM backends are reachable."""
+        raise NotImplementedError()
+
+
+@dataclass(frozen=True)
 class CrawlQueueItem:
     uid: str
     url: str
@@ -522,6 +566,8 @@ class Context:
     nlp: NLP
     crawl_queue: CrawlQueue | None = None
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
+    llm: LLM | None = None
+    article_workers: int = 4
 
 
 def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):
