@@ -672,7 +672,11 @@ Should I run it? (y/n) [n]",
         """
         any_refreshed = False
         for _, dep in self.dependencies.items():
-            dep.read_or_process(ctx)
+            try:
+                dep.read_or_process(ctx)
+            except Exception as e:
+                print(f"Dependency {dep.pipeline_name} failed: {e}")
+                raise e
             if dep._refreshed_execution:
                 any_refreshed = True
         return any_refreshed
