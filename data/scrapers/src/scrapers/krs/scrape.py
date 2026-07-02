@@ -301,9 +301,18 @@ def save_org_connections(
 
     print(f"\n\nalready_scraped_krs ({len(already_scraped_krs)}):")
     print(already_scraped_krs.head())
+    print(already_scraped_krs[["method", "date"]].value_counts())
+    print("Matching 0000062694")
+    print(already_scraped_krs[already_scraped_krs["krs"] == "0000062694"])
 
     print(f"\n\nneeds_refresh_krs ({len(needs_refresh_krs)}):")
     print(needs_refresh_krs.head())
+    print("Matching 0000062694")
+    print(needs_refresh_krs[needs_refresh_krs["krs"] == "0000062694"])
+    print(f"Nulls: {needs_refresh_krs['date'].isnull().sum()}")
+    print(needs_refresh_krs["date"].value_counts())
+    print(f"Nulls: {needs_refresh_krs['update_date'].isnull().sum()}")
+    print(needs_refresh_krs["update_date"].value_counts())
 
     # Remove needs refresh from already_scraped_krs, since we need to update them.
     already_scraped = (
@@ -377,6 +386,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
     already_scraped: KRSAlreadyScraped
+    needs_refresh: KRSNeedsRefresh
     companies_all: Companies
     hardcoded_people: PeopleRejestrIOHardcoded
     people: PeopleKRS
@@ -522,8 +532,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
     def process(self, ctx: Context):
         for url in save_org_connections(
-            already_scraped_krs=KRSAlreadyScraped().latest_scrapes(ctx),
-            needs_refresh_krs=KRSNeedsRefresh().read_or_process(ctx),
+            already_scraped_krs=self.already_scraped.latest_scrapes(ctx),
+            needs_refresh_krs=self.needs_refresh.read_or_process(ctx),
             already_scraped_people=get_osoby_scraped(ctx),
             connections=self.companies_to_scrape(ctx),
             names=self.companies_without_names(ctx),

@@ -109,7 +109,13 @@ def scrape_krs(sleep_time=0.2):
     ctx, _ = setup_context(
         use_rejestr_io=True,
         policy=ProcessPolicy(
-            {"ScrapeRejestrIO", "KRSAlreadyScraped", "KRSNeedsRefresh"}
+            {
+                "ScrapeRejestrIO",
+                "KRSAlreadyScraped",
+                "KRSNeedsRefresh",
+                "CompaniesKRS",
+                "KRSUpdates",
+            }
         ),
     )
     pipeline = ScrapeRejestrIO()
