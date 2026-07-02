@@ -73,21 +73,27 @@ def query_krs_api(url, verbose=True) -> str | None:
     result = {}
     try:
         response = requests.get(url)
+        if response.text == "":
+            return None
         result = response.json()
     except requests.exceptions.JSONDecodeError:
         print_filtered(f"Failed to decode JSON from {url}, skipping")
         if response is not None:
-            print_filtered(f"Response: {response.text}")
+            print(f"Response: '{response.text}'")
+            raise ValueError("Failed to decode non-empty response")
         return None
 
-    if "odpis" not in result:
-        print_filtered(f"Unexpected response for {url}: {result}, skipping this KRS")
-        return None
-    dzial1 = result["odpis"]["dane"]["dzial1"]
-    dane = dzial1.get("danePodmiotu", {})
-    if "siedzibaIAdres" in dzial1:
-        miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
-        print_filtered(f"{dane.get('nazwa', dane)} - {miasto}")
+    # either expect odpis or title == Not Found
+    if not ("odpis" in result or result.get("title", "") == "Not Found"):
+        raise ValueError(f"Unexpected response for {url}: {result}, skipping this KRS")
+
+    if "odpis" in result:
+        # Printing data about the company
+        dzial1 = result["odpis"]["dane"]["dzial1"]
+        dane = dzial1.get("danePodmiotu", {})
+        if "siedzibaIAdres" in dzial1:
+            miasto = dzial1["siedzibaIAdres"]["adres"]["miejscowosc"]
+            print_filtered(f"{dane.get('nazwa', dane)} - {miasto}")
     return json.dumps(result)
 
 

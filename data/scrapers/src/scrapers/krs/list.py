@@ -248,6 +248,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             if "Biuletyn" in blob_name:
                 continue
             c = company_from_api_krs(postal_codes, data)
+            if c is None:
+                continue
             self.add_company(c)
             self.add_company_source(c.krs, blob_name)
 
@@ -329,8 +331,11 @@ KNOWN_OWNER_PREFIXES = {
 }
 
 
-def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany:
+def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany | None:
     try:
+        if data.get("title") == "Not Found":
+            return None
+
         odpis = data["odpis"]
         krs = odpis.get("naglowekA").get("numerKRS")
         dane = odpis.get("dane", {})
