@@ -159,6 +159,7 @@ class KRSScraped:
             return None
 
 
+# TODO spread the usage of this function
 def enum_dict_factory(data):
     """Converts enum fields to their underlying value."""
     result = []
@@ -221,6 +222,11 @@ class KRSNeedsRefresh(Pipeline):
     already_scraped: KRSAlreadyScraped
     updates: KRSUpdates
 
+    @property
+    def refresh_cutoff_date(self) -> str:
+        # TODO implement it
+        raise NotImplementedError("Implement a logic counting work days")
+
     def process(self, ctx):
         """Lists updates for a KRS and checks if there were any more recent updates"""
 
@@ -237,7 +243,7 @@ class KRSNeedsRefresh(Pipeline):
         merged = pd.merge(latest_scrapes, latest_updates, on="krs", how="inner")
         needs_refresh = merged[
             (merged["update_date"] > merged["date"])
-            & (merged["update_date"] < "2026-06-28")  # TODO add some time backoff
+            & (merged["update_date"] < self.refresh_cutoff_date)
             # | (merged["update_date"] > "2026-05-01")
         ]
 
