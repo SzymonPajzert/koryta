@@ -10,9 +10,9 @@ from bs4 import BeautifulSoup, Tag
 from tqdm.asyncio import tqdm
 
 from entities.util import NormalizedParse
-from scrapers.article.done_urls_pipeline import ArticleDoneUrls
-from scrapers.article.parse_runner import _hash_bytes, _is_html
-from scrapers.article.pipeline_utils import iter_done_urls, llm_model
+from scrapers.article.pipelines.common import hash_bytes, is_html
+from scrapers.article.pipelines.done_urls_pipeline import ArticleDoneUrls
+from scrapers.article.pipelines.pipeline_utils import iter_done_urls, llm_model
 from scrapers.stores import Context, DoneUrl, LLMRequest, MirrorRef, Pipeline
 
 SELECTOR_PROMPT_VERSION = 1
@@ -382,7 +382,7 @@ def _candidate_done_urls_by_domain(
     scored: dict[str, list[tuple[int, str, DoneUrl]]] = {}
     seen_urls: set[str] = set()
     for done in done_urls:
-        if done.url in seen_urls or not _is_html(done.media_type):
+        if done.url in seen_urls or not is_html(done.media_type):
             continue
         seen_urls.add(done.url)
         try:
@@ -450,7 +450,7 @@ def _build_selector_sample(ctx: Context, done_urls: list[DoneUrl]) -> dict[str, 
             continue
         prompts.append(_PROMPT_TMPL.format(url=done.url, skeleton=skeleton))
         sample_urls.append(done.url)
-        sample_html_hashes.append(_hash_bytes(html))
+        sample_html_hashes.append(hash_bytes(html))
     return {
         "candidate_urls": [done.url for done in done_urls],
         "html_found": bool(html_by_url),

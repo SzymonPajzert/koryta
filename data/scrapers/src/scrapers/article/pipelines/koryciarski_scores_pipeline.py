@@ -8,8 +8,8 @@ import pandas as pd
 from tqdm import tqdm
 
 from entities.article import KoryciarskiScore
-from scrapers.article.parsed_pipeline import ArticleParsed
-from scrapers.article.pipeline_utils import llm_model
+from scrapers.article.pipelines.parsed_pipeline import ArticleParsed
+from scrapers.article.pipelines.pipeline_utils import llm_model
 from scrapers.stores import Context, LLMRequest, Pipeline
 from stores.config import VERSIONED_DIR
 

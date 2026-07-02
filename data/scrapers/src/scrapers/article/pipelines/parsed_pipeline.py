@@ -1,8 +1,8 @@
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import queue
 import threading
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -10,22 +10,22 @@ from tqdm import tqdm
 
 from entities.article import ParsedArticleRecord
 from entities.util import NormalizedParse
-from scrapers.article.domain_selectors_pipeline import (
+from scrapers.article.parse import extract_article_content
+from scrapers.article.pipelines.common import (
+    PARSER_VERSION,
+    build_parse_status_record,
+    hash_bytes,
+    hash_text,
+    is_html,
+    parse_record_to_entity,
+    should_reuse_parse,
+)
+from scrapers.article.pipelines.domain_selectors_pipeline import (
     ArticleDomainSelectors,
     selector_map_from_df,
 )
-from scrapers.article.done_urls_pipeline import ArticleDoneUrls
-from scrapers.article.parse import extract_article_content
-from scrapers.article.parse_runner import (
-    _PARSER_VERSION,
-    _build_status_record,
-    _hash_bytes,
-    _hash_text,
-    _is_html,
-    _record_to_entity,
-    _should_reuse,
-)
-from scrapers.article.pipeline_utils import iter_done_urls
+from scrapers.article.pipelines.done_urls_pipeline import ArticleDoneUrls
+from scrapers.article.pipelines.pipeline_utils import iter_done_urls
 from scrapers.stores import Context, DoneUrl, MirrorRef, NotInMirrorError, Pipeline
 from stores.config import VERSIONED_DIR
 
@@ -108,7 +108,7 @@ class ArticleParsed(Pipeline[ParsedArticleRecord]):
             if done.url in seen_urls:
                 continue
             seen_urls.add(done.url)
-            if not _is_html(done.media_type):
+            if not is_html(done.media_type):
                 continue
             row, task, reusable_url = _classify_done_url(
                 done, selectors, existing_records
@@ -180,7 +180,7 @@ def _classify_done_url(
     if selector is None:
         return None, None, None
 
-    if _should_reuse(previous, selector, done):
+    if should_reuse_parse(previous, selector, done):
         assert previous is not None
         return None, None, done.url
 
@@ -213,7 +213,7 @@ def _emit_reused_records(ctx: Context, path: Path, reusable_urls: set[str]) -> i
 
 
 def _emit_record(ctx: Context, row: dict[str, Any]) -> None:
-    ctx.io.dumper.insert_into(_record_to_entity(row), [])  # type: ignore[attr-defined]
+    ctx.io.dumper.insert_into(parse_record_to_entity(row), [])  # type: ignore[attr-defined]
 
 
 def _parse_domain_batches(
@@ -292,10 +292,11 @@ def _parse_domain_batch(
     stop_event: threading.Event,
 ) -> None:
     mirror = getattr(ctx.io, "mirror", None)
-    should_delete = mirror is not None and hasattr(mirror, "delete_extracted")
+    ensure_extracted = getattr(mirror, "ensure_extracted", None)
+    delete_extracted = getattr(mirror, "delete_extracted", None)
     try:
-        if mirror is not None and hasattr(mirror, "ensure_extracted"):
-            mirror.ensure_extracted(host)
+        if callable(ensure_extracted):
+            ensure_extracted(host)
         for task in tasks:
             if stop_event.is_set():
                 return
@@ -307,8 +308,8 @@ def _parse_domain_batch(
         for task in tasks:
             row_queue.put(_status_row_for_task(task, "error", error=str(exc)))
     finally:
-        if should_delete:
-            mirror.delete_extracted(host)
+        if callable(delete_extracted):
+            delete_extracted(host)
 
 
 def _status_row_for_task(
@@ -318,8 +319,8 @@ def _status_row_for_task(
     error: str | None = None,
 ) -> dict[str, Any]:
     return _entity_to_record(
-        _record_to_entity(
-            _build_status_record(
+        parse_record_to_entity(
+            build_parse_status_record(
                 DoneUrl(task.uid, task.url, task.storage_path),
                 task.domain,
                 task.selector,
@@ -360,15 +361,15 @@ def _parse_task(ctx: Context, task: ParseTask) -> dict[str, Any]:
             ),
             "ld_json": result.get("ld_json"),
             "article_content": article_content,
-            "article_content_hash": _hash_text(article_content),
-            "html_sha256": _hash_bytes(html_bytes),
-            "parser_version": _PARSER_VERSION,
+            "article_content_hash": hash_text(article_content),
+            "html_sha256": hash_bytes(html_bytes),
+            "parser_version": PARSER_VERSION,
         }
-        return _entity_to_record(_record_to_entity(record))
+        return _entity_to_record(parse_record_to_entity(record))
     except Exception as exc:
         return _entity_to_record(
-            _record_to_entity(
-                _build_status_record(
+            parse_record_to_entity(
+                build_parse_status_record(
                     done,
                     task.domain,
                     task.selector,

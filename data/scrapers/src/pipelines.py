@@ -5,8 +5,6 @@ from analysis.payloads import PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.scores import CompanyScores, PeopleScores
 from analysis.stats import Statistics
-from scrapers.kmgp.companies import CompaniesKMGP
-from scrapers.kmgp.people import PeopleKMGP
 from scrapers.article.pipelines import (
     ArticleDomainSelectors,
     ArticleDoneUrls,
@@ -14,6 +12,8 @@ from scrapers.article.pipelines import (
     ArticleKoryciarskiScores,
     ArticleParsed,
 )
+from scrapers.kmgp.companies import CompaniesKMGP
+from scrapers.kmgp.people import PeopleKMGP
 from scrapers.koryta.differ import KorytaDiffer
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.list import CompaniesKRS, PeopleKRS

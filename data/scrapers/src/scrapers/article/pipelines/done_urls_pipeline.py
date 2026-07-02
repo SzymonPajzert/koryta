@@ -1,5 +1,6 @@
 import pandas as pd
 
+from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
 from scrapers.stores import Context, DoneUrl, Pipeline
 
 
@@ -12,11 +13,6 @@ class ArticleDoneUrls(Pipeline[DoneUrl]):
 
     def process(self, ctx: Context):
         if ctx.crawl_queue is None:
-            from scrapers.article.postgres_queue import (
-                PostgresClient,
-                PostgresCrawlQueue,
-            )
-
             pg_client = PostgresClient.from_env(max_size=1)
             try:
                 queue = PostgresCrawlQueue(pg_client)

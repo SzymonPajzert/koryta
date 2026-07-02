@@ -15,8 +15,10 @@ from entities.facts import (
     PersonalRelationFact,
     fact_to_dict,
 )
-from scrapers.article.koryciarski_scores_pipeline import ArticleKoryciarskiScores
-from scrapers.article.pipeline_utils import llm_model
+from scrapers.article.pipelines.koryciarski_scores_pipeline import (
+    ArticleKoryciarskiScores,
+)
+from scrapers.article.pipelines.pipeline_utils import llm_model
 from scrapers.stores import Context, LLMRequest, Pipeline
 from stores.config import VERSIONED_DIR
 

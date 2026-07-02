@@ -1,11 +1,10 @@
 import pandas as pd
 
+from entities.util import NormalizedParse
 from scrapers.stores import Context, DoneUrl
 
 
 def domains_from_done_urls(done_df: pd.DataFrame) -> set[str]:
-    from entities.util import NormalizedParse
-
     domains: set[str] = set()
     for row in done_df.itertuples(index=False):
         try:
