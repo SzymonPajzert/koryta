@@ -381,23 +381,6 @@ class LLM(metaclass=ABCMeta):
     """Abstract interface for OpenAI-compatible chat completion clients."""
 
     @abstractmethod
-    async def chat(
-        self,
-        prompt: str,
-        *,
-        max_tokens: int,
-        temperature: float = 0,
-        model: str | None = None,
-    ) -> str:
-        """Return the assistant message content for a single prompt."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    async def map_chat(self, requests: list[LLMRequest]) -> list[LLMResponse]:
-        """Return chat completions for a batch of prompts."""
-        raise NotImplementedError()
-
-    @abstractmethod
     def response_pool(self) -> LLMResponsePool:
         """Create a bounded request/response pool."""
         raise NotImplementedError()

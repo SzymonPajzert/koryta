@@ -200,7 +200,7 @@ async def _generate_selectors(
             rows.append(cached)
             continue
         tasks.append(
-            _generate_selector_for_domain_limited(
+            _build_selector_sample_for_domain_limited(
                 semaphore,
                 ctx,
                 domain,
@@ -212,7 +212,7 @@ async def _generate_selectors(
         for task in tqdm.as_completed(
             tasks,
             total=len(tasks),
-            desc="Generating selectors",
+            desc="Building selector samples",
             unit="domain",
             dynamic_ncols=True,
             mininterval=1.0,
@@ -220,10 +220,15 @@ async def _generate_selectors(
         ):
             rows.append(await task)
 
+    prompt_rows = [row for row in rows if row.get("status") == "needs_llm"]
+    rows = [row for row in rows if row.get("status") != "needs_llm"]
+    if prompt_rows:
+        rows.extend(await _generate_selector_prompt_rows(ctx, prompt_rows, model=model))
+
     return sorted(rows, key=lambda row: str(row.get("domain") or ""))
 
 
-async def _generate_selector_for_domain_limited(
+async def _build_selector_sample_for_domain_limited(
     semaphore: asyncio.Semaphore,
     ctx: Context,
     domain: str,
@@ -232,7 +237,7 @@ async def _generate_selector_for_domain_limited(
     model: str,
 ) -> dict[str, Any]:
     async with semaphore:
-        return await _generate_selector_for_domain(
+        return await _build_selector_sample_for_domain(
             ctx,
             domain,
             candidates,
@@ -240,7 +245,7 @@ async def _generate_selector_for_domain_limited(
         )
 
 
-async def _generate_selector_for_domain(
+async def _build_selector_sample_for_domain(
     ctx: Context,
     domain: str,
     candidates: list[DoneUrl],
@@ -260,19 +265,102 @@ async def _generate_selector_for_domain(
     if not prompts:
         return _selector_status_row(domain, None, "no_skeletons", model, urls)
 
+    return {
+        "domain": domain,
+        "status": "needs_llm",
+        "prompts": prompts,
+        "sample_urls": sample["sample_urls"],
+        "sample_html_hashes": sample["sample_html_hashes"],
+    }
+
+
+async def _generate_selector_prompt_rows(
+    ctx: Context,
+    prompt_rows: list[dict[str, Any]],
+    *,
+    model: str,
+) -> list[dict[str, Any]]:
     assert ctx.llm is not None
-    responses = await ctx.llm.map_chat(
-        [
-            LLMRequest(
-                prompt=prompt,
-                max_tokens=SELECTOR_MAX_TOKENS,
-                temperature=SELECTOR_TEMPERATURE,
-                model=model,
-            )
-            for prompt in prompts
-        ]
-    )
-    selectors = [_parse_selector_response(response.content) for response in responses]
+    pending: dict[int, str] = {}
+    responses_by_domain: dict[str, list[str]] = {
+        str(row["domain"]): [] for row in prompt_rows
+    }
+    rows_by_domain = {str(row["domain"]): row for row in prompt_rows}
+
+    total_prompts = sum(len(row.get("prompts") or []) for row in prompt_rows)
+    with tqdm(
+        total=total_prompts,
+        desc="Generating selector prompts",
+        unit="prompt",
+        dynamic_ncols=True,
+        mininterval=1.0,
+        smoothing=0.05,
+    ) as bar:
+        async with ctx.llm.response_pool() as pool:
+            for row in prompt_rows:
+                domain = str(row["domain"])
+                for prompt in row.get("prompts") or []:
+                    while pool.is_full():
+                        request_id, response = await pool.get_response()
+                        _record_selector_response(
+                            responses_by_domain,
+                            pending.pop(request_id),
+                            response,
+                        )
+                        bar.update(1)
+
+                    request_id = await pool.put_request(
+                        LLMRequest(
+                            prompt=str(prompt),
+                            max_tokens=SELECTOR_MAX_TOKENS,
+                            temperature=SELECTOR_TEMPERATURE,
+                            model=model,
+                        )
+                    )
+                    pending[request_id] = domain
+
+            while pending:
+                request_id, response = await pool.get_response()
+                _record_selector_response(
+                    responses_by_domain,
+                    pending.pop(request_id),
+                    response,
+                )
+                bar.update(1)
+
+    return [
+        _selector_row_from_responses(
+            rows_by_domain[domain],
+            responses,
+            model=model,
+        )
+        for domain, responses in responses_by_domain.items()
+    ]
+
+
+def _record_selector_response(
+    responses_by_domain: dict[str, list[str]],
+    domain: str,
+    response,
+) -> None:
+    if isinstance(response, Exception):
+        responses_by_domain[domain].append("")
+    else:
+        responses_by_domain[domain].append(response.content)
+
+
+def _selector_row_from_responses(
+    prompt_row: dict[str, Any],
+    response_texts: list[str],
+    *,
+    model: str,
+) -> dict[str, Any]:
+    domain = str(prompt_row["domain"])
+    selectors = [
+        _parse_selector_response(response_text)
+        for response_text in response_texts
+        if response_text
+    ]
     winner = _majority_vote(selectors)
     votes = Counter(selector for selector in selectors if selector)
     return {
@@ -281,8 +369,8 @@ async def _generate_selector_for_domain(
         "status": "ok" if winner else "no_selector",
         "votes": votes.get(winner, 0) if winner else 0,
         "all_votes": dict(votes),
-        "sample_urls": sample["sample_urls"],
-        "sample_html_hashes": sample["sample_html_hashes"],
+        "sample_urls": prompt_row["sample_urls"],
+        "sample_html_hashes": prompt_row["sample_html_hashes"],
         "selector_prompt_version": SELECTOR_PROMPT_VERSION,
         "model": model,
     }

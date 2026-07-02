@@ -73,50 +73,6 @@ class OpenAICompatibleMultiPortLLM(LLM):
         except Exception as exc:
             return port, False, str(exc)
 
-    async def chat(
-        self,
-        prompt: str,
-        *,
-        max_tokens: int,
-        temperature: float = 0,
-        model: str | None = None,
-    ) -> str:
-        response = await self.map_chat(
-            [
-                LLMRequest(
-                    prompt=prompt,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    model=model,
-                )
-            ]
-        )
-        return response[0].content
-
-    async def map_chat(self, requests: list[LLMRequest]) -> list[LLMResponse]:
-        results: list[LLMResponse | None] = [None] * len(requests)
-        indexes_by_id: dict[int, int] = {}
-
-        async with self.response_pool() as pool:
-            for index, request in enumerate(requests):
-                while pool.is_full():
-                    request_id, response = await pool.get_response()
-                    result_index = indexes_by_id.pop(request_id)
-                    if isinstance(response, Exception):
-                        raise response
-                    results[result_index] = response
-
-                request_id = await pool.put_request(request)
-                indexes_by_id[request_id] = index
-
-            while indexes_by_id:
-                request_id, response = await pool.get_response()
-                result_index = indexes_by_id.pop(request_id)
-                if isinstance(response, Exception):
-                    raise response
-                results[result_index] = response
-        return [result for result in results if result is not None]
-
     def response_pool(self) -> LLMResponsePool:
         return OpenAICompatibleResponsePool(self)
 
