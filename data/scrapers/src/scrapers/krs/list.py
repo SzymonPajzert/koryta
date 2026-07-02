@@ -268,13 +268,16 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 )
             )
 
+        self.check_awaiting()
+        return DataFrame.from_records([dataclasses.asdict(c) for c in output])
+
+    def check_awaiting(self):
         for k, vs in self.awaiting_relations.items():
             for v in vs:
                 if v[0] == k:
                     continue
 
                 raise ValueError(f"Awaiting relations not empty: {k} {v}")
-        return DataFrame.from_records([dataclasses.asdict(c) for c in output])
 
 
 def company_from_rejestrio(data: dict, pcs: DataFrame | None = None) -> KrsCompany:
