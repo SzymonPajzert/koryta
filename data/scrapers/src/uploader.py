@@ -131,7 +131,7 @@ class Uploader:
 
     def submit_results(self, entities):
         self.success_count = 0
-        self.total = len(entities)
+        self.total = 0
         for idx, payload in enumerate(entities):
             if self.args.limit is not None and idx >= self.args.limit:
                 print(f"Reached limit {self.args.limit}")
@@ -158,6 +158,7 @@ class Uploader:
         )
 
     def check_success(self, resp):
+        self.total += 1
         if resp.status_code == 200:
             self.success_count += 1
         return resp
