@@ -3,7 +3,7 @@ import json
 import re
 import textwrap
 from collections import Counter
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from bs4 import BeautifulSoup, Tag
@@ -105,8 +105,9 @@ _PROMPT_TMPL = textwrap.dedent(
     - <!-- ~Nw --> element contains roughly N words
     - <!-- ~Nw LISTING --> holds multiple articles; do not select this
 
-    TASK: Return the ONE CSS selector that reliably captures the complete article body
-    (headline + lead paragraph + body text) across ALL pages on this site, not just this one.
+    TASK: Return the ONE CSS selector that reliably captures the complete
+    article body (headline + lead paragraph + body text) across ALL pages on
+    this site, not just this one.
 
     STRATEGY:
     1. Find the broadest element that is clearly a single-article container.
@@ -120,7 +121,8 @@ _PROMPT_TMPL = textwrap.dedent(
     4. No bare tags without class/id: body, main, article, section, div are banned.
     5. No descendant chains with 3+ space-separated parts.
     6. Never select a LISTING element.
-    7. If not a news article, return {{"selector": null, "reasoning": "not an article page"}}
+    7. If not a news article, return:
+       {{"selector": null, "reasoning": "not an article page"}}
 
     HTML skeleton:
     {skeleton}"""
@@ -161,7 +163,7 @@ def _existing_selector_rows(df: pd.DataFrame | None) -> dict[str, dict[str, Any]
     for row in df.replace({pd.NA: None}).to_dict(orient="records"):
         domain = row.get("domain")
         if isinstance(domain, str) and domain:
-            rows[domain] = row
+            rows[domain] = cast(dict[str, Any], row)
     return rows
 
 
@@ -182,7 +184,14 @@ async def _generate_selectors(
     assert ctx.llm is not None
     await ctx.llm.check_health()
     rows: list[dict[str, Any]] = []
-    semaphore = asyncio.Semaphore(SELECTOR_DOMAIN_CONCURRENCY)
+    domain_concurrency = max(
+        1,
+        int(
+            getattr(ctx, "article_workers", SELECTOR_DOMAIN_CONCURRENCY)
+            or SELECTOR_DOMAIN_CONCURRENCY
+        ),
+    )
+    semaphore = asyncio.Semaphore(domain_concurrency)
 
     tasks = []
     for domain, candidates in sorted(candidates_by_domain.items()):
@@ -205,6 +214,9 @@ async def _generate_selectors(
             total=len(tasks),
             desc="Generating selectors",
             unit="domain",
+            dynamic_ncols=True,
+            mininterval=1.0,
+            smoothing=0.05,
         ):
             rows.append(await task)
 
@@ -276,7 +288,9 @@ async def _generate_selector_for_domain(
     }
 
 
-def _candidate_done_urls_by_domain(done_urls: list[DoneUrl]) -> dict[str, list[DoneUrl]]:
+def _candidate_done_urls_by_domain(
+    done_urls: list[DoneUrl],
+) -> dict[str, list[DoneUrl]]:
     scored: dict[str, list[tuple[int, str, DoneUrl]]] = {}
     seen_urls: set[str] = set()
     for done in done_urls:
@@ -291,7 +305,9 @@ def _candidate_done_urls_by_domain(done_urls: list[DoneUrl]) -> dict[str, list[D
         if not _is_article_path(parsed.path):
             continue
         score = _article_score(parsed.path)
-        scored.setdefault(parsed.hostname_normalized, []).append((-score, done.url, done))
+        scored.setdefault(parsed.hostname_normalized, []).append(
+            (-score, done.url, done)
+        )
 
     return {
         domain: [done for _score, _url, done in sorted(items)]
@@ -301,14 +317,32 @@ def _candidate_done_urls_by_domain(done_urls: list[DoneUrl]) -> dict[str, list[D
 
 def _read_candidate_html(ctx: Context, done_urls: list[DoneUrl]) -> dict[str, bytes]:
     html_by_url: dict[str, bytes] = {}
+    hosts = _hosts_for_done_urls(done_urls)
+    mirror = getattr(ctx.io, "mirror", None)
+    delete_extracted = getattr(mirror, "delete_extracted", None)
+    try:
+        for done in done_urls:
+            try:
+                html = ctx.io.read_data(MirrorRef(done.url)).read_bytes()
+            except Exception:
+                continue
+            if html and html.lstrip()[:1] in (b"<", b"\xef"):
+                html_by_url[done.url] = html
+    finally:
+        if callable(delete_extracted):
+            for host in hosts:
+                delete_extracted(host)
+    return html_by_url
+
+
+def _hosts_for_done_urls(done_urls: list[DoneUrl]) -> set[str]:
+    hosts: set[str] = set()
     for done in done_urls:
         try:
-            html = ctx.io.read_data(MirrorRef(done.url)).read_bytes()
+            hosts.add(NormalizedParse.parse(done.url).hostname_normalized)
         except Exception:
             continue
-        if html and html.lstrip()[:1] in (b"<", b"\xef"):
-            html_by_url[done.url] = html
-    return html_by_url
+    return hosts
 
 
 def _build_selector_sample(ctx: Context, done_urls: list[DoneUrl]) -> dict[str, Any]:
@@ -316,7 +350,10 @@ def _build_selector_sample(ctx: Context, done_urls: list[DoneUrl]) -> dict[str, 
     sample_urls: list[str] = []
     sample_html_hashes: list[str] = []
     prompts: list[str] = []
-    for done in [done for done in done_urls if done.url in html_by_url][:SELECTOR_SAMPLES]:
+    candidates_with_html = [
+        done for done in done_urls if done.url in html_by_url
+    ][:SELECTOR_SAMPLES]
+    for done in candidates_with_html:
         html = html_by_url.get(done.url)
         if not html:
             continue
@@ -407,7 +444,9 @@ def _build_skeleton(tag, depth=0) -> str:
     cls = " ".join(_clean_classes(tag)[:3])
     tid = tag.get("id", "")
     attrs = (f' class="{cls}"' if cls else "") + (f' id="{tid}"' if tid else "")
-    children = [c for c in tag.children if isinstance(c, Tag) and c.name not in _SKIP_TAGS]
+    children = [
+        c for c in tag.children if isinstance(c, Tag) and c.name not in _SKIP_TAGS
+    ]
 
     if not children:
         text = tag.get_text(" ", strip=True)[:100].replace("\n", " ")
@@ -433,7 +472,9 @@ def _build_skeleton(tag, depth=0) -> str:
         i = j
 
     inner = "".join(
-        (indent + "  " + c + "\n") if isinstance(c, str) else _build_skeleton(c, depth + 1)
+        (indent + "  " + c + "\n")
+        if isinstance(c, str)
+        else _build_skeleton(c, depth + 1)
         for c in collapsed
     )
     if not inner.strip():

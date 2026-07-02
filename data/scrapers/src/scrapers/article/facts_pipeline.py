@@ -22,7 +22,6 @@ from stores.config import VERSIONED_DIR
 
 PROMPT_VERSION = 1
 TEXT_LIMIT = 100000
-BATCH_SIZE = 256
 MAX_TOKENS = 1000
 TEMPERATURE = 0.1
 
@@ -59,7 +58,8 @@ _PROMPT = (
     "Format każdej linii:\n"
     "- employment | person=... | organization=... | role=... | justification=...\n"
     "- party_membership | person=... | party=... | justification=...\n"
-    "- personal_relation | subject=... | object=... | relation=... | justification=...\n\n"
+    "- personal_relation | subject=... | object=... | relation=... | "
+    "justification=...\n\n"
     "Jeśli nie ma faktów, zwróć pustą odpowiedź albo sam nagłówek `facts:`.\n"
     "Nie zgaduj. Nie dopisuj faktów spoza tekstu.\n\n"
     "Artykuł:\n{text}"
@@ -118,7 +118,10 @@ class ArticleExtractedFacts(Pipeline[ArticleFacts]):
         if not _SCORES_FILE.exists():
             raise FileNotFoundError(_SCORES_FILE)
 
-        existing = _existing_facts_cache_from_files(_FINAL_OUTPUT_FILE, _TEMP_OUTPUT_FILE)
+        existing = _existing_facts_cache_from_files(
+            _FINAL_OUTPUT_FILE,
+            _TEMP_OUTPUT_FILE,
+        )
         _prepare_temp_output()
         model = llm_model(ctx)
         records = _extractable_records(_PARSED_FILE, _SCORES_FILE)
@@ -149,7 +152,11 @@ def _existing_facts_cache_from_files(*paths: Path) -> dict[str, dict[str, Any]]:
         if not path.exists():
             continue
         with path.open("r", encoding="utf-8") as handle:
-            for line in tqdm(handle, desc=f"Reading facts cache {path.name}", unit="row"):
+            for line in tqdm(
+                handle,
+                desc=f"Reading facts cache {path.name}",
+                unit="row",
+            ):
                 raw = line.strip()
                 if not raw:
                     continue
@@ -183,7 +190,11 @@ def _extractable_records(parsed_path: Path, scores_path: Path) -> list[dict[str,
                 continue
             content_hash = row.get("article_content_hash")
             content = row.get("article_content")
-            if isinstance(content_hash, str) and isinstance(content, str) and content.strip():
+            if (
+                isinstance(content_hash, str)
+                and isinstance(content, str)
+                and content.strip()
+            ):
                 latest[url] = row
     return list(latest.values())
 
@@ -216,27 +227,85 @@ async def _extract_records(
 ) -> None:
     assert ctx.llm is not None
     await ctx.llm.check_health()
-    batch: list[dict[str, Any]] = []
+    pending: dict[int, dict[str, Any]] = {}
+    uncached = _emit_cached_facts(ctx, records, existing, model)
 
-    with tqdm(total=len(records), desc="Extracting article facts", unit="article") as bar:
-        for record in records:
-            cached = existing.get(str(record["url"]))
-            if _cache_valid(cached, record, model):
-                assert cached is not None
-                _emit_facts(ctx, _facts_row_from_cache(cached))
+    with tqdm(
+        total=len(uncached),
+        desc="Extracting article facts",
+        unit="article",
+        dynamic_ncols=True,
+        mininterval=1.0,
+        smoothing=0.05,
+    ) as bar:
+        async with ctx.llm.response_pool() as pool:
+            for record in uncached:
+                while pool.is_full():
+                    request_id, response = await pool.get_response()
+                    _emit_fact_response(
+                        ctx,
+                        pending.pop(request_id),
+                        response,
+                        model,
+                    )
+                    bar.update(1)
+
+                request_id = await pool.put_request(_fact_request(record, model))
+                pending[request_id] = record
+
+            while pending:
+                request_id, response = await pool.get_response()
+                _emit_fact_response(
+                    ctx,
+                    pending.pop(request_id),
+                    response,
+                    model,
+                )
                 bar.update(1)
-                continue
-            batch.append(record)
-            if len(batch) >= BATCH_SIZE:
-                for row in await _extract_batch(ctx, batch, model=model):
-                    _emit_facts(ctx, row)
-                bar.update(len(batch))
-                batch = []
 
-        if batch:
-            for row in await _extract_batch(ctx, batch, model=model):
-                _emit_facts(ctx, row)
-            bar.update(len(batch))
+
+def _emit_cached_facts(
+    ctx: Context,
+    records: list[dict[str, Any]],
+    existing: dict[str, dict[str, Any]],
+    model: str,
+) -> list[dict[str, Any]]:
+    uncached: list[dict[str, Any]] = []
+    cached_count = 0
+    for record in records:
+        cached = existing.get(str(record["url"]))
+        if _cache_valid(cached, record, model):
+            assert cached is not None
+            _emit_facts(ctx, _facts_row_from_cache(cached))
+            cached_count += 1
+            continue
+        uncached.append(record)
+    if cached_count:
+        print(f"Reused cached article facts: {cached_count}")
+    return uncached
+
+
+def _emit_fact_response(
+    ctx: Context,
+    record: dict[str, Any],
+    response,
+    model: str,
+) -> None:
+    if isinstance(response, Exception):
+        _emit_facts(ctx, _error_row(record, model, str(response)))
+    else:
+        _emit_facts(ctx, _facts_row(record, response.content, model, response))
+
+
+def _fact_request(record: dict[str, Any], model: str) -> LLMRequest:
+    return LLMRequest(
+        prompt=_PROMPT.format(
+            text=str(record.get("article_content") or "")[:TEXT_LIMIT]
+        ),
+        max_tokens=MAX_TOKENS,
+        temperature=TEMPERATURE,
+        model=model,
+    )
 
 
 def _cache_valid(
@@ -267,35 +336,17 @@ def _facts_row_from_cache(cached: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def _extract_batch(
-    ctx: Context,
-    records: list[dict[str, Any]],
-    *,
+def _facts_row(
+    record: dict[str, Any],
+    response_text: str,
     model: str,
-) -> list[dict[str, Any]]:
-    assert ctx.llm is not None
-    requests = [
-        LLMRequest(
-            prompt=_PROMPT.format(text=str(record.get("article_content") or "")[:TEXT_LIMIT]),
-            max_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
-            model=model,
+    response,
+) -> dict[str, Any]:
+    try:
+        facts = _normalize_markdown_response(
+            str(record.get("url") or ""),
+            response_text,
         )
-        for record in records
-    ]
-    try:
-        responses = await ctx.llm.map_chat(requests)
-    except Exception as exc:
-        return [_error_row(record, model, str(exc)) for record in records]
-    return [
-        _facts_row(record, response.content, model, response)
-        for record, response in zip(records, responses)
-    ]
-
-
-def _facts_row(record: dict[str, Any], response_text: str, model: str, response) -> dict[str, Any]:
-    try:
-        facts = _normalize_markdown_response(str(record.get("url") or ""), response_text)
         return {
             "url": record["url"],
             "article_content_hash": record["article_content_hash"],
@@ -405,7 +456,10 @@ def _coerce_fact(url: str, raw_fact: dict[str, Any]) -> ArticleFact | None:
         lowered = f"{organization} {role_text or ''}".lower()
         if "kww" in lowered or "komitet wyborczy" in lowered:
             return None
-        if any(banned in lowered for banned in ("kandydat", "kandydatka", "wybor", "wyborc")):
+        if any(
+            banned in lowered
+            for banned in ("kandydat", "kandydatka", "wybor", "wyborc")
+        ):
             return None
         return EmploymentFact(
             url=url,

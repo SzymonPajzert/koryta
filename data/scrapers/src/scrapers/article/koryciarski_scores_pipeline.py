@@ -15,7 +15,6 @@ from stores.config import VERSIONED_DIR
 
 PROMPT_VERSION = 1
 TEXT_LIMIT = 100000
-BATCH_SIZE = 256
 MAX_TOKENS = 512
 TEMPERATURE = 0.1
 
@@ -105,7 +104,10 @@ class ArticleKoryciarskiScores(Pipeline[KoryciarskiScore]):
         if not _PARSED_FILE.exists():
             raise FileNotFoundError(_PARSED_FILE)
 
-        existing = _existing_score_cache_from_files(_FINAL_OUTPUT_FILE, _TEMP_OUTPUT_FILE)
+        existing = _existing_score_cache_from_files(
+            _FINAL_OUTPUT_FILE,
+            _TEMP_OUTPUT_FILE,
+        )
         _prepare_temp_output()
         model = llm_model(ctx)
         records = _latest_ok_parsed_records(_PARSED_FILE)
@@ -136,7 +138,11 @@ def _existing_score_cache_from_files(*paths: Path) -> dict[str, dict[str, Any]]:
         if not path.exists():
             continue
         with path.open("r", encoding="utf-8") as handle:
-            for line in tqdm(handle, desc=f"Reading score cache {path.name}", unit="row"):
+            for line in tqdm(
+                handle,
+                desc=f"Reading score cache {path.name}",
+                unit="row",
+            ):
                 raw = line.strip()
                 if not raw:
                     continue
@@ -186,29 +192,87 @@ async def _score_records(
 ) -> list[dict[str, Any]]:
     assert ctx.llm is not None
     await ctx.llm.check_health()
-    batch: list[dict[str, Any]] = []
+    pending: dict[int, dict[str, Any]] = {}
+    uncached = _emit_cached_scores(ctx, records, existing, model)
 
-    with tqdm(total=len(records), desc="Scoring koryciarstwo", unit="article") as bar:
-        for record in records:
-            cached = existing.get(str(record["url"]))
-            if _cache_valid(cached, record, model):
-                assert cached is not None
-                _emit_score(ctx, _score_row_from_cache(cached))
+    with tqdm(
+        total=len(uncached),
+        desc="Scoring koryciarstwo",
+        unit="article",
+        dynamic_ncols=True,
+        mininterval=1.0,
+        smoothing=0.05,
+    ) as bar:
+        async with ctx.llm.response_pool() as pool:
+            for record in uncached:
+                while pool.is_full():
+                    request_id, response = await pool.get_response()
+                    _emit_score_response(
+                        ctx,
+                        pending.pop(request_id),
+                        response,
+                        model,
+                    )
+                    bar.update(1)
+
+                request_id = await pool.put_request(_score_request(record, model))
+                pending[request_id] = record
+
+            while pending:
+                request_id, response = await pool.get_response()
+                _emit_score_response(
+                    ctx,
+                    pending.pop(request_id),
+                    response,
+                    model,
+                )
                 bar.update(1)
-                continue
-            batch.append(record)
-            if len(batch) >= BATCH_SIZE:
-                for row in await _score_batch(ctx, batch, model=model):
-                    _emit_score(ctx, row)
-                bar.update(len(batch))
-                batch = []
-
-        if batch:
-            for row in await _score_batch(ctx, batch, model=model):
-                _emit_score(ctx, row)
-            bar.update(len(batch))
 
     return []
+
+
+def _emit_cached_scores(
+    ctx: Context,
+    records: list[dict[str, Any]],
+    existing: dict[str, dict[str, Any]],
+    model: str,
+) -> list[dict[str, Any]]:
+    uncached: list[dict[str, Any]] = []
+    cached_count = 0
+    for record in records:
+        cached = existing.get(str(record["url"]))
+        if _cache_valid(cached, record, model):
+            assert cached is not None
+            _emit_score(ctx, _score_row_from_cache(cached))
+            cached_count += 1
+            continue
+        uncached.append(record)
+    if cached_count:
+        print(f"Reused cached koryciarstwo scores: {cached_count}")
+    return uncached
+
+
+def _emit_score_response(
+    ctx: Context,
+    record: dict[str, Any],
+    response,
+    model: str,
+) -> None:
+    if isinstance(response, Exception):
+        _emit_score(ctx, _error_row(record, model, str(response)))
+    else:
+        _emit_score(ctx, _score_row(record, response.content, model, response))
+
+
+def _score_request(record: dict[str, Any], model: str) -> LLMRequest:
+    return LLMRequest(
+        prompt=_PROMPT.format(
+            text=str(record.get("article_content") or "")[:TEXT_LIMIT]
+        ),
+        max_tokens=MAX_TOKENS,
+        temperature=TEMPERATURE,
+        model=model,
+    )
 
 
 def _emit_score(ctx: Context, row: dict[str, Any]) -> None:
@@ -259,33 +323,6 @@ def _score_row_from_cache(cached: dict[str, Any]) -> dict[str, Any]:
         "total_tokens": int(cached.get("total_tokens") or 0),
         "error": cached.get("error"),
     }
-
-
-async def _score_batch(
-    ctx: Context,
-    records: list[dict[str, Any]],
-    *,
-    model: str,
-) -> list[dict[str, Any]]:
-    assert ctx.llm is not None
-    requests = [
-        LLMRequest(
-            prompt=_PROMPT.format(text=str(record.get("article_content") or "")[:TEXT_LIMIT]),
-            max_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
-            model=model,
-        )
-        for record in records
-    ]
-    try:
-        responses = await ctx.llm.map_chat(requests)
-    except Exception as exc:
-        return [_error_row(record, model, str(exc)) for record in records]
-
-    return [
-        _score_row(record, response.content, model, response)
-        for record, response in zip(records, responses)
-    ]
 
 
 def _score_row(

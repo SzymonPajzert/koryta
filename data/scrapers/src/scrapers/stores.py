@@ -350,6 +350,33 @@ class LLMResponse:
     total_tokens: int = 0
 
 
+class LLMResponsePool(metaclass=ABCMeta):
+    """Bounded async request/response pool for long-running LLM pipelines."""
+
+    @abstractmethod
+    async def __aenter__(self) -> "LLMResponsePool":
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def is_full(self) -> bool:
+        """Return True when the pool cannot accept more outstanding requests."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def put_request(self, request: LLMRequest) -> int:
+        """Submit a request and return its response id."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_response(self) -> tuple[int, LLMResponse | Exception]:
+        """Return the next completed response by id."""
+        raise NotImplementedError()
+
+
 class LLM(metaclass=ABCMeta):
     """Abstract interface for OpenAI-compatible chat completion clients."""
 
@@ -368,6 +395,11 @@ class LLM(metaclass=ABCMeta):
     @abstractmethod
     async def map_chat(self, requests: list[LLMRequest]) -> list[LLMResponse]:
         """Return chat completions for a batch of prompts."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def response_pool(self) -> LLMResponsePool:
+        """Create a bounded request/response pool."""
         raise NotImplementedError()
 
     @abstractmethod
