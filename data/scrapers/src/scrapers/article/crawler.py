@@ -23,6 +23,7 @@ from scrapers.article.scoring import get_scoring_function
 from scrapers.stores import (
     Context,
     CrawlQueue,
+    CrawlQueueItem,
     LocalFile,
     NewUrl,
     Priority,
@@ -103,7 +104,7 @@ def _compress_long_segments(path: str, max_segment_length: int) -> str:
         if len(segment.encode("utf-8")) > max_segment_length:
             hash_suffix = hashlib.md5(segment.encode()).hexdigest()[:_HASH_SUFFIX_LEN]
             # +2: 1 for '_' separator, 1 safety (check is bytes, truncation is chars)
-            truncated = segment[:max_segment_length - _HASH_SUFFIX_LEN - 2]
+            truncated = segment[: max_segment_length - _HASH_SUFFIX_LEN - 2]
             segment = f"{truncated}_{hash_suffix}"
         safe_segments.append(segment)
     return "/".join(safe_segments)
@@ -149,7 +150,7 @@ def _upload_response(
     path = _storage_path(parsed)
     if options.storage_type == "gcs":
         content_type = _content_type_from_response(response)
-        ctx.io.upload(parsed.full_url, response.content, content_type)
+        ctx.io.batch_upload(parsed.full_url, response.content, content_type)
     elif options.storage_type == "local":
         if options.local_output is None:
             raise ValueError("local_output is required for local storage")
@@ -296,6 +297,12 @@ def _worker_thread(
     worker_name = f"{options.worker_id}_{thread_index}"
     logging.info("Starting to crawl in worker: %s", worker_name)
 
+    starter_domains = [
+        e
+        for i, e in enumerate(options.domains_of_interest)
+        if i % options.worker_threads == thread_index
+    ]
+
     while True:
         entry = queue.get(
             worker_name,
@@ -303,8 +310,13 @@ def _worker_thread(
             timeout_seconds=options.lock_timeout_seconds,
         )
         if entry is None:
-            logging.info("Closing crawl queue. Nothing more to do.")
-            return
+            if len(starter_domains) == 0:
+                logging.info("Closing crawl queue. Nothing more to do.")
+                return
+
+            url = starter_domains[0]
+            entry = CrawlQueueItem("000", url, 100)
+            starter_domains = starter_domains[1:]
 
         uid = entry.uid
         url = entry.url
@@ -318,7 +330,8 @@ def _worker_thread(
             # aren't re-queried immediately after hitting the rate limit.
             logging.info(
                 "[p=%d] Skipping because of hit rate limit: %s",
-                priority, parsed_url.full_url,
+                priority,
+                parsed_url.full_url,
             )
         elif result.error:
             logging.error(
@@ -337,18 +350,24 @@ def _worker_thread(
                 result.request_duration_s or 0,
                 parsed_url.full_url,
             )
-            queue.mark_done(uid, result.storage_path, {
-                "request_duration_s": result.request_duration_s,
-                "parse_duration_s": result.parse_duration_s,
-                "upload_duration_s": result.upload_duration_s,
-                "total_duration_s": result.total_duration_s,
-                "worker_id": worker_name,
-                "media_type": result.media_type,
-            })
-            queue.put([
-                NewUrl(url, _priority_for_url(options, url))
-                for url in result.discovered_urls
-            ])
+            queue.mark_done(
+                uid,
+                result.storage_path,
+                {
+                    "request_duration_s": result.request_duration_s,
+                    "parse_duration_s": result.parse_duration_s,
+                    "upload_duration_s": result.upload_duration_s,
+                    "total_duration_s": result.total_duration_s,
+                    "worker_id": worker_name,
+                    "media_type": result.media_type,
+                },
+            )
+            queue.put(
+                [
+                    NewUrl(url, _priority_for_url(options, url))
+                    for url in result.discovered_urls
+                ]
+            )
 
 
 def run_crawler(ctx: Context, options: CrawlOptions) -> None:
@@ -361,6 +380,7 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
 
     if options.worker_threads <= 1:
         _worker_thread(0, options, queue, ctx, blocked_normalized)
+        ctx.io.flush_all()
         return
 
     with ThreadPoolExecutor(max_workers=options.worker_threads) as executor:
@@ -372,3 +392,5 @@ def run_crawler(ctx: Context, options: CrawlOptions) -> None:
         ]
         for future in futures:
             future.result()
+
+    ctx.io.flush_all()

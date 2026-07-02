@@ -28,16 +28,20 @@ from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
 from stores.nlp import NLPImpl
 from stores.rejestr import Rejestr
+from stores.storage import BatchClient
 from stores.storage import Client as CloudStorageClient
 from stores.utils import UtilsImpl
 from stores.web import WebImpl
 
 
 class Conductor(IO):
-    def __init__(self, dumper: EntityDumper):
+    def __init__(self, dumper: EntityDumper, batch_upload=False):
         self.firestore = FirestoreIO()
         self.dumper = dumper
-        self.storage = CloudStorageClient()
+        if batch_upload:
+            self.storage = BatchClient()
+        else:
+            self.storage = CloudStorageClient()
         self.mirror = CompressedMirror()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
@@ -135,6 +139,16 @@ class Conductor(IO):
             source, data, content_type, include_query=include_query, verbose=verbose
         )
 
+    def batch_upload(
+        self, source, data, content_type, include_query=False, verbose=True
+    ):
+        self.storage.batch_upload(
+            source, data, content_type, include_query=include_query, verbose=verbose
+        )
+
+    def flush_all(self):
+        self.storage.flush_all()
+
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)
 
@@ -158,11 +172,12 @@ def setup_context(
     use_nlp: bool = False,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
+    batch_upload: bool = False,
 ) -> tuple[Context, EntityDumper]:
     if policy is None:
         policy = ProcessPolicy.with_default()
     dumper = EntityDumper()
-    conductor = Conductor(dumper)
+    conductor = Conductor(dumper, batch_upload=batch_upload)
     rejestr_io = None
     if use_rejestr_io:
         print("Initializing RejestrIO as a data source")

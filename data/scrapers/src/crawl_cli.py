@@ -91,7 +91,7 @@ def _build_parser() -> ArgumentParser:
         default=None,
         metavar="N",
         help="Set priority=0 for pending URLs on domains with fewer than N done links, "
-             "so that done + bumped = N per domain. Then exit.",
+        "so that done + bumped = N per domain. Then exit.",
     )
     return parser
 
@@ -137,9 +137,7 @@ def _read_csv_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 def _load_seed_urls(path: Path) -> list[str]:
     fieldnames, rows = _read_csv_rows(path)
     if "Domena" not in fieldnames:
-        raise ValueError(
-            f"{path} must have a 'Domena' column. Got: {fieldnames}"
-        )
+        raise ValueError(f"{path} must have a 'Domena' column. Got: {fieldnames}")
     urls = [row.get("Domena", "").strip() for row in rows if row.get("Domena")]
     if not urls:
         raise ValueError(f"{path} has no URLs to seed.")
@@ -150,9 +148,7 @@ def _load_blocked_domains(path: Path) -> list[BlockedDomain]:
     fieldnames, rows = _read_csv_rows(path)
     expected = ["Domena", "Powód"]
     if fieldnames != expected:
-        raise ValueError(
-            f"{path} must have columns {expected}. Got: {fieldnames}"
-        )
+        raise ValueError(f"{path} must have columns {expected}. Got: {fieldnames}")
     blocked: list[BlockedDomain] = []
     for row in rows:
         domain = row.get("Domena", "").strip()
@@ -206,7 +202,9 @@ def main() -> None:  # noqa: PLR0915
         ctx, dumper = setup_context(False, crawl_queue=queue)
         try:
             run_parse(
-                queue, ctx, args.parse_limit,
+                queue,
+                ctx,
+                args.parse_limit,
                 worker_processes=worker_processes,
             )
         finally:
@@ -228,7 +226,8 @@ def main() -> None:  # noqa: PLR0915
                 logging.info("  %s: +%d", domain, count)
             logging.info(
                 "Bumped %d URLs to priority 0 (target=%d).",
-                bumped, args.bump_small_domains,
+                bumped,
+                args.bump_small_domains,
             )
         finally:
             pg_client.close()
@@ -236,9 +235,7 @@ def main() -> None:  # noqa: PLR0915
 
     if args.reprioritize:
         seed_urls = _load_seed_urls(args.seed) if args.seed else []
-        scorer = get_scoring_function(
-            args.url_scoring_function, frozenset(seed_urls)
-        )
+        scorer = get_scoring_function(args.url_scoring_function, frozenset(seed_urls))
         priority_fn = lambda url: max(0, min(100, 100 - scorer(url)))  # noqa: E731
         pg_client = PostgresClient.from_env(max_size=1)
         queue = PostgresCrawlQueue(pg_client)
@@ -284,7 +281,7 @@ def main() -> None:  # noqa: PLR0915
         if args.profile_path
         else None
     )
-    ctx, _ = setup_context(False, crawl_queue=queue)
+    ctx, _ = setup_context(False, crawl_queue=queue, batch_upload=True)
     try:
         with profile_scope(profile_enabled, profile_path):
             run_crawler(ctx, options)

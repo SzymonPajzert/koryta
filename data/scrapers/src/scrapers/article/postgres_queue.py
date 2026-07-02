@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
 
 from entities.util import NormalizedParse
 from scrapers.stores import (
@@ -42,18 +42,22 @@ class PostgresClient:
         *,
         max_size: int = 4,
     ):
-        self._pool = ConnectionPool(
-            kwargs={
-                "host": host,
-                "port": port,
-                "dbname": database,
-                "user": user,
-                "password": password,
-            },
-            min_size=1,
-            max_size=max_size,
-            open=True,
-        )
+        try:
+            self._pool = ConnectionPool(
+                kwargs={
+                    "host": host,
+                    "port": port,
+                    "dbname": database,
+                    "user": user,
+                    "password": password,
+                },
+                timeout=5,
+                min_size=1,
+                max_size=max_size,
+                open=True,
+            )
+        except PoolTimeout as e:
+            raise ConnectionError("Start postgres server with docker compose up") from e
 
     @contextmanager
     def transaction(self):

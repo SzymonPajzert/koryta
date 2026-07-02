@@ -1,9 +1,18 @@
+import argparse
+import atexit
+import io
+import tarfile
+import threading
+from collections import defaultdict
 from datetime import datetime
+from functools import cached_property
 from typing import Generator
 from zoneinfo import ZoneInfo
 
 import google.cloud.storage as storage
+from duckdb import NotImplementedException
 from tqdm import tqdm
+from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
 from scrapers.stores import IO, CloudStorage, DownloadableFile
@@ -143,6 +152,19 @@ class Client:
             print(f"An error occurred: {e}")
             return None
 
+    def batch_upload(
+        self,
+        source: NormalizedParse | str,
+        data,
+        content_type,
+        include_query=False,
+        verbose=True,
+    ) -> None:
+        raise NotImplementedException("Use BatchClient instead")
+
+    def flush_all(self) -> None:
+        raise NotImplementedException("Use BatchClient instead")
+
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         """Lists available values for a given namespace (e.g. 'date')."""
         bucket = self.storage_client.bucket(BUCKET)
@@ -168,3 +190,117 @@ class Client:
                     values.add(v)
 
         return sorted(list(values))
+
+
+class BatchClient(Client):
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--max_batch_size",
+            help="Size of the data to be cached until it's uploaded",
+            default=50 * 1024 * 1024,
+            required=False,
+        )
+        args, _ = parser.parse_known_args()
+        return args
+
+    def __init__(self):
+        super().__init__()
+        self._batch_locks = defaultdict(threading.Lock)
+        self._batches = {}
+        self._global_lock = threading.Lock()
+        atexit.register(self.flush_all)
+
+    def batch_upload(
+        self,
+        source: NormalizedParse | str,
+        data,
+        content_type,
+        include_query=False,
+        verbose=True,
+    ):
+        if isinstance(source, str):
+            source = NormalizedParse.parse(source)
+
+        hostname = source.hostname
+        date = datetime.now(warsaw_tz).strftime("%Y-%m-%d")
+        key = (hostname, date)
+
+        with self._global_lock:
+            lock = self._batch_locks[key]
+
+        with lock:
+            if key not in self._batches:
+                uid = uuid7str()
+                buf = io.BytesIO()
+                tar = tarfile.open(fileobj=buf, mode="w:gz")
+                self._batches[key] = {
+                    "uid": uid,
+                    "buffer": buf,
+                    "tar": tar,
+                    "uncompressed_size": 0,
+                    "index": [],
+                }
+
+            batch = self._batches[key]
+
+            path = source.path if source.path else "index"
+            if include_query:
+                for k, v in sorted(source.query.items(), key=lambda item: item[0]):
+                    path += f"/?{k}={v}"
+
+            rel_path = f"{source.hostname}/{path}".replace("//", "/").rstrip("/")
+
+            if isinstance(data, str):
+                data = data.encode("utf-8")
+
+            info = tarfile.TarInfo(name=rel_path)
+            info.size = len(data)
+            info.mtime = int(datetime.now(warsaw_tz).timestamp())
+
+            batch["tar"].addfile(info, io.BytesIO(data))
+            batch["index"].append(rel_path)
+            batch["uncompressed_size"] += len(data)
+
+            if batch["uncompressed_size"] >= self.args.max_batch_size:
+                self._flush_batch(key, batch)
+                del self._batches[key]
+
+    def _flush_batch(self, key, batch):
+        index_data = ("\\n".join(batch["index"]) + "\\n").encode("utf-8")
+        idx_info = tarfile.TarInfo(name="index.txt")
+        idx_info.size = len(index_data)
+        idx_info.mtime = int(datetime.now(warsaw_tz).timestamp())
+        batch["tar"].addfile(idx_info, io.BytesIO(index_data))
+
+        batch["tar"].close()
+        compressed_data = batch["buffer"].getvalue()
+
+        hostname, date = key
+        uid = batch["uid"]
+
+        destination_blob_name = f"hostname={hostname}/date={date}/uid_{uid}.tar.gz"
+        bucket = self.storage_client.bucket(BUCKET)
+        blob = bucket.blob(destination_blob_name)
+
+        try:
+            blob.upload_from_string(compressed_data, content_type="application/gzip")
+            full_path = f"gs://{BUCKET}/{destination_blob_name}"
+            print(f"Successfully uploaded batch to: {full_path}")
+        except Exception as e:
+            print(
+                f"An error occurred when batch_upload to {destination_blob_name}: {e}"
+            )
+
+    def flush_all(self):
+        with self._global_lock:
+            keys = list(self._batches.keys())
+
+        for key in keys:
+            lock = self._batch_locks[key]
+            with lock:
+                if key in self._batches:
+                    batch = self._batches[key]
+                    self._flush_batch(key, batch)
+                    del self._batches[key]

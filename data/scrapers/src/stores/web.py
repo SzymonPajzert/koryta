@@ -29,7 +29,7 @@ class WebImpl(Web):
                 # parser.parse expects list of lines.
                 # TODO fix, currently we used one cached robots.txt
                 content_bytes = ctx.io.read_data(
-                    DownloadableFile(robots_url)
+                    DownloadableFile(robots_url, full_url=True)
                 ).read_string()
                 if isinstance(content_bytes, bytes):
                     content = content_bytes.decode("utf-8")

@@ -134,6 +134,7 @@ class DownloadableFile(DataRef):
 
     url: str
     filename_fallback: str | None = None
+    full_url: bool = False
     complex_download: str | None = None
     download_lambda: typing.Callable | None = None
     binary: bool = True
@@ -149,6 +150,8 @@ class DownloadableFile(DataRef):
         """
         if self.filename_fallback is not None:
             return self.filename_fallback
+        if self.full_url:
+            return self.url.split("://")[1]
         return self.url.split("/")[-1]
 
 
@@ -231,6 +234,23 @@ class IO(metaclass=ABCMeta):
     ):
         """Uploads data to storage (e.g. GCS)."""
         raise NotImplementedError()
+
+    @abstractmethod
+    def batch_upload(
+        self,
+        source: Any,
+        data: Any,
+        content_type: str,
+        include_query=False,
+        verbose=True,
+    ):
+        """Batches data for upload (e.g. to GCS in a tar.gz)."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def flush_all(self):
+        """Flushes all pending batches."""
+        pass
 
     # TODO get rid of this - it should be just a library call
     @abstractmethod
