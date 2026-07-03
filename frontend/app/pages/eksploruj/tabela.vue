@@ -37,8 +37,36 @@
     <div class="pa-4">
       <h1 class="text-h4 mb-4">
         Eksploruj powiązania dla
-        {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
+        {{ entityName }}
       </h1>
+
+      <v-row v-if="selectedCompaniesData.length > 0" class="mb-4 mt-2">
+        <v-col
+          v-for="companyData in selectedCompaniesData"
+          :key="companyData.id"
+          cols="12"
+          md="6"
+          lg="4"
+        >
+          <v-card variant="outlined" class="h-100">
+            <v-card-title class="d-flex align-center text-wrap pb-0">
+              <v-icon
+                :icon="mdiOfficeBuildingOutline"
+                class="mr-2 flex-shrink-0"
+              />
+              <span>{{ companyData.name }}</span>
+            </v-card-title>
+            <v-card-text class="pt-2">
+              <div v-if="companyData.krsNumber" class="text-body-2">
+                <strong>KRS:</strong> {{ companyData.krsNumber }}
+              </div>
+              <div v-if="companyData.location" class="text-body-2">
+                <strong>Lokalizacja:</strong> {{ companyData.location }}
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
 
       <v-alert
         v-if="region && !company"
@@ -106,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { mdiCash } from "@mdi/js";
+import { mdiCash, mdiOfficeBuildingOutline } from "@mdi/js";
 import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
@@ -225,6 +253,24 @@ const company = computed<[string, string] | undefined>(() => {
     }
   }
   return undefined;
+});
+
+const selectedCompaniesData = computed(() => {
+  if (!filterKrs.value || !places.value) return [];
+  const selected = [];
+  const krsSet = new Set(filterKrs.value);
+  for (const [id, place] of Object.entries(places.value)) {
+    if (place.krsNumber && krsSet.has(place.krsNumber)) {
+      selected.push({ id, ...place });
+    }
+  }
+  return selected;
+});
+
+const entityName = computed(() => {
+  if (filterKrs.value) return "wybranych firm";
+  if (region.value) return region.value[1];
+  return "aktualnego wyszukiwania";
 });
 
 const filterVisibility = computed<"all" | "public" | "private">({

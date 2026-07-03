@@ -163,6 +163,8 @@ export type PersonRich = Person & {
 export interface Company extends Omit<Node, "type"> {
   type: "place";
   krsNumber?: string;
+  // TODO populate this field
+  location?: string;
 }
 
 export interface Article extends Omit<Node, "type"> {
