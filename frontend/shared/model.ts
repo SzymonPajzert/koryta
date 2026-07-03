@@ -246,4 +246,7 @@ export type Note = {
 
   // Users can easily add sources they encounter and annotate what they found interesting in them.
   sources?: NoteSource[];
+
+  adminStatus?: "resolved" | "unresolved";
+  adminType?: string;
 };
