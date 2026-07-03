@@ -395,6 +395,11 @@ def _cache_valid(
         and cached.get("article_content_hash") == record.get("article_content_hash")
         and cached.get("prompt_version") == PROMPT_VERSION
         and cached.get("model") == model
+        and all(
+            "justification_is_in_text" in fact
+            for fact in cached.get("extracted_facts") or []
+            if isinstance(fact, dict)
+        )
     )
 
 
@@ -423,6 +428,7 @@ def _facts_row(
         facts = _normalize_markdown_response(
             str(record.get("url") or ""),
             response_text,
+            str(record.get("article_content") or ""),
         )
         return {
             "url": record["url"],
@@ -520,9 +526,14 @@ def _extract_markdown_facts(text: str) -> list[dict[str, str]]:
     return facts
 
 
-def _coerce_fact(url: str, raw_fact: dict[str, Any]) -> ArticleFact | None:
+def _coerce_fact(
+    url: str,
+    raw_fact: dict[str, Any],
+    article_text: str,
+) -> ArticleFact | None:
     fact_type = raw_fact.get("fact_type")
     justification = str(raw_fact.get("justification") or "").strip()
+    justification_is_in_text = bool(justification and justification in article_text)
     if fact_type == "employment":
         person = str(raw_fact.get("person") or "").strip()
         organization = str(raw_fact.get("organization") or "").strip()
@@ -541,6 +552,7 @@ def _coerce_fact(url: str, raw_fact: dict[str, Any]) -> ArticleFact | None:
         return EmploymentFact(
             url=url,
             justification=justification,
+            justification_is_in_text=justification_is_in_text,
             person=person,
             organization=organization,
             role=role_text or None,
@@ -556,6 +568,7 @@ def _coerce_fact(url: str, raw_fact: dict[str, Any]) -> ArticleFact | None:
         return PartyMembershipFact(
             url=url,
             justification=justification,
+            justification_is_in_text=justification_is_in_text,
             person=person,
             party=party,
         )
@@ -583,6 +596,7 @@ def _coerce_fact(url: str, raw_fact: dict[str, Any]) -> ArticleFact | None:
         return PersonalRelationFact(
             url=url,
             justification=justification,
+            justification_is_in_text=justification_is_in_text,
             subject=subject,
             object=object_,
             relation=relation_text or None,
@@ -590,10 +604,14 @@ def _coerce_fact(url: str, raw_fact: dict[str, Any]) -> ArticleFact | None:
     return None
 
 
-def _normalize_markdown_response(url: str, text: str) -> list[dict[str, Any]]:
+def _normalize_markdown_response(
+    url: str,
+    text: str,
+    article_text: str,
+) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
     for raw_fact in _extract_markdown_facts(text):
-        fact = _coerce_fact(url, raw_fact)
+        fact = _coerce_fact(url, raw_fact, article_text)
         if fact is not None:
             facts.append(fact_to_dict(fact))
     return facts

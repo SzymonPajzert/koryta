@@ -10,6 +10,7 @@ from typing import Any
 class ArticleFact:
     url: str
     justification: str
+    justification_is_in_text: bool
 
 
 @dataclass(frozen=True)
