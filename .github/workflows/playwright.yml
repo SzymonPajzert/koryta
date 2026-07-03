@@ -42,7 +42,7 @@ jobs:
           java-version: "21"
 
       - name: Cache Firebase emulators
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
           key: ${{ runner.os }}-firebase-emulators-${{ hashFiles('firebase.json') }}
