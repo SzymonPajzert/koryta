@@ -163,6 +163,7 @@ def setup_context(
     llm_ports: list[int] | None = None,
     llm_model: str = "Qwen/Qwen3-14B",
     llm_per_port_concurrency: int = 4,
+    llm_request_timeout_seconds: int = 600,
     article_workers: int = 4,
     article_facts_min_koryciarski_score: int | None = None,
     policy: ProcessPolicy | None = None,
@@ -178,6 +179,7 @@ def setup_context(
                 model=llm_model,
                 ports=tuple(llm_ports or list(range(6000, 6016))),
                 per_port_concurrency=llm_per_port_concurrency,
+                request_timeout_seconds=llm_request_timeout_seconds,
             )
         )
     conductor = Conductor(dumper, llm=llm)

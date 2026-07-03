@@ -1,6 +1,9 @@
 import asyncio
+import difflib
 import json
 import re
+import unicodedata
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -22,10 +25,11 @@ from scrapers.article.pipelines.pipeline_utils import llm_model
 from scrapers.stores import Context, LLMRequest, Pipeline
 from stores.config import VERSIONED_DIR
 
-PROMPT_VERSION = 3
+PROMPT_VERSION = 7
 TEXT_LIMIT = 100000
-MAX_TOKENS = 1000
+MAX_TOKENS = 20000
 TEMPERATURE = 0.1
+JUSTIFICATION_FUZZY_THRESHOLD = 0.85
 
 _PARSED_FILE = Path(VERSIONED_DIR) / "article_parsed" / "article_parsed.jsonl"
 _SCORES_FILE = (
@@ -35,8 +39,12 @@ _SCORES_FILE = (
 )
 _FINAL_OUTPUT_FILE = Path(VERSIONED_DIR) / "article_facts" / "article_facts.jsonl"
 _TEMP_OUTPUT_FILE = Path(VERSIONED_DIR) / "article_facts" / "article_facts.jsonl.tmp"
+_THINK_BLOCK_RE = re.compile(r"<think>(.*?)</think>", flags=re.DOTALL)
+_RUN_RESPONSE_THINK_CHARS = 0
+_RUN_RESPONSE_THINK_BLOCKS = 0
 
 _PROMPT = (
+    "Jesteś profesjonalnym, obiektywnym dziennikarzem analizującym tekst źródłowy. "
     "Wyciągnij tylko fakty bezpośrednio poparte główną treścią artykułu. "
     "Interesują nas wyłącznie trzy typy faktów:\n"
     "1. employment — ktoś pracuje, pełni funkcję albo zajmuje stanowisko "
@@ -75,12 +83,18 @@ _PROMPT = (
     "180 znaków. Nie parafrazuj justification. Nie pisz: tekst mówi, artykuł "
     "podaje, jawnie podano, ..., ani własnych wyjaśnień. Jeśli nie możesz podać "
     "krótkiego dokładnego cytatu z artykułu, ustaw justification=.\n\n"
-    "Zwróć końcową odpowiedź jako krótki markdown, jedna linia na fakt.\n"
-    "Format każdej linii:\n"
-    "- employment | person=... | organization=... | role=... | justification=...\n"
-    "- party_membership | person=... | party=... | justification=...\n"
-    "- personal_relation | subject=... | object=... | relation=... | "
-    "justification=...\n\n"
+    "Zanim zwrócisz fakty, musisz krótko pomyśleć jawnie w sekcji "
+    "<think>...</think>. Sekcja <think> ma mieć 3-8 krótkich punktów: "
+    "kandydaci na fakty, dowody w tekście, odrzucone kandydaty i powód "
+    "odrzucenia. Nie umieszczaj w <think> finalnych linii faktów. "
+    "Po </think> napisz osobną linię `facts:` i dopiero pod nią zwróć końcową "
+    "odpowiedź jako krótki markdown, jedna linia na fakt.\n"
+    "Format każdej linii. Najpierw zawsze podaj justification, potem typ faktu, "
+    "potem pola faktu:\n"
+    "- justification=... | employment | person=... | organization=... | role=...\n"
+    "- justification=... | party_membership | person=... | party=...\n"
+    "- justification=... | personal_relation | subject=... | object=... | "
+    "relation=...\n\n"
     "Jeśli nie ma faktów, zwróć pustą odpowiedź albo sam nagłówek `facts:`.\n"
     "Nie zgaduj. Nie dopisuj faktów spoza tekstu.\n\n"
     "Artykuł:\n{text}"
@@ -132,6 +146,7 @@ class ArticleExtractedFacts(Pipeline[ArticleFacts]):
         return df
 
     def process(self, ctx: Context):
+        _reset_run_think_stats()
         if ctx.llm is None:
             raise ValueError("ArticleExtractedFacts requires Context.llm")
         if not _PARSED_FILE.exists():
@@ -369,7 +384,8 @@ def _emit_fact_response(
     model: str,
 ) -> None:
     if isinstance(response, Exception):
-        _emit_facts(ctx, _error_row(record, model, str(response)))
+        error = str(response) or f"{type(response).__name__}: {response!r}"
+        _emit_facts(ctx, _error_row(record, model, error))
     else:
         _emit_facts(ctx, _facts_row(record, response.content, model, response))
 
@@ -382,6 +398,7 @@ def _fact_request(record: dict[str, Any], model: str) -> LLMRequest:
         max_tokens=MAX_TOKENS,
         temperature=TEMPERATURE,
         model=model,
+        enable_thinking=True,
     )
 
 
@@ -395,6 +412,9 @@ def _cache_valid(
         and cached.get("article_content_hash") == record.get("article_content_hash")
         and cached.get("prompt_version") == PROMPT_VERSION
         and cached.get("model") == model
+        and "response_think_chars" in cached
+        and "response_think_blocks" in cached
+        and "response_think_text" in cached
         and all(
             "justification_is_in_text" in fact
             for fact in cached.get("extracted_facts") or []
@@ -415,6 +435,9 @@ def _facts_row_from_cache(cached: dict[str, Any]) -> dict[str, Any]:
         "prompt_tokens": int(cached.get("prompt_tokens") or 0),
         "completion_tokens": int(cached.get("completion_tokens") or 0),
         "total_tokens": int(cached.get("total_tokens") or 0),
+        "response_think_chars": int(cached.get("response_think_chars") or 0),
+        "response_think_blocks": int(cached.get("response_think_blocks") or 0),
+        "response_think_text": str(cached.get("response_think_text") or ""),
     }
 
 
@@ -424,6 +447,9 @@ def _facts_row(
     model: str,
     response,
 ) -> dict[str, Any]:
+    think_text = _think_text(response_text)
+    think_chars, think_blocks = _think_stats_from_text(think_text)
+    _add_run_think_stats(think_chars, think_blocks)
     try:
         facts = _normalize_markdown_response(
             str(record.get("url") or ""),
@@ -441,9 +467,20 @@ def _facts_row(
             "prompt_tokens": response.prompt_tokens,
             "completion_tokens": response.completion_tokens,
             "total_tokens": response.total_tokens,
+            "response_think_chars": think_chars,
+            "response_think_blocks": think_blocks,
+            "response_think_text": think_text,
         }
     except Exception as exc:
-        return _error_row(record, model, str(exc), response=response)
+        return _error_row(
+            record,
+            model,
+            str(exc),
+            response=response,
+            think_chars=think_chars,
+            think_blocks=think_blocks,
+            think_text=think_text,
+        )
 
 
 def _error_row(
@@ -451,6 +488,9 @@ def _error_row(
     model: str,
     error: str,
     response=None,
+    think_chars: int = 0,
+    think_blocks: int = 0,
+    think_text: str = "",
 ) -> dict[str, Any]:
     return {
         "url": record.get("url"),
@@ -463,6 +503,9 @@ def _error_row(
         "prompt_tokens": int(getattr(response, "prompt_tokens", 0) or 0),
         "completion_tokens": int(getattr(response, "completion_tokens", 0) or 0),
         "total_tokens": int(getattr(response, "total_tokens", 0) or 0),
+        "response_think_chars": think_chars,
+        "response_think_blocks": think_blocks,
+        "response_think_text": think_text,
     }
 
 
@@ -483,16 +526,41 @@ def _emit_facts(ctx: Context, row: dict[str, Any]) -> None:
             prompt_tokens=int(row.get("prompt_tokens") or 0),
             completion_tokens=int(row.get("completion_tokens") or 0),
             total_tokens=int(row.get("total_tokens") or 0),
+            response_think_chars=int(row.get("response_think_chars") or 0),
+            response_think_blocks=int(row.get("response_think_blocks") or 0),
+            response_think_text=str(row.get("response_think_text") or ""),
         ),
         [],
     )
 
 
 def _strip_formatting(text: str) -> str:
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    text = _THINK_BLOCK_RE.sub("", text).strip()
     text = re.sub(r"^```[a-z]*\n?", "", text.strip())
     text = re.sub(r"\n?```$", "", text.strip())
     return text.strip()
+
+
+def _think_text(text: str) -> str:
+    return "\n\n".join(block.strip() for block in _THINK_BLOCK_RE.findall(text))
+
+
+def _think_stats_from_text(text: str) -> tuple[int, int]:
+    if not text:
+        return 0, 0
+    return len(text), len([block for block in text.split("\n\n") if block.strip()])
+
+
+def _add_run_think_stats(chars: int, blocks: int) -> None:
+    global _RUN_RESPONSE_THINK_CHARS, _RUN_RESPONSE_THINK_BLOCKS
+    _RUN_RESPONSE_THINK_CHARS += chars
+    _RUN_RESPONSE_THINK_BLOCKS += blocks
+
+
+def _reset_run_think_stats() -> None:
+    global _RUN_RESPONSE_THINK_CHARS, _RUN_RESPONSE_THINK_BLOCKS
+    _RUN_RESPONSE_THINK_CHARS = 0
+    _RUN_RESPONSE_THINK_BLOCKS = 0
 
 
 def _split_fact_line(line: str) -> dict[str, str] | None:
@@ -504,11 +572,21 @@ def _split_fact_line(line: str) -> dict[str, str] | None:
     parts = [part.strip() for part in line.split("|")]
     if not parts:
         return None
-    fact_type = parts[0].strip().lower()
-    if fact_type not in {"employment", "party_membership", "personal_relation"}:
+    fact_types = {"employment", "party_membership", "personal_relation"}
+    fact_type = ""
+    fact_type_index = -1
+    for index, part in enumerate(parts):
+        candidate = part.strip().lower()
+        if candidate in fact_types:
+            fact_type = candidate
+            fact_type_index = index
+            break
+    if not fact_type:
         return None
     parsed: dict[str, str] = {"fact_type": fact_type}
-    for part in parts[1:]:
+    for index, part in enumerate(parts):
+        if index == fact_type_index:
+            continue
         if "=" not in part:
             continue
         key, value = part.split("=", 1)
@@ -533,7 +611,10 @@ def _coerce_fact(
 ) -> ArticleFact | None:
     fact_type = raw_fact.get("fact_type")
     justification = str(raw_fact.get("justification") or "").strip()
-    justification_is_in_text = bool(justification and justification in article_text)
+    justification_is_in_text = _justification_is_supported(
+        justification,
+        article_text,
+    )
     if fact_type == "employment":
         person = str(raw_fact.get("person") or "").strip()
         organization = str(raw_fact.get("organization") or "").strip()
@@ -604,6 +685,113 @@ def _coerce_fact(
     return None
 
 
+def _justification_is_supported(justification: str, article_text: str) -> bool:
+    justification = justification.strip()
+    if not justification:
+        return False
+    if justification in article_text:
+        return True
+    if _normalized_substring(justification, article_text):
+        return True
+
+    stripped = _strip_edge_ellipsis(justification)
+    if stripped and stripped != justification and stripped in article_text:
+        return True
+    if stripped and stripped != justification and _normalized_substring(
+        stripped,
+        article_text,
+    ):
+        return True
+
+    pattern = _justification_wildcard_pattern(stripped or justification)
+    if pattern is not None and re.search(pattern, article_text, re.DOTALL) is not None:
+        return True
+
+    return _fuzzy_justification_match(stripped or justification, article_text)
+
+
+def _justification_wildcard_pattern(justification: str) -> str | None:
+    placeholders = ("[...]", "[…]", "…")
+    if not any(placeholder in justification for placeholder in placeholders):
+        return None
+
+    parts = re.split(r"(?:\[\.\.\.\]|\[…\]|…)", justification)
+    escaped = [re.escape(part.strip()) for part in parts if part.strip()]
+    if not escaped:
+        return None
+    return r".{0,1000}?".join(escaped)
+
+
+def _strip_edge_ellipsis(justification: str) -> str:
+    without_prefix = re.sub(r"^(?:\.\.\.|…)\s*", "", justification)
+    return re.sub(r"\s*(?:\.\.\.|…)$", "", without_prefix).strip()
+
+
+def _normalized_substring(needle: str, haystack: str) -> bool:
+    normalized_needle = _normalize_justification_text(needle)
+    return bool(
+        normalized_needle
+        and normalized_needle in _normalize_justification_text(haystack)
+    )
+
+
+def _fuzzy_justification_match(justification: str, article_text: str) -> bool:
+    needle_tokens = _normalize_justification_text(justification).split()
+    if len(needle_tokens) < 3:
+        return False
+
+    article_tokens = _normalize_justification_text(article_text).split()
+    if len(article_tokens) < len(needle_tokens):
+        return False
+
+    needle = " ".join(needle_tokens)
+    article_positions_by_token: dict[str, list[int]] = defaultdict(list)
+    for index, token in enumerate(article_tokens):
+        article_positions_by_token[token].append(index)
+
+    anchor_offsets = [
+        (offset, token)
+        for offset, token in enumerate(needle_tokens)
+        if len(token) >= 4 and token in article_positions_by_token
+    ]
+    if not anchor_offsets:
+        anchor_offsets = [
+            (offset, token)
+            for offset, token in enumerate(needle_tokens)
+            if token in article_positions_by_token
+        ]
+    if not anchor_offsets:
+        return False
+
+    window_size = len(needle_tokens)
+    candidate_starts: set[int] = set()
+    for offset, token in anchor_offsets:
+        for article_position in article_positions_by_token[token]:
+            start = article_position - offset
+            if 0 <= start <= len(article_tokens) - window_size:
+                candidate_starts.add(start)
+
+    for start in candidate_starts:
+        candidate = " ".join(article_tokens[start : start + window_size])
+        if (
+            difflib.SequenceMatcher(None, needle, candidate).ratio()
+            >= JUSTIFICATION_FUZZY_THRESHOLD
+        ):
+            return True
+    return False
+
+
+def _normalize_justification_text(text: str) -> str:
+    text = "".join(
+        char
+        for char in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(char)
+    )
+    text = text.lower()
+    text = re.sub(r"[^\w]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _normalize_markdown_response(
     url: str,
     text: str,
@@ -627,4 +815,9 @@ def _print_llm_usage(ctx: Context) -> None:
         f"{int(getattr(llm, 'prompt_tokens', 0) or 0)} prompt tokens, "
         f"{int(getattr(llm, 'completion_tokens', 0) or 0)} completion tokens, "
         f"{int(getattr(llm, 'total_tokens', 0) or 0)} total tokens"
+    )
+    print(
+        "LLM think usage: "
+        f"{_RUN_RESPONSE_THINK_BLOCKS} blocks, "
+        f"{_RUN_RESPONSE_THINK_CHARS} chars"
     )

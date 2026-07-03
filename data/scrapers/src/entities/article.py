@@ -98,3 +98,6 @@ class ArticleFacts:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    response_think_chars: int = 0
+    response_think_blocks: int = 0
+    response_think_text: str = ""

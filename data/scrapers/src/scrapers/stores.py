@@ -338,6 +338,7 @@ class LLMRequest:
     max_tokens: int
     temperature: float = 0
     model: str | None = None
+    enable_thinking: bool = False
 
 
 @dataclass(frozen=True)

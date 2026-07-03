@@ -92,6 +92,12 @@ def get_args():
         help="Concurrent requests allowed per LLM port.",
     )
     parser.add_argument(
+        "--llm-request-timeout-seconds",
+        type=int,
+        default=600,
+        help="HTTP timeout for each LLM request.",
+    )
+    parser.add_argument(
         "--article-workers",
         type=int,
         default=4,
@@ -143,6 +149,7 @@ def main():
         llm_ports=_parse_ports(args.llm_ports),
         llm_model=args.llm_model,
         llm_per_port_concurrency=args.llm_per_port_concurrency,
+        llm_request_timeout_seconds=args.llm_request_timeout_seconds,
         article_workers=args.article_workers,
         article_facts_min_koryciarski_score=(
             args.article_facts_min_koryciarski_score

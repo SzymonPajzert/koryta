@@ -2,17 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-import re
 import resource
 from dataclasses import dataclass
 
 import aiohttp
 
 from scrapers.stores import LLM, LLMRequest, LLMResponse, LLMResponsePool
-
-
-def strip_thinking(text: str) -> str:
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 @dataclass(frozen=True)
@@ -106,7 +101,9 @@ class OpenAICompatibleMultiPortLLM(LLM):
             "temperature": request.temperature,
             "max_tokens": request.max_tokens,
             "chat_template_kwargs": {
-                "enable_thinking": self.config.enable_thinking,
+                "enable_thinking": (
+                    request.enable_thinking or self.config.enable_thinking
+                ),
             },
         }
         async with self._semaphores[port]:
@@ -119,7 +116,7 @@ class OpenAICompatibleMultiPortLLM(LLM):
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-        content = strip_thinking(data["choices"][0]["message"]["content"])
+        content = data["choices"][0]["message"]["content"]
         usage = data.get("usage") or {}
         prompt_tokens = int(usage.get("prompt_tokens") or 0)
         completion_tokens = int(usage.get("completion_tokens") or 0)
