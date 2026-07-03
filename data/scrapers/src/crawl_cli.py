@@ -11,8 +11,8 @@ from pathlib import Path
 from uuid import uuid4
 
 from conductor import setup_context
-from external.url_store_client import UrlStoreClient
 from entities.util import NormalizedParse
+from external.url_store_client import UrlStoreClient
 from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
