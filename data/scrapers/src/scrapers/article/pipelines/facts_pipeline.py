@@ -22,7 +22,7 @@ from scrapers.article.pipelines.pipeline_utils import llm_model
 from scrapers.stores import Context, LLMRequest, Pipeline
 from stores.config import VERSIONED_DIR
 
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 TEXT_LIMIT = 100000
 MAX_TOKENS = 1000
 TEMPERATURE = 0.1
@@ -46,16 +46,29 @@ _PROMPT = (
     "3. personal_relation — ktoś jest spokrewniony z kimś albo pozostaje "
     "z kimś w jednoznacznie opisanej bliskiej relacji osobistej\n\n"
     "Jeśli w tekście nie ma takich faktów, zwróć pustą listę.\n\n"
-    "Zwróć maksymalnie 8 faktów.\n"
     "Ignoruj komentarze czytelników, podpisy zdjęć, stopki, wezwania do głosowania, "
     "listy kandydatów, listy uczestników, listy radnych, listy sygnatariuszy, "
     "zaproszenia na wydarzenia i proste relacje z obecności na spotkaniu.\n"
+    "Jeśli tekst jest listą teaserów, stroną tagu albo zbiorem wielu krótkich "
+    "zajawek, zwróć pustą odpowiedź.\n"
+    "Każdy fakt musi dotyczyć realnej, nazwanej osoby. Nie zwracaj faktów dla "
+    "osób opisanych tylko jako: urzędnik, dyrektor, prezes, podejrzany, "
+    "biznesmen, osoba, ... albo brak danych.\n"
     "Nie traktuj kandydowania w wyborach, poparcia wyborczego, głosowania na kogoś, "
     "udziału w spotkaniu, wystąpienia publicznego ani przynależności do komitetu "
     "wyborczego jako employment.\n"
+    "Nie traktuj bycia podejrzanym, oskarżonym, zatrzymanym, autorem, rozmówcą "
+    "ani osobą cytowaną jako employment.\n"
     "Nie traktuj komitetu wyborczego jako partii politycznej.\n"
+    "Nie zwracaj party_membership, jeśli tekst mówi tylko, że partii nie podano, "
+    "osoba jest bezpartyjna, kandydowała z listy albo jest z nią luźno związana.\n"
     "Nie traktuj poparcia, krytyki, wspólnego wystąpienia ani cytowania jednej osoby "
-    "przez drugą jako personal_relation.\n\n"
+    "przez drugą jako personal_relation.\n"
+    "Personal_relation zwracaj tylko dla rodziny, małżeństwa, partnerstwa albo "
+    "wyraźnie opisanej bliskiej relacji osobistej. Nie zwracaj relacji "
+    "zawodowych, przestępczych, korupcyjnych ani współpracy.\n"
+    "Nie zwracaj placeholderów ani faktów negatywnych typu person=..., "
+    "party=nie podano, organization=nieokreślona.\n\n"
     "Zwróć końcową odpowiedź jako krótki markdown, jedna linia na fakt.\n"
     "Format każdej linii:\n"
     "- employment | person=... | organization=... | role=... | justification=...\n"
@@ -127,7 +140,16 @@ class ArticleExtractedFacts(Pipeline[ArticleFacts]):
         _prepare_temp_output()
         model = llm_model(ctx)
         records = _extractable_records(_PARSED_FILE, _SCORES_FILE)
-        asyncio.run(_extract_records(ctx, records, existing, model=model))
+        min_score = getattr(ctx, "article_facts_min_koryciarski_score", None)
+        asyncio.run(
+            _extract_records(
+                ctx,
+                records,
+                existing,
+                model=model,
+                min_score=min_score,
+            )
+        )
         _print_llm_usage(ctx)
         return pd.DataFrame()
 
@@ -174,7 +196,7 @@ def _existing_facts_cache_from_files(*paths: Path) -> dict[str, dict[str, Any]]:
 
 
 def _extractable_records(parsed_path: Path, scores_path: Path) -> list[dict[str, Any]]:
-    article_urls = _article_urls_from_scores(scores_path)
+    article_scores = _article_scores_by_url(scores_path)
     latest: dict[str, dict[str, Any]] = {}
     with parsed_path.open("r", encoding="utf-8") as handle:
         for line in tqdm(handle, desc="Reading parsed articles", unit="row"):
@@ -186,7 +208,7 @@ def _extractable_records(parsed_path: Path, scores_path: Path) -> list[dict[str,
             except Exception:
                 continue
             url = row.get("url")
-            if not isinstance(url, str) or url not in article_urls:
+            if not isinstance(url, str) or url not in article_scores:
                 continue
             if row.get("parse_status") != "ok":
                 continue
@@ -197,12 +219,13 @@ def _extractable_records(parsed_path: Path, scores_path: Path) -> list[dict[str,
                 and isinstance(content, str)
                 and content.strip()
             ):
+                row["koryciarski_llm_score"] = article_scores[url]
                 latest[url] = row
     return list(latest.values())
 
 
-def _article_urls_from_scores(path: Path) -> set[str]:
-    urls: set[str] = set()
+def _article_scores_by_url(path: Path) -> dict[str, int]:
+    scores: dict[str, int] = {}
     with path.open("r", encoding="utf-8") as handle:
         for line in tqdm(handle, desc="Reading scores", unit="row"):
             raw = line.strip()
@@ -215,9 +238,26 @@ def _article_urls_from_scores(path: Path) -> set[str]:
             if row.get("llm_is_article") is not True:
                 continue
             url = row.get("url")
-            if isinstance(url, str):
-                urls.add(url)
-    return urls
+            score = _score_from_row(row)
+            if isinstance(url, str) and score is not None:
+                scores[url] = score
+    return scores
+
+
+def _score_from_row(row: dict[str, Any]) -> int | None:
+    raw_score = row.get("koryciarski_llm_score")
+    if isinstance(raw_score, bool):
+        return None
+    if isinstance(raw_score, int):
+        return raw_score
+    if isinstance(raw_score, float):
+        return int(raw_score)
+    if isinstance(raw_score, str) and raw_score.strip():
+        try:
+            return int(raw_score)
+        except Exception:
+            return None
+    return None
 
 
 async def _extract_records(
@@ -226,11 +266,15 @@ async def _extract_records(
     existing: dict[str, dict[str, Any]],
     *,
     model: str,
+    min_score: int | None,
 ) -> None:
     assert ctx.llm is not None
     await ctx.llm.check_health()
     pending: dict[int, dict[str, Any]] = {}
-    uncached = _emit_cached_facts(ctx, records, existing, model)
+    uncached = _filter_uncached_fact_records(
+        _emit_cached_facts(ctx, records, existing, model),
+        min_score,
+    )
 
     with tqdm(
         total=len(uncached),
@@ -264,6 +308,31 @@ async def _extract_records(
                     model,
                 )
                 bar.update(1)
+
+
+def _filter_uncached_fact_records(
+    records: list[dict[str, Any]],
+    min_score: int | None,
+) -> list[dict[str, Any]]:
+    if min_score is None:
+        return records
+    filtered = [
+        record
+        for record in records
+        if _record_meets_min_score(record, min_score)
+    ]
+    skipped = len(records) - len(filtered)
+    if skipped:
+        print(
+            "Skipped uncached article facts below koryciarski score "
+            f"{min_score}: {skipped}"
+        )
+    return filtered
+
+
+def _record_meets_min_score(record: dict[str, Any], min_score: int) -> bool:
+    score = _score_from_row(record)
+    return score is not None and score >= min_score
 
 
 def _emit_cached_facts(

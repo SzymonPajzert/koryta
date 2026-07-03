@@ -97,6 +97,15 @@ def get_args():
         default=4,
         help="Parallel workers for article parsing pipelines.",
     )
+    parser.add_argument(
+        "--article-facts-min-koryciarski-score",
+        type=int,
+        default=None,
+        help=(
+            "Only run ArticleExtractedFacts LLM extraction for uncached articles "
+            "with koryciarski_llm_score >= N."
+        ),
+    )
     args, _ = parser.parse_known_args()
     return args
 
@@ -135,13 +144,19 @@ def main():
         llm_model=args.llm_model,
         llm_per_port_concurrency=args.llm_per_port_concurrency,
         article_workers=args.article_workers,
+        article_facts_min_koryciarski_score=(
+            args.article_facts_min_koryciarski_score
+        ),
         policy=policy,
     )
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:
         # TODO this special handling is bad imo
-        print("No pipeline specified, will run all except ScrapeRejestrIO and article pipelines")
+        print(
+            "No pipeline specified, will run all except ScrapeRejestrIO "
+            "and article pipelines"
+        )
     pipeline_names = set(pt.__name__ for pt in PIPELINES)
     for p_name in args.pipeline:
         if p_name not in pipeline_names:

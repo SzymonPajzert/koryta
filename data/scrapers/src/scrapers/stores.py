@@ -643,6 +643,7 @@ class Context:
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
     llm: LLM | None = None
     article_workers: int = 4
+    article_facts_min_koryciarski_score: int | None = None
 
 
 def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):

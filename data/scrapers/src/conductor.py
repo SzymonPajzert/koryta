@@ -158,6 +158,7 @@ def setup_context(
     llm_model: str = "Qwen/Qwen3-14B",
     llm_per_port_concurrency: int = 4,
     article_workers: int = 4,
+    article_facts_min_koryciarski_score: int | None = None,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
 ) -> tuple[Context, EntityDumper]:
@@ -194,6 +195,7 @@ def setup_context(
         refresh_policy=policy,
         llm=llm,
         article_workers=article_workers,
+        article_facts_min_koryciarski_score=article_facts_min_koryciarski_score,
     )
 
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore
