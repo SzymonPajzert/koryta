@@ -39,10 +39,16 @@ class Conductor(IO):
         self.firestore = FirestoreIO()
         self.dumper = dumper
         self.llm = llm
-        self.storage = CloudStorageClient()
+        self._storage: CloudStorageClient | None = None
         self.mirror = CompressedMirror()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
+
+    @property
+    def storage(self) -> CloudStorageClient:
+        if self._storage is None:
+            self._storage = CloudStorageClient()
+        return self._storage
 
     def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, DownloadableFile):
