@@ -41,9 +41,7 @@
           <NoteSourceCard
             :model-value="source"
             :is-editing="isEditing"
-            @update:model-value="
-              formData.sources && (formData.sources[index] = $event)
-            "
+            @update:model-value="formData.sources[index] = $event"
             @remove="removeSource(index)"
           />
         </v-col>
@@ -106,7 +104,11 @@ const otherSources = computed(() => {
 const isEditing = ref(false);
 const saving = ref(false);
 
-const formData = ref<Partial<Note>>({
+type NodeEditable = Omit<Partial<Note>, "sources"> & {
+  sources: Required<Note>["sources"];
+};
+
+const formData = ref<NodeEditable>({
   sources: [],
 });
 
@@ -140,9 +142,6 @@ const addSource = () => {
   if (!isEditing.value) {
     startEditing();
   }
-  if (!formData.value.sources) {
-    formData.value.sources = [];
-  }
   formData.value.sources.push({
     url: "",
     note: "",
@@ -150,9 +149,7 @@ const addSource = () => {
 };
 
 const removeSource = (index: number) => {
-  if (formData.value.sources) {
-    formData.value.sources.splice(index, 1);
-  }
+  formData.value.sources.splice(index, 1);
 };
 
 const save = async () => {
