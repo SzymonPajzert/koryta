@@ -22,7 +22,7 @@ from scrapers.article.pipelines.pipeline_utils import llm_model
 from scrapers.stores import Context, LLMRequest, Pipeline
 from stores.config import VERSIONED_DIR
 
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 TEXT_LIMIT = 100000
 MAX_TOKENS = 1000
 TEMPERATURE = 0.1
@@ -69,6 +69,12 @@ _PROMPT = (
     "zawodowych, przestępczych, korupcyjnych ani współpracy.\n"
     "Nie zwracaj placeholderów ani faktów negatywnych typu person=..., "
     "party=nie podano, organization=nieokreślona.\n\n"
+    "Pole justification jest dowodem z tekstu. Musi być albo dokładnym cytatem "
+    "skopiowanym z artykułu, albo pustą wartością. Cytat musi być krótkim "
+    "fragmentem, najlepiej jednym zdaniem albo częścią zdania, maksymalnie około "
+    "180 znaków. Nie parafrazuj justification. Nie pisz: tekst mówi, artykuł "
+    "podaje, jawnie podano, ..., ani własnych wyjaśnień. Jeśli nie możesz podać "
+    "krótkiego dokładnego cytatu z artykułu, ustaw justification=.\n\n"
     "Zwróć końcową odpowiedź jako krótki markdown, jedna linia na fakt.\n"
     "Format każdej linii:\n"
     "- employment | person=... | organization=... | role=... | justification=...\n"
