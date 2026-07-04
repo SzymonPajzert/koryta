@@ -1,6 +1,7 @@
 # This file sets custom claims in firebase of specified user IDs
 
 from enum import IntEnum
+
 import firebase_admin
 from firebase_admin import auth
 from firebase_admin.auth import UserRecord
@@ -13,15 +14,15 @@ class Level(IntEnum):
     ADMIN = 3
 
 
-def get_custom_claims_dict(l: Level):
+def get_custom_claims_dict(level: Level):
     c = Level.UNKNOWN
     result = {}
-    while int(c) <= int(l):
+    while int(c) <= int(level):
         if c == Level.TRUSTED:
             result["trusted"] = True
         if c == Level.ADMIN:
             result["admin"] = True
-        c = c + 1
+        c = Level(int(c) + 1)
     return result
 
 
@@ -46,11 +47,12 @@ ROLE_LEVELS = {
 
 PROJECT_ID = "koryta-pl"
 
-if __name__ == "__main__":
+
+def main():
     options = {
         "projectId": PROJECT_ID,
     }
-    default_app = firebase_admin.initialize_app(options=options)
+    firebase_admin.initialize_app(options=options)
 
     for uid, level in ROLE_LEVELS.items():
         user: UserRecord = auth.get_user(uid)
@@ -59,7 +61,8 @@ if __name__ == "__main__":
         )
         change_to = get_custom_claims_dict(level)
         print(
-            f"will set to {level}, dict_diff is:\n{dict_diff(change_to, user.custom_claims)}"
+            f"will set to {level}, \
+dict_diff is:\n{dict_diff(change_to, user.custom_claims)}"
         )
         # Print confirmation, wait for y, default N
         confirmation = input("Confirm? (y/N): ")
