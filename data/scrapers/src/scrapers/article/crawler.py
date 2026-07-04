@@ -314,17 +314,14 @@ def _http_worker(
         entry: CrawlQueueItem | None = work_q.get()
         if entry is None:
             work_q.task_done()
-            ctx.io.flush_all()
             return
         try:
             parsed_url = NormalizedParse.parse(entry.url)
             result = crawl_url(ctx, parsed_url, options)
         except Exception as exc:
             result = CrawlResult(error=f"unexpected: {exc}")
-            ctx.io.flush_all()
         done_q.put((entry, result))
         work_q.task_done()
-        ctx.io.flush_all()
 
 
 def _flush_batch(

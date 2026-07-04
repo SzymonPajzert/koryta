@@ -148,9 +148,6 @@ class Conductor(IO):
             source, data, content_type, include_query=include_query, verbose=verbose
         )
 
-    def flush_all(self):
-        self.storage.flush_all()
-
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return self.storage.list_namespaces(ref, namespace)
 

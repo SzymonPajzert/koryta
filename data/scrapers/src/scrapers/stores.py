@@ -247,11 +247,6 @@ class IO(metaclass=ABCMeta):
         """Batches data for upload (e.g. to GCS in a tar.gz)."""
         raise NotImplementedError()
 
-    @abstractmethod
-    def flush_all(self):
-        """Flushes all pending batches."""
-        pass
-
     # TODO get rid of this - it should be just a library call
     @abstractmethod
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:

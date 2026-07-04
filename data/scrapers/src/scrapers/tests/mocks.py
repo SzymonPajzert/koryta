@@ -142,9 +142,6 @@ class MockIO(IO):
     ):
         self.upload(source, data, content_type)
 
-    def flush_all(self):
-        pass
-
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         return []
 
@@ -202,9 +199,6 @@ class DictMockIO(IO):
         self, source, data, content_type, include_query=False, verbose=True
     ):
         self.upload(source, data, content_type)
-
-    def flush_all(self):
-        pass
 
     def list_files(self, path: DataRef) -> typing.Iterable[DataRef]:
         if isinstance(path, LocalFile):

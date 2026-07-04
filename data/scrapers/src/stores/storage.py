@@ -188,9 +188,6 @@ class Client:
     ) -> None:
         raise NotImplementedError("Use BatchClient instead")
 
-    def flush_all(self) -> None:
-        raise NotImplementedError("Use BatchClient instead")
-
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         """Lists available values for a given namespace (e.g. 'date')."""
         bucket = self.storage_client.bucket(BUCKET)
