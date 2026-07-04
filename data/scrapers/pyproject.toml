@@ -131,6 +131,7 @@ koryta_crawl = "crawl_cli:main"
 koryta_scraper = "scraper:main"
 koryta_scrape_krs = "scraper:scrape_krs"
 koryta_scrape_krs_updates = "scraper:scrape_updates_by_dates"
+set_auth_claims = "set_auth_claims:main"
 
 
 [build-system]
