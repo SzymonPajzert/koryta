@@ -348,6 +348,10 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany | None:
         miejscowosc = siedziba.get("adres", {}).get("miejscowosc", "").lower()
         postal_code = siedziba.get("adres", {}).get("kodPocztowy")
 
+        activity = []
+        if odpis["naglowekA"]["rejestr"] == "RejP":
+            activity = parse_activity_from_api_krs(dane.get("dzial3", {}))
+
         teryt_code = get_teryt(pcs, miejscowosc, postal_code)
         owners: list[Owner] = []
         # Check who's listed as wspolnicy.
@@ -374,6 +378,7 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany | None:
             nip=nip,
             regon=regon,
             parents=owners,
+            activity=activity,
         )
     except KeyError as e:
         raise ValueError(
@@ -381,4 +386,29 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany | None:
         ) from e
     except TypeError as e:
         print(data)
-        raise ValueError(f"Wrong data: {data}, {e}")
+        raise ValueError(f"Wrong data: {data}") from e
+
+
+def parse_activity_from_api_krs(dzial3: dict) -> list[str]:
+    """
+    Extracts the list of activities (PKD codes) from the API KRS response.
+    """
+
+    def parse_entry(entry: dict) -> str:
+        kod_dzial = entry.get("kodDzial", "")
+        kod_klasa = entry.get("kodKlasa", "")
+        kod_podklasa = entry.get("kodPodklasa", "")
+        return f"{kod_dzial}.{kod_klasa}.{kod_podklasa}"
+
+    activities = []
+    if "celDzialaniaOrganizacji" in dzial3:
+        # We don't handle Stowarzyszenia yet
+        # TODO support them
+        return []
+
+    pkd_entry = dzial3.get("przedmiotDzialalnosci", [])
+    for entry in pkd_entry["przedmiotPrzewazajacejDzialalnosci"]:
+        activities.append(parse_entry(entry))
+    for entry in pkd_entry.get("przedmiotPozostalejDzialalnosci", []):
+        activities.append(parse_entry(entry))
+    return activities

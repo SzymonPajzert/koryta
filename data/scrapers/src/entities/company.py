@@ -32,6 +32,7 @@ class Company:
     teryt_code: str | None = None
     nip: str | None = None
     regon: str | None = None
+    activity: list[str] = field(default_factory=list)
     sources: list[Source] = field(default_factory=list)
     children: list[str] = field(default_factory=list)
     parents: list[Owner] = field(default_factory=list)

@@ -55,6 +55,18 @@ EXPECTED_COMPANIES = {
             Source(source="hardcoded", source_krs=None, reason="PUBLIC_COMPANIES_KRS"),
             Source(source="rejestr-io", source_krs="rejestr.io", reason=None),
         ],
+        activity=[
+            "36.00.Z",
+            "37.00.Z",
+            "42.21.Z",
+            "68.32.Z",
+            "81.30.Z",
+            "81.29.Z",
+            "42.11.Z",
+            "42.91.Z",
+            "42.99.Z",
+            "43.2.",
+        ],
     ),
     "0000156806": Company(
         krs="0000156806",
