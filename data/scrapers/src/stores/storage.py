@@ -293,7 +293,7 @@ class BatchClient(Client):
             return f"gs://{BUCKET}/hostname={hostname}/date={date}/uid_{batch['uid']}.tar.gz"
 
     def _flush_batch(self, key, batch):
-        index_data = ("\\n".join(batch["index"]) + "\\n").encode("utf-8")
+        index_data = ("\n".join(batch["index"]) + "\n").encode("utf-8")
         idx_info = tarfile.TarInfo(name="index.txt")
         idx_info.size = len(index_data)
         idx_info.mtime = int(datetime.now(warsaw_tz).timestamp())

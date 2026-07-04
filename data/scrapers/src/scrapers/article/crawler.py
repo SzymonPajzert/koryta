@@ -151,7 +151,7 @@ def _upload_response(
     path = _storage_path(parsed)
     if options.storage_type == "gcs":
         content_type = _content_type_from_response(response)
-        ctx.io.batch_upload(parsed.full_url, response.content, content_type)
+        path = ctx.io.batch_upload(parsed.full_url, response.content, content_type)
     elif options.storage_type == "local":
         if options.local_output is None:
             raise ValueError("local_output is required for local storage")
