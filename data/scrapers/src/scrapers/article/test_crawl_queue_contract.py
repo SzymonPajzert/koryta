@@ -41,13 +41,15 @@ def test_mark_error_retries_until_max(crawl_queue: CrawlQueue):
     assert crawl_queue.get("worker-3", max_retries=2) is None
 
 
-def test_release_allows_reget(crawl_queue: CrawlQueue):
+def test_release_preserves_postgres_timeout(crawl_queue: CrawlQueue):
     crawl_queue.put([NewUrl("https://example.com/a", 10)])
     row = crawl_queue.get("worker-1", max_retries=1)
     assert row is not None
+
     crawl_queue.release(row.uid)
-    row2 = crawl_queue.get("worker-2", max_retries=1)
-    assert row2 is not None
+
+    assert crawl_queue.get("worker-2", max_retries=1) is None
+    assert crawl_queue.get("worker-2", max_retries=1, timeout_seconds=0) == row
 
 
 def test_put_rejects_out_of_range_priority(crawl_queue: CrawlQueue):

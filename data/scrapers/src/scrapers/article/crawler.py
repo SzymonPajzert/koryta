@@ -85,13 +85,15 @@ _next_request_time: dict[str, float] = {}
 
 
 def _can_crawl(parsed: NormalizedParse, rate_limit: float) -> bool:
+    if rate_limit <= 0:
+        return True
     with _next_req_lock:
         domain = parsed.hostname_normalized
         next_time = _next_request_time.get(domain, 0)
-        now = time.time()
+        now = time.monotonic()
         if now < next_time:
             return False
-        _next_request_time[domain] = time.time() + rate_limit
+        _next_request_time[domain] = now + rate_limit
         return True
 
 
@@ -279,8 +281,8 @@ def _extract_urls(
     return discovered
 
 
-_FLUSH_INTERVAL_S = 2.0  # also flush after this many seconds of inactivity
-_LOG_INTERVAL_S = 30.0  # how often to log queue stats
+_FLUSH_INTERVAL_S = 30.0  # also flush after this many seconds of inactivity
+_LOG_INTERVAL_S = 30.0   # how often to log queue stats
 
 
 def _priority_for_url(options: CrawlOptions, url: str) -> Priority:
@@ -334,13 +336,14 @@ def _flush_batch(
     """Write a batch of crawl results to the DB in as few transactions as possible."""
     done_items: list[tuple[str, str | None, dict]] = []
     error_items: list[tuple[str, str]] = []
+    release_items: list[str] = []
     all_discovered: list[NewUrl] = []
 
     for entry, result in pending:
         priority = entry.priority
         if result.hit_rate_limit:
-            # Do not release — rely on lock timeout so it isn't re-queued immediately.
-            logging.info("[p=%d] Skipping (rate limited): %s", priority, entry.url)
+            logging.info("[p=%d] Releasing (rate limited): %s", priority, entry.url)
+            release_items.append(entry.uid)
         elif result.error:
             logging.error(
                 "[p=%d][%.2fs] Crawl failed (%s): %s",
@@ -380,6 +383,8 @@ def _flush_batch(
         queue_store.mark_done_batch(done_items)
     if error_items:
         queue_store.mark_error_batch(error_items)
+    if release_items:
+        queue_store.release_batch(release_items)
     if all_discovered:
         queue_store.put(all_discovered)
 

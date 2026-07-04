@@ -27,7 +27,13 @@ from scrapers.stores import BlockedDomain, CrawlQueue, NewUrl
 def _build_parser() -> ArgumentParser:
     parser = ArgumentParser(description="Run the article crawler")
     parser.add_argument("--worker-id", default=f"crawler-{uuid4()}")
-    parser.add_argument("--storage-type", choices=["gcs", "local"], default="local")
+    parser.add_argument(
+        "--storage-type",
+        "--storage",
+        choices=["gcs", "local"],
+        default="local",
+        dest="storage_type",
+    )
     parser.add_argument("--local-output", type=Path, default=Path("crawler_output"))
     parser.add_argument("--per-url-max-retries", type=int, default=3)
     parser.add_argument("--lock-timeout-seconds", type=int, default=60)
@@ -111,13 +117,20 @@ def _build_parser() -> ArgumentParser:
 
 
 def _build_options(args: argparse.Namespace, seed_urls: list[str]) -> CrawlOptions:
+    if args.per_domain_rate_limit_qpm < 0:
+        raise ValueError("--per-domain-rate-limit-qpm must be >= 0")
+    per_domain_wait_between_requests_s = (
+        0
+        if args.per_domain_rate_limit_qpm == 0
+        else 60 / args.per_domain_rate_limit_qpm
+    )
     return CrawlOptions(
         worker_id=args.worker_id,
         storage_type=args.storage_type,
         local_output=args.local_output if args.storage_type == "local" else None,
         per_url_max_retries=args.per_url_max_retries,
         lock_timeout_seconds=args.lock_timeout_seconds,
-        per_domain_wait_between_requests_s=60 / args.per_domain_rate_limit_qpm,
+        per_domain_wait_between_requests_s=per_domain_wait_between_requests_s,
         url_scoring_function=args.url_scoring_function,
         domains_of_interest=frozenset(seed_urls),
         worker_threads=max(1, args.worker_threads),
@@ -208,7 +221,7 @@ def profile_scope(enabled: bool, path: Path | None):
 def main() -> None:  # noqa: PLR0915
     _setup_logging()
     parser = _build_parser()
-    args, _ = parser.parse_known_args()
+    args = parser.parse_args()
 
     if args.parse:
         parse(args)
