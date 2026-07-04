@@ -370,7 +370,7 @@ def test_enrichment(find_column_match):
     assert found_start, f"Expected {first_work} in {row['employment']}"
 
 
-scraped_krs = []
+scraped_krs: list = []
 
 
 def find_krs(ctx):
