@@ -30,8 +30,8 @@ class MockIO(IO):
 
     def batch_upload(
         self, source, data, content_type, include_query=False, verbose=True
-    ):
-        pass
+    ) -> str:
+        return ""
 
     def list_namespaces(self, ref, namespace):
         pass

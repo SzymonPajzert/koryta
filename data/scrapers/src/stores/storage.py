@@ -185,7 +185,7 @@ class Client:
         content_type,
         include_query=False,
         verbose=True,
-    ) -> None:
+    ) -> str:
         raise NotImplementedError("Use BatchClient instead")
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
@@ -242,7 +242,7 @@ class BatchClient(Client):
         content_type,
         include_query=False,
         verbose=True,
-    ):
+    ) -> str:
         if isinstance(source, str):
             source = NormalizedParse.parse(source)
 
@@ -289,6 +289,8 @@ class BatchClient(Client):
             if batch["uncompressed_size"] >= self.args.max_batch_size:
                 self._flush_batch(key, batch)
                 del self._batches[key]
+
+            return f"gs://{BUCKET}/hostname={hostname}/date={date}/uid_{batch['uid']}.tar.gz"
 
     def _flush_batch(self, key, batch):
         index_data = ("\\n".join(batch["index"]) + "\\n").encode("utf-8")
