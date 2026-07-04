@@ -243,8 +243,10 @@ class IO(metaclass=ABCMeta):
         content_type: str,
         include_query=False,
         verbose=True,
-    ):
-        """Batches data for upload (e.g. to GCS in a tar.gz)."""
+    ) -> str:
+        """Batches data for upload (e.g. to GCS in a tar.gz).
+
+        Returns: The path to the uploaded batch file."""
         raise NotImplementedError()
 
     # TODO get rid of this - it should be just a library call
