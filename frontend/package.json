@@ -29,6 +29,7 @@
     "backstop:approve": "backstop approve",
     "test:visual": "start-server-and-test dev:build http://localhost:3000 'backstop test'",
     "test:playwright": "start-server-and-test dev:prod-data http://127.0.0.1:3000 'playwright test'",
+    "test:playwright:ci": "start-server-and-test dev:local http://127.0.0.1:3000 'playwright test'",
     "test": "npm run test:ci && npm run test:e2e",
     "check:duplication": "jscpd app server --ignore app/coverage",
     "quick-check": "npx prettier --write . && npx prettier --check . && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:playwright",
