@@ -94,7 +94,7 @@ def get_args():
     parser.add_argument(
         "--llm-request-timeout-seconds",
         type=int,
-        default=600,
+        default=1800,
         help="HTTP timeout for each LLM request.",
     )
     parser.add_argument(
@@ -111,6 +111,18 @@ def get_args():
             "Only run ArticleExtractedFacts LLM extraction for uncached articles "
             "with koryciarski_llm_score >= N."
         ),
+    )
+    parser.add_argument(
+        "--article-facts-max-tokens",
+        type=int,
+        default=None,
+        help="Max completion tokens for ArticleExtractedFacts LLM requests.",
+    )
+    parser.add_argument(
+        "--article-facts-text-limit",
+        type=int,
+        default=None,
+        help="Max article text characters fed to the facts extraction prompt.",
     )
     args, _ = parser.parse_known_args()
     return args
@@ -154,6 +166,8 @@ def main():
         article_facts_min_koryciarski_score=(
             args.article_facts_min_koryciarski_score
         ),
+        article_facts_max_tokens=args.article_facts_max_tokens,
+        article_facts_text_limit=args.article_facts_text_limit,
         policy=policy,
     )
 

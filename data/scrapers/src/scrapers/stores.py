@@ -645,6 +645,8 @@ class Context:
     llm: LLM | None = None
     article_workers: int = 4
     article_facts_min_koryciarski_score: int | None = None
+    article_facts_max_tokens: int | None = None
+    article_facts_text_limit: int | None = None
 
 
 def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):

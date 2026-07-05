@@ -317,7 +317,7 @@ async def _extract_records(
                     )
                     bar.update(1)
 
-                request_id = await pool.put_request(_fact_request(record, model))
+                request_id = await pool.put_request(_fact_request(record, model, ctx))
                 pending[request_id] = record
 
             while pending:
@@ -390,12 +390,18 @@ def _emit_fact_response(
         _emit_facts(ctx, _facts_row(record, response.content, model, response))
 
 
-def _fact_request(record: dict[str, Any], model: str) -> LLMRequest:
+def _fact_request(record: dict[str, Any], model: str, ctx=None) -> LLMRequest:
+    text_limit = (
+        getattr(ctx, "article_facts_text_limit", None) or TEXT_LIMIT
+    )
+    max_tokens = (
+        getattr(ctx, "article_facts_max_tokens", None) or MAX_TOKENS
+    )
     return LLMRequest(
         prompt=_PROMPT.format(
-            text=str(record.get("article_content") or "")[:TEXT_LIMIT]
+            text=str(record.get("article_content") or "")[:text_limit]
         ),
-        max_tokens=MAX_TOKENS,
+        max_tokens=max_tokens,
         temperature=TEMPERATURE,
         model=model,
         enable_thinking=True,
@@ -409,6 +415,7 @@ def _cache_valid(
 ) -> bool:
     return (
         cached is not None
+        and cached.get("fact_extraction_status") != "error"
         and cached.get("article_content_hash") == record.get("article_content_hash")
         and cached.get("prompt_version") == PROMPT_VERSION
         and cached.get("model") == model

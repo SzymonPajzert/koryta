@@ -166,6 +166,8 @@ def setup_context(
     llm_request_timeout_seconds: int = 600,
     article_workers: int = 4,
     article_facts_min_koryciarski_score: int | None = None,
+    article_facts_max_tokens: int | None = None,
+    article_facts_text_limit: int | None = None,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
 ) -> tuple[Context, EntityDumper]:
@@ -204,6 +206,8 @@ def setup_context(
         llm=llm,
         article_workers=article_workers,
         article_facts_min_koryciarski_score=article_facts_min_koryciarski_score,
+        article_facts_max_tokens=article_facts_max_tokens,
+        article_facts_text_limit=article_facts_text_limit,
     )
 
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore
