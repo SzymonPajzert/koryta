@@ -9,11 +9,14 @@ const isLocal =
   process.env.USE_EMULATORS === "true" ||
   process.env.NODE_ENV === "development";
 const useProdProject = process.env.USE_PROD_PROJECT === "true";
+const ssr = process.env.SSR !== "false";
 console.log(
   "Nuxt Config - isLocal:",
   isLocal,
   "USE_EMULATORS:",
   process.env.USE_EMULATORS,
+  "SSR:",
+  ssr,
 );
 
 export default defineNuxtConfig({
@@ -54,7 +57,7 @@ export default defineNuxtConfig({
 
   devtools: { enabled: true },
 
-  ssr: true,
+  ssr,
 
   components: [
     {
