@@ -32,7 +32,7 @@ jobs:
         run: npm ci
 
       - name: Install Functions Dependencies
-        working-directory: functions
+        working-directory: frontend/functions
         run: npm ci
 
       - name: Install Java (for Emulators)
@@ -55,7 +55,7 @@ jobs:
 
       - name: Run Playwright tests
         working-directory: frontend
-        run: npm run test:playwright
+        run: npm run test:playwright:ci
 
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
