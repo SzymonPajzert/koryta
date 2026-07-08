@@ -17,15 +17,25 @@ class UrlStoreQueue(CrawlQueue):
         max_retries: int = 3,
         timeout_seconds: float = 60,
     ) -> CrawlQueueItem | None:
-        urls = self.url_client.claim_urls(limit=1)
-        if not urls:
-            return None
-        url = urls[0]
-        return CrawlQueueItem(
-            uid=str(url.id),
-            url=url.url,
-            priority=0,
-        )
+        urls = self.get_batch(worker_id, 1, max_retries, timeout_seconds)
+        return urls[0] if urls else None
+
+    def get_batch(
+        self,
+        worker_id: str,
+        batch_size: int = 16,
+        max_retries: int = 3,
+        timeout_seconds: float = 60,
+    ) -> list[CrawlQueueItem]:
+        urls = self.url_client.claim_urls(limit=batch_size)
+        return [
+            CrawlQueueItem(
+                uid=str(url.id),
+                url=url.url,
+                priority=0,
+            )
+            for url in urls
+        ]
 
     def mark_done(
         self,

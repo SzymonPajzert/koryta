@@ -437,8 +437,17 @@ class CrawlQueue(metaclass=ABCMeta):
 
     @abstractmethod
     def release(self, uid: str) -> None:
-        """Release a lock without marking done or error."""
+        """Handle an unprocessed URL without marking done or error.
+
+        Implementations may either make the URL immediately claimable again or
+        keep the current lock and rely on their timeout/retry semantics.
+        """
         raise NotImplementedError()
+
+    def release_batch(self, uids: list[str]) -> None:
+        """Batch-handle unprocessed URLs. Default calls release() per item."""
+        for uid in uids:
+            self.release(uid)
 
     @abstractmethod
     def add_blocked_domains(self, rows: list[BlockedDomain]) -> None:

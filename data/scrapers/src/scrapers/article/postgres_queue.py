@@ -319,12 +319,16 @@ class PostgresCrawlQueue(CrawlQueue):
         )
 
     def release(self, uid: str) -> None:
-        """Release a lock without marking done or error."""
-        self.pg.execute(
-            "UPDATE website_index SET locked_by_worker_id = NULL, "
-            "locked_at = NULL WHERE id = %s",
-            [uid],
-        )
+        """Keep the current lock and let timeout-based retry semantics apply."""
+        self.release_batch([uid])
+
+    def release_batch(self, uids: list[str]) -> None:
+        """Keep current locks and let timeout-based retry semantics apply."""
+        # The crawler calls release_batch() for local rate-limit skips. For
+        # Postgres we intentionally keep locks so URLs cannot be reclaimed in a
+        # tight loop; get()/get_batch() will expose them again after
+        # lock_timeout_seconds.
+        return None
 
     def put(self, urls: list[NewUrl]) -> None:
         """Insert/enqueue URLs (idempotent)."""

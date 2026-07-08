@@ -7,9 +7,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Iterable, Literal
 
+import time
+
 import requests
 
 UrlStatus = Literal["new", "in_progress", "fetched", "failed"]
+
+_RETRYABLE = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+)
 
 
 @dataclass
@@ -166,27 +173,44 @@ class UrlStoreClient:
             params: dict[str, Any] | None = None,
             json: Any | None = None,
             auth: bool = True,
+            max_retries: int = 5,
     ) -> Any:
         headers: dict[str, str] = {}
         if auth and self.api_key:
             headers["X-API-Key"] = self.api_key
-        response = self.session.request(
-            method=method,
-            url=f"{self.base_url}{path}",
-            params=params,
-            json=json,
-            headers=headers,
-            timeout=self.timeout,
-        )
-        if not response.ok:
+        url = f"{self.base_url}{path}"
+        for attempt in range(max_retries):
             try:
-                body: Any = response.json()
-            except ValueError:
-                body = response.text
-            raise UrlStoreError(response.status_code, body)
-        if response.status_code == 204 or not response.content:
-            return None
-        return response.json()
+                response = self.session.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    json=json,
+                    headers=headers,
+                    timeout=self.timeout,
+                )
+            except _RETRYABLE as exc:
+                if attempt == max_retries - 1:
+                    raise
+                wait = 2 ** attempt
+                print(f"url_store request failed ({exc}), retrying in {wait}s ({attempt + 1}/{max_retries})")
+                time.sleep(wait)
+                continue
+            if response.status_code in (429, 502, 503, 504) and attempt < max_retries - 1:
+                wait = 2 ** attempt
+                print(f"url_store got {response.status_code}, retrying in {wait}s ({attempt + 1}/{max_retries})")
+                time.sleep(wait)
+                continue
+            if not response.ok:
+                try:
+                    body: Any = response.json()
+                except ValueError:
+                    body = response.text
+                raise UrlStoreError(response.status_code, body)
+            if response.status_code == 204 or not response.content:
+                return None
+            return response.json()
+        raise RuntimeError("unreachable")
 
 
 def _parse_dt(value: str) -> datetime:
