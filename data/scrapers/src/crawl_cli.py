@@ -120,7 +120,7 @@ def _build_parser() -> ArgumentParser:
         type=Path,
         default=Path("logs"),
         metavar="DIR",
-        help="Directory for log files (default: ./logs). Each run gets a timestamped file.",
+        help="Directory for log files (default: ./logs). Each run gets a timestamped file.",  # noqa: E501
     )
     return parser
 
@@ -261,10 +261,10 @@ def profile_scope(enabled: bool, path: Path | None):
 
 
 def main() -> None:  # noqa: PLR0915
-    log_file = _setup_logging(args.log_dir)
-    logging.info("Logging to %s", log_file)
     parser = _build_parser()
     args = parser.parse_args()
+    log_file = _setup_logging(args.log_dir)
+    logging.info("Logging to %s", log_file)
 
     if args.parse:
         parse(args)
