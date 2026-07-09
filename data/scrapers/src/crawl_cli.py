@@ -5,8 +5,10 @@ import cProfile
 import csv
 import logging
 import os
+import sys
 from argparse import ArgumentParser
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -113,6 +115,13 @@ def _build_parser() -> ArgumentParser:
         action="store_true",
         help="Read url from custom pipeline instead of the default one.",
     )
+    parser.add_argument(
+        "--log-dir",
+        type=Path,
+        default=Path("logs"),
+        metavar="DIR",
+        help="Directory for log files (default: ./logs). Each run gets a timestamped file.",
+    )
     return parser
 
 
@@ -192,12 +201,45 @@ def _build_seed_rows(urls: list[str]) -> list[NewUrl]:
     return [NewUrl(url, 0) for url in urls]
 
 
-def _setup_logging():
+class _Tee:
+    """Write to both an original stream and a file simultaneously."""
+
+    def __init__(self, original, file_path: Path) -> None:
+        self._original = original
+        self._file = open(file_path, "a", buffering=1)
+
+    def write(self, data: str) -> int:
+        self._original.write(data)
+        self._file.write(data)
+        return len(data)
+
+    def flush(self) -> None:
+        self._original.flush()
+        self._file.flush()
+
+    def __getattr__(self, name: str):
+        return getattr(self._original, name)
+
+
+def _setup_logging(log_dir: Path) -> Path:
+    log_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = log_dir / f"{ts}.txt"
+
+    file_handler = logging.FileHandler(log_file)
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    file_handler.setFormatter(fmt)
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[logging.StreamHandler()],
+        handlers=[logging.StreamHandler(sys.stdout), file_handler],
     )
+
+    # Tee stderr (tracebacks, print(..., file=sys.stderr)) to the log file too
+    sys.stderr = _Tee(sys.stderr, log_file)
+
+    return log_file
 
 
 @contextmanager
@@ -219,7 +261,8 @@ def profile_scope(enabled: bool, path: Path | None):
 
 
 def main() -> None:  # noqa: PLR0915
-    _setup_logging()
+    log_file = _setup_logging(args.log_dir)
+    logging.info("Logging to %s", log_file)
     parser = _build_parser()
     args = parser.parse_args()
 
