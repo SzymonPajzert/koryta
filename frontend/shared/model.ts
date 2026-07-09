@@ -10,7 +10,15 @@ type PageBase<PageType> = {
   delete_reason?: string;
   visibility?: boolean;
   stats?: NodeStats;
+  revisions?: NodeRevisions;
 };
+
+export interface NodeRevisions {
+  latest_id: string;
+  latest_time: string | null;
+  total: number;
+  has_unapproved: boolean;
+}
 
 type NodeEdgeStats = {
   experienceMonths: number;
