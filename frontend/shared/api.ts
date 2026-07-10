@@ -1,4 +1,4 @@
-import type { ElectionPosition } from "~~/shared/model";
+import type { ElectionPosition } from "./model";
 import { z } from "zod";
 
 export const companyRequestSchema = z.object({
