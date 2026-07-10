@@ -4,6 +4,7 @@ import { fetchOptionsValidator, paginate } from "~~/server/utils/fetch";
 import { getUser } from "~~/server/utils/auth";
 import { defineEventHandler } from "h3";
 import { pageIsPublic } from "~~/shared/model";
+import { normalizeUpdateTime } from "~~/shared/revisions";
 
 const queryValidator = z.object({
   ...fetchOptionsValidator.shape,
@@ -49,6 +50,11 @@ export default defineEventHandler(async (event) => {
       ) {
         data.revision_id = data.revision_id._path.segments.join("/");
       }
+    }
+    if (data.revisions?.latest_time) {
+      data.revisions.latest_time = normalizeUpdateTime(
+        data.revisions.latest_time,
+      );
     }
     return { id: doc.id, ...data, visibility: pageIsPublic(data) };
   });
