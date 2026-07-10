@@ -12,10 +12,14 @@ const vuetify = createVuetify({
 });
 
 // Mock vue-router explicitly since it's imported
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ query: {}, params: { type: "spolki-partie" } }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}));
+vi.mock("vue-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("vue-router")>();
+  return {
+    ...actual,
+    useRoute: () => ({ query: {}, params: { type: "spolki-partie" } }),
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), afterEach: vi.fn() }),
+  };
+});
 
 // Mock Nuxt auto-imports
 vi.stubGlobal("definePageMeta", vi.fn());

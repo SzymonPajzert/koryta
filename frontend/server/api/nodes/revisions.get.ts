@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { fetchOptionsValidator, paginate } from "~~/server/utils/fetch";
-import { getUser } from "~~/server/utils/auth";
 import { defineEventHandler } from "h3";
 import { pageIsPublic } from "~~/shared/model";
 import { normalizeUpdateTime } from "~~/shared/revisions";
@@ -15,9 +14,6 @@ const queryValidator = z.object({
 
 export default defineEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
-
-  // Require authentication (admin/authorized user only)
-  await getUser(event);
 
   const db = getFirestore("koryta-pl");
   let fsQuery: FirebaseFirestore.Query = db.collection("nodes");
