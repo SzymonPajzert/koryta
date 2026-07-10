@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Iterable, Literal
-
-import time
 
 import requests
 
@@ -83,11 +82,11 @@ class UrlStoreError(Exception):
 
 class UrlStoreClient:
     def __init__(
-            self,
-            base_url: str,
-            api_key: str | None = None,
-            timeout: float = 30.0,
-            session: requests.Session | None = None,
+        self,
+        base_url: str,
+        api_key: str | None = None,
+        timeout: float = 30.0,
+        session: requests.Session | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -98,7 +97,7 @@ class UrlStoreClient:
     def from_env(cls) -> UrlStoreClient:
         return cls(
             base_url=os.environ["URL_STORE_URL"],
-            api_key=os.environ["URL_STORE_API_KEY"]
+            api_key=os.environ["URL_STORE_API_KEY"],
         )
 
     def close(self) -> None:
@@ -114,11 +113,11 @@ class UrlStoreClient:
         return self._request("GET", "/health", auth=False)
 
     def list_urls(
-            self,
-            status: UrlStatus | None = None,
-            domain: str | None = None,
-            limit: int = 100,
-            offset: int = 0,
+        self,
+        status: UrlStatus | None = None,
+        domain: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> list[UrlOut]:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if status is not None:
@@ -148,12 +147,12 @@ class UrlStoreClient:
         return data["exists"]
 
     def update_url(
-            self,
-            url_id: int,
-            status: UrlStatus,
-            error: str | None = None,
-            context: dict[str, Any] | None = None,
-            storage_path: str | None = None,
+        self,
+        url_id: int,
+        status: UrlStatus,
+        error: str | None = None,
+        context: dict[str, Any] | None = None,
+        storage_path: str | None = None,
     ) -> UrlOut:
         body: dict[str, Any] = {"status": status}
         if error is not None:
@@ -166,14 +165,14 @@ class UrlStoreClient:
         return UrlOut.from_payload(data)
 
     def _request(
-            self,
-            method: str,
-            path: str,
-            *,
-            params: dict[str, Any] | None = None,
-            json: Any | None = None,
-            auth: bool = True,
-            max_retries: int = 5,
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: Any | None = None,
+        auth: bool = True,
+        max_retries: int = 5,
     ) -> Any:
         headers: dict[str, str] = {}
         if auth and self.api_key:
@@ -192,14 +191,13 @@ class UrlStoreClient:
             except _RETRYABLE as exc:
                 if attempt == max_retries - 1:
                     raise
-                wait = 2 ** attempt
-                print(f"url_store request failed ({exc}), retrying in {wait}s ({attempt + 1}/{max_retries})")
-                time.sleep(wait)
+                self._wait_attempt(f"request failed ({exc})", attempt, max_retries)
                 continue
-            if response.status_code in (429, 502, 503, 504) and attempt < max_retries - 1:
-                wait = 2 ** attempt
-                print(f"url_store got {response.status_code}, retrying in {wait}s ({attempt + 1}/{max_retries})")
-                time.sleep(wait)
+            if (
+                response.status_code in (429, 502, 503, 504)
+                and attempt < max_retries - 1
+            ):
+                self._wait_attempt(f"got {response.status_code}", attempt, max_retries)
                 continue
             if not response.ok:
                 try:
@@ -211,6 +209,11 @@ class UrlStoreClient:
                 return None
             return response.json()
         raise RuntimeError("unreachable")
+
+    def _wait_attempt(self, cause: str, attempt: int, max_retries: int) -> None:
+        wait = 2**attempt
+        print(f"url_store {cause}, retrying in {wait}s ({attempt + 1}/{max_retries})")
+        time.sleep(wait)
 
 
 def _parse_dt(value: str) -> datetime:
