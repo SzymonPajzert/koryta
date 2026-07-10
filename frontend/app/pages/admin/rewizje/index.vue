@@ -18,6 +18,11 @@
             item.name
           }}</NuxtLink>
         </template>
+        <template #[`item.revisions.total`]="{ item }">
+          <NuxtLink :to="`/admin/rewizje/${item.id}`">
+            {{ item.revisions?.total ?? 0 }}
+          </NuxtLink>
+        </template>
         <template #[`item.revisions.latest_time`]="{ item }">
           {{ formatDate(item.revisions?.latest_time) }}
         </template>
