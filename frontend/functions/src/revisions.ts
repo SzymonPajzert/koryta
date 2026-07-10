@@ -4,6 +4,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 import {
   computeRevisionsObj,
+  normalizeUpdateTime,
   type RevisionMinimal,
 } from "../../shared/revisions";
 
@@ -107,9 +108,12 @@ async function revisionsForNode(nodeId: string): Promise<RevisionMinimal[]> {
 
   const allDocs = [...allDocsUnderscore.docs, ...allDocsCapitalized.docs];
 
-  const revisionsArray: RevisionMinimal[] = allDocs.map((d) => ({
-    id: d.id,
-    update_time: d.data().update_time as string | null,
-  }));
+  const revisionsArray: { id: string; update_time: string | null }[] =
+    allDocs.map((d) => {
+      return {
+        id: d.id,
+        update_time: normalizeUpdateTime(d.data().update_time),
+      };
+    });
   return revisionsArray;
 }

@@ -9,7 +9,11 @@ import type {
   Node,
   Revision,
 } from "~~/shared/model";
-import { computeRevisionsObj, type RevisionMinimal } from "~~/shared/revisions";
+import {
+  computeRevisionsObj,
+  normalizeUpdateTime,
+  type RevisionMinimal,
+} from "~~/shared/revisions";
 import { computeNodeStats } from "~~/shared/stats";
 import { getEdges, getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
@@ -67,10 +71,12 @@ function buildNodeUpdateData(
     stats.people = targetCounts[node.id]?.size || 0;
   }
 
-  const mappedRevisions: RevisionMinimal[] = nodeRevisionsRaw.map((r) => ({
-    id: r.id,
-    update_time: (r.data.update_time as string | null) || null,
-  }));
+  const mappedRevisions: RevisionMinimal[] = nodeRevisionsRaw.map((r) => {
+    return {
+      id: r.id,
+      update_time: normalizeUpdateTime(r.data.update_time),
+    };
+  });
   const revisionsObj = computeRevisionsObj(
     node.data.revision_id,
     mappedRevisions,

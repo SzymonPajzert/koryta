@@ -1,3 +1,4 @@
+import type { Timestamp } from "firebase-admin/firestore";
 import type { NodeRevisions } from "./model";
 
 /**
@@ -6,6 +7,35 @@ import type { NodeRevisions } from "./model";
 export interface RevisionMinimal {
   id: string;
   update_time: string | null;
+}
+
+/**
+ * Normalizes different timestamp formats into an ISO string.
+ *
+ * Firestore internally strictly stores dates as its `Timestamp` type, but the
+ * data can arrive in different shapes depending on how it traverses the app's layers:
+ * 1. `Timestamp` object (has `.toDate()`): When freshly fetched from Firestore via
+ *    the `firebase-admin` or client SDK.
+ * 2. Object with `_seconds`: When a `Timestamp` is serialized (e.g. `JSON.stringify`
+ *    via Nuxt's SSR payload) and passed across the network, losing its class prototype.
+ * 3. `string`: When a previous mapping step explicitly converted it to an ISO string.
+ */
+export function normalizeUpdateTime(
+  updateTime: Timestamp | string | { _seconds: number } | null | undefined,
+): string | null {
+  if (!updateTime) return null;
+  if (typeof updateTime === "string") return updateTime;
+  if (typeof (updateTime as { toDate?: () => unknown }).toDate === "function") {
+    return (updateTime as { toDate: () => { toISOString: () => string } })
+      .toDate()
+      .toISOString();
+  }
+  if (typeof updateTime === "object" && "_seconds" in updateTime) {
+    return new Date(
+      (updateTime as { _seconds: number })._seconds * 1000,
+    ).toISOString();
+  }
+  return null;
 }
 
 export function computeRevisionsObj(
