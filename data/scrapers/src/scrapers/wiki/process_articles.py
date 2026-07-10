@@ -13,7 +13,8 @@ from tqdm import tqdm
 
 from entities.company import Wikipedia as Company
 from entities.person import Wikipedia as People
-from scrapers.stores import Context, DownloadableFile, Pipeline, write_dataframe
+from scrapers.stores import Context, Pipeline
+from scrapers.stores.file import DownloadableFile
 from scrapers.wiki.util import parse_date
 from util.lists import WIKI_POLITICAL_LINKS
 from util.polish import LOWER, UPPER
@@ -358,13 +359,13 @@ class ProcessWiki(Pipeline[People]):
 
     def process(self, ctx: Context):
         people, companies = scrape_wiki(ctx)
-        
+
         people.sort(key=lambda x: x.content_score, reverse=True)
         companies.sort(key=lambda x: x.content_score, reverse=True)
 
         comp_df = pd.DataFrame([asdict(c) for c in companies])
-        write_dataframe(ctx, comp_df, "company_wikipedia", "jsonl")
-        
+        self.write_dataframe(ctx, comp_df, "company_wikipedia", "jsonl")
+
         return pd.DataFrame([asdict(p) for p in people])
 
 

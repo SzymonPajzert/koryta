@@ -12,7 +12,8 @@ from entities.person import KRS as KrsPerson
 from scrapers.krs.data import CompaniesHardcoded
 from scrapers.krs.graph import QueryRelation
 from scrapers.map.postal_codes import PostalCodes
-from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
+from scrapers.stores import CloudStorage, Context, Pipeline
+from scrapers.stores.file import DownloadableFile
 
 curr_date = datetime.now().strftime("%Y-%m-%d")
 

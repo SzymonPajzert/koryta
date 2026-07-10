@@ -17,7 +17,8 @@ from conductor import Conductor, make_reader_conductor  # type: ignore[attr-defi
 from entities.article import ParsedArticle
 from entities.util import NormalizedParse
 from scrapers.article.parse import extract_article_content
-from scrapers.stores import Context, CrawlQueue, DoneUrl, NotInMirrorError
+from scrapers.stores import Context, CrawlQueue, DoneUrl
+from scrapers.stores.file import NotInMirrorError
 
 _URL_PARSING_CSV = Path(__file__).parent / "test_data" / "url_parsing.csv"
 
@@ -57,15 +58,17 @@ def _parse_domain_worker(host: str, batch: list[DoneUrl]) -> None:
             html_bytes = mirror.get(done.url)
             result = extract_article_content(html_bytes)
             pub_date = result.get("publication_date")
-            out_q.put(ParsedArticle(
-                uid=done.uid,
-                url=done.url,
-                storage_path=done.storage_path,
-                is_article=result.get("is_article"),
-                title=result.get("title"),
-                publication_date=pub_date.isoformat() if pub_date else None,
-                article_content=result.get("article_content", ""),
-            ))
+            out_q.put(
+                ParsedArticle(
+                    uid=done.uid,
+                    url=done.url,
+                    storage_path=done.storage_path,
+                    is_article=result.get("is_article"),
+                    title=result.get("title"),
+                    publication_date=pub_date.isoformat() if pub_date else None,
+                    article_content=result.get("article_content", ""),
+                )
+            )
         except Exception as exc:
             logging.warning("Failed to parse %s: %s", done.url, exc)
             out_q.put(None)
@@ -157,8 +160,10 @@ def run_parse(
     _print_coverage(domain_counts, test_domains)
 
     to_parse = [d for d in all_done if _is_html(d.media_type)][:parse_limit]
-    print(f"\nParsing {len(to_parse)} URLs "
-          f"(limit={parse_limit}, workers={worker_processes})...")
+    print(
+        f"\nParsing {len(to_parse)} URLs "
+        f"(limit={parse_limit}, workers={worker_processes})..."
+    )
 
     by_domain: dict[str, list[DoneUrl]] = {}
     for done in to_parse:
@@ -209,5 +214,7 @@ def run_parse(
 
     logging.info(
         "Parsed %d pages (%d errors, %d not in mirror).",
-        len(to_parse) - errors - not_in_mirror, errors, not_in_mirror,
+        len(to_parse) - errors - not_in_mirror,
+        errors,
+        not_in_mirror,
     )

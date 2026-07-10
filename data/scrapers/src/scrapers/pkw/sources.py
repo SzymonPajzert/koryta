@@ -5,7 +5,7 @@ from datetime import date
 
 from scrapers.pkw.elections import ElectionType
 from scrapers.stores import Context, File
-from scrapers.stores import DownloadableFile as FileSource
+from scrapers.stores.file import DownloadableFile as FileSource
 from util.polish import PkwFormat
 
 

@@ -22,9 +22,9 @@ from entities.person import PersonVote
 from scrapers.stores import (
     CloudStorage,
     Context,
-    DownloadableFile,
     Pipeline,
 )
+from scrapers.stores.file import DownloadableFile
 
 CURRENT_DATE = datetime.now().strftime("%Y-%m-%d")
 

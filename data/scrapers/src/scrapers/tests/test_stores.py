@@ -9,11 +9,11 @@ import pandas as pd
 
 from scrapers.stores import (
     Context,
-    DownloadableFile,
     LocalFile,
     Pipeline,
     ProcessPolicy,
 )
+from scrapers.stores.file import DownloadableFile
 
 
 class TestStores(unittest.TestCase):

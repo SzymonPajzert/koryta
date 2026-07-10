@@ -14,13 +14,11 @@ from scrapers.stores import (
     Context,
     CrawlQueue,
     DataRef,
-    DownloadableFile,
     File,
-    GCSBlob,
     LocalFile,
-    MirrorRef,
     ProcessPolicy,
 )
+from scrapers.stores.file import DownloadableFile, GCSBlob, MirrorRef
 from stores import file
 from stores.config import PROJECT_ROOT
 from stores.download import CompressedMirror, FileSource
