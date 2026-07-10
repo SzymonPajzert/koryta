@@ -139,8 +139,8 @@ class Extract(Pipeline):
             and not args.rejestrio_id
         ):
             raise ValueError(
-                "[Extract]: Needed one of: --region, --krs, --approved, \
-                    --all, --rejestrio-id"
+                "Needed one of following flags to 'koryta' command: --region, --krs, \
+--approved, --all, --rejestrio-id. See pipeline Extract for more details."
             )
 
         return args
