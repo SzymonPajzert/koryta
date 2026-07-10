@@ -7,7 +7,7 @@ from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
-from scrapers.stores import DownloadableFile as FileSource
+from scrapers.stores.file import DownloadableFile as FileSource
 
 
 class CompaniesHardcoded(Pipeline[KRS]):

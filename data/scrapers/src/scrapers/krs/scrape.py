@@ -20,10 +20,10 @@ from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import (
     CloudStorage,
     Context,
-    DownloadableFile,
     Pipeline,
     iterate_pipeline_dict,
 )
+from scrapers.stores.file import DownloadableFile
 
 
 class QueryType(Enum):

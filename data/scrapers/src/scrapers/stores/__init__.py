@@ -9,7 +9,7 @@ import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, List, Union, overload
+from typing import TYPE_CHECKING, Any, Callable, List, NewType, Union, overload
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,8 @@ from scrapers.stores.file import (
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection
+
+Priority = NewType("Priority", int)
 
 
 class Extractor(metaclass=ABCMeta):

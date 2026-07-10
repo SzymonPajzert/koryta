@@ -7,7 +7,8 @@ division codes (województwo, powiat, gmina) from the official TERYT database.
 
 import pandas as pd
 
-from scrapers.stores import Context, DownloadableFile, Pipeline
+from scrapers.stores import Context, Pipeline
+from scrapers.stores.file import DownloadableFile
 
 teryt_data = DownloadableFile(
     "https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx",

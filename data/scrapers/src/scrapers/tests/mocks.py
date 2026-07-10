@@ -15,13 +15,13 @@ from scrapers.stores import (
     CloudStorage,
     Context,
     DataRef,
-    DownloadableFile,
     File,
     Formats,
     LocalFile,
     ProcessPolicy,
     RejestrIO,
 )
+from scrapers.stores.file import DownloadableFile
 from stores.file import FromPath
 
 nested_dict: TypeAlias = dict[str, Union[str, bytes, "nested_dict"]]

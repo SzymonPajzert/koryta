@@ -18,7 +18,8 @@ from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
-from scrapers.stores import IO, CloudStorage, DownloadableFile
+from scrapers.stores import IO, CloudStorage
+from scrapers.stores.file import DownloadableFile
 
 BUCKET = "koryta-pl-crawled"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
