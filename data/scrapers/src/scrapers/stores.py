@@ -584,21 +584,6 @@ class Context:
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
 
 
-def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):
-    """Writes a DataFrame to storage."""
-
-    def writer(f: io.BufferedWriter):
-        match format:
-            case "jsonl":
-                df.to_json(f, orient="records", lines=True)
-            case "csv":
-                df.to_csv(f, index=False)
-            case _:
-                raise ValueError(f"Not supported export format - {format}")
-
-    ctx.io.write_file(LocalFile(filename, "versioned"), writer)
-
-
 Output = typing.TypeVar("Output")
 
 
@@ -723,13 +708,29 @@ class Pipeline(typing.Generic[Output]):
 
         if df is not None and self.output_path != "":
             print(f"Writing to {self.output_path}")
-            write_dataframe(ctx, df, self.output_path, self.format)
+            self.write_dataframe(ctx, df)
 
         if df is not None:
             ctx.refresh_policy.add_refreshed_pipeline(self.pipeline_name)
             self._cached_result = df
 
         return df
+
+    def write_dataframe(self, ctx: Context, df: pd.DataFrame):
+        """Writes a DataFrame to storage."""
+        if self.filename is None:
+            return
+
+        def writer(f: io.BufferedWriter):
+            match self.format:
+                case "jsonl":
+                    df.to_json(f, orient="records", lines=True)
+                case "csv":
+                    df.to_csv(f, index=False)
+                case _:
+                    raise ValueError(f"Not supported export format - {self.format}")
+
+        ctx.io.write_file(LocalFile(self.output_path, "versioned"), writer)
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:
         df = self.read(ctx)

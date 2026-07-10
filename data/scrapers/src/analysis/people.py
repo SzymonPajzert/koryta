@@ -9,7 +9,7 @@ from analysis.utils import read_enriched
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
 from scrapers.krs.list import CompaniesKRS
 from scrapers.map.teryt import Teryt
-from scrapers.stores import Context, LocalFile, Pipeline, write_dataframe
+from scrapers.stores import Context, LocalFile, Pipeline
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -261,19 +261,19 @@ def remove_duplicates(ctx: Context, df):
         dupes = dupes[~dupes["krs_name"].isin(conflicting_names)]
 
         if not dupes.empty:
-            smaller = dupes[
-                [
-                    "krs_name",
-                    "pkw_name",
-                    "wiki_name",
-                    "overall_score",
-                    "mistake_odds",
-                    "birth_year",
-                    "elections",
-                ]
-            ].sort_values("krs_name")
+            # smaller = dupes[
+            #     [
+            #         "krs_name",
+            #         "pkw_name",
+            #         "wiki_name",
+            #         "overall_score",
+            #         "mistake_odds",
+            #         "birth_year",
+            #         "elections",
+            #     ]
+            # ].sort_values("krs_name")
             print(f"Found {len(dupes)} duplicates")
-            write_dataframe(ctx, smaller, "people_duplicated.jsonl", "jsonl")
+            # write_dataframe(ctx, smaller, "people_duplicated.jsonl", "jsonl")
 
     return df
 
