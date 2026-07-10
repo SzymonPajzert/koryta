@@ -1,17 +1,18 @@
 {
   "compilerOptions": {
-    "module": "NodeNext",
+    "ignoreDeprecations": "6.0",
+    "module": "commonjs",
     "esModuleInterop": true,
-    "moduleResolution": "nodenext",
+    "moduleResolution": "node",
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "outDir": "lib",
-    "rootDir": "src",
+    "rootDir": "..",
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
     "target": "es2022"
   },
   "compileOnSave": true,
-  "include": ["src"]
+  "include": ["src", "../shared"]
 }
