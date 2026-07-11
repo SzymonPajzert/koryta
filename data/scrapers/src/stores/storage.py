@@ -229,7 +229,7 @@ class BatchClient(Client):
         parser.add_argument(
             "--batch_idle_timeout",
             type=float,
-            default=600.0,
+            default=3600.0,
             help="Flush a domain batch if idle for this many seconds (default: 600).",
         )
         args, _ = parser.parse_known_args()

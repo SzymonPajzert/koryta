@@ -262,7 +262,7 @@ def profile_scope(enabled: bool, path: Path | None):
 
 def main() -> None:  # noqa: PLR0915
     parser = _build_parser()
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     log_file = _setup_logging(args.log_dir)
     logging.info("Logging to %s", log_file)
 
