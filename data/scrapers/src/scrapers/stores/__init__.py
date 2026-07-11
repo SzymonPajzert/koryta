@@ -495,7 +495,7 @@ class Pipeline(typing.Generic[Output]):
         df = None
         try:
             df = ctx.io.read_data(
-                LocalFile(self.output_path, "versioned")
+                LocalFile(self.output_path(), "versioned")
             ).read_dataframe(self.format, dtype=self.dtype)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
@@ -503,7 +503,7 @@ class Pipeline(typing.Generic[Output]):
         return df
 
     def output_time(self, ctx: Context):
-        self_ref = LocalFile(self.output_path, "versioned") if self.filename else None
+        self_ref = LocalFile(self.output_path(), "versioned") if self.filename else None
         return ctx.io.get_mtime(self_ref) if self_ref else None
 
     @staticmethod
@@ -578,13 +578,24 @@ Should I run it? (y/n) [n]",
 
         return df
 
-    def write_dataframe(self, ctx: Context, df: pd.DataFrame):
+    def write_dataframe(
+        self,
+        ctx: Context,
+        df: pd.DataFrame,
+        filename: str | None = None,
+        format: Formats | None = None,
+    ):
         """Writes a DataFrame to storage."""
-        if self.filename is None:
+        if filename is None:
+            filename = self.filename
+        if format is None:
+            format = self.format
+
+        if filename is None:
             return
 
         def writer(f: io.BufferedWriter):
-            match self.format:
+            match format:
                 case "jsonl":
                     df.to_json(f, orient="records", lines=True)
                 case "csv":
@@ -592,7 +603,9 @@ Should I run it? (y/n) [n]",
                 case _:
                     raise ValueError(f"Not supported export format - {self.format}")
 
-        ctx.io.write_file(LocalFile(self.output_path, "versioned"), writer)
+        ctx.io.write_file(
+            LocalFile(self.output_path(filename, format), "versioned"), writer
+        )
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:
         df = self.read(ctx)
@@ -664,10 +677,16 @@ Should I run it? (y/n) [n]",
             ):
                 yield annotation, pipeline_type_dep
 
-    @property
-    def output_path(self) -> str:
-        if self.filename:
-            return posixpath.join(self.filename, self.filename + "." + self.format)
+    def output_path(
+        self, filename: str | None = None, format: Formats | None = None
+    ) -> str:
+        if filename is None:
+            filename = self.filename
+        if format is None:
+            format = self.format
+
+        if filename is not None:
+            return posixpath.join(filename, filename + "." + format)
         return ""
 
     @property
