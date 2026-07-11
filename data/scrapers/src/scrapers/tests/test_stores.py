@@ -285,8 +285,8 @@ class TestPipeline(unittest.TestCase):
             pipeline.read_or_process(self.mock_ctx)
 
             # Verify write was called
-            self.mock_ctx.io.write_file.assert_called_once()
-            args, _ = self.mock_ctx.io.write_file.call_args
+            self.assertEqual(self.mock_ctx.io.write_file.call_count, 2)
+            args, _ = self.mock_ctx.io.write_file.call_args_list[0]
             # args: (fs, content_callback)
             self.assertTrue(args[0].filename.endswith(".jsonl"))
 
