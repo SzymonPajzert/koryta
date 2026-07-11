@@ -22,6 +22,7 @@ from scrapers.stores.file import (
     File,
     Formats,
     LocalFile,
+    VersionedBackup,
 )
 
 if TYPE_CHECKING:
@@ -491,16 +492,31 @@ class Pipeline(typing.Generic[Output]):
             self.dependencies[annotation] = dep
 
     def read(self, ctx: Context):
+        """Attempts to read the output of the pipeline from storage (local or bucket).
+
+        Raises FileNotFoundError if not found."""
         assert self.filename
-        df = None
+        filenotfound: Exception | None = None
         try:
-            df = ctx.io.read_data(
+            return ctx.io.read_data(
                 LocalFile(self.output_path(), "versioned")
             ).read_dataframe(self.format, dtype=self.dtype)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
-            raise
-        return df
+            filenotfound = e
+
+        try:
+            return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
+                self.format, dtype=self.dtype
+            )
+        except Exception as e:
+            print("Versioned backup read failed, continuing: ", e)
+            filenotfound = e
+
+        # If there was any exception, raise the last one
+        if filenotfound is not None:
+            raise filenotfound
+        return None
 
     def output_time(self, ctx: Context):
         self_ref = LocalFile(self.output_path(), "versioned") if self.filename else None
@@ -606,6 +622,7 @@ Should I run it? (y/n) [n]",
         ctx.io.write_file(
             LocalFile(self.output_path(filename, format), "versioned"), writer
         )
+        ctx.io.write_file(VersionedBackup(filename), writer)
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:
         df = self.read(ctx)

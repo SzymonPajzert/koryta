@@ -150,3 +150,10 @@ class CloudStorage(DataRef):
     max_namespaces: list[str] = field(default_factory=list)
     namespace_values: dict[str, str] = field(default_factory=dict)
     binary: bool = False
+
+
+@dataclass
+class VersionedBackup(DataRef):
+    """A reference to a versioned backup file in cloud storage."""
+
+    filename: str
