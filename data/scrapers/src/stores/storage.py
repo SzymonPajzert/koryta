@@ -357,10 +357,29 @@ class BatchClient(Client):
         with self._global_lock:
             keys = list(self._batches.keys())
 
+        to_flush = []
         for key in keys:
             lock = self._batch_locks[key]
             with lock:
                 if key in self._batches:
-                    batch = self._batches[key]
-                    self._flush_batch(key, batch)
-                    del self._batches[key]
+                    to_flush.append((key, self._batches.pop(key)))
+
+        if not to_flush:
+            return
+
+        max_workers = 16
+        print(f"Flushing {len(to_flush)} batches in parallel (max {max_workers})...")
+        sem = threading.Semaphore(max_workers)
+
+        def _flush_with_sem(key, batch):
+            with sem:
+                self._flush_batch(key, batch)
+
+        threads = [
+            threading.Thread(target=_flush_with_sem, args=(key, batch), daemon=False)
+            for key, batch in to_flush
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
