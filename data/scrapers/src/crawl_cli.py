@@ -307,7 +307,7 @@ def main() -> None:  # noqa: PLR0915
         if args.profile_path
         else None
     )
-    ctx, _ = setup_context(False, crawl_queue=queue, batch_upload=True)
+    ctx, _ = setup_context(False, crawl_queue=queue)
     try:
         with profile_scope(profile_enabled, profile_path):
             run_crawler(ctx, options)
@@ -346,21 +346,6 @@ def bump_small_domains(args, parser):
         pg_client.close()
 
 
-def parse(args):
-    worker_processes = max(1, args.worker_threads)
-    pg_client = PostgresClient.from_env(max_size=1)
-    queue = PostgresCrawlQueue(pg_client)
-    ctx, dumper = setup_context(False, crawl_queue=queue)
-    try:
-        run_parse(
-            queue,
-            ctx,
-            args.parse_limit,
-            worker_processes=worker_processes,
-        )
-    finally:
-        dumper.dump_pandas()
-        pg_client.close()
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
 
 from entities.util import NormalizedParse
 from scrapers.stores import (
