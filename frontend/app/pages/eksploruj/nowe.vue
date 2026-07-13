@@ -239,10 +239,10 @@ const headers = computed(() => {
     { title: "Partie", key: "parties", sortable: false },
     { title: "Firmy", key: "companies", sortable: false },
     { title: "Wybory", key: "elections", sortable: false },
-    { title: "Lata pracy", key: "experience", sortable: false },
-    { title: "Notatki", key: "notesCount", sortable: false },
-    { title: "Głosy łącznie", key: "votes.interesting", sortable: false },
-    { title: "Twój głos", key: "userVote", sortable: false },
+    { title: "Lata pracy", key: "experience", sortable: false, align: "center" as const },
+    { title: "Notatki", key: "notesCount", sortable: false, align: "center" as const },
+    { title: "Głosy łącznie", key: "votes.interesting", sortable: false, align: "center" as const },
+    { title: "Twój głos", key: "userVote", sortable: false, align: "center" as const },
   ];
   if (user.value) {
     baseHeaders.push({

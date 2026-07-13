@@ -188,10 +188,30 @@ const headers = computed(() => {
       key: "latestEmploymentStart",
       sortable: true,
     },
-    { title: "Lata pracy", key: "experience", sortable: true },
-    { title: "Notatki", key: "notesCount", sortable: true },
-    { title: "Głosy łącznie", key: "votes.interesting", sortable: true },
-    { title: "Twój głos", key: "userVote", sortable: false },
+    {
+      title: "Lata pracy",
+      key: "experience",
+      sortable: true,
+      align: "center" as const,
+    },
+    {
+      title: "Notatki",
+      key: "notesCount",
+      sortable: true,
+      align: "center" as const,
+    },
+    {
+      title: "Głosy łącznie",
+      key: "stats.votes.interesting",
+      sortable: true,
+      align: "center" as const,
+    },
+    {
+      title: "Twój głos",
+      key: "userVote",
+      sortable: false,
+      align: "center" as const,
+    },
   ];
   if (user.value) {
     baseHeaders.push({
