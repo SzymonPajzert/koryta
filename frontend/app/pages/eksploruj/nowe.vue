@@ -231,7 +231,9 @@ watch(page, () => {
   actionVoted.value = false;
 });
 
-const sortBy = ref([{ key: "votes.interesting", order: "desc" as const }]);
+const sortBy = ref([
+  { key: "stats.votes.interesting", order: "desc" as const },
+]);
 
 const headers = computed(() => {
   const baseHeaders = [
@@ -239,10 +241,35 @@ const headers = computed(() => {
     { title: "Partie", key: "parties", sortable: false },
     { title: "Firmy", key: "companies", sortable: false },
     { title: "Wybory", key: "elections", sortable: false },
-    { title: "Lata pracy", key: "experience", sortable: false, align: "center" as const },
-    { title: "Notatki", key: "notesCount", sortable: false, align: "center" as const },
-    { title: "Głosy łącznie", key: "votes.interesting", sortable: false, align: "center" as const },
-    { title: "Twój głos", key: "userVote", sortable: false, align: "center" as const },
+    {
+      title: "Ostatnie zatrudnienie",
+      key: "latestEmploymentStart",
+      sortable: false,
+    },
+    {
+      title: "Lata pracy",
+      key: "experience",
+      sortable: false,
+      align: "center" as const,
+    },
+    {
+      title: "Notatki",
+      key: "notesCount",
+      sortable: false,
+      align: "center" as const,
+    },
+    {
+      title: "Głosy łącznie",
+      key: "stats.votes.interesting",
+      sortable: false,
+      align: "center" as const,
+    },
+    {
+      title: "Twój głos",
+      key: "userVote",
+      sortable: false,
+      align: "center" as const,
+    },
   ];
   if (user.value) {
     baseHeaders.push({
@@ -261,7 +288,7 @@ const apiQuery = computed(
       type: "person",
       limit: 1,
       page: page.value,
-      sortBy: "votes.interesting",
+      sortBy: "stats.votes.interesting",
       sortDesc: "true",
       visibility: "private",
       hideVoted: "no_votes",
