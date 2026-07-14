@@ -512,7 +512,8 @@ class Pipeline(typing.Generic[Output]):
             result = func(self, ctx)
             if result and self.confirm_run:
                 answer = ctx.utils.input_with_timeout(
-                    "This pipeline is pretty big, Should I run it? (y/n) [n]",
+                    f"Pipeline {type(self).__name__} runs long. \
+Should I run it? (y/n) [n]",
                     timeout=10,
                 )
                 if answer is None or answer.lower() != "y":
@@ -568,7 +569,7 @@ class Pipeline(typing.Generic[Output]):
         df = self.run_pipeline(ctx, ctx.refresh_policy)
 
         if df is not None and self.output_path != "":
-            print(f"Writing to {self.output_path}")
+            print(f"Writing to {self.output_path()}")
             self.write_dataframe(ctx, df)
 
         if df is not None:
