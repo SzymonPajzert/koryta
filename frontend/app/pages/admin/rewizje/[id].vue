@@ -53,8 +53,8 @@
                 </div>
                 <div class="text-caption font-weight-mono text-grey mt-1">
                   <nuxt-link
-                    v-if="rev.data?.type"
-                    :to="`/entity/${rev.data?.type}/${nodeId}?revisionId=${rev.id}`"
+                    v-if="getRevisionData(rev.data)['type']"
+                    :to="`/entity/${getRevisionData(rev.data)['type']}/${nodeId}?revisionId=${rev.id}`"
                     class="text-decoration-none text-primary font-weight-bold"
                     target="_blank"
                   >
@@ -81,14 +81,22 @@
                   {{ key }}
                 </div>
                 <div class="field-value text-body-2">
-                  <template v-if="rev.data && rev.data[key] !== undefined">
+                  <template
+                    v-if="
+                      rev.data && getRevisionData(rev.data)[key] !== undefined
+                    "
+                  >
                     <pre
                       class="mb-0"
                       style="white-space: pre-wrap; font-family: inherit"
                       >{{
-                        typeof rev.data[key] === "object"
-                          ? JSON.stringify(rev.data[key], null, 2)
-                          : rev.data[key]
+                        typeof getRevisionData(rev.data)[key] === "object"
+                          ? JSON.stringify(
+                              getRevisionData(rev.data)[key],
+                              null,
+                              2,
+                            )
+                          : getRevisionData(rev.data)[key]
                       }}</pre
                     >
                   </template>
@@ -189,6 +197,13 @@ function formatDate(val: unknown) {
   const time = parseTime(val);
   if (!time) return "-";
   return new Date(time).toLocaleString("pl-PL");
+}
+
+function getRevisionData(data: unknown): Record<string, unknown> {
+  if (data && typeof data === "object") {
+    return data as Record<string, unknown>;
+  }
+  return {};
 }
 </script>
 

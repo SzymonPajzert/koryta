@@ -324,6 +324,7 @@ import type {
   Article,
   Region,
   NodeType,
+  Revision,
 } from "~~/shared/model";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import { useDisplay } from "vuetify";
@@ -385,13 +386,12 @@ useHead({
 
 const revisionId = computed(() => route.query.revisionId as string | undefined);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const { data: revisionResponse } = await useAsyncData<any>(
+const { data: revisionResponse } = await useAsyncData<Revision | null>(
   `revision-${route.query.revisionId || "none"}`,
-  () =>
-    revisionId.value
-      ? $fetch(`/api/revisions/${revisionId.value}`)
-      : Promise.resolve(null),
+  async () => {
+    if (!revisionId.value) return null;
+    return $fetch<Revision>(`/api/revisions/${revisionId.value}` as never);
+  },
   { watch: [revisionId] },
 );
 
@@ -400,7 +400,7 @@ const entity = computed(() => {
     return {
       ...response.value?.node,
       ...revisionResponse.value.data,
-    };
+    } as unknown as Person | Company | Article | Region;
   }
   return response.value?.node;
 });
