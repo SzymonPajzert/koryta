@@ -22,7 +22,9 @@
                 v-for="rev in allRevisions"
                 :key="'h-' + rev.id"
                 class="card-header text-left"
-                :class="{ 'highlighted-revision': rev.id === route.query.revisionId }"
+                :class="{
+                  'highlighted-revision': rev.id === route.query.revisionId,
+                }"
               >
                 <div class="d-flex justify-space-between align-start mb-2">
                   <div>
@@ -33,13 +35,21 @@
                       {{ rev.update_user || "Nieznany" }}
                     </div>
                   </div>
-                  <v-chip
-                    :color="rev.update_automatic ? 'info' : 'secondary'"
-                    size="x-small"
-                    class="mt-1"
-                  >
-                    {{ rev.update_automatic ? "Auto" : "Ręczna" }}
-                  </v-chip>
+                  <div class="d-flex flex-column align-end ga-1">
+                    <v-chip
+                      v-if="rev.id === approvedRevisionId"
+                      color="success"
+                      size="x-small"
+                    >
+                      Zaakceptowana
+                    </v-chip>
+                    <v-chip
+                      :color="rev.update_automatic ? 'info' : 'secondary'"
+                      size="x-small"
+                    >
+                      {{ rev.update_automatic ? "Auto" : "Ręczna" }}
+                    </v-chip>
+                  </div>
                 </div>
                 <div class="text-caption font-weight-mono text-grey mt-1">
                   <nuxt-link
@@ -61,7 +71,9 @@
                 v-for="rev in allRevisions"
                 :key="key + '-' + rev.id"
                 class="card-cell"
-                :class="{ 'highlighted-revision': rev.id === route.query.revisionId }"
+                :class="{
+                  'highlighted-revision': rev.id === route.query.revisionId,
+                }"
               >
                 <div
                   class="field-label text-caption text-primary font-weight-bold mb-1"
@@ -100,7 +112,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { ClientOnly } from "#components";
 import { mdiArrowLeft } from "@mdi/js";
 
@@ -114,19 +126,20 @@ useHead({
 });
 
 const route = useRoute();
-const router = useRouter();
 const nodeId = route.params.id as string;
 
 const revisions = ref<Record<string, unknown>[]>([]);
+const approvedRevisionId = ref<string | null>(null);
 const pending = ref(true);
 
 onMounted(async () => {
   try {
-    const data = await $fetch<Record<string, unknown>[]>(
-      "/api/revisions/byNode",
-      { params: { nodeId } },
-    );
-    revisions.value = data;
+    const data = await $fetch<{
+      revisions: Record<string, unknown>[];
+      approvedRevisionId: string | null;
+    }>("/api/revisions/byNode", { params: { nodeId } });
+    revisions.value = data.revisions;
+    approvedRevisionId.value = data.approvedRevisionId;
   } catch (err) {
     console.error("Failed to fetch revisions:", err);
   } finally {

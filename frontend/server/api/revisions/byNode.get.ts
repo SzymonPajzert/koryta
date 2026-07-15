@@ -14,9 +14,10 @@ export default defineEventHandler(async (event) => {
   const db = getFirestore(getApp(), "koryta-pl");
 
   // Query with both field name variants (node_id and nodeId)
-  const [byUnderscore, byCamel] = await Promise.all([
+  const [byUnderscore, byCamel, nodeDoc] = await Promise.all([
     db.collection("revisions").where("node_id", "==", nodeId).get(),
     db.collection("revisions").where("nodeId", "==", nodeId).get(),
+    db.collection("nodes").doc(nodeId).get(),
   ]);
 
   // Deduplicate by document ID
@@ -27,5 +28,24 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return Array.from(map.values());
+  // Extract the approved revision ID from the node document
+  let approvedRevisionId: string | null = null;
+  if (nodeDoc.exists) {
+    const nodeData = nodeDoc.data();
+    const revId = nodeData?.revision_id;
+    if (revId) {
+      if (typeof revId === "string") {
+        const segments = revId.split("/");
+        approvedRevisionId = segments[segments.length - 1];
+      } else if (typeof revId === "object" && "path" in revId) {
+        const segments = (revId as { path: string }).path.split("/");
+        approvedRevisionId = segments[segments.length - 1];
+      }
+    }
+  }
+
+  return {
+    revisions: Array.from(map.values()),
+    approvedRevisionId,
+  };
 });
