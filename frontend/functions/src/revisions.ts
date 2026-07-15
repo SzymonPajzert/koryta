@@ -13,7 +13,7 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
-const db = getFirestore();
+const db = getFirestore(getApps()[0], "koryta-pl");
 
 export const onRevisionWritten = onDocumentWritten(
   {
