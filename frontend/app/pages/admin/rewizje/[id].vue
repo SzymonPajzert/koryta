@@ -43,8 +43,8 @@
                 </div>
                 <div class="text-caption font-weight-mono text-grey mt-1">
                   <nuxt-link
-                    v-if="nodeDoc?.type || rev.data?.type"
-                    :to="`/entity/${nodeDoc?.type || rev.data?.type}/${nodeId}?revisionId=${rev.id}`"
+                    v-if="rev.data?.type"
+                    :to="`/entity/${rev.data?.type}/${nodeId}?revisionId=${rev.id}`"
                     class="text-decoration-none text-primary font-weight-bold"
                     target="_blank"
                   >
@@ -99,10 +99,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useCollection, useIsCurrentUserLoaded, useFirebaseApp } from "vuefire";
-import { collection, query, where, getFirestore } from "firebase/firestore";
 import { ClientOnly } from "#components";
 import { mdiArrowLeft } from "@mdi/js";
 
@@ -117,36 +115,27 @@ useHead({
 
 const route = useRoute();
 const router = useRouter();
-const firebaseApp = useFirebaseApp();
-const db = getFirestore(firebaseApp, "koryta-pl");
 const nodeId = route.params.id as string;
 
-const isAuthReady = useIsCurrentUserLoaded();
+const revisions = ref<Record<string, unknown>[]>([]);
+const pending = ref(true);
 
-const revisionsByNode_id = useCollection(
-  computed(() =>
-    isAuthReady.value
-      ? query(collection(db, "revisions"), where("node_id", "==", nodeId))
-      : null,
-  ),
-);
-
-const revisionsByNodeId = useCollection(
-  computed(() =>
-    isAuthReady.value
-      ? query(collection(db, "revisions"), where("nodeId", "==", nodeId))
-      : null,
-  ),
-);
+onMounted(async () => {
+  try {
+    const data = await $fetch<Record<string, unknown>[]>(
+      "/api/revisions/byNode",
+      { params: { nodeId } },
+    );
+    revisions.value = data;
+  } catch (err) {
+    console.error("Failed to fetch revisions:", err);
+  } finally {
+    pending.value = false;
+  }
+});
 
 const allRevisions = computed(() => {
-  const merged = [...revisionsByNode_id.value, ...revisionsByNodeId.value];
-  // Deduplicate by ID just in case
-  const map = new Map();
-  for (const rev of merged) {
-    map.set(rev.id, rev);
-  }
-  return Array.from(map.values()).sort((a, b) => {
+  return [...revisions.value].sort((a, b) => {
     const timeA = new Date(parseTime(a.update_time)).getTime();
     const timeB = new Date(parseTime(b.update_time)).getTime();
     return timeB - timeA;
@@ -156,21 +145,13 @@ const allRevisions = computed(() => {
 const allKeys = computed(() => {
   const keys = new Set<string>();
   for (const rev of allRevisions.value) {
-    if (rev.data) {
-      for (const k of Object.keys(rev.data)) {
+    if (rev.data && typeof rev.data === "object") {
+      for (const k of Object.keys(rev.data as Record<string, unknown>)) {
         keys.add(k);
       }
     }
   }
   return Array.from(keys).sort();
-});
-
-const pending = computed(() => {
-  return (
-    !isAuthReady.value ||
-    revisionsByNode_id.pending.value ||
-    revisionsByNodeId.pending.value
-  );
 });
 
 function parseTime(val: unknown): string | number {
