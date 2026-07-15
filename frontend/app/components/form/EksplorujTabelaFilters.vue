@@ -91,9 +91,7 @@
         ></v-btn>
 
         <div class="d-flex align-start mb-4 pr-8">
-          <v-icon color="info" class="mr-3 mt-1"
-            >mdi-information-outline</v-icon
-          >
+          <v-icon color="info" class="mr-3 mt-1" :icon="mdiInformationOutline"></v-icon>
           <div>
             <div class="text-subtitle-2 font-weight-bold">
               Filtry administracyjne
@@ -161,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { mdiClose, mdiFilterCogOutline } from "@mdi/js";
+import { mdiClose, mdiFilterCogOutline, mdiInformationOutline } from "@mdi/js";
 import { ref, computed } from "vue";
 
 const showStatusBanner = ref(true);

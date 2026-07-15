@@ -2,7 +2,7 @@
   <div class="pa-4">
     <div class="d-flex align-center mb-4">
       <v-btn
-        icon="mdi-arrow-left"
+        :icon="mdiArrowLeft"
         variant="text"
         class="mr-2"
         @click="router.back()"
@@ -96,6 +96,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useCollection, useIsCurrentUserLoaded, useFirebaseApp } from "vuefire";
 import { collection, query, where, getFirestore } from "firebase/firestore";
 import { ClientOnly } from "#components";
+import { mdiArrowLeft } from "@mdi/js";
 
 definePageMeta({
   middleware: "auth",
