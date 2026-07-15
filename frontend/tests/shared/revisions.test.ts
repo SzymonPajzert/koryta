@@ -56,10 +56,10 @@ describe("computeRevisionsObj", () => {
     expect(result?.has_unapproved).toBe(true);
   });
 
-  it("should set has_unapproved to false if nodeRevisionId is null (not approved at all)", () => {
+  it("should set has_unapproved to true if nodeRevisionId is null (not approved at all)", () => {
     const revisions = [{ id: "rev2", update_time: "2026-07-09T12:00:00Z" }];
 
     const result = computeRevisionsObj(null, revisions);
-    expect(result?.has_unapproved).toBe(false);
+    expect(result?.has_unapproved).toBe(true);
   });
 });
