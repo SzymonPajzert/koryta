@@ -5,7 +5,7 @@
         :icon="mdiArrowLeft"
         variant="text"
         class="mr-2"
-        @click="router.back()"
+        to="/admin/rewizje"
       ></v-btn>
       <h1 class="text-h4">Szczegóły rewizji dla węzła {{ route.params.id }}</h1>
     </div>
