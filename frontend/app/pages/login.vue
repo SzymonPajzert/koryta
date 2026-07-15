@@ -124,6 +124,24 @@ const login = async () => {
     await authLogin(email.value, password.value);
     // User is signed in.
     console.debug("User logged in successfully!");
+
+    // Wait for auth state to propagate to Vuefire before router.push
+    if (!user.value) {
+      await new Promise<void>((resolve) => {
+        const unwatch = watch(user, (u) => {
+          if (u) {
+            unwatch();
+            resolve();
+          }
+        });
+        // Fallback timeout just in case
+        setTimeout(() => {
+          unwatch();
+          resolve();
+        }, 2000);
+      });
+    }
+
     router.push((redirect as string) || "/");
   } catch (err: unknown) {
     const errorObj = err as { code: string; message: string };
@@ -141,6 +159,10 @@ const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
     console.debug("User logged in with Google successfully!");
+
+    // Add delay to allow auth state to propagate to middleware
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     router.push((redirect as string) || "/");
   } catch (err: unknown) {
     const errorObj = err as { code: string; message: string };
@@ -159,8 +181,22 @@ const register = async () => {
     await sendEmailVerification(userCredential.user);
     alert("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
 
-    // Add delay to allow auth state to propagate to middleware (especially for tests)
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // Wait for auth state to propagate to Vuefire before router.push
+    if (!user.value) {
+      await new Promise<void>((resolve) => {
+        const unwatch = watch(user, (u) => {
+          if (u) {
+            unwatch();
+            resolve();
+          }
+        });
+        // Fallback timeout just in case
+        setTimeout(() => {
+          unwatch();
+          resolve();
+        }, 2000);
+      });
+    }
 
     router.push((redirect as string) || "/");
   } catch (err: unknown) {

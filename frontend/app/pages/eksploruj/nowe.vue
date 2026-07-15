@@ -245,6 +245,7 @@ const headers = computed(() => {
       title: "Ostatnie zatrudnienie",
       key: "latestEmploymentStart",
       sortable: false,
+      align: "center" as const,
     },
     {
       title: "Lata pracy",
