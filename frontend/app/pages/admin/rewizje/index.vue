@@ -73,7 +73,7 @@ const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
           order: route.query.sortDesc === "true" ? "desc" : "asc",
         },
       ]
-    : [],
+    : [{ key: "revisions.latest_time", order: "desc" }],
 );
 
 const headers = [
