@@ -7,7 +7,10 @@
         Wyślij ponownie
       </v-btn>
     </div>
-    <div class="mt-4">
+    <div class="mt-4 d-flex gap-2 align-center">
+      <v-btn color="primary" @click="doRedirect">
+        Wróć do przeglądania ({{ countdown }})
+      </v-btn>
       <v-btn color="warning" @click="logoutForced">Wyloguj się teraz</v-btn>
     </div>
   </main>
@@ -35,7 +38,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { watch } from "vue";
+import { useCountdown } from "@vueuse/core";
 import {
   type User,
   onAuthStateChanged,
@@ -53,10 +57,20 @@ const router = useRouter();
 const route = useRoute();
 
 const { redirect, reason } = route.query;
+const { logout, idToken } = useAuthState();
+
+const doRedirect = () => {
+  pause();
+  router.push((redirect as string) || "/");
+};
+
 const {
-  logout,
-  idToken,
-} = useAuthState();
+  remaining: countdown,
+  resume,
+  pause,
+} = useCountdown(5, {
+  onComplete: doRedirect,
+});
 
 const user = ref<User | null>();
 if (auth) {
@@ -70,6 +84,18 @@ if (auth) {
     }
   });
 }
+
+watch(
+  user,
+  (newUser) => {
+    if (newUser) {
+      resume();
+    } else {
+      pause();
+    }
+  },
+  { immediate: true },
+);
 
 const logoutForced = async () => {
   await logout();
