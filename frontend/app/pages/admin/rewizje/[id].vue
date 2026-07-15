@@ -151,6 +151,7 @@ const allKeys = computed(() => {
       }
     }
   }
+  keys.delete("revision_id");
   return Array.from(keys).sort();
 });
 
