@@ -85,7 +85,10 @@ export function computeRevisionsObj(
   }
 
   let has_unapproved = false;
-  if (normalizedRevisionId && typeof normalizedRevisionId === "string") {
+  if (!normalizedRevisionId || typeof normalizedRevisionId !== "string") {
+    // No approved revision exists, so all revisions are unapproved
+    has_unapproved = true;
+  } else {
     const revIdSegments = normalizedRevisionId.split("/");
     const actualRevId = revIdSegments[revIdSegments.length - 1];
     if (latest.id !== actualRevId) {
