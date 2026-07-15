@@ -41,8 +41,16 @@
                     {{ rev.update_automatic ? "Auto" : "Ręczna" }}
                   </v-chip>
                 </div>
-                <div class="text-caption font-weight-mono text-grey">
-                  ID: {{ rev.id }}
+                <div class="text-caption font-weight-mono text-grey mt-1">
+                  <nuxt-link
+                    v-if="nodeDoc?.type || rev.data?.type"
+                    :to="`/entity/${nodeDoc?.type || rev.data?.type}/${nodeId}?revisionId=${rev.id}`"
+                    class="text-decoration-none text-primary font-weight-bold"
+                    target="_blank"
+                  >
+                    ID: {{ rev.id }}
+                  </nuxt-link>
+                  <span v-else>ID: {{ rev.id }}</span>
                 </div>
               </th>
             </tr>
