@@ -22,6 +22,7 @@
                 v-for="rev in allRevisions"
                 :key="'h-' + rev.id"
                 class="card-header text-left"
+                :class="{ 'highlighted-revision': rev.id === route.query.revisionId }"
               >
                 <div class="d-flex justify-space-between align-start mb-2">
                   <div>
@@ -52,6 +53,7 @@
                 v-for="rev in allRevisions"
                 :key="key + '-' + rev.id"
                 class="card-cell"
+                :class="{ 'highlighted-revision': rev.id === route.query.revisionId }"
               >
                 <div
                   class="field-label text-caption text-primary font-weight-bold mb-1"
@@ -216,5 +218,8 @@ function formatDate(val: unknown) {
 }
 .comparison-table tbody tr td {
   border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+.highlighted-revision {
+  background: rgba(var(--v-theme-primary), 0.1) !important;
 }
 </style>
