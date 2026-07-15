@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
 
+from entities.facts import ArticleFact
+
 
 @dataclass
 class Article:
@@ -91,7 +93,7 @@ class ArticleFacts:
 
     url: str
     article_content_hash: str
-    extracted_facts: list[dict[str, Any]]
+    extracted_facts: list[ArticleFact]
     fact_extraction_status: str
     fact_extraction_error: str | None
     model: str

@@ -16,7 +16,7 @@ from entities.facts import (
     EmploymentFact,
     PartyMembershipFact,
     PersonalRelationFact,
-    fact_to_dict,
+    dict_to_fact,
 )
 from scrapers.article.pipelines.koryciarski_scores_pipeline import (
     ArticleKoryciarskiScores,
@@ -516,12 +516,26 @@ def _error_row(
     }
 
 
+def _deserialize_facts(raw: list[Any]) -> list[ArticleFact]:
+    """Convert dicts read from JSONL back to ArticleFact instances."""
+    facts = []
+    for item in raw:
+        if isinstance(item, ArticleFact):
+            facts.append(item)
+        elif isinstance(item, dict):
+            try:
+                facts.append(dict_to_fact(item))
+            except Exception:
+                pass
+    return facts
+
+
 def _emit_facts(ctx: Context, row: dict[str, Any]) -> None:
     ctx.io.dumper.insert_into(  # type: ignore[attr-defined]
         ArticleFacts(
             url=str(row.get("url") or ""),
             article_content_hash=str(row.get("article_content_hash") or ""),
-            extracted_facts=list(row.get("extracted_facts") or []),
+            extracted_facts=_deserialize_facts(row.get("extracted_facts") or []),
             fact_extraction_status=str(row.get("fact_extraction_status") or "ok"),
             fact_extraction_error=(
                 None
@@ -811,12 +825,12 @@ def _normalize_markdown_response(
     url: str,
     text: str,
     article_text: str,
-) -> list[dict[str, Any]]:
-    facts: list[dict[str, Any]] = []
+) -> list[ArticleFact]:
+    facts: list[ArticleFact] = []
     for raw_fact in _extract_markdown_facts(text):
         fact = _coerce_fact(url, raw_fact, article_text)
         if fact is not None:
-            facts.append(fact_to_dict(fact))
+            facts.append(fact)
     return facts
 
 
