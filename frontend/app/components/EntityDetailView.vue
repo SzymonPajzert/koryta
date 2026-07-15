@@ -102,7 +102,7 @@
         <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
           Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
           <br />
-          <nuxt-link :to="`/admin/rewizje/${node}`"
+          <nuxt-link :to="`/admin/rewizje/${node}?revisionId=${revisionId}`"
             >Zobacz historię zmian</nuxt-link
           >.
         </v-alert>
