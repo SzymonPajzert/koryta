@@ -14,12 +14,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const user = await getUser(event);
-  if (!user) {
-    throw createError({
-      statusCode: 401,
-      message: "Unauthorized",
-    });
-  }
 
   const db = getFirestore(getApp(), "koryta-pl");
   const revisionRef = db.collection("revisions").doc();

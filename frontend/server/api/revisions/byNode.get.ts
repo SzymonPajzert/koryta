@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Extract the approved revision ID from the node document
-  let approvedRevisionId: string | null = null;
+  let approvedRevisionId: string | undefined = undefined;
   if (nodeDoc.exists) {
     const nodeData = nodeDoc.data();
     const revId = nodeData?.revision_id;

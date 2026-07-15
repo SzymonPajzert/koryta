@@ -63,7 +63,11 @@
               </span>
             </li>
             <li class="d-flex align-center mb-2">
-              <v-icon color="medium-emphasis" class="mr-2" :icon="mdiCircleSmall"></v-icon>
+              <v-icon
+                color="medium-emphasis"
+                class="mr-2"
+                :icon="mdiCircleSmall"
+              ></v-icon>
               <span
                 >Spróbuj znaleźć interesujące i istotne informacje na temat tej
                 osoby.</span
@@ -112,7 +116,11 @@
               >
             </li>
             <li class="d-flex align-center">
-              <v-icon color="medium-emphasis" class="mr-2" :icon="mdiCircleSmall"></v-icon>
+              <v-icon
+                color="medium-emphasis"
+                class="mr-2"
+                :icon="mdiCircleSmall"
+              ></v-icon>
               <span
                 >Kiedy skończysz, kliknij przycisk "Następna osoba" aby przejść
                 dalej.</span
