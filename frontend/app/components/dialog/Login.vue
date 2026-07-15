@@ -2,7 +2,9 @@
   <v-dialog v-model="dialog" max-width="500">
     <template #activator="{ props: activatorProps }">
       <slot name="activator" :props="activatorProps">
-        <v-btn v-bind="activatorProps" color="primary"> Zaloguj się </v-btn>
+        <v-btn v-if="!hideActivator" v-bind="activatorProps" color="primary">
+          Zaloguj się
+        </v-btn>
       </slot>
     </template>
 
@@ -39,6 +41,14 @@ import { ref } from "vue";
 import { mdiClose } from "@mdi/js";
 
 const dialog = defineModel<boolean>();
+withDefaults(
+  defineProps<{
+    hideActivator?: boolean;
+  }>(),
+  {
+    hideActivator: false,
+  },
+);
 const isLogin = ref(true);
 
 const emit = defineEmits<{
