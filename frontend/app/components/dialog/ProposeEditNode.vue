@@ -86,6 +86,8 @@ const loginDialog = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const user = useCurrentUser();
+const router = useRouter();
+const route = useRoute();
 
 const handleActivatorClick = () => {
   if (user.value) {
@@ -137,12 +139,23 @@ async function submit() {
       body.parties = editData.parties;
     }
 
-    await authFetch("/api/revisions/create", {
-      method: "POST",
-      body,
-    });
+    const { data: response } = await authFetch<{ id: string }>(
+      "/api/revisions/create",
+      {
+        method: "POST",
+        body,
+      },
+    );
     dialog.value = false;
     emit("success");
+
+    // Redirect to the same page with the revisionId to show their proposed changes
+    if (response.value?.id) {
+      router.push({
+        path: route.path,
+        query: { ...route.query, revisionId: response.value.id },
+      });
+    }
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Wystąpił błąd";
   } finally {

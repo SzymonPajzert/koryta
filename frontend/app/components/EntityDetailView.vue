@@ -99,6 +99,14 @@
     </template>
     <v-card v-else width="100%" style="overflow: visible">
       <div class="pa-4">
+        <v-alert v-if="revisionId" type="info" variant="tonal" class="mb-4">
+          Wyświetlasz podgląd zaproponowanej zmiany na tej stronie.
+          <br />
+          <nuxt-link :to="`/admin/rewizje/${node}`"
+            >Zobacz historię zmian</nuxt-link
+          >.
+        </v-alert>
+
         <div v-if="entity?.type === 'place'" class="mb-4 d-flex">
           <v-btn
             class="ml-2"
@@ -375,7 +383,27 @@ useHead({
   }),
 });
 
-const entity = computed(() => response.value?.node);
+const revisionId = computed(() => route.query.revisionId as string | undefined);
+
+const { data: revisionResponse } = await useAsyncData<any>(
+  `revision-${route.query.revisionId || "none"}`,
+  () =>
+    revisionId.value
+      ? $fetch(`/api/revisions/${revisionId.value}`)
+      : Promise.resolve(null),
+  { watch: [revisionId] },
+);
+
+const entity = computed(() => {
+  if (revisionId.value && revisionResponse.value?.data) {
+    return {
+      ...response.value?.node,
+      ...revisionResponse.value.data,
+    };
+  }
+  return response.value?.node;
+});
+
 const regionTeryt = computed(() => {
   if (entity.value && entity.value.type === "region") {
     return entity.value.teryt;
