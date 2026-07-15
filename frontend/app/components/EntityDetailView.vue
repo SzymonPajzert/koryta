@@ -385,6 +385,7 @@ useHead({
 
 const revisionId = computed(() => route.query.revisionId as string | undefined);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const { data: revisionResponse } = await useAsyncData<any>(
   `revision-${route.query.revisionId || "none"}`,
   () =>
