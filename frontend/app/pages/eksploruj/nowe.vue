@@ -63,9 +63,7 @@
               </span>
             </li>
             <li class="d-flex align-center mb-2">
-              <v-icon color="medium-emphasis" class="mr-2"
-                >mdi-circle-small</v-icon
-              >
+              <v-icon color="medium-emphasis" class="mr-2" :icon="mdiCircleSmall"></v-icon>
               <span
                 >Spróbuj znaleźć interesujące i istotne informacje na temat tej
                 osoby.</span
@@ -114,9 +112,7 @@
               >
             </li>
             <li class="d-flex align-center">
-              <v-icon color="medium-emphasis" class="mr-2"
-                >mdi-circle-small</v-icon
-              >
+              <v-icon color="medium-emphasis" class="mr-2" :icon="mdiCircleSmall"></v-icon>
               <span
                 >Kiedy skończysz, kliknij przycisk "Następna osoba" aby przejść
                 dalej.</span
@@ -187,6 +183,7 @@ import {
   mdiCheckboxBlankCircleOutline,
   mdiCheckboxMarkedCircle,
   mdiInformation,
+  mdiCircleSmall,
 } from "@mdi/js";
 import { ref, computed } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
