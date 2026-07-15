@@ -132,14 +132,20 @@ def _parse_ports(raw_ports: str) -> list[int]:
     raw_ports = raw_ports.strip()
     if not raw_ports:
         return []
-    if "-" in raw_ports and "," not in raw_ports:
-        start_text, end_text = raw_ports.split("-", 1)
-        start = int(start_text)
-        end = int(end_text)
-        if end < start:
-            raise ValueError("--llm-ports range end must be >= start")
-        return list(range(start, end + 1))
-    return [int(port.strip()) for port in raw_ports.split(",") if port.strip()]
+    ports: list[int] = []
+    for part in raw_ports.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start_text, end_text = part.split("-", 1)
+            start, end = int(start_text), int(end_text)
+            if end < start:
+                raise ValueError("--llm-ports range end must be >= start")
+            ports.extend(range(start, end + 1))
+        else:
+            ports.append(int(part))
+    return ports
 
 
 def main():

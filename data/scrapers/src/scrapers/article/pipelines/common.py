@@ -46,6 +46,7 @@ def build_parse_status_record(
         "article_content_hash": hash_text(""),
         "html_sha256": None,
         "parser_version": PARSER_VERSION,
+        "extraction_method": None,
     }
     if error is not None:
         record["error"] = error
@@ -75,6 +76,7 @@ def parse_record_to_entity(record: dict[str, Any]) -> ParsedArticleRecord:
         article_content_hash=str(record.get("article_content_hash") or hash_text("")),
         html_sha256=html_sha256 if html_sha256 is None else str(html_sha256),
         parser_version=int(record.get("parser_version") or PARSER_VERSION),
+        extraction_method=record.get("extraction_method") or None,
         error=error if error is None else str(error),
     )
 

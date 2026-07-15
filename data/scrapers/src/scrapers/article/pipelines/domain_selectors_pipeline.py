@@ -3,6 +3,7 @@ import json
 import re
 import textwrap
 from collections import Counter
+from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
@@ -12,8 +13,12 @@ from tqdm.asyncio import tqdm
 from entities.util import NormalizedParse
 from scrapers.article.pipelines.common import hash_bytes, is_html
 from scrapers.article.pipelines.done_urls_pipeline import ArticleDoneUrls
-from scrapers.article.pipelines.pipeline_utils import iter_done_urls, llm_model
-from scrapers.stores import Context, DoneUrl, LLMRequest, MirrorRef, Pipeline
+from scrapers.article.pipelines.pipeline_utils import (
+    iter_done_urls,
+    llm_model,
+    read_html_from_storage,
+)
+from scrapers.stores import Context, DoneUrl, LLMRequest, Pipeline
 
 SELECTOR_PROMPT_VERSION = 1
 SELECTOR_MAX_TOKENS = 200
@@ -403,38 +408,12 @@ def _candidate_done_urls_by_domain(
     }
 
 
-def _read_candidate_html(ctx: Context, done_urls: list[DoneUrl]) -> dict[str, bytes]:
-    html_by_url: dict[str, bytes] = {}
-    hosts = _hosts_for_done_urls(done_urls)
-    mirror = getattr(ctx.io, "mirror", None)
-    delete_extracted = getattr(mirror, "delete_extracted", None)
-    try:
-        for done in done_urls:
-            try:
-                html = ctx.io.read_data(MirrorRef(done.url)).read_bytes()
-            except Exception:
-                continue
-            if html and html.lstrip()[:1] in (b"<", b"\xef"):
-                html_by_url[done.url] = html
-    finally:
-        if callable(delete_extracted):
-            for host in hosts:
-                delete_extracted(host)
-    return html_by_url
-
-
-def _hosts_for_done_urls(done_urls: list[DoneUrl]) -> set[str]:
-    hosts: set[str] = set()
-    for done in done_urls:
-        try:
-            hosts.add(NormalizedParse.parse(done.url).hostname_normalized)
-        except Exception:
-            continue
-    return hosts
-
-
 def _build_selector_sample(ctx: Context, done_urls: list[DoneUrl]) -> dict[str, Any]:
-    html_by_url = _read_candidate_html(ctx, done_urls)
+    html_by_url = {
+        url: html
+        for url, html in read_html_from_storage(ctx, done_urls).items()
+        if html.lstrip()[:1] in (b"<", b"\xef")
+    }
     sample_urls: list[str] = []
     sample_html_hashes: list[str] = []
     prompts: list[str] = []
@@ -640,6 +619,17 @@ def _parse_selector_response(response: str) -> str | None:
     return _clean_selector(selector)
 
 
+_VERIFIED_SELECTORS_FILE = Path(__file__).parent / "verified_selectors.json"
+
+
+def load_verified_selectors() -> dict[str, str]:
+    if not _VERIFIED_SELECTORS_FILE.exists():
+        return {}
+    with _VERIFIED_SELECTORS_FILE.open(encoding="utf-8") as f:
+        data = json.load(f)
+    return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, str)}
+
+
 def selector_map_from_df(selectors_df: pd.DataFrame) -> dict[str, str]:
     selectors: dict[str, str] = {}
     for row in selectors_df.to_dict(orient="records"):
@@ -647,4 +637,4 @@ def selector_map_from_df(selectors_df: pd.DataFrame) -> dict[str, str]:
         selector = row.get("selector")
         if isinstance(domain, str) and isinstance(selector, str) and selector.strip():
             selectors[domain] = selector.strip()
-    return selectors
+    return {**selectors, **load_verified_selectors()}

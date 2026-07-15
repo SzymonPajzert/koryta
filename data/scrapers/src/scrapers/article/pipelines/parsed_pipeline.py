@@ -1,6 +1,9 @@
 import json
-import queue
-import threading
+import multiprocessing
+import random
+import tarfile
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,9 +28,11 @@ from scrapers.article.pipelines.domain_selectors_pipeline import (
     selector_map_from_df,
 )
 from scrapers.article.pipelines.done_urls_pipeline import ArticleDoneUrls
-from scrapers.article.pipelines.pipeline_utils import iter_done_urls
-from scrapers.stores import Context, DoneUrl, MirrorRef, NotInMirrorError, Pipeline
-from stores.config import VERSIONED_DIR
+from scrapers.article.pipelines.pipeline_utils import (
+    iter_done_urls,
+)
+from scrapers.stores import Context, DoneUrl, Pipeline
+from stores.config import DOWNLOADED_DIR, VERSIONED_DIR
 
 _FINAL_OUTPUT_FILE = Path(VERSIONED_DIR) / "article_parsed" / "article_parsed.jsonl"
 _TEMP_OUTPUT_FILE = (
@@ -223,93 +228,48 @@ def _parse_domain_batches(
     if not tasks_by_domain:
         return
 
-    workers = max(1, int(getattr(ctx, "article_workers", 1) or 1))
-    domains_sorted = sorted(tasks_by_domain.items(), key=lambda item: -len(item[1]))
+    workers = max(1, int(getattr(ctx, "article_workers", 8) or 8))
     total_work = sum(len(tasks) for tasks in tasks_by_domain.values())
-    row_queue: queue.Queue[dict[str, Any]] = queue.Queue()
-    domain_queue: queue.Queue[tuple[str, list[ParseTask]] | None] = queue.Queue()
-    stop_event = threading.Event()
 
-    print(f"Parsing {total_work} article HTML pages with {workers} workers")
-    for item in domains_sorted:
-        domain_queue.put(item)
-    for _ in range(workers):
-        domain_queue.put(None)
-
-    worker_threads = [
-        threading.Thread(
-            target=_parse_worker_loop,
-            args=(ctx, domain_queue, row_queue, stop_event),
-            name=f"article-parse-{idx}",
-            daemon=True,
-        )
-        for idx in range(workers)
-    ]
-    for thread in worker_threads:
-        thread.start()
-
-    try:
-        with tqdm(total=total_work, desc="Parsing HTML", unit="page") as bar:
-            received = 0
-            while received < total_work:
-                try:
-                    row = row_queue.get(timeout=5)
-                except queue.Empty:
-                    if not any(thread.is_alive() for thread in worker_threads):
-                        break
-                    continue
-                _emit_record(ctx, row)
-                received += 1
-                bar.update(1)
-    except KeyboardInterrupt as exc:
-        stop_event.set()
-        raise InterruptedError from exc
-    finally:
-        stop_event.set()
-        for thread in worker_threads:
-            thread.join(timeout=1)
-
-
-def _parse_worker_loop(
-    ctx: Context,
-    domain_queue: queue.Queue[tuple[str, list[ParseTask]] | None],
-    row_queue: queue.Queue[dict[str, Any]],
-    stop_event: threading.Event,
-) -> None:
-    while not stop_event.is_set():
-        item = domain_queue.get()
-        if item is None:
-            return
-        host, tasks = item
-        _parse_domain_batch(ctx, host, tasks, row_queue, stop_event)
-
-
-def _parse_domain_batch(
-    ctx: Context,
-    host: str,
-    tasks: list[ParseTask],
-    row_queue: queue.Queue[dict[str, Any]],
-    stop_event: threading.Event,
-) -> None:
-    mirror = getattr(ctx.io, "mirror", None)
-    ensure_extracted = getattr(mirror, "ensure_extracted", None)
-    delete_extracted = getattr(mirror, "delete_extracted", None)
-    try:
-        if callable(ensure_extracted):
-            ensure_extracted(host)
+    by_storage: dict[str, list[ParseTask]] = defaultdict(list)
+    for tasks in tasks_by_domain.values():
         for task in tasks:
-            if stop_event.is_set():
-                return
-            row_queue.put(_parse_task(ctx, task))
-    except NotInMirrorError as exc:
-        for task in tasks:
-            row_queue.put(_status_row_for_task(task, "not_in_mirror", error=str(exc)))
-    except Exception as exc:
-        for task in tasks:
-            row_queue.put(_status_row_for_task(task, "error", error=str(exc)))
-    finally:
-        if callable(delete_extracted):
-            delete_extracted(host)
+            by_storage[task.storage_path].append(task)
+
+    storage_items = list(by_storage.items())
+    random.shuffle(storage_items)
+
+    print(
+        f"Parsing {total_work} pages across "
+        f"{len(by_storage)} tar.gz files with {workers} workers"
+    )
+
+    mp_ctx = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(
+        max_workers=workers, mp_context=mp_ctx
+    ) as pool:
+        futures = {
+            pool.submit(
+                _parse_storage_batch_in_process, sp, t, DOWNLOADED_DIR
+            ): len(t)
+            for sp, t in storage_items
+        }
+        try:
+            with tqdm(
+                total=total_work, desc="Parsing HTML", unit="page", smoothing=0.05
+            ) as bar:
+                for future in as_completed(futures):
+                    try:
+                        rows = future.result()
+                    except Exception as exc:
+                        bar.update(futures[future])
+                        print(f"Batch error: {exc}")
+                        continue
+                    for row in rows:
+                        _emit_record(ctx, row)
+                    bar.update(len(rows))
+        except KeyboardInterrupt:
+            raise InterruptedError
 
 
 def _status_row_for_task(
@@ -331,19 +291,20 @@ def _status_row_for_task(
     )
 
 
-def _parse_task(ctx: Context, task: ParseTask) -> dict[str, Any]:
+def _parse_task(task: ParseTask, html_bytes: bytes) -> dict[str, Any]:
     done = DoneUrl(task.uid, task.url, task.storage_path)
     try:
-        html_bytes = ctx.io.read_data(MirrorRef(task.url)).read_bytes()
-        result = extract_article_content(html_bytes, task.selector)
+        result = extract_article_content(html_bytes, task.selector, task.url)
         article_content = result.get("article_content", "") or ""
         selector_matched = bool(result.get("selector_matched"))
-        if not selector_matched:
-            parse_status = "selector_not_found"
-        elif not article_content.strip():
-            parse_status = "empty_text"
+        extraction_method = result.get("extraction_method")
+        has_content = bool(article_content.strip())
+        if extraction_method == "selector":
+            parse_status = "ok" if has_content else "empty_text"
+        elif extraction_method == "readability":
+            parse_status = "ok" if has_content else "empty_text"
         else:
-            parse_status = "ok"
+            parse_status = "selector_not_found"
         publication_date = result.get("publication_date")
         record = {
             "uid": task.uid,
@@ -353,6 +314,7 @@ def _parse_task(ctx: Context, task: ParseTask) -> dict[str, Any]:
             "selector": task.selector,
             "parse_status": parse_status,
             "selector_matched": selector_matched,
+            "extraction_method": extraction_method,
             "title": result.get("title"),
             "publication_date": (
                 publication_date.isoformat()
@@ -380,6 +342,43 @@ def _parse_task(ctx: Context, task: ParseTask) -> dict[str, Any]:
         )
 
 
+_GCS_PREFIX = "gs://koryta-pl-crawled/"
+
+
+def _parse_storage_batch_in_process(
+    storage_path: str, tasks: list[ParseTask], downloaded_dir: str
+) -> list[dict[str, Any]]:
+    blob_name = storage_path.removeprefix(_GCS_PREFIX)
+    local_path = Path(downloaded_dir) / blob_name.replace("/", ".")
+    remaining = {t.url: t for t in tasks}
+    results: list[dict[str, Any]] = []
+    try:
+        with tarfile.open(local_path, mode="r:gz") as tar:
+            members = {m.name: m for m in tar.getmembers()}
+            for task in tasks:
+                member = members.get(_member_path_from_url(task.url))
+                if member is None:
+                    continue
+                f = tar.extractfile(member)
+                if f is not None:
+                    results.append(_parse_task(task, f.read()))
+                    remaining.pop(task.url, None)
+    except Exception as exc:
+        return [_status_row_for_task(t, "error", error=str(exc)) for t in tasks]
+    for task in remaining.values():
+        results.append(_status_row_for_task(task, "not_in_mirror"))
+    return results
+
+
+def _member_path_from_url(url: str) -> str:
+    try:
+        parsed = NormalizedParse.parse(url)
+        path = parsed.path if parsed.path else "index"
+        return f"{parsed.hostname}/{path}".replace("//", "/").rstrip("/")
+    except Exception:
+        return ""
+
+
 def _entity_to_record(entity: ParsedArticleRecord) -> dict[str, Any]:
     return {
         "uid": entity.uid,
@@ -389,6 +388,7 @@ def _entity_to_record(entity: ParsedArticleRecord) -> dict[str, Any]:
         "selector": entity.selector,
         "parse_status": entity.parse_status,
         "selector_matched": entity.selector_matched,
+        "extraction_method": entity.extraction_method,
         "title": entity.title,
         "publication_date": entity.publication_date,
         "ld_json": entity.ld_json,
