@@ -21,7 +21,13 @@ export interface RevisionMinimal {
  * 3. `string`: When a previous mapping step explicitly converted it to an ISO string.
  */
 export function normalizeUpdateTime(
-  updateTime: Timestamp | string | { _seconds: number } | null | undefined,
+  updateTime:
+    | Timestamp
+    | string
+    | { _seconds: number }
+    | null
+    | undefined
+    | unknown,
 ): string | null {
   if (!updateTime) return null;
   if (typeof updateTime === "string") return updateTime;

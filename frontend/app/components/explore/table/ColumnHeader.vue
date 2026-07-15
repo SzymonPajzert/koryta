@@ -3,13 +3,13 @@
     <v-tooltip :text="tooltip" location="top" max-width="300">
       <template #activator="{ props }">
         <v-icon
+          :icon="mdiInformationOutline"
           v-bind="props"
           size="small"
           class="mr-2"
           color="grey-darken-1"
           @click.stop
-          >mdi-information-outline</v-icon
-        >
+        />
       </template>
     </v-tooltip>
     <span>{{ column.title }}</span>
@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { mdiArrowDown, mdiArrowUp } from "@mdi/js";
+import { mdiArrowDown, mdiArrowUp, mdiInformationOutline } from "@mdi/js";
 defineProps<{
   tooltip: string;
   column: {
