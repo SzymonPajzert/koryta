@@ -6,6 +6,7 @@ from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.scores import CompanyScores, PeopleScores
 from analysis.stats import Statistics
 from scrapers.article.pipelines import (
+    ArticleAnalyzed,
     ArticleDomainSelectors,
     ArticleDoneUrls,
     ArticleExtractedFacts,
@@ -32,6 +33,7 @@ PIPELINES = [
     ArticleParsed,
     ArticleKoryciarskiScores,
     ArticleExtractedFacts,
+    ArticleAnalyzed,
     CompaniesKRS,
     Companies,
     CompaniesKMGP,

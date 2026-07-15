@@ -13,6 +13,7 @@ from scrapers.stores import (
 )
 
 ARTICLE_PIPELINES = {
+    "ArticleAnalyzed",
     "ArticleDoneUrls",
     "ArticleDomainSelectors",
     "ArticleExtractedFacts",
@@ -124,6 +125,12 @@ def get_args():
         default=None,
         help="Max article text characters fed to the facts extraction prompt.",
     )
+    parser.add_argument(
+        "--tag",
+        type=str,
+        default=None,
+        help="Tag for this pipeline run (e.g. v1_qwen3-32b), stored in output records.",
+    )
     args, _ = parser.parse_known_args()
     return args
 
@@ -174,6 +181,7 @@ def main():
         ),
         article_facts_max_tokens=args.article_facts_max_tokens,
         article_facts_text_limit=args.article_facts_text_limit,
+        article_tag=args.tag,
         policy=policy,
     )
 

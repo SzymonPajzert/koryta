@@ -175,6 +175,7 @@ def setup_context(
     article_facts_min_koryciarski_score: int | None = None,
     article_facts_max_tokens: int | None = None,
     article_facts_text_limit: int | None = None,
+    article_tag: str | None = None,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
 ) -> tuple[Context, EntityDumper]:
@@ -215,6 +216,7 @@ def setup_context(
         article_facts_min_koryciarski_score=article_facts_min_koryciarski_score,
         article_facts_max_tokens=article_facts_max_tokens,
         article_facts_text_limit=article_facts_text_limit,
+        article_tag=article_tag,
     )
 
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore

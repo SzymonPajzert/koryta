@@ -647,6 +647,7 @@ class Context:
     article_facts_min_koryciarski_score: int | None = None
     article_facts_max_tokens: int | None = None
     article_facts_text_limit: int | None = None
+    article_tag: str | None = None
 
 
 def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):

@@ -102,3 +102,22 @@ class ArticleFacts:
     response_think_chars: int = 0
     response_think_blocks: int = 0
     response_think_text: str = ""
+
+
+@dataclass
+class ArticleAnalyzedRecord:
+    """Merged article record combining parse, score and extracted facts."""
+
+    __output_path__: ClassVar[Path] = Path(
+        "article_analyzed/article_analyzed.jsonl.tmp"
+    )
+
+    url: str
+    domain: str
+    title: str | None
+    publication_date: str | None
+    article_content: str
+    koryciarski_llm_score: int | None
+    koryciarski_llm_reason: str
+    extracted_facts: list[dict[str, Any]]
+    tag: str | None = None

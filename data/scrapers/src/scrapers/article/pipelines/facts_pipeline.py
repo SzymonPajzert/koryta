@@ -423,7 +423,7 @@ def _cache_valid(
         and "response_think_blocks" in cached
         and "response_think_text" in cached
         and all(
-            "justification_is_in_text" in fact
+            "justification_in_text" in fact
             for fact in cached.get("extracted_facts") or []
             if isinstance(fact, dict)
         )
@@ -618,7 +618,7 @@ def _coerce_fact(
 ) -> ArticleFact | None:
     fact_type = raw_fact.get("fact_type")
     justification = str(raw_fact.get("justification") or "").strip()
-    justification_is_in_text = _justification_is_supported(
+    justification_in_text = _find_justification_in_text(
         justification,
         article_text,
     )
@@ -640,7 +640,8 @@ def _coerce_fact(
         return EmploymentFact(
             url=url,
             justification=justification,
-            justification_is_in_text=justification_is_in_text,
+            justification_in_text=justification_in_text,
+
             person=person,
             organization=organization,
             role=role_text or None,
@@ -656,7 +657,8 @@ def _coerce_fact(
         return PartyMembershipFact(
             url=url,
             justification=justification,
-            justification_is_in_text=justification_is_in_text,
+            justification_in_text=justification_in_text,
+
             person=person,
             party=party,
         )
@@ -684,7 +686,8 @@ def _coerce_fact(
         return PersonalRelationFact(
             url=url,
             justification=justification,
-            justification_is_in_text=justification_is_in_text,
+            justification_in_text=justification_in_text,
+
             subject=subject,
             object=object_,
             relation=relation_text or None,
@@ -692,29 +695,34 @@ def _coerce_fact(
     return None
 
 
-def _justification_is_supported(justification: str, article_text: str) -> bool:
+def _find_justification_in_text(
+    justification: str, article_text: str
+) -> str | None:
     justification = justification.strip()
     if not justification:
-        return False
+        return None
     if justification in article_text:
-        return True
-    if _normalized_substring(justification, article_text):
-        return True
+        return justification
 
     stripped = _strip_edge_ellipsis(justification)
-    if stripped and stripped != justification and stripped in article_text:
-        return True
-    if stripped and stripped != justification and _normalized_substring(
-        stripped,
-        article_text,
-    ):
-        return True
+    candidate = stripped if (stripped and stripped != justification) else justification
 
-    pattern = _justification_wildcard_pattern(stripped or justification)
-    if pattern is not None and re.search(pattern, article_text, re.DOTALL) is not None:
-        return True
+    if candidate != justification and candidate in article_text:
+        return candidate
+    if _normalized_substring(justification, article_text):
+        return justification
+    if candidate != justification and _normalized_substring(candidate, article_text):
+        return candidate
 
-    return _fuzzy_justification_match(stripped or justification, article_text)
+    pattern = _justification_wildcard_pattern(candidate)
+    if pattern is not None:
+        m = re.search(pattern, article_text, re.DOTALL)
+        if m is not None:
+            return m.group(0)
+
+    if _fuzzy_justification_match(candidate, article_text):
+        return candidate
+    return None
 
 
 def _justification_wildcard_pattern(justification: str) -> str | None:
