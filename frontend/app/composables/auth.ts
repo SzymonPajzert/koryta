@@ -85,14 +85,17 @@ export const authFetch = createUseFetch({
     }
 
     if (user.value) {
+      // TODO don't auto add latest here
       options.query = { ...options.query, latest: true };
-      // TODO restore only for user-specific content.
-      // If passing authorization, we will never hit cache
-      // https://firebase.google.com/docs/app-hosting/optimize-cache#cacheable-content
-      // const token = await user.value.getIdToken();
-      // const headers = toValue(options.headers) || new Headers();
-      // headers.set("Authorization", `Bearer ${token}`);
-      // options.headers = headers;
+
+      // Attach auth token to requests that are not GET or HEAD.
+      const method = (unref(options.method) || "GET").toUpperCase();
+      if (method !== "GET" && method !== "HEAD") {
+        const token = await user.value.getIdToken();
+        const headers = new Headers(unref(options.headers) || {});
+        headers.set("Authorization", `Bearer ${token}`);
+        options.headers = headers;
+      }
     }
   },
 });
