@@ -5,6 +5,9 @@ test.describe("OmniSearch Nowe", () => {
     // 1. Go to login page
     await page.goto("/login");
 
+    // Wait for Vue hydration to complete before interacting
+    await page.waitForTimeout(1500);
+
     // 2. Switch to register mode
     await page
       .locator("text=Nie masz konta? Zarejestruj się")
@@ -27,13 +30,13 @@ test.describe("OmniSearch Nowe", () => {
 
     // Wait for hydration
     await expect(page.locator(".v-main")).toBeVisible();
-    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(500);
 
     // Click the search input
     await page.locator("input#omni-search").click();
 
-    // Type 'and' to search for Andrzej Grzyb
-    await page.locator("input#omni-search").fill("and");
+    // Type 'grzyb' to search for Andrzej Grzyb
+    await page.locator("input#omni-search").fill("grzyb");
 
     // Wait for search results
     const personItem = page

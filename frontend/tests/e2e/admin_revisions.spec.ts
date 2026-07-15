@@ -64,6 +64,9 @@ test.describe("Admin Revisions View", () => {
     // 1. Go to login page
     await page.goto("/login");
 
+    // Wait for Vue hydration to complete before interacting
+    await page.waitForTimeout(1500);
+
     // 2. Switch to register mode
     await page.locator("text=Nie masz konta? Zarejestruj się").click();
     await expect(page.locator('button:has-text("Stwórz konto")')).toBeVisible();
