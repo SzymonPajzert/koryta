@@ -49,12 +49,10 @@ export const onRevisionWritten = onDocumentWritten(
           "No revisions found for node:",
           nodeId,
           "revision: ",
-          data.id,
+          event.params.revisionId,
         );
         const nodeRef = db.collection("nodes").doc(nodeId);
-        await nodeRef.update({
-          revisions: null,
-        });
+        await nodeRef.set({ revisions: null }, { merge: true });
         return;
       }
 
