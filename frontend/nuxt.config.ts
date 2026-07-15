@@ -209,6 +209,7 @@ export default defineNuxtConfig({
   },
   routeRules: {
     "/": { swr: 3600 },
+    "/admin/**": { ssr: false },
   },
   devServer: {
     host: "127.0.0.1",
