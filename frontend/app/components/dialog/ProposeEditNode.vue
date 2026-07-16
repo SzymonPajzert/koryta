@@ -94,10 +94,12 @@ import { parties } from "~~/shared/misc";
 const props = defineProps<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   entity: Record<string, any>;
+  skipRedirect?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "success"): void;
+  (e: "submitted", revisionId: string): void;
 }>();
 
 const dialog = ref(false);
@@ -168,12 +170,17 @@ async function submit() {
     dialog.value = false;
     emit("success");
 
-    // Redirect to the same page with the revisionId to show their proposed changes
     if (response.value?.id) {
-      router.push({
-        path: route.path,
-        query: { ...route.query, revisionId: response.value.id },
-      });
+      emit("submitted", response.value.id);
+
+      // When skipRedirect is set, the parent handles showing the revision
+      // (e.g., the tabela side panel shows the link inline)
+      if (!props.skipRedirect) {
+        router.push({
+          path: route.path,
+          query: { ...route.query, revisionId: response.value.id },
+        });
+      }
     }
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Wystąpił błąd";

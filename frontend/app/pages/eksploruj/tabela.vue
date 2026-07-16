@@ -25,6 +25,42 @@
       />
 
       <div v-if="focusedPerson" class="pa-4 pt-0">
+        <div class="d-flex align-center mb-4">
+          <DialogProposeEditNode
+            :entity="focusedPerson"
+            skip-redirect
+            @submitted="onRevisionSubmitted"
+          >
+            <template #activator="{ props: activatorProps }">
+              <v-btn
+                v-bind="activatorProps"
+                variant="tonal"
+                color="warning"
+                :prepend-icon="mdiPencilOutline"
+              >
+                Zaproponuj zmianę
+              </v-btn>
+            </template>
+          </DialogProposeEditNode>
+        </div>
+
+        <v-alert
+          v-if="submittedRevisionId"
+          type="info"
+          variant="tonal"
+          class="mb-4"
+        >
+          Zaproponowano zmianę.
+          <a
+            :href="getPersonPreviewUrl(focusedPerson, submittedRevisionId)"
+            target="_blank"
+            class="text-primary font-weight-bold"
+          >
+            Podgląd zmiany
+            <v-icon :icon="mdiOpenInNew" size="small" />
+          </a>
+        </v-alert>
+
         <NoteEditor
           :key="focusedPerson.id"
           :node-id="focusedPerson.id"
@@ -134,7 +170,12 @@
 </template>
 
 <script setup lang="ts">
-import { mdiCash, mdiOfficeBuildingOutline } from "@mdi/js";
+import {
+  mdiCash,
+  mdiOfficeBuildingOutline,
+  mdiPencilOutline,
+  mdiOpenInNew,
+} from "@mdi/js";
 import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
@@ -144,6 +185,7 @@ import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
 import { useEdges } from "~/composables/edges";
+import { generateEntityUrl } from "~/composables/slugs";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -506,8 +548,20 @@ const focusedEdges = computed(() => [
   ...focusedTargets.value,
 ]);
 
+const submittedRevisionId = shallowRef<string | undefined>(undefined);
+
+const onRevisionSubmitted = (revisionId: string) => {
+  submittedRevisionId.value = revisionId;
+};
+
+const getPersonPreviewUrl = (person: PersonRich, revisionId: string) => {
+  const baseUrl = generateEntityUrl("person", person.id, person.name);
+  return `${baseUrl}?revisionId=${revisionId}`;
+};
+
 const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
+  submittedRevisionId.value = undefined;
   openDrawer.value = true;
 };
 </script>
