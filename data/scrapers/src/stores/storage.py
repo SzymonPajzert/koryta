@@ -1,7 +1,6 @@
 import argparse
 import atexit
 import io
-import os
 import tarfile
 import threading
 import typing
@@ -22,6 +21,7 @@ from uuid_extensions import uuid7str  # type: ignore
 from entities.util import NormalizedParse
 from scrapers.stores import IO, CloudStorage
 from scrapers.stores.file import DownloadableFile
+from stores.user import get_username
 
 CRAWLED_BUCKET = "koryta-pl-crawled"
 SHARED_BUCKET = "koryta-pl-sharedcache"
@@ -230,7 +230,7 @@ class Client:
         filename, user, and datetime.
         """
 
-        user = os.environ.get("USER", "configured_user")
+        user = get_username()
         dt_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
         blob_name = f"filename={filename}/user={user}/datetime={dt_str}/backup.tar.gz"
