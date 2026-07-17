@@ -1,8 +1,10 @@
 import argparse
 import atexit
 import io
+import os
 import tarfile
 import threading
+import typing
 from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
@@ -22,6 +24,7 @@ from scrapers.stores import IO, CloudStorage
 from scrapers.stores.file import DownloadableFile
 
 CRAWLED_BUCKET = "koryta-pl-crawled"
+SHARED_BUCKET = "koryta-pl-sharedcache"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 
@@ -214,6 +217,47 @@ class Client:
                     values.add(v)
 
         return sorted(list(values))
+
+    def upload_backup(
+        self,
+        filename: str,
+        content: str | typing.Callable[[io.BufferedWriter], None],
+    ):
+        """Uploads a versioned backup as a tar.gz archive to GCS.
+
+        Creates an archive containing the data file and an empty metadata.json,
+        then uploads it to the backup bucket under a path partitioned by
+        filename, user, and datetime.
+        """
+
+        user = os.environ.get("USER", "configured_user")
+        dt_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+        blob_name = f"filename={filename}/user={user}/datetime={dt_str}/backup.tar.gz"
+
+        bucket = self.storage_client.bucket(SHARED_BUCKET)
+        blob = bucket.blob(blob_name)
+
+        tar_buf = io.BytesIO()
+        with tarfile.open(fileobj=tar_buf, mode="w:gz") as tar:
+            df_bytes = io.BytesIO()
+            if isinstance(content, str):
+                df_bytes.write(content.encode("utf-8"))
+            else:
+                content(df_bytes)  # type: ignore
+            df_bytes.seek(0)
+
+            info = tarfile.TarInfo(name=filename)
+            info.size = len(df_bytes.getvalue())
+            tar.addfile(info, df_bytes)
+
+            meta_info = tarfile.TarInfo(name="metadata.json")
+            meta_info.size = 0
+            tar.addfile(meta_info, io.BytesIO(b""))
+
+        tar_buf.seek(0)
+        blob.upload_from_file(tar_buf, content_type="application/gzip")
+        print(f"Successfully uploaded backup to gs://{SHARED_BUCKET}/{blob_name}")
 
 
 class BatchClient(Client):
