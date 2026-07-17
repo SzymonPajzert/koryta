@@ -4,7 +4,7 @@
       v-model="openDrawer"
       location="end"
       temporary
-      :width="$vuetify.display.mdAndUp ? 600 : 280"
+      :width="$vuetify.display.mdAndUp ? 600 : $vuetify.display.width"
     >
       <v-card-item>
         <template #append>
@@ -34,7 +34,7 @@
         <CardEmploymentHistory :edges="focusedEdges" />
       </div>
     </v-navigation-drawer>
-    <div class="pa-4">
+    <div class="pa-4 pa-md-6 w-100">
       <h1 class="text-h4 mb-4">
         Eksploruj powiązania dla
         {{ entityName }}
@@ -68,36 +68,56 @@
         </v-col>
       </v-row>
 
-      <v-alert
-        v-if="region && !company"
-        type="warning"
+      <v-card
+        v-if="showZrzutkaBanner"
+        class="mb-4 px-6 py-4 d-flex flex-column flex-md-row align-md-center gap-4"
         variant="tonal"
-        class="mb-4"
-        :icon="mdiCash"
+        color="success"
+        rounded="lg"
       >
-        <div class="d-flex align-center w-100">
+        <div class="d-flex align-start align-sm-center gap-3 flex-grow-1">
+          <v-icon
+            :icon="mdiInformationOutline"
+            color="orange"
+            size="40"
+            class="flex-shrink-0 mt-1 mt-md-0 d-none d-md-flex"
+          />
+          <span class="text-body-1 text-left text-md-center flex-grow-1">
+            Wesprzyj projekt na zrzutce, by przygotować podsumowania dla innych
+            miast, podobnie jak to dla
+            <NuxtLink to="/entity/region/teryt1261">Krakowa</NuxtLink>
+          </span>
+        </div>
+        <div class="d-flex gap-4 flex-shrink-0 mt-3 mt-md-0">
           <v-btn
             href="https://zrzutka.pl/rd7ssx/pay"
             target="_blank"
-            color="#E64164"
+            color="#097214ff"
+            variant="elevated"
+            :size="$vuetify.display.mdAndUp ? undefined : 'small'"
+            min-width="120"
+            class="mr-2"
           >
-            Zrzutka
             <v-img
-              :width="30"
+              :width="22"
               aspect-ratio="16/9"
               cover
               src="@/assets/zrzutka.png"
+              class="mr-1"
             />
+            Zrzutka
           </v-btn>
-          <v-spacer />
-          <div class="mr-8">
-            Wesprzyj projekt na zrzutce, by przygotować podsumowania dla innych
-            miast, podobie jak to dla
-            <NuxtLink to="/entity/region/teryt1261">Krakowa</NuxtLink>
-          </div>
-          <v-spacer />
+          <v-btn
+          :size="$vuetify.display.mdAndUp ? 'large' : undefined"
+          color="orange""
+          density="compact"
+          icon="$close"
+          variant="text"
+          class="flex-shrink-0"
+          @click="showZrzutkaBanner = false"
+        />
         </div>
-      </v-alert>
+      </v-card>
 
       <ExploreLoginBanner v-if="!user" :hidden-count="hiddenCount" />
 
@@ -134,7 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { mdiCash, mdiOfficeBuildingOutline } from "@mdi/js";
+import { mdiInformationOutline, mdiOfficeBuildingOutline } from "@mdi/js";
 import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
@@ -154,7 +174,6 @@ const route = useRoute();
 const router = useRouter();
 
 const DEFAULT_ITEMS_PER_PAGE = "10";
-
 const itemsPerPage = ref(
   parseInt((route.query.itemsPerPage as string) || DEFAULT_ITEMS_PER_PAGE),
 );
@@ -497,6 +516,7 @@ const updateQueryParams = async (options: {
 };
 
 const openDrawer = shallowRef(false);
+const showZrzutkaBanner = ref(true);
 const focusedPerson = shallowRef<PersonRich | undefined>(undefined);
 const focusedPersonId = computed(() => focusedPerson.value?.id);
 const { sources: focusedSources, targets: focusedTargets } =
@@ -522,6 +542,21 @@ const focusPerson = (item: PersonRich) => {
   }
   .table-card :deep(.v-data-table__th) {
     top: var(--v-layout-top) !important;
+  }
+}
+
+/* Sticky first column — only on mobile where the table scrolls horizontally */
+@media (max-width: 959px) {
+  .table-card :deep(th:first-child),
+  .table-card :deep(td:first-child) {
+    position: sticky !important;
+    left: 0;
+    z-index: 2;
+    background: rgb(var(--v-theme-surface));
+  }
+
+  .table-card :deep(th:first-child) {
+    z-index: 3 !important;
   }
 }
 </style>
