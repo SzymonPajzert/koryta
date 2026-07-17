@@ -27,3 +27,25 @@ def get_username():
             return user
 
     raise ValueError("USERNAME environment variable not set")
+
+
+def pick_user(username: str, userlist: list[str]) -> str:
+    if username in userlist:
+        return username
+    elif len(userlist) == 1:
+        chosen_user = next(iter(userlist))
+        print(f"Using only available user: '{chosen_user}'")
+        return chosen_user
+    else:
+        users = sorted(userlist)
+        print("Available users:")
+        for i, u in enumerate(users):
+            print(f"  [{i}] {u}")
+        choice = input("Select user number: (or 'q' to quit):").strip()
+        if choice.lower() == "q":
+            raise ValueError("User selection aborted by the user.")
+        try:
+            chosen_user = users[int(choice)]
+            return chosen_user
+        except (ValueError, IndexError):
+            raise FileNotFoundError("Invalid selection")

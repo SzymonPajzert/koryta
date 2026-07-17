@@ -21,7 +21,7 @@ from uuid_extensions import uuid7str  # type: ignore
 from entities.util import NormalizedParse
 from scrapers.stores import IO, CloudStorage
 from scrapers.stores.file import DownloadableFile
-from stores.user import get_username
+from stores.user import get_username, pick_user
 
 CRAWLED_BUCKET = "koryta-pl-crawled"
 SHARED_BUCKET = "koryta-pl-sharedcache"
@@ -258,6 +258,58 @@ class Client:
         tar_buf.seek(0)
         blob.upload_from_file(tar_buf, content_type="application/gzip")
         print(f"Successfully uploaded backup to gs://{SHARED_BUCKET}/{blob_name}")
+
+    def download_backup(self, filename: str) -> io.BytesIO:
+        """Downloads the latest versioned backup for a filename from GCS.
+
+        Prefers backups from the current user. If none exist for the current
+        user, lists available users and prompts for a choice.
+
+        Returns a BytesIO of the extracted data file from the tar.gz archive.
+        """
+        prefix = f"filename={filename}/"
+        bucket = self.storage_client.bucket(SHARED_BUCKET)
+        blobs = list(bucket.list_blobs(prefix=prefix))
+
+        if not blobs:
+            raise FileNotFoundError(
+                f"No versioned backups found for '{filename}' "
+                f"in gs://{SHARED_BUCKET}/{prefix}"
+            )
+
+        # Group blobs by user
+        user_blobs: dict[str, list] = {}
+        for blob in blobs:
+            parts = blob.name.split("/")
+            user = None
+            for part in parts:
+                if part.startswith("user="):
+                    user = part.removeprefix("user=")
+                    break
+            if user:
+                user_blobs.setdefault(user, []).append(blob)
+
+        current_user = get_username()
+        chosen_user = pick_user(current_user, list(user_blobs.keys()))
+
+        # Pick the latest backup (sorted by datetime in the blob name)
+        chosen_blobs = sorted(user_blobs[chosen_user], key=lambda b: b.name)
+        latest_blob = chosen_blobs[-1]
+
+        print(f"Downloading backup from gs://{SHARED_BUCKET}/{latest_blob.name}")
+        tar_buf = io.BytesIO(latest_blob.download_as_bytes())
+        tar_buf.seek(0)
+
+        with tarfile.open(fileobj=tar_buf, mode="r:gz") as tar:
+            for member in tar.getmembers():
+                if member.name != "metadata.json":
+                    extracted = tar.extractfile(member)
+                    if extracted is not None:
+                        return io.BytesIO(extracted.read())
+
+        raise FileNotFoundError(
+            f"Backup archive at '{latest_blob.name}' contains no data file."
+        )
 
 
 class BatchClient(Client):

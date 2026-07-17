@@ -85,6 +85,10 @@ class Conductor(IO):
         if isinstance(fs, LocalFile):
             return file.FromPath(os.path.join(PROJECT_ROOT, fs.folder, fs.filename))
 
+        if isinstance(fs, VersionedBackup):
+            data = self.storage.download_backup(fs.filename)
+            return file.FromBytesIO(data, fs.filename)
+
         raise NotImplementedError()
 
     def list_files(self, path: DataRef) -> typing.Iterable[DataRef]:
