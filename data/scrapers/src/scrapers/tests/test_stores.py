@@ -13,7 +13,7 @@ from scrapers.stores import (
     Pipeline,
     ProcessPolicy,
 )
-from scrapers.stores.file import DownloadableFile
+from scrapers.stores.file import DownloadableFile, VersionedBackup
 
 
 class TestStores(unittest.TestCase):
@@ -154,9 +154,15 @@ class TestPipeline(unittest.TestCase):
         pipeline.filename = "dummy"
 
         # Mock existing file (though we shouldn't read it if refreshing)
-        self.mock_ctx.io.read_data.return_value.read_dataframe.return_value = (
-            self.dummy_df
-        )
+        # VersionedBackup reads should fail (no GCS in tests)
+        def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                raise FileNotFoundError(f"No backup for {ref.filename}")
+            m = Mock()
+            m.read_dataframe.return_value = self.dummy_df
+            return m
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
 
         # Mock dependency instance that will be replaced in params
         # Note: Pipeline constructor initializes dep. We need to spy on it or mock it.
@@ -211,6 +217,8 @@ class TestPipeline(unittest.TestCase):
         written_files: dict[str, Any] = {}
 
         def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                raise FileNotFoundError(f"No backup for {ref.filename}")
             # We assume ref is LocalFile and has .filename
             # The pipeline writes to filename.jsonl
             fname = ref.filename
@@ -245,6 +253,7 @@ class TestPipeline(unittest.TestCase):
                     print(f"Failed to capture written DF for {fs.filename}: {e}")
 
         # Use side_effect on mock
+        self.mock_ctx.io.read_data.side_effect = read_data_se
         self.mock_ctx.io.write_file.side_effect = capture_written_df  # type: ignore
 
         # We need to spy on process calls to verify execution order/count

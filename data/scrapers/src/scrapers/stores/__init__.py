@@ -581,6 +581,29 @@ Should I run it? (y/n) [n]",
             except FileNotFoundError:
                 # We'll try to process
                 pass
+        elif should_refresh and self.filename is not None:
+            # When the local output is missing (not an explicit policy refresh),
+            # still try reading from backup before re-processing.
+            decision = ctx.refresh_policy.execution_decisions.get(self.pipeline_name)
+            if decision and decision[1] == "missing output":
+                try:
+                    df = ctx.io.read_data(
+                        VersionedBackup(self.filename)
+                    ).read_dataframe(self.format, dtype=self.dtype)
+                    if df is not None:
+                        self._cached_result = df
+                        # Save locally so the next run finds the file on disk.
+                        print(
+                            f"Restored {self.pipeline_name} from versioned backup, "
+                            f"saving to {self.output_path()}"
+                        )
+                        self.write_dataframe(ctx, df, local_only=True)
+                        return df
+                except Exception as e:
+                    print(
+                        f"Backup read failed for {self.pipeline_name}, "
+                        f"will re-process: {e}"
+                    )
 
         df = self.run_pipeline(ctx, ctx.refresh_policy)
 
@@ -600,8 +623,14 @@ Should I run it? (y/n) [n]",
         df: pd.DataFrame,
         filename: str | None = None,
         format: Formats | None = None,
+        local_only: bool = False,
     ):
-        """Writes a DataFrame to storage."""
+        """Writes a DataFrame to storage.
+
+        Args:
+            local_only: If True, only writes to the local versioned path
+                and skips the GCS backup upload.
+        """
         if filename is None:
             filename = self.filename
         if format is None:
@@ -622,7 +651,8 @@ Should I run it? (y/n) [n]",
         ctx.io.write_file(
             LocalFile(self.output_path(filename, format), "versioned"), writer
         )
-        ctx.io.write_file(VersionedBackup(filename), writer)
+        if not local_only:
+            ctx.io.write_file(VersionedBackup(filename), writer)
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:
         df = self.read(ctx)
