@@ -46,7 +46,7 @@ export interface NodeStats {
   people?: number;
 }
 
-export type VoteCategory = "interesting" | "quality";
+export type VoteCategory = "interesting" | "quality" | "correct";
 
 export type Votes = Record<
   VoteCategory,
@@ -253,3 +253,31 @@ export type Note = {
   // Users can easily add sources they encounter and annotate what they found interesting in them.
   sources?: NoteSource[];
 };
+
+export type ExtractionFactType =
+  | "employment"
+  | "party_membership"
+  | "personal_relation";
+
+export interface ExtractionFact {
+  id?: string;
+  url: string;
+  justification: string;
+  justification_in_text?: string | null;
+  fact_type: ExtractionFactType;
+  // Fields vary by fact_type:
+  person?: string;
+  organization?: string;
+  role?: string;
+  party?: string;
+  subject?: string;
+  object?: string;
+  relation?: string;
+  // Metadata:
+  articleUrl: string;
+  articleDomain?: string;
+  articleNodeId?: string; // linked node if URL matches an existing article node
+  tag: string; // extraction model tag (e.g. "v1_qwen3-32b")
+  createdAt?: string;
+  uploaderUid?: string;
+}

@@ -1,4 +1,8 @@
-import { mdiAlertCircleOutline, mdiLightbulbOutline } from "@mdi/js";
+import {
+  mdiAlertCircleOutline,
+  mdiCheckCircleOutline,
+  mdiLightbulbOutline,
+} from "@mdi/js";
 import { computed, type MaybeRef } from "vue";
 import {
   getFirestore,
@@ -28,6 +32,12 @@ const configMap: Record<
     icon: mdiAlertCircleOutline,
     color: "error",
     downColor: "success",
+  },
+  correct: {
+    text: "Poprawny fakt",
+    icon: mdiCheckCircleOutline,
+    color: "success",
+    downColor: "error",
   },
 };
 
