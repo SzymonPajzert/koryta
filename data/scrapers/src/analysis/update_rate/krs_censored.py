@@ -22,7 +22,6 @@ import pandas as pd
 from analysis.update_rate.shared import (
     METHODS_OF_INTEREST,
     build_update_dates,
-    extract_censored_people,
     extract_rejestrio_people,
     index_api_krs_files,
     load_already_scraped,
@@ -30,6 +29,7 @@ from analysis.update_rate.shared import (
     make_context,
     read_cached_file,
 )
+from scrapers.krs.people_parsing import extract_censored_people
 
 
 def _build_krs_scrapes(scraped_df):
