@@ -130,6 +130,8 @@ koryta_pipelines = "pipelines:main"
 koryta_crawl = "crawl_cli:main"
 koryta_scraper = "scraper:main"
 koryta_scrape_krs = "scraper:scrape_krs"
+koryta_scrape_krs_free = "scraper:scrape_krs_free"
+koryta_scrape_krs_paid = "scraper:scrape_krs_paid"
 koryta_scrape_krs_updates = "scraper:scrape_updates_by_dates"
 set_auth_claims = "set_auth_claims:main"
 
