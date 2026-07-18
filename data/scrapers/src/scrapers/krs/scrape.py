@@ -14,6 +14,7 @@ from analysis.people import PeopleMerged
 from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
+from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -246,13 +247,19 @@ class KRSNeedsRefresh(Pipeline):
 
     already_scraped: KRSAlreadyScraped
     updates: KRSUpdates
+    censored_people: KRSCensoredPeople
 
     @property
     def refresh_cutoff_date(self) -> str:
         return compute_refresh_cutoff_date(date.today(), SKIP_WORK_DAYS)
 
     def process(self, ctx):
-        """Lists updates for a KRS and checks if there were any more recent updates"""
+        """Lists updates for a KRS, filtered by actual people changes.
+
+        Uses KRSCensoredPeople to pre-filter: only include KRS entries
+        where the censored people list actually changed between the two
+        most recent api-krs snapshots.
+        """
 
         latest_scrapes = self.already_scraped.latest_scrapes(ctx)
 
@@ -268,8 +275,16 @@ class KRSNeedsRefresh(Pipeline):
         needs_refresh = merged[
             (merged["update_date"] > merged["date"])
             & (merged["update_date"] < self.refresh_cutoff_date)
-            # | (merged["update_date"] > "2026-05-01")
         ]
+
+        # Pre-filter: only keep KRS where censored people actually changed
+        changed_krs = self.censored_people.krs_with_people_changes(ctx)
+        before_count = len(needs_refresh)
+        needs_refresh = needs_refresh[needs_refresh["krs"].isin(changed_krs)]
+        print(
+            f"Censored people pre-filter: {before_count} → "
+            f"{len(needs_refresh)} KRS entries"
+        )
 
         return needs_refresh.sort_values(by=["update_date"], ascending=False)
 
