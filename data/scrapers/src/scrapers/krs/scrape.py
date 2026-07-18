@@ -2,6 +2,7 @@ import argparse
 import json
 import typing
 from dataclasses import asdict, dataclass, field
+from datetime import date, timedelta
 from enum import Enum
 from functools import cached_property
 
@@ -216,6 +217,28 @@ class KRSAlreadyScraped(Pipeline):
         return max_dates
 
 
+SKIP_WORK_DAYS = 2
+
+
+def compute_refresh_cutoff_date(today: date, skip_days: int) -> str:
+    """Compute a cutoff date by skipping `skip_days` business days back from `today`.
+
+    Only weekdays (Mon-Fri) are counted. The returned date is the last
+    skipped day (i.e. everything strictly before this date should be
+    included).
+
+    Example: if today is Saturday 2026-07-18 and skip_days is 2, the
+    function skips Friday (1) and Thursday (2), returning "2026-07-16".
+    """
+    current = today
+    skipped = 0
+    while skipped < skip_days:
+        current -= timedelta(days=1)
+        if current.weekday() < 5:  # Monday=0 … Friday=4
+            skipped += 1
+    return current.isoformat()
+
+
 class KRSNeedsRefresh(Pipeline):
     filename = "krs_needs_refresh"
 
@@ -224,8 +247,7 @@ class KRSNeedsRefresh(Pipeline):
 
     @property
     def refresh_cutoff_date(self) -> str:
-        # TODO implement it
-        raise NotImplementedError("Implement a logic counting work days")
+        return compute_refresh_cutoff_date(date.today(), SKIP_WORK_DAYS)
 
     def process(self, ctx):
         """Lists updates for a KRS and checks if there were any more recent updates"""
