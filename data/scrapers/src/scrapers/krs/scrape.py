@@ -217,7 +217,9 @@ class KRSAlreadyScraped(Pipeline):
         return max_dates
 
 
-SKIP_WORK_DAYS = 2
+# The results from analysis/update_rate suggest 4 days is enough for 90% success rate
+# of the propagation.
+SKIP_WORK_DAYS = 4
 
 
 def compute_refresh_cutoff_date(today: date, skip_days: int) -> str:
