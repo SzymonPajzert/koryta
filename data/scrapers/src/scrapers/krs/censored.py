@@ -78,25 +78,34 @@ class KRSCensoredPeople(Pipeline):
 
         return pd.DataFrame(results)
 
-    def krs_with_people_changes(self, ctx: Context) -> set[str]:
-        """Return KRS numbers where censored people changed.
+    def krs_with_people_changes(self, ctx: Context) -> dict[str, str]:
+        """Return KRS → change_date for entries where people changed.
 
-        Compares the two most recent snapshots per KRS. If there's
-        only one snapshot, the KRS is included (first-time scrape).
+        For each KRS, walks snapshots in date order and records the
+        date of the most recent hash change. Returns only KRS entries
+        where such a change exists.
+
+        KRS entries with only one snapshot are included with that
+        snapshot's date (first-time scrape, no prior data).
         """
         df = self.read_or_process(ctx)
         if df.empty:
-            return set()
+            return {}
 
-        changed: set[str] = set()
+        changed: dict[str, str] = {}
         for krs, group in df.groupby("krs"):
             sorted_group = group.sort_values("date")
             hashes = sorted_group["people_hash"].tolist()
+            dates = sorted_group["date"].tolist()
             if len(hashes) < 2:
                 # Only one snapshot — include it (first-time)
-                changed.add(str(krs))
-            elif hashes[-1] != hashes[-2]:
-                changed.add(str(krs))
+                changed[str(krs)] = str(dates[0])
+            else:
+                # Walk backwards to find the most recent change
+                for i in range(len(hashes) - 1, 0, -1):
+                    if hashes[i] != hashes[i - 1]:
+                        changed[str(krs)] = str(dates[i])
+                        break
 
         return changed
 

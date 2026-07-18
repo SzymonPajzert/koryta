@@ -257,36 +257,58 @@ class KRSNeedsRefresh(Pipeline):
         """Lists updates for a KRS, filtered by actual people changes.
 
         Uses KRSCensoredPeople to pre-filter: only include KRS entries
-        where the censored people list actually changed between the two
-        most recent api-krs snapshots.
+        where the censored people list changed AFTER the last rejestr.io
+        scrape, avoiding re-processing of stale changes.
         """
 
         latest_scrapes = self.already_scraped.latest_scrapes(ctx)
 
         updates_df = self.updates.read_or_process(ctx)
         if updates_df.empty:
-            return pd.DataFrame(columns=["krs", "method", "date", "update_date"])
+            return pd.DataFrame(
+                columns=["krs", "method", "date", "update_date"]
+            )
 
         updates_df["krs"] = updates_df["krs"].astype(str).str.zfill(10)
-        latest_updates = updates_df.groupby(["krs"]).aggregate("max").reset_index()
-        latest_updates = latest_updates.rename(columns={"date": "update_date"})
+        latest_updates = (
+            updates_df.groupby(["krs"]).aggregate("max").reset_index()
+        )
+        latest_updates = latest_updates.rename(
+            columns={"date": "update_date"}
+        )
 
-        merged = pd.merge(latest_scrapes, latest_updates, on="krs", how="inner")
+        merged = pd.merge(
+            latest_scrapes, latest_updates, on="krs", how="inner"
+        )
         needs_refresh = merged[
             (merged["update_date"] > merged["date"])
             & (merged["update_date"] < self.refresh_cutoff_date)
         ]
 
-        # Pre-filter: only keep KRS where censored people actually changed
+        # Pre-filter: only keep KRS where censored people changed
+        # after the last rejestr.io scrape date
         changed_krs = self.censored_people.krs_with_people_changes(ctx)
         before_count = len(needs_refresh)
-        needs_refresh = needs_refresh[needs_refresh["krs"].isin(changed_krs)]
+
+        def has_recent_change(row):
+            krs = row["krs"]
+            if krs not in changed_krs:
+                return False
+            change_date = changed_krs[krs]
+            last_scrape = row["date"]
+            return change_date > last_scrape
+
+        needs_refresh = needs_refresh[
+            needs_refresh.apply(has_recent_change, axis=1)
+        ]
         print(
             f"Censored people pre-filter: {before_count} → "
             f"{len(needs_refresh)} KRS entries"
         )
 
-        return needs_refresh.sort_values(by=["update_date"], ascending=False)
+        return needs_refresh.sort_values(
+            by=["update_date"], ascending=False
+        )
 
 
 def get_osoby_scraped(ctx: Context) -> dict[str, list[QueryType]]:
