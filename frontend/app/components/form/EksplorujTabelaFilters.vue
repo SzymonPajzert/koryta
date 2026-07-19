@@ -139,6 +139,31 @@
               bg-color="white"
             />
           </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field
+              v-model="minEmploymentDate"
+              type="date"
+              label="Zatrudnieni od"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              clearable
+              bg-color="white"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field
+              v-model="minVotes"
+              type="number"
+              label="Min. głosy łącznie"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              clearable
+              :min="0"
+              bg-color="white"
+            />
+          </v-col>
         </v-row>
       </v-sheet>
     </v-expand-transition>
@@ -177,6 +202,8 @@ const hideVoted = defineModel<"all" | "no_votes" | "has_votes">("hideVoted");
 const currentlyEmployed = defineModel<"all" | "any" | "selected">(
   "currentlyEmployed",
 );
+const minEmploymentDate = defineModel<string | null>("minEmploymentDate");
+const minVotes = defineModel<number | null>("minVotes");
 
 const statusSummary = computed(() => {
   const filters = [];

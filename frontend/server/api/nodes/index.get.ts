@@ -27,6 +27,8 @@ const queryValidator = z.object({
   visibility: z.enum(["public", "private"]).optional(),
   hideVoted: z.enum(["all", "no_votes", "has_votes"]).optional(),
   currentlyEmployed: z.enum(["all", "any", "selected"]).optional(),
+  minEmploymentDate: z.string().optional(),
+  minVotes: z.coerce.number().optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),
@@ -253,6 +255,32 @@ export default defineEventHandler(async (event) => {
               : n.stats?.edges?.approved?.currentlyEmployed;
             return flag === true;
           }),
+      });
+    }
+
+    if (query.minEmploymentDate) {
+      const minDate = query.minEmploymentDate;
+      const field = user
+        ? "stats.edges.all.latestEmploymentStart"
+        : "stats.edges.approved.latestEmploymentStart";
+      ops.push({
+        applyFs: (q) => q.where(field, ">=", minDate),
+        applyMem: (nodes) =>
+          nodes.filter((n) => {
+            const val = user
+              ? n.stats?.edges?.all?.latestEmploymentStart
+              : n.stats?.edges?.approved?.latestEmploymentStart;
+            return typeof val === "string" && val >= minDate;
+          }),
+      });
+    }
+
+    if (query.minVotes != null) {
+      const minVotes = query.minVotes;
+      ops.push({
+        applyFs: (q) => q.where("stats.votes.interesting", ">=", minVotes),
+        applyMem: (nodes) =>
+          nodes.filter((n) => (n.stats?.votes?.interesting ?? 0) >= minVotes),
       });
     }
 
