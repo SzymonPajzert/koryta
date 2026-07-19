@@ -116,7 +116,7 @@ dependencies = [
     "leveldb-export @ git+https://github.com/SzymonPajzert/leveldb-export.git@upgrade",
     "stanza (>=1.11.1,<2.0.0)",
     "dacite (>=1.9.2,<2.0.0)",
-    "psycopg[binary] (>=3.0.0,<4.0.0)",
+    "psycopg[binary] (>=3.3.4,<4.0.0)",
     "psycopg-pool (>=3.0.0,<4.0.0)",
     "plotly (>=6.9.0,<7.0.0)",
     "pytest-fast-first (>=1.0.5,<2.0.0)",
