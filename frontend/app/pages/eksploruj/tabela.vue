@@ -144,6 +144,8 @@
         v-model:krs="filterKrs"
         v-model:hide-voted="filterHideVoted"
         v-model:currently-employed="filterCurrentlyEmployed"
+        v-model:min-employment-date="filterMinEmploymentDate"
+        v-model:min-votes="filterMinVotes"
         :available-parties="availableParties"
         :available-regions="availableRegions"
         :available-companies="availableCompanies"
@@ -427,6 +429,37 @@ const filterHideVoted = computed<"all" | "no_votes" | "has_votes">({
   },
 });
 
+const filterMinEmploymentDate = computed<string | null>({
+  get: () => (route.query.minEmploymentDate as string) || null,
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        minEmploymentDate: val || undefined,
+      },
+    });
+  },
+});
+
+const filterMinVotes = computed<number | null>({
+  get: () => {
+    const v = route.query.minVotes as string | undefined;
+    if (v == null) return null;
+    const n = parseInt(v);
+    return isNaN(n) ? null : n;
+  },
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        minVotes: val != null ? String(val) : undefined,
+      },
+    });
+  },
+});
+
 const availableRegions = computed(() => {
   return Object.values(regions.value ?? {})
     .map((r) => ({ title: r.name, value: r.teryt }))
@@ -484,6 +517,8 @@ const apiQuery = computed(
         filterCurrentlyEmployed.value !== "all"
           ? filterCurrentlyEmployed.value
           : undefined,
+      minEmploymentDate: filterMinEmploymentDate.value || undefined,
+      minVotes: filterMinVotes.value != null ? filterMinVotes.value : undefined,
     }) as Query,
 );
 
