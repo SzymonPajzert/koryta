@@ -63,6 +63,9 @@
       <v-toolbar v-if="user" density="compact" color="primary">
         <v-spacer />
 
+        <v-btn :prepend-icon="mdiViewList" variant="text" to="/admin/rewizje">
+          Rewizje
+        </v-btn>
         <v-btn
           :prepend-icon="mdiLightningBolt"
           variant="text"
@@ -95,7 +98,7 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiAccount, mdiLightningBolt } from "@mdi/js";
+import { mdiAccount, mdiLightningBolt, mdiViewList } from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
 import { useDisplay } from "vuetify";
