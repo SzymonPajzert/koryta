@@ -25,7 +25,7 @@
       />
 
       <div v-if="focusedPerson" class="pa-4 pt-0">
-        <div class="d-flex align-center mb-4">
+        <div class="d-flex justify-center align-center ga-4 mb-4">
           <DialogProposeEditNode
             :entity="focusedPerson"
             skip-redirect
@@ -42,6 +42,12 @@
               </v-btn>
             </template>
           </DialogProposeEditNode>
+
+          <ButtonVoteNumber
+            v-if="focusedPerson"
+            :id="focusedPerson.id"
+            category="interesting"
+          />
         </div>
 
         <v-alert
