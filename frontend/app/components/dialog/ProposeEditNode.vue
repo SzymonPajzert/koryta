@@ -1,6 +1,10 @@
 <template>
   <div class="d-inline-block">
-    <slot name="activator" :props="{ onClick: handleActivatorClick }">
+    <slot
+      v-if="!hideActivator"
+      name="activator"
+      :props="{ onClick: handleActivatorClick }"
+    >
       <v-btn
         icon
         border="sm current"
@@ -106,7 +110,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from "vue";
 import { mdiAccountPlusOutline, mdiPencilOutline } from "@mdi/js";
-import { authFetch } from "@/composables/auth";
+import { authRequest } from "@/composables/auth";
 import { generateEntityUrl } from "~/composables/slugs";
 import { parties } from "~~/shared/misc";
 import type { NodeType } from "~~/shared/model";
@@ -117,6 +121,10 @@ const props = defineProps<{
   entity?: Record<string, any>;
   /** Type of the node to create, only used when there is no `entity`. */
   createType?: NodeType;
+  /** Prefills the name when creating, e.g. with the search query it started from. */
+  initialName?: string;
+  /** Hides the built in activator, for callers that open the dialog via `open()`. */
+  hideActivator?: boolean;
   skipRedirect?: boolean;
 }>();
 
@@ -157,6 +165,10 @@ const onLoginSuccess = () => {
   dialog.value = true;
 };
 
+// Lets a parent open the dialog without rendering an activator of its own,
+// while keeping the "log in first" gating in one place.
+defineExpose({ open: handleActivatorClick });
+
 const editData = reactive({
   name: "",
   content: "",
@@ -167,9 +179,9 @@ const editData = reactive({
 
 watch(dialog, (val) => {
   if (!val) return;
-  // Prefill from the edited entity, or start blank when proposing a new one
+  // Prefill from the edited entity, or from `initialName` when proposing a new one
   const entity = props.entity ?? {};
-  editData.name = entity.name || "";
+  editData.name = entity.name || props.initialName || "";
   editData.content = entity.content || "";
   editData.parties = Array.isArray(entity.parties) ? [...entity.parties] : [];
   editData.wikipedia = entity.wikipedia || "";
@@ -203,7 +215,7 @@ async function submit() {
       body.rejestrIo = editData.rejestrIo;
     }
 
-    const { data: response } = await authFetch<{ id: string; node_id: string }>(
+    const response = await authRequest<{ id: string; node_id: string }>(
       "/api/revisions/create",
       {
         method: "POST",
@@ -213,10 +225,10 @@ async function submit() {
     dialog.value = false;
     emit("success");
 
-    if (response.value?.id) {
-      emit("submitted", response.value.id);
-      if (isCreate.value && response.value.node_id) {
-        emit("created", response.value.node_id);
+    if (response.id) {
+      emit("submitted", response.id);
+      if (isCreate.value && response.node_id) {
+        emit("created", response.node_id);
       }
 
       // When skipRedirect is set, the parent handles showing the revision
@@ -224,18 +236,14 @@ async function submit() {
       if (!props.skipRedirect) {
         // A newly created node lives under its own url, an edit stays in place
         const path =
-          isCreate.value && response.value.node_id
-            ? generateEntityUrl(
-                type.value,
-                response.value.node_id,
-                editData.name,
-              )
+          isCreate.value && response.node_id
+            ? generateEntityUrl(type.value, response.node_id, editData.name)
             : route.path;
         router.push({
           path,
           query: isCreate.value
-            ? { revisionId: response.value.id }
-            : { ...route.query, revisionId: response.value.id },
+            ? { revisionId: response.id }
+            : { ...route.query, revisionId: response.id },
         });
       }
     }
