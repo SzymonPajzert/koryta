@@ -217,12 +217,14 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       include: [
+        "@mdi/js",
         "@plausible-analytics/tracker",
-        "vuefire",
         "@vue/devtools-core",
         "@vue/devtools-kit",
-        "vue3-apexcharts",
+        "@vueuse/core",
         "v-network-graph",
+        "vue3-apexcharts",
+        "vuefire",
       ],
     },
   },
