@@ -12,7 +12,7 @@ test.describe("Admin Revisions View", () => {
   }) => {
     const app =
       getApps().length === 0
-        ? initializeApp({ projectId: "koryta-pl" })
+        ? initializeApp({ projectId: "demo-koryta-pl" })
         : getApp();
     const db = getFirestore(app, "koryta-pl");
     const testNodeId = "000000-test-node-" + Date.now();
