@@ -7,7 +7,14 @@
         class="mr-2"
         to="/admin/rewizje"
       ></v-btn>
-      <h1 class="text-h4">Szczegóły rewizji dla węzła {{ route.params.id }}</h1>
+      <div>
+        <h1 class="text-h4">
+          Szczegóły rewizji: {{ nodeName || route.params.id }}
+        </h1>
+        <div v-if="nodeName" class="text-caption text-grey-darken-1">
+          Węzeł {{ route.params.id }}
+        </div>
+      </div>
     </div>
 
     <v-card v-if="pending" class="pa-4 text-center">
@@ -40,8 +47,17 @@
                       v-if="rev.id === approvedRevisionId"
                       color="success"
                       size="x-small"
+                      :prepend-icon="mdiEarth"
                     >
-                      Zaakceptowana
+                      Publiczna
+                      <v-tooltip
+                        activator="parent"
+                        location="bottom"
+                        max-width="280"
+                      >
+                        Ta wersja jest obecnie widoczna publicznie na stronie
+                        (pole revision_id węzła).
+                      </v-tooltip>
                     </v-chip>
                     <v-chip
                       :color="rev.update_automatic ? 'info' : 'secondary'"
@@ -51,16 +67,27 @@
                     </v-chip>
                   </div>
                 </div>
-                <div class="text-caption font-weight-mono text-grey mt-1">
+                <div class="mt-1">
                   <nuxt-link
                     v-if="getRevisionData(rev.data)['type']"
                     :to="`/entity/${getRevisionData(rev.data)['type']}/${nodeId}?revisionId=${rev.id}`"
-                    class="text-decoration-none text-primary font-weight-bold"
+                    class="text-decoration-none text-primary font-weight-bold d-inline-flex align-center ga-1"
                     target="_blank"
                   >
-                    ID: {{ rev.id }}
+                    <v-icon :icon="mdiEyeOutline" size="small" />
+                    Podgląd tej wersji strony
+                    <v-tooltip
+                      activator="parent"
+                      location="bottom"
+                      max-width="300"
+                    >
+                      Kliknij, aby zobaczyć, jak wyglądałaby strona po
+                      opublikowaniu tej wersji.
+                    </v-tooltip>
                   </nuxt-link>
-                  <span v-else>ID: {{ rev.id }}</span>
+                  <div class="text-caption font-weight-mono text-grey mt-1">
+                    ID: {{ rev.id }}
+                  </div>
                 </div>
               </th>
             </tr>
@@ -122,7 +149,7 @@
 import { computed, ref, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { ClientOnly } from "#components";
-import { mdiArrowLeft } from "@mdi/js";
+import { mdiArrowLeft, mdiEyeOutline, mdiEarth } from "@mdi/js";
 
 definePageMeta({
   middleware: "auth",
@@ -161,6 +188,19 @@ const allRevisions = computed(() => {
     const timeB = new Date(parseTime(b.update_time)).getTime();
     return timeB - timeA;
   });
+});
+
+// The node name isn't stored on the revision list directly, so derive it from
+// the most recent revision that carries a `name` in its data snapshot. Names
+// rarely change, so the latest available one is a safe label for the node.
+const nodeName = computed<string | null>(() => {
+  for (const rev of allRevisions.value) {
+    const name = getRevisionData(rev.data)["name"];
+    if (typeof name === "string" && name.trim()) {
+      return name;
+    }
+  }
+  return null;
 });
 
 const allKeys = computed(() => {
