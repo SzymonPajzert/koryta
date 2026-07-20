@@ -11,7 +11,10 @@
         variant="outlined"
         @click="handleActivatorClick"
       >
-        <v-icon :icon="mdiPencilOutline" color="warning" />
+        <v-icon
+          :icon="isCreate ? mdiAccountPlusOutline : mdiPencilOutline"
+          color="warning"
+        />
         <span
           style="
             position: absolute;
@@ -24,21 +27,22 @@
             white-space: nowrap;
             border: 0;
           "
-          >Zaproponuj zmianę</span
+          >{{ title }}</span
         >
-        <v-tooltip activator="parent" location="top"
-          >Zaproponuj zmianę</v-tooltip
-        >
+        <v-tooltip activator="parent" location="top">{{ title }}</v-tooltip>
       </v-btn>
     </slot>
 
     <v-dialog v-model="dialog" max-width="600">
       <v-card>
-        <v-card-title>Zaproponuj zmianę</v-card-title>
+        <v-card-title>{{ title }}</v-card-title>
         <v-card-text>
           <p class="mb-4">
-            Zaproponuj nowe dane dla tego wpisu. Zmiany będą musiały zostać
-            zatwierdzone.
+            {{
+              isCreate
+                ? "Zaproponuj nowy wpis. Wystarczy imię i nazwisko, pozostałe pola są opcjonalne. Wpis będzie musiał zostać zatwierdzony."
+                : "Zaproponuj nowe dane dla tego wpisu. Zmiany będą musiały zostać zatwierdzone."
+            }}
           </p>
           <v-form ref="form" @submit.prevent="submit">
             <v-text-field
@@ -47,7 +51,7 @@
               required
               class="mb-2"
             />
-            <template v-if="entity.type === 'person'">
+            <template v-if="type === 'person'">
               <v-select
                 v-model="editData.parties"
                 :items="parties"
@@ -55,6 +59,20 @@
                 multiple
                 chips
                 clearable
+                class="mb-2"
+              />
+              <v-text-field
+                v-model="editData.wikipedia"
+                label="Link do Wikipedii"
+                hint="Pełny link do artykułu"
+                persistent-hint
+                class="mb-2"
+              />
+              <v-text-field
+                v-model="editData.rejestrIo"
+                label="Link do Rejestr.io"
+                hint="Pełny link do profilu"
+                persistent-hint
                 class="mb-2"
               />
             </template>
@@ -86,21 +104,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from "vue";
-import { mdiPencilOutline } from "@mdi/js";
+import { ref, reactive, computed, watch } from "vue";
+import { mdiAccountPlusOutline, mdiPencilOutline } from "@mdi/js";
 import { authFetch } from "@/composables/auth";
+import { generateEntityUrl } from "~/composables/slugs";
 import { parties } from "~~/shared/misc";
+import type { NodeType } from "~~/shared/model";
 
 const props = defineProps<{
+  /** Omitted when proposing a brand new node instead of an edit. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  entity: Record<string, any>;
+  entity?: Record<string, any>;
+  /** Type of the node to create, only used when there is no `entity`. */
+  createType?: NodeType;
   skipRedirect?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "success"): void;
-  (e: "submitted", revisionId: string): void;
+  (e: "submitted" | "created", id: string): void;
 }>();
+
+const isCreate = computed(() => !props.entity);
+const type = computed<NodeType>(
+  () => props.entity?.type ?? props.createType ?? "person",
+);
+const title = computed(() =>
+  isCreate.value
+    ? type.value === "person"
+      ? "Zaproponuj dodanie osoby"
+      : "Zaproponuj dodanie wpisu"
+    : "Zaproponuj zmianę",
+);
 
 const dialog = ref(false);
 const loginDialog = ref(false);
@@ -126,18 +161,19 @@ const editData = reactive({
   name: "",
   content: "",
   parties: [] as string[],
+  wikipedia: "",
+  rejestrIo: "",
 });
 
 watch(dialog, (val) => {
-  if (val) {
-    editData.name = props.entity.name || "";
-    editData.content = props.entity.content || "";
-    if (props.entity.type === "person") {
-      editData.parties = Array.isArray(props.entity.parties)
-        ? [...props.entity.parties]
-        : [];
-    }
-  }
+  if (!val) return;
+  // Prefill from the edited entity, or start blank when proposing a new one
+  const entity = props.entity ?? {};
+  editData.name = entity.name || "";
+  editData.content = entity.content || "";
+  editData.parties = Array.isArray(entity.parties) ? [...entity.parties] : [];
+  editData.wikipedia = entity.wikipedia || "";
+  editData.rejestrIo = entity.rejestrIo || "";
 });
 
 async function submit() {
@@ -151,16 +187,23 @@ async function submit() {
 
   try {
     const body: Record<string, unknown> = {
-      node_id: props.entity.id,
       name: editData.name,
       content: editData.content,
     };
 
-    if (props.entity.type === "person") {
-      body.parties = editData.parties;
+    if (isCreate.value) {
+      body.type = type.value;
+    } else {
+      body.node_id = props.entity!.id;
     }
 
-    const { data: response } = await authFetch<{ id: string }>(
+    if (type.value === "person") {
+      body.parties = editData.parties;
+      body.wikipedia = editData.wikipedia;
+      body.rejestrIo = editData.rejestrIo;
+    }
+
+    const { data: response } = await authFetch<{ id: string; node_id: string }>(
       "/api/revisions/create",
       {
         method: "POST",
@@ -172,13 +215,27 @@ async function submit() {
 
     if (response.value?.id) {
       emit("submitted", response.value.id);
+      if (isCreate.value && response.value.node_id) {
+        emit("created", response.value.node_id);
+      }
 
       // When skipRedirect is set, the parent handles showing the revision
       // (e.g., the tabela side panel shows the link inline)
       if (!props.skipRedirect) {
+        // A newly created node lives under its own url, an edit stays in place
+        const path =
+          isCreate.value && response.value.node_id
+            ? generateEntityUrl(
+                type.value,
+                response.value.node_id,
+                editData.name,
+              )
+            : route.path;
         router.push({
-          path: route.path,
-          query: { ...route.query, revisionId: response.value.id },
+          path,
+          query: isCreate.value
+            ? { revisionId: response.value.id }
+            : { ...route.query, revisionId: response.value.id },
         });
       }
     }
