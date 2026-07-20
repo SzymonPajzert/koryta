@@ -5,6 +5,7 @@ import { sanitizeFirestoreData } from "~~/server/utils/revisions";
 import { personEditSchema } from "~~/shared/api";
 
 /** Fields that are internal/computed and should not be copied into revision data */
+// TODO remove it and try just using zod for stripping these fields.
 const INTERNAL_FIELDS = new Set([
   "stats",
   "revision_id",
