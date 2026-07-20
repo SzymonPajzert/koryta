@@ -46,6 +46,7 @@
           <ButtonVoteNumber
             v-if="focusedPerson"
             :id="focusedPerson.id"
+            :key="focusedPerson.id"
             category="interesting"
           />
         </div>

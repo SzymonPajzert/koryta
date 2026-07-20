@@ -39,11 +39,11 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
   const db = getFirestore(firebaseApp, "koryta-pl");
   const config = configMap[category];
 
-  const nodeRef = toValue(nodeID);
+  const nodeRef = computed(() => toValue(nodeID));
 
   const voteNodeUserRef = computed(() => {
     if (!user.value) return null;
-    return doc(db, "votes", `${nodeRef}_${user.value.uid}`);
+    return doc(db, "votes", `${nodeRef.value}_${user.value.uid}`);
   });
   const voteNodeUserDoc = useDocument(voteNodeUserRef);
 
@@ -52,7 +52,7 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
   });
 
   const votesNodeRef = computed(() => {
-    return query(collection(db, "votes"), where("nodeId", "==", nodeRef));
+    return query(collection(db, "votes"), where("nodeId", "==", nodeRef.value));
   });
 
   const votesNodeCollection = useCollection(votesNodeRef, {
@@ -91,9 +91,9 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
     const newValue = (currentVote ?? 0) + value;
 
     setDoc(
-      doc(db, "votes", `${nodeRef}_${user.value.uid}`),
+      doc(db, "votes", `${nodeRef.value}_${user.value.uid}`),
       {
-        nodeId: nodeRef,
+        nodeId: nodeRef.value,
         userUid: user.value.uid,
         categoryVotes: {
           [category]: newValue,
