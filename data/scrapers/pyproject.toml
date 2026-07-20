@@ -112,7 +112,7 @@ dependencies = [
     "nbconvert (>=7.17.1,<8.0.0)",
     "memoized-property (>=1.0.3,<2.0.0)",
     "mwparserfromhell (>=0.7.2,<0.8.0)",
-    "scipy (>=1.16.3,<2.0.0)",
+    "scipy (>=1.18.0,<2.0.0)",
     "leveldb-export @ git+https://github.com/SzymonPajzert/leveldb-export.git@upgrade",
     "stanza (>=1.11.1,<2.0.0)",
     "dacite (>=1.9.2,<2.0.0)",
