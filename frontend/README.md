@@ -31,10 +31,55 @@ npm run dev:prod-data
 
 ## Testing
 
-Run tests through
+### Unit tests (Vitest)
 
 ```bash
-npx cypress run
+npm run test:ci
+```
+
+### Playwright E2E tests
+
+Playwright tests are the primary E2E test suite. They use the `webServer` config in
+`playwright.config.ts` to automatically start emulators, seed data, and launch the dev server.
+
+**CI mode** (seeded emulator data — used in GitHub Actions and `quick-check`):
+
+```bash
+npm run test:playwright:ci
+```
+
+**Local mode** (production-exported data — useful for testing with real data):
+
+```bash
+# First, pull production data if you haven't already
+npm run db:pull
+
+npm run test:playwright
+```
+
+**With an already-running dev server** (skips automatic server startup):
+
+```bash
+# Start your preferred dev environment in one terminal
+npm run dev:local    # or: npm run dev:prod-data
+
+# Run tests in another terminal — Playwright will reuse the existing server on :3000
+npx playwright test
+```
+
+You can override which server command Playwright uses via the `PLAYWRIGHT_SERVER_COMMAND`
+environment variable:
+
+```bash
+PLAYWRIGHT_SERVER_COMMAND="npm run dev:prod-data" npx playwright test
+```
+
+### Cypress E2E tests
+
+```bash
+npm run test:e2e        # run with seeded data
+npm run test:e2e:prod   # run prod-specific tests
+npm run test:e2e:open   # open Cypress UI
 ```
 
 ## Code quality
@@ -95,5 +140,7 @@ npm run quick-check:failsafe
 | `npm run test:e2e:prod`       | Run Cypress prod e2e tests                              |
 | `npm run test:e2e:open`       | Open Cypress UI                                         |
 | `npm run test:visual`         | Run BackstopJS visual regression tests                  |
-| `npm run test:playwright`     | Run Playwright tests                                    |
+| `npm run test:playwright`     | Run Playwright tests (production data)                  |
+| `npm run test:playwright:ci`  | Run Playwright tests (seeded data, used in CI)          |
+| `npm run quick-check`         | Format + lint + types + tests + Playwright              |
 | `npm run backstop:approve`    | Approve BackstopJS visual test baseline                 |

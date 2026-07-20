@@ -28,12 +28,12 @@
     "backstop:test": "backstop test",
     "backstop:approve": "backstop approve",
     "test:visual": "start-server-and-test dev:build http://localhost:3000 'backstop test'",
-    "test:playwright": "start-server-and-test dev:prod-data http://127.0.0.1:3000 'playwright test'",
-    "test:playwright:ci": "start-server-and-test dev:local http://127.0.0.1:3000 'playwright test'",
+    "test:playwright": "cross-env PLAYWRIGHT_SERVER_COMMAND='npm run dev:prod-data' playwright test",
+    "test:playwright:ci": "playwright test",
     "test": "npm run test:ci && npm run test:e2e",
     "check:duplication": "jscpd app server --ignore app/coverage",
-    "quick-check": "npx prettier --write . && npx prettier --check . && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:playwright",
-    "quick-check:failsafe": "npx prettier --write . || true && npx prettier --check . || true && npm run test:ci || true && npm run typecheck || true && npx eslint || true && npm run check:duplication || true && npm run test:playwright || true"
+    "quick-check": "npx prettier --write . && npx prettier --check . && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:playwright:ci",
+    "quick-check:failsafe": "npx prettier --write . || true && npx prettier --check . || true && npm run test:ci || true && npm run typecheck || true && npx eslint || true && npm run check:duplication || true && npm run test:playwright:ci || true"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.4",

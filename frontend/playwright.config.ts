@@ -11,6 +11,14 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:3000",
     trace: "on-first-retry",
   },
+  webServer: {
+    command: process.env.PLAYWRIGHT_SERVER_COMMAND || "npm run dev:local",
+    url: "http://127.0.0.1:3000",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    stdout: "pipe",
+    stderr: "pipe",
+  },
   projects: [
     {
       name: "chromium",
