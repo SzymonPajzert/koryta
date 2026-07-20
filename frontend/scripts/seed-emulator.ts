@@ -59,9 +59,13 @@ async function seedDatabase() {
   const batch = db.batch();
 
   for (const [id, node] of Object.entries(nodes)) {
-    const nodeData = { ...node };
+    const nodeData = { ...node } as Record<string, unknown>;
     if (!nodeData.stats) nodeData.stats = {};
-    nodeData.stats.isApproved = true;
+    const stats = nodeData.stats as Record<string, unknown>;
+    // Only default to approved=true if not explicitly set in seed data
+    if (stats.isApproved === undefined) {
+      stats.isApproved = true;
+    }
     const ref = db.collection("nodes").doc(id);
     batch.set(ref, nodeData);
   }

@@ -35,6 +35,10 @@ jobs:
         working-directory: frontend/functions
         run: npm ci
 
+      - name: Build Functions
+        working-directory: frontend/functions
+        run: npm run build
+
       - name: Install Java (for Emulators)
         uses: actions/setup-java@v4
         with:
