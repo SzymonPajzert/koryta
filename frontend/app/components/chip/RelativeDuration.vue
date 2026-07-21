@@ -45,13 +45,15 @@ const parseDate = (d: string | undefined, fallback: number) => {
   return date.getTime();
 };
 
+// useState to avoid hydration mismatch between the server and client.
+const now = useState("relative-duration-now", () => Date.now());
+
 const leftPercent = computed(() => {
-  const now = Date.now();
   // Assume one year default duration if min/max are missing entirely
-  const defaultMin = now - 31536000000;
+  const defaultMin = now.value - 31536000000;
 
   const min = parseDate(props.minStart, defaultMin);
-  const max = parseDate(props.maxEnd, now);
+  const max = parseDate(props.maxEnd, now.value);
   const start = parseDate(props.start, min); // if no start, it starts from min
 
   if (min >= max) return 0;
@@ -61,14 +63,13 @@ const leftPercent = computed(() => {
 });
 
 const widthPercent = computed(() => {
-  const now = Date.now();
-  const defaultMin = now - 31536000000;
+  const defaultMin = now.value - 31536000000;
 
   const min = parseDate(props.minStart, defaultMin);
-  const max = parseDate(props.maxEnd, now);
+  const max = parseDate(props.maxEnd, now.value);
 
   const start = parseDate(props.start, min);
-  const end = parseDate(props.end, now); // if no end, it goes to now
+  const end = parseDate(props.end, now.value); // if no end, it goes to now
 
   if (min >= max) return 100;
 
