@@ -4,6 +4,19 @@ import os
 import sys
 
 import pandas as pd
+from dotenv import load_dotenv
+
+
+def backup_disabled() -> bool:
+    """Whether uploading versioned backups to shared GCS is disabled.
+
+    Controlled by the ``DISABLE_BACKUP`` variable (read from the environment or
+    a ``.env`` file), which the ``koryta --no-backup`` flag also sets. Handy for
+    local runs against the emulator / prod-data where we don't want to write to
+    shared cloud storage.
+    """
+    load_dotenv()
+    return os.getenv("DISABLE_BACKUP", "").strip().lower() in {"1", "true", "yes"}
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 
