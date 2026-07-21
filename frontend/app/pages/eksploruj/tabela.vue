@@ -536,7 +536,10 @@ const apiQuery = computed(
 // We perform a double join in the composible
 // We query /api/nodes/uncached and /api/graph/local
 // to join the stats info with the node neighborhood.
-const { tableItems, totalItems, pending } = await useListWithStats(apiQuery);
+const { tableItems, totalItems, pending } = await useListWithStats(
+  apiQuery,
+  "eksploruj-tabela-data",
+);
 
 const updateQueryParams = async (options: {
   sortBy: { key: string; order: string }[];
