@@ -13,7 +13,7 @@
         variant="text"
         :color="userVoteResult > 0 ? config.color : 'medium-emphasis'"
         class="rounded-0"
-        :disabled="loading"
+        :disabled="loading || userVoteResult >= 5"
         :title="'Głosuj na plus'"
         @click="handleVote(1)"
       />
@@ -33,7 +33,7 @@
         variant="text"
         :color="userVoteResult < 0 ? config.downColor : 'medium-emphasis'"
         class="rounded-0"
-        :disabled="loading"
+        :disabled="loading || userVoteResult <= -5"
         :title="'Głosuj na minus'"
         @click="handleVote(-1)"
       />
