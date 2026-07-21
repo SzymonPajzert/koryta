@@ -3,6 +3,10 @@
     <div class="align-self-center">
       <h1 class="text-h4 mb-4">Eksploruj nowe osoby</h1>
 
+      <div class="d-flex align-start ga-4 mb-4 flex-wrap">
+        <ExploreProgressBar hide-cta :query="apiQuery" class="flex-grow-1" />
+      </div>
+
       <!-- CLOSED STATE -->
       <div v-if="!showInstructions" class="d-flex align-center ga-3 mb-4">
         <v-alert

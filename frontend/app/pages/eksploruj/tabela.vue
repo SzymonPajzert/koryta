@@ -159,6 +159,8 @@
         :show-visibility="!!user"
       />
 
+      <ExploreProgressBar :query="apiQuery" class="mb-4" />
+
       <v-card class="table-card">
         <ExploreTable
           v-model:items-per-page="itemsPerPage"
