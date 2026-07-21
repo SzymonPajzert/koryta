@@ -87,8 +87,13 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
     }
 
     loading.value = true;
-    const currentVote = userCategoryVotes.value[category];
-    const newValue = (currentVote ?? 0) + value;
+    const currentVote = userCategoryVotes.value[category] ?? 0;
+    const newValue = Math.max(-5, Math.min(5, currentVote + value));
+
+    if (newValue === currentVote) {
+      loading.value = false;
+      return;
+    }
 
     setDoc(
       doc(db, "votes", `${nodeRef.value}_${user.value.uid}`),
