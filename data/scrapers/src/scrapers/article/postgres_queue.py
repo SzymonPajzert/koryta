@@ -23,7 +23,7 @@ from scrapers.stores import (
     CrawlQueue,
     CrawlQueueItem,
     DoneUrl,
-    NewUrl,
+    NewUrl
 )
 
 logger = logging.getLogger(__name__)

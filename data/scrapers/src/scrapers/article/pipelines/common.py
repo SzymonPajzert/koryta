@@ -5,7 +5,7 @@ from typing import Any
 from entities.article import ParsedArticleRecord
 from scrapers.stores import DoneUrl
 
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 
 
 def hash_text(text: str) -> str:
@@ -77,6 +77,7 @@ def parse_record_to_entity(record: dict[str, Any]) -> ParsedArticleRecord:
         html_sha256=html_sha256 if html_sha256 is None else str(html_sha256),
         parser_version=int(record.get("parser_version") or PARSER_VERSION),
         extraction_method=record.get("extraction_method") or None,
+        outbound_urls=record.get("outbound_urls") or None,
         error=error if error is None else str(error),
     )
 

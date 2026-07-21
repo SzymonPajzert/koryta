@@ -74,11 +74,10 @@ class EntityDumper:
             self.sort_keys[n] = sort_by
             self.output_paths[n] = self._resolve_output_path(v)
         self.inmemory[n].append(v)
-        # Update cache on write
-        self._last_written_cache = (n, self.inmemory[n])
         if self.args.dump_every is not None:
             self._insert_count += 1
             if self._insert_count % self.args.dump_every == 0:
+                self._last_written_cache = (n, list(self.inmemory[n]))
                 self.flush()
 
     def flush(self) -> None:

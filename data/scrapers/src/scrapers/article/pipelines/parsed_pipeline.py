@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from entities.article import ParsedArticleRecord
 from entities.util import NormalizedParse
+from scrapers.article.crawler import extract_urls_from_html
 from scrapers.article.parse import extract_article_content
 from scrapers.article.pipelines.common import (
     PARSER_VERSION,
@@ -244,30 +245,49 @@ def _parse_domain_batches(
         f"{len(by_storage)} tar.gz files with {workers} workers"
     )
 
+    # Limit in-flight futures to bound memory: each future holds parsed
+    # results (including outbound_urls) until consumed by as_completed.
+    MAX_IN_FLIGHT = workers * 4
+
     mp_ctx = multiprocessing.get_context("spawn")
     with ProcessPoolExecutor(
         max_workers=workers, mp_context=mp_ctx
     ) as pool:
-        futures = {
-            pool.submit(
-                _parse_storage_batch_in_process, sp, t, DOWNLOADED_DIR
-            ): len(t)
-            for sp, t in storage_items
-        }
         try:
             with tqdm(
                 total=total_work, desc="Parsing HTML", unit="page", smoothing=0.05
             ) as bar:
-                for future in as_completed(futures):
-                    try:
-                        rows = future.result()
-                    except Exception as exc:
-                        bar.update(futures[future])
-                        print(f"Batch error: {exc}")
-                        continue
-                    for row in rows:
-                        _emit_record(ctx, row)
-                    bar.update(len(rows))
+                pending: dict = {}
+                items_iter = iter(storage_items)
+                done = False
+                while not done or pending:
+                    # fill up to MAX_IN_FLIGHT
+                    while not done and len(pending) < MAX_IN_FLIGHT:
+                        try:
+                            sp, t = next(items_iter)
+                            f = pool.submit(
+                                _parse_storage_batch_in_process, sp, t, DOWNLOADED_DIR
+                            )
+                            pending[f] = len(t)
+                        except StopIteration:
+                            done = True
+                            break
+                    if not pending:
+                        break
+                    for future in as_completed(list(pending.keys()), timeout=None):
+                        if future not in pending:
+                            continue
+                        n = pending.pop(future)
+                        try:
+                            rows = future.result()
+                        except Exception as exc:
+                            bar.update(n)
+                            print(f"Batch error: {exc}")
+                            break
+                        for row in rows:
+                            _emit_record(ctx, row)
+                        bar.update(len(rows))
+                        break  # refill the queue after each completed future
         except KeyboardInterrupt:
             raise InterruptedError
 
@@ -295,6 +315,11 @@ def _parse_task(task: ParseTask, html_bytes: bytes) -> dict[str, Any]:
     done = DoneUrl(task.uid, task.url, task.storage_path)
     try:
         result = extract_article_content(html_bytes, task.selector, task.url)
+        base_url = (
+            task.url if task.url.startswith("http") else f"https://{task.url}"
+        )
+        html_text = html_bytes.decode("utf-8", errors="replace")
+        outbound_urls = sorted(extract_urls_from_html(html_text, base_url))
         article_content = result.get("article_content", "") or ""
         selector_matched = bool(result.get("selector_matched"))
         extraction_method = result.get("extraction_method")
@@ -326,6 +351,7 @@ def _parse_task(task: ParseTask, html_bytes: bytes) -> dict[str, Any]:
             "article_content_hash": hash_text(article_content),
             "html_sha256": hash_bytes(html_bytes),
             "parser_version": PARSER_VERSION,
+            "outbound_urls": outbound_urls,
         }
         return _entity_to_record(parse_record_to_entity(record))
     except Exception as exc:
@@ -396,5 +422,6 @@ def _entity_to_record(entity: ParsedArticleRecord) -> dict[str, Any]:
         "article_content_hash": entity.article_content_hash,
         "html_sha256": entity.html_sha256,
         "parser_version": entity.parser_version,
+        "outbound_urls": entity.outbound_urls,
         "error": entity.error,
     }

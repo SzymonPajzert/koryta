@@ -595,13 +595,15 @@ class ProcessPolicy:
                         dep_run, dep_reason = self.execution_decisions[
                             dep.pipeline_name
                         ]
-                        if dep_run:
+                        if dep_run and pipeline.pipeline_name not in self.exclude_refresh:
                             decision = (
                                 True,
                                 f"dependency {dep.pipeline_name} refreshed",
                             )
                             break
 
+                        if pipeline.pipeline_name in self.exclude_refresh:
+                            continue
                         dep_mtime = dep.output_time(ctx)
                         if dep_mtime is None or dep_mtime > mtime:
                             decision = (

@@ -61,6 +61,7 @@ class ParsedArticleRecord:
     html_sha256: str | None
     parser_version: int
     extraction_method: str | None = None
+    outbound_urls: list[str] | None = None
     error: str | None = None
 
 

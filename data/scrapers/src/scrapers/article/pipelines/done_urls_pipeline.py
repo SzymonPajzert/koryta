@@ -13,7 +13,12 @@ def _fetch_url_store() -> list[DoneUrl]:
         for url in page:
             if url.storage_path:
                 results.append(
-                    DoneUrl(url=url.url, uid=str(url.id), storage_path=url.storage_path)
+                    DoneUrl(
+                        url=url.url,
+                        uid=str(url.id),
+                        storage_path=url.storage_path,
+                        media_type="text/html",
+                    )
                 )
         if len(page) < 500:
             break
