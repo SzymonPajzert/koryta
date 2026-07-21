@@ -79,15 +79,15 @@ export default defineCachedEventHandler(
     const stats = { ...zero, total: nodes.length };
     for (const node of nodes) {
       const isApproved = node.stats?.isApproved === true;
-      const hasPending = node.revisions?.has_unapproved === true;
+      // const hasPending = node.revisions?.has_unapproved === true;
       const hasVotes = node.stats?.votes?.humanVoted === true;
       const hasNotes = (node.stats?.notesCount ?? 0) > 0;
 
       if (isApproved) stats.approved++;
-      else if (hasVotes || hasNotes || hasPending) stats.reviewed++;
+      else if (hasVotes || hasNotes) stats.reviewed++;
       else stats.toCheck++;
 
-      if (hasPending) stats.pendingRevisions++;
+      // if (hasPending) stats.pendingRevisions++;
       if (hasVotes) stats.withVotes++;
       if (hasNotes) stats.withNotes++;
     }
