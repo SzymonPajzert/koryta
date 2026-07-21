@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 
 import pandas as pd
@@ -49,6 +50,12 @@ def get_args():
         default=[],
     )
     parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Disable uploading/reading versioned backups to/from shared GCS "
+        "(also settable via DISABLE_BACKUP in the environment or .env)",
+    )
+    parser.add_argument(
         "pipeline",
         help="Pipeline to be run - available are "
         + " ".join(pt.__name__ for pt in PIPELINES),
@@ -68,6 +75,8 @@ def get_args():
 
 def main():
     args = get_args()
+    if args.no_backup:
+        os.environ["DISABLE_BACKUP"] = "1"
     refresh = []
     exclude_refresh = []
     if args.refresh:
