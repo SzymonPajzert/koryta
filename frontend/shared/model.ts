@@ -229,11 +229,17 @@ export interface Comment {
   parentId?: string; // Optional: reply to another comment
 }
 
+export type NoteAdminStatus = "resolved" | "unresolved";
+
 export type NoteSource = {
   url: string;
   note: string;
   // TODO enable users associating with a source node.
   // source_id: string;
+
+  // Admin triage of an individual source. Each source is reviewed separately.
+  adminStatus?: NoteAdminStatus;
+  adminType?: string;
 };
 
 /** Note allows users to collaborate on a node content without accessing the node itself.
