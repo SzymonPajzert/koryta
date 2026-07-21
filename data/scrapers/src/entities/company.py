@@ -36,6 +36,7 @@ class Company:
     sources: list[Source] = field(default_factory=list)
     children: list[str] = field(default_factory=list)
     parents: list[Owner] = field(default_factory=list)
+    is_public: bool = False
 
     def __post_init__(self):
         """Ensures the KRS ID is zero-padded to 10 digits."""

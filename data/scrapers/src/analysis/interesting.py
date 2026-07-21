@@ -87,6 +87,7 @@ class Companies(Pipeline[Company]):
                     teryt_code=teryt_code,
                     sources=merge.sources,
                     activity=krs.activity if krs is not None else [],
+                    is_public=krs.is_public if krs is not None else False,
                     # TODO add owners=[],
                 )
             )

@@ -234,11 +234,13 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                         continue
                     c = self.add_company(company_from_rejestrio(item, postal_codes))
                     self.add_company_source(c.krs, blob_name)
-                    conn_type = QueryRelation.from_rejestrio(
-                        item["krs_powiazania_kwerendowane"][0]
-                    )
-                    if parent is not None and conn_type.is_child():
-                        self.add_relation(parent.id, c.krs)
+                    
+                    if "aktualnosc_aktualne" in blob_name:
+                        conn_type = QueryRelation.from_rejestrio(
+                            item["krs_powiazania_kwerendowane"][0]
+                        )
+                        if parent is not None and conn_type.is_child():
+                            self.add_relation(parent.id, c.krs)
 
             elif "/org" in blob_name:
                 c = company_from_rejestrio(data, postal_codes)
@@ -253,6 +255,49 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 continue
             self.add_company(c)
             self.add_company_source(c.krs, blob_name)
+
+        # 1. Base case: explicitly public companies
+        public_krss = set()
+
+        for company in self.companies.values():
+            if company.is_public:
+                public_krss.add(company.krs)
+            # Also check if it's hardcoded as public
+            hc = hardcoded.get(company.krs)
+            if hc:
+                if any(
+                    src
+                    in [
+                        "MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO_KRSs",
+                        "SPOLKI_SKARBU_PANSTWA",
+                    ]
+                    for src in hc.sources
+                ):
+                    public_krss.add(company.krs)
+                    company.is_public = True
+
+        # 2. Propagate is_public to children
+        parent_to_children: dict[str, list[str]] = {}
+        for company in self.companies.values():
+            for child in company.children:
+                parent_to_children.setdefault(company.krs, []).append(child)
+            for owner in company.parents:
+                if owner.krs:
+                    parent_to_children.setdefault(owner.krs, []).append(company.krs)
+                    
+        # Add awaiting_relations to the parent_to_children map
+        for k, relations in self.awaiting_relations.items():
+            for p_id, child_id in relations:
+                parent_to_children.setdefault(p_id, []).append(child_id)
+
+        # Propagate using BFS
+        queue = list(public_krss)
+        while queue:
+            curr = queue.pop(0)
+            for child in parent_to_children.get(curr, []):
+                if child in self.companies and not self.companies[child].is_public:
+                    self.companies[child].is_public = True
+                    queue.append(child)
 
         output = []
         for company in self.companies.values():
@@ -331,6 +376,7 @@ KNOWN_OWNER_PREFIXES = {
     "MIASTO": 4,
     "POWIAT": 4,
     "WOJEWODZTWO": 2,
+    "WOJEWÓDZTWO": 2,
     "SKARB PAŃSTWA": None,  # TODO support it
 }
 
@@ -353,19 +399,33 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany | None:
         if odpis["naglowekA"]["rejestr"] == "RejP":
             activity = parse_activity_from_api_krs(dane.get("dzial3", {}))
 
+        is_public = "organPodmiotZalozycielskiMinisterNadzorujacy" in dzial1
+
         teryt_code = get_teryt(pcs, miejscowosc, postal_code)
         owners: list[Owner] = []
-        # Check who's listed as wspolnicy.
-        # If it's one of the known prefixes, add teryt as owners
-        wspolnicy = dzial1.get("wspolnicySpzoo", [])
+
+        # Check who's listed as wspolnicy or jedyny akcjonariusz
+        wspolnicy = dzial1.get("wspolnicySpzoo", []) + dzial1.get(
+            "jedynyAkcjonariusz", []
+        )
         for w in wspolnicy:
             if "nazwa" not in w:
                 continue
-            w_nazwa = w["nazwa"]
+            w_nazwa = w["nazwa"].upper()
+
+            matched_prefix = False
             for prefix, teryt_length in KNOWN_OWNER_PREFIXES.items():
-                if w_nazwa.startswith(prefix) and teryt_length is not None:
-                    owners.append(Owner(krs=None, teryt=teryt_code[:teryt_length]))
+                if w_nazwa.startswith(prefix):
+                    if teryt_length is not None:
+                        owners.append(Owner(krs=None, teryt=teryt_code[:teryt_length]))
+                    is_public = True
+                    matched_prefix = True
                     break
+
+            if not matched_prefix and "krs" in w and "krs" in w["krs"]:
+                parent_krs = w["krs"]["krs"]
+                if parent_krs and parent_krs != "0000000000":
+                    owners.append(Owner(krs=parent_krs, teryt=None))
 
         identyfikatory = dzial1.get("danePodmiotu", {}).get("identyfikatory", {})
         nip = identyfikatory.get("nip")
@@ -380,6 +440,7 @@ def company_from_api_krs(pcs: DataFrame, data: dict) -> KrsCompany | None:
             regon=regon,
             parents=owners,
             activity=activity,
+            is_public=is_public,
         )
     except KeyError as e:
         raise ValueError(
