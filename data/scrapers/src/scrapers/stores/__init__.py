@@ -24,6 +24,7 @@ from scrapers.stores.file import (
     LocalFile,
     VersionedBackup,
 )
+from stores.config import backup_disabled
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection
@@ -651,7 +652,7 @@ Should I run it? (y/n) [n]",
         ctx.io.write_file(
             LocalFile(self.output_path(filename, format), "versioned"), writer
         )
-        if not local_only:
+        if not local_only and not backup_disabled():
             ctx.io.write_file(VersionedBackup(filename), writer)
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:
