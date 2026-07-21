@@ -5,6 +5,16 @@
 
       <div class="d-flex align-start ga-4 mb-4 flex-wrap">
         <ExploreProgressBar hide-cta :query="apiQuery" class="flex-grow-1" />
+        <v-select
+          v-model="filterCategory"
+          :items="availableCategories"
+          label="Typ podmiotu"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          style="min-width: 220px; max-width: 280px"
+        />
       </div>
 
       <!-- CLOSED STATE -->
@@ -199,6 +209,7 @@ import {
 } from "@mdi/js";
 import { ref, computed } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
+import { companyCategories } from "~~/shared/companyCategories";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
@@ -219,6 +230,22 @@ const showInstructions = useCookie<boolean>("show-explore-new-instructions", {
   default: () => true,
 });
 const user = useCurrentUser();
+
+const route = useRoute();
+const router = useRouter();
+const availableCategories = companyCategories.map((c) => ({
+  title: c.title,
+  value: c.value,
+}));
+const filterCategory = computed<string | null>({
+  get: () => (route.query.category as string) || null,
+  set: (val) => {
+    page.value = 1;
+    router.push({
+      query: { ...route.query, category: val || undefined },
+    });
+  },
+});
 
 const actionExplored = ref(false);
 const actionNoted = ref(false);
@@ -302,6 +329,7 @@ const apiQuery = computed(
       sortDesc: "true",
       visibility: "private",
       hideVoted: "no_votes",
+      category: filterCategory.value || undefined,
     }) as Query,
 );
 

@@ -173,6 +173,10 @@ export interface Company extends Omit<Node, "type"> {
   krsNumber?: string;
   // TODO populate this field
   location?: string;
+  /** PKD codes from KRS, e.g. "86.10.Z" */
+  activity?: string[];
+  /** Categories derived from PKD codes, see shared/companyCategories.ts */
+  categories?: string[];
 }
 
 export interface Article extends Omit<Node, "type"> {
