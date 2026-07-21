@@ -6,6 +6,7 @@ import {
   companyRequestSchema,
   type CompanyRequest as Request,
 } from "#shared/api";
+import { categoriesFromActivity } from "#shared/companyCategories";
 
 export default defineEventHandler(async (event) => {
   console.info("Handling ingest/company.post");
@@ -16,11 +17,15 @@ export default defineEventHandler(async (event) => {
   const db = getFirestore(getApp(), "koryta-pl");
 
   const nodeRef = await findCompanyByKRS(db, body.krs, true);
-  const revisionData = {
+  const revisionData: Record<string, unknown> = {
     name: body.name,
     type: "place",
     krsNumber: body.krs,
   };
+  if (body.activity && body.activity.length > 0) {
+    revisionData.activity = body.activity;
+    revisionData.categories = categoriesFromActivity(body.activity);
+  }
 
   const batch = db.batch();
   createRevisionTransaction(db, batch, user, nodeRef, revisionData, true, true);
