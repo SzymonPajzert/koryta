@@ -210,6 +210,8 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { swr: 3600 },
     "/admin/**": { ssr: false },
+    "/entity/**": { swr: 3600 },
+    "/[seoType]/**": { swr: 3600 },
   },
   devServer: {
     host: "127.0.0.1",
