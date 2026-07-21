@@ -17,6 +17,7 @@ from leveldb_export import parse_leveldb_documents  # type: ignore
 from memoized_property import memoized_property  # type:ignore
 from tqdm import tqdm
 
+from entities.company import KorytaCompany
 from entities.person import Koryta as Person
 from entities.person import PersonVote
 from scrapers.stores import (
@@ -167,6 +168,59 @@ class KorytaPeople(Pipeline[Person]):
             )
 
         print("Finished processing people.")
+        return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
+
+
+class KorytaCompanies(Pipeline[KorytaCompany]):
+    """Lists companies (place nodes) already submitted to koryta.pl.
+
+    Mirrors `KorytaPeople`: it reads the latest Firestore export and yields the
+    companies present on the site, so a migration can re-submit only companies
+    that already exist rather than creating new ones.
+    """
+
+    date: str
+
+    def __init__(self, date: str | None = None) -> None:
+        super().__init__()
+        self.date = date or CURRENT_DATE
+
+    @memoized_property
+    def filename(self) -> str:
+        if self.date:
+            return f"company_koryta_{self.date}"
+        return "company_koryta"
+
+    def process(self, ctx: Context):
+        date_read = self.date
+        while True:
+            print(f"Reading for {date_read}")
+            input_documents = FirestoreCollection("nodes", "place", date_read)
+            df = input_documents.process(ctx)
+
+            if len(df) > 0:
+                break
+
+            print(f"Found no companies for date {date_read}. Going one day earlier")
+            date_read = (
+                datetime.strptime(date_read, "%Y-%m-%d") - pd.Timedelta(days=1)
+            ).strftime("%Y-%m-%d")
+
+        outputs = []
+        for data in tqdm(df.to_dict(orient="records")):
+            krs = data.get("krsNumber")
+            if not krs or pd.isna(krs):
+                # Some place nodes (e.g. associations) have no KRS number.
+                continue
+            outputs.append(
+                KorytaCompany(
+                    id=data["id"],
+                    krs=str(krs),
+                    is_approved=bool(data.get("revision_id")),
+                )
+            )
+
+        print("Finished processing companies.")
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
 
 
