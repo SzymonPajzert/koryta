@@ -67,6 +67,9 @@ EXPECTED_COMPANIES = {
             "42.99.Z",
             "43.2.",
         ],
+        children=[],
+        parents=[],
+        is_public=True,
     ),
     "0000156806": Company(
         krs="0000156806",
@@ -74,6 +77,7 @@ EXPECTED_COMPANIES = {
         city="Siedlce",
         teryt_code="1464",
         sources=[Source("rejestr-io", "rejestr.io")],
+        is_public=True,
     ),
     "0000459347": Company(
         krs="0000459347",
@@ -101,3 +105,26 @@ def test_expected_output(companies_map, companies_df, expected_company):
     print(company)
     print(expected_company)
     assert company == expected_company, company
+
+
+EXPECTED_PUBLIC_STATUS = {
+    "0000012143": False,
+    "0000032034": True,
+    "0000033768": True,
+    "0000888730": False,
+    "0000026425": True,
+    "0000144249": False,
+}
+
+
+@pytest.mark.parametrize(
+    "krs,expected_is_public",
+    EXPECTED_PUBLIC_STATUS.items(),
+    ids=EXPECTED_PUBLIC_STATUS.keys(),
+)
+def test_is_public(companies_map, krs, expected_is_public):
+    if krs not in companies_map:
+        pytest.skip(
+            f"KRS {krs} not found in test data, please ensure data exists for this test"
+        )
+    assert companies_map[krs].is_public == expected_is_public
