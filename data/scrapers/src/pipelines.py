@@ -1,14 +1,14 @@
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
-from analysis.payloads import PeoplePayloads, RegionPayloads
+from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.scores import CompanyScores, PeopleScores
 from analysis.stats import Statistics
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.kmgp.people import PeopleKMGP
 from scrapers.koryta.differ import KorytaDiffer
-from scrapers.koryta.download import KorytaPeople, KorytaVotes
+from scrapers.koryta.download import KorytaCompanies, KorytaPeople, KorytaVotes
 from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.scrape import KRSAlreadyScraped, KRSNeedsRefresh, ScrapeRejestrIO
@@ -24,6 +24,7 @@ PIPELINES = [
     CompaniesKRS,
     Companies,
     CompaniesKMGP,
+    CompaniesPayloads,
     CompanyScores,
     PeopleScores,
     Extract,
@@ -31,6 +32,7 @@ PIPELINES = [
     KRSCensoredPeople,
     KRSNeedsRefresh,
     KRSUpdates,
+    KorytaCompanies,
     KorytaDiffer,
     KorytaPeople,
     KorytaVotes,

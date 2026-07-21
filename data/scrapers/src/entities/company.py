@@ -44,6 +44,24 @@ class Company:
 
 
 @dataclass
+class KorytaCompany:
+    """A company (place node) already submitted to koryta.pl.
+
+    Read back from a Firestore export so that migrations can target only the
+    companies that already exist on the site, mirroring `entities.person.Koryta`.
+    """
+
+    id: str
+    krs: str | None = None
+    # Whether the node is currently published on koryta (has a current revision).
+    is_approved: bool = False
+
+    def __post_init__(self):
+        if self.krs is not None:
+            self.krs = str(self.krs).zfill(10)
+
+
+@dataclass
 class Wikipedia:
     name: str
     content_score: int
