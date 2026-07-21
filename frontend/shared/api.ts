@@ -6,6 +6,8 @@ export const companyRequestSchema = z.object({
   name: z.string(),
   owners: z.array(z.string()).optional(),
   teryt: z.string().optional(),
+  /** PKD codes from KRS, e.g. "86.10.Z" */
+  activity: z.array(z.string()).optional(),
 });
 
 export type CompanyRequest = {
@@ -13,6 +15,7 @@ export type CompanyRequest = {
   name: string;
   owners?: string[];
   teryt?: string;
+  activity?: string[];
 };
 
 const employmentRequestSchema = z.object({

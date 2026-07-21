@@ -7,6 +7,7 @@ const queryValidator = z.object({
   parties: z.union([z.string(), z.array(z.string())]).optional(),
   teryt: z.string().optional(),
   krs: z.union([z.string(), z.array(z.string())]).optional(),
+  category: z.string().optional(),
   currentlyEmployed: z.enum(["all", "any", "selected"]).optional(),
   minEmploymentDate: z.string().optional(),
   minVotes: z.coerce.number().optional(),

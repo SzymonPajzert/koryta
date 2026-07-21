@@ -18,6 +18,7 @@ export type StructuralQuery = {
   parties?: string | string[];
   teryt?: string;
   krs?: string | string[];
+  category?: string;
   currentlyEmployed?: "all" | "any" | "selected";
   minEmploymentDate?: string;
   minVotes?: number;
@@ -138,6 +139,24 @@ export async function buildStructuralFilterOps(
       return { ops, empty: true };
     }
     const placeIds = places.map((doc) => doc.id);
+    ops.push(targetNodesOp(placeIds, query, edgeScope, arrayFilterUsed));
+    arrayFilterUsed = true;
+  }
+
+  if (query.category) {
+    // Category -> place ids is resolved in memory from the cached place list:
+    // `categories` on place nodes may be stored sanitized (as an object), so
+    // it cannot be queried with array-contains.
+    const places = await fetchNodes("place");
+    const placeIds = Object.entries(places)
+      .filter(([, place]) =>
+        asArray<string>(place.categories).includes(query.category!),
+      )
+      .map(([id]) => id);
+
+    if (placeIds.length === 0) {
+      return { ops, empty: true };
+    }
     ops.push(targetNodesOp(placeIds, query, edgeScope, arrayFilterUsed));
     arrayFilterUsed = true;
   }
