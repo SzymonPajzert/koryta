@@ -49,42 +49,21 @@
 import { computed } from "vue";
 import { mdiAccountTie } from "@mdi/js";
 import type { ExtractionFact } from "~~/shared/model";
+import {
+  factTypeLabel as labelFor,
+  factTypeColor as colorFor,
+  factSubject,
+  factSummary,
+} from "~/utils/extraction";
 
 const { fact } = defineProps<{
   fact: ExtractionFact;
 }>();
 
-const factTypeLabelMap: Record<string, string> = {
-  employment: "Zatrudnienie",
-  party_membership: "Członkostwo partyjne",
-  personal_relation: "Relacja osobista",
-};
-
-const factTypeColorMap: Record<string, string> = {
-  employment: "primary",
-  party_membership: "secondary",
-  personal_relation: "info",
-};
-
-const factTypeLabel = computed(
-  () => factTypeLabelMap[fact.fact_type] ?? fact.fact_type,
-);
-const factTypeColor = computed(
-  () => factTypeColorMap[fact.fact_type] ?? "default",
-);
-
-const displayPerson = computed(() => fact.person || fact.subject || "—");
-
-const secondaryText = computed(() => {
-  if (fact.fact_type === "employment") return fact.organization;
-  if (fact.fact_type === "party_membership") return fact.party;
-  if (fact.fact_type === "personal_relation") {
-    return fact.object
-      ? `${fact.relation ?? "relacja"} → ${fact.object}`
-      : fact.relation;
-  }
-  return null;
-});
+const factTypeLabel = computed(() => labelFor(fact));
+const factTypeColor = computed(() => colorFor(fact));
+const displayPerson = computed(() => factSubject(fact));
+const secondaryText = computed(() => factSummary(fact));
 </script>
 
 <style scoped>
