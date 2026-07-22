@@ -506,13 +506,14 @@ class Pipeline(typing.Generic[Output]):
             print("File doesn't exist, continuing: ", e)
             filenotfound = e
 
-        try:
-            return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
-                self.format, dtype=self.dtype
-            )
-        except Exception as e:
-            print("Versioned backup read failed, continuing: ", e)
-            filenotfound = e
+        if not backup_disabled():
+            try:
+                return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
+                    self.format, dtype=self.dtype
+                )
+            except Exception as e:
+                print("Versioned backup read failed, continuing: ", e)
+                filenotfound = e
 
         # If there was any exception, raise the last one
         if filenotfound is not None:
@@ -584,9 +585,10 @@ Should I run it? (y/n) [n]",
                 pass
         elif should_refresh and self.filename is not None:
             # When the local output is missing (not an explicit policy refresh),
-            # still try reading from backup before re-processing.
+            # try reading from backup before re-processing, unless backups are
+            # disabled (then recompute from source instead of restoring stale data).
             decision = ctx.refresh_policy.execution_decisions.get(self.pipeline_name)
-            if decision and decision[1] == "missing output":
+            if decision and decision[1] == "missing output" and not backup_disabled():
                 try:
                     df = ctx.io.read_data(
                         VersionedBackup(self.filename)
