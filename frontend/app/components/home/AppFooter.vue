@@ -35,14 +35,16 @@
         </div>
       </v-col>
 
-      <v-col v-for="(section, i) in sections" :key="i" cols="6" md="3">
+      <v-col v-for="(section, i) in sections" :key="i" cols="6" md="4" lg="2">
         <p class="text-body-1 font-weight-bold mb-3">{{ section.title }}</p>
 
         <div v-for="item in section.items" :key="item.title">
           <v-btn
             class="text-none px-0 justify-start"
             exact
-            :to="item.link"
+            :to="'link' in item ? item.link : undefined"
+            :href="'href' in item ? item.href : undefined"
+            :target="'href' in item ? '_blank' : undefined"
             :ripple="false"
             :text="item.title"
             variant="plain"
@@ -73,6 +75,14 @@ const sections = [
     items: [
       { title: "Regulamin", link: "/plik/regulamin" },
       { title: "Polityka prywatności", link: "/plik/polityka_prywatnosci" },
+    ],
+  },
+  {
+    title: "Wesprzyj nas",
+    items: [
+      { title: "Patronite", href: "https://patronite.pl/romb.me" },
+      { title: "Zrzutka", href: "https://zrzutka.pl/rd7ssx/pay" },
+      { title: "Zostań wolontariuszem", link: "/pomoc" },
     ],
   },
 ];

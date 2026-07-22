@@ -375,15 +375,6 @@ watch(
   { immediate: true },
 );
 
-useHead({
-  title: computed(() => {
-    if (status.value !== "success") {
-      return "Strona nieznaleziona";
-    }
-    return response.value?.node?.name ?? "Strona nieznaleziona";
-  }),
-});
-
 const revisionId = computed(() => route.query.revisionId as string | undefined);
 
 const { data: revisionResponse } = await useAsyncData<Revision | null>(
@@ -428,4 +419,74 @@ const subsidiaries = computed(() => {
     (e) => e.type === "owns" && e.richNode.type == "place",
   );
 });
+
+// SEO: rich previews for shared node links (social cards + search snippets)
+const seoTypeLabels: Record<NodeType, string> = {
+  person: "Osoba",
+  place: "Instytucja",
+  region: "Region",
+  article: "Artykuł",
+};
+
+function formatConnectionCount(n: number): string {
+  if (n === 1) return "1 udokumentowane powiązanie";
+  const last = n % 10;
+  const lastTwo = n % 100;
+  if ([2, 3, 4].includes(last) && ![12, 13, 14].includes(lastTwo)) {
+    return `${n} udokumentowane powiązania`;
+  }
+  return `${n} udokumentowanych powiązań`;
+}
+
+const connectionCount = computed(
+  () =>
+    edges.value.filter((e) =>
+      ["employed", "connection", "owns", "election"].includes(e.type),
+    ).length,
+);
+
+const seoDescription = computed(() => {
+  const e = entity.value;
+  if (!e) return undefined;
+  const connections = formatConnectionCount(connectionCount.value);
+  switch (e.type) {
+    case "person": {
+      const parties = e.parties?.length
+        ? ` Komitety i partie: ${e.parties.join(", ")}.`
+        : "";
+      return `${e.name} — ${connections} w bazie Koryta.pl: zatrudnienie w spółkach publicznych, starty w wyborach i źródła.${parties}`;
+    }
+    case "place":
+      return `${e.name} — ${connections} w bazie Koryta.pl: sprawdź, które osoby ze świata polityki są związane z tą instytucją.`;
+    case "region":
+      return `${e.name} — statystyki koryciarstwa regionu w bazie Koryta.pl: osoby u władzy zatrudnione w spółkach publicznych i instytucjach.`;
+    case "article":
+      return `${e.name} — artykuł źródłowy w bazie powiązań Koryta.pl.`;
+    default:
+      return undefined;
+  }
+});
+
+const seoTitle = computed(() => {
+  if (status.value !== "success") {
+    return "Strona nieznaleziona";
+  }
+  return entity.value?.name ?? "Strona nieznaleziona";
+});
+
+useSeoMeta({
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  twitterCard: "summary_large_image",
+});
+
+if (status.value === "success" && entity.value) {
+  defineOgImageComponent("NodeCard", {
+    title: entity.value.name,
+    typeLabel: seoTypeLabels[entity.value.type] ?? "",
+    connectionsLabel: formatConnectionCount(connectionCount.value),
+  });
+}
 </script>

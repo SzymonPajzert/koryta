@@ -107,6 +107,11 @@
   </HomeSection>
   <HomeSection>
     <v-row>
+      <HomeIntro />
+    </v-row>
+  </HomeSection>
+  <HomeSection>
+    <v-row>
       <v-col cols="12">
         <HomeHeading
           class="scroll-topic"

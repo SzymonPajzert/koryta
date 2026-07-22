@@ -199,6 +199,8 @@ export default defineNuxtConfig({
     defaults: {
       extension: "png",
     },
+    // Polish diacritics require the latin-ext subset
+    fontSubsets: ["latin", "latin-ext"],
   },
 
   nitro: {
