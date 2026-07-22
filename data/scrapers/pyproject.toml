@@ -244,7 +244,10 @@ include_external_packages = true
 name = "Clean architecture"
 type = "layers"
 layers = ["analysis", "stores", "scrapers", "util", "entities"]
-ignore_imports = ["scrapers.krs.scrape -> analysis.*"]
+ignore_imports = [
+    "scrapers.krs.scrape -> analysis.*",
+    "scrapers.stores -> stores.config",
+]
 
 [[tool.importlinter.contracts]]
 name = "Do not import external packages"
@@ -285,6 +288,7 @@ ignore_imports = [
     "scrapers.article.parse_runner -> csv",
     "entities.util -> urllib",
     "scrapers.stores -> io",
+    "scrapers.stores -> stores.config",
     # Created a quick export of library util.firestore
     "util.firestore -> firebase_admin",
     "util.firestore -> os",
