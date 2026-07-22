@@ -69,7 +69,9 @@ def clean_payload(payload):
 
 
 class Uploader:
-    TYPE_URLS = {"extraction": "/api/ingest/extraction"}
+    # Per-type ingest URLs handled by the generic submit_entity path. Extraction
+    # is handled by ExtractionUploader (batched), so it is intentionally absent.
+    TYPE_URLS: dict[str, str] = {}
 
     def __init__(self, args: Args):
         self.args = args
@@ -89,6 +91,8 @@ class Uploader:
             return PersonUploader(args)
         if args.type == "company":
             return CompanyUploader(args)
+        if args.type == "extraction":
+            return ExtractionUploader(args)
         return Uploader(args)
 
     def submit_entity(self, payload) -> requests.Response:
@@ -238,6 +242,50 @@ class PersonUploader(CompanyUploader):
             return self.submit_payload(current_target_url, payload, fail=False)
         else:
             return resp
+
+
+class ExtractionUploader(Uploader):
+    """Uploads facts extracted from newspaper articles.
+
+    Each stdin line is a full article carrying an ``extracted_facts`` list. The
+    ``/api/ingest/extraction`` endpoint accepts a batch of articles in a single
+    request, so unlike the per-entity uploaders we post everything at once. The
+    articles have no ``name`` field, so the generic ``submit_results`` (which
+    skips nameless payloads and prints ``payload['name']``) doesn't apply.
+    """
+
+    @typing.override
+    def submit_results(self, entities):
+        url = f"{self.args.endpoint}/api/ingest/extraction"
+        articles = [e for e in entities if e is not None]
+        fact_count = sum(len(a.get("extracted_facts") or []) for a in articles)
+        self.total = fact_count
+        self.success_count = 0
+
+        print(
+            f"Uploading {len(articles)} articles ({fact_count} facts) to {url}...",
+            end=" ",
+            file=sys.stderr,
+        )
+        # Note: do not run clean_payload here — the endpoint schema keeps
+        # `title`/`publication_date` as nullable-but-required, so stripping
+        # their `null` values would fail validation.
+        resp = requests.post(
+            url,
+            data=json.dumps({"articles": articles}, cls=NumpyEncoder),
+            headers=self.headers,
+        )
+        if resp.status_code in [200, 201]:
+            print("  OK", file=sys.stderr)
+            self.success_count = fact_count
+        else:
+            print(f"FAILED ({resp.status_code}): {resp.text}", file=sys.stderr)
+            raise Exception(f"API error: {resp.status_code} - {resp.text}")
+
+        print(
+            f"\nUpload complete. Articles: {len(articles)}, Facts: {fact_count}",
+            file=sys.stderr,
+        )
 
 
 def print_results(entities):
