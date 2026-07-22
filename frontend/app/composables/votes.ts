@@ -1,6 +1,7 @@
 import {
   mdiAlertCircleOutline,
   mdiCheckCircleOutline,
+  mdiHelpCircleOutline,
   mdiLightbulbOutline,
 } from "@mdi/js";
 import { computed, type MaybeRef } from "vue";
@@ -38,6 +39,12 @@ const configMap: Record<
     icon: mdiCheckCircleOutline,
     color: "success",
     downColor: "error",
+  },
+  insufficient: {
+    text: "Za mało informacji",
+    icon: mdiHelpCircleOutline,
+    color: "warning",
+    downColor: "warning",
   },
 };
 

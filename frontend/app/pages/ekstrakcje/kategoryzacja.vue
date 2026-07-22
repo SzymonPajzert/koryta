@@ -49,40 +49,50 @@
       </div>
 
       <!-- Desktop fallback buttons -->
-      <div
-        v-if="currentFact"
-        class="d-flex justify-center align-center ga-4 mt-6"
-      >
-        <v-btn
-          color="error"
-          variant="tonal"
-          size="large"
-          :prepend-icon="mdiCloseCircleOutline"
-          @click="onSwiped('left')"
-        >
-          Niepoprawny
-        </v-btn>
-        <v-btn
-          color="success"
-          variant="tonal"
-          size="large"
-          :append-icon="mdiCheckCircleOutline"
-          @click="onSwiped('right')"
-        >
-          Poprawny
-        </v-btn>
+      <div v-if="currentFact" class="mt-6">
+        <div class="d-flex justify-center align-center ga-4">
+          <v-btn
+            color="error"
+            variant="tonal"
+            size="large"
+            :prepend-icon="mdiCloseCircleOutline"
+            @click="recordVote('incorrect')"
+          >
+            Niepoprawny
+          </v-btn>
+          <v-btn
+            color="success"
+            variant="tonal"
+            size="large"
+            :append-icon="mdiCheckCircleOutline"
+            @click="recordVote('correct')"
+          >
+            Poprawny
+          </v-btn>
+        </div>
+        <div class="d-flex justify-center mt-3">
+          <v-btn
+            color="warning"
+            variant="text"
+            :prepend-icon="mdiHelpCircleOutline"
+            @click="recordVote('insufficient')"
+          >
+            Za mało informacji
+          </v-btn>
+        </div>
       </div>
     </template>
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import {
   mdiArrowLeft,
   mdiCheckAll,
   mdiCheckCircleOutline,
   mdiCloseCircleOutline,
+  mdiHelpCircleOutline,
 } from "@mdi/js";
 import { useExtractions } from "~/composables/extractions";
 import { useVotes } from "~/composables/votes";
@@ -96,6 +106,8 @@ useHead({
 });
 
 const { data, pending } = useExtractions();
+const route = useRoute();
+const router = useRouter();
 
 // Track which facts the user has voted on in this session
 const votedIds = ref(new Set<string>());
@@ -121,14 +133,21 @@ const currentFact = computed<ExtractionFact | undefined>(
   () => sortedFacts.value[currentIndex.value],
 );
 
-function onSwiped(direction: "left" | "right") {
+type Verdict = "correct" | "incorrect" | "insufficient";
+
+function recordVote(verdict: Verdict) {
   const fact = currentFact.value;
   if (!fact?.id) return;
 
-  // Cast vote: right = correct (+1), left = incorrect (-1)
-  const { castVote } = useVotes(fact.id, "correct");
-  const value = direction === "right" ? 1 : -1;
-  castVote(value);
+  if (verdict === "insufficient") {
+    // Separate axis: the reviewer can't decide from the available context.
+    const { castVote } = useVotes(fact.id, "insufficient");
+    castVote(1);
+  } else {
+    // right = correct (+1), left = incorrect (-1)
+    const { castVote } = useVotes(fact.id, "correct");
+    castVote(verdict === "correct" ? 1 : -1);
+  }
 
   votedIds.value.add(fact.id);
 
@@ -140,6 +159,34 @@ function onSwiped(direction: "left" | "right") {
     currentIndex.value = sortedFacts.value.length;
   }
 }
+
+function onSwiped(direction: "left" | "right") {
+  recordVote(direction === "right" ? "correct" : "incorrect");
+}
+
+// Deep-link support: jump to the fact named in ?fact=<id> once facts load,
+// and keep the URL in sync with the current card so it can be shared.
+const initialized = ref(false);
+watch(
+  sortedFacts,
+  (facts) => {
+    if (initialized.value || facts.length === 0) return;
+    const target = route.query.fact;
+    if (typeof target === "string") {
+      const idx = facts.findIndex((f) => f.id === target);
+      if (idx >= 0) currentIndex.value = idx;
+    }
+    initialized.value = true;
+  },
+  { immediate: true },
+);
+
+watch(currentFact, (fact) => {
+  const id = fact?.id;
+  if (id && route.query.fact !== id) {
+    router.replace({ query: { ...route.query, fact: id } });
+  }
+});
 </script>
 
 <style scoped>

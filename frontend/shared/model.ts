@@ -46,7 +46,11 @@ export interface NodeStats {
   people?: number;
 }
 
-export type VoteCategory = "interesting" | "quality" | "correct";
+export type VoteCategory =
+  | "interesting"
+  | "quality"
+  | "correct"
+  | "insufficient";
 
 export type Votes = Record<
   VoteCategory,
