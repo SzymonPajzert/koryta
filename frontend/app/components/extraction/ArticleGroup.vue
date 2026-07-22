@@ -18,7 +18,9 @@
     </v-card-item>
 
     <v-expand-transition>
-      <div v-show="expanded">
+      <!-- only mount a group's cards + vote widgets when it is opened
+       so collapsed groups don't spin up Firestore listeners -->
+      <div v-if="expanded">
         <v-divider />
         <v-card-text class="pa-4">
           <div v-for="fact in facts" :key="fact.id ?? fact.url" class="mb-4">
