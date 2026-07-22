@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const { ref: nodeRef, approve } = await findCompanyByKRS(db, body.krs, true);
+  const { ref: nodeRef, publish } = await findCompanyByKRS(db, body.krs, true);
   // Layered over what is already stored: a payload carries only the fields the
   // scrapers found, and the revision is written to the node wholesale.
   const revisionData: Record<string, unknown> = {
@@ -52,7 +52,8 @@ export default defineEventHandler(async (event) => {
     nodeRef,
     revisionData,
     true,
-    approve,
+    publish,
+    publish,
   );
 
   const dbb = { db, batch, user, added: new Set<string>() };
@@ -62,7 +63,7 @@ export default defineEventHandler(async (event) => {
     for (const parent of body.owners) {
       if (!parent) continue;
       const { ref: parentRef } = await findCompanyByKRS(db, parent, false);
-      await createEdge(dbb, parentRef.id, nodeRef.id, "owns", approve);
+      await createEdge(dbb, parentRef.id, nodeRef.id, "owns", publish);
     }
   }
 
@@ -76,7 +77,7 @@ export default defineEventHandler(async (event) => {
         regionNodeId,
         nodeRef.id,
         "owns",
-        approve,
+        publish,
       );
       region = added ? "added" : "existing";
     } else {
@@ -120,7 +121,7 @@ async function createEdge(
   source: string,
   target: string,
   type: EdgeType,
-  approve: boolean,
+  publish: boolean,
 ): Promise<boolean> {
   const { db, batch, user, added } = dbb;
   const edgeData = { source, target, type };
@@ -135,22 +136,31 @@ async function createEdge(
   added.add(edgeId);
 
   const edgeRef = db.collection("edges").doc(edgeId);
-  createRevisionTransaction(db, batch, user, edgeRef, edgeData, true, approve);
+  createRevisionTransaction(
+    db,
+    batch,
+    user,
+    edgeRef,
+    edgeData,
+    true,
+    publish,
+    publish,
+  );
   return true;
 }
 
 /** Locate the company node for a KRS number.
  *
- * `approve` tells the caller whether the new revision should be published
- * (become the node's current revision). To keep a migration safe, an existing
- * company keeps its current visibility: an already-public company stays public,
- * while a still-pending one is not force-published by a re-ingest. A brand-new
- * company is published as before. */
+ * `publish` tells the caller whether the new revision should be approved and
+ * published. To keep a migration safe, an existing company keeps its current
+ * visibility: an already-public company stays public, while a still-pending
+ * one is not force-published by a re-ingest. A brand-new company is published
+ * as before. */
 async function findCompanyByKRS(
   db: FirebaseFirestore.Firestore,
   krs: string,
   createNew: boolean,
-): Promise<{ ref: FirebaseFirestore.DocumentReference; approve: boolean }> {
+): Promise<{ ref: FirebaseFirestore.DocumentReference; publish: boolean }> {
   // Check if company already exists
   const existingQuery = await db
     .collection("nodes")
@@ -163,9 +173,9 @@ async function findCompanyByKRS(
     if (!doc) {
       throw new Error("Unexpected empty docs array");
     }
-    return { ref: doc.ref, approve: pageIsPublic(doc.data()) };
+    return { ref: doc.ref, publish: pageIsPublic(doc.data()) };
   } else if (createNew) {
-    return { ref: db.collection("nodes").doc(), approve: true };
+    return { ref: db.collection("nodes").doc(), publish: true };
   } else {
     throw createError({
       statusCode: 404,

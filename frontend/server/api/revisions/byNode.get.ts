@@ -1,5 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
+import { pageIsPublic } from "~~/shared/model";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -28,10 +29,12 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Extract the approved revision ID from the node document
+  // Extract the approved revision ID and publication state from the node
   let approvedRevisionId: string | undefined = undefined;
+  let published = false;
   if (nodeDoc.exists) {
     const nodeData = nodeDoc.data();
+    published = pageIsPublic(nodeData || {});
     const revId = nodeData?.revision_id;
     if (revId) {
       if (typeof revId === "string") {
@@ -47,5 +50,6 @@ export default defineEventHandler(async (event) => {
   return {
     revisions: Array.from(map.values()),
     approvedRevisionId,
+    published,
   };
 });

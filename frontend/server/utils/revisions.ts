@@ -71,6 +71,7 @@ function sanitizeValue(value: unknown, insideArray: boolean): unknown {
 export const INTERNAL_FIELDS = new Set([
   "stats",
   "revision_id",
+  "published",
   "revisions",
   "votes",
   "id",
@@ -111,6 +112,7 @@ export function createRevisionTransaction(
   data: Record<string, unknown> | Node | Edge, // TODO unify this
   automatic: boolean = false,
   approve: boolean = false,
+  published?: boolean,
 ): BatchResult {
   const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
@@ -128,14 +130,24 @@ export function createRevisionTransaction(
   }
 
   batch.set(revisionRef, revision);
-  // If approve, set the current revision.
+
+  // The target document is fully replaced by the revision data plus the
+  // node-level state (`revision_id`, `published`) that is not part of any
+  // revision. Callers updating an existing document must pass `published`
+  // through, otherwise the flag is dropped by the overwrite.
+  const targetData = {
+    ...(revision.data as Record<string, unknown>),
+  };
   if (approve) {
     console.info(
       `Approving node=${targetRef.id} revision_id=${revisionRef.id}`,
     );
-    (revision.data as Record<string, unknown>).revision_id = revisionRef;
+    targetData.revision_id = revisionRef;
   }
-  batch.set(targetRef, revision.data as Record<string, unknown>);
+  if (published !== undefined) {
+    targetData.published = published;
+  }
+  batch.set(targetRef, targetData);
 
   return { revisionRef, targetRef };
 }

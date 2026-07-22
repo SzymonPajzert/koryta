@@ -14,6 +14,7 @@ const responseValidator = z.object({
   type: z.enum(["person", "place", "article", "region"]),
   // TODO revision elements are either string or complex object
   revision_id: z.union([z.string(), z.object({ path: z.string() })]).optional(),
+  published: z.boolean().optional(),
 });
 
 export default authCachedEventHandler(async (event) => {

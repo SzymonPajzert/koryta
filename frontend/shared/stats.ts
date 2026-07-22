@@ -1,4 +1,5 @@
 import type { NodeStats, VoteDocument, Note, Edge } from "./model";
+import { pageIsPublic } from "./model";
 
 export function calculateExperience(edges: Edge[]): number {
   const intervals: { start: number; end: number }[] = [];
@@ -146,7 +147,7 @@ export function computeEdgeStats(
   publicPlaceIds: ReadonlySet<string>,
   transitiveTargets: Record<string, string[]> = {},
 ) {
-  const approvedEdges = nodeEdges.filter((e) => !!e.revision_id);
+  const approvedEdges = nodeEdges.filter((e) => pageIsPublic(e));
   const publicEdges = publicEmployment(nodeEdges, publicPlaceIds);
   const publicApprovedEdges = publicEmployment(approvedEdges, publicPlaceIds);
 

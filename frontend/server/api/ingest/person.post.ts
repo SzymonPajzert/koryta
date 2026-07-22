@@ -56,6 +56,7 @@ export default defineEventHandler(async (event) => {
         createPerson(body),
         true,
         ctx.autoapprove,
+        ctx.autoapprove,
       );
     } else {
       const personRef = db.collection("nodes").doc(personId);
@@ -271,6 +272,7 @@ async function createArticle(
       revisionData,
       true,
       ctx.autoapprove,
+      ctx.autoapprove,
     );
     created = true;
   }
@@ -471,6 +473,7 @@ async function findEdgeOrCreate(ctx: Context, edge: Edge) {
     edgeRef,
     edge,
     true,
+    ctx.autoapprove,
     ctx.autoapprove,
   );
   return edgeRef.id;

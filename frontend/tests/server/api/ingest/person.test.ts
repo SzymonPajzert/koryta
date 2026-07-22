@@ -162,6 +162,7 @@ describe("api/ingest/person", () => {
       },
       true,
       false, // approve
+      false, // published
     );
     expect(result.elections).toHaveLength(1);
   });
@@ -213,6 +214,7 @@ describe("api/ingest/person", () => {
         committee: "Komitet Wyborczy Prawo i Sprawiedliwość",
       }),
       true,
+      false,
       false,
     );
   });
