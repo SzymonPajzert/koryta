@@ -15,6 +15,35 @@
           Węzeł {{ route.params.id }}
         </div>
       </div>
+      <v-spacer />
+      <div v-if="!pending" class="d-flex align-center ga-2">
+        <v-chip
+          :color="published ? 'success' : 'grey'"
+          size="small"
+          :prepend-icon="published ? mdiEarth : mdiEyeOffOutline"
+        >
+          {{ published ? "Opublikowana" : "Nieopublikowana" }}
+        </v-chip>
+        <v-btn
+          v-if="isAdmin"
+          :color="published ? 'grey' : 'success'"
+          size="small"
+          :loading="publishPending"
+          :disabled="!published && !approvedRevisionId"
+          @click="setPublished(!published)"
+        >
+          {{ published ? "Ukryj" : "Opublikuj" }}
+          <v-tooltip
+            v-if="!published && !approvedRevisionId"
+            activator="parent"
+            location="bottom"
+            max-width="280"
+          >
+            Strona potrzebuje zatwierdzonej rewizji, żeby można było ją
+            opublikować.
+          </v-tooltip>
+        </v-btn>
+      </div>
     </div>
 
     <v-card v-if="pending" class="pa-4 text-center">
@@ -47,16 +76,17 @@
                       v-if="rev.id === approvedRevisionId"
                       color="success"
                       size="x-small"
-                      :prepend-icon="mdiEarth"
+                      :prepend-icon="mdiCheckDecagramOutline"
                     >
-                      Publiczna
+                      Zatwierdzona
                       <v-tooltip
                         activator="parent"
                         location="bottom"
                         max-width="280"
                       >
-                        Ta wersja jest obecnie widoczna publicznie na stronie
-                        (pole revision_id węzła).
+                        Ta wersja jest zatwierdzoną rewizją węzła (pole
+                        revision_id). Widoczna publicznie tylko jeśli węzeł jest
+                        opublikowany.
                       </v-tooltip>
                     </v-chip>
                     <v-chip
@@ -149,7 +179,13 @@
 import { computed, ref, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { ClientOnly } from "#components";
-import { mdiArrowLeft, mdiEyeOutline, mdiEarth } from "@mdi/js";
+import {
+  mdiArrowLeft,
+  mdiEyeOutline,
+  mdiEyeOffOutline,
+  mdiEarth,
+  mdiCheckDecagramOutline,
+} from "@mdi/js";
 
 definePageMeta({
   middleware: "auth",
@@ -163,24 +199,45 @@ useHead({
 const route = useRoute();
 const nodeId = route.params.id as string;
 
+const { isAdmin } = useAuthState();
+
 const revisions = ref<Record<string, unknown>[]>([]);
 const approvedRevisionId = ref<string | null>(null);
+const published = ref(false);
 const pending = ref(true);
+const publishPending = ref(false);
 
 onMounted(async () => {
   try {
     const data = await $fetch<{
       revisions: Record<string, unknown>[];
       approvedRevisionId: string | null;
+      published: boolean;
     }>("/api/revisions/byNode", { params: { nodeId } });
     revisions.value = data.revisions;
     approvedRevisionId.value = data.approvedRevisionId;
+    published.value = data.published;
   } catch (err) {
     console.error("Failed to fetch revisions:", err);
   } finally {
     pending.value = false;
   }
 });
+
+async function setPublished(value: boolean) {
+  publishPending.value = true;
+  try {
+    const result = await authRequest<{ published: boolean }>(
+      "/api/nodes/publish",
+      { body: { node_id: nodeId, published: value } },
+    );
+    published.value = result.published;
+  } catch (err) {
+    console.error("Failed to change publication state:", err);
+  } finally {
+    publishPending.value = false;
+  }
+}
 
 const allRevisions = computed(() => {
   return [...revisions.value].sort((a, b) => {

@@ -53,6 +53,7 @@ export default defineEventHandler(async (event) => {
         personData,
         true,
         ctx.autoapprove,
+        ctx.autoapprove,
       );
     }
 
@@ -201,6 +202,7 @@ async function createArticle(
       articleRef,
       revisionData,
       true,
+      ctx.autoapprove,
       ctx.autoapprove,
     );
     created = true;
@@ -377,6 +379,7 @@ async function findEdgeOrCreate(ctx: Context, edge: Edge) {
       edgeRef,
       edge,
       true,
+      ctx.autoapprove,
       ctx.autoapprove,
     );
     return edgeRef.id;

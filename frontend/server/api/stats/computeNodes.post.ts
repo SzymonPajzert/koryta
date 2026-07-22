@@ -15,6 +15,7 @@ import {
   type RevisionMinimal,
 } from "~~/shared/revisions";
 import { computeNodeStats } from "~~/shared/stats";
+import { pageIsPublic } from "~~/shared/model";
 import { getEdges, getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
 
@@ -59,7 +60,7 @@ function buildNodeUpdateData(
   );
 
   const stats = computeNodeStats(
-    !!node.data.revision_id,
+    pageIsPublic(node.data),
     nodeEdges,
     nodeNotes,
     nodeVotes,
@@ -213,12 +214,12 @@ export default defineEventHandler(async () => {
   const targetCounts: Record<string, Set<string>> = {};
   for (const edge of edges as Edge[]) {
     if (!edge.target || !edge.source) continue;
-    // We only care about approved edges
-    if (!edge.revision_id) continue;
+    // We only care about public edges
+    if (!pageIsPublic(edge)) continue;
 
-    // We only care about approved people
+    // We only care about public people
     const person = peopleMap[edge.source];
-    if (!person || !person.revision_id) continue;
+    if (!person || !pageIsPublic(person)) continue;
 
     const targets = [edge.target];
     if (placeToRegions[edge.target]) {

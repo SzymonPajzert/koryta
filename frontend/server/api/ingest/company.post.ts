@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const { ref: nodeRef, approve } = await findCompanyByKRS(db, body.krs, true);
+  const { ref: nodeRef, publish } = await findCompanyByKRS(db, body.krs, true);
   const revisionData: Record<string, unknown> = {
     name: body.name,
     type: "place",
@@ -39,7 +39,8 @@ export default defineEventHandler(async (event) => {
     nodeRef,
     revisionData,
     true,
-    approve,
+    publish,
+    publish,
   );
 
   // Process 'owns' relationships
@@ -52,7 +53,7 @@ export default defineEventHandler(async (event) => {
         parentRef.id,
         nodeRef.id,
         "owns",
-        approve,
+        publish,
       );
     }
   }
@@ -60,7 +61,7 @@ export default defineEventHandler(async (event) => {
   // Process 'teryt' to link the company to a region
   if (body.teryt) {
     const regionNodeId = await findRegionByTeryt(db, body.teryt);
-    createEdge({ db, batch, user }, regionNodeId, nodeRef.id, "owns", approve);
+    createEdge({ db, batch, user }, regionNodeId, nodeRef.id, "owns", publish);
   }
 
   await batch.commit();
@@ -79,7 +80,7 @@ function createEdge(
   source: string,
   target: string,
   type: string,
-  approve: boolean,
+  publish: boolean,
 ) {
   const { db, batch, user } = dbb;
   const edgeRef = db.collection("edges").doc();
@@ -89,21 +90,30 @@ function createEdge(
     type,
   };
 
-  createRevisionTransaction(db, batch, user, edgeRef, edgeData, true, approve);
+  createRevisionTransaction(
+    db,
+    batch,
+    user,
+    edgeRef,
+    edgeData,
+    true,
+    publish,
+    publish,
+  );
 }
 
 /** Locate the company node for a KRS number.
  *
- * `approve` tells the caller whether the new revision should be published
- * (become the node's current revision). To keep a migration safe, an existing
- * company keeps its current visibility: an already-public company stays public,
- * while a still-pending one is not force-published by a re-ingest. A brand-new
- * company is published as before. */
+ * `publish` tells the caller whether the new revision should be approved and
+ * published. To keep a migration safe, an existing company keeps its current
+ * visibility: an already-public company stays public, while a still-pending
+ * one is not force-published by a re-ingest. A brand-new company is published
+ * as before. */
 async function findCompanyByKRS(
   db: FirebaseFirestore.Firestore,
   krs: string,
   createNew: boolean,
-): Promise<{ ref: FirebaseFirestore.DocumentReference; approve: boolean }> {
+): Promise<{ ref: FirebaseFirestore.DocumentReference; publish: boolean }> {
   // Check if company already exists
   const existingQuery = await db
     .collection("nodes")
@@ -116,9 +126,9 @@ async function findCompanyByKRS(
     if (!doc) {
       throw new Error("Unexpected empty docs array");
     }
-    return { ref: doc.ref, approve: pageIsPublic(doc.data()) };
+    return { ref: doc.ref, publish: pageIsPublic(doc.data()) };
   } else if (createNew) {
-    return { ref: db.collection("nodes").doc(), approve: true };
+    return { ref: db.collection("nodes").doc(), publish: true };
   } else {
     throw createError({
       statusCode: 404,

@@ -60,6 +60,64 @@ describe("createRevisionTransaction", () => {
       data: data,
       update_user: "test-user",
     });
+    // Without approve/published the target document is just the data
+    const targetData = vi.mocked(mockBatch.set).mock.calls[1][1];
+    expect(targetData).toEqual(data);
+  });
+
+  it("should set revision_id on the target but not in the revision data when approving", () => {
+    const user = { uid: "test-user" };
+    const targetRef = { id: "node-1" } as DocumentReference;
+    const data = { title: "New Title" };
+
+    createRevisionTransaction(
+      mockDb,
+      mockBatch,
+      user,
+      targetRef,
+      data,
+      false,
+      true,
+    );
+
+    const revisionDoc = vi.mocked(mockBatch.set).mock.calls[0][1] as {
+      data: Record<string, unknown>;
+    };
+    expect(revisionDoc.data).not.toHaveProperty("revision_id");
+
+    const targetData = vi.mocked(mockBatch.set).mock.calls[1][1] as Record<
+      string,
+      unknown
+    >;
+    expect(targetData.revision_id).toEqual({ id: "new-rev-id" });
+  });
+
+  it("should write the published flag onto the target document", () => {
+    const user = { uid: "test-user" };
+    const targetRef = { id: "node-1" } as DocumentReference;
+    const data = { title: "New Title" };
+
+    createRevisionTransaction(
+      mockDb,
+      mockBatch,
+      user,
+      targetRef,
+      data,
+      false,
+      true,
+      false,
+    );
+
+    const revisionDoc = vi.mocked(mockBatch.set).mock.calls[0][1] as {
+      data: Record<string, unknown>;
+    };
+    expect(revisionDoc.data).not.toHaveProperty("published");
+
+    const targetData = vi.mocked(mockBatch.set).mock.calls[1][1] as Record<
+      string,
+      unknown
+    >;
+    expect(targetData.published).toBe(false);
   });
 });
 

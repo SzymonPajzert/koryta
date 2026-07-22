@@ -1,5 +1,6 @@
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
+import { pageIsPublic } from "../../shared/model";
 
 const generateChunksLower = (name: string): string[] => {
   const chunks: string[] = [""];
@@ -38,16 +39,16 @@ export const onNodeWritten = onDocumentWritten(
 
     if (!afterData) return; // Node deleted
 
-    const beforeRev = !!beforeData?.revision_id;
-    const afterRev = !!afterData.revision_id;
+    const beforePublic = beforeData ? pageIsPublic(beforeData) : false;
+    const afterPublic = pageIsPublic(afterData);
 
     const updatePayload: Record<string, unknown> = {};
 
-    if (beforeRev !== afterRev) {
+    if (beforePublic !== afterPublic) {
       // Avoid infinite loops by only updating if stats.isApproved doesn't match
       const currentStatsApproved = afterData.stats?.isApproved;
-      if (currentStatsApproved !== afterRev) {
-        updatePayload["stats.isApproved"] = afterRev;
+      if (currentStatsApproved !== afterPublic) {
+        updatePayload["stats.isApproved"] = afterPublic;
       }
     }
 

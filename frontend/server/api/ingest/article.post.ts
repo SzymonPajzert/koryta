@@ -66,6 +66,7 @@ export default defineEventHandler(async (event) => {
         false,
         // TODO don't autoapprove
         true,
+        true,
       );
       created = true;
     }

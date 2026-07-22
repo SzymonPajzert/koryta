@@ -159,6 +159,7 @@ describe("api/ingest/person", () => {
       },
       true,
       false, // approve
+      false, // published
     );
     expect(result.elections).toHaveLength(1);
   });

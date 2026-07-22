@@ -112,6 +112,7 @@ describe("api/ingest/company", () => {
       },
       true,
       true, // approve
+      true, // published
     );
     // ref.id is accessed in handler return statement
     expect(result).toEqual({ id: "doc-ref-id", code: 200 });
@@ -150,6 +151,7 @@ describe("api/ingest/company", () => {
       },
       true,
       true, // already public => stays public
+      true,
     );
     expect(result).toEqual({ id: "existing-id", code: 200 });
   });
@@ -186,8 +188,45 @@ describe("api/ingest/company", () => {
       },
       true,
       false, // pending => not force-published
+      false,
     );
     expect(result).toEqual({ id: "existing-id", code: 200 });
+  });
+
+  it("should keep an approved-but-unpublished company hidden", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "12345",
+      name: "Updated Company",
+    });
+
+    const existingRef = { id: "existing-id" };
+    const existingDoc = {
+      ref: existingRef,
+      // approved revision exists, but the node was explicitly unpublished
+      data: () => ({ revision_id: "rev-1", published: false }),
+    };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [existingDoc],
+    });
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      { uid: "test-user-id" },
+      existingRef,
+      {
+        name: "Updated Company",
+        type: "place",
+        krsNumber: "12345",
+      },
+      true,
+      false, // hidden => not force-published
+      false,
+    );
   });
 
   it("should store isPublic when is_public is provided", async () => {
@@ -213,6 +252,7 @@ describe("api/ingest/company", () => {
         krsNumber: "12345",
         isPublic: true,
       },
+      true,
       true,
       true,
     );
@@ -257,6 +297,7 @@ describe("api/ingest/company", () => {
       },
       true,
       true, // approve
+      true, // published
     );
   });
 
@@ -295,6 +336,7 @@ describe("api/ingest/company", () => {
       },
       true,
       true, // approve
+      true, // published
     );
   });
 
@@ -353,6 +395,7 @@ describe("api/ingest/company", () => {
         target: "company-id",
         type: "owns",
       },
+      true,
       true,
       true,
     );

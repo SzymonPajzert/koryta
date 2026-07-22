@@ -4,7 +4,13 @@ type PageBase<PageType> = {
   id?: string;
   type: PageType;
   content?: string;
+  /** The approved revision of the page. Approval alone does not make the page
+   * visible to the public — that is controlled by `published`. */
   revision_id?: string | { path: string };
+  /** Whether the page is publicly visible. Toggled by admins independently of
+   * revision approval, so a node can have an approved revision that is not
+   * live yet. */
+  published?: boolean;
   votes?: Votes;
   deleted?: boolean;
   delete_reason?: string;
@@ -100,7 +106,15 @@ export type ElectionPosition =
   | "Senat"
   | "Parlament Europejski";
 
-export function pageIsPublic(node: { revision_id?: unknown }) {
+export function pageIsPublic(node: {
+  published?: unknown;
+  revision_id?: unknown;
+}) {
+  if (node.published !== undefined) {
+    return node.published === true;
+  }
+  // Legacy fallback for documents written before the `published` field
+  // existed; /api/nodes/migratePublished backfills it.
   return !!node.revision_id;
 }
 

@@ -9,6 +9,7 @@ import { personEditSchema } from "~~/shared/api";
 const INTERNAL_FIELDS = new Set([
   "stats",
   "revision_id",
+  "published",
   "revisions",
   "votes",
   "id",
