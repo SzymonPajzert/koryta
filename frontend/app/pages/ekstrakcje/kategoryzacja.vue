@@ -16,7 +16,7 @@
       <v-progress-circular indeterminate color="primary" size="48" />
     </div>
 
-    <div v-else-if="sortedFacts.length === 0" class="py-8 text-center">
+    <div v-else-if="allFacts.length === 0" class="py-8 text-center">
       <v-alert type="info" variant="tonal">
         Brak faktów do kategoryzacji.
       </v-alert>
@@ -25,14 +25,14 @@
     <template v-else>
       <!-- Progress counter -->
       <div class="text-center mb-4 text-body-2 text-medium-emphasis">
-        {{ currentIndex + 1 }} / {{ sortedFacts.length }} faktów
+        Oznaczono {{ votedIds.size }} z {{ allFacts.length }}
       </div>
 
       <!-- Swipe card area -->
       <div class="swipe-area mx-auto">
         <ExtractionSwipeCard
           v-if="currentFact"
-          :key="currentFact.id ?? currentIndex"
+          :key="currentFact.id"
           :fact="currentFact"
           @swiped="onSwiped"
         />
@@ -81,12 +81,44 @@
           </v-btn>
         </div>
       </div>
+
+      <!-- Related facts: pick which context to keep alongside the current fact -->
+      <div v-if="currentFact" class="related-section mx-auto mt-8">
+        <div class="d-flex align-center flex-wrap ga-1 mb-2">
+          <span class="text-caption text-medium-emphasis me-1">
+            Powiązane fakty:
+          </span>
+          <v-chip-group v-model="activeFilters" multiple class="py-0">
+            <v-chip value="article" size="small" filter variant="outlined">
+              Z tego artykułu
+            </v-chip>
+            <v-chip value="person" size="small" filter variant="outlined">
+              O tej osobie
+            </v-chip>
+          </v-chip-group>
+        </div>
+
+        <template v-if="activeFilters.length">
+          <ExtractionCard
+            v-for="f in relatedFacts"
+            :key="f.id"
+            :fact="f"
+            class="mb-3"
+          />
+          <div
+            v-if="relatedFacts.length === 0"
+            class="text-center text-caption text-medium-emphasis py-2"
+          >
+            Brak innych powiązanych faktów.
+          </div>
+        </template>
+      </div>
     </template>
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import {
   mdiArrowLeft,
   mdiCheckAll,
@@ -96,6 +128,7 @@ import {
 } from "@mdi/js";
 import { useExtractions } from "~/composables/extractions";
 import { useVotes } from "~/composables/votes";
+import { factSubject } from "~/utils/extraction";
 import type { ExtractionFact } from "~~/shared/model";
 
 definePageMeta({
@@ -109,29 +142,46 @@ const { data, pending } = useExtractions();
 const route = useRoute();
 const router = useRouter();
 
-// Track which facts the user has voted on in this session
-const votedIds = ref(new Set<string>());
-const currentIndex = ref(0);
-
-const sortedFacts = computed<ExtractionFact[]>(() => {
-  const response = data.value;
-  if (!response?.facts) return [];
-
-  // Only include facts with IDs (required for voting)
-  const withIds = response.facts.filter((f) => f.id);
-
-  // Sort: unvoted first, then voted
-  return [...withIds].sort((a, b) => {
-    const aVoted = votedIds.value.has(a.id!);
-    const bVoted = votedIds.value.has(b.id!);
-    if (aVoted === bVoted) return 0;
-    return aVoted ? 1 : -1;
-  });
-});
-
-const currentFact = computed<ExtractionFact | undefined>(
-  () => sortedFacts.value[currentIndex.value],
+// All votable facts (an id is required to vote), in fetch order.
+const allFacts = computed<ExtractionFact[]>(() =>
+  (data.value?.facts ?? []).filter((f) => f.id),
 );
+
+// Facts voted on in this session — they drop out of the related lists and the
+// traversal so the reviewer keeps moving forward.
+const votedIds = ref(new Set<string>());
+
+// The fact currently under review, tracked by id (not index) so we can jump to
+// a related fact next while keeping context — see recordVote().
+const currentId = ref<string | null>(null);
+const currentFact = computed<ExtractionFact | undefined>(() =>
+  allFacts.value.find((f) => f.id === currentId.value),
+);
+
+// Two independent context toggles → four combinations.
+type RelatedFilter = "article" | "person";
+const activeFilters = ref<RelatedFilter[]>(["article"]);
+
+function sameSubject(a: ExtractionFact, b: ExtractionFact): boolean {
+  const subject = factSubject(a);
+  return subject !== "—" && subject === factSubject(b);
+}
+
+// Unvoted facts related to the current one per the active filters. Filters are
+// unioned, so enabling both widens the context (this article + this person).
+const relatedFacts = computed<ExtractionFact[]>(() => {
+  const fact = currentFact.value;
+  if (!fact || activeFilters.value.length === 0) return [];
+  const byArticle = activeFilters.value.includes("article");
+  const byPerson = activeFilters.value.includes("person");
+  return allFacts.value.filter(
+    (f) =>
+      f.id !== fact.id &&
+      !votedIds.value.has(f.id!) &&
+      ((byArticle && f.articleUrl === fact.articleUrl) ||
+        (byPerson && sameSubject(f, fact))),
+  );
+});
 
 type Verdict = "correct" | "incorrect" | "insufficient";
 
@@ -151,42 +201,50 @@ function recordVote(verdict: Verdict) {
 
   votedIds.value.add(fact.id);
 
-  // Advance to next fact
-  if (currentIndex.value < sortedFacts.value.length - 1) {
-    currentIndex.value++;
-  } else {
-    // All done — move past the end so "all done" message shows
-    currentIndex.value = sortedFacts.value.length;
-  }
+  // Stay in context: if related facts remain, review one of those next so the
+  // surrounding facts stay on screen; otherwise take the next unreviewed fact.
+  const next =
+    relatedFacts.value[0] ??
+    allFacts.value.find((f) => !votedIds.value.has(f.id!));
+  currentId.value = next?.id ?? null;
 }
 
 function onSwiped(direction: "left" | "right") {
   recordVote(direction === "right" ? "correct" : "incorrect");
 }
 
-// Deep-link support: jump to the fact named in ?fact=<id> once facts load,
-// and keep the URL in sync with the current card so it can be shared.
+// Deep-link: honour ?fact=<id> on load, then keep the URL in sync so the
+// current card is always shareable.
 const initialized = ref(false);
 watch(
-  sortedFacts,
+  allFacts,
   (facts) => {
     if (initialized.value || facts.length === 0) return;
     const target = route.query.fact;
-    if (typeof target === "string") {
-      const idx = facts.findIndex((f) => f.id === target);
-      if (idx >= 0) currentIndex.value = idx;
+    if (typeof target === "string" && facts.some((f) => f.id === target)) {
+      currentId.value = target;
+    } else {
+      currentId.value =
+        facts.find((f) => !votedIds.value.has(f.id!))?.id ?? null;
     }
     initialized.value = true;
   },
   { immediate: true },
 );
 
-watch(currentFact, (fact) => {
+function syncUrlToFact(fact: ExtractionFact | undefined) {
   const id = fact?.id;
   if (id && route.query.fact !== id) {
     router.replace({ query: { ...route.query, fact: id } });
   }
-});
+}
+
+// Reflect subsequent fact changes (after each vote) in the URL...
+watch(currentFact, syncUrlToFact);
+// ...and sync the initial fact on mount. A plain watcher misses this when the
+// data is already present at setup (SSR / warm cache), because currentFact is
+// set before the watcher is armed, so there is no undefined→fact transition.
+onMounted(() => syncUrlToFact(currentFact.value));
 </script>
 
 <style scoped>
@@ -195,6 +253,10 @@ watch(currentFact, (fact) => {
 }
 
 .swipe-area {
+  max-width: 480px;
+}
+
+.related-section {
   max-width: 480px;
 }
 </style>
