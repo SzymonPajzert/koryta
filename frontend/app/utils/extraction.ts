@@ -22,17 +22,31 @@ export function factTypeColor(fact: ExtractionFact): string {
   return FACT_TYPE_COLORS[fact.fact_type];
 }
 
-/** The person the fact is about (person, or the subject of a relation). */
+// --- Edge-style presentation ---
+// A fact reads as an edge: source ── connector ──▶ target.
+
+/** Left-hand entity: the person the fact is about (person / relation subject). */
 export function factSubject(fact: ExtractionFact): string {
   return fact.person || fact.subject || "—";
 }
 
-/** Short summary of the fact's payload, varying by fact type. */
-export function factSummary(fact: ExtractionFact): string | null | undefined {
+/** Right-hand entity: organization / party / related person. */
+export function factTarget(fact: ExtractionFact): string | undefined {
   if (fact.fact_type === "employment") return fact.organization;
   if (fact.fact_type === "party_membership") return fact.party;
-  // personal_relation (the remaining fact_type)
-  return fact.object
-    ? `${fact.relation ?? "relacja"} → ${fact.object}`
-    : fact.relation;
+  return fact.object; // personal_relation
+}
+
+/** Connector label shown on the arrow between the two entities. */
+export function factConnector(fact: ExtractionFact): string {
+  if (fact.fact_type === "employment") return fact.role || "zatrudnienie";
+  if (fact.fact_type === "party_membership") return "członek";
+  return fact.relation || "relacja"; // personal_relation
+}
+
+/** Kind caption under the right-hand entity ("" when its type is unknown). */
+export function factTargetKind(fact: ExtractionFact): string {
+  if (fact.fact_type === "employment") return "organizacja";
+  if (fact.fact_type === "party_membership") return "partia";
+  return ""; // personal_relation: the object's type is not asserted
 }
