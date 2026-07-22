@@ -28,10 +28,7 @@
         </div>
 
         <!-- Target entity (right) -->
-        <div
-          v-if="targetName"
-          class="edge__entity edge__entity--target"
-        >
+        <div v-if="targetName" class="edge__entity edge__entity--target">
           <div class="edge__name">
             <span>{{ targetName }}</span>
             <v-icon size="16" class="edge__icon ms-1">{{ targetIcon }}</v-icon>
