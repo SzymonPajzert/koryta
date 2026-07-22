@@ -8,6 +8,8 @@ export const companyRequestSchema = z.object({
   teryt: z.string().optional(),
   /** PKD codes from KRS, e.g. "86.10.Z" */
   activity: z.array(z.string()).optional(),
+  /** Whether the company is publicly traded (spółka publiczna), from KRS. */
+  is_public: z.boolean().optional(),
 });
 
 export type CompanyRequest = {
@@ -16,6 +18,7 @@ export type CompanyRequest = {
   owners?: string[];
   teryt?: string;
   activity?: string[];
+  is_public?: boolean;
 };
 
 const employmentRequestSchema = z.object({
