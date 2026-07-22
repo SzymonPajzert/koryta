@@ -167,18 +167,31 @@ class Uploader:
 class CompanyUploader(Uploader):
     def __init__(self, args: Args):
         super().__init__(args)
-        self.company_payloads = self.get_company_payloads()
+        self._company_payloads: dict | None = None
 
     @typing.override
     def submit_entity(self, payload):
         mapped_payload = dict(payload)
         return self.submit_company(mapped_payload["krs"], mapped_payload)
 
-    def get_company_payloads(self):
-        # TODO this looks like an ugly pattern but I don't know how to do it better
-        print("Loading company payloads from Companies pipeline")
-        df = Companies().read_or_process(setup_context(False)[0])
-        return {c["krs"]: c for c in iterate_pipeline_dict(df)}
+    @property
+    def company_payloads(self) -> dict:
+        """Company payloads keyed by KRS, loaded lazily from the Companies
+        pipeline.
+
+        Only needed as a fallback when a caller asks to submit a company by KRS
+        without providing a payload (e.g. PersonUploader creating a missing
+        company). Uploading companies with explicit payloads from stdin never
+        triggers this, so `--type company` avoids re-running the whole
+        (expensive) Companies pipeline.
+        """
+        if self._company_payloads is None:
+            print("Loading company payloads from Companies pipeline")
+            df = Companies().read_or_process(setup_context(False)[0])
+            self._company_payloads = {
+                c["krs"]: c for c in iterate_pipeline_dict(df)
+            }
+        return self._company_payloads
 
     def submit_company(self, krs: str, payload: dict | None):
         current_target_url = f"{self.args.endpoint}/api/ingest/company"
