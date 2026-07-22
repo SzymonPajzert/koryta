@@ -32,14 +32,28 @@ export default defineEventHandler(async (event) => {
   }
 
   const batch = db.batch();
-  createRevisionTransaction(db, batch, user, nodeRef, revisionData, true, approve);
+  createRevisionTransaction(
+    db,
+    batch,
+    user,
+    nodeRef,
+    revisionData,
+    true,
+    approve,
+  );
 
   // Process 'owns' relationships
   if (body.owners && Array.isArray(body.owners)) {
     for (const parent of body.owners) {
       if (!parent) continue;
       const { ref: parentRef } = await findCompanyByKRS(db, parent, false);
-      createEdge({ db, batch, user }, parentRef.id, nodeRef.id, "owns", approve);
+      createEdge(
+        { db, batch, user },
+        parentRef.id,
+        nodeRef.id,
+        "owns",
+        approve,
+      );
     }
   }
 

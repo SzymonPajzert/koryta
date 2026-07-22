@@ -163,10 +163,17 @@ class CompaniesKRS(Pipeline[KrsCompany]):
     def add_company(self, company: KrsCompany):
         krs_id = company.krs
         if krs_id in self.companies:
-            # TODO implement merge logic
             existing = self.companies[krs_id]
             existing.name = existing.name or company.name
             existing.city = existing.city or company.city
+            existing.teryt_code = existing.teryt_code or company.teryt_code
+            existing.nip = existing.nip or company.nip
+            existing.regon = existing.regon or company.regon
+            existing.activity = existing.activity or company.activity
+            existing.is_public = existing.is_public or company.is_public
+            for owner in company.parents:
+                if owner not in existing.parents:
+                    existing.parents.append(owner)
             self.companies[krs_id] = existing
         else:
             self.companies[company.krs] = company

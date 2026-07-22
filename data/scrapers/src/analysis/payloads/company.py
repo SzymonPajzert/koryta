@@ -37,6 +37,7 @@ class CompaniesPayloads(Pipeline):
         return parser.parse_known_args()[0]
 
     def process(self, ctx: Context):
+        # TODO this should be a field and dependency
         submitted_df = KorytaCompanies(self.args.koryta_date).read_or_process(ctx)
         submitted_krs = {
             str(krs).zfill(10) for krs in submitted_df["krs"].dropna().tolist()
@@ -64,9 +65,7 @@ class CompaniesPayloads(Pipeline):
 
             is_public = row.get("is_public")
             is_public = (
-                bool(is_public)
-                if isinstance(is_public, (bool, np.bool_))
-                else False
+                bool(is_public) if isinstance(is_public, (bool, np.bool_)) else False
             )
 
             payloads.append(
