@@ -177,6 +177,8 @@ export interface Company extends Omit<Node, "type"> {
   activity?: string[];
   /** Categories derived from PKD codes, see shared/companyCategories.ts */
   categories?: string[];
+  /** Whether the company is publicly traded (spółka publiczna), from KRS. */
+  isPublic?: boolean;
 }
 
 export interface Article extends Omit<Node, "type"> {
