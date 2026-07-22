@@ -249,7 +249,7 @@ def _parse_domain_batches(
     # results (including outbound_urls) until consumed by as_completed.
     MAX_IN_FLIGHT = workers * 4
 
-    mp_ctx = multiprocessing.get_context("spawn")
+    mp_ctx = multiprocessing.get_context("fork")
     with ProcessPoolExecutor(
         max_workers=workers, mp_context=mp_ctx
     ) as pool:
