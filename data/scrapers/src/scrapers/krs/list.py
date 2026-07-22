@@ -220,6 +220,103 @@ class CompaniesKRS(Pipeline[KrsCompany]):
             data = json.loads(content)
             yield blob_ref.url, data
 
+    def process_rejestrio_blob(
+        self, blob_name: str, data, postal_codes: DataFrame
+    ) -> None:
+        if "aktualnosc_" in blob_name:
+            parent: KRS | None = None
+            if "/org" in blob_name:
+                parent = KRS.from_blob_name(blob_name)
+                self.add_company_source(parent.id, blob_name)
+
+            for item in data:
+                if item.get("typ") != "organizacja":
+                    continue
+                c = self.add_company(company_from_rejestrio(item, postal_codes))
+                self.add_company_source(c.krs, blob_name)
+
+                if "aktualnosc_aktualne" in blob_name:
+                    conn_type = QueryRelation.from_rejestrio(
+                        item["krs_powiazania_kwerendowane"][0]
+                    )
+                    if parent is not None and conn_type.is_child():
+                        self.add_relation(parent.id, c.krs)
+
+        elif "/org" in blob_name:
+            c = company_from_rejestrio(data, postal_codes)
+            self.add_company(c)
+            self.add_company_source(c.krs, blob_name)
+
+    def process_api_krs_blob(
+        self, blob_name: str, data, postal_codes: DataFrame
+    ) -> None:
+        if "Biuletyn" in blob_name:
+            return
+        c = company_from_api_krs(postal_codes, data)
+        if c is None:
+            return
+        self.add_company(c)
+        self.add_company_source(c.krs, blob_name)
+
+    def compute_public_krss(self, hardcoded) -> set[str]:
+        """Base case: companies explicitly public or hardcoded as public."""
+        public_krss = set()
+        for company in self.companies.values():
+            if company.is_public:
+                public_krss.add(company.krs)
+            hc = hardcoded.get(company.krs)
+            if hc and any(
+                src
+                in [
+                    "MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO_KRSs",
+                    "SPOLKI_SKARBU_PANSTWA",
+                ]
+                for src in hc.sources
+            ):
+                public_krss.add(company.krs)
+                company.is_public = True
+        return public_krss
+
+    def build_parent_to_children(self) -> dict[str, list[str]]:
+        parent_to_children: dict[str, list[str]] = {}
+        for company in self.companies.values():
+            for child in company.children:
+                parent_to_children.setdefault(company.krs, []).append(child)
+            for owner in company.parents:
+                if owner.krs:
+                    parent_to_children.setdefault(owner.krs, []).append(company.krs)
+
+        for relations in self.awaiting_relations.values():
+            for p_id, child_id in relations:
+                parent_to_children.setdefault(p_id, []).append(child_id)
+
+        return parent_to_children
+
+    def propagate_is_public(
+        self, public_krss: set[str], parent_to_children: dict[str, list[str]]
+    ) -> None:
+        queue = list(public_krss)
+        while queue:
+            curr = queue.pop(0)
+            for child in parent_to_children.get(curr, []):
+                if child in self.companies and not self.companies[child].is_public:
+                    self.companies[child].is_public = True
+                    queue.append(child)
+
+    def build_output(self, hardcoded) -> list[KrsCompany]:
+        output = []
+        for company in self.companies.values():
+            company_sources = self.company_sources.get(company.krs, set())
+            hc = hardcoded.get(company.krs)
+            if hc:
+                for src in hc.sources:
+                    company_sources.add(Source(source="hardcoded", reason=src))
+
+            output.append(
+                dataclasses.replace(company, sources=list(company_sources))
+            )
+        return output
+
     def process(self, ctx: Context):
         """
         Iterates through GCS files from rejestr.io, parses them,
@@ -230,96 +327,15 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         hardcoded = self.hardcoded_companies.all_companies_krs
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
-            if "aktualnosc_" in blob_name:
-                parent: KRS | None = None
-                if "/org" in blob_name:
-                    parent = KRS.from_blob_name(blob_name)
-                    self.add_company_source(parent.id, blob_name)
-
-                for item in data:
-                    if item.get("typ") != "organizacja":
-                        continue
-                    c = self.add_company(company_from_rejestrio(item, postal_codes))
-                    self.add_company_source(c.krs, blob_name)
-                    
-                    if "aktualnosc_aktualne" in blob_name:
-                        conn_type = QueryRelation.from_rejestrio(
-                            item["krs_powiazania_kwerendowane"][0]
-                        )
-                        if parent is not None and conn_type.is_child():
-                            self.add_relation(parent.id, c.krs)
-
-            elif "/org" in blob_name:
-                c = company_from_rejestrio(data, postal_codes)
-                self.add_company(c)
-                self.add_company_source(c.krs, blob_name)
+            self.process_rejestrio_blob(blob_name, data, postal_codes)
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
-            if "Biuletyn" in blob_name:
-                continue
-            c = company_from_api_krs(postal_codes, data)
-            if c is None:
-                continue
-            self.add_company(c)
-            self.add_company_source(c.krs, blob_name)
+            self.process_api_krs_blob(blob_name, data, postal_codes)
 
-        # 1. Base case: explicitly public companies
-        public_krss = set()
-
-        for company in self.companies.values():
-            if company.is_public:
-                public_krss.add(company.krs)
-            # Also check if it's hardcoded as public
-            hc = hardcoded.get(company.krs)
-            if hc:
-                if any(
-                    src
-                    in [
-                        "MINISTERSTWO_KULTURY_DZIEDZICTWA_NARODOWEGO_KRSs",
-                        "SPOLKI_SKARBU_PANSTWA",
-                    ]
-                    for src in hc.sources
-                ):
-                    public_krss.add(company.krs)
-                    company.is_public = True
-
-        # 2. Propagate is_public to children
-        parent_to_children: dict[str, list[str]] = {}
-        for company in self.companies.values():
-            for child in company.children:
-                parent_to_children.setdefault(company.krs, []).append(child)
-            for owner in company.parents:
-                if owner.krs:
-                    parent_to_children.setdefault(owner.krs, []).append(company.krs)
-                    
-        # Add awaiting_relations to the parent_to_children map
-        for k, relations in self.awaiting_relations.items():
-            for p_id, child_id in relations:
-                parent_to_children.setdefault(p_id, []).append(child_id)
-
-        # Propagate using BFS
-        queue = list(public_krss)
-        while queue:
-            curr = queue.pop(0)
-            for child in parent_to_children.get(curr, []):
-                if child in self.companies and not self.companies[child].is_public:
-                    self.companies[child].is_public = True
-                    queue.append(child)
-
-        output = []
-        for company in self.companies.values():
-            company_sources = self.company_sources.get(company.krs, set())
-            hc = hardcoded.get(company.krs)
-            if hc:
-                for src in hc.sources:
-                    company_sources.add(Source(source="hardcoded", reason=src))
-
-            output.append(
-                dataclasses.replace(
-                    company,
-                    sources=list(company_sources),
-                )
-            )
+        public_krss = self.compute_public_krss(hardcoded)
+        parent_to_children = self.build_parent_to_children()
+        self.propagate_is_public(public_krss, parent_to_children)
+        output = self.build_output(hardcoded)
 
         self.check_awaiting()
         return DataFrame.from_records([dataclasses.asdict(c) for c in output])
