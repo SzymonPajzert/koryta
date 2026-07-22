@@ -136,3 +136,36 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
     castVote,
   };
 }
+
+/** Fire-and-forget vote write that opens no Firestore listeners.
+ *
+ * `useVotes` sets up live `useDocument`/`useCollection` subscriptions, which
+ * are bound to the current effect scope for cleanup. Calling it from an event
+ * handler (outside any component setup scope) leaks a listener on every call.
+ * Use this for one-shot writes such as the review flow, where the reactive
+ * state is not needed. Returns false if there is no signed-in user. */
+export async function castVoteOnce(
+  nodeId: string,
+  category: VoteCategory,
+  value: number,
+): Promise<boolean> {
+  const user = useCurrentUser();
+  if (!user.value) return false;
+
+  const firebaseApp = useFirebaseApp();
+  const db = getFirestore(firebaseApp, "koryta-pl");
+  const clamped = Math.max(-5, Math.min(5, value));
+
+  await setDoc(
+    doc(db, "votes", `${nodeId}_${user.value.uid}`),
+    {
+      nodeId,
+      userUid: user.value.uid,
+      categoryVotes: { [category]: clamped },
+      updatedAt: new Date().toISOString(),
+    } as VoteDocument,
+    // Use merge:true to preserve existing votes in other categories.
+    { merge: true },
+  );
+  return true;
+}
