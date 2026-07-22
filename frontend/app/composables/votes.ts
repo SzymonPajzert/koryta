@@ -5,17 +5,9 @@ import {
   mdiLightbulbOutline,
 } from "@mdi/js";
 import { computed, type MaybeRef } from "vue";
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  where,
-  collection,
-  query,
-} from "firebase/firestore";
-import { useDocument, useFirebaseApp } from "vuefire";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { useCurrentUser, useDocument, useFirebaseApp } from "vuefire";
 import { useAuthState } from "./auth";
-import type { DocumentData } from "firebase-admin/firestore";
 import type { VoteCategory, VoteDocument } from "~~/shared/model";
 
 const configMap: Record<
@@ -48,8 +40,6 @@ const configMap: Record<
   },
 };
 
-type AggregatedVotes = Record<string, number>;
-
 export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
   const { user } = useAuthState();
   const firebaseApp = useFirebaseApp();
@@ -66,27 +56,6 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
 
   const userCategoryVotes = computed(() => {
     return voteNodeUserDoc.value?.categoryVotes || {};
-  });
-
-  const votesNodeRef = computed(() => {
-    return query(collection(db, "votes"), where("nodeId", "==", nodeRef.value));
-  });
-
-  const votesNodeCollection = useCollection(votesNodeRef, {
-    wait: true,
-  });
-  const nodeCategoryVotes = computed(() => {
-    return votesNodeCollection.value.reduce(
-      (acc: AggregatedVotes, doc: DocumentData) => {
-        const data = doc as VoteDocument;
-        const categoryVotes = data.categoryVotes;
-        Object.entries(categoryVotes).forEach(([category, value]) => {
-          acc[category] = (acc[category] || 0) + value;
-        });
-        return acc;
-      },
-      {} as AggregatedVotes,
-    );
   });
 
   const router = useRouter();
@@ -130,7 +99,6 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
 
   return {
     userCategoryVotes,
-    nodeCategoryVotes,
     config,
     loading,
     castVote,
