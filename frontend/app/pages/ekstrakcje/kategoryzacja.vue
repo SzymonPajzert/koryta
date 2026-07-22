@@ -127,7 +127,7 @@ import {
   mdiHelpCircleOutline,
 } from "@mdi/js";
 import { useExtractions } from "~/composables/extractions";
-import { useVotes } from "~/composables/votes";
+import { castVoteOnce } from "~/composables/votes";
 import { factSubject } from "~/utils/extraction";
 import type { ExtractionFact } from "~~/shared/model";
 
@@ -191,12 +191,10 @@ function recordVote(verdict: Verdict) {
 
   if (verdict === "insufficient") {
     // Separate axis: the reviewer can't decide from the available context.
-    const { castVote } = useVotes(fact.id, "insufficient");
-    castVote(1);
+    castVoteOnce(fact.id, "insufficient", 1);
   } else {
     // right = correct (+1), left = incorrect (-1)
-    const { castVote } = useVotes(fact.id, "correct");
-    castVote(verdict === "correct" ? 1 : -1);
+    castVoteOnce(fact.id, "correct", verdict === "correct" ? 1 : -1);
   }
 
   votedIds.value.add(fact.id);
