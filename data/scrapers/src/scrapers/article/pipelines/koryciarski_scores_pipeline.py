@@ -10,8 +10,7 @@ from tqdm import tqdm
 from entities.article import KoryciarskiScore
 from scrapers.article.pipelines.parsed_pipeline import ArticleParsed
 from scrapers.article.pipelines.pipeline_utils import llm_model
-from scrapers.stores import Context, LLMRequest, Pipeline
-from stores.config import VERSIONED_DIR
+from scrapers.stores import VERSIONED_DIR, Context, LLMRequest, Pipeline
 
 PROMPT_VERSION = 1
 TEXT_LIMIT = 100000

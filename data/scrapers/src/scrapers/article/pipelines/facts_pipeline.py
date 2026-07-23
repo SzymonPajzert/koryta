@@ -22,8 +22,7 @@ from scrapers.article.pipelines.koryciarski_scores_pipeline import (
     ArticleKoryciarskiScores,
 )
 from scrapers.article.pipelines.pipeline_utils import llm_model
-from scrapers.stores import Context, LLMRequest, Pipeline
-from stores.config import VERSIONED_DIR
+from scrapers.stores import VERSIONED_DIR, Context, LLMRequest, Pipeline
 
 PROMPT_VERSION = 7
 TEXT_LIMIT = 100000

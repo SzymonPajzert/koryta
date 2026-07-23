@@ -1,20 +1,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
 from util.polish import parse_polish_date
-
-_WORKER_SCRIPT = Path(__file__).parent / "readability_worker.mjs"
-# node_modules lives two levels up from src/
-_NODE_MODULES = Path(__file__).parents[3] / "node_modules"
 
 _EMPTY_RESULT: dict[str, Any] = {
     "selector_matched": False,
@@ -24,52 +17,6 @@ _EMPTY_RESULT: dict[str, Any] = {
     "article_content": "",
     "extraction_method": None,
 }
-
-
-class _ReadabilityWorker:
-    """Per-process singleton that keeps a Node.js readability worker alive."""
-
-    def __init__(self) -> None:
-        env = os.environ.copy()
-        env["NODE_PATH"] = str(_NODE_MODULES)
-        self._proc = subprocess.Popen(
-            ["node", str(_WORKER_SCRIPT)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            env=env,
-        )
-
-    def parse(self, html: str, url: str) -> dict[str, Any]:
-        assert self._proc.stdin and self._proc.stdout
-        payload = json.dumps({"html": html, "url": url}, ensure_ascii=False) + "\n"
-        self._proc.stdin.write(payload.encode("utf-8"))
-        self._proc.stdin.flush()
-        line = self._proc.stdout.readline()
-        if not line:
-            return {}
-        try:
-            return json.loads(line)
-        except Exception:
-            return {}
-
-    def close(self) -> None:
-        try:
-            if self._proc.stdin:
-                self._proc.stdin.close()
-            self._proc.wait(timeout=5)
-        except Exception:
-            self._proc.kill()
-
-
-_worker: _ReadabilityWorker | None = None
-
-
-def _get_worker() -> _ReadabilityWorker:
-    global _worker
-    if _worker is None:
-        _worker = _ReadabilityWorker()
-    return _worker
 
 
 def _iter_ld_json_documents(soup: BeautifulSoup) -> list[Any]:
@@ -145,6 +92,28 @@ def _parse_date(raw: str) -> date | None:
     return parse_polish_date(raw)
 
 
+def _title_from_ld_json(item: dict[str, Any] | None) -> str | None:
+    if not isinstance(item, dict):
+        return None
+    for key in ("headline", "name", "title"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return re.sub(r"\s{2,}", " ", value).strip()
+    return None
+
+
+def _date_from_ld_json(item: dict[str, Any] | None) -> date | None:
+    if not isinstance(item, dict):
+        return None
+    for key in ("datePublished", "dateCreated", "dateModified"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            parsed = _parse_date(value)
+            if parsed is not None:
+                return parsed
+    return None
+
+
 def extract_article_content(
     html_bytes: bytes, selector: str, url: str = ""
 ) -> dict[str, Any]:
@@ -155,10 +124,10 @@ def extract_article_content(
     soup = BeautifulSoup(html_bytes, "lxml")
     ld_json = _pick_ld_json_metadata(soup)
 
-    # Readability disabled for now — content comes from the selector, title/date
-    # are left None (see git history for the Node.js worker fallback).
-    title: str | None = None
-    publication_date: date | None = None
+    # Readability disabled — title/date come from ld+json metadata instead of the
+    # Node.js worker (see git history for the old fallback).
+    title = _title_from_ld_json(ld_json)
+    publication_date = _date_from_ld_json(ld_json)
 
     element = soup.select_one(selector)
 

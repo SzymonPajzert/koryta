@@ -32,8 +32,7 @@ from scrapers.article.pipelines.done_urls_pipeline import ArticleDoneUrls
 from scrapers.article.pipelines.pipeline_utils import (
     iter_done_urls,
 )
-from scrapers.stores import Context, DoneUrl, Pipeline
-from stores.config import DOWNLOADED_DIR, VERSIONED_DIR
+from scrapers.stores import DOWNLOADED_DIR, VERSIONED_DIR, Context, DoneUrl, Pipeline
 
 _FINAL_OUTPUT_FILE = Path(VERSIONED_DIR) / "article_parsed" / "article_parsed.jsonl"
 _TEMP_OUTPUT_FILE = (

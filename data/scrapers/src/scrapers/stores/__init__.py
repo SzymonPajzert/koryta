@@ -24,6 +24,8 @@ from scrapers.stores.file import (
     LocalFile,
     VersionedBackup,
 )
+from stores.config import DOWNLOADED_DIR as DOWNLOADED_DIR
+from stores.config import VERSIONED_DIR as VERSIONED_DIR
 from stores.config import backup_disabled
 
 if TYPE_CHECKING:

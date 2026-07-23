@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +11,7 @@ from scrapers.article.pipelines.koryciarski_scores_pipeline import (
     ArticleKoryciarskiScores,
 )
 from scrapers.article.pipelines.parsed_pipeline import ArticleParsed
-from scrapers.stores import Context, Pipeline
-from stores.config import VERSIONED_DIR
+from scrapers.stores import VERSIONED_DIR, Context, Pipeline
 
 _PARSED_FILE = Path(VERSIONED_DIR) / "article_parsed" / "article_parsed.jsonl"
 _SCORES_FILE = (
@@ -152,7 +150,7 @@ def _load_jsonl_filtered(
     result: dict[str, dict[str, Any]] = {}
     if not path.exists():
         return result
-    total = os.path.getsize(path)
+    total = path.stat().st_size
     with path.open(encoding="utf-8") as f, tqdm(
         total=total, unit="B", unit_scale=True, desc=f"  {path.name}"
     ) as bar:

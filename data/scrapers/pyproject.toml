@@ -289,6 +289,9 @@ ignore_imports = [
     "entities.util -> urllib",
     "scrapers.stores -> io",
     "scrapers.stores -> stores.config",
+    # In-memory tar extraction of GCS blobs and URL joining for link discovery
+    "scrapers.article.pipelines.pipeline_utils -> io",
+    "scrapers.article.crawler -> urllib",
     # Created a quick export of library util.firestore
     "util.firestore -> firebase_admin",
     "util.firestore -> os",
