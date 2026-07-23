@@ -6,7 +6,8 @@ from typing import Generator
 import pandas as pd
 
 from entities.util import NormalizedParse
-from scrapers.stores import Context, DoneUrl, GCSBlob
+from scrapers.stores import Context, DoneUrl
+from scrapers.stores.file import GCSBlob
 
 _GCS_PREFIX = "gs://koryta-pl-crawled/"
 

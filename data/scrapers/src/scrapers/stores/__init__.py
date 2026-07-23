@@ -458,7 +458,10 @@ class ProcessPolicy:
                         dep_run, dep_reason = self.execution_decisions[
                             dep.pipeline_name
                         ]
-                        if dep_run and pipeline.pipeline_name not in self.exclude_refresh:
+                        if (
+                            dep_run
+                            and pipeline.pipeline_name not in self.exclude_refresh
+                        ):
                             decision = (
                                 True,
                                 f"dependency {dep.pipeline_name} refreshed",
