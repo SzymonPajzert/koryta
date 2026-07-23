@@ -9,11 +9,11 @@ import pandas as pd
 
 from scrapers.stores import (
     Context,
-    DownloadableFile,
     LocalFile,
     Pipeline,
     ProcessPolicy,
 )
+from scrapers.stores.file import DownloadableFile, VersionedBackup
 
 
 class TestStores(unittest.TestCase):
@@ -154,9 +154,15 @@ class TestPipeline(unittest.TestCase):
         pipeline.filename = "dummy"
 
         # Mock existing file (though we shouldn't read it if refreshing)
-        self.mock_ctx.io.read_data.return_value.read_dataframe.return_value = (
-            self.dummy_df
-        )
+        # VersionedBackup reads should fail (no GCS in tests)
+        def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                raise FileNotFoundError(f"No backup for {ref.filename}")
+            m = Mock()
+            m.read_dataframe.return_value = self.dummy_df
+            return m
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
 
         # Mock dependency instance that will be replaced in params
         # Note: Pipeline constructor initializes dep. We need to spy on it or mock it.
@@ -200,6 +206,73 @@ class TestPipeline(unittest.TestCase):
             # Dependency check should happen
             pipeline.dep.read_or_process.assert_called_once()
 
+    def _missing_output_pipeline(self):
+        """A pipeline whose local output is missing (get_mtime -> None)."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.dep = Mock(spec=DummyDep)
+        pipeline.dep.pipeline_name = "DummyDep"
+        pipeline.dep.read_or_process.return_value = self.dummy_df
+        pipeline.dep.output_path = "dep_out"
+        pipeline.dependencies["dep"] = pipeline.dep
+        return pipeline
+
+    def test_missing_output_restores_from_backup(self):
+        """
+        Baseline: with backups enabled, a missing local output is restored from
+        the versioned backup instead of being reprocessed.
+        """
+        pipeline = self._missing_output_pipeline()
+        stale_df = pd.DataFrame({"col": [9, 9]})
+
+        def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                m = Mock()
+                m.read_dataframe.return_value = stale_df
+                return m
+            raise FileNotFoundError("no local output")
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
+
+        with patch.object(
+            pipeline, "process", return_value=self.dummy_df
+        ) as mock_process:
+            result = pipeline.read_or_process(self.mock_ctx)
+
+        # Restored from backup, pipeline NOT reprocessed.
+        mock_process.assert_not_called()
+        pd.testing.assert_frame_equal(result, stale_df)
+
+    @patch("scrapers.stores.backup_disabled", return_value=True)
+    def test_no_backup_skips_restore_and_reprocesses(self, _mock_disabled):
+        """
+        With backups disabled, a missing local output must be recomputed from
+        source rather than restored from the shared backup (stale data).
+        """
+        pipeline = self._missing_output_pipeline()
+        stale_df = pd.DataFrame({"col": [9, 9]})
+        backup_reads = []
+
+        def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                backup_reads.append(ref)
+                m = Mock()
+                m.read_dataframe.return_value = stale_df
+                return m
+            raise FileNotFoundError("no local output")
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
+
+        with patch.object(
+            pipeline, "process", return_value=self.dummy_df
+        ) as mock_process:
+            result = pipeline.read_or_process(self.mock_ctx)
+
+        # Backup must never be read, and the pipeline is reprocessed.
+        self.assertEqual(backup_reads, [])
+        mock_process.assert_called_once()
+        pd.testing.assert_frame_equal(result, self.dummy_df)
+
     def test_nested_pipelines_execution(self):
         """
         Verify correct propagation of execution in a 3-level nested pipeline.
@@ -211,6 +284,8 @@ class TestPipeline(unittest.TestCase):
         written_files: dict[str, Any] = {}
 
         def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                raise FileNotFoundError(f"No backup for {ref.filename}")
             # We assume ref is LocalFile and has .filename
             # The pipeline writes to filename.jsonl
             fname = ref.filename
@@ -245,6 +320,7 @@ class TestPipeline(unittest.TestCase):
                     print(f"Failed to capture written DF for {fs.filename}: {e}")
 
         # Use side_effect on mock
+        self.mock_ctx.io.read_data.side_effect = read_data_se
         self.mock_ctx.io.write_file.side_effect = capture_written_df  # type: ignore
 
         # We need to spy on process calls to verify execution order/count
@@ -285,8 +361,8 @@ class TestPipeline(unittest.TestCase):
             pipeline.read_or_process(self.mock_ctx)
 
             # Verify write was called
-            self.mock_ctx.io.write_file.assert_called_once()
-            args, _ = self.mock_ctx.io.write_file.call_args
+            self.assertEqual(self.mock_ctx.io.write_file.call_count, 2)
+            args, _ = self.mock_ctx.io.write_file.call_args_list[0]
             # args: (fs, content_callback)
             self.assertTrue(args[0].filename.endswith(".jsonl"))
 
@@ -604,6 +680,167 @@ class TestPipeline(unittest.TestCase):
 
                 # Stable should NOT run
                 mock_stable_proc.assert_not_called()
+
+class TestVersionedBackupRestore(unittest.TestCase):
+    """Tests for the versioned backup restore logic in read_or_process."""
+
+    def setUp(self):
+        self.mock_ctx = Mock(spec=Context)
+        self.mock_ctx.io = Mock()
+        self.mock_ctx.io.dumper = Mock()
+        self.mock_ctx.io.get_mtime.return_value = None  # Missing local output
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default()
+        self.backup_df = pd.DataFrame({"restored": [1, 2, 3]})
+
+    def test_missing_output_restores_from_backup(self):
+        """
+        When local output is missing and a versioned backup exists,
+        the pipeline should restore from backup without re-processing.
+        """
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+
+        dep_mock = Mock(spec=DummyDep)
+        dep_mock.pipeline_name = "DummyDep"
+        dep_mock.output_time.return_value = None
+        dep_mock.volatile = False
+        pipeline.dep = dep_mock
+        pipeline.dependencies["dep"] = dep_mock
+
+        def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                m = Mock()
+                m.read_dataframe.return_value = self.backup_df
+                return m
+            raise FileNotFoundError(f"No local file: {ref.filename}")
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
+
+        with patch.object(
+            pipeline, "process", return_value=pd.DataFrame()
+        ) as mock_process:
+            result = pipeline.read_or_process(self.mock_ctx)
+
+            # Should NOT have called process
+            mock_process.assert_not_called()
+
+            # Should return the backup data
+            pd.testing.assert_frame_equal(result, self.backup_df)
+
+    def test_missing_output_restores_and_saves_locally(self):
+        """
+        When restoring from backup, the data should be written to the
+        local versioned path (local_only=True) so next run finds it on disk.
+        """
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+
+        dep_mock = Mock(spec=DummyDep)
+        dep_mock.pipeline_name = "DummyDep"
+        dep_mock.output_time.return_value = None
+        dep_mock.volatile = False
+        pipeline.dep = dep_mock
+        pipeline.dependencies["dep"] = dep_mock
+
+        def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                m = Mock()
+                m.read_dataframe.return_value = self.backup_df
+                return m
+            raise FileNotFoundError(f"No local file: {ref.filename}")
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
+
+        pipeline.read_or_process(self.mock_ctx)
+
+        # write_file should have been called with a LocalFile (local save)
+        # but NOT with a VersionedBackup (no re-upload)
+        write_calls = self.mock_ctx.io.write_file.call_args_list
+        local_writes = [
+            c for c in write_calls if isinstance(c[0][0], LocalFile)
+        ]
+        backup_writes = [
+            c for c in write_calls if isinstance(c[0][0], VersionedBackup)
+        ]
+
+        self.assertGreater(len(local_writes), 0, "Should write locally")
+        self.assertEqual(
+            len(backup_writes), 0, "Should NOT re-upload to backup"
+        )
+
+    def test_missing_output_backup_fails_falls_through_to_process(self):
+        """
+        When local output is missing AND versioned backup also fails,
+        the pipeline should fall through to re-processing.
+        """
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+
+        dep_mock = Mock(spec=DummyDep)
+        dep_mock.pipeline_name = "DummyDep"
+        dep_mock.read_or_process.return_value = pd.DataFrame({"dep": [1]})
+        dep_mock.output_path = "dep_out"
+        dep_mock.output_time.return_value = None
+        dep_mock.volatile = False
+        pipeline.dep = dep_mock
+        pipeline.dependencies["dep"] = dep_mock
+
+        # Both local and backup reads fail
+        self.mock_ctx.io.read_data.side_effect = FileNotFoundError(
+            "Nothing exists"
+        )
+
+        processed_df = pd.DataFrame({"processed": [42]})
+        with patch.object(
+            pipeline, "process", return_value=processed_df
+        ) as mock_process:
+            result = pipeline.read_or_process(self.mock_ctx)
+
+            # Should have fallen through to process
+            mock_process.assert_called_once()
+            pd.testing.assert_frame_equal(result, processed_df)
+
+    def test_explicit_refresh_skips_backup(self):
+        """
+        When refresh is explicitly requested via policy (not just 'missing output'),
+        the pipeline should NOT try to restore from backup.
+        """
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+
+        dep_mock = Mock(spec=DummyDep)
+        dep_mock.pipeline_name = "DummyDep"
+        dep_mock.read_or_process.return_value = pd.DataFrame({"dep": [1]})
+        dep_mock.output_path = "dep_out"
+        dep_mock.output_time.return_value = None
+        dep_mock.volatile = False
+        pipeline.dep = dep_mock
+        pipeline.dependencies["dep"] = dep_mock
+
+        # Explicit refresh policy for this pipeline
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
+            refresh=["DummyPipeline"]
+        )
+
+        def read_data_se(ref):
+            if isinstance(ref, VersionedBackup):
+                # This should NOT be reached
+                m = Mock()
+                m.read_dataframe.return_value = self.backup_df
+                return m
+            raise FileNotFoundError("No local file")
+
+        self.mock_ctx.io.read_data.side_effect = read_data_se
+
+        processed_df = pd.DataFrame({"fresh": [99]})
+        with patch.object(
+            pipeline, "process", return_value=processed_df
+        ) as mock_process:
+            result = pipeline.read_or_process(self.mock_ctx)
+
+            # Should process, NOT restore from backup
+            mock_process.assert_called_once()
+            pd.testing.assert_frame_equal(result, processed_df)
 
 
 if __name__ == "__main__":

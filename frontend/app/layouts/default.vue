@@ -43,13 +43,14 @@
         <v-btn v-if="user && !pictureURL" icon to="/profil">
           <v-icon :icon="mdiAccount" />
         </v-btn>
-        <v-btn v-if="!user" :icon="!mdAndUp" to="/login">
+        <v-btn v-if="!user" :icon="!mdAndUp" @click="loginDialog = true">
           <v-icon v-if="!mdAndUp" :icon="mdiAccount" />
           <span class="d-none d-md-inline">Zaloguj się</span>
         </v-btn>
         <v-btn v-if="user && mdAndUp" text @click="logout">Wyloguj</v-btn>
+        <DialogLogin v-model="loginDialog" hide-activator />
         <template #fallback>
-          <v-btn :icon="!mdAndUp" to="/login">
+          <v-btn :icon="!mdAndUp" @click="loginDialog = true">
             <v-icon v-if="!mdAndUp" :icon="mdiAccount" />
             <span class="d-none d-md-inline">Zaloguj się</span>
           </v-btn>
@@ -62,6 +63,9 @@
       <v-toolbar v-if="user" density="compact" color="primary">
         <v-spacer />
 
+        <v-btn :prepend-icon="mdiViewList" variant="text" to="/admin/rewizje">
+          Rewizje
+        </v-btn>
         <v-btn
           :prepend-icon="mdiLightningBolt"
           variant="text"
@@ -94,14 +98,15 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiAccount, mdiLightningBolt } from "@mdi/js";
-import { computed } from "vue";
+import { mdiAccount, mdiLightningBolt, mdiViewList } from "@mdi/js";
+import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
 import { useDisplay } from "vuetify";
 
 const { mdAndUp } = useDisplay();
 const { user, userConfig, logout } = useAuthState();
 const route = useRoute();
+const loginDialog = ref(false);
 const maxWidth = computed(() =>
   route?.meta?.fullWidth ? "none" : (route?.meta?.maxWidth ?? 1200),
 );

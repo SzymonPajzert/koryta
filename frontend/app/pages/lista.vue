@@ -52,8 +52,6 @@ const people = computed(() => {
     }
   }
 
-  console.error("returning");
-
   return unfiltered;
 });
 </script>

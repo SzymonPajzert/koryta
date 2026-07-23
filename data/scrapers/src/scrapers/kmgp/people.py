@@ -9,7 +9,8 @@ import pandas as pd
 from entities.composite import Company, Election, Person, Source
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.pkw.process import PeoplePKW
-from scrapers.stores import CloudStorage, DownloadableFile, Pipeline
+from scrapers.stores import CloudStorage, Pipeline
+from scrapers.stores.file import DownloadableFile
 
 
 @dataclass

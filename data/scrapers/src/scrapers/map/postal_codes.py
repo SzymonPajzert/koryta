@@ -1,7 +1,7 @@
-
 import pandas as pd
 
-from scrapers.stores import Context, DownloadableFile, Pipeline
+from scrapers.stores import Context, Pipeline
+from scrapers.stores.file import DownloadableFile
 
 postal_codes_file = DownloadableFile(
     url="https://raw.githubusercontent.com/symerio/postal-codes-data/refs/heads/master/data/geonames/PL.txt",

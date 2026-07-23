@@ -59,9 +59,13 @@ async function seedDatabase() {
   const batch = db.batch();
 
   for (const [id, node] of Object.entries(nodes)) {
-    const nodeData = { ...node };
+    const nodeData = { ...node } as Record<string, unknown>;
     if (!nodeData.stats) nodeData.stats = {};
-    nodeData.stats.isApproved = true;
+    const stats = nodeData.stats as Record<string, unknown>;
+    // Only default to approved=true if not explicitly set in seed data
+    if (stats.isApproved === undefined) {
+      stats.isApproved = true;
+    }
     const ref = db.collection("nodes").doc(id);
     batch.set(ref, nodeData);
   }
@@ -115,8 +119,12 @@ async function seedAuth() {
     ]) {
       await auth.createUser(user);
       if (user.uid === "test-admin") {
-        await auth.setCustomUserClaims(user.uid, { admin: true });
-        console.log(`Set admin claim for ${user.email}`);
+        // datascience: allows uploading extractions via /api/ingest/extraction
+        await auth.setCustomUserClaims(user.uid, {
+          admin: true,
+          datascience: true,
+        });
+        console.log(`Set admin + datascience claim for ${user.email}`);
       }
       console.log(`User created: ${user.email} / ${user.password}`);
     }

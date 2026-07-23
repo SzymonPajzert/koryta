@@ -6,7 +6,7 @@ import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
 
 export async function useListWithStats(
   apiQuery: Ref<Query> | ComputedRef<Query>,
-  cacheKey: string = "tabela-data",
+  cacheKey: string,
 ) {
   const user = useCurrentUser();
   const isAuthReady = useIsCurrentUserLoaded();
@@ -76,6 +76,20 @@ export async function useListWithStats(
     {
       watch: [apiQuery, user],
       server: apiQuery.value.visibility !== "private",
+      // Use cached payload only while hydrating
+      // and always fetch fresh for client-side param changes.
+      //
+      // With `experimental.granularCachedData` set to true, the
+      // built-in getCachedData is consulted on every execute and returns
+      // `nuxtApp.static.data[key]` (extracted for SWR/prerendered routes such as `/`).
+      // That makes changing `apiQuery` re-serve the stale initial result
+      // instead of refetching.
+      getCachedData(key, nuxtApp, ctx) {
+        if (ctx.cause === "initial" && nuxtApp.isHydrating) {
+          return nuxtApp.payload.data[key];
+        }
+        return undefined;
+      },
     },
   );
 

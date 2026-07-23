@@ -4,132 +4,473 @@
     "type": "person",
     "content": "Politician from PO",
     "parties": ["PO"],
-    "revision_id": "rev1"
+    "revision_id": "rev1",
+    "nameChunksLower": [
+      "alski",
+      "an",
+      "i",
+      "jan",
+      "ki",
+      "kowalski",
+      "lski",
+      "n",
+      "owalski",
+      "ski",
+      "walski"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "2": {
     "name": "Orlen",
     "type": "place",
     "content": "State oil company",
-    "revision_id": "rev2"
+    "revision_id": "rev2",
+    "nameChunksLower": ["en", "len", "n", "orlen", "rlen"],
+    "krsNumber": "0000357114",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "3": {
     "name": "Anna Nowak",
     "type": "person",
     "content": "Politician from PiS",
     "parties": ["PiS"],
-    "revision_id": "rev3"
+    "revision_id": "rev3",
+    "nameChunksLower": [
+      "a",
+      "ak",
+      "anna",
+      "k",
+      "na",
+      "nna",
+      "nowak",
+      "owak",
+      "wak"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "4": {
     "name": "Piotr Wiśniewski",
     "type": "person",
     "content": "Politician from Lewica",
     "parties": ["Nowa Lewica"],
-    "revision_id": "rev4"
+    "revision_id": "rev4",
+    "nameChunksLower": [
+      "ewski",
+      "i",
+      "iewski",
+      "iotr",
+      "iśniewski",
+      "ki",
+      "niewski",
+      "otr",
+      "piotr",
+      "r",
+      "ski",
+      "tr",
+      "wiśniewski",
+      "wski",
+      "śniewski"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "5": {
     "name": "Krzysztof Wójcik",
     "type": "person",
     "content": "Politician from Konfederacja",
     "parties": ["Konfederacja"],
-    "revision_id": "rev5"
+    "revision_id": "rev5",
+    "nameChunksLower": [
+      "cik",
+      "f",
+      "ik",
+      "jcik",
+      "k",
+      "krzysztof",
+      "of",
+      "rzysztof",
+      "sztof",
+      "tof",
+      "wójcik",
+      "ysztof",
+      "ztof",
+      "zysztof",
+      "ójcik"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "h1": {
     "name": "Not approved person",
-    "type": "person"
+    "type": "person",
+    "nameChunksLower": [
+      "approved",
+      "d",
+      "ed",
+      "erson",
+      "n",
+      "not",
+      "on",
+      "ot",
+      "oved",
+      "person",
+      "pproved",
+      "proved",
+      "roved",
+      "rson",
+      "son",
+      "t",
+      "ved"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "6": {
     "name": "Sample Article",
     "type": "article",
     "sourceURL": "http://example.com",
-    "revision_id": "rev7"
+    "revision_id": "rev7",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "7": {
     "name": "Not approved article",
     "type": "article",
-    "sourceURL": "http://google.com"
+    "sourceURL": "http://google.com",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "8": {
     "name": "Artykuł bez krawędzi",
     "type": "article",
     "sourceURL": "http://lone-article.com",
-    "revision_id": "rev8"
+    "revision_id": "rev8",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "a1": {
     "name": "Artykuł placeholder 1",
     "type": "article",
     "sourceURL": "http://example1.com",
-    "revision_id": "a1"
+    "revision_id": "a1",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "a2": {
     "name": "Artykuł placeholder 2",
     "type": "article",
     "sourceURL": "http://example2.com",
-    "revision_id": "a2"
+    "revision_id": "a2",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "a3": {
     "name": "Artykuł placeholder 3",
     "type": "article",
     "sourceURL": "http://example3.com",
-    "revision_id": "a3"
+    "revision_id": "a3",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "a4": {
     "name": "Artykuł placeholder 4",
     "type": "article",
     "sourceURL": "http://example4.com",
-    "revision_id": "a4"
+    "revision_id": "a4",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "a5": {
     "name": "Artykuł placeholder 5",
     "type": "article",
     "sourceURL": "http://example5.com",
-    "revision_id": "a5"
+    "revision_id": "a5",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "a6": {
     "name": "Artykuł placeholder 6",
     "type": "article",
     "sourceURL": "http://example6.com",
-    "revision_id": "a6"
+    "revision_id": "a6",
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "teryt22": {
     "name": "Województwo Pomorskie",
     "type": "region",
     "teryt": "22",
-    "revision_id": "teryt22"
+    "revision_id": "teryt22",
+    "nameChunksLower": [
+      "dztwo",
+      "e",
+      "ewództwo",
+      "ie",
+      "jewództwo",
+      "kie",
+      "morskie",
+      "o",
+      "ojewództwo",
+      "omorskie",
+      "orskie",
+      "pomorskie",
+      "rskie",
+      "skie",
+      "two",
+      "wo",
+      "województwo",
+      "wództwo",
+      "ztwo",
+      "ództwo"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "teryt10": {
     "name": "Województwo Łódzkie",
     "type": "region",
     "teryt": "10",
-    "revision_id": "teryt10"
+    "revision_id": "teryt10",
+    "nameChunksLower": [
+      "dzkie",
+      "dztwo",
+      "e",
+      "ewództwo",
+      "ie",
+      "jewództwo",
+      "kie",
+      "o",
+      "ojewództwo",
+      "two",
+      "wo",
+      "województwo",
+      "wództwo",
+      "zkie",
+      "ztwo",
+      "ódzkie",
+      "ództwo",
+      "łódzkie"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "region-empty": {
     "name": "Województwo Puste",
     "type": "region",
-    "revision_id": "rev-region-empty"
+    "revision_id": "rev-region-empty",
+    "nameChunksLower": [
+      "dztwo",
+      "e",
+      "ewództwo",
+      "jewództwo",
+      "o",
+      "ojewództwo",
+      "puste",
+      "ste",
+      "te",
+      "two",
+      "uste",
+      "wo",
+      "województwo",
+      "wództwo",
+      "ztwo",
+      "ództwo"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "company-empty": {
     "name": "Firma Pusta",
     "type": "place",
-    "revision_id": "rev-company-empty"
+    "revision_id": "rev-company-empty",
+    "nameChunksLower": [
+      "a",
+      "firma",
+      "irma",
+      "ma",
+      "pusta",
+      "rma",
+      "sta",
+      "ta",
+      "usta"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "chain-person": {
     "name": "Osoba Testowa",
     "type": "person",
-    "revision_id": "rev-chain-person"
+    "revision_id": "rev-chain-person",
+    "nameChunksLower": [
+      "a",
+      "ba",
+      "estowa",
+      "oba",
+      "osoba",
+      "owa",
+      "soba",
+      "stowa",
+      "testowa",
+      "towa",
+      "wa"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "chain-company": {
     "name": "Firma Testowa",
     "type": "place",
-    "revision_id": "rev-chain-company"
+    "revision_id": "rev-chain-company",
+    "nameChunksLower": [
+      "a",
+      "estowa",
+      "firma",
+      "irma",
+      "ma",
+      "owa",
+      "rma",
+      "stowa",
+      "testowa",
+      "towa",
+      "wa"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "chain-powiat": {
     "name": "Powiat Testowy",
     "type": "region",
-    "revision_id": "rev-chain-powiat"
+    "revision_id": "rev-chain-powiat",
+    "nameChunksLower": [
+      "at",
+      "estowy",
+      "iat",
+      "owiat",
+      "owy",
+      "powiat",
+      "stowy",
+      "t",
+      "testowy",
+      "towy",
+      "wiat",
+      "wy",
+      "y"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
   },
   "chain-wojewodztwo": {
     "name": "Województwo Testowe",
     "type": "region",
-    "revision_id": "rev-chain-wojewodztwo"
+    "revision_id": "rev-chain-wojewodztwo",
+    "nameChunksLower": [
+      "dztwo",
+      "e",
+      "estowe",
+      "ewództwo",
+      "jewództwo",
+      "o",
+      "ojewództwo",
+      "owe",
+      "stowe",
+      "testowe",
+      "towe",
+      "two",
+      "we",
+      "wo",
+      "województwo",
+      "wództwo",
+      "ztwo",
+      "ództwo"
+    ],
+    "stats": {
+      "nodeGroupSize": 1
+    }
+  },
+  "opole-powiat": {
+    "name": "Opole",
+    "type": "region",
+    "teryt": "1661",
+    "nameChunksLower": ["e", "le", "ole", "opole", "pole"],
+    "stats": {
+      "isApproved": true,
+      "nodeGroupSize": 10
+    }
+  },
+  "andrzej-grzyb": {
+    "name": "Andrzej Grzyb",
+    "type": "person",
+    "nameChunksLower": [
+      "andrzej",
+      "b",
+      "drzej",
+      "ej",
+      "grzyb",
+      "j",
+      "ndrzej",
+      "rzej",
+      "rzyb",
+      "yb",
+      "zej",
+      "zyb"
+    ],
+    "stats": {
+      "isApproved": true,
+      "nodeGroupSize": 5
+    },
+    "slug": "andrzej-grzyb",
+    "content": "Polish politician"
+  },
+  "nowe-person-1": {
+    "name": "Nowa Osoba Testowa",
+    "type": "person",
+    "nameChunksLower": [
+      "a",
+      "ba",
+      "estowa",
+      "nowa",
+      "oba",
+      "osoba",
+      "owa",
+      "soba",
+      "stowa",
+      "testowa",
+      "towa",
+      "wa"
+    ],
+    "stats": {
+      "isApproved": false,
+      "nodeGroupSize": 1,
+      "votes": {
+        "humanVoted": false,
+        "interesting": 0
+      }
+    },
+    "content": "Test person not yet approved"
   }
 }

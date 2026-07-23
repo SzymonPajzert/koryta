@@ -1,4 +1,4 @@
-import type { ElectionPosition } from "~~/shared/model";
+import type { ElectionPosition, Person } from "./model";
 import { z } from "zod";
 
 export const companyRequestSchema = z.object({
@@ -6,6 +6,10 @@ export const companyRequestSchema = z.object({
   name: z.string(),
   owners: z.array(z.string()).optional(),
   teryt: z.string().optional(),
+  /** PKD codes from KRS, e.g. "86.10.Z" */
+  activity: z.array(z.string()).optional(),
+  /** Whether the company is publicly traded (spółka publiczna), from KRS. */
+  is_public: z.boolean().optional(),
 });
 
 export type CompanyRequest = {
@@ -13,6 +17,8 @@ export type CompanyRequest = {
   name: string;
   owners?: string[];
   teryt?: string;
+  activity?: string[];
+  is_public?: boolean;
 };
 
 const employmentRequestSchema = z.object({
@@ -87,3 +93,26 @@ export type EntityResult = {
   edgeId?: string;
   krs?: string;
 };
+
+/** Fields a user may propose for a person node, whether creating a new one
+ * or editing an existing one. Only person nodes are supported for now.
+ *
+ * This is an allowlist rather than a denylist of internal fields: anything
+ * not listed here is stripped by zod during parsing, so a caller can't smuggle
+ * in e.g. `revision_id` or `stats` and have it written straight to the node.
+ *
+ * The `satisfies` clause couples this to the `Person` model: if a listed
+ * field's type changes there, this schema stops typechecking until updated,
+ * so the two can't silently drift apart.
+ */
+export const personEditSchema = z.object({
+  name: z.string().min(1, "Nazwa jest wymagana"),
+  content: z.string().optional(),
+  parties: z.array(z.string()).optional(),
+  wikipedia: z.string().optional(),
+  rejestrIo: z.string().optional(),
+}) satisfies z.ZodType<
+  Pick<Person, "name" | "content" | "parties" | "wikipedia" | "rejestrIo">
+>;
+
+export type PersonEditRequest = z.infer<typeof personEditSchema>;

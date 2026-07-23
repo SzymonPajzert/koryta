@@ -293,7 +293,7 @@ def _extract_urls(
 
 
 _FLUSH_INTERVAL_S = 30.0  # also flush after this many seconds of inactivity
-_LOG_INTERVAL_S = 30.0   # how often to log queue stats
+_LOG_INTERVAL_S = 30.0  # how often to log queue stats
 
 
 def _priority_for_url(options: CrawlOptions, url: str) -> Priority:

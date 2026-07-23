@@ -41,8 +41,10 @@
     "rules": "database.rules.json"
   },
   "firestore": {
+    "database": "koryta-pl",
+    "location": "europe-central2",
     "rules": "firestore.rules",
-    "database": "koryta-pl"
+    "indexes": "firestore.indexes.json"
   },
   "functions": [
     {

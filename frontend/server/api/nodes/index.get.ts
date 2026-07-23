@@ -5,10 +5,13 @@ import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import {
   fetchNodes,
-  applyPartiesFilter,
   fetchOptionsValidator,
   paginate,
 } from "~~/server/utils/fetch";
+import {
+  buildStructuralFilterOps,
+  type NodeFilterOp,
+} from "~~/server/utils/nodeFilters";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { getUser } from "~~/server/utils/auth";
 import { pageIsPublic } from "~~/shared/model";
@@ -24,9 +27,12 @@ const queryValidator = z.object({
   parties: z.union([z.string(), z.array(z.string())]).optional(),
   teryt: z.string().optional(),
   krs: z.union([z.string(), z.array(z.string())]).optional(),
+  category: z.string().optional(),
   visibility: z.enum(["public", "private"]).optional(),
   hideVoted: z.enum(["all", "no_votes", "has_votes"]).optional(),
   currentlyEmployed: z.enum(["all", "any", "selected"]).optional(),
+  minEmploymentDate: z.string().optional(),
+  minVotes: z.coerce.number().optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),
@@ -67,139 +73,14 @@ export default defineEventHandler(async (event) => {
     const user = await getUser(event).catch(() => null);
     const db = getFirestore("koryta-pl");
 
-    type Op = {
-      applyFs: (q: FirebaseFirestore.Query) => FirebaseFirestore.Query;
-      applyMem: (nodes: any[]) => any[];
-    };
-    const ops: Op[] = [];
-
-    if (query.type) {
-      ops.push({
-        applyFs: (q) => q.where("type", "==", query.type),
-        applyMem: (nodes) => nodes.filter((n) => n.type === query.type),
-      });
-    }
-
-    const partiesToFilter = query.parties || query.party;
-    if (partiesToFilter) {
-      ops.push({
-        applyFs: (q) => applyPartiesFilter(q, partiesToFilter),
-        applyMem: (nodes) => {
-          const partiesToSearch = Array.isArray(partiesToFilter)
-            ? partiesToFilter
-            : [partiesToFilter];
-          const hasNone = partiesToSearch.includes("__NONE__");
-          const normalParties = partiesToSearch.filter((p) => p !== "__NONE__");
-          return nodes.filter((n) => {
-            const p = n.parties || [];
-            if (hasNone && p.length === 0) return true;
-            if (
-              normalParties.length > 0 &&
-              p.some((party: string) => normalParties.includes(party))
-            )
-              return true;
-            return false;
-          });
-        },
-      });
-    }
-
-    if (query.krs) {
-      const krsArray = [
-        ...new Set(Array.isArray(query.krs) ? query.krs : [query.krs]),
-      ];
-      const places: any[] = [];
-      for (let i = 0; i < krsArray.length; i += 10) {
-        const chunk = krsArray.slice(i, i + 10);
-        const chunkPlaces = await db
-          .collection("nodes")
-          .where("type", "==", "place")
-          .where("krsNumber", "in", chunk)
-          .get();
-        places.push(...chunkPlaces.docs);
-      }
-
-      if (places.length > 0) {
-        const placeIds = places.map((doc) => doc.id);
-        let arrayField = user
-          ? "stats.edges.all.targetNodeIds"
-          : "stats.edges.approved.targetNodeIds";
-
-        if (query.currentlyEmployed === "selected") {
-          arrayField = user
-            ? "stats.edges.all.currentlyEmployedTargetNodeIds"
-            : "stats.edges.approved.currentlyEmployedTargetNodeIds";
-        }
-
-        const applyMemOp = (nodes: any[]) =>
-          nodes.filter((n) => {
-            const arr = user
-              ? query.currentlyEmployed === "selected"
-                ? n.stats?.edges?.all?.currentlyEmployedTargetNodeIds
-                : n.stats?.edges?.all?.targetNodeIds
-              : query.currentlyEmployed === "selected"
-                ? n.stats?.edges?.approved?.currentlyEmployedTargetNodeIds
-                : n.stats?.edges?.approved?.targetNodeIds;
-            return (
-              Array.isArray(arr) &&
-              arr.some((id: string) => placeIds.includes(id))
-            );
-          });
-
-        if (placeIds.length <= 10) {
-          ops.push({
-            applyFs: (q) => q.where(arrayField, "array-contains-any", placeIds),
-            applyMem: applyMemOp,
-          });
-        } else {
-          ops.push({
-            applyFs: () => {
-              throw new Error("index: array-contains-any limit exceeded");
-            },
-            applyMem: applyMemOp,
-          });
-        }
-      } else {
-        return { nodes: {}, total: 0 };
-      }
-    }
-
-    if (query.teryt) {
-      const regions = await db
-        .collection("nodes")
-        .where("type", "==", "region")
-        .where("teryt", "==", query.teryt)
-        .limit(1)
-        .get();
-      if (!regions.empty) {
-        const regionId = regions.docs[0]?.id;
-        let arrayField = user
-          ? "stats.edges.all.targetNodeIds"
-          : "stats.edges.approved.targetNodeIds";
-
-        if (query.currentlyEmployed === "selected") {
-          arrayField = user
-            ? "stats.edges.all.currentlyEmployedTargetNodeIds"
-            : "stats.edges.approved.currentlyEmployedTargetNodeIds";
-        }
-
-        ops.push({
-          applyFs: (q) => q.where(arrayField, "array-contains", regionId),
-          applyMem: (nodes) =>
-            nodes.filter((n) => {
-              const arr = user
-                ? query.currentlyEmployed === "selected"
-                  ? n.stats?.edges?.all?.currentlyEmployedTargetNodeIds
-                  : n.stats?.edges?.all?.targetNodeIds
-                : query.currentlyEmployed === "selected"
-                  ? n.stats?.edges?.approved?.currentlyEmployedTargetNodeIds
-                  : n.stats?.edges?.approved?.targetNodeIds;
-              return Array.isArray(arr) && arr.includes(regionId);
-            }),
-        });
-      } else {
-        return { nodes: {}, total: 0 };
-      }
+    type Op = NodeFilterOp;
+    const { ops, empty } = await buildStructuralFilterOps(
+      db,
+      query,
+      user ? "all" : "approved",
+    );
+    if (empty) {
+      return { nodes: {}, total: 0 };
     }
 
     if (!user) {
@@ -237,22 +118,6 @@ export default defineEventHandler(async (event) => {
         applyFs: (q) => q.where("stats.votes.humanVoted", "==", true),
         applyMem: (nodes) =>
           nodes.filter((n) => n.stats?.votes?.humanVoted === true),
-      });
-    }
-
-    if (query.currentlyEmployed === "any") {
-      const field = user
-        ? "stats.edges.all.currentlyEmployed"
-        : "stats.edges.approved.currentlyEmployed";
-      ops.push({
-        applyFs: (q) => q.where(field, "==", true),
-        applyMem: (nodes) =>
-          nodes.filter((n) => {
-            const flag = user
-              ? n.stats?.edges?.all?.currentlyEmployed
-              : n.stats?.edges?.approved?.currentlyEmployed;
-            return flag === true;
-          }),
       });
     }
 

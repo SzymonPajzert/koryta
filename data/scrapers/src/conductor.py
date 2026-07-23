@@ -14,13 +14,11 @@ from scrapers.stores import (
     Context,
     CrawlQueue,
     DataRef,
-    DownloadableFile,
     File,
-    GCSBlob,
     LocalFile,
-    MirrorRef,
     ProcessPolicy,
 )
+from scrapers.stores.file import DownloadableFile, GCSBlob, MirrorRef, VersionedBackup
 from stores import file
 from stores.config import PROJECT_ROOT
 from stores.download import CompressedMirror, FileSource
@@ -89,6 +87,10 @@ class Conductor(IO):
         if isinstance(fs, LocalFile):
             return file.FromPath(os.path.join(PROJECT_ROOT, fs.folder, fs.filename))
 
+        if isinstance(fs, VersionedBackup):
+            data = self.storage.download_backup(fs.filename)
+            return file.FromBytesIO(data, fs.filename)
+
         raise NotImplementedError()
 
     def list_files(self, path: DataRef) -> typing.Iterable[DataRef]:
@@ -116,6 +118,10 @@ class Conductor(IO):
     def write_file(
         self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
     ):
+        if isinstance(fs, VersionedBackup):
+            self.storage.upload_backup(fs.filename, content)
+            return
+
         # We assume filename is relative to versioned dir
         # If it doesn't have absolute path
         # The filename passed from Pipeline is "something.jsonl"

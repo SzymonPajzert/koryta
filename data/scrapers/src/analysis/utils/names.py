@@ -1,5 +1,5 @@
 from scrapers.stores import Context, Pipeline
-from scrapers.stores import DownloadableFile as FileSource
+from scrapers.stores.file import DownloadableFile as FileSource
 
 
 class NamesCountByRegion(Pipeline):

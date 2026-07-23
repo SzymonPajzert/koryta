@@ -104,17 +104,29 @@ def upload_result(ctx: Context, url, result, verbose=True):
     ctx.io.upload(url, result, "application/json", verbose=verbose, include_query=True)
 
 
-def scrape_krs(sleep_time=0.2):
+REFRESH_PIPELINES = {
+    "ScrapeRejestrIO",
+    "KRSAlreadyScraped",
+    "KRSCensoredPeople",
+    "KRSNeedsRefresh",
+    "CompaniesKRS",
+    "KRSUpdates",
+}
+
+
+def scrape_krs_free(sleep_time=0.2):
+    """Phase 1: Scrape bulletin updates and free api-krs queries.
+
+    This updates the bulletin data and api-krs OdpisAktualny snapshots.
+    No cost — all queries go to the free api-krs.ms.gov.pl API.
+    """
     scrape_updates_by_dates(sleep_time)
     ctx, _ = setup_context(
-        use_rejestr_io=True,
-        policy=ProcessPolicy(
-            {"ScrapeRejestrIO", "KRSAlreadyScraped", "KRSNeedsRefresh"}
-        ),
+        use_rejestr_io=False,
+        policy=ProcessPolicy(REFRESH_PIPELINES),
     )
     pipeline = ScrapeRejestrIO()
     queries = list(pipeline.read_or_process_list(ctx))
-    print(f"Would cost: {sum(map(lambda x: x.cost(), queries))} PLN")
 
     successful_krs = set()
     failures = 0
@@ -130,8 +142,10 @@ def scrape_krs(sleep_time=0.2):
             if result is not None:
                 any_succeeded = True
             else:
-                # Saving an empty file to not requery it each time
-                print(f"Recording failure for {url} as an empty file...")
+                print(
+                    f"Recording failure for {url}"
+                    f" as an empty file..."
+                )
                 result = ""
             upload_result(ctx, url, result, verbose=False)
             sleep(sleep_time)
@@ -142,12 +156,27 @@ def scrape_krs(sleep_time=0.2):
             failures += 1
 
     print(
-        f"Successfully scraped {len(successful_krs)} KRS numbers, {failures} failures"
+        f"Successfully scraped {len(successful_krs)}"
+        f" KRS numbers, {failures} failures"
     )
-    print("Filtering out the failures")
-    queries = [q for q in queries if q.krs in successful_krs or q.krs is None]
 
-    print(f"Will cost: {sum(map(lambda x: x.cost(), queries))} PLN")
+
+def scrape_krs_paid(sleep_time=0.2):
+    """Phase 2: Query rejestr.io for KRS entries with confirmed changes.
+
+    Uses the KRSCensoredPeople pre-filter to skip KRS entries
+    where the censored people list didn't change. Only pays for
+    rejestr.io queries where there's an actual difference.
+    """
+    ctx, _ = setup_context(
+        use_rejestr_io=True,
+        policy=ProcessPolicy(REFRESH_PIPELINES),
+    )
+    pipeline = ScrapeRejestrIO()
+    queries = list(pipeline.read_or_process_list(ctx))
+
+    cost = sum(q.cost() for q in queries)
+    print(f"Will cost: {cost} PLN")
     input("Press enter to continue...")
 
     for query in queries:
@@ -162,6 +191,13 @@ def scrape_krs(sleep_time=0.2):
 
             upload_result(ctx, url, result)
             sleep(sleep_time)
+
+
+def scrape_krs(sleep_time=0.2):
+    """Run both phases: free api-krs queries then paid rejestr.io."""
+    scrape_krs_free(sleep_time)
+    scrape_krs_paid(sleep_time)
+
 
 
 def scrape_updates_by_dates(sleep_time=0.2):

@@ -10,7 +10,8 @@ from dataclasses import dataclass
 import pandas as pd
 
 from entities.company import KRS
-from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
+from scrapers.stores import CloudStorage, Context, Pipeline
+from scrapers.stores.file import DownloadableFile
 
 
 @dataclass

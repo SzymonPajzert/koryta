@@ -9,16 +9,27 @@ import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, List, Literal, NewType, Union, overload
+from typing import TYPE_CHECKING, Any, Callable, List, NewType, Union, overload
 
 import numpy as np
 import pandas as pd
 from dacite import Config, from_dict  # type: ignore[import-not-found]
 
 from entities.ner import NEREntities
+from scrapers.stores.file import (
+    CloudStorage,
+    DataRef,
+    File,
+    Formats,
+    LocalFile,
+    VersionedBackup,
+)
+from stores.config import backup_disabled
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection
+
+Priority = NewType("Priority", int)
 
 
 class Extractor(metaclass=ABCMeta):
@@ -33,154 +44,6 @@ class Extractor(metaclass=ABCMeta):
     def read_bytes(self, raw_bytes):
         """Reads and processes raw bytes."""
         raise NotImplementedError()
-
-
-type Formats = Literal["jsonl", "csv", "parquet"]
-Priority = NewType("Priority", int)
-
-
-class File(metaclass=ABCMeta):
-    """Abstract representation of a file, providing methods to read its content."""
-
-    path: str
-
-    @abstractmethod
-    def read_bytes(self) -> bytes:
-        """Reads the entire content of the file as bytes."""
-        pass
-
-    def read_string(self) -> str:
-        """Reads the entire content of the file as a string"""
-        return self.read_bytes().decode("utf-8")
-
-    @abstractmethod
-    def read_dataframe(
-        self,
-        fmt: Formats,
-        csv_sep=",",
-        dtype: dict[str, Any] | None = None,
-    ) -> pd.DataFrame:
-        pass
-
-    @abstractmethod
-    def read_jsonl(self):
-        """Reads a JSONL (JSON Lines) file."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def read_csv(self, sep=","):
-        """Reads a CSV file."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def read_xls(self, header_rows: int = 0, skip_rows: int = 0):
-        """Reads an XLS or XLSX file."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def read_parquet(self):
-        """Reads a Parquet file."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def read_zip(self, inner_path: str | None = None, idx: int | None = None) -> "File":
-        """Reads a file from within a ZIP archive."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def read_file(self) -> typing.IO[bytes] | typing.IO[str]:
-        """Returns a file-like object for reading."""
-        raise NotImplementedError()
-
-
-class ZipReader(metaclass=ABCMeta):
-    """Abstract base class for a ZIP file reader."""
-
-    # import bz2
-    # with bz2.open(DUMP_FILENAME, "rt", encoding="utf-8") as f:
-    @abstractmethod
-    def open(
-        self,
-        filename: str,
-        mode: str,
-        encoding: str | None = None,
-        subfile: str | None = None,
-    ) -> typing.BinaryIO | typing.TextIO:
-        """Opens a file within a ZIP archive."""
-        raise NotImplementedError()
-
-
-class DataRef(metaclass=ABCMeta):
-    """Abstract base class for a reference to a data source."""
-
-    pass
-
-
-@dataclass
-class LocalFile(DataRef):
-    """A reference to a file on the local filesystem."""
-
-    filename: str
-    folder: Literal["downloaded", "tests", "versioned", "crawler_output", "tests/wiki"]
-
-
-@dataclass
-class DownloadableFile(DataRef):
-    """
-    A reference to a file that needs to be downloaded.
-
-    Corresponds to stores.download.FileSource, which executes the download.
-    """
-
-    url: str
-    filename_fallback: str | None = None
-    full_url: bool = False
-    complex_download: str | None = None
-    download_lambda: typing.Callable | None = None
-    binary: bool = True
-
-    @property
-    def filename(self) -> str:
-        """
-        Determines the local filename for the downloadable file.
-
-        Returns:
-            The filename from filename_fallback if provided, otherwise infers
-            it from the URL.
-        """
-        if self.filename_fallback is not None:
-            return self.filename_fallback
-        if self.full_url:
-            return self.url.split("://")[1]
-        return self.url.split("/")[-1]
-
-
-@dataclass
-class GCSBlob(DataRef):
-    """A reference to a single blob in GCS by its blob name."""
-
-    blob_name: str
-
-
-@dataclass
-class MirrorRef(DataRef):
-    """A reference to a URL in the compressed HTML mirror."""
-
-    url: str
-
-
-class NotInMirrorError(Exception):
-    """Raised when a URL has no snapshot in the compressed mirror."""
-
-
-@dataclass
-class CloudStorage(DataRef):
-    """A reference to a collection of objects in cloud storage"""
-
-    prefix: str
-    max_namespaces: list[str] = field(default_factory=list)
-    namespace_values: dict[str, str] = field(default_factory=dict)
-    binary: bool = False
 
 
 class IO(metaclass=ABCMeta):
@@ -652,21 +515,6 @@ class Context:
     article_tag: str | None = None
 
 
-def write_dataframe(ctx: Context, df: pd.DataFrame, filename: str, format: Formats):
-    """Writes a DataFrame to storage."""
-
-    def writer(f: io.BufferedWriter):
-        match format:
-            case "jsonl":
-                df.to_json(f, orient="records", lines=True)
-            case "csv":
-                df.to_csv(f, index=False)
-            case _:
-                raise ValueError(f"Not supported export format - {format}")
-
-    ctx.io.write_file(LocalFile(filename, "versioned"), writer)
-
-
 Output = typing.TypeVar("Output")
 
 
@@ -713,19 +561,35 @@ class Pipeline(typing.Generic[Output]):
             self.dependencies[annotation] = dep
 
     def read(self, ctx: Context):
+        """Attempts to read the output of the pipeline from storage (local or bucket).
+
+        Raises FileNotFoundError if not found."""
         assert self.filename
-        df = None
+        filenotfound: Exception | None = None
         try:
-            df = ctx.io.read_data(
-                LocalFile(self.output_path, "versioned")
+            return ctx.io.read_data(
+                LocalFile(self.output_path(), "versioned")
             ).read_dataframe(self.format, dtype=self.dtype)
         except FileNotFoundError as e:
             print("File doesn't exist, continuing: ", e)
-            raise
-        return df
+            filenotfound = e
+
+        if not backup_disabled():
+            try:
+                return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
+                    self.format, dtype=self.dtype
+                )
+            except Exception as e:
+                print("Versioned backup read failed, continuing: ", e)
+                filenotfound = e
+
+        # If there was any exception, raise the last one
+        if filenotfound is not None:
+            raise filenotfound
+        return None
 
     def output_time(self, ctx: Context):
-        self_ref = LocalFile(self.output_path, "versioned") if self.filename else None
+        self_ref = LocalFile(self.output_path(), "versioned") if self.filename else None
         return ctx.io.get_mtime(self_ref) if self_ref else None
 
     @staticmethod
@@ -734,7 +598,8 @@ class Pipeline(typing.Generic[Output]):
             result = func(self, ctx)
             if result and self.confirm_run:
                 answer = ctx.utils.input_with_timeout(
-                    "This pipeline is pretty big, Should I run it? (y/n) [n]",
+                    f"Pipeline {type(self).__name__} runs long. \
+Should I run it? (y/n) [n]",
                     timeout=10,
                 )
                 if answer is None or answer.lower() != "y":
@@ -786,18 +651,79 @@ class Pipeline(typing.Generic[Output]):
             except FileNotFoundError:
                 # We'll try to process
                 pass
+        elif should_refresh and self.filename is not None:
+            # When the local output is missing (not an explicit policy refresh),
+            # try reading from backup before re-processing, unless backups are
+            # disabled (then recompute from source instead of restoring stale data).
+            decision = ctx.refresh_policy.execution_decisions.get(self.pipeline_name)
+            if decision and decision[1] == "missing output" and not backup_disabled():
+                try:
+                    df = ctx.io.read_data(
+                        VersionedBackup(self.filename)
+                    ).read_dataframe(self.format, dtype=self.dtype)
+                    if df is not None:
+                        self._cached_result = df
+                        # Save locally so the next run finds the file on disk.
+                        print(
+                            f"Restored {self.pipeline_name} from versioned backup, "
+                            f"saving to {self.output_path()}"
+                        )
+                        self.write_dataframe(ctx, df, local_only=True)
+                        return df
+                except Exception as e:
+                    print(
+                        f"Backup read failed for {self.pipeline_name}, "
+                        f"will re-process: {e}"
+                    )
 
         df = self.run_pipeline(ctx, ctx.refresh_policy)
 
         if df is not None and self.output_path != "":
-            print(f"Writing to {self.output_path}")
-            write_dataframe(ctx, df, self.output_path, self.format)
+            print(f"Writing to {self.output_path()}")
+            self.write_dataframe(ctx, df)
 
         if df is not None:
             ctx.refresh_policy.add_refreshed_pipeline(self.pipeline_name)
             self._cached_result = df
 
         return df
+
+    def write_dataframe(
+        self,
+        ctx: Context,
+        df: pd.DataFrame,
+        filename: str | None = None,
+        format: Formats | None = None,
+        local_only: bool = False,
+    ):
+        """Writes a DataFrame to storage.
+
+        Args:
+            local_only: If True, only writes to the local versioned path
+                and skips the GCS backup upload.
+        """
+        if filename is None:
+            filename = self.filename
+        if format is None:
+            format = self.format
+
+        if filename is None:
+            return
+
+        def writer(f: io.BufferedWriter):
+            match format:
+                case "jsonl":
+                    df.to_json(f, orient="records", lines=True)
+                case "csv":
+                    df.to_csv(f, index=False)
+                case _:
+                    raise ValueError(f"Not supported export format - {self.format}")
+
+        ctx.io.write_file(
+            LocalFile(self.output_path(filename, format), "versioned"), writer
+        )
+        if not local_only and not backup_disabled():
+            ctx.io.write_file(VersionedBackup(filename), writer)
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:
         df = self.read(ctx)
@@ -817,7 +743,11 @@ class Pipeline(typing.Generic[Output]):
         """
         any_refreshed = False
         for _, dep in self.dependencies.items():
-            dep.read_or_process(ctx)
+            try:
+                dep.read_or_process(ctx)
+            except Exception as e:
+                print(f"Dependency {dep.pipeline_name} failed: {e}")
+                raise e
             if dep._refreshed_execution:
                 any_refreshed = True
         return any_refreshed
@@ -869,10 +799,16 @@ class Pipeline(typing.Generic[Output]):
             ):
                 yield annotation, pipeline_type_dep
 
-    @property
-    def output_path(self) -> str:
-        if self.filename:
-            return posixpath.join(self.filename, self.filename + "." + self.format)
+    def output_path(
+        self, filename: str | None = None, format: Formats | None = None
+    ) -> str:
+        if filename is None:
+            filename = self.filename
+        if format is None:
+            format = self.format
+
+        if filename is not None:
+            return posixpath.join(filename, filename + "." + format)
         return ""
 
     @property

@@ -117,7 +117,7 @@ describe("api/ingest/company", () => {
     expect(result).toEqual({ id: "doc-ref-id", code: 200 });
   });
 
-  it("should update an existing company", async () => {
+  it("should re-approve an already-public existing company", async () => {
     mockReadBody.mockResolvedValue({
       krs: "12345",
       name: "Updated Company",
@@ -126,7 +126,8 @@ describe("api/ingest/company", () => {
     const existingRef = { id: "existing-id" };
     const existingDoc = {
       ref: existingRef,
-      data: () => ({ content: "Old Content" }),
+      // revision_id present => the company is currently public
+      data: () => ({ content: "Old Content", revision_id: "rev-1" }),
     };
     mockGet.mockResolvedValue({
       empty: false,
@@ -148,9 +149,73 @@ describe("api/ingest/company", () => {
         krsNumber: "12345",
       },
       true,
-      true, // approve
+      true, // already public => stays public
     );
     expect(result).toEqual({ id: "existing-id", code: 200 });
+  });
+
+  it("should keep a pending existing company pending", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "12345",
+      name: "Updated Company",
+    });
+
+    const existingRef = { id: "existing-id" };
+    const existingDoc = {
+      ref: existingRef,
+      // no revision_id => the company is still pending / unapproved
+      data: () => ({ content: "Old Content" }),
+    };
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [existingDoc],
+    });
+
+    const result = await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      { uid: "test-user-id" },
+      existingRef,
+      {
+        name: "Updated Company",
+        type: "place",
+        krsNumber: "12345",
+      },
+      true,
+      false, // pending => not force-published
+    );
+    expect(result).toEqual({ id: "existing-id", code: 200 });
+  });
+
+  it("should store isPublic when is_public is provided", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "12345",
+      name: "Public Company",
+      is_public: true,
+    });
+    mockGet.mockResolvedValue({ empty: true, docs: [] });
+    mockDoc.mockReturnValue(mockRef);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      { uid: "test-user-id" },
+      mockRef,
+      {
+        name: "Public Company",
+        type: "place",
+        krsNumber: "12345",
+        isPublic: true,
+      },
+      true,
+      true,
+    );
   });
 
   it("should create edges for owned companies", async () => {
@@ -169,7 +234,7 @@ describe("api/ingest/company", () => {
     const childRef = { id: "child-id" };
     mockGet.mockResolvedValueOnce({
       empty: false,
-      docs: [{ ref: childRef }],
+      docs: [{ ref: childRef, data: () => ({}) }],
     });
 
     // Edge creation

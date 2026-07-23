@@ -13,8 +13,8 @@ import requests
 from tqdm import tqdm
 
 from entities.util import NormalizedParse
-from scrapers.stores import DownloadableFile as FileSourceConfig
-from scrapers.stores import NotInMirrorError
+from scrapers.stores.file import DownloadableFile as FileSourceConfig
+from scrapers.stores.file import NotInMirrorError
 from stores.config import DOWNLOADED_DIR
 
 base_dir = Path(DOWNLOADED_DIR)
@@ -188,9 +188,9 @@ class CompressedMirror:
             bucket_name = bucket.removeprefix("gs://")
             blobs = sorted(
                 b.name
-                for b in gcs_lib.Client().bucket(bucket_name).list_blobs(
-                    prefix=f"hostname={host}/"
-                )
+                for b in gcs_lib.Client()
+                .bucket(bucket_name)
+                .list_blobs(prefix=f"hostname={host}/")
                 if b.name.endswith(".tar.gz")
             )
             if not blobs:
@@ -199,10 +199,12 @@ class CompressedMirror:
             df = FileSourceConfig(
                 url=f"gs://{bucket_name}/{blob_name}",
                 filename_fallback=blob_name.replace("/", "."),
-                download_lambda=lambda path: gcs_lib.Client()
+                download_lambda=lambda path: (
+                    gcs_lib.Client()
                     .bucket(bucket_name)
                     .blob(blob_name)
-                    .download_to_filename(str(path)),
+                    .download_to_filename(str(path))
+                ),
                 binary=True,
             )
             fs = FileSource(df)
@@ -228,7 +230,7 @@ class CompressedMirror:
             for member in tf.getmembers():
                 if not member.isfile() or member.name == "index.txt":
                     continue
-                rel = member.name[len(host) + 1:]  # strip "host/"
+                rel = member.name[len(host) + 1 :]  # strip "host/"
                 filename = rel.replace("/", ".")
                 f = tf.extractfile(member)
                 if f is not None:

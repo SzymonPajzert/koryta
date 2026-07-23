@@ -7,7 +7,8 @@ import pandas as pd
 from entities.company import Company as KrsCompany
 from entities.company import Source
 from scrapers.krs.list import CompaniesKRS
-from scrapers.stores import CloudStorage, Context, DownloadableFile, Pipeline
+from scrapers.stores import CloudStorage, Context, Pipeline
+from scrapers.stores.file import DownloadableFile
 
 
 class NipToKrsMapper:

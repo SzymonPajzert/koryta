@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 
 import pandas as pd
@@ -56,6 +57,12 @@ def get_args():
         help="Pipeline name to refresh, : to exclude or 'all'",
         action="append",
         default=[],
+    )
+    parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Disable uploading/reading versioned backups to/from shared GCS "
+        "(also settable via DISABLE_BACKUP in the environment or .env)",
     )
     parser.add_argument(
         "pipeline",
@@ -157,6 +164,8 @@ def _parse_ports(raw_ports: str) -> list[int]:
 
 def main():
     args = get_args()
+    if args.no_backup:
+        os.environ["DISABLE_BACKUP"] = "1"
     refresh = []
     exclude_refresh = []
     if args.refresh:
