@@ -232,6 +232,12 @@ class BatchClient(Client):
             default=3600.0,
             help="Flush a domain batch if idle for this many seconds (default: 600).",
         )
+        parser.add_argument(
+            "--flush_max_workers",
+            type=int,
+            default=16,
+            help="Max concurrent uploads when flushing batches in parallel.",
+        )
         args, _ = parser.parse_known_args()
         return args
 
@@ -367,7 +373,7 @@ class BatchClient(Client):
         if not to_flush:
             return
 
-        max_workers = 16
+        max_workers = self.args.flush_max_workers
         print(f"Flushing {len(to_flush)} batches in parallel (max {max_workers})...")
         sem = threading.Semaphore(max_workers)
 
