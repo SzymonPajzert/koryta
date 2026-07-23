@@ -215,18 +215,24 @@ def crawl_url(
             request_duration_s=t_request.duration,
         )
 
+    if not _is_html_response(response):
+        logging.info(
+            "Not saving the file, because it's not HTML: %s",
+            parsed_url.full_url,
+        )
+        return CrawlResult(
+            storage_path=None,
+            discovered_urls=[],
+            request_duration_s=t_request.duration,
+            total_duration_s=time.time() - start_time,
+            media_type=_content_type_from_response(response),
+        )
+
     with stopwatch() as t_upload:
         storage_path = _upload_response(ctx, parsed_url, response, options)
 
     with stopwatch() as t_parsed:
-        if _is_html_response(response):
-            discovered_urls = _extract_urls(ctx, response)
-        else:
-            discovered_urls = set()
-            logging.info(
-                "Not parsing the file, because it's not HTML: %s",
-                parsed_url.full_url,
-            )
+        discovered_urls = _extract_urls(ctx, response)
 
     return CrawlResult(
         storage_path=storage_path,

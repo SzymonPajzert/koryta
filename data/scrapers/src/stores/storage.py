@@ -3,6 +3,7 @@ import atexit
 import io
 import tarfile
 import threading
+import time
 import typing
 from collections import defaultdict
 from datetime import datetime
@@ -322,6 +323,18 @@ class BatchClient(Client):
             default=50 * 1024 * 1024,
             required=False,
         )
+        parser.add_argument(
+            "--batch_idle_timeout",
+            type=float,
+            default=3600.0,
+            help="Flush a domain batch if idle for this many seconds (default: 600).",
+        )
+        parser.add_argument(
+            "--flush_max_workers",
+            type=int,
+            default=16,
+            help="Max concurrent uploads when flushing batches in parallel.",
+        )
         args, _ = parser.parse_known_args()
         return args
 
@@ -331,6 +344,32 @@ class BatchClient(Client):
         self._batches = {}
         self._global_lock = threading.Lock()
         atexit.register(self.flush_all)
+        self._start_idle_flusher()
+
+    def _start_idle_flusher(self) -> None:
+        def _loop() -> None:
+            while True:
+                time.sleep(30)
+                self._flush_idle()
+
+        t = threading.Thread(target=_loop, daemon=True, name="batch-idle-flusher")
+        t.start()
+
+    def _flush_idle(self) -> None:
+        timeout = self.args.batch_idle_timeout
+        now = time.monotonic()
+        with self._global_lock:
+            keys = list(self._batches.keys())
+        for key in keys:
+            lock = self._batch_locks[key]
+            with lock:
+                batch = self._batches.get(key)
+                if batch is None:
+                    continue
+                if now - batch["last_updated"] >= timeout:
+                    print(f"Flushing idle batch for {key[0]} (idle >{timeout:.0f}s)")
+                    self._flush_batch(key, batch)
+                    del self._batches[key]
 
     def batch_upload(
         self,
@@ -361,6 +400,7 @@ class BatchClient(Client):
                     "tar": tar,
                     "uncompressed_size": 0,
                     "index": [],
+                    "last_updated": time.monotonic(),
                 }
 
             batch = self._batches[key]
@@ -382,6 +422,7 @@ class BatchClient(Client):
             batch["tar"].addfile(info, io.BytesIO(data))
             batch["index"].append(rel_path)
             batch["uncompressed_size"] += len(data)
+            batch["last_updated"] = time.monotonic()
 
             if batch["uncompressed_size"] >= self.args.max_batch_size:
                 self._flush_batch(key, batch)
@@ -419,10 +460,29 @@ class BatchClient(Client):
         with self._global_lock:
             keys = list(self._batches.keys())
 
+        to_flush = []
         for key in keys:
             lock = self._batch_locks[key]
             with lock:
                 if key in self._batches:
-                    batch = self._batches[key]
-                    self._flush_batch(key, batch)
-                    del self._batches[key]
+                    to_flush.append((key, self._batches.pop(key)))
+
+        if not to_flush:
+            return
+
+        max_workers = self.args.flush_max_workers
+        print(f"Flushing {len(to_flush)} batches in parallel (max {max_workers})...")
+        sem = threading.Semaphore(max_workers)
+
+        def _flush_with_sem(key, batch):
+            with sem:
+                self._flush_batch(key, batch)
+
+        threads = [
+            threading.Thread(target=_flush_with_sem, args=(key, batch), daemon=False)
+            for key, batch in to_flush
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()

@@ -69,11 +69,28 @@ class PostgresClient:
         with self.transaction() as cursor:
             cursor.execute(sql, params)
 
-    def executemany(self, sql: str, rows: list[tuple]) -> None:
+    def executemany(self, sql: str, rows: list[tuple], max_attempts: int = 5) -> None:
         if not rows:
             return
-        with self.transaction() as cursor:
-            cursor.executemany(sql, rows)
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with self.transaction() as cursor:
+                    cursor.executemany(sql, rows)
+                return
+            except psycopg.errors.DeadlockDetected as exc:
+                if attempt == max_attempts:
+                    logger.error(
+                        "Deadlock detected in executemany (attempt %d/%d). Giving up.",
+                        attempt, max_attempts,
+                    )
+                    raise
+                backoff = 0.1 * 2 ** attempt
+                logger.warning(
+                    "Deadlock detected in executemany (attempt %d/%d). "
+                    "Retrying after %.2fs. Error: %s",
+                    attempt, max_attempts, backoff, exc,
+                )
+                time.sleep(backoff)
 
     def fetchone(self, sql: str, params=None):
         with self.transaction() as cursor:
