@@ -7,7 +7,8 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from scrapers.koryta.differ import KorytaDiffer
-from scrapers.stores import NLP, Context, DownloadableFile, Utils, Web
+from scrapers.stores import NLP, Context, Utils, Web
+from scrapers.stores.file import DownloadableFile
 
 
 @pytest.mark.skip(reason="TODO not using it right now")

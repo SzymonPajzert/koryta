@@ -7,7 +7,8 @@ from analysis.people import PeopleEnriched
 from conductor import setup_context
 from entities.company import KRS
 from koryta import Pipeline
-from scrapers.stores import CloudStorage, DownloadableFile
+from scrapers.stores import CloudStorage
+from scrapers.stores.file import DownloadableFile
 from stores.config import tests
 
 

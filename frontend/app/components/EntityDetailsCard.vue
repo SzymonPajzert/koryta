@@ -12,6 +12,10 @@
       <v-spacer />
       <div class="d-none d-md-inline">
         <v-spacer />
+        <DialogProposeEditNode
+          v-if="entity && type === 'person'"
+          :entity="entity"
+        />
         <ButtonVoteWidget
           v-if="entity"
           :id="entity.id ?? ''"

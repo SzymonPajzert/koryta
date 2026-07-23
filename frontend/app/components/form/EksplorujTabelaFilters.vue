@@ -70,6 +70,17 @@
           bg-color="white"
         />
       </v-col>
+      <v-col cols="12" md="3">
+        <v-select
+          v-model="category"
+          :items="availableCategories"
+          label="Typ podmiotu"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+        />
+      </v-col>
     </v-row>
 
     <v-expand-transition>
@@ -91,9 +102,11 @@
         ></v-btn>
 
         <div class="d-flex align-start mb-4 pr-8">
-          <v-icon color="info" class="mr-3 mt-1"
-            >mdi-information-outline</v-icon
-          >
+          <v-icon
+            color="info"
+            class="mr-3 mt-1"
+            :icon="mdiInformationOutline"
+          ></v-icon>
           <div>
             <div class="text-subtitle-2 font-weight-bold">
               Filtry administracyjne
@@ -137,6 +150,31 @@
               bg-color="white"
             />
           </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field
+              v-model="minEmploymentDate"
+              type="date"
+              label="Zatrudnieni od"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              clearable
+              bg-color="white"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field
+              v-model="minVotes"
+              type="number"
+              label="Min. głosy łącznie"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              clearable
+              :min="0"
+              bg-color="white"
+            />
+          </v-col>
         </v-row>
       </v-sheet>
     </v-expand-transition>
@@ -161,20 +199,29 @@
 </template>
 
 <script setup lang="ts">
-import { mdiClose, mdiFilterCogOutline } from "@mdi/js";
+import { mdiClose, mdiFilterCogOutline, mdiInformationOutline } from "@mdi/js";
 import { ref, computed } from "vue";
+import { companyCategories } from "~~/shared/companyCategories";
 
 const showStatusBanner = ref(true);
 const showAllKrs = ref(false);
+
+const availableCategories = companyCategories.map((c) => ({
+  title: c.title,
+  value: c.value,
+}));
 
 const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
 const teryt = defineModel<string | null>("teryt");
 const krs = defineModel<string[] | null>("krs");
+const category = defineModel<string | null>("category");
 const hideVoted = defineModel<"all" | "no_votes" | "has_votes">("hideVoted");
 const currentlyEmployed = defineModel<"all" | "any" | "selected">(
   "currentlyEmployed",
 );
+const minEmploymentDate = defineModel<string | null>("minEmploymentDate");
+const minVotes = defineModel<number | null>("minVotes");
 
 const statusSummary = computed(() => {
   const filters = [];

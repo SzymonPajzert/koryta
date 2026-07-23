@@ -1,4 +1,4 @@
-import type { ElectionPosition } from "~~/shared/model";
+import type { ElectionPosition } from "../model";
 
 export interface Node {
   name: string;

@@ -3,6 +3,20 @@
     <div class="align-self-center">
       <h1 class="text-h4 mb-4">Eksploruj nowe osoby</h1>
 
+      <div class="d-flex align-start ga-4 mb-4 flex-wrap">
+        <ExploreProgressBar hide-cta :query="apiQuery" class="flex-grow-1" />
+        <v-select
+          v-model="filterCategory"
+          :items="availableCategories"
+          label="Typ podmiotu"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          style="min-width: 220px; max-width: 280px"
+        />
+      </div>
+
       <!-- CLOSED STATE -->
       <div v-if="!showInstructions" class="d-flex align-center ga-3 mb-4">
         <v-alert
@@ -63,9 +77,11 @@
               </span>
             </li>
             <li class="d-flex align-center mb-2">
-              <v-icon color="medium-emphasis" class="mr-2"
-                >mdi-circle-small</v-icon
-              >
+              <v-icon
+                color="medium-emphasis"
+                class="mr-2"
+                :icon="mdiCircleSmall"
+              ></v-icon>
               <span
                 >Spróbuj znaleźć interesujące i istotne informacje na temat tej
                 osoby.</span
@@ -114,9 +130,11 @@
               >
             </li>
             <li class="d-flex align-center">
-              <v-icon color="medium-emphasis" class="mr-2"
-                >mdi-circle-small</v-icon
-              >
+              <v-icon
+                color="medium-emphasis"
+                class="mr-2"
+                :icon="mdiCircleSmall"
+              ></v-icon>
               <span
                 >Kiedy skończysz, kliknij przycisk "Następna osoba" aby przejść
                 dalej.</span
@@ -187,9 +205,11 @@ import {
   mdiCheckboxBlankCircleOutline,
   mdiCheckboxMarkedCircle,
   mdiInformation,
+  mdiCircleSmall,
 } from "@mdi/js";
 import { ref, computed } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
+import { companyCategories } from "~~/shared/companyCategories";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
@@ -211,6 +231,22 @@ const showInstructions = useCookie<boolean>("show-explore-new-instructions", {
 });
 const user = useCurrentUser();
 
+const route = useRoute();
+const router = useRouter();
+const availableCategories = companyCategories.map((c) => ({
+  title: c.title,
+  value: c.value,
+}));
+const filterCategory = computed<string | null>({
+  get: () => (route.query.category as string) || null,
+  set: (val) => {
+    page.value = 1;
+    router.push({
+      query: { ...route.query, category: val || undefined },
+    });
+  },
+});
+
 const actionExplored = ref(false);
 const actionNoted = ref(false);
 const actionVoted = ref(false);
@@ -231,7 +267,9 @@ watch(page, () => {
   actionVoted.value = false;
 });
 
-const sortBy = ref([{ key: "votes.interesting", order: "desc" as const }]);
+const sortBy = ref([
+  { key: "stats.votes.interesting", order: "desc" as const },
+]);
 
 const headers = computed(() => {
   const baseHeaders = [
@@ -239,10 +277,36 @@ const headers = computed(() => {
     { title: "Partie", key: "parties", sortable: false },
     { title: "Firmy", key: "companies", sortable: false },
     { title: "Wybory", key: "elections", sortable: false },
-    { title: "Lata pracy", key: "experience", sortable: false },
-    { title: "Notatki", key: "notesCount", sortable: false },
-    { title: "Głosy łącznie", key: "votes.interesting", sortable: false },
-    { title: "Twój głos", key: "userVote", sortable: false },
+    {
+      title: "Ostatnie zatrudnienie",
+      key: "latestEmploymentStart",
+      sortable: false,
+      align: "center" as const,
+    },
+    {
+      title: "Lata pracy",
+      key: "experience",
+      sortable: false,
+      align: "center" as const,
+    },
+    {
+      title: "Notatki",
+      key: "notesCount",
+      sortable: false,
+      align: "center" as const,
+    },
+    {
+      title: "Głosy łącznie",
+      key: "stats.votes.interesting",
+      sortable: false,
+      align: "center" as const,
+    },
+    {
+      title: "Twój głos",
+      key: "userVote",
+      sortable: false,
+      align: "center" as const,
+    },
   ];
   if (user.value) {
     baseHeaders.push({
@@ -261,10 +325,11 @@ const apiQuery = computed(
       type: "person",
       limit: 1,
       page: page.value,
-      sortBy: "votes.interesting",
+      sortBy: "stats.votes.interesting",
       sortDesc: "true",
       visibility: "private",
       hideVoted: "no_votes",
+      category: filterCategory.value || undefined,
     }) as Query,
 );
 

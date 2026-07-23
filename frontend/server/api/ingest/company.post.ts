@@ -6,6 +6,8 @@ import {
   companyRequestSchema,
   type CompanyRequest as Request,
 } from "#shared/api";
+import { categoriesFromActivity } from "#shared/companyCategories";
+import { pageIsPublic } from "#shared/model";
 
 export default defineEventHandler(async (event) => {
   console.info("Handling ingest/company.post");
@@ -15,29 +17,50 @@ export default defineEventHandler(async (event) => {
   const user = await getUser(event);
   const db = getFirestore(getApp(), "koryta-pl");
 
-  const nodeRef = await findCompanyByKRS(db, body.krs, true);
-  const revisionData = {
+  const { ref: nodeRef, approve } = await findCompanyByKRS(db, body.krs, true);
+  const revisionData: Record<string, unknown> = {
     name: body.name,
     type: "place",
     krsNumber: body.krs,
   };
+  if (body.activity && body.activity.length > 0) {
+    revisionData.activity = body.activity;
+    revisionData.categories = categoriesFromActivity(body.activity);
+  }
+  if (body.is_public !== undefined) {
+    revisionData.isPublic = body.is_public;
+  }
 
   const batch = db.batch();
-  createRevisionTransaction(db, batch, user, nodeRef, revisionData, true, true);
+  createRevisionTransaction(
+    db,
+    batch,
+    user,
+    nodeRef,
+    revisionData,
+    true,
+    approve,
+  );
 
   // Process 'owns' relationships
   if (body.owners && Array.isArray(body.owners)) {
     for (const parent of body.owners) {
       if (!parent) continue;
-      const parentRef = await findCompanyByKRS(db, parent, false);
-      createEdge({ db, batch, user }, parentRef.id, nodeRef.id, "owns");
+      const { ref: parentRef } = await findCompanyByKRS(db, parent, false);
+      createEdge(
+        { db, batch, user },
+        parentRef.id,
+        nodeRef.id,
+        "owns",
+        approve,
+      );
     }
   }
 
   // Process 'teryt' to link the company to a region
   if (body.teryt) {
     const regionNodeId = await findRegionByTeryt(db, body.teryt);
-    createEdge({ db, batch, user }, regionNodeId, nodeRef.id, "owns");
+    createEdge({ db, batch, user }, regionNodeId, nodeRef.id, "owns", approve);
   }
 
   await batch.commit();
@@ -51,7 +74,13 @@ type DBB = {
   user: { uid: string };
 };
 
-function createEdge(dbb: DBB, source: string, target: string, type: string) {
+function createEdge(
+  dbb: DBB,
+  source: string,
+  target: string,
+  type: string,
+  approve: boolean,
+) {
   const { db, batch, user } = dbb;
   const edgeRef = db.collection("edges").doc();
   const edgeData = {
@@ -60,14 +89,21 @@ function createEdge(dbb: DBB, source: string, target: string, type: string) {
     type,
   };
 
-  createRevisionTransaction(db, batch, user, edgeRef, edgeData, true, true);
+  createRevisionTransaction(db, batch, user, edgeRef, edgeData, true, approve);
 }
 
+/** Locate the company node for a KRS number.
+ *
+ * `approve` tells the caller whether the new revision should be published
+ * (become the node's current revision). To keep a migration safe, an existing
+ * company keeps its current visibility: an already-public company stays public,
+ * while a still-pending one is not force-published by a re-ingest. A brand-new
+ * company is published as before. */
 async function findCompanyByKRS(
   db: FirebaseFirestore.Firestore,
   krs: string,
   createNew: boolean,
-) {
+): Promise<{ ref: FirebaseFirestore.DocumentReference; approve: boolean }> {
   // Check if company already exists
   const existingQuery = await db
     .collection("nodes")
@@ -80,9 +116,9 @@ async function findCompanyByKRS(
     if (!doc) {
       throw new Error("Unexpected empty docs array");
     }
-    return doc.ref;
+    return { ref: doc.ref, approve: pageIsPublic(doc.data()) };
   } else if (createNew) {
-    return db.collection("nodes").doc();
+    return { ref: db.collection("nodes").doc(), approve: true };
   } else {
     throw createError({
       statusCode: 404,

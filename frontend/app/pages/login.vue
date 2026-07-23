@@ -7,7 +7,10 @@
         Wyślij ponownie
       </v-btn>
     </div>
-    <div class="mt-4">
+    <div class="mt-4 d-flex gap-2 align-center">
+      <v-btn color="primary" @click="doRedirect">
+        Wróć do przeglądania ({{ countdown }})
+      </v-btn>
       <v-btn color="warning" @click="logoutForced">Wyloguj się teraz</v-btn>
     </div>
   </main>
@@ -25,41 +28,7 @@
         }}
       </a>
     </div>
-    <v-form @submit.prevent="isLogin ? login() : register()">
-      <div class="form-group">
-        <button
-          v-if="isLogin"
-          type="button"
-          :disabled="loading"
-          class="google-button"
-          @click="loginWithGoogle"
-        >
-          <span v-if="loading">Loguję się</span>
-          <span v-else>Zaloguj się z Google</span>
-        </button>
-      </div>
-
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input id="email" v-model="email" type="email" required />
-      </div>
-
-      <div class="form-group">
-        <label for="password">Hasło</label>
-        <input id="password" v-model="password" type="password" required />
-      </div>
-
-      <div class="form-group">
-        <button type="submit" :disabled="loading">
-          <span v-if="loading">Proszę czekać...</span>
-          <span v-else>{{ isLogin ? "Zaloguj się" : "Stwórz konto" }}</span>
-        </button>
-      </div>
-
-      <div v-if="error" class="error-message">
-        {{ error }}
-      </div>
-    </v-form>
+    <FormLoginForm :is-login="isLogin" @success="onLoginSuccess" />
     <div>
       {{ isLogin ? "Logowanie się" : "Rejestracja" }} oznacza zgodę z
       <a href="/plik/regulamin">regulaminem</a> oraz
@@ -69,21 +38,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { watch } from "vue";
+import { useCountdown } from "@vueuse/core";
 import {
-  GoogleAuthProvider,
-  signInWithPopup,
   type User,
   onAuthStateChanged,
   sendEmailVerification,
 } from "firebase/auth";
 import { set, ref as dbRef } from "firebase/database";
 
-const email = ref("");
-const password = ref("");
-const error = ref<string | null>(null);
 const loading = ref(false);
 const isLogin = ref(true);
+const error = ref<string | null>(null);
 
 const auth = useFirebaseAuth()!;
 const db = useDatabase();
@@ -91,12 +57,20 @@ const router = useRouter();
 const route = useRoute();
 
 const { redirect, reason } = route.query;
+const { logout, idToken } = useAuthState();
+
+const doRedirect = () => {
+  pause();
+  router.push((redirect as string) || "/");
+};
+
 const {
-  login: authLogin,
-  register: authRegister,
-  logout,
-  idToken,
-} = useAuthState();
+  remaining: countdown,
+  resume,
+  pause,
+} = useCountdown(5, {
+  onComplete: doRedirect,
+});
 
 const user = ref<User | null>();
 if (auth) {
@@ -111,68 +85,43 @@ if (auth) {
   });
 }
 
+watch(
+  user,
+  (newUser) => {
+    if (newUser) {
+      resume();
+    } else {
+      pause();
+    }
+  },
+  { immediate: true },
+);
+
 const logoutForced = async () => {
   await logout();
   // Force reload or redirect to be sure
   window.location.reload();
 };
 
-const login = async () => {
-  error.value = null;
-  loading.value = true;
-  try {
-    await authLogin(email.value, password.value);
-    // User is signed in.
-    console.debug("User logged in successfully!");
-    router.push((redirect as string) || "/");
-  } catch (err: unknown) {
-    const errorObj = err as { code: string; message: string };
-    console.error("Login error:", errorObj.code, errorObj.message);
-    error.value = getErrorMessage(errorObj.code);
-  } finally {
-    loading.value = false;
+const onLoginSuccess = async () => {
+  // Wait for auth state to propagate to Vuefire before router.push
+  if (!user.value) {
+    await new Promise<void>((resolve) => {
+      const unwatch = watch(user, (u) => {
+        if (u) {
+          unwatch();
+          resolve();
+        }
+      });
+      // Fallback timeout just in case
+      setTimeout(() => {
+        unwatch();
+        resolve();
+      }, 2000);
+    });
   }
-};
 
-const loginWithGoogle = async () => {
-  error.value = null;
-  loading.value = true;
-  try {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-    console.debug("User logged in with Google successfully!");
-    router.push((redirect as string) || "/");
-  } catch (err: unknown) {
-    const errorObj = err as { code: string; message: string };
-    console.error("Google login error:", errorObj.code, errorObj.message);
-    error.value = getErrorMessage(errorObj.code);
-  } finally {
-    loading.value = false;
-  }
-};
-
-const register = async () => {
-  error.value = null;
-  loading.value = true;
-  try {
-    const userCredential = await authRegister(email.value, password.value);
-    await sendEmailVerification(userCredential.user);
-    alert("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
-
-    // Add delay to allow auth state to propagate to middleware (especially for tests)
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    router.push((redirect as string) || "/");
-  } catch (err: unknown) {
-    const errorObj = err as { code: string; message: string };
-    if (errorObj.code === "auth/user-not-found") {
-      error.value = "Użytkownik nie istnieje";
-      return;
-    }
-    error.value = getErrorMessage(errorObj.code);
-  } finally {
-    loading.value = false;
-  }
+  router.push((redirect as string) || "/");
 };
 
 const sendVerification = async () => {
@@ -222,47 +171,5 @@ const getErrorMessage = (errorCode: string) => {
   border: 1px solid #ccc;
   border-radius: 5px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.form-group {
-  margin-bottom: 15px;
-}
-
-label {
-  display: block;
-  margin-bottom: 5px;
-}
-
-input[type="email"],
-input[type="password"] {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  box-sizing: border-box;
-}
-
-button {
-  background-color: #4caf50; /* Example color, change to match submitview */
-  color: white;
-  padding: 10px 15px;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.error-message {
-  color: red;
-  margin-top: 10px;
-}
-
-.google-button {
-  background-color: #db4437; /* Google red */
-  margin-top: 10px;
 }
 </style>

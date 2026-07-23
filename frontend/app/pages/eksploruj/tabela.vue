@@ -25,6 +25,49 @@
       />
 
       <div v-if="focusedPerson" class="pa-4 pt-0">
+        <div class="d-flex justify-center align-center ga-4 mb-4">
+          <DialogProposeEditNode
+            :entity="focusedPerson"
+            skip-redirect
+            @submitted="onRevisionSubmitted"
+          >
+            <template #activator="{ props: activatorProps }">
+              <v-btn
+                v-bind="activatorProps"
+                variant="tonal"
+                color="warning"
+                :prepend-icon="mdiPencilOutline"
+              >
+                Zaproponuj zmianę
+              </v-btn>
+            </template>
+          </DialogProposeEditNode>
+
+          <ButtonVoteNumber
+            v-if="focusedPerson"
+            :id="focusedPerson.id"
+            :key="focusedPerson.id"
+            category="interesting"
+          />
+        </div>
+
+        <v-alert
+          v-if="submittedRevisionId"
+          type="info"
+          variant="tonal"
+          class="mb-4"
+        >
+          Zaproponowano zmianę.
+          <a
+            :href="getPersonPreviewUrl(focusedPerson, submittedRevisionId)"
+            target="_blank"
+            class="text-primary font-weight-bold"
+          >
+            Podgląd zmiany
+            <v-icon :icon="mdiOpenInNew" size="small" />
+          </a>
+        </v-alert>
+
         <NoteEditor
           :key="focusedPerson.id"
           :node-id="focusedPerson.id"
@@ -106,13 +149,18 @@
         v-model:party="filterParty"
         v-model:teryt="filterTeryt"
         v-model:krs="filterKrs"
+        v-model:category="filterCategory"
         v-model:hide-voted="filterHideVoted"
         v-model:currently-employed="filterCurrentlyEmployed"
+        v-model:min-employment-date="filterMinEmploymentDate"
+        v-model:min-votes="filterMinVotes"
         :available-parties="availableParties"
         :available-regions="availableRegions"
         :available-companies="availableCompanies"
         :show-visibility="!!user"
       />
+
+      <ExploreProgressBar :query="apiQuery" class="mb-4" />
 
       <v-card class="table-card">
         <ExploreTable
@@ -134,7 +182,12 @@
 </template>
 
 <script setup lang="ts">
-import { mdiCash, mdiOfficeBuildingOutline } from "@mdi/js";
+import {
+  mdiCash,
+  mdiOfficeBuildingOutline,
+  mdiPencilOutline,
+  mdiOpenInNew,
+} from "@mdi/js";
 import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
@@ -144,6 +197,7 @@ import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
 import { useEdges } from "~/composables/edges";
+import { generateEntityUrl } from "~/composables/slugs";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -188,10 +242,30 @@ const headers = computed(() => {
       key: "latestEmploymentStart",
       sortable: true,
     },
-    { title: "Lata pracy", key: "experience", sortable: true },
-    { title: "Notatki", key: "notesCount", sortable: true },
-    { title: "Głosy łącznie", key: "votes.interesting", sortable: true },
-    { title: "Twój głos", key: "userVote", sortable: false },
+    {
+      title: "Lata pracy",
+      key: "experience",
+      sortable: true,
+      align: "center" as const,
+    },
+    {
+      title: "Notatki",
+      key: "notesCount",
+      sortable: true,
+      align: "center" as const,
+    },
+    {
+      title: "Głosy łącznie",
+      key: "stats.votes.interesting",
+      sortable: true,
+      align: "center" as const,
+    },
+    {
+      title: "Twój głos",
+      key: "userVote",
+      sortable: false,
+      align: "center" as const,
+    },
   ];
   if (user.value) {
     baseHeaders.push({
@@ -335,6 +409,19 @@ const filterKrs = computed<string[] | null>({
   },
 });
 
+const filterCategory = computed<string | null>({
+  get: () => (route.query.category as string) || null,
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        category: val || undefined,
+      },
+    });
+  },
+});
+
 const filterCurrentlyEmployed = computed<"all" | "any" | "selected">({
   get: () =>
     (route.query.currentlyEmployed as "all" | "any" | "selected" | undefined) ||
@@ -360,6 +447,37 @@ const filterHideVoted = computed<"all" | "no_votes" | "has_votes">({
         ...route.query,
         page: 1,
         hideVoted: val !== "all" ? val : undefined,
+      },
+    });
+  },
+});
+
+const filterMinEmploymentDate = computed<string | null>({
+  get: () => (route.query.minEmploymentDate as string) || null,
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        minEmploymentDate: val || undefined,
+      },
+    });
+  },
+});
+
+const filterMinVotes = computed<number | null>({
+  get: () => {
+    const v = route.query.minVotes as string | undefined;
+    if (v == null) return null;
+    const n = parseInt(v);
+    return isNaN(n) ? null : n;
+  },
+  set: (val) => {
+    router.push({
+      query: {
+        ...route.query,
+        page: 1,
+        minVotes: val != null ? String(val) : undefined,
       },
     });
   },
@@ -416,12 +534,15 @@ const apiQuery = computed(
           ? filterKrs.value
           : undefined,
       teryt: filterTeryt.value || undefined,
+      category: filterCategory.value || undefined,
       hideVoted:
         filterHideVoted.value !== "all" ? filterHideVoted.value : undefined,
       currentlyEmployed:
         filterCurrentlyEmployed.value !== "all"
           ? filterCurrentlyEmployed.value
           : undefined,
+      minEmploymentDate: filterMinEmploymentDate.value || undefined,
+      minVotes: filterMinVotes.value != null ? filterMinVotes.value : undefined,
     }) as Query,
 );
 
@@ -430,7 +551,10 @@ const apiQuery = computed(
 // We perform a double join in the composible
 // We query /api/nodes/uncached and /api/graph/local
 // to join the stats info with the node neighborhood.
-const { tableItems, totalItems, pending } = await useListWithStats(apiQuery);
+const { tableItems, totalItems, pending } = await useListWithStats(
+  apiQuery,
+  "eksploruj-tabela-data",
+);
 
 const updateQueryParams = async (options: {
   sortBy: { key: string; order: string }[];
@@ -486,8 +610,20 @@ const focusedEdges = computed(() => [
   ...focusedTargets.value,
 ]);
 
+const submittedRevisionId = shallowRef<string | undefined>(undefined);
+
+const onRevisionSubmitted = (revisionId: string) => {
+  submittedRevisionId.value = revisionId;
+};
+
+const getPersonPreviewUrl = (person: PersonRich, revisionId: string) => {
+  const baseUrl = generateEntityUrl("person", person.id, person.name);
+  return `${baseUrl}?revisionId=${revisionId}`;
+};
+
 const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
+  submittedRevisionId.value = undefined;
   openDrawer.value = true;
 };
 </script>

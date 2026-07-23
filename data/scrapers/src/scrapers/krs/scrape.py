@@ -2,6 +2,7 @@ import argparse
 import json
 import typing
 from dataclasses import asdict, dataclass, field
+from datetime import date, timedelta
 from enum import Enum
 from functools import cached_property
 
@@ -13,6 +14,7 @@ from analysis.people import PeopleMerged
 from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
+from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
 from scrapers.krs.graph import CompanyGraph
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
@@ -20,10 +22,10 @@ from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import (
     CloudStorage,
     Context,
-    DownloadableFile,
     Pipeline,
     iterate_pipeline_dict,
 )
+from scrapers.stores.file import DownloadableFile
 
 
 class QueryType(Enum):
@@ -216,38 +218,97 @@ class KRSAlreadyScraped(Pipeline):
         return max_dates
 
 
+# The results from analysis/update_rate suggest 4 days is enough for 90% success rate
+# of the propagation.
+SKIP_WORK_DAYS = 4
+
+
+def compute_refresh_cutoff_date(today: date, skip_days: int) -> str:
+    """Compute a cutoff date by skipping `skip_days` business days back from `today`.
+
+    Only weekdays (Mon-Fri) are counted. The returned date is the last
+    skipped day (i.e. everything strictly before this date should be
+    included).
+
+    Example: if today is Saturday 2026-07-18 and skip_days is 2, the
+    function skips Friday (1) and Thursday (2), returning "2026-07-16".
+    """
+    current = today
+    skipped = 0
+    while skipped < skip_days:
+        current -= timedelta(days=1)
+        if current.weekday() < 5:  # Monday=0 … Friday=4
+            skipped += 1
+    return current.isoformat()
+
+
 class KRSNeedsRefresh(Pipeline):
     filename = "krs_needs_refresh"
 
     already_scraped: KRSAlreadyScraped
     updates: KRSUpdates
+    censored_people: KRSCensoredPeople
 
     @property
     def refresh_cutoff_date(self) -> str:
-        # TODO implement it
-        raise NotImplementedError("Implement a logic counting work days")
+        return compute_refresh_cutoff_date(date.today(), SKIP_WORK_DAYS)
 
     def process(self, ctx):
-        """Lists updates for a KRS and checks if there were any more recent updates"""
+        """Lists updates for a KRS, filtered by actual people changes.
+
+        Uses KRSCensoredPeople to pre-filter: only include KRS entries
+        where the censored people list changed AFTER the last rejestr.io
+        scrape, avoiding re-processing of stale changes.
+        """
 
         latest_scrapes = self.already_scraped.latest_scrapes(ctx)
 
         updates_df = self.updates.read_or_process(ctx)
         if updates_df.empty:
-            return pd.DataFrame(columns=["krs", "method", "date", "update_date"])
+            return pd.DataFrame(
+                columns=["krs", "method", "date", "update_date"]
+            )
 
         updates_df["krs"] = updates_df["krs"].astype(str).str.zfill(10)
-        latest_updates = updates_df.groupby(["krs"]).aggregate("max").reset_index()
-        latest_updates = latest_updates.rename(columns={"date": "update_date"})
+        latest_updates = (
+            updates_df.groupby(["krs"]).aggregate("max").reset_index()
+        )
+        latest_updates = latest_updates.rename(
+            columns={"date": "update_date"}
+        )
 
-        merged = pd.merge(latest_scrapes, latest_updates, on="krs", how="inner")
+        merged = pd.merge(
+            latest_scrapes, latest_updates, on="krs", how="inner"
+        )
         needs_refresh = merged[
             (merged["update_date"] > merged["date"])
             & (merged["update_date"] < self.refresh_cutoff_date)
-            # | (merged["update_date"] > "2026-05-01")
         ]
 
-        return needs_refresh.sort_values(by=["update_date"], ascending=False)
+        # Pre-filter: only keep KRS where censored people changed
+        # after the last rejestr.io scrape date
+        changed_krs = self.censored_people.krs_with_people_changes(ctx)
+        before_count = len(needs_refresh)
+
+        def has_recent_change(row):
+            krs = row["krs"]
+            if krs not in changed_krs:
+                return False
+            change_date = changed_krs[krs]
+            last_scrape = row["date"]
+            return change_date > last_scrape
+
+        needs_refresh = needs_refresh[
+            needs_refresh.apply(has_recent_change, axis=1)
+        ]
+        print(
+            f"Censored people pre-filter: {before_count} → "
+            f"{len(needs_refresh)} KRS entries"
+        )
+
+        return needs_refresh.sort_values(
+            by=["update_date"], ascending=False
+        )
 
 
 def get_osoby_scraped(ctx: Context) -> dict[str, list[QueryType]]:
@@ -301,9 +362,18 @@ def save_org_connections(
 
     print(f"\n\nalready_scraped_krs ({len(already_scraped_krs)}):")
     print(already_scraped_krs.head())
+    print(already_scraped_krs[["method", "date"]].value_counts())
+    print("Matching 0000062694")
+    print(already_scraped_krs[already_scraped_krs["krs"] == "0000062694"])
 
     print(f"\n\nneeds_refresh_krs ({len(needs_refresh_krs)}):")
     print(needs_refresh_krs.head())
+    print("Matching 0000062694")
+    print(needs_refresh_krs[needs_refresh_krs["krs"] == "0000062694"])
+    print(f"Nulls: {needs_refresh_krs['date'].isnull().sum()}")
+    print(needs_refresh_krs["date"].value_counts())
+    print(f"Nulls: {needs_refresh_krs['update_date'].isnull().sum()}")
+    print(needs_refresh_krs["update_date"].value_counts())
 
     # Remove needs refresh from already_scraped_krs, since we need to update them.
     already_scraped = (
@@ -377,6 +447,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
     hardcoded_companies: CompaniesHardcoded
     companies: CompaniesKRS
     already_scraped: KRSAlreadyScraped
+    needs_refresh: KRSNeedsRefresh
     companies_all: Companies
     hardcoded_people: PeopleRejestrIOHardcoded
     people: PeopleKRS
@@ -522,8 +593,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
     def process(self, ctx: Context):
         for url in save_org_connections(
-            already_scraped_krs=KRSAlreadyScraped().latest_scrapes(ctx),
-            needs_refresh_krs=KRSNeedsRefresh().read_or_process(ctx),
+            already_scraped_krs=self.already_scraped.latest_scrapes(ctx),
+            needs_refresh_krs=self.needs_refresh.read_or_process(ctx),
             already_scraped_people=get_osoby_scraped(ctx),
             connections=self.companies_to_scrape(ctx),
             names=self.companies_without_names(ctx),

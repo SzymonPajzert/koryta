@@ -4,6 +4,7 @@ import io
 import tarfile
 import threading
 import time
+import typing
 from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
@@ -19,9 +20,12 @@ from tqdm import tqdm
 from uuid_extensions import uuid7str  # type: ignore
 
 from entities.util import NormalizedParse
-from scrapers.stores import IO, CloudStorage, DownloadableFile
+from scrapers.stores import IO, CloudStorage
+from scrapers.stores.file import DownloadableFile
+from stores.user import get_username, pick_user
 
-BUCKET = "koryta-pl-crawled"
+CRAWLED_BUCKET = "koryta-pl-crawled"
+SHARED_BUCKET = "koryta-pl-sharedcache"
 warsaw_tz = ZoneInfo("Europe/Warsaw")
 
 
@@ -52,7 +56,7 @@ class Client:
 
     def download_from_gcs(self, blob_name: str, filename: str, binary: bool):
         """Downloads a blob from GCS as a string."""
-        bucket = self.storage_client.bucket(BUCKET)
+        bucket = self.storage_client.bucket(CRAWLED_BUCKET)
         blob = bucket.blob(blob_name)
         try:
             if not binary:
@@ -63,13 +67,13 @@ class Client:
                 blob.download_to_filename(filename)
             return filename
         except Exception as e:
-            print(f"Failed to download gs://{BUCKET}/{blob_name}: {e}")
+            print(f"Failed to download gs://{CRAWLED_BUCKET}/{blob_name}: {e}")
             raise
 
     def cached_storage(self, blob_name: str, binary: bool) -> DownloadableFile:
         filename = blob_name.replace("/", ".")
         return DownloadableFile(
-            f"gs://{BUCKET}/{blob_name}",
+            f"gs://{CRAWLED_BUCKET}/{blob_name}",
             filename,
             download_lambda=lambda path: self.download_from_gcs(
                 blob_name, path, binary
@@ -79,7 +83,7 @@ class Client:
 
     def list_blobs(self, ref: CloudStorage) -> Generator[DownloadableFile, None, None]:
         """Lists blobs in a GCS bucket with a given prefix."""
-        bucket = self.storage_client.bucket(BUCKET)
+        bucket = self.storage_client.bucket(CRAWLED_BUCKET)
         prefix = ref.prefix
         glob = None
 
@@ -153,7 +157,7 @@ class Client:
             destination_blob_name = f"hostname={source.hostname}/{path}/date={date}"
             destination_blob_name = destination_blob_name.replace("//", "/")
             destination_blob_name = destination_blob_name.rstrip("/")
-            bucket = self.storage_client.bucket(BUCKET)
+            bucket = self.storage_client.bucket(CRAWLED_BUCKET)
             blob = bucket.blob(destination_blob_name)
             try:
                 # if_generation_match=0: only upload if the object doesn't exist yet.
@@ -168,8 +172,8 @@ class Client:
             except gcs_exceptions.PreconditionFailed:
                 pass  # already uploaded, nothing to do
 
-            full_path = f"gs://{BUCKET}/{destination_blob_name}"
-            file_path = f"{BUCKET}/{destination_blob_name}"
+            full_path = f"gs://{CRAWLED_BUCKET}/{destination_blob_name}"
+            file_path = f"{CRAWLED_BUCKET}/{destination_blob_name}"
             if verbose:
                 print(
                     f"Successfully uploaded data to: {full_path}. Go to https://console.cloud.google.com/storage/browser/_details/{file_path}"
@@ -191,7 +195,7 @@ class Client:
 
     def list_namespaces(self, ref: CloudStorage, namespace: str) -> list[str]:
         """Lists available values for a given namespace (e.g. 'date')."""
-        bucket = self.storage_client.bucket(BUCKET)
+        bucket = self.storage_client.bucket(CRAWLED_BUCKET)
         # We assume the structure is prefix/ns=val/...
         # We list with delimiter to get folders (prefixes)
         # The prefix should be ref.prefix + "/" if not empty
@@ -214,6 +218,99 @@ class Client:
                     values.add(v)
 
         return sorted(list(values))
+
+    def upload_backup(
+        self,
+        filename: str,
+        content: str | typing.Callable[[io.BufferedWriter], None],
+    ):
+        """Uploads a versioned backup as a tar.gz archive to GCS.
+
+        Creates an archive containing the data file and an empty metadata.json,
+        then uploads it to the backup bucket under a path partitioned by
+        filename, user, and datetime.
+        """
+
+        user = get_username()
+        dt_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+        blob_name = f"filename={filename}/user={user}/datetime={dt_str}/backup.tar.gz"
+
+        bucket = self.storage_client.bucket(SHARED_BUCKET)
+        blob = bucket.blob(blob_name)
+
+        tar_buf = io.BytesIO()
+        with tarfile.open(fileobj=tar_buf, mode="w:gz") as tar:
+            df_bytes = io.BytesIO()
+            if isinstance(content, str):
+                df_bytes.write(content.encode("utf-8"))
+            else:
+                content(df_bytes)  # type: ignore
+            df_bytes.seek(0)
+
+            info = tarfile.TarInfo(name=filename)
+            info.size = len(df_bytes.getvalue())
+            tar.addfile(info, df_bytes)
+
+            meta_info = tarfile.TarInfo(name="metadata.json")
+            meta_info.size = 0
+            tar.addfile(meta_info, io.BytesIO(b""))
+
+        tar_buf.seek(0)
+        blob.upload_from_file(tar_buf, content_type="application/gzip")
+        print(f"Successfully uploaded backup to gs://{SHARED_BUCKET}/{blob_name}")
+
+    def download_backup(self, filename: str) -> io.BytesIO:
+        """Downloads the latest versioned backup for a filename from GCS.
+
+        Prefers backups from the current user. If none exist for the current
+        user, lists available users and prompts for a choice.
+
+        Returns a BytesIO of the extracted data file from the tar.gz archive.
+        """
+        prefix = f"filename={filename}/"
+        bucket = self.storage_client.bucket(SHARED_BUCKET)
+        blobs = list(bucket.list_blobs(prefix=prefix))
+
+        if not blobs:
+            raise FileNotFoundError(
+                f"No versioned backups found for '{filename}' "
+                f"in gs://{SHARED_BUCKET}/{prefix}"
+            )
+
+        # Group blobs by user
+        user_blobs: dict[str, list] = {}
+        for blob in blobs:
+            parts = blob.name.split("/")
+            user = None
+            for part in parts:
+                if part.startswith("user="):
+                    user = part.removeprefix("user=")
+                    break
+            if user:
+                user_blobs.setdefault(user, []).append(blob)
+
+        current_user = get_username()
+        chosen_user = pick_user(current_user, list(user_blobs.keys()))
+
+        # Pick the latest backup (sorted by datetime in the blob name)
+        chosen_blobs = sorted(user_blobs[chosen_user], key=lambda b: b.name)
+        latest_blob = chosen_blobs[-1]
+
+        print(f"Downloading backup from gs://{SHARED_BUCKET}/{latest_blob.name}")
+        tar_buf = io.BytesIO(latest_blob.download_as_bytes())
+        tar_buf.seek(0)
+
+        with tarfile.open(fileobj=tar_buf, mode="r:gz") as tar:
+            for member in tar.getmembers():
+                if member.name != "metadata.json":
+                    extracted = tar.extractfile(member)
+                    if extracted is not None:
+                        return io.BytesIO(extracted.read())
+
+        raise FileNotFoundError(
+            f"Backup archive at '{latest_blob.name}' contains no data file."
+        )
 
 
 class BatchClient(Client):
@@ -331,7 +428,7 @@ class BatchClient(Client):
                 self._flush_batch(key, batch)
                 del self._batches[key]
 
-            return f"gs://{BUCKET}/hostname={hostname}/date={date}/uid_{batch['uid']}.tar.gz"
+            return f"gs://{CRAWLED_BUCKET}/hostname={hostname}/date={date}/uid_{batch['uid']}.tar.gz"
 
     def _flush_batch(self, key, batch):
         index_data = ("\n".join(batch["index"]) + "\n").encode("utf-8")
@@ -347,12 +444,12 @@ class BatchClient(Client):
         uid = batch["uid"]
 
         destination_blob_name = f"hostname={hostname}/date={date}/uid_{uid}.tar.gz"
-        bucket = self.storage_client.bucket(BUCKET)
+        bucket = self.storage_client.bucket(CRAWLED_BUCKET)
         blob = bucket.blob(destination_blob_name)
 
         try:
             blob.upload_from_string(compressed_data, content_type="application/gzip")
-            full_path = f"gs://{BUCKET}/{destination_blob_name}"
+            full_path = f"gs://{CRAWLED_BUCKET}/{destination_blob_name}"
             print(f"Successfully uploaded batch to: {full_path}")
         except Exception as e:
             print(

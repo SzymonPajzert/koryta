@@ -6,7 +6,7 @@ import type {
   Edge as DBEdge,
   EdgeType,
   Region,
-} from "@/../shared/model";
+} from "../model";
 import { DiGraph } from "digraph-js";
 import { personNode, companyNode, regionNode } from "./nodes";
 

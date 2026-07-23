@@ -10,7 +10,15 @@ type PageBase<PageType> = {
   delete_reason?: string;
   visibility?: boolean;
   stats?: NodeStats;
+  revisions?: NodeRevisions;
 };
+
+export interface NodeRevisions {
+  latest_id: string;
+  latest_time: string | null;
+  total: number;
+  has_unapproved: boolean;
+}
 
 type NodeEdgeStats = {
   experienceMonths: number;
@@ -38,7 +46,11 @@ export interface NodeStats {
   people?: number;
 }
 
-export type VoteCategory = "interesting" | "quality";
+export type VoteCategory =
+  | "interesting"
+  | "quality"
+  | "correct"
+  | "insufficient";
 
 export type Votes = Record<
   VoteCategory,
@@ -165,6 +177,12 @@ export interface Company extends Omit<Node, "type"> {
   krsNumber?: string;
   // TODO populate this field
   location?: string;
+  /** PKD codes from KRS, e.g. "86.10.Z" */
+  activity?: string[];
+  /** Categories derived from PKD codes, see shared/companyCategories.ts */
+  categories?: string[];
+  /** Whether the company is publicly traded (spółka publiczna), from KRS. */
+  isPublic?: boolean;
 }
 
 export interface Article extends Omit<Node, "type"> {
@@ -239,3 +257,31 @@ export type Note = {
   // Users can easily add sources they encounter and annotate what they found interesting in them.
   sources?: NoteSource[];
 };
+
+export type ExtractionFactType =
+  | "employment"
+  | "party_membership"
+  | "personal_relation";
+
+export interface ExtractionFact {
+  id?: string;
+  url: string;
+  justification: string;
+  justification_in_text?: string | null;
+  fact_type: ExtractionFactType;
+  // Fields vary by fact_type:
+  person?: string;
+  organization?: string;
+  role?: string;
+  party?: string;
+  subject?: string;
+  object?: string;
+  relation?: string;
+  // Metadata:
+  articleUrl: string;
+  articleDomain?: string;
+  articleNodeId?: string; // linked node if URL matches an existing article node
+  tag: string; // extraction model tag (e.g. "v1_qwen3-32b")
+  createdAt?: string;
+  uploaderUid?: string;
+}

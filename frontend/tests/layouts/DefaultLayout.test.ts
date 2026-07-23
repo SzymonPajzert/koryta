@@ -9,10 +9,7 @@ import { createVuetify } from "vuetify";
 
 // Mock dependencies
 vi.mock("../../app/composables/auth");
-vi.mock("vue-router", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-  useRoute: () => ({ query: {}, meta: {} }),
-}));
+
 vi.mock("vuetify", async () => {
   const actual = await vi.importActual("vuetify");
   return {

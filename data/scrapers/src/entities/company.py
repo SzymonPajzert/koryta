@@ -36,10 +36,29 @@ class Company:
     sources: list[Source] = field(default_factory=list)
     children: list[str] = field(default_factory=list)
     parents: list[Owner] = field(default_factory=list)
+    is_public: bool = False
 
     def __post_init__(self):
         """Ensures the KRS ID is zero-padded to 10 digits."""
         self.krs = str(self.krs).zfill(10)
+
+
+@dataclass
+class KorytaCompany:
+    """A company (place node) already submitted to koryta.pl.
+
+    Read back from a Firestore export so that migrations can target only the
+    companies that already exist on the site, mirroring `entities.person.Koryta`.
+    """
+
+    id: str
+    krs: str | None = None
+    # Whether the node is currently published on koryta (has a current revision).
+    is_approved: bool = False
+
+    def __post_init__(self):
+        if self.krs is not None:
+            self.krs = str(self.krs).zfill(10)
 
 
 @dataclass

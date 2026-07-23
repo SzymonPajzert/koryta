@@ -14,8 +14,8 @@
     "dev:local": "npm run stop && concurrently \"npm run emulators\" \"npm run seed && npm run dev\"",
     "db:pull": "bash scripts/pull-db.sh",
     "emulators:prod-data": "firebase emulators:start --project koryta-pl --import=.firebase/firestore_export --only auth,functions,firestore,database",
-    "dev:prod-data": "npm run stop && concurrently \"npm run emulators:prod-data\" \"cross-env USE_PROD_PROJECT=true npx tsx scripts/seed-emulator.ts --empty && npm run dev\"",
-    "dev:prod-data:no-ssr": "npm run stop && concurrently \"npm run emulators:prod-data\" \"cross-env USE_PROD_PROJECT=true npx tsx scripts/seed-emulator.ts --empty && npm run dev:no-ssr\"",
+    "dev:prod-data": "npm run stop && concurrently \"npm run emulators:prod-data\" \"cross-env USE_PROD_PROJECT=true npx tsx scripts/seed-emulator.ts --empty && cross-env USE_PROD_PROJECT=true npm run dev\"",
+    "dev:prod-data:no-ssr": "npm run stop && concurrently \"npm run emulators:prod-data\" \"cross-env USE_PROD_PROJECT=true npx tsx scripts/seed-emulator.ts --empty && cross-env USE_PROD_PROJECT=true npm run dev:no-ssr\"",
     "dev:build": "npm run stop && concurrently \"npm run emulators\" \"cross-env USE_EMULATORS=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 nuxt build && npm run seed && nuxt preview\"",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
@@ -28,12 +28,12 @@
     "backstop:test": "backstop test",
     "backstop:approve": "backstop approve",
     "test:visual": "start-server-and-test dev:build http://localhost:3000 'backstop test'",
-    "test:playwright": "start-server-and-test dev:prod-data http://127.0.0.1:3000 'playwright test'",
-    "test:playwright:ci": "start-server-and-test dev:local http://127.0.0.1:3000 'playwright test'",
+    "test:playwright": "cross-env PLAYWRIGHT_SERVER_COMMAND='npm run dev:prod-data' playwright test",
+    "test:playwright:ci": "playwright test",
     "test": "npm run test:ci && npm run test:e2e",
     "check:duplication": "jscpd app server --ignore app/coverage",
-    "quick-check": "npx prettier --write . && npx prettier --check . && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:playwright",
-    "quick-check:failsafe": "npx prettier --write . || true && npx prettier --check . || true && npm run test:ci || true && npm run typecheck || true && npx eslint || true && npm run check:duplication || true && npm run test:playwright || true"
+    "quick-check": "npx prettier --write . && npx prettier --check . && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:playwright:ci",
+    "quick-check:failsafe": "npx prettier --write . || true && npx prettier --check . || true && npm run test:ci || true && npm run typecheck || true && npx eslint || true && npm run check:duplication || true && npm run test:playwright:ci || true"
   },
   "dependencies": {
     "@firebase/app-types": "^0.9.4",
@@ -103,7 +103,9 @@
     "unplugin-auto-import": "^21.0.0",
     "vite-plugin-eslint2": "^5.0.4",
     "vite-plugin-vuetify": "^2.1.2",
-    "vitest": "^3.2.4"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^2.2.0"
   },
   "overrides": {
     "@vercel/nft": "^0.27.4",

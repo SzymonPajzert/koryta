@@ -13,8 +13,12 @@
     <v-card-text>
       <CardPersonInfo :person="person" class="mb-4" />
 
+      <div v-if="person.content" class="text-body-2 mb-4">
+        {{ person.content }}
+      </div>
+
       <!-- Action: Google Search -->
-      <div class="mb-6">
+      <div>
         <div class="text-caption text-medium-emphasis mb-2">
           Wyszukaj w internecie informacji:
         </div>
@@ -29,15 +33,6 @@
         >
           {{ query }}
         </v-btn>
-      </div>
-
-      <!-- Action: Interesting Vote -->
-      <div>
-        <ButtonVoteNumber
-          v-if="person"
-          :id="person.id"
-          category="interesting"
-        />
       </div>
     </v-card-text>
   </v-card>

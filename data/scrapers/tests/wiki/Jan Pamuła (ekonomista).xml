@@ -3,18 +3,18 @@
     <ns0:ns>0</ns0:ns>
     <ns0:id>1362335</ns0:id>
     <ns0:revision>
-      <ns0:id>77985176</ns0:id>
-      <ns0:parentid>70540688</ns0:parentid>
-      <ns0:timestamp>2025-11-06T21:58:23Z</ns0:timestamp>
+      <ns0:id>79839932</ns0:id>
+      <ns0:parentid>77985176</ns0:parentid>
+      <ns0:timestamp>2026-05-24T21:48:42Z</ns0:timestamp>
       <ns0:contributor>
-        <ns0:username>Politolog 200</ns0:username>
-        <ns0:id>305647</ns0:id>
+        <ns0:username>AkaruiHikari</ns0:username>
+        <ns0:id>1127867</ns0:id>
       </ns0:contributor>
-      <ns0:comment>drobne merytoryczne</ns0:comment>
-      <ns0:origin>77985176</ns0:origin>
+      <ns0:comment>kat.</ns0:comment>
+      <ns0:origin>79839932</ns0:origin>
       <ns0:model>wikitext</ns0:model>
       <ns0:format>text/x-wiki</ns0:format>
-      <ns0:text bytes="5113" sha1="e4vnq441gcc2lx6dn8is521ttb4lrsy" xml:space="preserve">{{Polityk infobox
+      <ns0:text bytes="5051" sha1="81ejaif9mrvlm3o4c2fh30eadk0s4vk" xml:space="preserve">{{Polityk infobox
  |polityk = Jan Pamuła
  |data urodzenia = 24 czerwca 1951
  |miejsce urodzenia = [[Bielsko-Biała]]
@@ -61,10 +61,9 @@ W 2008 wygrał konkurs na stanowisko prezesa [[Port lotniczy Kraków-Balice|port
 [[Kategoria:Politycy Unii Wolności]]
 [[Kategoria:Polscy ekonomiści]]
 [[Kategoria:Polscy menedżerowie]]
-[[Kategoria:Posłowie na Sejm III Rzeczypospolitej Polskiej]]
 [[Kategoria:Urodzeni w 1951]]
 [[Kategoria:Posłowie na Sejm Rzeczypospolitej Polskiej I kadencji (1991–1993)]]</ns0:text>
-      <ns0:sha1>e4vnq441gcc2lx6dn8is521ttb4lrsy</ns0:sha1>
+      <ns0:sha1>81ejaif9mrvlm3o4c2fh30eadk0s4vk</ns0:sha1>
     </ns0:revision>
   </ns0:page>
   
