@@ -240,8 +240,15 @@ def _extractable_records(parsed_path: Path, scores_path: Path) -> list[dict[str,
                 and isinstance(content, str)
                 and content.strip()
             ):
-                row["koryciarski_llm_score"] = article_scores[url]
-                latest[url] = row
+                # Keep only the fields fact extraction needs — dropping
+                # outbound_urls (63% of the row) and other columns keeps memory
+                # bounded on the 20GB parsed file.
+                latest[url] = {
+                    "url": url,
+                    "article_content_hash": content_hash,
+                    "article_content": content,
+                    "koryciarski_llm_score": article_scores[url],
+                }
     return list(latest.values())
 
 
@@ -712,6 +719,9 @@ def _coerce_fact(
 def _find_justification_in_text(
     justification: str, article_text: str
 ) -> str | None:
+    # The result must be a VERBATIM substring of article_text so it can be
+    # found with ctrl+F / highlighted in the source HTML. Every branch below
+    # returns actual article text (never the LLM's paraphrase).
     justification = justification.strip()
     if not justification:
         return None
@@ -723,10 +733,6 @@ def _find_justification_in_text(
 
     if candidate != justification and candidate in article_text:
         return candidate
-    if _normalized_substring(justification, article_text):
-        return justification
-    if candidate != justification and _normalized_substring(candidate, article_text):
-        return candidate
 
     pattern = _justification_wildcard_pattern(candidate)
     if pattern is not None:
@@ -734,9 +740,9 @@ def _find_justification_in_text(
         if m is not None:
             return m.group(0)
 
-    if _fuzzy_justification_match(candidate, article_text):
-        return candidate
-    return None
+    # Fuzzy fallback: the LLM may have dropped/altered a word (e.g. ate "też").
+    # Return the real article span that matches, not the LLM text.
+    return _fuzzy_verbatim_span(candidate, article_text)
 
 
 def _justification_wildcard_pattern(justification: str) -> str | None:
@@ -756,58 +762,82 @@ def _strip_edge_ellipsis(justification: str) -> str:
     return re.sub(r"\s*(?:\.\.\.|…)$", "", without_prefix).strip()
 
 
-def _normalized_substring(needle: str, haystack: str) -> bool:
-    normalized_needle = _normalize_justification_text(needle)
-    return bool(
-        normalized_needle
-        and normalized_needle in _normalize_justification_text(haystack)
-    )
+_WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+# How many tokens the article span may shift/grow at each edge relative to the
+# needle length, to absorb words the LLM dropped or added.
+_JUSTIFICATION_SLACK = 3
 
 
-def _fuzzy_justification_match(justification: str, article_text: str) -> bool:
+def _article_word_offsets(article_text: str) -> list[tuple[str, int, int]]:
+    """Tokenize into (normalized_token, start_char, end_char) so a matched token
+    window can be mapped back to a verbatim slice of article_text."""
+    words: list[tuple[str, int, int]] = []
+    for match in _WORD_RE.finditer(article_text):
+        norm = _normalize_justification_text(match.group(0))
+        if norm:
+            words.append((norm, match.start(), match.end()))
+    return words
+
+
+def _fuzzy_verbatim_span(justification: str, article_text: str) -> str | None:
+    """Find the verbatim article substring that best matches the justification.
+
+    Anchors on distinctive needle tokens, then flexes the span's start and end
+    by a few tokens to absorb words the LLM dropped/added, and returns the actual
+    article slice (guaranteed to be a substring) if the fuzzy ratio clears the
+    threshold. Returns None otherwise.
+    """
     needle_tokens = _normalize_justification_text(justification).split()
     if len(needle_tokens) < 3:
-        return False
-
-    article_tokens = _normalize_justification_text(article_text).split()
-    if len(article_tokens) < len(needle_tokens):
-        return False
+        return None
+    words = _article_word_offsets(article_text)
+    if len(words) < 3:
+        return None
 
     needle = " ".join(needle_tokens)
-    article_positions_by_token: dict[str, list[int]] = defaultdict(list)
-    for index, token in enumerate(article_tokens):
-        article_positions_by_token[token].append(index)
+    n = len(needle_tokens)
+    positions_by_token: dict[str, list[int]] = defaultdict(list)
+    for index, (token, _s, _e) in enumerate(words):
+        positions_by_token[token].append(index)
 
     anchor_offsets = [
         (offset, token)
         for offset, token in enumerate(needle_tokens)
-        if len(token) >= 4 and token in article_positions_by_token
+        if len(token) >= 4 and token in positions_by_token
     ]
     if not anchor_offsets:
         anchor_offsets = [
             (offset, token)
             for offset, token in enumerate(needle_tokens)
-            if token in article_positions_by_token
+            if token in positions_by_token
         ]
     if not anchor_offsets:
-        return False
+        return None
 
-    window_size = len(needle_tokens)
-    candidate_starts: set[int] = set()
+    base_starts: set[int] = set()
     for offset, token in anchor_offsets:
-        for article_position in article_positions_by_token[token]:
+        for article_position in positions_by_token[token]:
             start = article_position - offset
-            if 0 <= start <= len(article_tokens) - window_size:
-                candidate_starts.add(start)
+            if 0 <= start < len(words):
+                base_starts.add(start)
 
-    for start in candidate_starts:
-        candidate = " ".join(article_tokens[start : start + window_size])
-        if (
-            difflib.SequenceMatcher(None, needle, candidate).ratio()
-            >= JUSTIFICATION_FUZZY_THRESHOLD
-        ):
-            return True
-    return False
+    best_ratio = 0.0
+    best_span: str | None = None
+    slack = _JUSTIFICATION_SLACK
+    for base in base_starts:
+        for start in range(max(0, base - slack), min(len(words), base + slack + 1)):
+            end_lo = max(start, start + n - 1 - slack)
+            end_hi = min(len(words), start + n + slack)
+            for end in range(end_lo, end_hi):
+                span = article_text[words[start][1] : words[end][2]]
+                ratio = difflib.SequenceMatcher(
+                    None, needle, _normalize_justification_text(span)
+                ).ratio()
+                if ratio >= JUSTIFICATION_FUZZY_THRESHOLD and ratio > best_ratio:
+                    best_ratio = ratio
+                    best_span = span
+    return best_span
 
 
 def _normalize_justification_text(text: str) -> str:
