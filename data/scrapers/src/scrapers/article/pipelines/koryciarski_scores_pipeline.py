@@ -179,7 +179,13 @@ def _latest_ok_parsed_records(path: Path) -> list[dict[str, Any]]:
                 and isinstance(content, str)
                 and content.strip()
             ):
-                latest[url] = row
+                # Keep only the fields scoring needs — dropping outbound_urls
+                # (63% of the row) and other columns keeps memory bounded.
+                latest[url] = {
+                    "url": url,
+                    "article_content_hash": content_hash,
+                    "article_content": content,
+                }
     return list(latest.values())
 
 

@@ -5,6 +5,15 @@ from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
 from scrapers.stores import Context, DoneUrl, Pipeline
 
 
+def _normalize_url(url: str) -> str:
+    """Canonical key for dedup: drop protocol prefix and trailing slash."""
+    for prefix in ("https://", "http://"):
+        if url.startswith(prefix):
+            url = url[len(prefix) :]
+            break
+    return url.rstrip("/")
+
+
 def _fetch_url_store() -> list[DoneUrl]:
     client = UrlStoreClient.from_env()
     results, offset = [], 0
@@ -56,15 +65,28 @@ class ArticleDoneUrls(Pipeline[DoneUrl]):
         )
 
         all_urls = pg_urls + url_store_urls
-        return pd.DataFrame.from_records(
-            [
+
+        # Standardize URL format across sources so the same article yields the
+        # same string: postgres URLs have no protocol prefix while url_store URLs
+        # carry https://. Canonicalize to the no-protocol form, then dedupe
+        # (keeping the first occurrence — postgres wins, pg_urls come first).
+        records = []
+        seen: set[str] = set()
+        dupes = 0
+        for i, done in enumerate(all_urls):
+            canonical = _normalize_url(done.url)
+            if canonical in seen:
+                dupes += 1
+                continue
+            seen.add(canonical)
+            records.append(
                 {
                     "uid": done.uid,
-                    "url": done.url,
+                    "url": canonical,
                     "storage_path": done.storage_path,
                     "media_type": getattr(done, "media_type", None),
                     "source": "postgres" if i < len(pg_urls) else "url_store",
                 }
-                for i, done in enumerate(all_urls)
-            ]
-        )
+            )
+        print(f"Dropped {dupes:,} cross-source duplicate URLs, kept {len(records):,}")
+        return pd.DataFrame.from_records(records)

@@ -152,27 +152,13 @@ def extract_article_content(
     if not selector:
         raise ValueError("selector is required")
 
-    html_str = html_bytes.decode("utf-8", errors="replace")
     soup = BeautifulSoup(html_bytes, "lxml")
     ld_json = _pick_ld_json_metadata(soup)
 
-    # Always run Readability for title and date
-    full_url = url if url.startswith("http") else f"https://{url}"
-    readability: dict[str, Any] = {}
-    try:
-        readability = _get_worker().parse(html_str, full_url)
-    except Exception:
-        pass
-
+    # Readability disabled for now — content comes from the selector, title/date
+    # are left None (see git history for the Node.js worker fallback).
     title: str | None = None
-    raw_title = readability.get("title")
-    if isinstance(raw_title, str) and raw_title.strip():
-        title = re.sub(r"\s{2,}", " ", raw_title).strip()
-
     publication_date: date | None = None
-    raw_date = readability.get("published_time")
-    if isinstance(raw_date, str):
-        publication_date = _parse_date(raw_date)
 
     element = soup.select_one(selector)
 
@@ -187,18 +173,6 @@ def extract_article_content(
             "ld_json": ld_json,
             "article_content": content,
             "extraction_method": "selector",
-        }
-
-    # Selector not found — try Readability content as fallback
-    read_text = readability.get("text_content")
-    if isinstance(read_text, str) and read_text.strip():
-        return {
-            "selector_matched": False,
-            "title": title,
-            "publication_date": publication_date,
-            "ld_json": ld_json,
-            "article_content": read_text.strip(),
-            "extraction_method": "readability",
         }
 
     result = dict(_EMPTY_RESULT)
