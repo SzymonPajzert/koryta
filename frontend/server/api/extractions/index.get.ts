@@ -61,8 +61,10 @@ export default authCachedEventHandler(
   { maxAge: 60 },
 );
 
-/** Set `reviewCount` on each fact: how many users cast a correct/insufficient
- * vote on it. Lets the review flow hand every fact to a single reviewer. */
+/** Set `reviewCount` on each fact: how many humans cast a correct/insufficient
+ * vote on it. Lets the review flow hand every fact to a single reviewer.
+ * Votes by the automated "pipeline" user don't claim a fact (same convention
+ * as computeVoteStats). */
 async function attachReviewCounts(
   db: FirebaseFirestore.Firestore,
   facts: ExtractionFact[],
@@ -84,6 +86,7 @@ async function attachReviewCounts(
   for (const votesSnapshot of snapshots) {
     for (const doc of votesSnapshot.docs) {
       const vote = doc.data() as VoteDocument;
+      if (vote.userUid === "pipeline") continue;
       if (vote.categoryVotes.correct || vote.categoryVotes.insufficient) {
         reviewers.set(vote.nodeId, (reviewers.get(vote.nodeId) ?? 0) + 1);
       }
