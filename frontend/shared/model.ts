@@ -284,4 +284,7 @@ export interface ExtractionFact {
   tag: string; // extraction model tag (e.g. "v1_qwen3-32b")
   createdAt?: string;
   uploaderUid?: string;
+  // Server-computed on /api/extractions: count of correct/insufficient votes,
+  // used to hand each fact to a single reviewer.
+  reviewCount?: number;
 }
