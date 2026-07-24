@@ -55,13 +55,30 @@ export const onVoteWritten = onDocumentWritten(
 
       const voteStats = computeVoteStats(allVotes);
 
+      // Votes reference either graph nodes or extraction facts — aggregate
+      // onto whichever document the id belongs to.
       const nodeRef = db.collection("nodes").doc(nodeId);
-      await nodeRef.update({
+      const extractionRef = db.collection("extractions").doc(nodeId);
+
+      const target = (await nodeRef.get()).exists
+        ? nodeRef
+        : (await extractionRef.get()).exists
+          ? extractionRef
+          : null;
+
+      if (!target) {
+        logger.warn(
+          `Vote for id ${nodeId} that is neither a node nor an extraction; skipping aggregation`,
+        );
+        return;
+      }
+
+      await target.update({
         "stats.votes": voteStats,
       });
 
       logger.info(
-        `Successfully recalculated aggregatedVotes for node: ${nodeId}`,
+        `Successfully recalculated aggregatedVotes for ${target.path}`,
       );
     } catch (error) {
       logger.error(
