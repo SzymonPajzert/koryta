@@ -1,6 +1,6 @@
 <template>
   <v-card variant="outlined" class="extraction-card">
-    <v-card-text class="pb-2">
+    <v-card-text class="pb-3">
       <div class="edge">
         <!-- Source entity (left) -->
         <div class="edge__entity edge__entity--source">
@@ -38,13 +38,19 @@
       </div>
     </v-card-text>
 
-    <v-card-text v-if="fact.justification" class="pt-0">
-      <blockquote class="extraction-quote text-body-2">
-        {{ fact.justification }}
-      </blockquote>
-    </v-card-text>
+    <template v-if="fact.justification">
+      <v-divider />
+      <v-card-text class="pt-3 pb-0">
+        <div class="text-caption text-medium-emphasis mb-1">
+          Fragment artykułu
+        </div>
+        <blockquote class="extraction-quote text-body-2">
+          {{ fact.justification }}
+        </blockquote>
+      </v-card-text>
+    </template>
 
-    <v-card-actions class="pt-0">
+    <v-card-actions class="extraction-actions pt-1">
       <v-chip
         v-if="fact.articleDomain"
         size="x-small"
@@ -98,7 +104,9 @@ const targetIcon = computed(() => {
 <style scoped>
 .edge {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  /* Cap the connector column so a long role label wraps inside its chip
+     instead of squeezing the entity names. */
+  grid-template-columns: 1fr minmax(auto, 40%) 1fr;
   align-items: center;
   gap: 8px 12px;
 }
@@ -140,10 +148,34 @@ const targetIcon = computed(() => {
 
 .edge__connector {
   text-align: center;
+  min-width: 0;
+}
+
+/* Let the chip grow vertically so long role labels wrap instead of forcing
+   one line. */
+.edge__chip {
+  height: auto;
+  min-height: 24px;
+  max-width: 100%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  white-space: normal;
+}
+
+.edge__chip :deep(.v-chip__content) {
+  display: inline;
 }
 
 .edge__type {
   margin-top: 4px;
+}
+
+/* Phones: three columns don't fit, so stack into full-width rows. */
+@media (max-width: 599px) {
+  .edge {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
 }
 
 .extraction-quote {
@@ -151,5 +183,10 @@ const targetIcon = computed(() => {
   padding-left: 12px;
   font-style: italic;
   color: rgba(var(--v-theme-on-surface), 0.7);
+}
+
+/* Keep the domain row tight under the quote instead of floating far below. */
+.extraction-actions {
+  min-height: 0;
 }
 </style>
