@@ -1,18 +1,18 @@
 <template>
   <v-container class="kategoryzacja-container">
-    <div class="d-flex align-center mb-4">
+    <div class="mb-4">
       <v-btn
         variant="text"
         :prepend-icon="mdiArrowLeft"
         to="/ekstrakcje"
-        class="me-2"
+        class="ms-n4 mb-1"
       >
         Powrót
       </v-btn>
       <h1 class="text-h5">Kategoryzuj fakty</h1>
     </div>
 
-    <div v-if="pending" class="d-flex justify-center py-8">
+    <div v-if="loading" class="d-flex justify-center py-8">
       <v-progress-circular indeterminate color="primary" size="48" />
     </div>
 
@@ -25,7 +25,7 @@
     <template v-else>
       <!-- Progress counter -->
       <div class="text-center mb-4 text-body-2 text-medium-emphasis">
-        Oznaczono {{ votedIds.size }} z {{ allFacts.length }}
+        Oznaczono {{ reviewedCount }} z {{ allFacts.length }}
       </div>
 
       <!-- Swipe card area -->
@@ -54,7 +54,7 @@
           <v-btn
             color="error"
             variant="tonal"
-            size="large"
+            :size="smAndUp ? 'large' : 'default'"
             :prepend-icon="mdiCloseCircleOutline"
             @click="recordVote('incorrect')"
           >
@@ -63,7 +63,7 @@
           <v-btn
             color="success"
             variant="tonal"
-            size="large"
+            :size="smAndUp ? 'large' : 'default'"
             :append-icon="mdiCheckCircleOutline"
             @click="recordVote('correct')"
           >
@@ -126,10 +126,18 @@ import {
   mdiCloseCircleOutline,
   mdiHelpCircleOutline,
 } from "@mdi/js";
+import { useDisplay } from "vuetify";
+import { collection, getFirestore, query, where } from "firebase/firestore";
+import {
+  useCollection,
+  useCurrentUser,
+  useFirebaseApp,
+  useIsCurrentUserLoaded,
+} from "vuefire";
 import { useExtractions } from "~/composables/extractions";
 import { castVoteOnce } from "~/composables/votes";
 import { factSubject } from "~/utils/extraction";
-import type { ExtractionFact } from "~~/shared/model";
+import type { ExtractionFact, VoteDocument } from "~~/shared/model";
 
 definePageMeta({
   middleware: "auth",
@@ -141,15 +149,80 @@ useHead({
 const { data, pending } = useExtractions();
 const route = useRoute();
 const router = useRouter();
+const { smAndUp } = useDisplay();
 
 // All votable facts (an id is required to vote), in fetch order.
 const allFacts = computed<ExtractionFact[]>(() =>
   (data.value?.facts ?? []).filter((f) => f.id),
 );
 
-// Facts voted on in this session — they drop out of the related lists and the
-// traversal so the reviewer keeps moving forward.
-const votedIds = ref(new Set<string>());
+// Votes the signed-in user has already cast (live, across sessions), so a
+// returning reviewer resumes where they left off instead of starting over.
+const user = useCurrentUser();
+const isAuthLoaded = useIsCurrentUserLoaded();
+const db = getFirestore(useFirebaseApp(), "koryta-pl");
+const votesQuery = computed(() => {
+  // Client-only: the server render has no signed-in Firestore user.
+  if (import.meta.server || !user.value) return null;
+  return query(collection(db, "votes"), where("userUid", "==", user.value.uid));
+});
+const { data: userVotes, pending: votesPending } = useCollection<VoteDocument>(
+  votesQuery,
+  { ssrKey: "kategoryzacja-user-votes" },
+);
+
+const serverVotedIds = computed(() => {
+  const ids = new Set<string>();
+  for (const vote of userVotes.value) {
+    const categoryVotes = vote.categoryVotes;
+    if (categoryVotes.correct || categoryVotes.insufficient) {
+      ids.add(vote.nodeId);
+    }
+  }
+  return ids;
+});
+
+// Facts voted on in this session — merged with the persisted votes below.
+const sessionVotedIds = ref(new Set<string>());
+
+// One reviewer per fact: a fact any user has already reviewed (reviewCount
+// comes from the API and may lag a few minutes behind) counts as done, so
+// concurrent reviewers spread over the backlog instead of piling up.
+const externallyReviewedIds = computed(() => {
+  const ids = new Set<string>();
+  for (const fact of allFacts.value) {
+    if (fact.id && fact.reviewCount) ids.add(fact.id);
+  }
+  return ids;
+});
+
+const votedIds = computed(
+  () =>
+    new Set([
+      ...externallyReviewedIds.value,
+      ...serverVotedIds.value,
+      ...sessionVotedIds.value,
+    ]),
+);
+
+// The votes collection also holds votes on other node types, so count only the
+// facts on this page.
+const reviewedCount = computed(
+  () => allFacts.value.filter((f) => votedIds.value.has(f.id!)).length,
+);
+
+// Hold the initial spinner until both the facts and the user's existing votes
+// are in — otherwise the first card flashes an already-reviewed fact.
+const votesReady = computed(
+  () => isAuthLoaded.value && (!user.value || !votesPending.value),
+);
+// `import.meta.server`: SSR can't know the user's votes, so it renders the
+// spinner — the same thing the client's first (hydration) render shows while
+// auth is still restoring. Rendering the card on the server instead would
+// cause a hydration mismatch.
+const loading = computed(
+  () => import.meta.server || pending.value || !votesReady.value,
+);
 
 // The fact currently under review, tracked by id (not index) so we can jump to
 // a related fact next while keeping context — see recordVote().
@@ -197,7 +270,7 @@ function recordVote(verdict: Verdict) {
     castVoteOnce(fact.id, "correct", verdict === "correct" ? 1 : -1);
   }
 
-  votedIds.value.add(fact.id);
+  sessionVotedIds.value = new Set(sessionVotedIds.value).add(fact.id);
 
   // Stay in context: if related facts remain, review one of those next so the
   // surrounding facts stay on screen; otherwise take the next unreviewed fact.
@@ -212,14 +285,16 @@ function onSwiped(direction: "left" | "right") {
 }
 
 // Deep-link: honour ?fact=<id> on load, then keep the URL in sync so the
-// current card is always shareable.
+// current card is always shareable. Initialization waits for the persisted
+// votes too, so the first card picked is one the user hasn't reviewed yet.
 const initialized = ref(false);
 watch(
-  allFacts,
-  (facts) => {
-    if (initialized.value || facts.length === 0) return;
+  [allFacts, loading],
+  ([facts, isLoading]) => {
+    if (initialized.value || isLoading || facts.length === 0) return;
     const target = route.query.fact;
     if (typeof target === "string" && facts.some((f) => f.id === target)) {
+      // An explicitly shared card is shown even if it was already reviewed.
       currentId.value = target;
     } else {
       currentId.value =

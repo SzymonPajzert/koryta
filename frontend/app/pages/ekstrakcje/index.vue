@@ -1,7 +1,7 @@
 <template>
   <v-container>
-    <div class="d-flex align-center justify-space-between mb-6">
-      <h1 class="text-h4">Ekstrakcje z artykułów</h1>
+    <div class="d-flex align-center justify-space-between flex-wrap ga-3 mb-6">
+      <h1 class="text-h5 text-sm-h4">Ekstrakcje z artykułów</h1>
       <v-btn
         color="primary"
         variant="tonal"
