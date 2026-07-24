@@ -3,6 +3,7 @@ import json
 import os
 from dataclasses import asdict
 from functools import cached_property
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -21,6 +22,7 @@ class EntityDumper:
     def __init__(self) -> None:
         self.inmemory: dict[str, list[Any]] = {}
         self.sort_keys: dict[str, list[str]] = {}
+        self.output_paths: dict[str, str] = {}
         self._last_written_cache: tuple[str, list] | None = None
         self._has_flushed: bool = False
         self._insert_count: int = 0
@@ -50,6 +52,19 @@ class EntityDumper:
 
         raise ValueError(f"No output for {name} in EntityDumper")
 
+    def _resolve_output_path(self, v) -> str:
+        output_path = getattr(type(v), "__output_path__", None)
+        if output_path is not None:
+            path = Path(output_path)
+            if not path.is_absolute():
+                path = Path(VERSIONED_DIR) / path
+            return str(path)
+
+        mod = type(v).__module__.removeprefix("entities.")
+        n = mod + "." + type(v).__name__
+        n = n.replace(".", "_").lower()
+        return os.path.join(VERSIONED_DIR, f"{n}/{n}.jsonl")
+
     def insert_into(self, v, sort_by):
         mod = type(v).__module__.removeprefix("entities.")
         n = mod + "." + type(v).__name__
@@ -57,12 +72,12 @@ class EntityDumper:
         if n not in self.inmemory:
             self.inmemory[n] = []
             self.sort_keys[n] = sort_by
+            self.output_paths[n] = self._resolve_output_path(v)
         self.inmemory[n].append(v)
-        # Update cache on write
-        self._last_written_cache = (n, self.inmemory[n])
         if self.args.dump_every is not None:
             self._insert_count += 1
             if self._insert_count % self.args.dump_every == 0:
+                self._last_written_cache = (n, list(self.inmemory[n]))
                 self.flush()
 
     def flush(self) -> None:
@@ -71,8 +86,7 @@ class EntityDumper:
             if not v:
                 continue
             assert not self.sort_keys[k], "flush() cannot be used with sort_by"
-            name = k.lower()
-            path = os.path.join(VERSIONED_DIR, f"{name}/{name}.jsonl")
+            path = self.output_paths[k]
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "a") as f:
                 for item in v:
@@ -94,10 +108,8 @@ class EntityDumper:
             self._last_written_cache = (name, data)
 
         for k, v in self.inmemory.items():
-            name = k.lower()
-            print(f"Writing {name}...")
-            # Ensure the directory exists
-            path = os.path.join(VERSIONED_DIR, f"{name}/{name}.jsonl")
+            path = self.output_paths[k]
+            print(f"Writing {os.path.basename(path)}...")
             os.makedirs(os.path.dirname(path), exist_ok=True)
 
             df = pd.DataFrame.from_records([asdict(i) for i in v])

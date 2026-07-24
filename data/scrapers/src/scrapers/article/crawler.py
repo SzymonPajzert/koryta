@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal, cast
+from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup, Tag
@@ -245,15 +246,12 @@ def crawl_url(
     )
 
 
-def _extract_urls(
-    ctx: Context,
-    response: requests.Response,
-) -> set[str]:
-    discovered = set()
-    soup = BeautifulSoup(response.text, "lxml")
+def extract_urls_from_html(html: str, base_url: str) -> set[str]:
+    """Extract and normalise all absolute URLs from anchor tags in HTML."""
+    discovered: set[str] = set()
+    soup = BeautifulSoup(html, "lxml")
 
     base_tag = soup.find("base", href=True)
-    base_url = response.url
     if isinstance(base_tag, Tag):
         base_href = base_tag.get("href")
         if isinstance(base_href, str):
@@ -271,7 +269,7 @@ def _extract_urls(
         ):
             continue
         try:
-            absolute_link = ctx.utils.join_url(base_url, link)
+            absolute_link = urljoin(base_url, link)
         except ValueError:
             continue
         clean_link = absolute_link.split("?")[0].split("#")[0].rstrip("/")
@@ -285,6 +283,13 @@ def _extract_urls(
             discovered.add(clean_link)
 
     return discovered
+
+
+def _extract_urls(
+    ctx: Context,
+    response: requests.Response,
+) -> set[str]:
+    return extract_urls_from_html(response.text, response.url)
 
 
 _FLUSH_INTERVAL_S = 30.0  # also flush after this many seconds of inactivity

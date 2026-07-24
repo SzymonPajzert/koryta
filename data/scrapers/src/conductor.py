@@ -24,27 +24,29 @@ from stores.config import PROJECT_ROOT
 from stores.download import CompressedMirror, FileSource
 from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
+from stores.llm import OpenAICompatibleConfig, OpenAICompatibleMultiPortLLM
 from stores.nlp import NLPImpl
 from stores.rejestr import Rejestr
-from stores.storage import BatchClient
 from stores.storage import Client as CloudStorageClient
 from stores.utils import UtilsImpl
 from stores.web import WebImpl
 
 
 class Conductor(IO):
-    storage: CloudStorageClient
-
-    def __init__(self, dumper: EntityDumper, batch_upload=False):
+    def __init__(self, dumper: EntityDumper, llm=None):
         self.firestore = FirestoreIO()
         self.dumper = dumper
-        if batch_upload:
-            self.storage = BatchClient()
-        else:
-            self.storage = CloudStorageClient()
+        self.llm = llm
+        self._storage: CloudStorageClient | None = None
         self.mirror = CompressedMirror()
         self.progress_bar: tqdm | None = None
         self.continous_download = False
+
+    @property
+    def storage(self) -> CloudStorageClient:
+        if self._storage is None:
+            self._storage = CloudStorageClient()
+        return self._storage
 
     def read_data(self, fs: DataRef) -> File:
         if isinstance(fs, DownloadableFile):
@@ -111,12 +113,7 @@ class Conductor(IO):
             )
 
     def output_entity(self, entity, sort_by=[]):
-        try:
-            self.dumper.insert_into(entity, sort_by)
-        except TypeError as e:
-            logging.error(f"Error occurred while outputting entity: {e} {entity}")
-            print(entity)
-            raise
+        self.dumper.insert_into(entity, sort_by)
 
     def write_file(
         self, fs: DataRef, content: str | typing.Callable[[io.BufferedWriter], None]
@@ -175,14 +172,33 @@ class Conductor(IO):
 def setup_context(
     use_rejestr_io: bool = False,
     use_nlp: bool = False,
+    use_llm: bool = False,
+    llm_ports: list[int] | None = None,
+    llm_model: str = "Qwen/Qwen3-14B",
+    llm_per_port_concurrency: int = 4,
+    llm_request_timeout_seconds: int = 600,
+    article_workers: int = 4,
+    article_facts_min_koryciarski_score: int | None = None,
+    article_facts_max_tokens: int | None = None,
+    article_facts_text_limit: int | None = None,
+    article_tag: str | None = None,
     policy: ProcessPolicy | None = None,
     crawl_queue: CrawlQueue | None = None,
-    batch_upload: bool = False,
 ) -> tuple[Context, EntityDumper]:
     if policy is None:
         policy = ProcessPolicy.with_default()
     dumper = EntityDumper()
-    conductor = Conductor(dumper, batch_upload=batch_upload)
+    llm = None
+    if use_llm:
+        llm = OpenAICompatibleMultiPortLLM(
+            OpenAICompatibleConfig(
+                model=llm_model,
+                ports=tuple(llm_ports or list(range(6000, 6016))),
+                per_port_concurrency=llm_per_port_concurrency,
+                request_timeout_seconds=llm_request_timeout_seconds,
+            )
+        )
+    conductor = Conductor(dumper, llm=llm)
     rejestr_io = None
     if use_rejestr_io:
         print("Initializing RejestrIO as a data source")
@@ -201,6 +217,12 @@ def setup_context(
         crawl_queue=crawl_queue,
         nlp=nlp,  # type: ignore
         refresh_policy=policy,
+        llm=llm,
+        article_workers=article_workers,
+        article_facts_min_koryciarski_score=article_facts_min_koryciarski_score,
+        article_facts_max_tokens=article_facts_max_tokens,
+        article_facts_text_limit=article_facts_text_limit,
+        article_tag=article_tag,
     )
 
     ctx.con.create_function("parse_hostname", parse_hostname, [VARCHAR], VARCHAR)  # type: ignore

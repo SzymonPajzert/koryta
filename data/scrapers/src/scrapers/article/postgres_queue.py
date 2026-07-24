@@ -18,13 +18,7 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool, PoolTimeout
 
 from entities.util import NormalizedParse
-from scrapers.stores import (
-    BlockedDomain,
-    CrawlQueue,
-    CrawlQueueItem,
-    DoneUrl,
-    NewUrl,
-)
+from scrapers.stores import BlockedDomain, CrawlQueue, CrawlQueueItem, DoneUrl, NewUrl
 
 logger = logging.getLogger(__name__)
 

@@ -90,6 +90,9 @@ def download_from_url(url):
             p.total = total_file_size
             p.update(read_size)
 
+        opener = urllib.request.build_opener()
+        opener.addheaders = [("User-Agent", "Mozilla/5.0 (compatible; koryta-bot/1.0)")]
+        urllib.request.install_opener(opener)
         urllib.request.urlretrieve(url, destination_path, reporthook=reporthook)
         print("Download complete!")
         return destination_path

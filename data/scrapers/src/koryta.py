@@ -13,6 +13,15 @@ from scrapers.stores import (
     iterate_pipeline_dict,
 )
 
+ARTICLE_PIPELINES = {
+    "ArticleAnalyzed",
+    "ArticleDoneUrls",
+    "ArticleDomainSelectors",
+    "ArticleExtractedFacts",
+    "ArticleKoryciarskiScores",
+    "ArticleParsed",
+}
+
 
 class Printer:
     def __init__(self, args):
@@ -69,8 +78,88 @@ def get_args():
         default="file",
         help="Output channel (file or stdout)",
     )
+    parser.add_argument(
+        "--llm",
+        action="store_true",
+        help="Initialize the OpenAI-compatible local LLM client.",
+    )
+    parser.add_argument(
+        "--llm-model",
+        default="Qwen/Qwen3-14B",
+        help="Model name for local OpenAI-compatible LLM servers.",
+    )
+    parser.add_argument(
+        "--llm-ports",
+        default="6000-6015",
+        help="LLM ports as an inclusive range or comma list, e.g. 6000-6015.",
+    )
+    parser.add_argument(
+        "--llm-per-port-concurrency",
+        type=int,
+        default=4,
+        help="Concurrent requests allowed per LLM port.",
+    )
+    parser.add_argument(
+        "--llm-request-timeout-seconds",
+        type=int,
+        default=1800,
+        help="HTTP timeout for each LLM request.",
+    )
+    parser.add_argument(
+        "--article-workers",
+        type=int,
+        default=4,
+        help="Parallel workers for article parsing pipelines.",
+    )
+    parser.add_argument(
+        "--article-facts-min-koryciarski-score",
+        type=int,
+        default=None,
+        help=(
+            "Only run ArticleExtractedFacts LLM extraction for uncached articles "
+            "with koryciarski_llm_score >= N."
+        ),
+    )
+    parser.add_argument(
+        "--article-facts-max-tokens",
+        type=int,
+        default=None,
+        help="Max completion tokens for ArticleExtractedFacts LLM requests.",
+    )
+    parser.add_argument(
+        "--article-facts-text-limit",
+        type=int,
+        default=None,
+        help="Max article text characters fed to the facts extraction prompt.",
+    )
+    parser.add_argument(
+        "--tag",
+        type=str,
+        default=None,
+        help="Tag for this pipeline run (e.g. v1_qwen3-32b), stored in output records.",
+    )
     args, _ = parser.parse_known_args()
     return args
+
+
+def _parse_ports(raw_ports: str) -> list[int]:
+    raw_ports = raw_ports.strip()
+    if not raw_ports:
+        return []
+    ports: list[int] = []
+    for part in raw_ports.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start_text, end_text = part.split("-", 1)
+            start, end = int(start_text), int(end_text)
+            if end < start:
+                raise ValueError("--llm-ports range end must be >= start")
+            ports.extend(range(start, end + 1))
+        else:
+            ports.append(int(part))
+    return ports
 
 
 def main():
@@ -87,11 +176,31 @@ def main():
                 refresh.append(r)
 
     policy = ProcessPolicy.with_default(refresh, exclude_refresh=exclude_refresh)
-    ctx, dumper = setup_context(False, policy=policy)
+    needs_llm = args.llm or bool(set(args.pipeline or []) & ARTICLE_PIPELINES)
+    ctx, dumper = setup_context(
+        False,
+        use_llm=needs_llm,
+        llm_ports=_parse_ports(args.llm_ports),
+        llm_model=args.llm_model,
+        llm_per_port_concurrency=args.llm_per_port_concurrency,
+        llm_request_timeout_seconds=args.llm_request_timeout_seconds,
+        article_workers=args.article_workers,
+        article_facts_min_koryciarski_score=(
+            args.article_facts_min_koryciarski_score
+        ),
+        article_facts_max_tokens=args.article_facts_max_tokens,
+        article_facts_text_limit=args.article_facts_text_limit,
+        article_tag=args.tag,
+        policy=policy,
+    )
 
     no_pipeline = len(args.pipeline) == 0 or args.pipeline is None
     if no_pipeline:
-        raise ValueError("No pipeline specified, use koryta PipelineName")
+        # TODO this special handling is bad imo
+        print(
+            "No pipeline specified, will run all except ScrapeRejestrIO "
+            "and article pipelines"
+        )
     pipeline_names = set(pt.__name__ for pt in PIPELINES)
     for p_name in args.pipeline:
         if p_name not in pipeline_names:
@@ -105,7 +214,9 @@ def main():
     try:
         for p_type in PIPELINES:
             if p_type.__name__ in args.pipeline or (
-                no_pipeline and p_type.__name__ != "ScrapeRejestrIO"
+                no_pipeline
+                and p_type.__name__ != "ScrapeRejestrIO"
+                and p_type.__name__ not in ARTICLE_PIPELINES
             ):
                 print(f"Processing {p_type.__name__}")
                 p: Pipeline = Pipeline.create(p_type)

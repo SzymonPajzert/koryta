@@ -24,6 +24,8 @@ from scrapers.stores.file import (
     LocalFile,
     VersionedBackup,
 )
+from stores.config import DOWNLOADED_DIR as DOWNLOADED_DIR
+from stores.config import VERSIONED_DIR as VERSIONED_DIR
 from stores.config import backup_disabled
 
 if TYPE_CHECKING:
@@ -193,6 +195,66 @@ class NLP(metaclass=ABCMeta):
     def lemmatize(self, text_data: Union[str, List[str]]) -> Union[str, List[str]]:
         """Lemmatize text or list of texts."""
         pass
+
+
+@dataclass(frozen=True)
+class LLMRequest:
+    prompt: str
+    max_tokens: int
+    temperature: float = 0
+    model: str | None = None
+    enable_thinking: bool = False
+
+
+@dataclass(frozen=True)
+class LLMResponse:
+    content: str
+    port: int | None = None
+    model: str | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class LLMResponsePool(metaclass=ABCMeta):
+    """Bounded async request/response pool for long-running LLM pipelines."""
+
+    @abstractmethod
+    async def __aenter__(self) -> "LLMResponsePool":
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def is_full(self) -> bool:
+        """Return True when the pool cannot accept more outstanding requests."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def put_request(self, request: LLMRequest) -> int:
+        """Submit a request and return its response id."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_response(self) -> tuple[int, LLMResponse | Exception]:
+        """Return the next completed response by id."""
+        raise NotImplementedError()
+
+
+class LLM(metaclass=ABCMeta):
+    """Abstract interface for OpenAI-compatible chat completion clients."""
+
+    @abstractmethod
+    def response_pool(self) -> LLMResponsePool:
+        """Create a bounded request/response pool."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def check_health(self) -> None:
+        """Verify configured LLM backends are reachable."""
+        raise NotImplementedError()
 
 
 @dataclass(frozen=True)
@@ -398,13 +460,18 @@ class ProcessPolicy:
                         dep_run, dep_reason = self.execution_decisions[
                             dep.pipeline_name
                         ]
-                        if dep_run:
+                        if (
+                            dep_run
+                            and pipeline.pipeline_name not in self.exclude_refresh
+                        ):
                             decision = (
                                 True,
                                 f"dependency {dep.pipeline_name} refreshed",
                             )
                             break
 
+                        if pipeline.pipeline_name in self.exclude_refresh:
+                            continue
                         dep_mtime = dep.output_time(ctx)
                         if dep_mtime is None or dep_mtime > mtime:
                             decision = (
@@ -445,6 +512,12 @@ class Context:
     nlp: NLP
     crawl_queue: CrawlQueue | None = None
     refresh_policy: ProcessPolicy = field(default_factory=ProcessPolicy.with_default)
+    llm: LLM | None = None
+    article_workers: int = 4
+    article_facts_min_koryciarski_score: int | None = None
+    article_facts_max_tokens: int | None = None
+    article_facts_text_limit: int | None = None
+    article_tag: str | None = None
 
 
 Output = typing.TypeVar("Output")
@@ -463,6 +536,11 @@ class Pipeline(typing.Generic[Output]):
     format: Formats = "jsonl"
     dtype: dict[str, Any] | None = None
     confirm_run: bool = False
+    # Whether this pipeline's output participates in the shared GCS cache
+    # (uploaded on write, restored on read). Set False for large/incremental
+    # outputs that would flood the shared bucket — they stay local-only while
+    # still using local caching + refresh logic.
+    backup_to_shared_cache: bool = True
 
     _cached_result: pd.DataFrame | None = None
     _refreshed_execution: bool = False
@@ -506,7 +584,7 @@ class Pipeline(typing.Generic[Output]):
             print("File doesn't exist, continuing: ", e)
             filenotfound = e
 
-        if not backup_disabled():
+        if self.backup_to_shared_cache and not backup_disabled():
             try:
                 return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
                     self.format, dtype=self.dtype
@@ -588,7 +666,12 @@ Should I run it? (y/n) [n]",
             # try reading from backup before re-processing, unless backups are
             # disabled (then recompute from source instead of restoring stale data).
             decision = ctx.refresh_policy.execution_decisions.get(self.pipeline_name)
-            if decision and decision[1] == "missing output" and not backup_disabled():
+            if (
+                decision
+                and decision[1] == "missing output"
+                and self.backup_to_shared_cache
+                and not backup_disabled()
+            ):
                 try:
                     df = ctx.io.read_data(
                         VersionedBackup(self.filename)
@@ -654,7 +737,7 @@ Should I run it? (y/n) [n]",
         ctx.io.write_file(
             LocalFile(self.output_path(filename, format), "versioned"), writer
         )
-        if not local_only and not backup_disabled():
+        if not local_only and self.backup_to_shared_cache and not backup_disabled():
             ctx.io.write_file(VersionedBackup(filename), writer)
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:

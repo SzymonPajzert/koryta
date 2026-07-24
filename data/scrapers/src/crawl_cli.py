@@ -19,7 +19,6 @@ from scrapers.article.crawler import (
     CrawlOptions,
     run_crawler,
 )
-from scrapers.article.parse_runner import run_parse
 from scrapers.article.postgres_queue import PostgresClient, PostgresCrawlQueue
 from scrapers.article.scoring import get_scoring_function
 from scrapers.article.url_store_queue import UrlStoreQueue
@@ -82,17 +81,6 @@ def _build_parser() -> ArgumentParser:
         type=int,
         default=64,
         help="Number of URLs to claim from Postgres and flush back per queue write.",
-    )
-    parser.add_argument(
-        "--parse",
-        action="store_true",
-        help="Parse done URLs from DB: print stats and write article_parsed.jsonl.",
-    )
-    parser.add_argument(
-        "--parse-limit",
-        type=int,
-        default=1000,
-        help="Max number of done URLs to parse (default: 1000).",
     )
     parser.add_argument(
         "--reprioritize",
@@ -266,10 +254,6 @@ def main() -> None:  # noqa: PLR0915
     log_file = _setup_logging(args.log_dir)
     logging.info("Logging to %s", log_file)
 
-    if args.parse:
-        parse(args)
-        return
-
     if args.bump_small_domains is not None:
         bump_small_domains(args, parser)
         return
@@ -323,7 +307,7 @@ def main() -> None:  # noqa: PLR0915
         if args.profile_path
         else None
     )
-    ctx, _ = setup_context(False, crawl_queue=queue, batch_upload=True)
+    ctx, _ = setup_context(False, crawl_queue=queue)
     try:
         with profile_scope(profile_enabled, profile_path):
             run_crawler(ctx, options)
@@ -362,21 +346,6 @@ def bump_small_domains(args, parser):
         pg_client.close()
 
 
-def parse(args):
-    worker_processes = max(1, args.worker_threads)
-    pg_client = PostgresClient.from_env(max_size=1)
-    queue = PostgresCrawlQueue(pg_client)
-    ctx, dumper = setup_context(False, crawl_queue=queue)
-    try:
-        run_parse(
-            queue,
-            ctx,
-            args.parse_limit,
-            worker_processes=worker_processes,
-        )
-    finally:
-        dumper.dump_pandas()
-        pg_client.close()
 
 
 if __name__ == "__main__":
