@@ -51,6 +51,7 @@ class ParseTask:
 
 class ArticleParsed(Pipeline[ParsedArticleRecord]):
     filename = "article_parsed"
+    backup_to_shared_cache = False  # ~20GB streamed, keep local-only
 
     done_urls: ArticleDoneUrls
     domain_selectors: ArticleDomainSelectors

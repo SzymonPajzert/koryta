@@ -28,6 +28,7 @@ _TEMP_OUTPUT_FILE = _FINAL_OUTPUT_FILE.with_suffix(".jsonl.tmp")
 
 class ArticleAnalyzed(Pipeline[ArticleAnalyzedRecord]):
     filename = "article_analyzed"
+    backup_to_shared_cache = False  # large incremental output, keep local-only
 
     parsed: ArticleParsed
     koryciarski_scores: ArticleKoryciarskiScores

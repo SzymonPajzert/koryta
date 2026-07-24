@@ -102,6 +102,7 @@ _PROMPT = (
 
 class ArticleExtractedFacts(Pipeline[ArticleFacts]):
     filename = "article_facts"
+    backup_to_shared_cache = False  # large incremental output, keep local-only
 
     koryciarski_scores: ArticleKoryciarskiScores
 

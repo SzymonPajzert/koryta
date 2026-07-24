@@ -536,6 +536,11 @@ class Pipeline(typing.Generic[Output]):
     format: Formats = "jsonl"
     dtype: dict[str, Any] | None = None
     confirm_run: bool = False
+    # Whether this pipeline's output participates in the shared GCS cache
+    # (uploaded on write, restored on read). Set False for large/incremental
+    # outputs that would flood the shared bucket — they stay local-only while
+    # still using local caching + refresh logic.
+    backup_to_shared_cache: bool = True
 
     _cached_result: pd.DataFrame | None = None
     _refreshed_execution: bool = False
@@ -579,7 +584,7 @@ class Pipeline(typing.Generic[Output]):
             print("File doesn't exist, continuing: ", e)
             filenotfound = e
 
-        if not backup_disabled():
+        if self.backup_to_shared_cache and not backup_disabled():
             try:
                 return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
                     self.format, dtype=self.dtype
@@ -661,7 +666,12 @@ Should I run it? (y/n) [n]",
             # try reading from backup before re-processing, unless backups are
             # disabled (then recompute from source instead of restoring stale data).
             decision = ctx.refresh_policy.execution_decisions.get(self.pipeline_name)
-            if decision and decision[1] == "missing output" and not backup_disabled():
+            if (
+                decision
+                and decision[1] == "missing output"
+                and self.backup_to_shared_cache
+                and not backup_disabled()
+            ):
                 try:
                     df = ctx.io.read_data(
                         VersionedBackup(self.filename)
@@ -727,7 +737,7 @@ Should I run it? (y/n) [n]",
         ctx.io.write_file(
             LocalFile(self.output_path(filename, format), "versioned"), writer
         )
-        if not local_only and not backup_disabled():
+        if not local_only and self.backup_to_shared_cache and not backup_disabled():
             ctx.io.write_file(VersionedBackup(filename), writer)
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:

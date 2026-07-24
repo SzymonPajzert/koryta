@@ -45,6 +45,7 @@ def _fetch_postgres() -> list[DoneUrl]:
 
 class ArticleDoneUrls(Pipeline[DoneUrl]):
     filename = "article_done_urls"
+    backup_to_shared_cache = False  # ~461MB, keep local-only
 
     @property
     def output_class(self):

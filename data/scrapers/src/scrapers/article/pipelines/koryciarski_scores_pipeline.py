@@ -51,6 +51,7 @@ _PROMPT = (
 
 class ArticleKoryciarskiScores(Pipeline[KoryciarskiScore]):
     filename = "article_koryciarski_scores"
+    backup_to_shared_cache = False  # large incremental output, keep local-only
 
     article_parsed: ArticleParsed
 
