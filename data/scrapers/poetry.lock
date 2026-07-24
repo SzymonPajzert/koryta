@@ -7092,14 +7092,14 @@ files = [
 
 [[package]]
 name = "types-networkx"
-version = "3.6.1.20260518"
+version = "3.6.1.20260724"
 description = "Typing stubs for networkx"
 optional = false
 python-versions = ">=3.10"
 groups = ["test"]
 files = [
-    {file = "types_networkx-3.6.1.20260518-py3-none-any.whl", hash = "sha256:574304deea33828fb32cdca757af84f79b67bd80164aa1725c52a95d4a9347e6"},
-    {file = "types_networkx-3.6.1.20260518.tar.gz", hash = "sha256:af3ab153815b366c3695a0015cc75aece9b3eb0e5df56bb60ffee0b7cec8f630"},
+    {file = "types_networkx-3.6.1.20260724-py3-none-any.whl", hash = "sha256:646f101d7aaf6dada5d0b8270be7a8e6512e3d4cc0a5c5e32677c9b05d6e63ed"},
+    {file = "types_networkx-3.6.1.20260724.tar.gz", hash = "sha256:aae4d7105c96a571a827d082006d3120b75d8ae132a0c1818e533782d1ee2d83"},
 ]
 
 [package.dependencies]
@@ -7568,4 +7568,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "18873dec856a16d5397123405ce33eea460b5f820fe895e97ce04e5c756517c9"
+content-hash = "d4d3a8066a9e9a8d2995702d63f52735f11a879f18661ebf7bccd80e3381cb71"
