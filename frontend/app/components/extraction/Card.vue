@@ -40,25 +40,33 @@
 
     <template v-if="fact.justification">
       <v-divider />
-      <v-card-text class="pt-3 pb-0">
-        <div class="text-caption text-medium-emphasis mb-1">
-          Fragment artykułu
-        </div>
-        <blockquote class="extraction-quote text-body-2">
-          {{ fact.justification }}
-        </blockquote>
-      </v-card-text>
+      <!-- Quote links to the article, deep-linked to the passage via a text
+       fragment. Falls back to a plain block when there's no article URL. -->
+      <component
+        :is="sourceHref ? 'a' : 'div'"
+        :href="sourceHref"
+        :target="sourceHref ? '_blank' : undefined"
+        :rel="sourceHref ? 'noopener noreferrer' : undefined"
+        class="source-block"
+        :class="{ 'source-block--link': sourceHref }"
+      >
+        <v-card-text class="pt-3" :class="$slots.actions ? 'pb-0' : 'pb-4'">
+          <div
+            class="source-caption text-caption mb-1 d-flex align-center ga-1"
+            :class="sourceHref ? 'text-primary' : 'text-medium-emphasis'"
+          >
+            <span>{{ sourceCaption }}</span>
+            <v-icon v-if="sourceHref" size="13">{{ mdiOpenInNew }}</v-icon>
+          </div>
+          <blockquote class="extraction-quote text-body-2">
+            {{ fact.justification }}
+          </blockquote>
+        </v-card-text>
+      </component>
     </template>
 
-    <v-card-actions class="extraction-actions pt-1">
-      <v-chip
-        v-if="fact.articleDomain"
-        size="x-small"
-        variant="text"
-        class="text-medium-emphasis"
-      >
-        {{ fact.articleDomain }}
-      </v-chip>
+    <!-- Actions row only when the parent supplies vote buttons. -->
+    <v-card-actions v-if="$slots.actions" class="extraction-actions pt-1">
       <v-spacer />
       <slot name="actions" />
     </v-card-actions>
@@ -72,6 +80,7 @@ import {
   mdiAccountGroupOutline,
   mdiArrowRight,
   mdiDomain,
+  mdiOpenInNew,
 } from "@mdi/js";
 import type { ExtractionFact } from "~~/shared/model";
 import {
@@ -98,6 +107,50 @@ const targetIcon = computed(() => {
   if (fact.fact_type === "employment") return mdiDomain;
   if (fact.fact_type === "party_membership") return mdiAccountGroupOutline;
   return mdiAccountOutline; // personal_relation
+});
+
+// Encode for a URL text fragment (#:~:text=). Like encodeURIComponent, but
+// also encodes "-" since it's a delimiter in the text-fragment grammar.
+function encodeFragment(text: string): string {
+  return encodeURIComponent(text).replace(/-/g, "%2D");
+}
+
+// Build the "text=" part of a scroll-to-text-fragment. Short quotes match
+// whole; long ones use textStart,textEnd so a middle mismatch can't break it.
+function textFragment(quote: string): string | undefined {
+  const cleaned = quote
+    .replace(/[„""»«]/g, "") // strip typographic quotes the extractor adds
+    .replace(/\s*(?:\.\.\.|…)\s*/g, " ") // truncation markers → space
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return undefined;
+
+  const words = cleaned.split(" ");
+  if (words.length <= 10) return `text=${encodeFragment(cleaned)}`;
+
+  const start = words.slice(0, 5).join(" ");
+  const end = words.slice(-5).join(" ");
+  return `text=${encodeFragment(start)},${encodeFragment(end)}`;
+}
+
+// Link to the source article, deep-linked to the quoted passage. articleUrl is
+// stored without a protocol (e.g. "tvn24.pl/..."). Prefer justification_in_text
+// (verbatim from the article) so the highlight actually lands.
+const sourceHref = computed(() => {
+  const raw = fact.articleUrl;
+  if (!raw) return undefined;
+  const base = raw.includes("://") ? raw : `https://${raw}`;
+  const quote = fact.justification_in_text || fact.justification;
+  const fragment = quote ? textFragment(quote) : undefined;
+  return fragment ? `${base}#:~:${fragment}` : base;
+});
+
+// Names the destination so the reader sees where the link goes.
+const sourceCaption = computed(() => {
+  if (!sourceHref.value) return "Fragment artykułu";
+  return fact.articleDomain
+    ? `Zobacz artykuł na ${fact.articleDomain}`
+    : "Zobacz artykuł";
 });
 </script>
 
@@ -178,11 +231,29 @@ const targetIcon = computed(() => {
   }
 }
 
+.source-block {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.source-block--link {
+  cursor: pointer;
+}
+
+.source-block--link:hover .extraction-quote {
+  color: rgba(var(--v-theme-primary), 1);
+  border-left-color: rgba(var(--v-theme-primary), 0.9);
+}
+
 .extraction-quote {
   border-left: 3px solid rgba(var(--v-theme-primary), 0.4);
   padding-left: 12px;
   font-style: italic;
   color: rgba(var(--v-theme-on-surface), 0.7);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 /* Keep the domain row tight under the quote instead of floating far below. */
