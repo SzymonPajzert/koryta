@@ -61,7 +61,9 @@ export type Votes = Record<
 >;
 
 export type VoteDocument = {
-  nodeId: string;
+  // Either nodeId or extractionId is set.
+  nodeId?: string;
+  extractionId?: string;
   userUid: string;
   categoryVotes: Record<string, number>;
   updatedAt?: string;

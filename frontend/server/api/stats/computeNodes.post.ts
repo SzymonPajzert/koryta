@@ -130,7 +130,8 @@ export default defineEventHandler(async () => {
   ]);
   const votesByNode = extractByNode<VoteDocument>(
     votes as VoteDocument[],
-    (vote) => [vote.nodeId],
+    // Extraction votes carry extractionId instead and don't belong to a node.
+    (vote) => (vote.nodeId ? [vote.nodeId] : []),
   );
 
   const revisionsByNode: Record<string, { id: string; data: Revision }[]> = {};

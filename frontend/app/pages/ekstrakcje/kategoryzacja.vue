@@ -172,9 +172,10 @@ const { data: userVotes, pending: votesPending } = useCollection<VoteDocument>(
 const serverVotedIds = computed(() => {
   const ids = new Set<string>();
   for (const vote of userVotes.value) {
+    if (!vote.extractionId) continue;
     const categoryVotes = vote.categoryVotes;
     if (categoryVotes.correct || categoryVotes.insufficient) {
-      ids.add(vote.nodeId);
+      ids.add(vote.extractionId);
     }
   }
   return ids;
@@ -261,10 +262,15 @@ function recordVote(verdict: Verdict) {
 
   if (verdict === "insufficient") {
     // Separate axis: the reviewer can't decide from the available context.
-    castVoteOnce(fact.id, "insufficient", 1);
+    castVoteOnce(fact.id, "insufficient", 1, "extraction");
   } else {
     // right = correct (+1), left = incorrect (-1)
-    castVoteOnce(fact.id, "correct", verdict === "correct" ? 1 : -1);
+    castVoteOnce(
+      fact.id,
+      "correct",
+      verdict === "correct" ? 1 : -1,
+      "extraction",
+    );
   }
 
   sessionVotedIds.value = new Set(sessionVotedIds.value).add(fact.id);
@@ -281,9 +287,8 @@ function onSwiped(direction: "left" | "right") {
   recordVote(direction === "right" ? "correct" : "incorrect");
 }
 
-// Deep-link: honour ?fact=<id> on load, then keep the URL in sync so the
-// current card is always shareable. Initialization waits for the persisted
-// votes too, so the first card picked is one the user hasn't reviewed yet.
+// Deep-link: honour ?fact=<id> on load, then keep the URL in sync so the card
+// is shareable. Waits for persisted votes so the first card is unreviewed.
 const initialized = ref(false);
 watch(
   [allFacts, loading],
@@ -309,11 +314,10 @@ function syncUrlToFact(fact: ExtractionFact | undefined) {
   }
 }
 
-// Reflect subsequent fact changes (after each vote) in the URL...
+// Reflect subsequent fact changes (after each vote) in the URL
+// and sync the initial fact on mount, which a plain watcher misses when the
+// data is already present at setup (no undefined→fact transition).
 watch(currentFact, syncUrlToFact);
-// ...and sync the initial fact on mount. A plain watcher misses this when the
-// data is already present at setup (SSR / warm cache), because currentFact is
-// set before the watcher is armed, so there is no undefined→fact transition.
 onMounted(() => syncUrlToFact(currentFact.value));
 </script>
 

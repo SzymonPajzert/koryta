@@ -40,17 +40,25 @@ const configMap: Record<
   },
 };
 
-export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
+/** A vote targets a graph node or an extraction fact; the target picks which
+ * id field is set, so the id itself never needs inspecting. */
+export type VoteTarget = "node" | "extraction";
+
+export function useVotes(
+  targetId: MaybeRef<string>,
+  category: VoteCategory,
+  target: VoteTarget = "node",
+) {
   const { user } = useAuthState();
   const firebaseApp = useFirebaseApp();
   const db = getFirestore(firebaseApp, "koryta-pl");
   const config = configMap[category];
 
-  const nodeRef = computed(() => toValue(nodeID));
+  const idValue = computed(() => toValue(targetId));
 
   const voteNodeUserRef = computed(() => {
     if (!user.value) return null;
-    return doc(db, "votes", `${nodeRef.value}_${user.value.uid}`);
+    return doc(db, "votes", `${idValue.value}_${user.value.uid}`);
   });
   const voteNodeUserDoc = useDocument(voteNodeUserRef);
 
@@ -82,9 +90,9 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
     }
 
     setDoc(
-      doc(db, "votes", `${nodeRef.value}_${user.value.uid}`),
+      doc(db, "votes", `${idValue.value}_${user.value.uid}`),
       {
-        nodeId: nodeRef.value,
+        [target === "extraction" ? "extractionId" : "nodeId"]: idValue.value,
         userUid: user.value.uid,
         categoryVotes: {
           [category]: newValue,
@@ -113,9 +121,10 @@ export function useVotes(nodeID: MaybeRef<string>, category: VoteCategory) {
  * Use this for one-shot writes such as the review flow, where the reactive
  * state is not needed. Returns false if there is no signed-in user. */
 export async function castVoteOnce(
-  nodeId: string,
+  targetId: string,
   category: VoteCategory,
   value: number,
+  target: VoteTarget = "node",
 ): Promise<boolean> {
   const user = useCurrentUser();
   if (!user.value) return false;
@@ -125,9 +134,9 @@ export async function castVoteOnce(
   const clamped = Math.max(-5, Math.min(5, value));
 
   await setDoc(
-    doc(db, "votes", `${nodeId}_${user.value.uid}`),
+    doc(db, "votes", `${targetId}_${user.value.uid}`),
     {
-      nodeId,
+      [target === "extraction" ? "extractionId" : "nodeId"]: targetId,
       userUid: user.value.uid,
       categoryVotes: { [category]: clamped },
       updatedAt: new Date().toISOString(),

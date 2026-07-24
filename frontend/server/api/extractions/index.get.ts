@@ -80,15 +80,16 @@ async function attachReviewCounts(
   const reviewers = new Map<string, number>();
   const snapshots = await Promise.all(
     chunks.map((chunk) =>
-      db.collection("votes").where("nodeId", "in", chunk).get(),
+      db.collection("votes").where("extractionId", "in", chunk).get(),
     ),
   );
   for (const votesSnapshot of snapshots) {
     for (const doc of votesSnapshot.docs) {
       const vote = doc.data() as VoteDocument;
-      if (vote.userUid === "pipeline") continue;
+      const extractionId = vote.extractionId;
+      if (!extractionId || vote.userUid === "pipeline") continue;
       if (vote.categoryVotes.correct || vote.categoryVotes.insufficient) {
-        reviewers.set(vote.nodeId, (reviewers.get(vote.nodeId) ?? 0) + 1);
+        reviewers.set(extractionId, (reviewers.get(extractionId) ?? 0) + 1);
       }
     }
   }

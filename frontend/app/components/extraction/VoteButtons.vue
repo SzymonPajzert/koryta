@@ -57,8 +57,8 @@ const { id } = defineProps<{
 
 // Both categories live in the same vote document; two subscriptions to the
 // same doc are cheap (vuefire shares the underlying listener).
-const correct = useVotes(id, "correct");
-const insufficient = useVotes(id, "insufficient");
+const correct = useVotes(id, "correct", "extraction");
+const insufficient = useVotes(id, "insufficient", "extraction");
 
 const correctVote = computed(
   () => correct.userCategoryVotes.value.correct || 0,

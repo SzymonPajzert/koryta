@@ -17,27 +17,26 @@ export const onVoteWritten = onDocumentWritten(
     region: "europe-west1",
   },
   async (event) => {
-    const before = event.data?.before;
-    const after = event.data?.after;
+    const data = event.data?.after?.exists
+      ? event.data.after.data()
+      : event.data?.before?.exists
+        ? event.data.before.data()
+        : null;
 
-    const beforeData = before?.exists ? before.data() : null;
-    const afterData = after?.exists ? after.data() : null;
+    if (!data) return;
+    const target = data.extractionId
+      ? {
+          collection: "extractions",
+          field: "extractionId",
+          id: data.extractionId,
+        }
+      : data.nodeId
+        ? { collection: "nodes", field: "nodeId", id: data.nodeId }
+        : null;
 
-    // Use nodeId from the document or try extracting from the document ID pattern: [nodeId]_[userId]
-    let nodeId = afterData?.nodeId || beforeData?.nodeId;
-
-    if (!nodeId) {
-      const voteId = event.params.voteId;
-      const parts = voteId.split("_");
-      if (parts.length >= 2) {
-        // Assume the last part is userId and the rest is nodeId
-        nodeId = parts.slice(0, -1).join("_");
-      }
-    }
-
-    if (!nodeId) {
+    if (!target) {
       logger.warn(
-        `Could not determine nodeId for vote doc: ${event.params.voteId}`,
+        `Vote ${event.params.voteId} sets neither nodeId nor extractionId; skipping aggregation`,
       );
       return;
     }
@@ -47,7 +46,7 @@ export const onVoteWritten = onDocumentWritten(
     try {
       const votesSnapshot = await db
         .collection("votes")
-        .where("nodeId", "==", nodeId)
+        .where(target.field, "==", target.id)
         .get();
       const allVotes = votesSnapshot.docs.map(
         (doc) => doc.data() as VoteDocument,
@@ -55,34 +54,17 @@ export const onVoteWritten = onDocumentWritten(
 
       const voteStats = computeVoteStats(allVotes);
 
-      // Votes reference either graph nodes or extraction facts — aggregate
-      // onto whichever document the id belongs to.
-      const nodeRef = db.collection("nodes").doc(nodeId);
-      const extractionRef = db.collection("extractions").doc(nodeId);
-
-      const target = (await nodeRef.get()).exists
-        ? nodeRef
-        : (await extractionRef.get()).exists
-          ? extractionRef
-          : null;
-
-      if (!target) {
-        logger.warn(
-          `Vote for id ${nodeId} that is neither a node nor an extraction; skipping aggregation`,
-        );
-        return;
-      }
-
-      await target.update({
-        "stats.votes": voteStats,
-      });
+      await db
+        .collection(target.collection)
+        .doc(target.id)
+        .update({ "stats.votes": voteStats });
 
       logger.info(
-        `Successfully recalculated aggregatedVotes for ${target.path}`,
+        `Recalculated stats.votes for ${target.collection}/${target.id}`,
       );
     } catch (error) {
       logger.error(
-        `Error recalculating aggregatedVotes for node: ${nodeId}`,
+        `Error recalculating stats.votes for ${target.collection}/${target.id}`,
         error,
       );
     }
