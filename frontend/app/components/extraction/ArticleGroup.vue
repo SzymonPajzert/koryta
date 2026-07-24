@@ -24,11 +24,7 @@
           <div v-for="fact in facts" :key="fact.id ?? fact.url" class="mb-4">
             <ExtractionCard :fact="fact">
               <template #actions>
-                <ButtonVoteWidget
-                  v-if="fact.id"
-                  :id="fact.id"
-                  category="correct"
-                />
+                <ExtractionVoteButtons v-if="fact.id" :id="fact.id" />
               </template>
             </ExtractionCard>
           </div>
@@ -42,7 +38,7 @@
 import { ref, computed } from "vue";
 import { mdiChevronDown, mdiChevronUp } from "@mdi/js";
 import type { ExtractionFact } from "~~/shared/model";
-import { ButtonVoteWidget } from "#components";
+import { ExtractionVoteButtons } from "#components";
 
 const props = defineProps<{
   url: string;
