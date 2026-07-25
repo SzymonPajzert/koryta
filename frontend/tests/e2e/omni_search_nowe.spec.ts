@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { waitForLoginFormHydrated } from "./helpers/login";
+import { omniSearchFor } from "./helpers/omniSearch";
 
 test.describe("OmniSearch Nowe", () => {
   test("allows searching for person from /eksploruj/nowe", async ({ page }) => {
@@ -6,7 +8,7 @@ test.describe("OmniSearch Nowe", () => {
     await page.goto("/login");
 
     // Wait for Vue hydration to complete before interacting
-    await page.waitForTimeout(1500);
+    await waitForLoginFormHydrated(page);
 
     // 2. Switch to register mode
     await page
@@ -28,21 +30,13 @@ test.describe("OmniSearch Nowe", () => {
     await page.waitForTimeout(2000);
     await page.goto("/eksploruj/nowe");
 
-    // Wait for hydration
     await expect(page.locator(".v-main")).toBeVisible();
-    await page.waitForTimeout(500);
 
-    // Click the search input
-    await page.locator("input#omni-search").click();
-
-    // Type 'grzyb' to search for Andrzej Grzyb
-    await page.locator("input#omni-search").fill("grzyb");
-
-    // Wait for search results
+    // Search for Andrzej Grzyb
     const personItem = page
       .locator(".v-list-item", { hasText: "Andrzej Grzyb" })
       .first();
-    await expect(personItem).toBeVisible();
+    await omniSearchFor(page, "grzyb", personItem);
 
     // Click Andrzej Grzyb
     await personItem.click();

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { omniSearchFor } from "./helpers/omniSearch";
 
 test.describe("OmniSearch", () => {
   test.beforeEach(async ({ page }) => {
@@ -38,15 +39,11 @@ test.describe("OmniSearch", () => {
     await expect(page.locator(".v-main")).toBeVisible();
     await page.waitForLoadState("networkidle");
 
-    // Fill the search input
-    await page.locator("input#omni-search").click();
-    await page.locator("input#omni-search").fill("Opole");
-
     // Click Opole entry
     const opoleItem = page
       .locator(".v-list-item", { hasText: "Opole" })
       .first();
-    await expect(opoleItem).toBeVisible();
+    await omniSearchFor(page, "Opole", opoleItem);
 
     // Click the item
     await opoleItem.click();

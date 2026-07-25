@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { waitForLoginFormHydrated } from "./helpers/login";
 
 test.describe("Suggest node edits", () => {
   test("User can suggest an edit and admin can see it", async ({ page }) => {
@@ -7,7 +8,7 @@ test.describe("Suggest node edits", () => {
     await page.goto("/login");
 
     // Wait for Vue hydration to complete before interacting
-    await page.waitForTimeout(1500);
+    await waitForLoginFormHydrated(page);
 
     // 2. Switch to register mode
     await page.locator("text=Nie masz konta? Zarejestruj się").click();
@@ -55,10 +56,17 @@ test.describe("Suggest node edits", () => {
       'button:has-text("Zaproponuj zmianę")',
     );
     await expect(proposeEditButton).toBeVisible();
-    await proposeEditButton.click({ force: true });
 
-    // Wait for dialog
-    await page.waitForSelector(".v-dialog");
+    // The page may still be mid-hydration - the button is in the markup but
+    // Vue hasn't attached its listener yet, so the click is silently dropped
+    // (`force` skips the actionability wait that would otherwise hide this).
+    // Retry until the dialog actually opens.
+    const dialog = page.locator(".v-dialog");
+    await expect(async () => {
+      if (await dialog.isVisible()) return;
+      await proposeEditButton.click();
+      await expect(dialog).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 20_000 });
 
     // Fill the new content
     const newContent = `Testowa edycja contentu ${timestamp}`;

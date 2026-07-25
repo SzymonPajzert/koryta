@@ -34,8 +34,15 @@ test.describe("Map Stats", () => {
       response.url().includes("/api/nodes?type=person"),
     );
 
-    // Click the region
-    await firstRegion.click();
+    // Click the region. The page may still be mid-hydration - the markup is
+    // there but Vue hasn't attached listeners yet - so a click can silently do
+    // nothing. Retry until the side panel confirms a region was selected.
+    await expect(async () => {
+      await firstRegion.click();
+      await expect(page.getByText("Wybierz region z mapy")).toHaveCount(0, {
+        timeout: 500,
+      });
+    }).toPass({ timeout: 20_000 });
 
     // Wait for the side panel people request to complete
     const nodesResponse = await nodesRequestPromise;

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { waitForLoginFormHydrated } from "./helpers/login";
 
 test.describe("Eksploruj Nowe", () => {
   test("displays data when logged in as admin on dev:prod-data", async ({
@@ -8,7 +9,7 @@ test.describe("Eksploruj Nowe", () => {
     await page.goto("/login?redirect=/eksploruj/nowe");
 
     // Wait for Vue hydration to complete before filling inputs
-    await page.waitForTimeout(1500);
+    await waitForLoginFormHydrated(page);
 
     // 2. Fill credentials for seeded admin
     await page.locator("input#email").fill("admin@koryta.pl");

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { waitForLoginFormHydrated } from "./helpers/login";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
@@ -65,7 +66,7 @@ test.describe("Admin Revisions View", () => {
     await page.goto("/login");
 
     // Wait for Vue hydration to complete before interacting
-    await page.waitForTimeout(1500);
+    await waitForLoginFormHydrated(page);
 
     // 2. Switch to register mode
     await page.locator("text=Nie masz konta? Zarejestruj się").click();
