@@ -5,6 +5,12 @@ export default defineNuxtRouteMiddleware(async () => {
   if (!user) return navigateTo("/login", { replace: true });
   const idTokenResult = await user.getIdTokenResult();
   if (!idTokenResult.claims.admin) {
-    return false;
+    return abortNavigation(
+      createError({
+        statusCode: 403,
+        statusMessage: "Brak uprawnień",
+        message: "Ta strona jest dostępna tylko dla administratorów.",
+      }),
+    );
   }
 });
