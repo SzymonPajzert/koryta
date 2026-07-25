@@ -63,6 +63,14 @@
       <v-toolbar v-if="user" density="compact" color="primary">
         <v-spacer />
 
+        <v-btn
+          v-if="isAdmin"
+          :prepend-icon="mdiShieldAccount"
+          variant="text"
+          to="/admin"
+        >
+          Admin
+        </v-btn>
         <v-btn :prepend-icon="mdiViewList" variant="text" to="/admin/rewizje">
           Rewizje
         </v-btn>
@@ -98,13 +106,18 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiAccount, mdiLightningBolt, mdiViewList } from "@mdi/js";
+import {
+  mdiAccount,
+  mdiLightningBolt,
+  mdiShieldAccount,
+  mdiViewList,
+} from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
 import { useDisplay } from "vuetify";
 
 const { mdAndUp } = useDisplay();
-const { user, userConfig, logout } = useAuthState();
+const { user, userConfig, logout, isAdmin } = useAuthState();
 const route = useRoute();
 const loginDialog = ref(false);
 const maxWidth = computed(() =>
