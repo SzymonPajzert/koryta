@@ -4,16 +4,13 @@ test.describe("Map Stats", () => {
   test("displays matching people count in map tooltip, sidepanel, and API for unlogged users", async ({
     page,
   }) => {
-    // Register the response listener BEFORE navigating so we don't miss it
-    const statsResponsePromise = page.waitForResponse((response) =>
-      response.url().includes("/api/stats/regions"),
-    );
-
     // Navigate to the home page
     await page.goto("/");
 
-    // Wait for the regions stats API to load
-    const statsResponse = await statsResponsePromise;
+    // The region stats are fetched during SSR and embedded in the payload,
+    // so the browser never issues the request itself. Hit the API directly
+    // to verify it serves the data the map was rendered from.
+    const statsResponse = await page.request.get("/api/stats/regions");
     expect(statsResponse.status()).toBe(200);
 
     // Wait for the SVG map to be visible

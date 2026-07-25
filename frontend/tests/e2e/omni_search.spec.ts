@@ -73,10 +73,12 @@ test.describe("OmniSearch", () => {
     await orlenItem.click();
 
     await expect(page).toHaveURL(/.*\/eksploruj\/tabela\?.*krs=.+/);
+    // Prod data carries the uppercase KRS registry name ("ORLEN"), the local
+    // seed uses "Orlen" - accept both.
     await expect(
       page
         .locator(".v-autocomplete", { hasText: "Spółki" })
         .locator(".v-chip__content"),
-    ).toContainText("ORLEN");
+    ).toContainText("ORLEN", { ignoreCase: true });
   });
 });

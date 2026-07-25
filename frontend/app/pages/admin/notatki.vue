@@ -34,7 +34,7 @@
               />
             </template>
           </div>
-          <div class="text-caption mt-1">Autor: {{ entry.userUid }}</div>
+          <UserChip :uid="entry.userUid" />
         </v-col>
 
         <!-- Note Content Column -->

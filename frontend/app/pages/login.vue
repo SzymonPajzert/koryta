@@ -1,40 +1,69 @@
 <template>
-  <main v-if="user">
-    Cześć {{ user?.displayName }}!
-    <div v-if="!user.emailVerified">
-      Zweryfikuj swój email:
-      <v-btn :loading="loading" @click="sendVerification">
-        Wyślij ponownie
-      </v-btn>
-    </div>
-    <div class="mt-4 d-flex gap-2 align-center">
-      <v-btn color="primary" @click="doRedirect">
-        Wróć do przeglądania ({{ countdown }})
-      </v-btn>
-      <v-btn color="warning" @click="logoutForced">Wyloguj się teraz</v-btn>
-    </div>
-  </main>
-  <main v-if="!user">
-    <v-alert v-if="reason === 'unauthorized'" type="info" class="mb-4">
-      Musisz być zalogowany, aby uzyskać dostęp do tej strony.
-    </v-alert>
-    <h2 class="blue">{{ isLogin ? "Zaloguj się" : "Rejestracja" }}</h2>
-    <div>
-      <a href="javascript:void(0)" @click="isLogin = !isLogin">
-        {{
-          isLogin
-            ? "Nie masz konta? Zarejestruj się"
-            : "Masz już konto? Zaloguj się"
-        }}
-      </a>
-    </div>
-    <FormLoginForm :is-login="isLogin" @success="onLoginSuccess" />
-    <div>
-      {{ isLogin ? "Logowanie się" : "Rejestracja" }} oznacza zgodę z
-      <a href="/plik/regulamin">regulaminem</a> oraz
-      <a href="/plik/polityka_prywatnosci">polityką prywatności</a>.
-    </div>
-  </main>
+  <div class="login-page w-100 mx-auto">
+    <main v-if="user">
+      <v-card rounded="lg" class="pa-2">
+        <v-card-title class="text-h5 text-wrap">
+          Cześć {{ user?.displayName || user?.email }}!
+        </v-card-title>
+        <v-card-text>
+          <v-alert
+            v-if="!user.emailVerified"
+            type="warning"
+            variant="tonal"
+            density="compact"
+            class="mb-4"
+          >
+            <div class="d-flex flex-column flex-sm-row align-sm-center ga-2">
+              <span class="flex-grow-1">Zweryfikuj swój adres email.</span>
+              <v-btn
+                size="small"
+                variant="outlined"
+                :loading="loading"
+                @click="sendVerification"
+              >
+                Wyślij ponownie
+              </v-btn>
+            </div>
+          </v-alert>
+          <div class="d-flex flex-column ga-2">
+            <v-btn color="primary" block size="large" @click="doRedirect">
+              Wróć do przeglądania ({{ countdown }})
+            </v-btn>
+            <v-btn color="warning" variant="tonal" block @click="logoutForced">
+              Wyloguj się teraz
+            </v-btn>
+          </div>
+        </v-card-text>
+      </v-card>
+    </main>
+    <main v-if="!user">
+      <v-alert v-if="reason === 'unauthorized'" type="info" class="mb-4">
+        Musisz być zalogowany, aby uzyskać dostęp do tej strony.
+      </v-alert>
+      <v-card rounded="lg" class="pa-2">
+        <v-card-title class="text-h5 text-center">
+          {{ isLogin ? "Zaloguj się" : "Rejestracja" }}
+        </v-card-title>
+        <v-card-text>
+          <FormLoginForm :is-login="isLogin" @success="onLoginSuccess" />
+          <div class="text-center mt-4">
+            <a href="javascript:void(0)" @click="isLogin = !isLogin">
+              {{
+                isLogin
+                  ? "Nie masz konta? Zarejestruj się"
+                  : "Masz już konto? Zaloguj się"
+              }}
+            </a>
+          </div>
+          <div class="text-caption text-medium-emphasis text-center mt-4">
+            {{ isLogin ? "Logowanie się" : "Rejestracja" }} oznacza zgodę z
+            <a href="/plik/regulamin">regulaminem</a> oraz
+            <a href="/plik/polityka_prywatnosci">polityką prywatności</a>.
+          </div>
+        </v-card-text>
+      </v-card>
+    </main>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -163,13 +192,7 @@ const getErrorMessage = (errorCode: string) => {
 </script>
 
 <style scoped>
-/* Basic styling to resemble a form, adapt to your submitview's style */
-.login-view {
-  max-width: 400px;
-  margin: 0 auto;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.login-page {
+  max-width: 440px;
 }
 </style>

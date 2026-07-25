@@ -11,8 +11,17 @@ import {
 } from "vuefire";
 import { collection, doc } from "firebase/firestore";
 
-type UserConfig = {
+export type NewsletterPreferences = {
+  /** Notify about recently found people. */
+  recentPeople?: boolean;
+  /** Notify about calls to action. */
+  callsToAction?: boolean;
+};
+
+export type UserConfig = {
   photoURL?: string;
+  displayName?: string;
+  newsletter?: NewsletterPreferences;
 };
 
 export function useAuthState() {

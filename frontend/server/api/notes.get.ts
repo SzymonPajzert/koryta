@@ -28,6 +28,7 @@ export default defineEventHandler(async (event) => {
     const data = doc.data() as Note;
     return (data.sources || []).map((source) => ({
       nodeId: data.nodeId,
+      userUid: data.userUid,
       content: source.note,
       url: source.url,
     }));
@@ -35,17 +36,26 @@ export default defineEventHandler(async (event) => {
 
   const nodeIds = [...new Set(notesNoNames.map((n) => n.nodeId))];
 
-  const namesSnapshot = await db
-    .collection("nodes")
-    .where(FieldPath.documentId(), "in", nodeIds)
-    .get();
-  const names = Object.fromEntries(
-    namesSnapshot.docs.map((doc) => [doc.id, doc.data().name]),
-  );
+  // Firestore "in" queries accept at most 30 values and throw on an empty
+  // array, so fetch the node names in chunks.
+  const names: Record<string, string> = {};
+  const types: Record<string, string> = {};
+  for (let i = 0; i < nodeIds.length; i += 30) {
+    const chunk = nodeIds.slice(i, i + 30);
+    const namesSnapshot = await db
+      .collection("nodes")
+      .where(FieldPath.documentId(), "in", chunk)
+      .get();
+    for (const doc of namesSnapshot.docs) {
+      names[doc.id] = doc.data().name;
+      types[doc.id] = doc.data().type;
+    }
+  }
 
   const notes = notesNoNames.map((note) => ({
     ...note,
     name: names[note.nodeId],
+    nodeType: types[note.nodeId],
   }));
 
   return {

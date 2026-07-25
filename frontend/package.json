@@ -29,7 +29,7 @@
     "backstop:approve": "backstop approve",
     "test:visual": "start-server-and-test dev:build http://localhost:3000 'backstop test'",
     "test:playwright": "cross-env PLAYWRIGHT_SERVER_COMMAND='npm run dev:prod-data' playwright test",
-    "test:playwright:ci": "playwright test",
+    "test:playwright:ci": "node -e \"fs.rmSync('.nuxt/cache/nitro',{recursive:true,force:true})\" && playwright test",
     "test": "npm run test:ci && npm run test:e2e",
     "check:duplication": "jscpd app server --ignore app/coverage",
     "quick-check": "npx prettier --write . && npx prettier --check . && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:playwright:ci",

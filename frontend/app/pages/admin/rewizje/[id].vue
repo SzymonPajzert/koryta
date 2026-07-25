@@ -38,8 +38,8 @@
                     <div class="text-h6 font-weight-medium">
                       {{ formatDate(rev.update_time) }}
                     </div>
-                    <div class="text-caption text-grey-darken-1">
-                      {{ rev.update_user || "Nieznany" }}
+                    <div class="mt-1">
+                      <UserChip :uid="revisionUser(rev)" />
                     </div>
                   </div>
                   <div class="d-flex flex-column align-end ga-1">
@@ -237,6 +237,10 @@ function formatDate(val: unknown) {
   const time = parseTime(val);
   if (!time) return "-";
   return new Date(time).toLocaleString("pl-PL");
+}
+
+function revisionUser(rev: Record<string, unknown>): string | null {
+  return typeof rev.update_user === "string" ? rev.update_user : null;
 }
 
 function getRevisionData(data: unknown): Record<string, unknown> {

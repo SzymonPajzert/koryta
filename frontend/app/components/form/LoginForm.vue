@@ -1,45 +1,57 @@
 <template>
-  <div class="login-form">
-    <v-form @submit.prevent="isLogin ? login() : register()">
-      <div class="form-group">
-        <button
-          v-if="isLogin"
-          type="button"
-          :disabled="loading"
-          class="google-button"
-          @click="loginWithGoogle"
-        >
-          <span v-if="loading">Loguję się</span>
-          <span v-else>Zaloguj się z Google</span>
-        </button>
-      </div>
+  <v-form @submit.prevent="isLogin ? login() : register()">
+    <v-btn
+      v-if="isLogin"
+      type="button"
+      block
+      variant="outlined"
+      class="mb-4"
+      :disabled="loading"
+      :prepend-icon="mdiGoogle"
+      @click="loginWithGoogle"
+    >
+      {{ loading ? "Loguję się..." : "Zaloguj się z Google" }}
+    </v-btn>
 
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input id="email" v-model="email" type="email" required />
-      </div>
+    <v-divider v-if="isLogin" class="mb-4">
+      <span class="text-caption text-medium-emphasis px-2">lub</span>
+    </v-divider>
 
-      <div class="form-group">
-        <label for="password">Hasło</label>
-        <input id="password" v-model="password" type="password" required />
-      </div>
+    <v-text-field
+      id="email"
+      v-model="email"
+      type="email"
+      label="Email"
+      autocomplete="email"
+      required
+      class="mb-2"
+    />
 
-      <div class="form-group">
-        <button type="submit" :disabled="loading">
-          <span v-if="loading">Proszę czekać...</span>
-          <span v-else>{{ isLogin ? "Zaloguj się" : "Stwórz konto" }}</span>
-        </button>
-      </div>
+    <v-text-field
+      id="password"
+      v-model="password"
+      :type="showPassword ? 'text' : 'password'"
+      label="Hasło"
+      :autocomplete="isLogin ? 'current-password' : 'new-password'"
+      required
+      class="mb-2"
+      :append-inner-icon="showPassword ? mdiEyeOff : mdiEye"
+      @click:append-inner="showPassword = !showPassword"
+    />
 
-      <div v-if="error" class="error-message">
-        {{ error }}
-      </div>
-    </v-form>
-  </div>
+    <v-btn type="submit" block color="primary" size="large" :loading="loading">
+      {{ isLogin ? "Zaloguj się" : "Stwórz konto" }}
+    </v-btn>
+
+    <v-alert v-if="error" type="error" density="compact" class="mt-4">
+      {{ error }}
+    </v-alert>
+  </v-form>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
+import { mdiGoogle, mdiEye, mdiEyeOff } from "@mdi/js";
 import {
   GoogleAuthProvider,
   signInWithPopup,
@@ -56,6 +68,7 @@ const emit = defineEmits<{
 
 const email = ref("");
 const password = ref("");
+const showPassword = ref(false);
 const error = ref<string | null>(null);
 const loading = ref(false);
 
@@ -118,67 +131,24 @@ const register = async () => {
 const getErrorMessage = (errorCode: string) => {
   switch (errorCode) {
     case "auth/user-disabled":
-      return "This user account has been disabled.";
+      return "To konto zostało zablokowane.";
     case "auth/user-not-found":
-      return "User not found.";
+      return "Użytkownik nie istnieje.";
     case "auth/wrong-password":
-      return "Incorrect password.";
+    case "auth/invalid-credential":
+      return "Nieprawidłowy email lub hasło.";
     case "auth/popup-closed-by-user":
-      return "Login popup was closed by user.";
+      return "Okno logowania zostało zamknięte.";
     case "auth/cancelled-popup-request":
-      return "Login popup request was cancelled.";
+      return "Logowanie zostało anulowane.";
     case "auth/popup-blocked":
-      return "Login popup was blocked by the browser.";
+      return "Przeglądarka zablokowała okno logowania.";
     case "auth/email-already-in-use":
       return "Ten email jest już w użyciu.";
     case "auth/weak-password":
       return "Hasło jest zbyt słabe. Powinno mieć co najmniej 6 znaków.";
     default:
-      return "An unexpected error occurred. Please try again.";
+      return "Wystąpił nieoczekiwany błąd. Spróbuj ponownie.";
   }
 };
 </script>
-
-<style scoped>
-.form-group {
-  margin-bottom: 15px;
-}
-
-label {
-  display: block;
-  margin-bottom: 5px;
-}
-
-input[type="email"],
-input[type="password"] {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  box-sizing: border-box;
-}
-
-button {
-  background-color: #4caf50;
-  color: white;
-  padding: 10px 15px;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.error-message {
-  color: red;
-  margin-top: 10px;
-}
-
-.google-button {
-  background-color: #db4437;
-  margin-top: 10px;
-}
-</style>

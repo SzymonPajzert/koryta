@@ -17,9 +17,9 @@ export const onVoteWritten = onDocumentWritten(
     region: "europe-west1",
   },
   async (event) => {
-    const data = event.data?.after?.exists
+    const data = event.data?.after.exists
       ? event.data.after.data()
-      : event.data?.before?.exists
+      : event.data?.before.exists
         ? event.data.before.data()
         : null;
 
