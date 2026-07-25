@@ -65,7 +65,7 @@ Every Pull Request triggers:
 - **Linting**: Ensures code style consistency.
 - **Unit Tests**: Runs Vitest.
 - **E2E Tests**: Runs Cypress tests against the emulators.
-- **Visual Regression**: Runs Percy to detect UI changes.
+- **Visual Regression**: Compares Playwright screenshots against committed baselines (`npm run test:visual`).
 
 ### Preview Deployments
 

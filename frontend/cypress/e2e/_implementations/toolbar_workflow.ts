@@ -9,8 +9,6 @@ describe("User Toolbar and Edit Workflow", () => {
 
     cy.login();
     cy.contains("button", "Dodaj nowe").should("be.visible");
-
-    cy.percySnapshot("toolbar-logged-in");
   });
 
   it("pre-selects Article type when clicking Dodaj artykuł", () => {

@@ -37,15 +37,12 @@ describe.skip("Revisions Logic", () => {
 
       cy.contains("Politician from Konfederacja").should("be.visible");
       cy.contains("Politician from Konfederacja and PiS").should("not.exist");
-
-      cy.percySnapshot("approved-revision");
     });
 
     it("Displays latest revision for logged in user", () => {
       cy.login();
       cy.visit("/entity/person/5");
 
-      cy.percySnapshot("latest-revision");
       cy.contains("Politician from Konfederacja and PiS").should("be.visible");
     });
   });

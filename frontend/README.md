@@ -139,8 +139,17 @@ npm run quick-check:failsafe
 | `npm run test:e2e`            | Run Cypress e2e tests                                   |
 | `npm run test:e2e:prod`       | Run Cypress prod e2e tests                              |
 | `npm run test:e2e:open`       | Open Cypress UI                                         |
-| `npm run test:visual`         | Run BackstopJS visual regression tests                  |
+| `npm run test:visual`         | Run Playwright visual regression tests                  |
+| `npm run test:visual:update`  | Update visual regression baselines                      |
 | `npm run test:playwright`     | Run Playwright tests (production data)                  |
 | `npm run test:playwright:ci`  | Run Playwright tests (seeded data, used in CI)          |
 | `npm run quick-check`         | Format + lint + types + tests + Playwright              |
-| `npm run backstop:approve`    | Approve BackstopJS visual test baseline                 |
+
+### Visual regression tests
+
+Visual tests live in `tests/visual/` and use Playwright's `toHaveScreenshot()`.
+Baselines are committed under `tests/visual/__screenshots__/` and are
+OS-specific (the `linux` baselines are the source of truth, compared in CI on
+every PR). After an intentional UI change, regenerate them on Linux with
+`npm run test:visual:update` and commit the updated PNGs; on failure CI uploads
+a `playwright-visual-report` artifact with the image diffs.

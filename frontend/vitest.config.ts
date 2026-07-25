@@ -10,6 +10,7 @@ export default defineVitestConfig({
       "functions/node_modules",
       "tests/integration/**",
       "tests/e2e/**",
+      "tests/visual/**",
     ],
     coverage: {
       enabled: true,

@@ -127,7 +127,6 @@ describe.skip("Revisions Lifecycle", () => {
       if ($body.text().includes("Not approved person")) {
         cy.contains(".v-list-item", "Not approved person").click();
         cy.wait(500);
-        cy.percySnapshot("Revisions List one unfolded");
 
         cy.contains(".v-list-group", "Not approved person").within(() => {
           cy.contains("Rewizja z").click({ force: true });

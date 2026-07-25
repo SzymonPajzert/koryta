@@ -1,9 +1,7 @@
-1. Replace percySnapshots
+1. ~~Replace percySnapshots~~ DONE
 
-- rename command to something generic, e.g. snapshot("page name"), still taking the argument.
-- I ran out of quota on percySnapshots, so use another solution, e.g. checking in the screenshots and checking their diff.
-- Add snapshot in cypress tests to increase the coverage
-- also decrease their total number so we don't run out of quota.
+- Percy and BackstopJS are gone; `tests/visual/pages.spec.ts` takes the snapshots with Playwright's `toHaveScreenshot()`.
+- Baselines are committed under `tests/visual/__screenshots__/`, so there is no quota to run out of and CI compares them on every PR.
 
 1. Testing Infrastructure (High Priority)
    - Unified VueFire/Auth Mocking: We struggled with [Vue warn]: injection "Symbol(VueFireAuth)" not found in OmniSearch.test.ts.

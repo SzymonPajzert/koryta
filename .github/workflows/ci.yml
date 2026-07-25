@@ -11,7 +11,7 @@ on:
       - "frontend/**"
 
 jobs:
-  test-and-percy:
+  test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,7 +32,7 @@ jobs:
         run: npm ci
 
       - name: Install Functions Dependencies
-        working-directory: functions
+        working-directory: frontend/functions
         run: npm ci
 
       - name: Install Java (for Emulators)
@@ -52,17 +52,59 @@ jobs:
       - name: Start Emulators & Run Tests
         working-directory: frontend
         env:
-          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
           CYPRESS_CI: true
-        run: |
-          # Run visual tests only on:
-          # 1. Push to main
-          # Regular tests run on every synchronize (push to PR)
+        run: npm run test:e2e:build
 
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "Running with Percy..."
-            npx percy exec -- npm run test:e2e:build
-          else
-            echo "Running regular tests (skipping Percy)..."
-            npm run test:e2e:build
-          fi
+  visual-regression:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Functions Dependencies
+        working-directory: frontend/functions
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Java (for Emulators)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Cache Firebase emulators
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: ${{ runner.os }}-firebase-emulators-${{ hashFiles('firebase.json') }}
+          restore-keys: |
+            ${{ runner.os }}-firebase-emulators-
+
+      - name: Run Visual Regression Tests
+        working-directory: frontend
+        run: npm run test:visual
+
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-visual-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14

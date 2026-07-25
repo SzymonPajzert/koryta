@@ -7,7 +7,6 @@ export default withNuxt(
     ignores: [
       "**/coverage/**",
       "app/coverage/**",
-      "backstop_data/**",
       "**/.nuxt/**",
       "**/.output/**",
       "**/dist/**",
