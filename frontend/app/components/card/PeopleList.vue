@@ -26,6 +26,9 @@
     <template v-if="loading">
       <v-progress-circular indeterminate />
     </template>
+    <v-card-text v-else-if="people.length === 0">
+      Nie znaleźliśmy jeszcze osób w tym regionie.
+    </v-card-text>
     <template v-for="person in people" v-else :key="person.name">
       <v-list-item
         height="64"
