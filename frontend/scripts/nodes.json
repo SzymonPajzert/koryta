@@ -416,6 +416,7 @@
     "name": "Opole",
     "type": "region",
     "teryt": "1661",
+    "revision_id": "opole-powiat",
     "nameChunksLower": ["e", "le", "ole", "opole", "pole"],
     "stats": {
       "isApproved": true,
