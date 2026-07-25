@@ -104,7 +104,16 @@ async function revisionsForNode(nodeId: string): Promise<RevisionMinimal[]> {
     .where("nodeId", "==", nodeId)
     .get();
 
-  const allDocs = [...allDocsUnderscore.docs, ...allDocsCapitalized.docs];
+  // A revision may carry both spellings of the field, in which case it comes
+  // back from both queries - key by document id so it is only counted once.
+  const allDocs = [
+    ...new Map(
+      [...allDocsUnderscore.docs, ...allDocsCapitalized.docs].map((d) => [
+        d.id,
+        d,
+      ]),
+    ).values(),
+  ];
 
   const revisionsArray: { id: string; update_time: string | null }[] =
     allDocs.map((d) => {
