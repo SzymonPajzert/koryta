@@ -3,7 +3,7 @@
     <!-- Hero / Nasza misja -->
     <v-row align="center" class="mb-12">
       <v-col cols="12" md="8">
-        <h1 class="text-h3 font-weight-bold mb-4">Nasza misja</h1>
+        <h1 class="text-h4 text-sm-h3 font-weight-bold mb-4">Nasza misja</h1>
         <p class="text-h6 text-grey-darken-1 mb-6">
           Przekształcamy rozproszone dane w czytelną mapę powiązań, by każdy
           obywatel mógł świadomie oceniać jakość zarządzania majątkiem
@@ -25,7 +25,7 @@
 
     <!-- O projekcie -->
     <section class="mb-16">
-      <h2 class="text-h4 font-weight-bold mb-6">O projekcie</h2>
+      <h2 class="text-h5 text-sm-h4 font-weight-bold mb-6">O projekcie</h2>
       <v-row>
         <v-col cols="12" md="6">
           <p class="text-body-1 mb-4">
@@ -50,7 +50,7 @@
 
     <!-- Nasze wartości -->
     <section class="mb-16">
-      <h2 class="text-h4 font-weight-bold mb-6">Nasze wartości</h2>
+      <h2 class="text-h5 text-sm-h4 font-weight-bold mb-6">Nasze wartości</h2>
       <v-row>
         <v-col cols="12" sm="6">
           <v-card
@@ -172,7 +172,9 @@
     <section class="mb-16 bg-grey-lighten-4 rounded-xl py-10 px-6 px-md-10">
       <v-row>
         <v-col cols="12" md="5">
-          <h2 class="text-h4 font-weight-bold mb-4">Kim jesteśmy?</h2>
+          <h2 class="text-h5 text-sm-h4 font-weight-bold mb-4">
+            Kim jesteśmy?
+          </h2>
           <p class="text-body-1 mb-6">
             Tworzymy zespół zaangażowanych obywateli i ekspertów z różnych
             dziedzin, których łączą wspólne wartości. Wierzymy, że zbiorowy
@@ -247,7 +249,9 @@
 
     <!-- Jak pracujemy? -->
     <section class="mb-16">
-      <h2 class="text-h4 font-weight-bold text-center mb-10">Jak pracujemy?</h2>
+      <h2 class="text-h5 text-sm-h4 font-weight-bold text-center mb-10">
+        Jak pracujemy?
+      </h2>
       <v-row>
         <v-col cols="12" sm="6" lg="3">
           <div class="text-center px-4">
@@ -318,7 +322,7 @@
 
     <!-- FAQ -->
     <section class="mb-16">
-      <h2 class="text-h4 font-weight-bold text-center mb-8">
+      <h2 class="text-h5 text-sm-h4 font-weight-bold text-center mb-8">
         Często zadawane pytania
       </h2>
       <v-row justify="center">
@@ -373,7 +377,7 @@
 
     <!-- Kontakt -->
     <section class="text-center py-10 mb-8 border rounded-xl bg-grey-lighten-4">
-      <h2 class="text-h4 font-weight-bold mb-4">
+      <h2 class="text-h5 text-sm-h4 font-weight-bold mb-4">
         Dołącz do naszej społeczności
       </h2>
       <p class="text-body-1 mb-8 text-grey-darken-1">

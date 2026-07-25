@@ -1,6 +1,6 @@
 <template>
   <v-alert type="info" variant="tonal" class="mb-4" :icon="mdiAccountLock">
-    <div class="d-flex align-center justify-space-between w-100">
+    <div class="d-flex flex-wrap align-center justify-space-between ga-3 w-100">
       <div>
         Zaloguj się, aby uzyskać dostęp do jeszcze nieopublikowanych /
         niezweryfikowanych osób.
@@ -17,12 +17,7 @@
           >.
         </template>
       </div>
-      <v-btn
-        color="primary"
-        variant="flat"
-        to="/login"
-        class="ml-4 flex-shrink-0"
-      >
+      <v-btn color="primary" variant="flat" to="/login" class="flex-shrink-0">
         Zaloguj się
       </v-btn>
     </div>

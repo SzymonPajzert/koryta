@@ -63,8 +63,8 @@
 
     <v-col cols="12" md="6" align="center">
       <iframe
+        class="embed-widget"
         src="https://discord.com/widget?id=1338546021319315468&theme=dark"
-        width="400"
         height="300"
         allowtransparency="true"
         frameborder="0"
@@ -73,10 +73,10 @@
     </v-col>
     <v-col cols="12" md="6" align="center">
       <iframe
+        class="embed-widget"
         src="https://widgets.sociablekit.com/facebook-group-posts/iframe/25619702"
         frameborder="0"
-        width="400px"
-        height="300px"
+        height="300"
       />
     </v-col>
   </v-row>
@@ -96,5 +96,12 @@ definePageMeta({
 .clickable-card {
   cursor: pointer;
   text-decoration: none;
+}
+
+/* The embeds used to be a hard 400px, which is wider than a phone screen and
+   made the whole page scroll sideways. */
+.embed-widget {
+  width: 100%;
+  max-width: 400px;
 }
 </style>

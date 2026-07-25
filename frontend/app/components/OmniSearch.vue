@@ -11,10 +11,10 @@
       item-value="id"
       return-object
       autocomplete="off"
-      class="ma-2"
+      class="ma-2 omni-search"
       bg-color="white"
       :rounded="true"
-      :width
+      :style="{ '--omni-search-width': width }"
       density="comfortable"
       :hide-details="true"
       :menu-icon="mdiMagnify"
@@ -263,3 +263,14 @@ watch(nodeGroupPicked, (value) => {
   autocompleteFocus.value = false;
 });
 </script>
+
+<style scoped>
+/* The width was a hard pixel value, so in the app bar on a phone the field
+   overflowed its slot and the placeholder was clipped to "Szukaj os...".
+   Treat it as a ceiling and let the field shrink to whatever space is left. */
+.omni-search {
+  width: var(--omni-search-width, 300px);
+  max-width: 100%;
+  min-width: 0;
+}
+</style>

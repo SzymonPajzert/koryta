@@ -4,6 +4,7 @@
     :page="page"
     :sort-by="sortBy"
     fixed-header
+    mobile-breakpoint="sm"
     :headers="headers"
     :items="items"
     :items-length="totalItems"
@@ -17,6 +18,88 @@
     @update:sort-by="$emit('update:sortBy', $event)"
     @update:options="$emit('update:options', $event)"
   >
+    <!-- Vuetify's stacked mobile row prints "label: value" for every column,
+         which buries the name and leaves a blank line per empty field. On a
+         phone a person reads much better as a small card. -->
+    <template v-if="mobile" #item="{ item }">
+      <tr class="person-card-row">
+        <td colspan="99" class="pa-0">
+          <div class="person-card">
+            <div class="d-flex align-start ga-2">
+              <NuxtLink
+                v-if="!disableFocus"
+                class="text-primary font-weight-bold text-body-1 cursor-pointer flex-grow-1"
+                @click="$emit('focus', item)"
+              >
+                {{ item.name }}
+              </NuxtLink>
+              <span v-else class="text-primary font-weight-bold text-body-1">
+                {{ item.name }}
+              </span>
+
+              <v-chip
+                v-if="item.visibility === false"
+                size="x-small"
+                color="warning"
+                variant="tonal"
+              >
+                Szkic
+              </v-chip>
+            </div>
+
+            <div
+              v-if="item.parties?.length || item.companies?.length"
+              class="d-flex flex-wrap ga-1 mt-2"
+            >
+              <v-chip v-for="party in item.parties" :key="party" size="x-small">
+                {{ party }}
+              </v-chip>
+              <v-chip
+                v-for="companyName in item.companies"
+                :key="companyName"
+                size="x-small"
+                variant="outlined"
+              >
+                {{ shortCompanyName(companyName) }}
+              </v-chip>
+            </div>
+
+            <div class="d-flex align-center ga-1 mt-2">
+              <span class="text-caption text-medium-emphasis">
+                {{ item.stats?.votes?.interesting || 0 }} gł. ·
+                {{ item.stats?.notesCount || 0 }} not.
+              </span>
+              <v-spacer />
+              <ButtonVoteNumber
+                :id="item.id"
+                category="interesting"
+                @voted="$emit('action:voted', item)"
+              />
+              <v-btn
+                :icon="mdiOpenInNew"
+                variant="text"
+                density="comfortable"
+                color="secondary"
+                @click.stop="
+                  executeSearchAll(item, region, company);
+                  $emit('action:explored', item);
+                  if (!disableFocus) $emit('focus', item);
+                "
+              />
+              <v-btn
+                v-if="!disableFocus"
+                :icon="mdiMagnify"
+                variant="text"
+                density="comfortable"
+                color="primary"
+                @click.stop="$emit('focus', item)"
+              />
+            </div>
+          </div>
+        </td>
+      </tr>
+    </template>
+
     <template #[`header.experience`]="{ column }">
       <ExploreTableColumnHeader
         tooltip="Sumaryczna liczba lat przepracowanych w publicznych spółkach"
@@ -74,7 +157,7 @@
     </template>
 
     <template #[`item.name`]="{ item }">
-      <div style="max-width: 150px">
+      <div class="cell-name">
         <template v-if="disableFocus">
           <span class="text-primary font-weight-bold">
             {{ item.name }}
@@ -103,16 +186,15 @@
     </template>
 
     <template #[`item.companies`]="{ item }">
-      <div class="d-flex flex-wrap gap-1 py-1" style="max-width: 300px">
+      <div class="d-flex flex-wrap gap-1 py-1 cell-companies">
         <span v-for="companyName in item.companies" :key="companyName">
           <v-tooltip :text="shortCompanyName(companyName)" location="top">
             <template #activator="{ props: shortCompanyProps }">
               <v-chip
                 v-bind="shortCompanyProps"
                 size="small"
-                class="mr-1 mb-1 text-truncate d-flex"
+                class="mr-1 mb-1 text-truncate d-flex cell-companies__chip"
                 variant="outlined"
-                style="max-width: 300px"
               >
                 {{ shortCompanyName(companyName) }}
               </v-chip>
@@ -207,8 +289,11 @@
 
 <script setup lang="ts">
 import { mdiMagnify, mdiOpenInNew } from "@mdi/js";
+import { useDisplay } from "vuetify";
 import { executeSearchAll } from "~/composables/usePersonSearch";
 import type { PersonRich } from "~~/shared/model";
+
+const { smAndDown: mobile } = useDisplay();
 
 withDefaults(
   defineProps<{
@@ -291,3 +376,24 @@ const getWojewodztwo = (teryt?: string) => {
   return terytToWojewodztwo[teryt.substring(0, 2)];
 };
 </script>
+
+<style scoped>
+/* Cell widths used to be fixed pixel values, which forced the phone layout to
+   be at least that wide. Cap them relative to the cell instead. */
+.cell-name {
+  max-width: 150px;
+}
+
+.cell-companies,
+.cell-companies__chip {
+  max-width: 300px;
+}
+
+.person-card {
+  padding: 12px 16px;
+}
+
+.person-card-row + .person-card-row .person-card {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+</style>

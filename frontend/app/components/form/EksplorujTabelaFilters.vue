@@ -1,87 +1,103 @@
 <template>
   <div class="mb-4">
-    <v-row>
-      <v-col cols="12" md="3">
-        <v-autocomplete
-          v-model="party"
-          :items="availableParties"
-          label="Partia"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-          multiple
-          chips
-          closable-chips
-        />
-      </v-col>
-      <v-col cols="12" md="3">
-        <v-autocomplete
-          v-model="teryt"
-          :items="availableRegions"
-          label="Powiat"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-        />
-      </v-col>
-      <v-col cols="12" md="3">
-        <v-autocomplete
-          v-model="krs"
-          :items="availableCompanies"
-          label="Spółki"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-          multiple
-          chips
-          closable-chips
-          class="collapsible-autocomplete"
-          :class="{ 'is-expanded': showAllKrs }"
-        >
-          <template v-if="(krs?.length || 0) > 1" #append-inner>
-            <v-btn
-              variant="tonal"
-              size="small"
-              color="primary"
-              density="compact"
-              class="mt-1"
-              @click.stop="showAllKrs = !showAllKrs"
-            >
-              {{ showAllKrs ? "Zwiń" : `+${(krs?.length || 0) - 1}` }}
-            </v-btn>
-          </template>
-        </v-autocomplete>
-      </v-col>
-      <v-col cols="12" md="3" class="d-flex align-center">
-        <v-select
-          v-model="currentlyEmployed"
-          :items="[
-            { title: 'Wszystkie osoby', value: 'all' },
-            { title: 'Teraz w dowolnej firmie', value: 'any' },
-            { title: 'Teraz w wyszukanych podmiotach', value: 'selected' },
-          ]"
-          label="Zatrudnienie"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          bg-color="white"
-        />
-      </v-col>
-      <v-col cols="12" md="3">
-        <v-select
-          v-model="category"
-          :items="availableCategories"
-          label="Typ podmiotu"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-        />
-      </v-col>
-    </v-row>
+    <!-- On a phone the five filters stack to a full screen of empty inputs
+         before any data is visible, so collapse them behind a summary. -->
+    <v-btn
+      v-if="smAndDown"
+      variant="tonal"
+      block
+      class="mb-2 text-none justify-start"
+      :prepend-icon="mdiFilterVariant"
+      :append-icon="showFilters ? mdiChevronUp : mdiChevronDown"
+      @click="showFilters = !showFilters"
+    >
+      {{ activeFilterSummary }}
+    </v-btn>
+
+    <v-expand-transition>
+      <v-row v-show="!smAndDown || showFilters">
+        <v-col cols="12" md="3">
+          <v-autocomplete
+            v-model="party"
+            :items="availableParties"
+            label="Partia"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            clearable
+            multiple
+            chips
+            closable-chips
+          />
+        </v-col>
+        <v-col cols="12" md="3">
+          <v-autocomplete
+            v-model="teryt"
+            :items="availableRegions"
+            label="Powiat"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            clearable
+          />
+        </v-col>
+        <v-col cols="12" md="3">
+          <v-autocomplete
+            v-model="krs"
+            :items="availableCompanies"
+            label="Spółki"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            clearable
+            multiple
+            chips
+            closable-chips
+            class="collapsible-autocomplete"
+            :class="{ 'is-expanded': showAllKrs }"
+          >
+            <template v-if="(krs?.length || 0) > 1" #append-inner>
+              <v-btn
+                variant="tonal"
+                size="small"
+                color="primary"
+                density="compact"
+                class="mt-1"
+                @click.stop="showAllKrs = !showAllKrs"
+              >
+                {{ showAllKrs ? "Zwiń" : `+${(krs?.length || 0) - 1}` }}
+              </v-btn>
+            </template>
+          </v-autocomplete>
+        </v-col>
+        <v-col cols="12" md="3" class="d-flex align-center">
+          <v-select
+            v-model="currentlyEmployed"
+            :items="[
+              { title: 'Wszystkie osoby', value: 'all' },
+              { title: 'Teraz w dowolnej firmie', value: 'any' },
+              { title: 'Teraz w wyszukanych podmiotach', value: 'selected' },
+            ]"
+            label="Zatrudnienie"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            bg-color="white"
+          />
+        </v-col>
+        <v-col cols="12" md="3">
+          <v-select
+            v-model="category"
+            :items="availableCategories"
+            label="Typ podmiotu"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            clearable
+          />
+        </v-col>
+      </v-row>
+    </v-expand-transition>
 
     <v-expand-transition>
       <v-sheet
@@ -199,12 +215,24 @@
 </template>
 
 <script setup lang="ts">
-import { mdiClose, mdiFilterCogOutline, mdiInformationOutline } from "@mdi/js";
+import {
+  mdiChevronDown,
+  mdiChevronUp,
+  mdiClose,
+  mdiFilterCogOutline,
+  mdiFilterVariant,
+  mdiInformationOutline,
+} from "@mdi/js";
 import { ref, computed } from "vue";
+import { useDisplay } from "vuetify";
 import { companyCategories } from "~~/shared/companyCategories";
 
-const showStatusBanner = ref(true);
+const { smAndDown } = useDisplay();
+// Four extra inputs plus an explainer fill a whole phone screen before any
+// results, so start collapsed there and let the summary button open it.
+const showStatusBanner = ref(!smAndDown.value);
 const showAllKrs = ref(false);
+const showFilters = ref(false);
 
 const availableCategories = companyCategories.map((c) => ({
   title: c.title,
@@ -222,6 +250,22 @@ const currentlyEmployed = defineModel<"all" | "any" | "selected">(
 );
 const minEmploymentDate = defineModel<string | null>("minEmploymentDate");
 const minVotes = defineModel<number | null>("minVotes");
+
+/** Label for the collapsed mobile filter button, so it is clear what is on. */
+const activeFilterSummary = computed(() => {
+  const active: string[] = [];
+  if (party.value?.length) active.push(party.value.join(", "));
+  if (teryt.value) active.push("powiat");
+  if (krs.value?.length)
+    active.push(
+      krs.value.length === 1 ? "1 spółka" : `${krs.value.length} spółek`,
+    );
+  if (category.value) active.push("typ podmiotu");
+  if (currentlyEmployed.value !== "all") active.push("zatrudnienie");
+
+  if (active.length === 0) return "Filtry";
+  return `Filtry: ${active.join(" · ")}`;
+});
 
 const statusSummary = computed(() => {
   const filters = [];

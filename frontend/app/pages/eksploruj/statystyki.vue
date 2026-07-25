@@ -1,6 +1,6 @@
 <template>
   <div class="pa-4">
-    <h1 class="text-h4 mb-4">Statystyki głosowania</h1>
+    <h1 class="text-h5 text-sm-h4 mb-4">Statystyki głosowania</h1>
 
     <v-row v-if="pending">
       <v-col cols="12" class="d-flex justify-center my-12">

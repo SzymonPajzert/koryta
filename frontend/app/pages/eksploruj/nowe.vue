@@ -1,7 +1,7 @@
 <template>
   <ClientOnly>
     <div class="align-self-center">
-      <h1 class="text-h4 mb-4">Eksploruj nowe osoby</h1>
+      <h1 class="text-h5 text-sm-h4 mb-4">Eksploruj nowe osoby</h1>
 
       <div class="d-flex align-start ga-4 mb-4 flex-wrap">
         <ExploreProgressBar hide-cta :query="apiQuery" class="flex-grow-1" />
@@ -18,7 +18,10 @@
       </div>
 
       <!-- CLOSED STATE -->
-      <div v-if="!showInstructions" class="d-flex align-center ga-3 mb-4">
+      <div
+        v-if="!showInstructions"
+        class="d-flex align-center flex-wrap ga-3 mb-4"
+      >
         <v-alert
           class="flex-grow-1 cursor-pointer mb-0"
           :color="allActionsDone ? 'success' : undefined"
@@ -43,7 +46,9 @@
       </div>
 
       <!-- OPEN STATE -->
-      <div v-else class="d-flex align-start ga-4 mb-4">
+      <!-- Side by side the instructions are squeezed to a couple of words per
+           line on a phone, so stack them above the actions there. -->
+      <div v-else class="d-flex align-start ga-4 mb-4 flex-column flex-sm-row">
         <v-alert
           v-model="showInstructions"
           closable
@@ -144,7 +149,7 @@
         </v-alert>
 
         <ExploreNewButtons
-          vertical
+          :vertical="!smAndDown"
           :pending="pending"
           :all-actions-done="allActionsDone"
           @next="page += Math.round(Math.random() * 5)"
@@ -215,6 +220,7 @@ import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
 import { useEdges } from "~/composables/edges";
+import { useDisplay } from "vuetify";
 
 definePageMeta({
   affineLink: "BYOEeL1iG0mvIR3yz2pOs",
@@ -225,6 +231,7 @@ useHead({
   title: "Eksploruj Nowe - koryta.pl",
 });
 
+const { smAndDown } = useDisplay();
 const page = ref(1);
 const showInstructions = useCookie<boolean>("show-explore-new-instructions", {
   default: () => true,

@@ -60,7 +60,12 @@
   </v-app-bar>
   <v-main class="d-flex flex-column">
     <ClientOnly>
-      <v-toolbar v-if="user" density="compact" color="primary">
+      <v-toolbar
+        v-if="user"
+        density="compact"
+        color="primary"
+        class="admin-bar"
+      >
         <v-spacer />
 
         <v-btn
@@ -95,7 +100,7 @@
       </v-toolbar>
     </ClientOnly>
     <v-container
-      class="position-relative fill-height"
+      class="position-relative fill-height page-container"
       :max-width="maxWidth"
       :style="{ padding: rootPadding }"
     >
@@ -127,3 +132,26 @@ const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const affineLink = computed(() => route?.meta?.affineLink);
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
+
+<style scoped>
+/* `fill-height` turns the container into a flex box, which makes the page a
+   flex item. Flex items default to `min-width: auto`, so a page containing
+   something wide (the powiązania table is ~1200px of columns) refuses to
+   shrink and paints far outside a phone viewport instead of scrolling its own
+   inner container. `min-width: 0` lets the page shrink to the screen and hands
+   the horizontal scrolling back to whoever actually owns it. */
+.page-container > :deep(*) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The admin links do not fit across a phone; scroll them instead of letting
+   them push the page wider than the screen. */
+.admin-bar :deep(.v-toolbar__content) {
+  overflow-x: auto;
+}
+
+.admin-bar :deep(.v-toolbar__content)::-webkit-scrollbar {
+  display: none;
+}
+</style>

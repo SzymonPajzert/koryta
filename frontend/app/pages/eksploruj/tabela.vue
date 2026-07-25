@@ -77,8 +77,8 @@
         <CardEmploymentHistory :edges="focusedEdges" />
       </div>
     </v-navigation-drawer>
-    <div class="pa-4">
-      <h1 class="text-h4 mb-4">
+    <div class="pa-2 pa-sm-4">
+      <h1 class="text-h6 text-sm-h4 mb-4">
         Eksploruj powiązania dla
         {{ entityName }}
       </h1>
@@ -118,7 +118,7 @@
         class="mb-4"
         :icon="mdiCash"
       >
-        <div class="d-flex align-center w-100">
+        <div class="d-flex flex-wrap align-center ga-3 w-100">
           <v-btn
             href="https://zrzutka.pl/rd7ssx/pay"
             target="_blank"
@@ -132,13 +132,11 @@
               src="@/assets/zrzutka.png"
             />
           </v-btn>
-          <v-spacer />
-          <div class="mr-8">
+          <div class="flex-grow-1" style="min-width: 200px">
             Wesprzyj projekt na zrzutce, by przygotować podsumowania dla innych
             miast, podobie jak to dla
             <NuxtLink to="/entity/region/teryt1261">Krakowa</NuxtLink>
           </div>
-          <v-spacer />
         </div>
       </v-alert>
 
