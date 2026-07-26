@@ -28,14 +28,7 @@
 
     <template #append>
       <v-btn v-if="mdAndUp" text to="/o-nas">O nas</v-btn>
-      <v-btn v-if="mdAndUp" text to="/pomoc">Wesprzyj</v-btn>
-      <v-btn
-        v-if="mdAndUp"
-        text
-        href="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
-        target="_blank"
-        >Dołącz</v-btn
-      >
+      <v-btn v-if="mdAndUp" text to="/pomoc">Działaj z nami</v-btn>
       <ClientOnly>
         <v-btn v-if="user && pictureURL" icon to="/profil" size="32">
           <v-avatar :image="pictureURL" size="32" />
@@ -107,7 +100,7 @@
       :max-width="maxWidth"
       :style="{ padding: rootPadding }"
     >
-      <NuxtPage />
+      <slot />
     </v-container>
     <HomeAppFooter class="mt-auto w-100" />
   </v-main>

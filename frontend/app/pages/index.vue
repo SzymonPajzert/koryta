@@ -49,8 +49,8 @@
           flat
           rounded="lg"
           slim
-          text="Dowiedz się więcej"
-          to="/o-nas"
+          text="Działaj z nami"
+          to="/pomoc"
         />
       </v-col>
     </v-row>
