@@ -107,9 +107,7 @@
                 class="text-caption text-medium-emphasis mt-2"
               >
                 …i
-                {{
-                  summary.notes.needsAction - summary.notes.sample.length
-                }}
+                {{ summary.notes.needsAction - summary.notes.sample.length }}
                 więcej.
               </div>
             </template>
