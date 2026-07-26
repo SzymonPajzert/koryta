@@ -1,5 +1,5 @@
 <template>
-  <v-container class="py-8">
+  <div>
     <!-- Hero / Nasza misja -->
     <v-row align="center" class="mb-12">
       <v-col cols="12" md="8">
@@ -394,7 +394,7 @@
         Dołącz do Koryta.pl
       </v-btn>
     </section>
-  </v-container>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -413,6 +413,8 @@ useSeoMeta({
 
 definePageMeta({
   affineLink: "yzo0TKrnnYO59pbFuoaFq",
+  layout: "gray",
+  fullWidth: true,
 });
 </script>
 
