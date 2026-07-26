@@ -75,6 +75,14 @@
           Rewizje
         </v-btn>
         <v-btn
+          v-if="isAdmin"
+          :prepend-icon="mdiNoteTextOutline"
+          variant="text"
+          to="/admin/notatki"
+        >
+          Notatki
+        </v-btn>
+        <v-btn
           :prepend-icon="mdiLightningBolt"
           variant="text"
           href="https://github.com/users/SzymonPajzert/projects/2/views/3"
@@ -111,6 +119,7 @@ import {
   mdiLightningBolt,
   mdiShieldAccount,
   mdiViewList,
+  mdiNoteTextOutline,
 } from "@mdi/js";
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
