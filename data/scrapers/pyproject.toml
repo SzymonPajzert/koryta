@@ -21,7 +21,7 @@ dependencies = [
     "click==8.4.2",
     "cloudpathlib==0.24.0",
     "confection==0.1.5",
-    "cryptography==45.0.5",
+    "cryptography==49.0.0",
     "cymem==2.0.13",
     "dotenv==0.9.9",
     "duckdb==1.5.4",
