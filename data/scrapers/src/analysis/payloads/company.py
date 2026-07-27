@@ -15,9 +15,14 @@ class CompaniesPayloads(Pipeline):
     Joins the enriched `Companies` data (PKD `activity` + the `is_public`
     spółka-publiczna flag) with the set of companies already on the site
     (`KorytaCompanies`), so a migration re-submits only companies that already
-    exist. The payloads intentionally carry no owners/teryt, so the ingest
-    endpoint only updates node-level `activity`/`categories`/`isPublic` and does
-    not create or duplicate edges.
+    exist.
+
+    The payloads carry `teryt_code`, which the uploader maps to the `teryt`
+    field the ingest endpoint links a company to its region with. They still
+    carry no owners, so no ownership edges are touched. Location edges used to
+    be left out too, because the endpoint allocated a random id per edge and
+    re-running duplicated them; it now derives the id from the link itself and
+    skips edges that already exist, so this is safe to re-run.
     """
 
     volatile = True
@@ -47,6 +52,7 @@ class CompaniesPayloads(Pipeline):
         companies_df = self.companies.read_or_process(ctx)
 
         payloads = []
+        with_teryt = 0
         for row in companies_df.to_dict(orient="records"):
             krs = row.get("krs")
             if krs is None or (isinstance(krs, float) and np.isnan(krs)):
@@ -68,16 +74,26 @@ class CompaniesPayloads(Pipeline):
                 bool(is_public) if isinstance(is_public, (bool, np.bool_)) else False
             )
 
-            payloads.append(
-                {
-                    "krs": krs,
-                    "name": name,
-                    "activity": list(activity),
-                    "is_public": is_public,
-                }
-            )
+            payload = {
+                "krs": krs,
+                "name": name,
+                "activity": list(activity),
+                "is_public": is_public,
+            }
 
-        print(f"Emitting {len(payloads)} company payloads")
+            teryt_code = row.get("teryt_code")
+            if isinstance(teryt_code, str) and teryt_code.strip():
+                payload["teryt_code"] = teryt_code.strip()
+                with_teryt += 1
+
+            payloads.append(payload)
+
+        print(
+            f"Emitting {len(payloads)} company payloads "
+            f"({with_teryt} with a TERYT code)"
+        )
         if not payloads:
-            return pd.DataFrame(columns=["krs", "name", "activity", "is_public"])
+            return pd.DataFrame(
+                columns=["krs", "name", "activity", "is_public", "teryt_code"]
+            )
         return pd.DataFrame.from_records(payloads)
