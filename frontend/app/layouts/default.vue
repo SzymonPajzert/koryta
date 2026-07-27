@@ -53,7 +53,12 @@
   </v-app-bar>
   <v-main class="d-flex flex-column">
     <ClientOnly>
-      <v-toolbar v-if="user" density="compact" color="primary">
+      <v-toolbar
+        v-if="user"
+        density="compact"
+        color="primary"
+        class="user-toolbar"
+      >
         <v-spacer />
 
         <v-btn
@@ -129,3 +134,22 @@ const rootPadding = computed(() => (route?.meta?.fullWidth ? 0 : undefined));
 const affineLink = computed(() => route?.meta?.affineLink);
 const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
+
+<style scoped>
+/* Vuetify clips the toolbar content, so on narrow screens the trailing
+   buttons are unreachable. Let it scroll sideways instead. The spacers
+   collapse to zero once the buttons overflow, so wide screens still centre. */
+.user-toolbar :deep(.v-toolbar__content) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.user-toolbar :deep(.v-toolbar__content)::-webkit-scrollbar {
+  display: none;
+}
+
+.user-toolbar :deep(.v-btn) {
+  flex: 0 0 auto;
+}
+</style>
