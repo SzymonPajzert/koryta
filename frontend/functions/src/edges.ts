@@ -46,8 +46,21 @@ export const onEdgeWritten = onDocumentWritten(
         ...new Set(allEdges.map((e) => e.target).filter(Boolean)),
       ] as string[];
       const transitiveTargets: Record<string, string[]> = {};
+      const publicPlaceIds = new Set<string>();
 
       if (targetIds.length > 0) {
+        // Determine which of the targets are public places, so that experience
+        // in non-public places is excluded from the stats.
+        const targetNodes = await db.getAll(
+          ...targetIds.map((id) => db.collection("nodes").doc(id)),
+        );
+        for (const doc of targetNodes) {
+          const node = doc.data();
+          if (node?.type === "place" && node.isPublic) {
+            publicPlaceIds.add(doc.id);
+          }
+        }
+
         // Chunk targetIds into groups of 30 for the 'in' query
         for (let i = 0; i < targetIds.length; i += 30) {
           const chunk = targetIds.slice(i, i + 30);
@@ -72,7 +85,11 @@ export const onEdgeWritten = onDocumentWritten(
         }
       }
 
-      const edgeStats = computeEdgeStats(allEdges, transitiveTargets);
+      const edgeStats = computeEdgeStats(
+        allEdges,
+        publicPlaceIds,
+        transitiveTargets,
+      );
 
       const nodeRef = db.collection("nodes").doc(sourceId);
       await nodeRef.update({
