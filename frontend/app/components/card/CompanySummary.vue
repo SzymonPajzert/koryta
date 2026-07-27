@@ -12,6 +12,15 @@
         <strong>Lokalizacja:</strong> {{ location }}
       </div>
       <ChipPublicCompany :is-public="company.isPublic" class="mt-2" />
+
+      <NoteEditor
+        v-if="company.id"
+        :key="company.id"
+        :node-id="company.id"
+        node-type="place"
+        single-column
+        class="mt-4"
+      />
     </v-card-text>
   </v-card>
 </template>

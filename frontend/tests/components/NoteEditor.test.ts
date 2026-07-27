@@ -43,6 +43,26 @@ describe("NoteEditor", () => {
     expect(wrapper.text()).toContain("Dodaj źródło");
   });
 
+  it("describes what the note is about, defaulting to a person", async () => {
+    (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
+    (useNotes as any).mockReturnValue({
+      userNote: ref(null),
+      otherNotes: ref([]),
+      saveNote: vi.fn(),
+    });
+
+    const person = await mountSuspended(NoteEditor, {
+      props: { nodeId: "node-123" },
+    });
+    expect(person.text()).toContain("na temat tej osoby");
+
+    const company = await mountSuspended(NoteEditor, {
+      props: { nodeId: "node-123", nodeType: "place" as const },
+    });
+    expect(company.text()).toContain("na temat tej spółki");
+    expect(company.text()).not.toContain("tej osoby");
+  });
+
   it("shows the form when add source button is clicked", async () => {
     (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
     (useNotes as any).mockReturnValue({

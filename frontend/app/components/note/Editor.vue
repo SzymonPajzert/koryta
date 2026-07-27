@@ -5,9 +5,9 @@
     <v-card-text v-if="user && !userNote && !isEditing">
       <div>
         <p class="text-body-1 mb-4">
-          Wiesz więcej na temat tej osoby? Podziel się dodatkowymi informacjami
-          i dodaj linki do źródeł. Twoje notatki będą publiczne - w ten sposób
-          pomożesz innym w znajdowaniu powiązań.
+          Wiesz więcej na temat {{ subject }}? Podziel się dodatkowymi
+          informacjami i dodaj linki do źródeł. Twoje notatki będą publiczne - w
+          ten sposób pomożesz innym w znajdowaniu powiązań.
         </p>
       </div>
     </v-card-text>
@@ -82,13 +82,28 @@ import { mdiPlus } from "@mdi/js";
 import { ref, toRaw, computed } from "vue";
 import { useNotes } from "~/composables/notes";
 import { useAuthState } from "~/composables/auth";
-import type { Note } from "~~/shared/model";
+import type { Note, NodeType } from "~~/shared/model";
 import { NoteSourceCard } from "#components";
 
-const props = defineProps<{
-  nodeId: string;
-  singleColumn?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    nodeId: string;
+    singleColumn?: boolean;
+    /** Kind of node the note hangs off, which the prompt refers to. */
+    nodeType?: NodeType;
+  }>(),
+  { nodeType: "person" },
+);
+
+/** The node kind in the genitive, to read as "Wiesz więcej na temat ...?". */
+const noteSubject: Record<NodeType, string> = {
+  person: "tej osoby",
+  place: "tej spółki",
+  article: "tego artykułu",
+  region: "tego regionu",
+};
+
+const subject = computed(() => noteSubject[props.nodeType]);
 
 const emit = defineEmits(["saved"]);
 
