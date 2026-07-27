@@ -19,7 +19,7 @@
         <v-autocomplete
           v-model="teryt"
           :items="availableRegions"
-          label="Powiat"
+          label="Region"
           variant="outlined"
           density="comfortable"
           hide-details

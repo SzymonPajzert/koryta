@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // TODO remove this and fix the typing
 
-import { applyPartiesFilter } from "~~/server/utils/fetch";
+import { applyPartiesFilter, fetchNodes } from "~~/server/utils/fetch";
+import { isInWojewodztwo, isWojewodztwoTeryt } from "~~/shared/teryt";
 
 /** A node filter that can run either as a Firestore clause or in memory.
  * Firestore application can fail on missing indexes or on combining multiple
@@ -162,30 +163,12 @@ export async function buildStructuralFilterOps(
   }
 
   if (query.teryt) {
-    const regions = await db
-      .collection("nodes")
-      .where("type", "==", "region")
-      .where("teryt", "==", query.teryt)
-      .limit(1)
-      .get();
-    if (regions.empty) {
+    const regionIds = await resolveRegionIds(db, query.teryt);
+    if (regionIds.length === 0) {
       return { ops, empty: true };
     }
-    const regionId = regions.docs[0]!.id;
-    const applyMem = (nodes: any[]) =>
-      nodes.filter((n) =>
-        memTargets(n, edgeScope, query.currentlyEmployed).includes(regionId),
-      );
-    if (arrayFilterUsed) {
-      ops.push(memOnly(applyMem));
-    } else {
-      const arrayField = edgeTargetsField(edgeScope, query.currentlyEmployed);
-      ops.push({
-        applyFs: (q) => q.where(arrayField, "array-contains", regionId),
-        applyMem,
-      });
-      arrayFilterUsed = true;
-    }
+    ops.push(targetNodesOp(regionIds, query, edgeScope, arrayFilterUsed));
+    arrayFilterUsed = true;
   }
 
   if (query.currentlyEmployed === "any") {
@@ -222,6 +205,35 @@ export async function buildStructuralFilterOps(
   }
 
   return { ops, empty: false };
+}
+
+/** Region node ids a `teryt` filter covers.
+ *
+ * A powiat or gmina code identifies a single region. A województwo code covers
+ * the whole voivodeship: the województwo node itself - some people, such as
+ * sejmik members, hang off it directly - plus every powiat and gmina inside it.
+ * Without that expansion picking a województwo returned only the handful of
+ * people attached at voivodeship level.
+ */
+async function resolveRegionIds(
+  db: FirebaseFirestore.Firestore,
+  teryt: string,
+): Promise<string[]> {
+  if (isWojewodztwoTeryt(teryt)) {
+    // Cached, and only a few hundred documents.
+    const regions = await fetchNodes("region");
+    return Object.entries(regions)
+      .filter(([, region]) => isInWojewodztwo(region.teryt, teryt))
+      .map(([id]) => id);
+  }
+
+  const regions = await db
+    .collection("nodes")
+    .where("type", "==", "region")
+    .where("teryt", "==", teryt)
+    .limit(1)
+    .get();
+  return regions.empty ? [] : [regions.docs[0]!.id];
 }
 
 /** Filter to people connected to any of the given place/region node ids. */

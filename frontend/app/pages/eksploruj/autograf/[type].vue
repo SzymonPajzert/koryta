@@ -101,6 +101,7 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { parties } from "~~/shared/misc";
+import { regionFilterOptions } from "~~/shared/teryt";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
@@ -251,11 +252,9 @@ const allowedCompanyNames = computed(() => {
   return names;
 });
 
-const availableRegions = computed(() => {
-  return Object.values(regions.value ?? {})
-    .map((r) => ({ title: r.name, value: r.teryt }))
-    .sort((a, b) => a.title.localeCompare(b.title));
-});
+const availableRegions = computed(() =>
+  regionFilterOptions(Object.values(regions.value ?? {})),
+);
 
 const availableCompanies = computed(() => {
   return Object.values(places.value ?? {})
