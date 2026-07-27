@@ -26,7 +26,9 @@ type NodeEdgeStats = {
   /** Start of the most recent employment in a public company. */
   latestEmploymentStart?: string | null;
   targetNodeIds: string[];
+  /** Whether the person still holds a post in a public company. */
   currentlyEmployed: boolean;
+  /** Public companies (and their regions) the person still holds a post in. */
   currentlyEmployedTargetNodeIds?: string[];
 };
 

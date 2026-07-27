@@ -60,7 +60,7 @@
           v-model="currentlyEmployed"
           :items="[
             { title: 'Wszystkie osoby', value: 'all' },
-            { title: 'Teraz w dowolnej firmie', value: 'any' },
+            { title: 'Teraz w publicznej spółce', value: 'any' },
             { title: 'Teraz w wyszukanych podmiotach', value: 'selected' },
           ]"
           label="Zatrudnienie"

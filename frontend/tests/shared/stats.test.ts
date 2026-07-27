@@ -218,6 +218,42 @@ describe("shared/stats.ts", () => {
       expect(stats.all.experienceMonths).toBe(0);
     });
 
+    it("should treat only public companies as current employment", () => {
+      const edges: Edge[] = [
+        // Ongoing, but private
+        { target: "private-co", type: "employed" } as Edge,
+        {
+          target: "public-co",
+          type: "employed",
+          start_date: "2020-01-01T00:00:00Z",
+          end_date: "2021-01-01T00:00:00Z",
+        } as Edge,
+      ];
+
+      const stats = computeEdgeStats(edges, new Set(["public-co"]));
+
+      expect(stats.all.currentlyEmployed).toBe(false);
+      expect(stats.all.currentlyEmployedTargetNodeIds).toEqual([]);
+    });
+
+    it("should list only public companies as current employers", () => {
+      const edges: Edge[] = [
+        { target: "public-co", type: "employed" } as Edge,
+        { target: "private-co", type: "employed" } as Edge,
+      ];
+
+      const stats = computeEdgeStats(edges, new Set(["public-co"]), {
+        "public-co": ["region-A"],
+        "private-co": ["region-B"],
+      });
+
+      expect(stats.all.currentlyEmployed).toBe(true);
+      expect(stats.all.currentlyEmployedTargetNodeIds).toEqual([
+        "public-co",
+        "region-A",
+      ]);
+    });
+
     it("should ignore non-employment edges pointing at public companies", () => {
       const edges: Edge[] = [
         {

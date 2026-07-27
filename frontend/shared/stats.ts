@@ -171,10 +171,10 @@ export function computeEdgeStats(
       experienceMonths: calculateExperience(publicEdges),
       latestEmploymentStart: calculateLatestEmploymentStart(publicEdges),
       targetNodeIds: allTargetNodeIds,
-      currentlyEmployed: calculateCurrentlyEmployed(nodeEdges),
+      currentlyEmployed: calculateCurrentlyEmployed(publicEdges),
       currentlyEmployedTargetNodeIds: [
         ...new Set(
-          nodeEdges
+          publicEdges
             .filter((e) => calculateCurrentlyEmployed([e]))
             .flatMap((e) => [e.target, ...(transitiveTargets[e.target] || [])]),
         ),
@@ -185,10 +185,10 @@ export function computeEdgeStats(
       latestEmploymentStart:
         calculateLatestEmploymentStart(publicApprovedEdges),
       targetNodeIds: approvedTargetNodeIds,
-      currentlyEmployed: calculateCurrentlyEmployed(approvedEdges),
+      currentlyEmployed: calculateCurrentlyEmployed(publicApprovedEdges),
       currentlyEmployedTargetNodeIds: [
         ...new Set(
-          approvedEdges
+          publicApprovedEdges
             .filter((e) => calculateCurrentlyEmployed([e]))
             .flatMap((e) => [e.target, ...(transitiveTargets[e.target] || [])]),
         ),
