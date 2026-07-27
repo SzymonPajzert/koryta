@@ -91,23 +91,10 @@
           md="6"
           lg="4"
         >
-          <v-card variant="outlined" class="h-100">
-            <v-card-title class="d-flex align-center text-wrap pb-0">
-              <v-icon
-                :icon="mdiOfficeBuildingOutline"
-                class="mr-2 flex-shrink-0"
-              />
-              <span>{{ companyData.name }}</span>
-            </v-card-title>
-            <v-card-text class="pt-2">
-              <div v-if="companyData.krsNumber" class="text-body-2">
-                <strong>KRS:</strong> {{ companyData.krsNumber }}
-              </div>
-              <div v-if="companyData.location" class="text-body-2">
-                <strong>Lokalizacja:</strong> {{ companyData.location }}
-              </div>
-            </v-card-text>
-          </v-card>
+          <CardCompanySummary
+            :company="companyData"
+            :location="companyData.location"
+          />
         </v-col>
       </v-row>
 
@@ -182,17 +169,12 @@
 </template>
 
 <script setup lang="ts">
-import {
-  mdiCash,
-  mdiOfficeBuildingOutline,
-  mdiPencilOutline,
-  mdiOpenInNew,
-} from "@mdi/js";
+import { mdiCash, mdiPencilOutline, mdiOpenInNew } from "@mdi/js";
 import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { parties } from "~~/shared/misc";
-import type { PersonRich } from "~~/shared/model";
+import type { Company, PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
@@ -329,13 +311,28 @@ const company = computed<[string, string] | undefined>(() => {
   return undefined;
 });
 
+/** Region a company sits in.
+ *
+ * Company nodes carry no location of their own — the region is linked by an
+ * `owns` edge, which the stats job folds into the company's target node ids.
+ * Everything but the region ids is dropped by the lookup below.
+ */
+function companyLocation(place: Company): string | undefined {
+  const edgeStats = user.value
+    ? place.stats?.edges.all
+    : place.stats?.edges.approved;
+  return (edgeStats?.targetNodeIds ?? [])
+    .map((id) => regions.value?.[id]?.name)
+    .find((name) => !!name);
+}
+
 const selectedCompaniesData = computed(() => {
   if (!filterKrs.value || !places.value) return [];
   const selected = [];
   const krsSet = new Set(filterKrs.value);
   for (const [id, place] of Object.entries(places.value)) {
     if (place.krsNumber && krsSet.has(place.krsNumber)) {
-      selected.push({ id, ...place });
+      selected.push({ id, ...place, location: companyLocation(place) });
     }
   }
   return selected;
