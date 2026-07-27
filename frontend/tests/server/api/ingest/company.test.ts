@@ -53,6 +53,7 @@ vi.mock("../../../../server/utils/auth", () => ({
 
 vi.mock("../../../../server/utils/revisions", () => ({
   createRevisionTransaction: vi.fn(),
+  baseNodeFields: vi.fn().mockResolvedValue({}),
 }));
 
 const { mockReadBody } = vi.hoisted(() => {
@@ -237,7 +238,8 @@ describe("api/ingest/company", () => {
       docs: [{ ref: childRef, data: () => ({}) }],
     });
 
-    // Edge creation
+    // createEdge first checks whether the link already exists.
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     const edgeRef = { id: "edge-id" };
     mockDoc.mockReturnValueOnce(edgeRef);
 
@@ -279,6 +281,7 @@ describe("api/ingest/company", () => {
 
     mockDoc.mockReturnValueOnce(regionRefMock);
 
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     const edgeRef = { id: "edge-region-id" };
     mockDoc.mockReturnValueOnce(edgeRef);
     await handler({} as any);
@@ -337,6 +340,7 @@ describe("api/ingest/company", () => {
     };
     mockDoc.mockReturnValueOnce(regionRefMock);
 
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     const edgeRef = { id: "edge-region-id" };
     mockDoc.mockReturnValueOnce(edgeRef);
 
@@ -358,7 +362,7 @@ describe("api/ingest/company", () => {
     );
   });
 
-  it("should throw 400 if region with teryt code does not exist", async () => {
+  it("reports an unmappable region instead of failing the whole ingest", async () => {
     mockReadBody.mockResolvedValue({
       krs: "123456",
       name: "Unknown Region Company",
@@ -378,9 +382,55 @@ describe("api/ingest/company", () => {
     // Mock the fallback query missing
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
 
-    await expect(handler({} as any)).rejects.toMatchObject({
-      statusCode: 400,
-      message: "Region with TERYT code 9999 not found",
+    // The company's other fields are still worth storing, so the ingest
+    // succeeds and only the location is reported as unresolved.
+    const result = await handler({} as any);
+    expect(result).toMatchObject({ code: 200, region: "unknown" });
+    // Only the node revision was written - no edge.
+    expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+  });
+  it("derives the edge id from the link, so a re-run cannot duplicate it", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "123456",
+      name: "Regional Company",
+      teryt: "1061",
     });
+
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "company-id" });
+    mockDoc.mockReturnValueOnce({
+      id: "teryt1061",
+      get: vi.fn().mockResolvedValue({ exists: true }),
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "edge-region-id" });
+
+    await handler({} as any);
+
+    expect(mockDoc).toHaveBeenCalledWith("edge_teryt1061_company-id_owns");
+  });
+
+  it("skips an owns edge that is already stored", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "123456",
+      name: "Regional Company",
+      teryt: "1061",
+    });
+
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "company-id" });
+    mockDoc.mockReturnValueOnce({
+      id: "teryt1061",
+      get: vi.fn().mockResolvedValue({ exists: true }),
+    });
+    // The link is already there - e.g. an earlier run, or an edge written with
+    // the old random id.
+    mockGet.mockResolvedValueOnce({ empty: false, docs: [{ id: "legacy" }] });
+
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ region: "existing" });
+    // Node revision only; no second edge.
+    expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
   });
 });

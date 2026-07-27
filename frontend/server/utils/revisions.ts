@@ -38,6 +38,45 @@ export function sanitizeFirestoreData<T>(
   );
 }
 
+/** Computed or bookkeeping fields that belong to the node, not to a revision.
+ * They are regenerated (search chunks, stats) or managed elsewhere (revision
+ * pointers, votes), so copying them into revision data would freeze a stale
+ * snapshot. */
+export const INTERNAL_FIELDS = new Set([
+  "stats",
+  "revision_id",
+  "revisions",
+  "votes",
+  "id",
+  "deleted",
+  "delete_reason",
+  "visibility",
+  "nameChunksLower", // used for search indexing
+]);
+
+/** The existing node's fields, to layer a partial update on top of.
+ *
+ * A revision is a complete snapshot and is written to the node with `set`, not
+ * `merge`, so anything missing from it is dropped from the node. Callers that
+ * only know some of the fields - the ingest endpoints, which carry whatever the
+ * scrapers found - must start from what is already stored, or an update of one
+ * field silently erases the rest.
+ */
+export async function baseNodeFields(
+  nodeRef: DocumentReference,
+): Promise<Record<string, unknown>> {
+  const snapshot = await nodeRef.get();
+  if (!snapshot.exists) return {};
+
+  const base: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(snapshot.data() ?? {})) {
+    if (!INTERNAL_FIELDS.has(key)) {
+      base[key] = value;
+    }
+  }
+  return base;
+}
+
 export function createRevisionTransaction(
   db: Firestore,
   batch: WriteBatch,

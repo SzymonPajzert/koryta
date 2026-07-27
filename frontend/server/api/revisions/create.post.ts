@@ -1,22 +1,11 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
-import { sanitizeFirestoreData } from "~~/server/utils/revisions";
+import {
+  baseNodeFields,
+  sanitizeFirestoreData,
+} from "~~/server/utils/revisions";
 import { personEditSchema } from "~~/shared/api";
-
-/** Fields that are internal/computed and should not be copied into revision data */
-// TODO remove it and try just using zod for stripping these fields.
-const INTERNAL_FIELDS = new Set([
-  "stats",
-  "revision_id",
-  "revisions",
-  "votes",
-  "id",
-  "deleted",
-  "delete_reason",
-  "visibility",
-  "nameChunksLower", // used for search indexing
-]);
 
 export default defineEventHandler(async (event) => {
   const rawBody = await readBody(event);
@@ -55,16 +44,7 @@ export default defineEventHandler(async (event) => {
   // new node has no prior data, so it just starts out as a person.
   const baseFields: Record<string, unknown> = isNewNode
     ? { type: "person" }
-    : {};
-  if (!isNewNode) {
-    const nodeDoc = await nodeRef.get();
-    const nodeData = nodeDoc.exists ? nodeDoc.data() || {} : {};
-    for (const [key, value] of Object.entries(nodeData)) {
-      if (!INTERNAL_FIELDS.has(key)) {
-        baseFields[key] = value;
-      }
-    }
-  }
+    : await baseNodeFields(nodeRef);
 
   // User-submitted fields override the base node fields
   const mergedData = { ...baseFields, ...dataFields };
