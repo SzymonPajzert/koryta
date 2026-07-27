@@ -3,13 +3,12 @@ import { buildStructuralFilterOps } from "../../../server/utils/nodeFilters";
 
 const { mockFetchNodes, mockGet, mockWhere, mockCollection } = vi.hoisted(
   () => {
+    // Queries are answered per collection, since one call to
+    // buildStructuralFilterOps can hit `nodes` (regions, companies by KRS) and
+    // `edges` (company locations) in the same pass.
     const mockGet = vi.fn();
-    const mockWhere = vi.fn().mockReturnThis();
-    const mockCollection = vi.fn().mockReturnValue({
-      where: mockWhere,
-      limit: vi.fn().mockReturnThis(),
-      get: mockGet,
-    });
+    const mockWhere = vi.fn();
+    const mockCollection = vi.fn();
     return {
       mockFetchNodes: vi.fn(),
       mockGet,
@@ -38,6 +37,60 @@ const regions = {
   teryt1261: { teryt: "1261", name: "Kraków" },
 };
 
+/** Region -> company `owns` edges, the way company locations are stored. */
+const locationEdges = [
+  { source: "teryt1465", target: "szpitalWarszawa", type: "owns" },
+  { source: "teryt1425", target: "szpitalRadom", type: "owns" },
+  { source: "teryt1465", target: "wodociagiWarszawa", type: "owns" },
+  { source: "teryt1261", target: "szpitalKrakow", type: "owns" },
+  // Region hierarchy edges share the collection and must be ignored.
+  { source: "teryt14", target: "teryt1465", type: "owns" },
+];
+
+/** Wires the mocked Firestore up for one test. */
+function mockDb({
+  regionByTeryt,
+  placesByKrs = [],
+}: {
+  regionByTeryt?: string;
+  placesByKrs?: string[];
+} = {}) {
+  mockCollection.mockImplementation((name: string) => {
+    const clauses: { field: string; op: string; value: unknown }[] = [];
+    const query: Record<string, unknown> = {};
+    query.where = (field: string, op: string, value: unknown) => {
+      clauses.push({ field, op, value });
+      mockWhere(field, op, value);
+      return query;
+    };
+    query.limit = () => query;
+    query.get = () => {
+      mockGet(name, clauses);
+      if (name === "edges") {
+        const chunk = clauses.find((c) => c.field === "source")
+          ?.value as string[];
+        const docs = locationEdges
+          .filter((e) => chunk.includes(e.source))
+          .map((e) => ({ data: () => e }));
+        return Promise.resolve({ docs, empty: docs.length === 0 });
+      }
+      // `nodes`: either an exact region lookup or companies by KRS.
+      if (clauses.some((c) => c.field === "teryt")) {
+        return Promise.resolve(
+          regionByTeryt
+            ? { empty: false, docs: [{ id: regionByTeryt }] }
+            : { empty: true, docs: [] },
+        );
+      }
+      return Promise.resolve({
+        empty: placesByKrs.length === 0,
+        docs: placesByKrs.map((id) => ({ id })),
+      });
+    };
+    return query;
+  });
+}
+
 /** A Firestore query stub that records the clause it was given. */
 function stubQuery() {
   return {
@@ -61,6 +114,7 @@ describe("buildStructuralFilterOps, teryt filter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFetchNodes.mockResolvedValue(regions);
+    mockDb();
   });
 
   it("expands a województwo code to every region inside it", async () => {
@@ -87,10 +141,7 @@ describe("buildStructuralFilterOps, teryt filter", () => {
   });
 
   it("keeps a powiat code exact, without pulling in the whole województwo", async () => {
-    mockGet.mockResolvedValue({
-      empty: false,
-      docs: [{ id: "teryt1425" }],
-    });
+    mockDb({ regionByTeryt: "teryt1425" });
 
     const { ops, empty } = await buildStructuralFilterOps(
       db,
@@ -111,7 +162,7 @@ describe("buildStructuralFilterOps, teryt filter", () => {
   });
 
   it("reports an empty result set for an unknown powiat", async () => {
-    mockGet.mockResolvedValue({ empty: true, docs: [] });
+    mockDb();
     const { empty } = await buildStructuralFilterOps(
       db,
       { teryt: "9999" },
@@ -187,5 +238,116 @@ describe("buildStructuralFilterOps, teryt filter", () => {
       },
     ];
     expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual(["current"]);
+  });
+});
+
+describe("buildStructuralFilterOps, company level filters", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchNodes.mockImplementation((type: string) =>
+      Promise.resolve(
+        type === "region"
+          ? regions
+          : {
+              szpitalWarszawa: { categories: ["szpitale"] },
+              szpitalRadom: { categories: ["szpitale"] },
+              szpitalKrakow: { categories: ["szpitale"] },
+              wodociagiWarszawa: { categories: ["wodociagi"] },
+            },
+      ),
+    );
+    mockDb();
+  });
+
+  /** A person connected to the given company ids. */
+  const worker = (id: string, companies: string[]) => ({
+    id,
+    stats: { edges: { approved: { targetNodeIds: companies } } },
+  });
+
+  it("matches people at a company seated in the województwo", async () => {
+    const { ops, empty } = await buildStructuralFilterOps(
+      db,
+      { companyTeryt: "14" },
+      "approved",
+    );
+    expect(empty).toBe(false);
+
+    const nodes = [
+      worker("warszawa", ["szpitalWarszawa"]),
+      worker("radom", ["szpitalRadom"]),
+      worker("krakow", ["szpitalKrakow"]),
+    ];
+    expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual([
+      "warszawa",
+      "radom",
+    ]);
+  });
+
+  it("ignores the region hierarchy edges sharing the edges collection", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { companyTeryt: "14" },
+      "approved",
+    );
+    // teryt14 -> teryt1465 is an `owns` edge too, but a region is not a place.
+    expect(ops[0]!.applyMem([worker("region", ["teryt1465"])])).toEqual([]);
+  });
+
+  it("intersects category with company location instead of crossing them", async () => {
+    const { ops, empty } = await buildStructuralFilterOps(
+      db,
+      { category: "szpitale", companyTeryt: "14" },
+      "approved",
+    );
+    expect(empty).toBe(false);
+    // One op, not two: both constrain the same company.
+    expect(ops).toHaveLength(1);
+
+    const nodes = [
+      worker("atMazHospital", ["szpitalWarszawa"]),
+      // The case this whole change is about: a hospital elsewhere plus an
+      // unrelated mazowieckie company must NOT match.
+      worker("krakowHospitalPlusMazWater", [
+        "szpitalKrakow",
+        "wodociagiWarszawa",
+      ]),
+      worker("mazWaterOnly", ["wodociagiWarszawa"]),
+    ];
+    expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual(["atMazHospital"]);
+  });
+
+  it("intersects KRS with category as well", async () => {
+    mockDb({ placesByKrs: ["szpitalWarszawa", "wodociagiWarszawa"] });
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { krs: ["0000000001", "0000000002"], category: "szpitale" },
+      "approved",
+    );
+    expect(ops).toHaveLength(1);
+    const nodes = [
+      worker("hospital", ["szpitalWarszawa"]),
+      worker("water", ["wodociagiWarszawa"]),
+    ];
+    expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual(["hospital"]);
+  });
+
+  it("reports an empty result set when the intersection is empty", async () => {
+    const { empty } = await buildStructuralFilterOps(
+      db,
+      { category: "wodociagi", companyTeryt: "12" },
+      "approved",
+    );
+    expect(empty).toBe(true);
+  });
+
+  it("keeps the person level teryt filter independent of the company one", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { companyTeryt: "14", teryt: "12" },
+      "approved",
+    );
+    // Two ops: one about the employer, one about the person's own region ties.
+    expect(ops).toHaveLength(2);
   });
 });

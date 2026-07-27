@@ -19,7 +19,18 @@
         <v-autocomplete
           v-model="teryt"
           :items="availableRegions"
-          label="Region"
+          label="Region osoby"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+        />
+      </v-col>
+      <v-col cols="12" md="3">
+        <v-autocomplete
+          v-model="companyTeryt"
+          :items="availableRegions"
+          label="Siedziba spółki"
           variant="outlined"
           density="comfortable"
           hide-details
@@ -214,6 +225,7 @@ const availableCategories = companyCategories.map((c) => ({
 const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");
 const teryt = defineModel<string | null>("teryt");
+const companyTeryt = defineModel<string | null>("companyTeryt");
 const krs = defineModel<string[] | null>("krs");
 const category = defineModel<string | null>("category");
 const hideVoted = defineModel<"all" | "no_votes" | "has_votes">("hideVoted");

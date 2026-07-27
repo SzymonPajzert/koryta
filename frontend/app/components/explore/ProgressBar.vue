@@ -137,6 +137,7 @@ const props = defineProps<{
 const progressQuery = computed(() => ({
   parties: props.query.parties,
   teryt: props.query.teryt,
+  companyTeryt: props.query.companyTeryt,
   krs: props.query.krs,
   category: props.query.category,
   currentlyEmployed:

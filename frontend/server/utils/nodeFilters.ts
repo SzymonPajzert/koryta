@@ -18,6 +18,9 @@ export type StructuralQuery = {
   party?: string;
   parties?: string | string[];
   teryt?: string;
+  /** Region the person's *employer* is seated in, as opposed to `teryt`, which
+   * matches any tie the person has to a region (a job, but also an election). */
+  companyTeryt?: string;
   krs?: string | string[];
   category?: string;
   currentlyEmployed?: "all" | "any" | "selected";
@@ -121,6 +124,13 @@ export async function buildStructuralFilterOps(
     });
   }
 
+  // Filters that describe the company a person is connected to. They are
+  // intersected rather than pushed as separate ops, because they all constrain
+  // the *same* company: "a hospital, in mazowieckie" has to mean one place
+  // satisfying both, not a hospital anywhere plus an unrelated tie to the
+  // region.
+  const placeIdSets: string[][] = [];
+
   if (query.krs) {
     const krsArray = [
       ...new Set(Array.isArray(query.krs) ? query.krs : [query.krs]),
@@ -135,13 +145,7 @@ export async function buildStructuralFilterOps(
         .get();
       places.push(...chunkPlaces.docs);
     }
-
-    if (places.length === 0) {
-      return { ops, empty: true };
-    }
-    const placeIds = places.map((doc) => doc.id);
-    ops.push(targetNodesOp(placeIds, query, edgeScope, arrayFilterUsed));
-    arrayFilterUsed = true;
+    placeIdSets.push(places.map((doc) => doc.id));
   }
 
   if (query.category) {
@@ -149,12 +153,24 @@ export async function buildStructuralFilterOps(
     // `categories` on place nodes may be stored sanitized (as an object), so
     // it cannot be queried with array-contains.
     const places = await fetchNodes("place");
-    const placeIds = Object.entries(places)
-      .filter(([, place]) =>
-        asArray<string>(place.categories).includes(query.category!),
-      )
-      .map(([id]) => id);
+    placeIdSets.push(
+      Object.entries(places)
+        .filter(([, place]) =>
+          asArray<string>(place.categories).includes(query.category!),
+        )
+        .map(([id]) => id),
+    );
+  }
 
+  if (query.companyTeryt) {
+    const regionIds = await resolveRegionIds(db, query.companyTeryt);
+    placeIdSets.push(
+      regionIds.length === 0 ? [] : await placesInRegions(db, regionIds),
+    );
+  }
+
+  if (placeIdSets.length > 0) {
+    const placeIds = intersectAll(placeIdSets);
     if (placeIds.length === 0) {
       return { ops, empty: true };
     }
@@ -234,6 +250,51 @@ async function resolveRegionIds(
     .limit(1)
     .get();
   return regions.empty ? [] : [regions.docs[0]!.id];
+}
+
+function intersectAll(sets: string[][]): string[] {
+  return sets.reduce((acc, next) => {
+    const allowed = new Set(next);
+    return acc.filter((id) => allowed.has(id));
+  });
+}
+
+/** Place node ids seated in any of the given regions.
+ *
+ * Location is stored as an `owns` edge from the region to the company, written
+ * by the company ingest from the company's registered seat. Read from the edges
+ * rather than from the places' own stats, so the filter works without waiting
+ * for the stats job to run.
+ *
+ * The region hierarchy (województwo owns powiat) lives in the same collection
+ * with the same edge type, so region targets are dropped - otherwise a person
+ * tied to a powiat by an election would look like an employee of it.
+ */
+async function placesInRegions(
+  db: FirebaseFirestore.Firestore,
+  regionIds: string[],
+): Promise<string[]> {
+  const allRegionIds = new Set(Object.keys(await fetchNodes("region")));
+  const placeIds = new Set<string>();
+  // `in` takes at most 30 values, and a województwo covers far more regions.
+  for (let i = 0; i < regionIds.length; i += 30) {
+    const chunk = regionIds.slice(i, i + 30);
+    const snapshot = await db
+      .collection("edges")
+      .where("source", "in", chunk)
+      .get();
+    for (const doc of snapshot.docs) {
+      const edge = doc.data();
+      if (
+        edge.type === "owns" &&
+        edge.target &&
+        !allRegionIds.has(edge.target)
+      ) {
+        placeIds.add(edge.target as string);
+      }
+    }
+  }
+  return [...placeIds];
 }
 
 /** Filter to people connected to any of the given place/region node ids. */
