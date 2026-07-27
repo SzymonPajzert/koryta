@@ -19,8 +19,11 @@
           {{ edge.richNode.name }}
         </v-list-item-title>
 
-        <div class="text-caption text-medium-emphasis text-wrap">
-          {{ edgeLabel(edge) }}
+        <div class="d-flex align-center flex-wrap ga-2">
+          <span class="text-caption text-medium-emphasis text-wrap">
+            {{ edgeLabel(edge) }}
+          </span>
+          <ChipPublicCompany :is-public="publicCompanyFlag(edge)" />
         </div>
 
         <div class="d-md-none mt-2 pb-2">
@@ -54,6 +57,7 @@ import {
   mdiFileDocumentOutline,
   mdiCommentArrowRightOutline,
 } from "@mdi/js";
+import type { Company } from "~~/shared/model";
 
 function getIcon(type: string) {
   switch (type) {
@@ -94,5 +98,11 @@ const maxEnd = computed(() => {
 
 function edgeLabel(edge: EdgeNode) {
   return edge.label;
+}
+
+/** Public-sector ownership of the company behind an edge, if it is a company. */
+function publicCompanyFlag(edge: EdgeNode): boolean | undefined {
+  if (edge.richNode.type !== "place") return undefined;
+  return (edge.richNode as Company).isPublic;
 }
 </script>

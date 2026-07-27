@@ -21,7 +21,9 @@ export interface NodeRevisions {
 }
 
 type NodeEdgeStats = {
+  /** Years spent employed in public companies, see `Company.isPublic`. */
   experienceMonths: number;
+  /** Start of the most recent employment in a public company. */
   latestEmploymentStart?: string | null;
   targetNodeIds: string[];
   currentlyEmployed: boolean;
@@ -183,7 +185,16 @@ export interface Company extends Omit<Node, "type"> {
   activity?: string[];
   /** Categories derived from PKD codes, see shared/companyCategories.ts */
   categories?: string[];
-  /** Whether the company is publicly traded (spółka publiczna), from KRS. */
+  /** Whether the company is owned by the public sector, derived from KRS.
+   *
+   * Set by the scrapers when the company has a supervising ministry
+   * (`organPodmiotZalozycielskiMinisterNadzorujacy`), when a shareholder is a
+   * gmina/powiat/województwo/Skarb Państwa, or when it appears on a hardcoded
+   * list of state-owned companies. The flag is then propagated down ownership
+   * chains, so subsidiaries of public companies are public too.
+   *
+   * Note this is *not* "publicly traded" — see `data/scrapers/src/scrapers/krs/list.py`.
+   */
   isPublic?: boolean;
 }
 

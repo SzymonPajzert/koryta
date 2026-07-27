@@ -124,11 +124,29 @@ export function computeVoteStats(
   return aggregatedVotes;
 }
 
+/** Keeps only employment in a company the public sector owns.
+ *
+ * The explore table reports experience and the latest employment date for
+ * public companies only — time spent in a private company is not what the site
+ * tracks. See `Company.isPublic` for how a company earns the flag.
+ */
+function publicEmployment(
+  edges: Edge[],
+  publicPlaceIds: ReadonlySet<string>,
+): Edge[] {
+  return edges.filter(
+    (e) => e.type === "employed" && publicPlaceIds.has(e.target),
+  );
+}
+
 export function computeEdgeStats(
   nodeEdges: Edge[],
+  publicPlaceIds: ReadonlySet<string>,
   transitiveTargets: Record<string, string[]> = {},
 ) {
   const approvedEdges = nodeEdges.filter((e) => !!e.revision_id);
+  const publicEdges = publicEmployment(nodeEdges, publicPlaceIds);
+  const publicApprovedEdges = publicEmployment(approvedEdges, publicPlaceIds);
 
   const allTargetNodeIds = [
     ...new Set(
@@ -150,8 +168,8 @@ export function computeEdgeStats(
 
   return {
     all: {
-      experienceMonths: calculateExperience(nodeEdges),
-      latestEmploymentStart: calculateLatestEmploymentStart(nodeEdges),
+      experienceMonths: calculateExperience(publicEdges),
+      latestEmploymentStart: calculateLatestEmploymentStart(publicEdges),
       targetNodeIds: allTargetNodeIds,
       currentlyEmployed: calculateCurrentlyEmployed(nodeEdges),
       currentlyEmployedTargetNodeIds: [
@@ -163,8 +181,9 @@ export function computeEdgeStats(
       ].filter(Boolean),
     },
     approved: {
-      experienceMonths: calculateExperience(approvedEdges),
-      latestEmploymentStart: calculateLatestEmploymentStart(approvedEdges),
+      experienceMonths: calculateExperience(publicApprovedEdges),
+      latestEmploymentStart:
+        calculateLatestEmploymentStart(publicApprovedEdges),
       targetNodeIds: approvedTargetNodeIds,
       currentlyEmployed: calculateCurrentlyEmployed(approvedEdges),
       currentlyEmployedTargetNodeIds: [
@@ -183,6 +202,7 @@ export function computeNodeStats(
   nodeEdges: Edge[],
   nodeNotes: Note[],
   nodeVotes: VoteDocument[],
+  publicPlaceIds: ReadonlySet<string>,
   transitiveTargets: Record<string, string[]> = {},
 ): NodeStats {
   return {
@@ -192,6 +212,6 @@ export function computeNodeStats(
       .map((n) => n.sources?.length || 0)
       .reduce((a, b) => a + b, 0),
     votes: computeVoteStats(nodeVotes),
-    edges: computeEdgeStats(nodeEdges, transitiveTargets),
+    edges: computeEdgeStats(nodeEdges, publicPlaceIds, transitiveTargets),
   };
 }

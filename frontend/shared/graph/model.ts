@@ -11,6 +11,8 @@ export interface Node {
   parties?: string[];
   visibility?: boolean;
   entityType?: string;
+  /** Only on company nodes, see `Company.isPublic`. */
+  isPublic?: boolean;
 }
 
 export interface NodeStats {

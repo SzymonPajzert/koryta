@@ -27,7 +27,7 @@
 
     <template #[`header.latestEmploymentStart`]="{ column }">
       <ExploreTableColumnHeader
-        tooltip="Najnowsza data rozpoczęcia zatrudnienia w dostępnych powiązaniach"
+        tooltip="Najnowsza data rozpoczęcia zatrudnienia w publicznej spółce"
         :column="column"
         :sort-by="sortBy"
       />

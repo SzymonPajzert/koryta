@@ -51,6 +51,7 @@ function buildNodeUpdateData(
   resolvedPlaceToParentCompanies: Record<string, string[]>,
   nodeGroupSizeMap: Record<string, number>,
   targetCounts: Record<string, Set<string>>,
+  publicPlaceIds: ReadonlySet<string>,
 ) {
   const transitiveTargets = calculateTransitiveTargets(
     nodeEdges,
@@ -63,6 +64,7 @@ function buildNodeUpdateData(
     nodeEdges,
     nodeNotes,
     nodeVotes,
+    publicPlaceIds,
     transitiveTargets,
   );
 
@@ -154,6 +156,12 @@ export default defineEventHandler(async () => {
     else if (n.data.type === "place") placesMap[n.id] = n.data as Company;
     else if (n.data.type === "region") regionsMap[n.id] = n.data as Region;
   }
+
+  const publicPlaceIds = new Set(
+    Object.entries(placesMap)
+      .filter(([, place]) => place.isPublic)
+      .map(([id]) => id),
+  );
 
   const nodesNoStats = getNodesNoStats(
     peopleMap,
@@ -256,6 +264,7 @@ export default defineEventHandler(async () => {
       resolvedPlaceToParentCompanies,
       nodeGroupSizeMap,
       targetCounts,
+      publicPlaceIds,
     );
 
     const nodeRef = db.collection("nodes").doc(node.id);

@@ -129,7 +129,7 @@ describe("shared/stats.ts", () => {
         { target: "node4", type: "election", revision_id: "rev2" } as Edge, // approved election
       ];
 
-      const stats = computeEdgeStats(edges);
+      const stats = computeEdgeStats(edges, new Set(["node2"]));
 
       // 'all' expectations
       expect(stats.all.targetNodeIds).toEqual([
@@ -154,7 +154,11 @@ describe("shared/stats.ts", () => {
         company2: ["region-C"],
       };
 
-      const stats = computeEdgeStats(edges, transitiveTargets);
+      const stats = computeEdgeStats(
+        edges,
+        new Set(["company1", "company2"]),
+        transitiveTargets,
+      );
 
       // 'all' expectations should include all companies and their regions
       expect(stats.all.targetNodeIds).toEqual([
@@ -171,6 +175,62 @@ describe("shared/stats.ts", () => {
         "region-A",
         "region-B",
       ]);
+    });
+
+    it("should count experience and latest employment only in public companies", () => {
+      const edges: Edge[] = [
+        {
+          target: "public-co",
+          type: "employed",
+          start_date: "2020-01-01T00:00:00Z",
+          end_date: "2021-01-01T00:00:00Z",
+        } as Edge,
+        {
+          // More recent, but private — must not win the latest-employment date
+          target: "private-co",
+          type: "employed",
+          start_date: "2022-01-01T00:00:00Z",
+          end_date: "2023-01-01T00:00:00Z",
+        } as Edge,
+      ];
+
+      const stats = computeEdgeStats(edges, new Set(["public-co"]));
+
+      expect(stats.all.latestEmploymentStart).toBe("2020-01-01");
+      expect(stats.all.experienceMonths).toBeCloseTo(1.0, 1);
+      // Both companies are still reachable targets, only the metrics are filtered
+      expect(stats.all.targetNodeIds).toEqual(["public-co", "private-co"]);
+    });
+
+    it("should report no experience when every company is private", () => {
+      const edges: Edge[] = [
+        {
+          target: "private-co",
+          type: "employed",
+          start_date: "2020-01-01T00:00:00Z",
+          end_date: "2021-01-01T00:00:00Z",
+        } as Edge,
+      ];
+
+      const stats = computeEdgeStats(edges, new Set());
+
+      expect(stats.all.latestEmploymentStart).toBeNull();
+      expect(stats.all.experienceMonths).toBe(0);
+    });
+
+    it("should ignore non-employment edges pointing at public companies", () => {
+      const edges: Edge[] = [
+        {
+          target: "public-co",
+          type: "election",
+          start_date: "2023-01-01T00:00:00Z",
+        } as Edge,
+      ];
+
+      const stats = computeEdgeStats(edges, new Set(["public-co"]));
+
+      expect(stats.all.latestEmploymentStart).toBeNull();
+      expect(stats.all.experienceMonths).toBe(0);
     });
   });
 
@@ -195,6 +255,7 @@ describe("shared/stats.ts", () => {
         edges,
         notes,
         votes,
+        new Set(),
         transitiveTargets,
       );
 
