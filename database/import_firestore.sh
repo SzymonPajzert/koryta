@@ -11,7 +11,7 @@ rm -r current_firestore
 
 if ! [[ -d ./${LATEST_TIMESTAMP} ]] ; then
     echo "Downloading the latest export"
-    gsutil -m cp -r gs://koryta-pl-firestore-backups/${LATEST_TIMESTAMP} .
+    gcloud storage cp -r gs://koryta-pl-firestore-backups/${LATEST_TIMESTAMP} .
 fi
 
 cp -r ${LATEST_TIMESTAMP} current_firestore
