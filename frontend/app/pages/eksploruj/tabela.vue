@@ -25,48 +25,13 @@
       />
 
       <div v-if="focusedPerson" class="pa-4 pt-0">
-        <div class="d-flex justify-center align-center ga-4 mb-4">
-          <DialogProposeEditNode
-            :entity="focusedPerson"
-            skip-redirect
-            @submitted="onRevisionSubmitted"
-          >
-            <template #activator="{ props: activatorProps }">
-              <v-btn
-                v-bind="activatorProps"
-                variant="tonal"
-                color="warning"
-                :prepend-icon="mdiPencilOutline"
-              >
-                Zaproponuj zmianę
-              </v-btn>
-            </template>
-          </DialogProposeEditNode>
-
+        <ExploreProposeChange :key="focusedPerson.id" :person="focusedPerson">
           <ButtonVoteNumber
-            v-if="focusedPerson"
             :id="focusedPerson.id"
             :key="focusedPerson.id"
             category="interesting"
           />
-        </div>
-
-        <v-alert
-          v-if="submittedRevisionId"
-          type="info"
-          variant="tonal"
-          class="mb-4"
-        >
-          Zaproponowano zmianę.
-          <a
-            :href="getPersonPreviewUrl(focusedPerson, submittedRevisionId)"
-            target="_blank"
-            class="text-primary font-weight-bold"
-          >
-            Podgląd zmiany
-            <v-icon :icon="mdiOpenInNew" size="small" />
-          </a>
-        </v-alert>
+        </ExploreProposeChange>
 
         <NoteEditor
           :key="focusedPerson.id"
@@ -167,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { mdiCash, mdiPencilOutline, mdiOpenInNew } from "@mdi/js";
+import { mdiCash } from "@mdi/js";
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
@@ -179,7 +144,6 @@ import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
 import { useEdges } from "~/composables/edges";
-import { generateEntityUrl } from "~/composables/slugs";
 import { regionNamesByPlaceId } from "~/utils/companyLocation";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
@@ -447,20 +411,8 @@ const focusedEdges = computed(() => [
   ...focusedTargets.value,
 ]);
 
-const submittedRevisionId = shallowRef<string | undefined>(undefined);
-
-const onRevisionSubmitted = (revisionId: string) => {
-  submittedRevisionId.value = revisionId;
-};
-
-const getPersonPreviewUrl = (person: PersonRich, revisionId: string) => {
-  const baseUrl = generateEntityUrl("person", person.id, person.name);
-  return `${baseUrl}?revisionId=${revisionId}`;
-};
-
 const focusPerson = (item: PersonRich) => {
   focusedPerson.value = item;
-  submittedRevisionId.value = undefined;
   openDrawer.value = true;
 };
 </script>

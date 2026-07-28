@@ -178,6 +178,13 @@
                 :region="undefined"
                 :company="undefined"
               />
+
+              <div class="pa-4 pt-0">
+                <ExploreProposeChange
+                  :key="focusedPerson.id"
+                  :person="focusedPerson"
+                />
+              </div>
             </v-card>
           </v-col>
 
