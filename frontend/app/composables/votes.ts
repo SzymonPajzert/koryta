@@ -40,6 +40,46 @@ const configMap: Record<
   },
 };
 
+/** What each step of the -5..5 scale is meant to say.
+ *
+ * The number alone tells a voter nothing about where to stop, so every step
+ * gets a phrase. Only categories that are actually voted on the wide scale
+ * need an entry - the rest fall back to the category's own label. */
+const scaleLabels: Partial<Record<VoteCategory, Record<number, string>>> = {
+  interesting: {
+    5: "Bezczelne",
+    4: "Grube koryto",
+    3: "Koryciarz",
+    2: "Dobre znalezisko",
+    1: "Ciekawe",
+    [-1]: "Nie mogę znaleźć informacji",
+    [-2]: "Wygląda w porządku",
+    [-3]: "Nic tu nie ma",
+    [-4]: "Pomyłka w danych",
+    [-5]: "Nie powinno tu być",
+  },
+};
+
+/** The phrase for one step of the scale, or undefined outside -5..5 and for
+ * categories with no ladder of their own. */
+export function voteLevelLabel(
+  category: VoteCategory,
+  value: number,
+): string | undefined {
+  return scaleLabels[category]?.[value];
+}
+
+/** The whole ladder as one sentence, for places that have to explain the scale
+ * before the reader has clicked anything. */
+export function voteScaleSummary(category: VoteCategory): string | undefined {
+  const labels = scaleLabels[category];
+  if (!labels) return undefined;
+  const steps = [5, 4, 3, 2, 1, -1, -2, -3, -4, -5]
+    .filter((value) => labels[value])
+    .map((value) => `${value > 0 ? "+" : ""}${value} ${labels[value]}`);
+  return `Skala od -5 do +5: ${steps.join(", ")}.`;
+}
+
 /** A vote targets a graph node or an extraction fact; the target picks which
  * id field is set, so the id itself never needs inspecting. */
 export type VoteTarget = "node" | "extraction";

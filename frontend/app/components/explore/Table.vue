@@ -52,7 +52,7 @@
 
     <template #[`header.userVote`]="{ column }">
       <ExploreTableColumnHeader
-        tooltip="Twój osobisty głos dla tej osoby (widoczny tylko dla Ciebie)"
+        :tooltip="userVoteTooltip"
         :column="column"
         :sort-by="sortBy"
       />
@@ -209,7 +209,15 @@
 <script setup lang="ts">
 import { mdiMagnify, mdiOpenInNew } from "@mdi/js";
 import { executeSearchAll } from "~/composables/usePersonSearch";
+import { voteScaleSummary } from "~/composables/votes";
 import type { PersonRich } from "~~/shared/model";
+
+const userVoteTooltip = [
+  "Twój osobisty głos dla tej osoby (widoczny tylko dla Ciebie).",
+  voteScaleSummary("interesting"),
+]
+  .filter(Boolean)
+  .join(" ");
 
 withDefaults(
   defineProps<{

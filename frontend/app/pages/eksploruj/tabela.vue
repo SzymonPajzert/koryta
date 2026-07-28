@@ -30,6 +30,7 @@
             :id="focusedPerson.id"
             :key="focusedPerson.id"
             category="interesting"
+            show-label
           />
         </ExploreProposeChange>
 

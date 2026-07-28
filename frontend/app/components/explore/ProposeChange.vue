@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="d-flex justify-center align-center ga-4 mb-4">
+    <div class="d-flex flex-wrap justify-center align-center ga-4 mb-4">
       <DialogProposeEditNode
         :entity="person"
         skip-redirect
