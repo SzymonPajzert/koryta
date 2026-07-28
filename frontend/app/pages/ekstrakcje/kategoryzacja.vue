@@ -1,15 +1,29 @@
 <template>
   <v-container class="kategoryzacja-container">
-    <div class="mb-4">
+    <!-- The card is the point of this page, so the header stays on two lines:
+         the back button beside a title/progress stack rather than above it. -->
+    <div class="d-flex align-center ga-2 mb-3">
       <v-btn
         variant="text"
+        size="small"
+        density="comfortable"
         :prepend-icon="mdiArrowLeft"
         to="/ekstrakcje"
-        class="ms-n4 mb-1"
+        class="ms-n2 flex-shrink-0"
       >
         Powrót
       </v-btn>
-      <h1 class="text-h5">Kategoryzuj fakty</h1>
+      <div class="header-text">
+        <h1 class="text-subtitle-1 font-weight-medium text-truncate">
+          Kategoryzuj fakty
+        </h1>
+        <div
+          v-if="!loading && allFacts.length"
+          class="text-caption text-medium-emphasis"
+        >
+          Oznaczono {{ reviewedCount }} z {{ allFacts.length }}
+        </div>
+      </div>
     </div>
 
     <div v-if="loading" class="d-flex justify-center py-8">
@@ -23,11 +37,6 @@
     </div>
 
     <template v-else>
-      <!-- Progress counter -->
-      <div class="text-center mb-4 text-body-2 text-medium-emphasis">
-        Oznaczono {{ reviewedCount }} z {{ allFacts.length }}
-      </div>
-
       <!-- Swipe card area -->
       <div class="swipe-area mx-auto">
         <ExtractionSwipeCard
@@ -394,6 +403,18 @@ onMounted(() => syncUrlToFact(currentFact.value));
 <style scoped>
 .kategoryzacja-container {
   max-width: 600px;
+}
+
+/* Let the title ellipsize instead of pushing the back button off the row. */
+.header-text {
+  min-width: 0;
+}
+
+/* A phone has the least room to spare above the card. */
+@media (max-width: 599px) {
+  .kategoryzacja-container {
+    padding-top: 8px;
+  }
 }
 
 .swipe-area {
