@@ -50,7 +50,7 @@
 
       <!-- Desktop fallback buttons -->
       <div v-if="currentFact" class="mt-6">
-        <div class="d-flex justify-center align-center ga-4">
+        <div class="d-flex justify-center align-center ga-2">
           <v-btn
             color="error"
             variant="tonal"
@@ -58,7 +58,16 @@
             :prepend-icon="mdiCloseCircleOutline"
             @click="recordVote('incorrect')"
           >
-            Niepoprawny
+            Błędny
+          </v-btn>
+          <v-btn
+            color="warning"
+            variant="tonal"
+            :size="smAndUp ? 'large' : 'default'"
+            :prepend-icon="mdiHelpCircleOutline"
+            @click="recordVote('insufficient')"
+          >
+            Nie wiem
           </v-btn>
           <v-btn
             color="success"
@@ -67,17 +76,7 @@
             :append-icon="mdiCheckCircleOutline"
             @click="recordVote('correct')"
           >
-            Poprawny
-          </v-btn>
-        </div>
-        <div class="d-flex justify-center mt-3">
-          <v-btn
-            color="warning"
-            variant="text"
-            :prepend-icon="mdiHelpCircleOutline"
-            @click="recordVote('insufficient')"
-          >
-            Za mało informacji
+            Dobry
           </v-btn>
         </div>
       </div>
