@@ -5,7 +5,6 @@ test.describe("Explore Person", () => {
     page,
   }) => {
     // Navigate to the table page
-    await page.goto("/ekej/tabela"); // wait, the URL is /eksploruj/tabela
     await page.goto("/eksploruj/tabela");
     await expect(page.locator(".v-main")).toBeVisible();
     await expect(page.locator(".v-data-table__progress")).not.toBeVisible();

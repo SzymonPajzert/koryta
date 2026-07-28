@@ -3,24 +3,18 @@ import { omniSearchFor } from "./helpers/omniSearch";
 
 test.describe("OmniSearch", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    // The dev server keeps live listeners open, so "load" never settles here
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".v-main")).toBeVisible();
   });
 
   test("allows searching for parties", async ({ page }) => {
-    // Wait for the main page content to ensure app is hydrated
-    await expect(page.locator(".v-main")).toBeVisible();
-    await page.waitForLoadState("networkidle");
-
-    // Fill the search input
-    await page.locator("input#omni-search").click();
-    await page.locator("input#omni-search").fill("PO");
-
     // We expect "PO" as a title and "Partia" as a subtitle.
     const poItem = page
       .locator(".v-list-item", { hasText: "PO" })
       .filter({ hasText: "Partia" })
       .first();
-    await expect(poItem).toBeVisible();
+    await omniSearchFor(page, "PO", poItem);
 
     // Click the item
     await poItem.click();
@@ -35,10 +29,6 @@ test.describe("OmniSearch", () => {
   });
 
   test("allows searching for regions", async ({ page }) => {
-    // Wait for the main page content to ensure app is hydrated
-    await expect(page.locator(".v-main")).toBeVisible();
-    await page.waitForLoadState("networkidle");
-
     // Click Opole entry
     const opoleItem = page
       .locator(".v-list-item", { hasText: "Opole" })
@@ -55,17 +45,11 @@ test.describe("OmniSearch", () => {
   });
 
   test("should dedup companies", async ({ page }) => {
-    await expect(page.locator(".v-main")).toBeVisible();
-    await page.waitForLoadState("networkidle");
-
-    await page.locator("input#omni-search").click();
-    await page.locator("input#omni-search").fill("Orlen");
-
     // We expect "Orlen" to appear
     const orlenItem = page
       .locator(".v-list-item", { hasText: "Orlen" })
       .first();
-    await expect(orlenItem).toBeVisible();
+    await omniSearchFor(page, "Orlen", orlenItem);
 
     await orlenItem.click();
 

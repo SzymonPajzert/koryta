@@ -1,7 +1,10 @@
 import { test, expect } from "@playwright/test";
 
 test("check highlighted items", async ({ page }) => {
-  await page.goto("/eksploruj/tabela?krs=0000357114&page=1&itemsPerPage=10");
+  // The dev server keeps live listeners open, so "load" never settles here
+  await page.goto("/eksploruj/tabela?krs=0000357114&page=1&itemsPerPage=10", {
+    waitUntil: "domcontentloaded",
+  });
 
   // Wait for hydration before interacting
   await expect(page.locator(".v-main")).toBeVisible();

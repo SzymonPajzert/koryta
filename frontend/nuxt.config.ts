@@ -223,6 +223,10 @@ export default defineNuxtConfig({
         "@vue/devtools-kit",
         "@vueuse/core",
         "v-network-graph",
+        // The layout engine is a separate entry point, imported only once the
+        // graph store loads. Discovering it mid-run restarts the optimizer,
+        // which reloads every open page and drops the vite-node IPC with it.
+        "v-network-graph/lib/force-layout",
         "vue3-apexcharts",
         "vuefire",
       ],
