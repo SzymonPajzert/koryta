@@ -6,7 +6,7 @@ description: Guidelines on how to evaluate pipeline outputs.
 # Koryta CLI
 
 To test and view the output of a data pipeline from the scrapers directory, use the `koryta` cli command.
-The command is part of the package's virtual environment set up by Poetry.
+The command is part of the package's virtual environment, set up by `uv sync`.
 
 Example:
 `.venv/bin/koryta <pipeline_name> --output stdout`
@@ -20,4 +20,4 @@ Example:
 `.venv/bin/koryta <target_pipeline> --refresh <pipeline_to_refresh>`
 
 For example, if you updated `PeopleMerged` and want `PeoplePayloads` to rebuild using the new `PeopleMerged` output, run:
-`poetry run koryta PeoplePayloads --refresh PeopleMerged`
+`.venv/bin/koryta PeoplePayloads --refresh PeopleMerged`

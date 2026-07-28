@@ -8,104 +8,91 @@ on:
 permissions:
   contents: read
 
+# uv reads requires-python from pyproject.toml and fetches the interpreter
+# itself, so there is no setup-python step. `uv sync` installs exactly what
+# uv.lock pins; `--no-sync` on the run steps stops them re-resolving.
+env:
+  UV_VERSION: "0.11.33"
+
 jobs:
   ruff:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.13'
-
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "data/scrapers/uv.lock"
 
       - name: Install dependencies
         working-directory: data/scrapers
-        run: |
-          poetry install --only dev
+        run: uv sync --group dev
 
       - name: Run ruff - static analysis
         working-directory: data/scrapers
-        run: |
-          poetry run ruff check
+        run: uv run --no-sync ruff check
 
   lint-imports:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.13'
-
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "data/scrapers/uv.lock"
 
       - name: Install dependencies
         working-directory: data/scrapers
-        run: |
-          poetry install --only dev
+        run: uv sync --group dev
 
       - name: Run import linter
         working-directory: data/scrapers
-        run: |
-          poetry run lint-imports
+        run: uv run --no-sync lint-imports
 
   pytest:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.13'
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "data/scrapers/uv.lock"
 
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-
+      # The ml group (torch, spacy and the nvidia runtimes -- 4.5 GB) is left
+      # out: no test needs it. dev comes along as uv's default group.
       - name: Install dependencies
         working-directory: data/scrapers
-        run: |
-          poetry install --without ml
+        run: uv sync --group test
 
       - name: Run pytest
         working-directory: data/scrapers
         # TODO https://github.com/SzymonPajzert/koryta/issues/196
-        run: |
-          poetry run pytest --ignore src/tests 
-  
+        run: uv run --no-sync pytest --ignore src/tests
+
   mypy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.13'
-
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "data/scrapers/uv.lock"
 
       - name: Install dependencies
         working-directory: data/scrapers
-        run: |
-          poetry install --without ml
+        run: uv sync --group test
 
       - name: Run mypy
         working-directory: data/scrapers
-        run: poetry run mypy src
-
-  
+        run: uv run --no-sync mypy src

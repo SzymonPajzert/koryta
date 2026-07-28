@@ -1,19 +1,21 @@
-To run the binaries in this directory, you need to [install poetry](https://pypi.org/project/poetry/). Then, you can install it by running ([see demo](https://pypi.org/project/poetry/))
+To run the binaries in this directory you need [uv](https://docs.astral.sh/uv/). It
+fetches the Python 3.13 this project pins by itself, so nothing else has to be
+installed first.
 
 ```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 gcloud auth login # this is needed for buckets - https://docs.google.com/document/d/1bGrtID-mIFFitvfR_cEmmbV8hvTLDIWFQhnRiSwDlyY
 gcloud auth application-default set-quota-project koryta-pl  # To access Google cloud resources.
 
-# pip + venv
-python3.13 -m venv ./.venv
-. ./.venv/bin/activate
-pip install poetry
-poetry install
-
-# pipx
-pix install poetry
-poetry install
+uv sync --all-groups   # creates .venv and installs everything in uv.lock
 ```
+
+Leave out `--all-groups` to skip the `ml` group (torch, spacy and the nvidia
+runtimes, 4.5 GB) if you are not touching the extraction models.
+
+Dependencies live in `pyproject.toml` and are pinned in `uv.lock`; run
+`uv lock` after editing the former and commit both.
 
 Data mining code is located in the `src` directory. Some tests are located in the `tests` dir, while others are in the `src`, near the libraries that are tested.
 
@@ -39,7 +41,7 @@ During the course of the running of multiple binaries here, there will be two di
 
 ## Scripts
 
-You can run each script with `poetry run scripts-name`.
+You can run each script with `uv run scripts-name`.
 
 Refer to `pyproject.toml` for the most up-to-date list of the scripts available there:
 

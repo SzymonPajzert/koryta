@@ -1,4 +1,5 @@
 
-You are working in a Python environment managed by Poetry.
+You are working in a Python environment managed by uv.
 Always use `.venv/bin/python` or `.venv/bin/pytest` to run scripts and tests.
-The workspace root is `/Users/szymonpajzert/Programming/koryta/data/scrapers`.
+`uv sync --all-groups` rebuilds `.venv` from `uv.lock` if it is missing or stale.
+The workspace root is the `data/scrapers` directory of the checkout you are in.
