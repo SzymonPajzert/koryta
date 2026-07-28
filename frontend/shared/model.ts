@@ -305,7 +305,13 @@ export interface ExtractionFact {
   tag: string; // extraction model tag (e.g. "v1_qwen3-32b")
   createdAt?: string;
   uploaderUid?: string;
-  // Server-computed on /api/extractions: count of correct/insufficient votes,
-  // used to hand each fact to a single reviewer.
-  reviewCount?: number;
+  /** Vote aggregate, maintained by the `onVoteWritten` trigger exactly as it
+   * is for nodes. Seeded at ingest so that never-voted facts still carry the
+   * field — Firestore cannot query for one that is absent, and the review flow
+   * needs to ask for the unreviewed ones. */
+  stats?: { votes: NodeStats["votes"] };
+  /** Convenience flag derived from `stats.votes.humanVoted` by
+   * /api/extractions: a human (not the pipeline) has reviewed this fact, so the
+   * review flow hands it to no one else. */
+  reviewed?: boolean;
 }

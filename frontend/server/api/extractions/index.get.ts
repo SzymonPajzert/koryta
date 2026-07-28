@@ -2,10 +2,12 @@ import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
-import type { ExtractionFact, VoteDocument } from "~~/shared/model";
+import type { ExtractionFact } from "~~/shared/model";
 
 const queryValidator = z.object({
-  limit: z.coerce.number().default(100),
+  // No limit by default: the review flow needs the whole backlog, not a page of
+  // it. Callers that only render a slice pass an explicit `limit`.
+  limit: z.coerce.number().optional(),
   page: z.coerce.number().default(0),
   tag: z.string().optional(),
   groupBy: z.enum(["article"]).optional(),
@@ -25,18 +27,31 @@ export default authCachedEventHandler(
       firestoreQuery = firestoreQuery.where("tag", "==", query.tag);
     }
 
-    // Pagination
-    const offset = query.page * query.limit;
-    firestoreQuery = firestoreQuery.offset(offset).limit(query.limit);
+    // Newest first, so a freshly ingested batch is what reviewers see.
+    firestoreQuery = firestoreQuery.orderBy("createdAt", "desc");
+
+    // Pagination is opt-in: `page` only means anything alongside a `limit`.
+    if (query.limit !== undefined) {
+      firestoreQuery = firestoreQuery
+        .offset(query.page * query.limit)
+        .limit(query.limit);
+    }
 
     const snapshot = await firestoreQuery.get();
 
-    const facts: ExtractionFact[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as ExtractionFact[];
-
-    await attachReviewCounts(db, facts);
+    const facts: ExtractionFact[] = snapshot.docs.map((doc) => {
+      const { createdAt, stats, ...data } = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        stats,
+        // Stored as a Firestore Timestamp; the shared model says ISO string.
+        createdAt: createdAt?.toDate?.().toISOString() ?? createdAt,
+        // One reviewer per fact: the `onVoteWritten` trigger already keeps this
+        // aggregate on the document, so the review state costs no extra read.
+        reviewed: stats?.votes?.humanVoted === true,
+      };
+    }) as ExtractionFact[];
 
     if (query.groupBy === "article") {
       const articles: Record<
@@ -60,41 +75,3 @@ export default authCachedEventHandler(
   },
   { maxAge: 60 },
 );
-
-/** Set `reviewCount` on each fact: how many humans cast a correct/insufficient
- * vote on it. Lets the review flow hand every fact to a single reviewer.
- * Votes by the automated "pipeline" user don't claim a fact (same convention
- * as computeVoteStats). */
-async function attachReviewCounts(
-  db: FirebaseFirestore.Firestore,
-  facts: ExtractionFact[],
-) {
-  const ids = facts.map((f) => f.id).filter((id): id is string => !!id);
-
-  // Firestore caps `in` filters at 30 values per query.
-  const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += 30) {
-    chunks.push(ids.slice(i, i + 30));
-  }
-
-  const reviewers = new Map<string, number>();
-  const snapshots = await Promise.all(
-    chunks.map((chunk) =>
-      db.collection("votes").where("extractionId", "in", chunk).get(),
-    ),
-  );
-  for (const votesSnapshot of snapshots) {
-    for (const doc of votesSnapshot.docs) {
-      const vote = doc.data() as VoteDocument;
-      const extractionId = vote.extractionId;
-      if (!extractionId || vote.userUid === "pipeline") continue;
-      if (vote.categoryVotes.correct || vote.categoryVotes.insufficient) {
-        reviewers.set(extractionId, (reviewers.get(extractionId) ?? 0) + 1);
-      }
-    }
-  }
-
-  for (const fact of facts) {
-    if (fact.id) fact.reviewCount = reviewers.get(fact.id) ?? 0;
-  }
-}

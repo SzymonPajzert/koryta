@@ -151,7 +151,8 @@ const route = useRoute();
 const router = useRouter();
 const { smAndUp } = useDisplay();
 
-// All votable facts (an id is required to vote), in fetch order.
+// All votable facts (an id is required to vote), newest ingest first — the
+// API returns the whole collection ordered by createdAt descending.
 const allFacts = computed<ExtractionFact[]>(() =>
   (data.value?.facts ?? []).filter((f) => f.id),
 );
@@ -184,13 +185,14 @@ const serverVotedIds = computed(() => {
 // Facts voted on in this session — merged with the persisted votes below.
 const sessionVotedIds = ref(new Set<string>());
 
-// One reviewer per fact: a fact any user has already reviewed (reviewCount
-// comes from the API and may lag a few minutes behind) counts as done, so
-// concurrent reviewers spread over the backlog instead of piling up.
+// One reviewer per fact: a fact any user has already reviewed counts as done,
+// so concurrent reviewers spread over the backlog instead of piling up.
+// `reviewed` comes from the vote aggregate on the document, so it lags by the
+// trigger round-trip plus the API cache.
 const externallyReviewedIds = computed(() => {
   const ids = new Set<string>();
   for (const fact of allFacts.value) {
-    if (fact.id && fact.reviewCount) ids.add(fact.id);
+    if (fact.id && fact.reviewed) ids.add(fact.id);
   }
   return ids;
 });

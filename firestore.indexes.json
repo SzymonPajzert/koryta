@@ -1,6 +1,34 @@
 {
   "indexes": [
     {
+      "collectionGroup": "extractions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "stats.votes.humanVoted",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "extractions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tag",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "nodes",
       "queryScope": "COLLECTION",
       "fields": [

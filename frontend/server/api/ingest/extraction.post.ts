@@ -83,6 +83,13 @@ export default defineEventHandler(async (event) => {
         tag: article.tag,
         createdAt: Timestamp.now(),
         uploaderUid: user.uid,
+        // Seed the aggregate the `onVoteWritten` trigger maintains from here
+        // on. Firestore cannot query for a field that is absent, so without
+        // this an unvoted fact could never be found by a
+        // `stats.votes.humanVoted == false` query — which is exactly the
+        // backlog the review flow needs. See
+        // scripts/backfill-extraction-vote-stats.ts for existing documents.
+        stats: { votes: { humanVoted: false } },
       };
       if (articleNodeId) {
         doc.articleNodeId = articleNodeId;
