@@ -24,3 +24,20 @@ export async function omniSearchFor(
     await expect(expected).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: 20_000 });
 }
+
+/** Open the header search with no query and wait for its menu to appear.
+ *
+ * Same hydration race as `omniSearchFor`: before Vue takes over, the click
+ * lands on an inert input and opens nothing, so the click is what has to be
+ * retried. Waiting for `networkidle` instead does not work - the page keeps
+ * Firestore listeners open for as long as it is on screen, so the network
+ * never goes quiet. Clicking a live autocomplete toggles its menu, so a retry
+ * only clicks again while the menu is still shut. */
+export async function openOmniSearch(page: Page, menu: Locator) {
+  const input = page.locator("input#omni-search");
+
+  await expect(async () => {
+    if (!(await menu.isVisible())) await input.click();
+    await expect(menu).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
+}

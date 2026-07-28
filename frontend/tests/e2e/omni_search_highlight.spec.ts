@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openOmniSearch } from "./helpers/omniSearch";
 
 test("check highlighted items", async ({ page }) => {
   // The dev server keeps live listeners open, so "load" never settles here
@@ -6,14 +7,9 @@ test("check highlighted items", async ({ page }) => {
     waitUntil: "domcontentloaded",
   });
 
-  // Wait for hydration before interacting
   await expect(page.locator(".v-main")).toBeVisible();
-  await page.waitForLoadState("networkidle");
 
-  await page.locator("input#omni-search").click();
-
-  // wait for the list to appear
-  await expect(page.locator(".v-list")).toBeVisible();
+  await openOmniSearch(page, page.locator(".v-list"));
 
   // wait a bit for reactivity
   await page.waitForTimeout(1000);
