@@ -66,6 +66,7 @@ async function backfill() {
   let pending = 0;
   let seeded = 0;
   let recomputed = 0;
+  let unchanged = 0;
 
   for (const doc of extractionsSnap.docs) {
     const votes = votesByExtraction.get(doc.id);
@@ -77,13 +78,22 @@ async function backfill() {
     let voteStats: Record<string, unknown>;
     if (votes) {
       voteStats = computeVoteStats(votes);
-      recomputed++;
     } else if (current?.humanVoted === undefined) {
       voteStats = { humanVoted: false };
-      seeded++;
     } else {
+      unchanged++;
       continue;
     }
+
+    // Rewriting an identical aggregate costs a write and changes nothing, and
+    // this doubles as a repair tool for facts the trigger missed — so a run
+    // that finds nothing to fix should be free.
+    if (sameVoteStats(current, voteStats)) {
+      unchanged++;
+      continue;
+    }
+    if (votes) recomputed++;
+    else seeded++;
 
     if (commit) {
       batch.update(doc.ref, { "stats.votes": voteStats });
@@ -102,8 +112,21 @@ async function backfill() {
     `${commit ? "Wrote" : "Would write"} stats.votes on ${
       seeded + recomputed
     } extraction(s): ${recomputed} recomputed from votes, ${seeded} seeded ` +
-      `as unreviewed.`,
+      `as unreviewed. ${unchanged} already up to date.`,
   );
+}
+
+/** Shallow compare of two vote aggregates; every value is a primitive. */
+function sameVoteStats(
+  a: Record<string, unknown> | undefined,
+  b: Record<string, unknown>,
+): boolean {
+  if (!a) return false;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
 }
 
 backfill()
