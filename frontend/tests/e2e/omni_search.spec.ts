@@ -49,9 +49,9 @@ test.describe("OmniSearch", () => {
     await opoleItem.click();
     await expect(page).toHaveURL(/.*\/eksploruj\/tabela\?.*teryt=1661/);
 
-    await expect(page.locator(".v-input", { hasText: "Powiat" })).toContainText(
-      "Opole",
-    );
+    await expect(
+      page.locator(".v-input", { hasText: "Region osoby" }),
+    ).toContainText("Opole");
   });
 
   test("should dedup companies", async ({ page }) => {
