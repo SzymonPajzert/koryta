@@ -88,8 +88,6 @@
           v-for="companyData in selectedCompaniesData"
           :key="companyData.id"
           cols="12"
-          md="6"
-          lg="4"
         >
           <CardCompanySummary
             :company="companyData"
@@ -176,12 +174,13 @@ import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { parties } from "~~/shared/misc";
 import { regionFilterOptions } from "~~/shared/teryt";
-import type { Company, PersonRich } from "~~/shared/model";
+import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
 import { useEdges } from "~/composables/edges";
 import { generateEntityUrl } from "~/composables/slugs";
+import { regionNamesByPlaceId } from "~/utils/companyLocation";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -313,20 +312,10 @@ const company = computed<[string, string] | undefined>(() => {
   return undefined;
 });
 
-/** Region a company sits in.
- *
- * Company nodes carry no location of their own — the region is linked by an
- * `owns` edge, which the stats job folds into the company's target node ids.
- * Everything but the region ids is dropped by the lookup below.
- */
-function companyLocation(place: Company): string | undefined {
-  const edgeStats = user.value
-    ? place.stats?.edges.all
-    : place.stats?.edges.approved;
-  return (edgeStats?.targetNodeIds ?? [])
-    .map((id) => regions.value?.[id]?.name)
-    .find((name) => !!name);
-}
+/** Region each company sits in, keyed by company node id. */
+const companyLocations = computed(() =>
+  regionNamesByPlaceId(regions.value ?? {}, user.value ? "all" : "approved"),
+);
 
 const selectedCompaniesData = computed(() => {
   if (!filterKrs.value || !places.value) return [];
@@ -334,7 +323,7 @@ const selectedCompaniesData = computed(() => {
   const krsSet = new Set(filterKrs.value);
   for (const [id, place] of Object.entries(places.value)) {
     if (place.krsNumber && krsSet.has(place.krsNumber)) {
-      selected.push({ id, ...place, location: companyLocation(place) });
+      selected.push({ id, ...place, location: companyLocations.value[id] });
     }
   }
   return selected;

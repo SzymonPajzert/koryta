@@ -242,7 +242,21 @@
       "ództwo"
     ],
     "stats": {
-      "nodeGroupSize": 1
+      "nodeGroupSize": 1,
+      "edges": {
+        "all": {
+          "experienceMonths": 0,
+          "latestEmploymentStart": null,
+          "targetNodeIds": ["2"],
+          "currentlyEmployed": false
+        },
+        "approved": {
+          "experienceMonths": 0,
+          "latestEmploymentStart": null,
+          "targetNodeIds": ["2"],
+          "currentlyEmployed": false
+        }
+      }
     }
   },
   "teryt10": {

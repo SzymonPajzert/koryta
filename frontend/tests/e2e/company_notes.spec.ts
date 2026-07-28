@@ -21,6 +21,13 @@ test.describe("Company notes", () => {
     const companyCard = page.locator(`.v-card:has-text("${COMPANY_KRS}")`);
     await expect(companyCard).toBeVisible({ timeout: 15000 });
 
+    // The seat comes from the region -> company owns edge, not the company node
+    await expect(companyCard).toContainText("Województwo Pomorskie");
+
+    // The notes are behind a button, so the card stays a compact strip
+    await expect(companyCard).not.toContainText("na temat tej spółki");
+    await companyCard.getByRole("button", { name: "Notatki" }).click();
+
     // The prompt is company specific, not the person wording reused
     await expect(companyCard).toContainText("na temat tej spółki");
 
@@ -42,6 +49,9 @@ test.describe("Company notes", () => {
     // The note is attached to the company, so it is there on a fresh visit
     // The dev server keeps live listeners open, so "load" never settles here
     await page.goto(COMPANY_VIEW, { waitUntil: "domcontentloaded" });
+    await companyCard
+      .getByRole("button", { name: "Notatki" })
+      .click({ timeout: 30000 });
     await expect(companyCard).toContainText(url, { timeout: 30000 });
   });
 });
