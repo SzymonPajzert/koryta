@@ -101,6 +101,7 @@ import { mdiCash } from "@mdi/js";
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
+import { useQueryFilters } from "~/composables/queryFilters";
 import { parties } from "~~/shared/misc";
 import { regionFilterOptions } from "~~/shared/teryt";
 import type { Query } from "~~/server/api/nodes/index.get";
@@ -115,6 +116,8 @@ const route = useRoute();
 const router = useRouter();
 
 const DATA_LIMIT = 200;
+const { stringFilter, arrayFilter, choiceFilter } = useQueryFilters();
+
 const activeVisualisation = computed({
   get: () => route.params.type as string,
   set: (val: string) => {
@@ -154,105 +157,22 @@ const company = computed<[string, string] | undefined>(() => {
   return undefined;
 });
 
-const filterVisibility = computed<"all" | "public" | "private">({
-  get: () =>
-    (route.query.visibility as "all" | "public" | "private" | undefined) ||
-    "all",
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        visibility: val !== "all" ? val : undefined,
-      },
-    });
-  },
-});
-const filterParty = computed<string[] | null>({
-  get: () => {
-    const p = route.query.party;
-    if (!p) return null;
-    return Array.isArray(p) ? (p as string[]) : [p as string];
-  },
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        party: val && val.length > 0 ? val : undefined,
-      },
-    });
-  },
-});
-const filterTeryt = computed<string | null>({
-  get: () => {
-    return (route.query.teryt as string) || null;
-  },
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        teryt: val || undefined,
-      },
-    });
-  },
-});
-
-const filterCompanyTeryt = computed<string | null>({
-  get: () => {
-    return (route.query.companyTeryt as string) || null;
-  },
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        companyTeryt: val || undefined,
-      },
-    });
-  },
-});
-
-const filterKrs = computed<string[] | null>({
-  get: () => {
-    const k = route.query.krs;
-    if (!k) return null;
-    return [...new Set(Array.isArray(k) ? (k as string[]) : [k as string])];
-  },
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        krs: val && val.length > 0 ? val : undefined,
-      },
-    });
-  },
-});
-
-const filterCurrentlyEmployed = computed<"all" | "any" | "selected">({
-  get: () =>
-    (route.query.currentlyEmployed as "all" | "any" | "selected" | undefined) ||
-    "all",
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        currentlyEmployed: val !== "all" ? val : undefined,
-      },
-    });
-  },
-});
-
-const filterHideVoted = computed<"all" | "no_votes" | "has_votes">({
-  get: () =>
-    (route.query.hideVoted as "all" | "no_votes" | "has_votes" | undefined) ||
-    "all",
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        hideVoted: val !== "all" ? val : undefined,
-      },
-    });
-  },
-});
+const filterVisibility = choiceFilter<"all" | "public" | "private">(
+  "visibility",
+  "all",
+);
+const filterParty = arrayFilter("party");
+const filterTeryt = stringFilter("teryt");
+const filterCompanyTeryt = stringFilter("companyTeryt");
+const filterKrs = arrayFilter("krs");
+const filterCurrentlyEmployed = choiceFilter<"all" | "any" | "selected">(
+  "currentlyEmployed",
+  "all",
+);
+const filterHideVoted = choiceFilter<"all" | "no_votes" | "has_votes">(
+  "hideVoted",
+  "all",
+);
 
 const allowedCompanyNames = computed(() => {
   if (!filterKrs.value || filterKrs.value.length === 0) return null;

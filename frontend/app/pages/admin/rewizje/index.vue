@@ -44,7 +44,8 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
-import { useRouter, useRoute } from "vue-router";
+import { useRoute } from "vue-router";
+import { useQueryFilters } from "~/composables/queryFilters";
 
 definePageMeta({
   middleware: "auth",
@@ -59,10 +60,14 @@ const user = useCurrentUser();
 const isAuthReady = useIsCurrentUserLoaded();
 
 const route = useRoute();
-const router = useRouter();
+const { setQuery } = useQueryFilters();
+
+const DEFAULT_ITEMS_PER_PAGE = 10;
 
 const itemsPerPage = ref(
-  parseInt((route.query.itemsPerPage as string) || "10"),
+  parseInt(
+    (route.query.itemsPerPage as string) || String(DEFAULT_ITEMS_PER_PAGE),
+  ),
 );
 const page = ref(parseInt((route.query.page as string) || "1"));
 const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
@@ -152,18 +157,17 @@ const fetchData = async () => {
     items.value = Object.values(res.nodes);
     totalItems.value = res.total;
 
-    const newQuery = {
-      ...route.query,
-      page: String(page.value),
-      itemsPerPage: String(itemsPerPage.value),
+    // After the await above, so the user may have navigated away by now -
+    // setQuery declines to write onto whatever page they moved to.
+    setQuery({
+      page: page.value > 1 ? String(page.value) : undefined,
+      itemsPerPage:
+        itemsPerPage.value === DEFAULT_ITEMS_PER_PAGE
+          ? undefined
+          : String(itemsPerPage.value),
       sortBy: sortParam,
       sortDesc: sortDescParam,
-    };
-
-    const filteredQuery = Object.fromEntries(
-      Object.entries(newQuery).filter(([_, value]) => value !== undefined),
-    );
-    router.push({ query: filteredQuery });
+    });
   } catch (err) {
     console.error(err);
   } finally {

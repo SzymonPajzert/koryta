@@ -159,7 +159,6 @@
           :pending="pending"
           :region="region"
           :company="company"
-          @update:options="updateQueryParams"
           @focus="focusPerson"
         />
       </v-card>
@@ -169,9 +168,10 @@
 
 <script setup lang="ts">
 import { mdiCash, mdiPencilOutline, mdiOpenInNew } from "@mdi/js";
-import { ref, computed, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { computed } from "vue";
+import { useRoute } from "vue-router";
 import { useListWithStats } from "~/composables/entity/listWithStats";
+import { useQueryFilters } from "~/composables/queryFilters";
 import { parties } from "~~/shared/misc";
 import { regionFilterOptions } from "~~/shared/teryt";
 import type { PersonRich } from "~~/shared/model";
@@ -188,29 +188,47 @@ useHead({
 });
 
 const route = useRoute();
-const router = useRouter();
 
-const DEFAULT_ITEMS_PER_PAGE = "10";
+const DEFAULT_ITEMS_PER_PAGE = 10;
 
-const itemsPerPage = ref(
-  parseInt((route.query.itemsPerPage as string) || DEFAULT_ITEMS_PER_PAGE),
-);
-const page = ref(parseInt((route.query.page as string) || "1"));
+const { setQuery, stringFilter, arrayFilter, choiceFilter, numberFilter } =
+  useQueryFilters({ resetOnChange: ["page"] });
 
-watch(
-  () => route.query.page,
-  (newPage) => {
-    const p = parseInt((newPage as string) || "1");
-    if (page.value !== p) page.value = p;
+// Paging and sorting are the table's own state rather than filters, so they do
+// not reset the page - they set it.
+const page = computed<number>({
+  get: () => numberFilter("page").value ?? 1,
+  set: (val) => void setQuery({ page: val > 1 ? String(val) : undefined }),
+});
+
+const itemsPerPage = computed<number>({
+  get: () => numberFilter("itemsPerPage").value ?? DEFAULT_ITEMS_PER_PAGE,
+  set: (val) =>
+    void setQuery({
+      itemsPerPage: val === DEFAULT_ITEMS_PER_PAGE ? undefined : String(val),
+      page: undefined,
+    }),
+});
+
+type SortEntry = { key: string; order: "asc" | "desc" };
+
+const sortBy = computed<SortEntry[]>({
+  get: (): SortEntry[] => {
+    const key = (route.query.sortBy as string | undefined) || undefined;
+    if (!key) return [];
+    const order: "asc" | "desc" =
+      route.query.sortDesc === "true" ? "desc" : "asc";
+    return [{ key, order }];
   },
-);
-watch(
-  () => route.query.itemsPerPage,
-  (newItems) => {
-    const i = parseInt((newItems as string) || DEFAULT_ITEMS_PER_PAGE);
-    if (itemsPerPage.value !== i) itemsPerPage.value = i;
+  set: (val: SortEntry[]) => {
+    const sort = val[0];
+    void setQuery({
+      sortBy: sort?.key,
+      sortDesc: sort ? String(sort.order === "desc") : undefined,
+      page: undefined,
+    });
   },
-);
+});
 
 const user = useCurrentUser();
 
@@ -335,154 +353,25 @@ const entityName = computed(() => {
   return "aktualnego wyszukiwania";
 });
 
-const filterVisibility = computed<"all" | "public" | "private">({
-  get: () =>
-    (route.query.visibility as "all" | "public" | "private" | undefined) ||
-    "all",
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        visibility: val !== "all" ? val : undefined,
-      },
-    });
-  },
-});
-const filterParty = computed<string[] | null>({
-  get: () => {
-    const p = route.query.party;
-    if (!p) return null;
-    return Array.isArray(p) ? (p as string[]) : [p as string];
-  },
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        party: val && val.length > 0 ? val : undefined,
-      },
-    });
-  },
-});
-const filterTeryt = computed<string | null>({
-  get: () => {
-    return (route.query.teryt as string) || null;
-  },
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        teryt: val || undefined,
-      },
-    });
-  },
-});
-
-const filterCompanyTeryt = computed<string | null>({
-  get: () => (route.query.companyTeryt as string) || null,
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        companyTeryt: val || undefined,
-      },
-    });
-  },
-});
-
-const filterKrs = computed<string[] | null>({
-  get: () => {
-    const k = route.query.krs;
-    if (!k) return null;
-    return [...new Set(Array.isArray(k) ? (k as string[]) : [k as string])];
-  },
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        krs: val && val.length > 0 ? val : undefined,
-      },
-    });
-  },
-});
-
-const filterCategory = computed<string | null>({
-  get: () => (route.query.category as string) || null,
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        category: val || undefined,
-      },
-    });
-  },
-});
-
-const filterCurrentlyEmployed = computed<"all" | "any" | "selected">({
-  get: () =>
-    (route.query.currentlyEmployed as "all" | "any" | "selected" | undefined) ||
-    "all",
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        currentlyEmployed: val !== "all" ? val : undefined,
-      },
-    });
-  },
-});
-
-const filterHideVoted = computed<"all" | "no_votes" | "has_votes">({
-  get: () =>
-    (route.query.hideVoted as "all" | "no_votes" | "has_votes" | undefined) ||
-    "all",
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        hideVoted: val !== "all" ? val : undefined,
-      },
-    });
-  },
-});
-
-const filterMinEmploymentDate = computed<string | null>({
-  get: () => (route.query.minEmploymentDate as string) || null,
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        minEmploymentDate: val || undefined,
-      },
-    });
-  },
-});
-
-const filterMinVotes = computed<number | null>({
-  get: () => {
-    const v = route.query.minVotes as string | undefined;
-    if (v == null) return null;
-    const n = parseInt(v);
-    return isNaN(n) ? null : n;
-  },
-  set: (val) => {
-    router.push({
-      query: {
-        ...route.query,
-        page: 1,
-        minVotes: val != null ? String(val) : undefined,
-      },
-    });
-  },
-});
+const filterVisibility = choiceFilter<"all" | "public" | "private">(
+  "visibility",
+  "all",
+);
+const filterParty = arrayFilter("party");
+const filterTeryt = stringFilter("teryt");
+const filterCompanyTeryt = stringFilter("companyTeryt");
+const filterKrs = arrayFilter("krs");
+const filterCategory = stringFilter("category");
+const filterCurrentlyEmployed = choiceFilter<"all" | "any" | "selected">(
+  "currentlyEmployed",
+  "all",
+);
+const filterHideVoted = choiceFilter<"all" | "no_votes" | "has_votes">(
+  "hideVoted",
+  "all",
+);
+const filterMinEmploymentDate = stringFilter("minEmploymentDate");
+const filterMinVotes = numberFilter("minVotes");
 
 const availableRegions = computed(() =>
   regionFilterOptions(Object.values(regions.value ?? {})),
@@ -502,26 +391,18 @@ const availableParties = computed(() => {
   ];
 });
 
-const sortBy = ref<{ key: string; order: "asc" | "desc" }[]>(
-  route.query.sortBy
-    ? [
-        {
-          key: route.query.sortBy as string,
-          order: route.query.sortDesc === "true" ? "desc" : "asc",
-        },
-      ]
-    : [],
-);
 const apiQuery = computed(
   () =>
     ({
       type: "person",
-      limit: parseInt(
-        (route.query.itemsPerPage as string) || DEFAULT_ITEMS_PER_PAGE,
-      ),
-      page: parseInt((route.query.page as string) || "1"),
-      sortBy: route.query.sortBy as string | undefined,
-      sortDesc: route.query.sortDesc as "true" | "false" | undefined,
+      limit: itemsPerPage.value,
+      page: page.value,
+      sortBy: sortBy.value[0]?.key,
+      sortDesc: sortBy.value[0]
+        ? ((sortBy.value[0].order === "desc" ? "true" : "false") as
+            | "true"
+            | "false")
+        : undefined,
       parties:
         filterParty.value && filterParty.value.length > 0
           ? filterParty.value
@@ -555,50 +436,6 @@ const { tableItems, totalItems, pending } = await useListWithStats(
   apiQuery,
   "eksploruj-tabela-data",
 );
-
-const updateQueryParams = async (options: {
-  sortBy: { key: string; order: string }[];
-  page: number;
-  itemsPerPage: number;
-}) => {
-  const sortParam =
-    options.sortBy.length > 0 ? options.sortBy[0]?.key : undefined;
-  const sortDescParam =
-    options.sortBy.length > 0
-      ? options.sortBy[0]?.order === "desc"
-        ? "true"
-        : "false"
-      : undefined;
-
-  const currentQuery = route.query;
-  const rawQuery = {
-    ...currentQuery,
-    page: String(options.page),
-    itemsPerPage: String(options.itemsPerPage),
-    sortBy: sortParam,
-    sortDesc: sortDescParam,
-  };
-
-  const newQuery = Object.fromEntries(
-    Object.entries(rawQuery).filter(([_, value]) => value !== undefined),
-  );
-
-  const isChanged =
-    String(currentQuery.page || "1") !== String(options.page) ||
-    String(currentQuery.itemsPerPage || "50") !==
-      String(options.itemsPerPage) ||
-    currentQuery.sortBy !== sortParam ||
-    currentQuery.sortDesc !== sortDescParam;
-
-  if (!isChanged) {
-    if (!currentQuery.page || !currentQuery.itemsPerPage) {
-      await router.replace({ query: newQuery });
-    }
-    return;
-  }
-
-  await router.push({ query: newQuery });
-};
 
 const openDrawer = shallowRef(false);
 const focusedPerson = shallowRef<PersonRich | undefined>(undefined);

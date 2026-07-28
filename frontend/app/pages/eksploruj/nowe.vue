@@ -207,8 +207,9 @@ import {
   mdiInformation,
   mdiCircleSmall,
 } from "@mdi/js";
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
+import { useQueryFilters } from "~/composables/queryFilters";
 import { companyCategories } from "~~/shared/companyCategories";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
@@ -231,20 +232,16 @@ const showInstructions = useCookie<boolean>("show-explore-new-instructions", {
 });
 const user = useCurrentUser();
 
-const route = useRoute();
-const router = useRouter();
 const availableCategories = companyCategories.map((c) => ({
   title: c.title,
   value: c.value,
 }));
-const filterCategory = computed<string | null>({
-  get: () => (route.query.category as string) || null,
-  set: (val) => {
-    page.value = 1;
-    router.push({
-      query: { ...route.query, category: val || undefined },
-    });
-  },
+const { stringFilter } = useQueryFilters();
+const filterCategory = stringFilter("category");
+
+// The card stack is paged in memory rather than through the url.
+watch(filterCategory, () => {
+  page.value = 1;
 });
 
 const actionExplored = ref(false);
