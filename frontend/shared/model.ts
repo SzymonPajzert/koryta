@@ -70,6 +70,9 @@ export type VoteDocument = {
   extractionId?: string;
   userUid: string;
   categoryVotes: Record<string, number>;
+  // Free-text note the reviewer left alongside the verdict. Not aggregated —
+  // it is read back only by whoever reviews the extraction pipeline.
+  comment?: string;
   updatedAt?: string;
 };
 

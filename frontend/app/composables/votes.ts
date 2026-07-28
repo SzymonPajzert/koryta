@@ -146,3 +146,35 @@ export async function castVoteOnce(
   );
   return true;
 }
+
+/** Attach a free-text comment to the caller's vote on a target.
+ *
+ * Shares the one-doc-per-(target, user) layout of `castVoteOnce`, so a comment
+ * written before any verdict still lands on the same document. Returns false if
+ * there is no signed-in user. */
+export async function saveCommentOnce(
+  targetId: string,
+  comment: string,
+  target: VoteTarget = "node",
+): Promise<boolean> {
+  const user = useCurrentUser();
+  if (!user.value) return false;
+
+  const firebaseApp = useFirebaseApp();
+  const db = getFirestore(firebaseApp, "koryta-pl");
+
+  await setDoc(
+    doc(db, "votes", `${targetId}_${user.value.uid}`),
+    {
+      [target === "extraction" ? "extractionId" : "nodeId"]: targetId,
+      userUid: user.value.uid,
+      // The aggregation trigger reads this field unconditionally, so it has to
+      // exist even on the path where the comment arrives before any verdict.
+      categoryVotes: {},
+      comment,
+      updatedAt: new Date().toISOString(),
+    } as VoteDocument,
+    { merge: true },
+  );
+  return true;
+}

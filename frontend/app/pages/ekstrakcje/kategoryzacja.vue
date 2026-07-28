@@ -50,12 +50,14 @@
 
       <!-- Desktop fallback buttons -->
       <div v-if="currentFact" class="mt-6">
+        <!-- Four buttons have to share one row, so the icons go on wider
+             screens only — a phone has room for the labels or the icons. -->
         <div class="d-flex justify-center align-center ga-2">
           <v-btn
             color="error"
             variant="tonal"
             :size="smAndUp ? 'large' : 'default'"
-            :prepend-icon="mdiCloseCircleOutline"
+            :prepend-icon="smAndUp ? mdiCloseCircleOutline : undefined"
             @click="recordVote('incorrect')"
           >
             Błędny
@@ -64,7 +66,7 @@
             color="warning"
             variant="tonal"
             :size="smAndUp ? 'large' : 'default'"
-            :prepend-icon="mdiHelpCircleOutline"
+            :prepend-icon="smAndUp ? mdiHelpCircleOutline : undefined"
             @click="recordVote('insufficient')"
           >
             Nie wiem
@@ -73,11 +75,47 @@
             color="success"
             variant="tonal"
             :size="smAndUp ? 'large' : 'default'"
-            :append-icon="mdiCheckCircleOutline"
+            :append-icon="smAndUp ? mdiCheckCircleOutline : undefined"
             @click="recordVote('correct')"
           >
             Dobry
           </v-btn>
+          <v-btn
+            :size="smAndUp ? 'large' : 'default'"
+            :icon="mdiCommentTextOutline"
+            variant="text"
+            :color="commentOpen ? 'primary' : undefined"
+            aria-label="Skomentuj"
+            @click="commentOpen = true"
+          />
+        </div>
+
+        <!-- Comment: never advances on its own, so a verdict is still needed. -->
+        <div v-if="commentOpen" class="comment-section mx-auto mt-4">
+          <v-textarea
+            v-model="comment"
+            label="Komentarz (opcjonalny)"
+            rows="3"
+            auto-grow
+            hide-details
+            variant="outlined"
+            density="comfortable"
+            autofocus
+          />
+          <div class="d-flex justify-end mt-2">
+            <v-btn
+              v-if="verdictGiven"
+              color="primary"
+              variant="tonal"
+              :append-icon="mdiArrowRight"
+              @click="advance()"
+            >
+              Dalej
+            </v-btn>
+            <span v-else class="text-caption text-medium-emphasis py-2">
+              Wybierz jeszcze ocenę powyżej.
+            </span>
+          </div>
         </div>
       </div>
 
@@ -120,9 +158,11 @@
 import { ref, computed, watch, onMounted } from "vue";
 import {
   mdiArrowLeft,
+  mdiArrowRight,
   mdiCheckAll,
   mdiCheckCircleOutline,
   mdiCloseCircleOutline,
+  mdiCommentTextOutline,
   mdiHelpCircleOutline,
 } from "@mdi/js";
 import { useDisplay } from "vuetify";
@@ -134,7 +174,7 @@ import {
   useIsCurrentUserLoaded,
 } from "vuefire";
 import { useExtractions } from "~/composables/extractions";
-import { castVoteOnce } from "~/composables/votes";
+import { castVoteOnce, saveCommentOnce } from "~/composables/votes";
 import { factSubject } from "~/utils/extraction";
 import type { ExtractionFact, VoteDocument } from "~~/shared/model";
 
@@ -257,6 +297,16 @@ const relatedFacts = computed<ExtractionFact[]>(() => {
 
 type Verdict = "correct" | "incorrect" | "insufficient";
 
+// The comment box is opt-in per card: either the reviewer asks for it, or an
+// "incorrect" verdict opens it, since that is the one worth explaining. It never
+// advances by itself — a verdict is always required.
+const comment = ref("");
+const commentOpen = ref(false);
+// Whether a verdict was cast on the card on screen. Tracked separately from
+// `votedIds`, which also counts other reviewers' verdicts and would offer
+// "Dalej" on a deep-linked card this reviewer has not judged.
+const verdictGiven = ref(false);
+
 function recordVote(verdict: Verdict) {
   const fact = currentFact.value;
   if (!fact?.id) return;
@@ -275,6 +325,25 @@ function recordVote(verdict: Verdict) {
   }
 
   sessionVotedIds.value = new Set(sessionVotedIds.value).add(fact.id);
+  verdictGiven.value = true;
+
+  if (verdict === "incorrect") {
+    // Hold the card so the reviewer can say what is wrong with it; "Dalej"
+    // moves on whether or not they write anything.
+    commentOpen.value = true;
+    return;
+  }
+  advance();
+}
+
+function advance() {
+  const fact = currentFact.value;
+  const text = comment.value.trim();
+  if (fact?.id && text) saveCommentOnce(fact.id, text, "extraction");
+
+  comment.value = "";
+  commentOpen.value = false;
+  verdictGiven.value = false;
 
   // Stay in context: if related facts remain, review one of those next so the
   // surrounding facts stay on screen; otherwise take the next unreviewed fact.
@@ -331,6 +400,7 @@ onMounted(() => syncUrlToFact(currentFact.value));
   max-width: 480px;
 }
 
+.comment-section,
 .related-section {
   max-width: 480px;
 }
