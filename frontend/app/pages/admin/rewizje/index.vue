@@ -32,7 +32,7 @@
             :color="item.revisions.has_unapproved ? 'warning' : 'success'"
             size="small"
           >
-            {{ item.revisions.has_unapproved ? "Tak" : "Nie" }}
+            {{ item.revisions.has_unapproved ? "Nie" : "Tak" }}
           </v-chip>
           <span v-else>-</span>
         </template>
@@ -87,11 +87,15 @@ const headers = [
   { title: "Rewizje łącznie", key: "revisions.total", sortable: true },
   { title: "Ostatnia rewizja", key: "revisions.latest_time", sortable: true },
   {
-    title: "Niezaakceptowane",
+    title: "Zaakceptowane",
     key: "revisions.has_unapproved",
     sortable: true,
   },
 ];
+
+// The column reads "Zaakceptowane" but the field behind it stores the opposite,
+// so its sort has to travel the other way to match the direction clicked.
+const INVERTED_SORT_KEYS = new Set(["revisions.has_unapproved"]);
 
 interface RevisionItem {
   id: string;
@@ -140,6 +144,12 @@ const fetchData = async () => {
           ? "true"
           : "false"
         : undefined;
+    const apiSortDesc =
+      sortParam && INVERTED_SORT_KEYS.has(sortParam)
+        ? sortDescParam === "true"
+          ? "false"
+          : "true"
+        : sortDescParam;
 
     const res = await $fetch<{
       nodes: Record<string, RevisionItem>;
@@ -149,7 +159,7 @@ const fetchData = async () => {
         page: page.value,
         limit: itemsPerPage.value,
         sortBy: sortParam,
-        sortDesc: sortDescParam,
+        sortDesc: apiSortDesc,
       },
       headers: headersInit,
     });
