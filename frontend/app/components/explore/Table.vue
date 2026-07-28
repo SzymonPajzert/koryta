@@ -9,6 +9,7 @@
     :items-length="totalItems"
     :loading="pending"
     :items-per-page-text="itemsPerPageText"
+    :items-per-page-options="itemsPerPageOptions"
     :no-data-text="noDataText"
     :loading-text="loadingText"
     :hide-default-footer="hideDefaultFooter"
@@ -221,6 +222,7 @@ withDefaults(
     headers: Record<string, unknown>[];
     noDataText?: string;
     itemsPerPageText?: string;
+    itemsPerPageOptions?: { value: number; title: string }[];
     loadingText?: string;
     hideDefaultFooter?: boolean;
     region?: [string, string];
@@ -233,6 +235,15 @@ withDefaults(
     sortBy: () => [],
     noDataText: "Brak danych",
     itemsPerPageText: "Wierszy na stronę:",
+    // Vuetify's defaults, except that the last one is labelled by its English
+    // locale string ("All") - the app never sets a Polish locale.
+    itemsPerPageOptions: () => [
+      { value: 10, title: "10" },
+      { value: 25, title: "25" },
+      { value: 50, title: "50" },
+      { value: 100, title: "100" },
+      { value: -1, title: "Wszystkie" },
+    ],
     loadingText: "Ładowanie...",
     hideDefaultFooter: false,
     disableFocus: false,
