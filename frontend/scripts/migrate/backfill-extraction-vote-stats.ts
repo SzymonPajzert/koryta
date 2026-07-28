@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { computeVoteStats } from "../shared/stats";
-import type { VoteDocument } from "../shared/model";
+import { computeVoteStats } from "../../shared/stats";
+import type { VoteDocument } from "../../shared/model";
 
 /**
  * One-time migration: give every extraction a `stats.votes` aggregate.
