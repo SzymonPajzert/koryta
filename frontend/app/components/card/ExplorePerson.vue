@@ -1,6 +1,6 @@
 <template>
   <v-card v-if="person" class="ma-2" flat>
-    <v-card-title class="text-wrap text-h5 mb-2">
+    <v-card-title class="text-wrap text-h5 mb-2 d-flex align-center ga-2">
       <NuxtLink
         :to="`/osoba/${person.id}`"
         class="text-decoration-none text-primary"
@@ -8,6 +8,12 @@
       >
         {{ person.name }}
       </NuxtLink>
+      <PartyChip
+        v-for="party in person.parties"
+        :key="party"
+        :party
+        class="text-body-2"
+      />
     </v-card-title>
 
     <v-card-text>
