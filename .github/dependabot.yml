@@ -1,53 +1,58 @@
 version: 2
+
+# The aim here is a small, fixed number of pull requests per month rather than
+# one per dependency. Ungrouped majors were the main source of churn: each one
+# arrives as its own branch, none of them is worth reviewing on its own, and
+# they sit open for months going stale. They are grouped now too, so a round of
+# majors is one PR to take or close rather than five.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 7
     groups:
-      minor-updates:
-        update-types:
-          - "minor"
-          - "patch"
+      actions:
+        patterns: ["*"]
 
   - package-ecosystem: "npm"
-    directory: "/frontend"
+    # /functions and /util never existed at these paths, so those two entries
+    # updated nothing. The second npm project is frontend/functions.
+    directories:
+      - "/frontend"
+      - "/frontend/functions"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
     ignore:
       - dependency-name: "digraph-js"
-    schedule:
-      interval: "weekly"
+      # nuxt-og-image, pulled in by @nuxtjs/seo, peers on sharp ^0.34. Taking
+      # 0.35 at the root leaves that peer unsatisfiable, npm nests nuxt-og-image
+      # under @nuxtjs/seo, and Nuxt can no longer resolve it by name — every
+      # frontend job then dies in `nuxt prepare`. Drop this once nuxt-og-image
+      # widens the range.
+      - dependency-name: "sharp"
+        versions: [">=0.35"]
     groups:
-      minor-updates:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "npm"
-    directory: "/functions"
-    schedule:
-      interval: "weekly"
-    groups:
-      minor-updates:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "pip"
-    directory: "/util"
-    schedule:
-      interval: "weekly"
-    groups:
-      minor-updates:
-        update-types:
-          - "minor"
-          - "patch"
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+      major:
+        update-types: ["major"]
 
   - package-ecosystem: "pip"
     directory: "/data/scrapers"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
     groups:
-      minor-updates:
-        update-types:
-          - "minor"
-          - "patch"
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+      major:
+        update-types: ["major"]
