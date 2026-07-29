@@ -11,10 +11,10 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
  * untouched — after which every category vote sets exactly one target.
  *
  * Usage (against the running dev:prod-data emulator):
- *   npx tsx scripts/migrate-vote-target-fields.ts            # dry run
- *   npx tsx scripts/migrate-vote-target-fields.ts --commit   # apply
+ *   npx tsx scripts/migrate/migrate-vote-target-fields.ts            # dry run
+ *   npx tsx scripts/migrate/migrate-vote-target-fields.ts --commit   # apply
  * Against production:
- *   npx tsx scripts/migrate-vote-target-fields.ts --prod --commit
+ *   npx tsx scripts/migrate/migrate-vote-target-fields.ts --prod --commit
  */
 
 const isProd = process.argv.includes("--prod");

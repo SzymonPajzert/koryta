@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
+import { edgeDocumentId, edgeIdentity, findEdge } from "~~/server/utils/edges";
 import { electionPositions } from "~~/shared/misc";
 import type { Edge, Article, Person, ElectionPosition } from "~~/shared/model";
 import {
@@ -139,6 +140,17 @@ function createPerson(body: Partial<Person>): Person {
 }
 
 class Context {
+  /** Edges found or written during this request, by `edgeIdentity`.
+   *
+   * A payload routinely carries several ties between the same pair - two posts
+   * at one company, two elections in one region - and the employments are even
+   * resolved concurrently. Since nothing is committed until the end, a lookup
+   * cannot see what an earlier one just added, so without this each of them
+   * writes its own copy. That is where the bulk of the duplicate edges in the
+   * database came from.
+   */
+  readonly edgeIds = new Map<string, string>();
+
   constructor(
     readonly db: FirebaseFirestore.Firestore,
     readonly user: { uid: string },
@@ -359,26 +371,34 @@ async function lookupNode(
   return undefined;
 }
 
+/** The edge recording this fact, creating it if the database has no such edge.
+ *
+ * Matched on everything that distinguishes one edge from another, not just on
+ * the pair it joins: two posts at the same company are two edges, and the
+ * previous `(source, target)` lookup collapsed them - returning an unrelated
+ * edge between the same two nodes and quietly dropping the second fact.
+ */
 async function findEdgeOrCreate(ctx: Context, edge: Edge) {
-  const edgeSnap = await ctx.db
-    .collection("edges")
-    .where("source", "==", edge.source)
-    .where("target", "==", edge.target)
-    .limit(1)
-    .get();
+  const identity = edgeIdentity(edge);
+  const seen = ctx.edgeIds.get(identity);
+  if (seen) return seen;
 
-  if (edgeSnap.empty) {
-    const edgeRef = ctx.db.collection("edges").doc();
-    createRevisionTransaction(
-      ctx.db,
-      ctx.batch,
-      ctx.user,
-      edgeRef,
-      edge,
-      true,
-      ctx.autoapprove,
-    );
-    return edgeRef.id;
+  const existing = await findEdge(ctx.db, edge);
+  if (existing) {
+    ctx.edgeIds.set(identity, existing);
+    return existing;
   }
-  return edgeSnap.docs[0]?.id;
+
+  const edgeRef = ctx.db.collection("edges").doc(edgeDocumentId(edge));
+  createRevisionTransaction(
+    ctx.db,
+    ctx.batch,
+    ctx.user,
+    edgeRef,
+    edge,
+    true,
+    ctx.autoapprove,
+  );
+  ctx.edgeIds.set(identity, edgeRef.id);
+  return edgeRef.id;
 }

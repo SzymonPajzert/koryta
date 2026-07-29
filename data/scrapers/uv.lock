@@ -2240,14 +2240,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pl-core-news-lg"
-version = "3.8.0"
-source = { url = "https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl" }
-wheels = [
-    { url = "https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl", hash = "sha256:3bc7296cd4d67fa9ee0904b25401b0e9a9a772d5c4756edf54143a2ff4c9dcc0" },
-]
-
-[[package]]
 name = "platformdirs"
 version = "4.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3126,7 +3118,6 @@ dev = [
 ]
 ml = [
     { name = "beautifulsoup4" },
-    { name = "pl-core-news-lg" },
     { name = "seaborn" },
     { name = "spacy" },
     { name = "spacy-legacy" },
@@ -3275,7 +3266,6 @@ dev = [
 ]
 ml = [
     { name = "beautifulsoup4", specifier = "==4.15.0" },
-    { name = "pl-core-news-lg", url = "https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl" },
     { name = "seaborn", specifier = ">=0.13.2,<0.14.0" },
     { name = "spacy", specifier = "==3.8.7" },
     { name = "spacy-legacy", specifier = "==3.0.12" },

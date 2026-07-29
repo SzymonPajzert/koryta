@@ -425,12 +425,61 @@ describe("api/ingest/company", () => {
     });
     // The link is already there - e.g. an earlier run, or an edge written with
     // the old random id.
-    mockGet.mockResolvedValueOnce({ empty: false, docs: [{ id: "legacy" }] });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        {
+          id: "legacy",
+          data: () => ({
+            source: "teryt1061",
+            target: "company-id",
+            type: "owns",
+          }),
+        },
+      ],
+    });
 
     const result = await handler({} as any);
 
     expect(result).toMatchObject({ region: "existing" });
     // Node revision only; no second edge.
     expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("still writes the edge when the stored one says something else", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "123456",
+      name: "Regional Company",
+      teryt: "1061",
+    });
+
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "company-id" });
+    mockDoc.mockReturnValueOnce({
+      id: "teryt1061",
+      get: vi.fn().mockResolvedValue({ exists: true }),
+    });
+    // Same pair and type, but the stored edge carries dates - a different fact,
+    // which the old (source, target, type) lookup would have collapsed onto.
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        {
+          id: "dated",
+          data: () => ({
+            source: "teryt1061",
+            target: "company-id",
+            type: "owns",
+            start_date: "2020-01-01",
+          }),
+        },
+      ],
+    });
+
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ region: "added" });
+    // Node revision and the new edge's.
+    expect(createRevisionTransaction).toHaveBeenCalledTimes(2);
   });
 });

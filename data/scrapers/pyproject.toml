@@ -141,7 +141,8 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 ml = [
-    '''pl_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl#sha256=3bc7296cd4d67fa9ee0904b25401b0e9a9a772d5c4756edf54143a2ff4c9dcc0''',
+    # pl_core_news_lg is not here: stores.textmodel.ner fetches it at runtime,
+    # since a URL dependency costs a 612 MB download on every resolution.
     "beautifulsoup4==4.15.0",
     "seaborn (>=0.13.2,<0.14.0)",
     "tokenizers==0.22.2",
@@ -231,7 +232,11 @@ max-branches = 15
 "src/stores/storage.py" = ["PLR0402"]
 
 [tool.pytest.ini_options]
-markers = ["parametrize_skip_if"]
+markers = [
+    "parametrize_skip_if",
+    # Reads the production Firestore export from GCS rather than fixtures.
+    "integration",
+]
 # addopts = "--cov=src --cov-report=term:skip-covered --durations=5"
 addopts = "--durations=5 --ff-group-by-module"
 

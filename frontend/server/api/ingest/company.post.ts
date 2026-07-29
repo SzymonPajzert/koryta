@@ -10,7 +10,8 @@ import {
   type CompanyRequest as Request,
 } from "#shared/api";
 import { categoriesFromActivity } from "#shared/companyCategories";
-import { pageIsPublic } from "#shared/model";
+import { pageIsPublic, type EdgeType } from "#shared/model";
+import { edgeDocumentId, findEdge } from "~~/server/utils/edges";
 
 export default defineEventHandler(async (event) => {
   console.info("Handling ingest/company.post");
@@ -48,18 +49,14 @@ export default defineEventHandler(async (event) => {
     approve,
   );
 
+  const dbb = { db, batch, user, added: new Set<string>() };
+
   // Process 'owns' relationships
   if (body.owners && Array.isArray(body.owners)) {
     for (const parent of body.owners) {
       if (!parent) continue;
       const { ref: parentRef } = await findCompanyByKRS(db, parent, false);
-      await createEdge(
-        { db, batch, user },
-        parentRef.id,
-        nodeRef.id,
-        "owns",
-        approve,
-      );
+      await createEdge(dbb, parentRef.id, nodeRef.id, "owns", approve);
     }
   }
 
@@ -69,7 +66,7 @@ export default defineEventHandler(async (event) => {
     const regionNodeId = await findRegionByTeryt(db, body.teryt);
     if (regionNodeId) {
       const added = await createEdge(
-        { db, batch, user },
+        dbb,
         regionNodeId,
         nodeRef.id,
         "owns",
@@ -95,11 +92,15 @@ type DBB = {
   db: FirebaseFirestore.Firestore;
   batch: FirebaseFirestore.WriteBatch;
   user: { uid: string };
+  /** Edge ids already added to this request's batch, so a payload listing the
+   * same owner twice does not write the link - and a second revision of it -
+   * twice over. A lookup cannot catch that: the batch is not committed yet. */
+  added: Set<string>;
 };
 
 /** Links two nodes, at most once.
  *
- * The edge id is derived from the triple it represents, matching the scheme the
+ * The edge id is derived from what the edge represents, matching the scheme the
  * region pipeline already uses (`edge_<source>_<target>_<type>`), so re-running
  * an ingest cannot create a second copy of the same link. Edges written before
  * this carried random ids, so an existing link is looked up by its fields
@@ -112,26 +113,22 @@ async function createEdge(
   dbb: DBB,
   source: string,
   target: string,
-  type: string,
+  type: EdgeType,
   approve: boolean,
 ): Promise<boolean> {
-  const { db, batch, user } = dbb;
+  const { db, batch, user, added } = dbb;
   const edgeData = { source, target, type };
 
-  const existing = await db
-    .collection("edges")
-    .where("source", "==", source)
-    .where("target", "==", target)
-    .where("type", "==", type)
-    .limit(1)
-    .get();
-  if (!existing.empty) {
+  const edgeId = edgeDocumentId(edgeData);
+  if (added.has(edgeId)) {
     return false;
   }
+  if (await findEdge(db, edgeData)) {
+    return false;
+  }
+  added.add(edgeId);
 
-  const edgeRef = db
-    .collection("edges")
-    .doc(`edge_${source}_${target}_${type}`);
+  const edgeRef = db.collection("edges").doc(edgeId);
   createRevisionTransaction(db, batch, user, edgeRef, edgeData, true, approve);
   return true;
 }

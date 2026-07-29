@@ -4688,21 +4688,6 @@ tests = ["check-manifest", "coverage (>=7.4.2)", "defusedxml", "markdown2", "ole
 xmp = ["defusedxml"]
 
 [[package]]
-name = "pl_core_news_lg"
-version = "3.8.0"
-description = "Polish pipeline optimized for CPU. Components: tok2vec, morphologizer, parser, lemmatizer (trainable_lemmatizer), tagger, senter, ner."
-optional = false
-python-versions = "*"
-groups = ["ml"]
-files = [
-    {file = "pl_core_news_lg-3.8.0-py3-none-any.whl", hash = "sha256:3bc7296cd4d67fa9ee0904b25401b0e9a9a772d5c4756edf54143a2ff4c9dcc0"},
-]
-
-[package.source]
-type = "url"
-url = "https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl"
-
-[[package]]
 name = "platformdirs"
 version = "4.9.6"
 description = "A small Python package for determining appropriate platform-specific dirs, e.g. a `user data dir`."
@@ -7572,4 +7557,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "947e73ad5eb1d96c45eb8dba73f05bc4391b05ef62b87b04dddc46aecabb6b31"
+content-hash = "dbc428c74a40601e35bc36f9c426f5897045379cfc7b153d1814cdd3834d0c2e"

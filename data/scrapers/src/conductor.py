@@ -24,7 +24,6 @@ from stores.config import PROJECT_ROOT
 from stores.download import CompressedMirror, FileSource
 from stores.duckdb import EntityDumper
 from stores.firestore import FirestoreIO
-from stores.nlp import NLPImpl
 from stores.rejestr import Rejestr
 from stores.storage import BatchClient
 from stores.storage import Client as CloudStorageClient
@@ -190,6 +189,10 @@ def setup_context(
 
     nlp = None
     if use_nlp:
+        # We're importing dynamically here
+        # to avoid big dependency on spacy
+        from stores.nlp import NLPImpl  # noqa: PLC0415
+
         nlp = NLPImpl()
 
     ctx = Context(

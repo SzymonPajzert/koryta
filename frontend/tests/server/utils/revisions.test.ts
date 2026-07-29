@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   getRevisionsForNodes,
   createRevisionTransaction,
+  sanitizeFirestoreData,
 } from "../../../server/utils/revisions";
 import type {
   Firestore,
@@ -34,6 +35,64 @@ const mockDb = {
   collection: mockCollection,
   batch: vi.fn().mockReturnValue(mockBatch),
 } as unknown as Firestore;
+
+describe("sanitizeFirestoreData", () => {
+  it("keeps a top-level array field an array", () => {
+    // The whole point: `parties` is queried with array-contains-any, which
+    // matches nothing against a map and does not raise.
+    expect(sanitizeFirestoreData({ parties: ["PiS", "PSL"] })).toEqual({
+      parties: ["PiS", "PSL"],
+    });
+  });
+
+  it("keeps an empty array an array", () => {
+    // `{}` would not match the "no party" filter either, which looks for
+    // `parties == []`.
+    expect(sanitizeFirestoreData({ parties: [] })).toEqual({ parties: [] });
+  });
+
+  it("keeps arrays nested inside objects arrays", () => {
+    expect(sanitizeFirestoreData({ note: { sources: ["a", "b"] } })).toEqual({
+      note: { sources: ["a", "b"] },
+    });
+  });
+
+  it("rewrites an array directly inside an array as a map", () => {
+    // Firestore has no array-of-arrays, so this one really cannot be stored.
+    expect(sanitizeFirestoreData({ grid: [["a", "b"], ["c"]] })).toEqual({
+      grid: [{ 0: "a", 1: "b" }, { 0: "c" }],
+    });
+  });
+
+  it("keeps an array of objects, including their own arrays", () => {
+    expect(
+      sanitizeFirestoreData({
+        sources: [{ url: "u", tags: ["x"] }],
+      }),
+    ).toEqual({ sources: [{ url: "u", tags: ["x"] }] });
+  });
+
+  it("drops undefined and null fields", () => {
+    expect(sanitizeFirestoreData({ a: 1, b: undefined, c: null })).toEqual({
+      a: 1,
+    });
+  });
+
+  it("drops undefined and null array elements rather than leaving holes", () => {
+    // Firestore rejects an undefined element outright.
+    expect(sanitizeFirestoreData({ tags: ["a", null, "b"] })).toEqual({
+      tags: ["a", "b"],
+    });
+  });
+
+  it("leaves primitives alone", () => {
+    expect(sanitizeFirestoreData({ n: 1, s: "x", b: false })).toEqual({
+      n: 1,
+      s: "x",
+      b: false,
+    });
+  });
+});
 
 describe("createRevisionTransaction", () => {
   beforeEach(() => {

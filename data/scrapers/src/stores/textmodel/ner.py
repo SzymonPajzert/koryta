@@ -1,13 +1,27 @@
+import hashlib
 import re
+import tempfile
+import urllib.request
 from pathlib import Path
 from statistics import mean
 from typing import Dict, List
+from zipfile import ZipFile
 
 import spacy
 import stanza  # type: ignore
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
 
 from entities.ner import NEREntities
+
+SPACY_MODEL = "pl_core_news_lg"
+SPACY_MODEL_VERSION = "3.8.0"
+SPACY_MODEL_URL = (
+    "https://github.com/explosion/spacy-models/releases/download/"
+    f"{SPACY_MODEL}-{SPACY_MODEL_VERSION}/"
+    f"{SPACY_MODEL}-{SPACY_MODEL_VERSION}-py3-none-any.whl"
+)
+# The hash the dependency on this wheel used to carry.
+SPACY_MODEL_SHA256 = "3bc7296cd4d67fa9ee0904b25401b0e9a9a772d5c4756edf54143a2ff4c9dcc0"
 
 
 class HerbertNERClient:
@@ -215,10 +229,52 @@ class StanzaNERClient:
 class SpacyUtils:
     _nlp_spacy = None
 
+    def __init__(self):
+        self.model_dir = Path("models") / "spacy"
+
+    def _download_model(self, model_path: Path):
+        """Unpack the model wheel by hand, the way stanza.download would.
+
+        spacy.cli.download shells out to pip, which a uv-managed venv does not
+        have. The wheel is a zip holding the model under
+        <package>/<package>-<version>/, so unpacking it is all pip would do.
+        """
+        self.model_dir.mkdir(parents=True, exist_ok=True)
+
+        with tempfile.TemporaryDirectory(dir=self.model_dir) as staging:
+            wheel = Path(staging) / f"{SPACY_MODEL}.whl"
+            print(f"Downloading {SPACY_MODEL_URL}...")
+            urllib.request.urlretrieve(SPACY_MODEL_URL, wheel)
+
+            digest = hashlib.sha256()
+            with wheel.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1 << 20), b""):
+                    digest.update(chunk)
+
+            if digest.hexdigest() != SPACY_MODEL_SHA256:
+                raise ValueError(
+                    f"{SPACY_MODEL} wheel hashes to {digest.hexdigest()}, "
+                    f"expected {SPACY_MODEL_SHA256}"
+                )
+
+            with ZipFile(wheel) as archive:
+                archive.extractall(staging)
+
+            unpacked = Path(staging, SPACY_MODEL, model_path.name)
+            unpacked.rename(model_path)
+
     def _get_nlp_spacy(self):
         if self._nlp_spacy is None:
+            model_path = self.model_dir / f"{SPACY_MODEL}-{SPACY_MODEL_VERSION}"
+
+            if not model_path.is_dir():
+                print(f"Model is downloaded from external resource to {model_path}")
+                self._download_model(model_path)
+            else:
+                print(f"Model already exists in location: {model_path}")
+
             print("Loading spacy NLP...")
-            SpacyUtils._nlp_spacy = spacy.load("pl_core_news_lg")
+            SpacyUtils._nlp_spacy = spacy.load(model_path)
 
         return SpacyUtils._nlp_spacy
 

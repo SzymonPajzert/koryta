@@ -19,9 +19,9 @@ Run from the ``src`` directory (same import root as the tests)::
     python -m analysis.scripts.field_presence
     python -m analysis.scripts.field_presence --min-rate 0.6 --max-count 5000
 
-It reads the same koryta.pl Firestore dumps as the pipelines, picking the most
-recent dump date that contains data (mirroring the retry loop in
-``test_revisions.py``).
+It reads one koryta.pl Firestore export - the most recent complete one unless
+``--export`` names another - through ``scrapers.koryta.snapshot``, the same
+reader the invariant tests use.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,14 +41,15 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from conductor import setup_context  # noqa: E402
-from scrapers.koryta.download import FirestoreCollection  # noqa: E402
+from scrapers.koryta.snapshot import Snapshot, load_snapshot  # noqa: E402
 
 # Wrapper / bookkeeping keys that are not part of a node's own schema and should
 # be ignored when analysing field presence.
-#   - id/date are injected by FirestoreCollection.process
+#   - id is the Firestore document id, injected when the export is read
 #   - revisions wrap the node fields inside ``data`` and add node_id / update_*
 META_KEYS = {
     "id",
+    "stored_id",
     "date",
     "node_id",
     "update_user",
@@ -58,22 +58,16 @@ META_KEYS = {
 }
 
 
-def load_snapshot(ctx: Any, collection: str, max_lookback: int = 30) -> pd.DataFrame:
-    """Return a DataFrame for ``collection`` from the most recent dump date that
-    has data, retrying earlier dates just like ``test_revisions.py`` does."""
-    date_read = datetime.now().strftime("%Y-%m-%d")
-    for _ in range(max_lookback):
-        try:
-            df = FirestoreCollection(collection, None, date_read).process(ctx)
-            if len(df) > 0:
-                print(f"Loaded {len(df)} '{collection}' documents for {date_read}.")
-                return df
-        except Exception as exc:  # noqa: BLE001 - dumps for a date may be absent
-            print(f"  ({collection} @ {date_read} failed: {exc})")
-        date_read = (
-            datetime.strptime(date_read, "%Y-%m-%d") - pd.Timedelta(days=1)
-        ).strftime("%Y-%m-%d")
-    return pd.DataFrame()
+def load_collection(snapshot: Snapshot, collection: str) -> pd.DataFrame:
+    """Return a DataFrame for ``collection`` in the snapshot's export.
+
+    Reading one export rather than a day's worth matters here: the site is
+    exported twice a day, so a day-granular read would count every document
+    twice and every presence rate would be computed over a doubled total.
+    """
+    documents = snapshot.collection(collection)
+    print(f"Loaded {len(documents)} '{collection}' documents from {snapshot.date}.")
+    return pd.DataFrame.from_records(documents)
 
 
 def field_bag(row: pd.Series) -> tuple[str | None, dict[str, Any]]:
@@ -215,12 +209,16 @@ def main() -> None:
         default=1.0,
         help="Upper bound (exclusive) of the 'often but not always' band.",
     )
+    parser.add_argument(
+        "--export",
+        help="Export timestamp to read (default: the most recent complete one).",
+    )
     args = parser.parse_args()
 
-    ctx = setup_context(False)[0]
+    snapshot = load_snapshot(setup_context(False)[0], args.export)
 
     for collection in args.collections:
-        df = load_snapshot(ctx, collection)
+        df = load_collection(snapshot, collection)
         if df.empty:
             print(f"\nNo data found for collection {collection!r}; skipping.")
             continue

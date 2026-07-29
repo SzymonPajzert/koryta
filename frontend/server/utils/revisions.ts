@@ -11,30 +11,56 @@ export interface BatchResult {
   targetRef: DocumentReference;
 }
 
+/** Puts a value into the shape Firestore will accept.
+ *
+ * Two things are not storable: `undefined`, anywhere, and an array whose
+ * element is itself an array — Firestore has no array-of-arrays. Null and
+ * undefined are dropped; a directly nested array becomes a map keyed by index,
+ * which is the only shape left that keeps the order.
+ *
+ * A *top-level* array field is left as an array, and that distinction matters:
+ * `parties`, `activity` and `categories` are queried with `array-contains`,
+ * which matches nothing against a map and does not raise, so rewriting them
+ * makes the node vanish from the filter rather than fail loudly. Until
+ * 2026-07-28 this function rewrote every array it saw, which is how 461 people
+ * ended up unreachable by any party filter — see
+ * `scripts/migrate/unwrap-array-fields.ts`, which repairs the ones already
+ * written, and `data/scrapers/src/tests/pipelines/test_invariants.py`.
+ */
 export function sanitizeFirestoreData<T>(
   data: Record<string, unknown> | T,
 ): Record<string, unknown> | T;
-/** Overwrites nested arrays into objects with numbered keys */
 export function sanitizeFirestoreData<T>(
   data: Record<string, unknown> | T | undefined | null,
 ): Record<string, unknown> | T | undefined {
-  if (data === undefined) return undefined;
-  if (data === null) return undefined;
-  if (typeof data !== "object") return data;
+  return sanitizeValue(data, false) as Record<string, unknown> | T | undefined;
+}
 
-  if (Array.isArray(data)) {
-    const sanitizedArray = data.map((item) => sanitizeFirestoreData(item));
-    return sanitizeFirestoreData(
-      Object.fromEntries(
-        sanitizedArray.map((item, index) => [index.toString(), item]),
-      ),
+/** @param insideArray whether `value` is an element of an array, in which case
+ * an array of its own has nowhere to go and has to become a map. */
+function sanitizeValue(value: unknown, insideArray: boolean): unknown {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object") return value;
+
+  if (Array.isArray(value)) {
+    // Elements that sanitize away leave no hole: Firestore rejects an
+    // `undefined` element outright, and the previous implementation dropped
+    // them too, by way of the map it built.
+    const items = value
+      .map((item) => sanitizeValue(item, true))
+      .filter((item) => item !== undefined);
+    if (!insideArray) return items;
+    return Object.fromEntries(
+      items.map((item, index) => [String(index), item]),
     );
   }
 
+  // The fields of an object are not array elements, however deeply that object
+  // is nested — only an array directly inside an array is a problem.
   return Object.fromEntries(
-    Object.entries(data)
-      .map(([key, val]) => [key, sanitizeFirestoreData(val)])
-      .filter(([_, val]) => val !== undefined),
+    Object.entries(value)
+      .map(([key, val]) => [key, sanitizeValue(val, false)])
+      .filter(([, val]) => val !== undefined),
   );
 }
 
