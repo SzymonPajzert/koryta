@@ -365,8 +365,7 @@ const apiQuery = computed(
       sortBy: sortBy.value[0]?.key,
       sortDesc: sortBy.value[0]
         ? ((sortBy.value[0].order === "desc" ? "true" : "false") as
-            | "true"
-            | "false")
+            "true" | "false")
         : undefined,
       parties:
         filterParty.value && filterParty.value.length > 0

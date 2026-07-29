@@ -51,10 +51,7 @@ export interface NodeStats {
 }
 
 export type VoteCategory =
-  | "interesting"
-  | "quality"
-  | "correct"
-  | "insufficient";
+  "interesting" | "quality" | "correct" | "insufficient";
 
 export type Votes = Record<
   VoteCategory,
@@ -136,12 +133,7 @@ export function nodeIcon(type: NodeType) {
 }
 
 export type EdgeType =
-  | "employed"
-  | "connection"
-  | "mentions"
-  | "owns"
-  | "comment"
-  | "election";
+  "employed" | "connection" | "mentions" | "owns" | "comment" | "election";
 
 export const nodeTypeIcon: Record<NodeType, string> = {
   person: "mdi-account-outline",
@@ -283,9 +275,7 @@ export type Note = {
 };
 
 export type ExtractionFactType =
-  | "employment"
-  | "party_membership"
-  | "personal_relation";
+  "employment" | "party_membership" | "personal_relation";
 
 export interface ExtractionFact {
   id?: string;

@@ -182,8 +182,7 @@ async function createArticle(
   personId: string,
   articleURL: string,
 ): Promise<EntityResult> {
-  let articleId: string | undefined = undefined;
-  articleId = await lookupNode(ctx, "sourceURL", articleURL);
+  let articleId = await lookupNode(ctx, "sourceURL", articleURL);
 
   let created = false;
   if (!articleId) {

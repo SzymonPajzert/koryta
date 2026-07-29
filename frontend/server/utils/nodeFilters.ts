@@ -184,6 +184,9 @@ export async function buildStructuralFilterOps(
       return { ops, empty: true };
     }
     ops.push(targetNodesOp(regionIds, query, edgeScope, arrayFilterUsed));
+    // Nothing reads this today, but every op that consumes the array-filter
+    // slot has to claim it, or the next filter added below reads a stale false.
+    // eslint-disable-next-line no-useless-assignment
     arrayFilterUsed = true;
   }
 

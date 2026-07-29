@@ -22,12 +22,7 @@ export interface RevisionMinimal {
  */
 export function normalizeUpdateTime(
   updateTime:
-    | Timestamp
-    | string
-    | { _seconds: number }
-    | null
-    | undefined
-    | unknown,
+    Timestamp | string | { _seconds: number } | null | undefined | unknown,
 ): string | null {
   if (!updateTime) return null;
   if (typeof updateTime === "string") return updateTime;
@@ -46,10 +41,7 @@ export function normalizeUpdateTime(
 
 export function computeRevisionsObj(
   nodeRevisionId:
-    | string
-    | { path: string }
-    | { _path: { segments: string[] } }
-    | unknown,
+    string | { path: string } | { _path: { segments: string[] } } | unknown,
   revisionsArray: RevisionMinimal[],
 ): NodeRevisions | null {
   if (revisionsArray.length === 0) {

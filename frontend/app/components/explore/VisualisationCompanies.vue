@@ -95,8 +95,7 @@ const companies = computed(() => {
         ? person.parties.length > 0
         : Object.keys(
             (person.parties as unknown as
-              | Record<string, unknown>
-              | undefined) || {},
+              Record<string, unknown> | undefined) || {},
           ).length > 0) || person.elections.length > 0;
 
     for (const companyName of person.companies) {
@@ -137,8 +136,7 @@ const companies = computed(() => {
           ? [...person.parties]
           : Object.keys(
               (person.parties as unknown as
-                | Record<string, unknown>
-                | undefined) || {},
+                Record<string, unknown> | undefined) || {},
             );
 
         if (partiesToCount.length === 0) {

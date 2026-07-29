@@ -154,14 +154,21 @@ const searchData = ref<
 
 async function performSearch(searchTerm: string) {
   loading.value = true;
-  const response = await $fetch("/api/search", {
-    query: {
-      q: searchTerm,
-      latest: true,
-    },
-  });
-  searchData.value = response;
-  loading.value = false;
+  try {
+    const response = await $fetch("/api/search", {
+      query: {
+        q: searchTerm,
+        latest: true,
+      },
+    });
+    searchData.value = response;
+  } catch (error) {
+    // A search that fails should offer nothing rather than spin forever.
+    console.error("Search failed", error);
+    searchData.value = [];
+  } finally {
+    loading.value = false;
+  }
 }
 
 // Not sure what it does

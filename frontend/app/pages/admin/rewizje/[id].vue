@@ -124,8 +124,7 @@
                               2,
                             )
                           : getRevisionData(rev.data)[key]
-                      }}</pre
-                    >
+                      }}</pre>
                   </template>
                   <template v-else>
                     <span class="text-grey-lighten-1 font-italic"

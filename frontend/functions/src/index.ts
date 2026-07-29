@@ -144,7 +144,7 @@ export const scheduledFirestoreExport = onSchedule(
       logger.info(`Operation Name: ${response.name}`);
     } catch (err) {
       logger.error(err);
-      throw new Error("Export operation failed");
+      throw new Error("Export operation failed", { cause: err });
     }
   },
 );

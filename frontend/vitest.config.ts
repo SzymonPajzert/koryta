@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 export default defineVitestConfig({
   test: {
     environment: "nuxt",
+    // Booting the Nuxt environment costs well over vitest's 10s default; the
+    // suites that only skip tests still pay for it in beforeAll.
+    hookTimeout: 60_000,
     setupFiles: ["./tests/polyfill.ts", "./tests/setup.ts"],
     exclude: [
       "node_modules",
