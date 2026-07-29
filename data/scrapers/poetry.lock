@@ -6600,18 +6600,19 @@ tests = ["cython", "littleutils", "pygments", "pytest", "typeguard"]
 
 [[package]]
 name = "stanza"
-version = "1.11.1"
+version = "1.14.0"
 description = "A Python NLP Library for Many Human Languages, by the Stanford NLP Group"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "stanza-1.11.1-py3-none-any.whl", hash = "sha256:fb57509c182df4c8556f179ecaa3d47a1612a107d781f78d4084a24f3e7ee98c"},
-    {file = "stanza-1.11.1.tar.gz", hash = "sha256:eff84c40c9dab1badf89d09f04a9d887eebff01976e14f876582c0bd4bcc51e8"},
+    {file = "stanza-1.14.0-py3-none-any.whl", hash = "sha256:b5e81d742e39671de146e69f3c6ca7ff76cc4201ed07cab3083d815b2cbab544"},
+    {file = "stanza-1.14.0.tar.gz", hash = "sha256:edd1eb171d34bea920c4d06d3f007a2232a63991f20f398370204ca3ddc8287f"},
 ]
 
 [package.dependencies]
 emoji = "*"
+huggingface-hub = "*"
 networkx = "*"
 numpy = "*"
 platformdirs = "*"
@@ -6624,7 +6625,8 @@ udtools = ">=0.2.4"
 [package.extras]
 datasets = ["datasets"]
 dev = ["check-manifest"]
-morphseg = ["morphseg (>=0.2.0)"]
+matplotlib = ["matplotlib"]
+morphseg = ["morphseg (>=0.2.5.1)"]
 test = ["coverage", "pytest"]
 tokenizers = ["jieba", "pythainlp", "python-crfsuite", "spacy", "sudachidict_core", "sudachipy"]
 transformers = ["peft (>=0.6.1)", "transformers (>=3.0.0)"]
@@ -7570,4 +7572,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "2e4bcc023c0cfe480cc5992443848b62ca2477ef2d050e6ae1ef1dd6e51f820d"
+content-hash = "3eb4da9e4929e03004f86ea0df595a8918d11bc033ed372451047404d7bc7aa8"
