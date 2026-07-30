@@ -136,7 +136,7 @@ set_auth_claims = "set_auth_claims:main"
 
 
 [build-system]
-requires = ["poetry-core>=2.3.2,<3.0.0"]
+requires = ["poetry-core>=2.4.1,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
