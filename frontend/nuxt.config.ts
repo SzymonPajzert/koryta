@@ -1,5 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 
+import { resolveBuildInfo } from "./build-info";
+
 // Force IPv4 for emulators to avoid Node 17+ IPv6 issues
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -10,6 +12,7 @@ const isLocal =
   process.env.NODE_ENV === "development";
 const useProdProject = process.env.USE_PROD_PROJECT === "true";
 const ssr = process.env.SSR !== "false";
+const buildInfo = resolveBuildInfo(isLocal);
 console.log(
   "Nuxt Config - isLocal:",
   isLocal,
@@ -17,6 +20,10 @@ console.log(
   process.env.USE_EMULATORS,
   "SSR:",
   ssr,
+  "appEnv:",
+  buildInfo.appEnv,
+  "release:",
+  buildInfo.release,
 );
 
 export default defineNuxtConfig({
@@ -69,6 +76,17 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       isLocal,
+      // Reported by /api/health and attached to every Sentry event. Each field
+      // is overridable at runtime as NUXT_PUBLIC_BUILD_INFO_*, so a backend can
+      // correct its own label without a rebuild.
+      buildInfo,
+      sentry: {
+        // Prod carries the traffic, so it samples; autopush carries almost
+        // none, and there a full trace on every request is what makes a single
+        // manual click worth looking at.
+        tracesSampleRate: buildInfo.appEnv === "prod" ? 0.1 : 1.0,
+        replaysSessionSampleRate: buildInfo.appEnv === "prod" ? 0.01 : 0.1,
+      },
     },
   },
 

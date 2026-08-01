@@ -1,0 +1,61 @@
+name: Synthetic (prod)
+
+# Deploy-time checks only catch what a deploy breaks. Prod also breaks when
+# nothing was deployed - an index dropped, a scraper writing a document shape
+# the page cannot render, a quota - and that class of failure is otherwise
+# found by a user telling us.
+#
+# This is the coarse backstop: the whole smoke suite, on a schedule. For the
+# fast signal, put a Cloud Monitoring uptime check on /api/health, which polls
+# every minute and alerts properly; GitHub's scheduler runs late under load and
+# is not something to page on. See docs/deployments.md.
+#
+# Needs the repository variable PROD_URL (defaults to https://koryta.pl).
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: synthetic-prod
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke prod
+        working-directory: frontend
+        env:
+          SMOKE_BASE_URL: ${{ vars.PROD_URL || 'https://koryta.pl' }}
+          SMOKE_EXPECT_ENV: prod
+        run: npm run test:smoke
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: synthetic-report
+          path: frontend/playwright-report/
+          retention-days: 30

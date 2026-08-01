@@ -1,19 +1,42 @@
 rules_version = '2';
 
+// `resource` is the document as it is stored; `request.resource` is the
+// document as the write would leave it. On a create there is no `resource`,
+// and on a delete there is no `request.resource` - reading the missing one
+// raises an error, which Firestore reports as a denial. That reads like the
+// rule working, so several rules here were denying writes for the wrong
+// reason. tests/rules/firestore.rules.test.ts pins down which is which.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /nodes/{nodeId} {
       allow read: if resource.data.type == "article" || resource.data.type == "person" || resource.data.type == "place";
-      allow create: if request.auth != null && resource.data.revision_id == null;
+
+      // Nodes are written by the server through the admin SDK, which bypasses
+      // these rules, and everything a user contributes goes through the
+      // revision workflow. No browser has ever created one - the previous
+      // rule tried to, and denied every attempt by erroring on a null
+      // `resource`. Closed on purpose rather than by accident.
+      allow write: if false;
     }
 
     match /notes/{noteId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null && request.resource.data.userUid == request.auth.uid;
+
+      allow create: if request.auth != null && request.resource.data.userUid == request.auth.uid;
+
+      // Both halves matter: the note being replaced has to be yours, and the
+      // note replacing it has to stay yours. Checking only the incoming
+      // payload let anyone overwrite anyone else's note by putting their own
+      // uid in it.
+      allow update: if request.auth != null
+          && resource.data.userUid == request.auth.uid
+          && request.resource.data.userUid == request.auth.uid;
+
+      allow delete: if request.auth != null && resource.data.userUid == request.auth.uid;
     }
 
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
     match /revisions/{revisionId} {
@@ -28,9 +51,16 @@ service cloud.firestore {
 
     match /votes/{voteId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null 
+
+      allow create, update: if request.auth != null
           && voteId.matches('.*_' + request.auth.uid)
           && request.resource.data.userUid == request.auth.uid;
-      }
+
+      // Same story as notes: on a delete the payload does not exist, so the
+      // owner has to be read off the stored vote.
+      allow delete: if request.auth != null
+          && voteId.matches('.*_' + request.auth.uid)
+          && resource.data.userUid == request.auth.uid;
     }
   }
+}

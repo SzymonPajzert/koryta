@@ -7,8 +7,19 @@ runConfig:
   # cpu: 1
   memoryMiB: 1024
 
-# Environment variables and secrets.
-# env:
+# Fallback config, used by any backend whose Environment name does not match an
+# apphosting.<name>.yaml. See docs/deployments.md.
+env:
+  # Names the environment in Sentry and /api/health. Deliberately wrong here:
+  # a backend that reports "unknown" has no Environment name set in the App
+  # Hosting console, and we would rather see that than have it quietly answer
+  # to a neighbour's name.
+  - variable: APP_ENV
+    value: unknown
+    availability:
+      - BUILD
+      - RUNTIME
+
 # Configure environment variables.
 # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
 # - variable: MESSAGE

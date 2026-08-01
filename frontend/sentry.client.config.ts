@@ -1,17 +1,22 @@
 import * as Sentry from "@sentry/nuxt";
 
+const config = useRuntimeConfig();
+const { appEnv, release, buildTime } = config.public.buildInfo;
+
 Sentry.init({
   // If set up, you can use your runtime config here
   // dsn: useRuntimeConfig().public.sentry.dsn,
   dsn: "https://bd99c377832328230cfd5519914b9984@o4510028768870400.ingest.de.sentry.io/4510028773392464",
 
-  // We recommend adjusting this value in production, or using tracesSampler
-  // for finer control
-  tracesSampleRate: 1.0,
+  // Both backends report into the same Sentry project, so without these an
+  // issue on autopush is indistinguishable from one in front of real users,
+  // and no issue can be traced to the deploy that introduced it. "unknown"
+  // means a backend has no Environment name set in the App Hosting console.
+  environment: appEnv,
+  release,
 
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: 0.01,
+  tracesSampleRate: config.public.sentry.tracesSampleRate,
+  replaysSessionSampleRate: config.public.sentry.replaysSessionSampleRate,
 
   // If the entire session is not sampled, use the below sample rate to sample
   // sessions when an error occurs.
@@ -25,4 +30,8 @@ Sentry.init({
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
+
+  // Separates two rollouts of the same commit, and is the only identity a
+  // build has when its build environment exposes no sha.
+  initialScope: { tags: { buildTime } },
 });

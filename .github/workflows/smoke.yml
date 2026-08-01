@@ -1,0 +1,94 @@
+name: Smoke (deployed)
+
+# Everything else in CI tests a Nuxt server the runner just started against an
+# emulator full of seeded data. This is the only job that touches the artifact
+# we actually ship - the App Hosting build, its environment, Cloud Run, SSR
+# against the real database, and the shape of real documents.
+#
+# Needs the repository variable AUTOPUSH_URL (Settings > Secrets and variables
+# > Actions > Variables), e.g. https://autopush--koryta-pl.europe-west4.hosted.app
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Backend to smoke (defaults to the AUTOPUSH_URL variable)"
+        required: false
+        type: string
+      expect_env:
+        description: "appEnv the backend must report"
+        required: false
+        default: autopush
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer commit makes an in-flight wait pointless: it is waiting for a
+  # rollout App Hosting has already superseded.
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve target
+        id: target
+        env:
+          INPUT_URL: ${{ inputs.base_url }}
+          AUTOPUSH_URL: ${{ vars.AUTOPUSH_URL }}
+        run: |
+          url="${INPUT_URL:-$AUTOPUSH_URL}"
+          if [ -z "$url" ]; then
+            echo "::error::Set the AUTOPUSH_URL repository variable to the App Hosting URL of the autopush backend."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Wait for the rollout of this commit
+        working-directory: frontend
+        run: |
+          npx tsx scripts/wait-for-rollout.ts "${{ steps.target.outputs.url }}" \
+            --sha "${{ github.sha }}" \
+            --since "${{ steps.target.outputs.started }}" \
+            --timeout 1200
+
+      - name: Smoke
+        working-directory: frontend
+        env:
+          SMOKE_BASE_URL: ${{ steps.target.outputs.url }}
+          SMOKE_EXPECT_ENV: ${{ inputs.expect_env || 'autopush' }}
+        run: npm run test:smoke
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: smoke-report
+          path: frontend/playwright-report/
+          retention-days: 30

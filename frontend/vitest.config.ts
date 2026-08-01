@@ -19,6 +19,10 @@ export default defineVitestConfig({
       "functions/node_modules",
       "tests/integration/**",
       "tests/e2e/**",
+      // Playwright specs, and they need a deployed backend to point at.
+      "tests/smoke/**",
+      // Needs a firestore emulator; see vitest.rules.config.ts.
+      "tests/rules/**",
       "tests/visual/**",
     ],
     coverage: {

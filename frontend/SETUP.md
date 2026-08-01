@@ -67,6 +67,32 @@ Every Pull Request triggers:
 - **E2E Tests**: Runs Cypress tests against the emulators.
 - **Visual Regression**: Compares Playwright screenshots against committed baselines (`npm run test:visual`).
 
+All of them run against the emulators, so none of them sees the deployed
+artifact. That is what the smoke suite is for.
+
+### Smoke Tests (deployed)
+
+`tests/smoke` runs against a backend that is actually deployed - no emulator,
+no local server, real data:
+
+```bash
+SMOKE_BASE_URL=https://koryta.pl npm run test:smoke
+```
+
+CI runs it against autopush after every rollout and against prod on a schedule.
+
+### Firestore Rules
+
+```bash
+npm run test:rules
+```
+
+Starts its own Firestore emulator on port 8081, so it neither waits for nor
+disturbs a running dev stack.
+
 ### Preview Deployments
 
-A temporary **Preview URL** (e.g., `https://pr-123--koryta-pl.web.app`) is automatically generated for every PR. Use this to review UI changes on a live environment.
+There are none. A PR is verified by the checks above; the first deployed
+environment a change reaches is autopush, after it merges. See
+[`../docs/deployments.md`](../docs/deployments.md) for how it gets from there
+to prod.

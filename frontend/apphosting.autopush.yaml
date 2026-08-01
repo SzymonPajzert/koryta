@@ -1,0 +1,8 @@
+# Merged over apphosting.yaml for the backend whose Environment name is
+# "autopush". See https://firebase.google.com/docs/app-hosting/multiple-environments
+env:
+  - variable: APP_ENV
+    value: autopush
+    availability:
+      - BUILD
+      - RUNTIME

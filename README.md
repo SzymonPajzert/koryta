@@ -16,6 +16,12 @@ This project uses the following technologies:
   - Firebase hosting
   - Firebase cloud functions
 
+## Deployments
+
+Two App Hosting backends, autopush and prod, plus separately deployed rules,
+indexes and functions. How a change reaches users, what checks it passes on the
+way, and how to roll one back: [`docs/deployments.md`](docs/deployments.md).
+
 ## Project structure
 
 ### `data` - Python infrastructure to mine the data
