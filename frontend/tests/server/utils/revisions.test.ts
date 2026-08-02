@@ -94,6 +94,14 @@ describe("sanitizeFirestoreData", () => {
   });
 });
 
+/** A stand-in for a Firestore document reference. `parent` is what says which
+ * collection the document is in, and the revision records it. */
+function targetRefIn(collection: string, id: string) {
+  return { id, parent: { id: collection } } as DocumentReference;
+}
+
+const nodeRef = (id: string) => targetRefIn("nodes", id);
+
 describe("createRevisionTransaction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -104,7 +112,7 @@ describe("createRevisionTransaction", () => {
 
   it("should create a revision and NOT update head when updateHead=false", () => {
     const user = { uid: "test-user" };
-    const targetRef = { id: "node-1" } as DocumentReference;
+    const targetRef = nodeRef("node-1");
     const data = { title: "New Title" };
 
     createRevisionTransaction(mockDb, mockBatch, user, targetRef, data);
@@ -126,7 +134,7 @@ describe("createRevisionTransaction", () => {
 
   it("should set revision_id on the target but not in the revision data when approving", () => {
     const user = { uid: "test-user" };
-    const targetRef = { id: "node-1" } as DocumentReference;
+    const targetRef = nodeRef("node-1");
     const data = { title: "New Title" };
 
     createRevisionTransaction(
@@ -153,7 +161,7 @@ describe("createRevisionTransaction", () => {
 
   it("should write the published flag onto the target document", () => {
     const user = { uid: "test-user" };
-    const targetRef = { id: "node-1" } as DocumentReference;
+    const targetRef = nodeRef("node-1");
     const data = { title: "New Title" };
 
     createRevisionTransaction(
@@ -177,6 +185,27 @@ describe("createRevisionTransaction", () => {
       unknown
     >;
     expect(targetData.published).toBe(false);
+  });
+
+  it("records which collection the revision is for", () => {
+    // `node_id` holds the target's id whether the target is a node or an edge,
+    // so without this a reviewer applying an edge revision writes it onto a
+    // node that does not exist.
+    const user = { uid: "test-user" };
+    const data = { source: "node-1", target: "node-2", type: "employed" };
+
+    createRevisionTransaction(
+      mockDb,
+      mockBatch,
+      user,
+      targetRefIn("edges", "edge-1"),
+      data,
+    );
+
+    expect(vi.mocked(mockBatch.set).mock.calls[0][1]).toMatchObject({
+      node_id: "edge-1",
+      collection: "edges",
+    });
   });
 });
 

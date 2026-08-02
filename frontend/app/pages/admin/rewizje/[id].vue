@@ -90,12 +90,64 @@
                       </v-tooltip>
                     </v-chip>
                     <v-chip
+                      v-else-if="rev.status === 'rejected'"
+                      color="error"
+                      size="x-small"
+                      :prepend-icon="mdiCloseCircleOutline"
+                    >
+                      Odrzucona
+                      <v-tooltip
+                        v-if="rev.reject_reason"
+                        activator="parent"
+                        location="bottom"
+                        max-width="280"
+                      >
+                        {{ rev.reject_reason }}
+                      </v-tooltip>
+                    </v-chip>
+                    <v-chip
+                      v-else
+                      color="warning"
+                      size="x-small"
+                      :prepend-icon="mdiClockOutline"
+                    >
+                      Oczekuje
+                    </v-chip>
+                    <v-chip
                       :color="rev.update_automatic ? 'info' : 'secondary'"
                       size="x-small"
                     >
                       {{ rev.update_automatic ? "Auto" : "Ręczna" }}
                     </v-chip>
                   </div>
+                </div>
+
+                <div
+                  v-if="isAdmin && rev.id !== approvedRevisionId"
+                  class="d-flex ga-2 mb-2"
+                >
+                  <v-btn
+                    color="success"
+                    size="small"
+                    variant="tonal"
+                    :loading="reviewPendingId === rev.id"
+                    :prepend-icon="mdiCheck"
+                    :data-testid="`approve-${rev.id}`"
+                    @click="approve(String(rev.id))"
+                  >
+                    Zatwierdź
+                  </v-btn>
+                  <v-btn
+                    v-if="rev.status !== 'rejected'"
+                    color="error"
+                    size="small"
+                    variant="text"
+                    :prepend-icon="mdiClose"
+                    :data-testid="`reject-${rev.id}`"
+                    @click="openReject(String(rev.id))"
+                  >
+                    Odrzuć
+                  </v-btn>
                 </div>
                 <div class="mt-1">
                   <nuxt-link
@@ -130,6 +182,7 @@
                 class="card-cell"
                 :class="{
                   'highlighted-revision': rev.id === route.query.revisionId,
+                  'changed-field': differsFromApproved(rev, key),
                 }"
               >
                 <div
@@ -171,6 +224,43 @@
         </v-card>
       </client-only>
     </div>
+
+    <v-dialog v-model="rejectDialog" max-width="480">
+      <v-card>
+        <v-card-title>Odrzuć rewizję</v-card-title>
+        <v-card-text>
+          <p class="mb-3 text-body-2">
+            Rewizja zostaje zachowana wraz z powodem - to jedyne, co wróci do
+            osoby, która ją zgłosiła.
+          </p>
+          <v-textarea
+            v-model="rejectReason"
+            label="Powód odrzucenia"
+            placeholder="np. brak źródła, dane niezgodne z KRS"
+            rows="3"
+            auto-grow
+            data-testid="reject-reason"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="rejectDialog = false">Anuluj</v-btn>
+          <v-btn
+            color="error"
+            :disabled="!rejectReason.trim()"
+            :loading="reviewPendingId === rejectTarget"
+            data-testid="reject-confirm"
+            @click="reject()"
+          >
+            Odrzuć
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-snackbar v-model="errorShown" color="error" :timeout="6000">
+      {{ error }}
+    </v-snackbar>
   </div>
 </template>
 
@@ -183,7 +273,11 @@ import {
   mdiEyeOutline,
   mdiEyeOffOutline,
   mdiEarth,
+  mdiCheck,
   mdiCheckDecagramOutline,
+  mdiClockOutline,
+  mdiClose,
+  mdiCloseCircleOutline,
 } from "@mdi/js";
 
 definePageMeta({
@@ -205,23 +299,44 @@ const approvedRevisionId = ref<string | null>(null);
 const published = ref(false);
 const pending = ref(true);
 const publishPending = ref(false);
+const reviewPendingId = ref<string | null>(null);
+const error = ref<string | null>(null);
+const errorShown = ref(false);
+const rejectDialog = ref(false);
+const rejectReason = ref("");
+const rejectTarget = ref<string | null>(null);
+
+async function load() {
+  const data = await $fetch<{
+    revisions: Record<string, unknown>[];
+    approvedRevisionId: string | null;
+    published: boolean;
+  }>("/api/revisions/byNode", { params: { nodeId } });
+  revisions.value = data.revisions;
+  approvedRevisionId.value = data.approvedRevisionId;
+  published.value = data.published;
+}
 
 onMounted(async () => {
   try {
-    const data = await $fetch<{
-      revisions: Record<string, unknown>[];
-      approvedRevisionId: string | null;
-      published: boolean;
-    }>("/api/revisions/byNode", { params: { nodeId } });
-    revisions.value = data.revisions;
-    approvedRevisionId.value = data.approvedRevisionId;
-    published.value = data.published;
+    await load();
   } catch (err) {
     console.error("Failed to fetch revisions:", err);
   } finally {
     pending.value = false;
   }
 });
+
+/** Surfaces the server's message rather than a generic failure - the two that
+ * matter both say something the reviewer has to act on (a page needs an
+ * approved revision before it can go live; the live revision cannot be
+ * rejected). */
+function report(err: unknown) {
+  const data = (err as { data?: { message?: string } } | null)?.data;
+  error.value =
+    data?.message || (err instanceof Error ? err.message : "Wystąpił błąd");
+  errorShown.value = true;
+}
 
 async function setPublished(value: boolean) {
   publishPending.value = true;
@@ -232,9 +347,46 @@ async function setPublished(value: boolean) {
     );
     published.value = result.published;
   } catch (err) {
-    console.error("Failed to change publication state:", err);
+    report(err);
   } finally {
     publishPending.value = false;
+  }
+}
+
+async function approve(revisionId: string) {
+  reviewPendingId.value = revisionId;
+  try {
+    await authRequest("/api/revisions/approve", {
+      body: { revision_id: revisionId },
+    });
+    await load();
+  } catch (err) {
+    report(err);
+  } finally {
+    reviewPendingId.value = null;
+  }
+}
+
+function openReject(revisionId: string) {
+  rejectTarget.value = revisionId;
+  rejectReason.value = "";
+  rejectDialog.value = true;
+}
+
+async function reject() {
+  const revisionId = rejectTarget.value;
+  if (!revisionId) return;
+  reviewPendingId.value = revisionId;
+  try {
+    await authRequest("/api/revisions/reject", {
+      body: { revision_id: revisionId, reason: rejectReason.value.trim() },
+    });
+    rejectDialog.value = false;
+    await load();
+  } catch (err) {
+    report(err);
+  } finally {
+    reviewPendingId.value = null;
   }
 }
 
@@ -305,6 +457,29 @@ function getRevisionData(data: unknown): Record<string, unknown> {
   }
   return {};
 }
+
+/** The revision the page is serving right now, which is what every other
+ * column is worth reading against. */
+const approvedRevision = computed(() =>
+  allRevisions.value.find((rev) => rev.id === approvedRevisionId.value),
+);
+
+/** Whether `key` says something different here than in the approved revision.
+ *
+ * A revision is a full snapshot, so most of its fields are copies of what is
+ * already live and the handful that actually changed is what a reviewer needs
+ * to find. Compared as JSON, since values range from strings to arrays of
+ * them. Everything is "changed" while nothing is approved yet - on a brand new
+ * entry that is the truth. */
+function differsFromApproved(rev: Record<string, unknown>, key: string) {
+  const approved = approvedRevision.value;
+  if (!approved) return true;
+  if (rev.id === approved.id) return false;
+  return (
+    JSON.stringify(getRevisionData(rev.data)[key] ?? null) !==
+    JSON.stringify(getRevisionData(approved.data)[key] ?? null)
+  );
+}
 </script>
 
 <style scoped>
@@ -340,5 +515,13 @@ function getRevisionData(data: unknown): Record<string, unknown> {
 }
 .highlighted-revision {
   background: rgba(var(--v-theme-primary), 0.1) !important;
+}
+/* What this revision would change, so a reviewer reads the diff rather than
+   the whole snapshot. */
+.changed-field {
+  background: rgba(var(--v-theme-warning), 0.12) !important;
+}
+.changed-field .field-label {
+  color: rgb(var(--v-theme-warning)) !important;
 }
 </style>

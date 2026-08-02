@@ -4,7 +4,8 @@ import type {
   WriteBatch,
 } from "firebase-admin/firestore";
 import type { Edge, Node, Revision } from "~~/shared/model";
-import { Timestamp } from "firebase-admin/firestore";
+import { revisionCollection } from "~~/shared/model";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 export interface BatchResult {
   revisionRef: DocumentReference;
@@ -123,7 +124,19 @@ export function createRevisionTransaction(
     data: sanitizeFirestoreData(data),
     update_time: timestamp,
     update_user: user.uid,
+    // `node_id` is the target's id whatever the target is, so without this an
+    // edge revision is indistinguishable from a node one when a reviewer comes
+    // to apply it.
+    collection: targetRef.parent.id === "edges" ? "edges" : "nodes",
+    // A revision written as approved has already had its review; anything else
+    // is waiting for one.
+    status: approve ? "approved" : "pending",
   };
+
+  if (approve) {
+    revision.review_user = user.uid;
+    revision.review_time = timestamp;
+  }
 
   if (automatic) {
     revision.update_automatic = true;
@@ -150,6 +163,78 @@ export function createRevisionTransaction(
   batch.set(targetRef, targetData);
 
   return { revisionRef, targetRef };
+}
+
+/** The document a revision describes, in whichever collection it belongs to. */
+export function revisionTargetRef(
+  db: Firestore,
+  revision: { id?: string; collection?: unknown; data?: unknown } & {
+    node_id?: string;
+    nodeId?: string;
+  },
+): DocumentReference {
+  const targetId = revision.node_id ?? revision.nodeId;
+  if (!targetId) {
+    throw createError({
+      statusCode: 422,
+      message: `Rewizja ${revision.id ?? "?"} nie wskazuje żadnego dokumentu.`,
+    });
+  }
+  return db.collection(revisionCollection(revision)).doc(targetId);
+}
+
+/** Makes `revision` the one its target points at.
+ *
+ * The target document is a materialised copy of its approved revision, so
+ * approving means writing that snapshot over it - which is also how a revision
+ * can be *un*-approved by approving an older one. Everything the node owns
+ * rather than the revision (`published`, and the counters the triggers
+ * maintain) is carried across by hand, because the write is a `set` and would
+ * otherwise drop them.
+ *
+ * `publish` overrides the target's current visibility; left out, approving a
+ * revision never changes who can see the page.
+ */
+export async function applyRevision(
+  db: Firestore,
+  revisionRef: DocumentReference,
+  revision: Revision,
+  user: { uid: string },
+  publish?: boolean,
+): Promise<{ targetRef: DocumentReference; published: boolean }> {
+  const targetRef = revisionTargetRef(db, { ...revision, id: revisionRef.id });
+  const targetSnap = await targetRef.get();
+  const stored = targetSnap.data() ?? {};
+
+  const targetData: Record<string, unknown> = {
+    ...(revision.data as Record<string, unknown>),
+    revision_id: revisionRef,
+  };
+
+  // Kept out of the revision on purpose (see INTERNAL_FIELDS), so they have to
+  // survive the overwrite explicitly.
+  for (const field of ["stats", "revisions", "votes", "nameChunksLower"]) {
+    if (stored[field] !== undefined) targetData[field] = stored[field];
+  }
+
+  const published = publish ?? stored.published === true;
+  targetData.published = published;
+
+  const timestamp = Timestamp.now();
+  const batch = db.batch();
+  batch.set(targetRef, targetData);
+  batch.update(revisionRef, {
+    status: "approved",
+    review_user: user.uid,
+    review_time: timestamp,
+    reject_reason: FieldValue.delete(),
+  });
+  await batch.commit();
+
+  console.info(
+    `Approved revision=${revisionRef.id} target=${targetRef.path} published=${published} by=${user.uid}`,
+  );
+  return { targetRef, published };
 }
 
 export async function getRevisionsForNodes(

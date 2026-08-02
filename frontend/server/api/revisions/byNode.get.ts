@@ -1,6 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
-import { pageIsPublic } from "~~/shared/model";
+import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -30,26 +30,20 @@ export default defineEventHandler(async (event) => {
   }
 
   // Extract the approved revision ID and publication state from the node
-  let approvedRevisionId: string | undefined = undefined;
+  let approved: string | undefined = undefined;
   let published = false;
   if (nodeDoc.exists) {
     const nodeData = nodeDoc.data();
     published = pageIsPublic(nodeData || {});
-    const revId = nodeData?.revision_id;
-    if (revId) {
-      if (typeof revId === "string") {
-        const segments = revId.split("/");
-        approvedRevisionId = segments[segments.length - 1];
-      } else if (typeof revId === "object" && "path" in revId) {
-        const segments = (revId as { path: string }).path.split("/");
-        approvedRevisionId = segments[segments.length - 1];
-      }
-    }
+    approved = approvedRevisionId(nodeData?.revision_id);
   }
 
   return {
     revisions: Array.from(map.values()),
-    approvedRevisionId,
+    approvedRevisionId: approved,
     published,
+    /** Whether the node exists at all - a suggestion for a node that was never
+     * created has revisions but nothing to approve them onto. */
+    exists: nodeDoc.exists,
   };
 });

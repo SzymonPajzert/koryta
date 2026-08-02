@@ -278,6 +278,23 @@ export interface NodeTypeMap {
   region: Region;
 }
 
+/** Where a revision stands with whoever reviews it.
+ *
+ * Absent means the same as `pending`: every revision written before review
+ * existed is waiting, whether it came from a person or from the pipeline. Only
+ * an approved revision can be the one a node points at, and a rejected one is
+ * kept rather than deleted so the same suggestion is not re-reviewed forever.
+ */
+export type RevisionStatus = "pending" | "approved" | "rejected";
+
+/** Which collection a revision's target lives in.
+ *
+ * Revisions carry `node_id` whatever they describe, so an edge revision is not
+ * tellable from a node revision by its id alone. Written on new revisions;
+ * `revisionCollection` infers it for the ones stored before this existed.
+ */
+export type RevisionCollection = "nodes" | "edges";
+
 export interface Revision {
   id?: string;
   nodeId?: string;
@@ -287,6 +304,60 @@ export interface Revision {
   update_time: string | unknown; // ISO string
   update_user: string;
   update_automatic?: boolean;
+  collection?: RevisionCollection;
+  status?: RevisionStatus;
+  /** Why a revision was turned down, so the author can be told something more
+   * useful than "no". */
+  reject_reason?: string;
+  review_user?: string;
+  review_time?: string | unknown;
+}
+
+/** The collection a revision's target document lives in.
+ *
+ * Only an edge carries both ends of a link, and no node ever does, so the
+ * shape of the data answers this for the revisions written before the
+ * `collection` field existed.
+ */
+export function revisionCollection(revision: {
+  collection?: unknown;
+  data?: unknown;
+}): RevisionCollection {
+  if (revision.collection === "edges" || revision.collection === "nodes") {
+    return revision.collection;
+  }
+  const data = revision.data as
+    { source?: unknown; target?: unknown } | undefined | null;
+  return data && data.source && data.target ? "edges" : "nodes";
+}
+
+/** Whether a revision is still waiting for someone to look at it. */
+export function revisionIsPending(revision: { status?: unknown }): boolean {
+  return revision.status !== "approved" && revision.status !== "rejected";
+}
+
+/** The bare id of the revision a document points at, or undefined.
+ *
+ * `revision_id` reaches callers in three shapes depending on how far it has
+ * travelled: a `DocumentReference` straight from firebase-admin, the `{ path }`
+ * it serialises to over SSR, or a path string a previous hop already flattened.
+ * All three end in the id, which is the only part worth comparing.
+ */
+export function approvedRevisionId(revisionId: unknown): string | undefined {
+  if (!revisionId) return undefined;
+
+  let path: string | undefined;
+  if (typeof revisionId === "string") {
+    path = revisionId;
+  } else if (typeof revisionId === "object") {
+    const asPath = revisionId as { path?: unknown; id?: unknown };
+    if (typeof asPath.path === "string") path = asPath.path;
+    else if (typeof asPath.id === "string") return asPath.id;
+  }
+  if (!path) return undefined;
+
+  const segments = path.split("/");
+  return segments[segments.length - 1] || undefined;
 }
 
 export interface Link<T extends NodeType> {
