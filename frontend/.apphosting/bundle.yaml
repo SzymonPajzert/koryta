@@ -3,9 +3,9 @@ runConfig:
   runCommand: node .output/server/index.mjs
 metadata:
   framework: nuxt
-  frameworkVersion: 4.4.2
+  frameworkVersion: 4.5.1
   adapterPackageName: nitropack
-  adapterVersion: 2.13.3
+  adapterVersion: 2.13.4
 outputFiles:
   serverApp:
     include:

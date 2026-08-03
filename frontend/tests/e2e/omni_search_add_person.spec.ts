@@ -1,6 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 
-const ADD_PERSON = '[data-testid="omni-search-add-person"]';
+/** Everything a search that found nothing can be turned into, in the order the
+ * menu offers them. A person comes first because it is what most searches are
+ * for; a claim usually needs the institution and the source as well. */
+const CREATE_OPTIONS = ["person", "place", "article"] as const;
+
+const addOption = (type: string) => `[data-testid="omni-search-add-${type}"]`;
+const ADD_PERSON = addOption("person");
 
 /** Types into the omni search and waits for the menu to react. */
 async function searchFor(page: Page, query: string) {
@@ -27,10 +33,14 @@ test.describe("OmniSearch add person", () => {
     await expect(addPerson).toContainText("Dodaj nową osobę");
     await expect(addPerson).toContainText(query);
 
-    // It is the only thing offered, since nothing else matched
+    // The create options are the only things offered, since nothing matched -
+    // and all three are on offer, each carrying the query it would be named by
     await expect(page.locator(".v-overlay--active .v-list-item")).toHaveCount(
-      1,
+      CREATE_OPTIONS.length,
     );
+    for (const type of CREATE_OPTIONS) {
+      await expect(page.locator(addOption(type))).toContainText(query);
+    }
   });
 
   test("offers adding a person below existing results", async ({ page }) => {
@@ -47,10 +57,16 @@ test.describe("OmniSearch add person", () => {
     await expect(addPerson).toBeVisible();
     await expect(addPerson).toContainText("Dodaj nową osobę");
 
-    // Appended after the results rather than mixed into them
-    await expect(
-      page.locator(".v-overlay--active .v-list-item").last(),
-    ).toHaveAttribute("data-testid", "omni-search-add-person");
+    // Appended after the results rather than mixed into them: the create
+    // options are the tail of the menu, whatever matched above them
+    const items = page.locator(".v-overlay--active .v-list-item");
+    const tail = (await items.count()) - CREATE_OPTIONS.length;
+    for (const [offset, type] of CREATE_OPTIONS.entries()) {
+      await expect(items.nth(tail + offset)).toHaveAttribute(
+        "data-testid",
+        `omni-search-add-${type}`,
+      );
+    }
   });
 
   test("creates a person that only logged in users can see", async ({
