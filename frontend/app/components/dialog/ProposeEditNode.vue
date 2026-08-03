@@ -126,6 +126,23 @@
                 class="mb-2"
               />
             </template>
+            <template v-if="type === 'article'">
+              <v-text-field
+                v-model="editData.sourceURL"
+                label="Adres źródła"
+                hint="Pełny link do artykułu, np. https://wiadomosci.wp.pl/..."
+                persistent-hint
+                :rules="[urlRule]"
+                class="mb-2"
+              />
+              <v-text-field
+                v-model="editData.shortName"
+                label="Skrócona nazwa (opcjonalnie)"
+                hint="np. WP, Onet - używana tam, gdzie tytuł się nie mieści"
+                persistent-hint
+                class="mb-2"
+              />
+            </template>
             <v-textarea
               v-model="editData.content"
               label="Treść (opcjonalnie)"
@@ -184,11 +201,15 @@ const isCreate = computed(() => !props.entity);
 const type = computed<NodeType>(
   () => props.entity?.type ?? props.createType ?? "person",
 );
+const createTitles: Record<string, string> = {
+  person: "Zaproponuj dodanie osoby",
+  place: "Zaproponuj dodanie instytucji",
+  article: "Zaproponuj dodanie źródła",
+};
+
 const title = computed(() =>
   isCreate.value
-    ? type.value === "person"
-      ? "Zaproponuj dodanie osoby"
-      : "Zaproponuj dodanie wpisu"
+    ? (createTitles[type.value] ?? "Zaproponuj dodanie wpisu")
     : "Zaproponuj zmianę",
 );
 
@@ -236,7 +257,14 @@ const editData = reactive({
   nipNumber: "",
   isPublic: null as boolean | null,
   ktomaco: "",
+  sourceURL: "",
+  shortName: "",
 });
+
+/** An article is identified by its address, so a typo there creates a second
+ * copy of a source rather than pointing at the one already stored. */
+const urlRule = (value: string) =>
+  !value || URL.canParse(value) || "Podaj pełny adres, razem z https://";
 
 /** Says so before the request rather than after it, since both numbers carry a
  * check digit and the server rejects a wrong one anyway. */
@@ -266,6 +294,8 @@ watch(dialog, (val) => {
   // so offering it back as an answer would launder a gap into a fact.
   editData.isPublic = publicSectorKnown(entity) ? !!entity.isPublic : null;
   editData.ktomaco = entity.ktomaco || "";
+  editData.sourceURL = entity.sourceURL || "";
+  editData.shortName = entity.shortName || "";
 });
 
 async function submit() {
@@ -308,6 +338,11 @@ async function submit() {
       if (editData.isPublic !== null) {
         body.isPublic = editData.isPublic;
       }
+    }
+
+    if (type.value === "article") {
+      body.sourceURL = editData.sourceURL;
+      if (editData.shortName) body.shortName = editData.shortName;
     }
 
     const response = await authRequest<{ id: string; node_id: string }>(

@@ -44,12 +44,14 @@
         <template v-if="createName">
           <v-divider class="my-1" />
           <v-list-item
-            data-testid="omni-search-add-person"
-            :prepend-icon="mdiAccountPlusOutline"
-            @click="openCreatePerson"
+            v-for="option in createOptions"
+            :key="option.type"
+            :data-testid="`omni-search-add-${option.type}`"
+            :prepend-icon="option.icon"
+            @click="openCreate(option.type)"
           >
             <v-list-item-title>
-              Dodaj nową osobę "{{ createName }}"
+              {{ option.label }} "{{ createName }}"
             </v-list-item-title>
           </v-list-item>
         </template>
@@ -57,11 +59,12 @@
     </v-autocomplete>
 
     <DialogProposeEditNode
-      ref="createPersonDialog"
-      create-type="person"
+      ref="createDialog"
+      :key="createType"
+      :create-type="createType"
       :initial-name="pendingCreateName"
       hide-activator
-      @created="onPersonCreated"
+      @created="onNodeCreated"
     />
   </div>
 </template>
@@ -71,6 +74,8 @@ import {
   mdiAccountOutline,
   mdiAccountPlusOutline,
   mdiDomain,
+  mdiDomainPlus,
+  mdiFilePlusOutline,
   mdiFlag,
   mdiFormatListBulletedType,
   mdiMagnify,
@@ -79,6 +84,7 @@ import {
 import { parties } from "~~/shared/misc";
 import { generateEntityUrl } from "~/composables/slugs";
 import type { NodeType } from "~~/shared/model";
+import type { ProposableNodeType } from "~~/shared/api";
 import { refDebounced } from "@vueuse/core";
 
 const { push, currentRoute } = useRouter();
@@ -93,7 +99,7 @@ const search = ref();
 const nodeGroupPicked = ref<ListItem | null>(null);
 const autocompleteFocus = ref(false);
 const debouncedSearch = refDebounced(search, 300);
-const createPersonDialog = ref<{ open: () => void } | null>(null);
+const createDialog = ref<{ open: () => void } | null>(null);
 
 /** The query to offer as a new person, empty when there is nothing to add.
  *
@@ -107,16 +113,40 @@ const createName = computed(() => {
   return settled;
 });
 
+/** What a search that found nothing can be turned into.
+ *
+ * A person is first because it is what most searches are for, but a claim
+ * usually needs the institution and the source as well, and neither of those
+ * could be entered from anywhere in the site before. */
+const createOptions = [
+  {
+    type: "person" as const,
+    label: "Dodaj nową osobę",
+    icon: mdiAccountPlusOutline,
+  },
+  {
+    type: "place" as const,
+    label: "Dodaj instytucję lub spółkę",
+    icon: mdiDomainPlus,
+  },
+  { type: "article" as const, label: "Dodaj źródło", icon: mdiFilePlusOutline },
+];
+
 // Captured on click, because opening the dialog blurs the autocomplete, which
 // can reset `search` before the dialog reads the name to prefill.
 const pendingCreateName = ref("");
+const createType = ref<ProposableNodeType>("person");
 
-const openCreatePerson = () => {
+const openCreate = async (type: ProposableNodeType) => {
   pendingCreateName.value = createName.value;
-  createPersonDialog.value?.open();
+  createType.value = type;
+  // The dialog is keyed by type, so it is a different component instance once
+  // the type changes - open it after Vue has swapped it in.
+  await nextTick();
+  createDialog.value?.open();
 };
 
-const onPersonCreated = () => {
+const onNodeCreated = () => {
   // The dialog redirects to the new page, just reset the search box behind it
   search.value = null;
   nodeGroupPicked.value = null;

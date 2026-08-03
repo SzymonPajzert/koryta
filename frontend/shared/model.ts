@@ -115,7 +115,12 @@ export type ElectionPosition =
 export function pageIsPublic(node: {
   published?: unknown;
   revision_id?: unknown;
+  deleted?: unknown;
 }) {
+  // An approved removal outranks everything else: the page is only still here
+  // so that the decision, and the reason for it, stay on the record.
+  if (node.deleted === true) return false;
+
   if (node.published !== undefined) {
     return node.published === true;
   }

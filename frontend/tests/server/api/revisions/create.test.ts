@@ -178,3 +178,135 @@ describe("api/revisions/create, place edits", () => {
     });
   });
 });
+
+describe("api/revisions/create, proposing a new entry", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDoc.mockImplementation((id?: string) => ({ id: id ?? "generated-id" }));
+  });
+
+  it("creates a place with the fields a place has", async () => {
+    // Every new entry used to be written as a person whatever the form said,
+    // so a proposed company lost its KRS number and turned up as a politician.
+    mockReadBody.mockResolvedValue({
+      type: "place",
+      name: "Lubelskie Koleje sp. z o.o.",
+      krsNumber: "0000999888",
+      isPublic: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      type: "place",
+      name: "Lubelskie Koleje sp. z o.o.",
+      krsNumber: "0000999888",
+      isPublic: true,
+      isPublicSource: "manual",
+    });
+  });
+
+  it("creates an article with the address it lives at", async () => {
+    mockReadBody.mockResolvedValue({
+      type: "article",
+      name: "Żona byłego sekretarza generalnego PiS w radzie nadzorczej",
+      sourceURL: "https://wiadomosci.wp.pl/lubelskie-koleje",
+      shortName: "WP",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      type: "article",
+      sourceURL: "https://wiadomosci.wp.pl/lubelskie-koleje",
+      shortName: "WP",
+    });
+  });
+
+  it("insists an article carries a usable address", async () => {
+    mockReadBody.mockResolvedValue({
+      type: "article",
+      name: "Artykuł",
+      sourceURL: "wiadomosci.wp.pl",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("falls back to a person for a type nobody may propose", async () => {
+    // Regions come from TERYT and carry the ids the rest of the data joins on.
+    mockReadBody.mockResolvedValue({
+      type: "region",
+      name: "Województwo Wymyślone",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({ type: "person" });
+  });
+
+  it("still defaults to a person when no type is given", async () => {
+    mockReadBody.mockResolvedValue({ name: "Sylwia Sobolewska" });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({ type: "person" });
+  });
+});
+
+describe("api/revisions/create, proposing a removal", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDoc.mockImplementation((id?: string) => ({ id: id ?? "generated-id" }));
+  });
+
+  it("keeps the removal and its reason", async () => {
+    // Both fields were stripped by the edit schema, so "zaproponuj usunięcie"
+    // filed a revision identical to the entry it wanted taken down.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Jan Kowalski",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "jan",
+      deleted: true,
+      delete_reason: "Duplikat",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      type: "person",
+      name: "Jan Kowalski",
+      deleted: true,
+      delete_reason: "Duplikat",
+    });
+    expect(writtenRevision().status).toBe("pending");
+  });
+
+  it("insists on a reason", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Jan Kowalski",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "jan",
+      deleted: true,
+      delete_reason: "  ",
+    });
+
+    // Falls through to the edit schema, which wants a name it was not given.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+});

@@ -1,4 +1,4 @@
-import type { Company, ElectionPosition, Person } from "./model";
+import type { Article, Company, ElectionPosition, Person } from "./model";
 import {
   isValidNip,
   isValidRegon,
@@ -187,3 +187,44 @@ export const companyEditSchema = z.object({
 >;
 
 export type CompanyEditRequest = z.infer<typeof companyEditSchema>;
+
+/** Fields a user may propose for an article node.
+ *
+ * Articles were only ever created by `ingest/article`, from a URL the scrapers
+ * had already fetched, which left no way to enter the source a claim rests on
+ * while writing the claim itself. `sourceURL` is what identifies an article -
+ * the ingest looks entries up by it - so it is the one required field.
+ */
+export const articleEditSchema = z.object({
+  name: z.string().min(1, "Tytuł jest wymagany"),
+  content: z.string().optional(),
+  sourceURL: z.string().url("Podaj pełny adres źródła"),
+  shortName: z.string().optional(),
+}) satisfies z.ZodType<
+  Pick<Article, "name" | "content" | "sourceURL" | "shortName">
+>;
+
+export type ArticleEditRequest = z.infer<typeof articleEditSchema>;
+
+/** The node types a person may propose from the site.
+ *
+ * Regions are left out: they come from the TERYT register, are complete, and
+ * carry ids the rest of the data joins on.
+ */
+export const proposableNodeTypes = ["person", "place", "article"] as const;
+
+export type ProposableNodeType = (typeof proposableNodeTypes)[number];
+
+export const editSchemas = {
+  person: personEditSchema,
+  place: companyEditSchema,
+  article: articleEditSchema,
+} as const;
+
+/** A proposal to take an entry down, which is a revision like any other and is
+ * reviewed the same way. The reason is required because it is the only thing a
+ * reviewer has to go on. */
+export const removalSchema = z.object({
+  deleted: z.literal(true),
+  delete_reason: z.string().trim().min(1, "Powód usunięcia jest wymagany"),
+});
