@@ -86,8 +86,12 @@ export function isPublicInstitution(name: string | undefined): boolean {
  * WFOŚiGW, Departament and Urząd entries were unfindable for as long as that
  * took to notice.
  *
- * `revisionRef` is passed only when the node was already published, so an
- * unapproved draft stays one.
+ * `revisionRef` is passed only when the node already had an approved revision,
+ * so an unapproved draft stays one. Note this is approval, not visibility:
+ * these fields are written with `update`, so whether the page is published is
+ * left exactly as it was. `isPublic` here is about who owns the institution,
+ * which is a different question from whether its page is public - see
+ * `Company.isPublic` against `pageIsPublic`.
  */
 export function nodeOwnershipUpdate(revisionRef?: {
   id: string;
@@ -177,7 +181,8 @@ async function migrate() {
     // `nodeOwnershipUpdate` for why this is not the snapshot written back.
     batch.update(
       doc.ref,
-      // Published only if the node already was; an unapproved draft stays one.
+      // Repointed only if the node already had an approved revision; a draft
+      // stays one.
       nodeOwnershipUpdate(data.revision_id ? revisionRef : undefined),
     );
     pending += 2;

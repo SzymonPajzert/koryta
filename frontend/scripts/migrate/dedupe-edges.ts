@@ -5,6 +5,7 @@ import {
   edgeSemantics,
   type EdgeLike,
 } from "../../server/utils/edges";
+import { pageIsPublic } from "../../shared/model";
 
 /**
  * One-time migration: delete the edges that are genuinely a second copy of one
@@ -66,6 +67,7 @@ function informativeness(doc: FirebaseFirestore.QueryDocumentSnapshot): number {
   return Object.entries(data).filter(
     ([key, value]) =>
       key !== "revision_id" &&
+      key !== "published" &&
       value !== null &&
       value !== undefined &&
       value !== "",
@@ -74,9 +76,9 @@ function informativeness(doc: FirebaseFirestore.QueryDocumentSnapshot): number {
 
 /** The copy to keep: published if the group has any, then whichever knows most.
  *
- * Published comes first because `revision_id` is what makes an edge visible to
- * a logged out visitor, so keeping an unpublished copy would take a link off
- * the site.
+ * Published comes first because keeping a hidden copy would take a link off the
+ * site for a logged out visitor. That is `pageIsPublic`, not `revision_id` on
+ * its own - an edge can have an approved revision and still be hidden.
  *
  * Informativeness matters because collapsing on the start of a spell brings
  * together copies that are not byte-identical: the same employment recorded
@@ -87,7 +89,7 @@ function informativeness(doc: FirebaseFirestore.QueryDocumentSnapshot): number {
  * dry run predict what the real run will do.
  */
 function pickSurvivor(group: FirebaseFirestore.QueryDocumentSnapshot[]) {
-  const published = group.filter((doc) => doc.data().revision_id);
+  const published = group.filter((doc) => pageIsPublic(doc.data()));
   const candidates = published.length > 0 ? published : group;
   return candidates.reduce((best, doc) => {
     const diff = informativeness(doc) - informativeness(best);

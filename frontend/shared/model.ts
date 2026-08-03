@@ -112,6 +112,14 @@ export type ElectionPosition =
   | "Senat"
   | "Parlament Europejski";
 
+/** Whether a logged out visitor can see this page.
+ *
+ * Nothing to do with `Company.isPublic`, which is about who owns an
+ * institution: a state-owned company can have a page nobody has published yet,
+ * and a private one can have a page that has been live for months. The names
+ * are close enough to swap by accident, so check which question is being asked
+ * before reaching for either.
+ */
 export function pageIsPublic(node: {
   published?: unknown;
   revision_id?: unknown;
