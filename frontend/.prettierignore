@@ -7,3 +7,6 @@ functions/lib
 
 # rewritten by `nuxt build` via the apphosting nitro preset
 .apphosting
+
+.firebase
+.agent

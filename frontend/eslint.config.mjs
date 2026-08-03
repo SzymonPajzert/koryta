@@ -5,6 +5,7 @@ export default withNuxt(
   // Your custom configs here
   {
     ignores: [
+      ".firebase/**",
       "**/coverage/**",
       "app/coverage/**",
       "**/.nuxt/**",
