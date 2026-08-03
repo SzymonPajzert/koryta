@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { parseNodeDoc, logEventPath } from "~~/server/utils/fetch";
-import { getFirestore } from "firebase-admin/firestore";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { getValidatedQuery } from "h3";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const queryValidator = z.object({
   q: z.string().optional().default(""),
@@ -19,7 +19,7 @@ type node = {
 
 export default authCachedEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
 
   const firebaseQuery: FirebaseFirestore.Query = db
     .collection("nodes")

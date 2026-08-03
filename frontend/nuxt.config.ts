@@ -1,5 +1,14 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { bundleSharpBinaries } from "./build/sharp-binaries";
+import {
+  assertProjectMatchesEnv,
+  FIRESTORE_DATABASE_ID,
+  PROJECT_IDS,
+  PROD_PROJECT_ID,
+  resolveKorytaEnv,
+  resolveWebConfig,
+  USERS_DATABASE_ID,
+} from "./shared/firebase-env";
 
 // Force IPv4 for emulators to avoid Node 17+ IPv6 issues
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
@@ -11,6 +20,26 @@ const isLocal =
   process.env.NODE_ENV === "development";
 const useProdProject = process.env.USE_PROD_PROJECT === "true";
 const ssr = process.env.SSR !== "false";
+// Baked in at build time so a build is readable on its own, and overridable at
+// runtime through Nuxt's NUXT_PUBLIC_* convention.
+//
+// KORYTA_ENV picks the Firebase project, and for a preview that project also
+// supplies its own web app registration: App Hosting injects it as
+// FIREBASE_WEBAPP_CONFIG during the build, so a branch is deployed to the
+// preview project without anyone writing its api key down anywhere.
+const korytaEnv = resolveKorytaEnv(process.env.KORYTA_ENV, isLocal);
+const firebaseProjectId =
+  isLocal && useProdProject ? PROD_PROJECT_ID : PROJECT_IDS[korytaEnv];
+const webConfig = resolveWebConfig(korytaEnv, firebaseProjectId, {
+  injected: process.env.FIREBASE_WEBAPP_CONFIG,
+  overrides: {
+    apiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY,
+    appId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID,
+    messagingSenderId: process.env.NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    databaseURL: process.env.NUXT_PUBLIC_DATABASE_URL,
+  },
+});
+assertProjectMatchesEnv(korytaEnv, webConfig.projectId);
 console.log(
   "Nuxt Config - isLocal:",
   isLocal,
@@ -70,6 +99,19 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       isLocal,
+      // NUXT_PUBLIC_KORYTA_ENV / NUXT_PUBLIC_FIRESTORE_DATABASE /
+      // NUXT_PUBLIC_DATABASE_URL override these at runtime.
+      // server/plugins/firebase.server.ts refuses to boot when they do not
+      // describe the project the container is actually running in.
+      //
+      // The database ids are the same in every project - preview differs by
+      // being a different project, not by naming things differently - so these
+      // are constants that call sites read through appFirestore() and
+      // adminFirestore() rather than values that vary per deployment.
+      korytaEnv,
+      firestoreDatabase: FIRESTORE_DATABASE_ID,
+      usersDatabase: USERS_DATABASE_ID,
+      databaseURL: webConfig.databaseURL,
     },
   },
 
@@ -175,20 +217,18 @@ export default defineNuxtConfig({
     appCheck: {
       enabled: !isLocal,
     },
+    // Every field comes from shared/firebase-env.ts, which is what makes the
+    // project a build talks to a single decision rather than nine of them.
+    // Anything reading the Realtime Database at runtime goes through
+    // appDatabase(), which takes the URL from runtimeConfig instead.
     config: {
-      apiKey: "AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM",
-      authDomain:
-        isLocal && !useProdProject
-          ? "demo-koryta-pl.firebaseapp.com"
-          : "koryta-pl.firebaseapp.com",
-      projectId: isLocal && !useProdProject ? "demo-koryta-pl" : "koryta-pl",
-      storageBucket:
-        isLocal && !useProdProject
-          ? undefined
-          : "koryta-pl.firebasestorage.app",
-      messagingSenderId:
-        isLocal && !useProdProject ? undefined : "735903577811",
-      appId: "1:735903577811:web:53e6461c641b947a4e8626",
+      apiKey: webConfig.apiKey,
+      authDomain: webConfig.authDomain,
+      projectId: webConfig.projectId,
+      databaseURL: webConfig.databaseURL,
+      storageBucket: webConfig.storageBucket,
+      messagingSenderId: webConfig.messagingSenderId,
+      appId: webConfig.appId,
     },
     emulators: {
       enabled: isLocal,

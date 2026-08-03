@@ -1,7 +1,7 @@
 import { getValidatedQuery } from "h3";
-import { getFirestore } from "firebase-admin/firestore";
 import { paginate } from "~~/server/utils/fetch";
 import { z } from "zod";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const listQueryValidator = z.object({
   limit: z.coerce.number().default(50),
@@ -13,7 +13,7 @@ export default authCachedEventHandler(async (event) => {
     listQueryValidator.parse(q),
   );
 
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
   const articlesQuery = db.collection("nodes").where("type", "==", "article");
   const paginatedArticles = paginate(articlesQuery, query);
   const articlesSnap = await paginatedArticles.get();

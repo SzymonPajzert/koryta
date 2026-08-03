@@ -1,5 +1,5 @@
 import { connectAuthEmulator, getAuth } from "firebase/auth";
-import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { connectFirestoreEmulator } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { connectStorageEmulator, getStorage } from "firebase/storage";
 
@@ -18,7 +18,7 @@ export default defineNuxtPlugin((_nuxtApp) => {
     });
 
     // Firestore
-    const db = getFirestore(app, "koryta-pl");
+    const db = appFirestore(app);
     connectFirestoreEmulator(db, "127.0.0.1", 8080);
 
     // Functions

@@ -1,4 +1,5 @@
-import { getFirestore, type Query } from "firebase-admin/firestore";
+import type { Query } from "firebase-admin/firestore";
+import { adminFirestore } from "~~/server/utils/firebase";
 import {
   bucketNotes,
   bucketPeople,
@@ -56,7 +57,7 @@ export type DatabaseStats = {
  */
 export default defineCachedEventHandler(
   async (): Promise<DatabaseStats> => {
-    const db = getFirestore("koryta-pl");
+    const db = adminFirestore();
     const nodes = db.collection("nodes");
 
     const [

@@ -9,6 +9,7 @@ import nodes from "./nodes.json";
 import edges from "./edges.json";
 import revisions from "./revisions.json";
 import extractions from "./extractions.json";
+import { firestoreDatabaseFromEnv } from "../shared/firebase-env";
 
 const projectId =
   process.env.USE_PROD_PROJECT === "true" ? "koryta-pl" : "demo-koryta-pl";
@@ -41,7 +42,7 @@ async function seedDatabase() {
     resources: ["tcp:127.0.0.1:8080"],
     timeout: undefined,
   });
-  const db = getFirestore(app, "koryta-pl");
+  const db = getFirestore(app, firestoreDatabaseFromEnv());
 
   console.log("Seeding database...");
 

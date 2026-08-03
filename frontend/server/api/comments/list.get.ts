@@ -1,11 +1,10 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
 import type { Comment } from "~~/shared/model";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 export default authCachedEventHandler(async (event) => {
   const query = getQuery(event);
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
 
   let collectionRef = db.collection("comments") as FirebaseFirestore.Query;
 

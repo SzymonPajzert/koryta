@@ -1,8 +1,8 @@
-import { getFirestore } from "firebase-admin/firestore";
 import { getEdges } from "~~/shared/graph/util";
 import { fetchNodes, fetchEdges } from "~~/server/utils/fetch";
 import type { Article } from "~~/shared/model";
 import type { SourceStat } from "~~/server/api/nodes/articles/index.get";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 export default defineEventHandler(async () => {
   // Only authenticated or authorized actors should trigger a recalculation.
@@ -59,7 +59,7 @@ export default defineEventHandler(async () => {
       url: domainMap[domain],
     }));
 
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
 
   // Firestore batches are limited to 500 writes
   const chunks = [];

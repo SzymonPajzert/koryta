@@ -1,5 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
+import { adminFirestore } from "~~/server/utils/firebase";
 import { getUser } from "~~/server/utils/auth";
 import {
   baseNodeFields,
@@ -21,7 +20,7 @@ export default defineEventHandler(async (event) => {
     personRequestSchema.parse(body),
   );
   const user = await getUser(event);
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
 
   const batch = db.batch();
   const ctx = new Context(db, user, batch, body.autoapprove ?? false);

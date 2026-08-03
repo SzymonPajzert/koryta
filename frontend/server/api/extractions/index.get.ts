@@ -1,9 +1,8 @@
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { toExtractionFact } from "~~/server/utils/extractions";
 import type { ExtractionFact } from "~~/shared/model";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 // The collection grows with every ingest, so a page is always served — no
 // caller needs the whole backlog, and `total` tells them how much they missed.
@@ -31,7 +30,7 @@ export default authCachedEventHandler(
       queryValidator.parse(q),
     );
 
-    const db = getFirestore(getApp(), "koryta-pl");
+    const db = adminFirestore();
 
     let firestoreQuery: FirebaseFirestore.Query = db.collection("extractions");
 

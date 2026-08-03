@@ -1,6 +1,10 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import {
+  adminProjectFromEnv,
+  firestoreDatabaseFromEnv,
+} from "../../shared/firebase-env";
+import {
   edgeIdentity,
   edgeSemantics,
   type EdgeLike,
@@ -58,7 +62,7 @@ if (!isProd) {
   process.env.GCLOUD_PROJECT = "koryta-pl";
 }
 
-const app = initializeApp({ projectId: "koryta-pl" });
+const app = initializeApp({ projectId: adminProjectFromEnv() });
 
 /** How much this copy knows, for choosing which one to keep. */
 function informativeness(doc: FirebaseFirestore.QueryDocumentSnapshot): number {
@@ -134,7 +138,7 @@ function revisionTarget(value: unknown): string | undefined {
 }
 
 async function migrate() {
-  const db = getFirestore(app, "koryta-pl");
+  const db = getFirestore(app, firestoreDatabaseFromEnv());
   console.log(
     `Connecting to ${isProd ? "PRODUCTION" : "local emulator"} Firestore` +
       (commit ? "" : " (dry run — pass --commit to apply)"),

@@ -145,8 +145,8 @@ useHead({
 });
 
 const { user, userConfig, logout } = useAuthState();
-const rtdb = useDatabase();
-const firestore = useFirestore();
+const rtdb = appDatabase();
+const firestore = appUsersFirestore();
 
 const photoURL = computed(
   () => userConfig?.data?.value?.photoURL || user.value?.photoURL,

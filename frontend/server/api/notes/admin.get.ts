@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery } from "h3";
 import { getUser } from "~~/server/utils/auth";
 import { getNoteRows } from "~~/server/utils/notes";
 import type { NoteRow } from "~~/shared/model";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const queryValidator = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
-  const rows = await getNoteRows(getFirestore("koryta-pl"));
+  const rows = await getNoteRows(adminFirestore());
 
   const needle = query.q?.toLowerCase();
   const matching = rows.filter((row) => {

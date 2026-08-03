@@ -1,6 +1,5 @@
 import { computed, type MaybeRef } from "vue";
 import {
-  getFirestore,
   doc,
   setDoc,
   where,
@@ -106,7 +105,7 @@ export function noteAdminTypeLabel(type: string | null | undefined): string {
 export function useNotes(nodeID: MaybeRef<string>) {
   const { user } = useAuthState();
   const firebaseApp = useFirebaseApp();
-  const db = getFirestore(firebaseApp, "koryta-pl");
+  const db = appFirestore(firebaseApp);
 
   const nodeRef = computed(() => toValue(nodeID));
 

@@ -1,5 +1,5 @@
-import { getFirestore } from "firebase-admin/firestore";
 import { getUser } from "~~/server/utils/auth";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 export type ContributionStats = {
   votes: number;
@@ -12,7 +12,7 @@ export type ContributionStats = {
  * with the data tagging effort. */
 export default defineEventHandler(async (event): Promise<ContributionStats> => {
   const user = await getUser(event);
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
 
   const [votes, notes, revisions] = await Promise.all([
     db.collection("votes").where("userUid", "==", user.uid).count().get(),

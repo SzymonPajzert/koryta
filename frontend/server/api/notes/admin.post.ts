@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, readValidatedBody } from "h3";
 import { getUser } from "~~/server/utils/auth";
 import type { Note } from "~~/shared/model";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const bodyValidator = z.object({
   noteId: z.string().min(1),
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   const body = await readValidatedBody(event, (b) => bodyValidator.parse(b));
 
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
   const noteRef = db.collection("notes").doc(body.noteId);
 
   await db.runTransaction(async (tx) => {

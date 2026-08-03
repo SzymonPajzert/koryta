@@ -191,13 +191,8 @@ import {
   mdiHelpCircleOutline,
 } from "@mdi/js";
 import { useDisplay } from "vuetify";
-import { collection, getFirestore, query, where } from "firebase/firestore";
-import {
-  useCollection,
-  useCurrentUser,
-  useFirebaseApp,
-  useIsCurrentUserLoaded,
-} from "vuefire";
+import { collection, query, where } from "firebase/firestore";
+import { useCollection, useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
 import { useExtraction, useExtractions } from "~/composables/extractions";
 import { castVoteOnce, saveCommentOnce } from "~/composables/votes";
 import { factSubject } from "~/utils/extraction";
@@ -238,7 +233,7 @@ const allFacts = computed<ExtractionFact[]>(() =>
 
 const user = useCurrentUser();
 const isAuthLoaded = useIsCurrentUserLoaded();
-const db = getFirestore(useFirebaseApp(), "koryta-pl");
+const db = appFirestore();
 const votesQuery = computed(() => {
   // Client-only: the server render has no signed-in Firestore user.
   if (import.meta.server || !user.value) return null;

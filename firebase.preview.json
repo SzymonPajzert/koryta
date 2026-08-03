@@ -1,0 +1,33 @@
+{
+  "//": "Rules and indexes for the koryta-pl-preview project. Same files as production - firestore.rules, firestore.indexes.json, database.rules.json - because a preview that enforced different rules would not be a rehearsal of anything. It is a separate config only so that `firebase deploy` for preview cannot be typed at production by leaving out a flag: this one names no hosting or functions targets, and firebase.json names no preview project. Both Firestore databases are listed because the users collection lives in the unnamed one, in preview as in production; firebase.json covers only koryta-pl, which is what production has ever had rules deployed to from here.",
+  "firestore": [
+    {
+      "database": "koryta-pl",
+      "location": "europe-central2",
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    },
+    {
+      "database": "(default)",
+      "location": "europe-central2",
+      "rules": "firestore.rules"
+    }
+  ],
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "functions": [
+    {
+      "source": "frontend/functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    }
+  ]
+}

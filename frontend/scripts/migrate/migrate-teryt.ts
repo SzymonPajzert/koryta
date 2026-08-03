@@ -1,5 +1,10 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import {
+  adminProjectFromEnv,
+  firestoreDatabaseFromEnv,
+  LOCAL_PROJECT_ID,
+} from "../../shared/firebase-env";
 
 // Setup for emulator - similar to seed-emulator.ts
 const isProd = process.argv.includes("--prod");
@@ -7,15 +12,15 @@ const isProd = process.argv.includes("--prod");
 if (!isProd) {
   process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
   process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
-  process.env.GCLOUD_PROJECT = "demo-koryta-pl";
+  process.env.GCLOUD_PROJECT = LOCAL_PROJECT_ID;
 }
 
 const app = initializeApp({
-  projectId: isProd ? "koryta-pl" : "demo-koryta-pl",
+  projectId: isProd ? adminProjectFromEnv() : LOCAL_PROJECT_ID,
 });
 
 async function migrate() {
-  const db = getFirestore(app, "koryta-pl");
+  const db = getFirestore(app, firestoreDatabaseFromEnv());
   console.log(
     `Connecting to ${isProd ? "Production" : "Local Emulator"} Firestore...`,
   );

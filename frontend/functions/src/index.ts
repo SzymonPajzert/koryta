@@ -120,6 +120,18 @@ export const scheduledFirestoreExport = onSchedule(
       throw new Error("No project ID found");
     }
 
+    // This codebase is deployed to the preview project too, so that its
+    // triggers fire there. The export is the one function that must not run
+    // twice: the bucket below is where the emulator and the preview refresh
+    // both take "the latest export" from, and a copy of preview's own data
+    // landing in it would be handed straight back as production's.
+    if (projectId !== "koryta-pl") {
+      logger.info(
+        `Not exporting from ${projectId}; only koryta-pl is backed up`,
+      );
+      return;
+    }
+
     const databaseName = adminClient.databasePath(projectId, "koryta-pl");
     const bucketPrefix = "gs://koryta-pl-crawled/hostname=koryta.pl";
     const timestamp = new Date().toISOString();

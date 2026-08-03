@@ -1,9 +1,8 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
 import { pageIsPublic } from "~~/shared/model";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { z } from "zod";
 import type { Node } from "~~/shared/model";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const queryValidator = z.object({
   latest: z.string().optional(),
@@ -25,7 +24,7 @@ export default authCachedEventHandler(async (event) => {
     queryValidator.parse(query),
   );
 
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
   const node = await (query.latest == "true"
     ? getLatestRevision(db, id)
     : getEntity(db, id));

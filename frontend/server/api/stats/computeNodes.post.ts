@@ -1,4 +1,3 @@
-import { getFirestore } from "firebase-admin/firestore";
 import type {
   Edge,
   Note,
@@ -17,6 +16,7 @@ import {
 import { computeNodeStats } from "~~/shared/stats";
 import { getEdges, getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 function calculateTransitiveTargets(
   nodeEdges: Edge[],
@@ -94,7 +94,7 @@ export default defineEventHandler(async () => {
   // TODO enable check here
   // await getUser(event);
 
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
 
   const [nodesSnap, edgesSnap, notesSnap, votesSnap, revisionsSnap] =
     await Promise.all([

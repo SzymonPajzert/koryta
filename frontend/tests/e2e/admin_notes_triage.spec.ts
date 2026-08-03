@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { waitForLoginFormHydrated } from "./helpers/login";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { firestoreDatabaseFromEnv } from "../../shared/firebase-env";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -19,7 +20,7 @@ test.describe("Kategoryzacja notatek", () => {
       getApps().length === 0
         ? initializeApp({ projectId: "demo-koryta-pl" })
         : getApp();
-    const db = getFirestore(app, "koryta-pl");
+    const db = getFirestore(app, firestoreDatabaseFromEnv());
 
     const stamp = Date.now();
     const personId = `triage-person-${stamp}`;

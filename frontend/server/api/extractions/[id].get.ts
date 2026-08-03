@@ -1,7 +1,6 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { toExtractionFact } from "~~/server/utils/extractions";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 /** One fact by id, whatever its review state.
  *
@@ -16,7 +15,7 @@ export default authCachedEventHandler(
       throw createError({ statusCode: 400, message: "Missing extraction id" });
     }
 
-    const db = getFirestore(getApp(), "koryta-pl");
+    const db = adminFirestore();
     const doc = await db.collection("extractions").doc(id).get();
 
     if (!doc.exists) {

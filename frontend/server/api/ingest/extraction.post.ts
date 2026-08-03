@@ -1,9 +1,9 @@
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
+import { Timestamp } from "firebase-admin/firestore";
 import { getUser } from "~~/server/utils/auth";
 import type { ExtractionFact } from "~~/shared/model";
 import { normalizeUrl } from "~~/shared/url";
 import { z } from "zod";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const factSchema = z.object({
   url: z.string(),
@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
 
   // Article nodes by normalized url. This used to be an `in` query on the exact
   // `sourceURL`, which never matched anything: the crawler stores

@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { waitForLoginFormHydrated } from "./helpers/login";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { firestoreDatabaseFromEnv } from "../../shared/firebase-env";
 
 // Ensure emulator is used for admin SDK
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
@@ -15,7 +16,7 @@ test.describe("Admin Revisions View", () => {
       getApps().length === 0
         ? initializeApp({ projectId: "demo-koryta-pl" })
         : getApp();
-    const db = getFirestore(app, "koryta-pl");
+    const db = getFirestore(app, firestoreDatabaseFromEnv());
     const testNodeId = "000000-test-node-" + Date.now();
 
     // Seed a test node

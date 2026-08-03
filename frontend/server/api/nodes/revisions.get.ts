@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
 import { fetchOptionsValidator, paginate } from "~~/server/utils/fetch";
 import { defineEventHandler } from "h3";
 import { pageIsPublic } from "~~/shared/model";
 import { normalizeUpdateTime } from "~~/shared/revisions";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const queryValidator = z.object({
   ...fetchOptionsValidator.shape,
@@ -15,7 +15,7 @@ const queryValidator = z.object({
 export default defineEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
 
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
   let fsQuery: FirebaseFirestore.Query = db.collection("nodes");
 
   if (query.type) {

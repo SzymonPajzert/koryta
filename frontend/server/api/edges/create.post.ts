@@ -1,7 +1,6 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -15,7 +14,7 @@ export default defineEventHandler(async (event) => {
 
   const user = await getUser(event);
 
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
 
   const edgeRef = db.collection("edges").doc();
 

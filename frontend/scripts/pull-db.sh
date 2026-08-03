@@ -2,17 +2,15 @@
 
 set -euo pipefail
 
-BUCKET_PREFIX="gs://koryta-pl-crawled/hostname=koryta.pl/"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/firestore-export.sh"
+
 export_dir=".firebase/firestore_export"
 # Download somewhere else and swap in at the end, so a failed pull leaves the
 # previous export in place instead of an empty directory the emulator would
 # happily start from.
 staging_dir=".firebase/firestore_export.incoming"
 
-if ! command -v gcloud >/dev/null 2>&1; then
-    echo "Error: gcloud not found. Install the Google Cloud SDK: https://cloud.google.com/sdk/docs/install" >&2
-    exit 1
-fi
+require_gcloud
 
 cleanup() {
     rm -rf "$staging_dir"
@@ -20,14 +18,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Fetching the latest backup path from $BUCKET_PREFIX..."
-# List directories in the bucket, sort them to get the latest `date=` folder
-latest_backup_path=$(gcloud storage ls "$BUCKET_PREFIX" | grep 'date=' | sort | tail -n 1)
-
-if [ -z "$latest_backup_path" ]; then
-    echo "Error: Could not find any backups in $BUCKET_PREFIX" >&2
-    echo "If this is an authentication problem, run: gcloud auth login && gcloud auth application-default login" >&2
-    exit 1
-fi
+latest_backup_path=$(latest_export_path)
 
 echo "Latest backup found at: $latest_backup_path"
 

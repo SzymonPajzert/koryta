@@ -1,5 +1,5 @@
 import { authCachedEventHandler } from "~~/server/utils/handlers";
-import { getFirestore } from "firebase-admin/firestore";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 export type SourceStat = {
   domain: string;
@@ -10,7 +10,7 @@ export type SourceStat = {
 };
 
 export default authCachedEventHandler(async () => {
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
   const statsSnap = await db
     .collection("stats")
     .where("type", "==", "domain_articles")

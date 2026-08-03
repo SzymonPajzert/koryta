@@ -81,7 +81,7 @@ const isLogin = ref(true);
 const error = ref<string | null>(null);
 
 const auth = useFirebaseAuth()!;
-const db = useDatabase();
+const db = appDatabase();
 const router = useRouter();
 const route = useRoute();
 

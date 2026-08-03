@@ -1,5 +1,9 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import {
+  adminProjectFromEnv,
+  firestoreDatabaseFromEnv,
+} from "../../shared/firebase-env";
 
 /**
  * One-time migration: mark the public institutions that are not in KRS.
@@ -124,8 +128,8 @@ async function migrate() {
     process.env.GCLOUD_PROJECT = "koryta-pl";
   }
 
-  const app = initializeApp({ projectId: "koryta-pl" });
-  const db = getFirestore(app, "koryta-pl");
+  const app = initializeApp({ projectId: adminProjectFromEnv() });
+  const db = getFirestore(app, firestoreDatabaseFromEnv());
   console.log(
     `Connecting to ${isProd ? "PRODUCTION" : "local emulator"} Firestore` +
       (commit ? "" : " (dry run — pass --commit to apply)"),

@@ -1,7 +1,8 @@
-import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import { FieldPath } from "firebase-admin/firestore";
 import { defineEventHandler } from "h3";
 import { getUser } from "~~/server/utils/auth";
 import type { Note, NoteEntryKind } from "~~/shared/model";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 /** Cap on how many unapproved nodes we inspect to split manual vs automatic.
  * Aggregation gives the exact total cheaply, but deciding "automatic" needs a
@@ -56,7 +57,7 @@ export default defineEventHandler(async (event): Promise<AdminSummary> => {
     });
   }
 
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
 
   // --- Notes needing action -------------------------------------------------
   // Firestore can't query into an array of source objects, so read the notes

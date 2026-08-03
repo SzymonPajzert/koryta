@@ -1,9 +1,7 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
-
+import { adminFirestore } from "~~/server/utils/firebase";
 export function placeholder() {
   isEdge({});
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
   resolveEdgeNames(db, {});
 }
 

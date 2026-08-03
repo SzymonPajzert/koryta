@@ -1,0 +1,138 @@
+name: Preview deployment
+
+# Puts a branch on a URL you can open on a phone.
+#
+# One App Hosting backend, rolled out to on demand - not one per pull request.
+# A backend is a Cloud Run service with a build history, and the preview data
+# it reads is a single copy of the nightly export, so per-PR backends would
+# multiply the setup without giving anyone a second dataset. Whoever asks last
+# gets the URL; the run says which branch and commit are live on it.
+#
+# Two ways in:
+#   * the `preview` label on a pull request (add it again to redeploy after a
+#     push - a label event is the only cheap "deploy this now" gesture GitHub
+#     offers from a phone)
+#   * Actions -> Preview deployment -> Run workflow, for a branch with no PR
+#
+# Forks get nothing: no OIDC token, and a rollout writes to the project.
+#
+# The project is koryta-pl-preview, not koryta-pl. The service account this
+# authenticates as needs roles/firebaseapphosting.admin there and nothing at
+# all on production - which is the whole reason the preview environment is a
+# separate project. See frontend/development.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy. Empty deploys the one this run started from."
+        type: string
+        default: ""
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  # One rollout at a time. App Hosting queues them anyway, and two builds
+  # racing onto one backend means the URL shows whichever finished last.
+  group: preview-deployment
+  cancel-in-progress: false
+
+jobs:
+  rollout:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'preview' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Pick the branch
+        id: branch
+        env:
+          DISPATCH_BRANCH: ${{ inputs.branch }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          branch="${DISPATCH_BRANCH:-${PR_BRANCH:-${GITHUB_REF_NAME}}}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "Rolling out $branch"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # The rollout builds on Google's side from the branch in GitHub, so this
+      # only needs the CLI - not the app's dependencies.
+      - name: Install the Firebase CLI
+        run: npm install --no-save firebase-tools@15
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PREVIEW_SERVICE_ACCOUNT }}
+
+      # App Hosting reads the branch from the connected repository, so the
+      # commit that gets built is whatever is on the branch right now - not the
+      # one this workflow checked out. The two differ if something was pushed
+      # in between, which the summary below makes visible.
+      - name: Roll out to the preview backend
+        env:
+          BRANCH: ${{ steps.branch.outputs.branch }}
+          BACKEND: ${{ vars.PREVIEW_BACKEND || 'preview' }}
+        run: |
+          set -euo pipefail
+          npx firebase apphosting:rollouts:create "$BACKEND" \
+            --git-branch "$BRANCH" \
+            --project "${{ vars.PREVIEW_PROJECT || 'koryta-pl-preview' }}" \
+            --force
+
+      - name: Say where it is
+        if: always()
+        env:
+          BRANCH: ${{ steps.branch.outputs.branch }}
+          URL: ${{ vars.PREVIEW_URL }}
+        run: |
+          {
+            echo "### Preview deployment"
+            echo
+            echo "Branch: \`$BRANCH\`"
+            echo "URL: ${URL:-set the PREVIEW_URL repository variable to the backend URL}"
+            echo
+            echo "Runs in the koryta-pl-preview project, on a copy of the data refreshed"
+            echo "by \`npm run db:preview:refresh\`, with the accounts from"
+            echo "\`npm run preview:seed:auth\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request' && success()
+        uses: actions/github-script@v8
+        env:
+          BRANCH: ${{ steps.branch.outputs.branch }}
+          URL: ${{ vars.PREVIEW_URL }}
+        with:
+          script: |
+            const url = process.env.URL || "(set the PREVIEW_URL repository variable)";
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: [
+                `Deploying \`${process.env.BRANCH}\` to the preview backend: ${url}`,
+                "",
+                "It runs in the `koryta-pl-preview` project, with its own copy of the data and its",
+                "own accounts, and no access to production. The build takes a few minutes;",
+                "add the `preview` label again to redeploy after a push.",
+              ].join("\n"),
+            });

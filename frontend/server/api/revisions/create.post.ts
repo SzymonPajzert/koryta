@@ -1,11 +1,11 @@
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
+import { Timestamp } from "firebase-admin/firestore";
 import { getUser } from "~~/server/utils/auth";
 import {
   baseNodeFields,
   sanitizeFirestoreData,
 } from "~~/server/utils/revisions";
 import { companyEditSchema, personEditSchema } from "~~/shared/api";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 export default defineEventHandler(async (event) => {
   const rawBody = await readBody(event);
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
 
   const user = await getUser(event);
 
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
   const nodeRef = isNewNode
     ? db.collection("nodes").doc()
     : db.collection("nodes").doc(node_id);

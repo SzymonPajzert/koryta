@@ -1,6 +1,5 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -13,7 +12,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
 
   const comment = {
     content: body.content,

@@ -1,0 +1,37 @@
+# Overlay for the App Hosting backend whose environment name is `preview` -
+# the one any feature branch can be rolled out to, to be opened on a phone.
+# Merged over apphosting.yaml; production's backend never reads this file.
+#
+# The backend lives in the `koryta-pl-preview` project, so the Firebase ids it
+# needs are not here: App Hosting injects the project's own web app
+# registration as FIREBASE_WEBAPP_CONFIG during the build, and tells the
+# container which project it is in at runtime. shared/firebase-env.ts reads
+# both, and server/plugins/firebase.server.ts refuses to start if a build made
+# for one project is running in another. All that is left to declare is that
+# this is a preview at all.
+
+runConfig:
+  # A preview gets one visitor at a time, and a cold start is cheaper than an
+  # instance idling between the days nobody looks at it.
+  minInstances: 0
+  maxInstances: 2
+  memoryMiB: 1024
+
+env:
+  - variable: KORYTA_ENV
+    value: preview
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NUXT_PUBLIC_KORYTA_ENV
+    value: preview
+    availability:
+      - RUNTIME
+  # A second public copy of the site is a duplicate of koryta.pl as far as a
+  # crawler is concerned. nuxt-site-config reads this at runtime and
+  # @nuxtjs/robots serves a blanket Disallow when it is false.
+  - variable: NUXT_PUBLIC_SITE_INDEXABLE
+    value: "false"
+    availability:
+      - BUILD
+      - RUNTIME

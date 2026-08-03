@@ -2,7 +2,6 @@
 // TODO remove this and fix the typing
 
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
 import {
   fetchNodes,
   fetchOptionsValidator,
@@ -17,6 +16,7 @@ import { getUser } from "~~/server/utils/auth";
 import { pageIsPublic } from "~~/shared/model";
 import { defineEventHandler } from "h3";
 import { logger } from "firebase-functions/logger";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const queryValidator = z.object({
   // We use generic fetch options for pagination
@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
   // If pagination/sorting is requested, query Firestore directly for uncached results
   if (query.limit || query.sortBy) {
     const user = await getUser(event).catch(() => null);
-    const db = getFirestore("koryta-pl");
+    const db = adminFirestore();
 
     type Op = NodeFilterOp;
     const { ops, empty } = await buildStructuralFilterOps(

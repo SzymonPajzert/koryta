@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import { FieldPath } from "firebase-admin/firestore";
 import { paginate } from "~~/server/utils/fetch";
 import { defineEventHandler, getValidatedQuery } from "h3";
 import type { Note } from "~~/shared/model";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 // TODO this should be imported
 const queryValidator = z.object({
@@ -15,7 +16,7 @@ export default defineEventHandler(async (event) => {
   // TODO check it in zed
   if (query.limit > 50) throw createError({ statusCode: 400 });
 
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
   const notesQuery = db.collection("notes").orderBy("nodeId");
   const paginatedQuery = paginate(notesQuery, query);
 

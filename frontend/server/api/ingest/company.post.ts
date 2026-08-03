@@ -1,5 +1,3 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import {
   baseNodeFields,
@@ -12,6 +10,7 @@ import {
 import { categoriesFromActivity } from "#shared/companyCategories";
 import { pageIsPublic, type EdgeType } from "#shared/model";
 import { edgeDocumentId, findEdge } from "~~/server/utils/edges";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 export default defineEventHandler(async (event) => {
   console.info("Handling ingest/company.post");
@@ -19,7 +18,7 @@ export default defineEventHandler(async (event) => {
     companyRequestSchema.parse(body),
   );
   const user = await getUser(event);
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
 
   const { ref: nodeRef, approve } = await findCompanyByKRS(db, body.krs, true);
   // Layered over what is already stored: a payload carries only the fields the

@@ -26,7 +26,7 @@ export type UserConfig = {
 
 export function useAuthState() {
   const router = useRouter();
-  const db = useFirestore();
+  const db = appUsersFirestore();
 
   const user = useCurrentUser();
   const isAdmin = computedAsync(

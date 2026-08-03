@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { adminFirestore } from "~~/server/utils/firebase";
 import { collectActivityEvents } from "~~/server/utils/activityEvents";
 import {
   aggregateActivity,
@@ -121,7 +121,7 @@ const cachedWindow = defineCachedFunction(
       days,
     };
 
-    const db = getFirestore("koryta-pl");
+    const db = adminFirestore();
     const { events, truncated } = await collectActivityEvents(
       db,
       since.toISOString(),

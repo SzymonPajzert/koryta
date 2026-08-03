@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
 import { buildStructuralFilterOps } from "~~/server/utils/nodeFilters";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const queryValidator = z.object({
   party: z.string().optional(),
@@ -45,7 +45,7 @@ export default defineCachedEventHandler(
     const query = await getValidatedQuery(event, (q) =>
       queryValidator.parse(q),
     );
-    const db = getFirestore("koryta-pl");
+    const db = adminFirestore();
 
     const zero: ProgressStats = {
       total: 0,

@@ -1,6 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
-
+import { adminFirestore } from "~~/server/utils/firebase";
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, "id");
   if (!id) {
@@ -10,7 +8,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
   const docSnap = await db.collection("revisions").doc(id).get();
 
   if (!docSnap.exists) {

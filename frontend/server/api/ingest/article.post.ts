@@ -1,9 +1,9 @@
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
+import { Timestamp } from "firebase-admin/firestore";
 import { getUser } from "~~/server/utils/auth";
 import { createRevisionTransaction } from "~~/server/utils/revisions";
 import type { Article } from "~~/shared/model";
 import { z } from "zod";
+import { adminFirestore } from "~~/server/utils/firebase";
 
 const articleRequestSchema = z.object({
   url: z.string(),
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     articleRequestSchema.parse(body),
   );
   const user = await getUser(event);
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
 
   const batch = db.batch();
 

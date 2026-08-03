@@ -1,6 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { getApp } from "firebase-admin/app";
-
+import { adminFirestore } from "~~/server/utils/firebase";
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
   const nodeId = query.nodeId as string | undefined;
@@ -11,7 +9,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const db = getFirestore(getApp(), "koryta-pl");
+  const db = adminFirestore();
 
   // Query with both field name variants (node_id and nodeId)
   const [byUnderscore, byCamel, nodeDoc] = await Promise.all([

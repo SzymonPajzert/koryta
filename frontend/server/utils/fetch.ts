@@ -7,10 +7,10 @@ import {
   type Region,
   pageIsPublic,
 } from "~~/shared/model";
-import { getDatabase } from "firebase-admin/database";
-import { getFirestore, Filter } from "firebase-admin/firestore";
+import { Filter } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/logger";
 import { z } from "zod";
+import { adminFirestore, adminDatabase } from "~~/server/utils/firebase";
 
 export const fetchOptionsValidator = z.object({
   limit: z.coerce.number().optional(),
@@ -144,7 +144,7 @@ export async function fetchNodes<N extends NodeType>(
 const _cachedFetchNodes = defineCachedFunction(
   async (path: string, options: FetchNodesOptions = {}) => {
     const { nodeId } = options;
-    const db = getFirestore("koryta-pl");
+    const db = adminFirestore();
     let query: FirebaseFirestore.Query = db
       .collection("nodes")
       .where("type", "==", path);
@@ -259,7 +259,7 @@ export async function fetchEdgesClose(
   const ids = Array.isArray(centerNodeIds) ? centerNodeIds : [centerNodeIds];
   if (ids.length === 0) return [];
 
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
   const chunkSize = 30; // Firestore 'in' query limit is 30
 
   const edgesMap = new Map<string, Edge>();
@@ -308,7 +308,7 @@ export async function fetchEdgesClose(
 }
 
 export async function fetchEdges(): Promise<Edge[]> {
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
   const edges = (await db.collection("edges").get()).docs.map(edgeFromDB);
   const result = edges as unknown as Edge[];
   logEventPath("fetchEdges", "all", {
@@ -319,7 +319,7 @@ export async function fetchEdges(): Promise<Edge[]> {
 }
 
 export async function fetchFirestore<T>(path: string): Promise<T> {
-  const db = getDatabase();
+  const db = adminDatabase();
   const snapshot = await db.ref(path).once("value");
   return snapshot.val() || {};
 }
@@ -328,7 +328,7 @@ export async function fetchNodesByIds(
   nodeIds: string[],
 ): Promise<NodeDataUnion[]> {
   if (nodeIds.length === 0) return [];
-  const db = getFirestore("koryta-pl");
+  const db = adminFirestore();
   const uniqueIds = Array.from(new Set(nodeIds));
   const nodes = [];
 

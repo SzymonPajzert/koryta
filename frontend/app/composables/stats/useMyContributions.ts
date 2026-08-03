@@ -1,4 +1,4 @@
-import { getFirestore, collection, query, where } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 import { useCollection, useFirebaseApp } from "vuefire";
 import { useAuthState, authRequest } from "../auth";
 import type { ContributionStats } from "~~/server/api/stats/contributions.get";
@@ -12,7 +12,7 @@ import type { ContributionStats } from "~~/server/api/stats/contributions.get";
 export function useMyContributions() {
   const { user } = useAuthState();
   const firebaseApp = useFirebaseApp();
-  const db = getFirestore(firebaseApp, "koryta-pl");
+  const db = appFirestore(firebaseApp);
 
   const votesQuery = computed(() =>
     user.value

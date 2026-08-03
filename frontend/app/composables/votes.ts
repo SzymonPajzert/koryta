@@ -5,7 +5,7 @@ import {
   mdiLightbulbOutline,
 } from "@mdi/js";
 import { computed, type MaybeRef } from "vue";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { useCurrentUser, useDocument, useFirebaseApp } from "vuefire";
 import { useAuthState } from "./auth";
 import type { VoteCategory, VoteDocument } from "~~/shared/model";
@@ -91,7 +91,7 @@ export function useVotes(
 ) {
   const { user } = useAuthState();
   const firebaseApp = useFirebaseApp();
-  const db = getFirestore(firebaseApp, "koryta-pl");
+  const db = appFirestore(firebaseApp);
   const config = configMap[category];
 
   const idValue = computed(() => toValue(targetId));
@@ -170,7 +170,7 @@ export async function castVoteOnce(
   if (!user.value) return false;
 
   const firebaseApp = useFirebaseApp();
-  const db = getFirestore(firebaseApp, "koryta-pl");
+  const db = appFirestore(firebaseApp);
   const clamped = Math.max(-5, Math.min(5, value));
 
   await setDoc(
@@ -201,7 +201,7 @@ export async function saveCommentOnce(
   if (!user.value) return false;
 
   const firebaseApp = useFirebaseApp();
-  const db = getFirestore(firebaseApp, "koryta-pl");
+  const db = appFirestore(firebaseApp);
 
   await setDoc(
     doc(db, "votes", `${targetId}_${user.value.uid}`),
