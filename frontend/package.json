@@ -65,7 +65,7 @@
     "vue-router": "^5.0.6",
     "vue3-apexcharts": "^1.8.0",
     "vuefire": "^3.2.2",
-    "vuetify": "^3.13.0",
+    "vuetify": "^4.1.2",
     "vuetify-nuxt-module": "^0.19.5"
   },
   "devDependencies": {
