@@ -51,6 +51,12 @@ class MockIO(IO):
     def get_output(self, entity_type):
         pass
 
+    def restore_backup_to_path(self, filename, dest_path):
+        raise FileNotFoundError(f"No backup for {filename} in mock IO")
+
+    def upload_backup_from_path(self, filename, src_path):
+        raise NotImplementedError("upload_backup_from_path not implemented")
+
 
 class MockRejestrIO(RejestrIO):
     def get_rejestr_io(self, url):

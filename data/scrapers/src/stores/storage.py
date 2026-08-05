@@ -1,6 +1,8 @@
 import argparse
 import atexit
 import io
+import os
+import shutil
 import tarfile
 import threading
 import time
@@ -260,13 +262,45 @@ class Client:
         blob.upload_from_file(tar_buf, content_type="application/gzip")
         print(f"Successfully uploaded backup to gs://{SHARED_BUCKET}/{blob_name}")
 
-    def download_backup(self, filename: str) -> io.BytesIO:
-        """Downloads the latest versioned backup for a filename from GCS.
+    def upload_backup_from_path(self, filename: str, src_path: str) -> None:
+        """Uploads a local file as a versioned backup tar.gz to GCS.
+
+        Like upload_backup, but streams the source file from disk into the
+        archive instead of buffering it in memory -- for multi-GB outputs like
+        article_parsed. Same blob layout:
+        ``filename={filename}/user={user}/datetime={dt}/backup.tar.gz``.
+        """
+        user = get_username()
+        dt_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+        blob_name = f"filename={filename}/user={user}/datetime={dt_str}/backup.tar.gz"
+
+        bucket = self.storage_client.bucket(SHARED_BUCKET)
+        blob = bucket.blob(blob_name)
+
+        tmp_path = src_path + ".bak"
+        try:
+            with tarfile.open(tmp_path, mode="w:gz") as tar:
+                info = tarfile.TarInfo(name=filename)
+                info.size = os.path.getsize(src_path)
+                with open(src_path, "rb") as f:
+                    tar.addfile(info, f)
+                meta_info = tarfile.TarInfo(name="metadata.json")
+                meta_info.size = 0
+                tar.addfile(meta_info, io.BytesIO(b""))
+
+            with open(tmp_path, "rb") as f:
+                blob.upload_from_file(f, content_type="application/gzip")
+        finally:
+            os.unlink(tmp_path)
+        print(f"Successfully uploaded backup to gs://{SHARED_BUCKET}/{blob_name}")
+
+    def _latest_backup_blob(self, filename: str):
+        """The most recent versioned backup blob for a filename.
 
         Prefers backups from the current user. If none exist for the current
-        user, lists available users and prompts for a choice.
-
-        Returns a BytesIO of the extracted data file from the tar.gz archive.
+        user, lists available users and prompts for a choice. Raises
+        FileNotFoundError when no backups exist at all.
         """
         prefix = f"filename={filename}/"
         bucket = self.storage_client.bucket(SHARED_BUCKET)
@@ -295,8 +329,17 @@ class Client:
 
         # Pick the latest backup (sorted by datetime in the blob name)
         chosen_blobs = sorted(user_blobs[chosen_user], key=lambda b: b.name)
-        latest_blob = chosen_blobs[-1]
+        return chosen_blobs[-1]
 
+    def download_backup(self, filename: str) -> io.BytesIO:
+        """Downloads the latest versioned backup for a filename from GCS.
+
+        Prefers backups from the current user. If none exist for the current
+        user, lists available users and prompts for a choice.
+
+        Returns a BytesIO of the extracted data file from the tar.gz archive.
+        """
+        latest_blob = self._latest_backup_blob(filename)
         print(f"Downloading backup from gs://{SHARED_BUCKET}/{latest_blob.name}")
         tar_buf = io.BytesIO(latest_blob.download_as_bytes())
         tar_buf.seek(0)
@@ -311,6 +354,38 @@ class Client:
         raise FileNotFoundError(
             f"Backup archive at '{latest_blob.name}' contains no data file."
         )
+
+    def restore_backup_to_path(self, filename: str, dest_path: str) -> None:
+        """Streams the latest versioned backup for a filename to a local path.
+
+        Unlike download_backup, the tar.gz and its payload are streamed to disk
+        instead of buffered in memory -- the whole point of a local restore for
+        multi-GB outputs like article_parsed.
+
+        Writes to ``dest_path`` (atomically via a temp sibling) and leaves the
+        archive blob untouched.
+        """
+        latest_blob = self._latest_backup_blob(filename)
+        print(f"Downloading backup from gs://{SHARED_BUCKET}/{latest_blob.name}")
+
+        tmp_path = dest_path + ".bak"
+        with open(tmp_path, "wb") as f:
+            latest_blob.download_to_file(f)
+        try:
+            with tarfile.open(tmp_path, mode="r:gz") as tar:
+                for member in tar.getmembers():
+                    if member.name != "metadata.json":
+                        src = tar.extractfile(member)
+                        if src is None:
+                            continue
+                        with open(dest_path, "wb") as out:
+                            shutil.copyfileobj(src, out)
+                        return
+            raise FileNotFoundError(
+                f"Backup archive at '{latest_blob.name}' contains no data file."
+            )
+        finally:
+            os.unlink(tmp_path)
 
 
 class BatchClient(Client):

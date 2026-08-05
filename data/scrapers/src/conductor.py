@@ -224,6 +224,12 @@ class Conductor(IO):
         n = n.replace(".", "_")
         return self.dumper.get_output(n)
 
+    def restore_backup_to_path(self, filename: str, dest_path: str) -> None:
+        self.storage.restore_backup_to_path(filename, dest_path)
+
+    def upload_backup_from_path(self, filename: str, src_path: str) -> None:
+        self.storage.upload_backup_from_path(filename, src_path)
+
 
 def setup_context(
     requires: typing.Iterable[type[ContextResource]] = (),

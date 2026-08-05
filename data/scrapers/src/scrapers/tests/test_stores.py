@@ -1,12 +1,15 @@
 """Tests for the abstract store interfaces and data structures."""
 
 import io
+import os
+import tempfile
 import unittest
 from typing import Any
 from unittest.mock import Mock, patch
 
 import pandas as pd
 
+from scrapers.article.pipelines.incremental import IncrementalJsonlPipeline
 from scrapers.stores import (
     Context,
     LocalFile,
@@ -841,6 +844,275 @@ class TestVersionedBackupRestore(unittest.TestCase):
             # Should process, NOT restore from backup
             mock_process.assert_called_once()
             pd.testing.assert_frame_equal(result, processed_df)
+
+
+class TestSharedCacheHooks(unittest.TestCase):
+    """Tests for the shared-cache hooks (restore/upload by path) on Pipeline."""
+
+    def setUp(self):
+        self.mock_ctx = Mock(spec=Context)
+        self.mock_ctx.io = Mock()
+        self.mock_ctx.io.dumper = Mock()
+        self.mock_ctx.io.get_mtime.return_value = None
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default()
+        self.backup_df = pd.DataFrame({"restored": [1, 2, 3]})
+
+    def test_restore_output_from_shared_cache(self):
+        """restore_output_from_shared_cache streams the backup to the local
+        output path and reports success."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+
+        with patch("scrapers.stores.VERSIONED_DIR", "/tmp/versioned"):
+            ok = pipeline.restore_output_from_shared_cache(self.mock_ctx)
+
+        self.assertTrue(ok)
+        self.mock_ctx.io.restore_backup_to_path.assert_called_once_with(
+            "dummy", "/tmp/versioned/dummy/dummy.jsonl"
+        )
+
+    def test_restore_output_from_shared_cache_failure(self):
+        """A failed restore returns False and is not treated as success."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        self.mock_ctx.io.restore_backup_to_path.side_effect = FileNotFoundError(
+            "no backup"
+        )
+
+        ok = pipeline.restore_output_from_shared_cache(self.mock_ctx)
+
+        self.assertFalse(ok)
+
+    @patch("scrapers.stores.backup_disabled", return_value=True)
+    def test_restore_output_skipped_when_backup_disabled(self, _mock_disabled):
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+
+        ok = pipeline.restore_output_from_shared_cache(self.mock_ctx)
+
+        self.assertFalse(ok)
+        self.mock_ctx.io.restore_backup_to_path.assert_not_called()
+
+    def test_upload_output_to_shared_cache(self):
+        """upload_output_to_shared_cache streams the local output up, and only
+        when the pipeline opts in via backup_to_shared_cache."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.backup_to_shared_cache = True
+
+        with (
+            patch("scrapers.stores.VERSIONED_DIR", "/tmp/versioned"),
+            patch("os.path.exists", return_value=True),
+        ):
+            ok = pipeline.upload_output_to_shared_cache(self.mock_ctx)
+
+        self.assertTrue(ok)
+        self.mock_ctx.io.upload_backup_from_path.assert_called_once_with(
+            "dummy", "/tmp/versioned/dummy/dummy.jsonl"
+        )
+
+    def test_upload_output_skipped_when_local_only(self):
+        """Local-only pipelines (backup_to_shared_cache=False) never upload."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.backup_to_shared_cache = False
+
+        ok = pipeline.upload_output_to_shared_cache(self.mock_ctx)
+
+        self.assertFalse(ok)
+        self.mock_ctx.io.upload_backup_from_path.assert_not_called()
+
+    def test_upload_output_skipped_when_file_missing(self):
+        """No local output, no upload."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.backup_to_shared_cache = True
+
+        tmpdir = tempfile.mkdtemp()
+        with patch("scrapers.stores.VERSIONED_DIR", tmpdir):
+            ok = pipeline.upload_output_to_shared_cache(self.mock_ctx)
+
+        self.assertFalse(ok)
+        self.mock_ctx.io.upload_backup_from_path.assert_not_called()
+
+    @patch("scrapers.stores.backup_disabled", return_value=True)
+    def test_upload_output_skipped_when_backup_disabled(self, _mock_disabled):
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.backup_to_shared_cache = True
+
+        ok = pipeline.upload_output_to_shared_cache(self.mock_ctx)
+
+        self.assertFalse(ok)
+        self.mock_ctx.io.upload_backup_from_path.assert_not_called()
+
+    def test_force_download_overrides_local_only(self):
+        """--force-download-shared-cache restores even when the pipeline is
+        local-only (backup_to_shared_cache=False)."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.backup_to_shared_cache = False
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
+            force_download_shared_cache=True
+        )
+
+        with patch("scrapers.stores.VERSIONED_DIR", "/tmp/versioned"):
+            ok = pipeline.restore_output_from_shared_cache(self.mock_ctx)
+
+        self.assertTrue(ok)
+        self.mock_ctx.io.restore_backup_to_path.assert_called_once()
+
+    def test_force_upload_overrides_local_only(self):
+        """--force-upload-shared-cache uploads even when the pipeline is
+        local-only (backup_to_shared_cache=False)."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.backup_to_shared_cache = False
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
+            force_upload_shared_cache=True
+        )
+
+        tmpdir = tempfile.mkdtemp()
+        with patch("scrapers.stores.VERSIONED_DIR", tmpdir):
+            # create the local output file so the upload hook sees it
+            os.makedirs(os.path.join(tmpdir, "dummy"), exist_ok=True)
+            with open(os.path.join(tmpdir, "dummy", "dummy.jsonl"), "w") as f:
+                f.write("{}")
+            ok = pipeline.upload_output_to_shared_cache(self.mock_ctx)
+
+        self.assertTrue(ok)
+        self.mock_ctx.io.upload_backup_from_path.assert_called_once()
+
+    @patch("scrapers.stores.backup_disabled", return_value=True)
+    def test_force_flags_still_respect_backup_disabled(self, _mock_disabled):
+        """--no-backup wins over the force flags."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.backup_to_shared_cache = False
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
+            force_download_shared_cache=True, force_upload_shared_cache=True
+        )
+
+        dl = pipeline.restore_output_from_shared_cache(self.mock_ctx)
+        up = pipeline.upload_output_to_shared_cache(self.mock_ctx)
+
+        self.assertFalse(dl)
+        self.assertFalse(up)
+        self.mock_ctx.io.restore_backup_to_path.assert_not_called()
+        self.mock_ctx.io.upload_backup_from_path.assert_not_called()
+
+
+class TestIncrementalSharedCacheHooks(unittest.TestCase):
+    """Tests for the incremental pipeline's read/write shared-cache hooks."""
+
+    def setUp(self):
+        self.mock_ctx = Mock(spec=Context)
+        self.mock_ctx.io = Mock()
+        self.mock_ctx.io.dumper = Mock()
+        self.mock_ctx.io.get_mtime.return_value = None
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default()
+        self.tmpdir = tempfile.mkdtemp()
+
+    def _make_pipeline(self, backup_to_shared_cache=True):
+        class P(IncrementalJsonlPipeline):
+            filename = "incremental_hook_test"
+
+            def process(self, ctx):
+                return pd.DataFrame()
+
+        p = P()
+        p.backup_to_shared_cache = backup_to_shared_cache
+        return p
+
+    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+        new_callable=lambda: "/tmp/irrelevant",
+    )
+    def test_missing_output_restores_instead_of_processing(self, _mock_dir):
+        """With a missing local output and a backup available, an incremental
+        pipeline restores from the shared cache instead of re-processing."""
+        pipeline = self._make_pipeline()
+        pipeline.restore_output_from_shared_cache = Mock(return_value=True)
+
+        with patch.object(
+            pipeline, "process", return_value=pd.DataFrame()
+        ) as mock_process:
+            result = pipeline.read_or_process(self.mock_ctx)
+
+        mock_process.assert_not_called()
+        pipeline.restore_output_from_shared_cache.assert_called_once()
+        self.assertEqual(result.shape, (0, 0))
+
+    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+        new_callable=lambda: "/tmp/irrelevant",
+    )
+    def test_restore_failure_falls_through_to_processing(self, _mock_dir):
+        """When the shared-cache restore fails, the incremental pipeline
+        falls back to processing normally."""
+        pipeline = self._make_pipeline()
+        pipeline.restore_output_from_shared_cache = Mock(return_value=False)
+
+        with patch.object(
+            pipeline, "process", return_value=pd.DataFrame({"col": [1]})
+        ) as mock_process:
+            result = pipeline.read_or_process(self.mock_ctx)
+
+        mock_process.assert_called_once()
+        pd.testing.assert_frame_equal(result, pd.DataFrame({"col": [1]}))
+
+    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+        new_callable=lambda: "/tmp/irrelevant",
+    )
+    def test_successful_run_uploads_to_shared_cache(self, _mock_dir):
+        """A successful incremental run publishes its output to the shared
+        cache via the write hook."""
+        pipeline = self._make_pipeline()
+        # No backup available, so the run proceeds and then uploads.
+        pipeline.restore_output_from_shared_cache = Mock(return_value=False)
+        pipeline.upload_output_to_shared_cache = Mock(return_value=True)
+
+        with patch.object(
+            pipeline, "process", return_value=pd.DataFrame({"col": [1]})
+        ):
+            pipeline.read_or_process(self.mock_ctx)
+
+        pipeline.upload_output_to_shared_cache.assert_called_once()
+
+    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+        new_callable=lambda: "/tmp/irrelevant",
+    )
+    def test_local_only_pipeline_does_not_restore_or_upload(self, _mock_dir):
+        """Local-only incremental pipelines skip both shared-cache hooks."""
+        pipeline = self._make_pipeline(backup_to_shared_cache=False)
+
+        with patch.object(
+            pipeline, "process", return_value=pd.DataFrame({"col": [1]})
+        ) as mock_process:
+            pipeline.read_or_process(self.mock_ctx)
+
+        mock_process.assert_called_once()
+        self.mock_ctx.io.restore_backup_to_path.assert_not_called()
+        self.mock_ctx.io.upload_backup_from_path.assert_not_called()
+
+    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+        new_callable=lambda: "/tmp/irrelevant",
+    )
+    def test_force_download_restores_local_only_incremental(self, _mock_dir):
+        """--force-download-shared-cache makes a local-only incremental
+        pipeline restore from the shared cache instead of processing."""
+        pipeline = self._make_pipeline(backup_to_shared_cache=False)
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
+            force_download_shared_cache=True
+        )
+        pipeline.restore_output_from_shared_cache = Mock(return_value=True)
+
+        with patch.object(
+            pipeline, "process", return_value=pd.DataFrame({"col": [1]})
+        ) as mock_process:
+            result = pipeline.read_or_process(self.mock_ctx)
+
+        mock_process.assert_not_called()
+        pipeline.restore_output_from_shared_cache.assert_called_once()
+        self.assertEqual(result.shape, (0, 0))
 
 
 if __name__ == "__main__":

@@ -294,6 +294,8 @@ ignore_imports = [
     "entities.util -> urllib",
     "scrapers.stores -> io",
     "scrapers.stores -> stores.config",
+    # Joining local versioned output paths for --force-download-shared-cache
+    "scrapers.stores -> os",
     # In-memory tar extraction of GCS blobs and URL joining for link discovery
     "scrapers.article.pipelines.pipeline_utils -> io",
     "scrapers.article.crawler -> urllib",

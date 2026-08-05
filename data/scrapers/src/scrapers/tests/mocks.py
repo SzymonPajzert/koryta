@@ -179,6 +179,12 @@ class MockIO(IO):
             content(f)  # type: ignore
             self.files[filename] = MockFile(f.getvalue())
 
+    def restore_backup_to_path(self, filename: str, dest_path: str) -> None:
+        raise FileNotFoundError(f"No backup for {filename} in mock IO")
+
+    def upload_backup_from_path(self, filename: str, src_path: str) -> None:
+        raise NotImplementedError("upload_backup_from_path not implemented for MockIO")
+
 
 class DictMockIO(IO):
     def __init__(self, files):
@@ -236,6 +242,14 @@ class DictMockIO(IO):
             # looking at setup_test_context, it handles dicts.
             pass
         raise NotImplementedError("write_file not implemented for DictMockIO yet")
+
+    def restore_backup_to_path(self, filename: str, dest_path: str) -> None:
+        raise FileNotFoundError(f"No backup for {filename} in mock IO")
+
+    def upload_backup_from_path(self, filename: str, src_path: str) -> None:
+        raise NotImplementedError(
+            "upload_backup_from_path not implemented for DictMockIO"
+        )
 
 
 class MockRejestrIO(RejestrIO):

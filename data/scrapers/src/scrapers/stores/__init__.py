@@ -5,6 +5,7 @@ file operations, data references, and pipeline execution contexts.
 """
 
 import io
+import os
 import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
@@ -142,6 +143,16 @@ class IO(metaclass=ABCMeta):
         """
         Retrieves the output list for a specific entity type from the current context.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def restore_backup_to_path(self, filename: str, dest_path: str) -> None:
+        """Streams the latest versioned backup for a filename to a local path."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def upload_backup_from_path(self, filename: str, src_path: str) -> None:
+        """Uploads a local file as a versioned backup for a filename."""
         raise NotImplementedError()
 
 
@@ -475,6 +486,12 @@ class ProcessPolicy:
     refresh_pipelines: set[str]
     exclude_refresh: set[str] = field(default_factory=set)
     refreshed_pipelines: set[str] = field(default_factory=set)
+    # Override backup_to_shared_cache=False: force a shared-cache restore even
+    # for local-only pipelines. Still disabled by --no-backup/DISABLE_BACKUP.
+    force_download_shared_cache: bool = False
+    # Override backup_to_shared_cache=False: force a shared-cache upload even
+    # for local-only pipelines. Still disabled by --no-backup/DISABLE_BACKUP.
+    force_upload_shared_cache: bool = False
 
     execution_decisions: dict[str, tuple[bool, str]] = field(default_factory=dict)
     tree_printed: bool = False
@@ -483,10 +500,17 @@ class ProcessPolicy:
     def with_default(
         refresh: list[str] = [],
         exclude_refresh: list[str] = [],
+        force_download_shared_cache: bool = False,
+        force_upload_shared_cache: bool = False,
     ):
         refresh_pipelines = set() if len(refresh) == 0 else set(refresh)
         exclude_refresh_set = set(exclude_refresh)
-        return ProcessPolicy(refresh_pipelines, exclude_refresh_set)
+        return ProcessPolicy(
+            refresh_pipelines,
+            exclude_refresh_set,
+            force_download_shared_cache=force_download_shared_cache,
+            force_upload_shared_cache=force_upload_shared_cache,
+        )
 
     def check_set(self, s: set[str], pipeline_name: str):
         return "all" in s or pipeline_name in s
@@ -770,8 +794,7 @@ Should I run it? (y/n) [n]",
             if (
                 decision
                 and decision[1] == "missing output"
-                and self.backup_to_shared_cache
-                and not backup_disabled()
+                and self._shared_cache_active(ctx, force_download=True)
             ):
                 try:
                     df = ctx.io.read_data(
@@ -838,8 +861,91 @@ Should I run it? (y/n) [n]",
         ctx.io.write_file(
             LocalFile(self.output_path(filename, format), "versioned"), writer
         )
-        if not local_only and self.backup_to_shared_cache and not backup_disabled():
+        if not local_only and self._shared_cache_active(
+            ctx, force_upload=True
+        ):
             ctx.io.write_file(VersionedBackup(filename), writer)
+
+    def _shared_cache_active(
+        self, ctx: Context, force_download: bool = False, force_upload: bool = False
+    ) -> bool:
+        """Whether this pipeline's output should go through the shared cache.
+
+        A pipeline is shared-cache enabled when backups are not disabled AND it
+        opts in via backup_to_shared_cache OR the corresponding force flag is
+        set. Callers set exactly one of force_download/force_upload to name the
+        direction; only that direction's flag applies.
+        """
+        if backup_disabled():
+            return False
+        if self.backup_to_shared_cache:
+            return True
+        if force_download:
+            return ctx.refresh_policy.force_download_shared_cache
+        if force_upload:
+            return ctx.refresh_policy.force_upload_shared_cache
+        return False
+
+    def restore_output_from_shared_cache(self, ctx: Context) -> bool:
+        """Restore this pipeline's local output from the shared GCS cache.
+
+        Streams the latest backup for ``filename`` to the local output path, so
+        it is safe for multi-GB outputs. Returns True when a restore happened,
+        False otherwise (flag disabled, backup missing, or failure).
+
+        The incremental article pipelines reuse this hook on their read path --
+        it is what lets them pick up cached outputs instead of re-processing.
+        """
+        if (
+            self.filename is None
+            or not self._shared_cache_active(ctx, force_download=True)
+        ):
+            return False
+
+        dest_path = os.path.join(VERSIONED_DIR, self.output_path())
+        try:
+            ctx.io.restore_backup_to_path(self.filename, dest_path)
+        except Exception as e:
+            print(
+                f"Restore from shared cache failed for {self.pipeline_name}, "
+                f"will re-process: {e}"
+            )
+            return False
+
+        print(
+            f"Restored {self.pipeline_name} from shared cache, "
+            f"saving to {dest_path}"
+        )
+        return True
+
+    def upload_output_to_shared_cache(self, ctx: Context) -> bool:
+        """Upload this pipeline's local output to the shared GCS cache.
+
+        Streams the local file at the output path into the latest backup slot
+        for ``filename``. No-op unless backup_to_shared_cache is set or the
+        force-upload flag is on, and backups are not disabled. Returns True
+        when an upload happened.
+
+        The incremental article pipelines reuse this hook on their write path --
+        they never go through write_dataframe, so this is where their outputs
+        reach the shared cache.
+        """
+        if (
+            self.filename is None
+            or not self._shared_cache_active(ctx, force_upload=True)
+        ):
+            return False
+
+        src_path = os.path.join(VERSIONED_DIR, self.output_path())
+        if not os.path.exists(src_path):
+            print(
+                f"Upload to shared cache skipped for {self.pipeline_name}: "
+                f"{src_path} does not exist"
+            )
+            return False
+
+        ctx.io.upload_backup_from_path(self.filename, src_path)
+        return True
 
     def read_list(self, ctx: Context) -> typing.Iterable[Output]:
         df = self.read(ctx)

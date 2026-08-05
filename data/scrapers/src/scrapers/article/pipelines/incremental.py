@@ -66,6 +66,19 @@ class IncrementalJsonlPipeline(Pipeline[T]):
             self._cached_result = pd.DataFrame()
             return self._cached_result
 
+        # Read hook: a missing local output can be restored from the shared
+        # cache instead of re-processed. Streams to the final output path, so
+        # it is safe for multi-GB files.
+        decision = ctx.refresh_policy.execution_decisions.get(self.pipeline_name)
+        if (
+            decision
+            and decision[1] == "missing output"
+            and self.restore_output_from_shared_cache(ctx)
+        ):
+            self._cached_result = pd.DataFrame()
+            ctx.refresh_policy.add_refreshed_pipeline(self.pipeline_name)
+            return self._cached_result
+
         self.bind_requirements(ctx)
         self.preprocess_sources(ctx, ctx.refresh_policy)
         graceful = True
@@ -83,6 +96,11 @@ class IncrementalJsonlPipeline(Pipeline[T]):
                 print("Dumping...")
                 ctx.io.dumper.dump_pandas()  # type: ignore[attr-defined]
                 self.finalize_temp_output()
+                # Write hook: publish the freshly finalized output to the
+                # shared cache, if this pipeline opts in. Only on a successful
+                # run -- interrupted partial output stays local.
+                if self._refreshed_execution:
+                    self.upload_output_to_shared_cache(ctx)
                 print("Done")
 
         ctx.refresh_policy.add_refreshed_pipeline(self.pipeline_name)
