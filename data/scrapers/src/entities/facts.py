@@ -50,6 +50,14 @@ class PersonalRelationFact(ArticleFact):
     fact_type: str = field(default="personal_relation", init=False)
 
 
+@dataclass(frozen=True)
+class AffairInvolvementFact(ArticleFact):
+    person: str
+    role: str
+    affair: str
+    fact_type: str = field(default="affair_involvement", init=False)
+
+
 def fact_to_dict(fact: ArticleFact) -> dict[str, Any]:
     """Serialize an ArticleFact to a plain dict (fact_type included via asdict)."""
     return asdict(fact)
@@ -89,5 +97,14 @@ def dict_to_fact(data: dict[str, Any]) -> ArticleFact:
             subject=str(data.get("subject") or ""),
             object=str(data.get("object") or ""),
             relation=data.get("relation") or None,
+        )
+    if fact_type == "affair_involvement":
+        return AffairInvolvementFact(
+            url=url,
+            justification=justification,
+            justification_in_text=justification_in_text,
+            person=str(data.get("person") or ""),
+            role=str(data.get("role") or ""),
+            affair=str(data.get("affair") or ""),
         )
     raise ValueError(f"Unknown fact_type: {fact_type!r}")

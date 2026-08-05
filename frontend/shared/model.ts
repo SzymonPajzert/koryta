@@ -467,7 +467,10 @@ export type NoteRow = {
 };
 
 export type ExtractionFactType =
-  "employment" | "party_membership" | "personal_relation";
+  | "employment"
+  | "party_membership"
+  | "personal_relation"
+  | "affair_involvement";
 
 export interface ExtractionFact {
   id?: string;
@@ -483,6 +486,7 @@ export interface ExtractionFact {
   subject?: string;
   object?: string;
   relation?: string;
+  affair?: string;
   // Metadata:
   articleUrl: string;
   articleDomain?: string;

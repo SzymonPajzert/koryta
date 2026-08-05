@@ -86,7 +86,12 @@ DATED_EDGE_TYPES = ("employed", "election")
 
 VOTE_CATEGORIES = {"interesting", "quality", "correct", "insufficient"}
 
-EXTRACTION_FACT_TYPES = {"employment", "party_membership", "personal_relation"}
+EXTRACTION_FACT_TYPES = {
+    "employment",
+    "party_membership",
+    "personal_relation",
+    "affair_involvement",
+}
 
 # `computeVoteStats` never counts the pipeline's own votes as human review.
 PIPELINE_USER = "pipeline"

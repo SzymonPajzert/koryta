@@ -28,7 +28,7 @@ from scrapers.article.pipelines.incremental import IncrementalJsonlPipeline
 from scrapers.article.pipelines.pipeline_utils import llm_model
 from scrapers.stores import LLM, VERSIONED_DIR, Context, LLMRequest
 
-VERIFY_VERSION = 4
+VERIFY_VERSION = 8
 MAX_TOKENS = 4000
 TEMPERATURE = 0.0
 
@@ -45,11 +45,12 @@ _JSON_ANY_RE = re.compile(r"\{.*\}", flags=re.DOTALL)
 # The labeling rulebook is embedded here so the pipeline is self-contained (no
 # external file dependency). Keep it in sync with any labeling-policy changes.
 _RULES = """\
-# Facts Extraction — Labeling Rulebook (v4)
+# Facts Extraction — Labeling Rulebook (v8)
 
 Rules for labeling extracted facts (employment / party_membership /
-personal_relation) as **correct / incorrect / insufficient**, and — by
-extension — the contract the extractor's output must satisfy.
+personal_relation / affair_involvement) as **correct / incorrect /
+insufficient**, and — by extension — the contract the extractor's output must
+satisfy.
 
 ## 0. Principle
 
@@ -134,10 +135,15 @@ span. Judge form as well as grounding:
   left empty).
 - **`organization` must be an institution, not a bare place.** A city / gmina /
   województwo / country *alone* in the org slot (`Paczków`, `Węgry`) →
-  **incorrect** (a local official's org is the office, e.g. `Urząd Miejski w
-  Paczkowie`). BUT an institution whose *name* legitimately contains a place or
-  country is fine when the span supports it — `Rząd Węgier`, `Ambasada Polski we
-  Francji`, `Prokuratura Okręgowa w Katowicach` → **correct**.
+  **incorrect**. BUT a **local office entailed by a place + title in the span
+  is CORRECT**: a span naming a local official *by place* — `burmistrz
+  Milanówka`, `wójt gminy Paczków`, `starosta Oławy` — entails the office
+  (`Urząd Miejski w Milanówku`, `Urząd Gminy Paczków`, `Starostwo Powiatowe w
+  Oławie`) → accept. The place name itself is fine as the office's location;
+  do not demand the span spell out "Urząd". An institution whose *name*
+  legitimately contains a place or country is also fine when the span supports
+  it — `Rząd Węgier`, `Ambasada Polski we Francji`, `Prokuratura Okręgowa w
+  Katowicach` → **correct**.
 - **`role` — prefer the bare title, but standard multi-word titles are CORRECT.**
   A genuine compound office title, whose extra word is part of the title and
   NOT the employing institution, is fine: `prokurator generalny`, `prokurator
@@ -160,6 +166,22 @@ span. Judge form as well as grounding:
 - Both endpoints must be valid names (§2); an endpoint that is only
   `ojciec` / `żona` with no name → **incorrect**.
 - Swapped / wrong direction → **incorrect**.
+
+## 4.1 Affairs (affair_involvement)
+
+- `person` must be a valid full name (§2), and the **name must appear in the
+  justification span**; pronoun-only or implied → **insufficient**.
+- `role` and `affair` are **required** — a fact missing either is
+  **incorrect**. `role` is the person's descriptive role *in the affair* (a
+  phrase like `kierujący zorganizowaną grupą przestępczą`, `szef fundacji`,
+  `pośrednik`), not an official position — judge it as a descriptive phrase,
+  not by the employment `role` rules in §3.1.
+- `affair` must be the affair's **named proper name** (`Fundusz
+  Sprawiedliwości`, `afera podkarpacka`), not a bare noun like `afera`.
+- `role` and `affair` must be **stated or directly entailed** by the span;
+  a value more specific than the span, contradicted, or garbled →
+  **incorrect**. The `affair` name is a proper name, so any language is fine
+  (per §1).
 
 ## 5. Label definitions
 
@@ -184,11 +206,15 @@ span. Judge form as well as grounding:
 | Attribute contradicted, absent (ungrounded), or garbled | incorrect |
 | `organization` is a description / placeholder / anonymized (`firma B`) | incorrect |
 | `organization` is a place, not an institution (`Paczków`) | incorrect |
+| Local office entailed by place+title (`burmistrz Milanówka`) | correct |
 | `role` embeds the employing institution/unit (`szef klubu`) | incorrect |
 | Standard multi-word title (`prokurator generalny`, `rzecznik prasowy`) | correct |
 | `role` is a verb, not a position noun (`pracował`) | incorrect |
 | Value normalized to nominative but entailed by span (`Alior Bank`) | correct |
 | Relation endpoints swapped or unnamed | incorrect |
+| Affair fact missing `role` or `affair` | incorrect |
+| Affair `role`/`affair` not stated/entailed by span | incorrect |
+| Affair `affair` is a bare noun, not a named affair | incorrect |
 """
 
 _JUDGE_PROMPT = (
@@ -290,7 +316,7 @@ def _fact_view(fact: dict[str, Any]) -> dict[str, Any]:
         key: fact.get(key)
         for key in (
             "fact_type", "person", "subject", "role", "party",
-            "organization", "object", "relation",
+            "organization", "object", "relation", "affair",
         )
         if fact.get(key) is not None
     }
@@ -425,7 +451,7 @@ async def _drain_one(ctx, pool, inflight, model, bar) -> None:
     if isinstance(response, Exception):
         verdict, reason = "unknown", str(response)[:200]
     else:
-        verdict, reason = _parse_verdict(response.content)
+        verdict, reason = _parse_verdict(response.content or "")
     state["results"][idx] = _annotate(state["facts"][idx], verdict, reason)
     state["pending"] -= 1
     bar.update(1)

@@ -78,6 +78,7 @@ import { computed } from "vue";
 import {
   mdiAccountOutline,
   mdiAccountGroupOutline,
+  mdiAlertOutline,
   mdiArrowRight,
   mdiDomain,
   mdiOpenInNew,
@@ -106,6 +107,7 @@ const targetKind = computed(() => factTargetKind(fact));
 const targetIcon = computed(() => {
   if (fact.fact_type === "employment") return mdiDomain;
   if (fact.fact_type === "party_membership") return mdiAccountGroupOutline;
+  if (fact.fact_type === "affair_involvement") return mdiAlertOutline;
   return mdiAccountOutline; // personal_relation
 });
 

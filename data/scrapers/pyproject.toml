@@ -253,6 +253,10 @@ layers = ["analysis", "stores", "scrapers", "util", "entities"]
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.*",
     "scrapers.stores -> stores.config",
+    # ArticleExtractedFacts chains the ArticlePersonMentions output as a
+    # pipeline source (for the people-mentioned corpus gate) instead of
+    # hardcoding its jsonl path.
+    "scrapers.article.pipelines.facts_pipeline -> analysis.article_person_mentions",
 ]
 
 [[tool.importlinter.contracts]]
