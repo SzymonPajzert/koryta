@@ -10,8 +10,10 @@ from typing import Any
 import pandas as pd
 from tqdm import tqdm
 
+from analysis.article_person_mentions import ArticlePersonMentions
 from entities.article import ArticleFacts
 from entities.facts import (
+    AffairInvolvementFact,
     ArticleFact,
     EmploymentFact,
     PartyMembershipFact,
@@ -30,7 +32,7 @@ from scrapers.article.pipelines.pipeline_utils import (
 )
 from scrapers.stores import LLM, VERSIONED_DIR, Context, LLMRequest
 
-PROMPT_VERSION = 15
+PROMPT_VERSION = 21
 TEXT_LIMIT = 100000
 MAX_TOKENS = 20000
 TEMPERATURE = 0.1
@@ -51,13 +53,28 @@ _RUN_RESPONSE_THINK_BLOCKS = 0
 _PROMPT = (
     "Jesteś profesjonalnym, obiektywnym dziennikarzem analizującym tekst źródłowy. "
     "Wyciągnij tylko fakty bezpośrednio poparte główną treścią artykułu. "
-    "Interesują nas wyłącznie trzy typy faktów:\n"
+    "Interesują nas wyłącznie cztery typy faktów:\n"
     "1. employment — ktoś pracuje, pełni funkcję albo zajmuje stanowisko "
     "w instytucji, urzędzie, firmie, organizacji lub spółce\n"
     "2. party_membership — ktoś należy do partii politycznej albo jest "
     "jednoznacznie opisany jako polityk tej partii\n"
     "3. personal_relation — ktoś jest spokrewniony z kimś albo pozostaje "
-    "z kimś w jednoznacznie opisanej bliskiej relacji osobistej\n\n"
+    "z kimś w jednoznacznie opisanej bliskiej relacji osobistej\n"
+    "4. affair_involvement — ktoś jest zamieszany w aferę lub postępowanie: "
+    "podaj osobę (person), rolę, jaką pełniła w tej aferze (role) oraz nazwę "
+    "afery (affair). Rola to konkretne, opisowe określenie udziału w aferze "
+    "(np. 'kierujący zorganizowaną grupą przestępczą', 'szef fundacji', "
+    "'pośrednik'), a nie stanowisko urzędowe.\n"
+    "affair MUSI być NAZWANĄ aferą: nazwą własną (np. 'afera Qatargate', "
+    "'Fundusz Sprawiedliwości', 'afera respiratorowa') albo wyrażeniem, którym "
+    "artykuł jednoznacznie nazywa całą sprawę. NIE pisz opisu zamiast nazwy: "
+    "'skandal korupcyjny w Parlamencie Europejskim', 'korupcja w szpitalu', "
+    "'zmowa przetargowa' i 'aféra korupcyjna w X' to NIE są nazwy afer. Jeśli "
+    "artykuł nie nadaje sprawie nazwy, NIE zwracaj faktu affair_involvement.\n"
+    "Nie używaj jako role słów ogólnych 'zamieszany', 'oskarżony', 'podejrzany' "
+    "— podaj, w czym dana osoba uczestniczyła (np. 'pośrednik w łapówce', "
+    "'prezes spółki prowadzącej aferę', 'kierujący grupą'). Jeśli artykuł nie "
+    "opisuje roli osoby w aferze, NIE zwracaj tego faktu.\n\n"
     "Jeśli w tekście nie ma takich faktów, zwróć pustą listę.\n\n"
     "Ignoruj komentarze czytelników, podpisy zdjęć, stopki, wezwania do głosowania, "
     "listy kandydatów, listy uczestników, listy radnych, listy sygnatariuszy, "
@@ -160,7 +177,9 @@ _PROMPT = (
     "- justification=... | employment | person=... | organization=... | role=...\n"
     "- justification=... | party_membership | person=... | party=...\n"
     "- justification=... | personal_relation | subject=... | object=... | "
-    "relation=...\n\n"
+    "relation=...\n"
+    "- justification=... | affair_involvement | person=... | role=... | "
+    "affair=...\n\n"
     "Jeśli nie ma faktów, zwróć pustą odpowiedź albo sam nagłówek `facts:`.\n"
     "Nie zgaduj. Nie dopisuj faktów spoza tekstu.\n\n"
     "PRZYKŁADY:\n\n"
@@ -211,6 +230,17 @@ _PROMPT = (
     "- justification=Były burmistrz Paczkowa Bogdan W. usłyszał zarzuty "
     "| employment | person=Bogdan W. | organization=Urząd Miejski w Paczkowie "
     "| role=burmistrz\n\n"
+    "Artykuł: Zbigniew Ziobro kierował zorganizowaną grupą przestępczą "
+    "działającą w Funduszu Sprawiedliwości, ustaliła prokuratura.\n"
+    "<think>\n"
+    "- Zbigniew Ziobro — zamieszany w aferę Funduszu Sprawiedliwości "
+    "(affair_involvement); rola i nazwa afery w tym samym zdaniu\n"
+    "</think>\n"
+    "facts:\n"
+    "- justification=Zbigniew Ziobro kierował zorganizowaną grupą przestępczą "
+    "działającą w Funduszu Sprawiedliwości | affair_involvement "
+    "| person=Zbigniew Ziobro | role=kierujący zorganizowaną grupą przestępczą "
+    "| affair=Fundusz Sprawiedliwości\n\n"
     "Teraz przeanalizuj poniższy artykuł w ten sam sposób.\n"
     "Artykuł:\n{text}"
 )
@@ -223,6 +253,7 @@ class ArticleExtractedFacts(IncrementalJsonlPipeline[ArticleFacts]):
     interrupt_note = "will save partial facts"
 
     koryciarski_scores: ArticleKoryciarskiScores
+    mentions: ArticlePersonMentions
     llm: LLM
 
     @property
@@ -242,7 +273,15 @@ class ArticleExtractedFacts(IncrementalJsonlPipeline[ArticleFacts]):
         )
         self.prepare_temp_output()
         model = llm_model()
-        records = _extractable_records(_PARSED_FILE, _SCORES_FILE)
+        mentions_path = self.mentions.final_output_path
+        if not mentions_path.exists():
+            raise FileNotFoundError(mentions_path)
+        mentioned = _mentioned_urls(mentions_path)
+        records = _extractable_records(
+            _PARSED_FILE,
+            _SCORES_FILE,
+            mentioned,
+        )
         min_score = article_facts_min_koryciarski_score()
         asyncio.run(
             _extract_records(
@@ -282,7 +321,29 @@ def _existing_facts_cache_from_files(*paths: Path) -> dict[str, dict[str, Any]]:
     return cache
 
 
-def _extractable_records(parsed_path: Path, scores_path: Path) -> list[dict[str, Any]]:
+def _mentioned_urls(path: Path) -> set[str]:
+    """URLs of articles that mention at least one known person."""
+    urls: set[str] = set()
+    with path.open("r", encoding="utf-8") as handle:
+        for line in tqdm(handle, desc="Reading person mentions", unit="row"):
+            raw = line.strip()
+            if not raw:
+                continue
+            try:
+                row = json.loads(raw)
+            except Exception:
+                continue
+            url = row.get("url")
+            if isinstance(url, str) and url:
+                urls.add(url)
+    return urls
+
+
+def _extractable_records(
+    parsed_path: Path,
+    scores_path: Path,
+    mentioned: set[str],
+) -> list[dict[str, Any]]:
     article_scores = _article_scores_by_url(scores_path)
     latest: dict[str, dict[str, Any]] = {}
     with parsed_path.open("r", encoding="utf-8") as handle:
@@ -296,6 +357,8 @@ def _extractable_records(parsed_path: Path, scores_path: Path) -> list[dict[str,
                 continue
             url = row.get("url")
             if not isinstance(url, str) or url not in article_scores:
+                continue
+            if url not in mentioned:
                 continue
             if row.get("parse_status") != "ok":
                 continue
@@ -459,7 +522,15 @@ def _emit_fact_response(
         error = str(response) or f"{type(response).__name__}: {response!r}"
         _emit_facts(ctx, _error_row(record, model, error))
     else:
-        _emit_facts(ctx, _facts_row(record, response.content, model, response))
+        _emit_facts(
+            ctx,
+            _facts_row(
+                record,
+                response.content or "",
+                model,
+                response,
+            ),
+        )
 
 
 def _fact_request(record: dict[str, Any], model: str, ctx=None) -> LLMRequest:
@@ -526,6 +597,7 @@ def _facts_row(
     model: str,
     response,
 ) -> dict[str, Any]:
+    response_text = response_text or ""
     think_text = _think_text(response_text)
     think_chars, think_blocks = _think_stats_from_text(think_text)
     _add_run_think_stats(think_chars, think_blocks)
@@ -665,7 +737,12 @@ def _split_fact_line(line: str) -> dict[str, str] | None:
     parts = [part.strip() for part in line.split("|")]
     if not parts:
         return None
-    fact_types = {"employment", "party_membership", "personal_relation"}
+    fact_types = {
+        "employment",
+        "party_membership",
+        "personal_relation",
+        "affair_involvement",
+    }
     fact_type = ""
     fact_type_index = -1
     for index, part in enumerate(parts):
@@ -781,6 +858,21 @@ def _coerce_fact(
             subject=subject,
             object=object_,
             relation=relation_text or None,
+        )
+    if fact_type == "affair_involvement":
+        person = str(raw_fact.get("person") or "").strip()
+        role = str(raw_fact.get("role") or "").strip()
+        affair = str(raw_fact.get("affair") or "").strip()
+        if not person or not role or not affair:
+            return None
+        return AffairInvolvementFact(
+            url=url,
+            justification=justification,
+            justification_in_text=justification_in_text,
+
+            person=person,
+            role=role,
+            affair=affair,
         )
     return None
 

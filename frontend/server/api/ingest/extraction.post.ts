@@ -9,7 +9,12 @@ const factSchema = z.object({
   url: z.string(),
   justification: z.string(),
   justification_in_text: z.string().nullable().optional(),
-  fact_type: z.enum(["employment", "party_membership", "personal_relation"]),
+  fact_type: z.enum([
+    "employment",
+    "party_membership",
+    "personal_relation",
+    "affair_involvement",
+  ]),
   person: z.string().optional(),
   organization: z.string().optional(),
   role: z.string().optional(),
@@ -17,6 +22,7 @@ const factSchema = z.object({
   subject: z.string().optional(),
   object: z.string().optional(),
   relation: z.string().optional(),
+  affair: z.string().optional(),
 }) satisfies z.ZodType<Omit<ExtractionFact, "articleUrl" | "tag">>;
 
 const articleSchema = z.object({
@@ -92,6 +98,7 @@ export default defineEventHandler(async (event) => {
       if (fact.subject !== undefined) doc.subject = fact.subject;
       if (fact.object !== undefined) doc.object = fact.object;
       if (fact.relation !== undefined) doc.relation = fact.relation;
+      if (fact.affair !== undefined) doc.affair = fact.affair;
 
       allDocs.push(doc);
     }

@@ -4,12 +4,14 @@ const FACT_TYPE_LABELS: Record<ExtractionFactType, string> = {
   employment: "Zatrudnienie",
   party_membership: "Członkostwo partyjne",
   personal_relation: "Relacja osobista",
+  affair_involvement: "Zamieszany w aferę",
 };
 
 const FACT_TYPE_COLORS: Record<ExtractionFactType, string> = {
   employment: "primary",
   party_membership: "secondary",
   personal_relation: "info",
+  affair_involvement: "warning",
 };
 
 /** Human-readable label for a fact's type (falls back to the raw type). */
@@ -30,10 +32,11 @@ export function factSubject(fact: ExtractionFact): string {
   return fact.person || fact.subject || "—";
 }
 
-/** Right-hand entity: organization / party / related person. */
+/** Right-hand entity: organization / party / related person / affair. */
 export function factTarget(fact: ExtractionFact): string | undefined {
   if (fact.fact_type === "employment") return fact.organization;
   if (fact.fact_type === "party_membership") return fact.party;
+  if (fact.fact_type === "affair_involvement") return fact.affair;
   return fact.object; // personal_relation
 }
 
@@ -41,6 +44,8 @@ export function factTarget(fact: ExtractionFact): string | undefined {
 export function factConnector(fact: ExtractionFact): string {
   if (fact.fact_type === "employment") return fact.role || "zatrudnienie";
   if (fact.fact_type === "party_membership") return "członek";
+  if (fact.fact_type === "affair_involvement")
+    return fact.role || "zamieszany w aferę";
   return fact.relation || "relacja"; // personal_relation
 }
 
@@ -48,5 +53,6 @@ export function factConnector(fact: ExtractionFact): string {
 export function factTargetKind(fact: ExtractionFact): string {
   if (fact.fact_type === "employment") return "organizacja";
   if (fact.fact_type === "party_membership") return "partia";
+  if (fact.fact_type === "affair_involvement") return "afera";
   return ""; // personal_relation: the object's type is not asserted
 }
