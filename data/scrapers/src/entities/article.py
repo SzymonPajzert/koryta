@@ -172,3 +172,25 @@ class ArticlePeopleMentioned:
     date: str | None
     tags: list[str]
     people_mentioned: list[str]
+
+
+@dataclass
+class PersonAffairTags:
+    """Interesting affair/event tags attributed to a single person.
+
+    One record per person: the person's display name together with the
+    interesting tags found on the articles mentioning them. A tag counts only
+    when it names an affair, scandal, investigative commission or notable
+    event - generic category tags (polityka, prokuratura, sport, ...) are
+    filtered out, so the list is a summary of the affairs a person shows up in.
+    Each tag carries the number of articles that used it and the date range
+    they span.
+    """
+
+    __output_path__: ClassVar[Path] = Path(
+        "people_affair_tags/people_affair_tags.jsonl.tmp"
+    )
+
+    person: str
+    tags: list[dict[str, Any]]
+    total_articles: int

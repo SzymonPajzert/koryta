@@ -253,6 +253,9 @@ layers = ["analysis", "stores", "scrapers", "util", "entities"]
 ignore_imports = [
     "scrapers.krs.scrape -> analysis.*",
     "scrapers.stores -> stores.config",
+    # PeopleAffairTags chains the ArticlePersonMentions output as a pipeline
+    # source instead of hardcoding its jsonl path.
+    "scrapers.article.pipelines.people_affair_tags_pipeline -> analysis.article_person_mentions",
 ]
 
 [[tool.importlinter.contracts]]
