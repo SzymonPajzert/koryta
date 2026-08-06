@@ -12,8 +12,6 @@ patterns: an affair has to be named (``afera wizowa``) rather than described
 or ``prokuratura`` are filtered out.
 """
 
-from __future__ import annotations
-
 import json
 import re
 import unicodedata
