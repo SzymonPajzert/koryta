@@ -14,8 +14,8 @@ from scrapers.article.pipelines import (
     ArticleFactsVerified,
     ArticleKoryciarskiScores,
     ArticleParsed,
-    PeopleAffairTags,
 )
+from scrapers.article.pipelines.people_affair_tags_pipeline import PeopleAffairTags
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.kmgp.people import PeopleKMGP
 from scrapers.koryta.differ import KorytaDiffer

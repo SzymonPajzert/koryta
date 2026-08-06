@@ -175,6 +175,16 @@ class ArticlePeopleMentioned:
 
 
 @dataclass
+class AffairTag:
+    """A single affair/event tag with how often a person appeared next to it."""
+
+    tag: str
+    count: int
+    first_date: str | None = None
+    last_date: str | None = None
+
+
+@dataclass
 class PersonAffairTags:
     """Interesting affair/event tags attributed to a single person.
 
@@ -192,5 +202,5 @@ class PersonAffairTags:
     )
 
     person: str
-    tags: list[dict[str, Any]]
+    tags: list[AffairTag]
     total_articles: int

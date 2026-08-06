@@ -22,7 +22,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from analysis.article_person_mentions import ArticlePersonMentions
-from entities.article import PersonAffairTags
+from entities.article import AffairTag, PersonAffairTags
 from scrapers.article.pipelines.incremental import IncrementalJsonlPipeline
 from scrapers.stores import Context
 
@@ -170,23 +170,23 @@ class PeopleAffairTags(IncrementalJsonlPipeline[PersonAffairTags]):
 
         emitted = 0
         for person, buckets in per_person.items():
-            tags: list[dict[str, Any]] = []
+            tags: list[AffairTag] = []
             for tag, dates in buckets.items():
                 present = [d for d in dates if d]
                 tags.append(
-                    {
-                        "tag": tag,
-                        "count": len(dates),
-                        "first_date": min(present) if present else None,
-                        "last_date": max(present) if present else None,
-                    }
+                    AffairTag(
+                        tag=tag,
+                        count=len(dates),
+                        first_date=min(present) if present else None,
+                        last_date=max(present) if present else None,
+                    )
                 )
-            tags.sort(key=lambda t: (-int(t["count"]), str(t["tag"])))
+            tags.sort(key=lambda t: (-t.count, t.tag))
             ctx.io.dumper.insert_into(  # type: ignore[attr-defined]
                 PersonAffairTags(
                     person=person,
                     tags=tags,
-                    total_articles=sum(int(t["count"]) for t in tags),
+                    total_articles=sum(t.count for t in tags),
                 ),
                 [],
             )
