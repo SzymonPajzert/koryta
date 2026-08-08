@@ -76,9 +76,14 @@ jobs:
 
       # The ml group (torch, spacy and the nvidia runtimes -- 4.5 GB) is left
       # out: no test needs it. dev comes along as uv's default group.
+      #
+      # service is needed even though nothing here is a service test: pytest
+      # imports every test module to collect it, and src/service/test_app.py
+      # imports the app, which imports fastapi. Without it collection fails and
+      # the whole run exits 2 before a single test executes.
       - name: Install dependencies
         working-directory: data/scrapers
-        run: uv sync --locked --group test
+        run: uv sync --locked --group test --group service
 
       - name: Run pytest
         working-directory: data/scrapers
@@ -96,9 +101,11 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "data/scrapers/uv.lock"
 
+      # service for the same reason as the pytest job: mypy reads src/service,
+      # and an unresolvable fastapi import is an error like any other.
       - name: Install dependencies
         working-directory: data/scrapers
-        run: uv sync --locked --group test
+        run: uv sync --locked --group test --group service
 
       - name: Run mypy
         working-directory: data/scrapers

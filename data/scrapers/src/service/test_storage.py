@@ -98,15 +98,18 @@ def test_read_captured_html_pulls_the_right_member(monkeypatch: pytest.MonkeyPat
     assert html == b"<html>wanted</html>"
 
 
-def test_read_local_path_unescapes_the_url():
+def test_read_local_path_unescapes_the_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     """A file:// path has to come back as the name that was written.
 
     Most Polish article slugs carry a diacritic or a space, and `pathToFileURL`
     percent-escapes both.
     """
-    assert read_local_path("file:///tmp/koryta/artyku%C5%82%20o%20czym%C5%9B") == Path(
-        "/tmp/koryta/artykuł o czymś"
-    )
+    monkeypatch.setenv("CAPTURE_LOCAL_DIR", str(tmp_path))
+    wanted = tmp_path / "artykuł o czymś"
+
+    assert read_local_path(wanted.as_uri()) == wanted
 
 
 @pytest.mark.parametrize("bad", ["", "gs://bucket/blob", "file://relative/path"])
@@ -115,12 +118,39 @@ def test_read_local_path_rejects_anything_else(bad: str):
         read_local_path(bad)
 
 
-def test_read_captured_html_reads_the_development_sink(tmp_path: Path):
+def test_read_local_path_stays_inside_the_capture_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    """The path comes out of the request body, so it is the caller's to choose.
+
+    Cloud Tasks is the only thing that should reach `/extract`, but that is not
+    a reason to hand whatever does reach it an arbitrary file off this disk.
+    """
+    root = tmp_path / "captures"
+    root.mkdir()
+    monkeypatch.setenv("CAPTURE_LOCAL_DIR", str(root))
+
+    for outside in [
+        Path("/etc/passwd").as_uri(),
+        (root / ".." / "elsewhere" / "secret").as_uri(),
+        f"file://{root}/../../etc/passwd",
+    ]:
+        with pytest.raises(ValueError, match="outside"):
+            read_local_path(outside)
+
+    inside = root / "hostname=x" / "date=2026-08-08" / "uid_1.tar.gz"
+    assert read_local_path(inside.as_uri()) == inside
+
+
+def test_read_captured_html_reads_the_development_sink(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     """The local sink stands in for the bucket when there is no emulator.
 
     `uploadCapturedPage` writes the same archive to disk and returns a file://
     path; nothing else about the flow changes, which is the point.
     """
+    monkeypatch.setenv("CAPTURE_LOCAL_DIR", str(tmp_path))
     url = "https://www.example.pl/artykuł"
     archive = tmp_path / "hostname=www.example.pl" / "date=2026-08-03" / "uid_1.tar.gz"
     archive.parent.mkdir(parents=True)

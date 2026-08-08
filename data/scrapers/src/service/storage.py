@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import io
+import os
 import tarfile
+import tempfile
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -36,13 +38,36 @@ def split_gs_path(storage_path: str) -> tuple[str, str]:
     return bucket, blob
 
 
+def local_capture_root() -> Path:
+    """The one directory a `file://` capture may be read from.
+
+    `CAPTURE_LOCAL_DIR` and this default are the same pair the frontend's
+    `localCaptureRoot` uses, so the two halves of the development loop agree on
+    where an archive goes without either being told by the other.
+    """
+    configured = os.environ.get("CAPTURE_LOCAL_DIR")
+    root = (
+        Path(configured)
+        if configured
+        else Path(tempfile.gettempdir()) / "koryta-captures"
+    )
+    return root.resolve()
+
+
 def read_local_path(storage_path: str) -> Path:
-    """The file a `file://` capture path points at.
+    """The file a `file://` capture path points at, inside the sink.
 
     Only the development sink produces these: with no storage emulator to write
     to, `uploadCapturedPage` puts the archive on disk under the same name and
     hands back its path, so the whole capture loop runs on one machine without
     touching `gs://koryta-pl-crawled`.
+
+    The path arrives in the request body, which makes it the caller's to choose,
+    so it is confined to that sink rather than trusted. Cloud Tasks is the only
+    caller that should reach `/extract`, but "should" is not an argument for
+    handing whoever does reach it an arbitrary file off this disk — and the
+    check costs one comparison. Resolved before comparing, so `..` is walked out
+    before it is judged rather than after.
     """
     if not storage_path.startswith(_FILE_SCHEME):
         raise ValueError(f"not a file:// path: {storage_path!r}")
@@ -57,7 +82,12 @@ def read_local_path(storage_path: str) -> Path:
     path = Path(unquote(parsed.path))
     if not path.is_absolute():
         raise ValueError(f"file:// path is not absolute: {storage_path!r}")
-    return path
+
+    root = local_capture_root()
+    resolved = path.resolve()
+    if resolved != root and root not in resolved.parents:
+        raise ValueError(f"file:// path is outside {root}: {storage_path!r}")
+    return resolved
 
 
 def _download(storage_path: str) -> bytes:
