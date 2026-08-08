@@ -1,0 +1,146 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1c1b1f;
+  --muted: #5f5c66;
+  --line: #e2e0e6;
+  --primary: #6750a4;
+  --error: #b3261e;
+  --ok: #146c2e;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b1f;
+    --fg: #e6e1e5;
+    --muted: #cac4d0;
+    --line: #3a383e;
+    --primary: #d0bcff;
+    --error: #f2b8b5;
+    --ok: #7ad48f;
+  }
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  padding: 14px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.page {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  /* A headline can be long; two lines is enough to recognise the article. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+button {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--primary);
+  color: var(--bg);
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--line);
+  margin-top: 8px;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.status {
+  margin: 12px 0 0;
+  min-height: 1.45em;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.status[data-state="done"] {
+  color: var(--ok);
+}
+
+.status[data-state="error"] {
+  color: var(--error);
+}
+
+footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+footer a {
+  color: var(--primary);
+}
+
+.account {
+  color: var(--muted);
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.settings summary {
+  cursor: pointer;
+}
+
+.settings label {
+  display: block;
+  margin: 8px 0 4px;
+}
+
+.settings input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}

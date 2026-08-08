@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Koryta</title>
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon32.png" alt="" width="24" height="24" />
+      <h1>Zapisz artykuł</h1>
+    </header>
+
+    <p id="page" class="page"></p>
+
+    <button id="capture" type="button" class="primary">
+      Zapisz i wyciągnij fakty
+    </button>
+
+    <button id="connect" type="button" class="secondary" hidden>
+      Połącz z koryta.pl
+    </button>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <footer>
+      <a id="review" href="#" target="_blank" hidden>Zobacz fakty →</a>
+      <span id="account" class="account"></span>
+    </footer>
+
+    <details class="settings">
+      <summary>Ustawienia</summary>
+      <label for="origin">Adres serwisu</label>
+      <input id="origin" type="url" spellcheck="false" />
+      <button id="save-origin" type="button" class="secondary">Zapisz</button>
+    </details>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

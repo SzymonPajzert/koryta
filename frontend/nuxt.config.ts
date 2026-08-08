@@ -82,6 +82,10 @@ export default defineNuxtConfig({
       "koryta-pl",
     public: {
       isLocal,
+      /** The published extension's id, so `/rozszerzenie` knows who to hand a
+       * token to. Empty until it is listed, which the page says out loud
+       * rather than failing silently. */
+      extensionId: process.env.NUXT_PUBLIC_EXTENSION_ID || "",
     },
   },
 
