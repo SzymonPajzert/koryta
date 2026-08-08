@@ -65,9 +65,7 @@ def read_local_path(storage_path: str) -> Path:
     The path arrives in the request body, which makes it the caller's to choose,
     so it is confined to that sink rather than trusted. Cloud Tasks is the only
     caller that should reach `/extract`, but "should" is not an argument for
-    handing whoever does reach it an arbitrary file off this disk — and the
-    check costs one comparison. Resolved before comparing, so `..` is walked out
-    before it is judged rather than after.
+    handing whoever does reach it an arbitrary file off this disk.
     """
     if not storage_path.startswith(_FILE_SCHEME):
         raise ValueError(f"not a file:// path: {storage_path!r}")
@@ -83,11 +81,21 @@ def read_local_path(storage_path: str) -> Path:
     if not path.is_absolute():
         raise ValueError(f"file:// path is not absolute: {storage_path!r}")
 
+    # Rebuilt from the root rather than merely compared against it. Checking
+    # `root in resolved.parents` would be just as safe, but the file is then
+    # still opened through a path the caller supplied, and neither a reader nor
+    # a taint analysis can see that the check governs the open. Taking the
+    # relative part and joining it back onto a path we chose leaves nothing of
+    # the caller's string in the value that reaches the filesystem.
     root = local_capture_root()
-    resolved = path.resolve()
-    if resolved != root and root not in resolved.parents:
-        raise ValueError(f"file:// path is outside {root}: {storage_path!r}")
-    return resolved
+    resolved = os.path.realpath(str(path))
+    try:
+        relative = Path(resolved).relative_to(root)
+    except ValueError:
+        raise ValueError(f"file:// path is outside {root}: {storage_path!r}") from None
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"file:// path escapes {root}: {storage_path!r}")
+    return root.joinpath(*relative.parts)
 
 
 def _download(storage_path: str) -> bytes:
