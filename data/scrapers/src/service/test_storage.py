@@ -5,8 +5,15 @@ import tarfile
 
 import pytest
 
+from pathlib import Path
+
 from scrapers.article.pipelines.parsed_pipeline import _member_path_from_url
-from service.storage import member_path, read_captured_html, split_gs_path
+from service.storage import (
+    member_path,
+    read_captured_html,
+    read_local_path,
+    split_gs_path,
+)
 
 # The urls the frontend's `crawlMemberPath` was checked against; keeping the
 # expectations here as literals means a change on either side has to be made in
@@ -90,3 +97,41 @@ def test_read_captured_html_pulls_the_right_member(monkeypatch: pytest.MonkeyPat
     )
 
     assert html == b"<html>wanted</html>"
+
+
+def test_read_local_path_unescapes_the_url():
+    """A file:// path has to come back as the name that was written.
+
+    Most Polish article slugs carry a diacritic or a space, and `pathToFileURL`
+    percent-escapes both.
+    """
+    assert read_local_path("file:///tmp/koryta/artyku%C5%82%20o%20czym%C5%9B") == Path(
+        "/tmp/koryta/artykuł o czymś"
+    )
+
+
+@pytest.mark.parametrize("bad", ["", "gs://bucket/blob", "file://relative/path"])
+def test_read_local_path_rejects_anything_else(bad: str):
+    with pytest.raises(ValueError):
+        read_local_path(bad)
+
+
+def test_read_captured_html_reads_the_development_sink(tmp_path: Path):
+    """The local sink stands in for the bucket when there is no emulator.
+
+    `uploadCapturedPage` writes the same archive to disk and returns a file://
+    path; nothing else about the flow changes, which is the point.
+    """
+    url = "https://www.example.pl/artykuł"
+    archive = tmp_path / "hostname=www.example.pl" / "date=2026-08-03" / "uid_1.tar.gz"
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(
+        _archive(
+            {
+                member_path(url): b"<html>wanted</html>",
+                "index.txt": b"www.example.pl/artyku\xc5\x82\n",
+            }
+        )
+    )
+
+    assert read_captured_html(archive.as_uri(), url) == b"<html>wanted</html>"

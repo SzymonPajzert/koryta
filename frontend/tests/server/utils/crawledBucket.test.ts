@@ -1,10 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { gunzipSync } from "node:zlib";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   buildCrawlArchive,
   crawlArchivePath,
   crawlMemberPath,
   parseCrawlUrl,
+  uploadCapturedPage,
   warsawDate,
   uuid7,
 } from "../../../server/utils/crawledBucket";
@@ -200,6 +205,45 @@ describe("fragments", () => {
     );
     expect(crawlMemberPath("https://example.pl/a#komentarze")).toBe(
       "example.pl/a",
+    );
+  });
+});
+
+describe("uploadCapturedPage against the emulators", () => {
+  const created: string[] = [];
+
+  afterEach(() => {
+    delete process.env.USE_EMULATORS;
+    delete process.env.CAPTURE_LOCAL_DIR;
+    for (const dir of created.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes the archive to disk instead of the production bucket", async () => {
+    // There is no storage emulator, so without this a local capture writes a
+    // real object into the mirror the nightly pipeline reads.
+    const root = mkdtempSync(join(tmpdir(), "koryta-captures-test-"));
+    created.push(root);
+    process.env.USE_EMULATORS = "true";
+    process.env.CAPTURE_LOCAL_DIR = root;
+
+    const url = "https://www.example.pl/artykuł o czymś";
+    const { storagePath, blobName } = await uploadCapturedPage({
+      url,
+      html: Buffer.from("<html>treść</html>", "utf8"),
+    });
+
+    expect(storagePath.startsWith("file://")).toBe(true);
+    expect(blobName.startsWith("hostname=www.example.pl/date=")).toBe(true);
+
+    // The percent-escaping in the file:// url has to survive the round trip:
+    // most Polish article slugs carry a diacritic, and the extractor resolves
+    // this path to find the archive.
+    const file = fileURLToPath(storagePath);
+    expect(file).toBe(join(root, blobName));
+    expect(readArchive(readFileSync(file)).get(crawlMemberPath(url))).toBe(
+      "<html>treść</html>",
     );
   });
 });

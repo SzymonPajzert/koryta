@@ -1,5 +1,9 @@
 import { gzipSync } from "node:zlib";
 import { createHash, randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import { getStorage } from "firebase-admin/storage";
 import { getApp } from "firebase-admin/app";
 
@@ -242,6 +246,35 @@ export function sha256(content: Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+/** Where a capture goes when there is no bucket to put it in.
+ *
+ * `firebase.json` runs no storage emulator, and `USE_EMULATORS` does not reach
+ * `firebase-admin/storage` — so a local capture would write a real object into
+ * `gs://koryta-pl-crawled`, which the nightly pipeline reads. It would succeed,
+ * which is the problem: developing the capture flow would keep feeding the
+ * production mirror.
+ *
+ * So locally the same archive is written to disk instead, under the same
+ * `hostname=…/date=…/uid_….tar.gz` name, and the path comes back as a `file://`
+ * url. The extractor reads either scheme (`service/storage.py`), so the whole
+ * loop runs on one machine with nothing to clean up afterwards.
+ */
+export function localCaptureRoot(): string {
+  return resolve(
+    process.env.CAPTURE_LOCAL_DIR || join(tmpdir(), "koryta-captures"),
+  );
+}
+
+/** True when this process is talking to the emulators rather than to Firebase.
+ *
+ * Read off the environment rather than off `useRuntimeConfig().public.isLocal`,
+ * which is also true under vitest — the unit tests exercise the bucket path,
+ * and mock `firebase-admin/storage` to do it.
+ */
+function useLocalCaptureSink(): boolean {
+  return process.env.USE_EMULATORS === "true";
+}
+
 /** Stores one captured page where the crawler would have put it.
  *
  * Returns the `gs://` path, which is what `url_store` records as
@@ -260,13 +293,22 @@ export async function uploadCapturedPage(options: {
     { memberPath: crawlMemberPath(options.url), content: options.html },
   ]);
 
-  await getStorage(getApp())
-    .bucket(CRAWLED_BUCKET)
-    .file(blobName)
-    .save(archive, { contentType: "application/gzip" });
+  let storagePath: string;
+  if (useLocalCaptureSink()) {
+    const file = join(localCaptureRoot(), blobName);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, archive);
+    storagePath = pathToFileURL(file).href;
+  } else {
+    await getStorage(getApp())
+      .bucket(CRAWLED_BUCKET)
+      .file(blobName)
+      .save(archive, { contentType: "application/gzip" });
+    storagePath = `gs://${CRAWLED_BUCKET}/${blobName}`;
+  }
 
   return {
-    storagePath: `gs://${CRAWLED_BUCKET}/${blobName}`,
+    storagePath,
     blobName,
     htmlSha256: sha256(options.html),
   };

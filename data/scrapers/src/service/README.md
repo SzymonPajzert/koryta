@@ -45,21 +45,27 @@ EXTRACTOR_URL=http://localhost:8081`, which skips Cloud Tasks and calls the
 service straight. `GET /health` reports which variables are still missing rather
 than making you find out on the first capture.
 
+Nothing in that loop touches `gs://koryta-pl-crawled`. There is no storage
+emulator, so under `USE_EMULATORS=true` the capture endpoint writes the archive
+to `$CAPTURE_LOCAL_DIR` (default `$TMPDIR/koryta-captures`) under the same
+`hostname=…/date=…/uid_….tar.gz` name and hands back a `file://` path, which
+`read_captured_html` reads exactly as it reads a `gs://` one.
+
 ## Configuration
 
-| Variable | Default | |
-| --- | --- | --- |
-| `KORYTA_API_URL` | — | required, e.g. `https://koryta.pl` |
-| `FIREBASE_WEB_API_KEY` | — | required; public, same value as `nuxt.config.ts` |
-| `LLM_API_KEY` | — | required; also read from `OPENROUTER_APIKEY`/`OPENAI_API_KEY` |
-| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | any OpenAI-compatible endpoint |
-| `LLM_MODEL` | `qwen/qwen3-32b` | |
-| `LLM_LANES` | `4` | concurrent requests; the per-fact judgements use them |
-| `EXTRACTOR_UID` | `capture-extractor` | the Firebase uid this service signs in as |
-| `EXTRACTION_TAG` | `capture_v1` | stamped on every submitted fact |
-| `VERIFY_FACTS` | `true` | run the rulebook judge before submitting |
-| `MIN_KORYCIARSKI_SCORE` | unset | skip submitting below this score |
-| `URL_STORE_URL`, `URL_STORE_API_KEY` | unset | without these the nightly run will not see the capture |
+| Variable                             | Default                        |                                                               |
+| ------------------------------------ | ------------------------------ | ------------------------------------------------------------- |
+| `KORYTA_API_URL`                     | —                              | required, e.g. `https://koryta.pl`                            |
+| `FIREBASE_WEB_API_KEY`               | —                              | required; public, same value as `nuxt.config.ts`              |
+| `LLM_API_KEY`                        | —                              | required; also read from `OPENROUTER_APIKEY`/`OPENAI_API_KEY` |
+| `LLM_BASE_URL`                       | `https://openrouter.ai/api/v1` | any OpenAI-compatible endpoint                                |
+| `LLM_MODEL`                          | `qwen/qwen3-32b`               |                                                               |
+| `LLM_LANES`                          | `4`                            | concurrent requests; the per-fact judgements use them         |
+| `EXTRACTOR_UID`                      | `capture-extractor`            | the Firebase uid this service signs in as                     |
+| `EXTRACTION_TAG`                     | `capture_v1`                   | stamped on every submitted fact                               |
+| `VERIFY_FACTS`                       | `true`                         | run the rulebook judge before submitting                      |
+| `MIN_KORYCIARSKI_SCORE`              | unset                          | skip submitting below this score                              |
+| `URL_STORE_URL`, `URL_STORE_API_KEY` | unset                          | without these the nightly run will not see the capture        |
 
 The model is deliberately not the batch pipeline's `Qwen/Qwen3-14B`: there is no
 GPU behind Cloud Run, so this goes to a hosted endpoint. Facts from the two
