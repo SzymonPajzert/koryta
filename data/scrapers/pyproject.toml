@@ -156,6 +156,13 @@ ml = [
 ]
 
 
+# Only the capture extractor (src/service) needs these; nothing batch does, and
+# the Dockerfile installs this group and no other.
+service = [
+    "fastapi (>=0.122.0,<1.0.0)",
+    "uvicorn (>=0.42.0,<1.0.0)",
+]
+
 dev = [
     "jupyterlab (>=4.5.6,<5.0.0)",
     "import-linter (>=2.11,<3.0)",
