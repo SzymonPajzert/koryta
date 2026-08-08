@@ -3,7 +3,6 @@
   "name": "Koryta — zapisz artykuł",
   "version": "0.1.0",
   "description": "Zapisuje czytany artykuł w archiwum koryta.pl i wyciąga z niego fakty — także zza paywalla.",
-  "default_locale": "pl",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
     "https://koryta.pl/*",
