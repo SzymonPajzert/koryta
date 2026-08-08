@@ -8,8 +8,9 @@ import type { H3Event } from "h3";
  * edges and revisions on the scrapers' behalf, and they take the caller's word
  * for how far to trust a payload: `autoapprove` publishes what the request
  * creates, and `party_from_committee` writes a change through to a candidacy
- * the request did not create. Every other write path in the app proposes a
- * revision and waits for a reviewer.
+ * the request did not create. The capture path additionally writes to the
+ * shared crawled bucket and spends LLM calls. Every other write path in the app
+ * proposes a revision and waits for a reviewer.
  *
  * Split from `getUser` rather than folded into it so it stays a pure check on a
  * decoded token, which is what lets a test exercise the ingest with a mocked

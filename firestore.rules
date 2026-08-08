@@ -26,6 +26,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Pages captured from someone's browser. Written only by /api/ingest/page
+    // and by the extractor, both of which hold admin credentials and so are not
+    // subject to these rules at all — the client reads through /api/pages,
+    // which applies the same check server side.
+    match /articlePages/{pageId} {
+      allow read: if request.auth != null && request.auth.token.datascience == true;
+      allow write: if false;
+    }
+
     match /votes/{voteId} {
       allow read: if true;
       allow create, update, delete: if request.auth != null 
