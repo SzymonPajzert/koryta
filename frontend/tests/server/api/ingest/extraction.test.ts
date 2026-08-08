@@ -128,4 +128,38 @@ describe("api/ingest/extraction", () => {
       expect.objectContaining({ articleNodeId: "article-node" }),
     );
   });
+
+  it("credits the capture's uploader rather than the calling service", async () => {
+    // The capture extractor holds its own datascience account and submits on
+    // behalf of whoever captured the page; without this every fact found that
+    // way would be attributed to the service.
+    mockReadBody.mockResolvedValue({
+      uploaderUid: "reader-who-captured-it",
+      articles: [
+        {
+          url: "https://example.com/a",
+          domain: "example.com",
+          title: null,
+          publication_date: null,
+          tag: "capture_v1",
+          extracted_facts: [
+            {
+              url: "https://example.com/a",
+              justification: "bo tak",
+              fact_type: "employment",
+              person: "Jan Kowalski",
+              organization: "Orlen",
+            },
+          ],
+        },
+      ],
+    });
+
+    await handler({} as any);
+
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uploaderUid: "reader-who-captured-it" }),
+    );
+  });
 });

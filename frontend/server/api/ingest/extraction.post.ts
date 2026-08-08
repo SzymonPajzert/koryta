@@ -30,6 +30,15 @@ const articleSchema = z.object({
 
 const extractionRequestSchema = z.object({
   articles: z.array(articleSchema),
+  /** Who these facts should be credited to, when that is not the caller.
+   *
+   * The capture extractor runs as a service account and submits on behalf of
+   * whoever captured the page — without this every fact found that way would be
+   * attributed to the service rather than to the person who found the article.
+   * Only a datascience caller reaches this endpoint at all, so there is no
+   * wider identity to spoof.
+   */
+  uploaderUid: z.string().min(1).optional(),
 });
 
 export default defineEventHandler(async (event) => {
@@ -38,6 +47,7 @@ export default defineEventHandler(async (event) => {
   );
 
   const user = requireDatascience(await getUser(event));
+  const uploaderUid = body.uploaderUid ?? user.uid;
 
   const db = getFirestore(getApp(), "koryta-pl");
 
@@ -72,7 +82,7 @@ export default defineEventHandler(async (event) => {
         articleDomain: article.domain,
         tag: article.tag,
         createdAt: Timestamp.now(),
-        uploaderUid: user.uid,
+        uploaderUid,
         // Seed the aggregate the `onVoteWritten` trigger maintains from here
         // on. Firestore cannot query for a field that is absent, so without
         // this an unvoted fact could never be found by a

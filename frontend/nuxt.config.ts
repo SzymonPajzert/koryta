@@ -67,6 +67,19 @@ export default defineNuxtConfig({
   ],
 
   runtimeConfig: {
+    // The fast extractor for browser-captured pages (data/scrapers/src/service,
+    // deployed to Cloud Run). Left "off" everywhere it is not configured — a
+    // capture then stores its html and stops there, which is still enough for
+    // the nightly pipeline to pick the page up out of the bucket.
+    extractorDispatch: process.env.EXTRACTOR_DISPATCH || "off",
+    extractorUrl: process.env.EXTRACTOR_URL || "",
+    extractorQueue: process.env.EXTRACTOR_QUEUE || "article-extraction",
+    extractorLocation: process.env.EXTRACTOR_LOCATION || "europe-central2",
+    extractorServiceAccount: process.env.EXTRACTOR_SERVICE_ACCOUNT || "",
+    gcpProject:
+      process.env.GCLOUD_PROJECT ||
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      "koryta-pl",
     public: {
       isLocal,
     },
