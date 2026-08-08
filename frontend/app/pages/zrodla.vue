@@ -51,7 +51,35 @@
         >
           {{ alertMessage }}
         </v-alert>
+
+        <div v-if="canCapture" class="d-flex align-center flex-wrap ga-2 mt-4">
+          <span class="text-body-2 text-medium-emphasis">
+            Artykuł za paywallem? Dodanie samego adresu pobierze tylko zajawkę.
+          </span>
+          <v-spacer />
+          <v-btn
+            variant="text"
+            size="small"
+            :prepend-icon="mdiPuzzleOutline"
+            to="/rozszerzenie"
+          >
+            Rozszerzenie
+          </v-btn>
+          <v-btn
+            variant="tonal"
+            size="small"
+            :prepend-icon="mdiCodeTags"
+            @click="pasteDialogOpen = true"
+          >
+            Wklej treść
+          </v-btn>
+        </div>
       </v-card>
+
+      <ArticlePasteCaptureDialog
+        v-model="pasteDialogOpen"
+        @submitted="onCaptureSubmitted"
+      />
     </v-col>
 
     <v-col cols="12">
@@ -90,6 +118,9 @@
         <template #[`item.publishedDate`]="{ item }">
           {{ formatDate(item.publishedDate) }}
         </template>
+        <template #[`item.capture`]="{ item }">
+          <ArticleCaptureStatus :capture="forUrl(item.sourceURL)" />
+        </template>
       </v-data-table>
     </v-col>
 
@@ -104,12 +135,13 @@
 
 <script lang="ts" setup>
 import { computed, ref } from "vue";
-import { mdiArrowDown } from "@mdi/js";
+import { mdiArrowDown, mdiCodeTags, mdiPuzzleOutline } from "@mdi/js";
 import { useEntities } from "~/composables/entity";
 import { getPageMeta } from "~/composables/useFunctions";
 import { useCurrentUser } from "vuefire";
 import type { Timestamp } from "firebase-admin/firestore";
 import { useDomainIcon } from "~/composables/useDomainIcon";
+import { useCanCapture, useCaptures } from "~/composables/captures";
 
 definePageMeta({
   title: "Źródła",
@@ -156,15 +188,32 @@ const sortedArticles = computed(() => {
     });
 });
 
-const headers = [
+// Whether we hold the article's text, and what came out of it, is only useful
+// (and only readable) to the people who can capture pages — everyone else gets
+// the list exactly as it was.
+const canCapture = useCanCapture();
+const { forUrl, refresh: refreshCaptures } = useCaptures(canCapture);
+const pasteDialogOpen = ref(false);
+
+const headers = computed(() => [
   { title: "Tytuł", key: "name", sortable: false },
   { title: "Data publikacji", key: "publishedDate", sortable: false },
-];
+  ...(canCapture.value
+    ? [{ title: "Treść", key: "capture", sortable: false }]
+    : []),
+]);
 
 const newArticleUrl = ref("");
 const isAdding = ref(false);
 const alertMessage = ref("");
 const alertType = ref<"success" | "error" | "info" | "warning">("success");
+
+async function onCaptureSubmitted() {
+  alertMessage.value =
+    "Zapisano treść. Fakty pojawią się w kolejce za kilkanaście sekund.";
+  alertType.value = "success";
+  await Promise.all([refreshArticles(), refreshCaptures()]);
+}
 
 type nestedRecord = {
   [key: string]: string | nestedRecord;
