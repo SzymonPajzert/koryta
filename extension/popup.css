@@ -144,3 +144,63 @@ footer a {
   color: var(--fg);
   font: inherit;
 }
+
+/* Facts already extracted from the page in front of you. Capped in height
+   rather than in count: the popup should not grow past the viewport, and
+   scrolling a short list is better than hiding half of it behind a number. */
+#facts-section {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.facts-heading {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.facts li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.facts li:last-child {
+  border-bottom: none;
+}
+
+.fact-what {
+  display: block;
+}
+
+/* The model's reason for believing it, which is the part a reviewer judges. */
+.fact-why {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fact-reviewed {
+  color: var(--ok);
+}
+
+.facts-all {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--primary);
+  font-size: 12px;
+  text-decoration: none;
+}

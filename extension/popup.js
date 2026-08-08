@@ -37,6 +37,68 @@ const MESSAGES = {
   error: (job) => `Nie udało się: ${job.error}`,
 };
 
+/** One fact, said the way the ingest schema stores it.
+ *
+ * The three shapes are the three `fact_type`s the endpoint accepts; anything
+ * else falls back to the model's own justification, which is never empty.
+ */
+function factWhat(fact) {
+  switch (fact.fact_type) {
+    case "employment":
+      return [fact.person, fact.role, fact.organization]
+        .filter(Boolean)
+        .join(" · ");
+    case "party_membership":
+      return [fact.person, fact.party].filter(Boolean).join(" · ");
+    case "personal_relation":
+      return [fact.subject, fact.relation, fact.object]
+        .filter(Boolean)
+        .join(" · ");
+    default:
+      return fact.justification || "";
+  }
+}
+
+/** Renders the facts already extracted from this page, if there are any.
+ *
+ * Built with textContent rather than innerHTML: every string here came from a
+ * page someone else wrote, by way of a model, and the popup has no business
+ * parsing it as markup.
+ */
+function renderFacts({ capture, facts }, origin) {
+  const section = el("facts-section");
+  if (!facts?.length) {
+    section.hidden = true;
+    return;
+  }
+
+  el("facts-heading").textContent =
+    `${facts.length} ${factWord(facts.length)} z tej strony`;
+
+  const list = el("facts");
+  list.replaceChildren();
+  for (const fact of facts) {
+    const item = document.createElement("li");
+
+    const what = document.createElement("strong");
+    what.className = "fact-what";
+    what.textContent = factWhat(fact);
+    if (fact.reviewed) what.classList.add("fact-reviewed");
+    item.append(what);
+
+    const why = document.createElement("span");
+    why.className = "fact-why";
+    why.textContent = fact.justification || "";
+    item.append(why);
+
+    list.append(item);
+  }
+
+  el("facts-all").href =
+    `${origin}/ekstrakcje?article=${encodeURIComponent(capture.url)}`;
+  section.hidden = false;
+}
+
 function factWord(count) {
   if (count === 1) return "fakt";
   const rest = count % 10;
@@ -92,11 +154,38 @@ async function init() {
 
   await showAccount();
   render(await chrome.runtime.sendMessage({ type: "koryta-job-state", tabId }));
+
+  // Not awaited by the rest of init: this is a round trip to the server, and
+  // the capture button must be usable before it comes back.
+  void showKnownFacts(tab.url);
+}
+
+/** Shows what has already been extracted from this page, when anything has.
+ *
+ * Deliberately silent when it cannot say: an article nobody has captured is the
+ * ordinary case, and a signed-out popup already says so above.
+ */
+async function showKnownFacts(url) {
+  try {
+    const known = await chrome.runtime.sendMessage({
+      type: "koryta-known-facts",
+      tabId,
+      url,
+    });
+    if (known?.facts?.length) renderFacts(known, await getOrigin());
+  } catch {
+    // The popup closing mid-request rejects sendMessage; nothing to report.
+  }
 }
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "koryta-job" && message.tabId === tabId) {
     render(message.job);
+    // A capture that just finished has facts the list was opened too early to
+    // show, so fetch them rather than making someone reopen the popup.
+    if (message.job.state === "done" && message.job.url) {
+      void showKnownFacts(message.job.url);
+    }
   }
 });
 

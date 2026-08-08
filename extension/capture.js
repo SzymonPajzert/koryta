@@ -89,3 +89,35 @@ export function collectPage() {
     ldJson: ldJson.length ? ldJson[0] : undefined,
   };
 }
+
+/** Just the url a capture of this page would be filed under.
+ *
+ * The same precedence `collectPage` uses, and it has to stay that way: the
+ * popup looks a page up by this, and a capture is stored under that, so the two
+ * disagreeing means an article that was captured looks like one that never was.
+ * Kept separate because asking "do we already have this?" should not serialise
+ * a couple of megabytes of DOM to find out.
+ *
+ * Self-contained on purpose — `executeScript` sends the function's own source
+ * to the page, so it cannot reach anything in this module's scope.
+ */
+export function readCanonicalUrl() {
+  const pick = (selector, attribute) => {
+    const node = document.querySelector(selector);
+    const value = node && node.getAttribute(attribute);
+    return value ? value.trim() : "";
+  };
+
+  const canonical =
+    pick("link[rel=canonical]", "href") ||
+    pick('meta[property="og:url"]', "content") ||
+    location.href;
+
+  try {
+    const parsed = new URL(canonical, location.href);
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return location.href.split("#")[0];
+  }
+}

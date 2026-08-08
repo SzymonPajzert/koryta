@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
 import { toArticleCapture } from "~~/server/utils/captures";
+import { normalizeUrl } from "~~/shared/url";
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 500;
@@ -15,6 +16,13 @@ const queryValidator = z.object({
     .max(MAX_LIMIT)
     .default(DEFAULT_LIMIT),
   status: z.enum(["stored", "extracting", "done", "error"]).optional(),
+  /** Captures of one page, for the extension asking "have we read this?".
+   *
+   * Matched on `normalizedUrl`, not on the url as given: the address in the
+   * browser's bar carries the tracking parameters and the scheme that the
+   * canonical link the capture was filed under does not.
+   */
+  url: z.string().optional(),
 });
 
 /** Recent captures, newest first.
@@ -32,6 +40,13 @@ export default defineEventHandler(async (event) => {
   let firestoreQuery: FirebaseFirestore.Query = db.collection("articlePages");
   if (query.status) {
     firestoreQuery = firestoreQuery.where("status", "==", query.status);
+  }
+  if (query.url) {
+    firestoreQuery = firestoreQuery.where(
+      "normalizedUrl",
+      "==",
+      normalizeUrl(query.url),
+    );
   }
 
   const snapshot = await firestoreQuery

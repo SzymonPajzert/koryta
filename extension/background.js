@@ -7,7 +7,7 @@
  */
 
 import { getOrigin, TOKEN_REFRESH_MARGIN_MS } from "./config.js";
-import { collectPage } from "./capture.js";
+import { collectPage, readCanonicalUrl } from "./capture.js";
 
 /** The most recent job, per tab, so reopening the popup shows where it got to
  * rather than starting again. */
@@ -182,6 +182,53 @@ async function withToken(run) {
   }
 }
 
+/** What is already known about the page someone is looking at.
+ *
+ * Opening the popup on an article should answer "have we read this, and what
+ * came out of it" without capturing it again — most of the time the answer is
+ * that nothing has, which is why this stays quiet rather than reporting an
+ * error when there is no capture.
+ *
+ * Looked up by url rather than by the job map: jobs live only as long as the
+ * service worker, and the interesting case is an article captured last week.
+ */
+async function knownFacts(tabId, tabUrl) {
+  // Asked about the canonical url, because that is what a capture is filed
+  // under. `normalizeUrl` forgives the scheme, `www.` and a trailing slash, but
+  // it keeps the query string deliberately — for some Polish sites that is the
+  // article id — so an address carrying campaign parameters really is a
+  // different key, and only the page itself can say which url it claims to be.
+  let url = tabUrl;
+  try {
+    const [injection] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: readCanonicalUrl,
+    });
+    if (injection?.result) url = injection.result;
+  } catch {
+    // No activeTab grant on this page; the address bar is the best guess left.
+  }
+
+  const { result: pages } = await withToken((token) =>
+    api(`/api/pages?limit=1&url=${encodeURIComponent(url)}`, { token }),
+  );
+
+  const capture = pages.captures?.[0] ?? null;
+  if (!capture || capture.status !== "done" || !capture.extraction?.factCount) {
+    return { capture, facts: [] };
+  }
+
+  // Keyed on the capture's own url, not the tab's: the two differ whenever the
+  // page names a canonical link, and the facts were filed under the former.
+  const { result } = await withToken((token) =>
+    api(
+      `/api/extractions?limit=50&articleUrl=${encodeURIComponent(capture.url)}`,
+      { token },
+    ),
+  );
+  return { capture, facts: result.facts ?? [] };
+}
+
 function setJob(tabId, job) {
   jobs.set(tabId, job);
   // The popup may be closed; nobody listening is the normal case.
@@ -317,6 +364,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "koryta-job-state") {
     sendResponse(jobs.get(message.tabId) || { state: "idle" });
     return false;
+  }
+  if (message?.type === "koryta-known-facts") {
+    knownFacts(message.tabId, message.url)
+      // Never rejects at the popup: not knowing yet is the ordinary state, and
+      // an error here must not stand between someone and the capture button.
+      .then(sendResponse)
+      .catch((error) => sendResponse({ capture: null, facts: [], error: error.message }));
+    return true;
   }
   if (message?.type === "koryta-auth-state") {
     readToken().then((auth) => sendResponse({ auth }));
