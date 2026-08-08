@@ -15,6 +15,7 @@ the IAM API. See README-service.md.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -30,6 +31,28 @@ _TOKEN_LIFETIME_S = 3600
 _TOKEN_REFRESH_MARGIN_S = 300
 
 logger = logging.getLogger(__name__)
+
+
+def identity_toolkit_url(path: str) -> str:
+    """Where to exchange a custom token, production or emulator.
+
+    `firebase_admin` reads `FIREBASE_AUTH_EMULATOR_HOST` by itself, so
+    `create_custom_token` already produces a token only the emulator will
+    accept — but this exchange is a plain REST call, and pointed at production
+    it would offer that token to real Firebase and be refused. Against
+    `dev:prod-data` that failure lands at the very last step, after the page has
+    been parsed and the model has been paid for, and turns the whole capture
+    into an error.
+
+    The emulator serves the same paths under its own host and ignores the api
+    key, so only the origin changes.
+    """
+    host = os.environ.get("FIREBASE_AUTH_EMULATOR_HOST")
+    if not host:
+        return f"https://identitytoolkit.googleapis.com/{path}"
+    # The variable is a bare host:port; the emulator speaks http.
+    origin = host if "://" in host else f"http://{host}"
+    return f"{origin.rstrip('/')}/identitytoolkit.googleapis.com/{path}"
 
 
 @dataclass
@@ -58,7 +81,7 @@ class KorytaClient:
             self.config.extractor_uid, {"datascience": True}
         )
         response = self._session.post(
-            "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken",
+            identity_toolkit_url("v1/accounts:signInWithCustomToken"),
             params={"key": self.config.firebase_api_key},
             json={
                 "token": custom_token.decode("utf-8"),

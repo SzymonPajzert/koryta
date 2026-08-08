@@ -37,13 +37,24 @@ KORYTA_API_URL=http://localhost:3000 \
 FIREBASE_WEB_API_KEY=AIzaSyD54RK-k0TIcJtVbZerx2947XiduteqvaM \
 LLM_API_KEY=$OPENROUTER_APIKEY \
 ALLOW_UNAUTHENTICATED=1 \
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
 uv run uvicorn service.app:app --port 8081
 ```
 
 and point the frontend at it with `EXTRACTOR_DISPATCH=direct
 EXTRACTOR_URL=http://localhost:8081`, which skips Cloud Tasks and calls the
-service straight. `GET /health` reports which variables are still missing rather
-than making you find out on the first capture.
+service straight. Both of those are read by `nuxt.config.ts` at startup, so they
+have to be on the command that launches the dev server rather than exported
+afterwards. `GET /health` reports which variables are still missing rather than
+making you find out on the first capture.
+
+The two emulator variables are what let the run finish rather than merely start.
+Firestore is where the job document lives; auth is where the service redeems its
+own custom token for the id token `/api/ingest/extraction` wants, and without it
+that exchange goes to real Firebase with a token only the emulator would
+accept — which fails at the last step, after the page has been parsed and the
+model has been paid for.
 
 Nothing in that loop touches `gs://koryta-pl-crawled`. There is no storage
 emulator, so under `USE_EMULATORS=true` the capture endpoint writes the archive

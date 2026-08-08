@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import io
 import tarfile
+from pathlib import Path
 
 import pytest
-
-from pathlib import Path
 
 from scrapers.article.pipelines.parsed_pipeline import _member_path_from_url
 from service.storage import (

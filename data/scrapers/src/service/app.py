@@ -113,10 +113,21 @@ def health() -> dict[str, Any]:
 def extract(request: ExtractRequest) -> ExtractResponse:
     cfg = config()
     if cfg.missing:
-        raise HTTPException(
-            status_code=503,
-            detail=f"service is missing configuration: {', '.join(cfg.missing)}",
+        detail = f"service is missing configuration: {', '.join(cfg.missing)}"
+        # Written before the raise, or the job sits at "stored" saying nothing:
+        # the capture endpoint records a *dispatch* failure, and this is not one
+        # -- the task was accepted, and the only account of what happened next
+        # is here. Cloud Tasks retries a 503, so this may be overwritten by a
+        # later success, which is the right way round.
+        _update_page(
+            request.page_id,
+            {
+                "status": "error",
+                "extraction.error": detail,
+                "extraction.finishedAt": SERVER_TIMESTAMP,
+            },
         )
+        raise HTTPException(status_code=503, detail=detail)
 
     logger.info("extracting %s (%s)", request.url, request.page_id)
     _update_page(
