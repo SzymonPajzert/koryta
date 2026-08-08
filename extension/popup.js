@@ -7,6 +7,13 @@ const connectButton = el("connect");
 const reviewLink = el("review");
 
 let tabId = null;
+/** Whether a token is stored at all, which `render` needs and cannot ask for.
+ *
+ * `showAccount` runs first and would offer the button, then `render` ran second
+ * and hid it again for any state but `unauthenticated` — so a freshly installed
+ * extension, which has nothing stored and no job yet, showed no way to connect.
+ */
+let connected = false;
 
 /** Every state the background worker can be in, said in Polish.
  *
@@ -45,7 +52,7 @@ function render(job) {
   const busy = ["capturing", "uploading", "extracting"].includes(job.state);
   captureButton.disabled = busy;
   captureButton.textContent = busy ? "Pracuję…" : "Zapisz i wyciągnij fakty";
-  connectButton.hidden = job.state !== "unauthenticated";
+  connectButton.hidden = connected && job.state !== "unauthenticated";
   reviewLink.hidden = job.state !== "done" || !job.facts;
 }
 
@@ -56,6 +63,7 @@ async function showAccount() {
 
   const { auth } = await chrome.runtime.sendMessage({ type: "koryta-auth-state" });
   const account = el("account");
+  connected = !!auth;
   if (!auth) {
     account.textContent = "niepołączone";
     connectButton.hidden = false;
@@ -107,7 +115,14 @@ connectButton.addEventListener("click", async () => {
 });
 
 el("save-origin").addEventListener("click", async () => {
-  await setOrigin(el("origin").value.trim() || DEFAULT_ORIGIN);
+  try {
+    await setOrigin(el("origin").value.trim() || DEFAULT_ORIGIN);
+  } catch (error) {
+    // Said here rather than left to fail as "Failed to fetch" on the next
+    // capture, which is where an unusable address used to show up.
+    status.textContent = `Nie zapisano: ${error.message}`;
+    return;
+  }
   await showAccount();
   status.textContent = "Zapisano adres serwisu.";
 });

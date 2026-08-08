@@ -147,11 +147,39 @@ async function api(path, { method = "GET", body, token }) {
     parsed = { message: text.slice(0, 200) };
   }
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       parsed.message || parsed.statusMessage || `HTTP ${response.status}`,
     );
+    // Carried so the caller can tell "the server said no" from "the request
+    // never arrived", which is the difference between re-minting a token and
+    // showing the person an error.
+    error.status = response.status;
+    throw error;
   }
   return parsed;
+}
+
+/** Runs a request, and mints a new token if the server refuses the one it has.
+ *
+ * A cached token can be unexpired and still be refused. The usual cause is the
+ * dev server changing Firebase project underneath it — `dev:local` issues
+ * tokens for `demo-koryta-pl` and `dev:prod-data` for `koryta-pl`, and an id
+ * token names the project it was issued for. Re-seeding the auth emulator does
+ * the same thing.
+ *
+ * Without this the extension serves that dead token for the rest of its hour,
+ * and the popup hides the button that would fix it because something is stored.
+ */
+async function withToken(run) {
+  let auth = await requireToken();
+  try {
+    return { result: await run(auth.token), auth };
+  } catch (error) {
+    if (error.status !== 401) throw error;
+    await chrome.storage.local.remove("auth");
+    auth = await requireToken();
+    return { result: await run(auth.token), auth };
+  }
 }
 
 function setJob(tabId, job) {
@@ -207,7 +235,14 @@ async function pollCapture(tabId, pageId, token) {
 async function captureTab(tabId) {
   setJob(tabId, { state: "capturing" });
 
-  const token = await requireToken();
+  // Checked before the page is read and compressed, so a signed-out person is
+  // told to connect rather than made to wait for work that cannot be submitted.
+  let token;
+  try {
+    token = await requireToken();
+  } catch {
+    return setJob(tabId, { state: "unauthenticated" });
+  }
   if (!token) {
     return setJob(tabId, { state: "unauthenticated" });
   }
@@ -228,21 +263,32 @@ async function captureTab(tabId) {
   const { encoded } = await gzipBase64(page.html);
 
   let result;
+  let auth = token;
   try {
-    result = await api("/api/ingest/page", {
-      method: "POST",
-      token: token.token,
-      body: {
-        url: page.url,
-        html: encoded,
-        htmlEncoding: "gzip-base64",
-        title: page.title,
-        publishedDate: page.publishedDate,
-        meta: page.ldJson ? { ldJson: page.ldJson } : undefined,
-        source: "extension",
-      },
-    });
+    ({ result, auth } = await withToken((bearer) =>
+      api("/api/ingest/page", {
+        method: "POST",
+        token: bearer,
+        body: {
+          url: page.url,
+          html: encoded,
+          htmlEncoding: "gzip-base64",
+          title: page.title,
+          publishedDate: page.publishedDate,
+          meta: page.ldJson ? { ldJson: page.ldJson } : undefined,
+          source: "extension",
+        },
+      }),
+    ));
   } catch (error) {
+    // A 401 that survived a freshly minted token is a session that cannot be
+    // repaired from here, so offer to connect. A 403 is not: that account is
+    // signed in and simply not in the datascience group, and telling them to
+    // log in again would send them round in circles — the server's own message
+    // says what is actually wrong.
+    if (error.status === 401) {
+      return setJob(tabId, { state: "unauthenticated" });
+    }
     return setJob(tabId, { state: "error", error: error.message });
   }
 
@@ -256,7 +302,7 @@ async function captureTab(tabId) {
   }
 
   setJob(tabId, { state: "extracting", pageId: result.pageId, url: page.url });
-  return pollCapture(tabId, result.pageId, token.token);
+  return pollCapture(tabId, result.pageId, auth.token);
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
