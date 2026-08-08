@@ -20,6 +20,8 @@ type ExtractionsResponse = {
  */
 export function useExtractions(options?: {
   tag?: MaybeRefOrGetter<string | undefined>;
+  /** Everything from one article, by the url the uploader recorded. */
+  articleUrl?: MaybeRefOrGetter<string | undefined>;
   groupBy?: "article";
   reviewed?: MaybeRefOrGetter<"all" | "yes" | "no">;
   limit?: MaybeRefOrGetter<number | undefined>;
@@ -28,10 +30,12 @@ export function useExtractions(options?: {
   const query = computed(() => {
     const q: Record<string, string> = {};
     const tag = toValue(options?.tag);
+    const articleUrl = toValue(options?.articleUrl);
     const reviewed = toValue(options?.reviewed);
     const limit = toValue(options?.limit);
     const page = toValue(options?.page);
     if (tag) q.tag = tag;
+    if (articleUrl) q.articleUrl = articleUrl;
     if (options?.groupBy) q.groupBy = options.groupBy;
     if (reviewed) q.reviewed = reviewed;
     if (limit !== undefined) q.limit = String(limit);

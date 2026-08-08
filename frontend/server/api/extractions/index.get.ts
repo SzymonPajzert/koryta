@@ -19,6 +19,14 @@ const queryValidator = z.object({
     .default(DEFAULT_LIMIT),
   page: z.coerce.number().default(0),
   tag: z.string().optional(),
+  /** Everything extracted from one article.
+   *
+   * Matched against the url exactly as the uploader sent it, which is the same
+   * string a capture stores: `/api/ingest/page` derives both from
+   * `parseCrawlUrl`, and the extractor echoes back the url it was handed. No
+   * normalisation here, so this stays a plain equality the index can serve.
+   */
+  articleUrl: z.string().optional(),
   // Mirrors `hideVoted` on /api/nodes: filters on the vote aggregate that the
   // onVoteWritten trigger keeps on the document, so it costs no extra read.
   reviewed: z.enum(["all", "yes", "no"]).default("all"),
@@ -37,6 +45,14 @@ export default authCachedEventHandler(
 
     if (query.tag) {
       firestoreQuery = firestoreQuery.where("tag", "==", query.tag);
+    }
+
+    if (query.articleUrl) {
+      firestoreQuery = firestoreQuery.where(
+        "articleUrl",
+        "==",
+        query.articleUrl,
+      );
     }
 
     if (query.reviewed !== "all") {

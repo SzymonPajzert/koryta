@@ -12,6 +12,23 @@
       </v-btn>
     </div>
 
+    <v-alert
+      v-if="articleFilter"
+      type="info"
+      variant="tonal"
+      density="compact"
+      class="mb-4"
+    >
+      <div class="d-flex align-center justify-space-between flex-wrap ga-2">
+        <span class="text-truncate">
+          Fakty z jednego artykułu: <strong>{{ articleFilter }}</strong>
+        </span>
+        <v-btn size="small" variant="text" to="/ekstrakcje">
+          Pokaż wszystkie
+        </v-btn>
+      </div>
+    </v-alert>
+
     <div v-if="pending" class="d-flex justify-center py-8">
       <v-progress-circular indeterminate color="primary" size="48" />
     </div>
@@ -24,7 +41,11 @@
 
     <div v-else-if="articleGroups.length === 0" class="py-4">
       <v-alert type="info" variant="tonal">
-        Brak ekstrakcji do wyświetlenia.
+        {{
+          articleFilter
+            ? "Z tego artykułu nie zapisano jeszcze żadnych faktów."
+            : "Brak ekstrakcji do wyświetlenia."
+        }}
       </v-alert>
     </div>
 
@@ -53,10 +74,22 @@ useHead({
   title: "Ekstrakcje z artykułów - koryta.pl",
 });
 
+/** `?article=` narrows the page to one url, which is how `/zrodla` hands a
+ * reader the facts a capture just produced.
+ *
+ * A getter rather than a plain read, so following the link from an already open
+ * list refetches instead of showing the previous query's groups.
+ */
+const route = useRoute();
+const articleFilter = computed(() =>
+  typeof route.query.article === "string" ? route.query.article : undefined,
+);
+
 // This page renders every group at once, so it stays on the newest slice.
 const { data, pending, error } = useExtractions({
   groupBy: "article",
   limit: 100,
+  articleUrl: articleFilter,
 });
 
 type ArticleGroup = {

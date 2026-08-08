@@ -5,6 +5,8 @@
     size="small"
     variant="tonal"
     :prepend-icon="chip.icon"
+    :append-icon="factsLink ? mdiArrowRight : undefined"
+    :to="factsLink"
   >
     {{ chip.label }}
     <v-tooltip activator="parent" location="top">
@@ -24,6 +26,7 @@
 import { computed } from "vue";
 import {
   mdiAlertCircleOutline,
+  mdiArrowRight,
   mdiCheckCircleOutline,
   mdiFileDocumentOutline,
   mdiProgressClock,
@@ -31,6 +34,21 @@ import {
 import type { ArticleCapture } from "~~/shared/capture";
 
 const props = defineProps<{ capture?: ArticleCapture }>();
+
+/** Where the facts this capture produced can be read, or nothing.
+ *
+ * Only offered when there is something at the other end: a capture that is
+ * still running, failed, or found nothing would otherwise link to an empty
+ * list. `articleUrl` on a fact is the url the extractor was handed, which is
+ * this same string.
+ */
+const factsLink = computed(() => {
+  const capture = props.capture;
+  if (capture?.status !== "done" || !capture.extraction?.factCount) {
+    return undefined;
+  }
+  return { path: "/ekstrakcje", query: { article: capture.url } };
+});
 
 const chip = computed(() => {
   const capture = props.capture;

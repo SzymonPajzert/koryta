@@ -43,6 +43,20 @@
       ]
     },
     {
+      "collectionGroup": "extractions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "articleUrl",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "nodes",
       "queryScope": "COLLECTION",
       "fields": [

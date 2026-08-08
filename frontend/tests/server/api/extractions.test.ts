@@ -126,6 +126,35 @@ describe("GET /api/extractions", () => {
     expect(extractionsQuery.where).not.toHaveBeenCalled();
   });
 
+  it("narrows to one article, so a capture can link to what it produced", async () => {
+    // Matched exactly rather than normalised: `/api/ingest/page` and the
+    // extractor derive this from the same `parseCrawlUrl` output, so an
+    // equality is enough — and is what the composite index can serve.
+    await handler({
+      query: { articleUrl: "https://www.example.pl/artykuł" },
+    } as any);
+
+    expect(extractionsQuery.calls).toContainEqual([
+      "where",
+      ["articleUrl", "==", "https://www.example.pl/artykuł"],
+    ]);
+    // Still newest-first and still paged; the filter is an addition, not a
+    // different query.
+    expect(extractionsQuery.calls).toContainEqual([
+      "orderBy",
+      ["createdAt", "desc"],
+    ]);
+  });
+
+  it("does not filter by article unless asked", async () => {
+    await handler({ query: { reviewed: "no" } } as any);
+    expect(extractionsQuery.where).not.toHaveBeenCalledWith(
+      "articleUrl",
+      "==",
+      expect.anything(),
+    );
+  });
+
   it("serialises createdAt as an ISO string", async () => {
     extractionsQuery.docs = [
       factDoc("f1", timestamp("2026-07-27T10:00:00.000Z")),
