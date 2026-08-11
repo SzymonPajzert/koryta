@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="sidepanel.css" />
+    <title>Koryta — fakty</title>
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon32.png" alt="" width="20" height="20" />
+      <h1 id="page">Koryta</h1>
+    </header>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <button id="capture" type="button" class="primary" hidden>
+      Zapisz i wyciągnij fakty
+    </button>
+
+    <section id="facts-section" hidden>
+      <h2 id="facts-heading" class="facts-heading"></h2>
+      <div id="facts" class="facts"></div>
+      <a id="facts-all" href="#" target="_blank" class="facts-all">
+        Otwórz w koryta.pl →
+      </a>
+    </section>
+
+    <p id="empty" class="empty" hidden></p>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

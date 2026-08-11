@@ -134,6 +134,18 @@ footer a {
   margin: 8px 0 4px;
 }
 
+.settings .checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.settings .checkbox input {
+  width: auto;
+  margin: 0;
+}
+
 .settings input {
   width: 100%;
   box-sizing: border-box;

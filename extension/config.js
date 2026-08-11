@@ -59,3 +59,22 @@ export async function setOrigin(origin) {
 /** An id token is good for an hour; treat it as spent early rather than have a
  * capture fail on a token that expired between the check and the request. */
 export const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+/** Whether saving an article opens the side panel next to it.
+ *
+ * On unless someone turns it off, because a capture takes half a minute and a
+ * popup closes the moment the page is clicked — so without the panel the usual
+ * outcome is that nobody sees how it went. Off is a real preference rather than
+ * a fallback: the panel takes a column of the window away from the article, and
+ * a reader who only wants pages archived has no use for it.
+ */
+export const DEFAULT_SIDE_PANEL_ON_CAPTURE = true;
+
+export async function getSidePanelOnCapture() {
+  const stored = await chrome.storage.local.get("sidePanelOnCapture");
+  return stored.sidePanelOnCapture ?? DEFAULT_SIDE_PANEL_ON_CAPTURE;
+}
+
+export async function setSidePanelOnCapture(enabled) {
+  await chrome.storage.local.set({ sidePanelOnCapture: !!enabled });
+}

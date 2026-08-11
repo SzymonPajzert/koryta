@@ -30,6 +30,28 @@ The alternatives were weighed and lost:
 You need the `datascience` claim — the same one `/ekstrakcje` requires. The
 popup says so up front rather than after uploading a page.
 
+## The side panel
+
+Saving opens a panel beside the article, which is where the capture reports and
+where its facts arrive as cards — the same edge the site draws at `/ekstrakcje`,
+subject ── connector ──▶ target over the sentence it was read from. A popup
+closes the moment the page is clicked, and an extraction takes half a minute, so
+without the panel the usual outcome was that nobody saw how it went.
+
+Clicking a card's quote scrolls the article to that passage and highlights it,
+rather than opening the article again at a `#:~:text=` fragment the way the site
+does — here the article is already on screen. The find is whitespace- and
+quote-insensitive and falls back to the opening words, because a `justification`
+is the model's own wording and need not appear on the page verbatim.
+
+Turn it off in **Ustawienia** if you would rather keep the column: the popup
+still lists the facts, one line each.
+
+The panel follows the front tab, not the tab it was opened over. It needs
+Chrome 114 (`chrome.sidePanel`), and it can only scroll a page the extension has
+been invoked on — `activeTab` is granted by pressing the toolbar button and
+lasts until that tab navigates.
+
 ## Against a local dev server
 
 Set the address in the popup's **Ustawienia** to `http://localhost:3000` and run

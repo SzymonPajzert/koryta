@@ -1,12 +1,25 @@
-import { DEFAULT_ORIGIN, getOrigin, setOrigin } from "./config.js";
+import {
+  DEFAULT_ORIGIN,
+  getOrigin,
+  getSidePanelOnCapture,
+  setOrigin,
+  setSidePanelOnCapture,
+} from "./config.js";
+import { factConnector, factSubject, factTarget, factWord } from "./facts.js";
+import { jobIsBusy, jobMessage } from "./jobs.js";
 
 const el = (id) => document.getElementById(id);
 const status = el("status");
 const captureButton = el("capture");
 const connectButton = el("connect");
 const reviewLink = el("review");
+const sidePanelToggle = el("side-panel");
 
 let tabId = null;
+/** Read once at startup, because `chrome.sidePanel.open` needs the click that
+ * is still in progress: awaiting storage inside the handler spends the user
+ * gesture, and the call is then refused. */
+let sidePanelOnCapture = false;
 /** Whether a token is stored at all, which `render` needs and cannot ask for.
  *
  * `showAccount` runs first and would offer the button, then `render` ran second
@@ -15,48 +28,16 @@ let tabId = null;
  */
 let connected = false;
 
-/** Every state the background worker can be in, said in Polish.
+/** One fact on one line: the edge the side panel draws, flattened.
  *
- * Kept as one table rather than scattered through the flow so the popup never
- * ends up with a state it silently renders as blank.
- */
-const MESSAGES = {
-  idle: () => "",
-  capturing: () => "Odczytuję stronę…",
-  uploading: () => "Wysyłam do archiwum…",
-  extracting: () => "Wyciągam fakty — to potrwa kilkanaście sekund…",
-  unauthenticated: () =>
-    "Zaloguj się na koryta.pl i połącz rozszerzenie, żeby zapisywać artykuły.",
-  slow: (job) => job.message,
-  done: (job) =>
-    job.duplicate
-      ? "Ten artykuł był już zapisany."
-      : job.facts
-        ? `Gotowe — ${job.facts} ${factWord(job.facts)} do przejrzenia.`
-        : "Zapisane. Nie znaleziono w tym artykule faktów do dodania.",
-  error: (job) => `Nie udało się: ${job.error}`,
-};
-
-/** One fact, said the way the ingest schema stores it.
- *
- * The three shapes are the three `fact_type`s the endpoint accepts; anything
- * else falls back to the model's own justification, which is never empty.
+ * The popup is 320px of column, so the three entities are joined rather than
+ * laid out — but they are the same three, named by the same helpers, so the two
+ * surfaces cannot end up calling the same fact different things.
  */
 function factWhat(fact) {
-  switch (fact.fact_type) {
-    case "employment":
-      return [fact.person, fact.role, fact.organization]
-        .filter(Boolean)
-        .join(" · ");
-    case "party_membership":
-      return [fact.person, fact.party].filter(Boolean).join(" · ");
-    case "personal_relation":
-      return [fact.subject, fact.relation, fact.object]
-        .filter(Boolean)
-        .join(" · ");
-    default:
-      return fact.justification || "";
-  }
+  return [factSubject(fact), factConnector(fact), factTarget(fact)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** Renders the facts already extracted from this page, if there are any.
@@ -99,19 +80,11 @@ function renderFacts({ capture, facts }, origin) {
   section.hidden = false;
 }
 
-function factWord(count) {
-  if (count === 1) return "fakt";
-  const rest = count % 10;
-  const teens = count % 100;
-  return rest >= 2 && rest <= 4 && (teens < 12 || teens > 14) ? "fakty" : "faktów";
-}
-
 function render(job) {
-  const message = MESSAGES[job.state] || (() => "");
-  status.textContent = message(job) || "";
+  status.textContent = jobMessage(job);
   status.dataset.state = job.state;
 
-  const busy = ["capturing", "uploading", "extracting"].includes(job.state);
+  const busy = jobIsBusy(job);
   captureButton.disabled = busy;
   captureButton.textContent = busy ? "Pracuję…" : "Zapisz i wyciągnij fakty";
   connectButton.hidden = connected && job.state !== "unauthenticated";
@@ -123,7 +96,9 @@ async function showAccount() {
   el("origin").value = origin;
   reviewLink.href = `${origin}/ekstrakcje`;
 
-  const { auth } = await chrome.runtime.sendMessage({ type: "koryta-auth-state" });
+  const { auth } = await chrome.runtime.sendMessage({
+    type: "koryta-auth-state",
+  });
   const account = el("account");
   connected = !!auth;
   if (!auth) {
@@ -151,6 +126,9 @@ async function init() {
     status.textContent = "Tej strony nie da się zapisać.";
     return;
   }
+
+  sidePanelOnCapture = await getSidePanelOnCapture();
+  sidePanelToggle.checked = sidePanelOnCapture;
 
   await showAccount();
   render(await chrome.runtime.sendMessage({ type: "koryta-job-state", tabId }));
@@ -190,8 +168,24 @@ chrome.runtime.onMessage.addListener((message) => {
 });
 
 captureButton.addEventListener("click", async () => {
+  // First, and without an `await` in front of it. Chrome only opens a side
+  // panel while a user gesture is live, and every `await` here ends the one
+  // that this click provided — so anything asked of storage or the background
+  // worker has to happen after the panel is already opening.
+  if (sidePanelOnCapture) {
+    chrome.sidePanel.open({ tabId }).catch(() => {
+      // An older Chrome, or a window that cannot host a panel. The capture is
+      // the point and it still runs; the popup goes on reporting it.
+    });
+  }
+
   render({ state: "capturing" });
   render(await chrome.runtime.sendMessage({ type: "koryta-capture", tabId }));
+});
+
+sidePanelToggle.addEventListener("change", async () => {
+  sidePanelOnCapture = sidePanelToggle.checked;
+  await setSidePanelOnCapture(sidePanelOnCapture);
 });
 
 connectButton.addEventListener("click", async () => {

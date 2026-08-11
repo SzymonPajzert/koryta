@@ -8,6 +8,7 @@
 
 import { getOrigin, TOKEN_REFRESH_MARGIN_MS } from "./config.js";
 import { collectPage, readCanonicalUrl } from "./capture.js";
+import { scrollToQuote } from "./highlight.js";
 
 /** The most recent job, per tab, so reopening the popup shows where it got to
  * rather than starting again. */
@@ -229,10 +230,29 @@ async function knownFacts(tabId, tabUrl) {
   return { capture, facts: result.facts ?? [] };
 }
 
+/** Scrolls a tab to the passage a fact was read out of.
+ *
+ * The injection needs an `activeTab` grant on that tab, which pressing the
+ * toolbar button is what gives us and which lasts until the tab navigates. A
+ * panel opened from Chrome's own side-panel menu, over a page the extension has
+ * never been invoked on, has no grant — so the failure is reported rather than
+ * thrown, and the panel names the button to press.
+ */
+async function showQuote(tabId, quote) {
+  const [injection] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: scrollToQuote,
+    args: [String(quote ?? "")],
+  });
+  return injection?.result ?? { found: false };
+}
+
 function setJob(tabId, job) {
   jobs.set(tabId, job);
   // The popup may be closed; nobody listening is the normal case.
-  chrome.runtime.sendMessage({ type: "koryta-job", tabId, job }).catch(() => {});
+  chrome.runtime
+    .sendMessage({ type: "koryta-job", tabId, job })
+    .catch(() => {});
   return job;
 }
 
@@ -370,7 +390,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // Never rejects at the popup: not knowing yet is the ordinary state, and
       // an error here must not stand between someone and the capture button.
       .then(sendResponse)
-      .catch((error) => sendResponse({ capture: null, facts: [], error: error.message }));
+      .catch((error) =>
+        sendResponse({ capture: null, facts: [], error: error.message }),
+      );
+    return true;
+  }
+  if (message?.type === "koryta-show-quote") {
+    showQuote(message.tabId, message.quote)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ found: false, error: error.message }));
     return true;
   }
   if (message?.type === "koryta-auth-state") {

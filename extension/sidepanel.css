@@ -1,0 +1,263 @@
+/* The panel shares the popup's palette deliberately: the two are one extension
+   and are often on screen a second apart. The layout does not — a popup is a
+   fixed 320px card, and a panel is a resizable column the reader keeps open
+   beside the article. */
+
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --fg: #1c1b1f;
+  --muted: #5f5c66;
+  --line: #e2e0e6;
+  --primary: #6750a4;
+  --secondary: #625b71;
+  --info: #00639b;
+  --error: #b3261e;
+  --ok: #146c2e;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b1f;
+    --surface: #232228;
+    --fg: #e6e1e5;
+    --muted: #cac4d0;
+    --line: #3a383e;
+    --primary: #d0bcff;
+    --secondary: #ccc2dc;
+    --info: #8ecdf8;
+    --error: #f2b8b5;
+    --ok: #7ad48f;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    14px/1.45 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  /* The article's headline, which is long far more often than not. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.status {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.status:empty {
+  display: none;
+}
+
+.status[data-state="done"] {
+  color: var(--ok);
+}
+
+.status[data-state="error"] {
+  color: var(--error);
+}
+
+button.primary {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.facts-heading {
+  margin: 12px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.facts-all {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--primary);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.empty {
+  margin: 24px 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* --- The card, as /ekstrakcje draws it ------------------------------------ */
+
+.fact-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* A fact somebody has already judged is not what a reviewer is here for, so it
+   recedes rather than disappears — the panel's job is to say what this article
+   gave up, including the parts already dealt with. */
+.fact-card--reviewed {
+  opacity: 0.65;
+}
+
+.edge {
+  display: grid;
+  /* One column: a side panel starts around 340px, where the site's three-column
+     edge is the phone layout anyway. The wide rule below restores it for anyone
+     who has dragged the panel out. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 12px;
+}
+
+.edge__entity {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.edge__name {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.edge__kind,
+.edge__type {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.edge__chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.3;
+  /* A role can be a whole sentence ("pełnomocnik zarządu ds. …"); let it wrap
+     inside the chip instead of stretching the card. */
+  white-space: normal;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
+}
+
+.edge__chip[data-type="party_membership"] {
+  background: color-mix(in srgb, var(--secondary) 16%, transparent);
+  color: var(--secondary);
+}
+
+.edge__chip[data-type="personal_relation"] {
+  background: color-mix(in srgb, var(--info) 16%, transparent);
+  color: var(--info);
+}
+
+@media (min-width: 480px) {
+  .edge {
+    grid-template-columns: 1fr minmax(auto, 40%) 1fr;
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  .edge__entity--source {
+    text-align: left;
+  }
+
+  .edge__entity--target {
+    text-align: right;
+  }
+
+  .edge__connector {
+    text-align: center;
+    min-width: 0;
+  }
+}
+
+/* --- The passage the fact rests on ---------------------------------------- */
+
+.quote-block {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.quote-block {
+  cursor: pointer;
+}
+
+button.quote-block:hover .quote,
+button.quote-block:focus-visible .quote {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+.quote-caption {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--primary);
+}
+
+.quote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
