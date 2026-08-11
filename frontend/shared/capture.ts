@@ -52,6 +52,10 @@ export interface ArticleCapture {
   storagePath: string;
   htmlSha256: string;
   htmlBytes: number;
+  /** The passage the reader picked out, when they picked one — the extractor
+   * reads this instead of whatever a selector would have found. Null for the
+   * ordinary whole-page capture, which is most of them. */
+  selection?: string | null;
   source: CaptureSource;
   status: CaptureStatus;
   capturedBy: string;
@@ -72,3 +76,17 @@ export const CAPTURE_EXTRACTION_TAG = "capture_v1";
  * News pages with their scripts inlined reach a couple of megabytes; past this
  * it is not an article, and the extension is sending the wrong thing. */
 export const MAX_CAPTURE_HTML_BYTES = 8 * 1024 * 1024;
+
+/** Shortest passage worth asking the extractor about.
+ *
+ * A few words are not enough context for the facts prompt to ground anything
+ * in, and the run costs the same as a real one. Enforced at the extension so a
+ * reader is told before waiting, and here so it is true of every caller. */
+export const MIN_CAPTURE_SELECTION_CHARS = 80;
+
+/** Cap on a selection, well above any paragraph.
+ *
+ * The article's own text is already in the archive; a selection is a pointer
+ * into it, and one longer than this is someone selecting the whole page — which
+ * is the plain capture, and is what they should send instead. */
+export const MAX_CAPTURE_SELECTION_CHARS = 20_000;

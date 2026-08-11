@@ -65,14 +65,33 @@ second-level domain in those patterns — so the handoff there goes through
 ## What it sends
 
 `document.documentElement.outerHTML`, gzipped, plus the canonical url, the
-title, and `datePublished` from ld+json where the page has it. If you have
-**selected** more than 200 characters before pressing the button, the selection
-goes too and is preferred over any CSS selector — useful on a site nobody has a
-learned selector for yet.
+title, and `datePublished` from ld+json where the page has it.
 
 Nothing is sent until you press the button: the extension asks for `activeTab`
 rather than permission to read every site, so it can only see a page you have
 explicitly handed it.
+
+## Extracting from a passage
+
+Select a paragraph and the panel offers **Wyciągnij fakty z zaznaczenia**. The
+whole page is archived as usual; the selection rides along and becomes what the
+extractor parses, in place of whatever CSS selector it would otherwise have
+guessed with (`content_override` in `scrapers.article.oneshot`).
+
+Two things it is for: a domain nobody has a learned selector for yet, where the
+parse comes back with a nav bar, and a run over the whole article that missed a
+fact plainly sitting in one paragraph. Either way you are looking at the page,
+which no selector is.
+
+A selection is part of what makes a capture unique, so the same article can be
+extracted from more than once — but the same passage twice is still a duplicate
+and costs nothing. The bytes are only uploaded once; a second run points at the
+archive already in the bucket.
+
+Selecting more than 200 characters and pressing the ordinary save button sends
+that selection too, on the same reasoning. Below 80 characters nothing is sent
+either way: that is not enough for the facts prompt to ground a claim in, and
+the run costs what a real one costs.
 
 ## Publishing
 

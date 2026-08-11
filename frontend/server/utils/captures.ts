@@ -28,6 +28,7 @@ export function toArticleCapture(
     storagePath: String(data.storagePath ?? ""),
     htmlSha256: String(data.htmlSha256 ?? ""),
     htmlBytes: Number(data.htmlBytes ?? 0),
+    selection: data.selection ?? null,
     source: data.source === "paste" ? "paste" : "extension",
     status: data.status ?? "stored",
     capturedBy: String(data.capturedBy ?? ""),

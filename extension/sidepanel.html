@@ -17,6 +17,16 @@
       Zapisz i wyciągnij fakty
     </button>
 
+    <!-- Shown once the reader highlights a passage in the article, which is how
+         they say "there is a fact here that the run over the whole page
+         missed". -->
+    <section id="selection-section" class="selection" hidden>
+      <p id="selection-preview" class="selection__preview"></p>
+      <button id="selection-extract" type="button" class="secondary">
+        Wyciągnij fakty z zaznaczenia
+      </button>
+    </section>
+
     <section id="facts-section" hidden>
       <h2 id="facts-heading" class="facts-heading"></h2>
       <div id="facts" class="facts"></div>

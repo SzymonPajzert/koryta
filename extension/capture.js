@@ -71,6 +71,12 @@ export function collectPage() {
   const selection = (window.getSelection && window.getSelection().toString()) || "";
 
   return {
+    // Returned raw, with no length rule applied. Whether a selection is long
+    // enough to be worth extracting from depends on why it was made — a reader
+    // who pressed "wyciągnij fakty z zaznaczenia" meant this paragraph, while
+    // one who happened to have a word highlighted when they saved the page did
+    // not — and only the caller knows which it was.
+    selection,
     url,
     title:
       fromLdJson("headline") ||
@@ -83,9 +89,6 @@ export function collectPage() {
       fromLdJson("dateModified") ||
       undefined,
     html: document.documentElement.outerHTML,
-    // A reader who highlighted the article body has told us where it is, which
-    // beats guessing with a selector on a site nobody has a selector for.
-    selection: selection.length > 200 ? selection : "",
     ldJson: ldJson.length ? ldJson[0] : undefined,
   };
 }

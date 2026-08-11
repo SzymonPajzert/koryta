@@ -9,6 +9,7 @@
 import { getOrigin, TOKEN_REFRESH_MARGIN_MS } from "./config.js";
 import { collectPage, readCanonicalUrl } from "./capture.js";
 import { scrollToQuote } from "./highlight.js";
+import { watchSelection } from "./selection.js";
 
 /** The most recent job, per tab, so reopening the popup shows where it got to
  * rather than starting again. */
@@ -214,10 +215,16 @@ async function knownFacts(tabId, tabUrl) {
     api(`/api/pages?limit=1&url=${encodeURIComponent(url)}`, { token }),
   );
 
+  // No capture means nothing has been extracted, and the second request would
+  // be asking the server to confirm an empty answer.
+  //
+  // A capture that exists but is not finished still gets the second request,
+  // though. Facts are filed under the article's url and not under a capture, so
+  // once a page has been extracted from a selection, the newest capture of it
+  // is routinely one that is still running — and gating on that one's status
+  // would hide every fact the run before it had already found.
   const capture = pages.captures?.[0] ?? null;
-  if (!capture || capture.status !== "done" || !capture.extraction?.factCount) {
-    return { capture, facts: [] };
-  }
+  if (!capture) return { capture: null, facts: [] };
 
   // Keyed on the capture's own url, not the tab's: the two differ whenever the
   // page names a canonical link, and the facts were filed under the former.
@@ -228,6 +235,20 @@ async function knownFacts(tabId, tabUrl) {
     ),
   );
   return { capture, facts: result.facts ?? [] };
+}
+
+/** Has a tab start reporting what the reader highlights in it.
+ *
+ * The panel asks for this rather than doing it itself because only the
+ * background worker may inject; the messages the watcher then sends go to
+ * everything listening, which is where the panel picks them up.
+ */
+async function watchSelectionIn(tabId) {
+  const [injection] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: watchSelection,
+  });
+  return injection?.result ?? { text: "" };
 }
 
 /** Scrolls a tab to the passage a fact was read out of.
@@ -299,7 +320,31 @@ async function pollCapture(tabId, pageId, token) {
   });
 }
 
-async function captureTab(tabId) {
+/** How much has to be highlighted before a capture carries the selection along.
+ *
+ * Nobody asked for this one — it is a reader who happened to have something
+ * selected when they pressed the save button, so it has to be enough text to be
+ * unambiguously the article body rather than a headline they double-clicked.
+ */
+const INCIDENTAL_SELECTION_CHARS = 200;
+
+/** And when the reader asked for exactly this passage.
+ *
+ * Lower, because the intent is not in doubt — but not absent: a few words give
+ * the facts prompt nothing to ground a claim in, and the run costs what a real
+ * one costs. `/api/ingest/page` refuses anything shorter too; this is here so
+ * the answer comes back before the page has been read and compressed.
+ */
+const MIN_SELECTION_CHARS = 80;
+
+/** Captures the page in a tab, and asks for its facts.
+ *
+ * `selectionOnly` is the reader saying which paragraph to read: the whole page
+ * is still archived, and the selection rides along to be what the extractor
+ * parses instead of whatever a selector would have found. It is how a second
+ * pass over an article is asked for when the first missed something.
+ */
+async function captureTab(tabId, { selectionOnly = false } = {}) {
   setJob(tabId, { state: "capturing" });
 
   // Checked before the page is read and compressed, so a signed-out person is
@@ -326,6 +371,18 @@ async function captureTab(tabId) {
     });
   }
 
+  const highlighted = (page.selection || "").trim();
+  const floor = selectionOnly
+    ? MIN_SELECTION_CHARS
+    : INCIDENTAL_SELECTION_CHARS;
+  const selection = highlighted.length >= floor ? highlighted : "";
+  if (selectionOnly && !selection) {
+    return setJob(tabId, {
+      state: "error",
+      error: `zaznacz co najmniej ${MIN_SELECTION_CHARS} znaków`,
+    });
+  }
+
   setJob(tabId, { state: "uploading", url: page.url, title: page.title });
   const { encoded } = await gzipBase64(page.html);
 
@@ -343,6 +400,7 @@ async function captureTab(tabId) {
           title: page.title,
           publishedDate: page.publishedDate,
           meta: page.ldJson ? { ldJson: page.ldJson } : undefined,
+          selection: selection || undefined,
           source: "extension",
         },
       }),
@@ -374,11 +432,19 @@ async function captureTab(tabId) {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "koryta-capture") {
-    captureTab(message.tabId)
+    captureTab(message.tabId, { selectionOnly: !!message.selectionOnly })
       .catch((error) =>
         setJob(message.tabId, { state: "error", error: error.message }),
       )
       .then(sendResponse);
+    return true;
+  }
+  if (message?.type === "koryta-watch-selection") {
+    watchSelectionIn(message.tabId)
+      .then(sendResponse)
+      // A page with no `activeTab` grant cannot be watched, which only means
+      // the panel offers no selection button until the page is captured.
+      .catch(() => sendResponse({ text: "" }));
     return true;
   }
   if (message?.type === "koryta-job-state") {

@@ -11,7 +11,11 @@ import {
 } from "~~/server/utils/crawledBucket";
 import { dispatchExtraction } from "~~/server/utils/extractor";
 import { normalizeUrl } from "~~/shared/url";
-import { MAX_CAPTURE_HTML_BYTES } from "~~/shared/capture";
+import {
+  MAX_CAPTURE_HTML_BYTES,
+  MAX_CAPTURE_SELECTION_CHARS,
+  MIN_CAPTURE_SELECTION_CHARS,
+} from "~~/shared/capture";
 
 const pageRequestSchema = z.object({
   url: z.string().min(1),
@@ -22,6 +26,21 @@ const pageRequestSchema = z.object({
   title: z.string().nullable().optional(),
   publishedDate: z.string().optional(),
   meta: z.any().optional(),
+  /** A passage the reader picked out of the article.
+   *
+   * The whole page still travels and is still archived — this says which part
+   * of it the extractor should read. Two reasons someone sends one: the page is
+   * on a domain no selector has been learned for and the parse got a nav bar,
+   * or the run over the whole article missed a fact that is plainly in this
+   * paragraph. Either way the person doing it is looking at the page, which no
+   * selector is.
+   */
+  selection: z
+    .string()
+    .trim()
+    .min(MIN_CAPTURE_SELECTION_CHARS)
+    .max(MAX_CAPTURE_SELECTION_CHARS)
+    .optional(),
   source: z.enum(["extension", "paste"]).default("extension"),
 });
 
@@ -85,25 +104,39 @@ export default defineEventHandler(async (event) => {
   // Checked before the upload, not after: the archive name carries a fresh uuid
   // every time, so uploading first would leave an orphan copy in the bucket for
   // every retry, with nothing pointing at it.
-  const duplicate = await db
+  //
+  // The selection is part of the key, not of the query: it decides what the
+  // extractor reads, so the same page sent twice about two different paragraphs
+  // is two jobs. Matched in memory because Firestore's `== null` finds a field
+  // stored as null and not one that is absent, and every capture taken before
+  // selections existed has no such field at all — asked as a query, each of
+  // those would look like a page nobody had captured.
+  const sameBytes = await db
     .collection("articlePages")
     .where("normalizedUrl", "==", normalizedUrl)
     .where("htmlSha256", "==", htmlSha256)
-    .limit(1)
+    .limit(20)
     .get();
-  if (!duplicate.empty) {
-    const doc = duplicate.docs[0]!;
+  const duplicate = sameBytes.docs.find(
+    (doc) => (doc.data().selection ?? null) === (body.selection ?? null),
+  );
+  if (duplicate) {
     return {
       status: "ok",
-      pageId: doc.id,
+      pageId: duplicate.id,
       duplicate: true,
-      captureStatus: doc.data().status,
-      articleNodeId: doc.data().articleNodeId,
-      storagePath: doc.data().storagePath,
+      captureStatus: duplicate.data().status,
+      articleNodeId: duplicate.data().articleNodeId,
+      storagePath: duplicate.data().storagePath,
     };
   }
 
-  const { storagePath } = await uploadCapturedPage({ url, html });
+  // The archive is the page's bytes, and those are the same whichever passage
+  // this capture is about — so a second extraction over a page already in the
+  // bucket points at the copy that is there instead of writing another.
+  const storagePath =
+    (sameBytes.docs[0]?.data().storagePath as string | undefined) ??
+    (await uploadCapturedPage({ url, html })).storagePath;
 
   const batch = db.batch();
   const { nodeId, created } = await ensureArticleNode(db, batch, user, {
@@ -126,6 +159,7 @@ export default defineEventHandler(async (event) => {
     storagePath,
     htmlSha256,
     htmlBytes: html.length,
+    selection: body.selection ?? null,
     source: body.source,
     status: "stored",
     capturedBy: user.uid,
@@ -141,6 +175,7 @@ export default defineEventHandler(async (event) => {
     htmlSha256,
     uploaderUid: user.uid,
     articleNodeId: nodeId,
+    contentOverride: body.selection,
   });
 
   // A capture that could not be handed to the extractor is still stored, and

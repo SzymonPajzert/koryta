@@ -99,6 +99,43 @@ button.primary:disabled {
   cursor: default;
 }
 
+button.secondary {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+button.secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.selection {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
+/* Enough of the passage to recognise which one it is, and no more — the reader
+   can see the whole thing in the article a few centimetres to the left. */
+.selection__preview {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .facts-heading {
   margin: 12px 0 8px;
   font-size: 11px;

@@ -178,6 +178,117 @@ describe("api/ingest/page", () => {
     expect(dispatchExtraction).not.toHaveBeenCalled();
   });
 
+  describe("a passage the reader picked out", () => {
+    // Long enough to clear MIN_CAPTURE_SELECTION_CHARS, which is what stops a
+    // double-clicked headline being sent as a paragraph.
+    const PASSAGE =
+      "Prezesem spółki został Jan Kowalski, który wcześniej kierował " +
+      "departamentem w ministerstwie.";
+
+    it("is what the extractor reads, and is kept on the capture", async () => {
+      mockReadBody.mockResolvedValue(body({ selection: PASSAGE }));
+
+      await handler({} as never);
+
+      // The whole page is still archived — the selection says which part of it
+      // to parse, and `oneshot.parse_page` prefers it to any selector.
+      expect(dispatchExtraction).toHaveBeenCalledWith(
+        expect.objectContaining({ contentOverride: PASSAGE }),
+      );
+      expect(mockBatchSet.mock.calls.at(-1)![1]).toMatchObject({
+        selection: PASSAGE,
+      });
+    });
+
+    it("is null on an ordinary whole-page capture", async () => {
+      // Stored rather than left absent, so a reader of the document can tell a
+      // whole-page capture from one whose selection was lost.
+      await handler({} as never);
+      expect(mockBatchSet.mock.calls.at(-1)![1]).toMatchObject({
+        selection: null,
+      });
+      expect(dispatchExtraction).toHaveBeenCalledWith(
+        expect.objectContaining({ contentOverride: undefined }),
+      );
+    });
+
+    it("makes a second run over a page that was already captured", async () => {
+      // The point of the feature: the run over the whole article missed a fact
+      // that is plainly in this paragraph. Same bytes, same url — so without
+      // the selection in the key this would come back as a duplicate and
+      // nothing would be extracted.
+      duplicateQuery.get.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            id: "page-existing",
+            data: () => ({
+              status: "done",
+              selection: null,
+              articleNodeId: "node-9",
+              storagePath: "gs://koryta-pl-crawled/old.tar.gz",
+            }),
+          },
+        ],
+      });
+      mockReadBody.mockResolvedValue(body({ selection: PASSAGE }));
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ pageId: "page-1", duplicate: false });
+      expect(dispatchExtraction).toHaveBeenCalledWith(
+        expect.objectContaining({ contentOverride: PASSAGE }),
+      );
+      // The bytes are identical, so the second job points at the archive that
+      // is already in the bucket instead of writing another copy of it.
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(result.storagePath).toBe("gs://koryta-pl-crawled/old.tar.gz");
+    });
+
+    it("is a duplicate when the same passage is sent twice", async () => {
+      duplicateQuery.get.mockResolvedValue({
+        empty: false,
+        docs: [
+          { id: "page-whole", data: () => ({ selection: null }) },
+          {
+            id: "page-passage",
+            data: () => ({ status: "done", selection: PASSAGE }),
+          },
+        ],
+      });
+      mockReadBody.mockResolvedValue(body({ selection: PASSAGE }));
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ pageId: "page-passage", duplicate: true });
+      expect(dispatchExtraction).not.toHaveBeenCalled();
+    });
+
+    it("matches a capture taken before selections existed", async () => {
+      // Those documents have no `selection` field at all, which is why the
+      // match is made in memory: Firestore's `== null` finds a field stored as
+      // null and not one that is absent, so asked as a query every capture in
+      // the collection today would look like a page nobody had captured.
+      duplicateQuery.get.mockResolvedValue({
+        empty: false,
+        docs: [{ id: "page-old", data: () => ({ status: "done" }) }],
+      });
+
+      const result = await handler({} as never);
+
+      expect(result).toMatchObject({ pageId: "page-old", duplicate: true });
+      expect(mockSave).not.toHaveBeenCalled();
+    });
+
+    it("refuses one too short to ground a fact in", async () => {
+      mockReadBody.mockResolvedValue(body({ selection: "Jan Kowalski" }));
+
+      await expect(handler({} as never)).rejects.toThrow();
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(dispatchExtraction).not.toHaveBeenCalled();
+    });
+  });
+
   it("keeps the capture when the extractor cannot be reached", async () => {
     // The html is already in the bucket and the nightly pipeline reads it from
     // there, so a failed dispatch is recorded rather than raised.

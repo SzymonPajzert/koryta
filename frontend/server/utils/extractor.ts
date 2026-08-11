@@ -23,6 +23,11 @@ export type ExtractorJob = {
    * to the service account that parsed it. */
   uploaderUid: string;
   articleNodeId?: string;
+  /** The passage the reader picked out, when they picked one. The extractor
+   * prefers it to anything a selector finds — see `oneshot.parse_page` — which
+   * is the point: the person sending it was looking at the page, and the
+   * selector is a guess made from other pages on the same domain. */
+  contentOverride?: string;
 };
 
 type ExtractorConfig = {
