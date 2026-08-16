@@ -28,7 +28,13 @@ from scrapers.cru.umowy import CruUmowy
 from scrapers.kmgp.companies import CompaniesKMGP
 from scrapers.kmgp.people import PeopleKMGP
 from scrapers.koryta.differ import KorytaDiffer
-from scrapers.koryta.download import KorytaCompanies, KorytaPeople, KorytaVotes
+from scrapers.koryta.download import (
+    KorytaCompanies,
+    KorytaEdges,
+    KorytaNodes,
+    KorytaPeople,
+    KorytaVotes,
+)
 from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.scrape import KRSAlreadyScraped, KRSNeedsRefresh, ScrapeRejestrIO
@@ -69,6 +75,8 @@ PIPELINES = [
     KRSUpdates,
     KorytaCompanies,
     KorytaDiffer,
+    KorytaEdges,
+    KorytaNodes,
     KorytaPeople,
     KorytaVotes,
     PeopleEnriched,

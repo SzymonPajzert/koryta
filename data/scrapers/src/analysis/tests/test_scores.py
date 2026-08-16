@@ -17,6 +17,8 @@ from analysis.scores.base import (
     PeopleScoreModel,
     Population,
     banded_scores,
+    person_key,
+    rejestr_io_id,
 )
 from analysis.scores.turnover import same_region, year_of
 from entities.person import is_pipeline_uid
@@ -177,6 +179,197 @@ class TestPopulation:
             payload_rows=[],
         )
 
+        assert result.shortlist == []
+
+
+class TestPersonKey:
+    """Which payload row is which koryta node."""
+
+    def test_reads_the_id_out_of_a_profile_link(self):
+        assert rejestr_io_id("https://rejestr.io/osoby/312837") == "312837"
+
+    def test_tolerates_a_trailing_slash(self):
+        # `scrapers.krs.data` stores several hundred of them written that way.
+        assert rejestr_io_id("https://rejestr.io/osoby/312837/") == "312837"
+
+    def test_a_missing_link_is_not_an_id(self):
+        # A DataFrame column that some rows do not fill arrives as NaN.
+        assert rejestr_io_id(None) is None
+        assert rejestr_io_id(float("nan")) is None
+        assert rejestr_io_id("") is None
+        assert rejestr_io_id("https://rejestr.io/firmy/koryta") is None
+
+    def test_somebody_with_no_link_keys_exactly_as_before(self):
+        # The whole population used to be keyed on the bare name, so keeping
+        # that as the fallback is what makes this change a no-op for the
+        # roughly one node in six that has no rejestr.io link.
+        assert person_key(None, "Anna Kowalska") == "Anna Kowalska"
+
+    def test_an_id_cannot_be_mistaken_for_a_name(self):
+        assert person_key("https://rejestr.io/osoby/312837", "Anna") != "312837"
+
+
+class TestPopulationJoin:
+    """The payload and the site do not spell people the same way."""
+
+    def build(self, koryta_rows, payload_rows):
+        scorer = model(PeopleScoresCapture)
+        scorer.people_payloads.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            payload_rows
+        )
+        scorer.people_koryta.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            koryta_rows
+        )
+        scorer.people_votes.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.companies_krs.read_or_process = lambda ctx: pd.DataFrame()
+        return scorer.population(None)
+
+    def test_a_middle_name_no_longer_hides_a_person(self):
+        # KRS spells out the middle name and PKW does not, so the site's node
+        # and its payload row disagree. Keyed on the name, this person was on
+        # no model's shortlist and could not be scored at all - which is how
+        # the councillor who joined four Orlen boards after the 2024 election
+        # sat unrated.
+        result = self.build(
+            [
+                {
+                    "id": "n1",
+                    "full_name": "Kacper Karol Pietrusinski",
+                    "is_public": False,
+                    "parties": [],
+                    "rejestr_io": "https://rejestr.io/osoby/312837",
+                }
+            ],
+            [
+                {
+                    "name": "Kacper Pietrusinski",
+                    "rejestrIo": "https://rejestr.io/osoby/312837",
+                    "companies": [{"krs": "1"}],
+                    "elections": [],
+                }
+            ],
+        )
+
+        assert result.shortlist == ["rejestr.io/312837"]
+        assert result.node_ids["rejestr.io/312837"] == "n1"
+
+    def test_the_score_row_is_named_the_way_the_site_names_them(self):
+        result = self.build(
+            [
+                {
+                    "id": "n1",
+                    "full_name": "Kacper Karol Pietrusinski",
+                    "is_public": False,
+                    "parties": [],
+                    "rejestr_io": "https://rejestr.io/osoby/312837",
+                }
+            ],
+            [
+                {
+                    "name": "Kacper Pietrusinski",
+                    "rejestrIo": "https://rejestr.io/osoby/312837",
+                    "companies": [{"krs": "1"}],
+                    "elections": [],
+                }
+            ],
+        )
+
+        assert result.display_name("rejestr.io/312837") == "Kacper Karol Pietrusinski"
+
+    def test_two_people_who_share_a_name_stay_apart(self):
+        # Keyed on the name these two were one person, so one of them took the
+        # other's node id and the score went to whoever the dict kept.
+        result = self.build(
+            [
+                {
+                    "id": "n1",
+                    "full_name": "Sebastian Wierzbicki",
+                    "is_public": False,
+                    "parties": [],
+                    "rejestr_io": "https://rejestr.io/osoby/1",
+                },
+                {
+                    "id": "n2",
+                    "full_name": "Sebastian Wierzbicki",
+                    "is_public": False,
+                    "parties": [],
+                    "rejestr_io": "https://rejestr.io/osoby/2",
+                },
+            ],
+            [
+                {
+                    "name": "Sebastian Wierzbicki",
+                    "rejestrIo": "https://rejestr.io/osoby/1",
+                    "companies": [{"krs": "1"}],
+                    "elections": [],
+                },
+                {
+                    "name": "Sebastian Wierzbicki",
+                    "rejestrIo": "https://rejestr.io/osoby/2",
+                    "companies": [{"krs": "2"}],
+                    "elections": [],
+                },
+            ],
+        )
+
+        assert sorted(result.shortlist) == ["rejestr.io/1", "rejestr.io/2"]
+        assert result.node_ids == {"rejestr.io/1": "n1", "rejestr.io/2": "n2"}
+        assert [p.krs for p in result.employments["rejestr.io/2"]] == ["2"]
+
+    def test_a_node_with_no_link_still_joins_on_the_name(self):
+        # Nodes written before the site recorded rejestr.io links have no id to
+        # match on, and the payload run may not have one either. The name is
+        # all there is, and it has to keep working.
+        result = self.build(
+            [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}],
+            [{"name": "Anna", "companies": [{"krs": "1"}], "elections": []}],
+        )
+
+        assert result.shortlist == ["Anna"]
+        assert result.node_ids == {"Anna": "n1"}
+
+    def test_a_node_with_no_link_joins_a_payload_row_that_has_one(self):
+        # Only one side having the link is the common case during a backfill,
+        # and falling back to the name keeps them together.
+        result = self.build(
+            [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}],
+            [
+                {
+                    "name": "Anna",
+                    "rejestrIo": "https://rejestr.io/osoby/7",
+                    "companies": [{"krs": "1"}],
+                    "elections": [],
+                }
+            ],
+        )
+
+        assert result.shortlist == ["rejestr.io/7"]
+        assert result.node_ids == {"rejestr.io/7": "n1"}
+
+    def test_the_seed_follows_the_person_not_the_spelling(self):
+        # A published person is the ground truth the models generalise from.
+        # Missing the join loses the seed as surely as it loses the candidate.
+        result = self.build(
+            [
+                {
+                    "id": "n1",
+                    "full_name": "Jerzy Andrzej Michalak",
+                    "is_public": True,
+                    "parties": [],
+                    "rejestr_io": "https://rejestr.io/osoby/1104997",
+                }
+            ],
+            [
+                {
+                    "name": "Jerzy Michalak",
+                    "rejestrIo": "https://rejestr.io/osoby/1104997",
+                    "companies": [{"krs": "1"}],
+                    "elections": [],
+                }
+            ],
+        )
+
+        assert result.seeds() == {"rejestr.io/1104997": 3}
         assert result.shortlist == []
 
 

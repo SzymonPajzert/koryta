@@ -86,14 +86,48 @@ class CompanyFacts:
     is_public: bool
 
 
+def rejestr_io_id(value: typing.Any) -> str | None:
+    """The person id in a rejestr.io profile link, if there is one.
+
+    Both sides store the whole URL (`https://rejestr.io/osoby/312837`), some of
+    them with a trailing slash, so compare the id rather than the string. Takes
+    `Any` because the value arrives from a DataFrame, where a missing entry is
+    NaN rather than None.
+    """
+    if not isinstance(value, str):
+        return None
+    ident = value.strip().rstrip("/").rsplit("/", 1)[-1]
+    return ident if ident.isdigit() else None
+
+
+def person_key(rejestr_io: typing.Any, name: typing.Any) -> str:
+    """What identifies one person across the payloads and the site.
+
+    rejestr.io's id where there is one, and the name otherwise. The name alone
+    used to be the whole key, and it loses people at both ends: KRS spells out
+    a middle name where PKW does not, so `Kacper Karol Pietrusinski` and
+    `Kacper Pietrusinski` never met, and conversely two people who share a
+    common name were merged into one score.
+
+    The id form carries the `rejestr.io/` prefix and the name form is the bare
+    name, so everybody without a link keys exactly as they did before this and
+    no join that works today changes. Nobody is called `rejestr.io/312837`, so
+    the two forms cannot collide.
+    """
+    ident = rejestr_io_id(rejestr_io)
+    return f"rejestr.io/{ident}" if ident else str(name)
+
+
 @dataclasses.dataclass
 class Population:
     """Everyone a model can see, and what the site already thinks of them.
 
-    Keyed by person name throughout, which is what `PeoplePayloads` and the
-    site's own nodes are joined on today. Names collide - the existing
-    `CompanyScores` carries a TODO saying so - and until the payloads carry the
-    koryta node id, a model inherits that.
+    Keyed by `person_key` throughout - rejestr.io's person id where both the
+    payloads and the site's own node carry one, and the bare name where either
+    does not. Around a sixth of nodes have no rejestr.io link, so the name
+    fallback is still load-bearing and still inherits the collisions the
+    existing `CompanyScores` TODO describes; it just no longer decides the join
+    for everybody.
 
     The population is whatever the payload run covered. `Extract` filters by
     region unless asked for everything, so a regional run gives a regional
@@ -104,18 +138,18 @@ class Population:
 
     #: Payload rows, one per person, in payload order.
     people: pd.DataFrame
-    #: Person name -> koryta node id. Only people the site already has a node
+    #: Person key -> koryta node id. Only people the site already has a node
     #: for; a model cannot vote on anybody else.
     node_ids: dict[str, str]
-    #: Person name -> posts held, in payload order.
+    #: Person key -> posts held, in payload order.
     employments: dict[str, list[Employment]]
-    #: Person name -> candidacies stood.
+    #: Person key -> candidacies stood.
     candidacies: dict[str, list[Candidacy]]
     #: KRS -> everybody the payloads put in that company.
     roster: dict[str, list[str]]
     #: KRS -> what the KRS register says about the company.
     companies: dict[str, CompanyFacts]
-    #: Person name -> how firmly the site has already judged them. Positive for
+    #: Person key -> how firmly the site has already judged them. Positive for
     #: a published page or an upvote, negative for a downvote, absent for the
     #: unexamined. This is the ground truth the models generalise from, so it
     #: counts humans only - seeding a model on the pipeline's own past votes
@@ -125,17 +159,29 @@ class Population:
     #: not yet voted on by a human. Rating anybody else is telling somebody
     #: something they already know.
     shortlist: list[str]
+    #: Person key -> the name the site shows, for the score rows a run writes.
+    #: The site's spelling rather than the payload's, because that is what a
+    #: reader comparing the two will have in front of them.
+    names: dict[str, str] = dataclasses.field(default_factory=dict)
 
     def seeds(self, sign: int = 1) -> dict[str, float]:
         """Confirmed people whose judgement went the given way, weight positive."""
         return {
-            name: abs(weight)
-            for name, weight in self.seed_weights.items()
+            key: abs(weight)
+            for key, weight in self.seed_weights.items()
             if weight * sign > 0
         }
 
-    def has_candidacy(self, name: str) -> bool:
-        return bool(self.candidacies.get(name))
+    def has_candidacy(self, key: str) -> bool:
+        return bool(self.candidacies.get(key))
+
+    def display_name(self, key: str) -> str:
+        """What to call this person in the output.
+
+        Every key a run scores comes from a koryta row, so `names` has it; the
+        fallback is for a caller assembling a `Population` by hand.
+        """
+        return self.names.get(key) or key
 
 
 def banded_scores(raw: typing.Mapping[str, float]) -> dict[str, int]:
@@ -181,7 +227,7 @@ class PeopleScoreModel(Pipeline):
     companies_krs: CompaniesKRS
 
     def raw_scores(self, ctx: Context, population: Population) -> dict[str, float]:
-        """This model's opinion, on whatever scale suits it, keyed by name.
+        """This model's opinion, on whatever scale suits it, keyed by person key.
 
         Scores for people outside the shortlist are ignored, so a model is free
         to compute over everybody - the graph models have to.
@@ -200,19 +246,19 @@ class PeopleScoreModel(Pipeline):
         raw = self.raw_scores(ctx, population)
         eligible = set(population.shortlist)
         banded = banded_scores(
-            {name: score for name, score in raw.items() if name in eligible}
+            {key: score for key, score in raw.items() if key in eligible}
         )
 
         records = [
             dataclasses.asdict(
                 PersonScore(
-                    node_id=population.node_ids[name],
-                    name=name,
+                    node_id=population.node_ids[key],
+                    name=population.display_name(key),
                     score=score,
                     model=self.model_tag,
                 )
             )
-            for name, score in banded.items()
+            for key, score in banded.items()
         ]
         if not records:
             print(f"{type(self).__name__} found nobody to score")
@@ -230,15 +276,28 @@ class PeopleScoreModel(Pipeline):
         votes = self.people_votes.read_or_process(ctx)
         companies = self.companies_krs.read_or_process(ctx)
 
-        node_ids = dict(zip(koryta["full_name"], koryta["id"]))
         human_votes = self.human_votes(votes, koryta)
 
         employments: dict[str, list[Employment]] = {}
         candidacies: dict[str, list[Candidacy]] = {}
         roster: dict[str, list[str]] = {}
+        # Both ways of naming a payload row, so a koryta node can be matched on
+        # whichever of the two it carries. Where two payload rows share a name
+        # the first wins it; keying on the name alone used to leave the last
+        # one standing instead. Both are arbitrary and only a node with no
+        # rejestr.io link is decided by it - anybody who has one is matched on
+        # the id before the name is consulted.
+        keys_by_rejestr: dict[str, str] = {}
+        keys_by_name: dict[str, str] = {}
 
         for _, row in people.iterrows():
             name = str(row.get("name"))
+            key = person_key(row.get("rejestrIo"), name)
+            ident = rejestr_io_id(row.get("rejestrIo"))
+            if ident:
+                keys_by_rejestr.setdefault(ident, key)
+            keys_by_name.setdefault(name, key)
+
             posts = [
                 Employment(
                     krs=str(company["krs"]),
@@ -249,11 +308,11 @@ class PeopleScoreModel(Pipeline):
                 for company in iter_dicts(row.get("companies"))
                 if company.get("krs")
             ]
-            employments[name] = posts
+            employments[key] = posts
             for post in posts:
-                roster.setdefault(post.krs, []).append(name)
+                roster.setdefault(post.krs, []).append(key)
 
-            candidacies[name] = [
+            candidacies[key] = [
                 Candidacy(
                     year=election.get("election_year"),
                     teryt=election.get("teryt"),
@@ -263,21 +322,40 @@ class PeopleScoreModel(Pipeline):
                 for election in iter_dicts(row.get("elections"))
             ]
 
+        def key_of(entry) -> str:
+            """The payload row this koryta node is, by id and then by name.
+
+            The name is still tried, and has to be: a node written before the
+            site started recording rejestr.io links has no id to match on.
+            """
+            ident = rejestr_io_id(entry.get("rejestr_io"))
+            if ident and ident in keys_by_rejestr:
+                return keys_by_rejestr[ident]
+            name = str(entry.get("full_name"))
+            if name in keys_by_name:
+                return keys_by_name[name]
+            return person_key(entry.get("rejestr_io"), name)
+
+        node_ids: dict[str, str] = {}
+        names: dict[str, str] = {}
         seed_weights: dict[str, float] = {}
         shortlist: list[str] = []
         for _, entry in koryta.iterrows():
-            name = str(entry.get("full_name"))
+            key = key_of(entry)
+            node_ids[key] = str(entry.get("id"))
+            names[key] = str(entry.get("full_name"))
+
             is_public = entry.get("is_public", False)
             if pd.isna(is_public):
                 is_public = False
 
             vote = human_votes.get(str(entry.get("id")), 0.0)
             if is_public:
-                seed_weights[name] = max(seed_weights.get(name, 0.0), IS_PUBLIC_SCORE)
+                seed_weights[key] = max(seed_weights.get(key, 0.0), IS_PUBLIC_SCORE)
             elif vote:
-                seed_weights[name] = vote
-            elif name in employments:
-                shortlist.append(name)
+                seed_weights[key] = vote
+            elif key in employments:
+                shortlist.append(key)
 
         return Population(
             people=people,
@@ -288,6 +366,7 @@ class PeopleScoreModel(Pipeline):
             companies=self.company_facts(companies),
             seed_weights=seed_weights,
             shortlist=shortlist,
+            names=names,
         )
 
     @staticmethod

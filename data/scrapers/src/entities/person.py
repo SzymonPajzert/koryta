@@ -13,6 +13,11 @@ class Koryta:
     data: dict
     is_public: bool = False
     votes_interesting: int | None = None
+    #: The person's rejestr.io profile, as the site stores it. Carried because
+    #: it is the only identifier both this dataset and `PeoplePayloads` hold,
+    #: and joining the two on `full_name` silently drops whoever the two
+    #: sources spell differently. See `analysis.scores.base.person_key`.
+    rejestr_io: str | None = None
 
 
 @dataclass

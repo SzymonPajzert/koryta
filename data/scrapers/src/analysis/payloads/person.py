@@ -1,15 +1,19 @@
+import argparse
 import collections
 import math
 import typing
 from dataclasses import asdict
+from functools import cached_property
 
 import numpy as np
 import pandas as pd
 
 from analysis.extract import Extract, check_auto_approved
 from analysis.payloads.election import get_election_type
+from analysis.payloads.site import SiteSnapshot
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person
+from scrapers.koryta.download import KorytaPeople
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
 
@@ -24,19 +28,66 @@ class PeoplePayloads(Pipeline[Person]):
 
     people: Extract
 
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--on-koryta",
+            help="Emit payloads only for people who already have a page on "
+            "koryta.pl, so the run restates what is stored rather than "
+            "creating anybody. Pair it with --all: the filter is applied to "
+            "whatever Extract selected, and a region does not contain the "
+            "people whose pages need restating.",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
+        parser.add_argument(
+            "--koryta-date",
+            help="Date (YYYY-MM-DD) of the koryta.pl export listing who has a "
+            "page. Defaults to the latest available export.",
+            default=None,
+            required=False,
+        )
+        return parser.parse_known_args()[0]
+
     @property
     def output_class(self) -> typing.Type:
         return Person
 
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--only-changed",
+            help="Emit only the people whose payload would write something "
+            "koryta.pl does not already hold. The rest are uploads that end in "
+            "no revision and no edge, which is most of them once a region has "
+            "been submitted before.",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
+        parser.add_argument(
+            "--koryta-date",
+            help="Date (YYYY-MM-DD) of the koryta.pl export to compare against "
+            "for --only-changed. Defaults to the latest available export.",
+            default=None,
+            required=False,
+        )
+        return parser.parse_known_args()[0]
+
     def process(self, ctx: Context):
         people_df = self.people.read_or_process(ctx)
-        result = []
+        result = [self.map_person_payload(ctx, row) for _, row in people_df.iterrows()]
+        if self.args.on_koryta:
+            result = self.only_on_koryta(ctx, result)
         unmapped: typing.Counter[str] = collections.Counter()
-        for _, row in people_df.iterrows():
-            person = self.map_person_payload(ctx, row)
+        for person in result:
             unmapped.update(unmapped_committees(person.elections))
-            result.append(person)
         report_unmapped_committees(unmapped)
+        if self.args.only_changed:
+            result = self.only_changed(ctx, result)
         return (
             pd.DataFrame.from_records([asdict(p) for p in result])
             if result
@@ -51,6 +102,50 @@ class PeoplePayloads(Pipeline[Person]):
                 ]
             )
         )
+
+    def only_changed(self, ctx: Context, people: list[Person]) -> list[Person]:
+        """The payloads that would write something, and a note of what.
+
+        Filtering here rather than in the uploader keeps the decision next to
+        the data it is made from: the snapshot is a pipeline output like any
+        other, and a run that drops nine payloads in ten should say so where
+        the rest of the pipeline's reporting is.
+        """
+        snapshot = SiteSnapshot.read(ctx, self.args.koryta_date)
+
+        changed = []
+        reasons: typing.Counter[str] = collections.Counter()
+        for person in people:
+            person_reasons = snapshot.changes(asdict(person))
+            if not person_reasons:
+                continue
+            changed.append(person)
+            reasons.update(person_reasons)
+
+        print(
+            f"{len(changed)} of {len(people)} payloads differ from koryta.pl; "
+            f"dropping {len(people) - len(changed)} that would write nothing. "
+            f"What the rest would write:"
+        )
+        for reason, count in reasons.most_common():
+            print(f"  {count:6d}  {reason}")
+        return changed
+
+    def only_on_koryta(self, ctx: Context, payloads: list[Person]) -> list[Person]:
+        """The payloads for people who already have a page, and only those.
+
+        `/api/ingest/person` finds its target with a single
+        `where("name", "==", payload.name).limit(1)` and creates a new person
+        when that misses, so every payload naming somebody the site does not
+        have is a new node rather than an update. Of the 101,413 payloads
+        `--all` emits, 4,383 match - submitting the lot to restate 4,383
+        candidacies would take the collection from 6,115 people to ~103,000.
+        """
+        # TODO this should be a field and dependency
+        submitted_df = KorytaPeople(self.args.koryta_date).read_or_process(ctx)
+        names = submitted_df["full_name"].dropna().tolist()
+        print(f"{len(names)} people already have a page on koryta.pl")
+        return matching_one_page(payloads, names)
 
     def map_person_payload(self, ctx: Context, row: pd.Series) -> Person:
         def get_scalar(key):
@@ -176,6 +271,42 @@ def _extract_elections(row: pd.Series) -> list[Election]:
 
                 elections.append(election_payload)
     return elections
+
+
+def matching_one_page(payloads: list[Person], on_koryta: list[str]) -> list[Person]:
+    """The payloads a name identifies one person on both sides of.
+
+    The ingest joins a payload to a page by an exact match on `name` and
+    nothing else, so a name is only usable as an identifier where it names one
+    person in the payloads *and* one page on the site. Where it names several,
+    every candidacy PKW ever recorded for any of them lands on one page - the
+    "osoby zostały złączone" complaint, made worse rather than answered.
+
+    Dropped rather than resolved: which of four Piotr Mrozińskis a page is
+    about is not a question the payloads can answer, and a wrong candidacy on
+    a real page is a worse outcome than a missing one. They are reported so the
+    count is visible, because it is the part of the backlog this run leaves.
+    """
+    pages = collections.Counter(on_koryta)
+    candidates = collections.Counter(person.name for person in payloads)
+
+    result = [
+        person
+        for person in payloads
+        if pages[person.name] == 1 and candidates[person.name] == 1
+    ]
+
+    ambiguous = {
+        person.name
+        for person in payloads
+        if pages[person.name] >= 1
+        and (pages[person.name] > 1 or candidates[person.name] > 1)
+    }
+    print(
+        f"{len(result)} of {len(payloads)} payloads name somebody with a page; "
+        f"{len(ambiguous)} names left alone as several people share them"
+    )
+    return result
 
 
 def party_of_candidacy(committee: str | None) -> str | None:

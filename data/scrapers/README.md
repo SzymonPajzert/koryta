@@ -79,6 +79,43 @@ the mirror outright, and
 published to the shared cache only when it was freshly dumped *and* its sha256
 changed, because that bucket partitions by timestamp and is never pruned.
 
+## Uploading only what changed
+
+`PeoplePayloads` emits a payload per person it knows about, and
+`koryta_uploader` posts every one of them at a request each. Most of those
+requests write nothing: the ingest looks a person up by name, adds a revision
+only for a field the node does not already carry, and matches each employment
+and candidacy against the edges already stored, so re-submitting a region that
+has been submitted before takes an hour and leaves the site as it was.
+
+`--only-changed` drops those payloads:
+
+```bash
+uv run koryta PeoplePayloads --region 14 --only-changed |
+  uv run koryta_uploader --type person --submit
+```
+
+It decides by replaying the ingest's own matching offline, against the nightly
+Firestore export in `gs://koryta-pl-crawled` -- the same dumps `KorytaPeople`
+reads, here through `KorytaNodes` and `KorytaEdges`. `--koryta-date` pins which
+export to compare against; the default is the newest one. The run then reports
+what the payloads it kept would write, in this shape:
+
+```
+N of M payloads differ from koryta.pl; dropping M-N that would write nothing.
+What the rest would write:
+     ...  stored candidacy learns a field
+     ...  person not on koryta.pl
+     ...  employment not stored
+```
+
+The comparison is a transcription of `frontend/server/utils/edges.ts` and the
+matching helpers in `frontend/server/api/ingest/person.post.ts`, and it is only
+worth as much as it stays one -- `analysis/payloads/site.py` says which reading
+each rule comes from. Where the two might disagree it keeps the payload: one
+sent needlessly costs a request, one dropped wrongly loses a fact and leaves
+nothing to notice it by.
+
 ## The compressed mirror
 
 Pipelines that read a whole hostname prefix -- the KRS ones, off

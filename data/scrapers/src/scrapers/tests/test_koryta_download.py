@@ -7,7 +7,9 @@ empty frame instead - which reaches the scoring models as "no human has ever
 voted on anybody" rather than as an error. These pin the shared behaviour.
 """
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pandas as pd
@@ -16,6 +18,8 @@ from scrapers.koryta.download import (
     MAX_EXPORT_LOOKBACK_DAYS,
     FirestoreCollection,
     KorytaCompanies,
+    KorytaEdges,
+    KorytaNodes,
     KorytaPeople,
     KorytaVotes,
     export_timestamp,
@@ -237,6 +241,44 @@ class TestWantedBlobs(unittest.TestCase):
         blobs = [blob(self.EARLY), blob(self.LATE), blob("2026-08-06T07:55:00.000Z")]
         wanted = FirestoreCollection("nodes").wanted_blobs(blobs)
         self.assertEqual(len(wanted), 3)
+
+
+class TestExportDtypes(unittest.TestCase):
+    """The identifiers a comparison matches on have to survive being written.
+
+    `KorytaNodes` is read back through `read_json`, which types a column by
+    what it looks like: a KRS becomes 349305.0 and a wojewodztwo's TERYT
+    becomes 2.0. Nothing fails - the lookups simply stop matching, and every
+    payload reads as one the site has never seen.
+    """
+
+    def round_trip(self, pipeline, row: dict) -> dict:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "export.jsonl"
+            pd.DataFrame.from_records([row]).to_json(path, orient="records", lines=True)
+            read = pd.read_json(path, lines=True, dtype=pipeline.dtype)
+        return read.iloc[0].to_dict()
+
+    def test_a_krs_keeps_its_leading_zeros(self):
+        row = self.round_trip(
+            KorytaNodes(),
+            {"id": "place-1", "type": "place", "krsNumber": "0000349305"},
+        )
+        self.assertEqual(row["krsNumber"], "0000349305")
+
+    def test_a_wojewodztwo_teryt_keeps_its_leading_zero(self):
+        row = self.round_trip(
+            KorytaNodes(),
+            {"id": "teryt02", "type": "region", "teryt": "02"},
+        )
+        self.assertEqual(row["teryt"], "02")
+
+    def test_a_term_a_reviewer_typed_stays_what_they_typed(self):
+        row = self.round_trip(
+            KorytaEdges(),
+            {"id": "edge-1", "type": "election", "term": "2024"},
+        )
+        self.assertEqual(row["term"], "2024")
 
 
 class TestExportTimestamp(unittest.TestCase):

@@ -241,6 +241,10 @@ class KorytaPeople(Pipeline[Person]):
             votes_interesting = (
                 data.get("stats", {}).get("votes", {}).get("interesting", None)
             )
+            # A node written before the field existed has no `rejestrIo` at
+            # all, and one written alongside nodes that do have it gets NaN
+            # from pandas rather than None. Both mean the same thing here.
+            rejestr_io = data.get("rejestrIo")
             outputs.append(
                 Person(
                     full_name=data.get("name", ""),
@@ -249,6 +253,7 @@ class KorytaPeople(Pipeline[Person]):
                     data={},  # data,
                     is_public=data.get("stats", {}).get("isApproved", False),
                     votes_interesting=votes_interesting,
+                    rejestr_io=rejestr_io if isinstance(rejestr_io, str) else None,
                 )
             )
 
@@ -297,6 +302,97 @@ class KorytaCompanies(Pipeline[KorytaCompany]):
 
         print("Finished processing companies.")
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
+
+
+#: What a node has to carry for `analysis.payloads.site` to answer the four
+#: lookups the person ingest makes - a person by name, a company by KRS, a
+#: region by TERYT, an article by URL - and to tell whether a person node would
+#: learn anything. Everything else an export holds (the search chunks, the
+#: stats, the `meta` of an article) is dropped: it is most of the bytes and
+#: none of the answer.
+NODE_FIELDS = [
+    "id",
+    "type",
+    "name",
+    "parties",
+    "content",
+    "wikipedia",
+    "rejestrIo",
+    "krsNumber",
+    "sourceURL",
+    "teryt",
+]
+
+#: What an edge has to carry to be compared with one the pipeline is about to
+#: send: the pair and type it is looked up by, and every discriminator any edge
+#: type declares in `frontend/server/utils/edges.ts`.
+EDGE_FIELDS = [
+    "id",
+    "type",
+    "source",
+    "target",
+    "name",
+    "content",
+    "start_date",
+    "end_date",
+    "position",
+    "party",
+    "committee",
+    "term",
+]
+
+
+class KorytaExport(Pipeline):
+    """One collection of the latest export, narrowed to the fields we compare.
+
+    `KorytaPeople` reads the same dumps but keeps only what scoring needs. This
+    keeps what *ingest* needs, which is a different set and includes the edges:
+    telling an upload that would change something from one that would not means
+    replaying the ingest's own matching, and that is all edges.
+    """
+
+    collection_name: str
+    fields: list[str]
+    date: str
+
+    def __init__(self, date: str | None = None) -> None:
+        super().__init__()
+        self.date = date or CURRENT_DATE
+
+    @memoized_property
+    def filename(self) -> str:
+        return f"koryta_{self.collection_name}_{self.date}"
+
+    def process(self, ctx: Context):
+        df, date_read = FirestoreCollection.latest_on_or_before(
+            ctx, self.collection_name, None, self.date
+        )
+        print(f"Read {len(df)} {self.collection_name} from the {date_read} export")
+        # A column no document of the export fills is still one the comparison
+        # asks about, so it has to exist and be empty rather than be missing.
+        return df.reindex(columns=self.fields)
+
+
+class KorytaNodes(KorytaExport):
+    """Every node on koryta.pl: the people, companies, regions and articles.
+
+    Every field here is looked up by its exact stored value, and a column of
+    digits is what `read_json` most likes to guess wrong: a KRS comes back as
+    349305.0 and a wojewodztwo's TERYT as 2.0, neither of which any payload
+    would ever match. `parties` is the one column that is not a string.
+    """
+
+    collection_name = "nodes"
+    fields = NODE_FIELDS
+    dtype = {name: str for name in NODE_FIELDS if name != "parties"}
+
+
+class KorytaEdges(KorytaExport):
+    """Every edge on koryta.pl: who worked where, who stood where, who is named."""
+
+    collection_name = "edges"
+    dtype = {name: str for name in EDGE_FIELDS}
+    fields = EDGE_FIELDS
 
 
 class KorytaVotes(Pipeline[PersonVote]):
