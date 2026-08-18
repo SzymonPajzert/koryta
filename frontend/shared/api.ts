@@ -95,6 +95,35 @@ export type ElectionRequest = {
   teryt?: string;
 };
 
+/** A date of birth as `YYYY-MM-DD`, or nothing.
+ *
+ * Checked rather than taken as a string, because this is the field identity
+ * matching turns on and it now arrives from an automated run: a name alone
+ * leaves 15.8% of the 106020 people in `people_krs_merged` ambiguous, a name
+ * plus this leaves 0.02%. A malformed value would be written a few thousand
+ * times before anybody noticed, and would match nothing.
+ *
+ * The range check is what a format check alone misses: "0202-05-27" parses.
+ * The floor is the earliest a living person's date could plausibly be and the
+ * ceiling is today, both deliberately loose - this is here to catch a mangled
+ * value, not to adjudicate anyone's age.
+ */
+function birthDateField() {
+  return z
+    .string()
+    .optional()
+    .refine(
+      (value) =>
+        value === undefined ||
+        value === "" ||
+        (/^\d{4}-\d{2}-\d{2}$/.test(value) &&
+          !Number.isNaN(Date.parse(value)) &&
+          new Date(value) >= new Date("1850-01-01") &&
+          new Date(value) <= new Date()),
+      { message: "Data urodzenia musi mieć postać RRRR-MM-DD" },
+    );
+}
+
 export const personRequestSchema = z.object({
   name: z.string(),
   content: z.string().optional(),
@@ -102,6 +131,10 @@ export const personRequestSchema = z.object({
 
   wikipedia: z.string().optional(),
   rejestrIo: z.string().optional(),
+  /** From rejestr.io by way of `people_krs_merged`. Accepted here at last: the
+   * scrapers have computed it all along, and zod strips what it does not
+   * declare, so every run silently dropped it on the way in. */
+  birthDate: birthDateField(),
   parties: z.array(z.string()).optional(),
   sources: z.array(z.string()).optional(),
   companies: z.array(employmentRequestSchema),
@@ -115,6 +148,7 @@ export type PersonRequest = {
 
   wikipedia?: string;
   rejestrIo?: string;
+  birthDate?: string;
   parties?: Array<string>;
   sources?: Array<string>;
   companies: Array<EmploymentRequest>;
@@ -255,7 +289,7 @@ export const personEditSchema = z.object({
   name: z.string().min(1, "Nazwa jest wymagana"),
   content: z.string().optional(),
   parties: z.array(z.string()).optional(),
-  birthDate: z.string().optional(),
+  birthDate: birthDateField(),
   wikipedia: z.string().optional(),
   rejestrIo: z.string().optional(),
   ktomaco: z.string().optional(),

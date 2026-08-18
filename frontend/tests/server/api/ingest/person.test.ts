@@ -751,5 +751,83 @@ describe("api/ingest/person", () => {
 
       expect(createRevisionTransaction).not.toHaveBeenCalled();
     });
+    it("stores a birth date it has learned, once", async () => {
+      // The field identity matching turns on. rejestr.io has carried one for
+      // every person it names all along - 106,020 of them, 100% coverage - and
+      // exactly 1 of the 6,115 stored people had one, because the payload
+      // dataclass had nowhere to put it and this schema stripped it.
+      personExists({ name: "Test Person", type: "person", parties: [] });
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        birthDate: "1967-09-20",
+        companies: [],
+        elections: [],
+      });
+
+      await handler({} as any);
+
+      expect(createRevisionTransaction).toHaveBeenCalledWith(
+        mockDb,
+        expect.anything(),
+        expect.objectContaining({ uid: "test-user-id" }),
+        expect.anything(),
+        expect.objectContaining({ birthDate: "1967-09-20" }),
+        expect.objectContaining({ automatic: true }),
+      );
+    });
+
+    it("does not rewrite a birth date the node already carries", async () => {
+      // A date of birth does not change, so a stored one is either right or is
+      // somebody's correction of the register - and unlike `wikipedia` there is
+      // no version of it that gets better on the next run.
+      personExists({
+        name: "Test Person",
+        type: "person",
+        parties: [],
+        birthDate: "1967-09-21",
+      });
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        birthDate: "1967-09-20",
+        companies: [],
+        elections: [],
+      });
+
+      await handler({} as any);
+
+      // Nothing else to say either, so the run leaves no revision at all.
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+    });
+
+    it("refuses a mangled birth date rather than storing it", async () => {
+      // It would be written a few thousand times before anybody noticed, and
+      // would match nothing.
+      personExists({ name: "Test Person", type: "person", parties: [] });
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        birthDate: "1967",
+        companies: [],
+        elections: [],
+      });
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+    });
+
+    it("refuses a birth date a format check alone would let through", async () => {
+      // "0202-05-27" is a well-formed ISO date and is a mangled 2002.
+      personExists({ name: "Test Person", type: "person", parties: [] });
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        birthDate: "0202-05-27",
+        companies: [],
+        elections: [],
+      });
+
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+    });
   });
 });

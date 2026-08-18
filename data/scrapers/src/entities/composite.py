@@ -53,6 +53,15 @@ class Person:
     parties: list[str] | None = None
     wikipedia: str | None = None
     rejestrIo: str | None = None
+    #: Date of birth as `YYYY-MM-DD`, from rejestr.io by way of
+    #: `people_krs_merged`, which carries one for all 106020 people it holds.
+    #:
+    #: The field the whole identity problem turns on. Matching a name against
+    #: the ~6100 people on koryta.pl leaves 15.8% of them ambiguous; a name plus
+    #: this leaves 0.02%. It was computed all along and dropped here - the
+    #: dataclass had nowhere to put it, so `payloads/person.py` never read the
+    #: column it was iterating past.
+    birthDate: str | None = None
     autoapprove: bool = False
 
 

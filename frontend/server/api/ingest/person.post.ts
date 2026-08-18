@@ -200,6 +200,12 @@ function updatedPerson(
   if (body.content) learned.content = body.content;
   if (body.wikipedia) learned.wikipedia = body.wikipedia;
   if (body.rejestrIo) learned.rejestrIo = body.rejestrIo;
+  // Filled in, never rewritten. A date of birth does not change, so a stored
+  // one is either right or is somebody's correction of what the register says -
+  // and unlike `wikipedia` there is no version of this that gets better on the
+  // next run. Leaving it alone also keeps a re-ingest from writing a revision
+  // per person for a value nobody disputed.
+  if (body.birthDate && !stored.birthDate) learned.birthDate = body.birthDate;
 
   const changed = Object.entries(learned).some(
     ([key, value]) => JSON.stringify(value) !== JSON.stringify(stored[key]),
@@ -219,6 +225,7 @@ function createPerson(body: Partial<Person>): Person {
     person.wikipedia = body.wikipedia;
   }
   if (body.rejestrIo) person.rejestrIo = body.rejestrIo;
+  if (body.birthDate) person.birthDate = body.birthDate;
   return person;
 }
 
