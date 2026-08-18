@@ -217,6 +217,7 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       end_date: edge.end_date,
       aidMeasure: edge.aidMeasure,
       aidGross: edge.aidGross,
+      aidNominal: edge.aidNominal,
       aidDecisions: edge.aidDecisions,
     };
     return result;

@@ -141,8 +141,14 @@ const aidGrantSchema = z.object({
    * see `shared/identifiers.ts`. */
   grantor_nip: z.string(),
   grantor_name: z.string(),
-  /** Ekwiwalent dotacji brutto in złoty, summed. Never the nominal value. */
+  /** Ekwiwalent dotacji brutto in złoty, summed. What every ranking uses. */
   gross: z.number().nonnegative(),
+  /** The nominal value, summed. Carried alongside `gross` and never instead of
+   * it: for a deferral the nominal value is the whole deferred contribution
+   * while the benefit is only the unpaid interest, so ranking on it is wrong.
+   * Dropping it is also wrong - Martes Sport took one decision worth 872 k PLN
+   * gross against 8.26 M PLN nominal, and gross alone makes that invisible. */
+  nominal: z.number().nonnegative().optional(),
   decisions: z.number().int().positive(),
   first_decision: z.string().optional(),
   last_decision: z.string().optional(),
@@ -215,6 +221,20 @@ export const aidRequestSchema = z.object({
   soleTrader: z.boolean().optional(),
   /** PKD codes, in the same shape `ingest/company` takes them. */
   activity: z.array(z.string()).optional(),
+  /** Structural signals, computed by `scrapers/sudop/signals.py`. An allowlist
+   * rather than free text, so that a typo in the pipeline shows up here rather
+   * than as a filter nobody can match. */
+  signals: z
+    .array(
+      z.enum([
+        "non_sme",
+        "outside_flood_region",
+        "capped_decision",
+        "rare_grantor",
+        "asset_light",
+      ]),
+    )
+    .optional(),
   grants: z.array(aidGrantSchema).min(1),
 });
 

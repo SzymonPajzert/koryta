@@ -118,8 +118,17 @@ export interface Edge extends PageBase<EdgeType> {
   aidGross?: number;
   /** How many SUDOP decisions the edge rolls up. A count, not a list: the
    * decisions themselves are not nodes, and eight of them are eight rows of one
-   * report rather than eight facts about the pair. */
+   * report rather than eight facts about the pair.
+   *
+   * Emphatically not a signal. The published analyses of this data flag a
+   * beneficiary at eight or more, and measured over the register those 71
+   * beneficiaries hold 9.78% of the money while the 1340 with a single decision
+   * hold 9.72% - the same pot. See `scrapers/sudop/signals.py`. */
   aidDecisions?: number;
+  /** The nominal value the edge rolls up, alongside `aidGross`. For a dotacja
+   * they are equal; for a deferral the nominal value is the whole deferred
+   * contribution and the gross equivalent is only the unpaid interest. */
+  aidNominal?: number;
 }
 
 export type ElectionPosition =
@@ -287,6 +296,16 @@ export interface Company extends Omit<Node, "type"> {
    * Absent means the scrapers wrote it, which is the case for every value
    * predating the edit form. */
   isPublicSource?: "manual";
+  /** Structural signals the public-aid pipeline raised about this beneficiary:
+   * `non_sme`, `outside_flood_region`, `capped_decision`, `rare_grantor`,
+   * `asset_light`. Derived, like `categories`, and rewritten wholesale by each
+   * ingest rather than accumulated.
+   *
+   * None of them is an accusation and none of them counts decisions - see
+   * `scrapers/sudop/signals.py`, which has the measurements showing why a count
+   * of decisions is the wrong question. Every one has an ordinary explanation
+   * available; they mark a beneficiary as worth reading, not as irregular. */
+  aidSignals?: string[];
 }
 
 /** Whether anything is actually known about a place's ownership.

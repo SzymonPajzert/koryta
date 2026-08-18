@@ -1,9 +1,9 @@
 """What the SUDOP rollup is allowed to emit.
 
-The numbers quoted here are from a full pull on 2026-08-18: 9461 decisions
-granted for disaster damage since the 2024 flood, 3711 beneficiaries, 30
-granting institutions, two programmes. Of those beneficiaries the biała lista
-put 748 in KRS, which is what the rollup keeps.
+The numbers quoted here are from a full pull on 2026-08-18: 9459 decisions
+granted for disaster damage since the 2024 flood, 3715 beneficiaries, 31
+granting institutions, two programmes. All of them are emitted; the biała lista
+put 748 in KRS, which decides what gets published rather than what gets stored.
 """
 
 from scrapers.sudop import people
@@ -23,6 +23,7 @@ def decision(**overrides):
         form="dotacja",
         pkd="22.23",
         size="mikroprzedsiębiorstwo",
+        size_code="0",
         teryt="1607053",
     )
     base.update(overrides)

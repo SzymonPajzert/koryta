@@ -67,5 +67,6 @@ export interface Edge {
   end_date?: string;
   aidMeasure?: string;
   aidGross?: number;
+  aidNominal?: number;
   aidDecisions?: number;
 }

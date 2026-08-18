@@ -84,6 +84,11 @@ export default defineEventHandler(async (event) => {
     beneficiaryData.activity = body.activity;
     beneficiaryData.categories = categoriesFromActivity(body.activity);
   }
+  // Rewritten wholesale rather than merged. A signal is a statement about the
+  // register as it stands now, so one that stopped being true - the grantor
+  // that had made two decisions has since made forty - has to stop being
+  // stored, and a union with what was there before would make it permanent.
+  beneficiaryData.aidSignals = body.signals ?? [];
   createRevisionTransaction(db, batch, user, beneficiary.ref, beneficiaryData, {
     automatic: true,
     approve: beneficiary.publish,
@@ -177,6 +182,9 @@ export default defineEventHandler(async (event) => {
             aidMeasure: body.measure,
             aidGross: grant.gross,
             aidDecisions: grant.decisions,
+            ...(grant.nominal !== undefined
+              ? { aidNominal: grant.nominal }
+              : {}),
             ...(grant.first_decision
               ? { start_date: grant.first_decision }
               : {}),

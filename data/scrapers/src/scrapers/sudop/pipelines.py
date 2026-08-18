@@ -38,7 +38,7 @@ import pandas as pd
 
 from scrapers.koryta.download import FirestoreCollection
 from scrapers.stores import Context, Pipeline
-from scrapers.sudop import api, ceidg, people, whitelist
+from scrapers.sudop import api, ceidg, people, signals, whitelist
 
 
 @dataclasses.dataclass
@@ -62,7 +62,11 @@ class AidDecision:
     nominal: float
     form: str
     pkd: str
+    #: The readable class, "mikroprzedsiębiorstwo" and so on.
     size: str
+    #: The same thing as SUDOP's code, 0-3, which is what the signals test.
+    #: 3 is "not an SME at all" and is the one that matters.
+    size_code: str
     teryt: str
 
 
@@ -110,6 +114,7 @@ class SudopAid(Pipeline[AidDecision]):
                 form=row.get("forma-pomocy-nazwa", ""),
                 pkd=row.get("sektor-dzialalnosci-kod", ""),
                 size=row.get("wielkosc-beneficjenta-nazwa", ""),
+                size_code=row.get("wielkosc-beneficjenta-kod", ""),
                 teryt=row.get("gmina-siedziby-kod", ""),
             )
             for row in rows
@@ -250,10 +255,18 @@ def _payloads(
     """
     owner_by_nip = owner_by_nip or {}
     koryta_people = koryta_people or {}
+    decisions = list(decisions)
     by_beneficiary: dict[tuple[str, str], list[dict]] = collections.defaultdict(list)
     for decision in decisions:
         key = (str(decision["beneficiary_nip"]), str(decision["measure"]))
         by_beneficiary[key].append(decision)
+
+    # Across the whole register rather than within one beneficiary: "this office
+    # barely ran a programme" is a fact about the office, and it is what makes
+    # its one decision worth reading.
+    decisions_by_grantor = collections.Counter(
+        str(decision["grantor_nip"]) for decision in decisions
+    )
 
     payloads = []
     for (nip, measure), rows in sorted(by_beneficiary.items()):
@@ -282,12 +295,18 @@ def _payloads(
                     "grantor_nip": grantor,
                     "grantor_name": row["grantor_name"],
                     "gross": 0.0,
+                    "nominal": 0.0,
                     "decisions": 0,
                     "first_decision": row["granted_on"],
                     "last_decision": row["granted_on"],
                 },
             )
             grant["gross"] += float(row["gross"])
+            # Carried alongside gross, not instead of it. Ranking on the
+            # nominal value is wrong for the reason `AidDecision` gives, but
+            # dropping it hides Martes Sport: one decision, 872 k PLN gross
+            # against 8.26 M PLN nominal, because it was a deferral.
+            grant["nominal"] += float(row["nominal"])
             grant["decisions"] += 1
             granted_on = row["granted_on"]
             if granted_on:
@@ -307,7 +326,11 @@ def _payloads(
             "grants": [
                 # Rounded to the grosz: the sums are floats, and a total that
                 # renders as 31513545.200000003 is not more precise for it.
-                {**grant, "gross": round(grant["gross"], 2)}
+                {
+                    **grant,
+                    "gross": round(grant["gross"], 2),
+                    "nominal": round(grant["nominal"], 2),
+                }
                 for grant in sorted(grants.values(), key=lambda grant: -grant["gross"])
             ],
         }
@@ -329,6 +352,23 @@ def _payloads(
                 "node_id": matched.node_id,
                 "teryt": people.powiat_of(owner_teryt),
             }
+        found = signals.signals(
+            signals.Beneficiary(
+                gross=sum(float(row["gross"]) for row in rows),
+                nominal=sum(float(row["nominal"]) for row in rows),
+                # The largest class any decision asserted, not the latest: SUDOP
+                # reports it per decision and they disagree, and taking the last
+                # would flag a company on the order of its rows.
+                size=max((str(row["size_code"]) for row in rows), default=""),
+                teryt=str(latest["teryt"] or ""),
+                pkd=tuple(pkd),
+                decision_values=tuple(float(row["gross"]) for row in rows),
+                grantors=tuple(grants),
+            ),
+            decisions_by_grantor,
+        )
+        if found:
+            payload["signals"] = found
         if pkd:
             payload["activity"] = pkd
         teryt = str(latest["teryt"] or "")

@@ -113,34 +113,49 @@ business's own registered seat rather than the seat SUDOP reported, and coverage
 of spółki cywilne. Without a key (`--ceidg-key`) the pipeline falls back to the
 biała lista and says so; the match rule is the same either way.
 
-### PESEL, which would settle it, and cannot be had
+### PESEL, and the birth dates that are already on disk
 
 A date of birth is what actually separates one Krzysztof Nowak from another, and
-a PESEL yields one exactly. `scrapers/sudop/pesel.py` implements the derivation
-- century folded into the month, the 1800s band last, the checksum - and returns
-a date and nothing else. The number itself is never stored, which is also what
-the published analysis of this data did with the PESELs in its source.
+a PESEL yields one exactly. `pesel.py` implements the derivation - century
+folded into the month, the 1800s band last, the checksum - and returns a date
+and nothing else. The number is never stored, which is what the published
+analysis of this data did with the PESELs in its source.
 
-Two things stand in the way, and the second is the one that matters:
+**There is no lawful bulk source of a sole trader's PESEL**, and each candidate
+fails on the merits rather than on effort:
 
-1. **There is no source.** The official KRS API censors PESELs to their first
-   digit: the 19,094 api-krs snapshots koryta has crawled hold `8**********` and
-   names masked the same way (see `scrapers/krs/people_parsing.py`). CEIDG does
-   not publish one. CRBR does, and closed to open access in 2026 - available on
-   application showing an *uzasadniony interes*, which a journalistic project
-   plausibly has, but that is an application and not an API key.
-2. **There would be nothing to match against.** Exactly **1 of koryta.pl's 6,115
-   people has a `birthDate`.** A perfect PESEL→date derivation resolves nothing
-   against an empty column.
+| | |
+|---|---|
+| KRS API | Censors them. Across 16,813 crawled `OdpisAktualny` snapshots, all 72,769 PESELs are masked to one visible digit and all 73,475 surnames to one letter - which is what `krs/censored.py` exists to exploit |
+| CEIDG | Publishes neither a PESEL nor a birth date; art. 43 ust. 1 ustawy o CEIDG withholds both |
+| Biała lista | Returns `"pesel": null` |
+| CRBR | Does not cover jednoosobowa działalność at all (art. 58 AML), and closed to open access in 2026 |
 
-So the prerequisite is not a PESEL source at all - it is birth dates on the
-people the site already has. Those are obtainable from data koryta already
-scrapes: `scrapers/pkw/process.py:48` derives `birth_year` from the candidate's
-age in the PKW files, and `entities/person.py` carries `birth_date`,
-`birth_year` and `birth_iso8601`. The value is computed and then dropped before
-Firestore. Wiring that through is the cheap, high-value piece of work, and it is
-worth doing whether or not a PESEL ever arrives - a birth year alone cuts the
-namesake problem down enormously.
+**But the birth dates are already here, and not from PESEL at all.** rejestr.io
+returns a full ISO `tozsamosc.data_urodzenia` for every person it ties to a KRS
+company, koryta already parses it, and
+`versioned/people_krs_merged/people_krs_merged.jsonl` holds **106,020 people,
+100% of them with a `birth_date`**. 5,208 of the 6,115 person nodes (85.2%)
+carry a `rejestrIo` link, so the date for them is sitting in `downloaded/`.
+
+Exactly **1 of those 6,115 nodes has a `birthDate` in Firestore.** The value is
+computed and then dropped, in two places:
+
+- `entities/composite.py:45-56` - the `Person` payload dataclass has no birth
+  field, so `analysis/payloads/person.py:94-104` never reads `row["birth_date"]`
+  even though it is a column of the dataframe it is iterating;
+- `frontend/shared/api.ts` `personRequestSchema` - has no `birthDate`, and zod
+  strips unknown keys, so it would be discarded even if the payload carried it.
+  (`personEditSchema` *does* accept it: that is the human edit form, which is
+  how the one stored value got there.)
+
+Wiring those two through is the highest-value work adjacent to this pipeline,
+and it is worth doing whether or not a PESEL ever arrives. Measured on the
+106,020-person KRS table: name alone leaves 15.8% of people ambiguous, name plus
+an exact birth year leaves 0.2%, name plus a full date 0.02%. Do **not** use
+PKW ages for this - PKW records an age and not a date, only for some election
+years, and a year derived from an age is ±1 (31.6% of certain-same-person PKW
+groups disagree by a year across elections).
 
 ## Scale: what this adds to the database
 
@@ -189,6 +204,68 @@ transaction each end had with the state. What is worth reading off it - who got
 how much - is a number on the edge, and shows on the company's own page without
 any traversal at all.
 
+## Signals: what is worth a second look
+
+The published analyses flag a beneficiary that collected **eight or more
+decisions**. Measured over the register, that rule does not do what it looks
+like it does:
+
+| | beneficiaries | share of the 699.2 M PLN |
+|---|---|---|
+| 8+ decisions | 71 | **9.78%** |
+| exactly 1 decision | 1,340 | **9.72%** |
+
+The same pot, spread over nineteen times as many companies. Of the 130
+beneficiaries above 1 M PLN the rule catches **20** and misses **110**; eight of
+the 130 got it in a single decision. What a high count actually measures is how
+many separate offices and instruments an applicant queued at - the 8+ group
+averages 2.59 grantors and 4.13 aid forms against 1.00 and 1.00 for the
+single-decision group. And the obvious excuse for it is false: ZUS never issued
+more than six decisions to one beneficiary, and the 8+ bucket is *less* ZUS
+(33.5%) than the single-decision bucket (64.3%).
+
+So `signals.py` counts nothing. Each signal is structural, and deliberately
+blind to decision count and to size:
+
+| signal | flags | of the money | single-decision share |
+|---|---|---|---|
+| `non_sme` — SUDOP size code 3 | 100 | 14.9% | 49% |
+| `outside_flood_region` — seat outside woj. 02/16/24 | 135 | 4.5% | 47% |
+| `asset_light` — PKD J/K/L/M and ≥ 200 k | 68 | 5.3% | 24% |
+| `rare_grantor` — grantor made ≤ 10 decisions in all | 37 | 3.3% | 35% |
+| `capped_decision` — a decision at exactly 1,000,000.00 | 29 | 6.9% | 24% |
+| **union** | **308** | **29.4%** | **37%** |
+| *(the 8+ rule, for comparison)* | *71* | *9.8%* | *0%* |
+
+The last column is the test that matters. The base rate of single-decision
+beneficiaries in the register is 39%; the union sits at 37%, so it is genuinely
+count-neutral, where every money-based signal — and the 8+ rule at 0% — just
+re-finds the large repeat recipients.
+
+`non_sme` is the clearest vindication: 79 large enterprises inside a programme
+that is 80% micro-firms, at a **median of 24,517 PLN — below the register's own
+median of 46,381**. Forty-six of them have a single decision. The list is Lidl,
+Dino Polska, Rossmann and Poczta Polska; the 8+ rule finds five of them.
+`capped_decision` is the cheapest: every grant cut to ZUS's ceiling to the
+grosz, 29 beneficiaries, none of them with 8 decisions.
+
+None of these is an accusation, and every one has an ordinary explanation
+available — SUDOP reports a beneficiary's seat rather than where the damage was,
+so `outside_flood_region` in particular is a question and not a finding. They
+are stored on the beneficiary node as `aidSignals`, rewritten wholesale by each
+run, because a signal is a statement about the register as it stands.
+
+**Not shipped:** the decision count itself; `gross/nominal < 0.2` as a flag (518
+beneficiaries at a median of 1,510 PLN — it means "somebody deferred a ZUS
+contribution"); "micro-enterprise with a large grant" (80% of the register is
+micro, so it carries no information the amount does not); and name-stem
+clustering (337 clusters, but the stems are naming boilerplate — get groups from
+KRS ownership, which koryta already ingests).
+
+The nominal value is stored per grant alongside the gross equivalent. Ranking on
+it is wrong, but dropping it hides Martes Sport: one decision, 872 k PLN gross
+against 8.26 M PLN nominal.
+
 ## Cost of running it
 
 **Pulling the data.** One SUDOP search, which queues for four to eight minutes
@@ -232,7 +309,8 @@ work through them. Nothing new appears in the sitemap: `_sitemap-urls.ts` lists
 | `KorytaPeoplePowiats` | `koryta_people_powiats` | reads the nightly export |
 | `AidPayloads` | volatile | pure rollup, plus CEIDG if a key is given |
 
-`pesel.py` is a pure function used by none of them yet; see above for why.
+`signals.py` and `pesel.py` are pure functions. The first runs inside
+`AidPayloads`; the second is used by nothing yet, for the reason above.
 
 ## What is deliberately not here
 
