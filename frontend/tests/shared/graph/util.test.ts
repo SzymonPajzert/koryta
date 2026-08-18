@@ -177,4 +177,67 @@ describe("graph utils", () => {
       expect(forPerson1?.connected).not.toContain("p2");
     });
   });
+  describe("aid edges", () => {
+    const aidEdge: DBEdge = {
+      id: "g1",
+      source: "zus",
+      target: "c1",
+      type: "aid",
+      aidMeasure: "SA.116730",
+      aidGross: 949371.91,
+      aidDecisions: 3,
+    } as DBEdge;
+
+    it("is a dead end in both directions", () => {
+      const [edge] = getEdges([aidEdge]);
+
+      // ZUS decided on 5690 of the 9350 grants under SA.116730, to 2914
+      // different companies. Traversable, that one node would assert a
+      // connection between every pair of them.
+      expect(edge!.traverse).toEqual({
+        forward: "dead_end",
+        backward: "dead_end",
+      });
+    });
+
+    it("carries the totals through to the graph edge", () => {
+      const [edge] = getEdges([aidEdge]);
+
+      expect(edge!.aidGross).toBe(949371.91);
+      expect(edge!.aidDecisions).toBe(3);
+      expect(edge!.aidMeasure).toBe("SA.116730");
+      expect(edge!.label).toBe("pomoc publiczna");
+    });
+
+    it("does not connect two companies paid by the same institution", () => {
+      // The arrangement the policy exists to prevent, at its smallest: one
+      // grantor, two beneficiaries with nothing else between them.
+      const companies: Record<string, Company> = {
+        zus: { name: "ZUS", type: "place" } as Company,
+        c1: { name: "Firma A", type: "place" } as Company,
+        c2: { name: "Firma B", type: "place" } as Company,
+      };
+      const nodesNoStats = getNodesNoStats({}, companies, {}, {});
+
+      const edges = getEdges([
+        aidEdge,
+        { ...aidEdge, id: "g2", target: "c2" } as DBEdge,
+      ]);
+
+      const groups = getNodeGroups(nodesNoStats, edges, {}, companies, {});
+      const forCompany1 = groups.find((group) => group.id === "c1");
+      const forGrantor = groups.find((group) => group.id === "zus");
+
+      expect(forCompany1?.connected).not.toContain("c2");
+
+      // The grantor still reaches the companies it paid, and should: "who did
+      // this office pay" is the question its own page answers. `dead_end`
+      // stops the hop *after* that one, which is the whole difference between
+      // a group of 2914 on the ZUS node and a group of 2914 on each of 2914
+      // companies.
+      expect(forGrantor?.connected).toEqual(
+        expect.arrayContaining(["c1", "c2"]),
+      );
+    });
+  });
 });

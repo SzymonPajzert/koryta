@@ -106,6 +106,30 @@ export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
     enrichable: true,
   },
 
+  // Public aid one institution paid one company under one programme, rolled up
+  // from however many SUDOP decisions that was.
+  //
+  // The rollup is the fact, which is why `aidMeasure` is the only
+  // discriminator: two grants from the same starosta under SA.116730 are two
+  // rows of one report, not two ties, and storing them separately would put
+  // 9461 edges where 5233 pairs exist. A second programme is a second fact,
+  // because nothing about the flood measure carries over to whatever the same
+  // institution pays the same company for next.
+  //
+  // Not enrichable, and it does not need to be: SUDOP is fed with a delay, so a
+  // re-ingest of the same programme restates the same pair with a larger
+  // `aidGross`, and hashing on the pair plus the measure lands it on the
+  // document that is already there - where the ingest overwrites the totals
+  // rather than adding to them. Enrichment is for filling in a missing
+  // discriminator, and there is never one missing here: an ingest that does not
+  // know the measure has no business writing the edge.
+  aid: {
+    kind: "occurrence",
+    discriminators: ["aidMeasure"],
+    identicalMeansSame: true,
+    enrichable: false,
+  },
+
   // Written by hand through /api/edges/create, never by an ingest.
   connection: {
     kind: "authored",

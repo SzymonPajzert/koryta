@@ -1,5 +1,23 @@
 import type { Article, ElectionPosition } from "./model";
 
+/** Node data written through sanitizeFirestoreData stores arrays as objects
+ * with numbered keys, so array fields have to be read tolerantly.
+ *
+ * Lives in `shared/` rather than beside its first caller in
+ * `server/utils/nodeFilters.ts`: that module reaches the Nitro cache through
+ * `server/utils/fetch.ts`, so importing three lines of array handling from it
+ * pulls in `defineCachedFunction` and everything behind it.
+ */
+export function asArray<T>(
+  value: T[] | Record<string, T> | undefined | null,
+): T[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === "object") return Object.values(value);
+  return [];
+}
+
+
 /** The parties a person can be filtered by, and the only strings that get a
  * chip. Anything else is stored and then invisible: no colour, no dropdown
  * entry, and bucketed as "inne / brak partii" in the statistics.

@@ -132,6 +132,7 @@ const edgeLabel: Record<EdgeType, string> = {
   comment: "komentarz",
   election: "kandydował",
   tagged: "temat",
+  aid: "pomoc publiczna",
 };
 
 const edgeTraverse: Record<EdgeType, TraversePolicy> = {
@@ -170,6 +171,27 @@ const edgeTraverse: Record<EdgeType, TraversePolicy> = {
     forward: "dead_end",
     backward: "dead_end",
   },
+  // Dead in both directions, for the same reason as `tagged` and with more at
+  // stake. An aid edge runs from the institution that paid to the company that
+  // was paid, and the institutions are few: ZUS alone decided on 5692 grants
+  // under SA.116730, to 2914 different companies. Traversable, that one node
+  // would put every flood-aid beneficiary two hops from every other, which is
+  // 4.2 million pairs of companies asserted to be connected by nothing more
+  // than having filed with the same office. The current widest hub in the
+  // database is a region node at 852 edges, so this would not be a difference
+  // of degree.
+  //
+  // Being paid by the same institution is also not the kind of claim the graph
+  // makes anywhere else: `owns` and `employed` are ties between the two ends,
+  // while this is a transaction both ends had with the state. What is worth
+  // reading off it - who got how much - is a number on the edge, and shows on
+  // the company's own page without any traversal at all.
+  //
+  // Guarded by a test in `tests/shared/graph/util.test.ts`.
+  aid: {
+    forward: "dead_end",
+    backward: "dead_end",
+  },
 };
 
 export function getEdges(edgesFromDB: DBEdge[]) {
@@ -193,6 +215,9 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       by_election: edge.by_election,
       start_date: edge.start_date,
       end_date: edge.end_date,
+      aidMeasure: edge.aidMeasure,
+      aidGross: edge.aidGross,
+      aidDecisions: edge.aidDecisions,
     };
     return result;
   });

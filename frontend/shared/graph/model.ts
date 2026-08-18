@@ -49,7 +49,8 @@ export interface Edge {
     | "owns"
     | "comment"
     | "election"
-    | "tagged";
+    | "tagged"
+    | "aid";
 
   traverse?: TraversePolicy;
   content?: string;
@@ -64,4 +65,7 @@ export interface Edge {
   by_election?: boolean;
   start_date?: string;
   end_date?: string;
+  aidMeasure?: string;
+  aidGross?: number;
+  aidDecisions?: number;
 }

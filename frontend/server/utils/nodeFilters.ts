@@ -3,6 +3,7 @@
 
 import { applyPartiesFilter, fetchNodes } from "~~/server/utils/fetch";
 import { isInWojewodztwo, isWojewodztwoTeryt } from "~~/shared/teryt";
+import { asArray } from "#shared/misc";
 
 /** A node filter that can run either as a Firestore clause or in memory.
  * Firestore application can fail on missing indexes or on combining multiple
@@ -35,17 +36,6 @@ export type StructuralQuery = {
   minEmploymentDate?: string;
   minVotes?: number;
 };
-
-/** Node data written through sanitizeFirestoreData stores arrays as objects
- * with numbered keys, so array fields have to be read tolerantly. */
-export function asArray<T>(
-  value: T[] | Record<string, T> | undefined | null,
-): T[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  if (typeof value === "object") return Object.values(value);
-  return [];
-}
 
 /** A query parameter that may arrive once, repeated, or not at all. */
 function toArray(value: string | string[] | undefined): string[] {

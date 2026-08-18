@@ -128,6 +128,98 @@ export type EntityResult = {
   krs?: string;
 };
 
+/** What one institution paid one beneficiary under one aid programme, already
+ * summed over its decisions.
+ *
+ * The summing happens in the pipeline rather than here because the ingest is
+ * per beneficiary and a rollup has to be over everything the register holds for
+ * the pair, not over the slice one request happens to carry.
+ */
+const aidGrantSchema = z.object({
+  /** The granting institution's NIP. A starosta, a marszałek or a wojewódzki
+   * fundusz has no KRS entry, so this is the only number every grantor has -
+   * see `shared/identifiers.ts`. */
+  grantor_nip: z.string(),
+  grantor_name: z.string(),
+  /** Ekwiwalent dotacji brutto in złoty, summed. Never the nominal value. */
+  gross: z.number().nonnegative(),
+  decisions: z.number().int().positive(),
+  first_decision: z.string().optional(),
+  last_decision: z.string().optional(),
+});
+
+export type AidGrantRequest = z.infer<typeof aidGrantSchema>;
+
+/** The person a sole trader's business belongs to, and where it is registered.
+ *
+ * Only ever somebody koryta.pl already tracks. Nothing in this ingest creates a
+ * person: 2045 of the flood-aid beneficiaries are private individuals who had a
+ * flood, and a register of those is not what the site is.
+ *
+ * `teryt` is the powiat the business sits in, and it is required because the
+ * name on its own is worthless. Matching those 2045 sole traders against the
+ * 6113 people on the site by name alone returns 21 hits and every one of them
+ * is in a different powiat from the person it matched - Grzegorz Lach's firm
+ * took 514 k PLN in powiat nyski while the councillor of that name sits in
+ * powiat płocki. The endpoint re-checks the powiat against the person's own
+ * region links rather than trusting the pipeline to have done it.
+ */
+const aidOwnerSchema = z.object({
+  name: z.string().min(1),
+  /** The person node the pipeline matched, checked rather than trusted. */
+  node_id: z.string().min(1),
+  /** Four digits: województwo and powiat. */
+  teryt: z.string().regex(/^\d{4}$/, "Kod powiatu ma cztery cyfry"),
+});
+
+export type AidOwnerRequest = z.infer<typeof aidOwnerSchema>;
+
+/** Public aid one beneficiary received under one programme, from however many
+ * institutions.
+ *
+ * Every beneficiary in the register is accepted, sole traders included. An
+ * earlier version required a KRS number, on the grounds that a sole trader has
+ * no ownership register behind it and so could never gain an edge; that reading
+ * was wrong about what makes a row worth keeping. The published analyses of
+ * this data treat a run of eight or more decisions as the thing to look at, and
+ * reading it by hand turns up single-decision micro-firms that are just as
+ * interesting - and a filter that drops four in five beneficiaries drops those
+ * before anybody can look.
+ *
+ * What the filter used to do, publication now does. Storing a row and putting
+ * up a public page about it are separate decisions in this model (`published`
+ * against `revision_id`), and `soleTrader` is what routes them: a company out
+ * of KRS is published on arrival as `ingest/company` has always done, and a
+ * natural person trading under their own name is stored and left for a
+ * reviewer.
+ */
+export const aidRequestSchema = z.object({
+  /** SUDOP's number for the programme ("SA.116730"). Part of the edge's
+   * identity, so re-running the ingest for one programme cannot disturb what
+   * another wrote. */
+  measure: z.string().min(1),
+  /** Required, and the only identifier that is. SUDOP addresses every
+   * beneficiary by NIP and three quarters of them have nothing else, so this is
+   * what a second run finds the node by. */
+  nip: identifierField(normalizeNip, isValidNip, "NIP").refine(
+    (value): value is string => !!value,
+    { message: "Beneficjent musi mieć NIP" },
+  ),
+  krs: z.string().min(1).optional(),
+  owner: aidOwnerSchema.optional(),
+  name: z.string().min(1),
+  teryt: z.string().optional(),
+  /** Whether the beneficiary is a company in KRS or a natural person trading
+   * under their own name, as the biała lista reports it. It decides what gets
+   * published, not what gets stored - see `ingest/aid`. */
+  soleTrader: z.boolean().optional(),
+  /** PKD codes, in the same shape `ingest/company` takes them. */
+  activity: z.array(z.string()).optional(),
+  grants: z.array(aidGrantSchema).min(1),
+});
+
+export type AidRequest = z.infer<typeof aidRequestSchema>;
+
 /** Fields a user may propose for a person node, whether creating a new one
  * or editing an existing one.
  *

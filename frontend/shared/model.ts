@@ -101,6 +101,25 @@ export interface Edge extends PageBase<EdgeType> {
   elected?: boolean;
   term?: string;
   by_election?: boolean;
+
+  /** The aid programme an `aid` edge rolls up, as SUDOP numbers it
+   * ("SA.116730"). Part of what the edge asserts - one institution can pay a
+   * company under two unrelated programmes - so it discriminates the document
+   * id, see `EDGE_SEMANTICS` in server/utils/edges.ts. */
+  aidMeasure?: string;
+  /** Ekwiwalent dotacji brutto, in złoty, summed over every decision the edge
+   * rolls up.
+   *
+   * The gross grant equivalent and not the nominal value, because the nominal
+   * value of an odroczenie składki is the whole deferred contribution while the
+   * benefit is only the interest nobody paid. Mixing the two in one ranking
+   * puts whoever deferred the most at the top, which is not who got the most.
+   */
+  aidGross?: number;
+  /** How many SUDOP decisions the edge rolls up. A count, not a list: the
+   * decisions themselves are not nodes, and eight of them are eight rows of one
+   * report rather than eight facts about the pair. */
+  aidDecisions?: number;
 }
 
 export type ElectionPosition =
@@ -177,7 +196,8 @@ export type EdgeType =
   | "owns"
   | "comment"
   | "election"
-  | "tagged";
+  | "tagged"
+  | "aid";
 
 export const nodeTypeIcon: Record<NodeType, string> = {
   person: "mdi-account-outline",
