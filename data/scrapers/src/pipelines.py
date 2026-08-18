@@ -36,10 +36,12 @@ from scrapers.krs.updates import KRSUpdates
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Regions
 from scrapers.pkw.process import PeoplePKW
+from scrapers.sudop.pipelines import AidPayloads, SudopAid, SudopBeneficiaries
 from scrapers.wiki.process_articles import ProcessWiki
 from scrapers.wiki.process_articles_ner import ProcessWikiNer
 
 PIPELINES = [
+    AidPayloads,
     CommitteeParties,
     ArticleDoneUrls,
     ArticleDomainSelectors,
@@ -78,6 +80,8 @@ PIPELINES = [
     PeoplePayloads,
     PeoplePKW,
     PeopleKMGP,
+    SudopAid,
+    SudopBeneficiaries,
     PostalCodes,
     ProcessWiki,
     ProcessWikiNer,

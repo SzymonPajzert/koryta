@@ -27,7 +27,9 @@ class NumpyEncoder(json.JSONEncoder):
 class Args:
     endpoint: str
     submit: bool
-    type: typing.Literal["person", "company", "region", "score", "extraction"]
+    type: typing.Literal[
+        "person", "company", "region", "score", "extraction", "aid"
+    ]
     database: str
     limit: int | None
     offset: int | None
@@ -44,7 +46,7 @@ def parse_args() -> Args:
     parser.add_argument("--submit", action="store_true", help="Submit data to the API")
     parser.add_argument(
         "--type",
-        choices=["person", "company", "region", "score", "extraction"],
+        choices=["person", "company", "region", "score", "extraction", "aid"],
         help="Entity type to query",
     )
     parser.add_argument(
@@ -111,6 +113,8 @@ class Uploader:
             return ExtractionUploader(args)
         if args.type == "score":
             return ScoreUploader(args)
+        if args.type == "aid":
+            return AidUploader(args)
         return Uploader(args)
 
     def submit_entity(self, payload) -> requests.Response:
@@ -234,6 +238,21 @@ class CompanyUploader(Uploader):
             current_target_url,
             payload,
         )
+
+
+class AidUploader(Uploader):
+    """Submits public-aid rollups to `/api/ingest/aid`.
+
+    One request per beneficiary, carrying every grant it received under the
+    measure. The endpoint writes the beneficiary, whichever granting
+    institutions it has not seen before, and one edge per (institution,
+    beneficiary) pair - so a payload with eight grants is one request and nine
+    documents, rather than the eight requests a per-decision ingest would be.
+    """
+
+    @typing.override
+    def submit_entity(self, payload):
+        return self.submit_payload(f"{self.args.endpoint}/api/ingest/aid", payload)
 
 
 class PersonUploader(CompanyUploader):
