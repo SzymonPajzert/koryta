@@ -49,7 +49,13 @@ export interface Edge {
     | "owns"
     | "comment"
     | "election"
-    | "tagged";
+    | "tagged"
+    // Not a relation anybody wrote down, and not a document in `edges`: it is
+    // worked out from two `election` edges that name the same list. See
+    // `shared/graph/coCandidates.ts`. It exists only in a `GraphLayout`, which
+    // is why it is on this union and not on `EdgeType` in `shared/model.ts` -
+    // nothing may ever try to store one.
+    | "co_candidate";
 
   traverse?: TraversePolicy;
   content?: string;

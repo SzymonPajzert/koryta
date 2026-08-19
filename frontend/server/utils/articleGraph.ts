@@ -7,6 +7,7 @@ import {
   getNodesNoStats,
   type GraphLayout,
 } from "~~/shared/graph/util";
+import { withCoCandidates } from "~~/shared/graph/coCandidates";
 import { fetchEdgesClose, fetchNodesByIds } from "~~/server/utils/fetch";
 import {
   edgesCitingArticles,
@@ -151,5 +152,12 @@ export async function graphForArticles(
     regions,
   );
 
-  return { edges, nodes: getNodes(nodeGroups, nodesNoStats), nodeGroups };
+  // A story rarely cites a candidacy, so this usually adds nothing; when one
+  // does, two of its people who stood on the same list are joined to each other
+  // here exactly as they are on a region page.
+  return withCoCandidates({
+    edges,
+    nodes: getNodes(nodeGroups, nodesNoStats),
+    nodeGroups,
+  });
 }

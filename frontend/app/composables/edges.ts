@@ -1,5 +1,5 @@
 import type { Node, Edge, EdgeType, ElectionPosition } from "~~/shared/model";
-import type { TraversePolicy } from "~~/shared/graph/model";
+import type { TraversePolicy, Edge as GraphEdge } from "~~/shared/graph/model";
 
 export type EdgeNode = {
   richNode: Node;
@@ -48,6 +48,20 @@ export const edgeTypeLabels: Record<string, string> = {
   tagged: "Dotyczy tematu",
 };
 
+/** Whether this is a relation somebody wrote down.
+ *
+ * `/api/graph/local` also returns the `co_candidate` edges worked out from two
+ * candidacies naming the same electoral list. Those belong on the canvas, drawn
+ * dashed as the inference they are; a list of connections offers an edit link
+ * and a source per row, and there is neither behind one of these. Nothing on a
+ * person's own page can produce one today - a co-candidate is two hops away,
+ * and a pair already joined by a stored edge is skipped - so this is the
+ * guarantee rather than a filter that currently removes anything.
+ */
+function isRecorded(edge: GraphEdge): edge is GraphEdge & { type: EdgeType } {
+  return edge.type !== "co_candidate";
+}
+
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   const { user } = useAuthState();
   const { data: localData, refresh: refreshLocal } = await authFetch(
@@ -63,7 +77,9 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   );
 
   const nodes = computed(() => localData.value?.nodes || {});
-  const edges = computed(() => localData.value?.edges || []);
+  const edges = computed(() =>
+    (localData.value?.edges || []).filter(isRecorded),
+  );
 
   const sources = computed<EdgeNode[]>(() => {
     const id = toValue(nodeID);

@@ -38,7 +38,11 @@
 
 <script setup lang="ts">
 import { defineConfigs, SimpleLayout } from "v-network-graph";
-import type { EventHandlers, NodeEvent } from "v-network-graph";
+import type {
+  EventHandlers,
+  NodeEvent,
+  Edge as CanvasEdge,
+} from "v-network-graph";
 import { useSimulationStore } from "@/stores/simulation";
 import type { NodeType } from "~~/shared/model";
 import type { Node as GraphNode, Edge } from "~~/shared/graph/model";
@@ -105,6 +109,13 @@ const eventHandlers: EventHandlers = {
   "node:dblclick": handleNodeClick,
 };
 
+/** Whether this line is an inference rather than a recorded relation.
+ *
+ * v-network-graph hands a style callback its own edge type, which is `source`,
+ * `target` and an index signature, so `type` arrives as `any` and the check is
+ * written once here rather than three times inline. */
+const isDerived = (edge: CanvasEdge) => edge.type === "co_candidate";
+
 const configs = reactive(
   defineConfigs({
     node: {
@@ -136,6 +147,15 @@ const configs = reactive(
       },
     },
     edge: {
+      // A `co_candidate` edge is drawn thin, grey and dashed, and every other
+      // edge keeps v-network-graph's defaults. Nobody wrote that relation down:
+      // it is worked out from two candidacies naming the same list, so it must
+      // not look like the lines a reader can click through to a source.
+      normal: {
+        width: (edge) => (isDerived(edge) ? 1.5 : 2),
+        color: (edge) => (isDerived(edge) ? "#9e9e9e" : "#4466cc"),
+        dasharray: (edge) => (isDerived(edge) ? "4 3" : 0),
+      },
       label: {
         fontSize: 11,
         color: "000",

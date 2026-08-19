@@ -7,6 +7,7 @@ import {
   getGraphBFS,
   type GraphLayout,
 } from "~~/shared/graph/util";
+import { withCoCandidates } from "~~/shared/graph/coCandidates";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import type { Edge, Person, Company, Region } from "~~/shared/model";
 import { getQuery, getRouterParam, type H3Event } from "h3";
@@ -108,12 +109,16 @@ export async function getLocalGraph(
     (e) => validLocalIds.has(e.source) && validLocalIds.has(e.target),
   );
 
-  return {
+  // Last, and after the node groups: two people who stood on the same list are
+  // joined to each other rather than only to their district, but only when the
+  // BFS above already put both of them on the page, and never in a way that
+  // changes what counts as connected. See `shared/graph/coCandidates.ts`.
+  return withCoCandidates({
     edges: localEdges,
     nodes: localNodes,
     // Filter node groups based on the fetched subgraph nodes if needed, or simply return empty if they aren't utilized.
     nodeGroups: nodeGroupsRaw.filter((g) => validLocalIds.has(g.id)),
-  } as GraphLayout;
+  } as GraphLayout);
 }
 
 /** Whether the caller asked to be shown things that are not approved yet.

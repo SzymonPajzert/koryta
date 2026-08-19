@@ -9,6 +9,15 @@ import type { Node as GraphNode } from "~~/shared/graph/model";
 
 const vuetify = createVuetify({ components, directives });
 
+/** The per-edge style callbacks Canvas.vue installs, as they are stored on the
+ * resolved config. v-network-graph calls each of these with the edge it is
+ * about to draw. */
+type EdgeStroke = {
+  width: (edge: { type: string }) => number;
+  color: (edge: { type: string }) => string;
+  dasharray: (edge: { type: string }) => string | number;
+};
+
 const twoPeople: Record<string, GraphNode> = {
   p1: { name: "Anna Nowak", type: "circle", color: "#000" },
   p2: { name: "Krzysztof Wójcik", type: "circle", color: "#000" },
@@ -78,5 +87,38 @@ describe("GraphCanvas", () => {
     expect(
       component.find(".v-ng-node-label .v-ng-text-background").exists(),
     ).toBe(true);
+  });
+
+  it("draws a derived co-candidate edge dashed, and a recorded one solid", async () => {
+    // The honesty requirement, checked through v-network-graph's own config
+    // resolution rather than by reading the callbacks back: a line worked out
+    // from two candidacies naming the same list must not look like the lines a
+    // reader can click through to a source.
+    const component = await mountSuspended(GraphCanvas, {
+      props: {
+        nodes: twoPeople,
+        edges: [
+          { source: "p1", target: "p2", type: "co_candidate" },
+          { source: "p2", target: "p1", type: "connection" },
+        ],
+        ready: true,
+        focusNodeId: "p1",
+      },
+      global: { plugins: [vuetify] },
+    });
+
+    const { normal } = (
+      component.vm as unknown as {
+        configs: { edge: { normal: EdgeStroke } };
+      }
+    ).configs.edge;
+
+    const derived = { source: "p1", target: "p2", type: "co_candidate" };
+    const recorded = { source: "p2", target: "p1", type: "connection" };
+
+    expect(normal.dasharray(derived)).toBe("4 3");
+    expect(normal.dasharray(recorded)).toBe(0);
+    expect(normal.width(derived)).toBeLessThan(normal.width(recorded));
+    expect(normal.color(derived)).not.toBe(normal.color(recorded));
   });
 });
