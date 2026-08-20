@@ -52,6 +52,53 @@ def check_auto_approved():
 RECENT_TRESHOLD = "2023-10-15"
 
 
+def iso_date(value: str) -> str:
+    """A `YYYY-MM-DD` date, checked, and handed on as the string it came as.
+
+    The dates it is compared against are the register's own `employed_start`
+    strings, and the comparison is a string one, so the flag has to stay a
+    string - but it has to be a string in that shape. `--employed-after
+    01-10-2024` sorts below every ISO date there is, so before this it did not
+    narrow the run by a single person and said nothing about it.
+    """
+    return date.fromisoformat(value).isoformat()
+
+
+def is_public(flags: pd.Series) -> pd.Series:
+    """A column of "is this company publicly owned" as actual booleans.
+
+    `astype(bool)` is not that. A column that came back as text - a frame read
+    without `CompaniesKRS`'s pinned dtypes, a hand-made CSV - has `astype(bool)`
+    call the string "False" true, and every company in the register would then
+    be public, so `--public-employer` would filter nothing while looking like it
+    had. Missing reads as false: not knowing who owns a company is not knowing
+    that the public does.
+    """
+    if pd.api.types.is_bool_dtype(flags) or pd.api.types.is_numeric_dtype(flags):
+        return flags.fillna(False).astype(bool)
+    # Anything else is read as text, which on this pandas is the dtype a column
+    # of Python strings gets - `object` is not the only way text arrives.
+    return flags.map(
+        lambda value: value is True or str(value).strip().lower() in {"true", "1"}
+    ).astype(bool)
+
+
+def krs_ids(ids: pd.Series) -> pd.Series:
+    """KRS ids as the zero-padded ten-character strings everything else uses.
+
+    A KRS id is only itself zero-padded and the employment records carry it
+    that way. `CompaniesKRS` pins the column to a string so a normal run needs
+    none of this, but a frame that arrived another way has had its leading
+    zeros inferred away - and as a float, `str()` leaves a ".0" on the end, so
+    padding alone turns 120987 into "0120987.0" rather than back into
+    "0000120987". An id that matches no employment record reads as "nobody
+    works anywhere public", which is a wrong answer rather than an error.
+    """
+    if pd.api.types.is_float_dtype(ids):
+        ids = ids.astype("Int64")
+    return ids.astype(str).str.zfill(10)
+
+
 class Extract(Pipeline):
     filename = None
 
@@ -59,6 +106,7 @@ class Extract(Pipeline):
     companies: CompaniesKRS
     teryt: Teryt
     _relevant_companies: set[str] | None = None
+    _public_companies: set[str] | None = None
 
     MATCHED_ODDS = 100000  # 1/odds is the probability the person is an accidental match
     EXPECTED_SCORE = 10.5  # Expected score calculated by analysis.people script
@@ -92,9 +140,22 @@ class Extract(Pipeline):
         )
         parser.add_argument(
             "--employed-after",
-            help="Extract people who were employed after the given date",
+            help="Extract people who were employed after the given date (YYYY-MM-DD)",
+            type=iso_date,
             default=None,
             required=False,
+        )
+        parser.add_argument(
+            "--public-employer",
+            help="Count only jobs at companies the register puts in public "
+            "hands - the state, a voivodeship, a powiat or a gmina, and "
+            "whatever they own down the chain. Meant for --employed-after: "
+            "somebody who took a job at a private company last year is not "
+            "what the site is about. Pair it with --ignore-elections unless "
+            "the run should also require a candidacy.",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
         )
         parser.add_argument(
             "--currently-employed",
@@ -175,6 +236,10 @@ class Extract(Pipeline):
         return self.args.currently_employed
 
     @property
+    def public_employer(self) -> bool:
+        return self.args.public_employer
+
+    @property
     def ignore_elections(self) -> bool:
         return self.args.ignore_elections
 
@@ -209,13 +274,54 @@ class Extract(Pipeline):
         self._relevant_companies = result
         return result
 
+    def public_companies(self, ctx) -> set[str]:
+        """KRS ids of the companies the register puts in public hands.
+
+        `is_public` is `CompaniesKRS`'s own answer rather than a guess made
+        here: a founding ministry named in the register entry, an owner called
+        GMINA/MIASTO/POWIAT/WOJEWODZTWO, one of the hardcoded state-company
+        lists, or a company owned by something that is already public - see
+        `compute_public_krss` and `propagate_is_public` there.
+
+        False is "the register never said so" rather than "private", and the
+        case that costs most is a state-controlled S.A.: KRS names shareholders
+        only for a sp. z o.o. or a sole shareholder, so ORLEN and PKP S.A. are
+        public here while ENERGA and PKP CARGO, which they control, carry no
+        owner at all and are not. Somebody whose only recent job is at one of
+        those is left out, which is the trade `--public-employer` makes - the
+        register's answer rather than a guess off the company's name.
+        """
+        if self._public_companies is not None:
+            return self._public_companies
+
+        companies = self.companies.read_or_process(ctx)
+        if "is_public" not in companies:
+            raise ValueError(
+                "--public-employer needs the is_public column CompaniesKRS "
+                "writes, and the company data read here has none. Rebuild it "
+                "with --refresh CompaniesKRS."
+            )
+
+        public = companies.loc[is_public(companies["is_public"]), "krs"]
+        self._public_companies = set(krs_ids(public))
+        print(f"{len(self._public_companies)} of {len(companies)} companies are public")
+        return self._public_companies
+
     def relevant_employment(self, ctx):
         relevant_companies = self.relevant_companies(ctx)
+        public_companies = self.public_companies(ctx) if self.public_employer else None
 
         def works_in_relevant(employment_list) -> int:
             result = 0
             for emp in as_sequence(employment_list):
-                if emp.get("employed_krs") in relevant_companies or self.all:
+                krs = emp.get("employed_krs")
+                # A job at a company nobody has established the ownership of
+                # counts as not public, not as unknown: the flag is there to
+                # leave out the private sector, and a company the register was
+                # never asked about is a company we cannot say that of.
+                if public_companies is not None and krs not in public_companies:
+                    continue
+                if krs in relevant_companies or self.all:
                     if self.employed_after:
                         start_date = emp.get("employed_start")
                         if start_date is not None and start_date > self.employed_after:
@@ -279,9 +385,17 @@ class Extract(Pipeline):
         auto_approved = people.apply(self.auto_approved_func(), axis=1)
         # TODO handle a condition here that --all can be just used as
         # a placeholder but it doesn't disable all the filters
+        # Every flag that narrows what counts has to be named here, or --all
+        # keeps listing everybody and the narrowing silently does nothing.
         use_all = (
             1
-            if (self.all and not self.employed_after and not self.election_after)
+            if (
+                self.all
+                and not self.employed_after
+                and not self.election_after
+                and not self.public_employer
+                and not self.currently_employed
+            )
             else 0
         )
 
