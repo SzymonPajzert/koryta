@@ -12,6 +12,10 @@ from scrapers.stores import Context, Pipeline, ProcessPolicy
 class MockPipeline(Pipeline):
     filename = "mock"
 
+    #: `PeoplePayloads` asks its source how narrow the run is, and the source
+    #: it asks is `Extract`, which is what this stands in for.
+    min_score = None
+
     def __init__(self, data):
         super().__init__()
         self.data = pd.DataFrame(data)

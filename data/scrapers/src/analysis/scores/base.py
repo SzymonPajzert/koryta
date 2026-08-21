@@ -137,6 +137,22 @@ class Population:
     def has_candidacy(self, name: str) -> bool:
         return bool(self.candidacies.get(name))
 
+    def with_shortlist(self, names: typing.Iterable[str]) -> "Population":
+        """The same population, asked about these people instead.
+
+        Whoever the caller names, the already-judged are dropped from the
+        shortlist: a seed is the answer key, and a model that scored one would
+        be marking its own homework. Duplicates go with them - the site's
+        export is read twice on a day it was dumped twice, and a name rated
+        twice is rated no differently.
+        """
+        return dataclasses.replace(
+            self,
+            shortlist=[
+                name for name in dict.fromkeys(names) if name not in self.seed_weights
+            ],
+        )
+
 
 def banded_scores(raw: typing.Mapping[str, float]) -> dict[str, int]:
     """Put a model's raw output on the shared 1-5 scale.
@@ -225,111 +241,127 @@ class PeopleScoreModel(Pipeline):
         return df.astype({"score": "int32"})
 
     def population(self, ctx: Context) -> Population:
-        people = self.people_payloads.read_or_process(ctx)
-        koryta = self.people_koryta.read_or_process(ctx)
-        votes = self.people_votes.read_or_process(ctx)
-        companies = self.companies_krs.read_or_process(ctx)
-
-        node_ids = dict(zip(koryta["full_name"], koryta["id"]))
-        human_votes = self.human_votes(votes, koryta)
-
-        employments: dict[str, list[Employment]] = {}
-        candidacies: dict[str, list[Candidacy]] = {}
-        roster: dict[str, list[str]] = {}
-
-        for _, row in people.iterrows():
-            name = str(row.get("name"))
-            posts = [
-                Employment(
-                    krs=str(company["krs"]),
-                    role=company.get("role"),
-                    start=company.get("start"),
-                    end=company.get("end"),
-                )
-                for company in iter_dicts(row.get("companies"))
-                if company.get("krs")
-            ]
-            employments[name] = posts
-            for post in posts:
-                roster.setdefault(post.krs, []).append(name)
-
-            candidacies[name] = [
-                Candidacy(
-                    year=election.get("election_year"),
-                    teryt=election.get("teryt"),
-                    party=election.get("party"),
-                    committee=election.get("committee"),
-                )
-                for election in iter_dicts(row.get("elections"))
-            ]
-
-        seed_weights: dict[str, float] = {}
-        shortlist: list[str] = []
-        for _, entry in koryta.iterrows():
-            name = str(entry.get("full_name"))
-            is_public = entry.get("is_public", False)
-            if pd.isna(is_public):
-                is_public = False
-
-            vote = human_votes.get(str(entry.get("id")), 0.0)
-            if is_public:
-                seed_weights[name] = max(seed_weights.get(name, 0.0), IS_PUBLIC_SCORE)
-            elif vote:
-                seed_weights[name] = vote
-            elif name in employments:
-                shortlist.append(name)
-
-        return Population(
-            people=people,
-            node_ids=node_ids,
-            employments=employments,
-            candidacies=candidacies,
-            roster=roster,
-            companies=self.company_facts(companies),
-            seed_weights=seed_weights,
-            shortlist=shortlist,
+        return population_from(
+            people=self.people_payloads.read_or_process(ctx),
+            koryta=self.people_koryta.read_or_process(ctx),
+            votes=self.people_votes.read_or_process(ctx),
+            companies=self.companies_krs.read_or_process(ctx),
         )
 
-    @staticmethod
-    def human_votes(votes: pd.DataFrame, koryta: pd.DataFrame) -> dict[str, float]:
-        """Node id -> the sum of what people voted on it.
 
-        `KorytaPeople.votes_interesting` would be the obvious source and is the
-        wrong one: it is the site's own aggregate, which includes the
-        pipeline's vote. A model seeded on it would be seeded on its own output
-        and, worse, `shortlist` would drop everybody the pipeline had ever
-        scored, so no run after the first could revise a score.
-        """
-        if votes.empty or "person_koryta_id" not in votes:
-            return {}
-        totals: dict[str, float] = {}
-        for _, row in votes.iterrows():
-            target = row.get("person_koryta_id")
-            interesting = row.get("interesting")
-            # NaN rather than a blank is what a vote with no node on it looks
-            # like once pandas has been through it, and NaN is truthy - see
-            # `KorytaVotes.process`, which is where those get dropped now.
-            if pd.isna(target) or interesting is None or pd.isna(interesting):
-                continue
-            node_id = str(target).strip()
-            if not node_id:
-                continue
-            totals[node_id] = totals.get(node_id, 0.0) + float(interesting)
-        return totals
+def population_from(
+    people: pd.DataFrame,
+    koryta: pd.DataFrame,
+    votes: pd.DataFrame,
+    companies: pd.DataFrame,
+) -> Population:
+    """The population, from the four frames it is unpacked out of.
 
-    @staticmethod
-    def company_facts(companies: pd.DataFrame) -> dict[str, CompanyFacts]:
-        if companies.empty or "krs" not in companies:
-            return {}
-        facts = {}
-        for _, row in companies.iterrows():
-            krs = row.get("krs")
-            if not krs or pd.isna(krs):
-                continue
-            is_public = row.get("is_public", False)
-            facts[str(krs)] = CompanyFacts(
-                name=row.get("name"),
-                teryt=str(row["teryt_code"]) if row.get("teryt_code") else None,
-                is_public=bool(is_public) if not pd.isna(is_public) else False,
+    Taken apart from the pipeline that usually reads them because the payloads
+    are not always on disk when somebody wants them scored: `PeoplePayloads`
+    rates the frame it has just built, in the same process, and asking a
+    pipeline for it there would rebuild it underneath the run doing the rating.
+    """
+    node_ids = dict(zip(koryta["full_name"], koryta["id"]))
+    votes_by_node = human_votes(votes)
+
+    employments: dict[str, list[Employment]] = {}
+    candidacies: dict[str, list[Candidacy]] = {}
+    roster: dict[str, list[str]] = {}
+
+    for _, row in people.iterrows():
+        name = str(row.get("name"))
+        posts = [
+            Employment(
+                krs=str(company["krs"]),
+                role=company.get("role"),
+                start=company.get("start"),
+                end=company.get("end"),
             )
-        return facts
+            for company in iter_dicts(row.get("companies"))
+            if company.get("krs")
+        ]
+        employments[name] = posts
+        for post in posts:
+            roster.setdefault(post.krs, []).append(name)
+
+        candidacies[name] = [
+            Candidacy(
+                year=election.get("election_year"),
+                teryt=election.get("teryt"),
+                party=election.get("party"),
+                committee=election.get("committee"),
+            )
+            for election in iter_dicts(row.get("elections"))
+        ]
+
+    seed_weights: dict[str, float] = {}
+    shortlist: list[str] = []
+    for _, entry in koryta.iterrows():
+        name = str(entry.get("full_name"))
+        is_public = entry.get("is_public", False)
+        if pd.isna(is_public):
+            is_public = False
+
+        vote = votes_by_node.get(str(entry.get("id")), 0.0)
+        if is_public:
+            seed_weights[name] = max(seed_weights.get(name, 0.0), IS_PUBLIC_SCORE)
+        elif vote:
+            seed_weights[name] = vote
+        elif name in employments:
+            shortlist.append(name)
+
+    return Population(
+        people=people,
+        node_ids=node_ids,
+        employments=employments,
+        candidacies=candidacies,
+        roster=roster,
+        companies=company_facts(companies),
+        seed_weights=seed_weights,
+        shortlist=shortlist,
+    )
+
+
+def human_votes(votes: pd.DataFrame) -> dict[str, float]:
+    """Node id -> the sum of what people voted on it.
+
+    `KorytaPeople.votes_interesting` would be the obvious source and is the
+    wrong one: it is the site's own aggregate, which includes the pipeline's
+    vote. A model seeded on it would be seeded on its own output and, worse,
+    `shortlist` would drop everybody the pipeline had ever scored, so no run
+    after the first could revise a score.
+    """
+    if votes.empty or "person_koryta_id" not in votes:
+        return {}
+    totals: dict[str, float] = {}
+    for _, row in votes.iterrows():
+        target = row.get("person_koryta_id")
+        interesting = row.get("interesting")
+        # NaN rather than a blank is what a vote with no node on it looks like
+        # once pandas has been through it, and NaN is truthy - see
+        # `KorytaVotes.process`, which is where those get dropped now.
+        if pd.isna(target) or interesting is None or pd.isna(interesting):
+            continue
+        node_id = str(target).strip()
+        if not node_id:
+            continue
+        totals[node_id] = totals.get(node_id, 0.0) + float(interesting)
+    return totals
+
+
+def company_facts(companies: pd.DataFrame) -> dict[str, CompanyFacts]:
+    if companies.empty or "krs" not in companies:
+        return {}
+    facts = {}
+    for _, row in companies.iterrows():
+        krs = row.get("krs")
+        if not krs or pd.isna(krs):
+            continue
+        is_public = row.get("is_public", False)
+        facts[str(krs)] = CompanyFacts(
+            name=row.get("name"),
+            teryt=str(row["teryt_code"]) if row.get("teryt_code") else None,
+            is_public=bool(is_public) if not pd.isna(is_public) else False,
+        )
+    return facts

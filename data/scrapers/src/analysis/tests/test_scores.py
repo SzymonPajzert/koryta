@@ -18,6 +18,7 @@ from analysis.scores.base import (
     Population,
     banded_scores,
 )
+from analysis.scores.company import company_score_map
 from analysis.scores.turnover import same_region, year_of
 from entities.person import is_pipeline_uid
 from scrapers.stores import Pipeline
@@ -213,6 +214,29 @@ class TestCompanyScores:
         )
 
         assert scores == {"Anna": 2}
+
+    def test_a_company_is_rated_by_everybody_in_it_it_has_a_rating_for(self):
+        payloads = pd.DataFrame.from_records(
+            [
+                {"name": "Anna", "companies": [{"krs": "1"}, {"krs": "2"}]},
+                {"name": "Bogdan", "companies": [{"krs": "1"}]},
+                {"name": "Celina", "companies": [{"krs": "2"}]},
+            ]
+        )
+
+        by_krs = company_score_map(payloads, {"Anna": 5, "Bogdan": 5})
+
+        # Both are somewhere Anna sits, and the confidence factor means the
+        # second rating counts: nobody has rated Celina, so company 2 is one
+        # person's word against company 1's two.
+        assert by_krs["1"] > by_krs["2"]
+
+    def test_a_person_nobody_rated_says_nothing_about_their_employer(self):
+        payloads = pd.DataFrame.from_records(
+            [{"name": "Celina", "companies": [{"krs": "3"}]}]
+        )
+
+        assert company_score_map(payloads, {}) == {}
 
     def test_a_vote_on_something_that_is_not_a_person_is_ignored(self):
         # Places get voted on too, and a node deleted since the export is gone

@@ -185,6 +185,19 @@ class Extract(Pipeline):
             action=argparse.BooleanOptionalAction,
         )
         parser.add_argument(
+            "--min-score",
+            type=int,
+            # The bands `analysis.scores.base.SCORE_BANDS` hands out, spelled
+            # out rather than imported: the models are built on the payloads,
+            # which are built on this, so importing them here is a cycle.
+            choices=[1, 2, 3, 4, 5],
+            help="Only list people the scoring models rate this highly, on "
+            "the same 1-5 scale the site shows. Applied one pipeline later, by "
+            "PeoplePayloads - see its `min_score` property.",
+            default=None,
+            required=False,
+        )
+        parser.add_argument(
             "--rejestrio-id",
             help="Extract a person with a given RejestrIO id",
             default=None,
@@ -226,6 +239,17 @@ class Extract(Pipeline):
     @property
     def rejestrio_id(self) -> str | None:
         return self.args.rejestrio_id
+
+    @property
+    def min_score(self) -> int | None:
+        """The lowest band a person can be rated and still be listed, if any.
+
+        Defined with the rest of the filters that decide who this run is about,
+        and applied by `PeoplePayloads` rather than here, because the models
+        that do the rating read a person's employers and candidacies in the
+        payload shapes - which is one pipeline further on than this.
+        """
+        return self.args.min_score
 
     @property
     def employed_after(self) -> bool:
