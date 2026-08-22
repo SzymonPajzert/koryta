@@ -126,7 +126,7 @@ class PeopleAffairTags(IncrementalJsonlPipeline[PersonAffairTags]):
     """Summarize, per person, the affair/event tags of their articles."""
 
     filename = "people_affair_tags"
-    backup_to_shared_cache = False  # small derived summary, local-only
+    read_backup = write_backup = False  # small derived summary, local-only
 
     mentions: ArticlePersonMentions
 

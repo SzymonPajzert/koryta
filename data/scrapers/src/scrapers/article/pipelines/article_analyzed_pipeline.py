@@ -44,7 +44,7 @@ _VERIFICATION_FIELDS = {"verified", "verification_verdict", "verification_reason
 
 class ArticleAnalyzed(IncrementalJsonlPipeline[ArticleAnalyzedRecord]):
     filename = "article_analyzed"
-    backup_to_shared_cache = False  # large incremental output, keep local-only
+    read_backup = write_backup = False  # large incremental output, keep local-only
     # No interrupt_exceptions: a Ctrl+C during the merge still flushes via the
     # base's finally, then propagates (this step is cheap to re-run).
 

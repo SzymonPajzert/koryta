@@ -53,7 +53,7 @@ class ParseTask:
 
 class ArticleParsed(IncrementalJsonlPipeline[ParsedArticleRecord]):
     filename = "article_parsed"
-    backup_to_shared_cache = False  # ~20GB streamed, keep local-only
+    read_backup = write_backup = False  # ~20GB streamed, keep local-only
     interrupt_exceptions = (InterruptedError,)
     interrupt_note = "will save partial data"
 

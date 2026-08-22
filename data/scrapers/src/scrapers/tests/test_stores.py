@@ -15,6 +15,7 @@ from scrapers.stores import (
     LocalFile,
     Pipeline,
     ProcessPolicy,
+    Selection,
 )
 from scrapers.stores.file import DownloadableFile, VersionedBackup
 
@@ -33,15 +34,38 @@ class TestStores(unittest.TestCase):
         self.assertEqual(df_fallback.filename, "data.csv")
 
 
+class TestSelection(unittest.TestCase):
+    def test_parse_splits_on_the_colon_prefix(self):
+        selection = Selection.parse(["A", ":B", " C ", "", ":all"])
+        self.assertEqual(selection.selected, {"A", "C"})
+        self.assertEqual(selection.deselected, {"B", "all"})
+
+    def test_unnamed_pipelines_take_the_default(self):
+        selection = Selection.parse(["A"])
+        self.assertTrue(selection.decide("A", default=False))
+        self.assertFalse(selection.decide("B", default=False))
+        self.assertTrue(selection.decide("B", default=True))
+
+    def test_all_and_colon_all(self):
+        self.assertTrue(Selection.parse(["all"]).decide("A", default=False))
+        self.assertFalse(Selection.parse([":all"]).decide("A", default=True))
+
+    def test_deselection_wins(self):
+        # ...whichever order the flags came in, and even against 'all'.
+        self.assertFalse(Selection.parse(["A", ":A"]).decide("A", default=True))
+        self.assertFalse(Selection.parse(["all", ":A"]).decide("A", default=True))
+        self.assertTrue(Selection.parse(["all", ":A"]).decide("B", default=False))
+
+
 class TestProcessPolicy(unittest.TestCase):
     def test_with_default(self):
         # Default behavior
         policy = ProcessPolicy.with_default()
-        self.assertEqual(policy.refresh_pipelines, set())
+        self.assertEqual(policy.refresh.selected, set())
 
         # With explicit values
         policy = ProcessPolicy.with_default(refresh=["A"])
-        self.assertEqual(policy.refresh_pipelines, {"A"})
+        self.assertEqual(policy.refresh.selected, {"A"})
 
     def test_should_refresh(self):
         policy = ProcessPolicy.with_default(refresh=["A"])
@@ -54,18 +78,25 @@ class TestProcessPolicy(unittest.TestCase):
 
     def test_should_refresh_logic(self):
         # Refresh all except A
-        policy = ProcessPolicy.with_default(refresh=["all"], exclude_refresh=["A"])
+        policy = ProcessPolicy.with_default(refresh=["all", ":A"])
         self.assertTrue(policy.should_refresh("B"))
         self.assertFalse(policy.should_refresh("A"))
 
         # Refresh explicit A, exclude A (exclude takes precedence)
-        policy = ProcessPolicy.with_default(refresh=["A"], exclude_refresh=["A"])
+        policy = ProcessPolicy.with_default(refresh=["A", ":A"])
         self.assertFalse(policy.should_refresh("A"))
 
         # Refresh explicit A, exclude B
-        policy = ProcessPolicy.with_default(refresh=["A"], exclude_refresh=["B"])
+        policy = ProcessPolicy.with_default(refresh=["A", ":B"])
         self.assertTrue(policy.should_refresh("A"))
         self.assertFalse(policy.should_refresh("B"))
+
+    @patch("scrapers.stores.backup_disabled", return_value=True)
+    def test_disable_backup_env_deselects_both_directions(self, _mock_disabled):
+        """DISABLE_BACKUP is folded in as ':all', so it beats --read-backup."""
+        policy = ProcessPolicy.with_default(read_backup=["all"], write_backup=["A"])
+        self.assertFalse(policy.read_backup.decide("A", default=True))
+        self.assertFalse(policy.write_backup.decide("A", default=True))
 
 
 # Dummy Pipelines for testing
@@ -246,13 +277,15 @@ class TestPipeline(unittest.TestCase):
         mock_process.assert_not_called()
         pd.testing.assert_frame_equal(result, stale_df)
 
-    @patch("scrapers.stores.backup_disabled", return_value=True)
-    def test_no_backup_skips_restore_and_reprocesses(self, _mock_disabled):
+    def test_no_backup_skips_restore_and_reprocesses(self):
         """
-        With backups disabled, a missing local output must be recomputed from
+        With reads deselected, a missing local output must be recomputed from
         source rather than restored from the shared backup (stale data).
         """
         pipeline = self._missing_output_pipeline()
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
+            read_backup=[":all"], write_backup=[":all"]
+        )
         stale_df = pd.DataFrame({"col": [9, 9]})
         backup_reads = []
 
@@ -883,10 +916,10 @@ class TestSharedCacheHooks(unittest.TestCase):
 
         self.assertFalse(ok)
 
-    @patch("scrapers.stores.backup_disabled", return_value=True)
-    def test_restore_output_skipped_when_backup_disabled(self, _mock_disabled):
+    def test_restore_output_skipped_when_reads_deselected(self):
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(read_backup=[":all"])
 
         ok = pipeline.restore_output_from_shared_cache(self.mock_ctx)
 
@@ -895,10 +928,10 @@ class TestSharedCacheHooks(unittest.TestCase):
 
     def test_upload_output_to_shared_cache(self):
         """upload_output_to_shared_cache streams the local output up, and only
-        when the pipeline opts in via backup_to_shared_cache."""
+        when the pipeline opts in via write_backup."""
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        pipeline.backup_to_shared_cache = True
+        pipeline.write_backup = True
 
         with (
             patch("scrapers.stores.VERSIONED_DIR", "/tmp/versioned"),
@@ -912,10 +945,10 @@ class TestSharedCacheHooks(unittest.TestCase):
         )
 
     def test_upload_output_skipped_when_local_only(self):
-        """Local-only pipelines (backup_to_shared_cache=False) never upload."""
+        """Local-only pipelines (write_backup=False) never upload."""
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        pipeline.backup_to_shared_cache = False
+        pipeline.write_backup = False
 
         ok = pipeline.upload_output_to_shared_cache(self.mock_ctx)
 
@@ -926,7 +959,7 @@ class TestSharedCacheHooks(unittest.TestCase):
         """No local output, no upload."""
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        pipeline.backup_to_shared_cache = True
+        pipeline.write_backup = True
 
         tmpdir = tempfile.mkdtemp()
         with patch("scrapers.stores.VERSIONED_DIR", tmpdir):
@@ -935,25 +968,24 @@ class TestSharedCacheHooks(unittest.TestCase):
         self.assertFalse(ok)
         self.mock_ctx.io.upload_backup_from_path.assert_not_called()
 
-    @patch("scrapers.stores.backup_disabled", return_value=True)
-    def test_upload_output_skipped_when_backup_disabled(self, _mock_disabled):
+    def test_upload_output_skipped_when_writes_deselected(self):
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        pipeline.backup_to_shared_cache = True
+        pipeline.write_backup = True
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(write_backup=[":all"])
 
         ok = pipeline.upload_output_to_shared_cache(self.mock_ctx)
 
         self.assertFalse(ok)
         self.mock_ctx.io.upload_backup_from_path.assert_not_called()
 
-    def test_force_download_overrides_local_only(self):
-        """--force-download-shared-cache restores even when the pipeline is
-        local-only (backup_to_shared_cache=False)."""
+    def test_read_backup_overrides_local_only(self):
+        """--read-backup restores even when the pipeline is local-only."""
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        pipeline.backup_to_shared_cache = False
+        pipeline.read_backup = pipeline.write_backup = False
         self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
-            force_download_shared_cache=True
+            read_backup=["DummyPipeline"]
         )
 
         with patch("scrapers.stores.VERSIONED_DIR", "/tmp/versioned"):
@@ -962,15 +994,26 @@ class TestSharedCacheHooks(unittest.TestCase):
         self.assertTrue(ok)
         self.mock_ctx.io.restore_backup_to_path.assert_called_once()
 
-    def test_force_upload_overrides_local_only(self):
-        """--force-upload-shared-cache uploads even when the pipeline is
-        local-only (backup_to_shared_cache=False)."""
+    def test_read_backup_names_one_pipeline_only(self):
+        """Naming one pipeline leaves the others on their own default."""
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        pipeline.backup_to_shared_cache = False
+        pipeline.read_backup = pipeline.write_backup = False
         self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
-            force_upload_shared_cache=True
+            read_backup=["SomeOtherPipeline"]
         )
+
+        ok = pipeline.restore_output_from_shared_cache(self.mock_ctx)
+
+        self.assertFalse(ok)
+        self.mock_ctx.io.restore_backup_to_path.assert_not_called()
+
+    def test_write_backup_overrides_local_only(self):
+        """--write-backup uploads even when the pipeline is local-only."""
+        pipeline = DummyPipeline()
+        pipeline.filename = "dummy"
+        pipeline.read_backup = pipeline.write_backup = False
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(write_backup=["all"])
 
         tmpdir = tempfile.mkdtemp()
         with patch("scrapers.stores.VERSIONED_DIR", tmpdir):
@@ -983,23 +1026,14 @@ class TestSharedCacheHooks(unittest.TestCase):
         self.assertTrue(ok)
         self.mock_ctx.io.upload_backup_from_path.assert_called_once()
 
-    @patch("scrapers.stores.backup_disabled", return_value=True)
-    def test_force_flags_still_respect_backup_disabled(self, _mock_disabled):
-        """--no-backup wins over the force flags."""
+    def test_read_and_write_are_decided_separately(self):
+        """The nightly's case: restore what is cached, publish nothing."""
         pipeline = DummyPipeline()
         pipeline.filename = "dummy"
-        pipeline.backup_to_shared_cache = False
-        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
-            force_download_shared_cache=True, force_upload_shared_cache=True
-        )
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(write_backup=[":all"])
 
-        dl = pipeline.restore_output_from_shared_cache(self.mock_ctx)
-        up = pipeline.upload_output_to_shared_cache(self.mock_ctx)
-
-        self.assertFalse(dl)
-        self.assertFalse(up)
-        self.mock_ctx.io.restore_backup_to_path.assert_not_called()
-        self.mock_ctx.io.upload_backup_from_path.assert_not_called()
+        self.assertTrue(pipeline.reads_shared_cache(self.mock_ctx))
+        self.assertFalse(pipeline.writes_shared_cache(self.mock_ctx))
 
 
 class TestIncrementalSharedCacheHooks(unittest.TestCase):
@@ -1013,7 +1047,7 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
         self.mock_ctx.refresh_policy = ProcessPolicy.with_default()
         self.tmpdir = tempfile.mkdtemp()
 
-    def _make_pipeline(self, backup_to_shared_cache=True):
+    def _make_pipeline(self, shared_cache=True):
         class P(IncrementalJsonlPipeline):
             filename = "incremental_hook_test"
 
@@ -1021,7 +1055,7 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
                 return pd.DataFrame()
 
         p = P()
-        p.backup_to_shared_cache = backup_to_shared_cache
+        p.read_backup = p.write_backup = shared_cache
         return p
 
     @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
@@ -1082,7 +1116,7 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
     )
     def test_local_only_pipeline_does_not_restore_or_upload(self, _mock_dir):
         """Local-only incremental pipelines skip both shared-cache hooks."""
-        pipeline = self._make_pipeline(backup_to_shared_cache=False)
+        pipeline = self._make_pipeline(shared_cache=False)
 
         with patch.object(
             pipeline, "process", return_value=pd.DataFrame({"col": [1]})
@@ -1096,13 +1130,11 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
     @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
         new_callable=lambda: "/tmp/irrelevant",
     )
-    def test_force_download_restores_local_only_incremental(self, _mock_dir):
-        """--force-download-shared-cache makes a local-only incremental
-        pipeline restore from the shared cache instead of processing."""
-        pipeline = self._make_pipeline(backup_to_shared_cache=False)
-        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(
-            force_download_shared_cache=True
-        )
+    def test_read_backup_restores_local_only_incremental(self, _mock_dir):
+        """--read-backup all makes a local-only incremental pipeline restore
+        from the shared cache instead of processing."""
+        pipeline = self._make_pipeline(shared_cache=False)
+        self.mock_ctx.refresh_policy = ProcessPolicy.with_default(read_backup=["all"])
         pipeline.restore_output_from_shared_cache = Mock(return_value=True)
 
         with patch.object(

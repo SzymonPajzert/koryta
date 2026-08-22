@@ -270,7 +270,7 @@ _PROMPT = (
 
 class ArticleExtractedFacts(IncrementalJsonlPipeline[ArticleFacts]):
     filename = "article_facts"
-    backup_to_shared_cache = False  # large incremental output, keep local-only
+    read_backup = write_backup = False  # large incremental output, keep local-only
     interrupt_exceptions = (InterruptedError, KeyboardInterrupt)
     interrupt_note = "will save partial facts"
 

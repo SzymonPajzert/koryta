@@ -117,6 +117,10 @@ REFRESH_PIPELINES = {
 }
 
 
+def _refresh_policy() -> ProcessPolicy:
+    return ProcessPolicy.with_default(refresh=sorted(REFRESH_PIPELINES))
+
+
 def scrape_krs_free(sleep_time=0.2):
     """Phase 1: Scrape bulletin updates and free api-krs queries.
 
@@ -124,7 +128,7 @@ def scrape_krs_free(sleep_time=0.2):
     No cost — all queries go to the free api-krs.ms.gov.pl API.
     """
     scrape_updates_by_dates(sleep_time)
-    ctx, _ = setup_context(policy=ProcessPolicy(REFRESH_PIPELINES))
+    ctx, _ = setup_context(policy=_refresh_policy())
     pipeline = ScrapeRejestrIO()
     queries = list(pipeline.read_or_process_list(ctx))
 
@@ -170,7 +174,7 @@ def scrape_krs_paid(sleep_time=0.2):
     """
     # The queries come off a pipeline, but the paid calls are made here, so
     # this phase asks for the client itself rather than declaring it.
-    ctx, _ = setup_context([RejestrIO], policy=ProcessPolicy(REFRESH_PIPELINES))
+    ctx, _ = setup_context([RejestrIO], policy=_refresh_policy())
     pipeline = ScrapeRejestrIO()
     queries = list(pipeline.read_or_process_list(ctx))
 
@@ -200,7 +204,7 @@ def scrape_krs(sleep_time=0.2):
 
 
 def scrape_updates_by_dates(sleep_time=0.2):
-    ctx, _ = setup_context(policy=ProcessPolicy({"KRSUpdates"}))
+    ctx, _ = setup_context(policy=ProcessPolicy.with_default(refresh=["KRSUpdates"]))
 
     start_date = datetime.strptime("2025-06-01", "%Y-%m-%d").date()
     today = datetime.now().date()

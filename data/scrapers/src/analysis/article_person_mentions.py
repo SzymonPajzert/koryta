@@ -1140,7 +1140,8 @@ class ArticlePersonMentions(IncrementalJsonlPipeline[ArticlePersonMentioned]):
     """Cross-reference koryta people with article_parsed to find mentions."""
 
     filename = "article_person_mentions"
-    backup_to_shared_cache = False  # derived from the ~21GB parse corpus, local-only
+    # derived from the ~21GB parse corpus, local-only
+    read_backup = write_backup = False
 
     koryta_people: KorytaPeople
     parsed: ArticleParsed

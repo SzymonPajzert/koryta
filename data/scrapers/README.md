@@ -104,6 +104,40 @@ which is what you want when iterating on a scrape:
 uv run koryta ScrapeRejestrIO --no-mirror
 ```
 
+## The shared cache, and who is allowed to touch it
+
+Pipeline outputs are also kept as versioned backups in shared GCS, so a fresh
+checkout can restore an expensive output rather than rebuild it. Each direction
+is a separate decision, and each is a pipeline default the command line can
+override.
+
+The pipeline states its default as two class attributes:
+
+```python
+class ArticleParsed(IncrementalJsonlPipeline):
+    read_backup = write_backup = False  # ~20GB streamed, keep local-only
+```
+
+`koryta` then takes `--read-backup` and `--write-backup`, both repeatable and
+both using the same grammar as `--refresh`: a pipeline name selects it, `all`
+selects every one, and a leading `:` deselects. Deselecting wins over
+selecting, so `:all` means "none of them" whatever else is on the line. A
+pipeline you do not name keeps whatever its class declared -- naming one does
+not silently re-decide the rest.
+
+| you want | pass |
+| --- | --- |
+| the defaults | nothing |
+| restore, but publish nothing | `--write-backup :all` |
+| pull down a local-only output | `--read-backup ArticleParsed` |
+| publish a local-only output | `--write-backup ArticleParsed` |
+| stay off the bucket entirely | `--no-backup` |
+
+`--no-backup` is exactly `--read-backup :all --write-backup :all`, and setting
+`DISABLE_BACKUP` in the environment or a `.env` does the same thing -- useful
+for local runs against the emulator or prod-data, where nothing should be
+written to shared cloud storage.
+
 ## The nightly pipeline run
 
 `.github/workflows/pipelines.yml` runs the pipelines on CI in two tiers.
@@ -129,9 +163,9 @@ cheapest, and `PeoplePKW -> Teryt` needs no credentials at all, so it works on
 a fork's pull request too. Widen the list in the workflow if you want more --
 a same-repo pull request does get bucket access, it will just be slow.
 
-`test_scrape_rejestr_io.py` is excluded from both. With no versioned output and
-backups disabled it would not read a cached result; it would run the scraper,
-and that one bills per query.
+`test_scrape_rejestr_io.py` is excluded from both. A miss on both the versioned
+output and the shared cache leaves it running the scraper itself, and that one
+bills per query.
 
 Both pin a dated dump rather than `latest`, which rotates roughly twice a month
 -- on `latest` a red build cannot tell "the pipeline broke" from "Wikipedia
@@ -145,7 +179,11 @@ repository variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and
 `gs://koryta-pl-crawled` is the whole grant. Nothing here touches the live
 Firestore -- what `scrapers.koryta.download` calls a `FirestoreCollection` is a
 leveldb export of it sitting in that same bucket -- and the run passes
-`--no-backup`, so it never writes anywhere.
+`--write-backup :all`, so it publishes nothing. Reads are deliberately left at
+each pipeline's default: the run has read-only credentials anyway, and a
+pipeline whose input only exists in the shared cache has to be able to fetch
+it. `--no-backup` used to be what CI passed, which shut off both directions
+and left those pipelines with nothing to start from.
 
 A fork's pull request gets no OIDC token, so it runs without credentials. That
 is fine: the slice tier's pipelines do not need any.
@@ -154,7 +192,7 @@ To reproduce a CI run locally:
 
 ```bash
 uv run koryta --all-pipelines --exclude ProcessWikiNer \
-  --refresh all --no-backup --assume-yes \
+  --refresh all --write-backup :all --assume-yes \
   --wiki-dump-url https://dumps.wikimedia.org/plwiki/20260701/plwiki-20260701-pages-articles-multistream1.xml-p1p187037.bz2 \
   --wiki-dump-file plwiki-20260701-shard1.bz2
 ```

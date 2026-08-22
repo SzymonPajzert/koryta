@@ -23,13 +23,17 @@ modelling one, and mixing the two hides both.
 
 Run it from ``data/scrapers`` after the score pipelines' sources are built::
 
-    .venv/bin/python -m analysis.scripts.score_recall --all --no-backup
-    .venv/bin/python -m analysis.scripts.score_recall --all --no-backup --folds 4
+    .venv/bin/python -m analysis.scripts.score_recall --all --write-backup :all
+    .venv/bin/python -m analysis.scripts.score_recall --all --write-backup :all \
+        --folds 4
 
 ``--all`` and the other ``Extract`` flags are passed through, so the population
 graded is the population that would be scored, and ``--refresh`` works as it
 does for ``koryta`` - ``--refresh :PeopleMerged`` grades against the merge
 already on disk rather than spending an hour rebuilding the wiki dump.
+``--read-backup`` / ``--write-backup`` are ``koryta``'s too: grading should
+never publish its own outputs, but it should still be free to restore an
+expensive input rather than rebuild it.
 """
 
 from __future__ import annotations
@@ -92,19 +96,38 @@ def parse_args() -> argparse.Namespace:
         help="Pipeline name to refresh, ':' to exclude, or 'all'.",
     )
     parser.add_argument(
+        "--read-backup",
+        action="append",
+        default=[],
+        metavar="PIPELINE",
+        help="Pipeline allowed to restore its output from the shared GCS "
+        "cache. Same grammar as --refresh.",
+    )
+    parser.add_argument(
+        "--write-backup",
+        action="append",
+        default=[],
+        metavar="PIPELINE",
+        help="Pipeline allowed to upload its output to the shared GCS cache. "
+        "Same grammar as --refresh; ':all' publishes nothing.",
+    )
+    parser.add_argument(
         "--no-backup",
         action="store_true",
-        help="Disable reading/writing versioned backups in shared GCS.",
+        help="Shorthand for --read-backup :all --write-backup :all.",
     )
     args, _ = parser.parse_known_args()
     return args
 
 
-def process_policy(refresh: list[str]) -> ProcessPolicy:
-    """`koryta`'s `--refresh` handling: a leading ':' excludes instead."""
+def process_policy(args: argparse.Namespace) -> ProcessPolicy:
+    """`koryta`'s selector flags, spelled the same way here."""
+    read, write = list(args.read_backup), list(args.write_backup)
+    if args.no_backup:
+        read.append(":all")
+        write.append(":all")
     return ProcessPolicy.with_default(
-        [r for r in refresh if not r.startswith(":")],
-        exclude_refresh=[r[1:] for r in refresh if r.startswith(":")],
+        refresh=args.refresh, read_backup=read, write_backup=write
     )
 
 
@@ -314,7 +337,7 @@ def main() -> int:
     required: set = set()
     for model_type in PEOPLE_SCORE_MODELS:
         required |= selected_resources({model_type.__name__})
-    ctx, _dumper = setup_context(required, policy=process_policy(args.refresh))
+    ctx, _dumper = setup_context(required, policy=process_policy(args))
 
     base = models[0].population(ctx)
     payloads = models[0].people_payloads.read_or_process(ctx)

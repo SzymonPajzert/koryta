@@ -162,6 +162,11 @@ jobs:
       # output, which is the point: a fresh checkout has none anyway, and
       # reading backups would hide a pipeline that no longer produces its own.
       #
+      # --write-backup :all rather than --no-backup: this run must not publish
+      # to the shared bucket, but it does have to read from it. --no-backup
+      # shut off both directions, which left a pipeline whose input only lives
+      # in the shared cache with nothing to start from.
+      #
       # --assume-yes answers the "this pipeline runs long" prompts. Without it
       # they read EOF from /dev/null, take it as no, and skip the wiki pass.
       - name: Run pipelines
@@ -182,7 +187,7 @@ jobs:
           # shellcheck disable=SC2086
           uv run --no-sync koryta $selection \
             --refresh all \
-            --no-backup \
+            --write-backup :all \
             --assume-yes \
             --wiki-dump-url "$DUMP_URL" \
             --wiki-dump-file "$DUMP_FILE"
@@ -196,9 +201,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$TIER" = "full" ]; then
-            # All but the RejestrIO scraper: with no versioned output and
-            # backups disabled, that test would not read a cached result -- it
-            # would run the scraper, which bills per query.
+            # All but the RejestrIO scraper: a miss on both the versioned
+            # output and the shared cache leaves that test running the scraper
+            # itself, which bills per query. Not worth the risk for one test.
             uv run --no-sync pytest src/tests/pipelines -v \
               --ignore=src/tests/pipelines/test_scrape_rejestr_io.py
           else

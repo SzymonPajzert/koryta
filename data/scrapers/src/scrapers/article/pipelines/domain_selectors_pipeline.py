@@ -137,7 +137,7 @@ _PROMPT_TMPL = textwrap.dedent(
 
 class ArticleDomainSelectors(Pipeline):
     filename = "article_domain_selectors"
-    backup_to_shared_cache = False  # keep article outputs local-only
+    read_backup = write_backup = False  # keep article outputs local-only
 
     done_urls: ArticleDoneUrls
     llm: LLM

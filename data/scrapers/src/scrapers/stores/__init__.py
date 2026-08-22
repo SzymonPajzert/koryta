@@ -493,43 +493,90 @@ class CrawlQueue(ContextResource, metaclass=ABCMeta):
 
 
 @dataclass
-class ProcessPolicy:
-    refresh_pipelines: set[str]
-    exclude_refresh: set[str] = field(default_factory=set)
-    refreshed_pipelines: set[str] = field(default_factory=set)
-    # Override backup_to_shared_cache=False: force a shared-cache restore even
-    # for local-only pipelines. Still disabled by --no-backup/DISABLE_BACKUP.
-    force_download_shared_cache: bool = False
-    # Override backup_to_shared_cache=False: force a shared-cache upload even
-    # for local-only pipelines. Still disabled by --no-backup/DISABLE_BACKUP.
-    force_upload_shared_cache: bool = False
+class Selection:
+    """Which pipelines a repeatable ``--flag NAME`` option picked out.
 
+    One shape for every such flag: a bare name picks that pipeline, ``all``
+    picks every one, and a leading ``:`` unpicks -- so ``--refresh all
+    --refresh :Teryt`` is "everything but Teryt". Unpicking wins, which is what
+    makes ``:all`` a way to say "none of them" regardless of what else is on the
+    command line.
+
+    A pipeline neither side names falls back to the `default` the caller passes
+    to `decide`. `--refresh` passes False (nothing refreshes unless asked);
+    `--read-backup` / `--write-backup` pass the pipeline's own class attribute,
+    so naming one pipeline does not silently re-decide the rest.
+    """
+
+    selected: set[str] = field(default_factory=set)
+    deselected: set[str] = field(default_factory=set)
+
+    @staticmethod
+    def parse(values: typing.Iterable[str]) -> "Selection":
+        selection = Selection()
+        for value in values:
+            name = value.strip()
+            if not name:
+                continue
+            if name.startswith(":"):
+                selection.deselected.add(name[1:])
+            else:
+                selection.selected.add(name)
+        return selection
+
+    def excludes(self, pipeline_name: str) -> bool:
+        """Whether the command line explicitly unpicked this pipeline."""
+        return "all" in self.deselected or pipeline_name in self.deselected
+
+    def includes(self, pipeline_name: str) -> bool:
+        """Whether the command line explicitly picked this pipeline."""
+        return "all" in self.selected or pipeline_name in self.selected
+
+    def decide(self, pipeline_name: str, default: bool = False) -> bool:
+        if self.excludes(pipeline_name):
+            return False
+        if self.includes(pipeline_name):
+            return True
+        return default
+
+
+@dataclass
+class ProcessPolicy:
+    #: Which pipelines to reprocess rather than read off disk. Default False:
+    #: nothing refreshes unless the run asked for it.
+    refresh: Selection = field(default_factory=Selection)
+    #: Which pipelines may restore their output from the shared GCS cache.
+    #: Falls back to `Pipeline.read_backup`.
+    read_backup: Selection = field(default_factory=Selection)
+    #: Which pipelines may upload their output to the shared GCS cache.
+    #: Falls back to `Pipeline.write_backup`.
+    write_backup: Selection = field(default_factory=Selection)
+
+    refreshed_pipelines: set[str] = field(default_factory=set)
     execution_decisions: dict[str, tuple[bool, str]] = field(default_factory=dict)
     tree_printed: bool = False
 
     @staticmethod
     def with_default(
         refresh: list[str] = [],
-        exclude_refresh: list[str] = [],
-        force_download_shared_cache: bool = False,
-        force_upload_shared_cache: bool = False,
-    ):
-        refresh_pipelines = set() if len(refresh) == 0 else set(refresh)
-        exclude_refresh_set = set(exclude_refresh)
-        return ProcessPolicy(
-            refresh_pipelines,
-            exclude_refresh_set,
-            force_download_shared_cache=force_download_shared_cache,
-            force_upload_shared_cache=force_upload_shared_cache,
-        )
+        read_backup: list[str] = [],
+        write_backup: list[str] = [],
+    ) -> "ProcessPolicy":
+        """A policy from the raw, repeatable flag values.
 
-    def check_set(self, s: set[str], pipeline_name: str):
-        return "all" in s or pipeline_name in s
+        `DISABLE_BACKUP` in the environment (or a `.env`) is folded in here as
+        `:all` on both directions, so a run that never passed a backup flag
+        still honours it -- and so `--read-backup` and the environment variable
+        settle their disagreement by the one rule Selection already has.
+        """
+        read, write = Selection.parse(read_backup), Selection.parse(write_backup)
+        if backup_disabled():
+            read.deselected.add("all")
+            write.deselected.add("all")
+        return ProcessPolicy(Selection.parse(refresh), read, write)
 
-    def should_refresh(self, pipeline_name: str):
-        if pipeline_name in self.exclude_refresh:
-            return False
-        return self.check_set(self.refresh_pipelines, pipeline_name)
+    def should_refresh(self, pipeline_name: str) -> bool:
+        return self.refresh.decide(pipeline_name)
 
     def add_refreshed_pipeline(self, pipeline_name: str):
         self.refreshed_pipelines.add(pipeline_name)
@@ -560,9 +607,8 @@ class ProcessPolicy:
                         dep_run, dep_reason = self.execution_decisions[
                             dep.pipeline_name
                         ]
-                        if (
-                            dep_run
-                            and pipeline.pipeline_name not in self.exclude_refresh
+                        if dep_run and not self.refresh.excludes(
+                            pipeline.pipeline_name
                         ):
                             decision = (
                                 True,
@@ -570,7 +616,7 @@ class ProcessPolicy:
                             )
                             break
 
-                        if pipeline.pipeline_name in self.exclude_refresh:
+                        if self.refresh.excludes(pipeline.pipeline_name):
                             continue
                         dep_mtime = dep.output_time(ctx)
                         if dep_mtime is None or dep_mtime > mtime:
@@ -672,11 +718,15 @@ class Pipeline(typing.Generic[Output]):
     format: Formats = "jsonl"
     dtype: dict[str, Any] | None = None
     confirm_run: bool = False
-    # Whether this pipeline's output participates in the shared GCS cache
-    # (uploaded on write, restored on read). Set False for large/incremental
-    # outputs that would flood the shared bucket — they stay local-only while
-    # still using local caching + refresh logic.
-    backup_to_shared_cache: bool = True
+    # Whether this pipeline's output participates in the shared GCS cache, per
+    # direction: restored on read, uploaded on write. These are only defaults —
+    # `koryta --read-backup / --write-backup` overrides either one for a run,
+    # so a pipeline states what it wants and the command line stays free to
+    # disagree. Set both False for large/incremental outputs that would flood
+    # the shared bucket: they stay local-only while still using local caching
+    # and the refresh logic.
+    read_backup: bool = True
+    write_backup: bool = True
 
     _cached_result: pd.DataFrame | None = None
     _refreshed_execution: bool = False
@@ -720,7 +770,7 @@ class Pipeline(typing.Generic[Output]):
             print("File doesn't exist, continuing: ", e)
             filenotfound = e
 
-        if self.backup_to_shared_cache and not backup_disabled():
+        if self.reads_shared_cache(ctx):
             try:
                 return ctx.io.read_data(VersionedBackup(self.filename)).read_dataframe(
                     self.format, dtype=self.dtype
@@ -805,7 +855,7 @@ Should I run it? (y/n) [n]",
             if (
                 decision
                 and decision[1] == "missing output"
-                and self._shared_cache_active(ctx, force_download=True)
+                and self.reads_shared_cache(ctx)
             ):
                 try:
                     df = ctx.io.read_data(
@@ -872,45 +922,37 @@ Should I run it? (y/n) [n]",
         ctx.io.write_file(
             LocalFile(self.output_path(filename, format), "versioned"), writer
         )
-        if not local_only and self._shared_cache_active(
-            ctx, force_upload=True
-        ):
+        if not local_only and self.writes_shared_cache(ctx):
             ctx.io.write_file(VersionedBackup(filename), writer)
 
-    def _shared_cache_active(
-        self, ctx: Context, force_download: bool = False, force_upload: bool = False
-    ) -> bool:
-        """Whether this pipeline's output should go through the shared cache.
+    def reads_shared_cache(self, ctx: Context) -> bool:
+        """Whether this run may restore this pipeline's output from the cache.
 
-        A pipeline is shared-cache enabled when backups are not disabled AND it
-        opts in via backup_to_shared_cache OR the corresponding force flag is
-        set. Callers set exactly one of force_download/force_upload to name the
-        direction; only that direction's flag applies.
+        The class attribute is the default; `--read-backup` on the command line
+        (and `DISABLE_BACKUP`, which `with_default` folds in as `:all`) is what
+        overrides it.
         """
-        if backup_disabled():
-            return False
-        if self.backup_to_shared_cache:
-            return True
-        if force_download:
-            return ctx.refresh_policy.force_download_shared_cache
-        if force_upload:
-            return ctx.refresh_policy.force_upload_shared_cache
-        return False
+        return ctx.refresh_policy.read_backup.decide(
+            self.pipeline_name, self.read_backup
+        )
+
+    def writes_shared_cache(self, ctx: Context) -> bool:
+        """Whether this run may upload this pipeline's output to the cache."""
+        return ctx.refresh_policy.write_backup.decide(
+            self.pipeline_name, self.write_backup
+        )
 
     def restore_output_from_shared_cache(self, ctx: Context) -> bool:
         """Restore this pipeline's local output from the shared GCS cache.
 
         Streams the latest backup for ``filename`` to the local output path, so
         it is safe for multi-GB outputs. Returns True when a restore happened,
-        False otherwise (flag disabled, backup missing, or failure).
+        False otherwise (reads not allowed, backup missing, or failure).
 
         The incremental article pipelines reuse this hook on their read path --
         it is what lets them pick up cached outputs instead of re-processing.
         """
-        if (
-            self.filename is None
-            or not self._shared_cache_active(ctx, force_download=True)
-        ):
+        if self.filename is None or not self.reads_shared_cache(ctx):
             return False
 
         dest_path = os.path.join(VERSIONED_DIR, self.output_path())
@@ -933,18 +975,14 @@ Should I run it? (y/n) [n]",
         """Upload this pipeline's local output to the shared GCS cache.
 
         Streams the local file at the output path into the latest backup slot
-        for ``filename``. No-op unless backup_to_shared_cache is set or the
-        force-upload flag is on, and backups are not disabled. Returns True
-        when an upload happened.
+        for ``filename``. No-op unless this run allows writes for the pipeline.
+        Returns True when an upload happened.
 
         The incremental article pipelines reuse this hook on their write path --
         they never go through write_dataframe, so this is where their outputs
         reach the shared cache.
         """
-        if (
-            self.filename is None
-            or not self._shared_cache_active(ctx, force_upload=True)
-        ):
+        if self.filename is None or not self.writes_shared_cache(ctx):
             return False
 
         src_path = os.path.join(VERSIONED_DIR, self.output_path())

@@ -232,7 +232,7 @@ _JUDGE_PROMPT = (
 
 class ArticleFactsVerified(IncrementalJsonlPipeline[ArticleFactsVerifiedRecord]):
     filename = "article_facts_verified"
-    backup_to_shared_cache = False
+    read_backup = write_backup = False
     interrupt_exceptions = (InterruptedError, KeyboardInterrupt)
     interrupt_note = "will save partial verifications"
 

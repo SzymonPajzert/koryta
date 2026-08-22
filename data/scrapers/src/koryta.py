@@ -58,24 +58,29 @@ def get_args():
         default=[],
     )
     parser.add_argument(
+        "--read-backup",
+        action="append",
+        default=[],
+        metavar="PIPELINE",
+        help="Pipeline allowed to restore its output from the shared GCS "
+        "cache. Same grammar as --refresh: a name, 'all', or ':name'/':all' "
+        "to forbid it. Pipelines you do not name keep their own default, so "
+        "':all' is how you say 'read nothing'.",
+    )
+    parser.add_argument(
+        "--write-backup",
+        action="append",
+        default=[],
+        metavar="PIPELINE",
+        help="Pipeline allowed to upload its output to the shared GCS cache. "
+        "Same grammar as --read-backup. ':all' uploads nothing, which is what "
+        "an unattended run that should not publish wants.",
+    )
+    parser.add_argument(
         "--no-backup",
         action="store_true",
-        help="Disable uploading/reading versioned backups to/from shared GCS "
-        "(also settable via DISABLE_BACKUP in the environment or .env)",
-    )
-    parser.add_argument(
-        "--force-download-shared-cache",
-        action="store_true",
-        help="Restore pipeline outputs from the shared GCS cache even for "
-        "pipelines marked local-only (backup_to_shared_cache=False). "
-        "Streams to disk. Still disabled by --no-backup/DISABLE_BACKUP.",
-    )
-    parser.add_argument(
-        "--force-upload-shared-cache",
-        action="store_true",
-        help="Upload pipeline outputs to the shared GCS cache even for "
-        "pipelines marked local-only (backup_to_shared_cache=False). "
-        "Streams from disk. Still disabled by --no-backup/DISABLE_BACKUP.",
+        help="Shorthand for --read-backup :all --write-backup :all. Also "
+        "settable as DISABLE_BACKUP in the environment or .env.",
     )
     parser.add_argument(
         "--all-pipelines",
@@ -149,22 +154,20 @@ def selected_resources(selected: set[str]) -> set[type[ContextResource]]:
 
 def main():
     args = get_args()
+    read_backup = list(args.read_backup)
+    write_backup = list(args.write_backup)
     if args.no_backup:
+        # Also in the environment, for the parts that read it there rather than
+        # off the policy (stores.config.backup_disabled, and anything a .env
+        # would have configured).
         os.environ["DISABLE_BACKUP"] = "1"
-    refresh = []
-    exclude_refresh = []
-    if args.refresh:
-        for r in args.refresh:
-            if r.startswith(":"):
-                exclude_refresh.append(r[1:])
-            else:
-                refresh.append(r)
+        read_backup.append(":all")
+        write_backup.append(":all")
 
     policy = ProcessPolicy.with_default(
-        refresh,
-        exclude_refresh=exclude_refresh,
-        force_download_shared_cache=args.force_download_shared_cache,
-        force_upload_shared_cache=args.force_upload_shared_cache,
+        refresh=args.refresh,
+        read_backup=read_backup,
+        write_backup=write_backup,
     )
 
     selected = select_pipelines(args)
