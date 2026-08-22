@@ -132,3 +132,49 @@ describe("EmploymentHistory", () => {
     expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
   });
 });
+
+/** The per-row citation button: how many articles a claim rests on, and the way
+ * into changing that. */
+describe("EmploymentHistory sources", () => {
+  function sourcesButton(wrapper: ReturnType<typeof mountHistory>) {
+    return wrapper.find('[data-testid="edge-sources-open-e1"]');
+  }
+
+  it("counts the articles a relation is cited to", () => {
+    const wrapper = mountHistory([
+      candidacy({ references: ["a1", "a2"], label: "Prezes" }),
+    ]);
+
+    expect(sourcesButton(wrapper).text()).toContain("2");
+  });
+
+  it("offers an editor a way in on a relation with no source at all", () => {
+    const wrapper = mount(EmploymentHistory, {
+      global: {
+        plugins: [vuetify],
+        components: { PartyChip, ChipPublicCompany, ChipRelativeDuration },
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      props: { edges: [candidacy()] as any, canEdit: true },
+    });
+
+    expect(sourcesButton(wrapper).exists()).toBe(true);
+    expect(sourcesButton(wrapper).text()).toBe("");
+  });
+
+  it("says nothing to a reader who cannot cite anything", () => {
+    // Every candidacy comes from the register with no `references`, so an
+    // anonymous reader would otherwise get a row of dead buttons down the page.
+    const wrapper = mountHistory([candidacy()]);
+
+    expect(sourcesButton(wrapper).exists()).toBe(false);
+  });
+
+  it("asks for the sources rather than following the row's link", async () => {
+    const wrapper = mountHistory([candidacy({ references: ["a1"] })]);
+
+    await sourcesButton(wrapper).trigger("click");
+
+    expect(wrapper.emitted("sources")?.[0]?.[0]).toMatchObject({ id: "e1" });
+  });
+});

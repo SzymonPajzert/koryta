@@ -179,32 +179,58 @@
 
         <!-- 5. What rests on it, and adding to that -->
         <v-divider class="my-4" />
-        <div class="d-flex align-center flex-wrap ga-2 mb-2">
-          <h2 class="text-subtitle-1 font-weight-bold">
-            Artykuł stanowi źródło dla
-          </h2>
-          <v-spacer />
-          <v-btn
-            color="primary"
-            variant="tonal"
-            size="small"
-            :prepend-icon="mdiPlus"
-            data-testid="article-add-sourced-edge"
-            @click="openAddEdge()"
-          >
-            Dodaj powiązanie
-          </v-btn>
+        <!-- Wrapped so the visual suite can capture the section on its own:
+             the page below it draws a force-directed graph, which settles
+             somewhere slightly different on every run. -->
+        <div data-testid="article-sources-section">
+          <div class="d-flex align-center flex-wrap ga-2 mb-2">
+            <h2 class="text-subtitle-1 font-weight-bold">
+              Artykuł stanowi źródło dla
+            </h2>
+            <v-spacer />
+            <v-btn
+              color="primary"
+              variant="tonal"
+              size="small"
+              :prepend-icon="mdiPlus"
+              data-testid="article-add-sourced-edge"
+              @click="openAddEdge()"
+            >
+              Dodaj powiązanie
+            </v-btn>
+            <!-- The claim is often already in the base, made from some other
+                 article; then the thing to add is this article behind it, not a
+                 second copy of the relation. -->
+            <v-btn
+              color="primary"
+              variant="text"
+              size="small"
+              :prepend-icon="mdiLinkVariantPlus"
+              data-testid="article-cite-existing-edge"
+              @click="openCiteExisting()"
+            >
+              Istniejące powiązanie
+            </v-btn>
+          </div>
+          <ArticleSourcedEdgeList
+            :edges="sourcedEdges"
+            :can-edit="!!user"
+            :removing="detaching"
+            @detach="detachSource"
+          />
         </div>
-        <ArticleSourcedEdgeList
-          :edges="sourcedEdges"
-          :can-edit="!!user"
-          :removing="detaching"
-          @detach="detachSource"
-        />
 
         <ArticleAddSourcedEdgeDialog
           v-if="article"
           v-model="addEdgeOpen"
+          :article-id="nodeId"
+          :article-name="article.name"
+          @added="refreshSourced()"
+        />
+
+        <ArticleCiteExistingEdgeDialog
+          v-if="article"
+          v-model="citeExistingOpen"
           :article-id="nodeId"
           :article-name="article.name"
           @added="refreshSourced()"
@@ -229,8 +255,9 @@
             />
           </div>
           <p class="text-caption text-medium-emphasis mt-2">
-            Pokazujemy osoby i instytucje wspomniane w tym artykule oraz
-            powiązania, dla których jest on źródłem.
+            Pokazujemy osoby i instytucje wspomniane w tym artykule, powiązania,
+            dla których jest on źródłem, oraz najbliższe otoczenie wspomnianych
+            osób.
           </p>
         </template>
 
@@ -259,6 +286,7 @@ import { computed, ref } from "vue";
 import {
   mdiChevronDown,
   mdiChevronUp,
+  mdiLinkVariantPlus,
   mdiOpenInNew,
   mdiPlus,
   mdiRefresh,
@@ -498,6 +526,15 @@ function openAddEdge() {
     return;
   }
   addEdgeOpen.value = true;
+}
+
+const citeExistingOpen = ref(false);
+function openCiteExisting() {
+  if (!user.value) {
+    handleLoginRedirect();
+    return;
+  }
+  citeExistingOpen.value = true;
 }
 
 const detaching = ref<string | null>(null);

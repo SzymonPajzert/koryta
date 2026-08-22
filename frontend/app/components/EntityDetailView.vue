@@ -182,7 +182,9 @@
             <CardEmploymentHistory
               :edges="edges"
               :can-add="canAddRelations"
+              :can-edit="canAddRelations"
               @add="openAdd(['employed'], 'Dodaj osobę pracującą tutaj')"
+              @sources="openSources"
             />
           </template>
           <template v-if="entity?.type === 'region'">
@@ -194,7 +196,9 @@
             <CardEmploymentHistory
               :edges="edges"
               :can-add="canAddRelations"
+              :can-edit="canAddRelations"
               @add="openAdd(undefined, 'Dodaj powiązanie')"
+              @sources="openSources"
             />
           </template>
           <v-row v-else>
@@ -241,6 +245,14 @@
           :types="addRelationTypes"
           :title="addRelationTitle"
           @added="refreshEdges()"
+        />
+
+        <FormEdgeSourcesDialog
+          v-if="sourcesEdge?.id"
+          v-model="sourcesOpen"
+          :edge-id="sourcesEdge.id"
+          :edge-label="sourcesLabel"
+          @changed="refreshEdges()"
         />
 
         <div v-if="referencedIn.length" class="mt-4">
@@ -348,7 +360,7 @@ import {
   mdiHome,
   mdiRefresh,
 } from "@mdi/js";
-import { useEdges } from "~/composables/edges";
+import { useEdges, type EdgeNode } from "~/composables/edges";
 import {
   entityDescription,
   entityOgType,
@@ -516,5 +528,30 @@ function openAdd(types: edgeTypeExt[] | undefined, title: string) {
   addRelationTypes.value = types;
   addRelationTitle.value = title;
   addRelationOpen.value = true;
+}
+
+/** The relation whose sources are on screen. One dialog for the whole page
+ * rather than one per row: a person with fifty relations would otherwise mount
+ * fifty of them, each with its own picker. */
+const sourcesOpen = ref(false);
+const sourcesEdge = ref<EdgeNode | undefined>(undefined);
+
+/** The claim being cited, read as a sentence: who, which relation, with whom.
+ * The dialog knows only an edge id, and an id tells the reader nothing about
+ * which of the rows they clicked. */
+const sourcesLabel = computed(() => {
+  const edge = sourcesEdge.value;
+  if (!edge) return "";
+  const subject = entity.value?.name ?? "";
+  const other = edge.richNode?.name ?? "";
+  const period = [edge.start_date, edge.end_date].filter(Boolean).join(" - ");
+  return [`${subject} - ${edge.label} - ${other}`, period]
+    .filter(Boolean)
+    .join(" · ");
+});
+
+function openSources(edge: EdgeNode) {
+  sourcesEdge.value = edge;
+  sourcesOpen.value = true;
 }
 </script>

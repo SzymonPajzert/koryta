@@ -9,6 +9,11 @@ export type EdgeNode = {
   target: string;
   id?: string;
   traverse?: TraversePolicy;
+  /** Article ids the relation is cited to, as the local graph returns them.
+   * The names behind them are only fetched when somebody opens the sources
+   * dialog - here it is the count that matters, so a claim with nothing behind
+   * it can be told apart from one that is sourced. */
+  references?: string[];
   start_date?: string;
   end_date?: string;
   party?: string;

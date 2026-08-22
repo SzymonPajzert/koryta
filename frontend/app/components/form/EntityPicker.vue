@@ -133,15 +133,31 @@ const listedTypes = computed(() =>
   entityTypes.value.filter((kind) => LISTED_TYPES.includes(kind)),
 );
 
+/** A listed entry, and the link it came from where it has one.
+ *
+ * The url is not drawn - it is what an article can be found by. Somebody
+ * looking for the piece they have just read has it open in another tab, so what
+ * they reach for is the address rather than the headline. */
+type Listed = Link<NodeType> & { url?: string };
+
+/** What the listing actually holds, which is not what `Article` promises.
+ *
+ * `Node.name` is declared as a plain `string`; six articles on koryta.pl carry
+ * an empty one and a seventh has no `name` field at all. Written down here
+ * rather than asserted away, because the code below is what has to cope. */
+type ListedNode = Pick<Article, "visibility" | "shortName" | "sourceURL"> & {
+  name?: string | null;
+};
+
 /** Whole-collection listings, fetched once when the picker is first opened and
  * kept out of setup so a form that never opens the picker does not pay for
  * them. Keyed by kind because a picker can want both at once. */
-const listed = ref<Partial<Record<NodeType, Link<NodeType>[]>>>({});
+const listed = ref<Partial<Record<NodeType, Listed[]>>>({});
 
 async function loadListed(kind: NodeType) {
   if (listed.value[kind]) return;
   try {
-    const response = await $fetch<{ nodes: Record<string, Article> }>(
+    const response = await $fetch<{ nodes: Record<string, ListedNode> }>(
       "/api/nodes",
       // `latest` for a signed in reader, or they cannot see what they have just
       // made. /api/nodes is cached for six hours and this is a plain `$fetch`,
@@ -153,7 +169,21 @@ async function loadListed(kind: NodeType) {
       ...listed.value,
       [kind]: Object.entries(response.nodes)
         .filter(([, node]) => !!user.value || node.visibility !== false)
-        .map(([id, node]) => ({ type: kind, id, name: node.name })),
+        .map(([id, node]) => {
+          const url = typeof node.sourceURL === "string" ? node.sourceURL : "";
+          return {
+            type: kind,
+            id,
+            // The filter below used to call `toLowerCase` on this. On the one
+            // article that has no `name` that threw, and it threw on every
+            // render of the picker - so the whole article list came back empty
+            // and no term found anything at all. The link is what is left to
+            // call a nameless article by.
+            name:
+              (node.name ?? "").trim() || node.shortName?.trim() || url || id,
+            ...(url ? { url } : {}),
+          };
+        }),
     };
   } catch (e) {
     console.error(`Failed to list ${kind}`, e);
@@ -210,11 +240,44 @@ watch(debouncedSearch, async (term) => {
   await search_(trimmed);
 });
 
-const items = computed<Link<NodeType>[]>(() => {
-  const term = (search.value || "").toLowerCase();
+/** What two spellings of the same link have in common.
+ *
+ * A url pasted out of the address bar and the one we stored differ in ways that
+ * are not the article: the scheme, a `www.`, a trailing slash, and whether the
+ * Polish letters in the slug arrive percent-encoded or as themselves. */
+function urlKey(value: string) {
+  let plain = value;
+  try {
+    plain = decodeURI(value);
+  } catch {
+    // A stray `%` is not an escape; match on what was typed instead.
+  }
+  return plain
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/+$/, "");
+}
+
+/** Whether to try the term against links at all.
+ *
+ * Only what reads as one - a slash or a dotted domain. A headline word would
+ * otherwise turn up every article whose slug happens to contain it, which is
+ * most of them for a term as short as "sad". */
+function looksLikeLink(term: string) {
+  return term.includes("/") || /\.[a-z]{2,}/i.test(term);
+}
+
+const items = computed<Listed[]>(() => {
+  // Trimmed, because a url arrives pasted and a paste brings whitespace with
+  // it often enough that the match would be lost to a trailing space.
+  const term = (search.value || "").trim().toLowerCase();
+  const asLink = looksLikeLink(term) ? urlKey(term) : "";
   const fromListings = listedTypes.value.flatMap((kind) =>
-    (listed.value[kind] ?? []).filter((entry) =>
-      entry.name.toLowerCase().includes(term),
+    (listed.value[kind] ?? []).filter(
+      (entry) =>
+        entry.name.toLowerCase().includes(term) ||
+        (!!asLink && !!entry.url && urlKey(entry.url).includes(asLink)),
     ),
   );
   const base = [...results.value, ...fromListings];

@@ -22,7 +22,7 @@
     "target": "2",
     "type": "connection",
     "revision_id": "rev_edge_3",
-    "references": []
+    "references": ["6"]
   },
   {
     "source": "teryt22",

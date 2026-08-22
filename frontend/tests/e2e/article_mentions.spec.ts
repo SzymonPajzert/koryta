@@ -74,6 +74,15 @@ test("a mention added by hand reaches the article and topic graphs", async ({
     timeout: 60_000,
   });
 
+  // 2b. With the network she sits in around her. Nothing rests on this
+  //     article, so her employer and the person she knows can only have come
+  //     from the hop out the article graph takes from everybody it names -
+  //     which is what makes the mention worth drawing rather than a lone dot.
+  await expect(label(page, "Orlen").first()).toBeVisible({ timeout: 60_000 });
+  await expect(label(page, "Jan Kowalski").first()).toBeVisible({
+    timeout: 60_000,
+  });
+
   // 3. The story the article belongs to draws her too.
   const picker = page.getByTestId("article-topic-picker");
   await expect(async () => {
@@ -99,6 +108,9 @@ test("a mention added by hand reaches the article and topic graphs", async ({
   await expect(label(page, "Anna Nowak").first()).toBeVisible({
     timeout: 60_000,
   });
+  // And her alone: a story already draws every one of its articles' people,
+  // so it does not take the hop out that a single article's page does.
+  await expect(label(page, "Jan Kowalski")).toHaveCount(0);
 
   // 4. Taking it back takes her off both.
   await page.goBack();

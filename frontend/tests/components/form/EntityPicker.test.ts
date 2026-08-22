@@ -16,7 +16,15 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
 /** What the two endpoints answer with, set per test by `respondWith`. */
 let searched: { id: string; name: string; type: string }[] = [];
-let listedNodes: Record<string, { name: string; visibility?: boolean }> = {};
+type ListedNode = {
+  /** Nullable on purpose: six articles on koryta.pl carry no headline and one
+   * of them has no `name` field at all. */
+  name?: string | null;
+  visibility?: boolean;
+  sourceURL?: string;
+  shortName?: string;
+};
+let listedNodes: Record<string, ListedNode> = {};
 /** Which kinds were asked for whole, so a test can say the listing happened. */
 let askedForTypes: string[] = [];
 
@@ -145,7 +153,7 @@ describe("EntityPicker", () => {
      * a response. */
     function respondWith(options: {
       search?: { id: string; name: string; type: string }[];
-      nodes?: Record<string, { name: string; visibility?: boolean }>;
+      nodes?: Record<string, ListedNode>;
     }) {
       searched = options.search ?? [];
       listedNodes = options.nodes ?? {};
@@ -225,6 +233,109 @@ describe("EntityPicker", () => {
       const rendered = document.body.textContent;
       expect(rendered).toContain("Zatwierdzony");
       expect(rendered).not.toContain("Szkic");
+    });
+
+    describe("articles", () => {
+      /** One of them has no headline at all, which is the state of the base:
+       * a facebook post, a scan behind a `plik.php?id=`, and one article whose
+       * `name` field is missing outright. */
+      const nodes = {
+        "art-1": {
+          name: "Krzywda sędziego z Olsztyna",
+          sourceURL:
+            "https://olsztyn.wyborcza.pl/olsztyn/7,48726,32842906,krzywda-sedziego.html",
+        },
+        "art-2": {
+          name: null,
+          sourceURL: "https://bip.powiat.pruszkow.pl/plik.php?id=275783",
+        },
+      };
+
+      it("finds an article by its headline", async () => {
+        respondWith({ nodes });
+
+        const wrapper = mountPicker("article");
+        await wrapper.find("input").trigger("focus");
+        await searchFor(wrapper, "sędziego");
+
+        expect(askedForTypes).toContain("article");
+        expect(document.body.textContent).toContain(
+          "Krzywda sędziego z Olsztyna",
+        );
+      });
+
+      it("keeps listing the others when one article has no name", async () => {
+        // The regression this pins: the filter called `toLowerCase` on every
+        // entry's name, so the one article with none threw on each render of
+        // the picker and no term found anything at all.
+        respondWith({ nodes });
+
+        const wrapper = mountPicker("article");
+        await wrapper.find("input").trigger("focus");
+        await searchFor(wrapper, "Olsztyn");
+
+        expect(document.body.textContent).toContain(
+          "Krzywda sędziego z Olsztyna",
+        );
+      });
+
+      it("calls a nameless article by its link", async () => {
+        respondWith({ nodes });
+
+        const wrapper = mountPicker("article");
+        await wrapper.find("input").trigger("focus");
+        await searchFor(wrapper, "plik.php");
+
+        expect(document.body.textContent).toContain(
+          "bip.powiat.pruszkow.pl/plik.php?id=275783",
+        );
+      });
+
+      it("finds an article by a pasted link", async () => {
+        // What comes off the address bar is not what was stored: `www.`, a
+        // trailing slash, and the Polish letters spelled out rather than
+        // percent-encoded.
+        respondWith({
+          nodes: {
+            "art-3": {
+              name: "Pełna lista absolwentów",
+              sourceURL:
+                "https://facebook.com/posts/pe%C5%82na-lista-absolwent%C3%B3w",
+            },
+          },
+        });
+
+        const wrapper = mountPicker("article");
+        await wrapper.find("input").trigger("focus");
+        await searchFor(
+          wrapper,
+          "https://www.facebook.com/posts/pełna-lista-absolwentów/",
+        );
+
+        expect(document.body.textContent).toContain("Pełna lista absolwentów");
+      });
+
+      it("tries the links only for a term that reads as one", async () => {
+        // A slug holds the words of the headline, so matching every term
+        // against it would answer "sad" with most of the base. Only something
+        // with a slash or a dotted domain in it is taken for a link.
+        respondWith({
+          nodes: {
+            "art-1": {
+              name: "Zupełnie inna sprawa",
+              sourceURL: "https://example.pl/sad-okregowy",
+            },
+          },
+        });
+
+        const wrapper = mountPicker("article");
+        await wrapper.find("input").trigger("focus");
+        await searchFor(wrapper, "okregowy");
+        expect(document.body.textContent).not.toContain("Zupełnie inna sprawa");
+
+        await searchFor(wrapper, "example.pl/sad-okregowy");
+        expect(document.body.textContent).toContain("Zupełnie inna sprawa");
+      });
     });
   });
 });

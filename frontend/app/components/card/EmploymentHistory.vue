@@ -1,5 +1,5 @@
 <template>
-  <v-list class="px-2" variant="flat">
+  <v-list class="px-2" variant="flat" data-testid="relations-history">
     <div class="d-flex align-center justify-space-between mb-2">
       <h3 class="text-h6">Historia powiązań</h3>
       <v-btn
@@ -56,13 +56,44 @@
         </div>
 
         <template #append>
-          <div v-if="isDated(edge)" class="d-none d-md-flex">
-            <ChipRelativeDuration
-              :start="edge.start_date"
-              :end="edge.end_date"
-              :min-start="minStart"
-              :max-end="maxEnd"
-            />
+          <div class="d-flex align-center ga-2">
+            <div v-if="isDated(edge)" class="d-none d-md-flex">
+              <ChipRelativeDuration
+                :start="edge.start_date"
+                :end="edge.end_date"
+                :min-start="minStart"
+                :max-end="maxEnd"
+              />
+            </div>
+            <!-- What the claim rests on. The row itself is a link to the other
+                 end, so this stops the click rather than letting it navigate
+                 away from the relation it is about. -->
+            <v-btn
+              v-if="edge.id && (sourceCount(edge) > 0 || canEdit)"
+              variant="text"
+              size="small"
+              class="px-1"
+              :color="sourceCount(edge) > 0 ? undefined : 'medium-emphasis'"
+              :title="
+                sourceCount(edge) > 0
+                  ? 'Pokaż źródła powiązania'
+                  : 'Dodaj źródło powiązania'
+              "
+              :data-testid="`edge-sources-open-${edge.id}`"
+              @click.stop.prevent="emit('sources', edge)"
+            >
+              <v-icon
+                :icon="
+                  sourceCount(edge) > 0
+                    ? mdiFileDocumentMultipleOutline
+                    : mdiFileDocumentPlusOutline
+                "
+                size="small"
+              />
+              <span v-if="sourceCount(edge) > 0" class="ml-1 text-caption">
+                {{ sourceCount(edge) }}
+              </span>
+            </v-btn>
           </div>
         </template>
       </v-list-item>
@@ -76,6 +107,8 @@ import {
   mdiOfficeBuildingOutline,
   mdiFileDocumentOutline,
   mdiCommentArrowRightOutline,
+  mdiFileDocumentMultipleOutline,
+  mdiFileDocumentPlusOutline,
   mdiPlus,
 } from "@mdi/js";
 import type { Company } from "~~/shared/model";
@@ -97,9 +130,19 @@ const props = defineProps<{
   edges: EdgeNode[];
   /** Whether this section offers adding a relation. */
   canAdd?: boolean;
+  /** Whether each row offers citing the relation to an article. A reader who
+   * cannot edit still sees the count on the relations that have one. */
+  canEdit?: boolean;
 }>();
 
-const emit = defineEmits<{ add: [] }>();
+const emit = defineEmits<{ add: []; sources: [edge: EdgeNode] }>();
+
+/** How many articles a relation is cited to. An edge that predates
+ * `references`, or one the graph returned without it, counts as none rather
+ * than breaking the row. */
+function sourceCount(edge: EdgeNode) {
+  return edge.references?.length ?? 0;
+}
 
 const edgesSorted = computed(() => {
   return props.edges.toSorted((a, b) => {
