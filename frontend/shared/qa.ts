@@ -117,6 +117,26 @@ export const QA_ITEMS: QaItem[] = [
     area: "public",
   },
   {
+    id: "tabela-columns-on-phone",
+    date: "2026-08-23",
+    title: "Tabela na telefonie tylko z trzema kolumnami",
+    description:
+      "Na wąskim ekranie tabela „Eksploruj” pokazuje już tylko imię i " +
+      "nazwisko, wybory oraz firmy. Kolumny do eksploracji - notatki, głosy, " +
+      "twój głos, widoczność i przyciski - znikają, bo wszystko to jest w " +
+      "panelu, który otwiera się po kliknięciu nazwiska.",
+    steps: [
+      "Na telefonie (albo zwęź okno poniżej 960 px) wejdź na /eksploruj/tabela.",
+      "Sprawdź, że w nagłówku są tylko „Imię i nazwisko”, „Wybory” i „Firmy” - w tej kolejności.",
+      "Sprawdź, że tabeli nie da się przewinąć w bok: żadna kolumna nie wystaje poza ekran.",
+      "Kliknij nazwisko - panel ma się otworzyć od dołu, z głosami i notatkami tej osoby.",
+      "Rozszerz okno powyżej 960 px - mają wrócić wszystkie kolumny, razem z „Głosy łącznie” i „Eksploruj”.",
+      "Zaloguj się i powtórz to samo na wąskim ekranie - kolumny „Widoczność” też ma nie być.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
     id: "feedback-from-qa",
     date: "2026-08-23",
     title: "Uwaga z listy QA idzie prosto do zespołu",

@@ -75,7 +75,7 @@
     </template>
 
     <template #[`item.name`]="{ item }">
-      <div style="max-width: 150px">
+      <div class="name-cell">
         <template v-if="disableFocus">
           <span class="text-primary font-weight-bold">
             {{ item.name }}
@@ -104,16 +104,15 @@
     </template>
 
     <template #[`item.companies`]="{ item }">
-      <div class="d-flex flex-wrap gap-1 py-1" style="max-width: 300px">
+      <div class="d-flex flex-wrap gap-1 py-1 companies-cell">
         <span v-for="companyName in item.companies" :key="companyName">
           <v-tooltip :text="shortCompanyName(companyName)" location="top">
             <template #activator="{ props: shortCompanyProps }">
               <v-chip
                 v-bind="shortCompanyProps"
                 size="small"
-                class="mr-1 mb-1 text-truncate d-flex"
+                class="mr-1 mb-1 text-truncate d-flex company-chip"
                 variant="outlined"
-                style="max-width: 300px"
               >
                 {{ shortCompanyName(companyName) }}
               </v-chip>
@@ -327,6 +326,39 @@ const getWojewodztwo = (teryt?: string) => {
   flex-direction: column;
   align-items: flex-start;
   max-width: 220px;
+}
+
+.name-cell {
+  max-width: 150px;
+}
+
+.companies-cell {
+  max-width: 300px;
+}
+
+/* Matches the cell, in pixels rather than a percentage: the chip sits in an
+ * auto sized flex item, so there is nothing definite for a percentage to
+ * resolve against. */
+.company-chip {
+  max-width: 300px;
+}
+
+/* The page drops to three columns here (see pages/eksploruj/tabela.vue), and
+ * the desktop caps alone still add up to more than a phone is wide. These are
+ * what make the three of them fit without a sideways scroll. */
+@media (max-width: 959.98px) {
+  .name-cell {
+    max-width: 110px;
+  }
+
+  .companies-cell,
+  .company-chip {
+    max-width: 130px;
+  }
+
+  .elections-cell {
+    max-width: 120px;
+  }
 }
 
 .elections-cell .v-chip {

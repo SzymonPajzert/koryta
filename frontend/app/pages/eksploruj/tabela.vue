@@ -97,6 +97,7 @@ import { regionFilterOptions } from "~~/shared/teryt";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
+import { useDisplay } from "vuetify";
 
 import { useEdges } from "~/composables/edges";
 
@@ -154,6 +155,17 @@ const sortBy = computed<SortEntry[]>({
 
 const user = useCurrentUser();
 
+const { smAndDown } = useDisplay();
+
+// What is left of the table below 960px: who the person is, what they stood
+// in, and where they have worked. Everything dropped here - notes, votes, the
+// vote control, visibility, the explore buttons - is there to steer
+// exploration rather than to read a row, and all of it is in the drawer the
+// name opens. Ten columns on a phone meant scrolling sideways past them to
+// reach anything, which is the same boundary the drawer and the sticky header
+// already switch on.
+const PHONE_COLUMN_KEYS = ["name", "elections", "companies"];
+
 const headers = computed(() => {
   const baseHeaders = [
     { title: "Imię i nazwisko", key: "name", sortable: true },
@@ -190,6 +202,11 @@ const headers = computed(() => {
       align: "center" as const,
     },
   ];
+  if (smAndDown.value) {
+    return PHONE_COLUMN_KEYS.flatMap((key) =>
+      baseHeaders.filter((header) => header.key === key),
+    );
+  }
   if (user.value) {
     baseHeaders.push({
       title: "Widoczność",
