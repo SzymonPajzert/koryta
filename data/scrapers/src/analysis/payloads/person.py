@@ -19,6 +19,15 @@ UNMAPPED_COMMITTEES_REPORTED = 20
 
 
 class PeoplePayloads(Pipeline[Person]):
+    """The person payloads the uploader submits to koryta.pl.
+
+    Who they are for is `Extract`'s question, and its flags answer it.
+    `--min-score` is the one this pipeline has to apply itself: it narrows the
+    list to the people the site's own scoring models rate at least that highly,
+    and those models read a person's employers and candidacies in the shapes
+    built here.
+    """
+
     # TODO save to the same file as extract
     volatile = True
 
@@ -37,10 +46,8 @@ class PeoplePayloads(Pipeline[Person]):
             unmapped.update(unmapped_committees(person.elections))
             result.append(person)
         report_unmapped_committees(unmapped)
-        return (
-            pd.DataFrame.from_records([asdict(p) for p in result])
-            if result
-            else pd.DataFrame(
+        if not result:
+            return pd.DataFrame(
                 columns=[
                     "name",
                     "companies",
@@ -50,7 +57,8 @@ class PeoplePayloads(Pipeline[Person]):
                     "rejestrIo",
                 ]
             )
-        )
+        payloads = pd.DataFrame.from_records([asdict(p) for p in result])
+        return filter_by_score(ctx, payloads, self.people.min_score)
 
     def map_person_payload(self, ctx: Context, row: pd.Series) -> Person:
         def get_scalar(key):
@@ -101,6 +109,72 @@ class PeoplePayloads(Pipeline[Person]):
             wikipedia=wikipedia_url,
             rejestrIo=rejestrIo,
             autoapprove=count > 0,
+        )
+
+
+def filter_by_score(
+    ctx: Context, payloads: pd.DataFrame, min_score: int | None
+) -> pd.DataFrame:
+    """The payloads worth listing, when the run asked for a minimum band.
+
+    A run that lists everybody lists something like a hundred thousand people,
+    which is not a queue anybody works through; `--min-score` narrows it to the
+    ones the site's own scoring models would have nominated. Those models are
+    not sources of this pipeline and cannot be: they are built on its output,
+    which is also why the import below is where it is.
+    """
+    if min_score is None:
+        return payloads
+
+    from analysis.scores.ensemble import score_payloads  # noqa: PLC0415
+
+    scores = score_payloads(ctx, payloads)
+    kept = payloads[keep_mask(payloads, scores, min_score)]
+    report_scores(payloads, scores, kept, min_score)
+    return kept.reset_index(drop=True)
+
+
+def keep_mask(
+    payloads: pd.DataFrame, scores: dict[str, int], min_score: int
+) -> pd.Series:
+    """Which rows a `--min-score` run still lists.
+
+    The threshold is a question about people nobody has judged yet, so it is
+    not asked of those already named by one of the hardcoded press lists: that
+    is what `autoapprove` marks, the ingest approves those revisions without a
+    review, and a model rating them low says only that the model has not heard
+    of them. Whoever the site itself has published or voted on is answered
+    inside `score_payloads`.
+    """
+    rated = payloads["name"].map(lambda name: scores.get(name, 0) >= min_score)
+    return rated | payloads["autoapprove"].fillna(False).astype(bool)
+
+
+def report_scores(
+    payloads: pd.DataFrame,
+    scores: dict[str, int],
+    kept: pd.DataFrame,
+    min_score: int,
+) -> None:
+    """How the run was rated, and what the threshold did to it."""
+    bands = collections.Counter(scores.get(name, 0) for name in payloads["name"])
+    print(f"Listing {len(kept)} of {len(payloads)} people, band {min_score} and up:")
+    for band, count in sorted(bands.items(), reverse=True):
+        label = f"band {band}" if band else "unrated"
+        print(f"  {label:<10}{count:>8}")
+
+    on_a_list = sum(
+        1
+        for name, approved in zip(payloads["name"], payloads["autoapprove"])
+        if approved and scores.get(name, 0) < min_score
+    )
+    if on_a_list:
+        print(f"  {on_a_list} of them listed on a press list's say-so, not on a band")
+    if kept.empty:
+        print(
+            "Nobody cleared the threshold, so this run lists nobody. Either the "
+            "band is higher than anything the models handed out, or the site's "
+            "export the models seed on came back empty."
         )
 
 

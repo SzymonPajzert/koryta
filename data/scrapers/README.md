@@ -47,6 +47,43 @@ You can run each script with `uv run scripts-name`.
 
 Refer to `pyproject.toml` for the most up-to-date list of the scripts available there.
 
+## Which people a run submits
+
+`PeoplePayloads` builds the payloads the uploader posts to koryta.pl, and
+`Extract`'s flags decide who is in them. `--all` is a hundred thousand people,
+which is more than anybody reviews, so `--min-score` narrows the list to the
+ones the site's own scoring models rate that highly - on the same 1-5 scale the
+site shows:
+
+```bash
+uv run koryta PeoplePayloads --all --min-score 3 --no-backup \
+  --refresh :PeopleEnriched --refresh :CompaniesKRS   # ~25s
+```
+
+All five models in `analysis.scores` run over the payloads before they are
+listed and a person keeps the best band any of them gave, which is the number
+the site displays, so the threshold means there what it means here. Two groups
+are not asked the question: whoever the site has already published or a human
+has already voted on keeps that verdict, and a name from one of the hardcoded
+press lists is listed whatever the models think of them.
+
+The models seed on the site's own export, so a scored run reads
+`person_koryta_<date>` and `person_votes_<date>` as well. It prints the
+distribution before it filters - on the 100,257 people an `--all` run listed on
+2026-08-20 that was:
+
+| band | people |
+| ---- | ------ |
+| 5 | 3,091 |
+| 4 | 8,066 |
+| 3 | 16,495 |
+| 2 | 30,765 |
+| 1 | 40,434 |
+| unrated | 1,406 |
+
+so `--min-score 2` lists nearly three fifths of them and `--min-score 3` about
+a quarter.
+
 ## Centralny Rejestr Umów (CRU)
 
 `CruDump` fetches the public contracts register from a postgres mirror of the

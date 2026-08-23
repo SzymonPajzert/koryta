@@ -15,6 +15,7 @@ so the uplaoder can diff if we need/have to update the scores or not.
 """
 
 import dataclasses
+import typing
 
 import pandas as pd
 
@@ -45,6 +46,44 @@ def normalized_scores(scores: pd.DataFrame, n: NormalizationFactors) -> pd.Serie
         .sum()
     ) / (len(scores) + CONFIDENCE_FACTOR)
     return pd.Series({"score": ratio})
+
+
+def company_score_map(
+    payloads: pd.DataFrame, person_scores: typing.Mapping[str, float]
+) -> dict[str, float]:
+    """KRS -> how the people in it are rated, from a person->score map.
+
+    A parameter rather than the pipeline's own source because two callers need
+    the same arithmetic over scores the pipeline has not got: the recall
+    harness rebuilds it per fold so a held-out person cannot be graded on their
+    own `is_public`, and `PeoplePayloads` rebuilds it from the population it is
+    filtering, which is mid-run and cannot ask a pipeline built on itself.
+    """
+    records = []
+    for _, row in payloads.iterrows():
+        score = person_scores.get(row["name"], 0)
+        if not score:
+            continue
+
+        for company in as_sequence(row.get("companies")):
+            if isinstance(company, dict):
+                krs = company.get("krs")
+            else:
+                krs = getattr(company, "krs", None)
+            if krs:
+                records.append({"krs": krs, "score": score})
+
+    if not records:
+        return {}
+
+    df = pd.DataFrame.from_records(records)
+    factors = NormalizationFactors(
+        min_score=df["score"].min(), max_score=df["score"].max()
+    )
+    scored = df.groupby("krs", as_index=False)[["score"]].apply(
+        lambda s: normalized_scores(s, factors)
+    )
+    return dict(zip(scored["krs"], scored["score"]))
 
 
 class CompanyScores(Pipeline):
@@ -109,38 +148,16 @@ class CompanyScores(Pipeline):
         scores = self.person_scores(ctx, person_names)
         people_df = self.people_payloads.read_or_process(ctx)
 
-        records = []
-        for _, row in people_df.iterrows():
-            person_score = scores.get(row["name"], 0)
-            if person_score == 0:
-                continue
-
-            for company in as_sequence(row.get("companies")):
-                if isinstance(company, dict):
-                    krs = company.get("krs")
-                else:
-                    krs = getattr(company, "krs", None)
-                if krs:
-                    records.append({"krs": krs, "score": person_score})
-
-        if not records:
+        by_krs = company_score_map(people_df, scores)
+        if not by_krs:
             return pd.DataFrame(columns=["krs", "sum_score"])
 
-        df = pd.DataFrame.from_records(records)
-
-        statistics = NormalizationFactors(
-            min_score=df["score"].min(), max_score=df["score"].max()
+        scores_df = pd.DataFrame(
+            {"krs": list(by_krs.keys()), "sum_score": list(by_krs.values())}
         )
-        scores_df = df.groupby("krs", as_index=False)[["score"]].apply(
-            lambda s: normalized_scores(s, statistics)
-        )
-
-        scores_df = scores_df.rename(columns={"score": "sum_score"})
-        scores_df = scores_df.sort_values(by="sum_score", ascending=False).reset_index(
+        return scores_df.sort_values(by="sum_score", ascending=False).reset_index(
             drop=True
         )
-
-        return scores_df
 
 
 class PeopleScores(PeopleScoreModel):

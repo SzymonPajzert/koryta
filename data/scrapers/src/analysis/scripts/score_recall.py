@@ -15,8 +15,10 @@ held-out person comes back with is what the model would have said about them
 before anybody looked.
 
 Two things are deliberately not folded in. ``CompanyScores`` is recomputed per
-fold rather than read from its pipeline, because the stored one is built from
-``is_public`` and would hand ``PeopleScores`` the answer. And a labelled person
+fold rather than read from its pipeline - that is what
+``analysis.scores.ensemble`` does for every caller - because the stored one is
+built from ``is_public`` and would hand ``PeopleScores`` the answer. And a
+labelled person
 the payloads have no row for is reported separately rather than counted as a
 miss: the models never had anything to go on, which is a data problem and not a
 modelling one, and mixing the two hides both.
@@ -42,19 +44,13 @@ import os
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 _SRC_ROOT = Path(__file__).resolve().parents[2]
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from analysis.scores import PEOPLE_SCORE_MODELS  # noqa: E402
-from analysis.scores.base import Population, banded_scores  # noqa: E402
-from analysis.scores.company import (  # noqa: E402
-    NormalizationFactors,
-    PeopleScores,
-    normalized_scores,
-)
+from analysis.scores.base import Population  # noqa: E402
+from analysis.scores.ensemble import model_bands  # noqa: E402
 from conductor import setup_context  # noqa: E402
 from koryta import selected_resources  # noqa: E402
 from scrapers.stores import Pipeline, ProcessPolicy  # noqa: E402
@@ -108,46 +104,6 @@ def process_policy(refresh: list[str]) -> ProcessPolicy:
     )
 
 
-def company_score_map(
-    payloads: pd.DataFrame, person_scores: dict[str, float]
-) -> dict[str, float]:
-    """``CompanyScores.process``, over a person->score map the caller controls.
-
-    Kept deliberately close to the original so the numbers stay comparable with
-    a real run; the only difference is where the person scores come from.
-    """
-    records = []
-    for _, row in payloads.iterrows():
-        score = person_scores.get(row["name"], 0)
-        if not score:
-            continue
-        companies = row.get("companies")
-        if companies is None or isinstance(companies, (str, bytes)):
-            continue
-        if not hasattr(companies, "__iter__"):
-            continue
-        for company in companies:
-            krs = (
-                company.get("krs")
-                if isinstance(company, dict)
-                else getattr(company, "krs", None)
-            )
-            if krs:
-                records.append({"krs": krs, "score": score})
-
-    if not records:
-        return {}
-
-    df = pd.DataFrame.from_records(records)
-    factors = NormalizationFactors(
-        min_score=df["score"].min(), max_score=df["score"].max()
-    )
-    scored = df.groupby("krs", as_index=False)[["score"]].apply(
-        lambda s: normalized_scores(s, factors)
-    )
-    return dict(zip(scored["krs"], scored["score"]))
-
-
 def fold_population(base: Population, held_out: set[str]) -> Population:
     """`base` with `held_out` demoted from answer key to candidate."""
     return dataclasses.replace(
@@ -160,32 +116,6 @@ def fold_population(base: Population, held_out: set[str]) -> Population:
         shortlist=list(base.shortlist)
         + [name for name in sorted(held_out) if name in base.employments],
     )
-
-
-def model_bands(model, ctx, pop: Population, payloads: pd.DataFrame) -> dict[str, int]:
-    """One model's 1-5 verdict on this fold's shortlist."""
-    if isinstance(model, PeopleScores):
-        # PeopleScores reads company scores off a pipeline built from is_public,
-        # so rebuild them on this fold's seeds only.
-        companies = company_score_map(payloads, pop.seeds())
-        raw = {
-            name: model.calculate_weighted(
-                (
-                    model.total_company_score(pop.employments.get(name, []), companies),
-                    model.COMPANY_WEIGHT,
-                ),
-                (
-                    model.elections_score(pop.candidacies.get(name, [])),
-                    model.ELECTION_WEIGHT,
-                ),
-            )
-            for name in pop.shortlist
-        }
-    else:
-        raw = model.raw_scores(ctx, pop)
-
-    eligible = set(pop.shortlist)
-    return banded_scores({n: s for n, s in raw.items() if n in eligible})
 
 
 def report(

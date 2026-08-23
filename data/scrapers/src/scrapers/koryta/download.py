@@ -151,7 +151,7 @@ class FirestoreCollection(Pipeline):
         document once per export. 2026-08-07 has two, and returned 12230 person
         nodes for a site with 6115 people; the same doubling reaches
         `KorytaVotes` as every human vote counted twice, which is somebody's
-        opinion weighed double in `PeopleScoreModel.human_votes`.
+        opinion weighed double in `analysis.scores.base.human_votes`.
 
         The newest export of the day wins, because a later dump supersedes the
         earlier one rather than adding to it. With no date set the caller wants
