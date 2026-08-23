@@ -93,14 +93,16 @@
     </template>
 
     <template #[`item.parties`]="{ item }">
-      <v-chip
-        v-for="party in item.parties"
-        :key="party"
-        size="small"
-        class="mr-1"
-      >
-        {{ party }}
-      </v-chip>
+      <div class="parties-cell">
+        <v-chip
+          v-for="party in item.parties"
+          :key="party"
+          size="small"
+          class="mr-1 party-chip"
+        >
+          {{ party }}
+        </v-chip>
+      </div>
     </template>
 
     <template #[`item.companies`]="{ item }">
@@ -343,21 +345,57 @@ const getWojewodztwo = (teryt?: string) => {
   max-width: 300px;
 }
 
-/* The page drops to three columns here (see pages/eksploruj/tabela.vue), and
- * the desktop caps alone still add up to more than a phone is wide. These are
- * what make the three of them fit without a sideways scroll. */
+/* Unconstrained above the breakpoint, where the cell it sits in has no cap of
+ * its own - the chips flow across the column as they always did. */
+.parties-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+/* The page drops to four columns here (see pages/eksploruj/tabela.vue), and
+ * a 375px phone leaves the table 343px to put them in. A chip cannot wrap, so
+ * whatever it is allowed to be wide is what its column costs at a minimum:
+ * these four caps plus the padding are that budget, and they are what keeps
+ * the page off a sideways scroll. A long party or company name is truncated
+ * instead of setting the width of the column for every other row - the drawer
+ * behind the name has all of it in full. */
 @media (max-width: 959.98px) {
   .name-cell {
-    max-width: 110px;
+    max-width: 100px;
+    /* A surname long enough to not fit is broken across lines rather than
+     * pushing the other three columns out. */
+    overflow-wrap: anywhere;
+  }
+
+  .parties-cell,
+  .party-chip {
+    max-width: 60px;
   }
 
   .companies-cell,
   .company-chip {
-    max-width: 130px;
+    max-width: 72px;
   }
 
   .elections-cell {
-    max-width: 120px;
+    max-width: 72px;
+  }
+
+  /* Vuetify's 16px each side, four times over, is 128px of those 343px. */
+  :deep(.v-data-table__td),
+  :deep(.v-data-table__th) {
+    padding-inline: 8px !important;
+  }
+}
+
+/* Narrower than any phone this decade except a 320px iPhone SE, where the
+ * header row - "Imię i nazwisko" is the widest word in it - is what the name
+ * column costs. Kept out of the block above so that a heading is never broken
+ * mid-word at a width where it did not have to be. */
+@media (max-width: 359.98px) {
+  :deep(.v-data-table__th) {
+    overflow-wrap: anywhere;
   }
 }
 
@@ -367,6 +405,14 @@ const getWojewodztwo = (teryt?: string) => {
 
 .elections-cell :deep(.v-chip__content) {
   min-width: 0;
+}
+
+.party-chip :deep(.v-chip__content) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
 }
 
 .election-location {

@@ -154,13 +154,13 @@ const sortBy = computed<SortEntry[]>({
 
 const user = useCurrentUser();
 
-// What is left of the table below 960px: who the person is, where they have
-// worked and what they stood in. Everything marked with this - notes, votes,
-// the vote control, visibility, the explore buttons - is there to steer
-// exploration rather than to read a row, and all of it is in the drawer the
-// name opens. Ten columns on a phone meant scrolling sideways past them to
-// reach anything, at the same boundary the drawer and the sticky header
-// already switch on.
+// What is left of the table below 960px: who the person is, their party,
+// where they have worked and what they stood in. Everything marked with this
+// - notes, votes, the vote control, visibility, the explore buttons - is
+// there to steer exploration rather than to read a row, and all of it is in
+// the drawer the name opens. Ten columns on a phone meant scrolling sideways
+// past them to reach anything, at the same boundary the drawer and the sticky
+// header already switch on.
 //
 // A stylesheet rather than `useDisplay().smAndDown` and a shorter array:
 // under SSR Vuetify builds its display state from a placeholder width of
@@ -177,7 +177,7 @@ const PHONE_HIDDEN = {
 const headers = computed(() => {
   const baseHeaders = [
     { title: "Imię i nazwisko", key: "name", sortable: true },
-    { title: "Partie", key: "parties", sortable: false, ...PHONE_HIDDEN },
+    { title: "Partie", key: "parties", sortable: false },
     { title: "Firmy", key: "companies", sortable: false },
     { title: "Wybory", key: "elections", sortable: false },
     {
