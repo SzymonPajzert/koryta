@@ -122,12 +122,12 @@ export const QA_ITEMS: QaItem[] = [
     title: "Tabela na telefonie tylko z trzema kolumnami",
     description:
       "Na wąskim ekranie tabela „Eksploruj” pokazuje już tylko imię i " +
-      "nazwisko, wybory oraz firmy. Kolumny do eksploracji - notatki, głosy, " +
+      "nazwisko, firmy oraz wybory. Kolumny do eksploracji - notatki, głosy, " +
       "twój głos, widoczność i przyciski - znikają, bo wszystko to jest w " +
       "panelu, który otwiera się po kliknięciu nazwiska.",
     steps: [
       "Na telefonie (albo zwęź okno poniżej 960 px) wejdź na /eksploruj/tabela.",
-      "Sprawdź, że w nagłówku są tylko „Imię i nazwisko”, „Wybory” i „Firmy” - w tej kolejności.",
+      "Sprawdź, że w nagłówku są tylko „Imię i nazwisko”, „Firmy” i „Wybory”.",
       "Sprawdź, że tabeli nie da się przewinąć w bok: żadna kolumna nie wystaje poza ekran.",
       "Kliknij nazwisko - panel ma się otworzyć od dołu, z głosami i notatkami tej osoby.",
       "Rozszerz okno powyżej 960 px - mają wrócić wszystkie kolumny, razem z „Głosy łącznie” i „Eksploruj”.",

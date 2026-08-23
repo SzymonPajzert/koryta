@@ -97,7 +97,6 @@ import { regionFilterOptions } from "~~/shared/teryt";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
-import { useDisplay } from "vuetify";
 
 import { useEdges } from "~/composables/edges";
 
@@ -155,66 +154,81 @@ const sortBy = computed<SortEntry[]>({
 
 const user = useCurrentUser();
 
-const { smAndDown } = useDisplay();
-
-// What is left of the table below 960px: who the person is, what they stood
-// in, and where they have worked. Everything dropped here - notes, votes, the
-// vote control, visibility, the explore buttons - is there to steer
+// What is left of the table below 960px: who the person is, where they have
+// worked and what they stood in. Everything marked with this - notes, votes,
+// the vote control, visibility, the explore buttons - is there to steer
 // exploration rather than to read a row, and all of it is in the drawer the
 // name opens. Ten columns on a phone meant scrolling sideways past them to
-// reach anything, which is the same boundary the drawer and the sticky header
+// reach anything, at the same boundary the drawer and the sticky header
 // already switch on.
-const PHONE_COLUMN_KEYS = ["name", "elections", "companies"];
+//
+// A stylesheet rather than `useDisplay().smAndDown` and a shorter array:
+// under SSR Vuetify builds its display state from a placeholder width of
+// 1280px and only measures the window when the app's suspense resolves, so a
+// width-driven header list renders the ten column table first and corrects
+// itself afterwards - and never corrects it at all if that one update does
+// not run. `hidden-sm-and-down` is Vuetify's own utility, `display: none`
+// under `(max-width: 959.98px)`, and it is right before the first paint.
+const PHONE_HIDDEN = {
+  headerProps: { class: "hidden-sm-and-down" },
+  cellProps: { class: "hidden-sm-and-down" },
+};
 
 const headers = computed(() => {
   const baseHeaders = [
     { title: "Imię i nazwisko", key: "name", sortable: true },
-    { title: "Partie", key: "parties", sortable: false },
+    { title: "Partie", key: "parties", sortable: false, ...PHONE_HIDDEN },
     { title: "Firmy", key: "companies", sortable: false },
     { title: "Wybory", key: "elections", sortable: false },
     {
       title: "Ostatnie zatrudnienie",
       key: "latestEmploymentStart",
       sortable: true,
+      ...PHONE_HIDDEN,
     },
     {
       title: "Lata pracy",
       key: "experience",
       sortable: true,
       align: "center" as const,
+      ...PHONE_HIDDEN,
     },
     {
       title: "Notatki",
       key: "notesCount",
       sortable: true,
       align: "center" as const,
+      ...PHONE_HIDDEN,
     },
     {
       title: "Głosy łącznie",
       key: "stats.votes.interesting",
       sortable: true,
       align: "center" as const,
+      ...PHONE_HIDDEN,
     },
     {
       title: "Twój głos",
       key: "userVote",
       sortable: false,
       align: "center" as const,
+      ...PHONE_HIDDEN,
     },
   ];
-  if (smAndDown.value) {
-    return PHONE_COLUMN_KEYS.flatMap((key) =>
-      baseHeaders.filter((header) => header.key === key),
-    );
-  }
   if (user.value) {
     baseHeaders.push({
       title: "Widoczność",
       key: "visibility",
       sortable: true,
+      ...PHONE_HIDDEN,
     });
   }
-  baseHeaders.push({ title: "Eksploruj", key: "explore", sortable: false });
+  baseHeaders.push({
+    title: "Eksploruj",
+    key: "explore",
+    sortable: false,
+    ...PHONE_HIDDEN,
+  });
   return baseHeaders;
 });
 
