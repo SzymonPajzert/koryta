@@ -11,6 +11,10 @@ export type ArticleMeta = {
       datePublished?: string;
     };
   };
+  /** ISO, read off the whole page by `shared/pageDate.ts` - the ld+json blocks
+   * past the first, the `article:published_time` meta family and
+   * `<time datetime>`, none of which `meta.ldJson` can answer for. */
+  publishedDate?: string;
   url?: string;
 };
 

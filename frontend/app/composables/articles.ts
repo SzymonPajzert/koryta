@@ -57,7 +57,11 @@ export async function articlePayloadFor(url: string): Promise<ArticlePayload> {
   return {
     url: meta.url || url,
     name: meta.title || undefined,
+    // `getPageMeta` reads the whole page; the ld+json search below is what is
+    // left for a response from before it did, and for the shapes it declines
+    // to guess at.
     publishedDate:
+      meta.publishedDate ||
       meta.meta?.ldJson?.datePublished ||
       meta.meta?.ldJson?.dateModified ||
       deepSearch(meta.meta as NestedRecord | undefined, "datePublished") ||

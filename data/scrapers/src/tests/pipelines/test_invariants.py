@@ -678,9 +678,11 @@ def test_every_article_has_a_publication_date(articles):
     `ensureArticleNode` wrote `publishedDate: parseArticleDate(...)`, which is
     `undefined` whenever the scraped meta carried no date, and `undefined` is
     dropped on the way to Firestore rather than stored as a blank. `getPageMeta`
-    reads only the *first* ld+json block on the page and no
+    read only the *first* ld+json block on the page and no
     `article:published_time` meta tag at all, so on the outlets that lead with
-    an Organization block that was every article they published.
+    an Organization block that was every article they published. It now reads
+    the page with `frontend/shared/pageDate.ts`, which is every ld+json block,
+    the `article:published_time` meta family and `<time datetime>`.
     """
     # 185 of the 317 articles in the export of 2026-08-20, and the count was
     # still climbing - 184 on 2026-08-11 - because the ingest kept adding to it.

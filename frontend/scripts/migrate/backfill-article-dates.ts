@@ -1,5 +1,10 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import {
+  dateFromUrl,
+  extractPublishedDate,
+  usableDate,
+} from "../../shared/pageDate";
 
 /**
  * Gives every article node a `publishedDate`, and optionally publishes the ones
@@ -18,10 +23,12 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
  *
  * None of the 184 has the `meta` blob it was ingested with, so the date cannot
  * be recovered from the database: it has to come back off the page. This
- * re-fetches each `sourceURL` and reads the date out of the ld+json and the
- * `article:published_time` family of meta tags - the second of which
- * `getPageMeta` never looked at, which is a large part of how these arrived
- * dateless.
+ * re-fetches each `sourceURL` and reads the date out of it with
+ * `shared/pageDate.ts`, which is the same extractor `getPageMeta` and the
+ * extension now use - it reads the ld+json blocks past the first, the
+ * `article:published_time` family of meta tags, and `<time datetime>`, none
+ * of which the old `getPageMeta` looked at, which is a large part of how
+ * these arrived dateless.
  *
  * The cause is fixed in `ensureArticleNode` (server/utils/articles.ts), which
  * used to write `publishedDate: undefined` - stripped on the way to Firestore,
@@ -34,6 +41,13 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
  * revisions, i.e. when we first recorded it. That is not the publication date
  * and does not pretend to be - it is a lower bound that puts the row somewhere
  * plausible instead of nowhere at all. Every node that gets one is listed.
+ *
+ * Read those dates for what they are. The revisions collection itself starts on
+ * 2025-12-20, so every article older than that dates to that one day: against
+ * the export of 2026-08-23 all 55 fallbacks came out 2025-12-20, which is a
+ * block of rows in one place in /zrodla rather than 55 separate claims about
+ * when anything was published. `--no-fallback` leaves them undated, and
+ * invisible, instead.
  *
  * The date is written as a revision rather than straight onto the node, because
  * `publishedDate` is revision-carried data (it is not in `INTERNAL_FIELDS`).
@@ -77,126 +91,18 @@ const USER_AGENT =
   "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 const AUTHOR = "migration:backfill-article-dates";
 
-/** Nothing this site covers was published before the web, and a date in the
- * future is a template that rendered wrong. Either way it is worse than the
- * revision fallback, so it is rejected rather than stored. */
-const MIN_DATE = Date.UTC(1990, 0, 1);
-const maxDate = () => Date.now() + 24 * 60 * 60 * 1000;
-
-function usableDate(raw: string | undefined): Date | undefined {
-  if (!raw) return undefined;
-  const date = new Date(raw);
-  const time = date.getTime();
-  if (Number.isNaN(time) || time < MIN_DATE || time > maxDate())
-    return undefined;
-  return date;
-}
-
-/** The first string value stored under any of `keys`, however deeply nested.
- * ld+json is shaped differently by every CMS - sometimes an object, sometimes
- * an `@graph` array, sometimes both - and the date is the only thing wanted
- * out of it. */
-function deepFind(value: unknown, keys: string[]): string | undefined {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = deepFind(item, keys);
-      if (found) return found;
-    }
-    return undefined;
+/** The host a `sourceURL` points at, for grouping what could not be dated.
+ * An outlet that turns up repeatedly in that list is one the extractor should
+ * learn, rather than a page that genuinely carries no date. */
+function hostOf(url: string | undefined): string {
+  if (!url) return "(no sourceURL)";
+  try {
+    return new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname
+      .replace(/^www\./, "")
+      .toLowerCase();
+  } catch {
+    return "(unparseable url)";
   }
-  if (value && typeof value === "object") {
-    for (const [key, val] of Object.entries(value)) {
-      if (keys.includes(key) && typeof val === "string" && val) return val;
-    }
-    for (const val of Object.values(value)) {
-      const found = deepFind(val, keys);
-      if (found) return found;
-    }
-  }
-  return undefined;
-}
-
-/** Reads a publication date out of a page's html.
- *
- * Parsed with regexes rather than cheerio, which is a dependency of
- * `functions/` and not of the app - a one-off script is not worth adding one
- * for, and the two shapes it looks for are both machine-written.
- *
- * Every ld+json block is tried, not just the first: `getPageMeta` takes
- * `.first()`, and on the outlets that lead with an Organization or
- * BreadcrumbList block that is the one without a date.
- */
-function extractPublishedDate(html: string): string | undefined {
-  const published: string[] = [];
-  const modified: string[] = [];
-
-  const ldJson = html.matchAll(
-    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
-  );
-  for (const match of ldJson) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(match[1]!);
-    } catch {
-      continue; // A block we cannot read is not a reason to give up on the page.
-    }
-    const p = deepFind(parsed, ["datePublished", "dateCreated"]);
-    if (p) published.push(p);
-    const m = deepFind(parsed, ["dateModified"]);
-    if (m) modified.push(m);
-  }
-
-  const metaTags = html.matchAll(/<meta\s+([^>]*?)\/?>/gi);
-  for (const match of metaTags) {
-    const attrs = match[1]!;
-    const name = /(?:property|name|itemprop)\s*=\s*["']([^"']+)["']/i.exec(
-      attrs,
-    )?.[1];
-    const content = /content\s*=\s*["']([^"']*)["']/i.exec(attrs)?.[1];
-    if (!name || !content) continue;
-    const key = name.toLowerCase();
-    if (
-      key === "article:published_time" ||
-      key === "og:article:published_time" ||
-      key === "datepublished" ||
-      key === "date" ||
-      key === "dc.date.issued"
-    ) {
-      published.push(content);
-    } else if (
-      key === "article:modified_time" ||
-      key === "og:updated_time" ||
-      key === "datemodified"
-    ) {
-      modified.push(content);
-    }
-  }
-
-  // Publication before modification: a page edited years later still reports
-  // the day it ran, and that is the date the list is sorted by.
-  for (const candidate of [...published, ...modified]) {
-    const date = usableDate(candidate);
-    if (date) return date.toISOString();
-  }
-  return undefined;
-}
-
-/** The date some urls carry in the path.
- *
- * Only the two shapes that are unambiguous: a web.archive.org capture stamp,
- * and a blog's `/2024/09/04/` segments. Worth trying before the revision
- * fallback because both state something about the article rather than about
- * when we noticed it - the archive stamp in particular is the one date a
- * snapshot of a homepage has.
- */
-function dateFromUrl(url: string): string | undefined {
-  const archived = /\/web\/(\d{4})(\d{2})(\d{2})\d{6}(?:[a-z_]+)?\//i.exec(url);
-  const path = /\/(\d{4})\/(\d{2})\/(\d{2})\//.exec(url);
-  const match = archived ?? path;
-  if (!match) return undefined;
-  return usableDate(
-    `${match[1]}-${match[2]}-${match[3]}T00:00:00Z`,
-  )?.toISOString();
 }
 
 type FetchOutcome =
@@ -277,20 +183,37 @@ const INTERNAL_FIELDS = new Set([
 
 /** When this node was first written down, as a lower bound on when the article
  * ran. `undefined` when it has no revisions - a node created before the
- * revisions collection existed has nothing to date it by. */
+ * revisions collection existed has nothing to date it by.
+ *
+ * Asked twice, because `node_id` is stored two ways. `createRevisionTransaction`
+ * writes `targetRef.id`, a string, and everything written through it matches the
+ * first query; the older revisions - which is what an article that has never
+ * been edited since still points at - hold a `nodes/<id>` DocumentReference, and
+ * a Firestore equality does not match a reference against a string. Asking only
+ * for the string is why every article in this list used to report "no revision
+ * to date it by", including the ones whose `revision_id` names a revision that
+ * is plainly there.
+ */
 async function earliestRevisionTime(
   db: FirebaseFirestore.Firestore,
   nodeId: string,
 ): Promise<Date | undefined> {
-  const snap = await db
-    .collection("revisions")
-    .where("node_id", "==", nodeId)
-    .orderBy("update_time", "asc")
-    .limit(1)
-    .get();
-  const time = snap.docs[0]?.data().update_time;
-  if (!time?.toDate) return undefined;
-  return usableDate(time.toDate().toISOString());
+  const times = await Promise.all(
+    [nodeId, db.collection("nodes").doc(nodeId)].map(async (id) => {
+      const snap = await db
+        .collection("revisions")
+        .where("node_id", "==", id)
+        .orderBy("update_time", "asc")
+        .limit(1)
+        .get();
+      const time = snap.docs[0]?.data().update_time;
+      return time?.toDate ? usableDate(time.toDate().toISOString()) : undefined;
+    }),
+  );
+  const earliest = times
+    .filter((time): time is Date => time !== undefined)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  return earliest;
 }
 
 async function migrate() {
@@ -418,6 +341,7 @@ async function migrate() {
     for (const { candidate, date, reason } of fallbacks) {
       console.log(
         `  ${candidate.id}  ${date.toISOString().slice(0, 10)}  ` +
+          `${hostOf(candidate.sourceURL)}  ` +
           `${candidate.name.slice(0, 60)}  (${reason})`,
       );
     }
@@ -426,7 +350,27 @@ async function migrate() {
     console.log("\nStill undated, and so still absent from /zrodla:");
     for (const { candidate, reason } of skipped) {
       console.log(
-        `  ${candidate.id}  ${candidate.name.slice(0, 60)}  (${reason})`,
+        `  ${candidate.id}  ${hostOf(candidate.sourceURL)}  ` +
+          `${candidate.name.slice(0, 60)}  (${reason})`,
+      );
+    }
+    // The same list by host: one outlet appearing several times is a shape the
+    // extractor does not read yet, and worth a rule; a long tail of one-offs is
+    // pages that never carried a date.
+    const byHost = new Map<string, { count: number; reasons: Set<string> }>();
+    for (const { candidate, reason } of skipped) {
+      const host = hostOf(candidate.sourceURL);
+      const entry = byHost.get(host) ?? { count: 0, reasons: new Set() };
+      entry.count += 1;
+      entry.reasons.add(reason.split(";")[0]!.trim());
+      byHost.set(host, entry);
+    }
+    console.log("\nUndated by host:");
+    for (const [host, { count, reasons }] of [...byHost].sort(
+      (a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]),
+    )) {
+      console.log(
+        `  ${String(count).padStart(3)}  ${host}  (${[...reasons].join(", ")})`,
       );
     }
   }

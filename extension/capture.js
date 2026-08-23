@@ -13,7 +13,9 @@ export function collectPage() {
   const pick = (selector, attribute) => {
     const element = document.querySelector(selector);
     if (!element) return undefined;
-    const value = attribute ? element.getAttribute(attribute) : element.textContent;
+    const value = attribute
+      ? element.getAttribute(attribute)
+      : element.textContent;
     return value ? value.trim() : undefined;
   };
 
@@ -52,6 +54,25 @@ export function collectPage() {
     return visit(ldJson);
   };
 
+  // <time datetime="…">, which is what the outlets with neither ld+json nor og
+  // tags carry — see `shared/pageDate.ts`, which reads the same shapes off the
+  // html that the crawler fetches. Marked first; failing that, a page with one
+  // `<time>` on it is showing its own date, while several unmarked ones are a
+  // list of posts and none of them can be picked out as the article's.
+  const fromTime = (marked, allowLone) => {
+    const times = Array.from(document.querySelectorAll("time[datetime]"));
+    const label = (element) =>
+      `${element.getAttribute("itemprop") || ""} ${element.className || ""}`.toLowerCase();
+    const flagged = times.filter(
+      (element) =>
+        element.hasAttribute("pubdate") || marked.test(label(element)),
+    );
+    const chosen =
+      flagged[0] || (allowLone && times.length === 1 ? times[0] : undefined);
+    const value = chosen && chosen.getAttribute("datetime");
+    return value ? value.trim() : undefined;
+  };
+
   // The canonical url, so two readers capturing the same article through
   // different tracking links file it in the same place. The fragment always
   // goes; the query stays, because for some Polish sites it is the article id.
@@ -68,7 +89,8 @@ export function collectPage() {
     url = location.href.split("#")[0];
   }
 
-  const selection = (window.getSelection && window.getSelection().toString()) || "";
+  const selection =
+    (window.getSelection && window.getSelection().toString()) || "";
 
   return {
     // Returned raw, with no length rule applied. Whether a selection is long
@@ -86,7 +108,9 @@ export function collectPage() {
     publishedDate:
       fromLdJson("datePublished") ||
       pick('meta[property="article:published_time"]', "content") ||
+      fromTime(/publish|pubdat|entry-date|data-publikacji/, true) ||
       fromLdJson("dateModified") ||
+      fromTime(/modified|updat|aktualiz/, false) ||
       undefined,
     html: document.documentElement.outerHTML,
     ldJson: ldJson.length ? ldJson[0] : undefined,

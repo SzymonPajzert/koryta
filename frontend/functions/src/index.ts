@@ -13,6 +13,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { v1 } from "@google-cloud/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { extractPublishedDate } from "../../shared/pageDate";
 
 interface incomingUrl {
   url: string;
@@ -45,7 +46,7 @@ export const getPageMeta = functions.https.onCall<incomingUrl>(
         timeout: 10000, // 10 sekund
       });
 
-      const html = response.data;
+      const html = typeof response.data === "string" ? response.data : "";
       const $ = cheerio.load(html);
       const title = $("title").first().text().trim();
 
@@ -62,13 +63,31 @@ export const getPageMeta = functions.https.onCall<incomingUrl>(
         }
       }
 
+      // The date, read out of the whole page rather than out of `meta` by the
+      // caller. `ldJson` is the first block only, which on the outlets that
+      // lead with an Organization or BreadcrumbList block is the one without a
+      // date - and it is silent about the `article:published_time` meta tags
+      // and `<time datetime>`, which is what the rest of them carry. An article
+      // that arrives here undated is not listed on /zrodla at all, because that
+      // page sorts on `publishedDate` and a Firestore `orderBy` skips the
+      // documents missing the field.
+      const publishedDate = extractPublishedDate(html);
+
       if (!title) {
         // Jeśli tytuł jest pusty, ale strona została pobrana
         functions.logger.warn(`No title found for URL: ${url}`);
-        return { title: "", ...(meta ? { meta } : {}) };
+        return {
+          title: "",
+          ...(meta ? { meta } : {}),
+          ...(publishedDate ? { publishedDate } : {}),
+        };
       }
 
-      return { title: title, ...(meta ? { meta } : {}) };
+      return {
+        title: title,
+        ...(meta ? { meta } : {}),
+        ...(publishedDate ? { publishedDate } : {}),
+      };
     } catch (error: unknown) {
       functions.logger.error(
         `Error fetching page title for URL: ${url}`,
