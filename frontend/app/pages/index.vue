@@ -1,8 +1,11 @@
 <template>
   <HomeSection color>
+    <!-- Desktop only. On a phone the logo and the headline are most of the
+         first screen, and neither of them is something a reader can act on -
+         the search below is, so it starts the page instead. -->
     <v-container
       fluid
-      class="d-flex align-center justify-center overflow-hidden w-100"
+      class="d-none d-md-flex align-center justify-center overflow-hidden w-100"
     >
       <v-row justify="center" align="center" class="w-100 h-100">
         <v-col cols="12" md="3" class="d-flex align-center justify-center">
@@ -33,11 +36,19 @@
         </v-col>
       </v-row>
     </v-container>
+    <!-- Search and button in one wrapping flex line rather than an 8/4 grid.
+         The grid put them in columns with different padding, so on a phone,
+         where the columns stack, the button sat 20px to the left of the search
+         bar above it, and on a desktop it started at the 8/12 mark - a gap
+         wide enough to read as a stray control rather than as the search's
+         companion. Wrapping puts it under the search on a phone, at the same
+         left edge, and beside it everywhere else. -->
     <v-row class="align-center">
-      <v-col cols="12" md="8" class="d-flex pa-8">
-        <omni-search width="400px" />
-      </v-col>
-      <v-col cols="12" md="4">
+      <v-col
+        cols="12"
+        class="home-actions d-flex flex-wrap align-center ga-4 pa-4 pa-md-8"
+      >
+        <omni-search />
         <v-btn
           :append-icon="mdiChevronRight"
           color="secondary"
@@ -55,7 +66,10 @@
   <HomeSection>
     <HomeExplorer />
   </HomeSection>
-  <HomeSection>
+  <!-- Desktop only, for now. Both cards are a screen tall on a phone and both
+       lead somewhere the search bar already offers - "Lista wszystkich osób"
+       is its first entry, and it is the first thing on the page now. -->
+  <HomeSection class="d-none d-md-block">
     <v-row>
       <v-col cols="12" class="pa-0">
         <HomeHeading class="scroll-topic" title="Przeglądaj osoby" center />
@@ -146,6 +160,17 @@ const { toCheck } = useStats();
 </script>
 
 <style scoped>
+/* OmniSearch's root is `display: contents`, so the field itself is the flex
+   item on this line - which is why the `width: 400px` this page used to pass
+   never took, `.v-input` being `flex: 1 1 auto` and free to grow past it.
+   Sizing it as the flex item is what holds: it fills the line on a phone and
+   stops at the width the search was always meant to have. The basis is below
+   the narrowest phone, so the button wraps under it rather than squeezing it. */
+.home-actions :deep(.v-input) {
+  flex: 1 1 280px;
+  max-width: 400px;
+}
+
 .scroll-topic {
   scroll-margin-top: 100px; /* Adjust this value based on header height */
   /* For mobile you might want less, or use a media query */

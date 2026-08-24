@@ -1,7 +1,7 @@
 <template>
   <HomeHeading
     title="Ostatnie zatrudnienia"
-    subtitle="Kto ostatnio objął stanowisko. Kliknij, żeby zobaczyć całą ścieżkę tej osoby."
+    subtitle="Kto ostatnio objął stanowisko. Kliknij, żeby zobaczyć stronę tej osoby."
   />
 
   <v-infinite-scroll

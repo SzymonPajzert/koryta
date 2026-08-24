@@ -23,7 +23,10 @@
           <v-icon :icon="mdiPencilPlus" /> Chcę pomóc! (ankieta)
         </v-btn>
       </v-col>
-      <v-col cols="12" md="6" class="text-center">
+      <!-- Desktop only. On a phone it is the second button in a row of two
+           that both ask for the same thing, and /pomoc is already one tap away
+           from the top of the home page. -->
+      <v-col cols="12" md="6" class="text-center d-none d-md-block">
         <v-btn variant="elevated" color="primary" class="ma-2" to="/pomoc">
           Albo zacznij działać
         </v-btn>
