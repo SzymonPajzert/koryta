@@ -26,4 +26,23 @@ html {
 .v-btn--disabled.v-btn--variant-flat .v-btn__overlay {
   opacity: 0;
 }
+
+/* A link that is the row rather than a call to action - an entry name in a
+   list, where every row carries one and the browser default turns the whole
+   column blue. Reads as body text, underlines only when it is actually being
+   pointed at, so the affordance survives without the colour.
+
+   Global because the profile card and the review queue render the same
+   proposal and must not drift apart; `.zrodla-link` and `.contributors__link`
+   are older, scoped copies of these exact rules. */
+.link-plain,
+.link-plain:visited {
+  color: inherit;
+  text-decoration: none;
+}
+
+.link-plain:hover,
+.link-plain:focus-visible {
+  text-decoration: underline;
+}
 </style>

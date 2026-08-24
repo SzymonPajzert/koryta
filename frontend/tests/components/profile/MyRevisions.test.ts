@@ -89,9 +89,10 @@ describe("MyRevisions", () => {
 
     const link = wrapper.get('a[href="/osoba/n1?revisionId=rev1"]');
     // The class carries `color: inherit` and drops the underline; without it
-    // every row renders as blue underlined anchor, which is what the card
-    // looked like when it was reported.
-    expect(link.classes()).toContain("revisions__link");
+    // every row renders as a blue underlined anchor, which is what the card
+    // looked like when it was reported. Defined once in app.vue and shared
+    // with the review queue, so the two cannot drift apart.
+    expect(link.classes()).toContain("link-plain");
   });
 
   it("asks for everything until a status is chosen", async () => {

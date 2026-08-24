@@ -3,7 +3,7 @@
     <NuxtLink
       v-if="proposal.targetPath"
       :to="proposal.targetPath"
-      class="text-body-2 font-weight-medium"
+      class="link-plain text-body-2 font-weight-medium"
     >
       {{ name }}
     </NuxtLink>

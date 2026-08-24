@@ -92,7 +92,7 @@
             <NuxtLink
               v-if="row.targetPath"
               :to="`${row.targetPath}?revisionId=${row.id}`"
-              class="revisions__link text-body-2 font-weight-medium"
+              class="link-plain text-body-2 font-weight-medium"
             >
               {{ rowName(row) }}
             </NuxtLink>
@@ -365,20 +365,3 @@ const summaryChips = computed(() =>
 const rowName = (row: Proposal) =>
   row.targetName ?? (row.targetExists ? "Wpis bez nazwy" : "Usunięty wpis");
 </script>
-
-<style scoped>
-/* An entry name is the row, not a call to action, and there is one on every
-   row - as browser-default anchors that made the card a column of blue. Same
-   treatment as the source and contributor tables: reads as text, underlines
-   when it is actually being pointed at. */
-.revisions__link,
-.revisions__link:visited {
-  color: inherit;
-  text-decoration: none;
-}
-
-.revisions__link:hover,
-.revisions__link:focus-visible {
-  text-decoration: underline;
-}
-</style>
