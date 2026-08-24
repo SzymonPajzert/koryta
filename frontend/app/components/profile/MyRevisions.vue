@@ -23,15 +23,45 @@
       />
 
       <div v-if="anyProposals" class="d-flex flex-wrap ga-2 mb-3">
+        <!-- A chip both counts a state and selects it. `Zastąpione` only
+             counts: it has no stored form to filter on - see
+             `matchesStoredStatus` - and asking for it would really be asking
+             for approved. -->
         <v-chip
           v-for="chip in summaryChips"
           :key="chip.status"
           :color="chip.color"
-          variant="tonal"
+          :variant="chip.active ? 'flat' : 'tonal'"
           size="small"
+          :link="chip.selectable"
+          :disabled="chip.filterable && !chip.selectable"
+          :aria-pressed="chip.filterable ? chip.active : undefined"
+          :data-testid="`proposal-filter-${chip.status}`"
+          @click="chip.selectable ? toggleFilter(chip.status) : undefined"
         >
           {{ chip.label }} {{ chip.count }}
         </v-chip>
+
+        <v-btn
+          v-if="statusFilter !== 'all'"
+          size="x-small"
+          variant="text"
+          :prepend-icon="mdiClose"
+          data-testid="proposal-filter-clear"
+          @click="clearFilter"
+        >
+          Pokaż wszystkie
+        </v-btn>
+      </div>
+
+      <!-- Approved and superseded share one stored status, so the filter
+           cannot separate them and says so rather than looking like it
+           miscounted against the chip above. -->
+      <div
+        v-if="statusFilter === 'approved' && counts.superseded > 0"
+        class="text-caption text-medium-emphasis mb-3"
+      >
+        Razem z zastąpionymi - dla bazy to jedno i to samo „zatwierdzone”.
       </div>
 
       <v-alert
@@ -62,7 +92,7 @@
             <NuxtLink
               v-if="row.targetPath"
               :to="`${row.targetPath}?revisionId=${row.id}`"
-              class="text-body-2 font-weight-medium"
+              class="revisions__link text-body-2 font-weight-medium"
             >
               {{ rowName(row) }}
             </NuxtLink>
@@ -152,17 +182,19 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { mdiEarth } from "@mdi/js";
+import { mdiClose, mdiEarth } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { polishCounting } from "~/composables/polish";
 import { formatDaysAgo } from "~/utils/chartTheme";
 import {
   emptyProposalCounts,
+  proposalStatuses,
   proposalStatusHints,
   proposalStatusLabels,
   type Proposal,
   type ProposalCounts,
   type ProposalStatus,
+  type StoredStatusFilter,
 } from "~~/shared/proposals";
 import {
   notificationEnabled,
@@ -189,6 +221,10 @@ const counts = ref<ProposalCounts>(emptyProposalCounts());
 const total = ref(0);
 const truncated = ref(false);
 const page = ref(0);
+/** Which state the list is narrowed to, in the stored vocabulary the endpoint
+ * speaks. Paging and the filter share one request, so a narrowed list pages
+ * through its own matches rather than through everything. */
+const statusFilter = ref<StoredStatusFilter>("all");
 const pending = ref(false);
 const loaded = ref(false);
 const failed = ref(false);
@@ -199,7 +235,7 @@ const loadPage = async (next: number) => {
   try {
     const response = await authRequest<MyProposals>("/api/revisions/mine", {
       method: "GET",
-      query: { limit: PAGE_SIZE, page: next },
+      query: { limit: PAGE_SIZE, page: next, status: statusFilter.value },
     });
     rows.value =
       next === 1 ? response.revisions : [...rows.value, ...response.revisions];
@@ -222,8 +258,26 @@ onMounted(() => void loadPage(1));
 
 const loadMore = () => void loadPage(page.value + 1);
 
+/** Clicking the selected state clears the filter, so the same chip is both the
+ * way in and the way out. Always back to page one: the offsets belong to the
+ * previous selection. */
+const toggleFilter = (status: ProposalStatus) => {
+  const next = status === "superseded" ? "approved" : status;
+  statusFilter.value = statusFilter.value === next ? "all" : next;
+  void loadPage(1);
+};
+
+const clearFilter = () => {
+  statusFilter.value = "all";
+  void loadPage(1);
+};
+
 const hasMore = computed(() => rows.value.length < total.value);
-const anyProposals = computed(() => total.value > 0);
+/** Read off the counts, not off `total`: `total` is the filtered set, and a
+ * reader who narrowed to one state has not stopped having proposals. */
+const anyProposals = computed(() =>
+  proposalStatuses.some((status) => counts.value[status] > 0),
+);
 
 const { user, userConfig } = useAuthState();
 
@@ -279,6 +333,14 @@ const chipOrder: ProposalStatus[] = [
   "superseded",
 ];
 
+/** How many rows `?status=` would return for a chip. See `matchesStoredStatus`:
+ * approved and superseded are one stored status and cannot be asked for
+ * separately. */
+const selects = (status: ProposalStatus) =>
+  status === "approved"
+    ? counts.value.approved + counts.value.superseded
+    : counts.value[status];
+
 const summaryChips = computed(() =>
   chipOrder
     .filter((status) => status !== "superseded" || counts.value.superseded > 0)
@@ -287,6 +349,13 @@ const summaryChips = computed(() =>
       label: countLabels[status],
       color: proposalStatusLabels[status].color,
       count: counts.value[status],
+      filterable: status !== "superseded",
+      // What the filter would actually return, which is not the chip's own
+      // count for `approved`: superseded proposals share its stored status and
+      // come back with it. A chip that would select nothing is not offered -
+      // `disabled` on a v-chip is a look, not a guard, so the click checks too.
+      selectable: status !== "superseded" && selects(status) > 0,
+      active: statusFilter.value === status,
     })),
 );
 
@@ -296,3 +365,20 @@ const summaryChips = computed(() =>
 const rowName = (row: Proposal) =>
   row.targetName ?? (row.targetExists ? "Wpis bez nazwy" : "Usunięty wpis");
 </script>
+
+<style scoped>
+/* An entry name is the row, not a call to action, and there is one on every
+   row - as browser-default anchors that made the card a column of blue. Same
+   treatment as the source and contributor tables: reads as text, underlines
+   when it is actually being pointed at. */
+.revisions__link,
+.revisions__link:visited {
+  color: inherit;
+  text-decoration: none;
+}
+
+.revisions__link:hover,
+.revisions__link:focus-visible {
+  text-decoration: underline;
+}
+</style>
