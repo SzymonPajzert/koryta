@@ -655,29 +655,60 @@ def series_to_list(s: pd.Series) -> list[str]:
     return s.tolist()
 
 
-def settled_registers(already_scraped_krs: pd.DataFrame) -> dict[str, set[QueryType]]:
+def reopened_by_the_bulletin(
+    needs_refresh_krs: pd.DataFrame | None,
+) -> set[tuple[str, str]]:
+    """The (company, register) pairs the bulletin has moved since we looked.
+
+    `KRSNeedsRefresh` has already done this work: a row in it is a query
+    whose company the bulletin named after the date on our newest response
+    to that query. Read here as the one thing that can undo a 404.
+    """
+    if needs_refresh_krs is None or needs_refresh_krs.empty:
+        return set()
+    return set(
+        zip(
+            needs_refresh_krs["krs"].astype(str),
+            needs_refresh_krs["method"].astype(str),
+        )
+    )
+
+
+def settled_registers(
+    already_scraped_krs: pd.DataFrame, needs_refresh_krs: pd.DataFrame | None = None
+) -> dict[str, set[QueryType]]:
     """Register queries a company has already been given the answer to.
 
     A KRS entry lives in a register, and the other one answers 404. That is
     not a gap to be filled by asking again: the register has said what it
-    knows, and it will say the same next run. So the query is dropped for
-    good rather than re-issued whenever something else about the company
-    moves.
+    knows, and it will say the same next run - unless the company's entry
+    moves, which is the only way it can appear in a register that had said
+    it was not there. So the query is dropped until the bulletin names the
+    company again, rather than re-issued whenever anything else moves.
 
-    What this gives up: an association that later registers as an
-    entrepreneur gains an entry in a register that had answered 404 for it,
-    and nothing here will go back and look. It is rare, and the alternative
-    is a query per company per run for as long as the crawl exists.
+    The two numbers this rests on, over the crawl as it stood in August
+    2026: 2,539 registers have answered 404, and 473 of them have a bulletin
+    entry dated after that answer. So 2,066 queries stop immediately, and
+    the 473 are a one-off - re-asking stores a fresh response, the 404 it
+    confirms carries the newer date, and the company comes back only if its
+    entry moves again.
+
+    Without `needs_refresh_krs` every 404 stands. That is the reading
+    `jobs.krs_odpis` wants: it takes a 404 only as a hint at which register
+    to ask first, and a stale hint costs one request.
     """
     if "not_found" not in already_scraped_krs.columns:
         # An output written before the column existed. Nothing is settled,
         # which is what the code did before it.
         return {}
+    reopened = reopened_by_the_bulletin(needs_refresh_krs)
     settled: dict[str, set[QueryType]] = {}
     answered = already_scraped_krs[
         already_scraped_krs["not_found"].fillna(False).astype(bool)
     ]
     for krs, method in zip(answered["krs"], answered["method"]):
+        if (str(krs), str(method)) in reopened:
+            continue
         settled.setdefault(str(krs), set()).add(QueryType(method))
     return settled
 
@@ -746,8 +777,11 @@ def save_org_connections(
         .aggregate(series_to_list)
     )
 
-    settled = settled_registers(already_scraped_krs)
-    print(f"Registers already answered 404: {sum(len(s) for s in settled.values())}")
+    settled = settled_registers(already_scraped_krs, needs_refresh_krs)
+    print(
+        f"Registers already answered 404: {sum(len(s) for s in settled.values())} "
+        "(a register the bulletin has moved since is asked again)"
+    )
 
     for krs in connections:
         connections_methods: list[QueryType] = [
