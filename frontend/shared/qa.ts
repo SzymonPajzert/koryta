@@ -42,6 +42,23 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
 /** Newest first. Prepend, never insert in the middle. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "qa-link-in-admin-panel",
+    date: "2026-08-24",
+    title: "Lista QA schodzi z paska na panel",
+    description:
+      "Pasek u góry nie nosi już przycisku „QA” ani licznika, który przy " +
+      "każdym zgłoszonym problemie robił się czerwony na każdej podstronie. " +
+      "Wejście do listy jest teraz w panelu administracyjnym, a sama lista " +
+      "zostaje otwarta dla każdego zalogowanego.",
+    steps: [
+      "Zaloguj się i przejdź po kilku podstronach - w pasku pod górnym menu nie ma już przycisku „QA” ani liczby przy nim.",
+      "Wejdź na /admin i znajdź kafelek „QA” wśród podstron - ma prowadzić na /qa.",
+      "Wpisz /qa ręcznie w adres jako zwykły (nieadministrujący) użytkownik - strona ma się otworzyć normalnie.",
+    ],
+    link: "/admin",
+    area: "contributor",
+  },
+  {
     id: "home-recent-employments",
     date: "2026-08-23",
     title: "Ostatnie zatrudnienia na stronie głównej",

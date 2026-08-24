@@ -355,6 +355,7 @@ import {
   mdiNoteEditOutline,
   mdiTextBoxSearchOutline,
   mdiChartLine,
+  mdiClipboardCheckOutline,
   mdiChevronRight,
   mdiCheckCircleOutline,
   mdiGestureTapButton,
@@ -410,6 +411,12 @@ const subpages = [
     to: "/admin/opinie",
     icon: mdiMessageAlertOutline,
     desc: "Opinie i błędy zgłoszone przyciskiem na stronie i przy sprawdzaniu QA.",
+  },
+  {
+    title: "QA",
+    to: "/qa",
+    icon: mdiClipboardCheckOutline,
+    desc: "Lista zmian na stronie do sprawdzenia - otwarta dla każdego zalogowanego.",
   },
   {
     title: "Ekstrakcje",

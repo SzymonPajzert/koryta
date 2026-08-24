@@ -114,16 +114,21 @@ test.describe("QA changelog", () => {
     }
   });
 
-  test("the toolbar counts what is left to check", async ({ page }) => {
+  test("QA is reached from the admin panel, not from the toolbar", async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
 
-    // Lands straight on /qa, so the spec does not race a second navigation.
-    await logIn(page, undefined, "/qa");
+    await logIn(page, USERS.admin, "/admin");
 
-    const qaButton = page.getByRole("link", { name: "QA" }).first();
-    await expect(qaButton).toBeVisible({ timeout: 30_000 });
-    // Nothing in a fresh emulator has been checked, so the badge counts them
-    // all - a number, not an empty badge.
-    await expect(qaButton).toContainText(/\d+/);
+    // The panel is the one place that links to the changelog now.
+    await expect(page.locator('a[href="/qa"]').first()).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // The contributor toolbar used to carry a QA button with a badge that
+    // turned red for any reported problem, on every page of the site. Both are
+    // gone deliberately, so a link reappearing there is a regression.
+    await expect(page.locator('.user-toolbar a[href="/qa"]')).toHaveCount(0);
   });
 });
