@@ -3,6 +3,7 @@ import collections
 import math
 import typing
 from dataclasses import asdict
+from datetime import date, datetime
 from functools import cached_property
 
 import numpy as np
@@ -238,6 +239,8 @@ class PeoplePayloads(Pipeline[Person]):
                 f"https://pl.wikipedia.org/wiki/{wiki_name.replace(' ', '_')}"
             )
 
+        birth_date = _iso_date(get_scalar("birth_date"))
+
         rejestr_id = one_register_entry(row["rejestrio_id"])
         rejestrIo = f"https://rejestr.io/osoby/{rejestr_id}"
 
@@ -260,7 +263,37 @@ class PeoplePayloads(Pipeline[Person]):
             wikipedia=wikipedia_url,
             rejestrIo=rejestrIo,
             korytaId=koryta_id,
+            birthDate=birth_date,
         )
+
+
+def _iso_date(value: typing.Any) -> str | None:
+    """A birth date as `YYYY-MM-DD`, or None when there is not one.
+
+    The column arrives in whatever shape the join left it: an ISO string from
+    `people_krs_merged`, a `Timestamp` once pandas has parsed a frame, `NaT` or
+    `NaN` for a person nobody has a date for. `pd.isna` is what recognises all
+    three absences - `not value` does not, because `NaT` is truthy.
+
+    Anything that does not parse is dropped rather than passed on. The ingest
+    would reject it anyway, and a person is worth storing without a birth date.
+    """
+    if value is None or (not isinstance(value, (list, np.ndarray)) and pd.isna(value)):
+        return None
+    if isinstance(value, str):
+        text = value.strip()[:10]
+        try:
+            return date.fromisoformat(text).isoformat()
+        except ValueError:
+            return None
+    if isinstance(value, (datetime, date)):
+        return (
+            value.date().isoformat()
+            if isinstance(value, datetime)
+            else value.isoformat()
+        )
+    parsed = pd.to_datetime(value, errors="coerce")
+    return None if pd.isna(parsed) else parsed.date().isoformat()
 
 
 press_lists = press_list_evidence()

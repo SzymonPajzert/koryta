@@ -75,6 +75,7 @@ def payload(**overrides):
         "parties": ["PiS"],
         "wikipedia": None,
         "rejestrIo": "https://rejestr.io/osoby/123",
+        "birthDate": None,
     }
     base.update(overrides)
     return base
@@ -177,6 +178,22 @@ def test_a_rejestr_io_link_the_node_lacks_is_kept():
     snapshot = SiteSnapshot(nodes(person={"rejestrIo": None}), edges())
 
     assert snapshot.changes(payload()) == [PERSON_FIELDS]
+
+
+def test_a_birth_date_the_node_lacks_is_kept():
+    snapshot = SiteSnapshot(nodes(), edges())
+
+    assert snapshot.changes(payload(birthDate="1967-09-20")) == [PERSON_FIELDS]
+
+
+def test_a_birth_date_the_node_already_carries_is_dropped():
+    """`updatedPerson` fills this in and never rewrites it, so a payload that
+    disagrees with a stored date writes nothing at all. A filter that counted
+    the disagreement as a change would keep every one of the 106020 people the
+    register has a date for, forever."""
+    snapshot = SiteSnapshot(nodes(person={"birthDate": "1967-09-21"}), edges())
+
+    assert snapshot.changes(payload(birthDate="1967-09-20")) == []
 
 
 def test_an_empty_content_is_not_a_change():

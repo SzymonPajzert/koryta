@@ -395,6 +395,14 @@ class SiteSnapshot:
             if value:
                 learned[key] = value
 
+        # Filled in, never rewritten, so a payload restating a date the node
+        # already carries writes nothing and must not keep the payload alive.
+        # `updatedPerson` is the only field with this rule; the rest above are
+        # last-write-wins.
+        birth_date = field(payload, "birthDate")
+        if birth_date and not data.get("birthDate"):
+            learned["birthDate"] = birth_date
+
         return any(value != data.get(key) for key, value in learned.items())
 
     def company_changes(self, payload: typing.Mapping[str, typing.Any]) -> list[str]:
