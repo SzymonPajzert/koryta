@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import date, datetime
 from enum import Enum
 from typing import Optional
@@ -180,6 +181,26 @@ def format_person_name(name: str) -> str:
     # Substituting word by word rather than splitting and rejoining is what
     # leaves the whitespace between them as it was.
     return re.sub(r"\S+", word, name)
+
+
+def normalize_person_name(name: str) -> str:
+    """A person's name folded down to what two spellings of them share.
+
+    A transcription of `normalizePersonName` in `frontend/shared/names.ts`, and
+    it has to stay one: the site stores the result on every person node as
+    `nameNormalized` and the ingest looks a person up by it, so a pipeline that
+    folded a name differently would predict the wrong page. Same steps in the
+    same order - strip the combining marks NFD exposes, then `ł` and `Ł`, which
+    are their own codepoints and survive NFD, then lowercase, then anything
+    left that is not a letter or a digit becomes a word break.
+
+    Deliberately looser than `format_person_name`, which is about how a name is
+    *shown*. This one is only ever a key.
+    """
+    decomposed = unicodedata.normalize("NFD", name)
+    stripped = "".join(char for char in decomposed if not unicodedata.combining(char))
+    folded = stripped.replace("ł", "l").replace("Ł", "l").lower()
+    return re.sub(r"[^a-z0-9]+", " ", folded).strip()
 
 
 def parse_polish_date(date_string: str) -> Optional[date]:

@@ -133,13 +133,25 @@ def test_a_shared_name_is_no_obstacle_once_the_links_are_known():
     assert len(matching_one_page(payloads, snapshot)) == 2
 
 
-def test_the_match_is_exact():
-    """`where("name", "==", ...)` is; a filter that is looser than the lookup
-    passes through payloads that go on to create a second person."""
+def test_the_match_folds_the_spellings_the_lookup_folds():
+    """`lookupPersonByName` asks for `nameNormalized` before it asks for the
+    name, so case, diacritics and spacing are not what tells two people apart -
+    and a filter stricter than the lookup drops payloads the ingest would have
+    landed on a page."""
+    snapshot = site(("1", "Rafał Trzaskowski", None))
+    for spelling in ("rafal trzaskowski", "Rafal  Trzaskowski", "RAFAŁ TRZASKOWSKI"):
+        assert names(matching_one_page([payload(spelling)], snapshot)) == [spelling]
+
+
+def test_a_name_that_folds_onto_two_pages_is_still_ambiguous():
+    """One key to the ingest is one key here: `limit(1)` picks between them."""
+    snapshot = site(("1", "Rafał Kowalski", None), ("2", "Rafal Kowalski", None))
+    assert matching_one_page([payload("Rafal Kowalski")], snapshot) == []
+
+
+def test_a_different_person_is_still_a_different_person():
     snapshot = site(("1", "Jan Kowalski", None))
-    assert matching_one_page([payload("jan kowalski")], snapshot) == []
-    assert matching_one_page([payload("Jan  Kowalski")], snapshot) == []
-    assert matching_one_page([payload("Jan Kowalski ")], snapshot) == []
+    assert matching_one_page([payload("Jan Nowak")], snapshot) == []
 
 
 def test_the_pipeline_reads_the_site_off_the_export():
@@ -287,3 +299,20 @@ def test_asking_for_both_halves_is_an_error():
     with patch.object(sys, "argv", argv):
         with pytest.raises(ValueError, match="disjoint"):
             PeoplePayloads().args
+
+
+def test_the_inverse_folds_the_spellings_too():
+    """The counterpart of `test_the_match_folds_the_spellings_the_lookup_folds`:
+    a payload the lookup would land on a stored page is not somebody new, so
+    submitting it under --not-on-koryta would create the duplicate the folded
+    match exists to prevent."""
+    snapshot = site(("1", "Rafał Trzaskowski", None))
+    assert missing_from_koryta([payload("Rafal Trzaskowski")], snapshot) == []
+
+
+def test_two_payloads_that_fold_together_would_collapse():
+    """The second upload's fallback finds the page the first one created, and
+    `nameNormalized` is what it finds it by - so a difference of diacritics is
+    no longer enough to keep two new people apart."""
+    payloads = [payload("Rafał Kowalski"), payload("Rafal Kowalski")]
+    assert missing_from_koryta(payloads, site()) == []

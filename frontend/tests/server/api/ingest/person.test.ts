@@ -155,7 +155,10 @@ describe("api/ingest/person", () => {
       ],
     });
 
-    // Person query: Empty (creating new person)
+    // Person query: Empty (creating new person). Twice, because a miss on
+    // `nameNormalized` falls back to the exact-name query for the people
+    // stored before that field existed.
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockDoc.mockReturnValueOnce({
       id: "person-id",
@@ -237,6 +240,8 @@ describe("api/ingest/person", () => {
       ref: mockRef,
     });
 
+    // Two empties: the normalized lookup and then the exact-name fallback.
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockDoc.mockReturnValueOnce({
       id: "person-id",
@@ -698,6 +703,81 @@ describe("api/ingest/person", () => {
       });
     }
 
+    it("matches a stored person whose name is spelled with diacritics", async () => {
+      // The reason `nameNormalized` is stored at all. The graph has what the
+      // register wrote and the payload has what the scraper read, so the old
+      // equality on `name` read this as somebody new - and the second node
+      // took that run's employments, candidacies and mentions with it, leaving
+      // the votes and notes behind on the first.
+      personExists({
+        name: "Rafał Trzaskowski",
+        type: "person",
+        parties: [],
+      });
+      mockReadBody.mockResolvedValue({
+        name: "Rafal Trzaskowski",
+        parties: ["PiS"],
+        companies: [],
+        elections: [],
+      });
+
+      const result = await handler({} as any);
+
+      // Matched rather than created.
+      expect(result.personId).toBe("person-id");
+      // One query, and it asked for the folded name: the fallback is only
+      // reached when the first misses.
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(mockWhere).toHaveBeenCalledWith(
+        "nameNormalized",
+        "==",
+        "rafal trzaskowski",
+      );
+      // Matched rather than created, and the stored spelling wins: the
+      // revision restates the name the register gave, not the one the payload
+      // arrived with, so a run that dropped the diacritics cannot strip them
+      // off a live page.
+      const call = vi.mocked(createRevisionTransaction).mock.calls[0]!;
+      expect(call[4]).toMatchObject({ name: "Rafał Trzaskowski" });
+    });
+
+    it("falls back to the exact name for a person written before the field", async () => {
+      // `nameNormalized` is only on a node once the trigger has been deployed
+      // and scripts/migrate/backfill-person-name-normalized.ts has run. An
+      // ingest in between the two must not read every stored person as
+      // missing.
+      mockGet.mockReset();
+      mockDoc.mockReset();
+      mockDoc.mockReturnValue({
+        id: "person-id",
+        parent: nodesParent,
+        ref: mockRef,
+      });
+      mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+      mockGet.mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            id: "person-id",
+            ref: mockRef,
+            data: () => ({ name: "Test Person", type: "person", parties: [] }),
+          },
+        ],
+      });
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        parties: ["PiS"],
+        companies: [],
+        elections: [],
+      });
+
+      const result = await handler({} as any);
+
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(mockWhere).toHaveBeenCalledWith("name", "==", "Test Person");
+      expect(result.personId).toBe("person-id");
+    });
+
     it("writes the party the pipeline has learned since", async () => {
       // The whole point of mapping committees to parties: 6077 people are
       // already stored, and until now nothing the pipeline learned about one
@@ -1012,8 +1092,9 @@ describe("api/ingest/person", () => {
 });
 
 describe("api/ingest/person, a candidacy the site cannot place", () => {
-  /** A new person with `elections` and nothing else. The person lookup misses,
-   * so the node is created; every `mockGet` after the first belongs to the
+  /** A new person with `elections` and nothing else. The person lookup misses
+   * twice - on `nameNormalized` and then on the exact-name fallback - so the
+   * node is created; every `mockGet` after those two belongs to the
    * candidacies. */
   function newPersonWith(elections: unknown[], ...regionLookups: unknown[]) {
     mockReadBody.mockResolvedValue({
@@ -1029,6 +1110,7 @@ describe("api/ingest/person, a candidacy the site cannot place", () => {
       parent: nodesParent,
       ref: mockRef,
     });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
     mockDoc.mockReturnValueOnce({
       id: "person-id",

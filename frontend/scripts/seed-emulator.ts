@@ -9,6 +9,7 @@ import { generateChunksLower } from "../shared/search";
 import { computeEdgeStats } from "../shared/stats";
 import { bodyIsPaidPost } from "../shared/companyBodies";
 import type { Edge } from "../shared/model";
+import { normalizePersonName } from "../shared/names";
 
 import nodes from "./nodes.json";
 import edges from "./edges.json";
@@ -189,6 +190,14 @@ async function seedDatabase() {
     // which is why every spec that searched for a full name found nobody.
     if (typeof nodeData.name === "string") {
       nodeData.nameChunksLower = generateChunksLower(nodeData.name);
+      // The key the person ingest looks a person up by, written here for the
+      // same reason the chunks are: the trigger that maintains it in
+      // production does not run against a fixture loaded straight into the
+      // emulator, so without this a seeded person is invisible to the lookup
+      // and every ingest spec would create a duplicate.
+      if (nodeData.type === "person") {
+        nodeData.nameNormalized = normalizePersonName(nodeData.name);
+      }
     }
     // JSON has no timestamp, and the collection stores one - the same
     // conversion the extractions below need. Without a date at all an article

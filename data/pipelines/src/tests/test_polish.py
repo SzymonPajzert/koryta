@@ -1,6 +1,11 @@
 import pytest
 
-from util.polish import PkwFormat, format_person_name, parse_name
+from util.polish import (
+    PkwFormat,
+    format_person_name,
+    normalize_person_name,
+    parse_name,
+)
 
 
 def all_configurations(first_name, middle_name, last_name):
@@ -119,3 +124,40 @@ def test_format_person_name_is_idempotent(raw):
     """
     once = format_person_name(raw)
     assert format_person_name(once) == once
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("Rafał Trzaskowski", "rafal trzaskowski"),
+        ("Rafal Trzaskowski", "rafal trzaskowski"),
+        ("RAFAŁ TRZASKOWSKI", "rafal trzaskowski"),
+        # ł and Ł are their own codepoints, so NFD leaves them alone and they
+        # need their own replacement - the one bug this function is easy to
+        # write with.
+        ("Łukasz Żółw", "lukasz zolw"),
+        # Hyphens, apostrophes and dots are word breaks, not characters.
+        ("Jerzy Hardie-Douglas", "jerzy hardie douglas"),
+        ("D'Obyrn", "d obyrn"),
+        ("Jan  Kowalski ", "jan kowalski"),
+        # Nothing a name can be reduced to is still nothing: the caller has to
+        # fall back rather than look a page up under the empty key.
+        ("   ", ""),
+        ("???", ""),
+    ],
+)
+def test_normalize_person_name(raw, expected):
+    """A transcription of `normalizePersonName` in `frontend/shared/names.ts`.
+
+    The cases are the ones that distinguish the two implementations rather than
+    a sample: if these agree, the pipeline predicts the page the ingest's
+    `nameNormalized` lookup would land on.
+    """
+    assert normalize_person_name(raw) == expected
+
+
+def test_normalize_person_name_is_idempotent():
+    """It is a key, and a key of a key has to be the same key."""
+    for raw in ("Rafał Trzaskowski", "Jerzy Hardie-Douglas", "Łukasz Żółw"):
+        once = normalize_person_name(raw)
+        assert normalize_person_name(once) == once

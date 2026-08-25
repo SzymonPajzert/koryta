@@ -23,6 +23,7 @@ import type {
   NodeType,
 } from "~~/shared/model";
 import { pageIsPublic } from "~~/shared/model";
+import { normalizePersonName } from "~~/shared/names";
 import {
   personRequestSchema,
   type EntityResult,
@@ -651,7 +652,11 @@ async function lookupNodeDoc(
  * 3. Failing that, the name - but only onto a page that has *no* register entry
  *    of its own. 880 people predate the pipeline sending one, and refusing to
  *    match them would give every one of them a second page on the next run. The
- *    match adopts the entry, so it happens once per person.
+ *    match adopts the entry, so it happens once per person. Matched on
+ *    `nameNormalized` first: the two sides disagree about diacritics and case
+ *    as well as about middle names, so "Rafal Trzaskowski" read a stored "Rafał
+ *    Trzaskowski" as somebody the site did not have and the run created a
+ *    second node for a person who already had one.
  * 4. A page whose register entry is a *different* one is not a match, however
  *    the two are spelled. That is the whole of the collapse bug: it is what
  *    used to put two strangers who share a name on one page, and let the second
@@ -684,12 +689,43 @@ async function lookupPersonDoc(
     if (byRegister) return byRegister;
   }
 
-  const byName = await lookupNodeDoc(ctx, "name", body.name, "person");
+  const byName = await lookupPersonByName(ctx, body.name);
   if (!byName) return undefined;
 
   const storedRegister = byName.data()?.rejestrIo;
   if (!body.rejestrIo || !storedRegister) return byName;
   return storedRegister === body.rejestrIo ? byName : undefined;
+}
+
+/** The person stored under this name, folding the spellings apart.
+ *
+ * Firestore cannot call a function on its side of a comparison, so the folded
+ * form has to be a stored field: `onNodeWritten` in `functions/src/nodes.ts`
+ * writes `nameNormalized` for person nodes, it is internal like
+ * `nameChunksLower` so no revision carries it, and `seed-emulator.ts` computes
+ * it too or a seeded person would be invisible here.
+ *
+ * The exact-name query is kept as a fallback rather than dropped. A node only
+ * has `nameNormalized` once the trigger is deployed *and*
+ * `scripts/migrate/backfill-person-name-normalized.ts` has run, and those are
+ * two manual steps: in between, a lookup on the new field alone would read
+ * every stored person as missing and duplicate all of them. It costs a second
+ * read only when the first misses.
+ *
+ * The stored spelling wins either way. `updatedPerson` layers what the payload
+ * learned over the stored document, so the name it restates is the stored one
+ * and a run that read the name without its diacritics cannot strip them off a
+ * live page.
+ */
+async function lookupPersonByName(
+  ctx: Context,
+  name: string,
+): Promise<FirebaseFirestore.DocumentSnapshot | undefined> {
+  const normalized = normalizePersonName(name);
+  const folded = normalized
+    ? await lookupNodeDoc(ctx, "nameNormalized", normalized, "person")
+    : undefined;
+  return folded ?? (await lookupNodeDoc(ctx, "name", name, "person"));
 }
 
 /** The edge recording this fact, creating it if the database has no such edge.

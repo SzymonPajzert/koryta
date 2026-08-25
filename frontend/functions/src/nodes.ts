@@ -2,6 +2,7 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 import { pageIsPublic } from "../../shared/model";
 import { generateChunksLower } from "../../shared/search";
+import { normalizePersonName } from "../../shared/names";
 
 export const onNodeWritten = onDocumentWritten(
   {
@@ -48,6 +49,22 @@ export const onNodeWritten = onDocumentWritten(
         ) {
           updatePayload["nameChunksLower"] = nameChunksLower;
         }
+      }
+    }
+
+    // People only. `normalizePersonName` folds case, diacritics and hyphens,
+    // which is what two spellings of one person share - a company's name is
+    // matched on its KRS number instead, and giving one this field would only
+    // make the ingest's lookup ambiguous about what it had found.
+    //
+    // Firestore cannot call a function on its side, so the ingest's "do we
+    // already have this person" query has to compare a stored field. That is
+    // the whole reason this is written here: see `lookupPersonDoc` in
+    // `server/api/ingest/person.post.ts`.
+    if (afterData.type === "person" && typeof afterData.name === "string") {
+      const nameNormalized = normalizePersonName(afterData.name);
+      if (nameNormalized && afterData.nameNormalized !== nameNormalized) {
+        updatePayload["nameNormalized"] = nameNormalized;
       }
     }
 

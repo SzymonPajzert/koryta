@@ -113,6 +113,7 @@ export const INTERNAL_FIELDS = new Set([
   "merged_into", // where a duplicate page's readers are sent, see utils/merge
   "needs_split", // an admin's note that the page is two people, see nodes/split
   "nameChunksLower", // used for search indexing
+  "nameNormalized", // regenerated from the name; the ingest's person lookup
 ]);
 
 /** The existing node's fields, to layer a partial update on top of.

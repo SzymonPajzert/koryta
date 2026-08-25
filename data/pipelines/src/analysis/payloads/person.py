@@ -16,7 +16,7 @@ from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
-from util.polish import format_person_name
+from util.polish import format_person_name, normalize_person_name
 
 #: How many unrecognised committees to name when reporting what the party
 #: mapping is missing. Enough to act on, short enough to read.
@@ -410,19 +410,25 @@ def matching_one_page(payloads: list[Person], snapshot: SiteSnapshot) -> list[Pe
     wrong candidacy on a real page is a worse outcome than a missing one. Both
     counts are reported, because they are the part of the backlog a run leaves.
     """
-    candidates = collections.Counter(person.name for person in payloads)
+    # Counted on the folded name, because that is the key the ingest's fallback
+    # collides on: "Rafal Kowalski" and "Rafał Kowalski" are one query to it and
+    # so are one candidate here.
+    candidates = collections.Counter(
+        normalize_person_name(person.name) for person in payloads
+    )
 
     result: list[Person] = []
     created = 0
     ambiguous: set[str] = set()
     for person in payloads:
         payload = asdict(person)
+        folded = normalize_person_name(person.name)
         stored = snapshot.person_for(payload)
         if stored is None:
             created += 1
         elif identified_by(snapshot, payload):
             result.append(person)
-        elif candidates[person.name] == 1 and snapshot.people_named[person.name] == 1:
+        elif candidates[folded] == 1 and snapshot.people_named[folded] == 1:
             result.append(person)
         else:
             ambiguous.add(person.name)
@@ -455,18 +461,25 @@ def missing_from_koryta(payloads: list[Person], snapshot: SiteSnapshot) -> list[
     Namesakes the site already has separate pages for are not this case - those
     payloads resolve, so they never reach here.
     """
+    # Folded, because that is the key the ingest's name fallback would collide
+    # these payloads on once the first of them has created a node.
     unlinked_names = {
-        person.name for person in payloads if field(asdict(person), "rejestrIo") is None
+        normalize_person_name(person.name)
+        for person in payloads
+        if field(asdict(person), "rejestrIo") is None
     }
-    candidates = collections.Counter(person.name for person in payloads)
+    candidates = collections.Counter(
+        normalize_person_name(person.name) for person in payloads
+    )
 
     result: list[Person] = []
     stored_count = 0
     ambiguous: set[str] = set()
     for person in payloads:
+        folded = normalize_person_name(person.name)
         if snapshot.person_for(asdict(person)) is not None:
             stored_count += 1
-        elif candidates[person.name] > 1 and person.name in unlinked_names:
+        elif candidates[folded] > 1 and folded in unlinked_names:
             ambiguous.add(person.name)
         else:
             result.append(person)
