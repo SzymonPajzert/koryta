@@ -57,6 +57,15 @@ class Person:
     #: could work it out. The site's own key, so the ingest does not have to
     #: infer who this is - see `lookupPersonDoc`.
     korytaId: str | None = None
+    #: Date of birth as `YYYY-MM-DD`, from rejestr.io by way of
+    #: `people_krs_merged`, which carries one for all 106020 people it holds.
+    #:
+    #: The field the whole identity problem turns on. Matching a name against
+    #: the ~6100 people on koryta.pl leaves 15.8% of them ambiguous; a name plus
+    #: this leaves 0.02%. It was computed all along and dropped here - the
+    #: dataclass had nowhere to put it, so `payloads/person.py` never read the
+    #: column it was iterating past.
+    birthDate: str | None = None
 
 
 @dataclass
