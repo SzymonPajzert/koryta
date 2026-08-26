@@ -107,52 +107,6 @@ export const QA_ITEMS: QaItem[] = [
     area: "public",
   },
   {
-    id: "kto-kogo-zastapil",
-    date: "2026-08-24",
-    title: "Kto kogo zastąpił w spółce",
-    description:
-      "Na stronie instytucji jest nowa sekcja „Kto kogo zastąpił”: pary " +
-      "ustępujący - obejmujący stanowisko, dobrane w obrębie jednej spółki i " +
-      "jednej funkcji. Zmiany z tego samego dnia zebrane są w jedno " +
-      "wydarzenie, bo tak właśnie rejestr zapisuje wymianę całej rady. Na " +
-      "stronie osoby to samo widać od jej strony, w sekcji „Zmiany na " +
-      "stanowisku”, a w historii powiązań przy takim wpisie stoi linijka " +
-      "„Wcześniej: …”.",
-    steps: [
-      "Wejdź na stronę dużej spółki (np. przez wyszukiwarkę wpisz „Tauron”) i zjedź do sekcji „Kto kogo zastąpił”.",
-      "Znajdź kartę z kilkoma zmianami z jednej daty - ma mieć jeden nagłówek z datą i odznakę „N zmian tego samego dnia”, a nie N osobnych kart.",
-      "Sprawdź opis przerwy przy strzałce: „tego samego dnia”, „po N dniach przerwy” albo „wpisy nachodzą na siebie o N dni”.",
-      "Kliknij nazwisko po obu stronach strzałki - ma otwierać stronę tej osoby.",
-      "Zwęź okno do szerokości telefonu - wiersz ma się przełamać w pionie, strona nie może przewijać się w bok.",
-      "Wejdź na stronę osoby, która kogoś zastąpiła (np. /osoba/marzena-slomka-a8sCGsKrCC6OyVDmkOeg) - pod historią powiązań ma być sekcja „Zmiany na stanowisku” z liczbą „N z M powiązań”.",
-      "Wyloguj się i otwórz tę samą stronę spółki - zmian ma być mniej, a pod sekcją ma stać informacja, ilu nie pokazujemy, bo brakuje strony jednej z osób.",
-      "Zaloguj się z powrotem i odśwież tę stronę (F5, nie klikając w menu) - napis „nie pokazujemy” ma zniknąć, a brakujące osoby mają się pojawić z nazwiskami.",
-    ],
-    link: "/eksploruj/tabela",
-    area: "public",
-  },
-  {
-    id: "instytucja-ma-wlasna-strone",
-    date: "2026-08-24",
-    title: "Instytucja ma znów własną stronę",
-    description:
-      "Kliknięcie w spółkę nie przenosi już do tabeli osób przefiltrowanej " +
-      "do niej, tylko na stronę tej spółki: numery rejestrowe z odnośnikiem " +
-      "do rejestr.io, siedziba, właściciele, spółki zależne, obecny skład, " +
-      "historia powiązań i graf. Tabela jest nadal dostępna przyciskiem " +
-      "„Eksploruj powiązania”.",
-    steps: [
-      "W wyszukiwarce u góry wpisz nazwę spółki i wybierz ją - ma się otworzyć adres /instytucja/… , a nie /eksploruj/tabela.",
-      "Sprawdź kartę na górze: nazwa, „Instytucja publiczna”, numer KRS jako podkreślony odnośnik (nie jasnozielony) prowadzący do rejestr.io.",
-      "Kliknij „Eksploruj powiązania” - ma otworzyć starą tabelę przefiltrowaną do tej spółki.",
-      "Sprawdź, że sekcja „Historia powiązań” pojawia się raz, a nie dwa razy (kiedyś te same powiązania rysowały się też jako kafelki niżej).",
-      "Wejdź na stronę osoby i kliknij w jej miejsce pracy - ma prowadzić na stronę spółki.",
-      "Otwórz stronę instytucji bez numeru KRS (ministerstwo, urząd) - zamiast KRS mają być REGON i NIP.",
-    ],
-    link: "/",
-    area: "public",
-  },
-  {
     id: "extraction-matched-person",
     date: "2026-08-25",
     title: "Fakt z artykułu pokazuje, do kogo z bazy został przypisany",
@@ -274,6 +228,52 @@ export const QA_ITEMS: QaItem[] = [
     ],
     link: "/admin/opinie",
     area: "admin",
+  },
+  {
+    id: "kto-kogo-zastapil",
+    date: "2026-08-24",
+    title: "Kto kogo zastąpił w spółce",
+    description:
+      "Na stronie instytucji jest nowa sekcja „Kto kogo zastąpił”: pary " +
+      "ustępujący - obejmujący stanowisko, dobrane w obrębie jednej spółki i " +
+      "jednej funkcji. Zmiany z tego samego dnia zebrane są w jedno " +
+      "wydarzenie, bo tak właśnie rejestr zapisuje wymianę całej rady. Na " +
+      "stronie osoby to samo widać od jej strony, w sekcji „Zmiany na " +
+      "stanowisku”, a w historii powiązań przy takim wpisie stoi linijka " +
+      "„Wcześniej: …”.",
+    steps: [
+      "Wejdź na stronę dużej spółki (np. przez wyszukiwarkę wpisz „Tauron”) i zjedź do sekcji „Kto kogo zastąpił”.",
+      "Znajdź kartę z kilkoma zmianami z jednej daty - ma mieć jeden nagłówek z datą i odznakę „N zmian tego samego dnia”, a nie N osobnych kart.",
+      "Sprawdź opis przerwy przy strzałce: „tego samego dnia”, „po N dniach przerwy” albo „wpisy nachodzą na siebie o N dni”.",
+      "Kliknij nazwisko po obu stronach strzałki - ma otwierać stronę tej osoby.",
+      "Zwęź okno do szerokości telefonu - wiersz ma się przełamać w pionie, strona nie może przewijać się w bok.",
+      "Wejdź na stronę osoby, która kogoś zastąpiła (np. /osoba/marzena-slomka-a8sCGsKrCC6OyVDmkOeg) - pod historią powiązań ma być sekcja „Zmiany na stanowisku” z liczbą „N z M powiązań”.",
+      "Wyloguj się i otwórz tę samą stronę spółki - zmian ma być mniej, a pod sekcją ma stać informacja, ilu nie pokazujemy, bo brakuje strony jednej z osób.",
+      "Zaloguj się z powrotem i odśwież tę stronę (F5, nie klikając w menu) - napis „nie pokazujemy” ma zniknąć, a brakujące osoby mają się pojawić z nazwiskami.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
+    id: "instytucja-ma-wlasna-strone",
+    date: "2026-08-24",
+    title: "Instytucja ma znów własną stronę",
+    description:
+      "Kliknięcie w spółkę nie przenosi już do tabeli osób przefiltrowanej " +
+      "do niej, tylko na stronę tej spółki: numery rejestrowe z odnośnikiem " +
+      "do rejestr.io, siedziba, właściciele, spółki zależne, obecny skład, " +
+      "historia powiązań i graf. Tabela jest nadal dostępna przyciskiem " +
+      "„Eksploruj powiązania”.",
+    steps: [
+      "W wyszukiwarce u góry wpisz nazwę spółki i wybierz ją - ma się otworzyć adres /instytucja/… , a nie /eksploruj/tabela.",
+      "Sprawdź kartę na górze: nazwa, „Instytucja publiczna”, numer KRS jako podkreślony odnośnik (nie jasnozielony) prowadzący do rejestr.io.",
+      "Kliknij „Eksploruj powiązania” - ma otworzyć starą tabelę przefiltrowaną do tej spółki.",
+      "Sprawdź, że sekcja „Historia powiązań” pojawia się raz, a nie dwa razy (kiedyś te same powiązania rysowały się też jako kafelki niżej).",
+      "Wejdź na stronę osoby i kliknij w jej miejsce pracy - ma prowadzić na stronę spółki.",
+      "Otwórz stronę instytucji bez numeru KRS (ministerstwo, urząd) - zamiast KRS mają być REGON i NIP.",
+    ],
+    link: "/",
+    area: "public",
   },
   {
     id: "entity-page-admin-revisions-link",
