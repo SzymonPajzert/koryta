@@ -216,7 +216,7 @@ describe("getGraphBFS", () => {
   const edges = [spell("F", "A"), spell("B", "A"), spell("B", "y")];
 
   it("stamps every node with how far out it sits", () => {
-    const result = getGraphBFS("F", [], 2, edges, nodes);
+    const result = getGraphBFS(["F"], [], 2, edges, nodes);
 
     expect(result.F?.depth).toBe(0);
     expect(result.A?.depth).toBe(1);
@@ -224,13 +224,13 @@ describe("getGraphBFS", () => {
   });
 
   it("stops at the depth it was asked for, and keeps nothing unreachable", () => {
-    const result = getGraphBFS("F", [], 2, edges, nodes);
+    const result = getGraphBFS(["F"], [], 2, edges, nodes);
 
     expect(Object.keys(result).sort()).toEqual(["A", "B", "F"]);
   });
 
   it("draws one hop the way it always did", () => {
-    const result = getGraphBFS("F", [], 1, edges, nodes);
+    const result = getGraphBFS(["F"], [], 1, edges, nodes);
 
     expect(Object.keys(result).sort()).toEqual(["A", "F"]);
   });
@@ -239,7 +239,7 @@ describe("getGraphBFS", () => {
     // A page has one subject. Drawing the node a reader asked to see more of
     // at depth nought would give it the subject's size, ring and label, which
     // says the page is about it.
-    const result = getGraphBFS("F", ["B"], 2, edges, nodes);
+    const result = getGraphBFS(["F"], ["B"], 2, edges, nodes);
 
     expect(result.F?.depth).toBe(0);
     expect(result.B?.depth).toBe(1);
@@ -249,9 +249,41 @@ describe("getGraphBFS", () => {
   });
 
   it("ignores an expansion of the subject itself", () => {
-    const result = getGraphBFS("F", ["F"], 2, edges, nodes);
+    const result = getGraphBFS(["F"], ["F"], 2, edges, nodes);
 
     expect(result.F?.depth).toBe(0);
+  });
+
+  it("walks an expansion at the one hop the canvas asks for by default", () => {
+    // "Rozwiń" on a person's page, where the depth control sits at one. The
+    // node the reader clicked is stamped a ring out, but it still gets to
+    // reveal something - seeding it at depth one against a limit of one left
+    // it finished before it started, and the button did nothing at all.
+    const result = getGraphBFS(["F"], ["B"], 1, edges, nodes);
+
+    expect(result.B?.depth).toBe(1);
+    expect(result.y?.depth).toBe(2);
+  });
+
+  it("gives every subject its own neighbourhood, all on the same ring", () => {
+    // The table's request: a page of rows, none of them a footnote to the
+    // first. `B` is not related to `F`, and its employer has to come back
+    // anyway.
+    const result = getGraphBFS(["F", "B"], [], 1, edges, nodes);
+
+    expect(result.F?.depth).toBe(0);
+    expect(result.B?.depth).toBe(0);
+    expect(result.A?.depth).toBe(1);
+    expect(result.y?.depth).toBe(1);
+  });
+
+  it("keeps a subject's own ring out of the outer one", () => {
+    // Which is what keeps `pruneOuterRing` off a page of table rows: a one hop
+    // graph is never thinned.
+    const result = getGraphBFS(["F", "B"], [], 1, edges, nodes);
+    const depths = Object.values(result).map((n) => n.depth);
+
+    expect(Math.max(...depths)).toBe(1);
   });
 });
 

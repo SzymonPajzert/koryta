@@ -154,6 +154,43 @@ describe("getLocalGraph", () => {
     expect(frontier).toEqual(many.slice(0, 40).map((n) => n.id));
   });
 
+  it("gives every subject its own companies, not just the first one's", async () => {
+    // The table's request. p2 shares nothing with p1, and its employer has to
+    // come back all the same - "Firmy" was empty for every row but the first
+    // when these arrived as expansions instead.
+    world(
+      [
+        node("p1", "person"),
+        node("p2", "person"),
+        node("c1", "place"),
+        node("c2", "place"),
+      ],
+      [edge("p1", "c1", "employed"), edge("p2", "c2", "employed")],
+    );
+
+    const layout = await getLocalGraph("p1", true, 1, [], ["p2"]);
+
+    expect(Object.keys(layout.nodes).sort()).toEqual(["c1", "c2", "p1", "p2"]);
+    // One hop from either subject, so the ring budget never gets a say.
+    expect(layout.nodes.p2?.depth).toBe(0);
+    expect(layout.nodes.c2?.depth).toBe(1);
+    expect(layout.omitted).toBe(0);
+  });
+
+  it("shows what a reader expanded, at the one hop the canvas asks for", async () => {
+    // "Rozwiń" on c1 with the depth control at one: p2 is a hop past the
+    // horizon of p1's own graph, and that is the point of the button.
+    world(NODES, EDGES);
+
+    const layout = await getLocalGraph("p1", true, 1, ["c1"]);
+
+    expect(layout.nodes.p2).toBeDefined();
+    // A ring out from the subject, so it is drawn - and budgeted - as somebody
+    // else's relation rather than p1's.
+    expect(layout.nodes.c1?.depth).toBe(1);
+    expect(layout.nodes.p2?.depth).toBe(2);
+  });
+
   it("keeps a logged out reader from seeing an unapproved person", async () => {
     world(
       [node("p1", "person"), { ...node("p2", "person"), visibility: false }],

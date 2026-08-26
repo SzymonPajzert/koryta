@@ -66,6 +66,10 @@ export async function useListWithStats(
 
       if (nodes.length > 0) {
         const firstId = nodes[0]?.id;
+        // `subjects`, not `expand`: every row on the page is asked about in
+        // its own right. An `expand` is a node a reader clicked on somebody
+        // else's graph, and the endpoint draws it a ring out - which here left
+        // nine of the ten rows with no companies at all.
         const otherIds = nodes
           .slice(1)
           .map((n) => n.id)
@@ -73,7 +77,7 @@ export async function useListWithStats(
         try {
           const subRes = await $fetch(`/api/graph/local/${firstId}`, {
             method: "POST",
-            body: { expand: otherIds, distance: 1, latest: true },
+            body: { subjects: otherIds, distance: 1, latest: true },
             headers,
           });
           if (subRes) {

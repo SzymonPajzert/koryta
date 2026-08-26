@@ -202,7 +202,7 @@ export function getEdges(edgesFromDB: DBEdge[]) {
   });
 }
 
-/** The nodes within `maxDepth` relations of the subject, each stamped with how
+/** The nodes within `maxDepth` relations of the subjects, each stamped with how
  * far away it is.
  *
  * The stamp is the point as much as the filter. A two hop graph drawn flat
@@ -210,57 +210,99 @@ export function getEdges(edgesFromDB: DBEdge[]) {
  * person's employer and which is a colleague's - so every node carries the hop
  * count that put it there, and the canvas draws the rings differently.
  *
- * `expandedIds` are nodes the reader asked to see more of. They are extra
- * roots for the walk, but they start at one rather than nought: a page has a
- * single subject, and a neighbour drawn at depth nought gets the subject's
- * size, ring and label - which is a claim about whose page this is. Starting
- * them at one also puts whatever they reveal in the outer ring, where
- * `pruneOuterRing` can budget it rather than letting an expansion smuggle an
- * unbounded number of nodes past it. */
+ * `subjectIds` are the nodes the layout is *about*, all of them at depth
+ * nought. A person's page has exactly one; the table asks about a page of ten
+ * people at once, and none of the ten is a footnote to the first.
+ *
+ * `expandedIds` are nodes the reader asked to see more of. They walk as far as
+ * a subject does - a "Rozwiń" that fetched a node's relations and then drew
+ * none of them is the whole of the button - but they are *stamped* one ring
+ * out: a neighbour drawn at depth nought gets the subject's size, ring and
+ * label, which is a claim about whose page this is. That also puts whatever
+ * they reveal in the outer ring, where `pruneOuterRing` can budget it rather
+ * than letting an expansion smuggle an unbounded number of nodes past it.
+ *
+ * Which is why the walk and the stamp are two passes over the same edges
+ * rather than one. Folding them together is what broke this: expansions seeded
+ * at depth one against `maxDepth` of one were finished before they started, so
+ * every node but the first subject came back with no relations at all. */
 export function getGraphBFS(
-  subjectId: string,
+  subjectIds: string[],
   expandedIds: string[],
   maxDepth: number,
   edges: Edge[],
   interestingNodes: Record<string, Node & { stats: NodeStats }>,
 ): Record<string, Node & { stats: NodeStats; depth: number }> {
-  const depths = new Map<string, number>();
+  const subjects = subjectIds.filter((id) => !!id);
+  const expansions = expandedIds.filter((id) => !!id && !subjects.includes(id));
 
-  const queue: { id: string; d: number }[] = [];
-  const roots: [string, number][] = [
-    [subjectId, 0],
-    ...expandedIds.map((id): [string, number] => [id, 1]),
-  ];
-  for (const [id, d] of roots) {
-    if (depths.has(id)) continue;
-    queue.push({ id, d });
-    depths.set(id, d);
-  }
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    if (current.d >= maxDepth) continue;
-
-    const neighbors = edges
-      .filter((e) => e.source === current.id || e.target === current.id)
-      .map((e) => (e.source === current.id ? e.target : e.source));
-
-    for (const neighborId of neighbors) {
-      if (!interestingNodes[neighborId]) {
-        continue;
-      }
-
-      if (!depths.has(neighborId)) {
-        depths.set(neighborId, current.d + 1);
-        queue.push({ id: neighborId, d: current.d + 1 });
-      }
+  // Built once. Both passes ask "who is next to this node" for every node they
+  // reach, and the scan that answered it by filtering the whole edge list did
+  // that work again per node.
+  const neighbours = new Map<string, string[]>();
+  for (const edge of edges) {
+    for (const [from, to] of [
+      [edge.source, edge.target],
+      [edge.target, edge.source],
+    ]) {
+      const known = neighbours.get(from!);
+      if (known) known.push(to!);
+      else neighbours.set(from!, [to!]);
     }
   }
 
+  /** Breadth first from `roots`, `limit` hops, through `within` only. Seeds
+   * may start at different depths; they differ by at most one, so the queue
+   * stays in nondecreasing order and the first depth reached is the shortest. */
+  const walk = (
+    roots: [string, number][],
+    limit: number,
+    within: (id: string) => boolean,
+  ) => {
+    const depths = new Map<string, number>();
+    const queue: { id: string; d: number }[] = [];
+    for (const [id, d] of roots) {
+      if (depths.has(id)) continue;
+      depths.set(id, d);
+      queue.push({ id, d });
+    }
+    for (let head = 0; head < queue.length; head++) {
+      const current = queue[head]!;
+      if (current.d >= limit) continue;
+      for (const neighbour of neighbours.get(current.id) ?? []) {
+        if (depths.has(neighbour) || !within(neighbour)) continue;
+        depths.set(neighbour, current.d + 1);
+        queue.push({ id: neighbour, d: current.d + 1 });
+      }
+    }
+    return depths;
+  };
+
+  // Who is in: every root walks its own `maxDepth` hops, expansions included.
+  const reached = walk(
+    [...subjects, ...expansions].map((id): [string, number] => [id, 0]),
+    maxDepth,
+    (id) => !!interestingNodes[id],
+  );
+
+  // How far out each of them is drawn. The same roots over the same nodes, so
+  // nothing is added or lost - only expansions move, to the ring past the
+  // subjects'. No hop limit, because whatever an expansion revealed sits one
+  // past `maxDepth` by construction, and that ring is the whole point: it is
+  // what `pruneOuterRing` gets to budget.
+  const rings = walk(
+    [
+      ...subjects.map((id): [string, number] => [id, 0]),
+      ...expansions.map((id): [string, number] => [id, 1]),
+    ].filter(([id]) => reached.has(id)),
+    Infinity,
+    (id) => reached.has(id),
+  );
+
   return Object.fromEntries(
     Object.entries(interestingNodes)
-      .filter(([key]) => depths.has(key))
-      .map(([key, node]) => [key, { ...node, depth: depths.get(key)! }]),
+      .filter(([key]) => reached.has(key))
+      .map(([key, node]) => [key, { ...node, depth: rings.get(key)! }]),
   );
 }
 

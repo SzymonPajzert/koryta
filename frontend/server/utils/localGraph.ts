@@ -104,13 +104,26 @@ async function fetchNeighbourhood(
   return { edges: Array.from(edges.values()), nodes };
 }
 
+/** `peers` are further nodes the layout is *about*, alongside `focusNodeId`.
+ *
+ * The table is the caller: a page of it is ten people who happen to share a
+ * sort order, and it needs every one of their employers, not the first one's
+ * plus whatever the other nine have in common with them. Passing them as
+ * `expansions` instead would rank them a ring below the first row for no
+ * reason a reader could see - and hand the nine rows' companies to the outer
+ * ring budget, which would then drop most of them.
+ */
 export async function getLocalGraph(
   focusNodeId: string,
   showUnapproved: boolean,
   distance: number,
   expansions: string[],
+  peers: string[] = [],
 ) {
-  const focusIds = new Set([focusNodeId]);
+  const subjectIds = [focusNodeId, ...peers.filter((id) => !!id)].filter(
+    (id, at, all) => all.indexOf(id) === at,
+  );
+  const focusIds = new Set(subjectIds);
   for (const id of expansions) {
     if (id) focusIds.add(id);
   }
@@ -183,8 +196,8 @@ export async function getLocalGraph(
 
   // Actually perform BFS from backend
   const reachable = getGraphBFS(
-    focusNodeId,
-    expansions.filter((id) => id && id !== focusNodeId),
+    subjectIds,
+    expansions.filter((id) => id && !subjectIds.includes(id)),
     distance,
     edges,
     nodesAll,
