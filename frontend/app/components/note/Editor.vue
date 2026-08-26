@@ -29,7 +29,12 @@
     </p>
 
     <div>
-      <v-row>
+      <!-- `dense`, and the cards carry no bottom margin of their own: the
+           default gutter is 12px a side and each card added another 12 below
+           itself, so two rows of entries stood 36px apart - more air between
+           two notes than inside one. The dense gutter puts 8px between them,
+           which still reads as separate cards. -->
+      <v-row dense>
         <v-col
           v-for="(source, index) in otherSources"
           :key="'other-' + index"

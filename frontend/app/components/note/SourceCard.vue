@@ -1,5 +1,8 @@
 <template>
-  <v-card class="mb-3" variant="outlined">
+  <!-- No bottom margin: the grid in `note/Editor.vue` - the only place this is
+       used - sets the spacing between entries, and a margin here was added on
+       top of the gutter rather than instead of it. -->
+  <v-card variant="outlined">
     <v-chip-group
       v-if="isEditing"
       v-model="kind"
