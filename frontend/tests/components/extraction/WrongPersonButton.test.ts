@@ -97,9 +97,23 @@ describe("ExtractionWrongPersonButton", () => {
       go: () => {},
     });
     currentUser.value = null;
+    const router = useRouter();
     const button = await mount();
 
     await button.find("button").trigger("click");
+
+    // Waited for rather than assumed. The component does not await its own
+    // `router.push`, and vue-router finishes the navigation on a timer - so
+    // under a full run the last leg of it lands after this file's teardown has
+    // taken the stub back, and `history is not defined` is reported as an
+    // unhandled rejection against whatever was running by then. Holding the
+    // test open until the route has actually moved keeps the stub in place for
+    // as long as the navigation needs it, and says what the redirect is while
+    // it is here.
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.path).toBe("/login"),
+    );
+    expect(router.currentRoute.value.query.redirect).toBeDefined();
 
     expect(castVoteOnce).not.toHaveBeenCalled();
   });
