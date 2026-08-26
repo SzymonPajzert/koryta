@@ -81,6 +81,11 @@ async function seedDatabase() {
     // unchecked list, which is what its spec - and anybody looking at a fresh
     // local stack - expects to see.
     "qaChecks",
+    // Cleared because the seed now writes some, and the admin specs write more
+    // at run time under stamped ids. Left alone, re-seeding a live emulator
+    // would leave every note any earlier run had made sitting on the page
+    // under the fixtures below.
+    "notes",
   ];
   for (const col of collections) {
     const docs = await db.collection(col).listDocuments();
@@ -131,6 +136,46 @@ async function seedDatabase() {
   for (const [id, rev] of Object.entries(revisions)) {
     const ref = db.collection("revisions").doc(id);
     batch.set(ref, rev);
+  }
+
+  // Notes on Jan Kowalski (1), one of each kind, so the notes section has
+  // something in it to look at.
+  //
+  // Written by somebody else - `seed-notes-author`, an id no seeded account
+  // holds - which is what puts them in `otherSources` rather than in the
+  // reader's own note. A signed in reader therefore sees the whole section at
+  // once: other people's entries, the prompt inviting theirs, and the three
+  // buttons that add one. Owned by the reader it would be their note in edit
+  // mode instead, and the prompt would be gone.
+  //
+  // Only this person. Orlen (2) is deliberately left without any, because the
+  // empty section is a state worth a picture of its own and that is the page
+  // that takes it.
+  const seededNotes = {
+    "1_seed-notes-author": {
+      nodeId: "1",
+      userUid: "seed-notes-author",
+      createdAt: "2026-05-04T09:15:00.000Z",
+      sources: [
+        {
+          kind: "source",
+          url: "https://example.org/kowalski-rada-nadzorcza",
+          note: "Wzmianka o powołaniu do rady nadzorczej - notatka prasowa z maja.",
+        },
+        {
+          kind: "change_request",
+          note: "Data końca zatrudnienia w Orlenie wygląda na przesuniętą o rok.",
+        },
+        {
+          kind: "missing",
+          note: "Brakuje kadencji w radzie miasta sprzed 2019 roku.",
+        },
+      ],
+    },
+  };
+  for (const [id, note] of Object.entries(seededNotes)) {
+    const ref = db.collection("notes").doc(id);
+    batch.set(ref, note);
   }
 
   for (const [id, fact] of Object.entries(extractions)) {

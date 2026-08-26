@@ -26,14 +26,28 @@ async function settled(page: Page) {
 test.describe("Notatki", () => {
   test("notatki-sekcja", async ({ page }) => {
     test.setTimeout(120_000);
-    // A person, where the section sits directly under "Historia powiązań" and
-    // above the graph - the arrangement the restyle was judged against.
+    // Jan Kowalski, who the seed gives one note of each kind - a source with a
+    // url, a correction and a gap - written by somebody other than the reader.
+    // This is the section doing its job: other people's entries above the
+    // prompt inviting one of your own, which is the arrangement the restyle
+    // from a card to a plain section was judged against, and the state an
+    // empty shot cannot show.
     await logIn(page, USERS.normal, "/entity/person/1");
 
     const notes = page.getByTestId("note-editor");
     await expect(notes).toBeVisible({ timeout: 30_000 });
-    // The prompt is the last thing to resolve: it is behind `userNote`, which
-    // is not known until the note collection for this person has answered.
+    // By value, not by text: NoteSourceCard puts the entry in a v-textarea, so
+    // what it says is the control's value and `getByText` - which reads text
+    // content - matches nothing however well the note has rendered.
+    //
+    // The entries arrive with the note collection and the prompt is behind
+    // `userNote`; waiting for the last of the three cards and then the prompt
+    // covers both, so nothing is captured half filled.
+    await expect(
+      notes.getByRole("textbox", { name: "Czego tu brakuje?" }),
+    ).toHaveValue("Brakuje kadencji w radzie miasta sprzed 2019 roku.", {
+      timeout: 30_000,
+    });
     await expect(
       notes.getByText("Wiesz więcej na temat tej osoby?"),
     ).toBeVisible({ timeout: 30_000 });
@@ -42,11 +56,13 @@ test.describe("Notatki", () => {
     await expect(notes).toHaveScreenshot("notatki-sekcja.png");
   });
 
-  test("notatki-sekcja-spolka", async ({ page }) => {
+  test("notatki-sekcja-pusta", async ({ page }) => {
     test.setTimeout(120_000);
-    // The same component with a different subject line, on the page where it
-    // is the only section of its kind - worth its own shot because a company
-    // page frames it differently from a person's.
+    // Orlen, left without notes in the seed on purpose: the empty section is
+    // what most entities show and it is a different shape - a heading, the
+    // prompt and the three buttons, with no cards between them. The subject
+    // line changes with the kind of entity too ("tej spółki", not "tej
+    // osoby"), so this covers that as well.
     await logIn(page, USERS.normal, "/entity/place/2");
 
     const notes = page.getByTestId("note-editor");
@@ -56,6 +72,6 @@ test.describe("Notatki", () => {
     ).toBeVisible({ timeout: 30_000 });
     await settled(page);
 
-    await expect(notes).toHaveScreenshot("notatki-sekcja-spolka.png");
+    await expect(notes).toHaveScreenshot("notatki-sekcja-pusta.png");
   });
 });
