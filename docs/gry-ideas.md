@@ -64,7 +64,19 @@ the collab fun is the face when the real number drops. Data hook: the biggest
 of any idea — declarations are public PDFs largely not in the graph, so the
 game funds their digitization.
 
-### 7. Wyżej/Niżej — higher-lower
+### 7. Kontexto — graph-distance guesser ⭐ (round 2, liked; data-gated)
+Guess the mystery politician; every wrong guess answers with its distance in
+the connection graph ("Morawiecki — 3 uściski od celu, najkrótsza droga przez
+spółkę energetyczną"). Triangulate through the network; solving the daily IS
+learning who's connected to whom. Versus: same target, fewer guesses wins.
+**Variant (Szymon):** pathfinding A→B — at each step choose: reveal the
+closest company link, the closest personal link (game finds it), or name a
+middle person yourself and search from both ends (3+3 beats 6).
+**Prerequisite:** both need denser person↔person edges than the graph has —
+materialize co-board-membership and co-candidacy (see co-candidate-edges
+branch) as first-class interpersonal edges; family/social ties are the gap.
+
+### 7a. Wyżej/Niżej — higher-lower
 Two cards, one stat (board seats per person to start), tap higher/lower,
 streak. Daily seeded 10-pair run + endless arcade for video. Cheapest build.
 Needs work on fun categories — let users suggest the next category. Skip
