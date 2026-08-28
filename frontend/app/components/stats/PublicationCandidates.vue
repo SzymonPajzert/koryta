@@ -122,7 +122,7 @@ const subtitle = computed(() =>
 
 /** The queue the chart is about: unpublished, best rated first. */
 const candidatesLink =
-  "/eksploruj/tabela?visibility=private&minVotes=1&sortBy=votes.interesting&sortDesc=true";
+  "/eksploruj/tabela?visibility=private&minVotes=1&sortBy=stats.votes.interesting&sortDesc=true";
 
 const series = computed(() => [
   {

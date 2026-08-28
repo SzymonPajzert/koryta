@@ -9,7 +9,7 @@
           size="small"
           class="text-none"
           :prepend-icon="mdiTable"
-          to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=votes.interesting&sortDesc=true"
+          to="/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=stats.votes.interesting&sortDesc=true"
         >
           Tabela
         </v-btn>

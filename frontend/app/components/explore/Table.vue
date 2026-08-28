@@ -60,7 +60,7 @@
          prints the title and nothing that says what the number counts. -->
     <template #[`header.stats.votes.interesting`]="{ column }">
       <ExploreTableColumnHeader
-        tooltip="Suma głosów społeczności określających jak interesująca jest ta osoba. W menu kolumny można sortować także po liczbie notatek."
+        tooltip="Suma głosów społeczności i najwyższej oceny modelu. Kliknij liczbę, żeby zobaczyć, ile modeli oceniło tę osobę i ile osób na nią zagłosowało. W menu kolumny można sortować także po liczbie notatek."
         :column="column"
         :sort-by="sortBy"
         :sort-options="VOTES_SORT_OPTIONS"
@@ -350,9 +350,7 @@
          `stats` document and blank for everybody who does not - where this
          slot reads that as the zero votes it is. -->
     <template #[`item.stats.votes.interesting`]="{ item }">
-      <span class="font-weight-bold">
-        {{ item.stats?.votes?.interesting || 0 }}
-      </span>
+      <VoteBreakdown :votes="item.stats?.votes" />
       <!-- „Notatki” is one of the sorts this column's menu offers and has no
            column of its own left to be read in, so the count sits under the
            total rather than being orderable and invisible. Nothing at zero: a

@@ -163,6 +163,38 @@ describe("shared/stats.ts", () => {
       });
     });
 
+    it("counts the people who voted, not the votes they cast", () => {
+      // The total cannot say whether a 4 is four models agreeing or one reader
+      // insisting; this is the number that tells them apart.
+      const stats = computeVoteStats([
+        { userUid: "aB3xYz", categoryVotes: { interesting: 3 } },
+        { userUid: "cD4wVu", categoryVotes: { interesting: 1 } },
+        pipelineVote("pipeline-capture", 5),
+      ] as unknown as VoteDocument[]);
+
+      expect(stats.humanCount).toBe(2);
+    });
+
+    it("counts one person voting twice as one voter", () => {
+      // One reader casting a verdict in two categories is one person who
+      // looked, which is what the count is meant to answer.
+      const stats = computeVoteStats([
+        { userUid: "aB3xYz", categoryVotes: { interesting: 3 } },
+        { userUid: "aB3xYz", categoryVotes: { quality: -1 } },
+      ] as unknown as VoteDocument[]);
+
+      expect(stats.humanCount).toBe(1);
+    });
+
+    it("leaves humanCount off a node no person has voted on", () => {
+      // Absent rather than 0: firestore cannot query for a field that is not
+      // there, and writing a 0 onto every node to say nothing happened is a
+      // migration with no reader.
+      const stats = computeVoteStats([pipelineVote("pipeline-capture", 5)]);
+
+      expect(stats.humanCount).toBeUndefined();
+    });
+
     it("leaves a re-scoring run out of lastVotedAt", () => {
       // The field reads as "when did somebody last look at this", and a
       // nightly re-run is not somebody looking.

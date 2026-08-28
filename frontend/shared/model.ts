@@ -80,6 +80,16 @@ export interface NodeStats {
     interesting?: number;
     quality?: number;
     humanVoted?: boolean;
+    /** How many people have voted on this node - not how much they said.
+     *
+     * `interesting` sums the verdicts, so a 4 is one enthusiast or four mild
+     * opinions or four models agreeing, and the number alone cannot say which.
+     * This is the count that tells them apart, and with `models` it is what
+     * `VoteBreakdown` renders. Absent, rather than 0, when nobody has voted:
+     * Firestore cannot query for a field that is not there, and writing a 0
+     * onto every node in the graph to say "nothing happened" is a migration
+     * with no reader. */
+    humanCount?: number;
     lastVotedAt?: string;
     /** What each scoring model made of this person, keyed by its `userUid`.
      * Only the best of them is in `interesting`; this is what says which model
