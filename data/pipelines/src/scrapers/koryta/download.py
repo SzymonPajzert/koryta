@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from entities.company import KorytaCompany
 from entities.person import Koryta as Person
-from entities.person import PersonVote, is_pipeline_uid
+from entities.person import PersonFact, PersonVote, is_pipeline_uid
 from scrapers.stores import (
     CloudStorage,
     Context,
@@ -497,3 +497,85 @@ class KorytaVotes(Pipeline[PersonVote]):
             )
 
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
+
+
+class KorytaFacts(Pipeline[PersonFact]):
+    """The extracted facts the site has managed to put on a named person.
+
+    The `extractions` collection is one document per fact, and most of them
+    name nobody the graph knows: `/api/ingest/extraction` only writes
+    `personNodeId` when the article's confirmed people include one whose name
+    the fact's own subject bears. Those are the only rows worth carrying, so
+    the rest are dropped here rather than in every consumer.
+
+    What a reviewer said comes along with the fact. The aggregate the
+    `onVoteWritten` trigger keeps on the extraction document holds `correct`
+    summed over reviewers and, since the match became reportable, `wrongPerson`
+    - and a fact somebody has already rejected should not be evidence that the
+    person it names is worth a look.
+    """
+
+    date: str | None = None
+
+    def __init__(self, date: str | None = None) -> None:
+        super().__init__()
+        self.date = date or CURRENT_DATE
+
+    @memoized_property
+    def filename(self) -> str:
+        if self.date:
+            return f"person_facts_{self.date}"
+        return "person_facts"
+
+    def process(self, ctx: Context):
+        df, _ = FirestoreCollection.latest_on_or_before(
+            ctx, "extractions", date=self.date
+        )
+
+        outputs = []
+        for data in tqdm(df.to_dict(orient="records")):
+            # A fact matched to nobody is the common case, and pandas turns the
+            # absent field into NaN rather than a blank - which is truthy, and
+            # would reach the consumers as a person id of "nan". The same trap
+            # `KorytaVotes` documents for `nodeId`.
+            person_koryta_id = data.get("personNodeId")
+            if pd.isna(person_koryta_id) or not str(person_koryta_id).strip():
+                continue
+
+            article_url = data.get("articleUrl")
+            if pd.isna(article_url) or not str(article_url).strip():
+                # Every fact carries the url it was pulled from, so this is a
+                # malformed row rather than a state worth modelling. Skipped
+                # because the consumers count distinct articles.
+                continue
+
+            votes = _fact_votes(data)
+            correct = votes.get("correct")
+            outputs.append(
+                PersonFact(
+                    person_koryta_id=str(person_koryta_id).strip(),
+                    article_url=str(article_url).strip(),
+                    fact_type=str(data.get("fact_type") or ""),
+                    correct=int(correct) if isinstance(correct, (int, float)) else None,
+                    wrong_person=bool(votes.get("wrongPerson")),
+                )
+            )
+
+        print(f"Finished processing facts: {len(outputs)} matched to a person.")
+        return pd.DataFrame.from_records(
+            [dataclasses.asdict(o) for o in outputs],
+            columns=[f.name for f in dataclasses.fields(PersonFact)],
+        )
+
+
+def _fact_votes(data: dict) -> dict:
+    """The `stats.votes` aggregate on an extraction row, whatever pandas made of it.
+
+    Absent for a fact nobody has voted on, and a float NaN rather than a
+    missing key once the export has been through a DataFrame.
+    """
+    stats = data.get("stats")
+    if not isinstance(stats, dict):
+        return {}
+    votes = stats.get("votes")
+    return votes if isinstance(votes, dict) else {}

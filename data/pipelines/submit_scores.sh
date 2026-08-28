@@ -27,7 +27,7 @@ function run_koryta() {
 	DISABLE_BACKUP=1 uv run koryta "$@" --no-backup --no-mirror
 }
 
-MODELS=${2:-"PeopleScores PeopleScoresPageRank PeopleScoresCoappointment PeopleScoresTurnover PeopleScoresSuccession PeopleScoresCapture"}
+MODELS=${2:-"PeopleScores PeopleScoresPageRank PeopleScoresCoappointment PeopleScoresTurnover PeopleScoresSuccession PeopleScoresCapture PeopleScoresFacts"}
 
 run_koryta PeopleEnriched --refresh :ProcessWiki --refresh all
 
