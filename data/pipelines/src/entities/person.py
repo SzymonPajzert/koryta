@@ -89,6 +89,34 @@ class PersonVote:
     interesting: int | None
 
 
+@dataclass
+class PersonFact:
+    """One extracted fact the site has matched to a person already in the graph.
+
+    A row per (fact, person), not per article: `/api/ingest/extraction` settles
+    which of an article's confirmed people each fact is about and stores that
+    as `personNodeId`, so the join is done by the time the export is written.
+    Facts it could not place - the usual case, and always the case for a name
+    two confirmed people share - never become one of these.
+
+    `article_url` is kept because the unit that matters downstream is the
+    article rather than the fact: three facts pulled out of one piece are three
+    readings of one source, and a model counting them as three would rate a
+    thorough extraction over a person who keeps turning up.
+    """
+
+    person_koryta_id: str
+    article_url: str
+    fact_type: str
+    #: What reviewers made of the fact, summed, or None if nobody has looked.
+    #: Negative means somebody said the fact is wrong.
+    correct: int | None = None
+    #: Whether a reviewer flagged the *match* rather than the fact - the name
+    #: matcher put this fact on the wrong person. Stored apart from `correct`
+    #: because the fact can be perfectly true about somebody else.
+    wrong_person: bool = False
+
+
 def is_pipeline_uid(user_uid: str | None) -> bool:
     """Whether a vote was cast by a scoring model rather than by a person.
 

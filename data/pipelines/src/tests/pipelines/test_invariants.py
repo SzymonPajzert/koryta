@@ -151,9 +151,18 @@ def compute_vote_stats(votes: list[dict]) -> dict:
     """Recompute a vote aggregate the way the site does.
 
     A port of `computeVoteStats` in `frontend/shared/stats.ts`, which the
-    `onVoteWritten` trigger runs to maintain `stats.votes`. Only the counters and
-    the `humanVoted` flag are reproduced; `lastVotedAt` is a formatted timestamp
-    and nothing queries it, and `models` is a breakdown rather than a tally.
+    `onVoteWritten` trigger runs to maintain `stats.votes`. Only the counters,
+    the `humanVoted` flag and the `humanCount` tally are reproduced;
+    `lastVotedAt` is a formatted timestamp and nothing queries it, and `models`
+    is a breakdown rather than a tally.
+
+    `humanCount` has to be mirrored rather than ignored: `stale_aggregates`
+    walks the union of the stored and the expected keys, so a counter the site
+    writes and this port does not know about reads as a difference on every
+    node anybody has voted on. Until the backfill in
+    `frontend/scripts/migrate/backfill-vote-human-count.ts` has run against a
+    snapshot - and the functions redeploy that keeps it current - those nodes
+    are genuinely stale, and this reports them.
 
     Human votes sum and the scoring models contribute only their best, which is
     what keeps a new model from rescaling a number the site sorts and buckets
@@ -161,10 +170,16 @@ def compute_vote_stats(votes: list[dict]) -> dict:
     """
     aggregate: dict = {"interesting": 0, "quality": 0, "humanVoted": False}
     pipeline_best: dict = {}
+    # By uid, as the site counts it: one person voting in two categories on the
+    # same node is one voter. A vote carrying no uid still sets `humanVoted` and
+    # still cannot be counted, which is the site's behaviour too.
+    humans: set = set()
     for vote in votes:
         from_pipeline = PIPELINE_USER in str(vote.get("userUid") or "")
         if not from_pipeline:
             aggregate["humanVoted"] = True
+            if vote.get("userUid"):
+                humans.add(str(vote["userUid"]))
         for category, value in (vote.get("categoryVotes") or {}).items():
             if from_pipeline:
                 current = pipeline_best.get(category)
@@ -175,6 +190,8 @@ def compute_vote_stats(votes: list[dict]) -> dict:
                 aggregate[category] = (aggregate.get(category) or 0) + value
     for category, best in pipeline_best.items():
         aggregate[category] = (aggregate.get(category) or 0) + best
+    if humans:
+        aggregate["humanCount"] = len(humans)
     return aggregate
 
 

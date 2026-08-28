@@ -10,6 +10,7 @@ from analysis.scores import (
     CompanyScores,
     PeopleScoresCapture,
     PeopleScoresCoappointment,
+    PeopleScoresFacts,
     PeopleScoresPageRank,
     PeopleScoresSuccession,
     PeopleScoresTurnover,
@@ -26,6 +27,12 @@ from analysis.scores.base import (
     banded_scores,
     person_key,
     rejestr_io_id,
+)
+from analysis.scores.facts import (
+    EXTRA_FACT_POINTS,
+    FACT_TYPE_POINTS,
+    MAX_EXTRA_POINTS,
+    article_points,
 )
 from analysis.scores.succession import as_date, successions
 from analysis.scores.turnover import same_region, year_of
@@ -154,6 +161,14 @@ class TestScoreRanges:
         )
         assert PeopleScoresPageRank.score_range == ScoreRange(ceiling=QUEUE_THRESHOLD)
         assert PeopleScoresCoappointment.score_range == ScoreRange(ceiling=2)
+
+    def test_the_fact_model_is_floored_but_unmeasured(self):
+        # Floored so the people it names are actually read - the signal cannot
+        # be measured until somebody looks at them. Pinned so that the day
+        # `score_model_accuracy.py` has an opinion, changing this is deliberate.
+        assert PeopleScoresFacts.score_range == ScoreRange(
+            floor=QUEUE_THRESHOLD, ceiling=5
+        )
 
     def test_a_capped_model_cannot_reach_the_queue_on_its_own(self):
         # The whole point of the cap: `together` may still colour somebody the
@@ -959,14 +974,155 @@ class TestPipelineUid:
 
 
 def test_every_model_votes_under_a_uid_the_site_reads_as_a_robot():
+    # Over the registry rather than a list written out here: the hardcoded
+    # version named four of the six models, so a new one could ship with a uid
+    # the frontend counts as a human - which would put its score into the human
+    # tally and seed the next run on the pipeline's own output.
     tags = set()
-    for model_type in (
-        PeopleScoresPageRank,
-        PeopleScoresCoappointment,
-        PeopleScoresTurnover,
-        PeopleScoresCapture,
-    ):
+    for model_type in PEOPLE_SCORE_MODELS:
         assert issubclass(model_type, PeopleScoreModel)
-        assert is_pipeline_uid(model_type.model_tag)
+        assert is_pipeline_uid(model_type.model_tag), model_type
         tags.add(model_type.model_tag)
-    assert len(tags) == 4
+    assert len(tags) == len(PEOPLE_SCORE_MODELS), "two models share a uid"
+
+
+def facts_frame(rows: list[dict]) -> pd.DataFrame:
+    """The `KorytaFacts` output shape, defaults filled in."""
+    return pd.DataFrame.from_records(
+        [
+            {
+                "person_koryta_id": row.get("person", "node-Anna"),
+                "article_url": row.get("article", "https://a.pl/1"),
+                "fact_type": row.get("type", "employment"),
+                "correct": row.get("correct"),
+                "wrong_person": row.get("wrong_person", False),
+            }
+            for row in rows
+        ],
+        columns=[
+            "person_koryta_id",
+            "article_url",
+            "fact_type",
+            "correct",
+            "wrong_person",
+        ],
+    )
+
+
+def facts_model(rows: list[dict]):
+    scorer = model(PeopleScoresFacts)
+    scorer.people_facts.read_or_process = lambda ctx: facts_frame(rows)
+    return scorer
+
+
+class TestArticlePoints:
+    """What one article is worth, given the facts it carries."""
+
+    def test_the_strongest_fact_decides_the_article(self):
+        assert article_points(["affair_involvement"]) == (
+            FACT_TYPE_POINTS["affair_involvement"]
+        )
+        # The affair decides it; the party membership only adds the extra-fact
+        # increment on top.
+        assert article_points(["party_membership", "affair_involvement"]) == (
+            FACT_TYPE_POINTS["affair_involvement"] + EXTRA_FACT_POINTS
+        )
+
+    def test_a_type_nobody_has_seen_scores_like_an_employment(self):
+        # The extractor owns the enum and has grown it before. A new kind of
+        # fact scoring zero would look exactly like the pipeline not running.
+        assert article_points(["something_new"]) == article_points(["employment"])
+
+    def test_two_articles_beat_one_well_mined_one(self):
+        # The whole point of counting articles rather than facts: three facts
+        # pulled out of one piece are three readings of one source.
+        one_thorough = article_points(["employment", "employment", "employment"])
+        two_separate = 2 * article_points(["employment"])
+
+        assert two_separate > one_thorough
+
+    def test_no_number_of_facts_in_one_article_beats_two_articles(self):
+        # Uncapped this failed at six facts of the weakest type: 1 + 0.25*5 =
+        # 2.25 against two separate articles at 2.0. The bonus is capped below
+        # the weakest article's own worth precisely so that no count can.
+        for fact_type in FACT_TYPE_POINTS:
+            for count in range(1, 60):
+                assert article_points([fact_type] * count) < 2 * article_points(
+                    [fact_type]
+                ), (fact_type, count)
+
+    def test_the_extra_fact_bonus_cannot_stand_in_for_an_article(self):
+        assert MAX_EXTRA_POINTS < min(FACT_TYPE_POINTS.values())
+        assert EXTRA_FACT_POINTS <= MAX_EXTRA_POINTS
+
+
+class TestFacts:
+    """Scoring a person on what has already been written about them."""
+
+    def test_somebody_in_two_articles_outranks_somebody_in_one(self):
+        scorer = facts_model(
+            [
+                {"person": "node-Anna", "article": "https://a.pl/1"},
+                {"person": "node-Anna", "article": "https://a.pl/2"},
+                {"person": "node-Bob", "article": "https://b.pl/1"},
+                {"person": "node-Bob", "article": "https://b.pl/1"},
+                {"person": "node-Bob", "article": "https://b.pl/1"},
+            ]
+        )
+
+        scores = scorer.raw_scores(None, population({"Anna": [], "Bob": []}))
+
+        assert scores["Anna"] > scores["Bob"]
+
+    def test_an_affair_says_more_than_a_party_card(self):
+        scorer = facts_model(
+            [
+                {"person": "node-Anna", "type": "affair_involvement"},
+                {"person": "node-Bob", "type": "party_membership"},
+            ]
+        )
+
+        scores = scorer.raw_scores(None, population({"Anna": [], "Bob": []}))
+
+        assert scores["Anna"] > scores["Bob"]
+
+    def test_a_fact_a_reviewer_rejected_does_not_count(self):
+        scorer = facts_model(
+            [
+                {"person": "node-Anna", "correct": -2},
+                {"person": "node-Bob", "correct": 1},
+            ]
+        )
+
+        scores = scorer.raw_scores(None, population({"Anna": [], "Bob": []}))
+
+        assert "Anna" not in scores
+        assert scores["Bob"] > 0
+
+    def test_a_fact_on_the_wrong_person_does_not_count(self):
+        scorer = facts_model([{"person": "node-Anna", "wrong_person": True}])
+
+        assert scorer.raw_scores(None, population({"Anna": []})) == {}
+
+    def test_an_unreviewed_fact_still_counts(self):
+        # `correct` and `wrong_person` are NaN for a fact nobody has voted on,
+        # which is every fact in the export today - and NaN is truthy, so
+        # reading it the obvious way would reject the entire signal.
+        rows = facts_frame([{"person": "node-Anna"}])
+        rows["correct"] = float("nan")
+        rows["wrong_person"] = float("nan")
+        scorer = model(PeopleScoresFacts)
+        scorer.people_facts.read_or_process = lambda ctx: rows
+
+        assert scorer.raw_scores(None, population({"Anna": []}))["Anna"] > 0
+
+    def test_a_fact_on_somebody_outside_the_payloads_is_skipped(self):
+        # A regional payload run covers a region; the extraction crawl does not.
+        scorer = facts_model([{"person": "node-Nobody"}])
+
+        assert scorer.raw_scores(None, population({"Anna": []})) == {}
+
+    def test_an_export_with_no_matched_facts_is_not_an_error(self):
+        scorer = facts_model([])
+
+        assert scorer.raw_scores(None, population({"Anna": []})) == {}
