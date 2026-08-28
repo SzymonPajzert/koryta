@@ -257,7 +257,11 @@
       "nodeGroupSize": 1,
       "votes": {
         "humanVoted": false,
-        "interesting": 3
+        "interesting": 3,
+        "models": {
+          "pipeline-facts": 3,
+          "pipeline-pagerank": 2
+        }
       },
       "edges": {
         "all": {

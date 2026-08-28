@@ -141,6 +141,33 @@ export function voteScaleSummary(category: VoteCategory): string | undefined {
   return `Skala od -5 do +5: ${steps.join(", ")}.`;
 }
 
+/** What each scoring model looks at, in the language of somebody reading the
+ * site rather than of the pipeline that wrote the vote.
+ *
+ * Keyed by the `model_tag` each model in `data/pipelines/src/analysis/scores/`
+ * declares, which is also the `userUid` its votes are stored under. The two
+ * lists drift - a model can be added, renamed or retired without this file
+ * knowing - so `scoreModelLabel` falls back to the uid rather than showing
+ * nothing, and an unlabelled model reads as a slightly ugly name instead of
+ * disappearing from a breakdown that claims to be complete. */
+const scoreModelLabels: Record<string, string> = {
+  pipeline: "Publiczni pracodawcy",
+  "pipeline-pagerank": "Sieć powiązań",
+  "pipeline-together": "Wspólne zarządy",
+  "pipeline-turnover": "Posada po wyborach",
+  "pipeline-succession": "Następca na stanowisku",
+  "pipeline-capture": "Przejęta instytucja",
+  "pipeline-facts": "Artykuły w bazie",
+};
+
+/** A readable name for the model behind one pipeline vote. */
+export function scoreModelLabel(uid: string): string {
+  // `|| uid` rather than `?? uid`: stripping the prefix off a bare "pipeline"
+  // leaves an empty string, not undefined, and an unnamed row is worse than an
+  // ugly one.
+  return scoreModelLabels[uid] || uid.replace(/^pipeline-?/, "") || uid;
+}
+
 /** A vote targets a graph node or an extraction fact; the target picks which
  * id field is set, so the id itself never needs inspecting. */
 export type VoteTarget = "node" | "extraction";

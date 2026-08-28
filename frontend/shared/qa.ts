@@ -48,6 +48,42 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "rozbicie-wyniku-w-tabeli",
+    title: "Wynik w tabeli mówi, skąd się wziął",
+    description:
+      "Liczba w kolumnie „Głosy łącznie” sumowała głosy ludzi z najwyższą " +
+      "oceną modelu, więc czwórka mogła znaczyć cztery zgodne modele albo " +
+      "jedną przekonaną osobę - i nie dało się ich odróżnić. Teraz kliknięcie " +
+      "w liczbę pokazuje, ile modeli oceniło tę osobę, co każdy z nich " +
+      "powiedział i ile osób na nią zagłosowało. Osoby, której nikt i żaden " +
+      "model nie ocenił, nadal pokazujemy jako samą liczbę.",
+    steps: [
+      "Wejdź na /eksploruj/tabela i posortuj malejąco po kolumnie „Głosy łącznie”.",
+      "Kliknij liczbę w tej kolumnie przy osobie z góry listy.",
+      "Sprawdź, że karta wymienia modele z ich ocenami i liczbę osób, które głosowały.",
+      "Sprawdź, że przy kilku modelach karta mówi, iż do wyniku liczy się tylko najwyższa ocena.",
+      "Znajdź osobę z wynikiem 0 i sprawdź, że liczba nie jest klikalna.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
+    id: "model-ocenia-po-artykulach",
+    title: "Osoby z artykułami w bazie trafiają wyżej w kolejce",
+    description:
+      "Nowy model oceniający („Artykuły w bazie”) bierze pod uwagę fakty " +
+      "wyciągnięte z artykułów i dopasowane do konkretnej osoby. Im o więcej " +
+      "różnych artykułów chodzi, tym wyżej - kilka faktów z jednego tekstu to " +
+      "wciąż jedno źródło. Fakt, który ktoś oznaczył jako błędny albo jako " +
+      "dotyczący innej osoby, przestaje się liczyć.",
+    steps: [
+      "Wejdź na /eksploruj/tabela i kliknij wynik osoby, o której mamy artykuły.",
+      "Sprawdź, że na liście modeli jest „Artykuły w bazie”.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "contributor",
+  },
+  {
     id: "statystyki-powiazan-duzych-wezlow",
     title: "Statystyki powiązań największych instytucji znów się przeliczają",
     description:

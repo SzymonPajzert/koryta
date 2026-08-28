@@ -151,9 +151,15 @@ export function isAutomatedUid(uid: string | undefined | null): boolean {
  * nothing.
  *
  * `models` keeps each model's own score so a reader can see which one
- * nominated a person. `lastVotedAt` deliberately ignores the pipeline: it
- * reads as "when did somebody last look at this", and a nightly re-scoring is
- * not somebody looking.
+ * nominated a person, and `humanCount` how many people voted at all. Between
+ * them they are what makes the total legible: summing and taking a maximum
+ * produce the same 4, and a reader deciding where to spend the next click
+ * wants to know whether it came from four models agreeing or one person
+ * insisting. `VoteBreakdown` is what renders them.
+ *
+ * `lastVotedAt` deliberately ignores the pipeline: it reads as "when did
+ * somebody last look at this", and a nightly re-scoring is not somebody
+ * looking.
  */
 export function computeVoteStats(
   nodeVotes: VoteDocument[],
@@ -167,11 +173,16 @@ export function computeVoteStats(
   let latestDate: Date | null = null;
   const pipelineBest: Record<string, number> = {};
   const models: Record<string, number> = {};
+  // By uid rather than by document, because the two are not the same thing:
+  // one person voting in two categories on the same node is one voter, and the
+  // count is meant to answer "how many people looked at this".
+  const humans = new Set<string>();
 
   for (const v of nodeVotes) {
     const fromPipeline = isPipelineUid(v.userUid);
     if (!fromPipeline) {
       aggregatedVotes.humanVoted = true;
+      if (v.userUid) humans.add(v.userUid);
       if (v.updatedAt) {
         const d = new Date(v.updatedAt);
         if (!latestDate || d > latestDate) {
@@ -206,6 +217,10 @@ export function computeVoteStats(
 
   if (Object.keys(models).length > 0) {
     aggregatedVotes.models = models;
+  }
+
+  if (humans.size > 0) {
+    aggregatedVotes.humanCount = humans.size;
   }
 
   if (latestDate) {
