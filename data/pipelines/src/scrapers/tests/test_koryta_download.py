@@ -187,6 +187,63 @@ class TestPipelinesFallBack(unittest.TestCase):
         self.assertEqual(df.iloc[0]["krs"], "0000123456")
 
 
+class TestCompanyActivityShapes(unittest.TestCase):
+    """The PKD codes come back off the node whichever way they were stored.
+
+    `SiteCompanyCategories` re-derives a company's category from these, so a
+    shape that reads back as no codes is a company that silently loses its
+    category rather than one that errors.
+    """
+
+    def companies(self, rows: list[dict]):
+        with patch.object(
+            FirestoreCollection,
+            "process",
+            exports_on({"2026-08-07": pd.DataFrame(rows)}),
+        ):
+            return KorytaCompanies(date="2026-08-07").process(mock_ctx())
+
+    def test_a_list_survives_as_a_list(self):
+        df = self.companies(
+            [{"id": "place-1", "krsNumber": "0000123456", "activity": ["49.20.Z"]}]
+        )
+        self.assertEqual(df.iloc[0]["activity"], ["49.20.Z"])
+
+    def test_a_numbered_key_map_is_unwrapped_in_order(self):
+        # How every array was stored before 2026-07-28, and how anything the
+        # repair script did not reach is stored still. Ten codes is the maximum
+        # KRS accepts, so the keys really do reach "9" - and a string sort would
+        # put "10" between "0" and "2" if one ever reached ten entries.
+        df = self.companies(
+            [
+                {
+                    "id": "place-1",
+                    "krsNumber": "0000123456",
+                    "activity": {"1": "33.17.Z", "0": "49.20.Z", "2": "52.21.B"},
+                }
+            ]
+        )
+        self.assertEqual(df.iloc[0]["activity"], ["49.20.Z", "33.17.Z", "52.21.B"])
+
+    def test_a_node_with_no_activity_comes_back_empty(self):
+        # The column exists because another row has it, so pandas fills this
+        # cell with a float NaN rather than with None.
+        df = self.companies(
+            [
+                {"id": "place-1", "krsNumber": "0000123456", "activity": ["86.10.Z"]},
+                {"id": "place-2", "krsNumber": "0000654321"},
+            ]
+        )
+        by_id = {row["id"]: row for row in df.to_dict(orient="records")}
+        self.assertEqual(by_id["place-1"]["activity"], ["86.10.Z"])
+        self.assertEqual(by_id["place-2"]["activity"], [])
+
+    def test_no_activity_column_at_all(self):
+        # An export taken before any place node carried PKD codes.
+        df = self.companies([{"id": "place-1", "krsNumber": "0000123456"}])
+        self.assertEqual(df.iloc[0]["activity"], [])
+
+
 class TestWantedBlobs(unittest.TestCase):
     """A day can hold more than one export; only the newest should be read."""
 

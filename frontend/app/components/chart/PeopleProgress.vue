@@ -4,7 +4,7 @@
       <v-tooltip
         v-for="(segment, index) in segments"
         :key="index"
-        :text="segment.label"
+        :text="`${segment.label}: ${segment.value}`"
         location="bottom"
       >
         <template #activator="{ props }">
@@ -12,17 +12,53 @@
             v-bind="props"
             :to="segment.link"
             class="stack-bar-segment"
+            :aria-label="`${segment.label}: ${segment.value}`"
             :style="{
               width: (segment.value / total) * 100 + '%',
               backgroundColor: segment.color,
             }"
-            tag="div"
           >
-            {{ segment.value }}
+            <!-- The count only exists above md, and hiding it is what fixes
+                 the report („liczby są mocno ściśnięte"). Inside the home
+                 page's padding the bar is 311px at 375px wide, and the live
+                 figures split it 39 / 22 / 250px. A flex item's default
+                 `min-width: auto` is its min-content, which here is the width
+                 of its own digits - so the middle segment could not be
+                 narrower than "513" and took the difference out of its
+                 neighbours, leaving six digits crammed into ~64px of bar. With
+                 the only child `display: none` the min-content is 0 and the
+                 three widths are finally the three shares. A `min-width` floor
+                 of the kind ExploreProgressBar carries would undo that, and
+                 would also give the seeded zero-value segment a sliver it does
+                 not have today. -->
+            <span class="d-none d-md-inline">{{ segment.value }}</span>
           </NuxtLink>
         </template>
       </v-tooltip>
     </div>
+
+    <!-- Where the figures go instead. They were only ever named by the tooltip
+         above, whose activator is a link: on a touch screen the tap navigates
+         rather than revealing anything, so a phone reader met three bare
+         integers in tap targets 22-39px wide. A row apiece gives each one a
+         name, a colour to tie it to its slice of the bar, and a target worth
+         aiming at. `text-start` because CardCallToAction centres everything
+         inside it and a two-column list has to line up. -->
+    <ul class="progress-legend d-md-none mt-3 pa-0 text-start">
+      <li v-for="segment in segments" :key="segment.label">
+        <NuxtLink
+          :to="segment.link"
+          class="d-flex align-center ga-2 py-2 text-body-2 text-medium-emphasis"
+        >
+          <span class="legend-dot" :style="{ background: segment.color }" />
+          <span>{{ segment.label }}</span>
+          <!-- Raw, not `toLocaleString("pl-PL")`: Node and Chromium disagree
+               about which no-break space groups the thousands, which is a
+               hydration mismatch on the busiest page of the site. -->
+          <span class="ms-auto font-weight-medium">{{ segment.value }}</span>
+        </NuxtLink>
+      </li>
+    </ul>
   </div>
 </template>
 
@@ -39,17 +75,22 @@ interface Segment {
 
 const { approved, reviewed, toCheck } = useStats();
 
+// The labels are the ones ExploreProgressBar uses for the same three figures.
+// They were "Dodane" and "Ciekawe", the latter left over from when the field
+// was called `interesting`, and until now they were only ever read off a hover
+// tooltip - so nobody on a phone had seen either of them. They are the legend's
+// text now, which is reason enough for them to say what the numbers mean.
 const segments = computed<Segment[]>(() => [
   {
     value: approved.value,
     color: "#4caf50",
-    label: "Dodane",
+    label: "Opublikowane",
     link: "/eksploruj/tabela",
   },
   {
     value: reviewed.value,
     color: "#2196f3",
-    label: "Ciekawe",
+    label: "Sprawdzone",
     link: "/pomoc",
   },
   {
@@ -107,5 +148,37 @@ const total = computed(() =>
   filter: brightness(1.1);
   transform: scale(1.02);
   z-index: 10;
+}
+
+.progress-legend {
+  list-style: none;
+  /* The browser's own 1em block margin on a `ul`, which would put an
+     unexplained gap between the bar and the first row and another one under
+     the last. `mt-3` in the template is `!important` and still wins for the
+     top. */
+  margin-block: 0;
+}
+
+.progress-legend a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* 959.98px is Vuetify's own md boundary - the width `d-md-none` above switches
+   at - so the bar and the legend can never both be on screen or both be off
+   it. 40px of empty colour is a slab once there is nothing written inside it;
+   at 24px the existing 12px radius makes it the pill it is described as. */
+@media (max-width: 959.98px) {
+  .stack-bar-container {
+    height: 1.5rem; /* 24px */
+  }
 }
 </style>

@@ -268,3 +268,85 @@ describe("EmploymentHistory sources", () => {
     expect(wrapper.emitted("sources")?.[0]?.[0]).toMatchObject({ id: "e1" });
   });
 });
+
+/** What „na telefonie powiązania są cały czas bardzo wysokie" turned into.
+ *
+ * jsdom applies no CSS and evaluates no media query, so none of this can assert
+ * a height - the breakpoint classes and the shape of the markup are the
+ * checkable half, and the measured half lives in tests/e2e/entity_phone.spec.ts.
+ */
+describe("EmploymentHistory on a phone", () => {
+  it("draws the duration bar once, in the column that is hidden below md", async () => {
+    // Two of them until now: the desktop one in #append, and a second copy
+    // stacked under the row for phones - 200px of fixed width inside a column
+    // half that wide, clipped at both ends by the content box's own overflow.
+    const wrapper = await render([
+      edge({ start_date: "2014-11-06", end_date: "2017-08-25" }),
+    ]);
+
+    const bars = wrapper.findAllComponents({ name: "ChipRelativeDuration" });
+    expect(bars).toHaveLength(1);
+    expect(bars[0]!.element.closest(".v-list-item__append")).not.toBeNull();
+  });
+
+  it("puts the dates beside the role instead, as one paragraph", async () => {
+    const wrapper = await render([
+      edge({ start_date: "2014-11-06", end_date: "2017-08-25" }),
+    ]);
+
+    const period = wrapper.get('[data-testid="edge-period-e1"]');
+    expect(period.text()).toContain("2014-11-06 - 2017-08-25");
+    // Below md only - above it the bar in #append already says this.
+    expect(period.classes()).toContain("d-md-none");
+    // Nested inside the role span rather than a sibling of it: a sibling is
+    // another flex item and would wrap onto a line of its own under a role of
+    // any length, which is the height this change is spending.
+    const role = period.element.parentElement!;
+    expect(role.className).toContain("text-caption");
+    expect(role.textContent).toContain("Zarząd");
+  });
+
+  it("says nothing about a period nobody recorded", async () => {
+    const wrapper = await render([
+      edge({ type: "connection", label: "kolega z zarządu" }),
+    ]);
+
+    expect(wrapper.find('[data-testid="edge-period-e1"]').exists()).toBe(false);
+  });
+
+  it("keeps the whole committee name on a row that only shows one line of it", () => {
+    const name = "Komitet Wyborczy Wyborców Ziemia Sieradzka";
+    const wrapper = mountHistory([candidacy({ committee: name })]);
+
+    const committee = wrapper.get(".history-row__committee");
+    expect(committee.attributes("title")).toBe(name);
+    // `text-wrap` is `white-space: normal !important` and would beat the
+    // one-line clamp, so it had to come off the span.
+    expect(committee.classes()).not.toContain("text-wrap");
+  });
+
+  it("falls the public-institution badge back to its icon", async () => {
+    // „Instytucja publiczna" is ~100px of a ~160px text column and repeats on
+    // every employment of somebody who has only ever worked in the public
+    // sector, which is most of the people on this site.
+    const wrapper = await render([
+      edge({
+        richNode: {
+          id: "place",
+          type: "place",
+          name: "PKP",
+          isPublic: true,
+        } as EdgeNode["richNode"],
+      }),
+    ]);
+
+    const chip = wrapper.get(".v-chip");
+    expect(chip.classes()).toContain("chip--compact");
+    // The chip's only accessible name once the label is display:none - the
+    // v-tooltip around it never opens on a touch screen, because the chip sits
+    // inside the row's own anchor and a tap follows the link.
+    expect(chip.attributes("title")).toContain("skarbu państwa");
+    // Hidden by the stylesheet below md, still in the markup, back above it.
+    expect(chip.get("span.d-none").classes()).toContain("d-md-inline");
+  });
+});

@@ -1,78 +1,76 @@
 <template>
-  <!-- A section, not a card. This sits between "Historia powiązań" and the
-       graph on a person's page and alongside "Zmiany na stanowisku", all of
-       which are headed sections on the page's own background - a raised card
-       with a title bar in the middle of them read as something pasted in from
-       another site. The same component is the notes on a company, an article
-       and a topic, and in the table's side panel, so restyling it here is what
-       makes notes look the same everywhere they appear. -->
-  <section
+  <!-- A section, not a card, and now literally the same section component as
+       "Zmiany na stanowisku" and "Fakty z artykułów" - which is the point.
+       Twice a reader said the notes did not belong on the page, and twice the
+       answer had been to copy the heading rules across by hand and let them
+       drift again. `PageSection` is the shell; the entries below it are drawn
+       by the same `k-card` rule as the cards in every neighbouring section.
+       The same component is the notes on a company, an article and a topic,
+       and in the table's side panel, so this is what notes look like
+       everywhere they appear. -->
+  <PageSection
     v-if="user || otherSources.length > 0"
-    class="px-2 mb-4"
+    title="Notatki"
+    :icon="mdiNoteTextOutline"
     data-testid="note-editor"
   >
-    <div class="sec-head">
-      <v-icon :icon="mdiNoteTextOutline" size="18" class="sec-head__icon" />
-      <h3 class="text-h6">Notatki</h3>
-    </div>
+    <template #lead>
+      <p v-if="user && !userNote && !isEditing" class="k-lead">
+        Wiesz więcej na temat {{ subject }}? Podziel się dodatkowymi
+        informacjami i dodaj linki do źródeł. Możesz też zgłosić poprawkę albo
+        brakujące dane. Twoje notatki będą publiczne - w ten sposób pomożesz
+        innym w znajdowaniu powiązań.
+      </p>
 
-    <p v-if="user && !userNote && !isEditing" class="k-lead">
-      Wiesz więcej na temat {{ subject }}? Podziel się dodatkowymi informacjami
-      i dodaj linki do źródeł. Możesz też zgłosić poprawkę albo brakujące dane.
-      Twoje notatki będą publiczne - w ten sposób pomożesz innym w znajdowaniu
-      powiązań.
-    </p>
-
-    <p v-if="!user && otherSources.length > 0" class="k-lead">
-      Zaloguj się, aby dodać własną notatkę i pomóc innym w znajdowaniu
-      powiązań.
-    </p>
+      <p v-if="!user && otherSources.length > 0" class="k-lead">
+        Zaloguj się, aby dodać własną notatkę i pomóc innym w znajdowaniu
+        powiązań.
+      </p>
+    </template>
 
     <div>
-      <!-- `dense`, and the cards carry no bottom margin of their own: the
-           default gutter is 12px a side and each card added another 12 below
-           itself, so two rows of entries stood 36px apart - more air between
-           two notes than inside one. The dense gutter puts 8px between them,
-           which still reads as separate cards. -->
-      <v-row dense>
-        <v-col
+      <!-- Full width, one under another, 8px apart - `.succ`'s spacing. The
+           two-up grid this was is what made the section read as its own
+           layout: every other section on a person's page stacks its entries,
+           and three of the six places that draw these notes already passed
+           `single-column` to opt out of the columns. That prop is gone with
+           the grid. -->
+      <div class="note-entries">
+        <NoteSourceCard
           v-for="(source, index) in otherSources"
           :key="'other-' + index"
-          cols="12"
-          :md="singleColumn ? '12' : '6'"
-        >
-          <NoteSourceCard :model-value="source" :is-editing="false" />
-        </v-col>
+          :model-value="source"
+          :is-editing="false"
+        />
 
-        <v-col
+        <NoteSourceCard
           v-for="(source, index) in formData.sources"
           :key="source.url || index"
-          cols="12"
-          :md="singleColumn ? '12' : '6'"
+          :model-value="source"
+          :is-editing="isEditing"
+          @update:model-value="formData.sources[index] = $event"
+          @remove="removeSource(index)"
+        />
+      </div>
+
+      <!-- Neutral, like the one "Dodaj" in "Historia powiązań" above: three
+           buttons in primary, warning and info were the most coloured thing on
+           a page whose entries carry no colour at all. The kind still has its
+           colour - on the chip you pick while writing the entry, where it is
+           telling you something. -->
+      <div v-if="user" class="d-flex flex-wrap ga-2 mt-3">
+        <v-btn
+          v-for="(config, value) in noteKindConfig"
+          :key="value"
+          variant="outlined"
+          size="small"
+          rounded="lg"
+          @click="addSource(value)"
         >
-          <NoteSourceCard
-            :model-value="source"
-            :is-editing="isEditing"
-            @update:model-value="formData.sources[index] = $event"
-            @remove="removeSource(index)"
-          />
-        </v-col>
-        <v-col v-if="user" cols="12" :md="singleColumn ? '12' : '6'">
-          <div class="d-flex flex-wrap ga-2">
-            <v-btn
-              v-for="(config, value) in noteKindConfig"
-              :key="value"
-              variant="outlined"
-              size="small"
-              :color="config.color"
-              @click="addSource(value)"
-            >
-              <v-icon start :icon="config.icon" />
-              {{ config.addLabel }}
-            </v-btn>
-          </div>
-        </v-col>
-      </v-row>
+          <v-icon start :icon="config.icon" />
+          {{ config.addLabel }}
+        </v-btn>
+      </div>
 
       <div v-if="user" class="d-flex justify-end mt-4">
         <v-btn
@@ -90,7 +88,7 @@
         >
       </div>
     </div>
-  </section>
+  </PageSection>
 </template>
 
 <script setup lang="ts">
@@ -111,7 +109,6 @@ import { NoteSourceCard } from "#components";
 const props = withDefaults(
   defineProps<{
     nodeId: string;
-    singleColumn?: boolean;
     /** Kind of node the note hangs off, which the prompt refers to. */
     nodeType?: NodeType;
   }>(),
@@ -252,25 +249,15 @@ const save = async () => {
 </script>
 
 <style scoped>
-/* Kept in step with the other sections on an entity page - `sec-head` and
-   `k-lead` are the same rules `succession/PersonChanges.vue` carries, and a
-   note heading that did not match one sitting directly above it was the whole
-   complaint. */
-.sec-head {
-  align-items: center;
+/* The gap between two notes, and between the heading and the first of them.
+   8px is what `.succ` puts between two handovers in the section above, and a
+   gap rather than a margin per card so that an entry carries no spacing of its
+   own - the grid this replaced gave each card a 12px gutter *and* a 12px
+   margin, which stood two notes further apart than a note is tall. */
+.note-entries {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-}
-
-.sec-head__icon {
-  color: rgba(var(--v-theme-on-surface), 0.38);
-}
-
-.k-lead {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  margin: 4px 0 12px;
-  max-width: 78ch;
+  margin-top: 8px;
 }
 </style>

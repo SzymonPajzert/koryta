@@ -31,7 +31,7 @@
     <template v-else>
       <!-- ============ 1. obecny skład ============ -->
       <section class="mb-8" data-testid="successions-current">
-        <div class="sec-head">
+        <div class="sec-head mb-1">
           <h2 class="text-h6 font-weight-bold">Obecny skład</h2>
           <span class="text-caption text-medium-emphasis">
             wpisy bez daty zakończenia, stan na {{ longDate(today) }}
@@ -58,7 +58,7 @@
               cols="12"
               md="6"
             >
-              <div class="k-card pa-4 pl-5 h-100">
+              <div class="k-card k-card--accent pa-4 pl-5 h-100">
                 <div class="d-flex align-start ga-3">
                   <div class="av av--in">{{ initials(post.personName) }}</div>
                   <div class="flex-grow-1 rl-txt">
@@ -140,7 +140,7 @@
 
       <!-- ============ 2. kto kogo zastąpił ============ -->
       <section data-testid="successions-relay">
-        <div class="sec-head">
+        <div class="sec-head mb-1">
           <h2 class="text-h6 font-weight-bold">Kto kogo zastąpił</h2>
           <span
             v-if="successions.length"
@@ -180,7 +180,7 @@
           <div
             v-for="batch in section.batches"
             :key="batch.key"
-            class="k-card mb-3"
+            class="k-card k-card--accent mb-3"
             :class="{ 'ev--batch': batch.pairs.length > 1 }"
             data-testid="succession-batch"
           >
@@ -639,52 +639,16 @@ const roleSections = computed(() => {
 </script>
 
 <style scoped>
-/* `card/Employment.vue`'s idiom, which is the site's card: a white surface, a
-   hairline, and one 4px sage edge. Sage is a fill and a border here and never
-   ink - `text-primary` on this theme is 1.85:1. */
-.k-card {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 8px;
-  overflow: hidden;
-  position: relative;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.k-card::before {
-  background: rgb(var(--v-theme-primary));
-  bottom: 0;
-  content: "";
-  left: 0;
-  position: absolute;
-  top: 0;
-  width: 4px;
-}
-
-/* A card that is only a note carries no accent: nothing in it is a claim
-   about a person. */
-.k-note {
-  background: rgb(var(--v-theme-surface));
-  border: 1px dashed rgba(var(--v-border-color), 0.3);
-  border-radius: 8px;
-  padding: 12px 16px;
-}
-
-.k-note + .k-note {
-  margin-top: 12px;
-}
-
-/* ---- headings ---- */
-
-.sec-head {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 6px;
-}
+/* `k-card`, `k-card--accent` and `k-note` are global (`app.vue`), and so is
+   `sec-head`. They used to be here too, at values a little off the ones
+   `succession/PersonChanges.vue` carried - 8px round instead of 10, a 4px
+   full-height rail instead of a 3px inset one, a baseline-aligned heading
+   instead of a centred one. Nobody chose that; they were copied at different
+   times. The company page moves to the shared values, which is what lets the
+   notes underneath these cards be the same object as the cards themselves.
+   The two headings keep their 6px of air as a `mb-1`, rounded to the spacing
+   scale, because the shell puts that gap on the lead paragraph and these two
+   have none. */
 
 .relay-intro {
   max-width: 62ch;

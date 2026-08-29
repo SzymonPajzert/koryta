@@ -35,17 +35,41 @@
         </v-list-item-title>
 
         <div class="d-flex align-center flex-wrap ga-2">
-          <span class="text-caption text-medium-emphasis text-wrap">
-            {{ edgeLabel(edge) }}
-          </span>
+          <!-- The period sits *inside* the role span below md, not beside it:
+               as a sibling it would be another flex item and wrap onto its own
+               line under a role of any length, and the row is being cut, not
+               rearranged. Above md the dates stay where they were, under the
+               bar in the append column - which is `display: none` here, and
+               whose phone stand-in was a 200px bar in a 160px column, clipped
+               at both ends by `.v-list-item__content { overflow: hidden }`, so
+               it could not say the one thing a bar says. -->
+          <span class="text-caption text-medium-emphasis text-wrap"
+            >{{ edgeLabel(edge)
+            }}<span
+              v-if="isDated(edge)"
+              class="d-md-none"
+              :data-testid="`edge-period-${edge.id}`"
+              >&nbsp;· {{ periodLabel(edge.start_date, edge.end_date) }}</span
+            ></span
+          >
           <PartyChip v-if="partyOf(edge)" :party="partyOf(edge)!" />
+          <!-- Ellipsised to one line below md, with the whole of it in the
+               title: three lines of a phone row for the registered name of a
+               committee, on a row whose subject is the district and the year,
+               is the single widest thing on a candidacy.
+
+               `text-wrap` came off because it is `white-space: normal
+               !important` and would beat the clamp. It was doing nothing here
+               anyway - only `.v-list-item-title` and `.v-list-subheader__text`
+               set `nowrap` in VList's stylesheet, and this span is neither. -->
           <span
             v-if="committeeOf(edge)"
-            class="text-caption text-medium-emphasis text-wrap"
+            class="text-caption text-medium-emphasis history-row__committee"
+            :title="committeeOf(edge)"
           >
             {{ committeeOf(edge) }}
           </span>
-          <ChipPublicCompany :company="asCompany(edge)" />
+          <ChipPublicCompany :company="asCompany(edge)" compact />
         </div>
 
         <!-- Who sat here before. A `v-for` over nought or one so the lookup is
@@ -89,15 +113,6 @@
           <span class="history-row__rail-gap">
             {{ gapLabel(predecessor.gapDays) }}
           </span>
-        </div>
-
-        <div v-if="isDated(edge)" class="d-md-none mt-2 pb-2">
-          <ChipRelativeDuration
-            :start="edge.start_date"
-            :end="edge.end_date"
-            :min-start="minStart"
-            :max-end="maxEnd"
-          />
         </div>
 
         <template #append>
@@ -169,6 +184,7 @@ import {
   mdiTrashCanOutline,
 } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
+import { periodLabel } from "~/utils/period";
 import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
 import type { Company } from "~~/shared/model";
@@ -368,5 +384,70 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
   font-size: 0.6875rem;
   line-height: 1.6;
   padding: 0 6px;
+}
+
+/* ---- the same row on a phone ----
+
+   Reported as „na telefonie powiązania są cały czas bardzo wysokie": at 375px
+   a row measured 140-200px, so two or three of them filled the screen. The
+   width is where it starts. Page padding leaves the row 253px of content box,
+   and two of its three grid columns are chrome - 56px of icon and up to 98px
+   of buttons - so the institution's name, the role, the party, the committee
+   and the badge were sharing 99-197px and wrapped four times over.
+
+   Everything below is a breakpoint, not `useDisplay()`: under SSR Vuetify
+   builds its display state from a placeholder 1280px width and only corrects
+   it once suspense resolves, so a phone would be served the desktop row and
+   then watch it collapse. 959.98px is Vuetify's own md boundary, the one the
+   `d-md-none` classes in the template switch at. */
+@media (max-width: 959.98px) {
+  /* Vuetify puts a fixed 32px spacer after a prepend icon and only ever reads
+     `--v-list-prepend-gap` from VList's `prependGap` prop, which this card
+     does not pass - so the desktop gap applied at every width and the icon
+     column cost 56px. Set as a custom property rather than through
+     `:deep(.v-list-item__spacer)` because it inherits into the spacer
+     VListItem renders for itself; the same declaration also gives the append
+     column a gap, which it wants - that spacer carries `order: -1`, so it
+     lands between the text and the buttons rather than outside them. */
+  .history-row {
+    --v-list-prepend-gap: 8px;
+  }
+
+  /* An institution's name is the one thing on the row that is worth two lines,
+     so it is tightened rather than clamped - "Wojewódzki Fundusz Ochrony
+     Środowiska i Gospodarki Wodnej w Łodzi" truncated at two lines is a worse
+     row than one that wraps. 1.6 is `.text-subtitle-2`'s line height, which is
+     set for a paragraph, not for a heading of three words. */
+  .history-row .v-list-item-title {
+    line-height: 1.3;
+  }
+
+  /* `min-width: 0` is the load-bearing line, not the ellipsis. A flex item's
+     automatic minimum size is its min-content width, and the min-content width
+     of a `nowrap` string is the whole string - so without this the span refuses
+     to shrink, `max-width` loses to it, and the committee overflows the row
+     instead of being cut. */
+  .history-row__committee {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* VBtn's 50px minimum is sized for a button with a word in it. These two
+     hold an icon and at most one digit, and between them they were taking a
+     third of the row. */
+  .history-row :deep(.v-btn--size-small) {
+    min-width: 0;
+  }
+
+  /* `.history-row__rail` is deliberately left alone. Clamping it to two lines
+     would mean `display: -webkit-box`, and the rail is a wrapping flex row of
+     five things - the arrow, „Wcześniej:", the name, a party chip and the gap
+     badge - each of which a webkit box lays out on its own line, so the clamp
+     would make it taller, not shorter. A `max-height` in em cannot land on a
+     line boundary either, because the chip sets a taller line box than the
+     text around it. It is 12px/1.45 and two lines in practice; leave it. */
 }
 </style>

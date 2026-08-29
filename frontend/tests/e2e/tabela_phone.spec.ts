@@ -45,6 +45,40 @@ test.describe("the table on a phone", () => {
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
   });
 
+  /** The other half of the same report: four columns fit a 375px phone only by
+   * being four truncated ones - a party ellipsised after six letters, a
+   * company after eight. Name+partie and firmy+wybory are one cell apiece now,
+   * so the phone gets two columns with 120px and 185px to spend rather than
+   * four with 100/60/72/72. The no-sideways-scroll assertion above is the
+   * guard on that arithmetic. */
+  test("shows one column for the person and one for their history", async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    // Filtered to a company, so every row is somebody it employs and the
+    // merged history cell is guaranteed a chip to draw. The seed has no
+    // election edges and only one person with a `latestEmploymentStart`, so
+    // the rest of that cell is covered by tests/components/explore/Table.test.ts
+    // instead of here.
+    await page.goto("/eksploruj/tabela?place=chain-company", {
+      waitUntil: "load",
+    });
+    await expect(
+      page.locator("tbody tr:first-child .text-primary.cursor-pointer").first(),
+    ).toBeVisible({ timeout: 60000 });
+
+    const headers = page.locator("thead th:visible");
+    await expect(headers).toHaveCount(2);
+    await expect(headers.nth(0)).toHaveText(/Osoba/);
+    await expect(headers.nth(1)).toHaveText(/Historia/);
+
+    await expect(
+      page
+        .locator("tbody tr:first-child td:nth-child(2) .company-chip")
+        .first(),
+    ).toBeVisible();
+  });
+
   test("keeps the filters one tap away, and says when they are on", async ({
     page,
   }) => {

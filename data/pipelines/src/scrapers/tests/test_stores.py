@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import Mock, patch
 
 import pandas as pd
+import pytest
 
 from scrapers.article.pipelines.incremental import IncrementalJsonlPipeline
 from scrapers.stores import (
@@ -108,6 +109,10 @@ class Level1(Pipeline):
         return pd.DataFrame({"l1": [1]})
 
 
+# Fakes the storage layer and asserts on the calls it would make, so it opts
+# out of the DISABLE_BACKUP guard in conftest.py - with the guard on, the code
+# under test short circuits before reaching the mock.
+@pytest.mark.exercises_backup
 class TestPipeline(unittest.TestCase):
     def setUp(self):
         self.mock_ctx = Mock(spec=Context)
@@ -684,6 +689,11 @@ class TestPipeline(unittest.TestCase):
                 # Stable should NOT run
                 mock_stable_proc.assert_not_called()
 
+
+# Fakes the storage layer and asserts on the calls it would make, so it opts
+# out of the DISABLE_BACKUP guard in conftest.py - with the guard on, the code
+# under test short circuits before reaching the mock.
+@pytest.mark.exercises_backup
 class TestVersionedBackupRestore(unittest.TestCase):
     """Tests for the versioned backup restore logic in read_or_process."""
 
@@ -759,17 +769,11 @@ class TestVersionedBackupRestore(unittest.TestCase):
         # write_file should have been called with a LocalFile (local save)
         # but NOT with a VersionedBackup (no re-upload)
         write_calls = self.mock_ctx.io.write_file.call_args_list
-        local_writes = [
-            c for c in write_calls if isinstance(c[0][0], LocalFile)
-        ]
-        backup_writes = [
-            c for c in write_calls if isinstance(c[0][0], VersionedBackup)
-        ]
+        local_writes = [c for c in write_calls if isinstance(c[0][0], LocalFile)]
+        backup_writes = [c for c in write_calls if isinstance(c[0][0], VersionedBackup)]
 
         self.assertGreater(len(local_writes), 0, "Should write locally")
-        self.assertEqual(
-            len(backup_writes), 0, "Should NOT re-upload to backup"
-        )
+        self.assertEqual(len(backup_writes), 0, "Should NOT re-upload to backup")
 
     def test_missing_output_backup_fails_falls_through_to_process(self):
         """
@@ -789,9 +793,7 @@ class TestVersionedBackupRestore(unittest.TestCase):
         pipeline.dependencies["dep"] = dep_mock
 
         # Both local and backup reads fail
-        self.mock_ctx.io.read_data.side_effect = FileNotFoundError(
-            "Nothing exists"
-        )
+        self.mock_ctx.io.read_data.side_effect = FileNotFoundError("Nothing exists")
 
         processed_df = pd.DataFrame({"processed": [42]})
         with patch.object(
@@ -846,6 +848,10 @@ class TestVersionedBackupRestore(unittest.TestCase):
             pd.testing.assert_frame_equal(result, processed_df)
 
 
+# Fakes the storage layer and asserts on the calls it would make, so it opts
+# out of the DISABLE_BACKUP guard in conftest.py - with the guard on, the code
+# under test short circuits before reaching the mock.
+@pytest.mark.exercises_backup
 class TestSharedCacheHooks(unittest.TestCase):
     """Tests for the shared-cache hooks (restore/upload by path) on Pipeline."""
 
@@ -1024,7 +1030,8 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
         p.backup_to_shared_cache = backup_to_shared_cache
         return p
 
-    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+    @patch(
+        "scrapers.article.pipelines.incremental.VERSIONED_DIR",
         new_callable=lambda: "/tmp/irrelevant",
     )
     def test_missing_output_restores_instead_of_processing(self, _mock_dir):
@@ -1042,7 +1049,8 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
         pipeline.restore_output_from_shared_cache.assert_called_once()
         self.assertEqual(result.shape, (0, 0))
 
-    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+    @patch(
+        "scrapers.article.pipelines.incremental.VERSIONED_DIR",
         new_callable=lambda: "/tmp/irrelevant",
     )
     def test_restore_failure_falls_through_to_processing(self, _mock_dir):
@@ -1059,7 +1067,8 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
         mock_process.assert_called_once()
         pd.testing.assert_frame_equal(result, pd.DataFrame({"col": [1]}))
 
-    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+    @patch(
+        "scrapers.article.pipelines.incremental.VERSIONED_DIR",
         new_callable=lambda: "/tmp/irrelevant",
     )
     def test_successful_run_uploads_to_shared_cache(self, _mock_dir):
@@ -1070,14 +1079,13 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
         pipeline.restore_output_from_shared_cache = Mock(return_value=False)
         pipeline.upload_output_to_shared_cache = Mock(return_value=True)
 
-        with patch.object(
-            pipeline, "process", return_value=pd.DataFrame({"col": [1]})
-        ):
+        with patch.object(pipeline, "process", return_value=pd.DataFrame({"col": [1]})):
             pipeline.read_or_process(self.mock_ctx)
 
         pipeline.upload_output_to_shared_cache.assert_called_once()
 
-    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+    @patch(
+        "scrapers.article.pipelines.incremental.VERSIONED_DIR",
         new_callable=lambda: "/tmp/irrelevant",
     )
     def test_local_only_pipeline_does_not_restore_or_upload(self, _mock_dir):
@@ -1093,7 +1101,8 @@ class TestIncrementalSharedCacheHooks(unittest.TestCase):
         self.mock_ctx.io.restore_backup_to_path.assert_not_called()
         self.mock_ctx.io.upload_backup_from_path.assert_not_called()
 
-    @patch("scrapers.article.pipelines.incremental.VERSIONED_DIR",
+    @patch(
+        "scrapers.article.pipelines.incremental.VERSIONED_DIR",
         new_callable=lambda: "/tmp/irrelevant",
     )
     def test_force_download_restores_local_only_incremental(self, _mock_dir):

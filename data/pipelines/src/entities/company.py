@@ -89,6 +89,20 @@ class KorytaCompany:
     krs: str | None = None
     # Whether the node is currently published on koryta (has a current revision).
     is_approved: bool = False
+    # The PKD codes the site holds for the company, as they were last ingested.
+    # They are a verbatim copy of the register's, which is what makes them worth
+    # reading back: a category can be re-derived from the export alone, without
+    # re-scraping KRS for 4047 companies to learn codes the site already has.
+    # They are also *only* as fresh as the last ingest - see
+    # `analysis.payloads.company.SiteCompanyCategories` for what that costs.
+    activity: list[str] = field(default_factory=list)
+    # The supervisory organ the site holds, and the only trace of the register's
+    # `formaPrawna` a node carries: the ingest payload derives this from the form
+    # and does not store the form itself. A category can be decided by the form
+    # (`SZPITALE.forms` files every SPZOZ under `szpitale`, PKD or no PKD), so
+    # without this the export alone cannot reproduce what a fresh upload would
+    # compute. See `entities.company_bodies.form_for_supervisory_body`.
+    supervisory_body: str = ""
 
     def __post_init__(self):
         if self.krs is not None:

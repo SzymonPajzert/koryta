@@ -25,6 +25,16 @@ halves carry their reasoning. The overrides are by KRS number rather than by
 name because a name is not unique - 96 company names in the register are
 shared by more than one entity.
 
+The include list keeps growing rather than being replaced by a cleverer prefix,
+and that is not a failure to generalise: 1253 of the 4047 place nodes on the
+site declare no PKD at all - every SPZOZ and every entry in the rejestr
+stowarzyszen - so for those there is nothing for a prefix to match. An SPZOZ is
+reached by its legal form instead (`SZPITALE.forms`); for the rest, naming them
+here is the only rule there can be. Matching on the name instead would be
+worse than it looks, which is what the `exclude` entries below are for: half a
+dozen railway-branded clinics and two cable-car operators would be swept into
+`koleje` by any rule that read "kolej" in a name.
+
 A category set computed here is a *default*. Once a person edits the
 categories of a company on the site, the node records
 `categoriesSource: "manual"` and the ingest stops writing over it, the same
@@ -379,6 +389,17 @@ KOLEJE = Category(
             "no PKD stored; the regional operators' association",
         ),
         Override(
+            "0000487558",
+            "Windykacja Kolejowa",
+            "PKD 64.99; PKP Cargo is its sole shareholder in the register",
+        ),
+        Override(
+            "0000499069",
+            "Fundacja Grupy PKP",
+            "rejestr stowarzyszen, no PKD; its registered purpose is rail "
+            "safety and rail heritage",
+        ),
+        Override(
             "0000206663",
             "Grupa Azoty Koltar",
             "the Grupa Azoty group's licensed rail carrier and wagon works at "
@@ -441,6 +462,33 @@ KOLEJE = Category(
             "0000011133",
             "Obwod Lecznictwa Kolejowego w Gliwicach",
             "an outpatient clinic",
+        ),
+        # The other four the site holds, and the ones a name rule would really
+        # cost: all four are SPZOZ entries that declare no PKD at all, so
+        # nothing but their name is available to place them and their name says
+        # "kolejowy". They reach `szpitale` by their legal form rather than by a
+        # code - 86.10 cannot see a company with an empty `activity` - so the
+        # exclusion here only keeps a future name rule from taking them for
+        # `koleje`.
+        Override(
+            "0000004917",
+            "Kolejowy Szpital Uzdrowiskowy w Naleczowie",
+            "an SPZOZ sanatorium, no PKD stored",
+        ),
+        Override(
+            "0000132016",
+            "Obwod Lecznictwa Kolejowego w Bielsku-Bialej",
+            "an SPZOZ outpatient clinic, no PKD stored",
+        ),
+        Override(
+            "0000046263",
+            "SPZOZ Obwod Lecznictwa Kolejowego",
+            "an SPZOZ outpatient clinic, no PKD stored",
+        ),
+        Override(
+            "0000031391",
+            "SPZOZ Szpital Kolejowy w Wilkowicach",
+            "an SPZOZ hospital, no PKD stored",
         ),
         # Road, water, mining and aviation companies that carry 42.12 or a
         # freight-rail code because of a siding or a contract, not because

@@ -20,6 +20,35 @@ from stores.auth import authenticate_user
 from util.firestore import Firestore
 
 
+def skipped_election_lines(resp) -> list[str]:
+    """What the person ingest stored nothing for, one readable line each.
+
+    Deliberately forgiving about the shape. The ingest's response is not
+    validated by a schema on either side of the wire, and this is a log line -
+    an upload that succeeded must not be turned into a failure by a reporting
+    field that came back looking different, or by an endpoint (company, region,
+    score) that has no such field at all.
+    """
+    try:
+        body = resp.json()
+    except ValueError:
+        return []
+    if not isinstance(body, dict):
+        return []
+    lines = []
+    for entry in body.get("skippedElections") or []:
+        if not isinstance(entry, dict):
+            continue
+        election = entry.get("election")
+        election = election if isinstance(election, dict) else {}
+        where = election.get("teryt") or "brak TERYT"
+        lines.append(
+            f"{election.get('election_type')} "
+            f"{election.get('election_year')} ({where}): {entry.get('reason')}"
+        )
+    return lines
+
+
 class NumpyEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, np.ndarray):
@@ -145,6 +174,14 @@ class Uploader:
         )
         if resp.status_code in [200, 201]:
             print("  OK", file=sys.stderr)
+            # A 200 is not "everything landed". The person ingest stores the
+            # candidacies it can place and names the ones it cannot, rather than
+            # answering an unplaceable electoral district with a 500 that took
+            # the rest of the person's list down with it. Printed here because
+            # otherwise the only trace of a dropped candidacy is a line in the
+            # server's log, which nobody running an upload is watching.
+            for line in skipped_election_lines(resp):
+                print(f"    skipped: {line}", file=sys.stderr)
         else:
             print(f"FAILED ({resp.status_code}): {resp.text}", file=sys.stderr)
             if fail:

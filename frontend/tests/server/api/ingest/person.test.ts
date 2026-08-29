@@ -569,6 +569,141 @@ describe("api/ingest/person", () => {
     });
   });
 
+  describe("a candidacy the site cannot place", () => {
+    /** Queue the lookups a payload of candidacies makes, in order.
+     *
+     * One per entry: a region id for a district the site has a node for -
+     * followed by the edge query that a resolved region leads to - and `null`
+     * for one it does not. A candidacy that never reaches the region lookup at
+     * all (no teryt, so nothing to look up) takes no entry.
+     */
+    function personWithRegions(regions: (string | null)[]) {
+      mockGet.mockReset();
+      mockDoc.mockReset();
+      mockDoc.mockImplementation((id?: string) => ({
+        id: id ?? "new-doc-id",
+        ref: mockRef,
+      }));
+      // The person is already stored and the payload says nothing new about
+      // them, so no revision is written for the node itself - every
+      // createRevisionTransaction below is a candidacy.
+      mockGet.mockResolvedValueOnce({
+        empty: false,
+        docs: [{ id: "person-id", ref: mockRef, data: () => ({}) }],
+      });
+      for (const region of regions) {
+        if (region === null) {
+          mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+          continue;
+        }
+        mockGet.mockResolvedValueOnce({
+          empty: false,
+          docs: [{ ref: { id: region }, id: region }],
+        });
+        mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+      }
+    }
+
+    function candidacies(elections: Record<string, unknown>[]) {
+      return {
+        name: "Test Person",
+        parties: [],
+        companies: [],
+        elections,
+      };
+    }
+
+    it("costs one candidacy, not the rest of the list", async () => {
+      // The regression: `lookupRegionId` threw on a teryt no region node
+      // carries, the loop had no per-item catch, and the `finally` committed
+      // the person anyway - so the person kept their party and lost every
+      // candidacy from the bad one onward. '2736' is a real example, a
+      // pre-1999 code off a Samorząd 1994 row.
+      personWithRegions(["teryt1465", null, "teryt0212"]);
+      mockReadBody.mockResolvedValue(
+        candidacies([
+          { election_type: "Samorząd", election_year: "2024", teryt: "1465" },
+          { election_type: "Samorząd", election_year: "1994", teryt: "2736" },
+          { election_type: "Samorząd", election_year: "2018", teryt: "0212" },
+        ]),
+      );
+
+      const result = await handler({} as any);
+
+      // The third one is the whole point: today it is never even attempted.
+      expect(result.elections).toHaveLength(2);
+      expect(result.elections!.map((e) => e.nodeId)).toEqual([
+        "teryt1465",
+        "teryt0212",
+      ]);
+      expect(createRevisionTransaction).toHaveBeenCalledTimes(2);
+    });
+
+    it("says which district it could not place", async () => {
+      // Three modern codes have no region node either ('1431' powiat
+      // warszawski zachodni among them), and the fix for those is to create the
+      // node. Swallowing the failure silently is how that stops being visible.
+      personWithRegions([null]);
+      mockReadBody.mockResolvedValue(
+        candidacies([
+          { election_type: "Sejm", election_year: "2023", teryt: "1431" },
+        ]),
+      );
+
+      const result = await handler({} as any);
+
+      expect(result.elections).toHaveLength(0);
+      expect(result.skippedElections).toEqual([
+        {
+          election: expect.objectContaining({ teryt: "1431" }),
+          reason: "Region not found: 1431",
+        },
+      ]);
+    });
+
+    it("keeps going when a candidacy fails for some other reason", async () => {
+      // Not every failure is a missing region. A candidacy with no teryt at all
+      // that no allowlist entry covers still throws, and it must cost one row
+      // rather than the request.
+      personWithRegions(["teryt1465", "teryt0212"]);
+      mockReadBody.mockResolvedValue(
+        candidacies([
+          { election_type: "Samorząd", election_year: "2024", teryt: "1465" },
+          { election_type: "Sejmik", election_year: "2018" },
+          { election_type: "Samorząd", election_year: "2018", teryt: "0212" },
+        ]),
+      );
+
+      const result = await handler({} as any);
+
+      expect(result.elections!.map((e) => e.nodeId)).toEqual([
+        "teryt1465",
+        "teryt0212",
+      ]);
+      expect(result.skippedElections).toHaveLength(1);
+      expect(result.skippedElections![0]!.reason).toContain(
+        "Election without teryt",
+      );
+    });
+
+    it("reports nothing for an election the allowlist covers", async () => {
+      // The 1994 and 1998 council files record no district the site can place,
+      // which is known and deliberate - `allowedFailingElections` is exactly
+      // that list. Those are not a gap to act on, so they stay out of the
+      // report the caller reads.
+      personWithRegions([]);
+      mockReadBody.mockResolvedValue(
+        candidacies([{ election_type: "Samorząd", election_year: "1994" }]),
+      );
+
+      const result = await handler({} as any);
+
+      expect(result.elections).toHaveLength(0);
+      expect(result.skippedElections).toEqual([]);
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+    });
+  });
+
   describe("a person the database already has", () => {
     /** Queue a lookup that finds `nodes` already holding this person.
      *

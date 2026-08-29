@@ -62,10 +62,12 @@ const pages: {
     // people the table is filtered to. Capturing before both leaves a card
     // with no identifiers and a table still spinning.
     settled: [/REGON:\s*123456785/, "Osoba Testowa"],
-    // Desktop only. The table's ten columns cannot fit a phone, so the page
-    // scrolls sideways and a fullPage shot comes out 1180px wide - most of it
-    // the closed end-drawer sitting off canvas, with the card and its
-    // identifiers behind it. It captures the overflow, not this page.
+    // Desktop only, and no longer because of the table: the phone view is two
+    // merged columns now and fits. What is left is the closed end-drawer, which
+    // sits off the right edge of the document rather than being taken out of
+    // it, so a fullPage shot comes out wider than the phone and spends most of
+    // itself on empty canvas with the card and its identifiers squeezed into
+    // the left of the frame. It captures the drawer, not this page.
     viewports: ["visual-desktop"],
   },
   {

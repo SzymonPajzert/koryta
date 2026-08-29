@@ -197,16 +197,24 @@
              the ones around it, which is the comparison view - so the row
              sends the reviewer there with this revision picked out, instead
              of packing approve, publish, reject, compare and copy-link into
-             the narrowest column of the table. -->
+             the narrowest column of the table.
+
+             One button also means one label. It used to name its own
+             destination, so a relation read "Rewizje powiązań" and a decided
+             proposal "Zobacz" - three widths of button in one column, which
+             read as three tools rather than as one repeated control. Where it
+             goes is now in the tooltip; the row already says both facts the
+             label was spending itself on. -->
         <template #[`item.actions`]="{ item }">
           <v-btn
             variant="tonal"
             size="small"
             :prepend-icon="mdiCompare"
             :to="reviewTo(item)"
+            :title="reviewHint(item)"
             :data-testid="`review-${item.id}`"
           >
-            {{ reviewLabel(item) }}
+            {{ REVIEW_LABEL }}
           </v-btn>
         </template>
       </v-data-table-server>
@@ -426,25 +434,39 @@ const formatMoment = (value: string | null) =>
   value ? new Date(value).toLocaleString("pl-PL") : "-";
 
 /** The side-by-side view, which only exists for nodes: an edge revision is
- * reviewed on /admin/rewizje-krawedzi, which takes no id. */
+ * reviewed on /admin/rewizje-krawedzi, which lists relations rather than
+ * versions of one entry. Null here is what marks a row as an edge one, so both
+ * the destination and the tooltip below read it rather than re-testing
+ * `targetCollection`. */
 const comparisonTo = (proposal: Proposal) =>
   proposal.targetCollection === "nodes" && proposal.targetId
     ? `/admin/rewizje/${proposal.targetId}?revisionId=${proposal.id}`
     : null;
 
 /** Where the row's one button goes. An edge revision has no per-node
- * comparison view - it is reviewed on its own page, which takes no id - so it
- * gets the nearest screen that can actually review it rather than a dead
- * button. */
+ * comparison view - the comparison screen is node-shaped down to its "Podgląd
+ * tej wersji strony" link - so it goes to the page that reviews relations,
+ * carrying its own id: a button that promises "this proposal" and lands on an
+ * unmarked list of forty has not kept the promise. `rewizja` is the key the
+ * queue's own permalink already uses. */
 const reviewTo = (proposal: Proposal) =>
-  comparisonTo(proposal) ?? "/admin/rewizje-krawedzi";
+  comparisonTo(proposal) ?? `/admin/rewizje-krawedzi?rewizja=${proposal.id}`;
 
-const reviewLabel = (proposal: Proposal) =>
-  comparisonTo(proposal) === null
-    ? "Rewizje powiązań"
-    : proposal.status === "pending"
-      ? "Rozpatrz"
-      : "Zobacz";
+/** One label, on every row. The button used to say "Rewizje powiązań" for a
+ * relation and "Zobacz" for a proposal already decided, so the narrowest
+ * column of the table held three differently sized controls and read as three
+ * different tools. Neither fact was the button's to tell: "Czego dotyczy"
+ * already carries the `Powiązanie` chip, and "Zgłoszenie" already carries the
+ * status. The button does one thing on every row, so it says one thing. */
+const REVIEW_LABEL = "Rozpatrz";
+
+/** What the button will open. The label is deliberately identical everywhere,
+ * so the one thing that genuinely differs between rows is said here instead -
+ * as a tooltip, which costs the column no width. */
+const reviewHint = (proposal: Proposal) =>
+  comparisonTo(proposal)
+    ? "Otwiera porównanie rewizji tego wpisu"
+    : "Otwiera listę rewizji powiązań, z tą propozycją podświetloną";
 
 const focusAuthor = (uid: string) => {
   author.value = uid;

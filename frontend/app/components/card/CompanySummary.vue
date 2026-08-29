@@ -98,13 +98,7 @@
 
       <v-col v-if="notesOpen && canEditNotes" cols="12" md="6">
         <v-card-text class="pt-0 pt-md-4">
-          <NoteEditor
-            :key="nodeId"
-            :node-id="nodeId"
-            node-type="place"
-            single-column
-            class="mb-0"
-          />
+          <NoteEditor :key="nodeId" :node-id="nodeId" node-type="place" />
         </v-card-text>
       </v-col>
     </v-row>

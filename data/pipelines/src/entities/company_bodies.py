@@ -55,6 +55,27 @@ SUPERVISORY_BODY_BY_FORM: dict[str, str] = {
 }
 
 
+def form_for_supervisory_body(body: str | None) -> str | None:
+    """The register form a stored supervisory body implies, or `None`.
+
+    The inverse of `SUPERVISORY_BODY_BY_FORM`, and it lives here so the two
+    cannot drift. It exists for the one caller that has a node rather than a
+    register entry - `analysis.payloads.company.SiteCompanyCategories` reads the
+    site's export, which stores the organ and not the form it came from.
+
+    Only an injective mapping can be inverted. Today's has one entry, so the
+    question does not arise; if two forms ever share an organ this returns
+    `None` for that organ rather than guessing, which costs those companies a
+    form-derived category in the catch-up producer and nothing else.
+    """
+    if not body:
+        return None
+    matches = [
+        form for form, known in SUPERVISORY_BODY_BY_FORM.items() if known == body
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def supervisory_body(form: str | None) -> str:
     """What this company's supervisory organ is called, for the ingest payload.
 

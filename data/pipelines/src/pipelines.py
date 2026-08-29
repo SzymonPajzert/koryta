@@ -2,7 +2,12 @@ from analysis.article_person_mentions import ArticlePersonMentions
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
-from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
+from analysis.payloads import (
+    CompaniesPayloads,
+    PeoplePayloads,
+    RegionPayloads,
+    SiteCompanyCategories,
+)
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.scores import (
     CompanyScores,
@@ -91,6 +96,7 @@ PIPELINES = [
     RegionPayloads,
     Regions,
     ScrapeRejestrIO,
+    SiteCompanyCategories,
     Statistics,
 ]
 

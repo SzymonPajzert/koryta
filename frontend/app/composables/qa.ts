@@ -8,9 +8,10 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { useFirebaseApp } from "vuefire";
-import { useAuthState } from "./auth";
+import { authRequest, useAuthState } from "./auth";
 import { captureFeedbackContext, submitFeedback } from "./feedback";
 import { normalizeUpdateTime } from "~~/shared/revisions";
+import { isFeedbackSettled, type QaAdminResolution } from "~~/shared/model";
 import {
   QA_ITEMS,
   qaCheckId,
@@ -50,6 +51,22 @@ export function useQaChecks() {
   const checks = useState<QaCheck[]>("qa-checks", () => []);
   const loadedFor = useState<string | null>("qa-checks-loaded-for", () => null);
   const pending = useState<boolean>("qa-checks-pending", () => false);
+
+  // What admins did with this reader's own reports, keyed by entry id. Kept
+  // beside the verdicts and cached the same way, but loaded separately - see
+  // `loadAdminResolutions`.
+  const resolutions = useState<Record<string, QaAdminResolution>>(
+    "qa-admin-resolutions",
+    () => ({}),
+  );
+  const resolutionsFor = useState<string | null>(
+    "qa-admin-resolutions-for",
+    () => null,
+  );
+  const resolutionsPending = useState<boolean>(
+    "qa-admin-resolutions-pending",
+    () => false,
+  );
 
   /** Fetches the verdicts unless this user's are already in hand. */
   async function load(force = false) {
@@ -100,6 +117,97 @@ export function useQaChecks() {
     () => !!user.value && loadedFor.value === user.value.uid,
   );
 
+  /** Fetches what admins did with this reader's own reports.
+   *
+   * Not folded into `load()`, which is the cheap one every page may call: this
+   * goes over the network to nitro, which runs a Firestore query behind it,
+   * and only /qa has anything to do with the answer. Cached per uid exactly
+   * like the verdicts, so coming back to the page does not re-ask.
+   *
+   * Failures are swallowed with a log on purpose. What this adds is a banner;
+   * the verdicts, the filters and the counts all work without it, and the most
+   * likely failure - a missing composite index on prod - must cost the banner
+   * and not the page.
+   */
+  async function loadAdminResolutions(force = false) {
+    // Client only, for the same reason `load` is: the server render carries no
+    // credentials, so the request could only come back 401 - unobserved, since
+    // callers do not await this.
+    if (import.meta.server) return;
+
+    const uid = user.value?.uid;
+    if (!uid) {
+      resolutions.value = {};
+      resolutionsFor.value = null;
+      return;
+    }
+    if (!force && resolutionsFor.value === uid) return;
+    if (resolutionsPending.value) return;
+
+    resolutionsPending.value = true;
+    try {
+      const data = await authRequest<{
+        resolutions: Record<string, QaAdminResolution>;
+      }>("/api/feedback/qa", { method: "GET" });
+      resolutions.value = data.resolutions;
+      resolutionsFor.value = uid;
+    } catch (error) {
+      console.error("Nie udało się wczytać odpowiedzi na zgłoszenia QA", error);
+    } finally {
+      resolutionsPending.value = false;
+    }
+  }
+
+  /** What the team did with this reader's newest report on an entry. */
+  const adminResolution = (itemId: string): QaAdminResolution | null =>
+    resolutions.value[itemId] ?? null;
+
+  /** Whether this entry is waiting on the reader to say something about a
+   * closure: they reported a problem, an admin settled it, and they have
+   * neither accepted that nor reported it again. */
+  const awaitingAcceptance = (itemId: string): boolean => {
+    const mine = myCheck(itemId);
+    if (!mine || mine.status !== "issue" || mine.acceptedResolutionAt) {
+      return false;
+    }
+    return isFeedbackSettled(adminResolution(itemId)?.status);
+  };
+
+  /** Take the team's word for it: the entry stops counting as this reader's
+   * problem and goes back to needing a look.
+   *
+   * `itemId` and `userUid` ride along even though the document already has
+   * them, because the firestore rule reads both off `request.resource.data`,
+   * which on a merge write is the resulting document - and a write that
+   * carried only the new field would arrive with neither. `updatedAt` is
+   * deliberately not touched: accepting is not a verdict, and re-stamping it
+   * would push the entry to the top of "Co napisali inni" as if the reader had
+   * written something new.
+   */
+  async function acceptResolution(itemId: string): Promise<void> {
+    const uid = user.value?.uid;
+    if (!uid) throw new Error("Trzeba być zalogowanym");
+
+    await setDoc(
+      doc(db, "qaChecks", qaCheckId(itemId, uid)),
+      {
+        itemId,
+        userUid: uid,
+        acceptedResolutionAt: serverTimestamp() as unknown as string,
+      },
+      { merge: true },
+    );
+
+    // Same trick as `saveCheck`: the sentinel is meaningless until firestore
+    // resolves it, and the page needs the entry to move now.
+    const stamped = new Date().toISOString();
+    checks.value = checks.value.map((check) =>
+      check.itemId === itemId && check.userUid === uid
+        ? { ...check, acceptedResolutionAt: stamped }
+        : check,
+    );
+  }
+
   /** This reader's own verdict on an entry - somebody else having been through
    * it leaves it unchecked here, on purpose. */
   const stateOf = (itemId: string): QaItemState =>
@@ -147,13 +255,25 @@ export function useQaChecks() {
     const existing = myCheck(itemId);
     const text = feedback?.trim() ?? "";
     // Read before the write below replaces it: what counts as news is what
-    // changed against the verdict that was already there.
-    const reported = qaVerdictIsReportable(status, text, existing);
+    // changed against the verdict that was already there. The closure is part
+    // of that - repeating "nadal nie działa" word for word is the reader
+    // arguing with a decision, and has to reach the team.
+    const reported = qaVerdictIsReportable(
+      status,
+      text,
+      existing,
+      isFeedbackSettled(adminResolution(itemId)?.status),
+    );
     const stored: QaCheck = {
       itemId,
       userUid: uid,
       status,
       feedback: text,
+      // Written on every verdict, not just when there is something to clear:
+      // the write is a merge, so an acceptance left over from a previous round
+      // would otherwise survive and keep a freshly reported problem out of
+      // "Problemy".
+      acceptedResolutionAt: null,
       // Stamped by firestore, like notes: a wrong clock on one machine should
       // not reorder everybody else's feedback.
       updatedAt: serverTimestamp() as unknown as string,
@@ -205,6 +325,18 @@ export function useQaChecks() {
         // is worth more when the team can go back to whoever left it.
         { attribute: true },
       );
+      // The report just filed is now the newest one about this entry, and it
+      // is untriaged - which is what the route would answer on the next load.
+      // Patched here so the banner clears on the click rather than on a reload
+      // the reader has no reason to do.
+      resolutions.value = {
+        ...resolutions.value,
+        [itemId]: {
+          itemId,
+          status: "new",
+          reportedAt: new Date().toISOString(),
+        },
+      };
       return { reported: true, forwarded: true };
     } catch (error) {
       // The verdict is already saved, so this is not a failure of the click -
@@ -226,5 +358,9 @@ export function useQaChecks() {
     checksFor,
     myCheck,
     saveCheck,
+    loadAdminResolutions,
+    adminResolution,
+    awaitingAcceptance,
+    acceptResolution,
   };
 }

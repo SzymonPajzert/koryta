@@ -48,6 +48,257 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "qa-zgloszenie-rozwiazane",
+    title: "Na liście QA widać, że zgłoszony problem został załatwiony",
+    description:
+      "Wpis, przy którym zgłosiłeś problem, świecił się na czerwono nawet " +
+      "wtedy, gdy zgłoszenie było już w panelu odhaczone jako załatwione - " +
+      "lista czytała tylko Twoją własną ocenę i nic nie wiedziała o tym, co " +
+      "zrobił z nim admin. Teraz taki wpis mówi wprost, że sprawę uznaliśmy " +
+      "za zamkniętą, i pyta, czy się z tym zgadzasz: „Przyjmuję” zdejmuje go " +
+      "z zakładki „Problemy” i odsyła do ponownego sprawdzenia, a „Nadal nie " +
+      "działa” wysyła świeże zgłoszenie do zespołu - tym razem także wtedy, " +
+      "gdy nie zmieniasz w uwadze ani słowa.",
+    steps: [
+      "Zaloguj się i wejdź na /qa, zakładka „Problemy”. Wybierz wpis, przy którym masz zgłoszony problem (jeśli nie masz żadnego, rozwiń dowolny wpis, wpisz uwagę i kliknij „Coś nie działa”).",
+      "W drugiej przeglądarce (albo po wylogowaniu i zalogowaniu jako admin) wejdź na /admin/opinie, znajdź to zgłoszenie po treści uwagi i ustaw mu status „Załatwione”.",
+      "Wróć na /qa i odśwież stronę. Przy tym wpisie ma być niebieski znacznik „Admin: Załatwione” i ramka z informacją, że problem uznaliśmy za załatwiony, a w niej przyciski „Przyjmuję” i „Nadal nie działa”.",
+      "Sprawdź, że wpisy, których admin nie ruszał, wyglądają jak dotąd - bez żadnej dodatkowej ramki i bez znacznika.",
+      "Kliknij „Przyjmuję”. Wpis ma zniknąć z zakładki „Problemy”, licznik przy niej zmniejszyć się o jeden, a sam wpis pojawić się w „Do sprawdzenia” z dopiskiem, że czeka na Twoje ponowne sprawdzenie.",
+      "Odśwież stronę - wpis ma zostać tam, gdzie był, a nie wrócić do „Problemów”.",
+      "Przy innym zamkniętym zgłoszeniu kliknij zamiast tego „Nadal nie działa”, nie zmieniając wpisanej wcześniej uwagi. Na dole ma pojawić się „Zgłoszone - problem trafił do zespołu”, ramka ma zniknąć, a w /admin/opinie ma czekać nowe zgłoszenie z tą samą treścią i statusem „Nowe”.",
+      "Ustaw jakiemuś zgłoszeniu status „Nie robimy” - na /qa ma być napisane właśnie to, a nie że jest załatwione.",
+      "Wyloguj się i zaloguj na inne konto: cudze zgłoszenia i cudze rozstrzygnięcia nie mają się pokazywać - widzisz tylko to, co sam zgłosiłeś.",
+    ],
+    link: "/qa",
+    area: "contributor",
+  },
+  {
+    id: "notatki-ten-sam-kafel",
+    title: "Notatki są takimi samymi kafelkami jak reszta strony",
+    description:
+      "Sam nagłówek „Notatki” to było za mało: pojedyncza notatka wciąż " +
+      "wyglądała jak niewypełniony formularz - tekst siedział w polu do " +
+      "wpisywania, nad nim wisiało szare pytanie do autora („Czego tu " +
+      "brakuje?”), a litery były dwa razy większe niż w sekcjach obok. Teraz " +
+      "notatka to zwykły kafelek - biała, cienka ramka, zaokrąglone rogi i " +
+      "zielona krawędź po lewej - dokładnie taki sam jak karty w „Zmianach na " +
+      "stanowisku” i na stronie spółki, bo wszystkie rysuje już jedna reguła " +
+      "zamiast pięciu przepisanych ręcznie kopii. Pole do pisania pojawia się " +
+      "dopiero wtedy, gdy sam edytujesz swoją notatkę. Adres źródła jest " +
+      "podpisany nazwą serwisu zamiast uciętego w pół linku, a notatki idą " +
+      "jedna pod drugą na całą szerokość, jak powiązania nad nimi.",
+    steps: [
+      "Wejdź zalogowany na stronę osoby, która ma notatki, np. /osoba/marzena-slomka-a8sCGsKrCC6OyVDmkOeg. Notatki mają być zwykłym tekstem - żadnej ramki pola do wpisywania, żadnego szarego pytania nad tekstem.",
+      "Porównaj kafelek notatki z kartą w sekcji „Zmiany na stanowisku” nad nią: ta sama ramka, to samo zaokrąglenie rogów, ta sama zielona krawędź po lewej i ta sama wielkość liter.",
+      "Najedź myszką na notatkę - ramka ma zzielenieć i pojawić się delikatny cień, tak samo jak przy najechaniu na kartę zmiany na stanowisku.",
+      "Sprawdź adres źródła: ma być podpisany nazwą serwisu (np. „wyborcza.pl”), a nie uciętym w połowie długim linkiem. Kliknięcie otwiera oryginał w nowej karcie.",
+      "Zwróć uwagę, że nagłówki „Historia powiązań”, „Zmiany na stanowisku”, „Notatki” i „Fakty z artykułów” zaczynają się teraz w jednej linii, jeden pod drugim.",
+      "Kliknij „Zgłoś poprawkę”, wpisz treść i zapisz. Dopiero w trybie edycji ma być widoczne pole do pisania razem z pytaniem pomocniczym; po zapisaniu wraca zwykły tekst.",
+      "Kliknij „Edytuj”, potem „Anuluj” - notatka ma wrócić do poprzedniej treści.",
+      "Trzy przyciski dodawania („Dodaj źródło”, „Zgłoś poprawkę”, „Zgłoś brak”) mają być w jednym rzędzie i bez kolorowych obwódek, tak jak „Dodaj” w „Historii powiązań”.",
+      "To samo sprawdź na stronie spółki (/instytucja/...), artykułu i tematu, w panelu bocznym otwieranym z /eksploruj/tabela oraz na /eksploruj/nowe - notatki rysuje wszędzie ten sam komponent.",
+      "Na telefonie: notatki mają iść jedna pod drugą na całą szerokość, tak jak powiązania nad nimi.",
+    ],
+    link: "/osoba/marzena-slomka-a8sCGsKrCC6OyVDmkOeg",
+    area: "public",
+  },
+  {
+    id: "tabela-osoba-i-historia",
+    title: "Tabela: osoba i jej historia w dwóch kolumnach",
+    description:
+      "W tabeli „Eksploruj” imię i partie są teraz jedną kolumną „Osoba”, a " +
+      "firmy, data ostatniego zatrudnienia i wybory drugą - „Historia”. Na " +
+      "telefonie zostają dwie szerokie kolumny zamiast czterech wąskich, " +
+      "więc plakietka partii nie jest już ucięta po sześciu literach ani " +
+      "nazwa firmy po ośmiu. Sortowanie po dacie ostatniego zatrudnienia " +
+      "siedzi od teraz na nagłówku „Historia” i jest wreszcie dostępne z " +
+      "telefonu, a stare linki z ?sortBy=latestEmploymentStart działają " +
+      "dokładnie jak dotąd.",
+    steps: [
+      "Wejdź na /eksploruj/tabela - w nagłówku mają być „Osoba” i „Historia” zamiast „Imię i nazwisko”, „Partie”, „Firmy” i „Wybory”.",
+      "Sprawdź kolumnę „Osoba”: plakietki partii mają stać obok nazwiska albo pod nim, a nie w osobnej kolumnie.",
+      "Sprawdź kolumnę „Historia”: mają w niej być plakietki firm, pod nimi „Ostatnie zatrudnienie: ” z datą, a obok (na komputerze) plakietki wyborów z rokiem i okręgiem.",
+      "Najedź na plakietkę firmy i na plakietkę wyborów - dymki z pełną nazwą firmy oraz z okręgiem, województwem i komitetem mają działać jak wcześniej.",
+      "Zwęź okno poniżej 960 px albo wejdź z telefonu - kolumny mają być dwie, nazwa partii ma się mieścić w całości albo być ucięta dopiero na szerokości kolumny, a tabeli nie da się przewinąć w bok.",
+      "Nadal na wąskim ekranie: pod firmami ma być sama data, bez podpisu „Ostatnie zatrudnienie”.",
+      "Kliknij nagłówek „Historia” - tabela ma się posortować, a w adresie ma się pojawić sortBy=latestEmploymentStart.",
+      "Zalogowany wejdź na /eksploruj/tabela?sortBy=latestEmploymentStart&sortDesc=true - lista ma się załadować (nie może być pusta), a strzałka sortowania ma stać przy „Historii”.",
+      "Kliknij nazwisko - w szufladzie mają być te same partie, firmy i wybory, w pełnej postaci.",
+      "Rozszerz okno powyżej 960 px - obok tych dwóch kolumn mają wrócić „Lata pracy”, „Notatki”, „Głosy łącznie”, „Twój głos” i „Eksploruj”.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
+    id: "eksploruj-nowe-tabela-w-karcie",
+    title: "„Eksploruj nowe”: tabela mieści się w karcie",
+    description:
+      "Tabela z osobą wystawała poza prawą krawędź swojej karty - na szerokim " +
+      "ekranie widać ją było wiszącą na tle strony, a na laptopie 1280 px " +
+      "ostatnie kolumny („Twój głos”, „Widoczność”, „Eksploruj”) były po " +
+      "prostu ucięte i nie dało się do nich dojechać żadnym suwakiem. Teraz " +
+      "tabela nigdy nie wychodzi poza kartę: jeśli zabraknie miejsca, " +
+      "przewija się w środku. Przy okazji zostało pięć kolumn zamiast " +
+      "jedenastu - „Osoba”, „Historia”, „Lata pracy”, „Twój głos” i " +
+      "„Eksploruj”. Zniknęły „Notatki” (wszystkie notatki są w całości niżej " +
+      "na tej samej stronie), „Widoczność” (w tej kolejce zawsze „Szkic”) " +
+      "oraz „Głosy łącznie”, której liczba przeniosła się pod nazwisko jako " +
+      "„Suma ocen”. Kolejka, sortowanie i głosowanie działają dokładnie tak " +
+      "samo; /eksploruj/tabela zostaje z kompletem kolumn.",
+    steps: [
+      "Wejdź zalogowany na /eksploruj/nowe. Tabela nad kartą osoby ma się kończyć równo z krawędzią białej karty - nic nie ma wystawać poza nią na tło strony.",
+      "Ustaw okno na około 1280 px szerokości i sprawdź prawą stronę wiersza: ikona „Eksploruj” i strzałki „Twój głos” mają być widoczne bez przewijania w bok. To są kroki 1 i 3 z paska nad tabelą, więc wcześniej nie dało się ich kliknąć na takim ekranie.",
+      "Policz kolumny - mają być dokładnie: „Osoba”, „Historia”, „Lata pracy”, „Twój głos”, „Eksploruj”. Kolumn „Notatki”, „Głosy łącznie” i „Widoczność” już nie ma.",
+      "Pod nazwiskiem osoby ma być drobny podpis „Suma ocen: N” - ta sama liczba, która wcześniej stała w kolumnie „Głosy łącznie”.",
+      "Przełącz kolejność na „Najwyżej oceniane” i klikaj „Następna osoba”: „Suma ocen” pod nazwiskiem ma maleć albo zostawać taka sama, nigdy rosnąć. To potwierdza, że liczba pod nazwiskiem jest tą, po której sortuje się kolejka.",
+      "Przewiń w dół do sekcji „Notatki”: są tam notatki tej osoby, także cudze, w całości - dlatego licznik notatek nie jest już potrzebny w tabeli.",
+      "Wejdź na /eksploruj/tabela: tam „Notatki”, „Głosy łącznie” i „Widoczność” zostają, a pod nazwiskiem nie ma żadnej „Sumy ocen”.",
+      "Zwęź okno do szerokości telefonu i wróć na /eksploruj/nowe: jeśli tabela się nie mieści, ma się przewijać w poziomie wewnątrz karty, a sama strona nie ma jechać w bok.",
+    ],
+    link: "/eksploruj/nowe",
+    area: "contributor",
+  },
+  {
+    id: "powiazania-nizsze-na-telefonie",
+    title: "Powiązania na telefonie są o połowę niższe",
+    description:
+      "Wiersz w „Historii powiązań” zajmował na telefonie 140-200 px, więc na " +
+      "ekran wchodziły dwa, trzy powiązania. Złożyły się na to trzy rzeczy: " +
+      "56 px odstępu przy ikonce i do 98 px na przyciski po prawej, przez co " +
+      "na nazwę instytucji zostawało 99-197 px i łamała się nawet na cztery " +
+      "linijki; osobny pasek trwania rysowany pod wierszem, szeroki na sztywne " +
+      "200 px, więc i tak ucinany z obu stron; oraz pełna nazwa komitetu " +
+      "wyborczego zajmująca trzy linijki. Teraz daty stoją zwykłym tekstem " +
+      "zaraz obok funkcji, pasek trwania zostaje tylko na komputerze, nazwa " +
+      "komitetu jest ucięta wielokropkiem (całość zostaje w dymku " +
+      "przeglądarki), a plakietka „Instytucja publiczna” zwija się do samej " +
+      "ikonki banku. Wiersz ma około 70-110 px, więc na jeden ekran wchodzi " +
+      "sześć, siedem powiązań zamiast trzech. Na komputerze nie zmienia się " +
+      "nic - pasek, pełna nazwa komitetu i pełna plakietka są tam, gdzie były.",
+    steps: [
+      "Na telefonie (albo zwęź okno poniżej 960 px) wejdź na stronę osoby z kilkoma powiązaniami, np. /osoba/maciej-sulgan-qlQRcKSMw1YLZJjNB71M.",
+      "Przewiń do „Historii powiązań” - policz, ile powiązań mieści się na jednym ekranie. Ma ich być co najmniej sześć, wcześniej wchodziły dwa albo trzy.",
+      "Sprawdź pojedynczy wiersz: pod nazwą instytucji ma być jedna linijka „Funkcja · data - data”, a pod nią nic więcej. Zielonego paska trwania nie ma.",
+      "Znajdź wiersz z kandydaturą w wyborach - nazwa komitetu ma być ucięta wielokropkiem w jednej linijce. Najedź na nią myszą (albo przytrzymaj), żeby zobaczyć całą.",
+      "Sprawdź wiersz ze spółką publiczną - zamiast napisu „Instytucja publiczna” ma być sama ikonka banku.",
+      "Zaloguj się jako admin i odśwież tę samą stronę na wąskim ekranie - ikona źródeł i kosz mają być po prawej, w jednej linii, i nadal dać się kliknąć.",
+      "Spróbuj przewinąć stronę w bok - nic nie ma wystawać poza ekran.",
+      "Wejdź na stronę spółki (/instytucja/...) na telefonie - lista osób ma wyglądać tak samo zwięźle.",
+      "Rozszerz okno powyżej 960 px - ma wrócić zielony pasek trwania po prawej stronie wiersza, pełna nazwa komitetu i napis „Instytucja publiczna”, a data ma być tylko raz, pod paskiem.",
+    ],
+    link: "/osoba/maciej-sulgan-qlQRcKSMw1YLZJjNB71M",
+    area: "public",
+  },
+  {
+    id: "home-pasek-postepu-na-telefonie",
+    title: "Pasek „Zostało nam jeszcze dużo osób” z legendą na telefonie",
+    description:
+      "Na wąskim ekranie pasek postępu na stronie głównej ma tylko 311 px " +
+      "szerokości, a wpisane w niego trzy liczby dzieliły między siebie " +
+      "kilkadziesiąt - środkowa nie mieściła się nawet we własnym kawałku " +
+      "paska i rozpychała sąsiednie, bo kawałek nie może być węższy niż " +
+      "wpisane w niego cyfry. Teraz na telefonie liczby stoją pod paskiem, w " +
+      "liście z kolorową kropką i nazwą (Opublikowane, Sprawdzone, Do " +
+      "sprawdzenia), a sam pasek jest niższy i pokazuje już tylko proporcje - " +
+      "i to dokładne, bo nic go od środka nie rozpycha. Przy okazji znika " +
+      "problem, o którym nikt nie mówił: nazwy kolorów podawał dotąd wyłącznie " +
+      "dymek po najechaniu myszą, więc na telefonie trzy gołe liczby nie " +
+      "znaczyły nic, a każda z nich była linkiem szerokim na dwadzieścia kilka " +
+      "pikseli. Na komputerze pasek zostaje dokładnie taki, jaki był.",
+    steps: [
+      "Na telefonie (albo zwęź okno poniżej 960 px) wejdź na stronę główną i zjedź do sekcji „Zostało nam jeszcze dużo osób”.",
+      "Na samym pasku nie ma już żadnych liczb - są tylko trzy kolorowe części, a pasek jest niższy niż wcześniej.",
+      "Pod paskiem są trzy wiersze: „Opublikowane”, „Sprawdzone” i „Do sprawdzenia”, każdy z kropką w kolorze swojej części paska i liczbą wyrównaną do prawej.",
+      "Sprawdź, że najdłuższa część paska to „Do sprawdzenia” i że jej liczba jest największa z trzech.",
+      "Kliknij „Opublikowane” - ma otworzyć tabelę powiązań. „Do sprawdzenia” ma otworzyć tabelę z osobami nieopublikowanymi, a „Sprawdzone” stronę /pomoc.",
+      "Rozszerz okno powyżej 960 px - liczby wracają na pasek, listy pod nim nie ma, a pasek jest znów wyższy.",
+      "Na komputerze najedź myszą na kawałek paska - dymek ma podać nazwę i liczbę, np. „Sprawdzone: 513”.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
+    id: "kategorie-spolek-przeliczone",
+    title: "Kategorie spółek policzone od nowa - koleje bez drogowców",
+    description:
+      "Etykiety kategorii na spółkach pochodziły jeszcze ze starej reguły, " +
+      "która patrzyła wyłącznie na kody PKD, więc pod „Kolejami” siedziały " +
+      "kopalnie i firmy drogowe z własną bocznicą, a nie było tam samego " +
+      "PKP. Reguła zmieniła się w potokach danych wcześniej, ale nie miała " +
+      "jak trafić na stronę: jedyne źródło danych do przeliczenia wymagało " +
+      "pełnego przeczesania KRS. Teraz kategorie da się policzyć z nocnego " +
+      "zrzutu bazy, więc cała baza dostała etykiety zgodne z regułą: doszło " +
+      "30 spółek kolejowych (m.in. Polskie Koleje Państwowe, PKP " +
+      "Informatyka, Polregio, Koleje Dolnośląskie, a także Windykacja " +
+      "Kolejowa i Fundacja Grupy PKP), a 21 firm spoza branży wypadło.",
+    steps: [
+      "Wejdź na /eksploruj/tabela?category=koleje - filtr „Kategoria” ma się sam ustawić na „Koleje”.",
+      "Sprawdź, że w tabeli są ludzie z Polskich Kolei Państwowych, PKP Informatyki, PKP Cargotabor, PKP Energetyki i PKP Intercity Remtrak - żadna z tych spółek nie ma kolejowego PKD, więc wcześniej ich tu nie było.",
+      "Sprawdź przewoźników, którzy zdążyli przejść na PKD 2025: Koleje Dolnośląskie, Koleje Wielkopolskie, Łódzka Kolej Aglomeracyjna, Polregio.",
+      "Sprawdź, że zniknęli drogowcy, kopalnie i huty: Chemobudowa-Kraków, Kopalnia Wapienia „Czatkowice”, DTŚ, Orlen Aviation, Enea Bioenergia. Kod kolejowy mają tylko dlatego, że mają bocznicę - jest ich mniej niż wcześniej i tak ma być.",
+      "Sprawdź, że nie ma Polskich Kolei Linowych - to koleje linowe, nie szynowe, i mają być poza tą kategorią.",
+      "Wejdź na stronę spółki Windykacja Kolejowa oraz Fundacja Grupy PKP - przy nazwie ma być chip „Koleje”, a kliknięcie w niego ma wrócić do przefiltrowanej tabeli.",
+      "Otwórz PKP Szybką Kolej Miejską w Trójmieście - kategoria ustawiona wcześniej ręcznie na stronie ma zostać nietknięta.",
+      "Sprawdź kolejowe przychodnie i szpitale (np. Szpital Kolejowy w Wilkowicach) - mimo nazwy nie mają być w „Kolejach”.",
+      "To samo sprawdź na /eksploruj/nowe - ta sama lista kategorii i ta sama zawartość po wybraniu „Koleje”.",
+      "Jeśli widzisz jeszcze starą zawartość, dopisz do adresu &latest=true - lista spółek jest trzymana w cache przez godzinę.",
+    ],
+    link: "/eksploruj/tabela?category=koleje",
+    area: "public",
+  },
+  {
+    id: "wybory-nie-gina-przy-nieznanym-okregu",
+    title: "Kandydatury nie giną przez jeden nieznany okręg",
+    description:
+      "Wgrywanie osoby przerywało się na pierwszej kandydaturze z okręgiem, " +
+      "którego nie ma na stronie - a wybory samorządowe z 1994 i 1998 roku " +
+      "są opisane starym, 49-województwowym kodem TERYT, który dziś nie " +
+      "oznacza żadnego regionu. Osoba zostawała wtedy z partią i firmami, " +
+      "ale bez ani jednej kandydatury, i tak samo przepadały wszystkie " +
+      "kolejne pozycje z jej listy - w danych to co piąta kandydatura. " +
+      "Teraz nierozpoznany okręg kosztuje jedną kandydaturę, a nie całą " +
+      "historię wyborczą, a import zamiast błędu zwraca listę pominiętych " +
+      "pozycji. Same potoki danych przestały też podawać przedreformowe " +
+      "kody jako TERYT. Kolumna „Wybory” w tabeli wypełnia się po ponownym " +
+      "wgraniu danych osób.",
+    steps: [
+      "Wejdź na /eksploruj/tabela i posortuj po „Ostatnie zatrudnienie” malejąco. W kolumnie „Wybory” część osób z partią ma teraz swoje kandydatury zamiast pustej komórki.",
+      "Wybierz osobę, która wcześniej miała partię i pustą kolumnę „Wybory” - np. Andrzej Grzyb, Czesław Siekierski, Adam Struzik - i sprawdź, czy w jej wierszu są chipy z rokiem i nazwą okręgu.",
+      "Najedź na chip: dymek ma pokazać okręg, województwo i komitet, z którego ramienia osoba startowała.",
+      "Kliknij nazwisko, żeby otworzyć szufladę z boku - te same kandydatury mają być na liście powiązań.",
+      "Wejdź na stronę tej osoby: kandydatury mają być w historii powiązań i w grafie na dole. Uwaga: świeżo wgrane kandydatury czekają na zatwierdzenie, więc niezalogowany czytelnik zobaczy je w tabeli, ale na grafie osoby dopiero po zatwierdzeniu.",
+      "Sprawdź kontrolnie kogoś, kto kandydatury miał już wcześniej - np. Krzysztof Kłak - żeby upewnić się, że nic mu nie ubyło ani się nie zdublowało.",
+    ],
+    link: "/eksploruj/tabela?sortBy=latestEmploymentStart&sortDesc=true",
+    area: "public",
+  },
+  {
+    id: "reviewer-queue-one-kind-of-button",
+    title: "Kolejka rewizji: w ostatniej kolumnie zawsze ten sam przycisk",
+    description:
+      "W ostatniej kolumnie kolejki każdy wiersz ma teraz identyczny przycisk " +
+      "„Rozpatrz”. Wcześniej propozycja dotycząca powiązania miała własny, dużo " +
+      "szerszy „Rewizje powiązań”, a zmiana już rozpatrzona - „Zobacz”, więc " +
+      "jedna kolumna wyglądała jak trzy różne narzędzia. Czego zmiana dotyczy, " +
+      "mówi chip „Powiązanie” w kolumnie „Czego dotyczy”, a to, czy czeka na " +
+      "decyzję - status w kolumnie „Zgłoszenie”; przycisk nie musi powtarzać " +
+      "żadnej z tych rzeczy. Dokąd prowadzi, mówi dymek po najechaniu, a przy " +
+      "powiązaniu prowadzi teraz na listę rewizji powiązań z tą jedną " +
+      "propozycją podświetloną.",
+    steps: [
+      "Jako admin wejdź na /admin/rewizje/kolejka.",
+      "Przejrzyj ostatnią kolumnę - w każdym wierszu ma być jeden przycisk „Rozpatrz”, tej samej szerokości, niezależnie od tego, czego zmiana dotyczy.",
+      "Najedź na przycisk - dymek ma powiedzieć, co się otworzy: porównanie rewizji wpisu albo lista rewizji powiązań.",
+      "Ustaw filtr „Status” na „Wszystkie” - przy rozpatrzonej już propozycji przycisk ma nadal nazywać się „Rozpatrz”, a o tym, że jest rozpatrzona, ma mówić status w pierwszej kolumnie.",
+      "Ustaw filtr „Rodzaj” na „Wszystko”, znajdź wiersz z chipem „Powiązanie” w kolumnie „Czego dotyczy” i kliknij „Rozpatrz” - otwiera się /admin/rewizje-krawedzi, a ten jeden wiersz jest podświetlony i przewinięty na widok.",
+      "Na liście rewizji powiązań zmień „Typ krawędzi” na inny niż typ podświetlonej propozycji - ma pojawić się informacja, że propozycji z linku nie ma na tej liście, z przyciskiem „Pokaż w kolejce”, który otwiera ją w kolejce.",
+      "Wróć do kolejki i kliknij „Rozpatrz” przy zwykłym wpisie - tak jak dotąd otwiera się porównanie rewizji z tą jedną podświetloną.",
+    ],
+    link: "/admin/rewizje/kolejka",
+    area: "admin",
+  },
+  {
     id: "spolki-skarbu-panstwa-maja-wlasciciela",
     title: "Spółki Skarbu Państwa mają wreszcie wpisanego właściciela",
     description:
@@ -617,13 +868,13 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Na wąskim ekranie nad wyszukiwarką jest jedno zdanie o tym, co ta " +
       "strona robi - zabrakło go, kiedy logo i nagłówek zeszły z pierwszego " +
-      "ekranu. Przycisk âDziałaj z namiâ znika z telefonów, żeby mapa " +
+      "ekranu. Przycisk „Działaj z nami” znika z telefonów, żeby mapa " +
       "koryciarstwa była pierwszą rzeczą pod wyszukiwarką; ten sam " +
       "odnośnik jest teraz w stopce, więc dalej można do niego trafić.",
     steps: [
       "Na telefonie (albo zwęż okno poniżej 960 px) wejdź na stronę główną - nad wyszukiwarką ma być jedno zdanie o tym, co robimy.",
-      "Sprawdź, że pod wyszukiwarką nie ma już przycisku âDziałaj z namiâ i że zaraz pod nią zaczyna się mapa.",
-      "Przewiń na sam dół - w stopce, w âO projekcieâ, ma być âDziałaj z namiâ, prowadzące na /pomoc.",
+      "Sprawdź, że pod wyszukiwarką nie ma już przycisku „Działaj z nami” i że zaraz pod nią zaczyna się mapa.",
+      "Przewiń na sam dół - w stopce, w „O projekcie”, ma być „Działaj z nami”, prowadzące na /pomoc.",
       "Rozszerz okno powyżej 960 px - wraca logo, nagłówek i przycisk obok wyszukiwarki, a zdanie znika (mówi to samo, co nagłówek).",
     ],
     link: "/",
@@ -640,9 +891,9 @@ export const QA_ITEMS: QaItem[] = [
       "staremu, filtry są rozwinięte.",
     steps: [
       "Na telefonie (albo zwęż okno poniżej 960 px) wejdź na /eksploruj/tabela - tabela ma być widoczna bez przewijania albo po jednym machnięciu.",
-      "Kliknij przycisk âFiltry i wyszukiwanieâ - filtry mają się rozwinąć i zwinąć ponownie.",
-      "Ustaw jakiś filtr, na przykład partię, i zwiń panel - na przycisku ma być âFiltry (1)â, żeby nie filtrował po cichu.",
-      "Wyloguj się i sprawdź niebieski banerek: przycisk âZaloguj sięâ ma być pod tekstem, w całości na ekranie.",
+      "Kliknij przycisk „Filtry i wyszukiwanie” - filtry mają się rozwinąć i zwinąć ponownie.",
+      "Ustaw jakiś filtr, na przykład partię, i zwiń panel - na przycisku ma być „Filtry (1)”, żeby nie filtrował po cichu.",
+      "Wyloguj się i sprawdź niebieski banerek: przycisk „Zaloguj się” ma być pod tekstem, w całości na ekranie.",
       "Spróbuj przewinąć stronę w bok - nie ma czego, nic nie wystaje poza ekran.",
       "Rozszerz okno powyżej 960 px - filtry mają być rozwinięte, bez przycisku do zwijania.",
     ],
@@ -653,20 +904,20 @@ export const QA_ITEMS: QaItem[] = [
     id: "reviewer-queue-one-button",
     title: "Kolejka rewizji: jeden przycisk zamiast pięciu",
     description:
-      "Wiersz w kolejce ma teraz jeden przycisk - âRozpatrzâ - który otwiera " +
+      "Wiersz w kolejce ma teraz jeden przycisk - „Rozpatrz” - który otwiera " +
       "porównanie rewizji tego wpisu z tą jedną podświetloną i przewiniętą " +
       "na widok. Decyzje zapadają tam, gdzie widać całą zmianę, a nie w " +
       "najwęższej kolumnie tabeli. Autor i data to jedna kolumna " +
-      "âZgłoszenieâ na początku wiersza, a âCzego dotyczyâ nie rozpycha się " +
+      "„Zgłoszenie” na początku wiersza, a „Czego dotyczy” nie rozpycha się " +
       "już na tytuł artykułu.",
     steps: [
       "Jako admin wejdź na /admin/rewizje/kolejka.",
-      "Sprawdź pierwszą kolumnę âZgłoszenieâ - w jednym miejscu ma być autor, kiedy zgłosił i status.",
+      "Sprawdź pierwszą kolumnę „Zgłoszenie” - w jednym miejscu ma być autor, kiedy zgłosił i status.",
       "Sprawdź ostatnią kolumnę - ma być w niej dokładnie jeden przycisk.",
-      "Kliknij âRozpatrzâ - otwiera się porównanie rewizji tego wpisu, a kolumna z tą rewizją jest podświetlona i widoczna bez przewijania w bok.",
-      "Zatwierdź albo odrzuć ją tam i wróć do kolejki - przycisk przy rozpatrzonej zmienia się na âZobaczâ.",
-      "Ustaw filtr âRodzajâ na âWszystkoâ i znajdź rewizję powiązania - jej przycisk ma prowadzić na /admin/rewizje-krawedzi, bo powiązania recenzuje się tam.",
-      "Znajdź rewizję artykułu o długim tytule - kolumna âCzego dotyczyâ ma być wąska, tytuł ucięty po dwóch liniach, a cały widoczny w dymku po najechaniu.",
+      "Kliknij „Rozpatrz” - otwiera się porównanie rewizji tego wpisu, a kolumna z tą rewizją jest podświetlona i widoczna bez przewijania w bok.",
+      "Zatwierdź albo odrzuć ją tam i wróć do kolejki - przycisk przy rozpatrzonej zmienia się na „Zobacz”.",
+      "Ustaw filtr „Rodzaj” na „Wszystko” i znajdź rewizję powiązania - jej przycisk ma prowadzić na /admin/rewizje-krawedzi, bo powiązania recenzuje się tam.",
+      "Znajdź rewizję artykułu o długim tytule - kolumna „Czego dotyczy” ma być wąska, tytuł ucięty po dwóch liniach, a cały widoczny w dymku po najechaniu.",
     ],
     link: "/admin/rewizje/kolejka",
     area: "admin",
@@ -675,15 +926,15 @@ export const QA_ITEMS: QaItem[] = [
     id: "drawer-admin-revisions-link",
     title: "Skrót do rewizji także w panelu bocznym",
     description:
-      "Przycisk âRewizjeâ, który admin ma na stronie osoby, jest teraz również " +
-      "w panelu bocznym otwieranym z tabeli - w tej samej linii co âZaproponuj " +
-      "zmianęâ i głosy. Nie trzeba już wychodzić z tabeli, żeby dojść do " +
+      "Przycisk „Rewizje”, który admin ma na stronie osoby, jest teraz również " +
+      "w panelu bocznym otwieranym z tabeli - w tej samej linii co „Zaproponuj " +
+      "zmianę” i głosy. Nie trzeba już wychodzić z tabeli, żeby dojść do " +
       "ekranu, na którym stronę się publikuje.",
     steps: [
-      "Jako admin wejdź na /eksploruj/tabela i kliknij nazwisko - w panelu, w linii z głosami, ma być przycisk âRewizjeâ.",
+      "Jako admin wejdź na /eksploruj/tabela i kliknij nazwisko - w panelu, w linii z głosami, ma być przycisk „Rewizje”.",
       "Kliknij go - ma otworzyć listę rewizji tej samej osoby, którą panel pokazywał.",
       "Wróć do tabeli, otwórz inną osobę i sprawdź, że przycisk prowadzi do niej, a nie do poprzedniej.",
-      "Zaloguj się jako zwykły użytkownik i powtórz - âZaproponuj zmianęâ ma być, âRewizjiâ nie.",
+      "Zaloguj się jako zwykły użytkownik i powtórz - „Zaproponuj zmianę” ma być, „Rewizji” nie.",
     ],
     link: "/eksploruj/tabela",
     area: "admin",
@@ -1097,6 +1348,10 @@ export type QaCheck = {
   feedback?: string;
   createdAt?: string;
   updatedAt?: string;
+  /** When this reader accepted an admin's close on their own report of this
+   * entry. Set from /qa, cleared by the next verdict; it is what stops the
+   * entry counting as their problem without claiming they re-checked it. */
+  acceptedResolutionAt?: string | null;
 };
 
 export function qaCheckId(itemId: string, userUid: string): string {
@@ -1121,6 +1376,13 @@ export function qaItemState(
   const mine = checks.find(
     (check) => check.itemId === itemId && check.userUid === userUid,
   );
+  // A reported problem the reader has since accepted as closed goes back to
+  // needing a look, not to "sprawdzone": an admin marking their report
+  // resolved is a claim by the team, and the entry only becomes verified when
+  // this reader says so themselves. The stored verdict is still "issue" - the
+  // acceptance is a separate field on purpose, so nothing has to lie about
+  // what they found. See `acceptedResolutionAt`.
+  if (mine?.status === "issue" && mine.acceptedResolutionAt) return "unchecked";
   return mine?.status ?? "unchecked";
 }
 
@@ -1187,9 +1449,19 @@ export function qaVerdictIsReportable(
   status: QaCheckStatus,
   note: string,
   previous: QaCheck | null,
+  /** Whether the last report this reader filed about the entry has already
+   * been closed by an admin. Defaults to false, which is what every caller
+   * that cannot know - the tests, anything reading a check on its own - should
+   * get. */
+  adminSettled = false,
 ): boolean {
   const text = note.trim();
   if (status === "ok" && !text) return false;
+  // Saying it is still broken after somebody closed the report is news even in
+  // the same words; that is the whole content of the message. Checked before
+  // the de-dup below, which would otherwise read it as the same verdict twice
+  // and leave the reader with no way to argue back.
+  if (adminSettled && status === "issue") return true;
   if (
     previous?.status === status &&
     (previous.feedback ?? "").trim() === text

@@ -159,6 +159,7 @@ import {
 import { authRequest } from "~/composables/auth";
 import { feedbackKindConfig } from "~/composables/feedback";
 import { qaStatusLabels } from "~~/shared/qa";
+import { isFeedbackSettled } from "~~/shared/model";
 import type { Feedback, FeedbackStatus } from "~~/shared/model";
 
 definePageMeta({
@@ -187,17 +188,14 @@ const visible = computed(() =>
     : items.value,
 );
 
+/** Settled is what the card greys out - "w trakcie" is still work in the queue
+ * and stays at full contrast. The list lives in shared/model.ts because /qa now
+ * asks the same question about a report the reader filed themselves. */
+const isSettled = (item: Feedback) => isFeedbackSettled(item.adminStatus);
+
 /** Reports are written by anyone, including signed-out visitors, so the route
  * is never trusted as a link target. The API only accepts site-relative paths;
  * this refuses anything else outright rather than rendering it. */
-/** Settled means nobody has to read it again: it was dealt with, or a decision
- * was made not to. Those two are what the card greys out - "w trakcie" is still
- * work in the queue and stays at full contrast. */
-const SETTLED_STATUSES: FeedbackStatus[] = ["resolved", "wont_fix"];
-
-const isSettled = (item: Feedback) =>
-  SETTLED_STATUSES.includes(item.adminStatus);
-
 const pageLink = (item: Feedback) =>
   /^\/(?!\/)/.test(item.context.route) ? item.context.route : undefined;
 

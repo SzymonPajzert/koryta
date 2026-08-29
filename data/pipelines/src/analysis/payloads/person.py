@@ -17,6 +17,15 @@ from scrapers.stores import Context, Pipeline
 #: mapping is missing. Enough to act on, short enough to read.
 UNMAPPED_COMMITTEES_REPORTED = 20
 
+#: The sixteen voivodeship codes TERYT has used since the 1999 reform replaced
+#: 49 voivodeships with them. Every region node the site holds is keyed on one
+#: of these or on a four-digit powiat code beginning with one, so this is the
+#: whole of what "a code the site can resolve" means.
+TERYT_VOIVODESHIPS = frozenset(f"{code:02d}" for code in range(2, 33, 2))
+
+#: How many unresolvable TERYT codes to name in the run's report.
+DROPPED_TERYTS_REPORTED = 20
+
 
 class PeoplePayloads(Pipeline[Person]):
     # TODO save to the same file as extract
@@ -32,11 +41,13 @@ class PeoplePayloads(Pipeline[Person]):
         people_df = self.people.read_or_process(ctx)
         result = []
         unmapped: typing.Counter[str] = collections.Counter()
+        dropped_teryts: typing.Counter[str] = collections.Counter()
         for _, row in people_df.iterrows():
-            person = self.map_person_payload(ctx, row)
+            person = self.map_person_payload(ctx, row, dropped_teryts)
             unmapped.update(unmapped_committees(person.elections))
             result.append(person)
         report_unmapped_committees(unmapped)
+        report_dropped_teryts(dropped_teryts)
         return (
             pd.DataFrame.from_records([asdict(p) for p in result])
             if result
@@ -52,7 +63,12 @@ class PeoplePayloads(Pipeline[Person]):
             )
         )
 
-    def map_person_payload(self, ctx: Context, row: pd.Series) -> Person:
+    def map_person_payload(
+        self,
+        ctx: Context,
+        row: pd.Series,
+        dropped_teryts: typing.Counter[str] | None = None,
+    ) -> Person:
         def get_scalar(key):
             val = row.get(key)
             if isinstance(val, (list, np.ndarray)):
@@ -71,7 +87,7 @@ class PeoplePayloads(Pipeline[Person]):
         )
 
         companies = _extract_companies(row)
-        elections = _extract_elections(row)
+        elections = _extract_elections(row, dropped_teryts)
         count, sources, content, party = _hardcoded_sources_content_parties(row)
         # The two hardcoded lists name a few hundred people between them; the
         # committees name everybody who ever stood for one. Both are evidence,
@@ -152,7 +168,42 @@ def _committee(value: typing.Any) -> str | None:
     return text
 
 
-def _extract_elections(row: pd.Series) -> list[Election]:
+def _modern_teryt(teryt: str) -> str | None:
+    """The candidacy's TERYT code, or None if it is not a TERYT code any more.
+
+    The 1994 and 1998 council files are filed under the pre-1999 division into
+    49 voivodeships, whose codes ran 01-49 - '2736', '47', '0102', '8510'. None
+    of those name anything today, and the codes that look modern are worse than
+    the ones that do not: '2310' is a well-formed four-digit string that no
+    region node has and never will.
+
+    Sending one anyway is what this is about. The ingest resolves `teryt` to a
+    region node, and until it was fixed a code it could not resolve threw and
+    took every candidacy after it in the payload down with it - 19,538
+    candidacies, 20% of the total, measured against the enriched people table.
+    The ingest now skips the one candidacy instead, so this is no longer load
+    bearing; it is here because a payload claiming a code that means nothing is
+    a claim the pipeline should not be making, and because it keeps 7,588 lines
+    of "region not found" out of every upload's log.
+
+    The powiat codes are their voivodeship's code plus two digits, so the first
+    two characters decide it for both lengths - which is why a modern code that
+    happens to have no region node yet ('1431', powiat warszawski zachodni)
+    still comes through: that is a missing region, not a bad code, and it should
+    be fixed by creating the node.
+    """
+    if len(teryt) == 4 and teryt.endswith("00"):
+        # PKW files a voivodeship-wide candidacy as WW00; the site's node for a
+        # voivodeship is keyed on the bare two-digit code.
+        teryt = teryt[:2]
+    if teryt[:2] not in TERYT_VOIVODESHIPS:
+        return None
+    return teryt
+
+
+def _extract_elections(
+    row: pd.Series, dropped_teryts: typing.Counter[str] | None = None
+) -> list[Election]:
     elections = []
     elec_list = row.get("elections")
     if isinstance(elec_list, (list, np.ndarray)):
@@ -170,9 +221,14 @@ def _extract_elections(row: pd.Series) -> list[Election]:
                 if e.get("election_year"):
                     election_payload.election_year = str(e.get("election_year"))
                 if teryt_val:
-                    if len(teryt_val) == 4 and teryt_val.endswith("00"):
-                        teryt_val = teryt_val[:2]
-                    election_payload.teryt = teryt_val
+                    modern = _modern_teryt(teryt_val)
+                    if modern is None and dropped_teryts is not None:
+                        dropped_teryts[teryt_val] += 1
+                    # The candidacy is kept either way. It happened, and the
+                    # ingest has an allowlist for exactly the old elections
+                    # whose district it cannot place; dropping the row instead
+                    # would lose a candidacy to fix a code.
+                    election_payload.teryt = modern
 
                 elections.append(election_payload)
     return elections
@@ -236,3 +292,23 @@ def report_unmapped_committees(unmapped: typing.Counter[str]) -> None:
     )
     for committee, count in unmapped.most_common(UNMAPPED_COMMITTEES_REPORTED):
         print(f"  {count:6d}  {committee}")
+
+
+def report_dropped_teryts(dropped: typing.Counter[str]) -> None:
+    """Name the districts the payloads could not place, and how many there are.
+
+    Almost all of this is the 1994 council file and its pre-1999 codes, which is
+    expected and not actionable. The number is worth printing anyway: it is how
+    a *modern* code that stopped resolving would show up, and a jump in it after
+    a change to the PKW join is the signal that the join started reading the
+    wrong column.
+    """
+    if not dropped:
+        return
+    total = sum(dropped.values())
+    print(
+        f"{total} candidacies carry a district code that is not a TERYT code "
+        f"today ({len(dropped)} distinct). The most common:"
+    )
+    for teryt, count in dropped.most_common(DROPPED_TERYTS_REPORTED):
+        print(f"  {count:6d}  {teryt}")

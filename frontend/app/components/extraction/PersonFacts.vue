@@ -3,28 +3,36 @@
        SuccessionPersonChanges follows. Most people in the graph are named in
        no analysed article at all, and a section that announces itself over
        empty space reads as a page that failed to load. An error is silent for
-       the same reason - see `total` below. -->
-  <section v-if="total > 0" class="mt-4" data-testid="person-extractions">
-    <div class="sec-head">
-      <v-icon :icon="mdiTextSearchVariant" size="18" class="sec-head__icon" />
-      <h3 class="text-h6">Fakty z artykułów</h3>
-    </div>
+       the same reason - see `total` below.
 
-    <!-- Said out loud, because the cards look like the rest of the page and
-         are not the same kind of claim: the register above is sourced and
-         reviewed, these are a model's reading of a newspaper, matched to this
-         person by name and not yet judged by anybody. -->
-    <p v-if="user" class="k-lead" data-testid="person-extractions-lead">
-      Automatycznie wyszukane w prasie i przypisane do tej osoby po imieniu i
-      nazwisku. Mogą być błędne - jeśli fakt dotyczy kogoś innego, zgłoś to
-      przyciskiem "To nie ta osoba".
-    </p>
-    <p v-else class="k-lead" data-testid="person-extractions-count">
-      Znaleźliśmy
-      <strong>{{ polishCounting(total, ...FACT_FORMS) }}</strong>
-      o tej osobie w artykułach prasowych. Ponieważ nie są jeszcze sprawdzone,
-      pokazujemy je tylko zalogowanym osobom.
-    </p>
+       `px-2` arrives with the shell, and this section had been missing it: its
+       heading started 8px left of the three above it on a person's page, which
+       nobody had spotted while every section carried its own copy of the
+       heading rules. -->
+  <PageSection
+    v-if="total > 0"
+    title="Fakty z artykułów"
+    :icon="mdiTextSearchVariant"
+    class="mt-4"
+    data-testid="person-extractions"
+  >
+    <template #lead>
+      <!-- Said out loud, because the cards look like the rest of the page and
+           are not the same kind of claim: the register above is sourced and
+           reviewed, these are a model's reading of a newspaper, matched to
+           this person by name and not yet judged by anybody. -->
+      <p v-if="user" class="k-lead" data-testid="person-extractions-lead">
+        Automatycznie wyszukane w prasie i przypisane do tej osoby po imieniu i
+        nazwisku. Mogą być błędne - jeśli fakt dotyczy kogoś innego, zgłoś to
+        przyciskiem "To nie ta osoba".
+      </p>
+      <p v-else class="k-lead" data-testid="person-extractions-count">
+        Znaleźliśmy
+        <strong>{{ polishCounting(total, ...FACT_FORMS) }}</strong>
+        o tej osobie w artykułach prasowych. Ponieważ nie są jeszcze sprawdzone,
+        pokazujemy je tylko zalogowanym osobom.
+      </p>
+    </template>
 
     <v-row v-if="user">
       <v-col v-for="fact in facts" :key="fact.id ?? fact.url" cols="12" md="6">
@@ -68,7 +76,7 @@
     >
       Pokazujemy {{ facts.length }} najnowszych z {{ total }}.
     </p>
-  </section>
+  </PageSection>
 </template>
 
 <script setup lang="ts">
@@ -123,24 +131,8 @@ const hidden = computed(() => Math.max(0, total.value - facts.value.length));
 </script>
 
 <style scoped>
-.sec-head {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.sec-head__icon {
-  color: rgba(var(--v-theme-on-surface), 0.38);
-}
-
-.k-lead {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  margin: 4px 0 12px;
-  max-width: 78ch;
-}
-
+/* The heading and the lead are `PageSection`'s, drawn from the global rules in
+   `app.vue`. What is left here is the shape of what is being withheld. */
 .locked {
   position: relative;
 }

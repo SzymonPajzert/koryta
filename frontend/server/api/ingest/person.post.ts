@@ -31,7 +31,13 @@ export default defineEventHandler(async (event) => {
   const db = getFirestore(getApp(), "koryta-pl");
 
   const batch = db.batch();
-  const ctx = new Context(db, user, batch, body.autoapprove ?? false);
+  const ctx = new Context(
+    db,
+    user,
+    batch,
+    body.autoapprove ?? false,
+    body.name,
+  );
 
   const { companyIDs, missingKRS } = await lookupCompanyIDs(
     ctx,
@@ -123,8 +129,28 @@ export default defineEventHandler(async (event) => {
       articlesResult.push(await createArticle(ctx, personId, article));
     }
     for (const election of assertArray(body.elections, "elections")) {
-      const result = await createElection(ctx, personId, election);
-      if (!result) continue; // TODO handle missing teryt for sejm etc.
+      // One candidacy per catch, the way the employments above have always
+      // been resolved. Without it, anything thrown here aborted the loop and
+      // 500ed the request while the `finally` still committed the person - so a
+      // payload with one unplaceable district stored the person's party, stored
+      // their employments, and stored not one of their candidacies. Measured
+      // against the enriched people table: 7,897 of 107,726 payloads would have
+      // failed that way, taking 19,538 candidacies (20.2%) with them.
+      const result = await createElection(ctx, personId, election).catch(
+        (e) => {
+          console.error(
+            `Error creating election for ${ctx.personName}`,
+            election,
+            e,
+          );
+          ctx.skippedElections.push({
+            election,
+            reason: e instanceof Error ? e.message : String(e),
+          });
+          return undefined;
+        },
+      );
+      if (!result) continue; // Skipped, and `ctx.skippedElections` says why.
       electionsResult.push(result);
     }
 
@@ -136,6 +162,10 @@ export default defineEventHandler(async (event) => {
       companies: companiesResult,
       articles: articlesResult,
       elections: electionsResult,
+      // What the request could not place, rather than a bare 500. The uploader
+      // prints it, so a run says which districts are missing and the next one
+      // can be measured against this one.
+      skippedElections: ctx.skippedElections,
       status: "ok",
     };
   } finally {
@@ -245,16 +275,33 @@ class Context {
    */
   readonly claimedEdgeIds = new Set<string>();
 
+  /** Candidacies this request could not store, and what stopped each one.
+   *
+   * A skipped candidacy used to be indistinguishable from one that was never
+   * sent: the ones the allowlist covers were dropped silently, and the rest
+   * threw, so the whole request came back a 500 naming a single teryt. Both
+   * hid the same thing - which districts the site has no region node for -
+   * behind an answer that said nothing about the other candidacies in the
+   * payload. Collected here and returned, so a run reports what it lost.
+   */
+  readonly skippedElections: { election: ElectionRequest; reason: string }[] =
+    [];
+
   constructor(
     readonly db: FirebaseFirestore.Firestore,
     readonly user: { uid: string },
     readonly batch: FirebaseFirestore.WriteBatch,
     readonly autoapprove: boolean,
+    /** Only ever used to name the person in a log line. Everything a payload
+     * asserts about them is written from `body`; this is so that "region not
+     * found" says whose candidacy it was. */
+    readonly personName: string,
   ) {
     this.db = db;
     this.user = user;
     this.batch = batch;
     this.autoapprove = autoapprove;
+    this.personName = personName;
   }
 }
 
@@ -330,6 +377,14 @@ async function createArticle(
 }
 
 // TODO remove it and fix it all the missing codes
+//
+// Only reachable when the payload carries no teryt at all, and that is now how
+// a 1994 or 1998 council candidacy arrives: `_modern_teryt` in
+// `data/pipelines/src/analysis/payloads/person.py` drops a code from the
+// pre-1999 division into 49 voivodeships rather than sending one that names
+// nothing today. So this list is what says "the district of this candidacy is
+// unknowable" - the one case where skipping is the intended answer, and the
+// reason those skips are not reported back as gaps to fix.
 const allowedFailingElections: Partial<ElectionRequest>[] = [
   { election_type: "Samorząd", election_year: "1994" },
   { election_type: "Samorząd", election_year: "1998" },
@@ -370,7 +425,30 @@ async function lookupRegionId(
     );
   }
   const regionId = await lookupNode(ctx, "teryt", election.teryt);
-  if (!regionId) throw new Error(`Region not found: ${election.teryt}`);
+  if (!regionId) {
+    // "No region node carries this code" is a statement about the file the
+    // candidacy came out of, not about the candidacy. The 1994 and 1998 council
+    // results are filed under the pre-1999 division into 49 voivodeships, whose
+    // codes ('2736', '47', '0102') name nothing today and never will - 7,588 of
+    // the 7,988 unresolvable codes in the payloads are those. Until now this
+    // was answered by throwing, which aborted the loop and cost the person
+    // every candidacy from here on; one unplaceable district is worth one
+    // candidacy.
+    //
+    // The rest are worth acting on rather than swallowing, which is what
+    // `skippedElections` is for: three modern codes have no region node either
+    // ('1431' powiat warszawski zachodni, '0263' Wałbrzych, '1499'), and the
+    // fix for those is to create the node, not to accept the loss.
+    console.error(
+      `Region not found: ${election.teryt} (${ctx.personName}, ` +
+        `${election.election_type} ${election.election_year ?? "?"})`,
+    );
+    ctx.skippedElections.push({
+      election,
+      reason: `Region not found: ${election.teryt}`,
+    });
+    return undefined;
+  }
   return regionId;
 }
 

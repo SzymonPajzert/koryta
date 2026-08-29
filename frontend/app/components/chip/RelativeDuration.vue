@@ -22,6 +22,7 @@
 
 <script lang="ts" setup>
 import { computed } from "vue";
+import { periodLabel } from "~/utils/period";
 
 const props = defineProps<{
   start: string | undefined;
@@ -30,18 +31,10 @@ const props = defineProps<{
   maxEnd: string | undefined;
 }>();
 
-const description = computed(() => {
-  // Both ends are optional - an edge entered through the editor may carry no
-  // date at all - so neither may be interpolated unguarded. "obecnie" is only
-  // right for the end: a missing start is unknown, not today.
-  if (!props.start && !props.end) {
-    return "";
-  }
-  if (props.start && props.end && props.start == props.end) {
-    return props.start;
-  }
-  return `${props.start ?? "?"} - ${props.end || "obecnie"}`;
-});
+// The wording lives in `~/utils/period` rather than here: the employment row
+// prints the same period as text below md, where this bar is hidden, and the
+// two must not be able to disagree about what a missing start reads as.
+const description = computed(() => periodLabel(props.start, props.end));
 
 const parseDate = (d: string | undefined, fallback: number) => {
   if (!d) return fallback;

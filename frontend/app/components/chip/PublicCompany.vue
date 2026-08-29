@@ -12,8 +12,27 @@
         :prepend-icon="chip.icon"
         size="x-small"
         :variant="chip.color ? 'flat' : 'tonal'"
+        :class="{ 'chip--compact': compact }"
+        :title="compact ? chip.tooltip : undefined"
       >
-        {{ chip.label }}
+        <!-- The label is a span so `compact` has something to hide. Below md
+             the chip is then an icon and nothing else, and the `title` above is
+             the only name it has left - `aria-label` would be the tidier tool
+             but this is a plain span with no role, where ARIA does not promise
+             it is exposed at all, while `title` is the defined fallback.
+
+             It is not there as a tooltip. A native one needs hover, and so does
+             the v-tooltip wrapping this - which on the surface `compact` is for
+             never opens either, because the chip sits inside the employment
+             row's own anchor and a tap follows the link. The price is that a
+             desktop reader hovering a compact chip gets both: weighed and paid,
+             because the alternative was dropping the v-tooltip for these
+             callers and losing the explanation on the one screen where it does
+             open. -->
+
+        <span :class="compact ? 'd-none d-md-inline' : undefined">{{
+          chip.label
+        }}</span>
       </v-chip>
     </template>
   </v-tooltip>
@@ -33,6 +52,17 @@ const props = defineProps<{
    * own card, which carries a "zaproponuj zmianę" button - and only noise in a
    * list, where most rows would carry it. */
   showUnknown?: boolean;
+  /** Whether to fall back to the icon alone on a narrow screen.
+   *
+   * For the callers that repeat this chip down a list. "Instytucja publiczna"
+   * is ~100px of a phone row's ~160px of text column, and it repeats on every
+   * employment of somebody who has only ever worked in the public sector -
+   * which is most of the people on this site, so the badge stops distinguishing
+   * anything and only pushes the institution's name onto another line. The
+   * icon still says it, the full label comes back above md, and a company's own
+   * card - where the fact is the point rather than a repeated qualifier - does
+   * not pass this. */
+  compact?: boolean;
 }>();
 
 // Three states, not two. KRS can only ever prove public ownership, never the
@@ -73,3 +103,22 @@ const chip = computed(() => {
   };
 });
 </script>
+
+<style scoped>
+/* 959.98px is Vuetify's own md boundary, the one `d-md-inline` above switches
+   at, so the padding and the label can never disagree about which side of it
+   they are on. Both rules out-specify Vuetify's `.v-chip.v-chip--size-x-small`
+   deliberately: a tie would be decided by whichever stylesheet the bundler
+   happened to emit last. */
+@media (max-width: 959.98px) {
+  .v-chip.chip--compact {
+    padding-inline: 4px;
+  }
+
+  /* The icon carries 4px of margin to hold it off a label that, here, is no
+     longer rendered - without this the chip is an icon with a gap after it. */
+  .v-chip.chip--compact :deep(.v-icon--start) {
+    margin-inline-end: 0;
+  }
+}
+</style>

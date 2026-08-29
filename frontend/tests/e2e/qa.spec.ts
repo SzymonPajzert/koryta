@@ -61,7 +61,9 @@ test.describe("QA changelog", () => {
     page,
     browser,
   }) => {
-    test.setTimeout(180_000);
+    // Longer than the specs around it: this one writes a report, triages it in
+    // a second browser and then comes back to the first.
+    test.setTimeout(240_000);
 
     await logIn(page, undefined, "/qa");
 
@@ -109,9 +111,40 @@ test.describe("QA changelog", () => {
       await expect(report).toBeVisible({ timeout: 60_000 });
       await expect(report).toContainText(`QA: ${SECOND.title}`);
       await expect(report).toContainText("Coś nie działa");
+
+      // And the other direction, which is what /qa had no way of knowing:
+      // closing the report here has to reach the person who wrote it. The
+      // select is opened by clicking the whole `.v-select` - the input inside
+      // it does not carry the click - and the option comes from the overlay,
+      // which is portalled to the body rather than into the card.
+      await report.locator('.v-select:has-text("Status")').click();
+      await adminPage.getByRole("option", { name: "Załatwione" }).click();
+      await expect(report).toHaveClass(/feedback-settled/, { timeout: 30_000 });
     } finally {
       await adminContext.close();
     }
+
+    // A reload rather than waiting on the page: the resolutions are read once
+    // per session, and nothing pushes an admin's decision to an open tab.
+    await page.reload();
+    await expect(page.locator('[data-qa-loaded="true"]')).toBeVisible({
+      timeout: 60_000,
+    });
+    await page.getByRole("button", { name: "Problemy" }).click();
+
+    await expect(card).toContainText("Admin: Załatwione", { timeout: 60_000 });
+    await expect(card).toContainText("Sprawdź, czy faktycznie działa");
+
+    // Taking the team's word for it drops the entry out of "Problemy" - back
+    // to needing a look, not to "Sprawdzone", because nobody has re-checked it.
+    await card.getByRole("button", { name: "Przyjmuję" }).click();
+    await expect(
+      page.getByText("Przyjęte - wpis wraca do sprawdzenia"),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(card).toBeHidden({ timeout: 30_000 });
+
+    await page.getByRole("button", { name: "Do sprawdzenia" }).click();
+    await expect(card).toContainText("czeka na Twoje ponowne sprawdzenie");
   });
 
   test("QA is reached from the admin panel, not from the toolbar", async ({

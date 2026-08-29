@@ -73,7 +73,7 @@ describe("the review queue's rows", () => {
     expect(button.props("to")).toBe("/admin/rewizje/node-1?revisionId=rev-1");
   });
 
-  it("sends an edge revision to the page that can review it", async () => {
+  it("sends an edge revision to the page that can review it, naming it", async () => {
     serve([
       proposal({
         id: "rev-edge",
@@ -84,8 +84,12 @@ describe("the review queue's rows", () => {
     const wrapper = await mount();
 
     const button = wrapper.findComponent('[data-testid="review-rev-edge"]');
-    expect(button.text()).toContain("Rewizje powiązań");
-    expect(button.props("to")).toBe("/admin/rewizje-krawedzi");
+    // Same word as every other row - which of the two screens it opens is the
+    // tooltip's job, not the label's.
+    expect(button.text()).toContain("Rozpatrz");
+    expect(button.attributes("title")).toContain("rewizji powiązań");
+    // With the id, so the list can mark the one row this is about.
+    expect(button.props("to")).toBe("/admin/rewizje-krawedzi?rewizja=rev-edge");
   });
 
   it("names the columns a reviewer reads, author and date as one", async () => {
@@ -101,12 +105,35 @@ describe("the review queue's rows", () => {
     ]);
   });
 
-  it("says what a settled revision offers instead of a decision", async () => {
+  it("keeps the same label once a proposal has been decided", async () => {
     serve([proposal({ id: "rev-done", status: "approved" })]);
     const wrapper = await mount();
 
-    expect(
-      wrapper.findComponent('[data-testid="review-rev-done"]').text(),
-    ).toContain("Zobacz");
+    // Whether it is still open is the status chip's job in the first column;
+    // the button used to say "Zobacz" here and so said it twice.
+    const button = wrapper.findComponent('[data-testid="review-rev-done"]');
+    expect(button.text()).toContain("Rozpatrz");
+    expect(button.text()).not.toContain("Zobacz");
+  });
+
+  it("offers the same button on every row, whatever the row is", async () => {
+    // The report this asserts against: "nie rozumiem dlaczego mamy dwa typy
+    // przyciskow po prawej stronie w tamtej kolumnie". These three rows are
+    // the three shapes the column used to take - a proposal waiting, a
+    // relation, and something already decided - and they appear together in
+    // the queue whenever a reader proposes a relation, or the filters are
+    // widened by the link out of "Najaktywniejsi".
+    serve([
+      proposal({ id: "rev-node" }),
+      proposal({ id: "rev-edge", targetCollection: "edges", targetPath: null }),
+      proposal({ id: "rev-old", status: "approved" }),
+    ]);
+    const wrapper = await mount();
+
+    const labels = wrapper
+      .findAll("tbody tr .v-btn")
+      .map((button) => button.text().trim());
+    expect(labels).toHaveLength(3);
+    expect(new Set(labels).size).toBe(1);
   });
 });

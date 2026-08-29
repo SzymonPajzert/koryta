@@ -13,6 +13,7 @@ import dataclasses
 import typing
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 from leveldb_export import parse_leveldb_documents  # type: ignore
 from memoized_property import memoized_property  # type:ignore
@@ -290,12 +291,62 @@ class KorytaPeople(Pipeline[Person]):
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
 
 
+def _stored_array(value: typing.Any) -> list[str]:
+    """A node field that ought to be a list, in whatever shape it was written.
+
+    Two shapes reach here and neither is a plain list. Nodes written before
+    2026-07-28 hold their arrays as numbered-key maps - `sanitizeFirestoreData`
+    in the frontend rewrote every array as `{"0": ..., "1": ...}`, and
+    `unwrap-array-fields.ts` repaired the 6088 documents that existed when it
+    was noticed, not the shape itself for anything written since. The frontend
+    reads them back through `asArray()`; the pipelines have no equivalent, and
+    one field does not justify a shared module.
+
+    The other shape is a float NaN, which is what a node that carries the field
+    at all gives when this one does not: `pd.DataFrame` fills the missing cell
+    of an object column rather than leaving it None, and `if not value` is not
+    enough to catch it - NaN is truthy.
+    """
+    if isinstance(value, dict):
+        # Sorted by the numeric key, not the string one: a company may declare
+        # ten codes, and "10" sorts before "2" lexically. The stored order is
+        # the register's, whose first entry is the main declared activity.
+        return [str(value[key]) for key in sorted(value, key=_numeric_key)]
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return [str(item) for item in value]
+    return []
+
+
+def _stored_text(value: typing.Any) -> str:
+    """A node field that ought to be a string, defaulting to the empty one.
+
+    The empty string rather than `None` for the same reason the ingest uses it:
+    a company with nothing special to say about its supervisory organ stores no
+    value, and "no value" and "not read" are the same answer here.
+
+    NaN needs catching for the reason `_stored_array` says: an object column
+    fills a missing cell with it, and it is truthy.
+    """
+    return value if isinstance(value, str) else ""
+
+
+def _numeric_key(key: typing.Any) -> tuple[int, str]:
+    """Order a numbered-key map by its numbers, and anything else after them."""
+    text = str(key)
+    return (int(text), text) if text.isdigit() else (2**31, text)
+
+
 class KorytaCompanies(Pipeline[KorytaCompany]):
     """Lists companies (place nodes) already submitted to koryta.pl.
 
     Mirrors `KorytaPeople`: it reads the latest Firestore export and yields the
     companies present on the site, so a migration can re-submit only companies
     that already exist rather than creating new ones.
+
+    It also carries the `activity` codes back off the node. They are the site's
+    copy of the register's PKD list, and having them here is what lets
+    `SiteCompanyCategories` recompute a company's category from the nightly
+    export instead of from a fresh KRS crawl.
     """
 
     date: str
@@ -326,6 +377,8 @@ class KorytaCompanies(Pipeline[KorytaCompany]):
                     id=data["id"],
                     krs=str(krs),
                     is_approved=bool(data.get("revision_id")),
+                    activity=_stored_array(data.get("activity")),
+                    supervisory_body=_stored_text(data.get("supervisoryBody")),
                 )
             )
 

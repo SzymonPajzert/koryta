@@ -165,18 +165,24 @@ const sortBy = computed<SortEntry[]>({
 
 const user = useCurrentUser();
 
-// What is left of the table below 960px: who the person is, their party,
-// where they have worked and what they stood in. Everything marked with this
-// - notes, votes, the vote control, visibility, the explore buttons - is
-// there to steer exploration rather than to read a row, and all of it is in
-// the drawer the name opens. Ten columns on a phone meant scrolling sideways
-// past them to reach anything, at the same boundary the drawer and the sticky
-// header already switch on.
+// What is left of the table below 960px: two columns, who the person is and
+// what they have done. Everything marked with this - notes, votes, the vote
+// control, visibility, the explore buttons - is there to steer exploration
+// rather than to read a row, and all of it is in the drawer the name opens.
+// The whole set on a phone meant scrolling sideways past them to reach
+// anything, at the same boundary the drawer and the sticky header already
+// switch on.
+//
+// It was four columns until the reporter pointed out that they were four
+// truncated ones: a party ellipsised after six letters and a company after
+// eight, in 60 and 72 pixels each. Name+partie and firmy+wybory are one
+// reading apiece, so they are one cell apiece now (explore/Table.vue), and
+// the two that are left get 120 and 185 pixels of the same 343.
 //
 // A stylesheet rather than `useDisplay().smAndDown` and a shorter array:
 // under SSR Vuetify builds its display state from a placeholder width of
 // 1280px and only measures the window when the app's suspense resolves, so a
-// width-driven header list renders the ten column table first and corrects
+// width-driven header list renders the full desktop table first and corrects
 // itself afterwards - and never corrects it at all if that one update does
 // not run. `hidden-sm-and-down` is Vuetify's own utility, `display: none`
 // under `(max-width: 959.98px)`, and it is right before the first paint.
@@ -187,16 +193,16 @@ const PHONE_HIDDEN = {
 
 const headers = computed(() => {
   const baseHeaders = [
-    { title: "Imię i nazwisko", key: "name", sortable: true },
-    { title: "Partie", key: "parties", sortable: false },
-    { title: "Firmy", key: "companies", sortable: false },
-    { title: "Wybory", key: "elections", sortable: false },
-    {
-      title: "Ostatnie zatrudnienie",
-      key: "latestEmploymentStart",
-      sortable: true,
-      ...PHONE_HIDDEN,
-    },
+    { title: "Osoba", key: "name", sortable: true },
+    // Keyed on `latestEmploymentStart`, which is what the merged cell in
+    // explore/Table.vue renders and what this column still sorts on. The key
+    // is emitted verbatim as `?sortBy=` and handed to a Firestore `orderBy`
+    // with no allow-list in between, so a prettier `history` would empty the
+    // table rather than reorder it - and would strand the
+    // `?sortBy=latestEmploymentStart` links that /eksploruj/nowe and the QA
+    // list already carry. Not phone-hidden: the sort is now reachable down
+    // there, where the date column never was.
+    { title: "Historia", key: "latestEmploymentStart", sortable: true },
     {
       title: "Lata pracy",
       key: "experience",

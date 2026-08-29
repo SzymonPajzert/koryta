@@ -5,6 +5,7 @@ import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import ItemCard from "../../../app/components/qa/ItemCard.vue";
 import type { QaCheck, QaItem, QaItemState } from "../../../shared/qa";
+import type { FeedbackStatus, QaAdminResolution } from "../../../shared/model";
 
 const vuetify = createVuetify({ components, directives });
 
@@ -23,6 +24,8 @@ const mount = async (
     myCheck: QaCheck | null;
     otherChecks: QaCheck[];
     reportedByOthers: boolean;
+    adminResolution: QaAdminResolution | null;
+    awaitingAcceptance: boolean;
   }> = {},
 ) =>
   await mountSuspended(ItemCard, {
@@ -33,8 +36,24 @@ const mount = async (
       myCheck: overrides.myCheck ?? null,
       otherChecks: overrides.otherChecks ?? [],
       reportedByOthers: overrides.reportedByOthers ?? false,
+      adminResolution: overrides.adminResolution ?? null,
+      awaitingAcceptance: overrides.awaitingAcceptance ?? false,
     },
   });
+
+/** This reader's own report on the entry. */
+const myReport = (feedback = "mapa się nie rysuje"): QaCheck => ({
+  itemId: item.id,
+  userUid: "me",
+  status: "issue",
+  feedback,
+});
+
+const closedAs = (status: FeedbackStatus): QaAdminResolution => ({
+  itemId: item.id,
+  status,
+  reportedAt: "2026-08-20T10:00:00.000Z",
+});
 
 describe("QaItemCard", () => {
   it("shows the steps for an entry nobody has checked", async () => {
@@ -110,6 +129,82 @@ describe("QaItemCard", () => {
   it("opens a confirmed entry that somebody else has flagged", async () => {
     const wrapper = await mount("ok", { reportedByOthers: true });
     expect(wrapper.text()).toContain("Kliknij przycisk");
+  });
+
+  it("tells the reader their problem was marked as dealt with", async () => {
+    const wrapper = await mount("issue", {
+      myCheck: myReport(),
+      adminResolution: closedAs("resolved"),
+      awaitingAcceptance: true,
+    });
+
+    expect(wrapper.text()).toContain("Admin: Załatwione");
+    expect(wrapper.text()).toContain("oznaczyliśmy go jako załatwiony");
+    expect(wrapper.text()).toContain("Przyjmuję");
+    expect(wrapper.text()).toContain("Nadal nie działa");
+  });
+
+  it("says what a refusal is, rather than calling it done", async () => {
+    const wrapper = await mount("issue", {
+      myCheck: myReport(),
+      adminResolution: closedAs("wont_fix"),
+      awaitingAcceptance: true,
+    });
+
+    expect(wrapper.text()).toContain("Admin: Nie robimy");
+    expect(wrapper.text()).toContain("oznaczyliśmy, że tego nie zrobimy");
+  });
+
+  it("says nothing while the report is still open", async () => {
+    const wrapper = await mount("issue", {
+      myCheck: myReport(),
+      adminResolution: closedAs("in_progress"),
+      awaitingAcceptance: false,
+    });
+
+    expect(wrapper.text()).not.toContain("Admin:");
+    expect(wrapper.text()).not.toContain("Przyjmuję");
+  });
+
+  it("stops asking once the closure was accepted", async () => {
+    const wrapper = await mount("unchecked", {
+      myCheck: {
+        ...myReport(),
+        acceptedResolutionAt: "2026-08-28T10:00:00.000Z",
+      },
+      adminResolution: closedAs("resolved"),
+      awaitingAcceptance: false,
+    });
+
+    expect(wrapper.text()).not.toContain("Przyjmuję");
+    expect(wrapper.text()).toContain("czeka na Twoje ponowne sprawdzenie");
+    // The stored verdict still says "issue", so neither button may read as
+    // this reader's standing answer.
+    expect(wrapper.text()).not.toContain("Twoja ocena");
+    const variants = wrapper
+      .findAllComponents({ name: "VBtn" })
+      .filter((b) => ["Działa", "Coś nie działa"].includes(b.text()))
+      .map((b) => b.props("variant"));
+    expect(variants).toEqual(["outlined", "outlined"]);
+  });
+
+  it("takes the closure, or argues with it in the words already there", async () => {
+    const wrapper = await mount("issue", {
+      myCheck: myReport("filtr nie filtruje"),
+      adminResolution: closedAs("resolved"),
+      awaitingAcceptance: true,
+    });
+
+    const button = (label: string) =>
+      wrapper.findAll("button").find((b) => b.text() === label)!;
+
+    await button("Przyjmuję").trigger("click");
+    expect(wrapper.emitted("accept")).toHaveLength(1);
+
+    await button("Nadal nie działa").trigger("click");
+    // The same verdict it has always emitted, carrying what the reader wrote
+    // the first time - the composable is what decides it is news.
+    expect(wrapper.emitted("save")).toEqual([["issue", "filtr nie filtruje"]]);
   });
 
   it("links to where the change can be seen", async () => {

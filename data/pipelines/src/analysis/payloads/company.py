@@ -1,4 +1,5 @@
 import argparse
+import collections
 from functools import cached_property
 
 import numpy as np
@@ -6,7 +7,7 @@ import pandas as pd
 
 from analysis.interesting import Companies
 from entities.company import display_name
-from entities.company_bodies import supervisory_body
+from entities.company_bodies import form_for_supervisory_body, supervisory_body
 from entities.company_categories import categories_for
 from scrapers.koryta.download import KorytaCompanies
 from scrapers.map.jst import SKARB_PANSTWA
@@ -170,3 +171,115 @@ class CompaniesPayloads(Pipeline):
                 ]
             )
         return pd.DataFrame.from_records(payloads)
+
+
+class SiteCompanyCategories(Pipeline):
+    """Recomputes `{krs, categories}` from what the site already stores.
+
+    The catch-up producer for `frontend/scripts/migrate/apply-company-categories.ts`,
+    and the reason it exists is operational rather than analytical. A change to
+    `entities.company_categories` changes what a *new* upload files a company
+    under and nothing about the 4047 place nodes already stored, so between the
+    rule change and a run of that migration the site serves the previous
+    mapping's answer with nothing to say it is stale. The only producer of the
+    migration's input used to be `CompaniesPayloads`, which reads `Companies` -
+    a KRS scrape and a wiki rebuild - so applying a one-line change to the
+    mapping cost a full crawl, and in practice was never done: the categories on
+    production were still the ones the old frontend rule produced, two months
+    and one whole rewrite of the mapping later.
+
+    This reads the nightly Firestore export instead. The site's `activity` is a
+    verbatim copy of the register's PKD codes - replaying the pre-2026-08-26
+    frontend rule over the stored codes reproduces 2800 of the 2801 stored
+    category sets, the one exception being a company somebody edited by hand -
+    so it is good enough to re-derive a category from, and it costs one export
+    read.
+
+    `CompaniesPayloads` stays authoritative and this does not replace it. It
+    cannot: it can only repeat the codes the site was last ingested with, so a
+    company whose register entry changed since gets yesterday's answer, and a
+    company the site has never held is not here at all. What it is for is
+    applying a change to the mapping on the day the change lands, rather than
+    whenever the next full company upload happens to run.
+
+    Emits exactly the two fields the migration reads. Everything else a company
+    payload carries - the name, the raw codes, `is_public`, the TERYT - is
+    deliberately absent: this is not an ingest payload and must not be fed to
+    the uploader, which would re-submit companies from a stale copy of the
+    register.
+    """
+
+    volatile = True
+    filename = None
+
+    @cached_property
+    def args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--koryta-date",
+            help="Date (YYYY-MM-DD) of the koryta.pl export to read the stored "
+            "PKD codes from. Defaults to the latest available export.",
+            default=None,
+        )
+        return parser.parse_known_args()[0]
+
+    def process(self, ctx: Context):
+        # Constructed here rather than declared as a source for the same reason
+        # `CompaniesPayloads` does it: the export date is an argument, and a
+        # declared dependency is built with no arguments at all.
+        submitted_df = KorytaCompanies(self.args.koryta_date).read_or_process(ctx)
+
+        records = []
+        counts: collections.Counter[str] = collections.Counter()
+        without_pkd = 0
+        for row in submitted_df.to_dict(orient="records"):
+            krs = row.get("krs")
+            if krs is None or (isinstance(krs, float) and np.isnan(krs)):
+                continue
+            krs = str(krs).zfill(10)
+
+            activity = row.get("activity")
+            if not isinstance(activity, (list, np.ndarray)):
+                activity = []
+            activity = [str(code) for code in activity]
+            if not activity:
+                without_pkd += 1
+
+            # The form, recovered from the only field on the node that
+            # remembers it. Without it every SPZOZ - 243 hospitals, none of
+            # which declares a single PKD code - would come back with no
+            # category at all, and the migration would strip `szpitale` from
+            # each of them. See `KorytaCompany.supervisory_body`.
+            form = form_for_supervisory_body(row.get("supervisory_body"))
+
+            categories = categories_for(krs, activity, form)
+            counts.update(categories or ["(none)"])
+            records.append({"krs": krs, "categories": categories})
+
+        # Refuse rather than emit an answer that would strip the site bare.
+        # `KorytaCompanies` caches its output per export date, and a copy
+        # written before it carried `activity` reads back with no such column at
+        # all - at which point every company here looks like it declares no PKD,
+        # only the ~30 on the override lists keep a category, and the migration
+        # dutifully removes `categories` from the other 2,771 nodes. A loud
+        # failure with the flag to fix it is the only safe answer.
+        if records and without_pkd == len(records):
+            raise ValueError(
+                "No company in the koryta.pl export carries any PKD code. That "
+                "is almost certainly a KorytaCompanies output cached before it "
+                "read `activity` - re-run with --refresh KorytaCompanies. "
+                "Applying this result would delete the categories of every "
+                "company on the site."
+            )
+
+        print(
+            f"Recomputed categories for {len(records)} companies already on "
+            f"koryta.pl ({without_pkd} of them declare no PKD, so only an "
+            f"override can place them):"
+        )
+        for value, count in counts.most_common():
+            print(f"  {count:6d}  {value}")
+
+        if not records:
+            return pd.DataFrame(columns=["krs", "categories"])
+        return pd.DataFrame.from_records(records)

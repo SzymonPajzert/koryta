@@ -77,10 +77,28 @@ what the pipelines say, so it is the thing to run after _any_ change to
 `data/pipelines/src/entities/company_categories.py` — the filter offers a
 category immediately and finds nothing under it until either the company upload
 runs again or this does. It holds no mapping of its own: point it with
-`--input` at a file of `{krs, categories}` records, which is the shape
-`CompaniesPayloads` emits, so it needs no edit when the rules change. Each
-change is filed as a revision rather than written past one, and a node a person
-has edited (`categoriesSource: "manual"`) is left alone.
+`--input` at a file of `{krs, categories}` records, so it needs no edit when the
+rules change. Each change is filed as a revision rather than written past one,
+and a node a person has edited (`categoriesSource: "manual"`) is left alone.
+
+**Run it in the same session as the rule change.** Between a change to the
+mapping and a run of this script the site keeps serving the _previous_ mapping's
+answer, and there is nothing anywhere to say the answer is stale — no warning,
+no empty state, just a category that quietly disagrees with the code. That is
+not hypothetical: the koleje mapping was rewritten on 2026-08-26 and production
+was still labelling companies with the rule the frontend used before it two days
+later, with mining and road-building companies under "Koleje" and PKP itself
+absent. A user reported it as a missing-companies bug.
+
+The reason it never ran was the input. The only producer used to be
+`CompaniesPayloads`, which reads today's register — a KRS scrape plus a wiki
+rebuild — so a one-line change to the mapping cost hours before it could be
+applied. `SiteCompanyCategories` now recomputes the same `{krs, categories}` from
+the PKD codes the nightly Firestore export already holds, in one read. It is
+strictly less authoritative — it can only repeat the codes a company was last
+ingested with — which is exactly the right trade when what changed is the rules
+rather than the register. `CompaniesPayloads` is still there for when a
+company's codes are what moved.
 
 It replaced `recompute-company-categories.ts`, which derived the categories
 itself from the PKD codes on the node. That could not survive the mapping

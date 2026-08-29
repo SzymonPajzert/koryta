@@ -189,6 +189,9 @@
         </v-expand-transition>
       </v-card>
 
+      <!-- `table-card` is not styled by anything here any more; it is the
+           handle tests/e2e/nowe_table_fits.spec.ts and explore_nowe.spec.ts
+           reach the table through. -->
       <v-card class="table-card mb-4">
         <ExploreTable
           :page="page"
@@ -199,6 +202,7 @@
           :items-per-page="1"
           :sort-by="sortBy"
           disable-focus
+          score-with-name
           hide-default-footer
           no-data-text="Brak danych do wyświetlenia. Prawdopodobnie przejrzałeś wszystkie nowe powiązania."
           @action:explored="actionExplored = true"
@@ -278,7 +282,6 @@
               <NoteEditor
                 :key="focusedPerson.id"
                 :node-id="focusedPerson.id"
-                single-column
                 @saved="actionNoted = true"
               />
             </v-card>
@@ -311,7 +314,6 @@ import { polishCounting } from "~/composables/polish";
 import { companyCategories } from "~~/shared/companyCategories";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
-import { useCurrentUser } from "vuefire";
 
 import { useEdges } from "~/composables/edges";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
@@ -329,8 +331,6 @@ const page = ref(1);
 const showInstructions = useCookie<boolean>("show-explore-new-instructions", {
   default: () => true,
 });
-const user = useCurrentUser();
-
 const availableCategories = companyCategories.map((c) => ({
   title: c.title,
   value: c.value,
@@ -442,61 +442,54 @@ watch(page, () => {
   actionVoted.value = false;
 });
 
-/** The column the api sorts on, which is also the one the table marks as
- * sorted. Both modes read top-down, so the direction is always descending. */
+/** The column the api sorts on. Both modes read top-down, so the direction is
+ * always descending. In `votes` mode the key names a column this table no
+ * longer draws - the total moved under the name - which costs nothing: every
+ * header here is `sortable: false`, so there is no arrow to put anywhere and
+ * the value is only ever passed on to the api. */
 const sortKey = computed(() =>
   orderRecent.value ? "latestEmploymentStart" : "stats.votes.interesting",
 );
 
 const sortBy = computed(() => [{ key: sortKey.value, order: "desc" as const }]);
 
-const headers = computed(() => {
-  const baseHeaders = [
-    { title: "Imię i nazwisko", key: "name", sortable: false },
-    { title: "Partie", key: "parties", sortable: false },
-    { title: "Firmy", key: "companies", sortable: false },
-    { title: "Wybory", key: "elections", sortable: false },
-    {
-      title: "Ostatnie zatrudnienie",
-      key: "latestEmploymentStart",
-      sortable: false,
-      align: "center" as const,
-    },
-    {
-      title: "Lata pracy",
-      key: "experience",
-      sortable: false,
-      align: "center" as const,
-    },
-    {
-      title: "Notatki",
-      key: "notesCount",
-      sortable: false,
-      align: "center" as const,
-    },
-    {
-      title: "Głosy łącznie",
-      key: "stats.votes.interesting",
-      sortable: false,
-      align: "center" as const,
-    },
-    {
-      title: "Twój głos",
-      key: "userVote",
-      sortable: false,
-      align: "center" as const,
-    },
-  ];
-  if (user.value) {
-    baseHeaders.push({
-      title: "Widoczność",
-      key: "visibility",
-      sortable: false,
-    });
-  }
-  baseHeaders.push({ title: "Eksploruj", key: "explore", sortable: false });
-  return baseHeaders;
-});
+/** Five columns, against the eleven this page used to declare - and it is the
+ * card they have to fit inside, 1248px at a 1280 viewport, that decides how
+ * many there is room for.
+ *
+ * "Osoba" and "Historia" are the merged pair /eksploruj/tabela draws; the cells
+ * live in the shared explore/Table.vue, so this list has to name the same keys
+ * or Vuetify falls back to stringifying an array of objects into the row.
+ *
+ * Three columns went for good. "Notatki" was a count of the notes the
+ * NoteEditor twenty centimetres below prints in full, other people's included.
+ * "Widoczność" was a constant: the queue hardcodes `visibility: "private"`,
+ * which the api resolves with the same `pageIsPublic` predicate the chip
+ * prints, so every row read "Szkic" - and it cost 142px of the budget.
+ * "Głosy łącznie" is the one that is not dead - it is the key the `votes`
+ * order sorts on and the number `minVotes` filters against - so it moved under
+ * the name instead (`score-with-name` above) rather than going away.
+ *
+ * Nothing reactive left in here, so it is a plain array: `Widoczność` was the
+ * only entry that depended on who was signed in, and this page is behind the
+ * auth middleware anyway. */
+const headers = [
+  { title: "Osoba", key: "name", sortable: false },
+  { title: "Historia", key: "latestEmploymentStart", sortable: false },
+  {
+    title: "Lata pracy",
+    key: "experience",
+    sortable: false,
+    align: "center" as const,
+  },
+  {
+    title: "Twój głos",
+    key: "userVote",
+    sortable: false,
+    align: "center" as const,
+  },
+  { title: "Eksploruj", key: "explore", sortable: false },
+];
 
 // Sorting on `latestEmploymentStart` leaves out the people who have no
 // employment edge to date at all - 135 of the 1,050 above the default score.
@@ -580,17 +573,22 @@ const { workLocations, mapLocations } = usePersonPlaces(
 </script>
 
 <style scoped>
-@media (min-width: 960px) {
-  .table-card,
-  .table-card :deep(.v-data-table),
-  .table-card :deep(.v-table),
-  .table-card :deep(.v-table__wrapper) {
-    overflow: visible !important;
-  }
-  .table-card :deep(.v-data-table__th) {
-    top: var(--v-layout-top) !important;
-  }
-}
+/* No `overflow: visible` on the table card here, deliberately. /eksploruj/tabela
+   deletes every scroll container between its sticky `<th>` and the page so the
+   header can stick to the app bar, and pays for it with a second, unscoped rule
+   putting `overflow-x: auto` on <html> - a whole page that scrolls sideways.
+   This page copied the first half and not the second. With nothing left to
+   scroll it and nothing left to clip it, the table painted at its min-content
+   width straight out over the page background past the card's right edge, which
+   is what was reported from a 2844px screen; on a 1280 laptop Vuetify's
+   `html { overflow-x: hidden }` swallowed the same overhang instead, taking the
+   vote control and the "Eksploruj" button - steps 3 and 1 of this page's own
+   three - off canvas with no scrollbar anywhere to reach them.
+
+   There was never anything to buy: the queue renders one row with the footer
+   hidden, so a header that sticks has nothing to stick over. Vuetify's own
+   `overflow: auto` on `.v-table__wrapper` stays, and whatever does not fit
+   scrolls inside the card. */
 
 /* ---- the queue filters ---- */
 
@@ -681,27 +679,5 @@ const { workLocations, mapLocations } = usePersonPlaces(
 
 .steps__detail li + li {
   margin-top: 4px;
-}
-
-/* ---- the empty relations section ---- */
-
-/* The same two rules `note/Editor.vue` and `succession/PersonChanges.vue`
-   carry, so the placeholder heading matches the real one it stands in for. */
-.sec-head {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.sec-head__icon {
-  color: rgba(var(--v-theme-on-surface), 0.38);
-}
-
-.k-lead {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  margin: 4px 0 12px;
-  max-width: 78ch;
 }
 </style>

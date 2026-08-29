@@ -17,9 +17,9 @@ import { companyCategories } from "../../shared/companyCategories";
  *
  * The upload closes that gap, but it means running the whole `Companies`
  * pipeline against production. This does the same job from the pipeline's
- * answer alone: point it at a file of `{krs, categories}` records - the shape
- * `CompaniesPayloads` emits, so a run of that pipeline dumped to JSONL is
- * exactly the input - and it writes the difference.
+ * answer alone: point it at a file of `{krs, categories}` records and it writes
+ * the difference. Two pipelines emit that shape - see the usage note below for
+ * which to pick.
  *
  * It deliberately holds no mapping of its own. The whole reason the derivation
  * moved to Python is that a PKD prefix list is not enough to decide what a
@@ -44,9 +44,26 @@ import { companyCategories } from "../../shared/companyCategories";
  *   - publish anything. A node's visibility is left exactly as it is, and a
  *     node with no approved revision keeps its draft state.
  *
- * Usage. Produce the input from the pipelines:
- *   cd data/pipelines && .venv/bin/python -m conductor CompaniesPayloads --json \
+ * Usage. Produce the input from the pipelines. There are two producers, and
+ * which one is right depends on what moved - the rules or the register.
+ *
+ *   `SiteCompanyCategories` is the cheap one and the usual answer. It recomputes
+ *   the categories from the PKD codes the nightly Firestore export already
+ *   carries, so it costs one export read and can be run in the same session as
+ *   the change to `company_categories.py` that it is applying. That is the whole
+ *   point of it: the expensive input is why the mapping and the site drifted two
+ *   months apart in the first place.
+ *
+ *   `CompaniesPayloads` is authoritative and slow. It reads today's register -
+ *   a KRS scrape and a wiki rebuild - so take it when a company's *codes* have
+ *   changed since it was last ingested, rather than when the rules have.
+ *
+ *   cd data/pipelines
+ *   # `grep '^{'` because `koryta` prints its progress on stdout alongside the
+ *   # records, and this script parses every non-blank line as JSON.
+ *   .venv/bin/koryta SiteCompanyCategories --output stdout | grep '^{' \
  *     > /tmp/company-categories.jsonl
+ *
  * then, against the running dev:prod-data emulator:
  *   npx tsx scripts/migrate/apply-company-categories.ts --input /tmp/company-categories.jsonl
  *   npx tsx scripts/migrate/apply-company-categories.ts --input ... --commit

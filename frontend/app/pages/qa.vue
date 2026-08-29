@@ -22,6 +22,10 @@
     >
       Zgłosiłeś problem w {{ counts.issue }} wpisach. Wpis zostaje w zakładce
       „Problemy”, dopóki nie napiszesz, że już działa.
+      <template v-if="settledCount > 0">
+        W {{ settledCount }} z nich admin uznał sprawę za zamkniętą - zajrzyj i
+        zdecyduj, czy się zgadzasz.
+      </template>
     </v-alert>
 
     <v-btn-toggle
@@ -78,8 +82,11 @@
       :my-check="myCheck(item.id)"
       :other-checks="otherChecks(item.id)"
       :reported-by-others="reportedByOthers(item.id)"
+      :admin-resolution="adminResolution(item.id)"
+      :awaiting-acceptance="awaitingAcceptance(item.id)"
       :saving="savingId === item.id"
       @save="(status, feedback) => save(item.id, status, feedback)"
+      @accept="accept(item.id)"
     />
 
     <v-snackbar v-model="snackbar" :timeout="3000" :color="snackbarColor">
@@ -114,6 +121,10 @@ const {
   checksFor,
   myCheck,
   saveCheck,
+  loadAdminResolutions,
+  adminResolution,
+  awaitingAcceptance,
+  acceptResolution,
 } = useQaChecks();
 
 type Filter = "unchecked" | "issue" | "all";
@@ -123,7 +134,20 @@ const snackbar = ref(false);
 const snackbarText = ref("");
 const snackbarColor = ref("success");
 
-onMounted(() => load());
+// Two reads, not one: `load` is the verdicts the whole page is built on, and
+// this is what the team did with the reports those verdicts filed. They fail
+// independently on purpose - see `loadAdminResolutions`.
+onMounted(() => {
+  load();
+  loadAdminResolutions();
+});
+
+/** How many of this reader's reported problems an admin has already closed.
+ * Counted over every entry rather than the visible ones: the alert sits above
+ * the filter and is the reason to go and look at "Problemy". */
+const settledCount = computed(
+  () => items.filter((item) => awaitingAcceptance(item.id)).length,
+);
 
 const matches = (state: QaItemState) =>
   filter.value === "all" ||
@@ -137,6 +161,28 @@ const visibleItems = computed(() =>
  * on the buttons, so repeating it below them says nothing. */
 const otherChecks = (itemId: string) =>
   checksFor(itemId).filter((check) => check.userUid !== user.value?.uid);
+
+/** Take the team's word that a reported problem is dealt with.
+ *
+ * The entry goes back to "Do sprawdzenia" rather than to "Sprawdzone", which
+ * is what the snackbar says: accepting a closure is not the same as having
+ * re-checked it, and only the reader can do the second one.
+ */
+async function accept(itemId: string) {
+  savingId.value = itemId;
+  try {
+    await acceptResolution(itemId);
+    snackbarText.value = "Przyjęte - wpis wraca do sprawdzenia";
+    snackbarColor.value = "success";
+  } catch (error) {
+    console.error("Nie udało się przyjąć rozstrzygnięcia QA", error);
+    snackbarText.value = "Nie udało się zapisać";
+    snackbarColor.value = "error";
+  } finally {
+    snackbar.value = true;
+    savingId.value = null;
+  }
+}
 
 async function save(itemId: string, status: QaCheckStatus, feedback: string) {
   savingId.value = itemId;

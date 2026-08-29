@@ -621,6 +621,23 @@ export const feedbackKindLabels: Record<FeedbackKind, string> = {
 
 export type FeedbackStatus = "new" | "in_progress" | "resolved" | "wont_fix";
 
+/** Settled means nobody has to read it again: it was dealt with, or a decision
+ * was made not to. "w trakcie" is still work in the queue and is not one of
+ * these.
+ *
+ * Kept here rather than in `/admin/opinie`, where it started, because /qa now
+ * asks the same question of a report the reader filed themselves - and the two
+ * pages disagreeing about what "closed" means would show a banner to somebody
+ * whose report the admin card still renders at full contrast. */
+export const FEEDBACK_SETTLED_STATUSES: FeedbackStatus[] = [
+  "resolved",
+  "wont_fix",
+];
+
+export function isFeedbackSettled(status?: FeedbackStatus | null): boolean {
+  return !!status && FEEDBACK_SETTLED_STATUSES.includes(status);
+}
+
 /** How far the Slack forward got. Absent on documents written before
  * forwarding existed, and on any that the trigger has not reached yet. */
 export type FeedbackSlackState = {
@@ -653,6 +670,25 @@ export type FeedbackQaContext = {
    * the Cloud Function does not need the changelog compiled into it. */
   title: string;
   status: QaCheckStatus;
+};
+
+/** What became of one reader's own report on one changelog entry, as /qa shows
+ * it back to them (`/api/feedback/qa`).
+ *
+ * Only ever about the caller's own reports, which is why it can carry an admin
+ * field at all: `adminStatus` is a triage decision the reporter is entitled to
+ * know about their own report, and nothing here says anything about anybody
+ * else's. `adminNote` is deliberately not part of this - it is where the team
+ * writes to itself, and forwarding it to the reporter would quietly turn an
+ * internal jotting into a reply.
+ */
+export type QaAdminResolution = {
+  /** `QaItem.id`, taken from `FeedbackContext.qa.itemId`. */
+  itemId: string;
+  status: FeedbackStatus;
+  /** When the report this answers was filed - the newest one per entry, so a
+   * fresh "nadal nie działa" replaces the closure it argues with. */
+  reportedAt: string;
 };
 
 /** What the reporter was looking at when they hit the feedback button, so a

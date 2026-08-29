@@ -39,15 +39,46 @@
       :text="error"
     />
 
+    <!-- The queue links here naming one proposal, and this list only holds the
+         pending ones of one type at a time. Saying nothing when the named one
+         is not here would leave the reviewer scanning forty rows for a
+         highlight that cannot appear - so say it, and hand back the one screen
+         that answers for any proposal whatever its status. -->
+    <v-alert
+      v-if="missingHighlight"
+      type="info"
+      variant="tonal"
+      density="compact"
+      class="mb-4"
+      data-testid="highlight-missing"
+    >
+      <div class="d-flex align-center flex-wrap ga-2">
+        <span>
+          Propozycji z linku nie ma na tej liście - albo została już
+          rozpatrzona, albo ukrywa ją filtr typu, albo jest na dalszej stronie.
+        </span>
+        <v-btn
+          variant="text"
+          size="small"
+          data-testid="highlight-in-queue"
+          :to="`/admin/rewizje/kolejka?rewizja=${highlighted}`"
+        >
+          Pokaż w kolejce
+        </v-btn>
+      </div>
+    </v-alert>
+
     <v-card>
       <v-data-table-server
         v-model:items-per-page="itemsPerPage"
         v-model:page="page"
+        class="edge-revision-table"
         :headers="headers"
         :items="items"
         :items-length="totalItems"
         :loading="pending"
         :items-per-page-options="[10, 25, 50, 100]"
+        :row-props="rowProps"
         no-data-text="Nic nie czeka na rozpatrzenie."
         @update:options="fetchData"
       >
@@ -105,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { mdiArrowRight, mdiRefresh } from "@mdi/js";
 import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
 import { useRoute } from "vue-router";
@@ -125,7 +156,13 @@ useHead({ title: "Rewizje krawędzi (Admin) - koryta.pl" });
 const user = useCurrentUser();
 const isAuthReady = useIsCurrentUserLoaded();
 const route = useRoute();
-const { setQuery } = useQueryFilters();
+const { setQuery, stringFilter } = useQueryFilters();
+
+/** The proposal the review queue linked to, if it linked to one. Read only:
+ * nothing on this page sets it, it survives paging and filtering because
+ * `setQuery` in `fetchData` only ever touches the keys it names, and it is
+ * dropped simply by arriving here from the menu instead. */
+const highlighted = stringFilter("rewizja");
 
 const DEFAULT_ITEMS_PER_PAGE = 25;
 
@@ -158,10 +195,62 @@ const items = ref<PendingEdgeRevision[]>([]);
 const totalItems = ref(0);
 const pending = ref(false);
 const error = ref<string | null>(null);
+/** Whether a fetch has ever come back. `pending` cannot stand in for it: the
+ * table only asks for the first page once it has mounted, so between render and
+ * that request the page is idle with an empty list. */
+const loaded = ref(false);
 
 function entityPath(endpoint: PendingEdgeEndpoint) {
   return `/entity/${endpoint.type}/${endpoint.id}`;
 }
+
+/** Marks the row the queue linked to. Through `row-props` rather than a class
+ * inside a cell slot: the tint belongs to the whole `tr`, and the `tr` is
+ * Vuetify's to render, not this template's. */
+const rowProps = ({ item }: { item: PendingEdgeRevision }) => ({
+  "data-revision-row": item.id,
+  class: item.id === highlighted.value ? "highlighted-revision" : undefined,
+});
+
+/** A tint on a row below the fold is not a highlight - the same reasoning the
+ * comparison view gives for scrolling to the column it tints. Waits for the
+ * rows to exist (`nextTick` after the fetch has written `items`), and centres
+ * rather than nudges, so the neighbours it sits between come with it. */
+const scrollToHighlighted = async () => {
+  // The server render has no scroll position to fix, and no `document`.
+  if (import.meta.server) return;
+  const id = highlighted.value;
+  if (!id) return;
+  await nextTick();
+  // Scanned rather than interpolated into a selector: `rewizja` arrives from
+  // the url, and a value carrying a quote makes `querySelector` throw a
+  // SyntaxError - here, inside a watcher, which surfaces as an unhandled
+  // rejection rather than as a missing highlight. A page holds a hundred rows
+  // at most, so the scan costs nothing worth naming.
+  const row = Array.from(document.querySelectorAll("[data-revision-row]")).find(
+    (element) => element.getAttribute("data-revision-row") === id,
+  );
+  row?.scrollIntoView({ block: "center" });
+};
+
+watch(
+  () => [items.value.length, highlighted.value] as const,
+  scrollToHighlighted,
+  { immediate: true },
+);
+
+/** The link named a proposal this list does not contain. Only claimed once a
+ * fetch has actually landed - before that, and while one is in flight, and
+ * after one failed, the list is empty for reasons that have nothing to do with
+ * the link, and the error alert above already speaks for the last of them. */
+const missingHighlight = computed(
+  () =>
+    !!highlighted.value &&
+    loaded.value &&
+    !pending.value &&
+    !error.value &&
+    !items.value.some((row) => row.id === highlighted.value),
+);
 
 /** A field value as one short line. The values are the scalars an edge carries
  * - a committee, a party, a date - so this is mostly about not printing
@@ -235,6 +324,7 @@ async function fetchData() {
     error.value = "Nie udało się wczytać rewizji krawędzi.";
   } finally {
     pending.value = false;
+    loaded.value = true;
   }
 }
 
@@ -243,3 +333,15 @@ watch(filterType, () => {
   fetchData();
 });
 </script>
+
+<style scoped>
+/* The `tr` is rendered by VDataTableRows, several components below this
+   template, so this file's scope id never reaches it and a bare
+   `.highlighted-revision` rule here would match nothing at all. `:deep()` off a
+   class that does land on the table is the way through. The tint is the same
+   one /admin/rewizje/[id] uses on the column it was linked to, on purpose: it
+   is the same "this is the one you clicked". */
+.edge-revision-table :deep(tr.highlighted-revision) {
+  background: rgba(var(--v-theme-primary), 0.1) !important;
+}
+</style>

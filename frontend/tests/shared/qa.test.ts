@@ -68,6 +68,33 @@ describe("qaItemState", () => {
   it("claims nothing when there is no reader", () => {
     expect(qaItemState("a", [check("a", "ok")], undefined)).toBe("unchecked");
   });
+
+  it("sends an issue back to unchecked once its closure was accepted", () => {
+    const reported = check("a", "issue");
+    expect(qaItemState("a", [reported], "u1")).toBe("issue");
+
+    // Accepting is not verifying: the entry needs a look again, and must not
+    // land in "sprawdzone" on somebody else's say-so.
+    expect(
+      qaItemState(
+        "a",
+        [{ ...reported, acceptedResolutionAt: "2026-08-28T10:00:00.000Z" }],
+        "u1",
+      ),
+    ).toBe("unchecked");
+  });
+
+  it("leaves an accepted approval alone", () => {
+    // Only a reported problem is ever accepted, but a stale field on an "ok"
+    // must not quietly un-check it.
+    expect(
+      qaItemState(
+        "a",
+        [{ ...check("a", "ok"), acceptedResolutionAt: "2026-08-28T00:00:00Z" }],
+        "u1",
+      ),
+    ).toBe("ok");
+  });
 });
 
 describe("qaReportedByOthers", () => {
@@ -107,6 +134,24 @@ describe("qaStateCounts", () => {
     );
     expect(counts).toEqual({ unchecked: 1, ok: 1, issue: 1 });
   });
+
+  it("stops counting a problem the reader accepted as closed", () => {
+    const items = [{ ...QA_ITEMS[0]!, id: "a" }];
+    const counts = qaStateCounts(
+      items,
+      [
+        {
+          ...check("a", "issue"),
+          acceptedResolutionAt: "2026-08-28T10:00:00.000Z",
+        },
+      ],
+      "u1",
+    );
+
+    // The badge on "Problemy" is the whole point: an entry the team has closed
+    // and the reader has accepted is not their outstanding problem any more.
+    expect(counts).toEqual({ unchecked: 1, ok: 0, issue: 0 });
+  });
 });
 
 describe("qaVerdictIsReportable", () => {
@@ -141,6 +186,26 @@ describe("qaVerdictIsReportable", () => {
     // Whitespace alone is not a new report either.
     expect(
       qaVerdictIsReportable("issue", "  mapa się nie rysuje  ", previous),
+    ).toBe(false);
+  });
+
+  it("says it again when the last report was closed", () => {
+    const previous = withNote("issue", "mapa się nie rysuje");
+
+    // Word for word the same report, and it still has to go out: after
+    // somebody has closed it, repeating it is the reader disagreeing, which is
+    // the one thing they had no way to say.
+    expect(
+      qaVerdictIsReportable("issue", "mapa się nie rysuje", previous, true),
+    ).toBe(true);
+    // Not a blanket exemption - a tick with nothing written is still a tick.
+    expect(qaVerdictIsReportable("ok", "", previous, true)).toBe(false);
+  });
+
+  it("holds the repeat back while the report is still open", () => {
+    const previous = withNote("issue", "mapa się nie rysuje");
+    expect(
+      qaVerdictIsReportable("issue", "mapa się nie rysuje", previous, false),
     ).toBe(false);
   });
 

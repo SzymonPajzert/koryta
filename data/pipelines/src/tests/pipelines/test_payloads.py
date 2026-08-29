@@ -1,10 +1,16 @@
 import json
+from collections import Counter
 from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 
-from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
+from analysis.payloads import (
+    CompaniesPayloads,
+    PeoplePayloads,
+    RegionPayloads,
+    SiteCompanyCategories,
+)
 from analysis.payloads.person import _extract_elections
 from scrapers.map.jst import SKARB_PANSTWA
 from scrapers.stores import Context, Pipeline, ProcessPolicy
@@ -137,6 +143,74 @@ def test_election_without_a_committee_sends_none(mock_ctx):
 
     assert len(elections) == 1
     assert elections[0].committee is None
+
+
+def test_pre_1999_district_codes_are_not_sent_as_teryt(mock_ctx):
+    """A 1994 council candidacy is filed under a voivodeship that no longer is.
+
+    The 1994 and 1998 files predate the 1999 reform, so they carry codes from
+    the 49-voivodeship division - '2736', '1911', '47'. None of them is the code
+    of a region the site holds, and the ingest used to answer an unresolvable
+    one by throwing, which cost the person every candidacy after it in the
+    payload. The candidacy itself is kept: it happened, and the ingest has an
+    allowlist for exactly these elections.
+    """
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "election_type": "samorządu",
+                    "party": None,
+                    "election_year": 1994,
+                    "teryt_powiat": ["2736"],
+                },
+                {
+                    "election_type": "samorządu",
+                    "party": None,
+                    "election_year": 1994,
+                    "teryt_powiat": ["1911"],
+                },
+                {
+                    "election_type": "samorządu",
+                    "party": None,
+                    "election_year": 1994,
+                    "teryt_powiat": ["47"],
+                },
+            ]
+        }
+    )
+    dropped: Counter[str] = Counter()
+
+    elections = _extract_elections(row, dropped)
+
+    assert [e.teryt for e in elections] == [None, None, None]
+    # Counted rather than silently binned - the count is how a modern code that
+    # stopped resolving would show up in a run's output.
+    assert dropped == Counter({"2736": 1, "1911": 1, "47": 1})
+
+
+def test_modern_district_codes_are_untouched(mock_ctx):
+    row = pd.Series(
+        {
+            "elections": [
+                # A powiat code passes through as it is
+                {"election_type": "sejmu", "teryt_powiat": ["1465"]},
+                # A voivodeship-wide candidacy is filed WW00; the site's region
+                # node for a voivodeship is keyed on the bare two digits
+                {"election_type": "sejmu", "teryt_powiat": ["2200"]},
+                # Powiat warszawski zachodni has no region node on the site,
+                # but 1431 is a real TERYT code - that is a missing region to
+                # create, not a code to drop
+                {"election_type": "sejmu", "teryt_powiat": ["1431"]},
+            ]
+        }
+    )
+    dropped: Counter[str] = Counter()
+
+    elections = _extract_elections(row, dropped)
+
+    assert [e.teryt for e in elections] == ["1465", "22", "1431"]
+    assert dropped == Counter()
 
 
 def test_upload_payloads_region_shape(mock_ctx):
@@ -358,3 +432,122 @@ def test_upload_payloads_carry_the_supervisory_organ(mock_ctx, monkeypatch):
     assert by_krs["0000079907"]["categories"] == ["szpitale"]
     # The empty string, not a missing key: it is what clears a stored value.
     assert by_krs["0000076705"]["supervisory_body"] == ""
+
+
+def test_site_company_categories_from_the_stored_pkd_codes(mock_ctx, monkeypatch):
+    """The catch-up producer works off the export alone.
+
+    `CompaniesPayloads` reads today's register, which means a KRS scrape and a
+    wiki rebuild before a one-line change to the mapping can be applied to the
+    site. This one reads the codes the site was last ingested with, so the same
+    change can be applied the day it lands.
+    """
+    pipeline = Pipeline.create(SiteCompanyCategories)
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [
+                {
+                    # PKP SKM w Trojmiescie: only a PKD 2025 rail code
+                    "id": "place-1",
+                    "krs": "0000076705",
+                    "activity": ["49.12.Z", "49.31.Z", "52.21.B"],
+                },
+                {
+                    # PKP Energetyka: the register stores no PKD for it at all,
+                    # so nothing but the override list can place it. This is the
+                    # case a PKD-only producer silently gets wrong, and it is
+                    # 1253 of the 4047 place nodes on the site.
+                    "id": "place-2",
+                    "krs": "0000014327",
+                    "activity": [],
+                },
+                {
+                    # Instytut Badawczy Drog i Mostow: carries 42.12 among ten
+                    # construction codes, and is on the exclude list
+                    "id": "place-3",
+                    "krs": "0000158240",
+                    "activity": ["72.19.Z", "42.11.Z", "42.12.Z"],
+                },
+            ]
+        ),
+    )
+
+    result_df = pipeline.process(mock_ctx)
+    records = result_df.to_dict(orient="records")
+
+    # Exactly the two fields `apply-company-categories.ts` reads, and no more:
+    # this is not an ingest payload and must not be fed to the uploader.
+    assert all(set(record) == {"krs", "categories"} for record in records)
+
+    by_krs = {record["krs"]: record["categories"] for record in records}
+    assert by_krs == {
+        "0000076705": ["koleje"],
+        "0000014327": ["koleje"],
+        "0000158240": [],
+    }
+
+
+def test_site_company_categories_read_the_form_off_the_node(mock_ctx, monkeypatch):
+    """An SPZOZ is filed by its legal form, and the export remembers it.
+
+    `SZPITALE.forms` places all 243 of them, none of which declares a single PKD
+    code - the associations register has no `przedmiotDzialalnosci` at all. The
+    node does not store the form, only the supervisory organ the form implies,
+    so the catch-up producer reads that back and maps it in. Without it every
+    one of those hospitals would come back with no category and the migration
+    would strip `szpitale` from each of them.
+    """
+    pipeline = Pipeline.create(SiteCompanyCategories)
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [
+                {
+                    # An SPZOZ hospital: no PKD, placed by its form alone.
+                    "id": "place-1",
+                    "krs": "0000079907",
+                    "activity": [],
+                    "supervisory_body": "rada-spoleczna",
+                },
+                {
+                    # The same shape without the organ - a spolka - stays where
+                    # its codes put it, so reading the field cannot widen an
+                    # answer for anything but an SPZOZ.
+                    "id": "place-2",
+                    "krs": "0000076705",
+                    "activity": ["49.12.Z"],
+                    "supervisory_body": "",
+                },
+            ]
+        ),
+    )
+
+    by_krs = {
+        record["krs"]: record["categories"]
+        for record in pipeline.process(mock_ctx).to_dict(orient="records")
+    }
+    assert by_krs == {"0000079907": ["szpitale"], "0000076705": ["koleje"]}
+
+
+def test_site_company_categories_refuses_a_cache_with_no_pkd(mock_ctx, monkeypatch):
+    """A `KorytaCompanies` output cached before it read `activity`.
+
+    It reads back with no such column, every company looks like it declares no
+    PKD, and the emitted answer would tell the migration to remove `categories`
+    from every node the override lists do not name. That is a worse outcome than
+    not running at all, so it fails instead.
+    """
+    pipeline = Pipeline.create(SiteCompanyCategories)
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [
+                {"id": "place-1", "krs": "0000076705"},
+                {"id": "place-2", "krs": "0000158240"},
+            ]
+        ),
+    )
+
+    with pytest.raises(ValueError, match="--refresh KorytaCompanies"):
+        pipeline.process(mock_ctx)

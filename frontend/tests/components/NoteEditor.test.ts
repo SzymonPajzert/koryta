@@ -161,4 +161,45 @@ describe("NoteEditor", () => {
       sources: [{ url: "", note: "", kind: "change_request" }],
     });
   });
+
+  // The shape of the section, rather than what it does - because "the notes
+  // look like they came from another site" was reported twice and both fixes
+  // before this one moved the chrome and left the entries alone. The section
+  // is `PageSection`, the same component "Zmiany na stanowisku" and "Fakty z
+  // artykułów" render through, and the entries stack full width the way every
+  // other section on a person's page stacks its own.
+  it("draws itself as one of the page's sections, with its entries stacked", async () => {
+    (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
+    (useNotes as any).mockReturnValue({
+      userNote: ref(null),
+      otherNotes: ref([
+        {
+          sources: [
+            { note: "pierwsza", kind: "source" },
+            { note: "druga", kind: "missing" },
+          ],
+        },
+      ]),
+      saveNote: vi.fn(),
+    });
+
+    const wrapper = await mountSuspended(NoteEditor, {
+      props: { nodeId: "node-123" },
+    });
+
+    const section = wrapper.get("[data-testid='note-editor']");
+    expect(section.element.tagName).toBe("SECTION");
+    // The shell's own padding, and no margin of its own: the page that stacks
+    // the sections owns the gap, and `mb-4` here left 32px under the notes
+    // where their neighbours leave 16.
+    expect(section.classes()).toContain("px-2");
+    expect(section.classes()).not.toContain("mb-4");
+    expect(section.get(".sec-head h3").text()).toBe("Notatki");
+
+    // Two entries, one under another. The two-up grid is what made the section
+    // its own layout, and three of the six callers already opted out of it.
+    expect(wrapper.find(".v-row").exists()).toBe(false);
+    expect(wrapper.findAll(".note-entry")).toHaveLength(2);
+    expect(wrapper.get(".note-entry").classes()).toContain("k-card");
+  });
 });

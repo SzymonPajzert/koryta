@@ -28,7 +28,7 @@
 
     <template #[`header.latestEmploymentStart`]="{ column }">
       <ExploreTableColumnHeader
-        tooltip="Najnowsza data rozpoczęcia zatrudnienia w publicznej spółce"
+        tooltip="Firmy, w których osoba pracowała, i wybory, w których startowała. Sortowanie po dacie ostatniego zatrudnienia w publicznej spółce."
         :column="column"
         :sort-by="sortBy"
       />
@@ -74,83 +74,121 @@
       />
     </template>
 
+    <!-- Who the person is: the name and the parties they have stood for, in
+         one cell. They were two columns, which on a phone meant two ~60px
+         boxes and a party ellipsised after six letters. A wrapping flex row
+         gets both readings out of one rule - the chips sit beside a short
+         name and drop under a long one - and the column can afford to be wide
+         because there are now two of them rather than four. -->
     <template #[`item.name`]="{ item }">
       <div class="name-cell">
-        <template v-if="disableFocus">
-          <span class="text-primary font-weight-bold">
-            {{ item.name }}
-          </span>
-        </template>
-        <template v-else>
-          <NuxtLink
-            class="text-primary cursor-pointer"
-            @click="$emit('focus', item)"
+        <div class="d-flex flex-wrap align-center ga-1">
+          <template v-if="disableFocus">
+            <span class="text-primary font-weight-bold">
+              {{ item.name }}
+            </span>
+          </template>
+          <template v-else>
+            <!-- `text-primary cursor-pointer` on the link is load-bearing:
+                 five e2e specs use it as their "the table has loaded"
+                 locator. -->
+            <NuxtLink
+              class="text-primary cursor-pointer"
+              @click="$emit('focus', item)"
+            >
+              {{ item.name }}
+            </NuxtLink>
+          </template>
+          <v-chip
+            v-for="party in item.parties"
+            :key="party"
+            size="small"
+            class="party-chip"
           >
-            {{ item.name }}
-          </NuxtLink>
-        </template>
+            {{ party }}
+          </v-chip>
+        </div>
+
+        <!-- On a one-person queue the total is what put this person in front
+             of the reader, so it stays on the row - as a line under the name,
+             which costs nothing, rather than as a column, which costs 32px of
+             padding plus its header word. -->
+        <div v-if="scoreWithName" class="text-caption text-medium-emphasis">
+          Suma ocen: {{ item.stats?.votes?.interesting || 0 }}
+        </div>
       </div>
     </template>
 
-    <template #[`item.parties`]="{ item }">
-      <div class="parties-cell">
-        <v-chip
-          v-for="party in item.parties"
-          :key="party"
-          size="small"
-          class="mr-1 party-chip"
+    <!-- What the person has done: employers, when the most recent of them
+         started, and the elections they stood in. Keyed on
+         `latestEmploymentStart` rather than on a fresh `history` key, and that
+         is not cosmetic - the header key is what the table emits as `sortBy`
+         and `server/api/nodes/index.get.ts` hands an unrecognised one straight
+         to a Firestore `orderBy`, which drops every document that lacks the
+         field. A new key would empty the table on the first tap of the header
+         and break the `?sortBy=latestEmploymentStart` links the QA list and
+         /eksploruj/nowe already point at. -->
+    <template #[`item.latestEmploymentStart`]="{ item }">
+      <div class="history-cell d-flex flex-column flex-md-row ga-1 ga-md-4">
+        <div
+          v-if="item.companies?.length || item.latestEmploymentStart"
+          class="companies-cell"
         >
-          {{ party }}
-        </v-chip>
-      </div>
-    </template>
+          <div class="d-flex flex-wrap ga-1 py-1">
+            <span v-for="companyName in item.companies" :key="companyName">
+              <v-tooltip :text="shortCompanyName(companyName)" location="top">
+                <template #activator="{ props: shortCompanyProps }">
+                  <v-chip
+                    v-bind="shortCompanyProps"
+                    size="small"
+                    class="mb-1 text-truncate d-flex company-chip"
+                    variant="outlined"
+                  >
+                    {{ shortCompanyName(companyName) }}
+                  </v-chip>
+                </template>
+              </v-tooltip>
+            </span>
+          </div>
+          <!-- The label goes on a phone and the bare date stays. It is the
+               only date in the cell, and the two columns left down there have
+               no room for eleven characters of prefix. -->
+          <div
+            v-if="item.latestEmploymentStart"
+            class="text-caption text-medium-emphasis"
+          >
+            <span class="d-none d-md-inline">Ostatnie zatrudnienie: </span
+            >{{ item.latestEmploymentStart }}
+          </div>
+        </div>
 
-    <template #[`item.companies`]="{ item }">
-      <div class="d-flex flex-wrap gap-1 py-1 companies-cell">
-        <span v-for="companyName in item.companies" :key="companyName">
-          <v-tooltip :text="shortCompanyName(companyName)" location="top">
-            <template #activator="{ props: shortCompanyProps }">
-              <v-chip
-                v-bind="shortCompanyProps"
-                size="small"
-                class="mr-1 mb-1 text-truncate d-flex company-chip"
-                variant="outlined"
-              >
-                {{ shortCompanyName(companyName) }}
-              </v-chip>
-            </template>
-          </v-tooltip>
-        </span>
-      </div>
-    </template>
-
-    <template #[`item.elections`]="{ item }">
-      <div class="elections-cell py-1">
-        <v-chip
-          v-for="(election, i) in item.elections"
-          :key="i"
-          size="small"
-          class="mb-1"
-          variant="outlined"
-        >
-          <v-tooltip activator="parent" location="top" open-delay="200">
-            <div v-if="election.location">{{ election.location }}</div>
-            <div>
-              {{
-                getWojewodztwo(election.teryt)
-                  ? `woj. ${getWojewodztwo(election.teryt)}`
-                  : "Brak informacji o województwie"
-              }}
-            </div>
-            <div v-if="election.committee">{{ election.committee }}</div>
-          </v-tooltip>
-          <span v-if="election.year" class="font-weight-bold mr-1">
-            {{ election.year }}
-          </span>
-          <span v-if="election.location" class="election-location">
-            {{ election.location }}
-          </span>
-        </v-chip>
+        <div v-if="item.elections?.length" class="elections-cell py-1">
+          <v-chip
+            v-for="(election, i) in item.elections"
+            :key="i"
+            size="small"
+            class="mb-1"
+            variant="outlined"
+          >
+            <v-tooltip activator="parent" location="top" open-delay="200">
+              <div v-if="election.location">{{ election.location }}</div>
+              <div>
+                {{
+                  getWojewodztwo(election.teryt)
+                    ? `woj. ${getWojewodztwo(election.teryt)}`
+                    : "Brak informacji o województwie"
+                }}
+              </div>
+              <div v-if="election.committee">{{ election.committee }}</div>
+            </v-tooltip>
+            <span v-if="election.year" class="font-weight-bold mr-1">
+              {{ election.year }}
+            </span>
+            <span v-if="election.location" class="election-location">
+              {{ election.location }}
+            </span>
+          </v-chip>
+        </div>
       </div>
     </template>
 
@@ -242,6 +280,17 @@ withDefaults(
     region?: [string, string];
     company?: [string, string];
     disableFocus?: boolean;
+    /** Print the aggregate score under the name instead of expecting a
+     * `stats.votes.interesting` column.
+     *
+     * A per-page flag on the shared component, like `disableFocus` above,
+     * because the name cell lives here and there is no pass-through slot for
+     * it. /eksploruj/nowe shows one person at a time and had to drop columns
+     * to fit its card, but the total is the number its queue is ordered by -
+     * so it moves rather than going away. Off everywhere else, so
+     * /eksploruj/tabela - which still declares the column - draws no extra
+     * line. */
+    scoreWithName?: boolean;
   }>(),
   {
     page: 1,
@@ -261,6 +310,7 @@ withDefaults(
     loadingText: "Ładowanie...",
     hideDefaultFooter: false,
     disableFocus: false,
+    scoreWithName: false,
     region: undefined,
     company: undefined,
   },
@@ -329,8 +379,14 @@ const getWojewodztwo = (teryt?: string) => {
   max-width: 220px;
 }
 
+/* The name, the party chips and (on /eksploruj/nowe) the score share this now,
+ * so it can be wider than the 150px the name alone had - the column it sits in
+ * is one of two rather than one of four, and the room came out of the two that
+ * went. Still called `name-cell` rather than something honest like
+ * `person-cell` because `tests/e2e/remove_edge.spec.ts` clicks the drawer open
+ * through it. */
 .name-cell {
-  max-width: 150px;
+  max-width: 200px;
 }
 
 .companies-cell {
@@ -344,57 +400,45 @@ const getWojewodztwo = (teryt?: string) => {
   max-width: 300px;
 }
 
-/* Unconstrained above the breakpoint, where the cell it sits in has no cap of
- * its own - the chips flow across the column as they always did. */
-.parties-cell {
-  display: flex;
-  flex-wrap: wrap;
+/* Above the breakpoint the two halves of the history sit side by side and
+ * each keeps the cap it had as a column of its own; below it they stack, which
+ * is what `flex-column flex-md-row` on the cell does. No cap here on purpose -
+ * the children carry theirs, and a cap on the parent would fight the gap. */
+.history-cell {
   align-items: flex-start;
 }
 
-/* The page drops to four columns here (see pages/eksploruj/tabela.vue), and
- * a 375px phone leaves the table 343px to put them in. A chip cannot wrap, so
- * whatever it is allowed to be wide is what its column costs at a minimum:
- * these four caps plus the padding are that budget, and they are what keeps
- * the page off a sideways scroll. A long party or company name is truncated
- * instead of setting the width of the column for every other row - the drawer
- * behind the name has all of it in full. */
+/* The page drops to two columns here (see pages/eksploruj/tabela.vue), and a
+ * 375px phone leaves the table 343px to put them in: 311px of content once the
+ * reduced 8px padding on four cell edges is out. A chip cannot wrap, so
+ * whatever it is allowed to be wide is what its column costs at a minimum, and
+ * these caps are that budget split 120/185 - they are what keeps the page off
+ * a sideways scroll. It is a far kinder split than the 100/60/72/72 four
+ * columns forced, which ellipsised a party after six letters. A name or a
+ * company longer than its share is still truncated rather than setting the
+ * width of the column for every other row - the drawer behind the name has all
+ * of it in full. */
 @media (max-width: 959.98px) {
-  .name-cell {
-    max-width: 100px;
+  .name-cell,
+  .party-chip {
+    max-width: 120px;
     /* A surname long enough to not fit is broken across lines rather than
-     * pushing the other three columns out. */
+     * pushing the history column out. */
     overflow-wrap: anywhere;
   }
 
-  .parties-cell,
-  .party-chip {
-    max-width: 60px;
-  }
-
+  .history-cell,
   .companies-cell,
-  .company-chip {
-    max-width: 72px;
-  }
-
+  .company-chip,
   .elections-cell {
-    max-width: 72px;
+    max-width: 185px;
   }
 
-  /* Vuetify's 16px each side, four times over, is 128px of those 343px. */
+  /* Vuetify's 16px each side, twice over, is 64px of those 343px. Halving it
+   * buys 32px back, which is a whole party chip. */
   :deep(.v-data-table__td),
   :deep(.v-data-table__th) {
     padding-inline: 8px !important;
-  }
-}
-
-/* Narrower than any phone this decade except a 320px iPhone SE, where the
- * header row - "Imię i nazwisko" is the widest word in it - is what the name
- * column costs. Kept out of the block above so that a heading is never broken
- * mid-word at a width where it did not have to be. */
-@media (max-width: 359.98px) {
-  :deep(.v-data-table__th) {
-    overflow-wrap: anywhere;
   }
 }
 

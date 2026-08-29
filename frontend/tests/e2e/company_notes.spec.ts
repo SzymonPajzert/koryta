@@ -44,11 +44,14 @@ test.describe("Company notes", () => {
 
     await companyCard.getByRole("button", { name: "Zapisz" }).click();
 
-    // Saving hides the edit controls and the source stays on the card
+    // Saving hides the edit controls and the source stays on the card. By
+    // href, not by text: a saved entry is labelled with its host now
+    // ("example.com"), because a cited url is routinely 120 characters and
+    // printing it whole is what cut the source off mid-path on a phone.
     await expect(
       companyCard.getByRole("button", { name: "Zapisz" }),
     ).toBeHidden({ timeout: 15000 });
-    await expect(companyCard).toContainText(url);
+    await expect(companyCard.locator(`a[href="${url}"]`)).toBeVisible();
 
     // The note is attached to the company, so it is there on a fresh visit -
     // once onNoteWritten has folded it into the company. That is a Cloud
@@ -62,7 +65,9 @@ test.describe("Company notes", () => {
       await companyCard
         .getByRole("button", { name: "Notatki" })
         .click({ timeout: 30000 });
-      await expect(companyCard).toContainText(url, { timeout: 5000 });
+      await expect(companyCard.locator(`a[href="${url}"]`)).toBeVisible({
+        timeout: 5000,
+      });
     }).toPass({ timeout: 90_000 });
   });
 });

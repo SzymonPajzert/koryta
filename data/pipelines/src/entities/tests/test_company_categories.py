@@ -274,6 +274,18 @@ class TestKolejeOverrides(unittest.TestCase):
         ):
             self.assertEqual(categories_for(krs, []), ["koleje"], krs)
 
+    def test_pkp_group_entities_no_pkd_rule_can_reach(self):
+        # Windykacja Kolejowa collects the group's debts and files 64.99,
+        # pozostala finansowa dzialalnosc uslugowa; the register's rejestr P
+        # names PKP Cargo S.A. as its sole shareholder.
+        self.assertEqual(categories_for("0000487558", ["64.99.Z"]), ["koleje"])
+        # Fundacja Grupy PKP is in the rejestr stowarzyszen and declares no PKD
+        # at all. Its registered purpose is level-crossing safety, support for
+        # the development of rail transport, and railway heritage - so it is a
+        # rail entity even though it is not a rail company, and the ten board
+        # and council members the site holds for it are the reason to say so.
+        self.assertEqual(categories_for("0000499069", []), ["koleje"])
+
     def test_cable_cars_are_not_railways(self):
         for krs in ("0000312594", "0000079964", "0000527636"):
             self.assertNotIn("koleje", categories_for(krs, []))
@@ -282,6 +294,16 @@ class TestKolejeOverrides(unittest.TestCase):
         self.assertEqual(
             categories_for("0000074422", ["86.10.Z", "56.10.A"]), ["szpitale"]
         )
+
+    def test_railway_branded_clinics_with_no_pkd_get_nothing(self):
+        # These four are SPZOZ entries with an empty `activity`, so their name
+        # is the only thing about them a rule could read - and it says
+        # "kolejowy". Naming them on the exclude list is what keeps the answer
+        # at "no category" rather than at the wrong one. That they are also not
+        # in `szpitale` is a separate gap: 86.10 cannot reach a company that
+        # declares no PKD.
+        for krs in ("0000004917", "0000132016", "0000046263", "0000031391"):
+            self.assertEqual(categories_for(krs, []), [], krs)
 
     def test_road_and_quarry_companies_that_carry_a_rail_code_incidentally(self):
         # Instytut Badawczy Drog i Mostow: 42.12 is one of ten construction codes

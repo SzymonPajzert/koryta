@@ -4,6 +4,14 @@ from entities.company import Company, Source
 from koryta import setup_context
 from pipelines import Companies
 
+#: Runs a real pipeline through ``read_or_process``, so it needs the
+#: ``versioned/`` output of a completed run - which is what ``e2e`` marks.
+#: ``person_wikipedia`` is named because it is the one output whose absence
+#: reaches ``ProcessWiki``, and rebuilding that resumes a ~2.9 GB Wikipedia
+#: dump download and a forty-minute parse from inside what looks like a
+#: test run.
+pytestmark = [pytest.mark.e2e, pytest.mark.needs_versioned("person_wikipedia")]
+
 
 @pytest.fixture(scope="module")
 def ctx():

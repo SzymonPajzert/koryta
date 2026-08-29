@@ -4,6 +4,13 @@ from conductor import setup_context
 from entities.person import RejestrIOKey
 from scrapers.krs.scrape import ScrapeRejestrIO
 
+#: Reads ``ScrapeRejestrIO``'s output, which this repository does not carry
+#: - and the newest copy in the shared cache predates the columns these
+#: tests read (``people``, ``unread_paths``, ``last_entry_no``), so even a
+#: restore does not satisfy them. Regenerating it needs rejestr.io mirror
+#: credentials, which is precisely the state ``e2e`` says we do not have.
+pytestmark = pytest.mark.e2e
+
 
 @pytest.fixture(scope="module")
 def ctx():

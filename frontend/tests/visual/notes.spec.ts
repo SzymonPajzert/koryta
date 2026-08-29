@@ -5,9 +5,14 @@ import { logIn, USERS } from "../e2e/helpers/auth";
  *
  * `note/Editor.vue` renders under `v-if="user || otherSources.length > 0"`,
  * and the seed creates no notes at all - so every logged out capture in
- * pages.spec.ts omits it entirely, and restyling it from a raised card to a
- * plain section changed no baseline in the suite. Signing in is what puts it
- * on the page.
+ * pages.spec.ts omits it entirely, and each round of restyling it changed no
+ * baseline in the suite. Signing in is what puts it on the page.
+ *
+ * What the shot is for: put it next to `visual-desktop/instytucja-strona.png`
+ * and the entries have to read as the same object as the "Kto kogo zastąpił"
+ * cards - same hairline, same radius, same sage rail, same text scale. They
+ * are drawn by the same rule now (`k-card` in `app.vue`), so a difference is
+ * a bug rather than a matter of taste.
  *
  * One element rather than a full page: a person's page ends in a
  * force-directed graph that settles somewhere slightly different every run,
@@ -36,18 +41,17 @@ test.describe("Notatki", () => {
 
     const notes = page.getByTestId("note-editor");
     await expect(notes).toBeVisible({ timeout: 30_000 });
-    // By value, not by text: NoteSourceCard puts the entry in a v-textarea, so
-    // what it says is the control's value and `getByText` - which reads text
-    // content - matches nothing however well the note has rendered.
+    // By text, which is what a note is now. It used to be the value of a
+    // readonly v-textarea - a reader was shown three form fields with the
+    // author's prompt floating over each as a label, which is what got the
+    // section reported twice as not belonging on the page.
     //
     // The entries arrive with the note collection and the prompt is behind
     // `userNote`; waiting for the last of the three cards and then the prompt
     // covers both, so nothing is captured half filled.
     await expect(
-      notes.getByRole("textbox", { name: "Czego tu brakuje?" }),
-    ).toHaveValue("Brakuje kadencji w radzie miasta sprzed 2019 roku.", {
-      timeout: 30_000,
-    });
+      notes.getByText("Brakuje kadencji w radzie miasta sprzed 2019 roku."),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
       notes.getByText("Wiesz więcej na temat tej osoby?"),
     ).toBeVisible({ timeout: 30_000 });

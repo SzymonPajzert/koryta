@@ -227,6 +227,66 @@ describe("/eksploruj/nowe", () => {
     expect(steps.text()).toContain("Jak to działa?");
   });
 
+  /** The table spilled out of its card because it declared eleven columns
+   * against a 1248px card, three of which this page already says elsewhere.
+   * The list is asserted whole rather than by absence: a column added back
+   * without a look at the width is exactly how the spill happened. */
+  it("asks for five columns, not the eleven that did not fit", async () => {
+    const wrapper = await mountPage();
+
+    const keys = (
+      wrapper.findComponent({ name: "ExploreTable" }).props("headers") as {
+        key: string;
+      }[]
+    ).map((header) => header.key);
+
+    expect(keys).toEqual([
+      "name",
+      "latestEmploymentStart",
+      "experience",
+      "userVote",
+      "explore",
+    ]);
+    // "Notatki" duplicates the NoteEditor further down, "Widoczność" reads
+    // "Szkic" on every row of a `visibility=private` queue, and "Głosy
+    // łącznie" moved under the name.
+    expect(keys).not.toContain("notesCount");
+    expect(keys).not.toContain("stats.votes.interesting");
+    expect(keys).not.toContain("visibility");
+  });
+
+  /** "Widoczność" used to be pushed onto the list for anybody signed in, and
+   * this page is behind the auth middleware - so every reader had it. */
+  it("does not bring Widoczność back for a signed-in reader", async () => {
+    authUser.value = {
+      getIdTokenResult: () => Promise.resolve({ claims: { admin: true } }),
+    };
+
+    const wrapper = await mountPage();
+
+    const keys = (
+      wrapper.findComponent({ name: "ExploreTable" }).props("headers") as {
+        key: string;
+      }[]
+    ).map((header) => header.key);
+
+    expect(keys).toEqual([
+      "name",
+      "latestEmploymentStart",
+      "experience",
+      "userVote",
+      "explore",
+    ]);
+  });
+
+  it("asks the table to print the score under the name instead", async () => {
+    const wrapper = await mountPage();
+
+    expect(
+      wrapper.findComponent({ name: "ExploreTable" }).props("scoreWithName"),
+    ).toBe(true);
+  });
+
   /** The queue is where a wrongly merged person is most likely to be caught, so
    * it carries the same admin control as the profile - see
    * `.agent/skills/relation-surfaces.md` on keeping this page and

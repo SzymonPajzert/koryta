@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { logIn, USERS } from "./helpers/auth";
 
 /** Seeded region, so this runs on the emulator's own data. */
 const TERYT = "22";
@@ -27,6 +28,37 @@ test.describe("Explore query parameters", () => {
 
     expect(new URL(page.url()).pathname).toBe("/");
     expect(new URL(page.url()).search).toBe("");
+  });
+
+  /** The linked sort, end to end. `server/api/nodes/index.get.ts` maps this key
+   * onto `stats.edges.*.latestEmploymentStart` and hands everything else it is
+   * given straight to a Firestore `orderBy`, which silently drops every
+   * document without the field - so renaming the merged "Historia" column's key
+   * would answer this url with an empty table rather than with an error.
+   *
+   * Signed in on purpose: the one seeded person carrying a
+   * `latestEmploymentStart` is an unapproved draft, so the signed-out query
+   * legitimately has nothing to sort. */
+  test("sorts on the linked latestEmploymentStart key", async ({ page }) => {
+    test.setTimeout(120000);
+    await logIn(
+      page,
+      USERS.normal,
+      "/eksploruj/tabela?sortBy=latestEmploymentStart&sortDesc=true",
+    );
+
+    await expect(
+      page.locator("tbody tr:first-child .text-primary.cursor-pointer").first(),
+    ).toBeVisible({ timeout: 60000 });
+
+    // The arrow sits on the merged column, and the url the reader arrived with
+    // is still the url they are on.
+    const sorted = page.locator("th.v-data-table__th--sorted");
+    await expect(sorted).toHaveCount(1);
+    await expect(sorted).toContainText("Historia");
+    expect(new URL(page.url()).searchParams.get("sortBy")).toBe(
+      "latestEmploymentStart",
+    );
   });
 
   test("keeps the filter in the url and drops it when cleared", async ({
