@@ -11,34 +11,36 @@
   <!-- Nothing found and nothing withheld: no heading either. A section that
        announces itself over empty space reads as a page that failed to load,
        and on most people this is what the register supports. -->
-  <section v-else-if="!empty" class="px-2" data-testid="person-successions">
-    <div class="sec-head">
-      <v-icon :icon="mdiSwapVertical" size="18" class="sec-head__icon" />
-      <h3 class="text-h6">Zmiany na stanowisku</h3>
-    </div>
+  <PageSection
+    v-else-if="!empty"
+    title="Zmiany na stanowisku"
+    :icon="mdiSwapVertical"
+    data-testid="person-successions"
+  >
+    <template #lead>
+      <p class="k-lead" data-testid="person-successions-coverage">
+        {{ coverage }}
+      </p>
 
-    <p class="k-lead" data-testid="person-successions-coverage">
-      {{ coverage }}
-    </p>
-
-    <!-- Why the section is shorter than the register. Said out loud: 896 of
-         6,592 people in the register have a page, so for a logged out reader
-         this is often most of what was found. -->
-    <p
-      v-if="hidden"
-      class="k-lead"
-      data-testid="person-successions-hidden"
-      data-hidden-count="1"
-    >
-      Nie pokazujemy jeszcze {{ hidden }}
-      {{ hidden === 1 ? "zmiany" : "zmian" }} — brakuje strony jednej z osób,
-      więc nie nazywamy jej tutaj.
-    </p>
+      <!-- Why the section is shorter than the register. Said out loud: 896 of
+           6,592 people in the register have a page, so for a logged out reader
+           this is often most of what was found. -->
+      <p
+        v-if="hidden"
+        class="k-lead"
+        data-testid="person-successions-hidden"
+        data-hidden-count="1"
+      >
+        Nie pokazujemy jeszcze {{ hidden }}
+        {{ hidden === 1 ? "zmiany" : "zmian" }} — brakuje strony jednej z osób,
+        więc nie nazywamy jej tutaj.
+      </p>
+    </template>
 
     <article
       v-for="change in changes"
       :key="change.key"
-      class="k-card succ"
+      class="k-card k-card--accent succ"
       :data-testid="change.testid"
     >
       <div class="succ__head">
@@ -111,7 +113,7 @@
         </div>
       </div>
     </article>
-  </section>
+  </PageSection>
 </template>
 
 <script lang="ts" setup>
@@ -309,60 +311,10 @@ function gapClass(gapDays: number): string {
 </script>
 
 <style scoped>
-/* `card/Employment.vue`'s idiom, which is the site's card: a white surface, a
-   hairline, and one sage edge. Sage is a fill and a border here and never ink -
-   `text-primary` on this theme is 1.85:1. */
-.k-card {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
-  position: relative;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.k-card::before {
-  background: rgb(var(--v-theme-primary));
-  border-radius: 99px;
-  bottom: 11px;
-  content: "";
-  left: 0;
-  position: absolute;
-  top: 11px;
-  width: 3px;
-}
-
-.k-card:hover {
-  border-color: rgba(var(--v-theme-primary), 0.9);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
-}
-
-/* A note carries no accent: nothing in it is a claim about a person. */
-.k-note {
-  background: rgb(var(--v-theme-surface));
-  border: 1px dashed rgba(var(--v-border-color), 0.3);
-  border-radius: 8px;
-  padding: 12px 16px;
-}
-
-.sec-head {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.sec-head__icon {
-  color: rgba(var(--v-theme-on-surface), 0.38);
-}
-
-.k-lead {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  margin: 4px 0 12px;
-  max-width: 78ch;
-}
+/* The card, the heading and the lead are global (`app.vue`) - a section draws
+   its own chrome but its entries are somebody else's component, so a scoped
+   rule cannot reach them and every component that tried ended up with a
+   slightly different card. What is left here is this section's own idiom. */
 
 /* ---- one handover ---- */
 

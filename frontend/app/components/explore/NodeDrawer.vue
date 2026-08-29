@@ -73,12 +73,7 @@
         />
       </ExploreProposeChange>
 
-      <NoteEditor
-        :key="node.id"
-        :node-id="node.id"
-        :node-type="node.type"
-        single-column
-      />
+      <NoteEditor :key="node.id" :node-id="node.id" :node-type="node.type" />
       <v-divider class="my-4" />
       <CardEmploymentHistory
         :edges="edges"

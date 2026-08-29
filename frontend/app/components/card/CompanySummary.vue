@@ -120,13 +120,7 @@
          width costs nothing: the notes are behind a button, so the card is one
          line until somebody asks for them. -->
     <v-card-text v-if="notesOpen && canEditNotes" class="pt-0">
-      <NoteEditor
-        :key="nodeId"
-        :node-id="nodeId"
-        node-type="place"
-        single-column
-        class="mb-0"
-      />
+      <NoteEditor :key="nodeId" :node-id="nodeId" node-type="place" />
     </v-card-text>
   </v-card>
 </template>

@@ -154,12 +154,10 @@ test.describe("Admin notes queue", () => {
       timeout: 30000,
     });
     await expect(drawer).toContainText("Notatki");
-    // The note itself is asserted on the field's value, not on the drawer's
-    // text: NoteSourceCard renders it into a readonly v-textarea, and a
-    // textarea's text is its value rather than part of its text content, so
-    // toContainText looks straight past it and only sees the labels around it.
-    await expect(drawer.locator("textarea").first()).toHaveValue(
-      `nowa notatka ${stamp}`,
-    );
+    // Plain text, which it had not been: NoteSourceCard used to render a note
+    // into a readonly v-textarea, so its content was the control's value and
+    // toContainText looked straight past it. A note is a card now, like every
+    // other entry on the page, and the field only appears for its author.
+    await expect(drawer).toContainText(`nowa notatka ${stamp}`);
   });
 });

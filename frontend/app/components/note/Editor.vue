@@ -1,21 +1,19 @@
 <template>
-  <!-- A section, not a card. This sits between "Historia powiązań" and the
-       graph on a person's page and alongside "Zmiany na stanowisku", all of
-       which are headed sections on the page's own background - a raised card
-       with a title bar in the middle of them read as something pasted in from
-       another site. The same component is the notes on a company, an article
-       and a topic, and in the table's side panel, so restyling it here is what
-       makes notes look the same everywhere they appear. -->
-  <section
+  <!-- A section, not a card, and now literally the same section component as
+       "Zmiany na stanowisku" and "Fakty z artykułów" - which is the point.
+       Twice a reader said the notes did not belong on the page, and twice the
+       answer had been to copy the heading rules across by hand and let them
+       drift again. `PageSection` is the shell; the entries below it are drawn
+       by the same `k-card` rule as the cards in every neighbouring section.
+       The same component is the notes on a company, an article and a topic,
+       and in the table's side panel, so this is what notes look like
+       everywhere they appear. -->
+  <PageSection
     v-if="user || otherSources.length > 0"
-    class="px-2 mb-4"
+    title="Notatki"
+    :icon="mdiNoteTextOutline"
     data-testid="note-editor"
   >
-    <div class="sec-head">
-      <v-icon :icon="mdiNoteTextOutline" size="18" class="sec-head__icon" />
-      <h3 class="text-h6">Notatki</h3>
-    </div>
-
     <!-- What to write, said with three written notes rather than with an
          adjective. „Nie wiadomo trochę, jakie info tam wklejać” is what an
          alpha tester said about the paragraph that stood here, which described
@@ -23,98 +21,96 @@
          are `noteKindConfig`'s, so they are the same sentences the fields
          themselves offer as placeholders. An article's page asks for a
          snippet instead, and has no kinds to give examples of. -->
-    <template v-if="user && !userNote && !isEditing">
-      <p v-if="snippetOnly" class="k-lead">
-        Co w tym artykule jest warte zapamiętania? Zapisz fragment albo własny
-        komentarz. Notatki są publiczne - w ten sposób pomożesz innym zrozumieć,
-        dlaczego ten tekst jest tu trzymany.
-      </p>
-      <template v-else>
-        <p class="k-lead mb-1">
-          Wiesz więcej na temat {{ subject }}? Wklej tu, co udało Ci się
-          znaleźć, razem z linkiem do źródła. Notatki są publiczne i to z nich
-          powstają kolejne powiązania w bazie - nie musi to być nic odkrywczego.
+    <template #lead>
+      <template v-if="user && !userNote && !isEditing">
+        <p v-if="snippetOnly" class="k-lead">
+          Co w tym artykule jest warte zapamiętania? Zapisz fragment albo własny
+          komentarz. Notatki są publiczne - w ten sposób pomożesz innym
+          zrozumieć, dlaczego ten tekst jest tu trzymany.
         </p>
-        <ul class="k-lead k-examples">
-          <li v-for="(config, value) in noteKindConfig" :key="value">
-            <strong>{{ config.title }}</strong> - „{{ config.example }}”
-          </li>
-        </ul>
+        <template v-else>
+          <p class="k-lead mb-1">
+            Wiesz więcej na temat {{ subject }}? Wklej tu, co udało Ci się
+            znaleźć, razem z linkiem do źródła. Notatki są publiczne i to z nich
+            powstają kolejne powiązania w bazie - nie musi to być nic
+            odkrywczego.
+          </p>
+          <ul class="k-lead k-examples">
+            <li v-for="(config, value) in noteKindConfig" :key="value">
+              <strong>{{ config.title }}</strong> - „{{ config.example }}”
+            </li>
+          </ul>
+        </template>
       </template>
+
+      <p v-if="!user && otherSources.length > 0" class="k-lead">
+        Zaloguj się, aby dodać własną notatkę i pomóc innym w znajdowaniu
+        powiązań.
+      </p>
     </template>
 
-    <p v-if="!user && otherSources.length > 0" class="k-lead">
-      Zaloguj się, aby dodać własną notatkę i pomóc innym w znajdowaniu
-      powiązań.
-    </p>
-
     <div>
-      <!-- `dense`, and the cards carry no bottom margin of their own: the
-           default gutter is 12px a side and each card added another 12 below
-           itself, so two rows of entries stood 36px apart - more air between
-           two notes than inside one. The dense gutter puts 8px between them,
-           which still reads as separate cards. -->
-      <v-row dense>
-        <v-col
+      <!-- Full width, one under another, 8px apart - `.succ`'s spacing. The
+           two-up grid this was is what made the section read as its own
+           layout: every other section on a person's page stacks its entries,
+           and three of the six places that draw these notes already passed
+           `single-column` to opt out of the columns. That prop is gone with
+           the grid. -->
+      <div class="note-entries">
+        <NoteSourceCard
           v-for="(source, index) in otherSources"
           :key="'other-' + index"
-          cols="12"
-          :md="singleColumn ? '12' : '6'"
-        >
-          <NoteSourceCard
-            :model-value="source"
-            :is-editing="false"
-            :snippet-only="snippetOnly"
-          />
-        </v-col>
+          :model-value="source"
+          :is-editing="false"
+          :snippet-only="snippetOnly"
+        />
 
-        <v-col
+        <NoteSourceCard
           v-for="(source, index) in formData.sources"
           :key="source.url || index"
-          cols="12"
-          :md="singleColumn ? '12' : '6'"
+          :model-value="source"
+          :is-editing="isEditing"
+          :snippet-only="snippetOnly"
+          @update:model-value="formData.sources[index] = $event"
+          @remove="removeSource(index)"
+        />
+      </div>
+
+      <!-- On an article there is one button and it makes a snippet: the url
+           an entry would carry is the page you are already on, and typing
+           another one there made a second article node out of a note filed
+           against the first. A correction to the article record itself goes
+           through "Zgłoś" like any other. -->
+      <div v-if="user && snippetOnly" class="d-flex flex-wrap ga-2 mt-3">
+        <v-btn
+          variant="outlined"
+          size="small"
+          rounded="lg"
+          data-testid="note-add-snippet"
+          @click="addSource('source')"
         >
-          <NoteSourceCard
-            :model-value="source"
-            :is-editing="isEditing"
-            :snippet-only="snippetOnly"
-            @update:model-value="formData.sources[index] = $event"
-            @remove="removeSource(index)"
-          />
-        </v-col>
-        <v-col v-if="user" cols="12" :md="singleColumn ? '12' : '6'">
-          <!-- On an article there is one button and it makes a snippet: the
-               url an entry would carry is the page you are already on, and
-               typing another one there made a second article node out of a
-               note filed against the first. A correction to the article record
-               itself goes through "Zgłoś" like any other. -->
-          <div v-if="snippetOnly" class="d-flex flex-wrap ga-2">
-            <v-btn
-              variant="outlined"
-              size="small"
-              color="primary"
-              data-testid="note-add-snippet"
-              @click="addSource('source')"
-            >
-              <v-icon start :icon="mdiNoteTextOutline" />
-              Dodaj notatkę
-            </v-btn>
-          </div>
-          <div v-else class="d-flex flex-wrap ga-2">
-            <v-btn
-              v-for="(config, value) in noteKindConfig"
-              :key="value"
-              variant="outlined"
-              size="small"
-              :color="config.color"
-              @click="addSource(value)"
-            >
-              <v-icon start :icon="config.icon" />
-              {{ config.addLabel }}
-            </v-btn>
-          </div>
-        </v-col>
-      </v-row>
+          <v-icon start :icon="mdiNoteTextOutline" />
+          Dodaj notatkę
+        </v-btn>
+      </div>
+      <!-- Neutral, like the one "Dodaj" in "Historia powiązań" above: three
+           buttons in primary, warning and info were the most coloured thing on
+           a page whose entries carry no colour at all. The kind still has its
+           colour - on the chip you pick while writing the entry, where it is
+           telling you something. -->
+      <div v-else-if="user" class="d-flex flex-wrap ga-2 mt-3">
+        <v-btn
+          v-for="(config, value) in noteKindConfig"
+          :key="value"
+          variant="outlined"
+          size="small"
+          rounded="lg"
+          @click="addSource(value)"
+        >
+          <v-icon start :icon="config.icon" />
+          {{ config.addLabel }}
+        </v-btn>
+      </div>
 
       <v-alert
         v-if="saveFailed"
@@ -155,7 +151,7 @@
         >
       </div>
     </div>
-  </section>
+  </PageSection>
 </template>
 
 <script setup lang="ts">
@@ -176,7 +172,6 @@ import { NoteSourceCard } from "#components";
 const props = withDefaults(
   defineProps<{
     nodeId: string;
-    singleColumn?: boolean;
     /** Kind of node the note hangs off, which the prompt refers to. */
     nodeType?: NodeType;
   }>(),
@@ -370,26 +365,16 @@ const save = async () => {
 </script>
 
 <style scoped>
-/* Kept in step with the other sections on an entity page - `sec-head` and
-   `k-lead` are the same rules `succession/PersonChanges.vue` carries, and a
-   note heading that did not match one sitting directly above it was the whole
-   complaint. */
-.sec-head {
-  align-items: center;
+/* The gap between two notes, and between the heading and the first of them.
+   8px is what `.succ` puts between two handovers in the section above, and a
+   gap rather than a margin per card so that an entry carries no spacing of its
+   own - the grid this replaced gave each card a 12px gutter *and* a 12px
+   margin, which stood two notes further apart than a note is tall. */
+.note-entries {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-}
-
-.sec-head__icon {
-  color: rgba(var(--v-theme-on-surface), 0.38);
-}
-
-.k-lead {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  margin: 4px 0 12px;
-  max-width: 78ch;
+  margin-top: 8px;
 }
 
 /* The three examples, as a list rather than as a sentence with semicolons in

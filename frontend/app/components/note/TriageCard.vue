@@ -1,5 +1,11 @@
 <template>
-  <v-card variant="outlined" class="triage-card">
+  <!-- The site's card rather than Vuetify's outlined one, which is the same
+       decision the public note card made: one `k-card` rule in `app.vue` draws
+       every card on the site, and the reviewer's queue showing a note in a
+       different frame than the page it came from is how the two drifted apart
+       in the first place. `v-card-text` and `v-divider` do not need a `v-card`
+       around them - they are a padded div and a rule. -->
+  <article class="k-card triage-card">
     <v-card-text class="pb-2">
       <!-- Which node the entry hangs off, and who wrote it: everything the
            reviewer needs to place the note before reading it. -->
@@ -51,7 +57,7 @@
       >
         <v-icon :icon="mdiLink" size="small" class="flex-shrink-0" />
         <span class="d-flex flex-column overflow-hidden">
-          <span class="text-body-2 font-weight-medium">{{ sourceDomain }}</span>
+          <span class="text-body-2 font-weight-medium">{{ sourceLabel }}</span>
           <span class="text-caption text-medium-emphasis text-truncate">
             {{ row.url }}
           </span>
@@ -66,7 +72,7 @@
         Brak źródła - oceń po samej treści.
       </div>
     </template>
-  </v-card>
+  </article>
 </template>
 
 <script setup lang="ts">
@@ -76,6 +82,7 @@ import { noteKindConfig } from "~/composables/notes";
 import { generateEntityUrl } from "~/composables/slugs";
 import type { NoteRow } from "~~/shared/model";
 import { entityIcon } from "~/utils/entityIcon";
+import { sourceDomain } from "~/utils/sourceDomain";
 
 const { row } = defineProps<{ row: NoteRow }>();
 
@@ -89,18 +96,15 @@ const entityUrl = computed(() =>
     : undefined,
 );
 
-// Readers paste all sorts of things into the url field, so a value that is not
-// a url at all is shown as-is rather than throwing on the way to the card.
-const sourceDomain = computed(() => {
-  if (!row.url) return "";
-  try {
-    return new URL(
-      row.url.includes("://") ? row.url : `https://${row.url}`,
-    ).hostname.replace(/^www\./, "");
-  } catch {
-    return "Źródło";
-  }
-});
+// Readers paste all sorts of things into the url field. What is not an address
+// at all gets a neutral heading here, because the line under it prints the raw
+// value in full and a queue row that said "gazeta, strona 3" twice would read
+// as a bug. `sourceDomain` is shared with the public note card, which makes the
+// opposite call on that same case for the same reason - there it is the only
+// place the value appears.
+const sourceLabel = computed(() =>
+  row.url ? (sourceDomain(row.url) ?? "Źródło") : "",
+);
 
 const formattedDate = computed(() =>
   row.createdAt

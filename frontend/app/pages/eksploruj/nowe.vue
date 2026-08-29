@@ -304,17 +304,12 @@
           <!-- The notes carry their own heading and sit on the page background
                everywhere else they appear. Here they are one of two columns,
                so they get the same surface as the card beside them - a bare
-               section next to a raised card read as an unfinished half.
-
-               `single-column` because this column is already half the page:
-               letting the editor split it again put each note in a quarter of
-               the screen, which is narrower than the quote pasted into it. -->
+               section next to a raised card read as an unfinished half. -->
           <v-col cols="12" md="6">
             <v-card class="mb-4 pa-2 pa-md-3">
               <NoteEditor
                 :key="focusedPerson.id"
                 :node-id="focusedPerson.id"
-                single-column
                 @saved="actionNoted = true"
               />
             </v-card>
