@@ -116,7 +116,8 @@
 import { computed, ref } from "vue";
 import { mdiArrowLeft, mdiEarth } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
-import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
+import { relationsPlural } from "~/composables/edges";
+import { edgeTypeLabels } from "~~/shared/edges";
 import type {
   UnpublishedEdgeRow,
   UnpublishedEdges,

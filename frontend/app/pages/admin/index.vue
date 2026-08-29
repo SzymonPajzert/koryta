@@ -364,19 +364,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import {
+  mdiChartLine,
+  mdiCheckCircleOutline,
+  mdiChevronRight,
+  mdiClipboardCheckOutline,
+  mdiClipboardTextClockOutline,
+  mdiGestureTapButton,
   mdiGraphOutline,
   mdiHistory,
   mdiInboxArrowDown,
-  mdiVectorPolyline,
-  mdiNoteEditOutline,
-  mdiTextBoxSearchOutline,
-  mdiChartLine,
-  mdiClipboardCheckOutline,
-  mdiChevronRight,
-  mdiCheckCircleOutline,
-  mdiGestureTapButton,
-  mdiRefresh,
   mdiMessageAlertOutline,
+  mdiNoteEditOutline,
+  mdiRefresh,
+  mdiTextBoxSearchOutline,
+  mdiVectorPolyline,
 } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { noteAdminTypeLabel, noteKindConfig } from "~/composables/notes";
@@ -421,6 +422,12 @@ const subpages = [
     to: "/admin/notatki",
     icon: mdiNoteEditOutline,
     desc: "Zgłoszenia i źródła dodane przez użytkowników.",
+  },
+  {
+    title: "Dziennik decyzji",
+    to: "/admin/audyt",
+    icon: mdiClipboardTextClockOutline,
+    desc: "Co administratorzy zdecydowali i dlaczego - z przyciskiem cofnięcia usunięcia.",
   },
   {
     title: "Zgłoszenia",

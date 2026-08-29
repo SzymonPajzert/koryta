@@ -76,7 +76,7 @@ import {
   mdiFileDocumentMultipleOutline,
   mdiSourceBranch,
 } from "@mdi/js";
-import { edgeTypeLabels } from "~/composables/edges";
+import { edgeTypeLabels } from "~~/shared/edges";
 import { polishCounting } from "~/composables/polish";
 import { generateEntityUrl } from "~/composables/slugs";
 import type { SourcedEdge } from "~~/server/api/edges/byReference.get";

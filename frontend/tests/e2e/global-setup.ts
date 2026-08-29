@@ -47,6 +47,9 @@ const LOGGED_IN_ROUTES = [
   // first few seconds.
   "/admin/krawedzie",
   "/admin/opinie",
+  // The decision log, whose spec looks for its own row and presses Przywróć
+  // within a few seconds of landing.
+  "/admin/audyt",
   // The id does not have to resolve; the route's own chunk is what we want
   // compiled before a spec follows a revision link into it.
   "/admin/rewizje/warmup",

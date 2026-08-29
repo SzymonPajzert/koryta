@@ -48,6 +48,36 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "admin-dziennik-decyzji",
+    title: "Dziennik decyzji administratorów, z przyciskiem „Przywróć”",
+    description:
+      "Nowa strona /admin/audyt pokazuje, co administratorzy zdecydowali o " +
+      "wpisach i powiązaniach: kto, kiedy, jakiego wpisu to dotyczyło i - " +
+      "przy usunięciach i odrzuceniach - dlaczego. Do tej pory te decyzje " +
+      "zapisywały się do bazy i nie było ich widać nigdzie poza licznikiem " +
+      "„Decyzja administratora” w statystykach, który mówi tylko, że ktoś coś " +
+      "zrobił. Przy usuniętych powiązaniach jest przycisk „Przywróć”, który " +
+      "cofa usunięcie - powiązanie wraca jako szkic, czyli widzą je zalogowani, " +
+      "ale nie widzi go publiczność; żeby wróciło na stronę dla wszystkich, " +
+      "trzeba je opublikować w „Powiązaniach”. Tak jest " +
+      "celowo: to, czy powiązanie było wcześniej publiczne, nie jest nigdzie " +
+      "zapisane, a zgadywanie oznaczałoby pokazanie czegoś, czego nikt " +
+      "ponownie nie sprawdził.",
+    steps: [
+      "Wejdź na /admin jako admin - w siatce kafelków jest „Dziennik decyzji”. Kliknij go (albo wejdź wprost na /admin/audyt).",
+      "Tabela ma kolumny: kiedy, kto, decyzja, czego dotyczy, powód. Najnowsze na górze. Nazwiska ładują się chwilę po tabeli - to jeden wspólny request na całą stronę.",
+      "Usuń jakieś powiązanie na stronie osoby (kosz w „Historii powiązań”), wróć na /admin/audyt i odśwież - na górze ma być wiersz „Usunięcie wpisu” z Twoim powodem i opisem powiązania („Osoba - rola - firma”).",
+      "Kliknij „Przywróć” w tym wierszu. Przycisk ma zniknąć, a na dole pojawić się komunikat, że powiązanie wróciło jako szkic.",
+      "Wróć na stronę osoby: powiązanie znów tam jest - zalogowani widzą szkice. Wyloguj się (albo otwórz okno prywatne) i sprawdź tę samą stronę: dla niezalogowanych powiązania nie ma, bo szkic nie jest publiczny.",
+      "Wejdź na /admin/krawedzie: przywrócone powiązanie ma tam czekać na opublikowanie. Opublikuj je - od tej pory widzą je też niezalogowani.",
+      "Odśwież /admin/audyt: są teraz dwa wiersze o tym powiązaniu - „Usunięcie wpisu” (już bez przycisku) i „Przywrócenie wpisu”.",
+      "Ustaw filtr „Rodzaj decyzji” na „Usunięcie wpisu” - w tabeli mają zostać same usunięcia. Wyczyść filtr i sprawdź, że wracają wszystkie.",
+      "Jeśli decyzji jest więcej niż 50, na dole jest „Wczytaj więcej”; kliknij i sprawdź, że dochodzą starsze wiersze, a żaden się nie dubluje.",
+    ],
+    link: "/admin/audyt",
+    area: "admin",
+  },
+  {
     id: "spolki-skarbu-panstwa-maja-wlasciciela",
     title: "Spółki Skarbu Państwa mają wreszcie wpisanego właściciela",
     description:
@@ -197,9 +227,9 @@ export const QA_ITEMS: QaItem[] = [
       "powiązań po źle scalonej osobie: zatrudnienia z niewłaściwej połowy " +
       "nie są niczyją tezą, tylko śmieciem po scaleniu. Powiązanie nie znika " +
       "z bazy - zostaje w niej razem z powodem i autorem usunięcia, więc " +
-      "widać, kto i dlaczego je zdjął. Cofnąć to można na razie tylko w " +
-      "bazie: żaden ekran w aplikacji nie przywraca usuniętego powiązania, " +
-      "więc pytaj o powód serio. Przy okazji: usunięte powiązanie znika też " +
+      "widać, kto i dlaczego je zdjął. Cofnąć usunięcie da się w „Dzienniku " +
+      "decyzji” (/admin/audyt) - patrz wpis o dzienniku. Przy okazji: " +
+      "usunięte powiązanie znika też " +
       "zalogowanym; wcześniej filtr omijał osoby oglądające wersje " +
       "niezatwierdzone, więc admin po usunięciu dalej widział je na stronie.",
     steps: [

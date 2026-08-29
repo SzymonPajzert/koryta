@@ -9,8 +9,10 @@
       <v-card-text class="pt-0">
         <p class="mb-4 text-body-2">
           Powiązanie zniknie ze strony i z grafu. Zostaje w bazie razem z
-          powodem, więc widać potem, kto i dlaczego je zdjął - ale nikt tej
-          decyzji nie zatwierdza po tobie i żaden ekran jej nie cofa.
+          powodem, więc widać potem, kto i dlaczego je zdjął - nikt jednak tej
+          decyzji nie zatwierdza po tobie. Cofnąć ją można w „Dzienniku
+          decyzji”, ale powiązanie wraca wtedy jako szkic i trzeba je jeszcze
+          raz opublikować.
         </p>
 
         <v-textarea

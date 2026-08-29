@@ -136,7 +136,7 @@ import {
 } from "@mdi/js";
 import type { Link, NodeType } from "~~/shared/model";
 import type { GraphLayout } from "~~/shared/graph/util";
-import { edgeTypeLabels } from "~/composables/edges";
+import { edgeTypeLabels } from "~~/shared/edges";
 import { authRequest } from "~/composables/auth";
 
 const props = defineProps<{

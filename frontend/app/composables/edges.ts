@@ -1,4 +1,5 @@
 import type { Node, Edge, EdgeType, ElectionPosition } from "~~/shared/model";
+import { edgeTypeLabels } from "~~/shared/edges";
 import type { TraversePolicy } from "~~/shared/graph/model";
 
 export type EdgeNode = {
@@ -35,19 +36,6 @@ export function relationsPlural(count: number): string {
   if (units >= 2 && units <= 4 && (tens < 12 || tens > 14)) return "powiązania";
   return "powiązań";
 }
-
-/** What a relation is called on screen, when it has no name of its own. Shared
- * with the admin views, which list edges outside any graph. */
-export const edgeTypeLabels: Record<string, string> = {
-  employed: "Zatrudniony/a w",
-  owns: "Właściciel",
-  seat: "Siedziba",
-  connection: "Powiązanie z",
-  mentions: "Wspomina o",
-  comment: "Komentarz",
-  election: "Kandydował/a w",
-  tagged: "Dotyczy tematu",
-};
 
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   const { user } = useAuthState();
