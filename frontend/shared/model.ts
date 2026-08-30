@@ -619,6 +619,16 @@ export type NoteSource = {
   adminTypeDeferred?: boolean;
 };
 
+/** Entries written before kinds existed are all sources.
+ *
+ * Here rather than in `composables/notes.ts`, where it used to live, so that
+ * `utils/notePromotion.ts` can read a kind without importing the composable -
+ * which now reads the promotion helpers back, and the two would form a cycle.
+ */
+export function noteKindOf(source: Pick<NoteSource, "kind">): NoteEntryKind {
+  return source.kind ?? "source";
+}
+
 /** Whether an entry is still waiting on an admin, which is what the dashboard
  * counts under "Notatki wymagające działania".
  *

@@ -8,6 +8,13 @@ export type ArticlePayload = {
   name?: string;
   publishedDate?: string;
   meta?: unknown;
+  /** Nodes this article names, recorded in the same commit as the article.
+   *
+   * Filing a url under somebody's note is a claim that the page is about them,
+   * and it is the only moment at which anybody says so - so the mention is
+   * written with the article rather than left for a reader to add by hand on a
+   * page they have no reason to visit. */
+  mentions?: string[];
 };
 
 type NestedRecord = {
@@ -70,12 +77,16 @@ export async function articlePayloadFor(url: string): Promise<ArticlePayload> {
  *
  * Which of the two happened is `created`; the endpoint matches urls normalized,
  * so the same piece added twice under different spellings is one node.
+ * `mentions` names the nodes it says the article is about, and comes back as
+ * the ones a relation was actually written for - an id already joined to the
+ * article, or one that is not a person or a company, is left out.
  */
 export async function ensureArticle(
   payload: ArticlePayload & { name: string },
-): Promise<{ nodeId: string; created: boolean }> {
-  return await authRequest<{ nodeId: string; created: boolean }>(
-    "/api/ingest/article",
-    { method: "POST", body: payload },
-  );
+): Promise<{ nodeId: string; created: boolean; mentions: string[] }> {
+  return await authRequest<{
+    nodeId: string;
+    created: boolean;
+    mentions: string[];
+  }>("/api/ingest/article", { method: "POST", body: payload });
 }
