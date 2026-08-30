@@ -138,6 +138,10 @@
           />
         </div>
 
+        <!-- The press on this company: the same section a person's page
+             carries, off the same endpoint. `mentions` is declared for both. -->
+        <MentionArticleList :node-id="nodeId" class="mt-6" />
+
         <NoteEditor :node-id="nodeId" node-type="place" class="mt-6" />
 
         <FormAddRelationDialog
