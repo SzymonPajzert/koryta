@@ -89,11 +89,37 @@
       </component>
     </template>
 
-    <!-- Actions row only when the parent supplies vote buttons. -->
-    <v-card-actions v-if="$slots.actions" class="extraction-actions pt-1">
+    <!-- Actions row when the parent supplies vote buttons, or when this fact
+         can become a relation. -->
+    <v-card-actions
+      v-if="$slots.actions || promotable"
+      class="extraction-actions pt-1"
+    >
+      <!-- What a confirmed fact is *for*. Voting a fact correct used to lead
+           nowhere: nothing reads the verdict, and recording what the fact said
+           meant retyping it into the edge form on somebody else's page. -->
+      <v-btn
+        v-if="promotable"
+        size="small"
+        variant="text"
+        color="primary"
+        :prepend-icon="mdiVectorLink"
+        data-testid="extraction-promote"
+        @click="promoteOpen = true"
+      >
+        Utwórz powiązanie
+      </v-btn>
       <v-spacer />
       <slot name="actions" />
     </v-card-actions>
+
+    <ExtractionPromoteDialog
+      v-if="rule"
+      v-model="promoteOpen"
+      :fact="fact"
+      :rule="rule"
+      @created="$emit('promoted', $event)"
+    />
   </v-card>
 </template>
 
@@ -107,6 +133,7 @@ import {
   mdiBomb,
   mdiDomain,
   mdiOpenInNew,
+  mdiVectorLink,
 } from "@mdi/js";
 import type { ExtractionFact } from "~~/shared/model";
 import {
@@ -116,13 +143,32 @@ import {
   factTarget,
   factConnector,
   factTargetKind,
+  factEdgeRule,
 } from "~/utils/extraction";
 import { generateEntityUrl } from "~/composables/slugs";
-import { ExtractionWrongPersonButton } from "#components";
+import {
+  ExtractionPromoteDialog,
+  ExtractionWrongPersonButton,
+} from "#components";
 
-const { fact } = defineProps<{
+const { fact, canPromote } = defineProps<{
   fact: ExtractionFact;
+  /** Whether to offer turning this fact into a relation. Off by default: the
+   * card is also rendered in places that are a reading surface rather than a
+   * review one, and on a person's own page every card would carry the button. */
+  canPromote?: boolean;
 }>();
+
+defineEmits<{ promoted: [edgeId: string] }>();
+
+const promoteOpen = ref(false);
+
+/** How this fact would become an edge, when it can become one at all.
+ *
+ * Undefined for a fact nobody was matched to, and for the two fact types with
+ * no edge type to become - see `factEdgeRule`. */
+const rule = computed(() => factEdgeRule(fact));
+const promotable = computed(() => !!rule.value && !!canPromote);
 
 const sourceName = computed(() => factSubject(fact));
 

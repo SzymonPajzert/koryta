@@ -244,22 +244,34 @@ export const nodeTypes = [
 
 export type NodeType = (typeof nodeTypes)[number];
 
-export type EdgeType =
-  | "employed"
-  | "connection"
-  | "mentions"
+/** Every kind of relation, in one place.
+ *
+ * The tuple is the source of truth and `EdgeType` is derived from it, the same
+ * arrangement `nodeTypes` has and for the same reason: a handler validating a
+ * `type` off the wire can say `z.enum(edgeTypes)` rather than writing the list
+ * out again, and `/api/edges/create` accepted any string at all until it could.
+ *
+ * Individual types are documented on the union below.
+ */
+export const edgeTypes = [
+  "employed",
+  "connection",
+  "mentions",
   /** Ownership: a shareholder, a parent company, the gmina that holds the
    * shares. Region -> company means the region *owns* it, which since the
    * `seat` split is a claim about shares rather than about geography. */
-  | "owns"
+  "owns",
   /** Where a company is registered. Split out of `owns`, which meant both
    * "sits in" and "is owned by" and could not mean both once the register's
    * shareholder lists were ingested: a gmina that owns a company seated in the
    * next town would otherwise move it there. */
-  | "seat"
-  | "comment"
-  | "election"
-  | "tagged";
+  "seat",
+  "comment",
+  "election",
+  "tagged",
+] as const;
+
+export type EdgeType = (typeof edgeTypes)[number];
 
 export const destinationAddText: Record<NodeType, string> = {
   person: "Dodaj osobę",
