@@ -183,7 +183,9 @@ export async function addArticleMentions(
   articleId: string,
   targetIds: string[],
 ): Promise<string[]> {
-  const wanted = Array.from(new Set(targetIds)).filter((id) => id !== articleId);
+  const wanted = Array.from(new Set(targetIds)).filter(
+    (id) => id !== articleId,
+  );
   if (wanted.length === 0) return [];
 
   const [existing, snaps] = await Promise.all([

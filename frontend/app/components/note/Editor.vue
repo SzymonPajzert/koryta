@@ -21,18 +21,26 @@
          alpha tester said about the paragraph that stood here, which described
          the notes („dodatkowe informacje”) without showing one. The examples
          are `noteKindConfig`'s, so they are the same sentences the fields
-         themselves offer as placeholders. -->
+         themselves offer as placeholders. An article's page asks for a
+         snippet instead, and has no kinds to give examples of. -->
     <template v-if="user && !userNote && !isEditing">
-      <p class="k-lead mb-1">
-        Wiesz więcej na temat {{ subject }}? Wklej tu, co udało Ci się znaleźć,
-        razem z linkiem do źródła. Notatki są publiczne i to z nich powstają
-        kolejne powiązania w bazie - nie musi to być nic odkrywczego.
+      <p v-if="snippetOnly" class="k-lead">
+        Co w tym artykule jest warte zapamiętania? Zapisz fragment albo własny
+        komentarz. Notatki są publiczne - w ten sposób pomożesz innym zrozumieć,
+        dlaczego ten tekst jest tu trzymany.
       </p>
-      <ul class="k-lead k-examples">
-        <li v-for="(config, value) in noteKindConfig" :key="value">
-          <strong>{{ config.title }}</strong> - „{{ config.example }}”
-        </li>
-      </ul>
+      <template v-else>
+        <p class="k-lead mb-1">
+          Wiesz więcej na temat {{ subject }}? Wklej tu, co udało Ci się
+          znaleźć, razem z linkiem do źródła. Notatki są publiczne i to z nich
+          powstają kolejne powiązania w bazie - nie musi to być nic odkrywczego.
+        </p>
+        <ul class="k-lead k-examples">
+          <li v-for="(config, value) in noteKindConfig" :key="value">
+            <strong>{{ config.title }}</strong> - „{{ config.example }}”
+          </li>
+        </ul>
+      </template>
     </template>
 
     <p v-if="!user && otherSources.length > 0" class="k-lead">
@@ -53,7 +61,11 @@
           cols="12"
           :md="singleColumn ? '12' : '6'"
         >
-          <NoteSourceCard :model-value="source" :is-editing="false" />
+          <NoteSourceCard
+            :model-value="source"
+            :is-editing="false"
+            :snippet-only="snippetOnly"
+          />
         </v-col>
 
         <v-col
@@ -65,12 +77,30 @@
           <NoteSourceCard
             :model-value="source"
             :is-editing="isEditing"
+            :snippet-only="snippetOnly"
             @update:model-value="formData.sources[index] = $event"
             @remove="removeSource(index)"
           />
         </v-col>
         <v-col v-if="user" cols="12" :md="singleColumn ? '12' : '6'">
-          <div class="d-flex flex-wrap ga-2">
+          <!-- On an article there is one button and it makes a snippet: the
+               url an entry would carry is the page you are already on, and
+               typing another one there made a second article node out of a
+               note filed against the first. A correction to the article record
+               itself goes through "Zgłoś" like any other. -->
+          <div v-if="snippetOnly" class="d-flex flex-wrap ga-2">
+            <v-btn
+              variant="outlined"
+              size="small"
+              color="primary"
+              data-testid="note-add-snippet"
+              @click="addSource('source')"
+            >
+              <v-icon start :icon="mdiNoteTextOutline" />
+              Dodaj notatkę
+            </v-btn>
+          </div>
+          <div v-else class="d-flex flex-wrap ga-2">
             <v-btn
               v-for="(config, value) in noteKindConfig"
               :key="value"
@@ -164,6 +194,17 @@ const noteSubject: Record<NodeType, string> = {
 
 const subject = computed(() => noteSubject[props.nodeType]);
 
+/** Whether an entry here is a snippet rather than a source with an address.
+ *
+ * On an article, the url a source entry would carry is the page the note is
+ * already attached to: the field was noise at best, and at worst it minted a
+ * second article node out of a note filed against the first. So an article's
+ * notes are text, and the kinds - which exist to say "this record is wrong" -
+ * go with the url, since a wrong article record is a revision rather than a
+ * note.
+ */
+const snippetOnly = computed(() => props.nodeType === "article");
+
 const emit = defineEmits(["saved"]);
 
 const { user } = useAuthState();
@@ -250,7 +291,9 @@ const removeSource = (index: number) => {
  * the guard on it.
  */
 const mentionedNodes = computed(() =>
-  props.nodeType === "person" || props.nodeType === "place" ? [props.nodeId] : [],
+  props.nodeType === "person" || props.nodeType === "place"
+    ? [props.nodeId]
+    : [],
 );
 
 /** The article node for a url, made if this is the first time anyone cites it.

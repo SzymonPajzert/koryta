@@ -138,6 +138,9 @@ describe("/api/notes/admin", () => {
       url: "https://a.example",
       // Entries written before kinds existed read back as sources.
       kind: "source",
+      // Null until promoting the source makes an article of it, which is what
+      // tells an entry that has been through it from one that has not.
+      articleNodeId: null,
       adminStatus: null,
       adminType: null,
       adminTypeDeferred: false,

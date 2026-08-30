@@ -5,7 +5,11 @@
        `SuccessionPersonChanges` follow. -->
   <section v-if="mentions.length > 0" class="mt-4" data-testid="node-mentions">
     <div class="sec-head">
-      <v-icon :icon="mdiNewspaperVariantOutline" size="18" class="sec-head__icon" />
+      <v-icon
+        :icon="mdiNewspaperVariantOutline"
+        size="18"
+        class="sec-head__icon"
+      />
       <h3 class="text-h6">Artykuły, które o tym wspominają</h3>
     </div>
 
@@ -15,12 +19,7 @@
     </p>
 
     <v-row dense>
-      <v-col
-        v-for="mention in mentions"
-        :key="mention.edgeId"
-        cols="12"
-        md="6"
-      >
+      <v-col v-for="mention in mentions" :key="mention.edgeId" cols="12" md="6">
         <v-card
           variant="outlined"
           class="h-100"
@@ -43,7 +42,11 @@
               >
                 <span v-if="domainOf(mention)">{{ domainOf(mention) }}</span>
                 <span v-if="dateOf(mention)">· {{ dateOf(mention) }}</span>
-                <v-chip v-if="!mention.published" size="x-small" variant="tonal">
+                <v-chip
+                  v-if="!mention.published"
+                  size="x-small"
+                  variant="tonal"
+                >
                   szkic
                   <v-tooltip activator="parent" location="top">
                     Powiązanie czeka na zatwierdzenie — widoczne tylko dla
@@ -104,7 +107,11 @@ const { data } = authFetch<NodeMentions>(
 const mentions = computed(() => data.value?.mentions ?? []);
 
 function articleUrl(mention: NodeMention) {
-  return generateEntityUrl("article", mention.nodeId, mention.name ?? undefined);
+  return generateEntityUrl(
+    "article",
+    mention.nodeId,
+    mention.name ?? undefined,
+  );
 }
 
 function domainOf(mention: NodeMention) {

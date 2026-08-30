@@ -87,7 +87,7 @@ vi.mock("firebase-admin/firestore", () => ({
     static now() {
       return new this();
     }
-    static fromDate(date: Date) {
+    static fromDate(_date: Date) {
       return new this();
     }
   },
