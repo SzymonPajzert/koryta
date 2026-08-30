@@ -193,12 +193,16 @@
           </v-row>
         </div>
 
+        <!-- `comment` only. `mentions` used to be filtered for here too and
+             could never match: `edges` comes from /api/graph/local/[id], which
+             builds its node map from people, places and regions, then drops
+             every edge whose far end is not in it - and the far end of a
+             mention is an article. The articles that name this entity have
+             their own section below, off an endpoint that can see them. -->
         <div class="mt-4">
           <v-row>
             <v-col
-              v-for="edge in edges.filter((edge) =>
-                ['comment', 'mentions'].includes(edge.type),
-              )"
+              v-for="edge in edges.filter((edge) => edge.type === 'comment')"
               :key="edge.richNode?.name"
               cols="12"
               md="6"
@@ -211,6 +215,14 @@
             </v-col>
           </v-row>
         </div>
+
+        <!-- Where a claim on this page came from, and what else has been
+             written about them. Only for the kinds `mentions` is declared
+             between; a region is never one end of one. -->
+        <MentionArticleList
+          v-if="entity?.type === 'person' || entity?.type === 'place'"
+          :node-id="node"
+        />
 
         <!-- Notes on a person are unreviewed claims about a named individual,
              so a reader has to be logged in to see them. Everything else -
