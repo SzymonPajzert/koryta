@@ -6,6 +6,7 @@ import {
   where,
   collection,
   query,
+  runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
 import { useCollection, useFirebaseApp } from "vuefire";
@@ -19,6 +20,7 @@ import {
   mdiVectorLink,
 } from "@mdi/js";
 import { useAuthState } from "./auth";
+import { withArticleIds } from "~/utils/notePromotion";
 import type { Note, NoteEntryKind, NoteSource } from "~~/shared/model";
 
 /** How each note entry kind presents itself: the label on its chip, the button
@@ -77,10 +79,11 @@ export const noteKindConfig: Record<
   },
 };
 
-/** Entries written before kinds existed are all sources. */
-export function noteKindOf(source: Pick<NoteSource, "kind">): NoteEntryKind {
-  return source.kind ?? "source";
-}
+/** Entries written before kinds existed are all sources.
+ *
+ * Defined in `shared/model.ts` beside the kind itself and re-exported here,
+ * which is where every component already reaches for it. */
+export { noteKindOf } from "~~/shared/model";
 
 /** What an admin decided the entry is about, once they have read it - the kind
  * above is what its author said it was. Stored as a plain string, so a value
@@ -172,10 +175,43 @@ export function useNotes(nodeID: MaybeRef<string>) {
     });
   };
 
+  /** Points the note's entries at the article nodes their urls became.
+   *
+   * A transaction, and it re-reads `sources` rather than being handed them,
+   * because promoting is slow: it fetches every new url to read its title, and
+   * an author who added another entry while that was in flight had it deleted
+   * by this second write. `setDoc(..., {merge: true})` merges *fields*, and
+   * `sources` is one field - so writing back the array as it looked before the
+   * fetch replaces the whole of it. An admin verdict written in the same window
+   * went the same way.
+   *
+   * Entries are matched by url, never by position, so an insert or a deletion
+   * in the meantime attaches the ids to the right entries anyway.
+   *
+   * Writes nothing when nothing changed, which is what keeps a re-save of an
+   * already promoted note from touching the document at all.
+   */
+  const attachArticleIds = async (articleIds: Map<string, string>) => {
+    if (articleIds.size === 0) return;
+    const docId = `${nodeRef.value}_${user.value?.uid}`;
+    await runTransaction(db, async (transaction) => {
+      const ref = doc(db, "notes", docId);
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists()) return;
+      const sources = (snapshot.data() as Note).sources ?? [];
+      const updated = withArticleIds(sources, articleIds);
+      if (!updated) return;
+      // Only `sources`, so the timestamps and anything else the document holds
+      // are left as they are - this is bookkeeping, not the author writing.
+      transaction.update(ref, { sources: updated });
+    });
+  };
+
   return {
     userNote,
     // TODO enable users seeing other users nodes
     otherNotes,
     saveNote,
+    attachArticleIds,
   };
 }

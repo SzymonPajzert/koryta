@@ -1,5 +1,6 @@
 import type { NoteSource } from "~~/shared/model";
-import { noteKindOf } from "~/composables/notes";
+import { noteKindOf } from "~~/shared/model";
+import { normalizeUrl } from "~~/shared/url";
 
 /** The entries of a note that should become articles.
  *
@@ -21,6 +22,12 @@ export function sourcesToPromote(sources: NoteSource[]): NoteSource[] {
 
 /** The same entries, each pointed at the article node its url became.
  *
+ * `articleIds` is keyed by `normalizeUrl`, not by the url as typed: the server
+ * matches an existing article normalized, so two entries citing
+ * `https://www.example.pl/a/` and `example.pl/a` are one article and both have
+ * to be given its id. Keying by the raw string left the second entry
+ * unattached, and the next save promoted it again.
+ *
  * Returns null where nothing changed, so a save that promoted nothing does not
  * write the note again. Entries are matched by url rather than by position: the
  * promotion runs after the note is stored, and the author may have added
@@ -32,7 +39,7 @@ export function withArticleIds(
 ): NoteSource[] | null {
   const updated = sources.map((source) => {
     const url = source.url?.trim();
-    const articleNodeId = url ? articleIds.get(url) : undefined;
+    const articleNodeId = url ? articleIds.get(normalizeUrl(url)) : undefined;
     if (!articleNodeId || source.articleNodeId === articleNodeId) return source;
     return { ...source, articleNodeId };
   });
@@ -42,36 +49,45 @@ export function withArticleIds(
   return changed ? updated : null;
 }
 
-/** Turn every source url a note carries into an article node.
+/** The article node id for every page a note's un-promoted sources cite.
  *
+ * Keyed by `normalizeUrl`, which is what `withArticleIds` looks entries up by.
  * `articleIdFor` is what does the storing - injected so that the rule of which
  * entries are promoted can be tested without the network. A url that fails is
- * skipped rather than retried here: the entry keeps no node id, so the next
- * save of the note tries it again.
+ * simply absent from the map rather than retried here: the entry keeps no node
+ * id, so the next save of the note tries it again.
  *
- * Gives back the note's entries with the new ids attached, or null where there
- * was nothing to promote or nothing came back.
+ * One request per *page*, not per entry: the urls are collapsed first, so a
+ * note citing the same piece twice under two spellings does not race itself
+ * into creating two article nodes for it. The url handed to `articleIdFor` is
+ * still the one the author typed, because that is the address it is stored
+ * under.
  */
-export async function promoteNoteSources(
+export async function articleIdsForSources(
   sources: NoteSource[],
   articleIdFor: (url: string) => Promise<string | undefined>,
-): Promise<NoteSource[] | null> {
-  const pending = sourcesToPromote(sources);
-  if (pending.length === 0) return null;
-
-  const urls = Array.from(new Set(pending.map((source) => source.url!.trim())));
+): Promise<Map<string, string>> {
   const articleIds = new Map<string, string>();
+  const pending = sourcesToPromote(sources);
+  if (pending.length === 0) return articleIds;
+
+  const byPage = new Map<string, string>();
+  for (const source of pending) {
+    const url = source.url!.trim();
+    const key = normalizeUrl(url);
+    if (!byPage.has(key)) byPage.set(key, url);
+  }
 
   await Promise.all(
-    urls.map(async (url) => {
+    Array.from(byPage, async ([key, url]) => {
       try {
         const nodeId = await articleIdFor(url);
-        if (nodeId) articleIds.set(url, nodeId);
+        if (nodeId) articleIds.set(key, nodeId);
       } catch (error) {
         console.error(`Failed to promote ${url} to an article`, error);
       }
     }),
   );
 
-  return withArticleIds(sources, articleIds);
+  return articleIds;
 }

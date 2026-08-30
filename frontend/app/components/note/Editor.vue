@@ -86,6 +86,29 @@
         </v-col>
       </v-row>
 
+      <v-alert
+        v-if="saveFailed"
+        type="error"
+        variant="tonal"
+        density="compact"
+        class="mt-3"
+        data-testid="note-save-error"
+      >
+        Nie udało się zapisać notatki. Sprawdź połączenie i spróbuj ponownie -
+        wpisany tekst jest nadal tutaj.
+      </v-alert>
+      <v-alert
+        v-else-if="promotionFailed"
+        type="warning"
+        variant="tonal"
+        density="compact"
+        class="mt-3"
+        data-testid="note-promotion-error"
+      >
+        Notatka została zapisana, ale nie udało się utworzyć strony artykułu z
+        podanego adresu. Spróbujemy ponownie przy następnym zapisie.
+      </v-alert>
+
       <div v-if="user" class="d-flex justify-end mt-4">
         <v-btn
           v-if="userNote && !isEditing"
@@ -117,7 +140,7 @@ import type {
   NoteSource,
 } from "~~/shared/model";
 import { articlePayloadFor, ensureArticle } from "~/composables/articles";
-import { promoteNoteSources } from "~/utils/notePromotion";
+import { articleIdsForSources } from "~/utils/notePromotion";
 import { NoteSourceCard } from "#components";
 
 const props = withDefaults(
@@ -144,7 +167,7 @@ const subject = computed(() => noteSubject[props.nodeType]);
 const emit = defineEmits(["saved"]);
 
 const { user } = useAuthState();
-const { userNote, otherNotes, saveNote } = useNotes(
+const { userNote, otherNotes, saveNote, attachArticleIds } = useNotes(
   computed(() => props.nodeId),
 );
 
@@ -154,6 +177,13 @@ const otherSources = computed(() => {
 
 const isEditing = ref(false);
 const saving = ref(false);
+/** The note itself would not store. Said out loud, because the entries stay on
+ * screen either way and a lost note otherwise looks exactly like a saved one. */
+const saveFailed = ref(false);
+/** The note stored but its urls did not become articles. A softer failure -
+ * nothing the author wrote is lost, and the next save tries again - so it says
+ * so without asking them to do anything. */
+const promotionFailed = ref(false);
 
 type NodeEditable = Omit<Partial<Note>, "sources"> & {
   sources: Required<Note>["sources"];
@@ -180,6 +210,12 @@ watch(userNote, (note) => {
   if (!note) {
     return;
   }
+  // Never over an open editor. The promotion writes the note a second time a
+  // few seconds after the save, and this watcher fired on that write and
+  // replaced whatever the author had started typing since.
+  if (isEditing.value) {
+    return;
+  }
   formData.value = {
     sources: (note.sources || []).map((s) => ({ ...s })),
   };
@@ -204,6 +240,19 @@ const removeSource = (index: number) => {
   formData.value.sources.splice(index, 1);
 };
 
+/** Who the article is about, as far as this note can say.
+ *
+ * The node the note hangs off: filing a url under a person is saying the page
+ * is about them, and that is the only moment anybody says so. Only a person or
+ * a company - `mentions` is not declared for a region, and on an article's own
+ * page the subject would be the article itself. The server checks the type
+ * again and ignores anything else, so this is which claim to make rather than
+ * the guard on it.
+ */
+const mentionedNodes = computed(() =>
+  props.nodeType === "person" || props.nodeType === "place" ? [props.nodeId] : [],
+);
+
 /** The article node for a url, made if this is the first time anyone cites it.
  *
  * A page that will not give up its title is still worth having, so it goes in
@@ -214,6 +263,7 @@ const articleIdFor = async (url: string) => {
   const { nodeId } = await ensureArticle({
     ...payload,
     name: payload.name || payload.url,
+    mentions: mentionedNodes.value,
   });
   return nodeId;
 };
@@ -225,10 +275,11 @@ const articleIdFor = async (url: string) => {
  * should watch a save spinner for that. The note is what the author came to
  * write; the articles follow from it.
  *
- * Reads the entries back off the stored note, so an author who is already
- * writing the next one does not have that entry dropped by this second write -
- * falling back to what was just saved, for the first note on a node, where the
- * collection has not caught up with its own new document yet.
+ * Reads the entries back off the stored note, falling back to what was just
+ * saved for the first note on a node, where the collection has not caught up
+ * with its own new document yet. Only to decide *which urls to fetch*, though -
+ * the ids are written back by `attachArticleIds`, which re-reads the entries
+ * inside a transaction, so an entry added while this was in flight survives.
  */
 const promoteSources = async () => {
   const saved = userNote.value?.sources?.length
@@ -237,27 +288,39 @@ const promoteSources = async () => {
   const stored = saved.map((source) => ({ ...source })) as NoteSource[];
 
   try {
-    const promoted = await promoteNoteSources(stored, articleIdFor);
-    if (promoted) await saveNote({ sources: promoted });
+    const articleIds = await articleIdsForSources(stored, articleIdFor);
+    await attachArticleIds(articleIds);
   } catch (error) {
     console.error("Failed to promote note sources to articles", error);
+    promotionFailed.value = true;
   }
 };
 
 const save = async () => {
   saving.value = true;
+  saveFailed.value = false;
+  promotionFailed.value = false;
   try {
-    isEditing.value = false;
     await saveNote(toRaw(formData.value));
+    // Only once the write has actually landed. Closing the editor first made a
+    // rejected save - a revoked token, a Firestore error - look exactly like a
+    // stored one, and the entry was gone on the next navigation.
+    isEditing.value = false;
     emit("saved");
   } catch (error) {
     console.error("Failed to save note", error);
+    saveFailed.value = true;
+    saving.value = false;
     return;
+  }
+
+  // Still inside the spinner: promotion writes the note a second time, and an
+  // author who was handed the "Edytuj" button back could save over it.
+  try {
+    await promoteSources();
   } finally {
     saving.value = false;
   }
-
-  await promoteSources();
 };
 
 // Automatically show editor if not created yet, wait, we have "startEditing" button for that

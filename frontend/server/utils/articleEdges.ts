@@ -149,6 +149,77 @@ export async function changeArticleEdges(
   });
 }
 
+/** What an article's `mentions` relation is, shared by everything that writes
+ * one. `bothDirections` because the pipeline stores person -> article while the
+ * app stores article -> person; see `ArticleEdgeKind`. */
+export const MENTIONS: ArticleEdgeKind = {
+  type: "mentions",
+  targetTypes: ["person", "place"],
+  bothDirections: true,
+  nothingNamed: "Nie podano osób do dodania ani usunięcia.",
+  wrongTarget: (id) => `${id} nie jest osobą ani instytucją w bazie.`,
+};
+
+/** Records that an article names these nodes, on the caller's batch.
+ *
+ * Split out of `changeArticleEdges` so that a caller which is already writing
+ * the article itself - promoting a note's source - can record the mention in the
+ * same commit, rather than making a second request that can fail on its own and
+ * leave an article nobody is joined to.
+ *
+ * Skips a node the article is already joined to, whichever way round the edge
+ * was stored, which is what keeps this idempotent: promoting the same note
+ * twice, or promoting a url the extraction pipeline already linked to this
+ * person, writes nothing the second time. Silently ignores a node that is not a
+ * person or a company - a note hangs off regions and topics too, and neither is
+ * something `mentions` is declared for.
+ *
+ * Returns the ids it wrote an edge for.
+ */
+export async function addArticleMentions(
+  db: FirebaseFirestore.Firestore,
+  batch: FirebaseFirestore.WriteBatch,
+  user: { uid: string },
+  articleId: string,
+  targetIds: string[],
+): Promise<string[]> {
+  const wanted = Array.from(new Set(targetIds)).filter((id) => id !== articleId);
+  if (wanted.length === 0) return [];
+
+  const [existing, snaps] = await Promise.all([
+    existingEdges(db, articleId, MENTIONS),
+    db.getAll(...wanted.map((id) => db.collection("nodes").doc(id))),
+  ]);
+
+  const mentionable = new Set(
+    snaps
+      .filter((snap) => {
+        const type = snap.data()?.type as NodeType | undefined;
+        return !!type && MENTIONS.targetTypes.includes(type);
+      })
+      .map((snap) => snap.id),
+  );
+
+  const written: string[] = [];
+  for (const targetId of wanted) {
+    if (!mentionable.has(targetId) || existing.has(targetId)) continue;
+    const edgeRef = db.collection("edges").doc();
+    createRevisionTransaction(
+      db,
+      batch,
+      user,
+      edgeRef,
+      { source: articleId, target: targetId, type: MENTIONS.type },
+      // A draft, the same terms as a mention added by hand on the article page:
+      // a reader saying "this page is about them" is a claim, not a fact, and
+      // the article node it hangs off may itself be waiting for review.
+      { published: false },
+    );
+    written.push(targetId);
+  }
+  return written;
+}
+
 /** The article's live edges of this kind, grouped by the node at the far end.
  *
  * A list rather than one document per node, because two writers who do not know

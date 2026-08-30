@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { NoteSource } from "~~/shared/model";
 import {
-  promoteNoteSources,
+  articleIdsForSources,
   sourcesToPromote,
   withArticleIds,
 } from "~/utils/notePromotion";
@@ -45,14 +45,23 @@ describe("sourcesToPromote", () => {
 describe("withArticleIds", () => {
   it("attaches the node each url became", () => {
     const sources = [source(), source({ url: "https://example.pl/b" })];
-    const updated = withArticleIds(
-      sources,
-      new Map([["https://example.pl/a", "a1"]]),
-    );
+    const updated = withArticleIds(sources, new Map([["example.pl/a", "a1"]]));
     expect(updated).toEqual([
       { ...sources[0], articleNodeId: "a1" },
       sources[1],
     ]);
+  });
+
+  it("attaches it however the entry spelled the url", () => {
+    // The server matches an existing article normalized, so all three of these
+    // are the one page and all three have to end up pointing at it.
+    const sources = [
+      source({ url: "https://www.example.pl/a/" }),
+      source({ url: "example.pl/a" }),
+      source({ url: "  https://example.pl/a  " }),
+    ];
+    const updated = withArticleIds(sources, new Map([["example.pl/a", "a1"]]));
+    expect(updated?.map((s) => s.articleNodeId)).toEqual(["a1", "a1", "a1"]);
   });
 
   it("says nothing changed when nothing did", () => {
@@ -60,45 +69,72 @@ describe("withArticleIds", () => {
     expect(
       withArticleIds(
         [source({ articleNodeId: "a1" })],
-        new Map([["https://example.pl/a", "a1"]]),
+        new Map([["example.pl/a", "a1"]]),
       ),
     ).toBeNull();
   });
 });
 
-describe("promoteNoteSources", () => {
-  it("promotes each url once, however many entries cite it", async () => {
+describe("articleIdsForSources", () => {
+  it("asks once per page, however many entries cite it", async () => {
     const articleIdFor = vi.fn(async () => "a1");
-    const updated = await promoteNoteSources(
+    const ids = await articleIdsForSources(
       [source(), source({ note: "I jeszcze to" })],
       articleIdFor,
     );
 
     expect(articleIdFor).toHaveBeenCalledTimes(1);
-    expect(updated?.map((s) => s.articleNodeId)).toEqual(["a1", "a1"]);
+    expect(ids).toEqual(new Map([["example.pl/a", "a1"]]));
+  });
+
+  it("asks once for one page cited under two spellings", async () => {
+    // Two requests would be two concurrent creates of the same article, and
+    // the server dedupes by reading before it writes - so both would miss and
+    // both would write. One node, one request.
+    const articleIdFor = vi.fn(async () => "a1");
+    const ids = await articleIdsForSources(
+      [source({ url: "https://www.example.pl/a/" }), source()],
+      articleIdFor,
+    );
+
+    expect(articleIdFor).toHaveBeenCalledTimes(1);
+    expect(ids).toEqual(new Map([["example.pl/a", "a1"]]));
+  });
+
+  it("asks with the url the author typed, not the normalized one", async () => {
+    // That address is what the article is stored under and what a reader
+    // follows; normalizing is only how two of them are told to be one page.
+    const articleIdFor = vi.fn(async () => "a1");
+    await articleIdsForSources(
+      [source({ url: "https://www.example.pl/a/" })],
+      articleIdFor,
+    );
+
+    expect(articleIdFor).toHaveBeenCalledWith("https://www.example.pl/a/");
   });
 
   it("does not ask when there is nothing to promote", async () => {
     const articleIdFor = vi.fn(async () => "a1");
     expect(
-      await promoteNoteSources([source({ kind: "missing" })], articleIdFor),
-    ).toBeNull();
+      await articleIdsForSources([source({ kind: "missing" })], articleIdFor),
+    ).toEqual(new Map());
     expect(articleIdFor).not.toHaveBeenCalled();
   });
 
-  it("keeps the entries that worked when one url fails", async () => {
+  it("keeps the pages that worked when one url fails", async () => {
     const articleIdFor = vi.fn(async (url: string) => {
       if (url === "https://example.pl/a") throw new Error("502");
       return "b1";
     });
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const updated = await promoteNoteSources(
+    const ids = await articleIdsForSources(
       [source(), source({ url: "https://example.pl/b" })],
       articleIdFor,
     );
 
-    // The failed one keeps no id, so the next save tries it again.
-    expect(updated?.map((s) => s.articleNodeId)).toEqual([undefined, "b1"]);
+    // The failed one is simply absent, so the entry keeps no id and the next
+    // save tries it again.
+    expect(ids).toEqual(new Map([["example.pl/b", "b1"]]));
   });
 });

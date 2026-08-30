@@ -1,4 +1,4 @@
-import { changeArticleEdges } from "~~/server/utils/articleEdges";
+import { changeArticleEdges, MENTIONS } from "~~/server/utils/articleEdges";
 
 /** Records that an article names somebody, or takes that back.
  *
@@ -9,15 +9,10 @@ import { changeArticleEdges } from "~~/server/utils/articleEdges";
  *
  * Institutions as well as people: the section on the article page has always
  * been "Wspomniane osoby i instytucje", and `mentions` joins an article to
- * either.
+ * either. The kind itself lives in `articleEdges.ts`, because promoting a
+ * note's source writes the same relation and the two must agree on it.
  */
 export default defineEventHandler(async (event) => {
-  const mentions = await changeArticleEdges(event, {
-    type: "mentions",
-    targetTypes: ["person", "place"],
-    bothDirections: true,
-    nothingNamed: "Nie podano osób do dodania ani usunięcia.",
-    wrongTarget: (id) => `${id} nie jest osobą ani instytucją w bazie.`,
-  });
+  const mentions = await changeArticleEdges(event, MENTIONS);
   return { mentions };
 });
