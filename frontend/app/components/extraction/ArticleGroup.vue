@@ -22,7 +22,7 @@
         <v-divider />
         <v-card-text class="pa-4">
           <div v-for="fact in facts" :key="fact.id ?? fact.url" class="mb-4">
-            <ExtractionCard :fact="fact">
+            <ExtractionCard :fact="fact" can-promote>
               <template #actions>
                 <ExtractionVoteButtons v-if="fact.id" :id="fact.id" />
               </template>

@@ -140,6 +140,7 @@
                 v-for="fact in facts"
                 :key="fact.id ?? fact.url"
                 :fact="fact"
+                can-promote
                 class="mb-3"
               >
                 <template #actions>
