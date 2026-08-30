@@ -70,6 +70,7 @@ export async function getNoteRows(db: Firestore): Promise<NoteRow[]> {
         url: source.url || null,
         // Entries written before kinds existed are all sources.
         kind: source.kind ?? "source",
+        articleNodeId: source.articleNodeId || null,
         adminStatus: source.adminStatus ?? null,
         adminType: source.adminType || null,
         adminTypeDeferred: source.adminTypeDeferred === true,

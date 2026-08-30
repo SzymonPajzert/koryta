@@ -708,6 +708,11 @@ export type NoteRow = {
   note: string;
   url: string | null;
   kind: NoteEntryKind;
+  /** The article node this entry's url became, once it has. Carried so a
+   * reviewer can reach the page it made, and so an entry that was never
+   * promoted - everything written before the feature, and everything whose
+   * promotion failed - is tellable from one that was. */
+  articleNodeId: string | null;
   adminStatus: NoteAdminStatus | null;
   adminType: string | null;
   /** Whether classifying this entry was handed back to the table view. */

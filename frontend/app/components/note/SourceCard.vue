@@ -4,7 +4,7 @@
        top of the gutter rather than instead of it. -->
   <v-card variant="outlined">
     <v-chip-group
-      v-if="isEditing"
+      v-if="isEditing && !snippetOnly"
       v-model="kind"
       mandatory
       class="px-2 pt-1"
@@ -24,7 +24,7 @@
     </v-chip-group>
 
     <v-expand-transition>
-      <div v-if="editingUrl" class="pa-2 pb-0 d-flex">
+      <div v-if="editingUrl && !snippetOnly" class="pa-2 pb-0 d-flex">
         <v-text-field
           v-model="source.url"
           label="URL"
@@ -51,11 +51,13 @@
          there always is. -->
     <v-textarea
       v-model="source.note"
-      :label="noteKindConfig[kind].prompt"
+      :label="snippetOnly ? SNIPPET_PROMPT : noteKindConfig[kind].prompt"
       :placeholder="
-        isEditing ? `np. ${noteKindConfig[kind].example}` : undefined
+        isEditing && !snippetOnly
+          ? `np. ${noteKindConfig[kind].example}`
+          : undefined
       "
-      :persistent-placeholder="isEditing"
+      :persistent-placeholder="isEditing && !snippetOnly"
       :readonly="!isEditing"
       variant="plain"
       hide-details
@@ -77,7 +79,7 @@
       </v-chip>
 
       <v-chip
-        v-if="source.url && !editingUrl"
+        v-if="source.url && !editingUrl && !snippetOnly"
         color="primary"
         variant="tonal"
         class="mr-2"
@@ -89,7 +91,7 @@
         <span class="text-truncate">{{ source.url }}</span>
       </v-chip>
       <v-chip
-        v-else-if="!editingUrl && isEditing"
+        v-else-if="!editingUrl && isEditing && !snippetOnly"
         color="grey"
         variant="outlined"
         class="mr-2"
@@ -105,7 +107,7 @@
            article, and this is the way to the page that holds its tags, its
            mentions and whatever else we know about it. -->
       <v-chip
-        v-if="source.articleNodeId && !editingUrl"
+        v-if="source.articleNodeId && !editingUrl && !snippetOnly"
         :to="generateEntityUrl('article', source.articleNodeId)"
         color="secondary"
         variant="tonal"
@@ -117,7 +119,7 @@
       </v-chip>
 
       <v-btn
-        v-if="source.url && !editingUrl && isEditing"
+        v-if="source.url && !editingUrl && isEditing && !snippetOnly"
         :icon="mdiPencil"
         size="x-small"
         variant="text"
@@ -155,7 +157,14 @@ import type { NoteEntryKind, NoteSource } from "~~/shared/model";
 defineEmits(["remove"]);
 
 const source = defineModel<NoteSource>({ required: true });
-const { isEditing } = defineProps<{ isEditing: boolean }>();
+const { isEditing, snippetOnly } = defineProps<{
+  isEditing: boolean;
+  /** On an article page an entry is a piece of text and nothing else: the url
+   * it would carry is the page it is already attached to, and the kinds exist
+   * to report that a record is wrong, which is a revision rather than a note.
+   * So the address field, the "Artykuł" chip and the kind picker all go. */
+  snippetOnly?: boolean;
+}>();
 
 // Replaces the object rather than mutating it so the parent's
 // `update:model-value` handler sees the change.
@@ -165,6 +174,9 @@ const kind = computed<NoteEntryKind>({
     source.value = { ...source.value, kind: value };
   },
 });
+
+/** What the text area asks for on an article, where the entry is the note. */
+const SNIPPET_PROMPT = "Co ciekawego jest w tym artykule?";
 
 const editingUrl = ref(false);
 

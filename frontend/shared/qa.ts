@@ -48,6 +48,68 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "osoba-wspomniana-w-artykulach",
+    title: "Na stronie osoby i spółki widać artykuły, które o nich wspominają",
+    description:
+      "Sekcja była w kodzie od dawna i nigdy nic nie pokazywała: brała " +
+      "powiązania z grafu, a graf z założenia wyrzuca wszystko, co dotyka " +
+      "artykułu. Teraz czyta je osobno - i te znalezione przez model, i te " +
+      "dopisane ręcznie na stronie artykułu, i te powstałe z dopisania źródła " +
+      "do notatki. Najnowsze na górze. Powiązanie czekające na zatwierdzenie " +
+      'widzą tylko zalogowani, z plakietką "szkic".',
+    steps: [
+      "Wejdź na stronę osoby, o której pisała prasa.",
+      'Zjedź do sekcji "Artykuły, które o tym wspominają".',
+      "Sprawdź, że kafelek prowadzi na stronę artykułu i pokazuje domenę oraz datę.",
+      "To samo na stronie spółki.",
+      "Wyloguj się: szkice powinny zniknąć, opublikowane zostać.",
+    ],
+    area: "public",
+  },
+  {
+    id: "zrodlo-w-notatce-oznacza-osobe",
+    title:
+      "Źródło dopisane do notatki oznacza osobę jako wspomnianą w artykule",
+    description:
+      "Dopisanie źródła tworzyło stronę artykułu i na tym się kończyło - " +
+      "artykuł trafiał do bazy niepowiązany z nikim, więc jego sekcja " +
+      '"Wspomniane osoby i instytucje" była pusta, a graf pod nim nie miał ' +
+      "co narysować. Teraz w tym samym zapisie powstaje powiązanie z osobą " +
+      "albo spółką, przy której notatka wisi. Ten sam adres wpisany na dwa " +
+      "sposoby (z www, ze slashem na końcu) to jeden artykuł, a nie dwa.",
+    steps: [
+      "Zaloguj się i dodaj do notatki przy osobie źródło z adresem artykułu.",
+      'Zapisz i przejdź żetonem "Artykuł" na stronę artykułu.',
+      'Sprawdź, że osoba jest w "Wspomniane osoby i instytucje" (jako szkic).',
+      "Wróć do notatki i zapisz ją jeszcze raz - nie powinno powstać drugie powiązanie ani drugi artykuł.",
+    ],
+    area: "contributor",
+  },
+  {
+    id: "artykul-zbiera-notatki",
+    title:
+      "Strona artykułu pokazuje notatki napisane przy osobach i spółkach, a własne notatki są krótkie",
+    description:
+      "Źródło dopisane do notatki przy osobie jest notatką o tym artykule - " +
+      "ale widać ją było tylko tam, gdzie ją napisano. Strona artykułu zbiera " +
+      "je teraz wszystkie, razem ze stroną, przy której powstały: kilka " +
+      "powodów, dla których różni ludzie trzymają ten sam tekst, obok tekstu. " +
+      "Łączymy po artykule i po adresie, więc łapią się też notatki starsze " +
+      "niż ta funkcja oraz zgłoszenia poprawek, które adres mają, a artykułem " +
+      "nigdy się nie stają. Widoczne po zalogowaniu, bo notatki przy osobach " +
+      "też są. Przy okazji notatka dodawana na samym artykule to teraz jeden " +
+      "przycisk i pole tekstu - adres, który wpisywało się wcześniej, był " +
+      "adresem strony, na której już jesteś.",
+    steps: [
+      'Zaloguj się, wejdź na stronę osoby i dodaj notatkę typu "Dodaj źródło" z adresem artykułu.',
+      'Zapisz i poczekaj, aż pojawi się żeton "Artykuł".',
+      "Przejdź nim na stronę artykułu.",
+      'Sprawdź sekcję "Notatki z innych stron" - powinna być tam Twoja notatka z nazwiskiem osoby.',
+      'Niżej dodaj notatkę do samego artykułu: powinien być jeden przycisk "Dodaj notatkę" i żadnego pola na adres.',
+    ],
+    area: "contributor",
+  },
+  {
     id: "fakt-na-powiazanie",
     title: "Wydobyty fakt można zamienić na powiązanie w grafie",
     description:

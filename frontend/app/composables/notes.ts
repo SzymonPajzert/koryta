@@ -21,7 +21,7 @@ import {
 } from "@mdi/js";
 import { useAuthState } from "./auth";
 import { withArticleIds } from "~/utils/notePromotion";
-import type { Note, NoteEntryKind, NoteSource } from "~~/shared/model";
+import type { Note, NoteEntryKind } from "~~/shared/model";
 
 /** How each note entry kind presents itself: the label on its chip, the button
  * that creates one, the prompt above the text area - and one written note of
