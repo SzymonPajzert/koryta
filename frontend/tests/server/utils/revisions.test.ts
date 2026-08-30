@@ -101,6 +101,54 @@ describe("sanitizeFirestoreData", () => {
       b: false,
     });
   });
+
+  // A Firestore value type is an object, but it is a value: taken apart into
+  // its private fields it becomes a map, and a map is not a timestamp to sort
+  // on, not a reference to follow, and not a `toDate()` anybody can call. Every
+  // article node written through `ensureArticleNode` carried a `publishedDate`
+  // decomposed this way. Told apart by prototype, so this covers the whole
+  // family rather than the three the SDK happens to export today.
+  class FakeTimestamp {
+    constructor(
+      readonly _seconds: number,
+      readonly _nanoseconds: number,
+    ) {}
+    toDate() {
+      return new Date(this._seconds * 1000);
+    }
+  }
+
+  it("keeps a Firestore value type whole rather than storing its fields", () => {
+    const stamp = new FakeTimestamp(1_700_000_000, 0);
+    const result = sanitizeFirestoreData({ publishedDate: stamp }) as {
+      publishedDate: FakeTimestamp;
+    };
+    expect(result.publishedDate).toBe(stamp);
+    expect(result.publishedDate).toBeInstanceOf(FakeTimestamp);
+  });
+
+  it("keeps one nested inside an object and inside an array", () => {
+    const stamp = new FakeTimestamp(1_700_000_000, 0);
+    const result = sanitizeFirestoreData({
+      meta: { fetchedAt: stamp },
+      spells: [{ start: stamp }],
+    }) as {
+      meta: { fetchedAt: FakeTimestamp };
+      spells: { start: FakeTimestamp }[];
+    };
+    expect(result.meta.fetchedAt).toBe(stamp);
+    expect(result.spells[0]!.start).toBe(stamp);
+  });
+
+  it("still descends into a plain object that merely looks like one", () => {
+    // The guard is about the prototype, not the field names - a map that came
+    // off `doc.data()` with these keys is still a map to sanitize.
+    expect(
+      sanitizeFirestoreData({
+        publishedDate: { _seconds: 1, _nanoseconds: 2, gone: undefined },
+      }),
+    ).toEqual({ publishedDate: { _seconds: 1, _nanoseconds: 2 } });
+  });
 });
 
 /** A stand-in for a Firestore document reference. `parent` is what says which

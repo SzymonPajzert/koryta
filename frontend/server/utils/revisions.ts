@@ -45,6 +45,24 @@ function sanitizeValue(value: unknown, insideArray: boolean): unknown {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "object") return value;
 
+  // Firestore's own value types - Timestamp, DocumentReference, GeoPoint,
+  // FieldValue, Buffer - are objects, but they are values rather than maps, and
+  // the generic branch below would take one apart into its private fields: a
+  // `Timestamp` became `{_seconds, _nanoseconds}`, which is a map as far as
+  // Firestore is concerned. Maps sort *after* every timestamp, so an article
+  // dated that way pinned itself above every properly dated one on /zrodla's
+  // `orderBy("publishedDate", "desc")`, read back undated wherever `toDate` is
+  // called, and looked "already dated" to backfill-article-dates.ts forever.
+  // Every article node written through `ensureArticleNode` was one of these.
+  //
+  // Told apart by prototype rather than by `instanceof` against the imported
+  // classes. Data destined for Firestore is plain objects all the way down - it
+  // comes from `doc.data()`, from a zod parse, from ld+json - so a custom
+  // prototype is the thing that marks a value type, and testing for it needs no
+  // list to keep in step with the SDK. It also keeps this working under a test
+  // that mocks the module, where `Timestamp` is not a constructor at all.
+  // Arrays are checked first: one has a prototype of its own and would
+  // otherwise be handed back whole, unsanitized.
   if (Array.isArray(value)) {
     // Elements that sanitize away leave no hole: Firestore rejects an
     // `undefined` element outright, and the previous implementation dropped
@@ -58,6 +76,8 @@ function sanitizeValue(value: unknown, insideArray: boolean): unknown {
     );
   }
 
+  if (!isPlainObject(value)) return value;
+
   // The fields of an object are not array elements, however deeply that object
   // is nested — only an array directly inside an array is a problem.
   return Object.fromEntries(
@@ -65,6 +85,15 @@ function sanitizeValue(value: unknown, insideArray: boolean): unknown {
       .map(([key, val]) => [key, sanitizeValue(val, false)])
       .filter(([, val]) => val !== undefined),
   );
+}
+
+/** Whether a value is a map to descend into, as opposed to a value to keep.
+ *
+ * `Object.create(null)` counts: `doc.data()` never returns one, but a caller
+ * building a payload with it means a bag of fields, not a value type. */
+function isPlainObject(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 /** Computed or bookkeeping fields that belong to the node, not to a revision.
