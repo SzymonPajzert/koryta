@@ -424,6 +424,59 @@ describe("shared/stats.ts", () => {
         expect(stats.all.latestEmploymentStart).toBe("2024-01-01");
       });
     });
+
+    describe("removed relations", () => {
+      // A relation an admin deleted, or one a merge collapsed into the
+      // survivor's copy, keeps its document with `deleted: true`. The
+      // `approved` scope dropped it through `pageIsPublic`; the `all` scope -
+      // what a logged-in editor's table is filtered and sorted by - did not.
+      const deletedJob = {
+        target: "szpital",
+        type: "employed",
+        published: true,
+        deleted: true,
+        start_date: "2024-01-01",
+      } as Edge;
+
+      it("leaves a deleted relation out of both scopes", () => {
+        const stats = computeEdgeStats([deletedJob], new Set(["szpital"]));
+
+        expect(stats.all.targetNodeIds).toEqual([]);
+        expect(stats.all.currentlyEmployed).toBe(false);
+        expect(stats.all.latestEmploymentStart).toBe(null);
+        expect(stats.all.currentlyEmployedTargetNodeIds).toEqual([]);
+        expect(stats.approved.targetNodeIds).toEqual([]);
+      });
+
+      it("does not carry a deleted seat's region into the targets", () => {
+        const stats = computeEdgeStats(
+          [{ target: "company1", type: "seat", deleted: true } as Edge],
+          new Set(),
+          { company1: ["region-A"] },
+        );
+
+        expect(stats.all.targetNodeIds).toEqual([]);
+        expect(stats.all.seatNodeIds).toEqual([]);
+      });
+
+      it("still counts the relations that were left alone", () => {
+        const stats = computeEdgeStats(
+          [
+            deletedJob,
+            {
+              target: "szpital",
+              type: "employed",
+              published: true,
+              start_date: "2020-01-01",
+            } as Edge,
+          ],
+          new Set(["szpital"]),
+        );
+
+        expect(stats.all.targetNodeIds).toEqual(["szpital"]);
+        expect(stats.all.latestEmploymentStart).toBe("2020-01-01");
+      });
+    });
   });
 
   describe("computeNodeStats", () => {

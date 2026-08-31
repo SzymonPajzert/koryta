@@ -256,9 +256,21 @@ export function computeEdgeStats(
    * classify. */
   unpaidSeatPlaceIds: ReadonlySet<string> = new Set(),
 ) {
-  const approvedEdges = nodeEdges.filter((e) => pageIsPublic(e));
+  // A removed relation is not a quiet one. `/api/edges/delete` and a merge's
+  // `collapsed` verdict both keep the document and set `deleted: true` - 775 of
+  // the 43,656 stored on 2026-08-31, touching 615 nodes - so without this every
+  // counter below goes on asserting a tie somebody has already taken off the
+  // graph. `pageIsPublic` catches it for the `approved` scope only, which left
+  // the `all` scope - the one a logged-in editor's table is filtered and sorted
+  // by - reading them as live: 165 of the 171 people merged away that day kept
+  // the employer, the region and the `currentlyEmployed` flag of the relation
+  // that had just been folded into the survivor, which is what put them back in
+  // /eksploruj/tabela after a `computeNodes` run rather than out of it.
+  const liveEdges = nodeEdges.filter((e) => e.deleted !== true);
+
+  const approvedEdges = liveEdges.filter((e) => pageIsPublic(e));
   const publicEdges = publicEmployment(
-    nodeEdges,
+    liveEdges,
     publicPlaceIds,
     unpaidSeatPlaceIds,
   );
@@ -270,7 +282,7 @@ export function computeEdgeStats(
 
   const allTargetNodeIds = [
     ...new Set(
-      nodeEdges.flatMap((e) => [
+      liveEdges.flatMap((e) => [
         e.target,
         ...(transitiveTargets[e.target] || []),
       ]),
@@ -305,7 +317,7 @@ export function computeEdgeStats(
       experienceMonths: calculateExperience(publicEdges),
       latestEmploymentStart: calculateLatestEmploymentStart(publicEdges),
       targetNodeIds: allTargetNodeIds,
-      seatNodeIds: seatTargets(nodeEdges),
+      seatNodeIds: seatTargets(liveEdges),
       currentlyEmployed: calculateCurrentlyEmployed(publicEdges),
       currentlyEmployedTargetNodeIds: [
         ...new Set(
