@@ -7,6 +7,7 @@ import {
   normalizeUpdateTime,
   type RevisionMinimal,
 } from "../../shared/revisions";
+import { revisionCollection } from "./model";
 
 // Ensure the Firebase Admin SDK is initialized
 if (getApps().length === 0) {
@@ -35,6 +36,19 @@ export const onRevisionWritten = onDocumentWritten(
       // If before does not exist, it's a create.
       const data = snap.after.exists ? snap.after.data() : snap.before.data();
       if (!data) return;
+
+      // A revision carries `node_id` whatever it describes, so an edge revision
+      // is not tellable from a node one by its id alone - only by `collection`.
+      // The `revisions` summary this trigger maintains is a nodes-only field:
+      // /admin/rewizje reads it off the node document, while the edge queue at
+      // /admin/rewizje-krawedzi queries the revisions collection directly and
+      // wants nothing denormalised onto the edge. So an edge revision has
+      // nothing here to recompute.
+      //
+      // Without this the lookup below asked `nodes` for an edge id, missed, and
+      // logged an error - once per edge revision, so several thousand every
+      // ingest run and ~15k on 2026-08-29 alone.
+      if (revisionCollection(data) !== "nodes") return;
 
       nodeId = data.node_id || data.nodeId;
       if (!nodeId) {
