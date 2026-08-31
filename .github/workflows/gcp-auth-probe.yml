@@ -1,0 +1,117 @@
+name: GCP auth probe
+
+# The nightly Pipelines run has never once succeeded: every scheduled run since
+# 2026-07-31 dies on
+#
+#   RefreshError: ('Unable to acquire impersonated credentials',
+#     {"code": 400, "message": "Request contains an invalid argument."})
+#
+# raised from external_account.py -> impersonated_credentials.py. The
+# `Authenticate to Google Cloud` step reports success either way -- the action
+# only writes the ADC file, it never exercises it -- so the failure surfaces
+# 40 minutes later inside a 2.9 GB pipeline run.
+#
+# This is that step and nothing else, on workflow_dispatch, so the answer takes
+# ~40 seconds. It is deliberately `continue-on-error` throughout: the point is
+# to collect every probe's result in one run, not to stop at the first red one.
+#
+# Delete this file once the nightly is green.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # for Workload Identity Federation
+    steps:
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PIPELINES_SERVICE_ACCOUNT }}
+
+      # No secret in here: endpoint URLs, the SA email, and the path to the
+      # OIDC token file. Worth reading for the impersonation URL and for any
+      # service_account_impersonation.token_lifetime_seconds -- a lifetime over
+      # 3600 is one of the two documented causes of INVALID_ARGUMENT.
+      - name: The credentials file the action wrote
+        continue-on-error: true
+        run: jq . "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      # Matching these against the provider's attributeCondition and
+      # attributeMapping is the whole question on the GCP side. The token
+      # itself is not printed, only the claims.
+      - name: OIDC token claims
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          src=$(jq -r '.credential_source.file // empty' "$GOOGLE_APPLICATION_CREDENTIALS")
+          [ -n "$src" ] || { echo "credential_source is not a file; nothing to decode"; exit 0; }
+          payload=$(cut -d. -f2 < "$src")
+          # base64url -> base64, and pad to a multiple of 4.
+          payload=$(printf '%s' "$payload" | tr '_-' '/+')
+          while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="${payload}="; done
+          printf '%s' "$payload" | base64 -d \
+            | jq '{aud, iss, sub, repository, repository_owner, ref, workflow, exp}'
+
+      # THE decisive probe. gcloud reads the same ADC file over the same WIF
+      # path as the Python code does.
+      #
+      #   works  -> the pool, the provider, the binding and the SA are all fine
+      #             and the bug is in how the pipelines ask for scopes. Fix in
+      #             the repo.
+      #   fails  -> the WIF/provider config is wrong. Fix in the GCP console;
+      #             no amount of Python changes will help.
+      - name: gcloud, same credentials
+        continue-on-error: true
+        run: |
+          gcloud auth list
+          gcloud storage ls gs://koryta-pl-crawled --limit 3
+
+      # google-auth builds the generateAccessToken body as
+      #   {"delegates": [], "scope": <scopes>, "lifetime": "<n>s"}
+      # and an empty `scope` is rejected as INVALID_ARGUMENT -- the same
+      # generic message a misconfigured pool produces. These two calls differ
+      # only in whether a scope is set, so they tell the two apart.
+      - name: google-auth, with and without an explicit scope
+        continue-on-error: true
+        run: |
+          pip install --quiet google-auth google-cloud-storage
+          python - <<'PY'
+          import traceback
+          import google.auth
+          import google.auth.transport.requests as gart
+
+          req = gart.Request()
+
+          for label, kwargs in [
+              ("no scopes (what google.auth.default() gives a bare caller)", {}),
+              ("cloud-platform scope", {"scopes": ["https://www.googleapis.com/auth/cloud-platform"]}),
+          ]:
+              print(f"\n=== {label} ===")
+              try:
+                  creds, project = google.auth.default(**kwargs)
+                  print(f"  type={type(creds).__name__} project={project}")
+                  print(f"  _scopes={getattr(creds, '_scopes', None)}")
+                  print(f"  requires_scopes={getattr(creds, 'requires_scopes', None)}")
+                  creds.refresh(req)
+                  print(f"  refresh OK, token expires {creds.expiry}")
+              except Exception:
+                  traceback.print_exc()
+
+          print("\n=== storage.Client().list_blobs, the call the nightly dies on ===")
+          try:
+              from google.cloud import storage
+              for i, b in enumerate(storage.Client().bucket("koryta-pl-crawled").list_blobs(max_results=3)):
+                  print(f"  {b.name}")
+              print("  list_blobs OK")
+          except Exception:
+              traceback.print_exc()
+          PY

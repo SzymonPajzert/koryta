@@ -247,3 +247,56 @@ jobs:
           # Not the dump, which lives in downloaded/.
           path: data/pipelines/versioned
           retention-days: 14
+
+  # GitHub's own "Only notify for failed workflows" setting covers this, but a
+  # scheduled run is attributed to whoever last touched the cron rather than to
+  # a person who asked for it, and 32 consecutive nightly failures reached
+  # nobody. An issue is louder: it shows up in the repo, it survives an ignored
+  # inbox, and watching the repo mails it.
+  #
+  # Only for the nightly -- a pull request already reports itself, and opening
+  # an issue per red PR would be noise.
+  notify:
+    needs: [resolve-dump, run]
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # One open issue at a time. Without this the nightly files a fresh one
+      # every night for as long as it stays broken; with it, the issue is
+      # opened once, and closing it is what re-arms the alert.
+      - name: Open an issue unless one is already open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # First, so the --label on the create below has something to point
+          # at. Listing by a label that does not exist is fine -- that returns
+          # an empty list -- but creating with one is not. `|| true` covers
+          # every night after the first, when it already exists.
+          gh label create nightly-failure \
+            --repo "$GITHUB_REPOSITORY" \
+            --color B60205 \
+            --description "The nightly Pipelines run is failing" 2>/dev/null || true
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --label nightly-failure --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            echo "Issue #${open} is still open; not filing another."
+            exit 0
+          fi
+          body=$(printf '%s\n' \
+            "The scheduled \`Pipelines\` run failed." \
+            "" \
+            "Run: ${RUN_URL}" \
+            "" \
+            "Close this issue once the nightly is green again -- closing it is" \
+            "what re-arms the alert, and it will not be filed again while it" \
+            "stays open.")
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --label nightly-failure \
+            --title "Nightly Pipelines failed on $(date -u +%Y-%m-%d)" \
+            --body "$body"
