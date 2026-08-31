@@ -582,6 +582,15 @@ async function lookupNode(
  * would hand back whichever of them Firestore reached first. Four such pairs
  * were live when this was written, and matching one of them would have written
  * a person's parties onto an article.
+ *
+ * A merge is followed the same way the `korytaId` branch below follows one. A
+ * tombstone keeps the `name` and the `rejestrIo` that got it matched here - it
+ * has to, they are the record of what the page was - so with 171 of them
+ * stored, a lookup can perfectly well land on the page a merge took out of use
+ * while the survivor sits one document further down the same equality query.
+ * `limit(1)` does not choose between them and nothing orders the two, so
+ * without this a re-ingest writes the person's jobs onto the tombstone: hidden
+ * from every reader, and missing from the page that replaced it.
  */
 async function lookupNodeDoc(
   ctx: Context,
@@ -592,7 +601,16 @@ async function lookupNodeDoc(
   let query = ctx.db.collection("nodes").where(field, "==", value);
   if (type) query = query.where("type", "==", type);
   const snap = await query.limit(1).get();
-  return snap.empty ? undefined : snap.docs[0];
+  const doc = snap.docs[0];
+  if (!doc) return undefined;
+  if (!doc.data().merged_into) return doc;
+
+  const { snapshot } = await resolveMergedNode(ctx.db, doc.id);
+  if (!snapshot?.exists) return undefined;
+  // Type-checked on the way out for the same reason the `korytaId` branch does
+  // it: the survivor is a document this query never filtered.
+  if (type && snapshot.data()?.type !== type) return undefined;
+  return snapshot;
 }
 
 /** The person this payload is about, if the site already has them.

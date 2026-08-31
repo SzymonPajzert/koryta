@@ -167,7 +167,7 @@ describe("api/ingest/person", () => {
     const regionRef1 = { id: "region-id-02" };
     mockGet.mockResolvedValueOnce({
       empty: false,
-      docs: [{ ref: regionRef1, id: "region-id-02" }],
+      docs: [{ ref: regionRef1, id: "region-id-02", data: () => ({}) }],
     });
 
     // Edge 1 creation
@@ -245,7 +245,7 @@ describe("api/ingest/person", () => {
     });
     mockGet.mockResolvedValueOnce({
       empty: false,
-      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465" }],
+      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
     });
     const edgeRef = { id: "edge-id" };
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
@@ -301,7 +301,7 @@ describe("api/ingest/person", () => {
       });
       mockGet.mockResolvedValueOnce({
         empty: false,
-        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465" }],
+        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
       });
       mockGet.mockResolvedValueOnce({
         empty: stored.length === 0,
@@ -473,7 +473,7 @@ describe("api/ingest/person", () => {
       // The second election repeats the region lookup and the edge query.
       mockGet.mockResolvedValueOnce({
         empty: false,
-        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465" }],
+        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
       });
       mockGet.mockResolvedValueOnce({
         empty: false,
@@ -514,7 +514,7 @@ describe("api/ingest/person", () => {
       // Both rows read the region and the siblings for themselves.
       mockGet.mockResolvedValueOnce({
         empty: false,
-        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465" }],
+        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
       });
       mockGet.mockResolvedValueOnce({
         empty: false,
@@ -552,7 +552,9 @@ describe("api/ingest/person", () => {
       for (let row = 1; row < 3; row++) {
         mockGet.mockResolvedValueOnce({
           empty: false,
-          docs: [{ ref: { id: "teryt1465" }, id: "teryt1465" }],
+          docs: [
+            { ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) },
+          ],
         });
         mockGet.mockResolvedValueOnce({
           empty: false,
@@ -594,7 +596,7 @@ describe("api/ingest/person", () => {
       });
       mockGet.mockResolvedValueOnce({
         empty: false,
-        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465" }],
+        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
       });
       mockGet.mockResolvedValueOnce({
         empty: false,
@@ -636,7 +638,7 @@ describe("api/ingest/person", () => {
       });
       mockGet.mockResolvedValueOnce({
         empty: false,
-        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465" }],
+        docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
       });
       mockGet.mockResolvedValueOnce({
         empty: false,
@@ -906,7 +908,7 @@ describe("api/ingest/person, a candidacy the site cannot place", () => {
 
   const found = (id: string) => ({
     empty: false,
-    docs: [{ ref: { id }, id }],
+    docs: [{ ref: { id }, id, data: () => ({}) }],
   });
   const missing = { empty: true, docs: [] };
 
@@ -1218,6 +1220,51 @@ describe("api/ingest/person, one register entry is one human", () => {
       parties: [],
     };
     payload({ name: "Andrzej Golimont", korytaId: "duplicate" });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("survivor");
+  });
+
+  it("follows a merge reached through the register entry", async () => {
+    // The tombstone keeps the register entry it was matched on, and the
+    // equality query does not choose between the two pages that carry it. The
+    // survivor is the one to write to whichever comes back first.
+    nodes.duplicate = {
+      type: "person",
+      name: "TAIDA MUCHLA JASTRZĘBSKA",
+      rejestrIo: "3532381",
+      deleted: true,
+      merged_into: "survivor",
+    };
+    nodes.survivor = {
+      type: "person",
+      name: "Taida Muchla Jastrzębska",
+      rejestrIo: "3532381",
+      parties: [],
+    };
+    payload({ name: "Taida Muchla Jastrzębska", rejestrIo: "3532381" });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("survivor");
+  });
+
+  it("follows a merge reached through the name", async () => {
+    // The name the merge left on the tombstone is a spelling the pipeline still
+    // emits - `carriedFields` deliberately does not move it onto the survivor.
+    nodes.duplicate = {
+      type: "person",
+      name: "Andrzej Marcin Golimont",
+      deleted: true,
+      merged_into: "survivor",
+    };
+    nodes.survivor = {
+      type: "person",
+      name: "Andrzej Golimont",
+      parties: [],
+    };
+    payload({ name: "Andrzej Marcin Golimont" });
 
     const result = await handler({} as any);
 
