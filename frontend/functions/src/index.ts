@@ -170,7 +170,7 @@ export const scheduledFirestoreExport = onSchedule(
 
 export { onVoteWritten } from "./votes";
 export { onNoteWritten } from "./notes";
-export { onEdgeWritten } from "./edges";
+export { onEdgeWritten, sweepEdgeStats } from "./edges";
 export { onNodeWritten } from "./nodes";
 export { onRevisionWritten } from "./revisions";
 export { onFeedbackCreated } from "./feedback";
