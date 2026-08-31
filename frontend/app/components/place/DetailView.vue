@@ -105,6 +105,7 @@
           />
           <CardEmploymentHistory
             :edges="edges"
+            :company="company"
             :can-add="canAddRelations"
             :can-cite="canAddRelations"
             :can-correct="canEditRelations"

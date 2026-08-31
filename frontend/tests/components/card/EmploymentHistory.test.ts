@@ -77,6 +77,63 @@ describe("CardEmploymentHistory", () => {
   });
 });
 
+/** Whose organ names the seat. Both directions of the same rename, because
+ * the card is drawn on a person's page and on an institution's and reads the
+ * institution off a different end of the row in each. */
+describe("EmploymentHistory supervisory seats", () => {
+  /** A row as an institution's page draws it: the far end is the person. */
+  function seat(fields: Partial<EdgeNode> = {}): EdgeNode {
+    return edge({
+      label: "Rada Nadzorcza",
+      richNode: { id: "p1", type: "person", name: "Jan Kowalski" },
+      ...fields,
+    } as Partial<EdgeNode>);
+  }
+
+  it("names the hospital's own organ on the hospital's page", async () => {
+    // The stored edge says "Rada Nadzorcza" - rejestr.io reports every
+    // supervisory seat under that one label - and an SPZOZ has no such board.
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [seat()],
+        company: { supervisoryBody: "rada-spoleczna" } as never,
+      },
+    });
+
+    expect(wrapper.text()).toContain("Rada Społeczna");
+    expect(wrapper.text()).not.toContain("Rada Nadzorcza");
+  });
+
+  it("still reads the organ off the row on a person's page", async () => {
+    // No `company` prop here: the person's page has a different institution on
+    // every row, and each row carries its own.
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [
+          seat({
+            richNode: {
+              id: "h1",
+              type: "place",
+              name: "Szpital",
+              supervisoryBody: "rada-spoleczna",
+            },
+          } as Partial<EdgeNode>),
+        ],
+      },
+    });
+
+    expect(wrapper.text()).toContain("Rada Społeczna");
+  });
+
+  it("leaves a spółka's board alone", async () => {
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: { edges: [seat()], company: {} as never },
+    });
+
+    expect(wrapper.text()).toContain("Rada Nadzorcza");
+  });
+});
+
 /** The one-line hint that ties a row to the "Zmiany na stanowisku" section
  * below it: who sat in this seat before. */
 describe("EmploymentHistory predecessors", () => {

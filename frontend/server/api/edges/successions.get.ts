@@ -11,6 +11,7 @@ import {
   successionsAtCompany,
   type SuccessionSpell,
 } from "~~/shared/succession";
+import { displayRole } from "~~/shared/companyBodies";
 import type { H3Event } from "h3";
 
 /** One end of a handover, named. */
@@ -32,7 +33,9 @@ export type SuccessionSide = {
 export type Succession = {
   companyId: string;
   companyName: string;
-  /** As the register names it: "Zarząd", "Rada Nadzorcza". */
+  /** As the register names it - "Zarząd", "Rada Nadzorcza" - except that a
+   * supervisory seat is renamed to whatever this institution's organ is
+   * actually called. See `displayRole`. */
   role: string;
   /** The day the arriving spell began - what the change is filed under. */
   date: string | null;
@@ -253,7 +256,7 @@ async function companySuccessions(
     successions.push({
       companyId,
       companyName: company.name,
-      role: pair.joined.role ?? "",
+      role: displayRole(pair.joined.role, company) ?? "",
       date: pair.joined.start,
       gapDays: pair.gapDays,
       batchSize: sameDayPeers(pairs, pair),
@@ -275,7 +278,7 @@ async function companySuccessions(
       personId: spell.personId,
       personName: person.name,
       parties: person.parties ?? [],
-      role: spell.role,
+      role: displayRole(spell.role, company) ?? null,
       start: spell.start,
     });
   }
@@ -319,6 +322,11 @@ async function personSuccessions(
   for (const companyId of companyIds) {
     const company = nodes.get(companyId);
     if (!canName(company, showUnapproved)) continue;
+    // Narrowed rather than skipped: an `employed` edge pointing at anything
+    // but a place is malformed, and this person's post at it is still a post.
+    // All that is lost is the organ's real name, which such a node has not
+    // got anyway.
+    const place = company.type === "place" ? company : undefined;
 
     // Matched over the whole company, then read from this person's side. The
     // pairing has to see every spell at the company to be one-to-one; keeping
@@ -351,7 +359,7 @@ async function personSuccessions(
       posts.push({
         companyId,
         companyName: company.name,
-        role: theirs.role ?? "",
+        role: displayRole(theirs.role, place) ?? "",
         start: theirs.start,
         end: theirs.end,
         predecessor: mine === "joined" ? neighbour : null,
