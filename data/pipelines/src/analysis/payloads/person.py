@@ -298,6 +298,32 @@ def _party_member(value: typing.Any) -> str | None:
     return text
 
 
+def _elected(value: typing.Any) -> bool | None:
+    """Whether PKW recorded this candidacy as winning, or None if it did not say.
+
+    Spelled out rather than left to truthiness, because every shortcut here
+    fails in the same direction - towards calling somebody a winner. The merged
+    column is a VARCHAR holding ``"TRUE"`` or ``"FALSE"`` (`headers.py` writes
+    it through ``parse_yes_no``), and ``"FALSE"`` is a non-empty string, so
+    ``if value`` reads a recorded loss as a win. A jsonl round trip through
+    pandas turns a missing value into a float NaN, which is truthy too.
+
+    A value nobody recognises is None rather than False, for the reason the
+    field is tri-state at all: not knowing is not the same as losing.
+    """
+    if value is None or isinstance(value, float) and math.isnan(value):
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().upper()
+    if text in {"TRUE", "T", "1"}:
+        return True
+    if text in {"FALSE", "F", "0"}:
+        return False
+    return None
+
+
+
 def _extract_elections(row: pd.Series) -> list[Election]:
     elections = []
     elec_list = row.get("elections")
@@ -313,6 +339,7 @@ def _extract_elections(row: pd.Series) -> list[Election]:
                     party=party_of_candidacy(committee),
                     party_from_committee=bool(parties_of_committee(committee)),
                     party_member=_party_member(e.get("party_member")),
+                    elected=_elected(e.get("candidacy_success")),
                 )
                 if e.get("election_year"):
                     election_payload.election_year = str(e.get("election_year"))

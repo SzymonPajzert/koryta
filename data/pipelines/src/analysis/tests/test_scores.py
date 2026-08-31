@@ -271,6 +271,64 @@ class TestPopulation:
 
         assert result.shortlist == []
 
+    def test_a_candidacy_carries_the_contest_and_the_result(self):
+        result = self.build(
+            [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}],
+            payload_rows=[
+                {
+                    "name": "Anna",
+                    "companies": [{"krs": "1"}],
+                    "elections": [
+                        {
+                            "election_year": "2024",
+                            "teryt": "1465",
+                            "party": "PiS",
+                            "committee": "KW Prawo i Sprawiedliwość",
+                            "election_type": "samorządu",
+                            "elected": True,
+                        }
+                    ],
+                }
+            ],
+        )
+
+        candidacy = result.candidacies["Anna"][0]
+        assert candidacy.election_type == "samorządu"
+        assert candidacy.elected is True
+
+    def test_a_result_nobody_recorded_survives_the_jsonl_round_trip(self):
+        """A payload read back from disk says None, not True.
+
+        `elections` comes back from jsonl with its missing values as float NaN
+        - the reason `iter_dicts` exists - and NaN is truthy. Left to `bool()`
+        this would tell every model that everybody the register is silent about
+        won their seat, which is most of the register and all of it before
+        2010.
+        """
+        result = self.build(
+            [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}],
+            payload_rows=[
+                {
+                    "name": "Anna",
+                    "companies": [{"krs": "1"}],
+                    "elections": [
+                        {
+                            "election_year": "1998",
+                            "teryt": "1465",
+                            "party": None,
+                            "committee": None,
+                            "election_type": float("nan"),
+                            "elected": float("nan"),
+                        }
+                    ],
+                }
+            ],
+        )
+
+        candidacy = result.candidacies["Anna"][0]
+        assert candidacy.elected is None
+        assert candidacy.election_type is None
+
 
 class TestPersonKey:
     """Which payload row is which koryta node."""

@@ -136,6 +136,21 @@ def iter_dicts(value: typing.Any) -> typing.Iterator[dict]:
             yield item
 
 
+def _flag(value: typing.Any) -> bool | None:
+    """A tri-state payload flag, surviving the round trip through pandas.
+
+    The same reason `iter_dicts` exists: a field that is None in the payload
+    comes back from jsonl as a float NaN, and NaN is truthy. `bool(NaN)` is
+    True, so a model asking "did this person win" would be told yes about
+    everybody the register is silent on.
+    """
+    if isinstance(value, bool):
+        return value
+    if value is None or isinstance(value, float):
+        return None
+    return bool(value)
+
+
 def _text(value: typing.Any) -> str | None:
     """A payload string, with pandas' NaN read back as the absence it was.
 
@@ -168,6 +183,16 @@ class Candidacy:
     #: it asked. A different claim from `party`, which is read off the
     #: committee - see `entities.composite.Election`.
     party_member: str | None = None
+    #: Which contest this was - a sejmik seat and a gmina council seat in one
+    #: year are two of them. Written onto every payload row by
+    #: `payloads.person.map_person_payload` since elections were first
+    #: uploaded, and read here for the first time.
+    election_type: str | None = None
+    #: Whether PKW recorded the candidacy as winning, or None where it said
+    #: nothing - which is most of the register and all of it before 2010. See
+    #: `entities.composite.Election.elected`: None is not a loss, and a model
+    #: reading it as one would file every pre-2010 politician as defeated.
+    elected: bool | None = None
 
 
 @dataclasses.dataclass
@@ -424,6 +449,8 @@ class PeopleScoreModel(Pipeline):
                     party=election.get("party"),
                     committee=election.get("committee"),
                     party_member=_text(election.get("party_member")),
+                    election_type=_text(election.get("election_type")),
+                    elected=_flag(election.get("elected")),
                 )
                 for election in iter_dicts(row.get("elections"))
             ]

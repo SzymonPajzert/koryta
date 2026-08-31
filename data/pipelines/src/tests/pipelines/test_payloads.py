@@ -139,6 +139,73 @@ def test_election_without_a_committee_sends_none(mock_ctx):
     assert elections[0].committee is None
 
 
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        ("TRUE", True),
+        ("FALSE", False),
+        (True, True),
+        (False, False),
+        (None, None),
+        (float("nan"), None),
+        ("", None),
+        ("Tak", None),
+    ],
+)
+def test_a_candidacy_carries_whether_it_won(stored, expected, mock_ctx):
+    """`candidacy_success` reaches the payload, and a loss is not a win.
+
+    Every case here is one the shortcut gets wrong. `parse_yes_no` stores the
+    flag as the *string* "TRUE" or "FALSE", so truthiness reads a recorded
+    defeat as a victory; a payload read back from jsonl turns a missing value
+    into a float NaN, which is truthy as well. Both have to come out as what
+    PKW actually said, and "it said nothing" has to stay distinct from "it said
+    no" - the register is silent for three quarters of its rows and all of them
+    before 2010.
+    """
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "election_type": "samorządu",
+                    "party": "KW Testowy",
+                    "election_year": 2024,
+                    "teryt_powiat": ["1465"],
+                    "candidacy_success": stored,
+                }
+            ]
+        }
+    )
+
+    elections = _extract_elections(row)
+
+    assert len(elections) == 1
+    assert elections[0].elected is expected
+
+
+def test_a_candidacy_nobody_recorded_a_result_for_says_nothing(mock_ctx):
+    """A row with no `candidacy_success` key at all is silent, not a loss.
+
+    The column is absent from whole elections rather than blank within them -
+    1994, 1998, 2006 and 2014 record no result for anybody - so this is the
+    ordinary case, not an edge one.
+    """
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "election_type": "samorządu",
+                    "party": "KW Testowy",
+                    "election_year": 1998,
+                    "teryt_powiat": ["1465"],
+                }
+            ]
+        }
+    )
+
+    assert _extract_elections(row)[0].elected is None
+
+
 def test_upload_payloads_region_shape(mock_ctx):
     pipeline = Pipeline.create(RegionPayloads)
 

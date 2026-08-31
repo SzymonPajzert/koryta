@@ -55,6 +55,18 @@ class Election:
     #: Absent means PKW published no answer for that election - which is most
     #: of them, and is not the same as answering "no party".
     party_member: str | None = None
+    # Whether PKW recorded this candidacy as winning the mandate. Tri-state,
+    # and the third state is the whole difficulty: PKW says nothing for 74.5%
+    # of its rows, which is not a loss. Ten (type, year) blocks are complete -
+    # samorzadu 2010 and 2024, sejmu and senatu 2011/2019/2023, europarlamentu
+    # 2019/2024 - samorzadu 2002 and 2018 are about 4%, and everything else is
+    # silent. Reading a missing value as False would file every politician who
+    # stood before 2010 as having lost.
+    #
+    # The value has been carried this far since `people_pkw_merged` first
+    # selected `candidacy_success` into the elections struct; it stopped here,
+    # because nothing read it off the row.
+    elected: bool | None = None
 
 
 @dataclass
