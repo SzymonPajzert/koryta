@@ -308,4 +308,3 @@ watch(nodeGroupPicked, (value) => {
   transform: rotate(0deg) !important;
 }
 </style>
-
