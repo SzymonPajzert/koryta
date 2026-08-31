@@ -36,7 +36,21 @@ _GCS_POOL_SIZE = 256  # generous cap; pool is lazy so unused slots cost nothing
 
 
 def _make_gcs_client() -> storage.Client:
-    credentials, project = google.auth.default()
+    # Scopes have to be named here. Passing `credentials=` and `_http=` to
+    # storage.Client skips the with_scopes_if_required() it would otherwise do
+    # for itself, so whatever google.auth.default() returns is what gets used.
+    #
+    # Unscoped is harmless for a service-account key or a gcloud user login --
+    # neither needs a scope to mint a token, which is why this only ever broke
+    # on CI. Under Workload Identity Federation the credentials are impersonated,
+    # and google-auth sends the scopes as the `scope` field of the
+    # generateAccessToken body; empty, IAM rejects the call as
+    #
+    #   RefreshError: ('Unable to acquire impersonated credentials',
+    #     {"code": 400, "message": "Request contains an invalid argument."})
+    #
+    # which is what every nightly run did from the first one on 2026-07-31.
+    credentials, project = google.auth.default(scopes=storage.Client.SCOPE)
     session = google.auth.transport.requests.AuthorizedSession(credentials)
     adapter = requests.adapters.HTTPAdapter(
         pool_connections=_GCS_POOL_SIZE, pool_maxsize=_GCS_POOL_SIZE

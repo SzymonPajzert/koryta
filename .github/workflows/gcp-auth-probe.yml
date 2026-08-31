@@ -72,8 +72,11 @@ jobs:
       - name: gcloud, same credentials
         continue-on-error: true
         run: |
-          gcloud auth list
-          gcloud storage ls gs://koryta-pl-crawled --limit 3
+          # `gcloud auth list` reads gcloud's own credential store, which
+          # ADC is not part of -- it says "No credentialed accounts" even when
+          # the calls below work. Not a signal either way.
+          gcloud storage ls gs://koryta-pl-crawled > /tmp/ls.txt
+          head -3 /tmp/ls.txt
 
       # google-auth builds the generateAccessToken body as
       #   {"delegates": [], "scope": <scopes>, "lifetime": "<n>s"}
