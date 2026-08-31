@@ -73,6 +73,33 @@ describe("fetchNodes", () => {
     expect(mockWhere).toHaveBeenCalledWith("type", "==", "person");
   });
 
+  it("leaves a page that was merged away out of the list", async () => {
+    // The tombstone is still a document - that is what makes its url resolve -
+    // but it is not an entity any more, and this cache is what the edit form's
+    // picker and the category lookups in nodeFilters.ts read.
+    mockGet.mockResolvedValue({
+      docs: [
+        {
+          id: "survivor",
+          data: () => ({ type: "person", name: "Andrzej Golimont" }),
+        },
+        {
+          id: "duplicate",
+          data: () => ({
+            type: "person",
+            name: "Andrzej Marcin Golimont",
+            deleted: true,
+            merged_into: "survivor",
+          }),
+        },
+      ],
+    });
+
+    const nodes = await fetchNodes("person", { bypassCache: true });
+
+    expect(Object.keys(nodes)).toEqual(["survivor"]);
+  });
+
   it("should filter by single party", async () => {
     await fetchNodes("person", { personParties: "PiS", bypassCache: true });
     expect(mockFilterWhere).toHaveBeenCalledWith(

@@ -125,7 +125,16 @@ const _cachedFetchNodes = defineCachedFunction(
     }
 
     const nodes = await query.get();
-    const nodesData = nodes.docs.map(parseNodeDoc);
+    const nodesData = nodes.docs
+      // A page merged away is still a document, so that its url resolves - see
+      // server/utils/merge.ts. It is not still an entity: leaving it in here
+      // offered it in the edit form's picker under the old name and counted it
+      // in the category and region lookups nodeFilters.ts builds from this
+      // cache. Filtered after the query because `deleted` is absent on a live
+      // node, which no Firestore predicate can ask about; this path already
+      // reads the whole collection, so it costs nothing.
+      .filter((doc) => doc.data().deleted !== true)
+      .map(parseNodeDoc);
 
     return Object.fromEntries(nodesData.map((node) => [node.id, node]));
   },

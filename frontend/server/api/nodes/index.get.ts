@@ -245,6 +245,26 @@ export default defineEventHandler(async (event) => {
       nodesArray = op.applyMem(nodesArray);
     }
 
+    // A page merged away keeps its document - `deleted: true`, `merged_into`,
+    // see server/utils/merge.ts - so its url still resolves and the votes and
+    // revisions filed against it still hang off something. `pageIsPublic` takes
+    // it off the public site, and that was assumed to be enough; it is not.
+    // `visibility=private` means `stats.isApproved == false`, which is exactly
+    // the bucket a tombstone falls into, so to a logged-in editor all 171
+    // people merged on 2026-08-31 were still rows in /eksploruj/tabela.
+    //
+    // In memory rather than in the query because Firestore cannot express it:
+    // `deleted` is absent on the other 15,597 nodes, so neither `== false` nor
+    // `!= true` matches them, and a mem-only op here would push the sort and
+    // every structural filter out of their indexes - reading all 8,277
+    // unpublished people to serve a page of ten. The price is that when the
+    // query did run indexed, the page can come back a row short and `total`
+    // still counts the tombstones. That is 171 in 8,277, which is the cheaper
+    // of the two errors by a wide margin.
+    nodesArray = nodesArray.filter(
+      (node) => (node as { deleted?: boolean }).deleted !== true,
+    );
+
     if (memOps.length > 0) {
       total = nodesArray.length;
       const page = query.page || 1;
