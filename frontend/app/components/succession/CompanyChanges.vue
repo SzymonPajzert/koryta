@@ -338,8 +338,13 @@ const props = defineProps<{ companyId: string; companyName: string }>();
 /** The two roles the register fills at almost every company, in the order a
  * reader looks for them. Everything else - prokurent, likwidator, a role
  * somebody typed by hand - sorts alphabetically after them. Matched on the
- * lowercased name, the way `shared/succession.ts` matches a seat. */
-const ROLE_ORDER = ["zarząd", "rada nadzorcza"];
+ * lowercased name, the way `shared/succession.ts` matches a seat.
+ *
+ * Three entries for two roles: the supervisory organ reaches this card under
+ * whichever name the institution's own form gives it (`displayRole`, applied
+ * by `/api/edges/successions`), and a hospital's rada społeczna belongs in the
+ * same place a spółka's rada nadzorcza does. No company has both. */
+const ROLE_ORDER = ["zarząd", "rada nadzorcza", "rada społeczna"];
 
 /** What a role with no name is called on screen. The pairing drops spells
  * whose role nobody recorded, so this only ever labels a current post. */

@@ -216,6 +216,13 @@ const props = defineProps<{
   /** Whether each row offers taking the relation off the graph outright, which
    * is an administrator's decision and nobody else's. */
   canRemove?: boolean;
+  /** The institution this list belongs to, on the page that *is* one.
+   *
+   * A person's page has a different company on every row and reads it off the
+   * row itself; a company's page has one, and its rows hold the people. Only
+   * the second case needs telling, which is why this is optional - see
+   * `roleOwner`. */
+  company?: Company;
   /** Who held each seat before, keyed by the edge id of the spell that took it
    * over. Optional because most callers of this card do not ask
    * `/api/edges/successions` at all - and because the successions of a company
@@ -260,6 +267,17 @@ const maxEnd = computed(() => {
   return new Date().toISOString().split("T")[0];
 });
 
+/** Whose organ decides what a row's role is called.
+ *
+ * The row holds one end of the relation and the page holds the other, so which
+ * of the two is the institution depends on whose page this is. `asCompany`
+ * answers it for a person's rows; `company` is a company page telling this card
+ * about itself, because there the far end is a person and the row alone cannot
+ * say. */
+function roleOwner(edge: EdgeNode): Company | undefined {
+  return asCompany(edge) ?? props.company;
+}
+
 /** What the row calls the relation.
  *
  * `edge.label` is the edge's own name, which for a supervisory seat is
@@ -268,7 +286,7 @@ const maxEnd = computed(() => {
  * have. See `displayRole`.
  */
 function edgeLabel(edge: EdgeNode) {
-  return displayRole(edge.label, asCompany(edge)) ?? edge.label;
+  return displayRole(edge.label, roleOwner(edge)) ?? edge.label;
 }
 
 /** The party a candidacy was run for, on the edges that assert one.
