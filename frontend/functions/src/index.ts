@@ -157,6 +157,13 @@ export const scheduledFirestoreExport = onSchedule(
           "votes",
           "extractions",
           "feedback",
+          // The record of what an administrator decided, and the only one:
+          // approval is otherwise written onto the revision as `review_user`,
+          // which holds the latest verdict and not the history, and
+          // publication is written nowhere else at all. Left out of this list
+          // when the collection shipped, so `tests/pipelines/test_audit.py`
+          // has been reading an empty list and passing vacuously ever since.
+          "audit",
         ],
       });
 
