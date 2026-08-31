@@ -6,6 +6,9 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 import { generateChunksLower } from "../shared/search";
+import { computeEdgeStats } from "../shared/stats";
+import { bodyIsPaidPost } from "../shared/companyBodies";
+import type { Edge } from "../shared/model";
 
 import nodes from "./nodes.json";
 import edges from "./edges.json";
@@ -61,6 +64,57 @@ function defaultPublished(
   return data;
 }
 
+/**
+ * `stats.edges` for every node the seeded edges start from, computed here for
+ * the same reason `nameChunksLower` is: with the function the real thing uses.
+ *
+ * `onEdgeWritten` no longer writes this field inline - it marks the node dirty
+ * and `sweepEdgeStats` does the work - and the emulator does not run scheduled
+ * functions, so nothing would ever fill it in locally. The explore table's
+ * filters query `stats.edges.*.currentlyEmployed` and
+ * `stats.edges.*.latestEmploymentStart` (`server/utils/nodeFilters.ts`), and
+ * Firestore's orderBy drops documents that lack the field, so without this the
+ * table comes up empty.
+ */
+function edgeStatsBySource(
+  nodesById: Record<string, Record<string, unknown>>,
+  allEdges: Record<string, unknown>[],
+): Record<string, ReturnType<typeof computeEdgeStats>> {
+  const publicPlaceIds = new Set<string>();
+  const unpaidSeatPlaceIds = new Set<string>();
+  for (const [id, node] of Object.entries(nodesById)) {
+    if (node.type !== "place") continue;
+    if (node.isPublic === true) publicPlaceIds.add(id);
+    if (!bodyIsPaidPost(node.supervisoryBody as string | undefined)) {
+      unpaidSeatPlaceIds.add(id);
+    }
+  }
+
+  // Keyed by target across the whole fixture rather than per source node, which
+  // is the same thing to `computeEdgeStats` - it only ever looks up the targets
+  // of the edges it was handed.
+  const transitiveTargets: Record<string, string[]> = {};
+  for (const edge of allEdges) {
+    const { source, target, type } = edge as unknown as Edge;
+    if (type !== "owns" && type !== "seat") continue;
+    if (!source || !target) continue;
+    (transitiveTargets[target] ??= []).push(source);
+  }
+
+  const bySource: Record<string, ReturnType<typeof computeEdgeStats>> = {};
+  for (const source of new Set(
+    allEdges.map((e) => e.source as string).filter(Boolean),
+  )) {
+    bySource[source] = computeEdgeStats(
+      allEdges.filter((e) => e.source === source) as unknown as Edge[],
+      publicPlaceIds,
+      transitiveTargets,
+      unpaidSeatPlaceIds,
+    );
+  }
+  return bySource;
+}
+
 async function seedDatabase() {
   await waitOn({
     resources: ["tcp:127.0.0.1:8080"],
@@ -99,6 +153,14 @@ async function seedDatabase() {
 
   const batch = db.batch();
 
+  const seededEdges = edges.map((edge) =>
+    defaultPublished({ ...edge } as Record<string, unknown>),
+  );
+  const edgeStatsBySourceId = edgeStatsBySource(
+    nodes as unknown as Record<string, Record<string, unknown>>,
+    seededEdges,
+  );
+
   for (const [id, node] of Object.entries(nodes)) {
     const nodeData = { ...node } as Record<string, unknown>;
     if (!nodeData.stats) nodeData.stats = {};
@@ -122,13 +184,16 @@ async function seedDatabase() {
     if (typeof nodeData.publishedDate === "string") {
       nodeData.publishedDate = new Date(nodeData.publishedDate);
     }
+    const seededEdgeStats = edgeStatsBySourceId[id];
+    if (seededEdgeStats) {
+      stats.edges = seededEdgeStats;
+    }
     defaultPublished(nodeData);
     const ref = db.collection("nodes").doc(id);
     batch.set(ref, nodeData);
   }
 
-  for (const edge of edges) {
-    const edgeData = defaultPublished({ ...edge } as Record<string, unknown>);
+  for (const edgeData of seededEdges) {
     const ref = db.collection("edges").doc();
     batch.set(ref, edgeData);
   }
