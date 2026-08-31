@@ -4,7 +4,14 @@ import type { TraversePolicy } from "~~/shared/graph/model";
 export type EdgeNode = {
   richNode: Node;
   type: EdgeType;
+  /** What the row prints, which for a relation with no name of its own is the
+   * edge type's Polish phrase - "Zatrudniony/a w" rather than a job title. */
   label: string;
+  /** The relation's own name, as stored: the job title, the election. Distinct
+   * from `label` above, which stands in for it when it is empty - anything
+   * offering the value back for editing wants this one, or it would store the
+   * fallback phrase as a real job title on the first save. */
+  name?: string;
   source: string;
   target: string;
   id?: string;

@@ -245,7 +245,7 @@ describe("EmploymentHistory sources", () => {
         components: { PartyChip, ChipPublicCompany, ChipRelativeDuration },
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      props: { edges: [candidacy()] as any, canEdit: true },
+      props: { edges: [candidacy()] as any, canCite: true },
     });
 
     expect(sourcesButton(wrapper).exists()).toBe(true);

@@ -1,6 +1,7 @@
 import type {
   Article,
   Company,
+  Edge,
   ElectionPosition,
   Person,
   Topic,
@@ -120,6 +121,25 @@ export type EmploymentRequest = {
   end?: string;
 };
 
+/** The offices a candidacy can be for, as a tuple, for `z.enum`.
+ *
+ * `shared/misc.ts` has the same list as an array for the dropdowns to iterate;
+ * zod needs a tuple of literals, and `satisfies` is what keeps the two from
+ * drifting apart - a position added there and not here stops typechecking. */
+const electionPositionValues = [
+  "Samorząd",
+  "Sejmik",
+  "Rada miasta",
+  "Rada gminy",
+  "Rada powiatu",
+  "Burmistrz",
+  "Wójt",
+  "Prezydent",
+  "Sejm",
+  "Senat",
+  "Parlament Europejski",
+] as const satisfies readonly ElectionPosition[];
+
 const electionRequestSchema = z.object({
   party: z.string().optional(),
   /** The electoral committee, as the scrapers read it off the PKW listing
@@ -141,19 +161,7 @@ const electionRequestSchema = z.object({
    * stays empty because a joint list names no single party. */
   party_from_committee: z.boolean().optional(),
   election_year: z.string().optional(),
-  election_type: z.enum([
-    "Samorząd",
-    "Sejmik",
-    "Rada miasta",
-    "Rada gminy",
-    "Rada powiatu",
-    "Burmistrz",
-    "Wójt",
-    "Prezydent",
-    "Sejm",
-    "Senat",
-    "Parlament Europejski",
-  ]),
+  election_type: z.enum(electionPositionValues),
   teryt: z.string().optional(),
 });
 
@@ -400,3 +408,59 @@ export const removalSchema = z.object({
   deleted: z.literal(true),
   delete_reason: z.string().trim().min(1, "Powód usunięcia jest wymagany"),
 });
+
+/** A date on a relation, as loosely as the register writes them.
+ *
+ * KRS gives a full day, PKW an election year, and a note off a press cutting
+ * often only a month - so all three lengths are accepted and stored as typed.
+ * The empty string is how the form clears a date that turned out to be wrong,
+ * which is why this is not `.min(1)`.
+ */
+const relationDate = z
+  .string()
+  .trim()
+  .refine((value) => !value || /^\d{4}(-\d{2}(-\d{2})?)?$/.test(value), {
+    message: "Format daty to RRRR, RRRR-MM albo RRRR-MM-DD",
+  })
+  .optional();
+
+/** Fields a person may change on an existing relation, on the same allowlist
+ * terms as `personEditSchema`: anything not named here is stripped by zod, so a
+ * caller cannot smuggle `published` or `revision_id` into the write.
+ *
+ * `source`, `target` and `type` are deliberately absent. They are what the
+ * relation *is* rather than what it says - moving either end turns a wrong
+ * claim into a different claim, and the honest version of that is removing this
+ * relation and adding the right one, each with its own record. `references` is
+ * absent for a different reason: relations are cited through
+ * `/api/edges/[id]/references`, which knows how to make an article node out of
+ * a bare url.
+ */
+export const edgeEditSchema = z.object({
+  name: z.string().optional(),
+  content: z.string().optional(),
+  start_date: relationDate,
+  end_date: relationDate,
+  party: z.string().optional(),
+  committee: z.string().optional(),
+  position: z.enum(electionPositionValues).optional(),
+  term: z.string().optional(),
+  elected: z.boolean().optional(),
+  by_election: z.boolean().optional(),
+}) satisfies z.ZodType<
+  Pick<
+    Edge,
+    | "name"
+    | "content"
+    | "start_date"
+    | "end_date"
+    | "party"
+    | "committee"
+    | "position"
+    | "term"
+    | "elected"
+    | "by_election"
+  >
+>;
+
+export type EdgeEditRequest = z.infer<typeof edgeEditSchema>;

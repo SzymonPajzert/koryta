@@ -114,7 +114,7 @@
                  end, so this stops the click rather than letting it navigate
                  away from the relation it is about. -->
             <v-btn
-              v-if="edge.id && (sourceCount(edge) > 0 || canEdit)"
+              v-if="edge.id && (sourceCount(edge) > 0 || canCite)"
               variant="text"
               size="small"
               class="px-1"
@@ -139,6 +139,24 @@
                 {{ sourceCount(edge) }}
               </span>
             </v-btn>
+            <!-- Correcting what the row says. Between the sources and the
+                 bin because that is the order of how much a mistake costs -
+                 cite it, fix it, remove it - and because this is the control
+                 the row is most often clicked for: a job title read off the
+                 register is right about the company and wrong about the job
+                 more often than it is wrong about either end. Stops the click
+                 like its neighbours; the row is a link to the other end. -->
+            <v-btn
+              v-if="edge.id && canCorrect"
+              variant="text"
+              size="small"
+              class="px-1"
+              color="ink-warning"
+              title="Popraw powiązanie"
+              :icon="mdiPencilOutline"
+              :data-testid="`edge-edit-${edge.id}`"
+              @click.stop.prevent="emit('edit', edge)"
+            />
             <!-- Admins only, and last in the row: this is the one control here
                  that takes something away. Stops the click for the same reason
                  the sources button does - the row is a link to the other end. -->
@@ -165,6 +183,7 @@ import {
   mdiArrowUp,
   mdiFileDocumentMultipleOutline,
   mdiFileDocumentPlusOutline,
+  mdiPencilOutline,
   mdiPlus,
   mdiTrashCanOutline,
 } from "@mdi/js";
@@ -185,8 +204,15 @@ const props = defineProps<{
   /** Whether this section offers adding a relation. */
   canAdd?: boolean;
   /** Whether each row offers citing the relation to an article. A reader who
-   * cannot edit still sees the count on the relations that have one. */
-  canEdit?: boolean;
+   * cannot cite still sees the count on the relations that have one. Separate
+   * from `canCorrect` because not every host mounts the sources dialog - the
+   * drawer does not - and a button that emits into nothing is worse than no
+   * button. */
+  canCite?: boolean;
+  /** Whether each row offers correcting what the relation says. Open to anyone
+   * signed in: `/api/edges/update` files a contributor's version as a proposal
+   * rather than applying it. */
+  canCorrect?: boolean;
   /** Whether each row offers taking the relation off the graph outright, which
    * is an administrator's decision and nobody else's. */
   canRemove?: boolean;
@@ -203,6 +229,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   add: [];
   sources: [edge: EdgeNode];
+  edit: [edge: EdgeNode];
   remove: [edge: EdgeNode];
 }>();
 

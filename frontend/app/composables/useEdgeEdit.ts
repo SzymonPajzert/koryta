@@ -116,17 +116,35 @@ export function useEdgeEdit({
   async function processEdge() {
     if (!readyToSubmit.value || saving.value) return;
 
-    // Editing an existing edge would need an endpoint that revises one, and
-    // there is none: /api/edges/create only ever writes a new document, so
-    // submitting here would silently duplicate the edge instead.
-    if (editedEdge) {
-      error.value = "Edycja istniejących powiązań nie jest jeszcze możliwa.";
-      return;
-    }
-
     error.value = null;
     saving.value = true;
     try {
+      // An edit revises the document that is already there rather than writing
+      // a second one - /api/edges/create only ever adds, so posting there would
+      // silently duplicate the relation. What may change is what the relation
+      // says; its two ends and its type are fixed, which is why the pickers
+      // above are read-only in this mode.
+      if (editedEdge) {
+        await authRequest<{ id: string }>("/api/edges/update", {
+          method: "POST",
+          body: {
+            edge_id: editedEdge,
+            name: newEdge.value.name,
+            content: newEdge.value.content,
+            start_date: newEdge.value.start_date,
+            end_date: newEdge.value.end_date,
+            party: newEdge.value.party,
+            committee: newEdge.value.committee,
+            position: newEdge.value.position,
+            elected: newEdge.value.elected,
+            term: newEdge.value.term,
+            by_election: newEdge.value.by_election,
+          },
+        });
+        await onUpdate();
+        return;
+      }
+
       const reference = referenceNode?.ref.value?.id;
       await authRequest<{ id: string }>("/api/edges/create", {
         method: "POST",

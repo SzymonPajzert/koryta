@@ -101,10 +101,12 @@
           <CardEmploymentHistory
             :edges="edges"
             :can-add="canAddRelations"
-            :can-edit="canAddRelations"
+            :can-cite="canAddRelations"
+            :can-correct="canEditRelations"
             :can-remove="canRemoveRelations"
             @add="openAdd(['employed'], 'Dodaj osobę pracującą tutaj')"
             @sources="openSources"
+            @edit="openEdit"
             @remove="openRemove"
           />
         </div>
@@ -150,6 +152,15 @@
           @changed="refreshEdges()"
         />
 
+        <DialogEditRelationHost
+          v-model="editOpen"
+          v-model:outcome="editedOutcome"
+          :edge="editEdge"
+          :label="editLabel"
+          :can-apply="canApplyEdits"
+          @saved="onEdgeEdited"
+        />
+
         <DialogRemoveEdgeHost
           v-model="removeOpen"
           v-model:shown="removedShown"
@@ -192,6 +203,7 @@ import { useDisplay } from "vuetify";
 import { useEdges, type EdgeNode } from "~/composables/edges";
 import { edgeSentence } from "~/utils/edgeSentence";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
+import { useEdgeEditing } from "~/composables/edgeEditing";
 import {
   entityDescription,
   entityOgType,
@@ -340,6 +352,23 @@ const {
   openRemove,
   onEdgeRemoved,
 } = useEdgeRemoval({
+  subjectName: () => company.value?.name,
+  refresh: refreshEdges,
+});
+
+/** Correcting one, on the same terms as on a person's page - a job title read
+ * off the register is as wrong here as it is there, and this is the page whose
+ * reader knows the board. */
+const {
+  canEdit: canEditRelations,
+  canApply: canApplyEdits,
+  editOpen,
+  editEdge,
+  editedOutcome,
+  editLabel,
+  openEdit,
+  onEdgeEdited,
+} = useEdgeEditing({
   subjectName: () => company.value?.name,
   refresh: refreshEdges,
 });

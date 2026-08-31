@@ -29,39 +29,77 @@ import type { VoteCategory, VoteDocument } from "~~/shared/model";
  */
 export const voteCategoryConfig: Record<
   VoteCategory,
-  { text: string; icon: string; color: string; downColor: string }
+  {
+    text: string;
+    icon: string;
+    color: string;
+    downColor: string;
+    /** What clicking the arrows actually asserts, in one sentence, in the first
+     * person.
+     *
+     * The ladder below says how strong a verdict is; this says what the verdict
+     * is *about*, and it is the half that was missing. An alpha tester working
+     * through /eksploruj/nowe put it plainly: the scale reads perfectly well as
+     * -5 to +5 and never says what makes a person „interesująca”, so the arrows
+     * get clicked as a rating of the page - is this entry any good - rather
+     * than as the judgement about the person that the queue is ordered by.
+     *
+     * Required on every category rather than only on the one that was
+     * complained about, because a category whose meaning cannot be said in a
+     * sentence is one nobody can vote on honestly. */
+    meaning: string;
+  }
 > = {
   interesting: {
     text: "Dobre znalezisko",
     icon: mdiLightbulbOutline,
     color: "ink-success",
     downColor: "ink-danger",
+    meaning:
+      "W górę: moim zdaniem ta osoba powinna być oznaczona jako koryciarz - " +
+      "ma posadę w spółce albo instytucji publicznej i polityczne powiązanie, " +
+      "które ją tłumaczy. W dół: moim zdaniem nie powinna.",
   },
   quality: {
     text: "Znaleziony problem",
     icon: mdiAlertCircleOutline,
     color: "ink-danger",
     downColor: "ink-success",
+    meaning:
+      "W górę: coś się tu nie zgadza z danymi. W dół: sprawdziłem/am i jest w " +
+      "porządku.",
   },
   correct: {
     text: "Poprawny fakt",
     icon: mdiCheckCircleOutline,
     color: "ink-success",
     downColor: "ink-danger",
+    meaning:
+      "W górę: ten fakt zgadza się ze źródłem. W dół: źródło mówi co innego.",
   },
   insufficient: {
     text: "Za mało informacji",
     icon: mdiHelpCircleOutline,
     color: "ink-warning",
     downColor: "ink-warning",
+    meaning:
+      "W górę: nie da się tego ocenić bez dodatkowych informacji, których tu " +
+      "nie ma.",
   },
   wrongPerson: {
     text: "To nie ta osoba",
     icon: mdiAccountAlertOutline,
     color: "ink-warning",
     downColor: "ink-warning",
+    meaning: "W górę: to imiennik - fakt dotyczy kogoś innego o tym nazwisku.",
   },
 };
+
+/** What a vote in this category asserts, for any surface that has to say so
+ * before the reader has clicked anything. */
+export function voteMeaning(category: VoteCategory): string {
+  return voteCategoryConfig[category].meaning;
+}
 
 /** What each step of the -5..5 scale is meant to say.
  *

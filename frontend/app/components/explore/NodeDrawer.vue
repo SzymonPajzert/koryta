@@ -82,8 +82,19 @@
       <v-divider class="my-4" />
       <CardEmploymentHistory
         :edges="edges"
+        :can-correct="canEditRelations"
         :can-remove="canRemoveRelations"
+        @edit="openEdit"
         @remove="openRemove"
+      />
+
+      <DialogEditRelationHost
+        v-model="editOpen"
+        v-model:outcome="editedOutcome"
+        :edge="editEdge"
+        :label="editLabel"
+        :can-apply="canApplyEdits"
+        @saved="onEdgeEdited"
       />
 
       <DialogRemoveEdgeHost
@@ -107,6 +118,7 @@ import type { NodeMaybeRich, PersonRich } from "~~/shared/model";
 import type { PlaceRegion } from "~/utils/companyLocation";
 import { usePersonPlaces } from "~/composables/personPlaces";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
+import { useEdgeEditing } from "~/composables/edgeEditing";
 
 const props = withDefaults(
   defineProps<{
@@ -136,9 +148,9 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  /** An admin took one of `edges` off the graph. The drawer does not own the
-   * fetch - `edges` is the caller's - so the caller re-reads it. */
-  removed: [];
+  /** One of `edges` was corrected or taken off the graph. The drawer does not
+   * own the fetch - `edges` is the caller's - so the caller re-reads it. */
+  changed: [];
 }>();
 
 /** Removing a relation from the drawer, which is how /eksploruj/tabela and
@@ -154,7 +166,24 @@ const {
   onEdgeRemoved,
 } = useEdgeRemoval({
   subjectName: () => props.node?.name,
-  refresh: () => emit("removed"),
+  refresh: () => emit("changed"),
+});
+
+/** Correcting one, from the same rows. The drawer and /eksploruj/nowe are the
+ * same job in two shapes, so a capability on one belongs on the other - see
+ * `.agent/skills/relation-surfaces.md`. */
+const {
+  canEdit: canEditRelations,
+  canApply: canApplyEdits,
+  editOpen,
+  editEdge,
+  editedOutcome,
+  editLabel,
+  openEdit,
+  onEdgeEdited,
+} = useEdgeEditing({
+  subjectName: () => props.node?.name,
+  refresh: () => emit("changed"),
 });
 
 const open = defineModel<boolean>({ required: true });

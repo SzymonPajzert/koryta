@@ -48,6 +48,74 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "poprawianie-powiazan",
+    title: "Powiązanie da się poprawić bez usuwania go",
+    description:
+      "„Zaproponuj zmianę” na stronie osoby zmienia jej imię, partię i linki " +
+      "- czyli najmniej z tego, co ta strona twierdzi. Same powiązania, a " +
+      "więc stanowiska i daty, dało się dotąd tylko dodać albo usunąć: " +
+      "literówka w nazwie funkcji albo rok wzięty z nieaktualnego odpisu " +
+      "wymagały skasowania wpisu przez admina i wklepania go od nowa. Teraz " +
+      "każdy wiersz w „Historii powiązań” ma ołówek. Zalogowany użytkownik " +
+      "zgłasza poprawkę do zatwierdzenia, admin zapisuje ją od razu. Kogo " +
+      "powiązanie łączy i jakiego jest rodzaju, nie zmienia się tu celowo - " +
+      "przesunięcie końca to inne twierdzenie, a nie poprawka.",
+    steps: [
+      "Zaloguj się i wejdź na stronę dowolnej osoby z zatrudnieniem. W „Historii powiązań” przy wierszu ma być pomarańczowy ołówek.",
+      "Kliknij ołówek: otwiera się okno „Popraw powiązanie” z wypełnionym stanowiskiem i datami tego wiersza, a nagłówek mówi, którego wiersza dotyczy.",
+      "Sprawdź, że wpisanie daty w innym formacie niż RRRR-MM-DD blokuje zapis i pokazuje podpowiedź o formacie.",
+      "Zapisz zmianę stanowiska. Jako zwykły użytkownik zobaczysz „czeka na zatwierdzenie” i wiersz na stronie się nie zmieni; jako admin zmiana wchodzi od razu.",
+      "Jako admin otwórz /admin/rewizje/kolejka - propozycja zwykłego użytkownika ma tam czekać i dać się zatwierdzić; po zatwierdzeniu wiersz na stronie osoby pokazuje nowe stanowisko.",
+      "Ta sama propozycja ma być widoczna na /admin/rewizje-krawedzi, z wypisaną różnicą pola.",
+      "To samo powtórz w kolejce /eksploruj/nowe, w panelu bocznym /eksploruj/tabela i na stronie spółki - ołówek ma być w każdym z tych miejsc.",
+      "Sprawdź, że ołówka nie widać, kiedy nie jesteś zalogowany.",
+    ],
+    area: "contributor",
+  },
+  {
+    id: "kolejka-mowi-co-oznacza-glos",
+    title: "Kolejka mówi wprost, co znaczy głos i co pisać w notatce",
+    description:
+      "Osoba testująca przeszła przez /eksploruj/nowe i nie wiedziała, co " +
+      "właściwie znaczy, że ktoś jest „interesujący” - skala od -5 do +5 " +
+      "czytała się jak ocena wpisu, a nie jak zdanie o człowieku. Nie było " +
+      "też wiadomo, jakie informacje wklejać w notatki. Nad kolejką stoi " +
+      "teraz zdanie o tym, na czym polega zadanie, głos jest opisany wprost " +
+      "(„w górę: moim zdaniem koryciarz”) w krokach, w dymku i w nagłówku " +
+      "kolumny, a nad notatkami są trzy przykłady, jak taka notatka wygląda.",
+    steps: [
+      "Wejdź na /eksploruj/nowe. Nad paskiem postępu ma stać akapit mówiący, co robisz i co znaczy głos w górę i w dół.",
+      "Rozwiń „Jak to działa?”: krok „Głos” ma opisywać znaczenie głosu, a pod krokami ma być wypisana cała skala od -5 do +5.",
+      "Najedź na liczbę w kontrolce głosu - dymek ma mówić, co głos oznacza, zanim powie, jak daleko sięga skala.",
+      "Zjedź do sekcji „Notatki” i sprawdź, że nad polami są trzy przykłady (źródło, do poprawy, brakuje danych).",
+      "Kliknij „Dodaj źródło” - w polu tekstowym ma być widoczny przykładowy wpis jako podpowiedź.",
+      "Na /eksploruj/tabela najedź na nagłówek „Twój głos” - ma mówić to samo, co kolejka.",
+    ],
+    link: "/eksploruj/nowe",
+    area: "contributor",
+  },
+  {
+    id: "szpitale-prowadza-do-kolejki",
+    title: "Strona szpitali prowadzi do kolejki, w której można pomóc",
+    description:
+      "Zestawienie rad nadzorczych szpitali mówi w podpisie wykresu, jak mała " +
+      "część miejsc jest sprawdzona, i na tym się kończyło - czytelnik, który " +
+      "chciał pomóc, nie miał gdzie kliknąć, a jedyną osobę, która się " +
+      "zgłosiła, trzeba było ręcznie wysłać pod adres kolejki. Pod wykresem " +
+      "jest teraz karta z liczbą osób czekających na sprawdzenie i przyciskiem " +
+      "do kolejki zawężonej do szpitali. Karta mówi też wprost, że kolejka " +
+      "jest zarazem samouczkiem.",
+    steps: [
+      "Wejdź na /eksploruj/szpitale i zjedź pod wykres i ramkę o radach społecznych.",
+      "Karta „Pomóż uzupełnić te liczby” ma podawać liczbę osób czekających na sprawdzenie.",
+      "Kliknij „Sprawdzaj osoby ze szpitali” - trafiasz na /eksploruj/nowe z ustawionym typem podmiotu „Szpitale”.",
+      "Wyloguj się i kliknij ten sam przycisk - powinno przenieść na logowanie i po zalogowaniu wrócić do kolejki.",
+      "Sprawdź drugi przycisk: „Cała lista w tabeli” otwiera /eksploruj/tabela zawężoną do szpitali.",
+    ],
+    link: "/eksploruj/szpitale",
+    area: "public",
+  },
+  {
     id: "scalony-duplikat-znika-z-list",
     title: "Scalony duplikat znika z tabeli i z podpowiedzi",
     description:

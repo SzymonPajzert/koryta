@@ -86,6 +86,15 @@ test.describe("Postęp weryfikacji", () => {
     await expect(
       bar.getByRole("link", { name: "Pomóż sprawdzać" }),
     ).toHaveCount(0);
-    await expect(bar).toHaveScreenshot("postep-weryfikacji-nowe.png");
+    // The feedback launcher is `position: fixed` at the bottom right of the
+    // window, so which element it lands on top of is decided by how far down
+    // the page that element happens to sit - it drifted over this card the
+    // moment the brief above the queue pushed the bar down a paragraph. It is
+    // not part of the bar and does not belong in the bar's baseline, so it is
+    // painted over in both the expected and the actual shot rather than
+    // photographed.
+    await expect(bar).toHaveScreenshot("postep-weryfikacji-nowe.png", {
+      mask: [page.locator(".feedback-fab")],
+    });
   });
 });

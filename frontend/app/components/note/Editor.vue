@@ -16,12 +16,24 @@
       <h3 class="text-h6">Notatki</h3>
     </div>
 
-    <p v-if="user && !userNote && !isEditing" class="k-lead">
-      Wiesz więcej na temat {{ subject }}? Podziel się dodatkowymi informacjami
-      i dodaj linki do źródeł. Możesz też zgłosić poprawkę albo brakujące dane.
-      Twoje notatki będą publiczne - w ten sposób pomożesz innym w znajdowaniu
-      powiązań.
-    </p>
+    <!-- What to write, said with three written notes rather than with an
+         adjective. „Nie wiadomo trochę, jakie info tam wklejać” is what an
+         alpha tester said about the paragraph that stood here, which described
+         the notes („dodatkowe informacje”) without showing one. The examples
+         are `noteKindConfig`'s, so they are the same sentences the fields
+         themselves offer as placeholders. -->
+    <template v-if="user && !userNote && !isEditing">
+      <p class="k-lead mb-1">
+        Wiesz więcej na temat {{ subject }}? Wklej tu, co udało Ci się znaleźć,
+        razem z linkiem do źródła. Notatki są publiczne i to z nich powstają
+        kolejne powiązania w bazie - nie musi to być nic odkrywczego.
+      </p>
+      <ul class="k-lead k-examples">
+        <li v-for="(config, value) in noteKindConfig" :key="value">
+          <strong>{{ config.title }}</strong> - „{{ config.example }}”
+        </li>
+      </ul>
+    </template>
 
     <p v-if="!user && otherSources.length > 0" class="k-lead">
       Zaloguj się, aby dodać własną notatkę i pomóc innym w znajdowaniu
@@ -272,5 +284,16 @@ const save = async () => {
   line-height: 1.5;
   margin: 4px 0 12px;
   max-width: 78ch;
+}
+
+/* The three examples, as a list rather than as a sentence with semicolons in
+   it: they are read by somebody looking for the one that matches what they
+   have, not read through. */
+.k-examples {
+  padding-left: 1.1rem;
+}
+
+.k-examples li + li {
+  margin-top: 2px;
 }
 </style>

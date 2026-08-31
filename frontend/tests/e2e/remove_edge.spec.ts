@@ -37,7 +37,12 @@ const edges = {
  * The page focuses `tableItems[0]`, so a test that just opened the queue would
  * be asserting against whoever happens to sort first. Filtering on a score no
  * seeded person has is what makes that one person ours - see `minVotes` in
- * server/api/nodes/index.get.ts. */
+ * server/api/nodes/index.get.ts.
+ *
+ * The threshold is a minimum, so it is not private to this spec: another
+ * spec's fixture scoring above 900 turns up here too, and takes the first row
+ * if its `latestEmploymentStart` is later. `edit_relation.spec.ts` carries the
+ * rule a new queue fixture has to follow, and sits below this one. */
 const QUEUE_SCORE = 900;
 
 /** Three pages and three relations of this spec's own.

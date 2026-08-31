@@ -24,6 +24,23 @@
         </v-btn>
       </div>
 
+      <!-- The job, in two sentences, above everything that does it.
+           „Niejasne jest, co to znaczy, że osoba jest interesująca” is what an
+           alpha tester said after working through this page: the steps below
+           said what to click and the vote control said -5 to +5, and between
+           them nothing said what the reader was being asked to decide. It is
+           the first thing on the page now because somebody who does not know
+           what the queue is for cannot get it from anywhere further down. -->
+      <p class="text-body-2 mb-4 lede" data-testid="queue-brief">
+        Kolejka pokazuje osoby, o których wiemy, że mają posadę w spółce albo
+        instytucji publicznej. Twoje zadanie: sprawdzić, czy tę posadę tłumaczy
+        polityka - partia, kampania, rodzina, znajomość z ratusza - i
+        zagłosować. <strong>Głos w górę</strong> znaczy „moim zdaniem ta osoba
+        powinna być oznaczona jako koryciarz”, <strong>głos w dół</strong> -
+        „moim zdaniem nie powinna”. Niczego tym nie publikujesz: głosy i notatki
+        układają kolejkę i to na nich pracuje redakcja.
+      </p>
+
       <ExploreProgressBar hide-cta :query="progressQuery" class="mb-4" />
 
       <!-- Everything that decides who is in the queue, in one strip. The order
@@ -220,7 +237,9 @@
             v-if="focusedEdges.length"
             :key="focusedPerson.id"
             :edges="focusedEdges"
+            :can-correct="canEditRelations"
             :can-remove="canRemoveRelations"
+            @edit="openEdit"
             @remove="openRemove"
           />
           <div v-else class="pa-2">
@@ -238,6 +257,15 @@
             </p>
           </div>
         </v-card>
+
+        <DialogEditRelationHost
+          v-model="editOpen"
+          v-model:outcome="editedOutcome"
+          :edge="editEdge"
+          :label="editLabel"
+          :can-apply="canApplyEdits"
+          @saved="onEdgeEdited"
+        />
 
         <DialogRemoveEdgeHost
           v-model="removeOpen"
@@ -311,12 +339,14 @@ import { ref, computed, watch } from "vue";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { useQueryFilters } from "~/composables/queryFilters";
 import { polishCounting } from "~/composables/polish";
+import { voteMeaning } from "~/composables/votes";
 import { companyCategories } from "~~/shared/companyCategories";
 import type { PersonRich } from "~~/shared/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 
 import { useEdges } from "~/composables/edges";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
+import { useEdgeEditing } from "~/composables/edgeEditing";
 
 definePageMeta({
   affineLink: "BYOEeL1iG0mvIR3yz2pOs",
@@ -396,24 +426,28 @@ const steps = computed(() => [
     done: actionExplored.value,
     hint:
       "Kliknij „Eksploruj” w wierszu tabeli - otworzą się wyszukiwarki z " +
-      "informacjami o tej osobie. Jeśli nic się nie otwiera, wyłącz " +
-      "blokowanie wyskakujących okien.",
+      "informacjami o tej osobie. Szukasz jednego: czy coś łączy ją z " +
+      "polityką. Jeśli nic się nie otwiera, wyłącz blokowanie wyskakujących " +
+      "okien.",
   },
   {
     key: "note",
     label: "Notatka",
     done: actionNoted.value,
     hint:
-      "Zapisz w sekcji „Notatki” to, co warto zapamiętać, razem z linkiem do " +
-      "źródła.",
+      "Zapisz w sekcji „Notatki” to, co znalazłeś/aś, razem z linkiem do " +
+      "źródła - pod nagłówkiem „Notatki” są przykłady, jak taka notatka " +
+      "wygląda. Nawet „szukałem/am i nic nie ma” jest coś warte: następna " +
+      "osoba nie zacznie od zera.",
   },
   {
     key: "vote",
     label: "Głos",
     done: actionVoted.value,
-    hint:
-      "Oceń w tabeli, czy ta osoba jest interesująca - to ustawia kolejność " +
-      "kolejki dla wszystkich.",
+    // What the arrows assert, in the same words `voteCategoryConfig` gives the
+    // control itself - the reader should not find one wording in the
+    // instructions and another in the tooltip.
+    hint: `${voteMeaning("interesting")} Głosy układają kolejkę dla wszystkich.`,
   },
 ]);
 
@@ -589,6 +623,25 @@ const {
   refresh: refreshFocusedEdges,
 });
 
+/** And correcting one without leaving the queue. This is the page where a
+ * wrong job title is actually noticed - it is the page for judging whether the
+ * person is worth publishing - so sending the reviewer to the profile to fix it
+ * and back is a detour through the thing they are reviewing. Same argument as
+ * the removal above. */
+const {
+  canEdit: canEditRelations,
+  canApply: canApplyEdits,
+  editOpen,
+  editEdge,
+  editedOutcome,
+  editLabel,
+  openEdit,
+  onEdgeEdited,
+} = useEdgeEditing({
+  subjectName: () => focusedPerson.value?.name,
+  refresh: refreshFocusedEdges,
+});
+
 const { workLocations, mapLocations } = usePersonPlaces(
   focusedPerson,
   focusedEdges,
@@ -635,6 +688,14 @@ const { workLocations, mapLocations } = usePersonPlaces(
   .order-toggle :deep(.v-btn__prepend) {
     display: none;
   }
+}
+
+/* The brief. Full-strength ink rather than the `text-medium-emphasis` the rest
+   of the page's captions carry: it is the one paragraph on this page that has
+   to be read, and it sits above the fold on a phone. */
+.lede {
+  line-height: 1.6;
+  max-width: 78ch;
 }
 
 /* ---- the three steps ---- */

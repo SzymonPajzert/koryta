@@ -300,10 +300,35 @@ describe("useEdgeEdit", () => {
     });
   });
 
-  it("does not duplicate an edge it was asked to edit", async () => {
-    // There is no endpoint that revises an edge, so submitting would write a
-    // second copy rather than change the one on screen.
-    const { layout, processEdge, error } = useEdgeEdit({
+  it("revises the edge it was asked to edit rather than adding a second one", async () => {
+    // /api/edges/create only ever writes a new document, so an edit that went
+    // there would leave the wrong relation on screen and a duplicate beside it.
+    const { layout, newEdge, processEdge, error } = useEdgeEdit({
+      fixedNode: on("person", "jan"),
+      edgeType: "connection",
+      initialDirection: "outgoing",
+      editedEdge: "edge-1",
+    });
+
+    layout.target.ref.value = { type: "person", id: "anna", name: "Anna" };
+    newEdge.value.name = "żona";
+    await processEdge();
+
+    expect(authRequest).toHaveBeenCalledWith(
+      "/api/edges/update",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.objectContaining({ edge_id: "edge-1", name: "żona" }),
+      }),
+    );
+    expect(error.value).toBeNull();
+  });
+
+  it("never sends the ends or the type of an edited edge", async () => {
+    // They are what the relation is rather than what it says, and the endpoint
+    // refuses them - see `edgeEditSchema`. Asserted here so the form cannot
+    // quietly start offering a move that the server would drop on the floor.
+    const { layout, processEdge } = useEdgeEdit({
       fixedNode: on("person", "jan"),
       edgeType: "connection",
       initialDirection: "outgoing",
@@ -313,7 +338,8 @@ describe("useEdgeEdit", () => {
     layout.target.ref.value = { type: "person", id: "anna", name: "Anna" };
     await processEdge();
 
-    expect(authRequest).not.toHaveBeenCalled();
-    expect(error.value).toContain("nie jest jeszcze możliwa");
+    expect(sentBody()).not.toHaveProperty("source");
+    expect(sentBody()).not.toHaveProperty("target");
+    expect(sentBody()).not.toHaveProperty("type");
   });
 });

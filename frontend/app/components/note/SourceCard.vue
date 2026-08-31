@@ -46,9 +46,16 @@
       </div>
     </v-expand-transition>
 
+    <!-- The example only while the note is being written: a placeholder is
+         invisible the moment there is text in the field, and on a stored note
+         there always is. -->
     <v-textarea
       v-model="source.note"
       :label="noteKindConfig[kind].prompt"
+      :placeholder="
+        isEditing ? `np. ${noteKindConfig[kind].example}` : undefined
+      "
+      :persistent-placeholder="isEditing"
       :readonly="!isEditing"
       variant="plain"
       hide-details

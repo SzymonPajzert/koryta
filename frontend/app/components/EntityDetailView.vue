@@ -149,11 +149,13 @@
             <CardEmploymentHistory
               :edges="edges"
               :can-add="canAddRelations"
-              :can-edit="canAddRelations"
+              :can-cite="canAddRelations"
+              :can-correct="canEditRelations"
               :can-remove="canRemoveRelations"
               :predecessors="predecessors"
               @add="openAdd(undefined, 'Dodaj powiązanie')"
               @sources="openSources"
+              @edit="openEdit"
               @remove="openRemove"
             />
             <!-- The rows above only hint at a handover; this states it, and
@@ -287,6 +289,15 @@
           @changed="refreshEdges()"
         />
 
+        <DialogEditRelationHost
+          v-model="editOpen"
+          v-model:outcome="editedOutcome"
+          :edge="editEdge"
+          :label="editLabel"
+          :can-apply="canApplyEdits"
+          @saved="onEdgeEdited"
+        />
+
         <DialogRemoveEdgeHost
           v-model="removeOpen"
           v-model:shown="removedShown"
@@ -403,6 +414,7 @@ import {
 import { useEdges, type EdgeNode } from "~/composables/edges";
 import { edgeSentence } from "~/utils/edgeSentence";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
+import { useEdgeEditing } from "~/composables/edgeEditing";
 import {
   entityDescription,
   entityOgType,
@@ -636,6 +648,24 @@ const {
   openRemove,
   onEdgeRemoved,
 } = useEdgeRemoval({
+  subjectName: () => entity.value?.name,
+  refresh: refreshEdges,
+});
+
+/** Correcting what a relation says, from the row that says it. Open to anyone
+ * signed in rather than to admins alone - `/api/edges/update` files a
+ * contributor's version as a proposal - which is why it does not share
+ * `canRemoveRelations` above. */
+const {
+  canEdit: canEditRelations,
+  canApply: canApplyEdits,
+  editOpen,
+  editEdge,
+  editedOutcome,
+  editLabel,
+  openEdit,
+  onEdgeEdited,
+} = useEdgeEditing({
   subjectName: () => entity.value?.name,
   refresh: refreshEdges,
 });

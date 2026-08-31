@@ -22,13 +22,25 @@ import { useAuthState } from "./auth";
 import type { Note, NoteEntryKind, NoteSource } from "~~/shared/model";
 
 /** How each note entry kind presents itself: the label on its chip, the button
- * that creates one, and the prompt above the text area. */
+ * that creates one, the prompt above the text area - and one written note of
+ * that kind, as an example.
+ *
+ * The example is not decoration. „Nie wiadomo trochę, jakie info tam wklejać”
+ * is how an alpha tester put it, and a prompt phrased as a question does not
+ * answer it: „Co ciekawego jest w tym źródle?” tells somebody they should type
+ * something without telling them what a useful something looks like. One filled
+ * in note does, in less space than a paragraph of instructions would.
+ */
 export const noteKindConfig: Record<
   NoteEntryKind,
   {
     title: string;
     addLabel: string;
     prompt: string;
+    /** A note of this kind, written out. Stored without the „np.” that a
+     * placeholder wants in front of it, so the same sentence can also be listed
+     * as an example above the form. */
+    example: string;
     icon: string;
     color: string;
   }
@@ -37,6 +49,9 @@ export const noteKindConfig: Record<
     title: "Źródło",
     addLabel: "Dodaj źródło",
     prompt: "Co ciekawego jest w tym źródle?",
+    example:
+      "Artykuł z marca 2023: został prezesem dwa miesiące po wyborach, " +
+      "wcześniej prowadził kampanię wójta. Link niżej.",
     icon: mdiLinkVariant,
     color: "primary",
   },
@@ -44,6 +59,9 @@ export const noteKindConfig: Record<
     title: "Do poprawy",
     addLabel: "Zgłoś poprawkę",
     prompt: "Co jest nie tak i jak powinno być?",
+    example:
+      "To imiennik - w radzie nadzorczej siedzi inny Jan Kowalski. Radny z " +
+      "Radomia to osobna osoba.",
     icon: mdiPencilOutline,
     color: "warning",
   },
@@ -51,6 +69,9 @@ export const noteKindConfig: Record<
     title: "Brakuje danych",
     addLabel: "Zgłoś brak",
     prompt: "Czego tu brakuje?",
+    example:
+      "Brakuje pracy w spółce wodociągowej 2019-2021, widać ją w KRS pod " +
+      "numerem 0000123456.",
     icon: mdiHelpCircleOutline,
     color: "info",
   },

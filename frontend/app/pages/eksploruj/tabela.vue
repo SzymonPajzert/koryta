@@ -9,7 +9,7 @@
       :region="region"
       :company="company"
       :company-regions="companyRegions"
-      @removed="refreshFocusedEdges()"
+      @changed="refreshFocusedEdges()"
     />
     <div class="pa-4">
       <!-- The whole chrome of this page, in one 44px bar (plus a 32px work row

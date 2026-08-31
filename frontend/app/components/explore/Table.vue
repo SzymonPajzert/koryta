@@ -428,11 +428,15 @@ import {
 } from "~/composables/usePersonSearch";
 import { polishCounting } from "~/composables/polish";
 import { longDate, monthYear } from "~~/shared/dates";
-import { voteScaleSummary } from "~/composables/votes";
+import { voteMeaning, voteScaleSummary } from "~/composables/votes";
 import type { PersonRich } from "~~/shared/model";
 
+/** What the arrows mean comes first, then how far they go. The scale was on
+ * its own here and answered the wrong question: a reader who has never voted
+ * needs to know what a plus asserts before they need to know it stops at five. */
 const userVoteTooltip = [
   "Twój osobisty głos dla tej osoby (widoczny tylko dla Ciebie).",
+  voteMeaning("interesting"),
   voteScaleSummary("interesting"),
 ]
   .filter(Boolean)

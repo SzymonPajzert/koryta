@@ -64,59 +64,13 @@
             Nie ma powiązania, które łączyłoby te dwie strony.
           </v-alert>
 
-          <v-row v-if="choice" dense class="mt-1">
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="details.name"
-                :label="nameLabel"
-                :placeholder="namePlaceholder"
-                density="compact"
-                hide-details
-                data-testid="add-relation-name"
-              />
-            </v-col>
-            <template v-if="wantsDates">
-              <v-col cols="6" md="3">
-                <v-text-field
-                  v-model="details.start_date"
-                  label="Od"
-                  placeholder="RRRR-MM-DD"
-                  density="compact"
-                  hide-details="auto"
-                  :rules="[dateRule]"
-                />
-              </v-col>
-              <v-col cols="6" md="3">
-                <v-text-field
-                  v-model="details.end_date"
-                  label="Do"
-                  placeholder="RRRR-MM-DD"
-                  density="compact"
-                  hide-details="auto"
-                  :rules="[dateRule]"
-                />
-              </v-col>
-            </template>
-            <template v-if="wantsElection">
-              <v-col cols="12" md="6">
-                <v-select
-                  v-model="details.party"
-                  :items="parties"
-                  label="Partia"
-                  density="compact"
-                  hide-details
-                  clearable
-                />
-              </v-col>
-              <v-col cols="12" md="6">
-                <v-text-field
-                  v-model="details.committee"
-                  label="Komitet wyborczy"
-                  density="compact"
-                  hide-details
-                />
-              </v-col>
-            </template>
+          <FormRelationDetailFields
+            v-if="choice"
+            v-model="details"
+            :real-type="option?.realType"
+            prefix="add-relation"
+            class="mt-1"
+          >
             <!-- A tagged edge says which story an article belongs to, which is
                  an editorial call rather than a claim needing a citation. -->
             <v-col
@@ -132,7 +86,7 @@
                 data-testid="add-relation-reference"
               />
             </v-col>
-          </v-row>
+          </FormRelationDetailFields>
         </template>
 
         <v-alert
@@ -171,13 +125,14 @@
 import { computed, ref, watch } from "vue";
 import { mdiArrowRight } from "@mdi/js";
 import type { Link, NodeType } from "~~/shared/model";
-import { parties } from "~~/shared/misc";
 import {
   edgeTypeOptions,
   relationChoices,
   type edgeTypeExt,
 } from "~/composables/useEdgeTypes";
 import { authRequest } from "~/composables/auth";
+import type { RelationDetails } from "~/components/form/RelationDetailFields.vue";
+import { relationDateRule } from "~/utils/relationDate";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -206,13 +161,11 @@ const reference = ref<Link<NodeType> | undefined>(undefined);
 const choiceIndex = ref<number | undefined>(undefined);
 const saving = ref(false);
 const error = ref<string | null>(null);
-const details = ref({
-  name: "",
-  start_date: "",
-  end_date: "",
-  party: "",
-  committee: "",
-});
+const details = ref<RelationDetails>(emptyDetails());
+
+function emptyDetails(): RelationDetails {
+  return { name: "", start_date: "", end_date: "", party: "", committee: "" };
+}
 
 const title = computed(() => props.title ?? "Dodaj powiązanie");
 
@@ -275,35 +228,13 @@ const option = computed(() =>
   choice.value ? edgeTypeOptions[choice.value.edgeTypeExt] : undefined,
 );
 
-const wantsDates = computed(
-  () => option.value?.realType === "employed" || wantsElection.value,
-);
-const wantsElection = computed(() => option.value?.realType === "election");
-
-const nameLabel = computed(() => {
-  if (option.value?.realType === "employed") return "Stanowisko / rola";
-  if (wantsElection.value) return "Nazwa wyborów";
-  return "Nazwa powiązania";
-});
-
-const namePlaceholder = computed(() =>
-  option.value?.realType === "employed" ? "np. prezes zarządu" : "",
-);
-
-/** Same rule the old form used: a date is optional, but a date that is written
- * has to be one Firestore and the timeline can read. */
-function dateRule(value: string) {
-  if (!value) return true;
-  return /^\d{4}(-\d{2}(-\d{2})?)?$/.test(value) || "Format: RRRR-MM-DD";
-}
-
 const readyToSubmit = computed(
   () =>
     !!other.value &&
     !!choice.value &&
     other.value.id !== props.nodeId &&
-    dateRule(details.value.start_date) === true &&
-    dateRule(details.value.end_date) === true,
+    relationDateRule(details.value.start_date) === true &&
+    relationDateRule(details.value.end_date) === true,
 );
 
 /** A fresh dialog every time it opens: leaving the last relation in the fields
@@ -314,13 +245,7 @@ watch(open, (isOpen) => {
   reference.value = undefined;
   choiceIndex.value = undefined;
   error.value = null;
-  details.value = {
-    name: "",
-    start_date: "",
-    end_date: "",
-    party: "",
-    committee: "",
-  };
+  details.value = emptyDetails();
 });
 
 // Picking a different entity can change which verbs apply, and an index into

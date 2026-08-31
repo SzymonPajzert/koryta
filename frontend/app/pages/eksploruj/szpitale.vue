@@ -107,6 +107,57 @@
     </v-alert>
 
     <!-- ------------------------------------------------------------------ -->
+    <!-- The way in, directly under the number that says why it is needed.
+         The chart's own subtitle has just admitted how much of the register is
+         unreviewed, and until now the page ended there: a reader who wanted to
+         help had nowhere to click, and the one person who was asked to help had
+         to be sent the address of the queue by hand. It says „tutorial” in as
+         many words because that was the other half of the report - the queue
+         teaches the job as you do it, and nothing about its name says so. -->
+    <v-card
+      variant="outlined"
+      class="mb-6 join-card"
+      data-testid="hospitals-join"
+    >
+      <v-card-item>
+        <template #prepend>
+          <v-icon :icon="mdiHandHeartOutline" size="large" color="ink-info" />
+        </template>
+        <v-card-title class="text-subtitle-1 font-weight-medium text-wrap">
+          Pomóż uzupełnić te liczby
+        </v-card-title>
+        <v-card-subtitle class="text-wrap">
+          {{ joinSubtitle }}
+        </v-card-subtitle>
+      </v-card-item>
+      <v-card-text class="text-body-2 pb-2">
+        Kolejka pokazuje po jednej osobie naraz, prowadzi krok po kroku i mówi,
+        czego szukać - to zarazem samouczek, więc nie trzeba nic wiedzieć na
+        start. Wystarczy pięć minut i konto na stronie.
+      </v-card-text>
+      <v-card-actions class="px-4 pb-4 pt-0">
+        <v-btn
+          color="primary"
+          variant="flat"
+          class="text-none"
+          :append-icon="mdiArrowRight"
+          to="/eksploruj/nowe?category=szpitale"
+          data-testid="hospitals-join-queue"
+        >
+          Sprawdzaj osoby ze szpitali
+        </v-btn>
+        <v-btn
+          variant="text"
+          class="text-none"
+          :prepend-icon="mdiTable"
+          to="/eksploruj/tabela?category=szpitale&visibility=private&sortBy=latestEmploymentStart&sortDesc=true"
+        >
+          Cała lista w tabeli
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+
+    <!-- ------------------------------------------------------------------ -->
     <h2 class="text-h6 mb-3">W skrócie</h2>
 
     <v-card variant="outlined" class="mb-4">
@@ -218,7 +269,12 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { mdiScaleBalance } from "@mdi/js";
+import {
+  mdiArrowRight,
+  mdiHandHeartOutline,
+  mdiScaleBalance,
+  mdiTable,
+} from "@mdi/js";
 import {
   boardGroupLabels,
   boardGroupShortLabels,
@@ -349,6 +405,19 @@ const chartSubtitle = computed(() => {
   return `${base} Z ${formatCount(total)} miejsc znanych z KRS redakcja sprawdziła i opublikowała ${formatCount(data.seats)} (${share}). Kolorowa głowa słupka to te sprawdzone, w podziale na partie; szary ogon to sama liczba osób, o których poza liczbą nie mówimy nic.`;
 });
 
+/** How much is still unread, said on the button's own card rather than only in
+ * the chart's subtitle above it - somebody scrolling past the chart is exactly
+ * the reader this is for. Falls back to naming the job rather than a number,
+ * because a response from the previous build carries no `unreviewed` (see
+ * `CachedGroup`) and „NaN osób” would be worse than no figure at all. */
+const joinSubtitle = computed(() => {
+  const unreviewed = (selected.value as CachedGroup | undefined)?.unreviewed;
+  if (!unreviewed) {
+    return "Każda sprawdzona osoba to jedno miejsce więcej w podziale powyżej.";
+  }
+  return `${polishCounting(unreviewed, "osoba", "osoby", "osób")} z rejestru czeka, aż ktoś sprawdzi, co je łączy z polityką. Do tego czasu wchodzą tylko w szary ogon słupka.`;
+});
+
 const emptyText = computed(() =>
   group.value === "paid"
     ? "Nie mamy jeszcze w bazie żadnego miejsca w radzie nadzorczej szpitala publicznego."
@@ -357,6 +426,13 @@ const emptyText = computed(() =>
 </script>
 
 <style scoped>
+/* The way into the queue. An info wash rather than a plain outlined card: it is
+   the one thing on this page that asks the reader to do something, and it sits
+   between two cards that only report. */
+.join-card {
+  background: rgba(var(--v-theme-info), 0.06);
+}
+
 /* Five headline numbers. `auto-fit` over a 150px floor gives two columns on a
    phone and one row on a desktop, without a breakpoint deciding it. */
 .stat-tiles {

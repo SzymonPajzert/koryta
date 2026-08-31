@@ -31,10 +31,14 @@
           }"
         >
           {{ signed(userVoteResult) }}
-          <v-tooltip activator="parent" location="top" max-width="260">
+          <v-tooltip activator="parent" location="top" max-width="300">
             <div>{{ currentHint }}</div>
+            <!-- What the arrows assert, not only how far they go. The scale
+                 line alone read as a rating of the entry rather than as a
+                 judgement about the person - see `voteCategoryConfig`. -->
+            <div class="text-caption">{{ config.meaning }}</div>
             <div class="text-caption text-medium-emphasis">
-              Skala od -5 do +5 - im wyżej, tym mocniejsze znalezisko.
+              Skala od -5 do +5 - im dalej, tym mocniejsze przekonanie.
             </div>
           </v-tooltip>
         </div>

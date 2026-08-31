@@ -5,7 +5,7 @@
       :node="focusedNode"
       :edges="focusedEdges"
       :company-regions="companyRegions"
-      @removed="refreshFocusedEdges()"
+      @changed="refreshFocusedEdges()"
     />
 
     <div class="d-flex align-center justify-space-between flex-wrap ga-3 mb-4">
