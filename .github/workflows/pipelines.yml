@@ -123,8 +123,16 @@ jobs:
       # wikimedia once and restored from cache every night after. Repo-wide
       # cache is 10 GB and evicts least-recently-used, which the uv cache also
       # draws on -- another reason the ml group stays out of this job.
+      # restore/save rather than `actions/cache`, whose post step declares
+      # `post-if: success()` -- it saves nothing from a job that failed. The
+      # full tier had never once succeeded, so between 2026-07-31 and
+      # 2026-09-01 it re-fetched the 2.9 GB dump every night and cached it
+      # never; `gh api repos/:owner/:repo/actions/caches` showed slice entries
+      # and no full ones at all. Downloading is not what breaks, so what was
+      # downloaded should outlive the run that broke.
       - name: Cache the dump
-        uses: actions/cache@v6
+        id: dump-cache
+        uses: actions/cache/restore@v6
         with:
           path: data/pipelines/downloaded/${{ env.DUMP_FILE }}
           key: wikidump-${{ env.DUMP_FILE }}
@@ -133,7 +141,7 @@ jobs:
       # stat.gov.pl. Separate from the dump because this one turns over: the
       # rolling key always saves, and restore-keys takes the newest previous.
       - name: Cache the other downloads
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: |
             data/pipelines/downloaded
@@ -217,6 +225,30 @@ jobs:
             --assume-yes \
             --wiki-dump-url "$DUMP_URL" \
             --wiki-dump-file "$DUMP_FILE"
+
+      # Both saves sit here rather than in a post step so that a failed run
+      # still keeps its downloads. `!cancelled()` and not `always()`: a
+      # cancelled job can be holding a half-written file.
+      #
+      # The dump is skipped on a restore hit -- the key is the filename, so the
+      # content cannot have changed, and saving an existing key is an error.
+      - name: Save the dump
+        if: ${{ !cancelled() && steps.dump-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: data/pipelines/downloaded/${{ env.DUMP_FILE }}
+          key: wikidump-${{ env.DUMP_FILE }}
+
+      # No such guard here: the key carries the run id, so it is new every
+      # time and there is nothing to collide with.
+      - name: Save the other downloads
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            data/pipelines/downloaded
+            !data/pipelines/downloaded/*.bz2
+          key: downloads-${{ env.TIER }}-${{ github.run_id }}
 
       # src/tests/pipelines runs real pipelines through read_or_process, which
       # is why the unit-test job ignores src/tests entirely (issue #196). Here
