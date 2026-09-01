@@ -156,6 +156,21 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
 </script>
 
 <style scoped>
+/* `fill-height` makes this container a flex box, and a flex item's automatic
+   minimum size is its min-content - so whatever a page puts in the slot is
+   never allowed to be narrower than the widest thing inside it could be. One
+   long word, one row of buttons that will not wrap, and the page is not
+   overflowing: it has resized, and the container, the rows and every card in
+   them come out wider than the window with it.
+   /eksploruj/statystyki was a 382px document in a 375px phone this way, with
+   nothing on it actually clipped - it simply refused to shrink. Zeroing the
+   minimum lets a page be as wide as the window and no wider; anything that
+   genuinely cannot fit still sticks out, which is the honest symptom and the
+   one tests/visual/phoneWidth.ts is watching for. */
+.v-container.fill-height > :deep(*) {
+  min-width: 0;
+}
+
 /* Vuetify clips the toolbar content, so on narrow screens the trailing
    buttons are unreachable. Let it scroll sideways instead. The spacers
    collapse to zero once the buttons overflow, so wide screens still centre. */
