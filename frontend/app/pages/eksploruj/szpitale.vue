@@ -135,7 +135,19 @@
         czego szukać - to zarazem samouczek, więc nie trzeba nic wiedzieć na
         start. Wystarczy pięć minut i konto na stronie.
       </v-card-text>
-      <v-card-actions class="px-4 pb-4 pt-0">
+      <!-- Stacked below `sm`. A `v-btn` never wraps its label, so side by side
+           these two want 424px of row and a 375px phone has 311 to give: the
+           row set the width of the document, and every card on the page was
+           then laid out 502px wide with a horizontal scrollbar under it.
+           Stretching rather than wrapping because wrapping only moves the
+           problem to the next narrow phone - „Sprawdzaj osoby ze szpitali”
+           alone is 252px, which is already most of a 320px screen. Chosen by
+           breakpoint classes and not `useDisplay()`, for the reason
+           StatsHospitalBreakdown gives: the server would render one layout and
+           the browser correct it. -->
+      <v-card-actions
+        class="flex-column flex-sm-row align-stretch align-sm-center px-4 pb-4 pt-0"
+      >
         <v-btn
           color="primary"
           variant="flat"
