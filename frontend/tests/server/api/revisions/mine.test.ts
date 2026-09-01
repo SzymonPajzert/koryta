@@ -400,4 +400,50 @@ describe("api/revisions/mine", () => {
 
     expect(headers.get("Cache-Control")).toBe("private, no-store");
   });
+
+  describe("narrowed to one entry", () => {
+    it("keeps only what was proposed for that entry", async () => {
+      // What the card on a company page asks, so that a contributor is shown
+      // the change they just proposed instead of proposing it again.
+      addRevision("rev-here");
+      addRevision("rev-elsewhere", { node_id: "node-2" });
+      targets["nodes/node-2"] = { name: "Inna Firma", type: "place" };
+
+      const result = await call({ nodeId: "node-1" });
+
+      expect(ids(result.revisions)).toEqual(["rev-here"]);
+      expect(result.total).toBe(1);
+      expect(result.counts.pending).toBe(1);
+    });
+
+    it("still narrows the scan by uid alone, and asks for no index", async () => {
+      // A `where` on the target next to the uid equality and the ordering
+      // would want a composite index; the scan is capped at 300 either way.
+      addRevision("rev-here");
+
+      await call({ nodeId: "node-1" });
+
+      expect(mockWhere).toHaveBeenCalledTimes(1);
+      expect(mockWhere).toHaveBeenCalledWith("update_user", "==", "me-uid");
+    });
+
+    it("finds a revision that spells the target the old way", async () => {
+      // `/api/revisions/byNode` queries both spellings, and a filter that only
+      // knew `node_id` would drop the older half of somebody's record.
+      addRevision("rev-old", { node_id: undefined, nodeId: "node-1" });
+
+      const result = await call({ nodeId: "node-1" });
+
+      expect(ids(result.revisions)).toEqual(["rev-old"]);
+    });
+
+    it("answers with nothing for an entry this user never touched", async () => {
+      addRevision("rev-here");
+
+      const result = await call({ nodeId: "node-2" });
+
+      expect(result.revisions).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+  });
 });

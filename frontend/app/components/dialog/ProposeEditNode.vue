@@ -227,7 +227,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "success"): void;
-  (e: "submitted" | "created", id: string): void;
+  /** `duplicate` when the endpoint recognised this as a restatement of a
+   * proposal already waiting, and handed back that one instead of filing a
+   * second copy. */
+  (e: "submitted", id: string, duplicate?: boolean): void;
+  (e: "created", id: string): void;
 }>();
 
 const isCreate = computed(() => !props.entity);
@@ -411,18 +415,19 @@ async function submit() {
       body.description = editData.description;
     }
 
-    const response = await authRequest<{ id: string; node_id: string }>(
-      "/api/revisions/create",
-      {
-        method: "POST",
-        body,
-      },
-    );
+    const response = await authRequest<{
+      id: string;
+      node_id: string;
+      duplicate?: boolean;
+    }>("/api/revisions/create", {
+      method: "POST",
+      body,
+    });
     dialog.value = false;
     emit("success");
 
     if (response.id) {
-      emit("submitted", response.id);
+      emit("submitted", response.id, response.duplicate === true);
       if (isCreate.value && response.node_id) {
         emit("created", response.node_id);
       }
@@ -444,7 +449,13 @@ async function submit() {
       }
     }
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : "Wystąpił błąd";
+    // `data.message` first: h3 puts the server's sentence there, and a
+    // FetchError's own `message` wraps it in the method and the url - so a
+    // reader who proposed a change that changes nothing was being told
+    // `[POST] "/api/revisions/create": 400 ...` rather than why.
+    const message = (e as { data?: { message?: string } } | null)?.data
+      ?.message;
+    error.value = message || (e instanceof Error ? e.message : "Wystąpił błąd");
   } finally {
     loading.value = false;
   }

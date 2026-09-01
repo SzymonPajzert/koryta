@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  type DocumentSnapshot,
+  type QueryDocumentSnapshot,
+} from "firebase-admin/firestore";
 import { defineEventHandler, getValidatedQuery, setResponseHeader } from "h3";
 import { getUser } from "~~/server/utils/auth";
 import { describeRevisions } from "~~/server/utils/revisionQueue";
@@ -14,6 +18,11 @@ const queryValidator = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
   page: z.coerce.number().int().min(1).default(1),
   status: z.enum(["pending", "approved", "rejected", "all"]).default("all"),
+  /** Narrow the record to one entry, for the card that entry's own page shows.
+   * Applied in memory rather than as a `where`, because a filter on the target
+   * alongside the uid equality and the ordering would want a composite index
+   * for what is already a capped scan. */
+  nodeId: z.string().optional(),
 });
 
 /** How far back one person's own record is read. The largest human revision
@@ -34,6 +43,10 @@ export type MyProposals = {
 
 /**
  * What the signed-in user proposed, and what came of it.
+ *
+ * With `?nodeId=` it answers the same question about one entry, which is what
+ * the card on that entry's page asks: a contributor who is shown no trace of
+ * the change they just proposed proposes it again.
  *
  * The uid comes from the verified token and there is no parameter for it, so
  * this cannot be turned into a way to read somebody else's record. Authors are
@@ -61,9 +74,9 @@ export default defineEventHandler(async (event): Promise<MyProposals> => {
     .limit(MINE_SCAN_CAP)
     .get();
 
-  const mine = snapshot.docs.filter(
-    (doc) => doc.get("update_automatic") !== true,
-  );
+  const mine = snapshot.docs
+    .filter((doc) => doc.get("update_automatic") !== true)
+    .filter((doc) => !query.nodeId || revisionNodeId(doc) === query.nodeId);
 
   const described = await describeRevisions(db, mine, { withAuthors: false });
 
@@ -84,3 +97,18 @@ export default defineEventHandler(async (event): Promise<MyProposals> => {
     truncated: snapshot.size >= MINE_SCAN_CAP,
   };
 });
+
+/** The target a revision names.
+ *
+ * Two spellings are in the data - `/api/revisions/byNode` queries both - so a
+ * filter that only knew `node_id` would silently drop the older half of
+ * somebody's record for an entry.
+ */
+function revisionNodeId(
+  doc: QueryDocumentSnapshot | DocumentSnapshot,
+): string | undefined {
+  const underscore = doc.get("node_id");
+  if (typeof underscore === "string") return underscore;
+  const camel = doc.get("nodeId");
+  return typeof camel === "string" ? camel : undefined;
+}
