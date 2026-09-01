@@ -55,10 +55,25 @@
           {{ notesOpen ? "Ukryj notatki" : "Notatki" }}
         </v-btn>
 
+        <!-- Where an admin reaches the node's revision list from. The
+             person page has had this since the shortcut shipped; the
+             company page had nothing, so the only way in was to type the
+             node id into a url. Not hidden below `md` the way the person
+             page's is: this row already wraps. -->
+        <v-btn
+          v-if="isAdmin && company.id"
+          variant="outlined"
+          :prepend-icon="mdiHistory"
+          :to="`/admin/rewizje/${company.id}`"
+          data-testid="admin-revisions-link"
+        >
+          Rewizje
+        </v-btn>
+
         <DialogProposeEditNode
           :entity="company"
           skip-redirect
-          @submitted="submittedRevisionId = $event"
+          @submitted="onSubmitted"
         >
           <template #activator="{ props: activatorProps }">
             <!-- Outlined, not `tonal color="warning"`: amber ink on a
@@ -80,8 +95,13 @@
         variant="tonal"
         density="compact"
         class="w-100"
+        data-testid="propose-confirmation"
       >
-        Zaproponowano zmianę.
+        {{
+          wasDuplicate
+            ? "Tę zmianę już zgłosiłeś - czeka na redakcję."
+            : "Zaproponowano zmianę."
+        }}
         <a
           :href="previewUrl"
           target="_blank"
@@ -114,6 +134,7 @@
 <script lang="ts" setup>
 import {
   mdiArrowRight,
+  mdiHistory,
   mdiNoteTextOutline,
   mdiOfficeBuildingOutline,
   mdiOpenInNew,
@@ -144,7 +165,9 @@ const notesOpen = ref(false);
 
 const nodeId = computed(() => props.company.id ?? "");
 
-const { user } = useAuthState();
+const emit = defineEmits<{ (e: "submitted", id: string): void }>();
+
+const { user, isAdmin } = useAuthState();
 const { userNote, otherNotes } = useNotes(nodeId);
 
 // The editor renders nothing for a logged out visitor with no notes to read,
@@ -156,6 +179,19 @@ const canEditNotes = computed(
 );
 
 const submittedRevisionId = ref<string | undefined>(undefined);
+/** Whether the submission landed on a proposal this user had already made,
+ * which is what `/api/revisions/create` answers now instead of filing a second
+ * copy of it. Saying so is the difference between "it worked" and "it worked,
+ * twice". */
+const wasDuplicate = ref(false);
+
+function onSubmitted(id: string, duplicate?: boolean) {
+  submittedRevisionId.value = id;
+  wasDuplicate.value = duplicate === true;
+  // The page around this card lists what the reader has proposed, and it has
+  // to hear about a proposal made from inside the card.
+  emit("submitted", id);
+}
 
 /** The company's own page. A company that was never saved has no id and so no
  * page - it is rendered from a revision that nothing points at yet. */

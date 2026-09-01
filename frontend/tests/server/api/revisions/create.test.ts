@@ -5,6 +5,9 @@ import handler from "../../../../server/api/revisions/create.post";
 const mockSet = vi.fn();
 const mockCommit = vi.fn();
 const mockDoc = vi.fn();
+/** What `revisions/<deterministic id>` holds. Empty unless a test says the
+ * caller has proposed this before. */
+const mockGet = vi.fn();
 const mockDb = {
   collection: vi.fn(() => ({ doc: mockDoc })),
   batch: vi.fn(() => ({ set: mockSet, commit: mockCommit })),
@@ -52,7 +55,11 @@ function writtenNode() {
 describe("api/revisions/create, place edits", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDoc.mockImplementation((id?: string) => ({ id: id ?? "generated-id" }));
+    mockGet.mockResolvedValue({ exists: false });
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      get: mockGet,
+    }));
   });
 
   it("records who answered the ownership question", async () => {
@@ -84,9 +91,12 @@ describe("api/revisions/create, place edits", () => {
       type: "place",
       name: "Ministerstwo Infrastruktury",
     });
+    // The description is what this proposal is really for. Something has to
+    // change, or the handler turns it down as a restatement of the entry.
     mockReadBody.mockResolvedValue({
       node_id: "ministerstwo",
       name: "Ministerstwo Infrastruktury",
+      content: "Resort odpowiedzialny za kolej.",
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -194,6 +204,7 @@ describe("api/revisions/create, place edits", () => {
     mockReadBody.mockResolvedValue({
       node_id: "jan",
       name: "Jan Kowalski",
+      content: "Poseł.",
       categories: ["koleje"],
     });
 
@@ -212,6 +223,7 @@ describe("api/revisions/create, place edits", () => {
     mockReadBody.mockResolvedValue({
       node_id: "jan",
       name: "Jan Kowalski",
+      content: "Poseł.",
       isPublic: true,
     });
 
@@ -296,7 +308,11 @@ describe("api/revisions/create, place edits", () => {
 describe("api/revisions/create, proposing a new entry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDoc.mockImplementation((id?: string) => ({ id: id ?? "generated-id" }));
+    mockGet.mockResolvedValue({ exists: false });
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      get: mockGet,
+    }));
   });
 
   it("creates a place with the fields a place has", async () => {
@@ -397,7 +413,11 @@ describe("api/revisions/create, proposing a new entry", () => {
 describe("api/revisions/create, proposing a removal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDoc.mockImplementation((id?: string) => ({ id: id ?? "generated-id" }));
+    mockGet.mockResolvedValue({ exists: false });
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      get: mockGet,
+    }));
   });
 
   it("keeps the removal and its reason", async () => {
@@ -441,5 +461,157 @@ describe("api/revisions/create, proposing a removal", () => {
     await expect(handler({} as any)).rejects.toMatchObject({
       statusCode: 400,
     });
+  });
+});
+
+describe("api/revisions/create, the same change twice", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockResolvedValue({ exists: false });
+    mockDoc.mockImplementation((id?: string) => ({
+      id: id ?? "generated-id",
+      get: mockGet,
+    }));
+  });
+
+  /** The id the handler addresses a restatement by. Written by the same
+   * proposer, against the same entry, saying the same thing. */
+  function proposedRevisionId() {
+    return mockDoc.mock.calls
+      .map(([id]) => id)
+      .find((id) => typeof id === "string" && id.startsWith("proposal_"));
+  }
+
+  it("files a first proposal under an id derived from what it says", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Tramwaje Śląskie",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "tramwaje",
+      name: "Tramwaje Śląskie S.A.",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    const id = proposedRevisionId();
+    expect(id).toMatch(/^proposal_tramwaje_test-user-id_/);
+    expect(result).toMatchObject({ id, duplicate: false });
+    expect(mockCommit).toHaveBeenCalled();
+  });
+
+  it("hands back the waiting proposal instead of filing it again", async () => {
+    // What went wrong on /instytucja: the page showed no trace of the change
+    // that had just been proposed, so the same correction was sent several
+    // times and the queue filled up with copies of it.
+    mockGet.mockResolvedValue({
+      exists: true,
+      id: "proposal_tramwaje_test-user-id_abcdefghij",
+      data: () => ({ status: "pending" }),
+    });
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Tramwaje Śląskie",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "tramwaje",
+      name: "Tramwaje Śląskie S.A.",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(result).toEqual({
+      id: "proposal_tramwaje_test-user-id_abcdefghij",
+      node_id: "tramwaje",
+      duplicate: true,
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("lets a rejected proposal be made again, without overwriting it", async () => {
+    // The rejection is a record with a reason in it, and the contributor is
+    // entitled to ask a second time - so the restatement is its own document.
+    mockGet.mockResolvedValue({
+      exists: true,
+      id: "proposal_tramwaje_test-user-id_abcdefghij",
+      data: () => ({ status: "rejected", reject_reason: "brak źródła" }),
+    });
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Tramwaje Śląskie",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "tramwaje",
+      name: "Tramwaje Śląskie S.A.",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(result.id).toBe("generated-id");
+    expect(result.duplicate).toBe(false);
+    expect(mockCommit).toHaveBeenCalled();
+  });
+
+  it("turns down a proposal that says what the entry already says", async () => {
+    // The form arrives prefilled, so "Zaproponuj" pressed after changing
+    // nothing filed a revision a reviewer had to open to find empty.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Tramwaje Śląskie",
+      categories: ["koleje"],
+      categoriesSource: "manual",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "tramwaje",
+      name: "Tramwaje Śląskie",
+      categories: ["koleje"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Ta propozycja niczego nie zmienia - wpis już to zawiera.",
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("still takes a restatement that pins a pipeline's guess", async () => {
+    // Same categories, but saying them by hand is what sets
+    // `categoriesSource: "manual"` and stops the next ingest overwriting them.
+    // That is a change, and turning it down would take the only way of
+    // confirming what a pipeline guessed.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "place",
+      name: "Tramwaje Śląskie",
+      categories: ["koleje"],
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "tramwaje",
+      name: "Tramwaje Śląskie",
+      categories: ["koleje"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      categories: ["koleje"],
+      categoriesSource: "manual",
+    });
+  });
+
+  it("addresses a new entry by nothing in particular", async () => {
+    // There is no entry to restate a proposal about, and two people proposing
+    // the same company are proposing two of them.
+    mockReadBody.mockResolvedValue({ type: "place", name: "Nowa Spółka" });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await handler({} as any);
+
+    expect(proposedRevisionId()).toBeUndefined();
+    expect(result.id).toBe("generated-id");
   });
 });

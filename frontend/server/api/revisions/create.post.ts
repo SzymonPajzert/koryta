@@ -3,9 +3,12 @@ import { getApp } from "firebase-admin/app";
 import { getUser } from "~~/server/utils/auth";
 import {
   baseNodeFields,
+  proposalId,
+  sameStoredValue,
   sanitizeFirestoreData,
   withSeededNodeStats,
 } from "~~/server/utils/revisions";
+import { revisionIsPending } from "~~/shared/model";
 import {
   editSchemas,
   proposableNodeTypes,
@@ -28,7 +31,6 @@ export default defineEventHandler(async (event) => {
   const nodeRef = isNewNode
     ? db.collection("nodes").doc()
     : db.collection("nodes").doc(node_id);
-  const revisionRef = db.collection("revisions").doc();
   const timestamp = Timestamp.now();
 
   // Fetch the existing node to use as a base layer so that the revision
@@ -83,13 +85,60 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // User-submitted fields override the base node fields
-  const mergedData = { ...baseFields, ...dataFields };
+  // User-submitted fields override the base node fields. Sanitized here rather
+  // than on the way into the document, because the two guards below compare it
+  // against what is stored, and stored data has already been through this.
+  const mergedData = sanitizeFirestoreData({
+    ...baseFields,
+    ...dataFields,
+  }) as Record<string, unknown>;
+
+  // Nothing to review. The form arrives prefilled from the entry, so
+  // "Zaproponuj" pressed after changing nothing - or after changing something
+  // back - files a revision that says exactly what the page already says, and
+  // a reviewer only finds that out by opening it.
+  if (
+    !isNewNode &&
+    sameStoredValue(mergedData, sanitizeFirestoreData(baseFields))
+  ) {
+    throw createError({
+      statusCode: 400,
+      message: "Ta propozycja niczego nie zmienia - wpis już to zawiera.",
+    });
+  }
+
+  // A proposal is addressed by what it proposes, the way the pipeline's are -
+  // see `proposeRevisionTransaction`. Nothing on an entry's page showed a
+  // contributor the change they had just made, so they made it again, and the
+  // queue filled up with copies of one correction. The uid is part of the
+  // address because two people proposing the same fix are two proposals, and
+  // folding those together would credit one of them to the other.
+  const restatementRef = isNewNode
+    ? undefined
+    : db
+        .collection("revisions")
+        .doc(proposalId(`${nodeRef.id}_${user.uid}`, mergedData));
+  const restated = await restatementRef?.get();
+
+  if (restated?.exists && revisionIsPending(restated.data() ?? {})) {
+    // Idempotent rather than an error: what the caller is asking for is on the
+    // table already, and handing back its id is what lets the page link them
+    // to the proposal they had forgotten making.
+    return { id: restated.id, node_id: nodeRef.id, duplicate: true };
+  }
+
+  // Already decided, so that record stays where it is and the restatement gets
+  // a document of its own: a rejected proposal sent again unchanged is a
+  // second ask, not an edit of the first.
+  const revisionRef =
+    restatementRef && !restated?.exists
+      ? restatementRef
+      : db.collection("revisions").doc();
 
   const revision = {
     node_id: nodeRef.id,
     collection: "nodes",
-    data: sanitizeFirestoreData(mergedData),
+    data: mergedData,
     update_time: timestamp,
     update_user: user.uid,
     update_automatic: false,
@@ -119,7 +168,7 @@ export default defineEventHandler(async (event) => {
   }
   await batch.commit();
 
-  return { id: revisionRef.id, node_id: nodeRef.id };
+  return { id: revisionRef.id, node_id: nodeRef.id, duplicate: false };
 });
 
 /** The kind of node a proposal is for, out of the kinds anyone may propose.
