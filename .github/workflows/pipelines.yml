@@ -172,8 +172,39 @@ jobs:
           # their own full pass over the dump, which would roughly triple the
           # run for a dataset nothing serves yet. Excluding the top-level one
           # takes the dependency with it.
+          #
+          # The article branch comes out for a different reason: ArticleDoneUrls
+          # reads the production crawl-queue Postgres and the url_store service,
+          # and a GitHub runner has neither, so it raises
+          # psycopg_pool.PoolTimeout five seconds in. Naming it alone would not
+          # help -- select_pipelines only subtracts from the top-level list, and
+          # read_or_process runs a stale source anyway -- so the eight pipelines
+          # that reach it through their annotations come out with it. Standing
+          # up an empty `services: postgres:` here would be worse than the
+          # failure: it answers with zero done URLs, and all eight go green
+          # having processed nothing.
+          #
+          # This leaves 40 of the 51 pipelines running, and drops the only
+          # ContextResource the nightly was asking for -- the article branch is
+          # what pulled in an LLM client. To put the branch back, give the
+          # runner a reachable crawl queue rather than deleting lines here.
           if [ "$TIER" = "full" ]; then
-            selection="--all-pipelines --exclude ProcessWikiNer"
+            excluded=(
+              ProcessWikiNer
+              ArticleDoneUrls
+              ArticleParsed
+              ArticleDomainSelectors
+              ArticleAnalyzed
+              ArticlePersonMentions
+              ArticleExtractedFacts
+              ArticleFactsVerified
+              ArticleKoryciarskiScores
+              PeopleAffairTags
+            )
+            selection="--all-pipelines"
+            for pipeline in "${excluded[@]}"; do
+              selection="$selection --exclude $pipeline"
+            done
           else
             # Wiki only: the rest reads GCS or Firestore, which a fork PR has
             # no credentials for. ProcessWiki needs none.
