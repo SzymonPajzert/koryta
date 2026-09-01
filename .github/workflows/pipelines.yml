@@ -234,10 +234,34 @@ jobs:
       #
       # Runs even if the step above failed: versioned/ output and stored data
       # break independently, and one night should report both.
+      #
+      # The ceiling is a backstop, not a budget: the 60 tests that remain read
+      # one Firestore export between them and finished in seven minutes the
+      # first night they ran at all. A step that wants half an hour has found
+      # something new to download, and should say so rather than eat the job.
       - name: Check the database invariants
         if: ${{ !cancelled() && env.TIER == 'full' }}
+        timeout-minutes: 30
         working-directory: data/pipelines
-        run: uv run --no-sync pytest -m e2e src/tests/pipelines -v
+        run: |
+          set -euo pipefail
+          # test_rejestrio_coverage.py is the one file here that does not read
+          # the export. Both its module fixtures walk the whole
+          # `hostname=rejestr.io` prefix of gs://koryta-pl-crawled -- once for
+          # RejestrIOCoverage, again for PersonFeedCoverage -- and that bucket
+          # is multi-region, so the egress is billed per GB. On 2026-09-01,
+          # the first night this step ever got past authentication, its 11
+          # tests took the 100 minutes between the other 60 finishing and the
+          # job's 120-minute ceiling, then died without a verdict; the
+          # cancellation took the caches and the artifact upload with it.
+          #
+          # It is an audit rather than a nightly signal anyway -- the budgets
+          # it asserts are measured by hand and dated in the file. Run it
+          # deliberately:
+          #
+          #   .venv/bin/pytest -m e2e src/tests/pipelines/test_rejestrio_coverage.py
+          uv run --no-sync pytest -m e2e src/tests/pipelines -v \
+            --ignore=src/tests/pipelines/test_rejestrio_coverage.py
 
       - name: Upload pipeline output
         if: ${{ !cancelled() }}
