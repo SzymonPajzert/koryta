@@ -1,21 +1,33 @@
 <template>
   <v-row cols="12">
+    <!-- Folded, not moved. Six lines on a desktop are sixteen on a phone, so
+         this notice was 380px of the first screen and a reader looking for the
+         list of articles met a legal disclaimer instead of it. It stays first
+         on the page, because that is where a disclaimer belongs and moving it
+         under a fifty-row table would be hiding it - but as one line that opens
+         rather than as the page's opening paragraph. -->
     <v-col cols="12">
-      <v-card>
-        <v-card-text>
-          Niniejsza strona została utworzona na podstawie materiałów prasowych,
-          informacji zawartych w Krajowym Rejestrze Sądowym, a także w oparciu o
-          inne ogólnodostępne źródła. Strona wskazuje wybrane powiązania o
-          charakterze biznesowym, rodzinnym lub innym łączące niektóre osoby
-          zatrudnione w spółkach, fundacjach i organizacjach zarządzanych przez
-          organy polskiego państwa. Powiązanie, które zdołaliśmy ustalić i które
-          w naszej opinii są istotne dla całościowego spojrzenia na proces
-          wybierania ludzi na stanowiska poza konkursami. Zastrzegamy, że celem
-          strony nie jest twierdzenie, że wszystkie osoby uwidocznione na mapie
-          działają wspólnie lub w porozumieniu, jak również przesądzanie o
-          czyjejkolwiek osobistej winie lub odpowiedzialności prawnej.
-        </v-card-text>
-      </v-card>
+      <v-expansion-panels variant="accordion">
+        <v-expansion-panel>
+          <v-expansion-panel-title class="text-body-2">
+            Na czym opiera się ta strona i czego nie twierdzimy
+          </v-expansion-panel-title>
+          <v-expansion-panel-text class="text-body-2 pt-2">
+            Niniejsza strona została utworzona na podstawie materiałów
+            prasowych, informacji zawartych w Krajowym Rejestrze Sądowym, a
+            także w oparciu o inne ogólnodostępne źródła. Strona wskazuje
+            wybrane powiązania o charakterze biznesowym, rodzinnym lub innym
+            łączące niektóre osoby zatrudnione w spółkach, fundacjach i
+            organizacjach zarządzanych przez organy polskiego państwa.
+            Powiązanie, które zdołaliśmy ustalić i które w naszej opinii są
+            istotne dla całościowego spojrzenia na proces wybierania ludzi na
+            stanowiska poza konkursami. Zastrzegamy, że celem strony nie jest
+            twierdzenie, że wszystkie osoby uwidocznione na mapie działają
+            wspólnie lub w porozumieniu, jak również przesądzanie o
+            czyjejkolwiek osobistej winie lub odpowiedzialności prawnej.
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
     </v-col>
 
     <v-col cols="12">
