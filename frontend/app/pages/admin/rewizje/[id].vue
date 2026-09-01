@@ -1,5 +1,5 @@
 <template>
-  <div class="pa-4">
+  <div class="pa-4 revision-compare">
     <div class="d-flex align-center mb-4">
       <v-btn
         :icon="mdiArrowLeft"
@@ -47,16 +47,45 @@
       </div>
     </div>
 
+    <!-- One column per revision, so a company the pipelines have re-uploaded
+         forty times is forty screens wide. The filter is what makes that
+         readable; the scrolling below it is what makes it reachable. -->
+    <div
+      v-if="!pending && allRevisions.length > 0"
+      class="d-flex flex-wrap ga-3 align-center mb-4"
+    >
+      <v-btn-toggle
+        v-model="columnFilter"
+        density="compact"
+        variant="outlined"
+        divided
+        mandatory
+      >
+        <v-btn
+          v-for="option in filterOptions"
+          :key="option.value"
+          :value="option.value"
+          size="small"
+          :data-testid="`revision-filter-${option.value}`"
+        >
+          {{ option.title }} ({{ option.count }})
+        </v-btn>
+      </v-btn-toggle>
+      <span class="text-caption text-medium-emphasis">
+        Pokazano {{ shownRevisions.length }} z {{ allRevisions.length }}.
+      </span>
+    </div>
+
     <v-card v-if="pending" class="pa-4 text-center">
       <v-progress-circular indeterminate></v-progress-circular>
     </v-card>
-    <div v-else class="overflow-x-auto pb-4">
+    <div v-else class="comparison-scroll pb-4">
       <client-only>
-        <table v-if="allRevisions.length > 0" class="comparison-table">
+        <table v-if="shownRevisions.length > 0" class="comparison-table">
           <thead>
             <tr>
               <th
-                v-for="rev in allRevisions"
+                v-for="rev in shownRevisions"
                 :key="'h-' + rev.id"
                 :data-revision-header="rev.id"
                 class="card-header text-left"
@@ -179,7 +208,7 @@
           <tbody>
             <tr v-for="key in allKeys" :key="key">
               <td
-                v-for="rev in allRevisions"
+                v-for="rev in shownRevisions"
                 :key="key + '-' + rev.id"
                 class="card-cell"
                 :class="{
@@ -222,7 +251,11 @@
           </tbody>
         </table>
         <v-card v-else class="pa-6 text-center text-grey">
-          Brak rewizji dla tego węzła.
+          {{
+            allRevisions.length > 0
+              ? "Żadna rewizja nie pasuje do wybranego filtra."
+              : "Brak rewizji dla tego węzła."
+          }}
         </v-card>
       </client-only>
     </div>
@@ -467,8 +500,57 @@ const allRevisions = computed(() => {
   });
 });
 
+/** Which columns to draw. A node the pipelines re-upload nightly carries
+ * dozens of revisions saying the same thing, and every one of them is a
+ * 350px column between the reviewer and the proposal they came to read. */
+type ColumnFilter = "all" | "manual" | "pending";
+
+const columnFilter = ref<ColumnFilter>("all");
+
+/** The three states the header chips already name, worked out the same way so
+ * that the filter and the chip on a column cannot disagree. */
+function isPendingRevision(rev: Record<string, unknown>) {
+  return rev.id !== approvedRevisionId.value && rev.status !== "rejected";
+}
+
+const filterOptions = computed(() => [
+  {
+    value: "all" as const,
+    title: "Wszystkie",
+    count: allRevisions.value.length,
+  },
+  {
+    value: "manual" as const,
+    title: "Od ludzi",
+    count: allRevisions.value.filter((rev) => rev.update_automatic !== true)
+      .length,
+  },
+  {
+    value: "pending" as const,
+    title: "Oczekujące",
+    count: allRevisions.value.filter(isPendingRevision).length,
+  },
+]);
+
+/**
+ * The columns actually drawn.
+ *
+ * The revision named by `?revisionId=` is never filtered out: the queue and
+ * every "podgląd" link arrive pointing at one, and dropping it would answer
+ * that link with a table the reviewer has to guess their way back out of.
+ */
+const shownRevisions = computed(() => {
+  const highlighted = route.query.revisionId;
+  return allRevisions.value.filter((rev) => {
+    if (rev.id === highlighted) return true;
+    if (columnFilter.value === "manual") return rev.update_automatic !== true;
+    if (columnFilter.value === "pending") return isPendingRevision(rev);
+    return true;
+  });
+});
+
 watch(
-  () => [allRevisions.value.length, route.query.revisionId] as const,
+  () => [shownRevisions.value.length, route.query.revisionId] as const,
   scrollToHighlighted,
   { immediate: true },
 );
@@ -488,7 +570,9 @@ const nodeName = computed<string | null>(() => {
 
 const allKeys = computed(() => {
   const keys = new Set<string>();
-  for (const rev of allRevisions.value) {
+  // Over the drawn columns, so filtering out the pipeline's uploads takes
+  // their fields with them rather than leaving rows reading "- brak -".
+  for (const rev of shownRevisions.value) {
     if (rev.data && typeof rev.data === "object") {
       for (const k of Object.keys(rev.data as Record<string, unknown>)) {
         keys.add(k);
@@ -558,6 +642,26 @@ function differsFromApproved(rev: Record<string, unknown>, key: string) {
 </script>
 
 <style scoped>
+/* The layout wraps every page in a `v-container.fill-height`, which Vuetify
+   implements as a flex row - and a flex item does not shrink below its own
+   content. So a table wide enough to scroll stretched the page instead, and
+   `html { overflow-x: hidden }`, which Vuetify also sets, then clipped the
+   right-hand revisions off with no way to reach them. `min-width: 0` hands the
+   overflow back to the scroller below, which is where it belongs. */
+.revision-compare {
+  width: 100%;
+  min-width: 0;
+}
+
+.comparison-scroll {
+  overflow: auto;
+  /* The sideways scrollbar belongs at the bottom of the window. Left to the
+     page it sat at the bottom of a table as tall as the field list, so on a
+     node with thirty fields reaching it meant scrolling past everything it
+     was there to move. */
+  max-height: calc(100vh - 16rem);
+}
+
 .comparison-table {
   border-collapse: separate;
   border-spacing: 16px 0;
