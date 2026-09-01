@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { expectFitsThePhone } from "./phoneWidth";
 
 /** `settled` is what has to be on the page before it is worth capturing, for
  * the pages that draw themselves from an api response rather than from the
@@ -137,5 +138,8 @@ for (const { name, path, settled, viewports, act } of pages) {
       fullPage: true,
       timeout: 20_000,
     });
+    // After the capture, because it moves the page about to find out which
+    // element is the wide one.
+    await expectFitsThePhone(page, testInfo);
   });
 }
