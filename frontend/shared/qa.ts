@@ -48,6 +48,24 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "pomiar-tabeli-eksploruj",
+    title: "Wiemy, co ludzie robią w tabeli",
+    description:
+      "Tabela jest drugą najczęściej otwieraną stroną, ale trzech na " +
+      "czterech czytelników, którzy na niej zaczynają, wychodziło bez śladu " +
+      "- filtry, sortowanie i przewijanie stron zmieniają tylko adres, więc " +
+      "dla statystyk wyglądały jak nic. Teraz każde z nich się liczy. " +
+      "Wygląd i działanie strony bez zmian.",
+    steps: [
+      "Wejdź na /eksploruj/tabela, ustaw filtr partii, posortuj kolumnę i przejdź na drugą stronę wyników - wszystko ma działać jak dotąd.",
+      "Kliknij nazwisko: ma się otworzyć panel boczny osoby.",
+      "Kliknij „Wyczyść” - wszystkie filtry znikają naraz.",
+      "Skopiuj link z karty udostępniania i sprawdź, że otwiera tę samą przefiltrowaną tabelę.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
     id: "pomiar-uzycia-strony",
     title: "Wiemy wreszcie, w co ludzie na stronie klikają",
     description:

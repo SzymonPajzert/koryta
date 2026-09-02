@@ -49,6 +49,7 @@
         :show-progress="!!user"
         show-share
         @clear="clearFilters"
+        @share="trackGoal('tabela:shared')"
       />
 
       <v-card class="table-card">
@@ -139,6 +140,8 @@ import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 
 import { useEdges } from "~/composables/edges";
+import { trackGoal } from "~/composables/analytics";
+import { activeTabelaFilters, tabelaFiltersChanged } from "~~/shared/analytics";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -158,18 +161,39 @@ const { setQuery, stringFilter, arrayFilter, choiceFilter, numberFilter } =
 
 // Paging and sorting are the table's own state rather than filters, so they do
 // not reset the page - they set it.
+//
+// The parameters are read once into a ref each rather than inside the getter:
+// the setters compare against the current value before counting the change,
+// and `numberFilter` builds a fresh computed per call, so reading it there
+// would allocate one on every write.
+const pageParam = numberFilter("page");
 const page = computed<number>({
-  get: () => numberFilter("page").value ?? 1,
-  set: (val) => void setQuery({ page: val > 1 ? String(val) : undefined }),
+  get: () => pageParam.value ?? 1,
+  set: (val) => {
+    // Only a move off the first page, and only one the reader made. Vuetify's
+    // table writes the page back on mount and whenever the row count changes,
+    // and neither is somebody reaching row 11.
+    if (val > 1 && val !== (pageParam.value ?? 1)) {
+      trackGoal("tabela:paged", { kind: "page", to: String(val) });
+    }
+    void setQuery({ page: val > 1 ? String(val) : undefined });
+  },
 });
 
+const itemsPerPageParam = numberFilter("itemsPerPage");
 const itemsPerPage = computed<number>({
-  get: () => numberFilter("itemsPerPage").value ?? DEFAULT_ITEMS_PER_PAGE,
-  set: (val) =>
+  get: () => itemsPerPageParam.value ?? DEFAULT_ITEMS_PER_PAGE,
+  set: (val) => {
+    // Asking for more rows is the same intent as turning the page, so it is the
+    // same goal - what matters is that the reader wanted past the tenth row.
+    if (val !== (itemsPerPageParam.value ?? DEFAULT_ITEMS_PER_PAGE)) {
+      trackGoal("tabela:paged", { kind: "rows", to: String(val) });
+    }
     void setQuery({
       itemsPerPage: val === DEFAULT_ITEMS_PER_PAGE ? undefined : String(val),
       page: undefined,
-    }),
+    });
+  },
 });
 
 type SortEntry = { key: string; order: "asc" | "desc" };
@@ -184,6 +208,19 @@ const sortBy = computed<SortEntry[]>({
   },
   set: (val: SortEntry[]) => {
     const sort = val[0];
+    // Compared against what is already in the url, because the table hands its
+    // sort back on mount as well as on a click.
+    const current = route.query.sortBy as string | undefined;
+    const currentDesc = route.query.sortDesc === "true";
+    if (
+      sort?.key !== current ||
+      (sort ? sort.order === "desc" : false) !== currentDesc
+    ) {
+      trackGoal("tabela:sorted", {
+        by: sort?.key ?? "none",
+        order: sort?.order ?? "none",
+      });
+    }
     void setQuery({
       sortBy: sort?.key,
       sortDesc: sort ? String(sort.order === "desc") : undefined,
@@ -370,7 +407,19 @@ const filterMinVotes = numberFilter("minVotes");
  * `parties` and `krs` are in the list without a control of their own: they are
  * the spellings older links use for `party` and `place`, and a „Wyczyść” that
  * left them behind would clear the chips and none of the filtering. */
-const clearFilters = () =>
+/** Set by `clearFilters`, read once by the query watcher below.
+ *
+ * Only ever armed when the clear will actually change the url, so the watcher
+ * it is waiting for is guaranteed to run and take it down again. Armed on a
+ * no-op it would swallow the reader's next real filter change. */
+let clearInFlight = false;
+
+const clearFilters = () => {
+  const dropped = activeTabelaFilters(route.query);
+  if (dropped.length > 0) {
+    clearInFlight = true;
+    trackGoal("tabela:filter-cleared", { dropped: String(dropped.length) });
+  }
   void setQuery({
     category: undefined,
     teryt: undefined,
@@ -386,6 +435,7 @@ const clearFilters = () =>
     minVotes: undefined,
     page: undefined,
   });
+};
 
 const availableRegions = computed(() =>
   regionFilterOptions(Object.values(regions.value ?? {})),
@@ -462,9 +512,53 @@ const focusedEdges = computed(() => [
 ]);
 
 const focusPerson = (item: PersonRich) => {
+  // The table's conversion: everything else on the page exists to get a reader
+  // to open one of these.
+  trackGoal("tabela:row-opened");
   focusedPerson.value = item;
   openDrawer.value = true;
 };
+
+// How the reader got here. 73% of the site's entrances land on `/`, and this is
+// where the home map, the party treemap and most of the search results send
+// them - so whether an arrival carries a filter is the difference between "came
+// looking for something" and "was handed the raw list of everybody".
+onMounted(() => {
+  const arrived = activeTabelaFilters(route.query);
+  trackGoal("tabela:open", {
+    filtered: arrived.length > 0 ? "true" : "false",
+    filters: arrived.join(",") || "none",
+  });
+});
+
+// Every filter on this page is a writable computed over the query string, so
+// the url is the one place that sees all of them - including the close button
+// on each chip and the spellings older links still use. Watching it beats
+// threading a callback through the filter bar and its eleven controls.
+watch(
+  () => route.query,
+  (after, before) => {
+    if (clearInFlight) {
+      // „Wyczyść” already reported itself as one event. Without this the same
+      // click would also report each of the filters it dropped as used.
+      clearInFlight = false;
+      return;
+    }
+    for (const filter of tabelaFiltersChanged(before, after)) {
+      trackGoal("tabela:filter", { filter });
+    }
+  },
+);
+
+// Once per settled fetch that came back empty, which is once per filter change
+// that found nobody. It does not fire while `pending` is still true, so the
+// empty table shown during a load is not counted as a dead end.
+watch(pending, (isPending, was) => {
+  if (isPending || !was || totalItems.value !== 0) return;
+  trackGoal("tabela:no-results", {
+    filters: activeTabelaFilters(route.query).join(",") || "none",
+  });
+});
 </script>
 
 <style scoped>

@@ -8,10 +8,10 @@ import { HOME_DEFAULT_EXPERIMENT } from "../../../shared/experiments";
  * booted in the test environment is a different question, and not one this
  * component can answer. */
 const trackGoal = vi.fn();
-const trackExperimentGoal = vi.fn();
+const setGlobalProp = vi.fn();
 vi.mock("~/composables/analytics", () => ({
   trackGoal: (...args: unknown[]) => trackGoal(...args),
-  trackExperimentGoal: (...args: unknown[]) => trackExperimentGoal(...args),
+  setGlobalProp: (...args: unknown[]) => setGlobalProp(...args),
 }));
 
 registerEndpoint("/api/stats/progress", () => ({
@@ -50,7 +50,7 @@ const tabs = (wrapper: Awaited<ReturnType<typeof mount>>, label: string) =>
 
 beforeEach(() => {
   trackGoal.mockClear();
-  trackExperimentGoal.mockClear();
+  setGlobalProp.mockClear();
   sessionStorage.clear();
 });
 
@@ -65,26 +65,51 @@ describe("HomeExplorer", () => {
   it("records the arm once, not once per tab strip", async () => {
     await mount();
 
-    expect(trackExperimentGoal).toHaveBeenCalledTimes(1);
-    expect(trackExperimentGoal.mock.calls[0]![0]).toBe(
-      `exp:${HOME_DEFAULT_EXPERIMENT.id}:map`,
+    const assigned = trackGoal.mock.calls.filter(
+      (call) => call[0] === "experiment:assigned",
     );
+    expect(assigned).toHaveLength(1);
+    expect(assigned[0]![1]).toEqual({
+      experiment: HOME_DEFAULT_EXPERIMENT.id,
+      arm: "map",
+    });
+  });
+
+  it("puts the arm on every later event", async () => {
+    // The whole point of moving off a goal-per-arm: with the arm as a property
+    // the dashboard can be filtered to one arm and any metric compared, not
+    // just the conversions of one goal.
+    const wrapper = await mount();
+
+    expect(setGlobalProp).toHaveBeenCalledWith(
+      `arm:${HOME_DEFAULT_EXPERIMENT.id}`,
+      "map",
+    );
+    // Registered before the first goal is sent, so the denominator sits inside
+    // the same filter as the things it is a denominator for.
+    expect(setGlobalProp.mock.invocationCallOrder[0]!).toBeLessThan(
+      trackGoal.mock.invocationCallOrder[0]!,
+    );
+    expect(wrapper.text()).toContain("Mapa koryciarstwa");
   });
 
   it("counts a switch to the party treemap, and back", async () => {
     const wrapper = await mount();
 
     await tabs(wrapper, "Partie")[0]!.trigger("click");
-    expect(trackGoal).toHaveBeenCalledWith("home-explorer:tab-parties");
+    expect(trackGoal).toHaveBeenCalledWith("home-explorer:tab", {
+      tab: "parties",
+    });
     expect(wrapper.text()).toContain("Podział na partie");
 
     trackGoal.mockClear();
     await tabs(wrapper, "Mapa")[0]!.trigger("click");
-    expect(trackGoal).toHaveBeenCalledWith("home-explorer:tab-map");
+    expect(trackGoal).toHaveBeenCalledWith("home-explorer:tab", { tab: "map" });
   });
 
   it("does not count a click on the tab already open", async () => {
     const wrapper = await mount();
+    trackGoal.mockClear();
 
     await tabs(wrapper, "Mapa")[0]!.trigger("click");
 
@@ -98,8 +123,9 @@ describe("HomeExplorer", () => {
     map.vm.$emit("click", { teryt: "1261", d: "", name: "Kraków" });
     await wrapper.vm.$nextTick();
 
-    expect(trackGoal).toHaveBeenCalledWith("home-map:region", {
-      region: "1261",
+    expect(trackGoal).toHaveBeenCalledWith("home-explorer:pick", {
+      panel: "map",
+      value: "1261",
     });
   });
 });

@@ -42,7 +42,12 @@
               <v-card-text>
                 <ClientOnly>
                   <LazyChartTreemapParty
-                    @select="trackGoal('home-parties:party', { party: $event })"
+                    @select="
+                      trackGoal('home-explorer:pick', {
+                        panel: 'parties',
+                        value: $event,
+                      })
+                    "
                   />
                 </ClientOnly>
               </v-card-text>
@@ -115,17 +120,17 @@ watch(arm, (value) => {
 function selectTab(value: unknown) {
   if (!isPanel(value) || value === tab.value) return;
   tab.value = value;
-  trackGoal(
-    value === "parties" ? "home-explorer:tab-parties" : "home-explorer:tab-map",
-  );
+  trackGoal("home-explorer:tab", { tab: value });
 }
 
-/** The map's only conversion. The powiat goes in a property rather than the
- * goal name - there are 380 of them, and on a Growth plan the property is
- * dropped, which is the right trade: one readable goal beats 380 unusable
- * ones. Keyed by teryt rather than name, which is optional on a Powiat. */
+/** The map's conversion, under the same goal as the treemap's so that `panel`
+ * compares the two directly - which is the question the tab strip poses.
+ *
+ * Keyed by teryt rather than name, which is optional on a Powiat. 380 values is
+ * a long breakdown but a legitimate one, and it is the only place the site
+ * would learn which parts of the country people look for. */
 function pickRegion(picked: Powiat) {
   region.value = picked;
-  trackGoal("home-map:region", { region: picked.teryt });
+  trackGoal("home-explorer:pick", { panel: "map", value: picked.teryt });
 }
 </script>
