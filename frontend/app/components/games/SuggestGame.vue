@@ -1,69 +1,89 @@
 <template>
-  <v-card variant="outlined" class="pa-4" data-testid="suggest-game">
-    <h2 class="text-h6 font-weight-bold mb-1">Zaproponuj grę</h2>
-    <p class="text-body-2 text-medium-emphasis mb-3">
-      Masz pomysł na kolejną codzienną zagadkę? Napisz, na czym miałaby polegać
-      — czytamy wszystkie zgłoszenia, a kolejne gry powstają właśnie z nich.
-    </p>
+  <v-expansion-panels variant="accordion" data-testid="suggest-game">
+    <v-expansion-panel>
+      <!-- Collapsed by default. The hub's job is to get somebody into a game,
+           and on a phone an open form pushes the game cards off the screen -
+           so this asks for one tap from the few people who came to write
+           something, rather than a scroll from everybody else. -->
+      <v-expansion-panel-title
+        class="text-subtitle-1 font-weight-bold"
+        data-testid="suggest-game-toggle"
+      >
+        Zaproponuj grę
+      </v-expansion-panel-title>
 
-    <template v-if="sent">
-      <v-alert
-        type="success"
-        variant="tonal"
-        data-testid="suggest-game-sent"
-        text="Dzięki! Pomysł trafił do nas."
-      />
-    </template>
+      <v-expansion-panel-text>
+        <p class="text-body-2 text-medium-emphasis mb-3">
+          Masz pomysł na kolejną codzienną zagadkę? Napisz, na czym miałaby
+          polegać — czytamy wszystkie zgłoszenia, a kolejne gry powstają właśnie
+          z nich.
+        </p>
 
-    <template v-else>
-      <v-textarea
-        v-model="message"
-        label="Na czym polega gra?"
-        placeholder="np. zgadywanie, z której partii jest osoba, po samym CV"
-        rows="3"
-        counter="4000"
-        :maxlength="4000"
-        :disabled="sending"
-        auto-grow
-        data-testid="suggest-game-message"
-      />
-      <v-text-field
-        v-model="contact"
-        label="Kontakt (opcjonalnie)"
-        placeholder="e-mail, jeśli chcesz odpowiedź"
-        :maxlength="200"
-        :disabled="sending"
-        density="comfortable"
-      />
+        <template v-if="sent">
+          <v-alert
+            type="success"
+            variant="tonal"
+            data-testid="suggest-game-sent"
+            text="Dzięki! Pomysł trafił do nas."
+          />
+        </template>
 
-      <!-- Honeypot: hidden from people, irresistible to form-filling bots. Not
+        <template v-else>
+          <v-textarea
+            v-model="message"
+            label="Na czym polega gra?"
+            placeholder="np. zgadywanie, z której partii jest osoba, po samym CV"
+            rows="3"
+            counter="4000"
+            :maxlength="4000"
+            :disabled="sending"
+            auto-grow
+            data-testid="suggest-game-message"
+          />
+          <v-text-field
+            v-model="contact"
+            label="Kontakt (opcjonalnie)"
+            placeholder="e-mail, jeśli chcesz odpowiedź"
+            :maxlength="200"
+            :disabled="sending"
+            density="comfortable"
+          />
+
+          <!-- Honeypot: hidden from people, irresistible to form-filling bots. Not
            `display: none`, which the better bots skip. Same field name the
            feedback dialog uses, because it is the same route that reads it. -->
-      <label class="suggest-honeypot" aria-hidden="true">
-        Nie wypełniaj tego pola
-        <input v-model="website" type="text" tabindex="-1" autocomplete="off" />
-      </label>
+          <label class="suggest-honeypot" aria-hidden="true">
+            Nie wypełniaj tego pola
+            <input
+              v-model="website"
+              type="text"
+              tabindex="-1"
+              autocomplete="off"
+            />
+          </label>
 
-      <v-btn
-        color="primary"
-        variant="flat"
-        :loading="sending"
-        :disabled="!message.trim()"
-        data-testid="suggest-game-submit"
-        @click="send"
-      >
-        Wyślij pomysł
-      </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            :loading="sending"
+            :disabled="!message.trim()"
+            data-testid="suggest-game-submit"
+            @click="send"
+          >
+            Wyślij pomysł
+          </v-btn>
 
-      <v-alert
-        v-if="failed"
-        class="mt-3"
-        type="error"
-        variant="tonal"
-        text="Nie udało się wysłać. Spróbuj ponownie za chwilę."
-      />
-    </template>
-  </v-card>
+          <v-alert
+            v-if="failed"
+            class="mt-3"
+            type="error"
+            variant="tonal"
+            text="Nie udało się wysłać. Spróbuj ponownie za chwilę."
+          />
+        </template>
+      </v-expansion-panel-text>
+    </v-expansion-panel>
+  </v-expansion-panels>
 </template>
 
 <script lang="ts" setup>
