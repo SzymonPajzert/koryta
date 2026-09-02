@@ -167,12 +167,16 @@ export default defineNuxtConfig({
     // to what rendering a page costs, and the handler does no rendering.
     proxy: true,
 
-    // Counts clicks that leave the site - the volunteer form, Patronite, the
-    // Slack invite - as one "Outbound Link: Click" goal. The url is a property,
-    // so on a Growth plan this cannot say *which* link, which is why the links
-    // that matter also fire a named goal of their own (shared/analytics.ts).
-    // Kept anyway: it is the only thing that sees the source links on an
-    // article page, and those are not worth a goal each.
+    // Counts clicks that leave the site as one "Outbound Link: Click" goal,
+    // with the url as a property - which on a Business plan is a breakdown
+    // rather than a single number, so this alone covers every source link on
+    // every article page without a goal for any of them.
+    //
+    // The handful that carry a decision - the volunteer form, Patronite, the
+    // Slack invite - still fire a named goal of their own
+    // (shared/analytics.ts), because a conversion worth putting in a funnel
+    // should be one thing to point at rather than a url filter somebody has to
+    // remember to apply.
     autoOutboundTracking: true,
   },
 

@@ -245,7 +245,12 @@
         </v-list>
       </v-menu>
 
-      <ExploreShareQuery v-if="showShare" :query="query" :lookup="lookup" />
+      <ExploreShareQuery
+        v-if="showShare"
+        :query="query"
+        :lookup="lookup"
+        @copied="emit('share')"
+      />
     </div>
 
     <!-- Band 2: the work row, for a reader who is signed in and can act on it.
@@ -457,7 +462,13 @@ const props = withDefaults(
  * The page owns the url, so the page drops them in one write - which is also
  * one history entry for the back button rather than ten.
  */
-const emit = defineEmits<{ clear: [] }>();
+const emit = defineEmits<{
+  clear: [];
+  /** The reader copied a link to the query this bar describes. Passed up rather
+   * than counted here for the same reason `clear` is: the page owns what its
+   * surface is called. */
+  share: [];
+}>();
 
 const visibility = defineModel<"all" | "public" | "private">("visibility");
 const party = defineModel<string[] | null>("party");

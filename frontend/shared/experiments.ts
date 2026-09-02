@@ -13,11 +13,25 @@
  * machinery does is exist. Turning it on is changing the weights, and the goals
  * are already registered so no data is lost to a forgotten dashboard step.
  *
- * Before spending traffic on the split, read `home-explorer:tab-parties`
- * (`shared/analytics.ts`). The tab strip is already switchable, so how many
- * people open the treemap at all is observable for free, at full sample size,
- * with no arm to divide by. An experiment is only worth running if that number
- * is ambiguous.
+ * Before spending traffic on the split, read `home-explorer:tab` broken down by
+ * `tab`, and `home-explorer:pick` broken down by `panel` (`shared/analytics.ts`).
+ * The tab strip is already switchable, so how many people open the treemap at
+ * all - and what each panel converts once opened - is observable for free, at
+ * full sample size, with no arm to divide by. An experiment is only worth
+ * running if those numbers are ambiguous.
+ *
+ * ## The arm is a property, not a goal
+ *
+ * On a Business plan the arm rides as a custom property on every event
+ * (`setGlobalProp` in `app/composables/analytics.ts`), so the dashboard can be
+ * filtered to one arm and *every* goal compared across them. That is a
+ * different and much better measurement than a goal per arm would have been:
+ * with a goal you can only count conversions, with a property you can ask what
+ * each arm's readers went on to do.
+ *
+ * One goal remains - `experiment:assigned` - and it is there to give each arm a
+ * denominator. It is passive, so being sorted into an arm does not by itself
+ * count as engagement.
  *
  * ## Stickiness is per session, on purpose
  *
@@ -109,27 +123,13 @@ export const EXPERIMENTS = {
 
 export type ExperimentId = keyof typeof EXPERIMENTS;
 
-/** The goal that records which arm a reader was assigned to.
+/** The property name an experiment's arm is reported under.
  *
- * On a Growth plan this marker is the *only* way to segment the other goals:
- * custom properties do not exist, but the dashboard can be filtered to visitors
- * who completed a given goal. So the reading is "filter to
- * `exp:home-default:parties`, then look at `home-parties:party`" - which is why
- * the arm has to be its own goal rather than a property on the others. */
-export function experimentGoal(experimentId: string, armId: string): string {
-  return `exp:${experimentId}:${armId}`;
+ * Keyed by experiment rather than a single `arm` property, so two experiments
+ * running at once do not overwrite each other on the same event. */
+export function armPropertyName(experimentId: string): string {
+  return `arm:${experimentId}`;
 }
-
-/** Every arm-marker goal, including the arms currently at zero weight.
- *
- * Zero-weight arms are included deliberately: registering a goal in Plausible
- * is a manual dashboard step, and the point of this list is that activating an
- * experiment never needs one. */
-export const EXPERIMENT_GOALS: string[] = Object.values(EXPERIMENTS)
-  .flatMap((experiment) =>
-    experiment.arms.map((arm) => experimentGoal(experiment.id, arm.id)),
-  )
-  .sort();
 
 /** A stable number in [0, 1) from an arbitrary string.
  *

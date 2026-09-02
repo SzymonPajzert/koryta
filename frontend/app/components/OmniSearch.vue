@@ -88,8 +88,7 @@ import { generateEntityUrl } from "~/composables/slugs";
 import { omniSearchTarget } from "~/composables/omniSearch";
 import { trackGoal } from "~/composables/analytics";
 import {
-  SEARCH_PICK_GOALS,
-  SEARCH_PROPOSE_GOALS,
+  resultBucket,
   searchPickKind,
   type SearchPickKind,
 } from "~~/shared/analytics";
@@ -155,9 +154,9 @@ const createType = ref<ProposableNodeType>("person");
 const openCreate = async (type: CreatableFromSearch) => {
   // Recorded before the dialog opens, because this is the interesting event on
   // its own: it says the search could not answer, and what the reader was
-  // willing to add instead. Whether they went on to submit is a different
-  // question, and one the revision queue already answers.
-  trackGoal(SEARCH_PROPOSE_GOALS[type], { query: createName.value });
+  // willing to add instead. The typed name is not recorded - it is somebody's
+  // name, and `kind` is the part that is about the site.
+  trackGoal("search:propose", { kind: type });
   pendingCreateName.value = createName.value;
   createType.value = type;
   // The dialog is keyed by type, so it is a different component instance once
@@ -238,12 +237,10 @@ async function performSearch(searchTerm: string) {
     searchData.value = response;
     // Counted here rather than on every keystroke: `debouncedSearch` is what
     // reaches the server, so this is one event per query a reader actually
-    // waited for, and the two goals are directly comparable - the gap between
-    // them is the share of searches the index cannot answer.
-    trackGoal("search:performed");
-    if (response.length === 0) {
-      trackGoal("search:no-results", { query: searchTerm });
-    }
+    // waited for. The count is bucketed and the query itself is not sent -
+    // `results: none` against the total is the share of searches the index
+    // cannot answer, which is the whole question.
+    trackGoal("search:performed", { results: resultBucket(response.length) });
   } catch (error) {
     // A search that fails should offer nothing rather than spin forever.
     console.error("Search failed", error);
@@ -326,9 +323,7 @@ watch(nodeGroupPicked, (value) => {
   // reader with something in mind, the other is a reader giving up on typing.
   // Defaulted, because the value arrives from VAutocomplete's model and a test
   // may hand over a partial entry.
-  trackGoal(SEARCH_PICK_GOALS[value.analyticsKind ?? "place"], {
-    title: value.title,
-  });
+  trackGoal("search:pick", { kind: value.analyticsKind ?? "place" });
   push(omniSearchTarget(currentRoute.value, value));
   autocompleteFocus.value = false;
 });

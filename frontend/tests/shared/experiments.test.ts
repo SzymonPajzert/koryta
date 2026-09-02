@@ -1,10 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   EXPERIMENTS,
-  EXPERIMENT_GOALS,
   HOME_DEFAULT_EXPERIMENT,
+  armPropertyName,
   assignArm,
-  experimentGoal,
   hashToUnitInterval,
   type Experiment,
 } from "../../shared/experiments";
@@ -118,13 +117,15 @@ describe("the registry", () => {
     }
   });
 
-  it("registers a marker goal for every arm, including dormant ones", () => {
-    for (const experiment of Object.values(EXPERIMENTS)) {
-      for (const arm of experiment.arms) {
-        expect(EXPERIMENT_GOALS).toContain(
-          experimentGoal(experiment.id, arm.id),
-        );
-      }
+  it("gives each experiment its own property name", () => {
+    // One `arm` property shared by every experiment would mean two running at
+    // once overwrite each other on the same event, and neither is readable.
+    const names = Object.values(EXPERIMENTS).map((experiment) =>
+      armPropertyName(experiment.id),
+    );
+    expect(new Set(names).size).toBe(names.length);
+    for (const name of names) {
+      expect(name).toMatch(/^arm:[a-z0-9-]+$/);
     }
   });
 

@@ -6,11 +6,11 @@
  */
 
 import {
+  armPropertyName,
   assignArm,
-  experimentGoal,
   type Experiment,
 } from "~~/shared/experiments";
-import { trackExperimentGoal } from "~/composables/analytics";
+import { setGlobalProp, trackGoal } from "~/composables/analytics";
 
 /** Where the per-session id lives. One key for the whole site: the id
  * identifies the session, not the experiment, so two experiments running at
@@ -64,7 +64,7 @@ function claimReport(experimentId: string): boolean {
   }
 }
 
-/** The arm this reader is in, and a record of it in Plausible.
+/** The arm this reader is in, registered so every later event carries it.
  *
  * Starts on the control arm and stays there through SSR, because `/` is served
  * from a shared `swr` cache and cannot vary per reader - the arm is resolved on
@@ -72,11 +72,16 @@ function claimReport(experimentId: string): boolean {
  * asymmetry `shared/experiments.ts` says to fix before activating a split, and
  * it is invisible while every experiment is dormant.
  *
- * The marker goal is sent once per session per experiment, on assignment. Once,
- * because the dashboard reading is "filter to visitors who converted this goal"
- * - a per-pageview marker would still segment correctly but would report an arm
- * size that is really a pageview count, which is the number one is trying not
- * to confuse it with.
+ * Two things happen on assignment. The arm becomes a property on every
+ * subsequent event, which is what makes the comparison readable; and
+ * `experiment:assigned` is sent once per session, which is what gives the arm a
+ * denominator to compare against. Once rather than per pageview, because an arm
+ * size that is really a pageview count is the number one is trying not to
+ * confuse it with.
+ *
+ * The ordering matters: `setGlobalProp` runs before the goal, so
+ * `experiment:assigned` carries the arm too and the denominator sits inside the
+ * same filter as everything it is a denominator for.
  */
 export function useExperimentArm<Id extends string>(
   experiment: Experiment<Id>,
@@ -89,9 +94,10 @@ export function useExperimentArm<Id extends string>(
     if (!id) return;
 
     arm.value = assignArm(experiment, id);
+    setGlobalProp(armPropertyName(experiment.id), arm.value);
 
     if (claimReport(experiment.id)) {
-      trackExperimentGoal(experimentGoal(experiment.id, arm.value), {
+      trackGoal("experiment:assigned", {
         experiment: experiment.id,
         arm: arm.value,
       });

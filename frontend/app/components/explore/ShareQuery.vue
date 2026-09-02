@@ -208,6 +208,9 @@ const selectUrl = () => {
   }
 };
 
+/** A link or a description+link actually reached the clipboard. */
+const emit = defineEmits<{ copied: [] }>();
+
 const copy = async (text: string, done: string) => {
   try {
     // Inside the try on purpose: on an insecure origin `navigator.clipboard`
@@ -235,8 +238,13 @@ const copy = async (text: string, done: string) => {
   }
 
   announce(done);
-  // Only on success. Closing on the failure path would take away the field the
-  // fallback just selected.
+  // Only on success, and for the same reason the dialog only closes here: the
+  // fallback path put the address in front of the reader to copy by hand, and
+  // nobody has shared anything yet. Emitted rather than counted here, so the
+  // page that shows this card is the one that names the goal.
+  emit("copied");
+  // Closing on the failure path would take away the field the fallback just
+  // selected.
   open.value = false;
 };
 </script>
