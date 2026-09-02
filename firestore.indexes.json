@@ -648,6 +648,20 @@
         },
         {
           "fieldPath": "update_time",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "revisions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "node_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "update_time",
           "order": "DESCENDING"
         }
       ]
