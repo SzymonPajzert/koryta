@@ -51,15 +51,12 @@ export const QA_ITEMS: QaItem[] = [
     id: "strzalki-na-liscie-regionu-w-jednej-linii",
     title: "Strzałki na liście osób regionu stoją w jednej kolumnie",
     description:
-      "Na stronie głównej, po kliknięciu powiatu na mapie, strzałka w wierszu " +
-      "osoby z partią stała pięć pikseli niżej niż w wierszu bez partii, więc " +
-      "kolumna strzałek nie była kolumną. Teraz partie i strzałka siedzą w " +
-      "jednym rzędzie wyśrodkowanym w pionie, a bardzo długa nazwa partii " +
-      "kończy się wielokropkiem zamiast wypychać strzałkę poza wiersz.",
+      "Na stronie głównej, po kliknięciu powiatu, strzałka w wierszu osoby z " +
+      "partią stała kilka pikseli niżej niż w wierszu bez partii. Teraz " +
+      "wszystkie są na jednej wysokości, a bardzo długa nazwa partii kończy " +
+      "się wielokropkiem zamiast wypychać strzałkę.",
     steps: [
-      "Na stronie głównej kliknij powiat, w którym ktoś ma przypisaną partię (np. duże miasto).",
-      "Porównaj wiersz z partią i wiersz bez: strzałki po prawej mają być na tej samej wysokości.",
-      "Na telefonie (375px) każda strzałka ma być w całości widoczna w karcie, a nazwisko - jeśli partie zabrały mu miejsce - ma się kończyć wielokropkiem, nie zawijać.",
+      "Kliknij powiat na mapie, w którym ktoś ma partię, i porównaj strzałki w wierszach z partią i bez.",
     ],
     link: "/",
     area: "public",
@@ -68,16 +65,11 @@ export const QA_ITEMS: QaItem[] = [
     id: "rewizje-w-panelu-tym-samym-przyciskiem",
     title: "„Rewizje” w panelu bocznym wygląda jak na stronie osoby",
     description:
-      "Skrót do rewizji, który admin ma w panelu bocznym tabeli, był szarym " +
-      "przyciskiem z napisem - jedynym takim w całym panelu, obok " +
-      "pomarańczowego „Zaproponuj zmianę” i pastylki z głosem. Teraz jest " +
-      "tym samym kwadratowym, obrysowanym przyciskiem z ikoną, którym " +
-      "strona osoby prowadzi do rewizji, z podpisem w dymku.",
+      "Skrót do rewizji w panelu bocznym tabeli był szarym przyciskiem z " +
+      "napisem. Teraz jest tym samym kwadratowym przyciskiem z ikoną i " +
+      "dymkiem, co w nagłówku strony osoby.",
     steps: [
-      "Jako admin wejdź na /eksploruj/tabela i kliknij nazwisko - w panelu, w linii z „Zaproponuj zmianę” i głosem, ma być kwadratowy przycisk z ikoną historii, bez napisu.",
-      "Najedź na niego - dymek ma mówić „Rewizje”; kliknięcie ma otworzyć listę rewizji tej osoby.",
-      "Otwórz stronę tej samej osoby i porównaj: przycisk „Rewizje” w nagłówku ma wyglądać tak samo.",
-      "Jako zwykły użytkownik przycisku w panelu ma nie być.",
+      "Jako admin kliknij nazwisko w /eksploruj/tabela i porównaj przycisk obok „Zaproponuj zmianę” z tym na stronie osoby.",
     ],
     link: "/eksploruj/tabela",
     area: "admin",
