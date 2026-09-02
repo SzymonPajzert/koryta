@@ -1421,13 +1421,13 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Na wąskim ekranie nad wyszukiwarką jest jedno zdanie o tym, co ta " +
       "strona robi - zabrakło go, kiedy logo i nagłówek zeszły z pierwszego " +
-      "ekranu. Przycisk âDziałaj z namiâ znika z telefonów, żeby mapa " +
+      "ekranu. Przycisk „Działaj z nami” znika z telefonów, żeby mapa " +
       "koryciarstwa była pierwszą rzeczą pod wyszukiwarką; ten sam " +
       "odnośnik jest teraz w stopce, więc dalej można do niego trafić.",
     steps: [
       "Na telefonie (albo zwęż okno poniżej 960 px) wejdź na stronę główną - nad wyszukiwarką ma być jedno zdanie o tym, co robimy.",
-      "Sprawdź, że pod wyszukiwarką nie ma już przycisku âDziałaj z namiâ i że zaraz pod nią zaczyna się mapa.",
-      "Przewiń na sam dół - w stopce, w âO projekcieâ, ma być âDziałaj z namiâ, prowadzące na /pomoc.",
+      "Sprawdź, że pod wyszukiwarką nie ma już przycisku „Działaj z nami” i że zaraz pod nią zaczyna się mapa.",
+      "Przewiń na sam dół - w stopce, w „O projekcie”, ma być „Działaj z nami”, prowadzące na /pomoc.",
       "Rozszerz okno powyżej 960 px - wraca logo, nagłówek i przycisk obok wyszukiwarki, a zdanie znika (mówi to samo, co nagłówek).",
     ],
     link: "/",
@@ -1444,9 +1444,9 @@ export const QA_ITEMS: QaItem[] = [
       "staremu, filtry są rozwinięte.",
     steps: [
       "Na telefonie (albo zwęż okno poniżej 960 px) wejdź na /eksploruj/tabela - tabela ma być widoczna bez przewijania albo po jednym machnięciu.",
-      "Kliknij przycisk âFiltry i wyszukiwanieâ - filtry mają się rozwinąć i zwinąć ponownie.",
-      "Ustaw jakiś filtr, na przykład partię, i zwiń panel - na przycisku ma być âFiltry (1)â, żeby nie filtrował po cichu.",
-      "Wyloguj się i sprawdź niebieski banerek: przycisk âZaloguj sięâ ma być pod tekstem, w całości na ekranie.",
+      "Kliknij przycisk „Filtry i wyszukiwanie” - filtry mają się rozwinąć i zwinąć ponownie.",
+      "Ustaw jakiś filtr, na przykład partię, i zwiń panel - na przycisku ma być „Filtry (1)”, żeby nie filtrował po cichu.",
+      "Wyloguj się i sprawdź niebieski banerek: przycisk „Zaloguj się” ma być pod tekstem, w całości na ekranie.",
       "Spróbuj przewinąć stronę w bok - nie ma czego, nic nie wystaje poza ekran.",
       "Rozszerz okno powyżej 960 px - filtry mają być rozwinięte, bez przycisku do zwijania.",
     ],
@@ -1457,20 +1457,20 @@ export const QA_ITEMS: QaItem[] = [
     id: "reviewer-queue-one-button",
     title: "Kolejka rewizji: jeden przycisk zamiast pięciu",
     description:
-      "Wiersz w kolejce ma teraz jeden przycisk - âRozpatrzâ - który otwiera " +
+      "Wiersz w kolejce ma teraz jeden przycisk - „Rozpatrz” - który otwiera " +
       "porównanie rewizji tego wpisu z tą jedną podświetloną i przewiniętą " +
       "na widok. Decyzje zapadają tam, gdzie widać całą zmianę, a nie w " +
       "najwęższej kolumnie tabeli. Autor i data to jedna kolumna " +
-      "âZgłoszenieâ na początku wiersza, a âCzego dotyczyâ nie rozpycha się " +
+      "„Zgłoszenie” na początku wiersza, a „Czego dotyczy” nie rozpycha się " +
       "już na tytuł artykułu.",
     steps: [
       "Jako admin wejdź na /admin/rewizje/kolejka.",
-      "Sprawdź pierwszą kolumnę âZgłoszenieâ - w jednym miejscu ma być autor, kiedy zgłosił i status.",
+      "Sprawdź pierwszą kolumnę „Zgłoszenie” - w jednym miejscu ma być autor, kiedy zgłosił i status.",
       "Sprawdź ostatnią kolumnę - ma być w niej dokładnie jeden przycisk.",
-      "Kliknij âRozpatrzâ - otwiera się porównanie rewizji tego wpisu, a kolumna z tą rewizją jest podświetlona i widoczna bez przewijania w bok.",
-      "Zatwierdź albo odrzuć ją tam i wróć do kolejki - przycisk przy rozpatrzonej zmienia się na âZobaczâ.",
-      "Ustaw filtr âRodzajâ na âWszystkoâ i znajdź rewizję powiązania - jej przycisk ma prowadzić na /admin/rewizje-krawedzi, bo powiązania recenzuje się tam.",
-      "Znajdź rewizję artykułu o długim tytule - kolumna âCzego dotyczyâ ma być wąska, tytuł ucięty po dwóch liniach, a cały widoczny w dymku po najechaniu.",
+      "Kliknij „Rozpatrz” - otwiera się porównanie rewizji tego wpisu, a kolumna z tą rewizją jest podświetlona i widoczna bez przewijania w bok.",
+      "Zatwierdź albo odrzuć ją tam i wróć do kolejki - przycisk przy rozpatrzonej zmienia się na „Zobacz”.",
+      "Ustaw filtr „Rodzaj” na „Wszystko” i znajdź rewizję powiązania - jej przycisk ma prowadzić na /admin/rewizje-krawedzi, bo powiązania recenzuje się tam.",
+      "Znajdź rewizję artykułu o długim tytule - kolumna „Czego dotyczy” ma być wąska, tytuł ucięty po dwóch liniach, a cały widoczny w dymku po najechaniu.",
     ],
     link: "/admin/rewizje/kolejka",
     area: "admin",
@@ -1479,15 +1479,15 @@ export const QA_ITEMS: QaItem[] = [
     id: "drawer-admin-revisions-link",
     title: "Skrót do rewizji także w panelu bocznym",
     description:
-      "Przycisk âRewizjeâ, który admin ma na stronie osoby, jest teraz również " +
-      "w panelu bocznym otwieranym z tabeli - w tej samej linii co âZaproponuj " +
-      "zmianęâ i głosy. Nie trzeba już wychodzić z tabeli, żeby dojść do " +
+      "Przycisk „Rewizje”, który admin ma na stronie osoby, jest teraz również " +
+      "w panelu bocznym otwieranym z tabeli - w tej samej linii co „Zaproponuj " +
+      "zmianę” i głosy. Nie trzeba już wychodzić z tabeli, żeby dojść do " +
       "ekranu, na którym stronę się publikuje.",
     steps: [
-      "Jako admin wejdź na /eksploruj/tabela i kliknij nazwisko - w panelu, w linii z głosami, ma być przycisk âRewizjeâ.",
+      "Jako admin wejdź na /eksploruj/tabela i kliknij nazwisko - w panelu, w linii z głosami, ma być przycisk „Rewizje”.",
       "Kliknij go - ma otworzyć listę rewizji tej samej osoby, którą panel pokazywał.",
       "Wróć do tabeli, otwórz inną osobę i sprawdź, że przycisk prowadzi do niej, a nie do poprzedniej.",
-      "Zaloguj się jako zwykły użytkownik i powtórz - âZaproponuj zmianęâ ma być, âRewizjiâ nie.",
+      "Zaloguj się jako zwykły użytkownik i powtórz - „Zaproponuj zmianę” ma być, „Rewizji” nie.",
     ],
     link: "/eksploruj/tabela",
     area: "admin",
