@@ -60,17 +60,17 @@
         <!-- The same shortcut the person's own page carries, in the row that
              already holds what an admin may do here. Reaching a person from
              the table and then having to open their page to publish them was
-             the long way round to the one screen that publishes. -->
-        <v-btn
+             the long way round to the one screen that publishes. The same
+             square outlined button as on that page, too: the small grey tonal
+             one this used to be was the only control of its kind in the
+             drawer, and it read as disabled next to the vote pill. -->
+        <ButtonIconAction
           v-if="isAdmin"
-          variant="tonal"
-          size="small"
-          :prepend-icon="mdiHistory"
+          :icon="mdiHistory"
+          label="Rewizje"
           :to="`/admin/rewizje/${person.id}`"
           data-testid="drawer-admin-revisions-link"
-        >
-          Rewizje
-        </v-btn>
+        />
       </ExploreProposeChange>
 
       <NoteEditor
