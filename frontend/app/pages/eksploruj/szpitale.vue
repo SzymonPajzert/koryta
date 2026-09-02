@@ -76,36 +76,6 @@
       </v-col>
     </v-row>
 
-    <!-- The exclusion, directly under the chart it applies to, because it is
-         the one thing a reader has to understand to read those numbers. It also
-         has to be prominent for a second reason: a rada społeczna is the body
-         actually filled with radni and officials, so a reader who notices it
-         was dropped and finds no explanation would reasonably read the omission
-         as cherry-picking rather than as the fairness choice it is. The switch
-         it points at is the one directly above the chart, which is why it now
-         says „nad wykresem” rather than „poniżej”. -->
-    <v-alert
-      type="info"
-      variant="tonal"
-      density="comfortable"
-      class="mb-6"
-      :icon="mdiScaleBalance"
-    >
-      <p class="mb-2">
-        <strong>Rada społeczna to nie rada nadzorcza.</strong> Rada społeczna
-        jest organem opiniodawczo-doradczym samodzielnego publicznego zakładu
-        opieki zdrowotnej. Ustawa o działalności leczniczej nie przewiduje dla
-        jej członków ani wynagrodzenia, ani diety — jedynie rekompensatę
-        utraconych zarobków, jeżeli pracodawca udzielił członkowi na czas
-        posiedzenia bezpłatnego zwolnienia z obowiązków pracowniczych (art. 48
-        ust. 9-10). Dlatego tych miejsc nie wliczamy do zestawienia.
-      </p>
-      <p class="mb-0">
-        {{ exclusionSummary }} Przełącznik nad wykresem pokazuje, co dokładnie
-        zostało wyłączone.
-      </p>
-    </v-alert>
-
     <!-- ------------------------------------------------------------------ -->
     <!-- The way in, directly under the number that says why it is needed.
          The chart's own subtitle has just admitted how much of the register is
@@ -172,6 +142,36 @@
         </v-btn>
       </v-card-actions>
     </v-card>
+
+    <!-- The exclusion, directly under the chart it applies to, because it is
+         the one thing a reader has to understand to read those numbers. It also
+         has to be prominent for a second reason: a rada społeczna is the body
+         actually filled with radni and officials, so a reader who notices it
+         was dropped and finds no explanation would reasonably read the omission
+         as cherry-picking rather than as the fairness choice it is. The switch
+         it points at is the one directly above the chart, which is why it now
+         says „nad wykresem” rather than „poniżej”. -->
+    <v-alert
+      type="info"
+      variant="tonal"
+      density="comfortable"
+      class="mb-6"
+      :icon="mdiScaleBalance"
+    >
+      <p class="mb-2">
+        <strong>Rada społeczna to nie rada nadzorcza.</strong> Rada społeczna
+        jest organem opiniodawczo-doradczym samodzielnego publicznego zakładu
+        opieki zdrowotnej. Ustawa o działalności leczniczej nie przewiduje dla
+        jej członków ani wynagrodzenia, ani diety — jedynie rekompensatę
+        utraconych zarobków, jeżeli pracodawca udzielił członkowi na czas
+        posiedzenia bezpłatnego zwolnienia z obowiązków pracowniczych (art. 48
+        ust. 9-10). Dlatego tych miejsc nie wliczamy do zestawienia.
+      </p>
+      <p class="mb-0">
+        {{ exclusionSummary }} Przełącznik nad wykresem pokazuje, co dokładnie
+        zostało wyłączone.
+      </p>
+    </v-alert>
 
     <!-- ------------------------------------------------------------------ -->
     <h2 class="text-h6 mb-3">W skrócie</h2>

@@ -10,7 +10,7 @@
       <v-expansion-panels variant="accordion">
         <v-expansion-panel>
           <v-expansion-panel-title class="text-body-2">
-            Na czym opiera się ta strona i czego nie twierdzimy
+            Na czym opiera się ta strona
           </v-expansion-panel-title>
           <v-expansion-panel-text class="text-body-2 pt-2">
             Niniejsza strona została utworzona na podstawie materiałów
