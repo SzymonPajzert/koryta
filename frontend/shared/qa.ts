@@ -48,6 +48,23 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "strzalki-na-liscie-regionu-w-jednej-linii",
+    title: "Strzałki na liście osób regionu stoją w jednej kolumnie",
+    description:
+      "Na stronie głównej, po kliknięciu powiatu na mapie, strzałka w wierszu " +
+      "osoby z partią stała pięć pikseli niżej niż w wierszu bez partii, więc " +
+      "kolumna strzałek nie była kolumną. Teraz partie i strzałka siedzą w " +
+      "jednym rzędzie wyśrodkowanym w pionie, a bardzo długa nazwa partii " +
+      "kończy się wielokropkiem zamiast wypychać strzałkę poza wiersz.",
+    steps: [
+      "Na stronie głównej kliknij powiat, w którym ktoś ma przypisaną partię (np. duże miasto).",
+      "Porównaj wiersz z partią i wiersz bez: strzałki po prawej mają być na tej samej wysokości.",
+      "Na telefonie (375px) każda strzałka ma być w całości widoczna w karcie, a nazwisko - jeśli partie zabrały mu miejsce - ma się kończyć wielokropkiem, nie zawijać.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "rewizje-w-panelu-tym-samym-przyciskiem",
     title: "„Rewizje” w panelu bocznym wygląda jak na stronie osoby",
     description:
