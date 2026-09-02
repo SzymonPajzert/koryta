@@ -1,4 +1,4 @@
-"""Reading a captured page back out of the crawled bucket."""
+"""Reading a captured page, and the people index, back out of a bucket."""
 
 from __future__ import annotations
 
@@ -121,3 +121,51 @@ def read_captured_html(storage_path: str, url: str) -> bytes:
         if extracted is None:
             raise KeyError(f"{wanted!r} is not a file in {storage_path}")
         return extracted.read()
+
+
+def latest_backup_blob_name(bucket_name: str, prefix: str) -> str:
+    """The newest pipeline backup under ``prefix``, by name.
+
+    The shared cache partitions a pipeline's output as
+    ``filename={name}/user={who}/datetime={when}/backup.tar.gz``, and
+    `KorytaPeople` puts the export date in the name itself
+    (``person_koryta_2026-09-01``). Both segments sort lexicographically the
+    same way they sort chronologically, so the greatest blob name is the most
+    recent run — no listing of dates and no parsing of either segment.
+
+    Deliberately not `stores.storage.download_backup`, which prefers the
+    current user's own backups and **prompts on stdin** to choose between users
+    when it finds none. That is right for someone at a terminal and wrong for a
+    Cloud Run instance, which has no stdin and would hang or crash on the first
+    capture after a deploy.
+    """
+    blobs = storage.Client().list_blobs(bucket_name, prefix=prefix)
+    names = [blob.name for blob in blobs if blob.name.endswith("/backup.tar.gz")]
+    if not names:
+        raise FileNotFoundError(f"no backups under gs://{bucket_name}/{prefix}")
+    return max(names)
+
+
+def read_backup_payload(raw: bytes) -> bytes:
+    """The data file out of a pipeline backup archive.
+
+    A backup holds the output under its pipeline's filename plus an empty
+    `metadata.json`, and the first is named after the run — so it is found by
+    being the one that is not the second, rather than by a name the reader
+    would have to know.
+    """
+    with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tar:
+        for member in tar.getmembers():
+            if not member.isfile() or member.name == "metadata.json":
+                continue
+            extracted = tar.extractfile(member)
+            if extracted is not None:
+                return extracted.read()
+    raise KeyError("backup archive holds no data file")
+
+
+def read_latest_backup(bucket_name: str, prefix: str) -> tuple[str, bytes]:
+    """The newest backup under ``prefix``, as (blob name, data file)."""
+    name = latest_backup_blob_name(bucket_name, prefix)
+    raw = storage.Client().bucket(bucket_name).blob(name).download_as_bytes()
+    return name, read_backup_payload(raw)

@@ -74,7 +74,10 @@ to `$CAPTURE_LOCAL_DIR` (default `$TMPDIR/koryta-captures`) under the same
 | `LLM_LANES`                          | `4`                            | concurrent requests; the per-fact judgements use them         |
 | `EXTRACTOR_UID`                      | `capture-extractor`            | the Firebase uid this service signs in as                     |
 | `EXTRACTION_TAG`                     | `capture_v2_qwen3.8-27b_attempt_lookup` | stamped on every submitted fact                      |
-| `MATCH_PEOPLE`                       | `true`                         | look facts' people up among the site's person nodes and send them as `koryta_ids` |
+| `MATCH_PEOPLE`                       | `true`                         | look facts' people up in the `KorytaPeople` dump and send them as `koryta_ids` |
+| `PEOPLE_INDEX_PATH`                  | unset                          | a `person_koryta` jsonl or `backup.tar.gz` to use instead of the newest in the shared cache |
+| `PEOPLE_INDEX_TTL_SECONDS`           | `86400`                        | how long an instance reuses its built index                   |
+| `SHARED_CACHE_BUCKET`                | `koryta-pl-sharedcache`        | where the `KorytaPeople` dumps are read from                  |
 | `VERIFY_FACTS`                       | `true`                         | run the rulebook judge before submitting                      |
 | `MIN_KORYCIARSKI_SCORE`              | unset                          | skip submitting below this score                              |
 | `URL_STORE_URL`, `URL_STORE_API_KEY` | unset                          | without these the nightly run will not see the capture        |
@@ -88,6 +91,34 @@ score does not gate extraction here: this is one page a person chose, not one of
 millions crawled, so the per-page cost that makes a 235B model impossible
 nightly is a rounding error on a single capture — and a capture is the one path
 where the reader is waiting for the answer and can see it be wrong.
+
+### The people index
+
+`MATCH_PEOPLE` links a submitted fact to the person page it is about, which
+`/api/ingest/extraction` can only do when the request names the article's
+people in `koryta_ids`. The names come from `KorytaPeople`'s output — the
+newest `filename=person_koryta_<date>/…/backup.tar.gz` in the shared cache,
+about 9,300 rows and 360 kB, built into a name index once per instance and
+reused for `PEOPLE_INDEX_TTL_SECONDS` (a day).
+
+Not from Firestore. Reading the person nodes directly is ~9,300 document reads
+per refresh for a set that changes when somebody adds a person page and not
+otherwise, and `KorytaPeople` is itself built from the nightly export — so the
+dump is the same snapshot the batch path matched against, for one object read.
+The cost of that choice is staleness: a person page created since the last
+`KorytaPeople` run is not in the index, and their facts arrive unlinked until
+it runs again.
+
+The dump is picked by taking the greatest blob name under the prefix. Both the
+date in the filename and the `datetime=` segment sort chronologically, so that
+is the most recent run whoever ran it — deliberately not
+`stores.storage.download_backup`, which prefers the current user's own backups
+and prompts on stdin to choose between users when it finds none. There is no
+stdin on Cloud Run.
+
+`PEOPLE_INDEX_PATH` overrides all of it with a local file, which is how the
+development loop runs without the bucket and how to pin a known dump into the
+image.
 
 ## Deploying
 
@@ -105,6 +136,11 @@ gcloud storage buckets add-iam-policy-binding gs://koryta-pl-crawled \
   --member=serviceAccount:$SA --role=roles/storage.objectViewer
 gcloud projects add-iam-policy-binding $PROJECT \
   --member=serviceAccount:$SA --role=roles/datastore.user
+
+# Read the people index. objectViewer, not objectAdmin: the bucket is shared
+# with the pipelines' own runs and this service must never write into it.
+gcloud storage buckets add-iam-policy-binding gs://koryta-pl-sharedcache \
+  --member=serviceAccount:$SA --role=roles/storage.objectViewer
 
 # Sign its own Firebase custom token. Without a key file firebase_admin signs
 # through the IAM API, so the account needs this *on itself*.

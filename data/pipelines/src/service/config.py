@@ -67,12 +67,21 @@ class Config:
 
     extraction_tag: str
     verify_facts: bool
-    #: Look the article's people up among the site's person nodes and send
-    #: their ids as `koryta_ids`, so the endpoint can link facts to person
-    #: pages. Off turns the fast path back into the unlinked `capture_v1`
-    #: behaviour without a redeploy — the switch to reach for if the match
-    #: turns out to link the wrong people.
+    #: Look the article's people up among the site's people and send their ids
+    #: as `koryta_ids`, so the endpoint can link facts to person pages. Off
+    #: turns the fast path back into the unlinked `capture_v1` behaviour
+    #: without a redeploy — the switch to reach for if the match turns out to
+    #: link the wrong people.
     match_people: bool
+    #: A `KorytaPeople` dump to build the name index from, instead of the
+    #: newest one in the shared cache: either the jsonl itself or the
+    #: `backup.tar.gz` it ships in. How the development loop runs without the
+    #: bucket, and how to pin the index into the image if the daily-ish dump is
+    #: too loose.
+    people_index_path: str
+    #: How long a built index is reused. A day by default: `KorytaPeople` runs
+    #: about that often, so anything shorter re-reads the same object.
+    people_index_ttl_seconds: int
     #: Skip fact extraction below this koryciarski score. Off by default: a
     #: person picked this page, which is a stronger signal than the score.
     min_score: int | None
@@ -85,6 +94,9 @@ class Config:
     allow_unauthenticated: bool = False
 
     crawled_bucket: str = "koryta-pl-crawled"
+    #: Where the pipelines publish their outputs. Read-only from here: the
+    #: bucket is shared with the owner's own runs.
+    shared_cache_bucket: str = "koryta-pl-sharedcache"
 
     missing: tuple[str, ...] = field(default_factory=tuple)
 
@@ -120,10 +132,15 @@ def config() -> Config:
         extraction_tag=os.environ.get("EXTRACTION_TAG", DEFAULT_EXTRACTION_TAG),
         verify_facts=_bool("VERIFY_FACTS", True),
         match_people=_bool("MATCH_PEOPLE", True),
+        people_index_path=os.environ.get("PEOPLE_INDEX_PATH", ""),
+        people_index_ttl_seconds=_int("PEOPLE_INDEX_TTL_SECONDS", 24 * 3600),
         min_score=int(raw_min_score) if raw_min_score else None,
         url_store_url=os.environ.get("URL_STORE_URL", ""),
         url_store_api_key=os.environ.get("URL_STORE_API_KEY", ""),
         allow_unauthenticated=_bool("ALLOW_UNAUTHENTICATED", False),
         crawled_bucket=os.environ.get("CRAWLED_BUCKET", "koryta-pl-crawled"),
+        shared_cache_bucket=os.environ.get(
+            "SHARED_CACHE_BUCKET", "koryta-pl-sharedcache"
+        ),
         missing=missing,
     )

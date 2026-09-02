@@ -169,9 +169,7 @@ def _run(cfg: Config, request: ExtractRequest) -> ExtractResponse:
         html, request.url, domain, content_override=request.content_override
     )
     people = (
-        match_people(_firestore(), parsed.article_content)
-        if cfg.match_people
-        else PeopleMatch()
+        match_people(cfg, parsed.article_content) if cfg.match_people else PeopleMatch()
     )
     logger.info(
         "matched %s known people (%s ambiguous) in %s",

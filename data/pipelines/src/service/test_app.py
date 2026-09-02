@@ -71,6 +71,8 @@ def _run_config(match_people: bool = True) -> Config:
         extraction_tag="capture_test",
         verify_facts=False,
         match_people=match_people,
+        people_index_path="",
+        people_index_ttl_seconds=1,
         min_score=None,
     )
 
@@ -99,7 +101,7 @@ def _wire_run(
     monkeypatch.setattr(service_app, "register_capture", lambda *a, **k: None)
     monkeypatch.setattr(service_app, "_llm", lambda cfg: object())
 
-    def _match(db: Any, text: str):
+    def _match(cfg: Config, text: str):
         seen["text"] = text
         return matched
 
