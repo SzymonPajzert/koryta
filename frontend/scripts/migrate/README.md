@@ -151,6 +151,26 @@ It only repairs one page per person. The opposite error — 36 pages that are tw
 people whose `rejestrIo` overwrote each other — is `needs_split` and
 `/api/nodes/split`, and is by hand.
 
+## `delete-extraction-tag.ts`, and the two flags it adds
+
+It removes every extraction filed under one model tag, together with the votes
+that point at those facts. `v26-mentions-qwen3.8-27b-openrouter` is the default,
+and `--tag <name>` points it at another.
+
+Read the dry run before committing. Ingest has no dedupe key — every fact is a
+fresh `doc()` — so a re-run files the same fact again, but a tag is rarely
+_only_ duplicates: of that tag's 293 facts on the 2026-09-02 export, 40 have a
+twin under another tag and 253 exist nowhere else. The script prints that split
+and warns when the second number is not zero. `--duplicates-only` deletes just
+the facts a different run also produced.
+
+Votes go with the facts. A vote whose `extractionId` names a deleted document
+is unreachable but still counted by /api/stats/database, which is the dead
+weight `delete-untargeted-votes.ts` cleared out; deleting both together avoids
+making more of it. `onVoteWritten` then fires for each deleted vote and logs a
+NOT_FOUND trying to update an aggregate on a fact that is gone — one error line
+per vote, expected.
+
 ## The invariants suite
 
 `data/pipelines/src/tests/pipelines/test_invariants.py` checks these properties
