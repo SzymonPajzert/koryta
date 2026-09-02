@@ -10,24 +10,43 @@
       </p>
     </v-col>
 
-    <v-col v-for="game in games" :key="game.title" cols="12" md="6">
-      <v-card :to="game.to" height="100%" variant="outlined" hover>
+    <v-col v-for="game in games" :key="game.slug" cols="12" md="6">
+      <v-card
+        :to="game.status === 'live' ? `/gry/${game.slug}` : undefined"
+        :disabled="game.status !== 'live'"
+        height="100%"
+        variant="outlined"
+        :hover="game.status === 'live'"
+        :data-testid="`game-card-${game.slug}`"
+      >
         <v-card-item>
           <template #prepend>
-            <v-icon :icon="game.icon" size="large" color="primary" />
+            <v-icon :icon="gameIcon(game.slug)" size="large" color="primary" />
           </template>
-          <v-card-title>{{ game.title }}</v-card-title>
+          <v-card-title class="d-flex align-center ga-2">
+            {{ game.title }}
+            <v-chip v-if="game.status !== 'live'" size="x-small" label>
+              wkrótce
+            </v-chip>
+          </v-card-title>
         </v-card-item>
         <v-card-text class="text-medium-emphasis">
-          {{ game.desc }}
+          {{ game.tagline }}
         </v-card-text>
       </v-card>
     </v-col>
 
+    <!-- The hub's own loop: the list above is what there is to play, and this
+         is how it grows. Kept on the hub rather than at the end of each daily,
+         where it would compete with the cross-promotion to the next game. -->
     <v-col cols="12" class="mt-4">
+      <GamesSuggestGame />
+    </v-col>
+
+    <v-col cols="12">
       <p class="text-body-2 text-medium-emphasis mb-0">
-        Masz pomysł na kolejną grę albo znasz brakujące powiązanie? Baza (i gry)
-        rosną dzięki zgłoszeniom użytkowników.
+        Znasz brakujące powiązanie? Baza (i gry) rosną dzięki zgłoszeniom
+        użytkowników.
       </p>
       <v-btn
         variant="text"
@@ -43,11 +62,9 @@
 </template>
 
 <script lang="ts" setup>
-import {
-  mdiChevronRight,
-  mdiMapSearchOutline,
-  mdiViewGridOutline,
-} from "@mdi/js";
+import { mdiChevronRight } from "@mdi/js";
+import { games } from "~~/shared/games/registry";
+import { gameIcon } from "~/utils/gameIcon";
 
 definePageMeta({
   title: "Gry",
@@ -55,18 +72,9 @@ definePageMeta({
   fullWidth: true,
 });
 
-const games = [
-  {
-    title: "Połączenia",
-    desc: "Pogrupuj 16 osób w cztery czwórki: wspólna partia, rok wyborów, region albo miejsce pracy. Masz cztery próby — jak w klasycznym Connections.",
-    icon: mdiViewGridOutline,
-    to: "/gry/polaczenia",
-  },
-  {
-    title: "Korytle",
-    desc: "Mozaika koryciarzy z jednego regionu Polski — podzielona według branż spółek i partii. Zgadnij, o które miasto chodzi; po każdej próbie podpowiemy odległość i kierunek.",
-    icon: mdiMapSearchOutline,
-    to: "/gry/korytle",
-  },
-];
+useSeoMeta({
+  title: "Gry koryta.pl",
+  description:
+    "Codzienne zagadki oparte na prawdziwych danych o polskiej polityce i spółkach skarbu państwa.",
+});
 </script>

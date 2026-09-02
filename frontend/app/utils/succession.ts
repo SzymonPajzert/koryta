@@ -1,5 +1,7 @@
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import type { EdgeNode } from "~/composables/edges";
+import { generateEntityUrl } from "~/composables/slugs";
+import { shortDate } from "~~/shared/dates";
 
 /** Whoever held a seat before the spell an edge records, carrying how many
  * seats changed hands alongside it - which is what says whether naming this
@@ -61,4 +63,136 @@ export function predecessorsByEdge(
     }
   }
   return byEdge;
+}
+
+/* ---------- the view-model behind a handover card ---------- */
+
+/** One side of a handover, as the card prints it.
+ *
+ * `label` names the position in the handover and never what the person did, so
+ * that no sentence here has to know anybody's gender. `when` is prose rather
+ * than dates because a caller may have reason not to say: the "Kiedy?" daily
+ * shows a real handover and asks the player for its date, so it passes the
+ * same card a term it has deliberately blanked. */
+export type SuccessionSideView = {
+  label: string;
+  name: string;
+  parties: string[];
+  /** Where this person's page is. Absent both for the person whose page the
+   * card is already on, and for a game that does not want the answer one click
+   * away; the card renders plain text either way. */
+  url?: string;
+  self: boolean;
+  when: string;
+};
+
+/** One seat changing hands, as the card prints it. */
+export type SuccessionChangeView = {
+  key: string;
+  testid: string;
+  companyName: string;
+  /** Absent where the card must not link out - see `SuccessionSideView.url`. */
+  companyUrl?: string;
+  role: string;
+  gapDays: number;
+  from: SuccessionSideView;
+  to: SuccessionSideView;
+  /** Set where a whole board changed on this day, so which of the departing
+   * members this person actually followed is not something the register says.
+   * The card names one of them and admits as much. */
+  batchNote: string | null;
+};
+
+/** What a role nobody recorded is called. The pairing drops spells with no
+ * role, so this should never be reached - it is here so that a hand-made edge
+ * cannot print an empty gap where the seat should be. */
+export const NO_ROLE = "funkcja niepodana w rejestrze";
+
+export function successionBatchNote(batchSize: number): string | null {
+  if (batchSize <= 1) return null;
+  return (
+    `Tego dnia zmieniło się ${batchSize} stanowisk tej samej funkcji - ` +
+    "rejestr nie wskazuje, kto zajął czyje miejsce."
+  );
+}
+
+/** This person's own spell, as the side of a handover they are on. */
+function selfTerm(post: PersonSuccession): string {
+  if (post.start && post.end) {
+    return `kadencja ${shortDate(post.start)} – ${shortDate(post.end)}`;
+  }
+  if (post.start) return `kadencja od ${shortDate(post.start)} · nadal trwa`;
+  if (post.end) return `kadencja do ${shortDate(post.end)}`;
+  return "brak dat kadencji";
+}
+
+/** A person's posts as handover cards, read from their own side.
+ *
+ * `from` is whoever left the seat and `to` whoever took it, whichever of the
+ * two this person is - so the arrow between them always points the way the
+ * seat moved, and the labels never have to be conditional in the template.
+ *
+ * Extracted from `succession/PersonChanges.vue` when the card became something
+ * a game renders too. The section still owns the fetch and the coverage line;
+ * what moved here is only the mapping, which is the half that had to be shared.
+ */
+export function personSuccessionChanges(
+  posts: PersonSuccession[],
+  self: { name: string; parties?: string[] },
+): SuccessionChangeView[] {
+  return posts.flatMap((post, index) => {
+    const neighbour = post.predecessor ?? post.successor;
+    if (!neighbour) return [];
+
+    const other: SuccessionSideView = {
+      label: post.predecessor
+        ? "Wcześniej na tym stanowisku"
+        : "Następnie na tym stanowisku",
+      name: neighbour.personName,
+      parties: neighbour.parties,
+      url: generateEntityUrl(
+        "person",
+        neighbour.personId,
+        neighbour.personName,
+      ),
+      self: false,
+      when: post.predecessor
+        ? neighbour.end
+          ? `kadencja do ${shortDate(neighbour.end)}`
+          : "koniec kadencji nieznany"
+        : neighbour.start
+          ? `kadencja od ${shortDate(neighbour.start)}`
+          : "początek kadencji nieznany",
+    };
+    const mine: SuccessionSideView = {
+      label: "Ta osoba",
+      name: self.name,
+      parties: self.parties ?? [],
+      self: true,
+      when: selfTerm(post),
+    };
+
+    return [
+      {
+        batchNote: successionBatchNote(post.batchSize),
+        // The edge on the other side is what makes a card unique: this person
+        // can hold two spells of one seat, and the index alone would reorder
+        // the cards under a refetch.
+        key: `${neighbour.edgeId}-${index}`,
+        testid: post.predecessor
+          ? "succession-predecessor"
+          : "succession-successor",
+        companyName: post.companyName,
+        companyUrl: generateEntityUrl(
+          "place",
+          post.companyId,
+          post.companyName,
+        ),
+        role: post.role.trim() || NO_ROLE,
+        gapDays: neighbour.gapDays,
+        from: post.predecessor ? other : mine,
+        to: post.predecessor ? mine : other,
+      },
+    ];
+  });
 }

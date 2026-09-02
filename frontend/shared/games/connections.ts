@@ -5,6 +5,8 @@
  * access lives in server/api/games/connections.get.ts.
  */
 
+import { hashSeed, mulberry32, seededShuffle } from "./engine";
+
 export const connectionsGroupKinds = [
   "party",
   "year",
@@ -69,34 +71,11 @@ export const connectionsGroupStyles: Record<
   company: { title: "Miejsce pracy", emoji: "🟪", color: "#ba81c5" },
 };
 
-export function hashSeed(str: string): number {
-  let h = 1779033703 ^ str.length;
-  for (let i = 0; i < str.length; i++) {
-    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  return h >>> 0;
-}
-
-export function mulberry32(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state |= 0;
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-export function seededShuffle<T>(items: readonly T[], rand: () => number): T[] {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [result[i], result[j]] = [result[j]!, result[i]!];
-  }
-  return result;
-}
+/* The seeded-random primitives moved to `engine.ts` when the second game
+ * needed them. Re-exported rather than relocated outright: this module's own
+ * tests and its API route import them from here, and a puzzle generator is not
+ * where anyone should have to notice a refactor of the engine underneath it. */
+export { hashSeed, mulberry32, seededShuffle } from "./engine";
 
 function candidateKeys(
   candidate: ConnectionsCandidate,

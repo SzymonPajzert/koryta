@@ -48,6 +48,39 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "gra-kiedy-suwak-lat",
+    title: "Nowa gra: „Kiedy?” — sześć zmian na stanowiskach na osi lat",
+    description:
+      "Codzienna zagadka pod /gry/kiedy pokazuje prawdziwą zmianę na " +
+      "stanowisku — kto odszedł, kto przyszedł — z ukrytymi kadencjami, a " +
+      "gracz ustawia suwak na roku. Karta zmiany to ten sam element, który " +
+      "profil osoby pokazuje w sekcji „Zmiany na stanowisku”.",
+    steps: [
+      "Wejdź na /gry/kiedy: widzisz kartę zmiany bez dat, suwak lat i licznik rund „Runda 1 z 6”.",
+      "Przesuń suwak i kliknij „Obstawiam”: dostajesz punkty i zdanie, o ile lat i w którą stronę się pomyliłeś.",
+      "Przejdź wszystkie sześć rund: na końcu jest wynik, oś ze znacznikami wszystkich sześciu zmian i przycisk „Udostępnij wynik”.",
+      "Odśwież stronę w połowie gry: rundy już rozegrane zostają zapamiętane.",
+    ],
+    link: "/gry/kiedy",
+    area: "public",
+  },
+  {
+    id: "gry-hub-zaproponuj-gre",
+    title: "Na stronie gier można zaproponować własną grę",
+    description:
+      "Lista gier pochodzi teraz z jednego rejestru (ta sama nazwa i opis w " +
+      "hubie, w nagłówku gry i w polecajce na końcu dnia), a pod nią jest " +
+      "pole „Zaproponuj grę” — zgłoszenie trafia tam, gdzie reszta opinii.",
+    steps: [
+      "Wejdź na /gry: gry są kartami, a gra jeszcze niegotowa ma plakietkę „wkrótce” i nie da się w nią kliknąć.",
+      "Wpisz pomysł w „Zaproponuj grę” i wyślij: pojawia się podziękowanie.",
+      "Jako admin otwórz /admin/opinie: zgłoszenie jest na liście jako pomysł ze ścieżką /gry.",
+      "Skończ dowolną grę: pod wynikiem są odnośniki do pozostałych gier na dziś.",
+    ],
+    link: "/gry",
+    area: "public",
+  },
+  {
     id: "szpitale-bez-ostrzezen-hydracji-po-zalogowaniu",
     title: "Strona szpitali nie zgłasza błędów hydracji po zalogowaniu",
     description:
