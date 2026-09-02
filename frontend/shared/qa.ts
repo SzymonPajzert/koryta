@@ -48,6 +48,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wzmianki-i-cytowane-notatki-ten-sam-naglowek",
+    title:
+      "„Artykuły, które o tym wspominają” i „Notatki z innych stron” mają nagłówek jak reszta sekcji",
+    description:
+      "Obie sekcje rysowały nagłówek własnym przepisem; teraz używają tego " +
+      "samego szablonu co „Notatki” i „Zmiany na stanowisku”, więc ikona, " +
+      "tytuł i podpis pod nim wyglądają wszędzie tak samo.",
+    steps: [
+      "Na stronie osoby ze wzmiankami w prasie i na stronie artykułu z notatkami z innych stron porównaj te nagłówki z nagłówkiem „Notatki” obok.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "notatki-ten-sam-kafel",
     title: "Notatki są takimi samymi kafelkami jak reszta strony",
     description:

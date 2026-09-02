@@ -3,20 +3,19 @@
        article we hold, and a heading over empty space reads as a page that
        failed to load. The same rule `ExtractionPersonFacts` and
        `SuccessionPersonChanges` follow. -->
-  <section v-if="mentions.length > 0" class="mt-4" data-testid="node-mentions">
-    <div class="sec-head">
-      <v-icon
-        :icon="mdiNewspaperVariantOutline"
-        size="18"
-        class="sec-head__icon"
-      />
-      <h3 class="text-h6">Artykuły, które o tym wspominają</h3>
-    </div>
-
-    <p class="k-lead" data-testid="node-mentions-lead">
-      Teksty prasowe, w których pada ta nazwa - z artykułów przeanalizowanych
-      przez model i ze źródeł dodanych w notatkach.
-    </p>
+  <PageSection
+    v-if="mentions.length > 0"
+    title="Artykuły, które o tym wspominają"
+    :icon="mdiNewspaperVariantOutline"
+    class="mt-4"
+    data-testid="node-mentions"
+  >
+    <template #lead>
+      <p class="k-lead" data-testid="node-mentions-lead">
+        Teksty prasowe, w których pada ta nazwa - z artykułów przeanalizowanych
+        przez model i ze źródeł dodanych w notatkach.
+      </p>
+    </template>
 
     <v-row dense>
       <v-col v-for="mention in mentions" :key="mention.edgeId" cols="12" md="6">
@@ -59,7 +58,7 @@
         </v-card>
       </v-col>
     </v-row>
-  </section>
+  </PageSection>
 </template>
 
 <script setup lang="ts">
@@ -131,24 +130,6 @@ function dateOf(mention: NodeMention) {
 </script>
 
 <style scoped>
-.sec-head {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.sec-head__icon {
-  color: rgba(var(--v-theme-on-surface), 0.38);
-}
-
-.k-lead {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  margin: 4px 0 12px;
-  max-width: 78ch;
-}
-
 .min-w-0 {
   min-width: 0;
 }

@@ -1,13 +1,17 @@
 <template>
-  <section v-if="notes.length > 0" data-testid="article-cited-notes">
-    <div class="d-flex align-center ga-2 mb-1">
-      <h2 class="text-subtitle-1 font-weight-bold">Notatki z innych stron</h2>
+  <!-- The same shell as the "Notatki" directly under it, so the two halves of
+       the readers' section read as one thing. The count sits where a section's
+       controls go. -->
+  <PageSection
+    v-if="notes.length > 0"
+    title="Notatki z innych stron"
+    :icon="mdiNoteMultipleOutline"
+    lead="Co czytelnicy zapisali o tym artykule przy osobach i spółkach, których dotyczy."
+    data-testid="article-cited-notes"
+  >
+    <template #actions>
       <v-chip size="x-small" variant="tonal">{{ notes.length }}</v-chip>
-    </div>
-    <p class="k-lead">
-      Co czytelnicy zapisali o tym artykule przy osobach i spółkach, których
-      dotyczy.
-    </p>
+    </template>
 
     <v-row dense>
       <v-col v-for="note in notes" :key="note.key" cols="12" md="6">
@@ -52,7 +56,7 @@
         </v-card>
       </v-col>
     </v-row>
-  </section>
+  </PageSection>
 </template>
 
 <script setup lang="ts">
@@ -68,6 +72,7 @@
  * withheld from logged out readers on the person's own page, and this must not
  * be the way around that.
  */
+import { mdiNoteMultipleOutline } from "@mdi/js";
 import { ref, watchEffect } from "vue";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { entityIcon } from "~/utils/entityIcon";
@@ -108,13 +113,3 @@ function formatDate(value: string) {
   return isNaN(date.getTime()) ? "" : date.toLocaleDateString("pl-PL");
 }
 </script>
-
-<style scoped>
-.k-lead {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  margin: 0 0 12px;
-  max-width: 78ch;
-}
-</style>
