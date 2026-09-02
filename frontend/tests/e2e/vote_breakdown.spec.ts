@@ -13,17 +13,33 @@ import { waitForLoginFormHydrated } from "./helpers/login";
  * `nowe-person-1` is seeded with two model scores and no human vote (see
  * scripts/nodes.json), so it exercises the model list and the "nobody has
  * voted" branch together.
+ *
+ * It is read on /eksploruj/tabela rather than on /eksploruj/nowe, where this
+ * test used to run. The queue cut its column list from eleven to five to fit
+ * the card, and "Głosy łącznie" was one of the three that went: the number
+ * moved under the name as a plain caption (`scoreWithName` in
+ * explore/Table.vue), and the breakdown went with the column. So the widget
+ * this test is about no longer exists on that page, and the test had been red
+ * on main ever since - looking for a button that the redesign deliberately
+ * removed. /eksploruj/tabela is the page that still declares the column, which
+ * is also the only place the keying bug above could ever come back.
+ *
+ * `visibility=private` is what puts the same unapproved person in front of the
+ * full column set: the api reads it as `stats.isApproved == false`, and this
+ * test signs in as an admin, who is who the filter is offered to.
  */
+const TABELA = "/eksploruj/tabela?visibility=private";
+
 test.describe("Rozbicie wyniku", () => {
   test("says which models scored a person and whether anybody voted", async ({
     page,
   }) => {
-    await page.goto("/login?redirect=/eksploruj/nowe");
+    await page.goto(`/login?redirect=${encodeURIComponent(TABELA)}`);
     await waitForLoginFormHydrated(page);
     await page.locator("input#email").fill("admin@koryta.pl");
     await page.locator("input#password").fill("password123");
     await page.locator('button[type="submit"]').click({ force: true });
-    await page.waitForURL("**/eksploruj/nowe", { timeout: 15000 });
+    await page.waitForURL("**/eksploruj/tabela**", { timeout: 15000 });
 
     await expect(page.locator(".v-main")).toBeVisible();
     await expect(page.locator(".v-data-table__progress")).not.toBeVisible({
