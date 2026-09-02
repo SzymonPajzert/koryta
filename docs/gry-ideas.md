@@ -70,12 +70,48 @@ the person, links the profile, and shows where the day's crowd converged.
 Sits between Kim jestem?'s anidle scorecard and Czyj człowiek?: same anonymous
 CV surface, different hidden variable — all three should share one CV-redaction
 component rather than three.
-**Grading is the build cost:** `education` is deliberately free prose
+**Grading is the build cost.** `education` is deliberately free prose
 (frontend/shared/model.ts — "sometimes a degree and sometimes a formation no
-degree scale covers", e.g. "duchowny prawosławny"), so scoring needs a parse
-into (poziom, dziedzina, uczelnia, dekada) facets plus a distance over the
-dziedzina tree. The prose stays the displayed answer; facets exist only to
-grade, and unparseable ones just drop out of the daily pool.
+degree scale covers", e.g. "duchowny prawosławny") and the player types
+freely too — "stolarz" is a legal answer — so both sides have to be made
+comparable before anything can be called close. Every answer, target prose
+and player guess alike, resolves to a row in one vocabulary table carrying
+four facets: **poziom**, ordinal (podstawowe < zasadnicze zawodowe < średnie
+< licencjat/inżynier < magister < doktor); **dziedzina**, a shallow tree
+(prawo, ekonomia, technika → budownictwo/mechanika/IT, medycyna, humanistyka
+→ historia/filologia, teologia, rolnictwo, wojsko, rzemiosło → drzewne);
+**uczelnia**; and **dekada dyplomu**. A guess comes back as a Wordle-style
+row over those facets — poziom ↑/↓, dziedzina as hops in the tree drawn as a
+meter, uczelnia ta sama / to samo miasto / ten sam typ / ✗, dekada ↑/↓ — and
+the rows stack so the board is the deduction. "stolarz" against a target of
+magister budownictwa answers poziom ↑↑, dziedzina 1 hop: keep the trade,
+climb the levels.
+
+**Why a scorecard and not a Kontexto-style closeness number.** Semantle and
+Kontexto can hand you one scalar because guesses there are unlimited — the
+number is a hill to climb, and climbing it is the game. Here the budget is
+five attempts, and a player who sees "62% blisko" has nothing to *do* with
+it. Per-facet direction is the only feedback that converges in five. Keep a
+one-word temperature (zimno / chłodno / ciepło / gorąco / prawie) as the
+headline for the share card, computed from the summed facet distance, but the
+row underneath it is what is actually played. Same reason dziedzina reports
+hops rather than ✓/✗: across ten branches, three ✗ in a row would tell you
+almost nothing.
+
+**The parse runs offline, on both sides — nothing calls a model per guess.**
+The input is an autocomplete over that same vocabulary table, so grading is a
+lookup: deterministic, instant, no runtime LLM cost and no free-text going
+anywhere near a prompt. The table is built once by an LLM pass over the
+distinct education strings on person nodes, seeded with a general list of
+Polish degrees, trades and formations so "stolarz" has a row even though
+nobody on the site is one, and with synonyms folded onto one row (prawnik /
+adwokat / prawo). Autocomplete does not leak the answer as long as it only
+fires at three characters and never offers a browsable list — the same reason
+Kim jestem?'s person search doesn't. Two rules fall out of the facets:
+a win is facet equality on the facets the target *has*, not string equality
+(so "prawo, UW" beats "magister prawa, Uniwersytet Warszawski"), and a target
+with fewer than two usable facets — "duchowny prawosławny" — stays out of the
+daily pool, because there is nothing to converge on.
 **Coverage is not a gate (Szymon):** nothing in the pipeline fills
 wykształcenie — it is hand-entered where somebody happens to know it — but a
 daily eats one target a day and only ever draws from the people already
