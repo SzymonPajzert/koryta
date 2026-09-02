@@ -28,6 +28,7 @@ from entities.util import NormalizedParse
 from scrapers.article import oneshot
 from service.config import Config, config
 from service.koryta_api import KorytaClient
+from service.people import PeopleMatch, match_people
 from service.storage import read_captured_html
 from service.url_store import register_capture
 from stores.llm import OpenAICompatibleConfig, OpenAICompatibleMultiPortLLM
@@ -161,6 +162,24 @@ def _run(cfg: Config, request: ExtractRequest) -> ExtractResponse:
     html = read_captured_html(request.storage_path, request.url)
     domain = NormalizedParse.parse(request.url).hostname_normalized
 
+    # Parsed here rather than inside `analyze`, because the people lookup needs
+    # the article text and the facts prompt needs the people: the hint has to
+    # be derived from the same text the model is about to be shown.
+    parsed = oneshot.parse_page(
+        html, request.url, domain, content_override=request.content_override
+    )
+    people = (
+        match_people(_firestore(), parsed.article_content)
+        if cfg.match_people
+        else PeopleMatch()
+    )
+    logger.info(
+        "matched %s known people (%s ambiguous) in %s",
+        len(people.ids),
+        len(people.ambiguous),
+        request.url,
+    )
+
     analyzed = asyncio.run(
         oneshot.analyze(
             _llm(cfg),
@@ -170,6 +189,8 @@ def _run(cfg: Config, request: ExtractRequest) -> ExtractResponse:
             model=cfg.llm_model,
             content_override=request.content_override,
             verify=cfg.verify_facts,
+            parsed=parsed,
+            people=people.names,
         )
     )
     logger.info("analysed %s", oneshot.to_json(analyzed))
@@ -197,7 +218,9 @@ def _run(cfg: Config, request: ExtractRequest) -> ExtractResponse:
     register_capture(cfg, request.url, domain, request.storage_path)
 
     submitted = 0
-    payload = oneshot.submission_payload(analyzed, cfg.extraction_tag)
+    payload = oneshot.submission_payload(
+        analyzed, cfg.extraction_tag, koryta_ids=people.ids
+    )
     below_threshold = cfg.min_score is not None and (
         score is None or score < cfg.min_score
     )
@@ -214,6 +237,8 @@ def _run(cfg: Config, request: ExtractRequest) -> ExtractResponse:
                 analyzed.score.reason if analyzed.score else ""
             ),
             "extraction.promptVersion": analyzed.facts_prompt_version,
+            "extraction.matchedPeople": len(people.ids),
+            "extraction.ambiguousPeople": list(people.ambiguous),
             "extraction.finishedAt": SERVER_TIMESTAMP,
             "extraction.error": None,
         },

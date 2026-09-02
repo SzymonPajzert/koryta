@@ -10,6 +10,23 @@ import os
 from dataclasses import dataclass, field
 from functools import cache
 
+#: The model the fast path runs. Named here rather than left to the deploy so
+#: that the tag below, which says which model wrote a fact, cannot drift from
+#: the model that actually wrote it.
+DEFAULT_LLM_MODEL = "qwen/qwen3-30b-a3b-instruct-2507"
+
+#: Stamped on every fact the fast path submits.
+#:
+#: Versioned separately from the batch pipeline's `--tag`, and re-versioned
+#: whenever either half of "which model, judged how" changes — a reviewer
+#: sorting `/ekstrakcje` reads the tag to know what produced the row.
+#: `attempt_lookup` is the people match in `service/people.py`: a name match
+#: against the site's person nodes, which is weaker evidence than the batch
+#: path's judged mentions and is worth being able to tell apart.
+#:
+#: Keep in step with `CAPTURE_EXTRACTION_TAG` in frontend/shared/capture.ts.
+DEFAULT_EXTRACTION_TAG = "capture_v2_qwen3.8-27b_attempt_lookup"
+
 
 def _int(name: str, default: int) -> int:
     raw = os.environ.get(name)
@@ -50,6 +67,12 @@ class Config:
 
     extraction_tag: str
     verify_facts: bool
+    #: Look the article's people up among the site's person nodes and send
+    #: their ids as `koryta_ids`, so the endpoint can link facts to person
+    #: pages. Off turns the fast path back into the unlinked `capture_v1`
+    #: behaviour without a redeploy — the switch to reach for if the match
+    #: turns out to link the wrong people.
+    match_people: bool
     #: Skip fact extraction below this koryciarski score. Off by default: a
     #: person picked this page, which is a stronger signal than the score.
     min_score: int | None
@@ -89,13 +112,14 @@ def config() -> Config:
         firebase_api_key=required["FIREBASE_WEB_API_KEY"],
         extractor_uid=os.environ.get("EXTRACTOR_UID", "capture-extractor"),
         firestore_database=os.environ.get("FIRESTORE_DATABASE", "koryta-pl"),
-        llm_model=os.environ.get("LLM_MODEL", "qwen/qwen3-235b-a22b-2507"),
+        llm_model=os.environ.get("LLM_MODEL", DEFAULT_LLM_MODEL),
         llm_base_url=os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
         llm_api_key=required["LLM_API_KEY"],
         llm_lanes=_int("LLM_LANES", 4),
         llm_timeout_seconds=_int("LLM_TIMEOUT_SECONDS", 300),
-        extraction_tag=os.environ.get("EXTRACTION_TAG", "capture_v1"),
+        extraction_tag=os.environ.get("EXTRACTION_TAG", DEFAULT_EXTRACTION_TAG),
         verify_facts=_bool("VERIFY_FACTS", True),
+        match_people=_bool("MATCH_PEOPLE", True),
         min_score=int(raw_min_score) if raw_min_score else None,
         url_store_url=os.environ.get("URL_STORE_URL", ""),
         url_store_api_key=os.environ.get("URL_STORE_API_KEY", ""),

@@ -68,8 +68,14 @@ export interface ArticleCapture {
  *
  * Versioned separately from the batch pipeline's `--tag`: the two run different
  * models over the same prompts, and a reviewer sorting through
- * `/ekstrakcje` should be able to tell which one guessed. */
-export const CAPTURE_EXTRACTION_TAG = "capture_v1";
+ * `/ekstrakcje` should be able to tell which one guessed. `attempt_lookup` is
+ * the capture extractor's people match — a name match against the site's
+ * person nodes, which is weaker evidence than the batch path's judged
+ * mentions, so facts linked by it are worth telling apart.
+ *
+ * The service is what actually stamps this; keep in step with
+ * `DEFAULT_EXTRACTION_TAG` in data/pipelines/src/service/config.py. */
+export const CAPTURE_EXTRACTION_TAG = "capture_v2_qwen3.8-27b_attempt_lookup";
 
 /** Cap on a single captured page, before compression.
  *

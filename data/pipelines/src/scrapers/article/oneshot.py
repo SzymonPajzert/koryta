@@ -27,7 +27,7 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 from entities.facts import fact_to_dict
 from scrapers.article.parse import (
@@ -281,6 +281,7 @@ async def extract_facts(
     text: str,
     model: str,
     usage: Usage | None = None,
+    people: Sequence[str] = (),
 ) -> list[dict[str, Any]]:
     """Facts grounded in the article text, via the facts pipeline's prompt.
 
@@ -288,12 +289,20 @@ async def extract_facts(
     which is where the `justification_in_text` span is resolved back to a
     verbatim slice of the article — the thing the verifier then judges, and the
     thing a reviewer can search the page for.
+
+    `people` is the detected-people hint the batch pipeline fills from
+    `ArticlePersonMentions`. It is formatted by the pipeline's own
+    `_people_hint`, so the same names produce the same prompt on both paths.
+    Empty is the honest value when nobody was looked up: the prompt tells the
+    model the list may contain false positives, and an empty one asks it to
+    work from the text alone, which is what this did before anything looked
+    people up at all.
     """
     text_limit = facts_pipeline.article_facts_text_limit() or facts_pipeline.TEXT_LIMIT
     max_tokens = facts_pipeline.article_facts_max_tokens() or facts_pipeline.MAX_TOKENS
     request = LLMRequest(
         prompt=facts_pipeline._PROMPT.format(
-            people="",
+            people=facts_pipeline._people_hint(list(people)),
             text=text[:text_limit],
         ),
         max_tokens=max_tokens,
@@ -355,6 +364,8 @@ async def analyze(
     selectors: Mapping[str, str] | None = None,
     content_override: str | None = None,
     verify: bool = True,
+    parsed: ParsedPage | None = None,
+    people: Sequence[str] = (),
 ) -> AnalyzedArticle:
     """Parse, score, extract and verify one captured page.
 
@@ -363,9 +374,16 @@ async def analyze(
     pages from each costing a fact-extraction call. Here a person chose this
     page deliberately, so the score is recorded as context and the facts are
     extracted regardless.
+
+    `parsed` is for the caller that already parsed the page, because it had to
+    read the article text before it could decide what to pass as `people` —
+    parsing is pure and cheap, but doing it twice would let the two copies
+    disagree about which text the hint was derived from. Pass `people` without
+    `parsed` and the hint is simply applied to a fresh parse.
     """
     usage = Usage()
-    parsed = parse_page(html, url, domain, selectors, content_override)
+    if parsed is None:
+        parsed = parse_page(html, url, domain, selectors, content_override)
     if not parsed.article_content:
         return AnalyzedArticle(
             parsed=parsed,
@@ -377,7 +395,7 @@ async def analyze(
 
     score_task = asyncio.create_task(score_page(llm, parsed.article_content, model))
     facts_task = asyncio.create_task(
-        extract_facts(llm, url, parsed.article_content, model, usage)
+        extract_facts(llm, url, parsed.article_content, model, usage, people)
     )
     score, extracted = await asyncio.gather(
         score_task, facts_task, return_exceptions=True
@@ -412,11 +430,20 @@ def submission_payload(
     analyzed: AnalyzedArticle,
     tag: str,
     only_verified: bool = True,
+    koryta_ids: Sequence[str] = (),
 ) -> dict[str, Any]:
     """The analysed article in the shape `/api/ingest/extraction` accepts.
 
     Matches what `uploader.py --type extraction` posts, field for field, so the
     fast path and the nightly upload put the same thing in the same collection.
+
+    `koryta_ids` are the person nodes the caller believes this article is
+    about. The endpoint matches each fact's subject against their names and
+    stamps `personNodeId` on the ones that agree, so passing them is the whole
+    difference between a fact that links to a person page and one that does
+    not. Omitted rather than sent empty when nobody was matched: the field is
+    optional on the endpoint, and an empty list would claim the lookup ran and
+    found nobody.
     """
     submitted: list[dict[str, Any]] = []
     for fact in analyzed.facts:
@@ -428,7 +455,7 @@ def submission_payload(
         clean["date"] = analyzed.parsed.publication_date
         submitted.append(clean)
 
-    return {
+    payload: dict[str, Any] = {
         "url": analyzed.parsed.url,
         "domain": analyzed.parsed.domain,
         "title": analyzed.parsed.title,
@@ -436,6 +463,9 @@ def submission_payload(
         "extracted_facts": submitted,
         "tag": tag,
     }
+    if koryta_ids:
+        payload["koryta_ids"] = list(koryta_ids)
+    return payload
 
 
 def to_json(analyzed: AnalyzedArticle) -> str:

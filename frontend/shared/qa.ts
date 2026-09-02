@@ -48,6 +48,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "fakty-z-wtyczki-lacza-sie-z-osobami",
+    title: "Fakty z wtyczki wskazują na strony osób",
+    description:
+      "Ekstraktor sprawdza teraz, czy osoby z artykułu są już w bazie, i " +
+      "podłącza do nich znalezione fakty - wcześniej fakt z wtyczki nie " +
+      "prowadził do żadnej strony osoby. Imię i nazwisko, które w bazie ma " +
+      "dwie osoby, zostaje bez podłączenia, bo nie ma czym ich rozróżnić.",
+    steps: [
+      "Wyślij wtyczką artykuł o osobie, która ma już stronę na koryta.pl.",
+      "Na /ekstrakcje znajdź jej fakt: ma tag capture_v2_qwen3.8-27b_attempt_lookup i link do strony tej osoby.",
+    ],
+    link: "/ekstrakcje",
+    area: "contributor",
+  },
+  {
     id: "pomiar-tabeli-eksploruj",
     title: "Wiemy, co ludzie robią w tabeli",
     description:

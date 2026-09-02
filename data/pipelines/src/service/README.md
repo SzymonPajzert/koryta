@@ -70,10 +70,11 @@ to `$CAPTURE_LOCAL_DIR` (default `$TMPDIR/koryta-captures`) under the same
 | `FIREBASE_WEB_API_KEY`               | —                              | required; public, same value as `nuxt.config.ts`              |
 | `LLM_API_KEY`                        | —                              | required; also read from `OPENROUTER_APIKEY`/`OPENAI_API_KEY` |
 | `LLM_BASE_URL`                       | `https://openrouter.ai/api/v1` | any OpenAI-compatible endpoint                                |
-| `LLM_MODEL`                          | `qwen/qwen3-235b-a22b-2507`    |                                                               |
+| `LLM_MODEL`                          | `qwen/qwen3-30b-a3b-instruct-2507` | see `DEFAULT_LLM_MODEL`                                   |
 | `LLM_LANES`                          | `4`                            | concurrent requests; the per-fact judgements use them         |
 | `EXTRACTOR_UID`                      | `capture-extractor`            | the Firebase uid this service signs in as                     |
-| `EXTRACTION_TAG`                     | `capture_v1`                   | stamped on every submitted fact                               |
+| `EXTRACTION_TAG`                     | `capture_v2_qwen3.8-27b_attempt_lookup` | stamped on every submitted fact                      |
+| `MATCH_PEOPLE`                       | `true`                         | look facts' people up among the site's person nodes and send them as `koryta_ids` |
 | `VERIFY_FACTS`                       | `true`                         | run the rulebook judge before submitting                      |
 | `MIN_KORYCIARSKI_SCORE`              | unset                          | skip submitting below this score                              |
 | `URL_STORE_URL`, `URL_STORE_API_KEY` | unset                          | without these the nightly run will not see the capture        |

@@ -295,3 +295,55 @@ def test_submission_payload_matches_the_ingest_contract():
     assert not {"verified", "verification_verdict", "verification_reason"} & set(fact)
     assert fact["date"] == "2026-07-14"
     assert fact["url"] == "https://www.example.pl/a"
+
+
+def test_analyze_passes_the_people_hint_into_the_facts_prompt():
+    """The hint is what the batch path fills from confirmed mentions.
+
+    Without it the fast path asked a differently-worded question than the
+    nightly run stamping facts into the same collection — the prompt has a
+    `Wykryte osoby:` block either way, and an empty one reads as "nobody
+    known is in this article" rather than "nobody looked".
+    """
+    llm = FakeLLM(facts_reply=FACTS_REPLY, score_reply=SCORE_REPLY)
+
+    _analyze(llm, people=["Jan Kowalski", "Anna Nowak"])
+
+    facts_prompt = next(p for p in llm.prompts if "Wykryte osoby:" in p)
+    assert "Wykryte osoby:\nJan Kowalski, Anna Nowak\n" in facts_prompt
+
+
+def test_analyze_reuses_a_page_the_caller_already_parsed():
+    """The caller parses first because the hint has to come from the same text.
+
+    Re-parsing inside `analyze` would let the two copies disagree about which
+    article the people were looked up in.
+    """
+    llm = FakeLLM(facts_reply=FACTS_REPLY, score_reply=SCORE_REPLY)
+    parsed = oneshot.parse_page(
+        ARTICLE_HTML, "https://www.example.pl/a", "www.example.pl", {}
+    )
+
+    analyzed = _analyze(llm, parsed=parsed)
+
+    assert analyzed.parsed is parsed
+
+
+def test_submission_payload_carries_the_matched_people():
+    llm = FakeLLM(facts_reply=FACTS_REPLY, score_reply=SCORE_REPLY)
+    analyzed = _analyze(llm)
+
+    payload = oneshot.submission_payload(
+        analyzed, "capture_test", koryta_ids=["person-1", "person-2"]
+    )
+
+    assert payload["koryta_ids"] == ["person-1", "person-2"]
+
+
+def test_submission_payload_omits_koryta_ids_when_nobody_matched():
+    """Absent, not empty: the endpoint treats the field as optional, and an
+    empty list would claim a lookup ran and confirmed nobody."""
+    llm = FakeLLM(facts_reply=FACTS_REPLY, score_reply=SCORE_REPLY)
+    analyzed = _analyze(llm)
+
+    assert "koryta_ids" not in oneshot.submission_payload(analyzed, "capture_test")

@@ -30,6 +30,7 @@ from tqdm import tqdm
 
 from analysis.utils import as_sequence
 from entities.article import ArticlePersonMentioned, ProofSignal
+from scrapers.article.names import PersonNameIndex, name_tuple
 from scrapers.article.parse import date_iso_from_ld_json, title_from_ld_json
 from scrapers.article.pipelines.common import (
     ascii_lower,
@@ -64,14 +65,6 @@ TEXT_LIMIT = 30000
 CONTEXT_BEFORE = 2000
 CONTEXT_AFTER = 3000
 
-# A word is capitalized when it starts with an uppercase Polish letter.
-_CAP = "A-ZĄĆĘŁŃÓŚŹŻ"
-_LOW = "a-ząćęłńóśźż"
-_WORD = rf"[{_CAP}][{_LOW}]+(?:['-][{_CAP}{_LOW}]+)*"
-# Consecutive capitalized words (2..6) -> a candidate person-name run.
-_MAX_RUN_WORDS = 6
-_RUN_RE = re.compile(rf"(?:{_WORD}\s+){{1,{_MAX_RUN_WORDS - 1}}}{_WORD}")
-
 # Domain -> region mapping (kept as an input file in files/, published to the
 # shared cache by the DomainToRegion pipeline). Each entry lists the regions
 # (woj/woj_code/powiat/powiat_code/miasto) the outlet covers.
@@ -79,10 +72,6 @@ _RUN_RE = re.compile(rf"(?:{_WORD}\s+){{1,{_MAX_RUN_WORDS - 1}}}{_WORD}")
 # truncated article excerpt, so verdicts can be eyeballed later.
 _DEBUG_FILE = Path(VERSIONED_DIR) / "article_person_mentions" / "judge_debug.jsonl"
 _DEBUG_CONTENT_LIMIT = 2000
-
-
-def _name_tuple(name: str) -> tuple[str, ...]:
-    return tuple(normalize_text(t) for t in str(name).split())
 
 
 def _tags_from_ld_json(ld_json: Any) -> list[str]:
@@ -118,50 +107,6 @@ def _tags_from_ld_json(ld_json: Any) -> list[str]:
         seen.add(key)
         deduped.append(tag)
     return deduped
-
-
-class PersonNameIndex:
-    """Lookup from normalized name tuples to the people they refer to."""
-
-    def __init__(self) -> None:
-        self._by_tuple: dict[tuple[str, ...], dict[str, str]] = {}
-        self.max_len = 0
-        self.people = 0
-        self.forms = 0
-        self._seen_people: set[str] = set()
-
-    def add(self, display: str, name_forms: list[tuple[str, ...]]) -> None:
-        """Register every spelling variant of one person's name.
-
-        Display names that normalize to the same string (e.g. "Zieliński" and
-        "Zielinski") are treated as one person; koryta names are unique, so the
-        first spelling seen wins.
-        """
-        norm_display = normalize_text(display)
-        if norm_display not in self._seen_people:
-            self._seen_people.add(norm_display)
-            self.people += 1
-        for form in name_forms:
-            if len(form) < 2:
-                continue
-            self._by_tuple.setdefault(form, {}).setdefault(norm_display, display)
-            self.max_len = max(self.max_len, len(form))
-            self.forms += 1
-
-    def find_in_text(self, text: str) -> set[str]:
-        """Return the display names of people mentioned in ``text``."""
-        found: set[str] = set()
-        for run in _RUN_RE.findall(text):
-            words = run.split()
-            n_words = len(words)
-            max_n = min(n_words, self.max_len)
-            for n in range(2, max_n + 1):
-                for i in range(n_words - n + 1):
-                    key = tuple(normalize_text(w) for w in words[i : i + n])
-                    names = self._by_tuple.get(key)
-                    if names:
-                        found.update(names.values())
-        return found
 
 
 # National party abbreviations / names an article is likely to use, mapped
@@ -469,7 +414,7 @@ def _load_index_and_profiles(
         person_id = _person_id(row)
         if not person_id:
             continue
-        index.add(display, [_name_tuple(display)])
+        index.add(display, [name_tuple(display)])
 
         profile = PersonProfile()
         profile.woj = {
