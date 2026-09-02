@@ -25,7 +25,7 @@ Korytle (stub), 6 uścisków / six degrees (planned flagship).
 
 | Game | Manual examples? | Collects data? | Data ready? | 1v1 | Video | Build | Timed |
 |---|---|---|---|---|---|---|---|
-| Po jakich studiach? | no (sampled from the filled subset) | medium (education leads) | yes (daily needs one target a day) | fewer attempts wins | good (reveal punchline) | med (facet grading) | secondary |
+| Po jakich studiach? | no (sampled from the filled subset) | medium (education leads) | yes (daily needs one target a day) | fewer guesses wins | good (reveal punchline) | low-med (embed + rank) | secondary |
 | Kim jestem? | yes — daily pick curated | weak (QA eyes) | mostly (pool, dates) | buzz duel | strong | med | secondary (time + clue count) |
 | Kiedy? | no (sampled; anchors light) | weak (hint-gap prompts) | partial (edge dates) | closest slider | ok | low | secondary |
 | Ta sama osoba? | no (pipeline queue) | STRONG — core purpose | yes | arcade board | weak | low-med | CORE (60 s arcade) |
@@ -57,12 +57,11 @@ Korytle (stub), 6 uścisków / six degrees (planned flagship).
 ### 1. Po jakich studiach? — wykształcenie z anonimowego CV ⭐ (round 3, friend's idea)
 An anonymous career — employment entries and election runs, dates kept,
 employers generalized to category — and one question: what did this person
-study? Guess iteratively; each attempt comes back as a closeness scorecard
-rather than tak/nie: poziom (średnie/licencjat/magister/doktorat) ↑/↓,
-dziedzina warmer/colder on a field-of-study tree (prawo → administracja is
-close, prawo → geologia is not), uczelnia ✓ / ta sama uczelnia, inny wydział /
-ten sam typ (techniczna, ekonomiczna, kościelna) / ✗, dekada dyplomu ↑/↓.
-Five attempts, score by how few you spent. The premise is that the CV really
+study? Guess iteratively; each attempt comes back as a Contexto-style rank —
+where your answer sits, out of the whole vocabulary, ordered by closeness to
+the real one. "stolarz" against a target of magister budownictwa is #340;
+"technik budowlany" is #24; #1 ends the day. Unlimited guesses, score is how
+many you spent, share is that count. The premise is that the CV really
 does leak it — a radca prawny in three radach nadzorczych reads differently
 from an inżynier who ended up in the same seats — and the best rounds are the
 ones where it lies (prezes spółki energetycznej po teologii). Reveal unmasks
@@ -70,48 +69,50 @@ the person, links the profile, and shows where the day's crowd converged.
 Sits between Kim jestem?'s anidle scorecard and Czyj człowiek?: same anonymous
 CV surface, different hidden variable — all three should share one CV-redaction
 component rather than three.
-**Grading is the build cost.** `education` is deliberately free prose
-(frontend/shared/model.ts — "sometimes a degree and sometimes a formation no
-degree scale covers", e.g. "duchowny prawosławny") and the player types
-freely too — "stolarz" is a legal answer — so both sides have to be made
-comparable before anything can be called close. Every answer, target prose
-and player guess alike, resolves to a row in one vocabulary table carrying
-four facets: **poziom**, ordinal (podstawowe < zasadnicze zawodowe < średnie
-< licencjat/inżynier < magister < doktor); **dziedzina**, a shallow tree
-(prawo, ekonomia, technika → budownictwo/mechanika/IT, medycyna, humanistyka
-→ historia/filologia, teologia, rolnictwo, wojsko, rzemiosło → drzewne);
-**uczelnia**; and **dekada dyplomu**. A guess comes back as a Wordle-style
-row over those facets — poziom ↑/↓, dziedzina as hops in the tree drawn as a
-meter, uczelnia ta sama / to samo miasto / ten sam typ / ✗, dekada ↑/↓ — and
-the rows stack so the board is the deduction. "stolarz" against a target of
-magister budownictwa answers poziom ↑↑, dziedzina 1 hop: keep the trade,
-climb the levels.
 
-**Why a scorecard and not a Kontexto-style closeness number.** Semantle and
-Kontexto can hand you one scalar because guesses there are unlimited — the
-number is a hill to climb, and climbing it is the game. Here the budget is
-five attempts, and a player who sees "62% blisko" has nothing to *do* with
-it. Per-facet direction is the only feedback that converges in five. Keep a
-one-word temperature (zimno / chłodno / ciepło / gorąco / prawie) as the
-headline for the share card, computed from the summed facet distance, but the
-row underneath it is what is actually played. Same reason dziedzina reports
-hops rather than ✓/✗: across ten branches, three ✗ in a row would tell you
-almost nothing.
+**Ranking, not a facet parse (Szymon).** The earlier design graded a guess
+by parsing both sides into poziom/dziedzina/uczelnia facets, which forced a
+rule that any target too odd to parse — "duchowny prawosławny" — drop out of
+the daily pool. That threw away the best days. Contexto's mechanic removes
+the problem instead of managing it: embed every entry in the vocabulary,
+embed the target, sort by cosine, and a guess is answered with its rank.
+Nothing has to be a degree, nothing has to fit a scale, and prose the
+taxonomy could never place is a first-class answer — "duchowny prawosławny"
+becomes a *great* daily rather than an excluded one, with ksiądz and teologia
+landing in the top ten and prawo somewhere past #3000.
+It also drops the five-attempt budget, and that coupling is the real point:
+a scalar is only playable when guesses are unlimited, because the number is a
+hill to climb rather than a thing to act on. Contexto is unlimited and scores
+by count; so is this. That removes the rage-quit failure mode too — everyone
+finishes eventually, which is what a daily needs.
+Shares its whole feedback surface with Kontexto (#8) — same rank UI, same
+share card, different distance underneath (embedding here, graph hops there).
+One component, two games.
 
-**The parse runs offline, on both sides — nothing calls a model per guess.**
-The input is an autocomplete over that same vocabulary table, so grading is a
-lookup: deterministic, instant, no runtime LLM cost and no free-text going
-anywhere near a prompt. The table is built once by an LLM pass over the
-distinct education strings on person nodes, seeded with a general list of
-Polish degrees, trades and formations so "stolarz" has a row even though
-nobody on the site is one, and with synonyms folded onto one row (prawnik /
-adwokat / prawo). Autocomplete does not leak the answer as long as it only
-fires at three characters and never offers a browsable list — the same reason
-Kim jestem?'s person search doesn't. Two rules fall out of the facets:
-a win is facet equality on the facets the target *has*, not string equality
-(so "prawo, UW" beats "magister prawa, Uniwersytet Warszawski"), and a target
-with fewer than two usable facets — "duchowny prawosławny" — stays out of the
-daily pool, because there is nothing to converge on.
+**What it costs, and what to check before committing.** Still a lookup at
+request time: the ranking over the vocabulary is precomputed per daily
+target, so a guess is an index into a sorted list — no model call, no
+free-text prompt, deterministic. Autocomplete stays, now only to keep typos
+and unknown strings out ("nie znam tego słowa"), not to constrain the answer
+space. Three things decide whether it actually works, none of them
+expensive to settle:
+*Does the embedding rank on the right axis?* The risk is that it weights the
+degree word over the field — "magister prawa" closer to "magister ekonomii"
+than to "prawnik" — which would make the game feel arbitrary. Likely fix is
+to embed a normalized phrase rather than the raw string, but this is an
+empirical question: take ten real targets, eyeball the top fifty, decide.
+*Is the vocabulary big enough for a rank to mean anything?* Contexto reads
+well because #412 out of ~100k is legible progress; out of 3,000 it is
+despair. So the vocabulary has to be Polish degrees, trades and formations at
+large, not just the strings present on koryta people.
+*Is #1 unique?* Near-duplicates ("magister prawa" / "mgr prawa") have to be
+folded together, or the player lands on a #2 that is the same answer in other
+words and feels cheated — the standard Contexto complaint.
+Optional, if playtests show people stalling: a purchasable hint that reveals
+one facet (poziom, or the dziedzina branch) at a cost to the score, the way
+Kiedy? sells its hints. That is the only thing the facet work would still be
+needed for, and it is strictly additive — not a prerequisite.
+
 **Coverage is not a gate (Szymon):** nothing in the pipeline fills
 wykształcenie — it is hand-entered where somebody happens to know it — but a
 daily eats one target a day and only ever draws from the people already
@@ -125,7 +126,7 @@ daily therefore means filling wykształcenie on famous people first, which is
 cheap and worth doing anyway. Collector on the margin: an unscored "nie wiem
 / zgłoś wykształcenie" round on people who lack it points the crowd at the
 same field.
-Versus: same CV, fewer attempts wins; tie broken by who named the uczelnia.
+Versus: same CV, fewer guesses wins; tie broken by who got closest earliest.
 
 ### 2. Kim jestem? — CV guess-who ⭐ flagship
 Daily politician, career revealed entry by entry (oldest first, employer
