@@ -145,6 +145,10 @@
            breakpoint classes and not `useDisplay()`, for the reason
            StatsHospitalBreakdown gives: the server would render one layout and
            the browser correct it. -->
+      <!-- `currentlyEmployed=selected` on both, as on every link out of the
+           chart: the page counts seats held now, and without it the queue led
+           with people whose seat on a board ended years ago while somebody
+           sitting on one today waited behind them. -->
       <v-card-actions
         class="flex-column flex-sm-row align-stretch align-sm-center px-4 pb-4 pt-0"
       >
@@ -153,7 +157,7 @@
           variant="flat"
           class="text-none"
           :append-icon="mdiArrowRight"
-          to="/eksploruj/nowe?category=szpitale"
+          to="/eksploruj/nowe?category=szpitale&currentlyEmployed=selected"
           data-testid="hospitals-join-queue"
         >
           Sprawdzaj osoby ze szpitali
@@ -162,7 +166,7 @@
           variant="text"
           class="text-none"
           :prepend-icon="mdiTable"
-          to="/eksploruj/tabela?category=szpitale&visibility=private&sortBy=latestEmploymentStart&sortDesc=true"
+          to="/eksploruj/tabela?category=szpitale&currentlyEmployed=selected&visibility=private&sortBy=latestEmploymentStart&sortDesc=true"
         >
           Cała lista w tabeli
         </v-btn>

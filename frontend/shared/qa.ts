@@ -48,6 +48,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "szpitale-linki-do-obecnych-miejsc",
+    title: "Linki ze strony szpitali prowadzą do obecnych członków rad",
+    description:
+      "Słupki wykresu, lista województw i przyciski „Sprawdzaj osoby ze " +
+      "szpitali” i „Cała lista w tabeli” otwierały wszystkich, którzy " +
+      "kiedykolwiek zasiadali w radzie szpitala. Teraz każdy z tych linków " +
+      "dodaje filtr „obecnie zatrudniony”, więc pokazuje ludzi, którzy " +
+      "zasiadają w niej dziś.",
+    steps: [
+      "Na /eksploruj/szpitale kliknij słupek partii albo „Cała lista w tabeli” - w adresie ma być currentlyEmployed=selected, a w tabeli tylko osoby z trwającym miejscem w szpitalu.",
+    ],
+    link: "/eksploruj/szpitale",
+    area: "public",
+  },
+  {
     id: "osoba-wspomniana-w-artykulach",
     title: "Na stronie osoby i spółki widać artykuły, które o nich wspominają",
     description:

@@ -126,6 +126,14 @@ export function partyDisplay(party: string): PartyDisplay {
   };
 }
 
+/** The seats this page counts are the ones held now, so every link out of it
+ * says so. Without this the table answered "who has ever sat on a hospital
+ * board" - a reader clicking a bar of current seats landed among people whose
+ * seat ended years ago, and the queue put a long-gone member ahead of somebody
+ * sitting on a board today. `selected` narrows the employer filter beside it -
+ * the category, the region, the one hospital - to relations still running. */
+const CURRENT_SEATS = { currentlyEmployed: "selected" } as const;
+
 /** A link to the same seats in the explore table: the party, narrowed to the
  * institutions this page counts.
  *
@@ -136,6 +144,7 @@ function partyTableLink(party: string): string {
   const query = new URLSearchParams();
   for (const alias of partyAliasesOf(party)) query.append("party", alias);
   query.set("category", "szpitale");
+  query.set("currentlyEmployed", CURRENT_SEATS.currentlyEmployed);
   return `/eksploruj/tabela?${query.toString()}`;
 }
 
@@ -313,6 +322,7 @@ export function regionQueueLink(teryt: string): string | null {
   const query = new URLSearchParams({
     category: "szpitale",
     companyTeryt: teryt,
+    ...CURRENT_SEATS,
     visibility: "private",
     sortBy: "latestEmploymentStart",
     sortDesc: "true",
@@ -362,6 +372,7 @@ export function regionDisplayRows(
 export function hospitalQueueLink(id: string): string {
   const query = new URLSearchParams({
     place: id,
+    ...CURRENT_SEATS,
     visibility: "private",
     sortBy: "latestEmploymentStart",
     sortDesc: "true",

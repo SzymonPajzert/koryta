@@ -91,9 +91,13 @@ describe("partySeatRows", () => {
   });
 
   it("links each row to the same seats in the explore table", () => {
-    expect(rows[0]?.to).toBe("/eksploruj/tabela?party=PiS&category=szpitale");
+    // Seats held now: without `currentlyEmployed=selected` the table listed
+    // everybody who ever sat on a hospital board, not the people the bar counts.
+    expect(rows[0]?.to).toBe(
+      "/eksploruj/tabela?party=PiS&category=szpitale&currentlyEmployed=selected",
+    );
     expect(rows[2]?.to).toBe(
-      "/eksploruj/tabela?party=__NONE__&category=szpitale",
+      "/eksploruj/tabela?party=__NONE__&category=szpitale&currentlyEmployed=selected",
     );
   });
 
@@ -214,6 +218,7 @@ describe("regionQueueLink", () => {
     expect(link.startsWith("/eksploruj/tabela?")).toBe(true);
     expect(query.get("companyTeryt")).toBe("22");
     expect(query.get("category")).toBe("szpitale");
+    expect(query.get("currentlyEmployed")).toBe("selected");
     expect(query.get("visibility")).toBe("private");
   });
 
@@ -365,6 +370,7 @@ describe("breakdownRows", () => {
     });
     expect(row!.href).toContain("abc");
     expect(row!.to).toContain("place=abc");
+    expect(row!.to).toContain("currentlyEmployed=selected");
   });
 
   it("keeps a hospital that has only a backlog - that is the work", () => {
