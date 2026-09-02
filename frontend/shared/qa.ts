@@ -48,6 +48,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "szpitale-bez-ostrzezen-hydracji-po-zalogowaniu",
+    title: "Strona szpitali nie zgłasza błędów hydracji po zalogowaniu",
+    description:
+      "Zalogowany czytelnik dostawał w konsoli kilkanaście ostrzeżeń Vue i " +
+      "stronę zbudowaną na nowo; teraz kto czyta, strona sprawdza dopiero po " +
+      "wczytaniu i wtedy dociąga świeże liczby.",
+    steps: [
+      "Zalogowany otwórz /eksploruj/szpitale z otwartą konsolą: żadnych „Hydration … mismatch”, a zestawienie i linki „Zobacz osoby” są na miejscu.",
+    ],
+    link: "/eksploruj/szpitale",
+    area: "contributor",
+  },
+  {
     id: "wzmianki-i-cytowane-notatki-ten-sam-naglowek",
     title:
       "„Artykuły, które o tym wspominają” i „Notatki z innych stron” mają nagłówek jak reszta sekcji",

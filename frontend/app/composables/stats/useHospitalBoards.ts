@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import { useCurrentUser } from "vuefire";
 import type { Ref } from "vue";
 import type {
@@ -464,15 +464,36 @@ export function breakdownRows(
  * than fetched from the browser.
  */
 export async function useHospitalBoards() {
-  const user = useCurrentUser();
+  const currentUser = useCurrentUser();
+
+  /** The reader, as far as the markup is allowed to know them.
+   *
+   * Null on the server, and null in the browser too until the page has
+   * hydrated - only then does it follow `useCurrentUser()`. The server never
+   * knows who is asking, but a returning reader's session is restored before
+   * the client's setup runs, so reading `useCurrentUser()` directly here made
+   * the two sides disagree about everything that depends on it: the `useFetch`
+   * key (a different query is a different payload entry, so the client found
+   * nothing and hydrated the whole page against null stats), the "Zobacz
+   * osoby" links, the sentence about excluded seats. Vue reported each of them
+   * as a hydration mismatch and rebuilt the page. */
+  const user = shallowRef<typeof currentUser.value>(null);
+  onNuxtReady(() =>
+    watch(
+      currentUser,
+      (reader) => {
+        user.value = reader ?? null;
+      },
+      { immediate: true },
+    ),
+  );
 
   // Anonymous readers ask for the plain URL, which is the one the six-hour
   // cache - ours and Cloud CDN's - is holding, and the one that gets indexed.
   // A signed-in reader is the person who might have just published a board
   // member, so they ask for `latest`, which the endpoint answers `no-store`.
-  // Reactive rather than read once: vuefire resolves the user after hydration,
-  // so at the time of the server render there is nobody to know about yet, and
-  // `useFetch` refetches when the query changes.
+  // Reactive rather than read once: `useFetch` refetches when the query
+  // changes, which for a signed-in reader is right after hydration.
   const { data, pending, error, refresh } = await useFetch<HospitalStats>(
     "/api/stats/hospitals",
     { query: computed(() => (user.value ? { latest: "true" } : {})) },
@@ -492,8 +513,9 @@ export async function useHospitalBoards() {
   );
 
   return {
-    /** Resolved here, before the `await` below, and handed back so a page does
-     * not call `useCurrentUser()` for itself.
+    /** The hydration-safe reader from above, handed back so a page does not
+     * call `useCurrentUser()` for itself - which would bring the mismatches
+     * back, and worse.
      *
      * A page that awaits this composable has a top-level `await` in its
      * `<script setup>`, and calling a composable AFTER that await runs it with

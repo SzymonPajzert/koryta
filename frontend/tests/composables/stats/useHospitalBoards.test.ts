@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { mockNuxtImport } from "@nuxt/test-utils/runtime";
-import { computed, ref, type Ref } from "vue";
+import { computed, nextTick, ref, type Ref } from "vue";
 import type {
   HospitalStats,
   SupervisoryGroup,
@@ -150,21 +150,37 @@ describe("supervisionSegments", () => {
 });
 
 // A holder the tests drop a real `ref` into, rather than a plain object with a
-// `value`: the composable builds a `computed` over the user, so the third test
-// below only means anything if what it mutates is genuinely reactive. The ref
-// cannot be made in the `vi.hoisted` factory, which runs before vue is
-// imported.
-const { userHolder, mockUseFetch } = vi.hoisted(() => ({
+// `value`: the composable watches the user, so the tests below that mutate it
+// only mean anything if what they mutate is genuinely reactive. The ref cannot
+// be made in the `vi.hoisted` factory, which runs before vue is imported.
+const { userHolder, mockUseFetch, readyCallbacks } = vi.hoisted(() => ({
   userHolder: { user: null as Ref<{ uid: string } | null> | null },
   mockUseFetch: vi.fn(),
+  readyCallbacks: [] as (() => void)[],
 }));
 vi.mock("vuefire", () => ({ useCurrentUser: () => userHolder.user }));
-// `vi.stubGlobal` cannot reach this: the suite runs in the Nuxt environment,
-// where `useFetch` is a real auto-import resolved from `#app` rather than a
-// global the composable reads at call time.
+// `vi.stubGlobal` cannot reach these: the suite runs in the Nuxt environment,
+// where `useFetch` and `onNuxtReady` are real auto-imports resolved from `#app`
+// rather than globals the composable reads at call time.
 mockNuxtImport("useFetch", () => mockUseFetch);
+// Held rather than run, so a test can look at the page before and after
+// hydration - the moment the composable is allowed to notice who is reading.
+mockNuxtImport("onNuxtReady", () => (cb: () => void) => {
+  readyCallbacks.push(cb);
+});
 
 describe("useHospitalBoards", () => {
+  beforeEach(() => {
+    readyCallbacks.length = 0;
+  });
+
+  /** The page has hydrated: `onNuxtReady` fires, and the watcher it installs
+   * gets its first turn. */
+  async function hydrated() {
+    for (const cb of readyCallbacks.splice(0)) cb();
+    await nextTick();
+  }
+
   async function capturedQuery(user: { uid: string } | null = null) {
     userHolder.user = ref(user);
     let options: { query?: Ref<Record<string, string>> } | undefined;
@@ -185,7 +201,10 @@ describe("useHospitalBoards", () => {
     // The one the six-hour cache holds, ours and Cloud CDN's, and the one that
     // gets indexed. An anonymous reader has published nothing and has no reason
     // to pay for a recount.
-    expect((await capturedQuery()).value).toEqual({});
+    const query = await capturedQuery();
+    expect(query.value).toEqual({});
+    await hydrated();
+    expect(query.value).toEqual({});
   });
 
   it("asks for the latest numbers once there is a signed-in reader", async () => {
@@ -193,19 +212,32 @@ describe("useHospitalBoards", () => {
     // member. `latest` is what makes the endpoint answer `no-store`, which is
     // the only instruction Cloud CDN takes - clearing the server-side cache on
     // publication never reached the copy at the edge.
-    expect((await capturedQuery({ uid: "admin-uid" })).value).toEqual({
-      latest: "true",
-    });
+    const query = await capturedQuery({ uid: "admin-uid" });
+    await hydrated();
+    expect(query.value).toEqual({ latest: "true" });
+  });
+
+  it("does not know the reader until the page has hydrated", async () => {
+    // A returning reader's session is restored before the client's setup runs,
+    // while the server never knows who is asking. Reading the user straight
+    // away made the client's `useFetch` key differ from the server's, so the
+    // payload went unused and the whole page hydrated against null stats -
+    // ten Vue mismatch warnings and a rebuilt DOM. The reader is null on both
+    // sides until hydration is over.
+    const query = await capturedQuery({ uid: "admin-uid" });
+    expect(query.value).toEqual({});
   });
 
   it("re-asks when the user resolves after the page has rendered", async () => {
     const query = await capturedQuery(null);
+    await hydrated();
     expect(query.value).toEqual({});
 
-    // vuefire settles the user after hydration, so at server-render time there
-    // is nobody to know about yet. The query is reactive precisely so `useFetch`
-    // refetches at that point rather than leaving the editor on the cached copy.
+    // A reader who signs in on the page, or whose session vuefire settles late.
+    // The query is reactive precisely so `useFetch` refetches at that point
+    // rather than leaving the editor on the cached copy.
     userHolder.user!.value = { uid: "admin-uid" };
+    await nextTick();
 
     expect(query.value).toEqual({ latest: "true" });
   });
