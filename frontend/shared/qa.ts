@@ -48,6 +48,24 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "rewizje-w-panelu-tym-samym-przyciskiem",
+    title: "„Rewizje” w panelu bocznym wygląda jak na stronie osoby",
+    description:
+      "Skrót do rewizji, który admin ma w panelu bocznym tabeli, był szarym " +
+      "przyciskiem z napisem - jedynym takim w całym panelu, obok " +
+      "pomarańczowego „Zaproponuj zmianę” i pastylki z głosem. Teraz jest " +
+      "tym samym kwadratowym, obrysowanym przyciskiem z ikoną, którym " +
+      "strona osoby prowadzi do rewizji, z podpisem w dymku.",
+    steps: [
+      "Jako admin wejdź na /eksploruj/tabela i kliknij nazwisko - w panelu, w linii z „Zaproponuj zmianę” i głosem, ma być kwadratowy przycisk z ikoną historii, bez napisu.",
+      "Najedź na niego - dymek ma mówić „Rewizje”; kliknięcie ma otworzyć listę rewizji tej osoby.",
+      "Otwórz stronę tej samej osoby i porównaj: przycisk „Rewizje” w nagłówku ma wyglądać tak samo.",
+      "Jako zwykły użytkownik przycisku w panelu ma nie być.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "admin",
+  },
+  {
     id: "zrodla-zaczynaja-sie-od-listy",
     title: "„Źródła” zaczynają się od źródeł",
     description:
