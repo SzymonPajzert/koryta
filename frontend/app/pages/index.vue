@@ -78,6 +78,7 @@
           text="Działaj z nami"
           to="/pomoc"
           data-testid="home-cta"
+          @click="trackGoal('cta:pomoc', { from: 'home-hero' })"
         />
       </v-col>
     </v-row>
@@ -152,6 +153,7 @@
 <script setup lang="ts">
 import { mdiChevronRight, mdiLayersSearchOutline, mdiTable } from "@mdi/js";
 import { useStats } from "~/composables/stats/useStats";
+import { trackGoal } from "~/composables/analytics";
 import { SOCIAL_CARD } from "~/composables/entitySeo";
 
 useSeoMeta({

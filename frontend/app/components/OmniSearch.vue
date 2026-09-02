@@ -86,6 +86,13 @@ import { parties } from "~~/shared/misc";
 import { nameMatchesTokens, searchTokens } from "~~/shared/search";
 import { generateEntityUrl } from "~/composables/slugs";
 import { omniSearchTarget } from "~/composables/omniSearch";
+import { trackGoal } from "~/composables/analytics";
+import {
+  SEARCH_PICK_GOALS,
+  SEARCH_PROPOSE_GOALS,
+  searchPickKind,
+  type SearchPickKind,
+} from "~~/shared/analytics";
 import type { NodeType } from "~~/shared/model";
 import type { ProposableNodeType } from "~~/shared/api";
 import { refDebounced } from "@vueuse/core";
@@ -135,12 +142,22 @@ const createOptions = [
   { type: "article" as const, label: "Dodaj źródło", icon: mdiFilePlusOutline },
 ];
 
+/** The subset of ProposableNodeType the search box actually offers. Narrower
+ * than the dialog's own type on purpose: a goal exists for each of these three,
+ * and a fourth added to `createOptions` should not compile until it has one. */
+type CreatableFromSearch = (typeof createOptions)[number]["type"];
+
 // Captured on click, because opening the dialog blurs the autocomplete, which
 // can reset `search` before the dialog reads the name to prefill.
 const pendingCreateName = ref("");
 const createType = ref<ProposableNodeType>("person");
 
-const openCreate = async (type: ProposableNodeType) => {
+const openCreate = async (type: CreatableFromSearch) => {
+  // Recorded before the dialog opens, because this is the interesting event on
+  // its own: it says the search could not answer, and what the reader was
+  // willing to add instead. Whether they went on to submit is a different
+  // question, and one the revision queue already answers.
+  trackGoal(SEARCH_PROPOSE_GOALS[type], { query: createName.value });
   pendingCreateName.value = createName.value;
   createType.value = type;
   // The dialog is keyed by type, so it is a different component instance once
@@ -181,7 +198,11 @@ type ListItem = {
   title: string;
   subtitle?: string;
   icon: string;
-  logEventKey: { content_id: string; content_type: string };
+  /** Which search:pick-* goal this entry converts, set where the entry is
+   * built. It replaces a `logEventKey` that carried content_id/content_type for
+   * an analytics call that no longer existed - nothing read it, so every hit
+   * was describing itself to nobody. */
+  analyticsKind: SearchPickKind;
   path?: string;
   query?: Record<string, string>;
 };
@@ -215,6 +236,14 @@ async function performSearch(searchTerm: string) {
       },
     });
     searchData.value = response;
+    // Counted here rather than on every keystroke: `debouncedSearch` is what
+    // reaches the server, so this is one event per query a reader actually
+    // waited for, and the two goals are directly comparable - the gap between
+    // them is the share of searches the index cannot answer.
+    trackGoal("search:performed");
+    if (response.length === 0) {
+      trackGoal("search:no-results", { query: searchTerm });
+    }
   } catch (error) {
     // A search that fails should offer nothing rather than spin forever.
     console.error("Search failed", error);
@@ -238,10 +267,7 @@ const items = computed<ListItem[]>(() => {
     title: "Lista wszystkich osób",
     icon: mdiFormatListBulletedType,
     path: "/eksploruj/tabela",
-    logEventKey: {
-      content_id: "",
-      content_type: "nodeGroup",
-    },
+    analyticsKind: "list",
   });
 
   parties.forEach((item) => {
@@ -254,10 +280,7 @@ const items = computed<ListItem[]>(() => {
       query: {
         party: item,
       },
-      logEventKey: {
-        content_id: item,
-        content_type: "party",
-      },
+      analyticsKind: "party",
     });
   });
 
@@ -281,10 +304,9 @@ const items = computed<ListItem[]>(() => {
         id: `entity-${item.id}`,
         title: item.name,
         icon,
-        logEventKey: {
-          content_id: item.id!,
-          content_type: "nodeGroup",
-        },
+        // The type /api/search returned, not the url it produced: a company
+        // with a krs filter and a company page both mean "place".
+        analyticsKind: searchPickKind(itemType),
         ...routing,
       });
     });
@@ -298,6 +320,15 @@ watch(nodeGroupPicked, (value) => {
     return;
   }
 
+  // `analyticsKind` rather than the destination, because several entries lead
+  // to the same place: a party and „Lista wszystkich osób” both open
+  // /eksploruj/tabela, and telling those apart is most of the point - one is a
+  // reader with something in mind, the other is a reader giving up on typing.
+  // Defaulted, because the value arrives from VAutocomplete's model and a test
+  // may hand over a partial entry.
+  trackGoal(SEARCH_PICK_GOALS[value.analyticsKind ?? "place"], {
+    title: value.title,
+  });
   push(omniSearchTarget(currentRoute.value, value));
   autocompleteFocus.value = false;
 });
