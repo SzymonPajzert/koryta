@@ -25,7 +25,7 @@ Korytle (stub), 6 uścisków / six degrees (planned flagship).
 
 | Game | Manual examples? | Collects data? | Data ready? | 1v1 | Video | Build | Timed |
 |---|---|---|---|---|---|---|---|
-| Po jakich studiach? | no (sampled; taxonomy once) | STRONG — education backfill | no (wykształcenie hand-filled) | fewer attempts wins | good (reveal punchline) | med (facet grading) | secondary |
+| Po jakich studiach? | no (sampled from the filled subset) | medium (education leads) | yes (daily needs one target a day) | fewer attempts wins | good (reveal punchline) | med (facet grading) | secondary |
 | Kim jestem? | yes — daily pick curated | weak (QA eyes) | mostly (pool, dates) | buzz duel | strong | med | secondary (time + clue count) |
 | Kiedy? | no (sampled; anchors light) | weak (hint-gap prompts) | partial (edge dates) | closest slider | ok | low | secondary |
 | Ta sama osoba? | no (pipeline queue) | STRONG — core purpose | yes | arcade board | weak | low-med | CORE (60 s arcade) |
@@ -76,15 +76,19 @@ degree scale covers", e.g. "duchowny prawosławny"), so scoring needs a parse
 into (poziom, dziedzina, uczelnia, dekada) facets plus a distance over the
 dziedzina tree. The prose stays the displayed answer; facets exist only to
 grade, and unparseable ones just drop out of the daily pool.
-**Data hook — the biggest since Majątek:** nothing in the pipeline fills
-wykształcenie; it is hand-entered where somebody happens to know it, so the
-eligible pool is thin today and must be measured before this is scheduled.
-Same shape as Majątek — the game funds the field: an unscored "nie wiem /
-zgłoś wykształcenie" round on people who lack it collects leads, and a
-Wikipedia/biogram extraction pass gives the crowd something to check.
-Recognizability floor applies to the *reveal*, not the question — the CV is
-anonymous while you play, so the target still has to clear the fame threshold
-or the unmask lands flat.
+**Coverage is not a gate (Szymon):** nothing in the pipeline fills
+wykształcenie — it is hand-entered where somebody happens to know it — but a
+daily eats one target a day and only ever draws from the people already
+filled in. So it runs on today's data, and hand-filling stays ahead of
+consumption without anyone trying; no backfill project gates the build.
+What actually bounds the pool is the intersection with the fame floor, not
+the field's raw coverage: the recognizability rule applies to the *reveal*
+rather than the question — the CV is anonymous while you play, so the target
+still has to clear the fame threshold or the unmask lands flat. Curating the
+daily therefore means filling wykształcenie on famous people first, which is
+cheap and worth doing anyway. Collector on the margin: an unscored "nie wiem
+/ zgłoś wykształcenie" round on people who lack it points the crowd at the
+same field.
 Versus: same CV, fewer attempts wins; tie broken by who named the uczelnia.
 
 ### 2. Kim jestem? — CV guess-who ⭐ flagship
