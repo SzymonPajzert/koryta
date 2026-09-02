@@ -19,6 +19,7 @@
           class="ma-2"
           href="https://docs.google.com/forms/d/e/1FAIpQLSfZX4ekzLEhX60f6Frn3JMKkYwbqG2tE1NNNN0Eu_Ozr814FQ/viewform"
           target="_blank"
+          @click="trackGoal('cta:volunteer-form', { from: 'home' })"
         >
           <v-icon :icon="mdiPencilPlus" /> Chcę pomóc! (ankieta)
         </v-btn>
@@ -27,7 +28,13 @@
            that both ask for the same thing, and /pomoc is already one tap away
            from the top of the home page. -->
       <v-col cols="12" md="6" class="text-center d-none d-md-block">
-        <v-btn variant="elevated" color="primary" class="ma-2" to="/pomoc">
+        <v-btn
+          variant="elevated"
+          color="primary"
+          class="ma-2"
+          to="/pomoc"
+          @click="trackGoal('cta:pomoc', { from: 'home-cta' })"
+        >
           Albo zacznij działać
         </v-btn>
       </v-col>
@@ -38,6 +45,7 @@
 <script setup lang="ts">
 import { mdiPencilPlus } from "@mdi/js";
 import { useStats } from "~/composables/stats/useStats";
+import { trackGoal } from "~/composables/analytics";
 
 const { reviewed } = useStats();
 </script>

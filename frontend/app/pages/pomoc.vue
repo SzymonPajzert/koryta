@@ -34,6 +34,7 @@
         height="100%"
         variant="outlined"
         hover
+        @click="action.href && trackGoal('cta:community', { to: action.title })"
       >
         <v-card-item>
           <template #prepend>
@@ -58,6 +59,7 @@
         height="100%"
         variant="outlined"
         hover
+        @click="trackGoal('cta:volunteer-form', { from: 'pomoc' })"
       >
         <v-card-item>
           <template #prepend>
@@ -83,6 +85,7 @@
         height="100%"
         variant="outlined"
         hover
+        @click="trackGoal('cta:donate', { to: 'patronite' })"
       >
         <v-card-item>
           <template #prepend>
@@ -125,6 +128,7 @@
         height="100%"
         variant="outlined"
         hover
+        @click="trackGoal('cta:community', { to: link.title })"
       >
         <v-card-item>
           <template #prepend>
@@ -161,6 +165,7 @@ import {
 } from "@mdi/js";
 import { useAuthState } from "@/composables/auth";
 import { useStats } from "~/composables/stats/useStats";
+import { trackGoal } from "~/composables/analytics";
 
 // Discord brand icon from simple-icons; @mdi/js no longer ships brand icons.
 const discordIcon =

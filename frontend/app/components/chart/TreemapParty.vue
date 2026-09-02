@@ -19,6 +19,13 @@ import {
 const { results: resultsUnfiltered } = await usePartyStatistics();
 const router = useRouter();
 
+/** Emitted alongside the navigation, not instead of it - the chart keeps
+ * deciding where a party leads, and the parent gets told that a party was
+ * picked. It exists so the home page can record the treemap's only conversion
+ * under a name that says where the click happened, rather than this component
+ * naming a surface it does not know it is on. Mirrors PolandMap's `click`. */
+const emit = defineEmits<{ select: [party: string] }>();
+
 const nonZeroIndices = computed(() =>
   resultsUnfiltered.value.map((x, i) => (x > 0 ? i : -1)).filter((i) => i >= 0),
 );
@@ -49,9 +56,12 @@ const chartOptions = computed(() => ({
         _chartContext: unknown,
         opts: { dataPointIndex: number },
       ) {
+        const party = parties.value[opts.dataPointIndex];
+        if (!party) return;
+        emit("select", party);
         router.push({
           path: "/eksploruj/tabela",
-          query: { party: parties.value[opts.dataPointIndex] },
+          query: { party },
         });
       },
     },

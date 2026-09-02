@@ -154,6 +154,26 @@ export default defineNuxtConfig({
   plausible: {
     // Prevent tracking on localhost
     ignoredHostnames: ["localhost"],
+
+    // Send events to our own origin, which nitro forwards to plausible.io. The
+    // tracker itself is already first-party - @nuxtjs/plausible bundles
+    // @plausible-analytics/tracker rather than loading a remote script - so the
+    // event endpoint was the only thing left for a blocklist to match, and the
+    // audience is 69% mobile and Polish, where blocking is common. Every number
+    // the dashboard has ever shown is a floor because of it.
+    //
+    // The cost is that each event becomes a request to the Cloud Run container
+    // instead of to plausible.io. At 15k pageviews a quarter that is noise next
+    // to what rendering a page costs, and the handler does no rendering.
+    proxy: true,
+
+    // Counts clicks that leave the site - the volunteer form, Patronite, the
+    // Slack invite - as one "Outbound Link: Click" goal. The url is a property,
+    // so on a Growth plan this cannot say *which* link, which is why the links
+    // that matter also fire a named goal of their own (shared/analytics.ts).
+    // Kept anyway: it is the only thing that sees the source links on an
+    // article page, and those are not worth a goal each.
+    autoOutboundTracking: true,
   },
 
   eslint: {

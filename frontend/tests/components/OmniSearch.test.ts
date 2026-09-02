@@ -149,7 +149,7 @@ describe("OmniSearch", () => {
     await autocomplete.emit("update:modelValue", {
       title: "Place 1",
       path: "/entity/place/place1",
-      logEventKey: { content_id: "place1", content_type: "place" },
+      analyticsKind: "place",
     });
 
     await nextTick();
