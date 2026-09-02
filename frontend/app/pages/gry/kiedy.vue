@@ -43,15 +43,25 @@
             Zmiana nastąpiła w {{ answered.answer }} r. — zdobywasz
             {{ answered.points }} pkt.
           </p>
-          <v-btn color="primary" variant="flat" @click="next">
+          <!-- Full width under `sm`, its own width above: the one thing to
+               tap on this screen should be under the thumb, not centred in a
+               row of empty card. -->
+          <v-btn
+            class="w-100 w-sm-auto"
+            color="primary"
+            size="large"
+            variant="flat"
+            @click="next"
+          >
             {{ round + 1 < puzzle.swaps.length ? "Następna zmiana" : "Wynik" }}
           </v-btn>
         </div>
 
         <v-btn
           v-else
-          class="mt-4"
+          class="mt-4 w-100 w-sm-auto"
           color="primary"
+          size="large"
           variant="flat"
           data-testid="kiedy-submit"
           @click="submit"

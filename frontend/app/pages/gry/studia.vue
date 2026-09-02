@@ -46,8 +46,9 @@
           data-testid="studia-input"
         />
         <v-btn
-          class="mt-3"
+          class="mt-3 w-100 w-sm-auto"
           color="primary"
+          size="large"
           variant="flat"
           :loading="checking"
           :disabled="!choice"
@@ -59,6 +60,10 @@
       </v-card>
 
       <v-list v-if="results.length" class="mt-4" density="compact">
+        <!-- The term wraps and the verdict sits under it rather than beside
+             it: a v-list-item `#append` holds its width and squeezes the title
+             instead, and "magister inżynier ochrony środowiska" against
+             "bardzo blisko" leaves nothing legible on a 375px screen. -->
         <v-list-item
           v-for="result in ordered"
           :key="result.term"
@@ -69,12 +74,10 @@
               #{{ result.rank }}
             </span>
           </template>
-          <v-list-item-title>{{ result.term }}</v-list-item-title>
-          <template #append>
-            <span class="text-caption text-medium-emphasis">
-              {{ result.temperature }}
-            </span>
-          </template>
+          <v-list-item-title class="text-wrap">
+            {{ result.term }}
+          </v-list-item-title>
+          <v-list-item-subtitle>{{ result.temperature }}</v-list-item-subtitle>
         </v-list-item>
       </v-list>
     </template>

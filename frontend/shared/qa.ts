@@ -60,6 +60,7 @@ export const QA_ITEMS: QaItem[] = [
       "Przesuń suwak i kliknij „Obstawiam”: dostajesz punkty i zdanie, o ile lat i w którą stronę się pomyliłeś.",
       "Przejdź wszystkie sześć rund: na końcu jest wynik, oś ze znacznikami wszystkich sześciu zmian i przycisk „Udostępnij wynik”.",
       "Odśwież stronę w połowie gry: rundy już rozegrane zostają zapamiętane.",
+      "Na telefonie (albo w oknie 375px): karta zmiany układa się w pionie, przyciski „−” i „+” przy roku ustawiają go co rok, a „Obstawiam” jest na całą szerokość.",
     ],
     link: "/gry/kiedy",
     area: "public",

@@ -76,6 +76,27 @@ czasie). Tego jeszcze **nie ma** — poniżej zakres, nie kod.
   wyborczych), majątek nie istnieje, a „lata w polityce” da się odczytać z
   profilu — czyli otwarta książka psuje tę konkretną kolumnę.
 
+## Telefon jest domyślnym urządzeniem
+
+Każda gra musi dać się wygodnie zagrać kciukiem na 375px. To nie jest lista
+życzeń dostępnościowych, tylko warunek działania mechaniki — kilka rzeczy z
+tego wynika wprost:
+
+- **Suwak sam nie wystarczy.** 27 lat na 375px to ~11px na rok przy opuszku
+  ~40px, a punktacja płaci pełne 100 tylko za trafiony rok. Stąd `YearSlider`
+  ma steppery „−/+” obok odczytu: przeciągnij, żeby być blisko, dotknij, żeby
+  wejść dokładnie. Każdy przyszły suwak (Majątek) ma ten sam problem.
+- **Główna akcja pod kciukiem** — przyciski „Obstawiam” i „Sprawdź” są
+  `w-100 w-sm-auto`, czyli pełna szerokość na telefonie.
+- **Nic nie może polegać na `useDisplay()`.** Pod SSR Vuetify przyjmuje 1280px
+  i poprawia się dopiero po hydracji, więc układ zależny od szerokości renderuje
+  się najpierw jako desktopowy. Używamy klas breakpointowych i media queries —
+  tak samo jak `eksploruj/tabela.vue` i `StatsHospitalBreakdown`.
+- **Nic nie stoi obok siebie, jeśli może się zawinąć.** Karta zmiany
+  (`succession/ChangeCard.vue`) rozkłada strony jedna pod drugą poniżej 600px i
+  obraca strzałkę; lista prób w „Po jakich studiach?” trzyma werdykt pod
+  terminem, bo `#append` w `v-list-item` ściska tytuł zamiast się zawijać.
+
 ## Czego brakuje po stronie danych
 
 - **„Po jakich studiach?”** stoi na `Person.education`. W eksporcie z
