@@ -25,6 +25,7 @@ Korytle (stub), 6 uścisków / six degrees (planned flagship).
 
 | Game | Manual examples? | Collects data? | Data ready? | 1v1 | Video | Build | Timed |
 |---|---|---|---|---|---|---|---|
+| Po jakich studiach? | no (sampled; taxonomy once) | STRONG — education backfill | no (wykształcenie hand-filled) | fewer attempts wins | good (reveal punchline) | med (facet grading) | secondary |
 | Kim jestem? | yes — daily pick curated | weak (QA eyes) | mostly (pool, dates) | buzz duel | strong | med | secondary (time + clue count) |
 | Kiedy? | no (sampled; anchors light) | weak (hint-gap prompts) | partial (edge dates) | closest slider | ok | low | secondary |
 | Ta sama osoba? | no (pipeline queue) | STRONG — core purpose | yes | arcade board | weak | low-med | CORE (60 s arcade) |
@@ -53,7 +54,40 @@ Korytle (stub), 6 uścisków / six degrees (planned flagship).
 
 ## Liked
 
-### 1. Kim jestem? — CV guess-who ⭐ flagship
+### 1. Po jakich studiach? — wykształcenie z anonimowego CV ⭐ (round 3, friend's idea)
+An anonymous career — employment entries and election runs, dates kept,
+employers generalized to category — and one question: what did this person
+study? Guess iteratively; each attempt comes back as a closeness scorecard
+rather than tak/nie: poziom (średnie/licencjat/magister/doktorat) ↑/↓,
+dziedzina warmer/colder on a field-of-study tree (prawo → administracja is
+close, prawo → geologia is not), uczelnia ✓ / ta sama uczelnia, inny wydział /
+ten sam typ (techniczna, ekonomiczna, kościelna) / ✗, dekada dyplomu ↑/↓.
+Five attempts, score by how few you spent. The premise is that the CV really
+does leak it — a radca prawny in three radach nadzorczych reads differently
+from an inżynier who ended up in the same seats — and the best rounds are the
+ones where it lies (prezes spółki energetycznej po teologii). Reveal unmasks
+the person, links the profile, and shows where the day's crowd converged.
+Sits between Kim jestem?'s anidle scorecard and Czyj człowiek?: same anonymous
+CV surface, different hidden variable — all three should share one CV-redaction
+component rather than three.
+**Grading is the build cost:** `education` is deliberately free prose
+(frontend/shared/model.ts — "sometimes a degree and sometimes a formation no
+degree scale covers", e.g. "duchowny prawosławny"), so scoring needs a parse
+into (poziom, dziedzina, uczelnia, dekada) facets plus a distance over the
+dziedzina tree. The prose stays the displayed answer; facets exist only to
+grade, and unparseable ones just drop out of the daily pool.
+**Data hook — the biggest since Majątek:** nothing in the pipeline fills
+wykształcenie; it is hand-entered where somebody happens to know it, so the
+eligible pool is thin today and must be measured before this is scheduled.
+Same shape as Majątek — the game funds the field: an unscored "nie wiem /
+zgłoś wykształcenie" round on people who lack it collects leads, and a
+Wikipedia/biogram extraction pass gives the crowd something to check.
+Recognizability floor applies to the *reveal*, not the question — the CV is
+anonymous while you play, so the target still has to clear the fame threshold
+or the unmask lands flat.
+Versus: same CV, fewer attempts wins; tie broken by who named the uczelnia.
+
+### 2. Kim jestem? — CV guess-who ⭐ flagship
 Daily politician, career revealed entry by entry (oldest first, employer
 redacted to category before unmasking), guess anytime via person-search
 autocomplete; fewer clues = better score. Curated around one *weird* entry
@@ -69,7 +103,7 @@ Opposite supply economics to clue-reveal: zero curation, any famous-pool
 person works — so anidle-mode is the everyday daily, CV-reveal the curated
 special. The attribute grid doubles as a tutorial of what koryta tracks.
 
-### 2. Kiedy? — timeline slider ⭐
+### 3. Kiedy? — timeline slider ⭐
 "Prezes spółki X odchodzi" → guess *when* on a 2007–2026 slider, score decays
 with distance. Purchasable hints that cap the score: party of the leaver
 (cheap), party of the successor (expensive — different parties ⇒ you've
@@ -81,7 +115,7 @@ Greyed-out hint ("brak danych") doubles as a crowdsourcing prompt.
 publication date. Self-dating ground truth, infinite supply, names can be
 redacted as difficulty dial.
 
-### 3. Ta sama osoba? — entity-resolution reCAPTCHA (data collector)
+### 4. Ta sama osoba? — entity-resolution reCAPTCHA (data collector)
 KRS card vs election card, same name: swipe tak / nie / nie wiem.
 Papers-Please deduction on evidence deltas (age off by one, middle initial).
 Timed arcade mode — 60 s, how many pairs — with a leaderboard; combo
@@ -91,7 +125,7 @@ uncertain-confidence band of the existing matching pipeline; 3 concordant
 votes from high-accuracy players = link evidence (never auto-merge).
 Best placed as a 3-pair bonus round after the fun dailies.
 
-### 4. Dwie prawdy i koryto — two truths and a lie (data collector)
+### 5. Dwie prawdy i koryto — two truths and a lie (data collector)
 Known politician, three career facts, one fabricated (sampled from the fact
 distribution of same-party/region peers — hard precisely when typical). Reveal
 sources the truths, red-stamps the fake. End-of-daily: submit tomorrow's
@@ -101,7 +135,7 @@ mundane rather than damning); LLM-generated lies need a human glance
 (a "fake" that is accidentally true is the embarrassing failure mode).
 Strongest video format of the batch.
 
-### 5. Krata — Immaculate Grid for polityka ⭐ (round 2, liked)
+### 6. Krata — Immaculate Grid for polityka ⭐ (round 2, liked)
 3×3 grid; rows and columns are criteria (partia × "zasiadał w spółce skarbu
 państwa" / "był w rządzie" / "kandydował na prezydenta"). Fill each cell with
 a person satisfying both, scored by *rarity* — the obvious answer everyone
@@ -119,7 +153,7 @@ trued up when the lead verifies — retroactive points as a retention loop.
 Crowd scores settle at midnight; share card carries the settled number.
 Bonus reveal stat: eligible-set size per cell ("214 poprawnych odpowiedzi").
 
-### 6. Majątek — Price is Right on oświadczenia majątkowe ⭐ (round 2, liked)
+### 7. Majątek — Price is Right on oświadczenia majątkowe ⭐ (round 2, liked)
 A politician plus one line of their real asset declaration ("oszczędności",
 "zegarki", "metraż domu") — guess the number on a slider, scored by
 closeness, five lines a day. Versus: both guess, closer takes the point;
@@ -127,7 +161,7 @@ the collab fun is the face when the real number drops. Data hook: the biggest
 of any idea — declarations are public PDFs largely not in the graph, so the
 game funds their digitization.
 
-### 7. Kontexto — graph-distance guesser ⭐ (round 2, liked; data-gated)
+### 8. Kontexto — graph-distance guesser ⭐ (round 2, liked; data-gated)
 Guess the mystery politician; every wrong guess answers with its distance in
 the connection graph ("Morawiecki — 3 uściski od celu, najkrótsza droga przez
 spółkę energetyczną"). Triangulate through the network; solving the daily IS
@@ -139,7 +173,7 @@ middle person yourself and search from both ends (3+3 beats 6).
 materialize co-board-membership and co-candidacy (see co-candidate-edges
 branch) as first-class interpersonal edges; family/social ties are the gap.
 
-### 8. 16-0 — koryto fantasy draft ⭐ (round 2, liked; friend's variant)
+### 9. 16-0 — koryto fantasy draft ⭐ (round 2, liked; friend's variant)
 The 38-0/82-0 sports-YT draft format, Polish number: 16 województw. Draft a
 five-role crew — Lider (highest office), Teczkowy (appointments across
 sectors/transitions), Marketingowiec (mentions in the crawled corpus),
@@ -155,7 +189,7 @@ Runs on person↔institution edges we already have; weak spots are tenure
 dates and salaries (Majątek digitization would feed Finansjer). Main design
 cost: score formulas funny enough to argue about, defensible enough to lose to.
 
-### 9. Czyj człowiek? — guess the party from the CV ⭐ (round 2, Szymon's idea)
+### 10. Czyj człowiek? — guess the party from the CV ⭐ (round 2, Szymon's idea)
 Anonymous employment history (party-explicit entries stripped, dates kept —
 dates + ministry is the learnable era signal), guess the party from ~6 chips.
 Three lives, endless seeded daily run, leaderboard; share = distance reached
@@ -165,7 +199,7 @@ unscored "nikt nie wie" round — crowd votes collect priors on undocumented
 affiliations (the same provenance data that gates Kontexto/Kiedy? hints).
 Versus: same seeded run, most cards before the third miss.
 
-### 10. Wyrzutek — odd one out ⭐ (round 2, liked; famous-pool only)
+### 11. Wyrzutek — odd one out ⭐ (round 2, liked; famous-pool only)
 Four politicians, three share a hidden graph link (same board, committee,
 foundation), one doesn't belong — tap the wyrzutek, reveal draws the actual
 edge triangle. Inverse of Połączenia's grouping. Hard mode: the odd one
@@ -173,7 +207,7 @@ shares a decoy link with two of them. Constraint from review: only very
 known politicians — nobody cares about guessing around a local radny.
 Versus: speed tap, wrong tap locks out.
 
-### 11. Prognoza — Polymarket for the revolving door ⭐ (round 2, strong like)
+### 12. Prognoza — Polymarket for the revolving door ⭐ (round 2, strong like)
 Weekly slate of yes/no bets on *upcoming* events: "Czy prezes spółki X
 przetrwa do końca kwartału?", "Czy stanowisko po wiceministrze Y dostanie
 ktoś z partii Z?" Lock predictions; the crawler + graph resolve them
@@ -185,7 +219,7 @@ picks, resolved on camera monthly. Risks: slow burn, no instant
 gratification; needs reliable crawler resolution or unsettled bets rot.
 Unique data angle: crowd forecasts are themselves a new dataset.
 
-### 12. Ile uścisków? — guess the graph distance ⭐ (round 2, very good)
+### 13. Ile uścisków? — guess the graph distance ⭐ (round 2, very good)
 Two famous politicians, one question: how many handshakes apart in the graph?
 Stepper 1–6, near-miss scoring; the reveal draws the actual shortest path
 node by node ("Ziobro → spółka → ktoś → Tusk"). Instant, concrete reward —
@@ -195,7 +229,7 @@ in a 10-second casual costume — same interpersonal-edge prerequisite, lighter
 mechanic. Versus: closer guess takes the point; tie broken by predicting the
 link type.
 
-### 13. Koryto czy nie? — anonymized appointment judgment ⭐ (round 2, liked)
+### 14. Koryto czy nie? — anonymized appointment judgment ⭐ (round 2, liked)
 One real appointment per card, ANONYMIZED (Szymon's requirement): no names —
 just the CV/qualifications history, the seat, and the timing relative to
 elections. Swipe: koryto / uzasadniona nominacja. Scored by consensus —
@@ -207,7 +241,7 @@ every swipe is a calibration label for the scoring models; hard
 crowd-vs-model disagreements are the cards worth editorial attention.
 Framing rule: "oceń nominację", never "osądź człowieka".
 
-### 14. Pająk — tap the center of the network (Szymon's seed, centroidgame.com)
+### 15. Pająk — tap the center of the network (Szymon's seed, centroidgame.com)
 A real subgraph drawn as ANONYMOUS dots + edges in a circular layout (nodes
 pinned on a ring so visual position carries zero signal — force-directed
 layouts would leak the answer into the picture's middle). One tap: who holds
@@ -220,7 +254,7 @@ bipartite person↔institution edges (no interpersonal-edge gate); curation =
 picking famous-adjacent daily clusters ("sieć wokół Orlenu").
 Versus: same web, closer tap wins.
 
-### 15. Kalendarium — Chronle for political events ⭐ (Szymon's pick)
+### 16. Kalendarium — Chronle for political events ⭐ (Szymon's pick)
 Wikitrivia insertion loop over REAL political events from the scraped
 article corpus: timeline starts with one anchor; draw a headline card, tap
 where it slots in; correct locks it in, wrong = strike, 3 strikes out.
@@ -233,7 +267,7 @@ cards. Reveals link the articles on /zrodla — distribution for sources.
 Replaces the cut Co było pierwsze? (person-level ordering had no hook;
 public events tap shared memory). Versus: same deck, longer run wins.
 
-### 16. Drabinka — insertion ladder by exact stat ⭐ (Uszereguj reworked via timdle.com)
+### 17. Drabinka — insertion ladder by exact stat ⭐ (Uszereguj reworked via timdle.com)
 Timdle's mechanic over politicians: order by an exact quantity — daily stat
 rotates: głosy w ostatnich wyborach (exact counts in election data — runs
 today), majątek (gated on the declarations pipeline — Majątek synergy),
@@ -247,50 +281,50 @@ Versus: same deck, higher score wins.
 
 ## Ok tier
 
-### 17. Wyżej/Niżej — higher-lower
+### 18. Wyżej/Niżej — higher-lower
 Two cards, one stat (board seats per person to start), tap higher/lower,
 streak. Daily seeded 10-pair run + endless arcade for video. Cheapest build.
 Needs work on fun categories — let users suggest the next category. Skip
 near-tie pairs; mind undercounted CVs being scored as truth ("co najmniej N").
 
-### 18. Kto to powiedział? — quote guesser (round 2, ok-tier)
+### 19. Kto to powiedział? — quote guesser (round 2, ok-tier)
 Real quote (Sejm stenograms + crawled interviews), autocomplete the speaker,
 graded feedback ("ta sama partia, inna dekada"); 3-second Sejm audio clip as
 hard mode. Versus: buzz duel, wrong buzz locks you out. Verdict: fine but
 sits far from koryta's own data — supply is public transcripts, not the graph.
 
-### 19. Zgadnij spółkę — company guess-who
+### 20. Zgadnij spółkę — company guess-who
 Kim jestem? engine, company as the mystery; clues from categories/is_public
 and board-churn aggregates ("11 zarządów w 8 lat"). Parked low: unclear who'd
 play — company names aren't recognizable the way faces are.
 
 ## Parked / cut — kept for reference, not discarded
 
-### 20. Karuzela — where did they land? (parked)
+### 21. Karuzela — where did they land? (parked)
 "X leaves the ministry — where do they work now?" 4 options with same-slice
 distractors. Parked: the honest insight is the answer is *unguessable*; maybe
 a Milionerzy-parody sketch, not a game.
 
-### 21. Mapka — Worldle for okręgi (cut)
+### 22. Mapka — Worldle for okręgi (cut)
 Territory silhouette + distance arrows, second stage "name the poseł". Cut:
 weakest thesis link, no good second stage; tradle-of-regions variant also
 failed to be fun (revealed attributes are inspected, not reasoned from).
 
-### 22. Rozplątanka — untangle two shuffled CVs (cut)
+### 23. Rozplątanka — untangle two shuffled CVs (cut)
 Two careers merged into one anonymous timeline, drag entries apart, name
 both people. Cut: the employment data isn't good enough to build
 confusable-pair tangles.
 
-### 23. Ile? — Price is Right on graph aggregates (cut)
+### 24. Ile? — Price is Right on graph aggregates (cut)
 Slider-guess churn stats ("ilu prezesów w 8 lat?"). Cut: no intuition
 anchor — closeness-guessing needs quantities people have priors about
 (money, age), not abstract aggregates. Refines why Majątek works.
 
-### 24. Co było pierwsze? — order two career events (cut)
+### 25. Co było pierwsze? — order two career events (cut)
 One politician, two CV entries, tap which came first; 3-lives streak.
 Cut: no hook ("I don't see it").
 
-### 25. Łańcuch — connection chain battle (cut)
+### 26. Łańcuch — connection chain battle (cut)
 Alternate naming graph-connected people/institutions on a shot clock,
 Cine2Nerdle-style. Cut: requires recall of low-level graph data players
 don't have (same failure as Karuzela — insider knowledge as the mechanic).
