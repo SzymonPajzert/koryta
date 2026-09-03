@@ -12,9 +12,10 @@ what has already been written about them. Any of them can nominate somebody the
 others miss, which is why the site takes the best score across models rather
 than the sum.
 
-Taking the best only works if a 5 means the same thing whoever said it, and the
-first measurement against human verdicts says it did not - so each model now
-carries a `ScoreRange` bounding the part of the 1-5 axis its accuracy supports.
+Combining them only works if a 5 means the same thing whoever said it, and the
+first measurement against human verdicts says it did not - so each model
+carries a `ScoreRange` bounding the part of the 1-5 axis its accuracy supports,
+and the frontend weights them by measured accuracy on top of that.
 `base` holds the numbers and `scripts/score_model_accuracy.py` recomputes them.
 
 See `base.PeopleScoreModel` for what they share.

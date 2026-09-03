@@ -136,6 +136,50 @@ export function isAutomatedUid(uid: string | undefined | null): boolean {
   return isPipelineUid(uid) || isMigrationUid(uid);
 }
 
+/** The pipeline's verdict on how cheaply this person's page could be written.
+ *
+ * Not a model and not a vote - it is read straight off the edges the node
+ * already carries, which is why it lives here rather than in
+ * `analysis/scores/`. It was a model for one commit; running it showed the
+ * mistake. It reached 4,105 people and exactly **9** that no other model
+ * scored, because `capture` and `pagerank` between them already cover almost
+ * everybody with a candidacy - so a seventh `pipeline-*` uid, a seventh weight
+ * to calibrate and a band nobody could reach bought nine people.
+ *
+ * The signal itself is the strongest single predictor measured on this site,
+ * which is why it survives as a term rather than being dropped: over the 200
+ * people first judged between 2026-08-11 and 2026-09-02 a bare candidacy count
+ * ranks at AUC 0.763 against 0.713 for the maximum of all six models, and of
+ * the 110 people triaged off the queue by hand, 76% of those with a candidacy
+ * were judged publishable against 0% of those without.
+ *
+ * Banded 1-4 on fixed cuts rather than by percentile, because this is a
+ * statement about one person's record and not about their rank in a run: a
+ * candidacy at all is 2, a handful is 3, and a PKW-declared party membership -
+ * a quotable sentence needing no research - is what reaches 4.
+ */
+export function evidenceBand(edges: Edge[]): number | undefined {
+  let candidacies = 0;
+  let declared = false;
+  for (const edge of edges) {
+    if (edge.type !== "election") continue;
+    candidacies += 1;
+    if (
+      edge.party_member &&
+      !/^nie nale(ż|z)y do partii/i.test(edge.party_member)
+    ) {
+      declared = true;
+    }
+  }
+  // Silence, not a zero. Somebody who never stood for anything is not scored
+  // low by this term, they are outside what it can speak about - the same
+  // discipline the models follow when they decline to vote.
+  if (!candidacies) return undefined;
+  if (declared) return 4;
+  if (candidacies >= 3) return 3;
+  return 2;
+}
+
 /** How much each scoring model's band counts towards the pipeline's verdict.
  *
  * Not all a mean's inputs mean the same thing, and `ScoreRange` in
@@ -164,7 +208,11 @@ export function isAutomatedUid(uid: string | undefined | null): boolean {
  *
  * A model not named here counts 1: unknown is treated as ordinary rather than
  * as silent, so a new model is heard, and measuring it later is what earns it
- * more or less than its neighbours. `pipeline-together` is 0 - the only measured
+ * more or less than its neighbours. `pipeline-evidence` and `pipeline-facts`
+ * are both on that default deliberately - a weight fitted for the first comes
+ * out at +1.66, the highest here, but it earns it by absorbing weight from
+ * `pipeline` and `turnover` while moving out-of-fold AUC by +0.007, so pinning
+ * the largest constant in the table to that would be fitting the noise. `pipeline-together` is 0 - the only measured
  * *anti*-signal, ranking at AUC 0.442 against those verdicts and 0.443-0.488
  * against the site's own seeds, which `analysis/scores/base.py` had already
  * recorded as significantly worse than the pool it draws from. Zero rather than
@@ -180,6 +228,12 @@ export const MODEL_WEIGHTS: Readonly<Record<string, number>> = {
   "pipeline-succession": 0.29,
   "pipeline-turnover": 1.52,
   "pipeline-together": 0,
+  /** The evidence term from `evidenceBand`, not a model. Held at the default
+   * so it informs the order without dominating it: fitted on the same 200
+   * people it comes out at +1.66, the highest here, but it earns that by
+   * absorbing weight from `pipeline` and `turnover` while moving out-of-fold
+   * AUC by +0.007. */
+  evidence: 1,
 };
 
 /** What a model nobody has measured contributes. */
@@ -240,6 +294,9 @@ export function modelWeight(uid: string): number {
  */
 export function computeVoteStats(
   nodeVotes: VoteDocument[],
+  /** The person's own edges, for the `evidence` term. Optional so the many
+   * callers that only hold votes keep working; they simply score without it. */
+  nodeEdges: Edge[] = [],
 ): Record<string, unknown> {
   const aggregatedVotes: Record<string, unknown> = {
     interesting: 0,
@@ -287,6 +344,20 @@ export function computeVoteStats(
     const interesting = v.categoryVotes.interesting;
     if (fromPipeline && typeof interesting === "number") {
       models[v.userUid] = interesting;
+    }
+  }
+
+  // The evidence term joins the pipeline's side of the average as though it
+  // were a model that voted, which is what makes it a *combiner* input rather
+  // than a second number bolted onto the total.
+  const evidence = evidenceBand(nodeEdges);
+  if (evidence !== undefined) {
+    const weight = modelWeight("evidence");
+    if (weight > 0) {
+      pipelineTotal.interesting =
+        (pipelineTotal.interesting ?? 0) + weight * evidence;
+      pipelineCount.interesting = (pipelineCount.interesting ?? 0) + weight;
+      models.evidence = evidence;
     }
   }
 
@@ -464,7 +535,7 @@ export function computeNodeStats(
     notesCount: nodeNotes
       .map((n) => n.sources?.length || 0)
       .reduce((a, b) => a + b, 0),
-    votes: computeVoteStats(nodeVotes),
+    votes: computeVoteStats(nodeVotes, nodeEdges),
     edges: computeEdgeStats(
       nodeEdges,
       publicPlaceIds,

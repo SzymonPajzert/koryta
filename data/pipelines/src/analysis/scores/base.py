@@ -136,6 +136,20 @@ def iter_dicts(value: typing.Any) -> typing.Iterator[dict]:
             yield item
 
 
+def _text(value: typing.Any) -> str | None:
+    """A payload string, with pandas' NaN read back as the absence it was.
+
+    The same trap `iter_dicts` exists for: a field that is None in the payload
+    comes back from jsonl as a float NaN, and NaN is truthy - so a model asking
+    "did this person declare a party" would be told yes about everybody PKW
+    never asked.
+    """
+    if value is None or isinstance(value, float):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 @dataclasses.dataclass
 class Employment:
     krs: str
@@ -150,6 +164,10 @@ class Candidacy:
     teryt: str | None
     party: str | None
     committee: str | None
+    #: PKW's verbatim answer to the membership question at this election, where
+    #: it asked. A different claim from `party`, which is read off the
+    #: committee - see `entities.composite.Election`.
+    party_member: str | None = None
 
 
 @dataclasses.dataclass
@@ -405,6 +423,7 @@ class PeopleScoreModel(Pipeline):
                     teryt=election.get("teryt"),
                     party=election.get("party"),
                     committee=election.get("committee"),
+                    party_member=_text(election.get("party_member")),
                 )
                 for election in iter_dicts(row.get("elections"))
             ]

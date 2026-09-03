@@ -197,6 +197,56 @@ describe("shared/stats.ts", () => {
       });
     });
 
+    const candidacy = (party_member?: string) =>
+      ({ type: "election", party_member }) as unknown as Edge;
+
+    it("counts a candidacy as evidence the page is cheap to write", () => {
+      // The strongest single predictor measured here: 76% of the people
+      // triaged off the queue with a candidacy were judged publishable,
+      // against 0% of those without.
+      const stats = computeVoteStats(
+        [pipelineVote("pipeline-capture", 2)],
+        [candidacy()],
+      );
+      // (0.98*2 + 1*2) / 1.98 = 2
+      expect(stats.interesting).toBe(2);
+      expect((stats.models as Record<string, number>).evidence).toBe(2);
+    });
+
+    it("reaches its top band only on a declared party membership", () => {
+      // A quotable sentence needing no research is what separates band 4 from
+      // a long tail of council candidacies.
+      const declared = computeVoteStats(
+        [],
+        [candidacy("członek partii politycznej: Prawo i Sprawiedliwość")],
+      );
+      const many = computeVoteStats(
+        [],
+        [candidacy(), candidacy(), candidacy()],
+      );
+      expect((declared.models as Record<string, number>).evidence).toBe(4);
+      expect((many.models as Record<string, number>).evidence).toBe(3);
+    });
+
+    it("reads a declared absence of party as no declaration", () => {
+      // "nie należy do partii politycznej" is a real answer and worth showing
+      // on the page, but it is not the citable party affiliation this term is
+      // measuring.
+      const stats = computeVoteStats(
+        [],
+        [candidacy("nie należy do partii politycznej")],
+      );
+      expect((stats.models as Record<string, number>).evidence).toBe(2);
+    });
+
+    it("stays silent about somebody who never stood for anything", () => {
+      // Silence, not a zero: they are outside what this term can speak about,
+      // the same way a model that has nothing to say casts no vote.
+      const stats = computeVoteStats([pipelineVote("pipeline-capture", 3)], []);
+      expect(stats.interesting).toBe(3);
+      expect((stats.models as Record<string, number>).evidence).toBeUndefined();
+    });
+
     it("adds the models' average on top of the human votes", () => {
       const stats = computeVoteStats([
         { userUid: "aB3xYz", categoryVotes: { interesting: 3 } },
