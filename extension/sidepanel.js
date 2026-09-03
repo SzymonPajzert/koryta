@@ -5,10 +5,10 @@
  * show. So the popup starts a capture and this reports on it — beside the page,
  * for as long as the reader wants it there.
  *
- * It belongs to whichever tab is in front rather than to the one it was opened
- * from: a side panel stays open across tab switches, and a panel still showing
- * the last article's facts over a different page would be worse than showing
- * nothing.
+ * It belongs to the tab it was opened over. Chrome hides it on every other tab
+ * (background.js disables the global entry, popup.js enables one tab at a
+ * time), so it can hold on to that article rather than re-pointing itself at
+ * whatever the reader switched to.
  */
 
 import { getOrigin } from "./config.js";
@@ -128,13 +128,37 @@ async function renderFacts({ capture, facts, error }) {
   el("capture").hidden = false;
 }
 
+/** The tab this panel was opened over.
+ *
+ * Carried in the panel's own url by whoever enabled it, because a panel that
+ * asked which tab is in front would answer the question wrongly the moment the
+ * reader looked at something else — the panel outlives the switch even when it
+ * is not on screen for it.
+ *
+ * The query is the fallback, and covers a panel opened from Chrome's own
+ * side-panel menu: nobody set a path for that one, so it carries no tab.
+ */
+async function panelTab() {
+  const asked = Number(new URLSearchParams(location.search).get("tabId"));
+  if (Number.isInteger(asked) && asked > 0) {
+    try {
+      return await chrome.tabs.get(asked);
+    } catch {
+      // Closed since. Falling through shows the front tab rather than an empty
+      // panel, which is the same thing an unparameterised panel does.
+    }
+  }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab ?? null;
+}
+
 /** Everything the panel shows about one tab, refetched from scratch.
  *
- * Cheap enough to do on every tab switch — one query by url, and a second only
- * when that page turned out to have facts.
+ * Cheap enough to redo whenever the tab navigates — one query by url, and a
+ * second only when that page turned out to have facts.
  */
 async function load() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = await panelTab();
   tabId = tab?.id ?? null;
   tabUrl = tab?.url || "";
   el("page").textContent = tab?.title || "Koryta";
@@ -184,10 +208,10 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (message.job.state === "done") void load();
 });
 
-// A side panel outlives the tab it was opened over, so it has to follow the
-// window: both switching tabs and navigating within one leave it pointed at an
-// article that is no longer on screen.
-chrome.tabs.onActivated.addListener(() => void load());
+// Only its own tab moves it. A tab switch takes the panel off screen instead
+// of handing it a different article, so there is nothing to follow there —
+// but navigating within the tab does have to be picked up, or the reader
+// clicks through to the next piece and the facts beside it are the last one's.
 chrome.tabs.onUpdated.addListener((updatedId, change) => {
   if (updatedId === tabId && change.status === "complete") void load();
 });
