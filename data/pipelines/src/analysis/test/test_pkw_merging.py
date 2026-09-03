@@ -169,6 +169,9 @@ def witko_rows(*rows):
                 "party": "KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ",
                 "election_year": "2010",
                 "election_type": "samorządu",
+                # `people_pkw_merged` selects it by name; PKW asked no
+                # membership question of a council list, so it is empty.
+                "party_member": None,
                 **row,
             }
             for row in rows

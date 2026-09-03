@@ -39,6 +39,7 @@ export type EdgeNode = {
   end_date?: string;
   party?: string;
   committee?: string;
+  party_member?: string;
   position?: ElectionPosition;
   elected?: boolean;
   term?: string;

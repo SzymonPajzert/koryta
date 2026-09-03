@@ -683,6 +683,10 @@ async function createElection(
   // election PKW may simply have said nothing about - and it says nothing
   // about 70% of the register. See `elected` in shared/api.ts.
   if (election.elected) edgeData.elected = true;
+  // PKW's membership question, answered at this election. Not part of the
+  // edge's identity - see EDGE_SEMANTICS.election - because the same candidacy
+  // is the same candidacy whether or not the declaration has been read yet.
+  if (election.party_member) edgeData.party_member = election.party_member;
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }

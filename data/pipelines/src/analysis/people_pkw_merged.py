@@ -53,6 +53,7 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
         election_type,
         candidacy_success,
         CAST(office AS VARCHAR) AS office,
+        party_member,
     FROM pkw_data
     WHERE first_name IS NOT NULL AND last_name IS NOT NULL
     """
@@ -79,6 +80,10 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
             "teryt_powiat": "teryt_powiat",
             "candidacy_success": "candidacy_success",
             "office": "office",
+            # On the candidacy rather than on the person, because it is an
+            # answer given at one election: somebody can declare PiS in 2011
+            # and no party in 2024, and both are true of them.
+            "party_member": "party_member",
         },
     )
 

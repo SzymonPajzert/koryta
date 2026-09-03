@@ -77,6 +77,7 @@
           >
             {{ committeeOf(edge) }}
           </span>
+          <ChipDeclaredParty :declaration="declaredPartyOf(edge)" />
           <v-chip
             v-if="wonSeat(edge)"
             size="x-small"
@@ -487,6 +488,23 @@ function committeeOf(edge: EdgeNode): string | undefined {
  */
 function wonSeat(edge: EdgeNode): boolean {
   return edge.type === "election" && edge.elected === true;
+}
+
+/** What the candidate told PKW about their own party membership, at this
+ * election.
+ *
+ * Guarded on the type for the reason `committeeOf` is: the card lists every
+ * relation a person has, and only a candidacy can carry a declaration.
+ *
+ * Deliberately not folded together with `partyOf`. That one is the site's
+ * reading of the committee through a curated table and is empty for a
+ * coalition; this is the candidate speaking about themselves, and the two
+ * disagree on a third of the Trzecia Droga candidacies that carry both. Where
+ * they agree the repetition is mild; where they differ it is the story.
+ */
+function declaredPartyOf(edge: EdgeNode): string | undefined {
+  if (edge.type !== "election") return undefined;
+  return edge.party_member || undefined;
 }
 
 /** Whether the edge asserts a period at all.

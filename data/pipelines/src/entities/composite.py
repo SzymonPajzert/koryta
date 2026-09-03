@@ -46,6 +46,27 @@ class Election:
     # selected `candidacy_success` into the elections struct; it stopped here,
     # because nothing read it off the row.
     elected: bool | None = None
+    #: What the candidate answered when PKW asked, at THIS election, whether
+    #: they belong to a party - stored verbatim, e.g. "członek partii
+    #: politycznej: Prawo i Sprawiedliwość" or "nie należy do partii
+    #: politycznej".
+    #:
+    #: A different claim from `party`, and the difference is the point. `party`
+    #: is the site's own reading of the committee through a curated table, and
+    #: is deliberately empty for a coalition; this is the candidate speaking
+    #: about themselves. They disagree often enough to be worth showing: over
+    #: the 1,404 Trzecia Droga candidacies that carry a declaration, two thirds
+    #: of the party labels the committee map writes are contradicted by it.
+    #:
+    #: Left as PKW wrote it rather than folded into the seven tokens
+    #: `committee_to_party` emits. The 1,084 distinct spellings run through
+    #: nominative and genitive ("Prawo i Sprawiedliwość", "Prawa i
+    #: Sprawiedliwości"), and a declension-folding guess that lands wrong would
+    #: write a second, worse party onto an edge that already has one.
+    #:
+    #: Absent means PKW published no answer for that election - which is most
+    #: of them, and is not the same as answering "no party".
+    party_member: str | None = None
 
 
 @dataclass

@@ -118,6 +118,7 @@ export const revisionFieldLabels: Record<string, string> = {
   position: "typ wyborów",
   party: "partia",
   committee: "komitet",
+  party_member: "deklarowana przynależność partyjna",
   references: "źródła",
   elected: "wybrany",
   term: "kadencja",
