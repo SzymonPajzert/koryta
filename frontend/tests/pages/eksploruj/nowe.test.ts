@@ -173,12 +173,16 @@ describe("/eksploruj/nowe", () => {
       sortBy: "latestEmploymentStart",
       sortDesc: "true",
       hideVoted: "no_votes",
-      minVotes: 3,
+      // Two since the pipeline's contribution became a mean rather than a
+      // maximum: a mean is never above a maximum, so the old cut of 3 asked
+      // every model that looked to average 3 and left 205 of the 5,955
+      // unjudged people rather than 2,322. See DEFAULT_MIN_VOTES.
+      minVotes: 2,
     });
     expect(wrapper.text()).toContain("Najnowsze zatrudnienia");
     expect(
       (wrapper.find('input[type="number"]').element as HTMLInputElement).value,
-    ).toBe("3");
+    ).toBe("2");
   });
 
   it("takes the minimum score from the url", async () => {

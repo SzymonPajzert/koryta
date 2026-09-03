@@ -383,11 +383,23 @@ const filterCurrentlyEmployed = stringFilter("currentlyEmployed");
 const filterOrder = choiceFilter<"recent" | "votes">("order", "recent");
 const orderRecent = computed(() => filterOrder.value === "recent");
 
-/** The aggregate score a person needs to show up in `recent`. Three is where
- * the pipeline's rating starts to mean something - 1,050 of the ~5,200
- * unpublished people clear it, against a maximum observed score of 5 - so the
- * queue stays a shortlist rather than everyone ever ingested. */
-const DEFAULT_MIN_VOTES = 3;
+/** The aggregate score a person needs to show up in `recent`.
+ *
+ * Two, since the pipeline's contribution became the mean over the models that
+ * spoke rather than the highest of them (see `computeVoteStats`). The number
+ * did not change meaning by a little: a mean is never above a maximum, so the
+ * old cut of 3 now asks every model that looked to average 3, and on the
+ * 2026-09-02 export it left 205 of the 5,955 unjudged people rather than the
+ * 2,322 it used to. Two leaves 1,648 - a tighter shortlist than before, which
+ * is the point, but still a queue somebody can work through.
+ *
+ * The equal-size cut would be 1.67, and that is the honest reading of "as many
+ * people as yesterday". It is not used, because a threshold a reader types into
+ * a box should be a number they can reason about, and because the ranking is
+ * what the change was for: at equal size the mean swaps 321 of the 2,322 people
+ * for others, and it is that swap rather than the cut that has to earn itself.
+ */
+const DEFAULT_MIN_VOTES = 2;
 const filterMinVotes = numberFilter("minVotes");
 /** Kept out of the url while it equals the default, like every other filter
  * here. Clearing the field therefore reads back as the default rather than as
