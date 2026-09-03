@@ -48,6 +48,27 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "srednia-ocen-modeli",
+    title: "Kolejka „nowe” bierze pod uwagę zgodność modeli",
+    description:
+      "Ocena pipeline'u była dotąd najwyższą z ocen modeli, więc jeden " +
+      "model mówiący 4 wyglądał tak samo jak cztery modele mówiące 4. " +
+      "Teraz jest to średnia z modeli, które się wypowiedziały. Na 200 " +
+      "osobach ocenionych między 11 sierpnia a 2 września: przy tej samej " +
+      "najwyższej ocenie 3 jeden model osamotniony trafiał w 25% " +
+      "przypadków, a dwa zgodne w 73%. Model „together”, który wypadł " +
+      "poniżej przypadku, nie wchodzi już do średniej - ale nadal widać, " +
+      "co powiedział.",
+    steps: [
+      "Wejdź na /eksploruj/nowe - lista jest posortowana po nowej ocenie, więc kolejność się zmieni.",
+      "Otwórz stronę osoby z listy i rozwiń rozkład głosów: ocena pipeline'u to teraz średnia, a pod nią widać każdy model osobno.",
+      "Sprawdź osobę, którą typował tylko jeden model - powinna stać niżej niż wcześniej.",
+      "Sprawdź osobę, co do której zgadza się kilka modeli - powinna stać wyżej.",
+    ],
+    link: "/eksploruj/nowe",
+    area: "public",
+  },
+  {
     id: "pomiar-tabeli-eksploruj",
     title: "Wiemy, co ludzie robią w tabeli",
     description:

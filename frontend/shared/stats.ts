@@ -136,19 +136,66 @@ export function isAutomatedUid(uid: string | undefined | null): boolean {
   return isPipelineUid(uid) || isMigrationUid(uid);
 }
 
+/** Models whose verdict is recorded but kept out of the average.
+ *
+ * A model belongs here when it has been measured and found to carry no
+ * ordering signal, because under an average - unlike under a maximum - a model
+ * that is wrong drags every person it names rather than only the ones it
+ * happens to top.
+ *
+ * `pipeline-together` is here on two independent measurements. Against the
+ * reader's verdict on the 200 people judged between 2026-08-11 and 2026-09-02
+ * it ranks at AUC 0.442, below chance, and taking it out of the maximum raised
+ * that rule by +0.019; against the site's own seeds a separate re-scoring put
+ * it at 0.443-0.488. `analysis/scores/base.py` had already recorded it as
+ * significantly *worse* than the pool it draws from (51% against 65%,
+ * p = 0.009) and clipped its ceiling to 2 in response, which under a maximum
+ * silenced it - it was the strict best of the six for 12 of the 975 people it
+ * scored. Under an average a ceiling is not silence, so the exclusion has to
+ * be said out loud.
+ *
+ * It keeps voting, and `models` still shows what it said: co-appointment is
+ * worth looking at on a person's page even where it does not order a queue.
+ */
+export const MODELS_OUT_OF_THE_AVERAGE: ReadonlySet<string> = new Set([
+  "pipeline-together",
+]);
+
 /**
  * The vote aggregate stored on a node: what people said, plus the pipeline's
  * best guess.
  *
  * Human votes sum, because each is somebody's independent opinion and two
- * people saying +3 is a stronger claim than one. Pipeline votes do not: the
- * models look at the same data from different angles and largely agree, so
- * summing them would say "five voters" where there is one dataset, and adding
- * a sixth model would silently rescale a number the explore table sorts on and
- * `bucketPublicationCandidates` cuts into 1-5 bands. Instead every model's
- * verdict collapses to the highest of them - a model that spots somebody the
- * others miss still surfaces them, and one that has nothing to say costs
- * nothing.
+ * people saying +3 is a stronger claim than one. Pipeline votes do not: adding
+ * a model would then silently rescale a number the explore table sorts on and
+ * `bucketPublicationCandidates` cuts into 1-5 bands. So the models are
+ * averaged over the ones that spoke, which stays inside 1-5 however many there
+ * are.
+ *
+ * It used to be the maximum, on the grounds that the models "look at the same
+ * data from different angles and largely agree". They do not: measured over
+ * the 5,979 people carrying a model vote on the 2026-09-02 export, pairwise
+ * Pearson r runs -0.00 to 0.37 with a mean of 0.196, so k/(1+(k-1)r) puts
+ * about three independent signals in the six - and a maximum reads one of
+ * them. Worse, a maximum is a ceiling: it is set by whichever model is most
+ * generous, which was `capture` for 3,746 of those people.
+ *
+ * The average is what the evidence supports. Scored against the reader's own
+ * verdict on the 200 people first judged between 2026-08-11 and 2026-09-02 -
+ * taking each one's model scores from the daily export *before* the verdict,
+ * which is the only unleaked frame available, since `Population.shortlist`
+ * retracts a score once somebody has been judged - it ranks at AUC 0.756
+ * against the maximum's 0.713, a paired-bootstrap gain of +0.043
+ * [+0.008, +0.081], p = 0.018. The gain is in the scores rather than in
+ * coverage: the same regression on six binary "did this model fire" flags
+ * scores 0.691, below the maximum it is supposed to beat.
+ *
+ * Where it pays is depth. In the top 20 nothing separates the two rules - both
+ * are already at 90% - and by 100 read the average holds 84% against 81%.
+ * A fitted log-odds combiner does better still (0.797, +0.090 precision at
+ * 100, p = 0.005) and is the next step, but it needs per-model calibration
+ * constants and a fixed probability-to-band table; this does not, and gets a
+ * third of the gain for one expression.
  *
  * `models` keeps each model's own score so a reader can see which one
  * nominated a person, and `humanCount` how many people voted at all. Between
@@ -171,7 +218,8 @@ export function computeVoteStats(
   };
 
   let latestDate: Date | null = null;
-  const pipelineBest: Record<string, number> = {};
+  const pipelineTotal: Record<string, number> = {};
+  const pipelineCount: Record<string, number> = {};
   const models: Record<string, number> = {};
   // By uid rather than by document, because the two are not the same thing:
   // one person voting in two categories on the same node is one voter, and the
@@ -191,13 +239,15 @@ export function computeVoteStats(
       }
     }
 
+    const counted = fromPipeline && !MODELS_OUT_OF_THE_AVERAGE.has(v.userUid);
+
     for (const [category, value] of Object.entries(v.categoryVotes)) {
       if (fromPipeline) {
-        const best = pipelineBest[category];
-        pipelineBest[category] =
-          best === undefined
-            ? (value as number)
-            : Math.max(best, value as number);
+        if (counted) {
+          pipelineTotal[category] =
+            (pipelineTotal[category] ?? 0) + (value as number);
+          pipelineCount[category] = (pipelineCount[category] ?? 0) + 1;
+        }
       } else {
         aggregatedVotes[category] =
           ((aggregatedVotes[category] as number) || 0) + (value as number);
@@ -210,9 +260,15 @@ export function computeVoteStats(
     }
   }
 
-  for (const [category, best] of Object.entries(pipelineBest)) {
+  for (const [category, total] of Object.entries(pipelineTotal)) {
+    const count = pipelineCount[category] ?? 0;
+    if (count === 0) continue;
+    // Rounded to two places so the stored number is readable and two nodes
+    // that got the same verdicts sort equal, rather than differing in the
+    // sixteenth digit of a float.
+    const mean = Math.round((total / count) * 100) / 100;
     aggregatedVotes[category] =
-      ((aggregatedVotes[category] as number) || 0) + best;
+      ((aggregatedVotes[category] as number) || 0) + mean;
   }
 
   if (Object.keys(models).length > 0) {

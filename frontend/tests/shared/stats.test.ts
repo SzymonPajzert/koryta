@@ -126,20 +126,74 @@ describe("shared/stats.ts", () => {
         categoryVotes: { interesting },
       }) as unknown as VoteDocument;
 
-    it("takes the best model rather than summing them", () => {
+    it("averages the models rather than summing them", () => {
       // Five models agreeing that somebody is a 4 is one dataset seen five
       // ways, not five voters — summing would put them at 20 on a 1-5 scale.
+      // The mean stays inside 1-5 however many models there are, which is what
+      // lets a seventh be added without moving anybody it is silent about.
       const stats = computeVoteStats([
         pipelineVote("pipeline", 2),
         pipelineVote("pipeline-pagerank", 4),
         pipelineVote("pipeline-turnover", 1),
       ]);
 
-      expect(stats.interesting).toBe(4);
+      expect(stats.interesting).toBe(2.33);
       expect(stats.humanVoted).toBe(false);
     });
 
-    it("adds the best model's score on top of the human votes", () => {
+    it("lets several middling models outrank one loud one", () => {
+      // The reason this is a mean and not a maximum. Both people used to score
+      // 4; the corroborated one is the better bet, and measured over the 200
+      // people judged between 2026-08-11 and 2026-09-02, holding the maximum
+      // at 3, one model speaking alone was interesting 25% of the time
+      // against 73% when a second agreed.
+      const corroborated = computeVoteStats([
+        pipelineVote("pipeline", 4),
+        pipelineVote("pipeline-capture", 4),
+        pipelineVote("pipeline-pagerank", 3),
+      ]);
+      const alone = computeVoteStats([
+        pipelineVote("pipeline", 4),
+        pipelineVote("pipeline-capture", 1),
+        pipelineVote("pipeline-pagerank", 1),
+      ]);
+
+      expect(corroborated.interesting).toBe(3.67);
+      expect(alone.interesting).toBe(2);
+    });
+
+    it("averages only over the models that spoke", () => {
+      // Silence is not a zero. `banded_scores` drops anybody a model scored at
+      // or below zero rather than banding them, so a model with nothing to say
+      // writes no vote at all — and dividing by six would punish a person for
+      // the models that never looked.
+      const stats = computeVoteStats([
+        pipelineVote("pipeline", 4),
+        pipelineVote("pipeline-capture", 4),
+      ]);
+
+      expect(stats.interesting).toBe(4);
+    });
+
+    it("keeps a model measured as noise out of the average", () => {
+      // `pipeline-together` ranks below chance on the reader's own verdicts
+      // (AUC 0.442) — see MODELS_OUT_OF_THE_AVERAGE. Under a maximum its
+      // clipped ceiling made it harmless; under a mean it would drag every
+      // person it names, so it is excluded rather than merely capped.
+      const stats = computeVoteStats([
+        pipelineVote("pipeline-capture", 4),
+        pipelineVote("pipeline-together", 1),
+      ]);
+
+      expect(stats.interesting).toBe(4);
+      // Still recorded, because co-appointment is worth seeing on the page.
+      expect(stats.models).toEqual({
+        "pipeline-capture": 4,
+        "pipeline-together": 1,
+      });
+    });
+
+    it("adds the models' average on top of the human votes", () => {
       const stats = computeVoteStats([
         { userUid: "aB3xYz", categoryVotes: { interesting: 3 } },
         { userUid: "cD4wVu", categoryVotes: { interesting: 2 } },
@@ -147,7 +201,8 @@ describe("shared/stats.ts", () => {
         pipelineVote("pipeline-capture", 1),
       ] as unknown as VoteDocument[]);
 
-      expect(stats.interesting).toBe(3 + 2 + 5);
+      // `together` is out of the average, so the pipeline contributes the 1.
+      expect(stats.interesting).toBe(3 + 2 + 1);
       expect(stats.humanVoted).toBe(true);
     });
 

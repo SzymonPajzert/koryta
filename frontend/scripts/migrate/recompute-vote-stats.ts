@@ -4,41 +4,44 @@ import { computeVoteStats } from "../../shared/stats";
 import type { VoteDocument } from "../../shared/model";
 
 /**
- * One-time migration: put `stats.votes.humanCount` on the nodes people voted on.
+ * Recompute `stats.votes` on every node anybody or any model has voted on.
  *
- * `computeVoteStats` now records how many people voted on a node, not just
- * whether anybody did — the total sums human verdicts and averages the models,
- * so a 4 is several models agreeing or one reader insisting and the number
- * alone cannot say which. (It took the best model when this was written; see
- * `recompute-vote-stats.ts`, which is the script to reach for now that the
- * reason to recompute is the rule rather than this field.)
- * The `onVoteWritten` trigger will write the new field from
- * each node's next vote onwards, which for most of them is never: a node picks
- * up a human vote once and then sits there.
+ * Run this whenever `computeVoteStats` changes what the aggregate means. The
+ * `onVoteWritten` trigger writes the new shape from each node's *next* vote
+ * onwards, which for most nodes is never - a person picks up a vote once and
+ * then sits there - so without this the graph holds two generations of the
+ * number at the same time, and `/eksploruj/nowe` sorts on the mixture.
  *
- * RUN THIS AFTER DEPLOYING FUNCTIONS, not before. Nothing in CI deploys them,
- * so until `firebase deploy --only functions` has gone out the trigger in
- * production is still the old build - and the next vote on a node recomputes
- * `stats.votes` without `humanCount`, quietly undoing this for that node.
- * Backfilling first is not harmful, only wasted on whichever nodes get voted
- * on in between.
+ * What prompted it: the pipeline's contribution stopped being the maximum
+ * across models and became the mean over the models that spoke, with
+ * `MODELS_OUT_OF_THE_AVERAGE` held back. Nothing recomputes that on its own,
+ * and until this has run the ordering of the queue is neither the old rule nor
+ * the new one.
  *
- * So this recomputes the aggregate for every node that has votes at all. It is
- * a recompute rather than a patch because `computeVoteStats` is the only thing
- * that should decide what the aggregate holds — writing just the one field here
- * would be a second implementation to keep in step with the first.
+ * RUN IT AFTER DEPLOYING FUNCTIONS, not before. Nothing in CI deploys them, so
+ * until `firebase deploy --only functions` has gone out the trigger in
+ * production is still the old build, and the next vote on a node recomputes
+ * `stats.votes` with the old rule - quietly undoing this for that node.
+ * Running it first is not harmful, only wasted on whichever nodes are voted on
+ * in between.
  *
- * Nodes nobody voted on are skipped rather than given a zero. `humanCount` is
- * absent-means-nobody by design (see `NodeStats`), and `VoteBreakdown` falls
- * back to the older `humanVoted` for aggregates written before this ran, so a
- * missed node degrades to the sentence it showed before rather than to a wrong
- * count.
+ * It recomputes rather than patching the fields that changed, because
+ * `computeVoteStats` is the only thing that should decide what the aggregate
+ * holds; writing individual fields here would be a second implementation to
+ * keep in step with the first. Idempotent: a node whose stored aggregate
+ * already matches is skipped, so a second run costs reads and no writes, and
+ * it doubles as a repair tool for nodes the trigger missed.
+ *
+ * `backfill-vote-human-count.ts` is the single-purpose ancestor of this script
+ * and does the same recompute; this one exists because the operator needs to
+ * know which change they are propagating, and that one names a field that is
+ * no longer the reason to run it.
  *
  * Usage (against the running dev:prod-data emulator):
- *   npx tsx scripts/migrate/backfill-vote-human-count.ts            # dry run
- *   npx tsx scripts/migrate/backfill-vote-human-count.ts --commit   # apply
+ *   npx tsx scripts/migrate/recompute-vote-stats.ts            # dry run
+ *   npx tsx scripts/migrate/recompute-vote-stats.ts --commit   # apply
  * Against production:
- *   npx tsx scripts/migrate/backfill-vote-human-count.ts --prod --commit
+ *   npx tsx scripts/migrate/recompute-vote-stats.ts --prod --commit
  */
 
 const isProd = process.argv.includes("--prod");
@@ -52,7 +55,7 @@ if (!isProd) {
 
 const app = initializeApp({ projectId: "koryta-pl" });
 
-async function backfill() {
+async function recompute() {
   const db = getFirestore(app, "koryta-pl");
   console.log(
     `Connecting to ${isProd ? "PRODUCTION" : "local emulator"} Firestore` +
@@ -171,7 +174,7 @@ function sortedEntries(value: object): [string, unknown][] {
   return Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
 }
 
-backfill()
+recompute()
   .then(() => process.exit(0))
   .catch((error) => {
     console.error(error);
