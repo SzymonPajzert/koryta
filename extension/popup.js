@@ -28,6 +28,29 @@ let sidePanelOnCapture = false;
  */
 let connected = false;
 
+/** Makes the panel available on one tab, and tells it which tab that is.
+ *
+ * The manifest's global entry is disabled in background.js, so this is the only
+ * thing that gives a tab a panel — and the `tabId` in the path is how the panel
+ * knows whose facts to show without having to ask which tab is in front.
+ *
+ * Called before the capture button can be pressed rather than from the handler,
+ * because `chrome.sidePanel.open` cannot be awaited into (see below) and would
+ * otherwise race the enablement it depends on.
+ */
+function enableSidePanelFor(id) {
+  return chrome.sidePanel
+    .setOptions({
+      tabId: id,
+      path: `sidepanel.html?tabId=${id}`,
+      enabled: true,
+    })
+    .catch(() => {
+      // An older Chrome, or a window with no panel to give. The capture is the
+      // point and it runs regardless.
+    });
+}
+
 /** One fact on one line: the edge the side panel draws, flattened.
  *
  * The popup is 320px of column, so the three entities are joined rather than
@@ -130,6 +153,11 @@ async function init() {
   sidePanelOnCapture = await getSidePanelOnCapture();
   sidePanelToggle.checked = sidePanelOnCapture;
 
+  // Whether or not the toggle is on: enabling is not opening, and a tab the
+  // popup has been used on is exactly the one where Chrome's own side-panel
+  // menu should offer ours.
+  await enableSidePanelFor(tabId);
+
   await showAccount();
   render(await chrome.runtime.sendMessage({ type: "koryta-job-state", tabId }));
 
@@ -173,6 +201,9 @@ captureButton.addEventListener("click", async () => {
   // that this click provided — so anything asked of storage or the background
   // worker has to happen after the panel is already opening.
   if (sidePanelOnCapture) {
+    // Belt and braces for a click that beat `init`: the awaited call there is
+    // what makes this reliable, and this one is all a very fast reader gets.
+    void enableSidePanelFor(tabId);
     chrome.sidePanel.open({ tabId }).catch(() => {
       // An older Chrome, or a window that cannot host a panel. The capture is
       // the point and it still runs; the popup goes on reporting it.

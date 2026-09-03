@@ -17,6 +17,26 @@ import { coalesceRefreshes } from "./refresh.js";
 const jobs = new Map();
 
 // --------------------------------------------------------------------------
+// Side panel
+//
+// The panel belongs to the tab it was opened over. Chrome's default is the
+// opposite: a panel is a property of the window, so one opened over an article
+// stays up over every other tab until somebody closes it by hand — and having
+// closed it, the reader has to reopen it on the next article.
+//
+// Turning off the manifest's global entry is what makes it per-tab: the panel
+// then exists only on tabs `popup.js` has enabled it for, so switching away
+// takes it off screen and coming back brings it up again, with the facts of
+// the article it was opened on.
+//
+// At the top level rather than in `onInstalled`, because the option lives as
+// long as the browser session and not as long as the install — every start of
+// the service worker has to assert it again.
+// --------------------------------------------------------------------------
+
+chrome.sidePanel.setOptions({ enabled: false }).catch(() => {});
+
+// --------------------------------------------------------------------------
 // Authentication
 //
 // koryta.pl signs people in with Firebase, whose session lives in the site's

@@ -50,10 +50,16 @@ closes it — Chrome puts no window furniture around a side panel, and the
 `chrome.sidePanel` API can open one but not close one, so the panel calls
 `window.close()` on itself.
 
-The panel follows the front tab, not the tab it was opened over. It needs
-Chrome 114 (`chrome.sidePanel`), and it can only scroll a page the extension has
-been invoked on — `activeTab` is granted by pressing the toolbar button and
-lasts until that tab navigates.
+The panel belongs to the tab it was opened over. Chrome's own default is a
+panel that belongs to the window: it stays up over every other tab until
+somebody closes it, and then has to be reopened on the next article. So the
+manifest's global entry is disabled and the popup enables the panel on one tab
+at a time — switching tabs takes it off screen, coming back brings it up again
+still showing that article's facts, and closing a tab takes its panel with it.
+
+It needs Chrome 114 (`chrome.sidePanel`), and it can only scroll a page the
+extension has been invoked on — `activeTab` is granted by pressing the toolbar
+button and lasts until that tab navigates.
 
 ## Against a local dev server
 
