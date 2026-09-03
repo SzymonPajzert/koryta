@@ -137,7 +137,8 @@ describe("shared/stats.ts", () => {
         pipelineVote("pipeline-turnover", 1),
       ]);
 
-      expect(stats.interesting).toBe(2.33);
+      // Weighted: (1.55*2 + 0.33*4 + 1.52*1) / (1.55 + 0.33 + 1.52) = 1.75
+      expect(stats.interesting).toBe(1.75);
       expect(stats.humanVoted).toBe(false);
     });
 
@@ -158,8 +159,10 @@ describe("shared/stats.ts", () => {
         pipelineVote("pipeline-pagerank", 1),
       ]);
 
-      expect(corroborated.interesting).toBe(3.67);
-      expect(alone.interesting).toBe(2);
+      // (1.55*4 + 0.98*4 + 0.33*3) / 2.86 against
+      // (1.55*4 + 0.98*1 + 0.33*1) / 2.86
+      expect(corroborated.interesting).toBe(3.88);
+      expect(alone.interesting).toBe(2.63);
     });
 
     it("averages only over the models that spoke", () => {
@@ -177,9 +180,10 @@ describe("shared/stats.ts", () => {
 
     it("keeps a model measured as noise out of the average", () => {
       // `pipeline-together` ranks below chance on the reader's own verdicts
-      // (AUC 0.442) — see MODELS_OUT_OF_THE_AVERAGE. Under a maximum its
-      // clipped ceiling made it harmless; under a mean it would drag every
-      // person it names, so it is excluded rather than merely capped.
+      // (AUC 0.442) — see MODEL_WEIGHTS, where it is the one model at 0.
+      // Under a maximum its clipped ceiling made it harmless; under a mean it
+      // would drag every person it names, so its weight is zero rather than
+      // its range merely capped.
       const stats = computeVoteStats([
         pipelineVote("pipeline-capture", 4),
         pipelineVote("pipeline-together", 1),

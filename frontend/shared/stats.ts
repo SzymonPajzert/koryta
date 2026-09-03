@@ -136,30 +136,58 @@ export function isAutomatedUid(uid: string | undefined | null): boolean {
   return isPipelineUid(uid) || isMigrationUid(uid);
 }
 
-/** Models whose verdict is recorded but kept out of the average.
+/** How much each scoring model's band counts towards the pipeline's verdict.
  *
- * A model belongs here when it has been measured and found to carry no
- * ordering signal, because under an average - unlike under a maximum - a model
- * that is wrong drags every person it names rather than only the ones it
- * happens to top.
+ * Not all a mean's inputs mean the same thing, and `ScoreRange` in
+ * `analysis/scores/base.py` is the proof: each model is already given only the
+ * part of the 1-5 axis its measured accuracy supports, so `turnover` is floored
+ * at 3 *because* it is the most accurate of them and `together` is capped at 2
+ * because it is the least. A plain mean reads that compression backwards - four
+ * models saying 1 drag a floored 3 down, and the model being punished is the
+ * one that earned its floor.
  *
- * `pipeline-together` is here on two independent measurements. Against the
- * reader's verdict on the 200 people judged between 2026-08-11 and 2026-09-02
- * it ranks at AUC 0.442, below chance, and taking it out of the maximum raised
- * that rule by +0.019; against the site's own seeds a separate re-scoring put
- * it at 0.443-0.488. `analysis/scores/base.py` had already recorded it as
- * significantly *worse* than the pool it draws from (51% against 65%,
- * p = 0.009) and clipped its ceiling to 2 in response, which under a maximum
- * silenced it - it was the strict best of the six for 12 of the 975 people it
- * scored. Under an average a ceiling is not silence, so the exclusion has to
- * be said out loud.
+ * That is not hypothetical. Ranking the 5,955 unjudged people by a plain mean
+ * rather than by the maximum swapped 322 of the top 2,322 for others, and the
+ * 322 dropped were turnover's: it fired on 90% of them at a mean band of 3.01
+ * while every other model sat at 1.1. They were also the most political people
+ * in the queue - 90% had stood for office against 53% of those swapped in.
  *
- * It keeps voting, and `models` still shows what it said: co-appointment is
- * worth looking at on a person's page even where it does not order a queue.
+ * Weights fix it, and they are fitted rather than chosen: a logistic regression
+ * on the six bands against the reader's own verdicts for the 200 people first
+ * judged between 2026-08-11 and 2026-09-02, each scored from the daily export
+ * before the verdict. Weighting recovers what the plain mean lost - 79.8% of
+ * the queue has stood for office against the maximum's 79.2% and the plain
+ * mean's 74.1% - and ranks better than either: AUC 0.814 against 0.765 and
+ * 0.713. (0.814 is fitted on those same 200, so read it beside the 0.797 the
+ * same model scored out-of-fold; the queue-composition numbers do not depend on
+ * the fit.)
+ *
+ * A model not named here counts 1: unknown is treated as ordinary rather than
+ * as silent, so a new model is heard, and measuring it later is what earns it
+ * more or less than its neighbours. `pipeline-together` is 0 - the only measured
+ * *anti*-signal, ranking at AUC 0.442 against those verdicts and 0.443-0.488
+ * against the site's own seeds, which `analysis/scores/base.py` had already
+ * recorded as significantly worse than the pool it draws from. Zero rather than
+ * omitted, so that adding it back is a number to change and not a code path.
+ *
+ * These are the second decimal of a fit on 200 people. Treat them as a starting
+ * point to re-measure, not as constants.
  */
-export const MODELS_OUT_OF_THE_AVERAGE: ReadonlySet<string> = new Set([
-  "pipeline-together",
-]);
+export const MODEL_WEIGHTS: Readonly<Record<string, number>> = {
+  pipeline: 1.55,
+  "pipeline-capture": 0.98,
+  "pipeline-pagerank": 0.33,
+  "pipeline-succession": 0.29,
+  "pipeline-turnover": 1.52,
+  "pipeline-together": 0,
+};
+
+/** What a model nobody has measured contributes. */
+export const DEFAULT_MODEL_WEIGHT = 1;
+
+export function modelWeight(uid: string): number {
+  return MODEL_WEIGHTS[uid] ?? DEFAULT_MODEL_WEIGHT;
+}
 
 /**
  * The vote aggregate stored on a node: what people said, plus the pipeline's
@@ -180,7 +208,9 @@ export const MODELS_OUT_OF_THE_AVERAGE: ReadonlySet<string> = new Set([
  * them. Worse, a maximum is a ceiling: it is set by whichever model is most
  * generous, which was `capture` for 3,746 of those people.
  *
- * The average is what the evidence supports. Scored against the reader's own
+ * The average is weighted, because the models are not interchangeable - see
+ * `MODEL_WEIGHTS`, and note that an unweighted mean demotes exactly the model
+ * with the best measured accuracy. Scored against the reader's own
  * verdict on the 200 people first judged between 2026-08-11 and 2026-09-02 -
  * taking each one's model scores from the daily export *before* the verdict,
  * which is the only unleaked frame available, since `Population.shortlist`
@@ -239,14 +269,14 @@ export function computeVoteStats(
       }
     }
 
-    const counted = fromPipeline && !MODELS_OUT_OF_THE_AVERAGE.has(v.userUid);
+    const weight = fromPipeline ? modelWeight(v.userUid) : 0;
 
     for (const [category, value] of Object.entries(v.categoryVotes)) {
       if (fromPipeline) {
-        if (counted) {
+        if (weight > 0) {
           pipelineTotal[category] =
-            (pipelineTotal[category] ?? 0) + (value as number);
-          pipelineCount[category] = (pipelineCount[category] ?? 0) + 1;
+            (pipelineTotal[category] ?? 0) + weight * (value as number);
+          pipelineCount[category] = (pipelineCount[category] ?? 0) + weight;
         }
       } else {
         aggregatedVotes[category] =
@@ -263,6 +293,9 @@ export function computeVoteStats(
   for (const [category, total] of Object.entries(pipelineTotal)) {
     const count = pipelineCount[category] ?? 0;
     if (count === 0) continue;
+    // Dividing by the summed weight rather than by the number of models is
+    // what keeps the result inside 1-5: it is a weighted mean of bands, so a
+    // person every model called 3 scores 3 whatever the weights are.
     // Rounded to two places so the stored number is readable and two nodes
     // that got the same verdicts sort equal, rather than differing in the
     // sixteenth digit of a float.
