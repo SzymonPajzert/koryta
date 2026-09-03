@@ -496,6 +496,10 @@ async function createElection(
   // has one - and why two candidacies in one town in one year are so often
   // indistinguishable. It is the strongest discriminator the payload carries.
   if (election.committee) edgeData.committee = election.committee;
+  // PKW's membership question, answered at this election. Not part of the
+  // edge's identity - see EDGE_SEMANTICS.election - because the same candidacy
+  // is the same candidacy whether or not the declaration has been read yet.
+  if (election.party_member) edgeData.party_member = election.party_member;
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }

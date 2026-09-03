@@ -109,6 +109,12 @@ export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
   // beside the original as a duplicate.
   election: {
     kind: "occurrence",
+    // `party_member` is deliberately absent. The same candidacy is the same
+    // candidacy whether or not PKW's membership answer has been read yet, and
+    // the answer is a 1,084-spelling free-text field - making it part of the
+    // identity would fork every candidacy carrying one the first time anybody
+    // normalises the string. It rides in as an enrichment instead, which is
+    // what `enrichable` below is for.
     discriminators: ["position", "start_date", "party", "committee", "term"],
     identicalMeansSame: false,
     enrichable: true,

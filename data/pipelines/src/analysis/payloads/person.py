@@ -263,6 +263,41 @@ def _committee(value: typing.Any) -> str | None:
     return text
 
 
+def _party_member(value: typing.Any) -> str | None:
+    """PKW's verbatim answer to "do you belong to a party", or None.
+
+    Three things have to be dropped, and none of them is an empty string.
+
+    A jsonl round trip through pandas turns a missing value into a float NaN,
+    which is truthy, so `if value` would carry "nan" onto an edge.
+
+    An endorsement is not a membership. 840 rows answer "popierany przez
+    Komitet Obywatelski ..." - naming who backed the candidate, which is the
+    opposite claim to belonging to something - and printing that under a label
+    saying "declared membership" would put words in their mouth.
+
+    A bare number is the 1997 Sejm workbook's party id, which `headers.py` no
+    longer maps here; the guard stays because the artifacts already written
+    still hold 6,432 of them and this reads them back.
+    """
+    if value is None:
+        return None
+    # `pd.isna` rather than a float check: pandas has three spellings of
+    # absence here - float NaN from a jsonl round trip, `pd.NA` from a nullable
+    # dtype, and None - and only the first is a float. It is asked of scalars
+    # only, so the list guard the array overload needs is not wanted.
+    if not isinstance(value, (list, np.ndarray)) and pd.isna(value):
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "<na>", "none"}:
+        return None
+    if text.lstrip("-").isdigit():
+        return None
+    if text.lower().startswith("popierany przez"):
+        return None
+    return text
+
+
 def _extract_elections(row: pd.Series) -> list[Election]:
     elections = []
     elec_list = row.get("elections")
@@ -277,6 +312,7 @@ def _extract_elections(row: pd.Series) -> list[Election]:
                     committee=committee,
                     party=party_of_candidacy(committee),
                     party_from_committee=bool(parties_of_committee(committee)),
+                    party_member=_party_member(e.get("party_member")),
                 )
                 if e.get("election_year"):
                     election_payload.election_year = str(e.get("election_year"))

@@ -179,7 +179,14 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Id kom Mandat": None,
     "Id listy": None,
     "Id okr.": None,
-    "Id partii": SetField("party_member"),
+    # Not a membership declaration. The 1997 Sejm workbook's column is an
+    # integer key into a party table PKW never published - 49 distinct values
+    # across 6,432 rows, which is every candidate in that election and every
+    # numeric value `party_member` has ever held. Mapping it onto the field
+    # meant 12% of all declarations were a number nobody can read, and the
+    # column it really belongs beside is `party`, which that workbook fills
+    # with the committee name anyway.
+    "Id partii": None,
     "II tura %\ngłosów": None,
     "II tura Gł. na\nkand.": None,
     "II tura Gł. wazne": None,

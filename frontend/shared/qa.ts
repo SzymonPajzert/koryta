@@ -48,6 +48,27 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "deklarowana-przynaleznosc-partyjna",
+    title: "Widać, co kandydat sam powiedział o swojej partii",
+    description:
+      "PKW przy każdych wyborach pyta kandydata, czy należy do partii, i " +
+      "publikuje odpowiedź dosłownie. Serwis do tej pory ją wyrzucał, choć " +
+      "45 tys. kandydatur ją ma. Teraz jest przy konkretnej kandydaturze, bo " +
+      "to odpowiedź z tych właśnie wyborów - można w 2011 zadeklarować PiS, " +
+      "a w 2024 bezpartyjność. To co innego niż chip partii obok: tamten " +
+      "serwis wyliczył z nazwy komitetu, ten jest oświadczeniem kandydata. " +
+      "Na kandydaturach Trzeciej Drogi te dwie rzeczy różnią się w dwóch " +
+      "trzecich przypadków.",
+    steps: [
+      "Wejdź na stronę osoby, która startowała w wyborach 2011, 2019 lub 2023 do sejmu - tam PKW pytała wszystkich.",
+      "W historii powiązań, przy wierszu kandydatury, obok komitetu ma być obwódkowy chip z nazwą partii.",
+      "Najedź na niego: dymek mówi, że to deklaracja kandydata wobec PKW, a nie ustalenie serwisu.",
+      "Znajdź kandydaturę z komitetu partyjnego, gdzie chip mówi „Bezpartyjny” - to najciekawszy przypadek.",
+      "Sprawdź kandydaturę z wyborów samorządowych do rady - tam PKW nie pytała, więc chipa ma nie być wcale (brak odpowiedzi to nie zaprzeczenie).",
+    ],
+    area: "public",
+  },
+  {
     id: "srednia-ocen-modeli",
     title: "Kolejka „nowe” bierze pod uwagę zgodność modeli",
     description:

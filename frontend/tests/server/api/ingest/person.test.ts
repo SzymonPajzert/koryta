@@ -267,6 +267,68 @@ describe("api/ingest/person", () => {
     );
   });
 
+  it("stores what the candidate declared about their own party membership", async () => {
+    // PKW asks every candidate whether they belong to a party and publishes
+    // the answer verbatim. A different claim from `party`, which the site
+    // derives from the committee - on a third of Trzecia Droga candidacies the
+    // two disagree. Declared in the schema or zod strips it, exactly as it
+    // stripped `committee` for years.
+    mockReadBody.mockResolvedValue({
+      name: "Test Person",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          committee: "Komitet Wyborczy Prawo i Sprawiedliwość",
+          party_member: "członek partii politycznej: Prawo i Sprawiedliwość",
+          election_year: "2024",
+          election_type: "Samorząd",
+          teryt: "1465",
+        },
+      ],
+    });
+
+    // The test above queues more `...Once` results than it consumes, and
+    // clearAllMocks does not drain that queue.
+    mockGet.mockReset();
+    mockDoc.mockReset();
+    mockDoc.mockReturnValue({
+      id: "new-doc-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({
+      id: "person-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
+    });
+    const edgeRef = { id: "edge-id" };
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
+      mockDb,
+      expect.anything(),
+      expect.objectContaining({ uid: "test-user-id" }),
+      edgeRef,
+      expect.objectContaining({
+        type: "election",
+        committee: "Komitet Wyborczy Prawo i Sprawiedliwość",
+        party_member: "członek partii politycznej: Prawo i Sprawiedliwość",
+      }),
+      { automatic: true, approve: false, published: false },
+    );
+  });
+
   describe("a candidacy the database already has", () => {
     /** The shape every one of the 10476 stored candidacies has today: written
      * before the ingest accepted a committee, so carrying none. */

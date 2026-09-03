@@ -160,6 +160,24 @@ const electionRequestSchema = z.object({
    * True for a coalition as well, where the map knows the committee but `party`
    * stays empty because a joint list names no single party. */
   party_from_committee: z.boolean().optional(),
+  /** What the candidate answered when PKW asked, at THIS election, whether
+   * they belong to a party - verbatim, e.g. "członek partii politycznej: Prawo
+   * i Sprawiedliwość" or "nie należy do partii politycznej".
+   *
+   * A different claim from `party`, which is the site's own reading of the
+   * committee through a curated table and is deliberately empty for a
+   * coalition. This is the candidate speaking about themselves, and the two
+   * disagree often: over the 1,404 Trzecia Droga candidacies carrying a
+   * declaration, two thirds of the labels the committee map writes are
+   * contradicted by it.
+   *
+   * A string rather than a boolean, because "nie należy do partii politycznej"
+   * is a real answer and `field()` in server/utils/edges.ts maps `false` to
+   * null - which would erase the one case where the denial is the news.
+   *
+   * Accepted here or zod strips it, which is what happened to `committee` for
+   * as long as it went undeclared. */
+  party_member: z.string().optional(),
   election_year: z.string().optional(),
   election_type: z.enum(electionPositionValues),
   teryt: z.string().optional(),
@@ -169,6 +187,7 @@ export type ElectionRequest = {
   party?: string;
   committee?: string;
   party_from_committee?: boolean;
+  party_member?: string;
   election_year?: string;
   election_type: ElectionPosition;
   teryt?: string;

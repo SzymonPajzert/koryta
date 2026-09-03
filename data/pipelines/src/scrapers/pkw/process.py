@@ -54,6 +54,9 @@ def extract_data(
         party = strip_if_not_none(party)
         position = strip_if_not_none(position)
         pkw_name = strip_if_not_none(pkw_name)
+        # The one text field that used to skip this, which is how a pandas NaN
+        # could reach `Person` as a float rather than as None.
+        party_member = strip_if_not_none(party_member)
     except AttributeError as e:
         raise ValueError(f"field has incorrect type: {e}")
 

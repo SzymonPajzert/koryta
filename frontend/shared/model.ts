@@ -156,6 +156,14 @@ export interface Edge extends PageBase<EdgeType> {
   references?: string[];
   party?: string;
   committee?: string;
+  /** PKW's verbatim answer to the membership question, at this election -
+   * "członek partii politycznej: Prawo i Sprawiedliwość", or "nie należy do
+   * partii politycznej". Not a party name and not normalised: 34.8% of the
+   * answers are a bare name and the spellings run through several cases.
+   *
+   * Absent means PKW published no answer for that election, which is most of
+   * them and is NOT the same as answering "no party". */
+  party_member?: string;
   position?: ElectionPosition;
   elected?: boolean;
   term?: string;
