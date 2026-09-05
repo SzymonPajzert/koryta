@@ -133,16 +133,16 @@ describe("rollupForDay", () => {
     const rollup = rollupForDay(
       "2026-08-20",
       [
-        event("anna", "nodeVote", "2026-08-20T09:00:00.000Z"),
-        event("anna", "nodeVote", "2026-08-20T18:00:00.000Z"),
+        event("anna", "vote", "2026-08-20T09:00:00.000Z"),
+        event("anna", "vote", "2026-08-20T18:00:00.000Z"),
         event("bob", "noteSource", "2026-08-20T12:00:00.000Z", 3),
       ],
       [],
     );
 
-    expect(rollup.totals).toEqual(counts({ nodeVote: 2, noteSource: 3 }));
+    expect(rollup.totals).toEqual(counts({ vote: 2, noteSource: 3 }));
     expect(rollup.contributors.anna).toEqual({
-      counts: counts({ nodeVote: 2 }),
+      counts: counts({ vote: 2 }),
       // The latest instant of the day, not the first one seen.
       lastActiveAt: "2026-08-20T18:00:00.000Z",
     });
@@ -152,22 +152,22 @@ describe("rollupForDay", () => {
   it("leaves the pipeline out, like every other count on the page", () => {
     const rollup = rollupForDay(
       "2026-08-20",
-      [event("pipeline-pagerank", "nodeVote", "2026-08-20T09:00:00.000Z")],
+      [event("pipeline-pagerank", "vote", "2026-08-20T09:00:00.000Z")],
       [],
     );
 
     expect(rollup.contributors).toEqual({});
-    expect(rollup.totals.nodeVote).toBe(0);
+    expect(rollup.totals.vote).toBe(0);
   });
 
   it("ignores an event that belongs to another day", () => {
     const rollup = rollupForDay(
       "2026-08-20",
-      [event("anna", "nodeVote", "2026-08-19T23:00:00.000Z")],
+      [event("anna", "vote", "2026-08-19T23:00:00.000Z")],
       [],
     );
 
-    expect(rollup.totals.nodeVote).toBe(0);
+    expect(rollup.totals.vote).toBe(0);
   });
 });
 
@@ -177,8 +177,8 @@ describe("mergeRollups", () => {
     rollupForDay(
       "2026-08-19",
       [
-        event("anna", "nodeVote", "2026-08-19T09:00:00.000Z"),
-        event("bob", "comment", "2026-08-19T09:00:00.000Z"),
+        event("anna", "vote", "2026-08-19T09:00:00.000Z"),
+        event("bob", "publication", "2026-08-19T09:00:00.000Z"),
       ],
       [],
     ),
@@ -186,7 +186,7 @@ describe("mergeRollups", () => {
       "2026-08-21",
       [
         event("anna", "revision", "2026-08-21T09:00:00.000Z"),
-        event("anna", "nodeVote", "2026-08-21T10:00:00.000Z"),
+        event("anna", "vote", "2026-08-21T10:00:00.000Z"),
       ],
       [],
     ),
@@ -197,7 +197,7 @@ describe("mergeRollups", () => {
 
     expect(aggregate.contributors[0]).toEqual({
       uid: "anna",
-      counts: counts({ nodeVote: 2, revision: 1 }),
+      counts: counts({ vote: 2, revision: 1 }),
       total: 3,
       lastActiveAt: "2026-08-21T10:00:00.000Z",
     });
@@ -226,7 +226,7 @@ describe("mergeRollups", () => {
 
     expect(aggregate.total).toBe(4);
     expect(aggregate.totals).toEqual(
-      counts({ nodeVote: 2, comment: 1, revision: 1 }),
+      counts({ vote: 2, publication: 1, revision: 1 }),
     );
   });
 
@@ -248,11 +248,11 @@ describe("mergeRollups", () => {
 describe("mergeTruncated", () => {
   it("reports a kind that any day in the window cut short, once", () => {
     const rollups = [
-      rollupForDay("2026-08-19", [], ["nodeVote"]),
-      rollupForDay("2026-08-20", [], ["nodeVote", "revision"]),
+      rollupForDay("2026-08-19", [], ["vote"]),
+      rollupForDay("2026-08-20", [], ["vote", "revision"]),
     ];
 
-    expect(mergeTruncated(rollups).sort()).toEqual(["nodeVote", "revision"]);
+    expect(mergeTruncated(rollups).sort()).toEqual(["revision", "vote"]);
   });
 });
 
@@ -260,12 +260,12 @@ describe("ensureDailyRollups", () => {
   it("reads a stored day instead of counting it again", async () => {
     const db = fakeDb({
       "activityDaily/2026-08-19": {
-        version: 2,
+        version: 3,
         date: "2026-08-19",
-        totals: { nodeVote: 4 },
+        totals: { vote: 4 },
         truncated: [],
         contributors: {
-          anna: { nodeVote: 4, lastActiveAt: "2026-08-19T20:00:00.000Z" },
+          anna: { vote: 4, lastActiveAt: "2026-08-19T20:00:00.000Z" },
         },
       },
     });
@@ -273,9 +273,9 @@ describe("ensureDailyRollups", () => {
     const rollups = await ensureDailyRollups(db as never, ["2026-08-19"]);
 
     expect(mockCollect).not.toHaveBeenCalled();
-    expect(rollups[0]!.totals.nodeVote).toBe(4);
+    expect(rollups[0]!.totals.vote).toBe(4);
     expect(rollups[0]!.contributors.anna).toEqual({
-      counts: counts({ nodeVote: 4 }),
+      counts: counts({ vote: 4 }),
       lastActiveAt: "2026-08-19T20:00:00.000Z",
     });
   });
@@ -283,7 +283,7 @@ describe("ensureDailyRollups", () => {
   it("counts a missing day, stores it, and does not count it twice", async () => {
     const db = fakeDb();
     mockCollect.mockResolvedValue({
-      events: [event("anna", "nodeVote", "2026-08-19T09:00:00.000Z")],
+      events: [event("anna", "vote", "2026-08-19T09:00:00.000Z")],
       truncated: [],
     });
 
@@ -293,15 +293,15 @@ describe("ensureDailyRollups", () => {
     mockCollect.mockClear();
     const second = await ensureDailyRollups(db as never, ["2026-08-19"]);
     expect(mockCollect).not.toHaveBeenCalled();
-    expect(second[0]!.totals.nodeVote).toBe(1);
+    expect(second[0]!.totals.vote).toBe(1);
   });
 
   it("reads a run of missing days in one scan, and splits it per day", async () => {
     const db = fakeDb();
     mockCollect.mockResolvedValue({
       events: [
-        event("anna", "nodeVote", "2026-08-19T09:00:00.000Z"),
-        event("anna", "comment", "2026-08-20T09:00:00.000Z"),
+        event("anna", "vote", "2026-08-19T09:00:00.000Z"),
+        event("anna", "publication", "2026-08-20T09:00:00.000Z"),
       ],
       truncated: [],
     });
@@ -318,8 +318,8 @@ describe("ensureDailyRollups", () => {
       sinceIso: "2026-08-19T00:00:00.000Z",
       untilIso: "2026-08-21T00:00:00.000Z",
     });
-    expect(rollups[0]!.totals.nodeVote).toBe(1);
-    expect(rollups[1]!.totals.comment).toBe(1);
+    expect(rollups[0]!.totals.vote).toBe(1);
+    expect(rollups[1]!.totals.publication).toBe(1);
   });
 
   it("does not scan across a day it already has", async () => {
@@ -327,7 +327,7 @@ describe("ensureDailyRollups", () => {
     // 20th for nothing.
     const db = fakeDb({
       "activityDaily/2026-08-20": {
-        version: 2,
+        version: 3,
         date: "2026-08-20",
         totals: {},
         contributors: {},
@@ -355,10 +355,11 @@ describe("ensureDailyRollups", () => {
   });
 
   it("recounts a day that was stored under an older counting rule", async () => {
-    // The rule changed - article nodes, bulk edge publications and the
-    // migration scripts stopped counting - so a day counted under the old one
-    // has to be thrown away, or the fix would only ever apply to days nobody
-    // had looked at yet.
+    // The rule has changed three times - article nodes, then the migration
+    // scripts, then the merge down to four kinds - so a day counted under an
+    // older one has to be thrown away, or the change would only ever apply to
+    // days nobody had looked at yet. The last of the three also renamed the
+    // fields, so a version-2 day would come back as one on which nobody voted.
     const db = fakeDb({
       "activityDaily/2026-08-19": {
         version: 1,
@@ -394,7 +395,7 @@ describe("ensureDailyRollups", () => {
         truncated:
           window.sinceIso === "2026-08-19T00:00:00.000Z" &&
           window.untilIso === "2026-08-21T00:00:00.000Z"
-            ? ["nodeVote"]
+            ? ["vote"]
             : [],
       }),
     );
@@ -414,13 +415,13 @@ describe("ensureDailyRollups", () => {
     const db = fakeDb();
     db.failWrites.value = true;
     mockCollect.mockResolvedValue({
-      events: [event("anna", "nodeVote", "2026-08-19T09:00:00.000Z")],
+      events: [event("anna", "vote", "2026-08-19T09:00:00.000Z")],
       truncated: [],
     });
 
     const rollups = await ensureDailyRollups(db as never, ["2026-08-19"]);
 
-    expect(rollups[0]!.totals.nodeVote).toBe(1);
+    expect(rollups[0]!.totals.vote).toBe(1);
   });
 
   it("asks for nothing when the window has no finished days", async () => {

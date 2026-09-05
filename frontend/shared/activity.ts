@@ -1,10 +1,15 @@
 /** The distinct things a person can do to the data, as the site records them.
  *
  * Each kind is one collection write a human made, which is what makes them
- * comparable on a timeline and countable per contributor. They are deliberately
- * finer-grained than "a vote": rating a person in the explore table and rating
- * a fact the extraction pipeline proposed are different work, land in the same
- * `votes` collection, and are told apart only by which id field is set.
+ * comparable on a timeline and countable per contributor.
+ *
+ * The list is deliberately short. It was finer once — a rating of a person and a
+ * rating of an extracted fact were two kinds, and every administrator action was
+ * counted beside the publications it led to — and seven bands on one stacked
+ * column is more legend than chart. What a reader wants from the page is who is
+ * rating, who is proposing, who is citing, and how much of it reached the
+ * public; the finer splits are still in the collections, and nothing here is the
+ * audit trail.
  *
  * Two interactions are missing on purpose, because nothing timestamps them:
  * the per-category tallies `/api/votes/vote` writes inline onto a node or edge
@@ -17,12 +22,9 @@
  * appended and takes the next slot, never inserted where it reads best.
  */
 export const activityKinds = [
-  "nodeVote",
-  "extractionVote",
+  "vote",
   "revision",
   "noteSource",
-  "comment",
-  "adminDecision",
   "publication",
 ] as const;
 
@@ -51,12 +53,9 @@ export type ActivityCounts = Record<ActivityKind, number>;
 
 export function emptyActivityCounts(): ActivityCounts {
   return {
-    nodeVote: 0,
-    extractionVote: 0,
+    vote: 0,
     revision: 0,
     noteSource: 0,
-    comment: 0,
-    adminDecision: 0,
     publication: 0,
   };
 }
@@ -66,29 +65,20 @@ export function totalActivity(counts: ActivityCounts): number {
 }
 
 export const activityKindLabels: Record<ActivityKind, string> = {
-  nodeVote: "Ocena osoby",
-  extractionVote: "Ocena ekstrakcji",
+  vote: "Ocena",
   revision: "Propozycja zmiany",
   noteSource: "Źródło lub zgłoszenie",
-  comment: "Komentarz",
-  adminDecision: "Decyzja administratora",
   publication: "Opublikowane osoby",
 };
 
 /** One sentence per kind, for the tooltip that explains what is being counted.
  * The stats page is the only place most readers meet these words. */
 export const activityKindDescriptions: Record<ActivityKind, string> = {
-  nodeVote:
-    "Ocena osoby lub innego węzła w grafie — „Dobre znalezisko” i „Znaleziony problem”.",
-  extractionVote:
-    "Ocena faktu zaproponowanego przez pipeline ekstrakcji — czy jest poprawny i czy wystarcza informacji.",
+  vote: "Ocena osoby albo faktu zaproponowanego przez pipeline ekstrakcji — „Dobre znalezisko”, „Znaleziony problem”, i czy fakt jest poprawny.",
   revision:
     "Ręcznie zaproponowana zmiana danych węzła, czekająca na akceptację administratora.",
   noteSource:
     "Wpis w notatce: podlinkowane źródło, prośba o poprawkę albo zgłoszenie brakujących danych.",
-  comment: "Komentarz pod osobą, powiązaniem albo w wątku zgłoszenia.",
-  adminDecision:
-    "Rozstrzygnięcie administratora: zatwierdzenie albo odrzucenie rewizji, ukrycie strony, usunięcie powiązania.",
   publication:
     "Strona osoby albo instytucji udostępniona publicznie. Powiązania opublikowane razem z nią to ta sama decyzja, więc liczą się raz — a nie raz na powiązanie.",
 };

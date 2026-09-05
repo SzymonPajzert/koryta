@@ -34,11 +34,11 @@ const pages: {
     // lands, so waiting for a tile label is what stops the capture racing it.
     //
     // Against the seeded world every chart on the page draws its empty state:
-    // the fixtures seed no votes, notes or comments, and the newest revision in
-    // them is from 2023, so the rolling activity window is always empty. That
-    // is what makes the shot stable day to day - and it does mean this baseline
-    // covers the layout, the copy and the empty states rather than the charts.
-    settled: ["Ocena ekstrakcji", "Opublikowane:"],
+    // the fixtures seed no votes or notes, and the newest revision in them is
+    // from 2023, so the rolling activity window is always empty. That is what
+    // makes the shot stable day to day - and it does mean this baseline covers
+    // the layout, the copy and the empty states rather than the charts.
+    settled: ["Źródło lub zgłoszenie", "Opublikowane:"],
   },
   {
     // A company's own page, restored 2026-08-24. `suk-spolka` is the seeded
