@@ -86,6 +86,21 @@ const props = defineProps<{
 /** Past this many columns a value on every cap is noise rather than a label. */
 const DIRECT_LABEL_LIMIT = 14;
 
+/** How much of a day's slot the column fills, and how wide it may ever get.
+ *
+ * Both are wider than `barPlotOptions` gives a bar by default (60% of the slot,
+ * 24px), and deliberately. The shared numbers are the mark spec for a chart of a
+ * handful of named categories, where a thin mark with air around it reads as one
+ * thing per band. Here the bands are consecutive days: the axis is a stretch of
+ * time and the columns are supposed to read as a series across it, which at 30
+ * days and full width they stopped doing - a 24px cap against a 37px slot puts a
+ * third of the width between neighbours, and the eye reads scattered pins rather
+ * than a shape. 90% leaves the 2px surface gap that separates them and nothing
+ * more; the cap is what keeps a 7-day window, where a slot is 157px, from
+ * drawing slabs. */
+const COLUMN_WIDTH = "90%";
+const MAX_COLUMN_PX = 48;
+
 const hasData = computed(() => props.daily.some((day) => day.total > 0));
 
 const subtitle = computed(() => {
@@ -114,6 +129,8 @@ const options = computed(() => {
     plotOptions: {
       bar: {
         ...barPlotOptions().plotOptions.bar,
+        columnWidth: COLUMN_WIDTH,
+        maxBarThickness: MAX_COLUMN_PX,
         // The running total on the cap, but only while the columns are far
         // enough apart for it to be read.
         dataLabels: {
