@@ -500,6 +500,11 @@ async function createElection(
   // edge's identity - see EDGE_SEMANTICS.election - because the same candidacy
   // is the same candidacy whether or not the declaration has been read yet.
   if (election.party_member) edgeData.party_member = election.party_member;
+  // Only a win is written. `false` is what the edit form stores for a box
+  // nobody ticked, so an ingested one would claim a named person lost an
+  // election PKW may simply have said nothing about - and it says nothing
+  // about 70% of the register. See `elected` in shared/api.ts.
+  if (election.elected) edgeData.elected = true;
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }

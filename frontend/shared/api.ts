@@ -178,6 +178,28 @@ const electionRequestSchema = z.object({
    * Accepted here or zod strips it, which is what happened to `committee` for
    * as long as it went undeclared. */
   party_member: z.string().optional(),
+  /** Whether PKW recorded the candidacy as winning the mandate.
+   *
+   * Sent only when it won. The payload's own field is tri-state - see
+   * `entities.composite.Election.elected`, where None is "PKW said nothing",
+   * which is 68,728 of its 97,748 rows and all of them before 2010 - but a
+   * stored `false` cannot carry that third state here: `useEdgeEdit` defaults
+   * a hand-made edge to `elected: false` for every box the form left blank,
+   * and `field()` in server/utils/edges.ts folds `false` to null so the two
+   * writers agree. An ingested `false` would therefore be indistinguishable
+   * from a blank form while reading, on the page, as an assertion that a named
+   * person lost.
+   *
+   * Dropping the recorded losses costs nothing measurable: banding the
+   * evidence term on the result rather than on the candidacy alone moves the
+   * queue's ranking by +0.005 AUC on the published-vs-unjudged frame and by
+   * 0.000 on the selection-free one. What the win buys is the page - `elected`
+   * is set on 2 of 14,518 stored candidacies, so no page can currently say
+   * anybody won anything.
+   *
+   * Accepted here or zod strips it, which is what happened to `committee` and
+   * to `party_member` for as long as they went undeclared. */
+  elected: z.boolean().optional(),
   election_year: z.string().optional(),
   election_type: z.enum(electionPositionValues),
   teryt: z.string().optional(),
@@ -188,6 +210,7 @@ export type ElectionRequest = {
   committee?: string;
   party_from_committee?: boolean;
   party_member?: string;
+  elected?: boolean;
   election_year?: string;
   election_type: ElectionPosition;
   teryt?: string;

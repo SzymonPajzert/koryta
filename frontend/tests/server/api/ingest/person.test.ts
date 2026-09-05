@@ -329,6 +329,106 @@ describe("api/ingest/person", () => {
     );
   });
 
+  it("records that a candidacy won", async () => {
+    // `elected` is set on 2 of the 14,518 stored candidacies, so no page can
+    // say anybody won anything. The pipeline has carried the result since
+    // `people_pkw_merged` first selected `candidacy_success` into the
+    // elections struct; the request schema is where it stopped.
+    mockReadBody.mockResolvedValue({
+      name: "Test Person",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          elected: true,
+          election_year: "2024",
+          election_type: "Samorząd",
+          teryt: "1465",
+        },
+      ],
+    });
+
+    mockGet.mockReset();
+    mockDoc.mockReset();
+    mockDoc.mockReturnValue({
+      id: "new-doc-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({
+      id: "person-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
+    });
+    const edgeRef = { id: "edge-id" };
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
+      mockDb,
+      expect.anything(),
+      expect.objectContaining({ uid: "test-user-id" }),
+      edgeRef,
+      expect.objectContaining({ type: "election", elected: true }),
+      { automatic: true, approve: false, published: false },
+    );
+  });
+
+  it("does not record a defeat, which it cannot tell from a blank form", async () => {
+    // PKW published no result for 68,728 of its 97,748 candidacy rows, and
+    // `useEdgeEdit` writes `elected: false` for every box a human left
+    // unticked - so a stored `false` does not mean "this person lost", it
+    // means "nobody said". Writing one would print a defeat on a named
+    // person's page on the strength of a silent register.
+    mockReadBody.mockResolvedValue({
+      name: "Test Person",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          elected: false,
+          election_year: "2024",
+          election_type: "Samorząd",
+          teryt: "1465",
+        },
+      ],
+    });
+
+    mockGet.mockReset();
+    mockDoc.mockReset();
+    mockDoc.mockReturnValue({
+      id: "new-doc-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({
+      id: "person-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
+    });
+    const edgeRef = { id: "edge-id" };
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    const written = vi.mocked(createRevisionTransaction).mock.calls[1]![4];
+    expect(written).not.toHaveProperty("elected");
+  });
+
   describe("a candidacy the database already has", () => {
     /** The shape every one of the 10476 stored candidacies has today: written
      * before the ingest accepted a committee, so carrying none. */

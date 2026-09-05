@@ -40,6 +40,37 @@ describe("CardEmploymentHistory", () => {
     ).toBe(true);
   });
 
+  it("marks a candidacy the person won", async () => {
+    // `elected` is set on 2 of the 14,518 stored candidacies and nothing
+    // rendered it, so no page could say anybody won anything.
+    const wrapper = await render([
+      edge({
+        id: "won",
+        type: "election",
+        label: "kandydatura",
+        elected: true,
+      }),
+    ]);
+    expect(wrapper.find('[data-testid="edge-elected-won"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain("Wybrany");
+  });
+
+  it("says nothing about a candidacy that carries no win", async () => {
+    // `false` is not "lost": `useEdgeEdit` writes it for every box a
+    // contributor left unticked, and PKW published no result at all for
+    // 68,728 of its 97,748 candidacy rows. Neither case may print a verdict
+    // about a named person.
+    for (const elected of [false, undefined]) {
+      const wrapper = await render([
+        edge({ id: "e1", type: "election", label: "kandydatura", elected }),
+      ]);
+      expect(wrapper.find('[data-testid="edge-elected-e1"]').exists()).toBe(
+        false,
+      );
+      expect(wrapper.text()).not.toContain("Wybrany");
+    }
+  });
+
   it("drops the duration bar for a relation that carries no dates", async () => {
     // `connection` has no date fields in the schema, so every one of them would
     // otherwise draw a full-width bar over a span nobody recorded.
