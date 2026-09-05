@@ -72,11 +72,12 @@ import {
  * which is what "co się działo" means here: one stacked series per interaction
  * the site records, in `activityKinds` order.
  *
- * That is past the method's comfortable ceiling for a stack - it was five when
- * this was written and is seven now - so the legend is always on and the table
- * view below carries every number. Three of the hues sit below 3:1 on white and
- * are only allowed with that relief; see `chartTheme.ts` before adding an
- * eighth. */
+ * Four bands, which is inside the method's comfortable ceiling for a stack - it
+ * was seven, and a legend of seven over a column chart is a key the reader has
+ * to learn before the chart says anything. The legend is still always on and the
+ * table view below still carries every number: two of the four hues sit below
+ * 3:1 on white and are only allowed with that relief. See `chartTheme.ts` before
+ * adding a fifth. */
 const props = defineProps<{
   daily: { date: string; counts: ActivityCounts; total: number }[];
   loading?: boolean;

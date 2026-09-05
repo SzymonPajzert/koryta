@@ -14,7 +14,7 @@ const row = (
   isSelf: false,
   email: null,
   photoURL: null,
-  counts: { ...emptyActivityCounts(), nodeVote: 3 },
+  counts: { ...emptyActivityCounts(), vote: 3 },
   total: 3,
   lastActiveAt: "2026-08-20T10:00:00.000Z",
   ...overrides,

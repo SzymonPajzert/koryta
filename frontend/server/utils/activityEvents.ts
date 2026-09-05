@@ -56,18 +56,17 @@ function windowed(
 /** Read every human interaction recorded inside `window`, from each of the
  * collections that records one, and flatten them into a single event list.
  *
- * The five reads are independent, so they run together; each is a range scan
+ * The four reads are independent, so they run together; each is a range scan
  * on a single field, which Firestore indexes without a composite. */
 export async function collectActivityEvents(
   db: Firestore,
   window: EventWindow,
 ): Promise<CollectedEvents> {
-  const [votes, notes, revisions, comments, decisions] = await Promise.all([
+  const [votes, notes, revisions, publications] = await Promise.all([
     collectVotes(db, window),
     collectNoteSources(db, window),
     collectRevisions(db, window),
-    collectComments(db, window),
-    collectAdminDecisions(db, window),
+    collectPublications(db, window),
   ]);
 
   return {
@@ -75,107 +74,95 @@ export async function collectActivityEvents(
       ...votes.events,
       ...notes.events,
       ...revisions.events,
-      ...comments.events,
-      ...decisions.events,
+      ...publications.events,
     ],
     truncated: [
       ...votes.truncated,
       ...notes.truncated,
       ...revisions.truncated,
-      ...comments.truncated,
-      ...decisions.truncated,
+      ...publications.truncated,
     ],
   };
 }
 
-/** What an administrator settled: pages made public, and everything else.
+/** Pages an administrator made public.
  *
- * Read from `audit` rather than from `review_user` on the revisions: that field
- * is overwritten by the next verdict, so counting it would lose every decision
- * an admin later revisited - which is exactly the history worth showing. It
- * also cannot see a publication, which touches no revision at all.
+ * Read from `audit` rather than from a field on the node: `published` is a
+ * boolean the next decision overwrites, so it says what is public now and
+ * nothing about when, or by whom, it became so.
+ *
+ * Only `publish` on `nodes` counts. The rest of what an administrator does —
+ * approving, rejecting, hiding, removing, and the `publish` filed per *edge* by
+ * `publishEdgeInBatch` — was counted here too, as an `adminDecision` kind, and
+ * is not any more. A page reaching the public is the outcome the whole review
+ * pipeline exists to produce and the one number worth watching on a chart of
+ * days; the steps on the way to it say how much reviewing is happening, which
+ * is a different question and one the admin panel's own queues answer. Dropping
+ * the edge rows is also what makes this a count of decisions rather than of
+ * writes: publishing one person with a dozen relations files twenty-five rows,
+ * of which exactly one is the page.
  *
  * This does not double-count against `revision`: that kind counts a change
- * being *proposed* (`update_time`), and this one counts it being settled.
+ * being *proposed* (`update_time`), and this one counts a page being published.
  *
- * **One click is one event.** Publishing a person publishes their relations
- * with them, and `publishEdgeInBatch` files an `approve` and a `publish` per
- * edge - so one person with a dozen relations left twenty-five rows here and
- * twenty-five marks on the chart. Hiding a page cascades the same way through
- * `cascadeUnpublishEdges`, and /admin/krawedzie publishes a whole selection at
- * once. The rows are the audit trail doing its job and they stay in the
- * collection; what they are not is twenty-five decisions.
- *
- * They cannot be told apart one row at a time - `applyRevision` files exactly
- * the same `{approve, edges}` row for a single proposal somebody reviewed by
- * hand, and dropping edge rows wholesale would score that as nothing. What does
- * tell them apart is the clock: a cascade writes its rows inside one commit,
- * microseconds apart, and a person cannot make two separate decisions in the
- * same second. So rows are folded together per (who, what, which collection,
- * second). A bulk publish of fifty relations becomes one event; fifty proposals
- * reviewed one at a time over an afternoon stay fifty.
- *
- * The fold is deliberately coarse in one direction only: a batch that happens to
- * straddle a second boundary counts twice instead of once, which is the right
- * way round to be wrong.
- *
- * What survives is then split in two, because the two answer different
- * questions. `publication` is a page reaching the public, which is the outcome
- * the whole review pipeline exists to produce and the number worth watching.
- * `adminDecision` is the rest of the queue work - approving, rejecting, hiding,
- * removing - which says how much reviewing is happening, not how much of it
- * landed.
+ * Rows are still folded per (who, which page, second), which costs nothing
+ * today — `/api/nodes/publish` is the only writer and files one row per request
+ * — and keeps a future batch that files two rows for one page in one commit
+ * from being read as two decisions. Two *different* pages published in the same
+ * second stay two, which is why the page id is in the key.
  */
-async function collectAdminDecisions(
+async function collectPublications(
   db: Firestore,
   window: EventWindow,
 ): Promise<CollectedEvents> {
+  // Not filtered in the query: `action` and `collection` alongside a range on
+  // `at` would need a composite index, and the scan is capped either way. The
+  // rows that are not publications are dropped here instead.
   const snap = await windowed(db.collection("audit"), "at", window)
-    .select("user", "at", "action", "collection")
+    .select("user", "at", "action", "collection", "target_id")
     .limit(SCAN_CAP)
     .get();
 
   const events: ActivityEvent[] = [];
   const seen = new Set<string>();
   for (const doc of snap.docs) {
+    if (doc.get("action") !== "publish" || doc.get("collection") !== "nodes") {
+      continue;
+    }
+
     const uid = doc.get("user");
     const at = doc.get("at");
     if (typeof uid !== "string" || typeof at !== "string") continue;
 
-    const action = doc.get("action");
-    const collection = doc.get("collection");
-
     // Second precision: `at` is `recordAudit`'s ISO instant, so cutting the
     // milliseconds off is what collapses one commit into one decision.
-    const commit = `${uid}|${String(action)}|${String(collection)}|${at.slice(0, 19)}`;
+    const commit = `${uid}|${String(doc.get("target_id"))}|${at.slice(0, 19)}`;
     if (seen.has(commit)) continue;
     seen.add(commit);
 
-    events.push({
-      uid,
-      at,
-      kind:
-        action === "publish" && collection === "nodes"
-          ? "publication"
-          : "adminDecision",
-    });
+    events.push({ uid, at, kind: "publication" });
   }
 
   const truncated: ActivityKind[] =
-    snap.size >= SCAN_CAP ? ["adminDecision", "publication"] : [];
+    snap.size >= SCAN_CAP ? ["publication"] : [];
   return { events, truncated };
 }
 
 /** A vote document is one per (target, voter), merged in place, so `updatedAt`
  * is the last time that voter touched that target rather than the moment of
- * any single click. Which id field is set is the only thing telling a rating of
- * a person apart from a rating of an extracted fact. */
+ * any single click.
+ *
+ * Rating a person in the explore table and rating a fact the extraction
+ * pipeline proposed land in the same collection and are told apart only by
+ * which id field is set. They were two kinds here and are one now: both are
+ * somebody reading a claim and saying whether it holds, and which surface they
+ * were looking at when they did it is not what the page is asking. */
 async function collectVotes(
   db: Firestore,
   window: EventWindow,
 ): Promise<CollectedEvents> {
   const snap = await windowed(db.collection("votes"), "updatedAt", window)
-    .select("userUid", "updatedAt", "nodeId", "extractionId")
+    .select("userUid", "updatedAt")
     .limit(SCAN_CAP)
     .get();
 
@@ -184,15 +171,10 @@ async function collectVotes(
     const uid = doc.get("userUid");
     const at = doc.get("updatedAt");
     if (typeof uid !== "string" || typeof at !== "string") continue;
-    events.push({
-      uid,
-      at,
-      kind: doc.get("extractionId") ? "extractionVote" : "nodeVote",
-    });
+    events.push({ uid, at, kind: "vote" });
   }
 
-  const truncated: ActivityKind[] =
-    snap.size >= SCAN_CAP ? ["nodeVote", "extractionVote"] : [];
+  const truncated: ActivityKind[] = snap.size >= SCAN_CAP ? ["vote"] : [];
   return { events, truncated };
 }
 
@@ -364,25 +346,4 @@ function wasNeverProposed(
 ): boolean {
   if (doc.get("status") === undefined) return true;
   return normalizeUpdateTime(doc.get("review_time")) === updatedAt;
-}
-
-async function collectComments(
-  db: Firestore,
-  window: EventWindow,
-): Promise<CollectedEvents> {
-  const snap = await windowed(db.collection("comments"), "createdAt", window)
-    .select("authorId", "createdAt")
-    .limit(SCAN_CAP)
-    .get();
-
-  const events: ActivityEvent[] = [];
-  for (const doc of snap.docs) {
-    const uid = doc.get("authorId");
-    const at = doc.get("createdAt");
-    if (typeof uid !== "string" || typeof at !== "string") continue;
-    events.push({ uid, at, kind: "comment" });
-  }
-
-  const truncated: ActivityKind[] = snap.size >= SCAN_CAP ? ["comment"] : [];
-  return { events, truncated };
 }

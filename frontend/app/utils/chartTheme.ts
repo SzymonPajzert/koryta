@@ -7,18 +7,19 @@ import type { ActivityKind } from "~~/shared/activity";
  * the combinations in use were run through its validator against this app's
  * white card surface rather than picked by eye:
  *
- * - the seven `activityColors` are categorical slots 1-7, checked as a stack
+ * - the four `activityColors` are categorical slots 1-4, checked as a stack
  *   (adjacent pairs) against this surface: worst CVD ΔE 9.1 (protan,
- *   yellow↔aqua), worst normal-vision ΔE 19.6 (magenta↔yellow). Slot 6 joined
- *   them for `adminDecision` and slot 7 for `publication`, and neither moved
- *   either figure - green sits next to magenta and violet next to green, and
- *   none of those is the pair either bound is set by;
+ *   yellow↔aqua), worst normal-vision ΔE 22.9 (the same pair). There were seven
+ *   of them, through slot 7, until the kinds were merged down to four; the four
+ *   that remain kept the first four slots rather than their old hues, so the
+ *   stack is still a prefix of the fixed order and every adjacent pair in it is
+ *   one the validator had already passed;
  * - `diverging.negative` / `diverging.positive` are slots 8 and 1, checked
  *   all-pairs: CVD ΔE 21.6.
  *
  * Aqua, yellow and magenta sit below 3:1 against white, which the method allows
  * only with relief — so every chart using them ships a table view of the same
- * numbers. Do not add an eighth activity colour without re-running the
+ * numbers. Do not add a fifth activity colour without re-running the
  * validator; the slot *order* is the colourblind-safety mechanism, not
  * decoration, so a new kind takes the next slot rather than a hue picked to
  * suit it - and is appended to `activityKinds`, so the stack stays in slot
@@ -74,13 +75,10 @@ export const diverging = {
  * its colour between the timeline, the tiles and the leaderboard. Colour
  * follows the kind, never its current rank. */
 export const activityColors: Record<ActivityKind, string> = {
-  nodeVote: categorical[0],
-  extractionVote: categorical[1],
-  revision: categorical[2],
-  noteSource: categorical[3],
-  comment: categorical[4],
-  adminDecision: categorical[5],
-  publication: categorical[6],
+  vote: categorical[0],
+  revision: categorical[1],
+  noteSource: categorical[2],
+  publication: categorical[3],
 };
 
 const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';

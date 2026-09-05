@@ -92,7 +92,7 @@ describe("isAutomatedUid", () => {
 describe("aggregateActivity", () => {
   it("fills every day of the window, quiet ones included", () => {
     const result = aggregateActivity(
-      [event("u1", "nodeVote", "2026-08-01T09:00:00.000Z")],
+      [event("u1", "vote", "2026-08-01T09:00:00.000Z")],
       WINDOW,
     );
 
@@ -102,21 +102,21 @@ describe("aggregateActivity", () => {
       "2026-08-01",
     ]);
     expect(result.daily[0]!.total).toBe(0);
-    expect(result.daily[2]!.counts.nodeVote).toBe(1);
+    expect(result.daily[2]!.counts.vote).toBe(1);
   });
 
-  it("keeps a vote on a person apart from a vote on an extraction", () => {
+  it("counts each kind on its own and totals them together", () => {
     const result = aggregateActivity(
       [
-        event("u1", "nodeVote", "2026-07-31T10:00:00.000Z"),
-        event("u1", "extractionVote", "2026-07-31T11:00:00.000Z"),
-        event("u1", "extractionVote", "2026-07-31T12:00:00.000Z"),
+        event("u1", "vote", "2026-07-31T10:00:00.000Z"),
+        event("u1", "vote", "2026-07-31T11:00:00.000Z"),
+        event("u1", "publication", "2026-07-31T12:00:00.000Z"),
       ],
       WINDOW,
     );
 
-    expect(result.totals.nodeVote).toBe(1);
-    expect(result.totals.extractionVote).toBe(2);
+    expect(result.totals.vote).toBe(2);
+    expect(result.totals.publication).toBe(1);
     expect(result.totals.revision).toBe(0);
     expect(result.total).toBe(3);
   });
@@ -134,9 +134,9 @@ describe("aggregateActivity", () => {
   it("ranks contributors by total and remembers when each was last seen", () => {
     const result = aggregateActivity(
       [
-        event("quiet", "comment", "2026-08-01T08:00:00.000Z"),
-        event("busy", "nodeVote", "2026-07-30T08:00:00.000Z"),
-        event("busy", "nodeVote", "2026-07-31T08:00:00.000Z"),
+        event("quiet", "noteSource", "2026-08-01T08:00:00.000Z"),
+        event("busy", "vote", "2026-07-30T08:00:00.000Z"),
+        event("busy", "vote", "2026-07-31T08:00:00.000Z"),
         event("busy", "revision", "2026-07-31T20:00:00.000Z"),
       ],
       WINDOW,
@@ -144,7 +144,7 @@ describe("aggregateActivity", () => {
 
     expect(result.contributors.map((c) => c.uid)).toEqual(["busy", "quiet"]);
     expect(result.contributors[0]!.counts).toMatchObject({
-      nodeVote: 2,
+      vote: 2,
       revision: 1,
     });
     expect(result.contributors[0]!.lastActiveAt).toBe(
@@ -154,8 +154,8 @@ describe("aggregateActivity", () => {
 
   it("orders equal totals stably rather than by insertion", () => {
     const events = [
-      event("zeta", "comment", "2026-07-31T08:00:00.000Z"),
-      event("alpha", "comment", "2026-07-31T08:00:00.000Z"),
+      event("zeta", "vote", "2026-07-31T08:00:00.000Z"),
+      event("alpha", "vote", "2026-07-31T08:00:00.000Z"),
     ];
 
     expect(
@@ -194,7 +194,7 @@ describe("aggregateActivity", () => {
         ),
         event(
           "migration:merge-duplicate-people",
-          "adminDecision",
+          "publication",
           "2026-07-31T08:00:01.000Z",
         ),
         event("u1", "revision", "2026-07-31T08:00:00.000Z"),
@@ -203,15 +203,15 @@ describe("aggregateActivity", () => {
     );
 
     expect(result.totals.revision).toBe(1);
-    expect(result.totals.adminDecision).toBe(0);
+    expect(result.totals.publication).toBe(0);
     expect(result.contributors.map((c) => c.uid)).toEqual(["u1"]);
   });
 
   it("drops events outside the window instead of clamping them in", () => {
     const result = aggregateActivity(
       [
-        event("u1", "nodeVote", "2026-07-29T23:59:59.000Z"),
-        event("u1", "nodeVote", "2026-08-02T00:00:01.000Z"),
+        event("u1", "vote", "2026-07-29T23:59:59.000Z"),
+        event("u1", "vote", "2026-08-02T00:00:01.000Z"),
       ],
       WINDOW,
     );

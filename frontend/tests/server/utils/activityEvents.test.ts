@@ -294,11 +294,11 @@ describe("collectNoteSources", () => {
   });
 });
 
-describe("collectAdminDecisions", () => {
+describe("collectPublications", () => {
   const audit = (docs: Doc[]) =>
     collectActivityEvents(fakeDb({ audit: docs }), WINDOW);
 
-  it("counts a published page as its own kind", async () => {
+  it("counts a published page", async () => {
     const { events } = await audit([
       { user: "admin", at: AT, action: "publish", collection: "nodes" },
     ]);
@@ -316,9 +316,8 @@ describe("collectAdminDecisions", () => {
 
   it("counts one publication for a person, not one per relation", async () => {
     // Publishing a person publishes their relations with them, and
-    // `publishEdgeInBatch` files an approve *and* a publish per edge. One
-    // click used to be twenty-five marks on the chart; it is three now - the
-    // page, and the two batches of edge rows behind it.
+    // `publishEdgeInBatch` files an approve *and* a publish per edge. One click
+    // used to be twenty-five marks on the chart; it is one now.
     const { events } = await audit([
       { user: "admin", at: AT, action: "publish", collection: "nodes" },
       ...inOneCommit(
@@ -329,70 +328,73 @@ describe("collectAdminDecisions", () => {
       ),
     ]);
 
-    expect(events.filter((e) => e.kind === "publication")).toHaveLength(1);
-    expect(events.filter((e) => e.kind === "adminDecision")).toHaveLength(2);
+    expect(events).toEqual([{ uid: "admin", at: AT, kind: "publication" }]);
   });
 
-  it("counts one decision for a whole cascade of hidden relations", async () => {
-    const { events } = await audit(
-      inOneCommit([
-        { user: "admin", action: "unpublish", collection: "nodes" },
-        ...Array.from({ length: 30 }, () => ({
-          user: "admin",
-          action: "unpublish",
-          collection: "edges",
-        })),
-      ]),
-    );
-
-    expect(events).toHaveLength(2);
-    expect(events.every((e) => e.kind === "adminDecision")).toBe(true);
-  });
-
-  it("still counts an edge proposal reviewed on its own", async () => {
-    // `applyRevision` files exactly the row a cascade does, for one relation a
-    // person looked at. Dropping edge rows wholesale scored this as nothing.
+  it("ignores everything an administrator did that was not publishing a page", async () => {
+    // Approving, rejecting, hiding and removing are the queue work on the way
+    // to a publication rather than the publication, and none of them is counted.
     const { events } = await audit([
-      {
-        user: "admin",
-        at: "2026-08-20T10:00:00.000Z",
-        action: "approve",
-        collection: "edges",
-      },
-      {
-        user: "admin",
-        at: "2026-08-20T10:04:00.000Z",
-        action: "approve",
-        collection: "edges",
-      },
-      {
-        user: "admin",
-        at: "2026-08-20T10:09:00.000Z",
-        action: "approve",
-        collection: "edges",
-      },
+      { user: "admin", at: AT, action: "approve", collection: "nodes" },
+      { user: "admin", at: AT, action: "reject", collection: "nodes" },
+      { user: "admin", at: AT, action: "unpublish", collection: "nodes" },
+      { user: "admin", at: AT, action: "delete", collection: "edges" },
+      { user: "admin", at: AT, action: "publish", collection: "edges" },
     ]);
 
-    expect(events).toHaveLength(3);
+    expect(events).toEqual([]);
   });
 
   it("does not fold two people's work together", async () => {
     const { events } = await audit([
-      { user: "ala", at: AT, action: "publish", collection: "nodes" },
-      { user: "bogdan", at: AT, action: "publish", collection: "nodes" },
+      {
+        user: "ala",
+        at: AT,
+        action: "publish",
+        collection: "nodes",
+        target_id: "n1",
+      },
+      {
+        user: "bogdan",
+        at: AT,
+        action: "publish",
+        collection: "nodes",
+        target_id: "n1",
+      },
     ]);
 
     expect(events.map((e) => e.uid).sort()).toEqual(["ala", "bogdan"]);
   });
 
-  it("keeps the different things done in one second apart", async () => {
+  it("keeps two pages published in the same second apart", async () => {
+    // The fold is per page as well as per second, so a batch that ever files
+    // two rows for one page reads as one decision while two people made public
+    // at once stay two.
     const { events } = await audit([
-      { user: "admin", at: AT, action: "approve", collection: "nodes" },
-      { user: "admin", at: AT, action: "reject", collection: "nodes" },
-      { user: "admin", at: AT, action: "delete", collection: "edges" },
+      {
+        user: "admin",
+        at: AT,
+        action: "publish",
+        collection: "nodes",
+        target_id: "n1",
+      },
+      {
+        user: "admin",
+        at: AT,
+        action: "publish",
+        collection: "nodes",
+        target_id: "n2",
+      },
+      {
+        user: "admin",
+        at: "2026-08-20T10:00:00.400Z",
+        action: "publish",
+        collection: "nodes",
+        target_id: "n2",
+      },
     ]);
 
-    expect(events).toHaveLength(3);
+    expect(events).toHaveLength(2);
   });
 });
 
@@ -405,7 +407,6 @@ describe("collectActivityEvents", () => {
           { userUid: "anna", updatedAt: AT, extractionId: "e1" },
         ],
         notes: [{ userUid: "bob", updatedAt: AT, sources: ["a", "b"] }],
-        comments: [{ authorId: "bob", createdAt: AT }],
         revisions: [{ update_user: "anna", update_time: AT }],
         audit: [
           { user: "admin", at: AT, action: "publish", collection: "nodes" },
@@ -414,13 +415,14 @@ describe("collectActivityEvents", () => {
       WINDOW,
     );
 
+    // Both vote documents are the same kind: a rating of a person and a rating
+    // of an extracted fact are one thing here.
     expect(events.map((event) => event.kind).sort()).toEqual([
-      "comment",
-      "extractionVote",
-      "nodeVote",
       "noteSource",
       "publication",
       "revision",
+      "vote",
+      "vote",
     ]);
 
     // A note contributes one unit per source it holds, not one per document.

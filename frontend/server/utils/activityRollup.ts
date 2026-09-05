@@ -16,8 +16,8 @@ import { collectActivityEvents } from "~~/server/utils/activityEvents";
 
 /** One finished UTC day of activity, counted once and kept.
  *
- * The activity section used to answer every request by scanning five
- * collections across the whole window - up to 20,000 documents per collection,
+ * The activity section used to answer every request by scanning every source
+ * collection across the whole window - up to 20,000 documents per collection,
  * per window length, re-read every time the five-minute cache lapsed. Almost
  * all of that is settled history: what happened on the 3rd cannot change on the
  * 12th, so it is counted on the 4th and read back as a single document from
@@ -30,8 +30,8 @@ import { collectActivityEvents } from "~~/server/utils/activityEvents";
  * counts it where it was. The same document then shows up on both days. The
  * live scan this replaces had the opposite bug (the older day silently lost the
  * event), and neither is fixable without recording an event per write rather
- * than reading it off the mutable document. Revisions, comments and audit
- * entries are append-only and never drift.
+ * than reading it off the mutable document. Revisions and audit entries are
+ * append-only and never drift.
  */
 export type DailyRollup = {
   /** `YYYY-MM-DD`, UTC. Also the document id. */
@@ -57,8 +57,12 @@ export type DailyRollup = {
  *
  * 1: excludes automatic revisions and article-node bookkeeping.
  * 2: excludes the `migration:*` scripts as well as the pipeline.
+ * 3: four kinds instead of seven — the two vote kinds merged, comments and
+ *    non-publication admin decisions dropped. A day stored under 2 holds its
+ *    counts under names this version no longer reads, so it would come back as
+ *    a day on which nobody voted.
  */
-const ROLLUP_VERSION = 2;
+const ROLLUP_VERSION = 3;
 
 const COLLECTION = "activityDaily";
 

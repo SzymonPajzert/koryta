@@ -92,10 +92,10 @@ beforeEach(() => {
   mockEnsure.mockResolvedValue([]);
   mockCollect.mockResolvedValue({
     events: [
-      { uid: "busy", kind: "nodeVote", at: today },
-      { uid: "busy", kind: "nodeVote", at: today },
+      { uid: "busy", kind: "vote", at: today },
+      { uid: "busy", kind: "vote", at: today },
       { uid: "busy", kind: "revision", at: today },
-      { uid: "quiet", kind: "extractionVote", at: today },
+      { uid: "quiet", kind: "vote", at: today },
     ],
     truncated: [],
   });
@@ -132,7 +132,7 @@ describe("/api/stats/activity", () => {
     ]);
     expect(result.namedCount).toBe(0);
     expect(result.self).toBeNull();
-    expect(result.totals.nodeVote).toBe(2);
+    expect(result.totals.vote).toBe(3);
     expect(result.total).toBe(4);
   });
 
@@ -209,7 +209,7 @@ describe("/api/stats/activity", () => {
     expect(result.self).toEqual({
       rank: 2,
       total: 1,
-      counts: expect.objectContaining({ extractionVote: 1 }),
+      counts: expect.objectContaining({ vote: 1 }),
     });
   });
 
@@ -239,7 +239,7 @@ describe("/api/stats/activity", () => {
       name: "Anna Nowak",
       email: "anna@example.com",
       total: 3,
-      counts: expect.objectContaining({ nodeVote: 2, revision: 1 }),
+      counts: expect.objectContaining({ vote: 2, revision: 1 }),
     });
   });
 
@@ -321,9 +321,9 @@ describe("/api/stats/activity", () => {
     mockGetUser.mockResolvedValue(null);
     mockCollect.mockResolvedValue({
       events: [],
-      truncated: ["nodeVote", "nodeVote", "revision"],
+      truncated: ["vote", "vote", "revision"],
     });
 
-    expect((await call()).truncated.sort()).toEqual(["nodeVote", "revision"]);
+    expect((await call()).truncated.sort()).toEqual(["revision", "vote"]);
   });
 });
