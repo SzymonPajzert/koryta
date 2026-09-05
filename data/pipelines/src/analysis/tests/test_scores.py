@@ -17,6 +17,7 @@ from analysis.scores import (
 )
 from analysis.scores.base import (
     FULL_RANGE,
+    IS_PUBLIC_SCORE,
     QUEUE_THRESHOLD,
     Candidacy,
     CompanyFacts,
@@ -207,6 +208,46 @@ class TestPopulation:
         assert result.seed_weights["Anna"] > 0
         assert result.shortlist == []
 
+    def test_a_published_twin_keeps_the_key_off_the_shortlist(self):
+        # Two pages for one person, unmerged - the site has around 130 of these
+        # waiting to be split or merged by hand. Being judged is a fact about
+        # the person, so the published page settles it for both; deciding it
+        # per row let the second page put the key back on the queue.
+        result = self.build(
+            [
+                {"id": "n1", "full_name": "Anna", "is_public": True, "parties": []},
+                {"id": "n2", "full_name": "Anna", "is_public": False, "parties": []},
+            ]
+        )
+
+        assert result.shortlist == []
+        assert result.seed_weights["Anna"] == IS_PUBLIC_SCORE
+
+    def test_a_voted_twin_keeps_the_key_off_the_shortlist(self):
+        result = self.build(
+            [
+                {"id": "n1", "full_name": "Anna", "is_public": False, "parties": []},
+                {"id": "n2", "full_name": "Anna", "is_public": False, "parties": []},
+            ],
+            [{"person_koryta_id": "n1", "interesting": 4}],
+        )
+
+        assert result.shortlist == []
+        assert result.seed_weights["Anna"] == 4
+
+    def test_the_key_points_at_the_page_still_waiting(self):
+        # Which of a key's nodes it carries used to be whichever the export
+        # listed last. Prefer the copy nobody has dealt with, so anything
+        # reading `node_ids` is pointed at the page a reader would open.
+        judged = {"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}
+        waiting = {"id": "n2", "full_name": "Anna", "is_public": False, "parties": []}
+        votes = [{"person_koryta_id": "n1", "interesting": -1}]
+
+        for rows in ([judged, waiting], [waiting, judged]):
+            result = self.build(rows, votes)
+
+            assert result.node_ids["Anna"] == "n2"
+
     def test_a_human_vote_takes_somebody_off_the_shortlist(self):
         result = self.build(
             [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}],
@@ -214,6 +255,30 @@ class TestPopulation:
         )
 
         assert result.seed_weights["Anna"] == 4
+        assert result.shortlist == []
+
+    def test_a_verdict_that_nets_to_zero_is_still_a_verdict(self):
+        # Two readers who disagree have both looked. Asking the sum reads that
+        # as nobody having voted and offers the person again.
+        result = self.build(
+            [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}],
+            [
+                {"person_koryta_id": "n1", "interesting": 1},
+                {"person_koryta_id": "n1", "interesting": -1},
+            ],
+        )
+
+        assert result.shortlist == []
+        assert result.seed_weights == {}
+
+    def test_a_vote_on_quality_alone_still_counts_as_a_look(self):
+        # `KorytaVotes` carries the interesting score and nothing else, so a
+        # reader who rated only the quality of a page arrives here as None.
+        result = self.build(
+            [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}],
+            [{"person_koryta_id": "n1", "interesting": None}],
+        )
+
         assert result.shortlist == []
 
     def test_a_downvote_seeds_the_other_way(self):

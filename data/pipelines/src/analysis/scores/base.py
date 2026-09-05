@@ -407,6 +407,7 @@ class PeopleScoreModel(Pipeline):
         companies = self.companies_krs.read_or_process(ctx)
 
         human_votes = self.human_votes(votes, koryta)
+        looked_at = self.human_voted_nodes(votes)
 
         employments: dict[str, list[Employment]] = {}
         candidacies: dict[str, list[Candidacy]] = {}
@@ -469,26 +470,60 @@ class PeopleScoreModel(Pipeline):
                 return keys_by_name[name]
             return person_key(entry.get("rejestrIo"), name)
 
+        # More than one node can key to the same person - two pages for one
+        # human that nobody has merged yet, or two humans sharing a name that
+        # neither side carries a rejestr.io id for. Whether somebody has been
+        # judged is therefore a fact about the *key*, gathered across every
+        # node that shares it, and the shortlist is decided once at the end.
+        #
+        # Deciding it per row instead is what this fixes: the branch below used
+        # to run inside the loop, so a published page followed by an unjudged
+        # twin put the key back on the shortlist and left `node_ids` pointing
+        # at whichever row came last. On the 2026-09-05 export that offered 24
+        # published pages and 21 already voted on - 8.7% of the queue's top
+        # 300, because a person with two pages is a person somebody found worth
+        # writing about twice.
         node_ids: dict[str, str] = {}
         names: dict[str, str] = {}
         seed_weights: dict[str, float] = {}
-        shortlist: list[str] = []
+        judged: set[str] = set()
         for _, entry in koryta.iterrows():
             key = key_of(entry)
-            node_ids[key] = str(entry.get("id"))
-            names[key] = str(entry.get("full_name"))
+            node_id = str(entry.get("id"))
+            name = str(entry.get("full_name"))
 
             is_public = entry.get("is_public", False)
             if pd.isna(is_public):
                 is_public = False
 
-            vote = human_votes.get(str(entry.get("id")), 0.0)
+            vote = human_votes.get(node_id, 0.0)
             if is_public:
                 seed_weights[key] = max(seed_weights.get(key, 0.0), IS_PUBLIC_SCORE)
-            elif vote:
-                seed_weights[key] = vote
-            elif key in employments:
-                shortlist.append(key)
+                judged.add(key)
+            elif node_id in looked_at:
+                # Somebody has looked, whatever they concluded. Asking the sum
+                # instead reads a verdict that nets to zero - a neutral vote, a
+                # vote on quality alone, or two readers cancelling each other -
+                # as nobody having voted, and puts the person back on the
+                # queue: six of them in the 2026-09-05 export. The weight is
+                # still only written where there is a direction to learn from,
+                # so `seed_weights` keeps meaning what its docstring says.
+                if vote:
+                    seed_weights[key] = vote
+                judged.add(key)
+            else:
+                # The page a reader would be sent to, so a score lands on the
+                # copy still waiting to be written up rather than on the twin
+                # somebody has already dealt with.
+                node_ids[key] = node_id
+                names[key] = name
+
+            node_ids.setdefault(key, node_id)
+            names.setdefault(key, name)
+
+        shortlist = [
+            key for key in node_ids if key not in judged and key in employments
+        ]
 
         return Population(
             people=people,
@@ -528,6 +563,27 @@ class PeopleScoreModel(Pipeline):
                 continue
             totals[node_id] = totals.get(node_id, 0.0) + float(interesting)
         return totals
+
+    @staticmethod
+    def human_voted_nodes(votes: pd.DataFrame) -> set[str]:
+        """Node ids somebody has looked at, whatever they then said.
+
+        A different question from `human_votes`, which sums the verdicts: what
+        decides eligibility is whether a person has been seen, and a sum cannot
+        say that. Zero is what a reader saying "not interesting" leaves behind,
+        and it is also what two readers disagreeing leave behind.
+        """
+        if votes.empty or "person_koryta_id" not in votes:
+            return set()
+        seen: set[str] = set()
+        for _, row in votes.iterrows():
+            target = row.get("person_koryta_id")
+            if pd.isna(target):
+                continue
+            node_id = str(target).strip()
+            if node_id:
+                seen.add(node_id)
+        return seen
 
     @staticmethod
     def company_facts(companies: pd.DataFrame) -> dict[str, CompanyFacts]:

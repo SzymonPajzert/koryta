@@ -178,6 +178,36 @@ class TestPipelinesFallBack(unittest.TestCase):
         self.assertEqual(df.iloc[0]["full_name"], "Jan Kowalski")
         self.assertTrue(df.iloc[0]["is_public"])
 
+    def test_a_merged_away_page_is_not_a_person_on_the_site(self):
+        # A merge keeps the duplicate's document so its url and the votes filed
+        # against it still resolve, and sends readers to the survivor. Passing
+        # it on put a page nobody can open in front of everything downstream -
+        # the scoring models nominated 93 such pages on the 2026-09-05 export.
+        yesterday = pd.DataFrame(
+            [
+                {
+                    "id": "person-1",
+                    "name": "Jan Kowalski",
+                    "parties": [],
+                    "stats": {"isApproved": False},
+                },
+                {
+                    "id": "person-2",
+                    "name": "Jan Kowalski",
+                    "parties": [],
+                    "deleted": True,
+                    "merged_into": "person-1",
+                    "stats": {"isApproved": False},
+                },
+            ]
+        )
+        with patch.object(
+            FirestoreCollection, "process", exports_on({"2026-08-06": yesterday})
+        ):
+            df = KorytaPeople(date="2026-08-07").process(mock_ctx())
+
+        self.assertEqual(list(df["id"]), ["person-1"])
+
     def test_companies_fall_back_as_they_always_did(self):
         yesterday = pd.DataFrame(
             [{"id": "place-1", "krsNumber": "0000123456", "revision_id": "r1"}]

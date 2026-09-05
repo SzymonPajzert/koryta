@@ -267,7 +267,28 @@ class KorytaPeople(Pipeline[Person]):
         )
 
         outputs = []
+        tombstones = 0
         for data in tqdm(df.to_dict(orient="records")):
+            # A merged-away duplicate keeps its document so that old links, and
+            # the votes and revisions filed against it, still resolve - see
+            # `merged_into` in `frontend/shared/model.ts`, which is set only
+            # alongside `deleted`. It is not a person the site has, and the
+            # readers it does have are sent to the survivor. Emitting it puts a
+            # page nobody can open in front of everything downstream: the
+            # scoring models nominated 93 of them on the 2026-09-05 export, and
+            # a name-matched ingest would file a post against a tombstone.
+            #
+            # NaN, not a blank, is what a field only some documents carry
+            # looks like once pandas has been through the frame - and NaN is
+            # truthy, so reading it straight would drop every person on the
+            # site. Same trap `_flag` exists for in `analysis/scores/base.py`.
+            deleted = data.get("deleted")
+            if isinstance(deleted, float):
+                deleted = None
+            if deleted:
+                tombstones += 1
+                continue
+
             votes_interesting = (
                 data.get("stats", {}).get("votes", {}).get("interesting", None)
             )
@@ -286,7 +307,10 @@ class KorytaPeople(Pipeline[Person]):
                 )
             )
 
-        print("Finished processing people.")
+        print(
+            f"Finished processing people: {len(outputs)} on the site, "
+            f"{tombstones} deleted or merged away."
+        )
         return pd.DataFrame.from_records([dataclasses.asdict(o) for o in outputs])
 
 
