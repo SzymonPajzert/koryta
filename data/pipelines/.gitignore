@@ -31,3 +31,6 @@ models
 
 # The nightly's expected row counts and column coverage - tracked on purpose
 !src/tests/e2e/baseline.json
+
+# The triage of the queue positions already researched - tracked on purpose
+!triage/*.csv
