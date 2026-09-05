@@ -61,6 +61,42 @@ class Person:
 
 
 @dataclass
+class PersonNote:
+    """One note a pipeline wrote onto a person's page.
+
+    The same shape a contributor's note has - a link and a sentence about what
+    is in it - stored in the same `notes` collection and drawn by the same
+    card. What makes it the pipeline's is the uid it is filed under: anything
+    containing "pipeline" reads as non-human, so the site can count community
+    notes without counting these, and a re-run replaces the pipeline's own note
+    on a page without touching anybody else's.
+
+    One note per (node, uid), which is the collection's own rule - a person has
+    at most one note from each author. A pipeline that wanted to say two things
+    about somebody would say them in one note, or write under a second uid.
+    """
+
+    node_id: str
+    #: The page's name, for the upload's own reporting. Nothing is written
+    #: from it: the note hangs off the node id.
+    name: str
+    #: Where the text came from. Rendered as the source link on the card, so a
+    #: reader can check the claim against the page it was taken from - which is
+    #: also what the licence on Wikipedia text asks for.
+    url: str
+    note: str
+    #: Which entry kind the note reads as on the card. "source" is a thing to
+    #: read rather than a correction somebody is owed, which is what keeps
+    #: these off the admin queue - see `noteNeedsAction` in
+    #: `frontend/shared/model.ts`.
+    kind: str = "source"
+    #: Which pipeline said so, and the `userUid` the note is stored under. The
+    #: default is the tag a note with no other provenance goes under, the way
+    #: `PersonScore.model` works.
+    model: str = "pipeline"
+
+
+@dataclass
 class PersonScore:
     node_id: str
     name: str

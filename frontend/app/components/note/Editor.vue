@@ -58,11 +58,12 @@
            the grid. -->
       <div class="note-entries">
         <NoteSourceCard
-          v-for="(source, index) in otherSources"
+          v-for="(entry, index) in otherSources"
           :key="'other-' + index"
-          :model-value="source"
+          :model-value="entry.source"
           :is-editing="false"
           :snippet-only="snippetOnly"
+          :automatic="entry.automatic"
         />
 
         <NoteSourceCard
@@ -165,6 +166,7 @@ import type {
   NoteEntryKind,
   NoteSource,
 } from "~~/shared/model";
+import { isPipelineUid } from "~~/shared/stats";
 import { articlePayloadFor, ensureArticle } from "~/composables/articles";
 import { articleIdsForSources } from "~/utils/notePromotion";
 import { NoteSourceCard } from "#components";
@@ -207,9 +209,28 @@ const { userNote, otherNotes, saveNote, attachArticleIds } = useNotes(
   computed(() => props.nodeId),
 );
 
-const otherSources = computed(() => {
-  return otherNotes.value.flatMap((n) => n.sources || []);
-});
+/** Everybody else's entries, each carrying whether a person wrote it.
+ *
+ * The pipelines write notes too - `PeopleWikiNotes` copies the opening
+ * paragraph of somebody's Wikipedia article onto their page - and they are
+ * stored in this collection like any other, so they arrive here. Who wrote an
+ * entry is not a property of the entry, only of the note it sits in, so it is
+ * resolved while the two are still together.
+ *
+ * People first. A paragraph a machine copied is background; what somebody took
+ * the trouble to write about this person is the thing to read, and it should
+ * not be pushed down the page by however many articles the pipeline found.
+ */
+const otherSources = computed(() =>
+  otherNotes.value
+    .flatMap((note) =>
+      (note.sources || []).map((source) => ({
+        source,
+        automatic: isPipelineUid(note.userUid),
+      })),
+    )
+    .sort((a, b) => Number(a.automatic) - Number(b.automatic)),
+);
 
 const isEditing = ref(false);
 const saving = ref(false);

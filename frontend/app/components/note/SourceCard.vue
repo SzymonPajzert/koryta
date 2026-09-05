@@ -14,6 +14,16 @@
          icon and small muted text above the thing itself. -->
     <template v-if="!isEditing">
       <div v-if="hasHead" class="note-entry__head">
+        <!-- Who wrote this. Said only where nobody did: a note the pipelines
+             copied off another site is not somebody's reading of it, and a
+             paragraph with no author sitting among notes that have one reads
+             as though the site wrote it. Everything else in the head is what
+             the entry says; this is where it came from. -->
+        <template v-if="automatic">
+          <v-icon :icon="mdiRobotOutline" size="15" class="note-entry__icon" />
+          <span class="note-entry__kind">Notatka automatyczna</span>
+        </template>
+
         <!-- A plain source needs no label - the link under it says what it is.
              A correction or a gap is a different kind of claim and says so. -->
         <template v-if="kind !== 'source'">
@@ -164,6 +174,7 @@ import {
   mdiLink,
   mdiPencil,
   mdiPlus,
+  mdiRobotOutline,
 } from "@mdi/js";
 import { generateEntityUrl } from "~/composables/slugs";
 import { noteKindConfig, noteKindOf } from "~/composables/notes";
@@ -173,8 +184,12 @@ import type { NoteEntryKind, NoteSource } from "~~/shared/model";
 defineEmits(["remove"]);
 
 const source = defineModel<NoteSource>({ required: true });
-const { isEditing, snippetOnly } = defineProps<{
+const { isEditing, snippetOnly, automatic } = defineProps<{
   isEditing: boolean;
+  /** Written by a pipeline rather than by a person - see `isPipelineUid`. Only
+   * ever true on an entry being read: nothing writes one of these from the
+   * browser. */
+  automatic?: boolean;
   /** On an article page an entry is a piece of text and nothing else: the url
    * it would carry is the page it is already attached to, and the kinds exist
    * to report that a record is wrong, which is a revision rather than a note.
@@ -200,6 +215,7 @@ const host = computed(() => sourceDomain(source.value.url));
  * row still costs its gap. */
 const hasHead = computed(
   () =>
+    automatic ||
     kind.value !== "source" ||
     (!snippetOnly && (!!source.value.url || !!source.value.articleNodeId)),
 );

@@ -148,6 +148,40 @@ describe("/api/notes/admin", () => {
     expect(result.notes[2]).toMatchObject({ kind: "change_request" });
   });
 
+  it("leaves a pipeline's own notes out of the queue", async () => {
+    // `PeopleWikiNotes` writes one per person with a Wikipedia article. There
+    // is no author to go back to and nothing to classify, so counting them
+    // would bury the entries somebody actually wrote.
+    mockNotesGet.mockResolvedValue({
+      docs: [
+        noteDoc("wiki", {
+          nodeId: "node-1",
+          userUid: "pipeline-wikipedia",
+          createdAt: "2026-03-02T00:00:00.000Z",
+          sources: [
+            {
+              note: "Jan Pamuła (ur. 1951) - polski polityk.",
+              url: "https://pl.wikipedia.org/wiki/Jan_Pamuła",
+              kind: "source",
+            },
+          ],
+        }),
+        noteDoc("human", {
+          nodeId: "node-1",
+          userUid: "user-a",
+          createdAt: "2026-01-02T00:00:00.000Z",
+          sources: [{ note: "pierwsza" }],
+        }),
+      ],
+    });
+    mockGetAll.mockResolvedValue([nodeDoc("node-1", "Jan Testowy")]);
+
+    const result = (await callHandler()) as Result;
+
+    expect(result.total).toBe(1);
+    expect(result.notes.map((row) => row.userUid)).toEqual(["user-a"]);
+  });
+
   it("dates a note that was never edited by when it was created", async () => {
     mockNotesGet.mockResolvedValue({
       docs: [

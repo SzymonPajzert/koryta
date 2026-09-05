@@ -8,9 +8,9 @@ vi.mock("@plausible-analytics/tracker", () => ({
   track: vi.fn(),
 }));
 
-const mount = (source: NoteSource, isEditing = false) =>
+const mount = (source: NoteSource, isEditing = false, automatic = false) =>
   mountSuspended(NoteSourceCard, {
-    props: { modelValue: source, isEditing },
+    props: { modelValue: source, isEditing, automatic },
   });
 
 describe("NoteSourceCard", () => {
@@ -24,6 +24,25 @@ describe("NoteSourceCard", () => {
       kind: "source",
     });
     expect(source.text()).not.toContain("Do poprawy");
+  });
+
+  it("says when nobody wrote the note", async () => {
+    // The pipelines write notes too - the Wikipedia lead paragraph - and a
+    // paragraph with no author sitting among notes that have one reads as
+    // though the site wrote it.
+    const wiki = await mount(
+      {
+        note: "Jan Pamuła (ur. 1951) - polski polityk.",
+        url: "https://pl.wikipedia.org/wiki/Jan_Pamuła",
+        kind: "source",
+      },
+      false,
+      true,
+    );
+    expect(wiki.text()).toContain("Notatka automatyczna");
+
+    const human = await mount({ note: "ciekawe", url: "https://a.example" });
+    expect(human.text()).not.toContain("Notatka automatyczna");
   });
 
   it("reads an entry written before kinds existed as a source", async () => {

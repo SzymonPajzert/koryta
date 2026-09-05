@@ -1,5 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { normalizeUpdateTime } from "~~/shared/revisions";
+import { isPipelineUid } from "~~/shared/stats";
 import type { NodeType, Note, NoteRow, NoteSource } from "~~/shared/model";
 
 type ResolvedNode = { name: string; type: NodeType };
@@ -42,6 +43,12 @@ export async function getNoteRows(db: Firestore): Promise<NoteRow[]> {
   const rows: NoteRow[] = [];
   for (const doc of snapshot.docs) {
     const data = doc.data() as Note;
+    // The queue is for entries somebody wrote and is owed an answer about. A
+    // pipeline's note - the Wikipedia lead paragraph `PeopleWikiNotes` copies
+    // onto a page - is neither: there is no author to go back to, nothing to
+    // classify, and a run adds one per person with an article. Left in, they
+    // would be most of /admin/notatki/kategoryzacja and none of its work.
+    if (isPipelineUid(data.userUid)) continue;
     // Only fields the author writes. `doc.updateTime` used to stand in for a
     // missing date, but triaging a source *is* a write to the document, so
     // every note without one jumped to the top of the queue the moment an

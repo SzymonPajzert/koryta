@@ -10,6 +10,48 @@ service cloud.firestore {
     match /notes/{noteId} {
       allow read: if true;
       allow create, update, delete: if request.auth != null && request.resource.data.userUid == request.auth.uid;
+
+      // A note written by a pipeline rather than by a contributor - today the
+      // opening paragraph of somebody's Wikipedia article, copied onto their
+      // page by `PeopleWikiNotes`. Nobody signs in as a pipeline, so the check
+      // above can never cover these; they are uploaded by whoever runs
+      // `koryta_uploader --type note`, writing under the pipeline's uid, and
+      // are limited to the datascience group like the votes below.
+      allow create, update: if request.auth != null
+          && request.auth.token.datascience == true
+          && isPipelineNote(noteId, request.resource.data);
+      // A page that no longer qualifies loses the note rather than keeping a
+      // stale one, so the reconciliation deletes; `resource` is the document
+      // as stored, since a delete carries no payload.
+      allow delete: if request.auth != null
+          && request.auth.token.datascience == true
+          && isPipelineNote(noteId, resource.data);
+    }
+
+    // What a pipeline is allowed to write into `notes`. The same two questions
+    // `isPipelineVote` asks - the uid reads as a robot's, and the document id
+    // spells out the node and uid it carries, so this branch cannot be used to
+    // write a note in somebody else's name - plus one this collection needs on
+    // its own: a note is prose shown on a person's page, so what it says is
+    // checked too.
+    //
+    // One entry, because a pipeline says one thing about a person, and only
+    // the three fields its author owns. `articleNodeId` and the `admin*` fields
+    // are the site's own bookkeeping about an entry, and a writer that could
+    // set them would be triaging its own note. `kind` has to be "source" -
+    // something to read - because the other kinds mean "this data is wrong" and
+    // put the entry on a queue for a person to act on; a robot does not get to
+    // file work for somebody else that way.
+    function isPipelineNote(noteId, data) {
+      return data.nodeId is string
+          && data.userUid is string
+          && data.userUid.matches('.*pipeline.*')
+          && noteId == data.nodeId + '_' + data.userUid
+          && data.sources is list
+          && data.sources.size() == 1
+          && data.sources[0].keys().hasOnly(['url', 'note', 'kind'])
+          && data.sources[0].note is string
+          && data.sources[0].kind == 'source';
     }
 
     match /users/{userId} {

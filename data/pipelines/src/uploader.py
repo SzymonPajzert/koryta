@@ -14,7 +14,7 @@ from conductor import setup_context
 from entities.company import display_name
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
-from entities.composite import PersonScore
+from entities.composite import PersonNote, PersonScore
 from entities.person import is_pipeline_uid
 from scrapers.map.jst import SKARB_PANSTWA
 from scrapers.stores import iterate_pipeline_dict
@@ -37,7 +37,7 @@ class NumpyEncoder(json.JSONEncoder):
 class Args:
     endpoint: str
     submit: bool
-    type: typing.Literal["person", "company", "region", "score", "extraction"]
+    type: typing.Literal["person", "company", "region", "score", "note", "extraction"]
     database: str
     limit: int | None
     offset: int | None
@@ -54,7 +54,15 @@ def parse_args() -> Args:
     parser.add_argument("--submit", action="store_true", help="Submit data to the API")
     parser.add_argument(
         "--type",
-        choices=["person", "company", "region", "score", "extraction", "computeNodes"],
+        choices=[
+            "person",
+            "company",
+            "region",
+            "score",
+            "note",
+            "extraction",
+            "computeNodes",
+        ],
         help="Entity type to query",
     )
     parser.add_argument(
@@ -72,9 +80,9 @@ def parse_args() -> Args:
     parser.add_argument(
         "--model",
         type=str,
-        help="For --type score: store the votes under this pipeline uid instead "
-        "of the one the rows carry. The name must contain 'pipeline', which is "
-        "what marks a vote as not cast by a person.",
+        help="For --type score and --type note: store them under this pipeline "
+        "uid instead of the one the rows carry. The name must contain "
+        "'pipeline', which is what marks a write as not made by a person.",
     )
     args = parser.parse_known_args()[0]
     return args  # type: ignore
@@ -97,7 +105,7 @@ class Uploader:
     def __init__(self, args: Args):
         self.args = args
 
-        if args.type in ["score"]:
+        if args.type in ["score", "note"]:
             # Same browser login as every other type, only the token goes to
             # Firestore rather than to an ingest endpoint. A local stack asks
             # for none of it, so the login is passed rather than performed.
@@ -121,6 +129,8 @@ class Uploader:
             return ExtractionUploader(args)
         if args.type == "score":
             return ScoreUploader(args)
+        if args.type == "note":
+            return NoteUploader(args)
         if args.type == "computeNodes":
             return ComputeNodesUploader(args)
         return Uploader(args)
@@ -461,6 +471,75 @@ class ScoreUploader(Uploader):
             raise ValueError(
                 f"Model uid {model!r} does not contain 'pipeline', so the site "
                 "would count its votes as human review."
+            )
+        return model
+
+
+class NoteUploader(Uploader):
+    """Uploads the notes a pipeline wrote onto people's pages.
+
+    The score path's shape, for the same reason: what to write can only be
+    decided against what this uid wrote last time, so the whole run goes at
+    once - see `Firestore.replace_notes`. The difference is what is at stake.
+    A score is an opinion the site aggregates away; a note is a paragraph a
+    reader reads on somebody's page, and the pipeline that wrote it is not
+    there to answer for it. That is why `PeopleWikiNotes` refuses to write one
+    unless the page already claims the article and the two dates of birth
+    agree, and why this refuses to write one under anything but a pipeline uid.
+
+    Notes go straight to Firestore rather than through an ingest endpoint
+    because they are not facts about a person: nothing here becomes a revision,
+    and nothing here is reviewed. Retracting one is a delete, which no ingest
+    endpoint can express.
+    """
+
+    @typing.override
+    def submit_results(self, entities):
+        rows = [PersonNote(**e) for e in entities if e is not None]
+        if not rows:
+            print("No notes to upload.", file=sys.stderr)
+            return
+
+        model = self.model_of(rows)
+        # Only part of the run reached us, so a person missing from it may
+        # simply have been cut off rather than dropped by the pipeline.
+        partial = bool(self.args.limit or self.args.offset)
+        written, retracted = self.firestore.replace_notes(
+            model, rows, retract=not partial
+        )
+
+        self.total = len(rows)
+        self.success_count = len(rows)
+        print(
+            f"\nUpload complete. Uid: {model}, written: {written}, "
+            f"retracted: {retracted}, unchanged: {len(rows) - written}",
+            file=sys.stderr,
+        )
+
+    def model_of(self, rows: list[PersonNote]) -> str:
+        """The uid to store this run under, and a check that it is a robot's.
+
+        A note filed under a human-looking uid would be counted as somebody
+        having written about that person - it would raise the node's
+        `notesCount`, take the page out of the "nobody has looked at this yet"
+        queue, and land in the admin triage list as an entry with no author to
+        ask about it.
+        """
+        if self.args.model:
+            model = self.args.model
+        else:
+            models = {row.model for row in rows}
+            if len(models) != 1:
+                raise ValueError(
+                    f"Expected one uid per upload, got {sorted(models)}. "
+                    "Upload each pipeline's notes separately, or pass --model."
+                )
+            model = models.pop()
+
+        if not is_pipeline_uid(model):
+            raise ValueError(
+                f"Uid {model!r} does not contain 'pipeline', so the site would "
+                "count its notes as somebody's."
             )
         return model
 
