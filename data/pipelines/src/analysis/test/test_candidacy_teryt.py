@@ -73,6 +73,10 @@ def candidacy(**overrides) -> pd.DataFrame:
         "election_year": 2024,
         "election_type": "samorządu",
         "candidacy_success": None,
+        # Nullable and empty for most of the register - PKW only asks the
+        # membership question at some elections - but the column has to
+        # exist, because `people_pkw_merged` selects it by name.
+        "party_member": None,
     }
     return pd.DataFrame([row | overrides])
 
@@ -131,6 +135,10 @@ def candidacies(*rows: dict) -> pd.DataFrame:
         "election_year": 2024,
         "election_type": "samorządu",
         "candidacy_success": None,
+        # Nullable and empty for most of the register - PKW only asks the
+        # membership question at some elections - but the column has to
+        # exist, because `people_pkw_merged` selects it by name.
+        "party_member": None,
     }
     return pd.DataFrame([base | row for row in rows])
 
