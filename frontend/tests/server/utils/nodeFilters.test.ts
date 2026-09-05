@@ -415,3 +415,63 @@ describe("buildStructuralFilterOps, company level filters", () => {
     expect(ops).toHaveLength(2);
   });
 });
+
+describe("buildStructuralFilterOps, hasWikipedia filter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchNodes.mockResolvedValue(regions);
+    mockDb();
+  });
+
+  /** People as the table's projection sees them: the link and nothing else. */
+  const people = [
+    { id: "linked", wikipedia: "https://pl.wikipedia.org/wiki/Jan_Pamuła" },
+    // Both ways a page can have no link. Neither is queryable, which is why
+    // "no" only ever runs in memory.
+    { id: "blank", wikipedia: "" },
+    { id: "absent" },
+  ];
+
+  it("is absent when the filter sits at its neutral value", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { hasWikipedia: "all" },
+      "approved",
+    );
+    expect(ops).toHaveLength(0);
+  });
+
+  it("asks Firestore for the people who have a link", async () => {
+    const { ops, fields } = await buildStructuralFilterOps(
+      db,
+      { hasWikipedia: "yes" },
+      "approved",
+    );
+    expect(ops).toHaveLength(1);
+    expect(ops[0]!.applyFs(stubQuery())).toEqual({
+      field: "wikipedia",
+      op: ">",
+      value: "",
+    });
+    expect(ops[0]!.applyMem(people).map((n) => n.id)).toEqual(["linked"]);
+    // Declared, so /api/stats/progress projects the field it filters on -
+    // left out, every document reads back without it and the count is zero.
+    expect(fields).toContain("wikipedia");
+  });
+
+  it("runs the other way round in memory, since Firestore cannot ask it", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { hasWikipedia: "no" },
+      "approved",
+    );
+    expect(ops).toHaveLength(1);
+    // The thrown message contains "index", which is what makes the fallback
+    // loop in /api/nodes degrade this op rather than fail the request.
+    expect(() => ops[0]!.applyFs(stubQuery())).toThrow(/index/);
+    expect(ops[0]!.applyMem(people).map((n) => n.id)).toEqual([
+      "blank",
+      "absent",
+    ]);
+  });
+});

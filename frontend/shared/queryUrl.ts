@@ -51,6 +51,7 @@ const SHARE_KEYS = [
   "place",
   "krs",
   "currentlyEmployed",
+  "hasWikipedia",
   "visibility",
   "hideVoted",
   "minEmploymentDate",
@@ -77,6 +78,7 @@ export type TableQuery = Partial<
  */
 const NEUTRAL: Partial<Record<ShareKey, string>> = {
   currentlyEmployed: "all",
+  hasWikipedia: "all",
   visibility: "all",
   hideVoted: "all",
   sortDesc: "false",
@@ -216,6 +218,18 @@ export const visibilityOptions: FilterOption[] = [
   { value: "private", title: "Tylko szkice", short: "tylko szkice" },
 ];
 
+/** Whether the person's page links to a Wikipedia article.
+ *
+ * Not an editor's filter, unlike the two below it: the link is on the page for
+ * anybody to see, and „has a biography somebody else already wrote" is how a
+ * reader finds the people they are likely to have heard of.
+ */
+export const hasWikipediaOptions: FilterOption[] = [
+  { value: "all", title: "Wszystkie" },
+  { value: "yes", title: "Z Wikipedią", short: "z Wikipedią" },
+  { value: "no", title: "Bez Wikipedii", short: "bez Wikipedii" },
+];
+
 export const hideVotedOptions: FilterOption[] = [
   { value: "all", title: "Wszystkie" },
   { value: "no_votes", title: "Bez ocenionych", short: "bez ocenionych" },
@@ -352,6 +366,19 @@ export function queryChips(
     });
   }
 
+  const wikipediaLabels = chosen(
+    hasWikipediaOptions,
+    values(query.hasWikipedia)[0],
+  );
+  if (wikipediaLabels) {
+    chips.push({
+      key: "hasWikipedia",
+      ...wikipediaLabels,
+      admin: false,
+      clears: ["hasWikipedia"],
+    });
+  }
+
   const visibilityLabels = chosen(
     visibilityOptions,
     values(query.visibility)[0],
@@ -427,6 +454,7 @@ const SENTENCE_ORDER: readonly ShareKey[] = [
   "companyTeryt",
   "party",
   "currentlyEmployed",
+  "hasWikipedia",
   "visibility",
   "hideVoted",
   "minEmploymentDate",

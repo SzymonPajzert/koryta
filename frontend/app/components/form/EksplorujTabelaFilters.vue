@@ -56,6 +56,7 @@
             v-model:category="category"
             v-model:hide-voted="hideVoted"
             v-model:currently-employed="currentlyEmployed"
+            v-model:has-wikipedia="hasWikipedia"
             v-model:min-employment-date="minEmploymentDate"
             v-model:min-votes="minVotes"
             :available-parties="availableParties"
@@ -112,6 +113,7 @@
               v-model:category="category"
               v-model:hide-voted="hideVoted"
               v-model:currently-employed="currentlyEmployed"
+              v-model:has-wikipedia="hasWikipedia"
               v-model:min-employment-date="minEmploymentDate"
               v-model:min-votes="minVotes"
               :available-parties="availableParties"
@@ -481,6 +483,7 @@ const hideVoted = defineModel<"all" | "no_votes" | "has_votes">("hideVoted");
 const currentlyEmployed = defineModel<"all" | "any" | "selected">(
   "currentlyEmployed",
 );
+const hasWikipedia = defineModel<"all" | "yes" | "no">("hasWikipedia");
 const minEmploymentDate = defineModel<string | null>("minEmploymentDate");
 const minVotes = defineModel<number | null>("minVotes");
 
@@ -514,6 +517,7 @@ const query = computed<TableQuery>(() => ({
   party: party.value,
   place: place.value,
   currentlyEmployed: currentlyEmployed.value,
+  hasWikipedia: hasWikipedia.value,
   visibility: visibility.value,
   hideVoted: hideVoted.value,
   minEmploymentDate: minEmploymentDate.value,
@@ -557,6 +561,7 @@ const CHIP_SURFACES: Partial<Record<ShareKey, string>> = {
   place: "bg-surface-sage",
   category: "bg-surface-sage",
   currentlyEmployed: "bg-surface-sage",
+  hasWikipedia: "bg-surface-sage",
   teryt: "bg-surface-info",
   companyTeryt: "bg-surface-info",
   party: "bg-surface-muted",
@@ -821,6 +826,9 @@ function clearChip(chip: QueryChip) {
         break;
       case "currentlyEmployed":
         currentlyEmployed.value = "all";
+        break;
+      case "hasWikipedia":
+        hasWikipedia.value = "all";
         break;
       case "visibility":
         visibility.value = "all";

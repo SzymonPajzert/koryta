@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   describeQuery,
+  hasWikipediaOptions,
   hideVotedOptions,
   queryChips,
   shareQuery,
@@ -228,6 +229,7 @@ describe("queryChips", () => {
     for (const [key, options] of [
       ["visibility", visibilityOptions],
       ["hideVoted", hideVotedOptions],
+      ["hasWikipedia", hasWikipediaOptions],
     ] as const) {
       for (const option of options.filter((item) => item.short)) {
         const [chip] = queryChips({ [key]: option.value });
@@ -240,7 +242,17 @@ describe("queryChips", () => {
   it("gives the neutral value of those toggles no chip", () => {
     // „Wszystkie” is the entry that turns the filter off; a chip for it would
     // offer an x that changes nothing.
-    expect(queryChips({ visibility: "all", hideVoted: "all" })).toEqual([]);
+    expect(
+      queryChips({ visibility: "all", hideVoted: "all", hasWikipedia: "all" }),
+    ).toEqual([]);
+  });
+
+  it("marks the Wikipedia filter as one a guest can use", () => {
+    // The link is on the page for anybody to read, so the chip is not tinted
+    // as an editor's and the rail lets a signed-out reader click it.
+    const [chip] = queryChips({ hasWikipedia: "yes" });
+    expect(chip?.admin).toBe(false);
+    expect(chip?.clears).toEqual(["hasWikipedia"]);
   });
 });
 
@@ -259,6 +271,15 @@ describe("describeQuery", () => {
         lookup,
       ),
     ).toBe("Szpitale · Kraków · bez ocenionych");
+  });
+
+  it("names the Wikipedia filter after the subject, before the narrowings", () => {
+    expect(
+      describeQuery(
+        { hasWikipedia: "yes", category: "szpitale", visibility: "private" },
+        lookup,
+      ),
+    ).toBe("Szpitale · z Wikipedią · tylko szkice");
   });
 
   it("says so when nothing is filtered", () => {

@@ -283,6 +283,7 @@ export const TABELA_FILTER_NAMES = {
   krs: "company",
   category: "category",
   currentlyEmployed: "currently-employed",
+  hasWikipedia: "wikipedia",
   minEmploymentDate: "employed-since",
   visibility: "visibility",
   hideVoted: "voted",

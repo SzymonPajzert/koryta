@@ -33,6 +33,7 @@
         v-model:category="filterCategory"
         v-model:hide-voted="filterHideVoted"
         v-model:currently-employed="filterCurrentlyEmployed"
+        v-model:has-wikipedia="filterHasWikipedia"
         v-model:min-employment-date="filterMinEmploymentDate"
         v-model:min-votes="filterMinVotes"
         v-model:sort-by="sortBy"
@@ -393,6 +394,10 @@ const filterHideVoted = choiceFilter<"all" | "no_votes" | "has_votes">(
   "hideVoted",
   "all",
 );
+const filterHasWikipedia = choiceFilter<"all" | "yes" | "no">(
+  "hasWikipedia",
+  "all",
+);
 const filterMinEmploymentDate = stringFilter("minEmploymentDate");
 const filterMinVotes = numberFilter("minVotes");
 
@@ -429,6 +434,7 @@ const clearFilters = () => {
     place: undefined,
     krs: undefined,
     currentlyEmployed: undefined,
+    hasWikipedia: undefined,
     visibility: undefined,
     hideVoted: undefined,
     minEmploymentDate: undefined,
@@ -481,6 +487,10 @@ const apiQuery = computed(
       currentlyEmployed:
         filterCurrentlyEmployed.value !== "all"
           ? filterCurrentlyEmployed.value
+          : undefined,
+      hasWikipedia:
+        filterHasWikipedia.value !== "all"
+          ? filterHasWikipedia.value
           : undefined,
       minEmploymentDate: filterMinEmploymentDate.value || undefined,
       minVotes: filterMinVotes.value != null ? filterMinVotes.value : undefined,

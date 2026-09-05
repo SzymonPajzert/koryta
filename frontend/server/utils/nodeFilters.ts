@@ -43,6 +43,9 @@ export type StructuralQuery = {
   currentlyEmployed?: "all" | "any" | "selected";
   minEmploymentDate?: string;
   minVotes?: number;
+  /** Whether the person's page links to a Wikipedia article. "all" is the
+   * absence of the filter and is dropped before it reaches here. */
+  hasWikipedia?: "all" | "yes" | "no";
 };
 
 /** A query parameter that may arrive once, repeated, or not at all. */
@@ -248,6 +251,46 @@ export async function buildStructuralFilterOps(
         nodes.filter((n) => (n.stats?.votes?.interesting ?? 0) >= minVotes),
       fields: ["stats.votes.interesting"],
     });
+  }
+
+  // Last on purpose, because one half of it can only run in memory and the
+  // fallback loop in /api/nodes degrades ops from the end: an op Firestore
+  // cannot take drags everything after it into memory with it, so it costs
+  // least where there is nothing after it.
+  if (query.hasWikipedia === "yes" || query.hasWikipedia === "no") {
+    const hasLink = (node: any) =>
+      typeof node.wikipedia === "string" && node.wikipedia.length > 0;
+    if (query.hasWikipedia === "yes") {
+      ops.push({
+        // `> ""` rather than `!= null`: a range against the empty string keeps
+        // only documents whose `wikipedia` exists and is a non-empty string,
+        // which is the question being asked. Firestore orders null before every
+        // string and drops documents missing the field from a range filter
+        // entirely, so both of the ways a page can have no link are excluded
+        // without having to name them.
+        applyFs: (q) => q.where("wikipedia", ">", ""),
+        applyMem: (nodes) => nodes.filter(hasLink),
+        fields: ["wikipedia"],
+      });
+    } else {
+      // Not expressible as a query at all. A page with no link does not carry
+      // the field, and Firestore cannot ask for documents that lack one -
+      // `== null` finds only those storing an explicit null, which is none of
+      // them.
+      //
+      // So „Bez Wikipedii” costs a scan: it pushes the sort and every filter
+      // after it out of their indexes, the way /api/nodes/index.get already
+      // describes for the tombstone check. Accepted rather than dropped,
+      // because the two directions are two different searches and the second
+      // one - „kogo nikt jeszcze nigdzie nie opisał” - is the editor's. If it
+      // ever needs to be cheap, the answer is a boolean on the node beside the
+      // other `stats`, maintained where the link is written and backfilled
+      // once; there is nothing to derive it from at query time.
+      ops.push({
+        ...memOnly((nodes) => nodes.filter((n) => !hasLink(n))),
+        fields: ["wikipedia"],
+      });
+    }
   }
 
   return result(false);

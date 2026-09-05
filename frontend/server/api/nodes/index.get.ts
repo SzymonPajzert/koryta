@@ -39,6 +39,7 @@ const queryValidator = z.object({
   currentlyEmployed: z.enum(["all", "any", "selected"]).optional(),
   minEmploymentDate: z.string().optional(),
   minVotes: z.coerce.number().optional(),
+  hasWikipedia: z.enum(["all", "yes", "no"]).optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),

@@ -48,6 +48,25 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wikipedia-filtr-i-notatka",
+    title: "Filtr „Wikipedia” i pierwszy akapit biogramu w notatkach",
+    description:
+      "W tabeli można teraz wybrać osoby, które mają artykuł na Wikipedii - " +
+      "albo tylko te, które go nie mają. Na stronach osób z takim linkiem " +
+      "pojawia się notatka z pierwszym akapitem biogramu, podpisana " +
+      "„Notatka automatyczna” i z odnośnikiem do artykułu. Powstaje ona " +
+      "tylko wtedy, gdy strona już wskazuje ten artykuł, a data urodzenia z " +
+      "rejestru zgadza się z tą z Wikipedii co do dnia.",
+    steps: [
+      "Wejdź na /eksploruj/tabela, otwórz „Filtry” i ustaw „Wikipedia” na „Z Wikipedią” - lista ma się skrócić, a nad tabelą ma pojawić się chip „Z Wikipedią”.",
+      "Przełącz na „Bez Wikipedii” - lista ma pokazać osoby bez tego linku.",
+      "Skopiuj link z karty udostępniania i sprawdź, że otwiera tę samą przefiltrowaną tabelę.",
+      "Otwórz stronę osoby z linkiem do Wikipedii i zjedź do „Notatki”: ma tam być akapit z biogramu z podpisem „Notatka automatyczna”, pod notatkami napisanymi przez ludzi.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
     id: "pomiar-tabeli-eksploruj",
     title: "Wiemy, co ludzie robią w tabeli",
     description:

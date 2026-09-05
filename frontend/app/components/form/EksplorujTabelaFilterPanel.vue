@@ -67,6 +67,21 @@
           hide-details
         />
       </v-col>
+      <!-- Up here with the public filters rather than under „Weryfikacja”,
+           because the Wikipedia link is on the page for anybody to read. It is
+           two searches, not one: „ludzie, o których ktoś już napisał” for a
+           reader following a name they half recognise, and its opposite for an
+           editor looking for the pages nobody has written up anywhere. -->
+      <v-col cols="12" md="6">
+        <v-select
+          v-model="hasWikipedia"
+          :items="wikipediaItems"
+          label="Wikipedia"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+        />
+      </v-col>
     </v-row>
 
     <!-- Four controls under one overline, and no prose. What stood here was a
@@ -220,6 +235,7 @@ import { mdiInformationOutline } from "@mdi/js";
 import { computed, ref } from "vue";
 import { ink, readableInkOn, surface } from "~~/shared/colors";
 import { companyCategories } from "~~/shared/companyCategories";
+import { hasWikipediaOptions } from "~~/shared/queryUrl";
 import { partyColors } from "~~/shared/misc";
 import { polishCounting } from "~/composables/polish";
 import FormEksplorujTabelaVerificationFields from "./EksplorujTabelaVerificationFields.vue";
@@ -257,6 +273,15 @@ const currentlyEmployed = defineModel<"all" | "any" | "selected">(
 );
 const minEmploymentDate = defineModel<string | null>("minEmploymentDate");
 const minVotes = defineModel<number | null>("minVotes");
+const hasWikipedia = defineModel<"all" | "yes" | "no">("hasWikipedia");
+
+/** Built from the shared list, so the select and the chip that opens it cannot
+ * end up calling the same value two things - the reason `visibilityOptions`
+ * and `hideVotedOptions` are shared for the fields below. */
+const wikipediaItems = hasWikipediaOptions.map((option) => ({
+  title: option.title,
+  value: option.value,
+}));
 
 const availableCategories = companyCategories.map((c) => ({
   title: c.title,
@@ -286,6 +311,7 @@ const basicCount = computed(
       set(teryt.value),
       set(category.value),
       set(currentlyEmployed.value),
+      set(hasWikipedia.value),
     ].filter(Boolean).length,
 );
 
