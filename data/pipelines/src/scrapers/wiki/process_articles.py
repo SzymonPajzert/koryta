@@ -135,19 +135,122 @@ def safe_middle_name_pattern(title):
     return f"'''({title.replace(' ', f'[ {UPPER}{LOWER}]*')})'''"
 
 
+#: How much of the opening paragraph is kept. A note is read on a person's
+#: page beside their jobs and their candidacies, so it is a paragraph rather
+#: than a biography; the longest Polish leads run past 2,000 characters and
+#: would be the largest thing on the page. Cut on a sentence boundary where
+#: there is one before the limit - see `lead_paragraph`.
+LEAD_MAX_CHARS = 700
+
+#: The shortest opening that is worth reading. Below this the first line is
+#: almost always a disambiguation note or a stray caption rather than the
+#: sentence that says who somebody is.
+LEAD_MIN_CHARS = 40
+
+#: Line prefixes that are not prose: list items, definition lists, table cells
+#: and rows, section headings, and html. Tested against the *wikitext* rather
+#: than against the stripped output, because stripping is what removes them -
+#: an article opening with a list, read after `strip_code`, offers its first
+#: bullet as a sentence.
+NOT_PROSE = ("*", "#", ":", ";", "|", "!", "=", "<", "}")
+
+#: A line that is a picture and its caption rather than the article's text.
+#: Everything else starting with a link is left alone: a lead may open with
+#: one, and only these namespaces are furniture.
+IMAGE_PREFIXES = ("[[plik:", "[[file:", "[[grafika:", "[[image:")
+
+
+def lead_paragraph(wikitext: str) -> str | None:
+    """The article's opening paragraph, as prose.
+
+    Found in the wikitext and stripped one line at a time, rather than by
+    stripping the article and taking the first paragraph of what is left. The
+    difference is that the markup saying "this is not a sentence" - the bullet,
+    the table pipe, the heading's equals signs - is exactly what stripping
+    removes, so after it a list item and a paragraph are indistinguishable.
+
+    Everything inside a template is skipped by counting braces: the infobox,
+    the disambiguation hatnote and the maintenance banners are all templates,
+    and they are what stands between the top of an article and its first
+    sentence. `strip_code` then does the rest on the one line that survives -
+    unwrapping links to their display text, dropping refs and comments - which
+    is the transformation a reader does by eye.
+
+    Read from the dump rather than from Wikipedia's REST summary endpoint,
+    because the dump is already downloaded and pinned: `scrapers/wiki/dump.py`
+    explains why a reproducible run matters here, and a per-article fetch would
+    put hundreds of live requests in the middle of a pipeline that otherwise
+    touches no network.
+    """
+    depth = 0
+    for raw in wikitext.split("\n"):
+        line = raw.strip()
+        inside = depth > 0
+        depth = max(
+            0,
+            depth
+            + line.count("{{")
+            + line.count("{|")
+            - line.count("}}")
+            - line.count("|}"),
+        )
+        if inside:
+            continue
+        # A line that *starts* a template is furniture. One that merely
+        # contains a balanced template is not: a lead sentence routinely
+        # carries `<ref>{{Cytuj ...}}</ref>` or a `{{fakt}}` in the middle of
+        # it, and skipping those would lose the lead of most biographies.
+        if not line or line.startswith(NOT_PROSE) or line.startswith(("{{", "{|")):
+            continue
+        if line[:10].lower().startswith(IMAGE_PREFIXES):
+            continue
+        text = (
+            mwparserfromhell.parse(line)
+            .strip_code(normalize=True, collapse=True)
+            .strip()
+        )
+        if len(text) < LEAD_MIN_CHARS:
+            continue
+        return truncate_lead(text)
+    return None
+
+
+def truncate_lead(lead: str) -> str:
+    """`lead` cut to `LEAD_MAX_CHARS`, on a sentence boundary where possible.
+
+    A paragraph cut mid-clause reads as a broken note rather than a short one,
+    and the opening sentence alone is already the useful part - it is the one
+    that says who the person is. Falls back to a hard cut with an ellipsis
+    where the first sentence is itself longer than the limit.
+    """
+    if len(lead) <= LEAD_MAX_CHARS:
+        return lead
+    cut = lead.rfind(". ", 0, LEAD_MAX_CHARS)
+    if cut > LEAD_MIN_CHARS:
+        return lead[: cut + 1]
+    return lead[: LEAD_MAX_CHARS - 1].rstrip() + "…"
+
+
 class WikiArticle:
     title: str
     original_title: str
     categories: list[str]
     links: list[str]
     infoboxes: list[Infobox]
+    lead: str | None
 
-    def __init__(self, title, categories, links, infoboxes, original_title=None):
+    def __init__(
+        self, title, categories, links, infoboxes, original_title=None, lead=None
+    ):
         self.title = title
         self.original_title = original_title if original_title is not None else title
         self.categories = categories
         self.links = links
         self.infoboxes = infoboxes
+        # The paragraph rather than the parse tree it came from: every article
+        # crosses a multiprocessing pool boundary, and a `Wikicode` would be
+        # pickled back to the parent whole.
+        self.lead = lead
 
     @staticmethod
     def extend_name(title, wikitext):
@@ -179,6 +282,7 @@ class WikiArticle:
             categories=get_links(parsed, prefix="Kategoria:"),
             links=get_links(parsed),
             infoboxes=infoboxes,
+            lead=lead_paragraph(wikitext),
         )
 
     @staticmethod
@@ -303,6 +407,7 @@ def extract_from_article(article: WikiArticle) -> People | Company | None:
             infoboxes=[i.inf_type for i in article.infoboxes],
             content_score=article.content_score,
             links=[],
+            lead=article.lead,
         )
     elif company:
         name = article.get_infobox(lambda i: i.fields.get("nazwa", None))

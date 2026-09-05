@@ -258,6 +258,15 @@ def people_merged(
             w.source as wiki_url,
             w.is_polityk,
             w.wiki_score,
+            -- What the article said the person was born on, kept beside the
+            -- register's own `birth_date` rather than merged into it. The join
+            -- above accepts a year-only article on the year alone, and nine of
+            -- the ten matches that leant on that branch were somebody else -
+            -- so a consumer that cannot afford a wrong match (`PeopleWikiNotes`
+            -- pastes the article's prose onto a page) needs to see which branch
+            -- let the row through, and only these two columns say.
+            w.birth_date as wiki_birth_date,
+            w.wiki_lead,
         FROM krs_pkw kp
         LEFT JOIN wiki_match w USING (krs_row)
     ),

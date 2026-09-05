@@ -51,6 +51,13 @@ PEOPLE_EXPECTED = {
         infoboxes=["Biogram"],
         content_score=1,
         links=[],
+        lead=(
+            "Józef Andrzej Śliwa (ur. 17 listopada 1954 w Grodkowie) – polski "
+            "zootechnik, przedsiębiorca, samorządowiec i urzędnik państwowy, w "
+            "latach 2003–2004 Główny Inspektor Inspekcji Jakości Handlowej "
+            "Artykułów Rolno-Spożywczych, w 2005 sekretarz stanu w "
+            "Ministerstwie Rolnictwa i Rozwoju Wsi."
+        ),
     ),
     "Grzegorz Pastuszko": People(
         source=("https://pl.wikipedia.org/wiki/Grzegorz_Pastuszko"),
@@ -61,6 +68,11 @@ PEOPLE_EXPECTED = {
         infoboxes=["Naukowiec"],
         content_score=1,
         links=[],
+        lead=(
+            "Grzegorz Michał Pastuszko (ur. 17 września 1981) – polski prawnik "
+            "konstytucjonalista, doktor habilitowany nauk prawnych, nauczyciel "
+            "akademicki Uniwersytetu Rzeszowskiego."
+        ),
     ),
     "Marcin Chludziński": People(
         source=("https://pl.wikipedia.org/wiki/Marcin_Chludziński"),
@@ -71,6 +83,12 @@ PEOPLE_EXPECTED = {
         infoboxes=["Biogram"],
         content_score=1,
         links=[],
+        lead=(
+            "Marcin Chludziński (ur. 1979) – polski menedżer. W latach "
+            "2016–2018 prezes Agencji Rozwoju Przemysłu, w latach 2018–2022 "
+            "prezes zarządu KGHM Polska Miedź, w latach 2022–2024 prezes "
+            "zarządu Gaz-System."
+        ),
     ),
 }
 

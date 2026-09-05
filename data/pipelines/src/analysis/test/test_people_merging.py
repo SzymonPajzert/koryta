@@ -74,7 +74,7 @@ def pkw_person(
     }
 
 
-def article(name: str, birth_iso8601: str) -> dict:
+def article(name: str, birth_iso8601: str, lead: str | None = None) -> dict:
     """One Wikipedia biography, as `ProcessWiki` leaves it.
 
     `birth_iso8601` is whatever `parse_date` made of the infobox: a full date
@@ -89,6 +89,7 @@ def article(name: str, birth_iso8601: str) -> dict:
         "infoboxes": ["Polityk"],
         "content_score": 1,
         "links": [],
+        "lead": lead if lead is not None else f"{name} – polski polityk.",
     }
 
 
@@ -120,6 +121,28 @@ def no_koryta() -> pd.DataFrame:
     return pd.DataFrame(columns=KORYTA_COLUMNS)
 
 
+#: `wiki_people` as `people_wiki_merged` leaves it. Spelled out rather than
+#: derived, because an empty frame carries no columns of its own and duckdb
+#: binds `krs_pkw_wiki` against these names - a column missing here is a binder
+#: error in every test that leaves Wikipedia out.
+WIKI_COLUMNS = [
+    "first_name",
+    "last_name",
+    "birth_year",
+    "birth_date",
+    "full_name",
+    "source",
+    "is_polityk",
+    "wiki_score",
+    "wiki_lead",
+]
+
+
+def no_wiki() -> pd.DataFrame:
+    """No biographies at all, for the joins that are not about Wikipedia."""
+    return pd.DataFrame(columns=WIKI_COLUMNS)
+
+
 def match_pkw(ctx, krs: list[dict], pkw: list[dict]) -> pd.DataFrame:
     """Run the merge over nothing but KRS and PKW.
 
@@ -129,18 +152,7 @@ def match_pkw(ctx, krs: list[dict], pkw: list[dict]) -> pd.DataFrame:
     return people_merged(
         ctx,
         pd.DataFrame(krs),
-        pd.DataFrame(
-            columns=[
-                "first_name",
-                "last_name",
-                "birth_year",
-                "birth_date",
-                "full_name",
-                "source",
-                "is_polityk",
-                "wiki_score",
-            ]
-        ),
+        no_wiki(),
         pd.DataFrame(pkw),
         no_koryta(),
         pd.DataFrame(columns=["last_name", "teryt", "count"]),
@@ -208,6 +220,39 @@ def test_a_year_only_biography_matches_somebody_born_that_year(ctx):
     )
 
     assert list(result["wiki_name"]) == ["Piotr Uszok"]
+
+
+def test_the_lead_and_the_articles_own_birth_date_reach_the_merged_row(ctx):
+    """What `PeopleWikiNotes` reads, carried through two merges to get here.
+
+    `wiki_birth_date` is kept beside the register's `birth_date` rather than
+    folded into it, because which of the two branches above matched is the
+    whole gate on a wiki note: an article giving only a year matched on the
+    year, and that is not evidence enough to paste its prose onto a page.
+    """
+    result = match(
+        ctx,
+        [krs_person("jan", "pamuła", "1951-06-24")],
+        [article("Jan Pamuła", "1951-06-24", lead="Jan Pamuła – polski polityk.")],
+    )
+
+    assert list(result["wiki_lead"]) == ["Jan Pamuła – polski polityk."]
+    assert list(result["wiki_birth_date"]) == ["1951-06-24"]
+    assert list(result["birth_date"]) == ["1951-06-24"]
+
+
+def test_a_year_only_biography_leaves_no_article_birth_date_behind(ctx):
+    # The year-only branch is exactly the one a note must not be written from,
+    # and this is what tells it apart: the article named no day, so there is no
+    # day to agree with.
+    result = match(
+        ctx,
+        [krs_person("jan", "pamuła", "1951-06-24")],
+        [article("Jan Pamuła", "1951-00-00")],
+    )
+
+    assert list(result["wiki_name"]) == ["Jan Pamuła"]
+    assert result["wiki_birth_date"].isna().all()
 
 
 def test_a_year_only_biography_does_not_match_a_different_year(ctx):
@@ -396,18 +441,7 @@ def match_koryta(ctx, krs: list[dict], koryta: list[dict]) -> pd.DataFrame:
     return people_merged(
         ctx,
         pd.DataFrame(krs),
-        pd.DataFrame(
-            columns=[
-                "first_name",
-                "last_name",
-                "birth_year",
-                "birth_date",
-                "full_name",
-                "source",
-                "is_polityk",
-                "wiki_score",
-            ]
-        ),
+        no_wiki(),
         pd.DataFrame(
             columns=[
                 "first_name",

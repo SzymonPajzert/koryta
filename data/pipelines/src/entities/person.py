@@ -14,6 +14,11 @@ class Koryta:
     is_public: bool = False
     votes_interesting: int | None = None
     rejestrIo: str | None = None
+    #: The Wikipedia article the page links to, verbatim as the node stores it.
+    #: Carried because it is the gate on the wiki notes: a lead paragraph is
+    #: pasted onto a page only where the page already claims that article, so
+    #: the note never asserts an identification the site has not made.
+    wikipedia: str | None = None
     teryt_wojewodztwo: list[str] = field(default_factory=list)
     teryt_powiat: list[str] = field(default_factory=list)
 
@@ -79,6 +84,12 @@ class Wikipedia:
     infoboxes: list[str]
     content_score: int
     links: list[str]
+    #: The article's opening paragraph as prose - „Jan Pamuła (ur. 24 czerwca
+    #: 1951 w Bielsku-Białej) - polski polityk, ekonomista i menedżer, poseł na
+    #: Sejm I kadencji." Wikitext with its markup stripped, truncated to
+    #: `LEAD_MAX_CHARS`; None where the article opens with something that is not
+    #: a paragraph. This is what `PeopleWikiNotes` writes onto a person's page.
+    lead: str | None = None
 
 
 @dataclass

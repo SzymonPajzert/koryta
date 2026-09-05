@@ -44,6 +44,9 @@ def people_wiki_merged(ctx: Context, wiki_data):  # noqa: F841
                 ELSE NULL    
             END as is_polityk,
             atan(content_score) AS wiki_score,
+            -- Quoted and renamed on the way in: `lead` is a window function in
+            -- DuckDB, and `any_value(lead)` below would be read as one.
+            "lead" AS wiki_lead,
             full_name,
             source
         FROM wiki_data
@@ -54,7 +57,14 @@ def people_wiki_merged(ctx: Context, wiki_data):  # noqa: F841
     create_people_table(
         con,
         "wiki_people",
-        any_vals=["is_polityk", "full_name", "wiki_score", "birth_date", "source"],
+        any_vals=[
+            "is_polityk",
+            "full_name",
+            "wiki_score",
+            "birth_date",
+            "source",
+            "wiki_lead",
+        ],
     )
 
     return con.sql("SELECT * FROM wiki_people").df()
