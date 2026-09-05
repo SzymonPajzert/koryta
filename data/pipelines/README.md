@@ -47,6 +47,43 @@ You can run each script with `uv run scripts-name`.
 
 Refer to `pyproject.toml` for the most up-to-date list of the scripts available there.
 
+## Notes the pipeline writes onto people's pages
+
+`PeopleWikiNotes` copies the opening paragraph of somebody's Wikipedia article
+onto their koryta.pl page, as a note in the `notes` collection under the uid
+`pipeline-wikipedia`. It is the same collection contributors write into, so the
+paragraph is drawn by the same card as their notes - marked „Notatka
+automatyczna", because nobody wrote it.
+
+Two gates decide who gets one, and both are about identity rather than text:
+
+- the page has to link to that article already. The link is a stored field
+  somebody can see and correct, so a note derived from it asserts nothing new.
+- the register's date of birth and the article's have to agree **to the day**.
+  The matcher in `analysis/people.py` also accepts a year-only article on the
+  year alone, and nine of the ten matches that leant on that branch turned out
+  to be somebody else. Good enough for a candidate list, not for prose on a
+  profile.
+
+```bash
+# The lead paragraphs come out of the dump, so the first run rebuilds the wiki
+# chain - about 40 minutes for the dump pass.
+uv run koryta PeopleEnriched --refresh ProcessWiki --refresh all
+
+./submit_notes.sh          # against a local dev stack
+./submit_notes.sh prod     # against autopush; needs the datascience claim
+```
+
+`koryta_uploader --type note` reconciles the whole uid at once, the way
+`--type score` does: it writes what changed, leaves what did not - an unchanged
+paragraph rewritten would move the note's date and fire `onNoteWritten` for
+nothing - and deletes the note on anybody who stopped qualifying. Re-running it
+is how a corrected Wikipedia link takes the old paragraph off a page.
+
+The site counts these separately from people's own notes (`stats.notesCount`
+against `stats.pipelineNotesCount`), so a page with a Wikipedia article does not
+read as one somebody has reviewed.
+
 ## Centralny Rejestr Umów (CRU)
 
 `CruDump` fetches the public contracts register from a postgres mirror of the

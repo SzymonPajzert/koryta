@@ -2,6 +2,7 @@ from analysis.article_person_mentions import ArticlePersonMentions
 from analysis.extract import Extract
 from analysis.graph import CommitteeParties, PeopleParties
 from analysis.interesting import Companies
+from analysis.notes import PeopleWikiNotes
 from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
 from analysis.people import PeopleEnriched, PeopleMerged
 from analysis.scores import (
@@ -97,6 +98,7 @@ PIPELINES = [
     PeoplePayloads,
     PeoplePKW,
     PeopleKMGP,
+    PeopleWikiNotes,
     PostalCodes,
     ProcessWiki,
     ProcessWikiNer,

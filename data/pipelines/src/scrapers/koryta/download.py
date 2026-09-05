@@ -281,6 +281,7 @@ class KorytaPeople(Pipeline[Person]):
                     is_public=data.get("stats", {}).get("isApproved", False),
                     votes_interesting=votes_interesting,
                     rejestrIo=data.get("rejestrIo"),
+                    wikipedia=data.get("wikipedia"),
                     teryt_wojewodztwo=teryt_wojewodztwo,
                     teryt_powiat=teryt_powiat,
                 )
