@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   educationIndex,
   educationKey,
+  educationLookup,
   educationRank,
   educationSimilarity,
   educationTemperature,
@@ -97,12 +98,51 @@ describe("educationIndex", () => {
   it("resolves the aliases a hand-typed field would hold", () => {
     expect(byTerm("prawnik").term).toBe("magister prawa");
     expect(byTerm("MGR PRAWA").term).toBe("magister prawa");
-    expect(byTerm("  rolnik ").term).toBe("dyplomowany rolnik");
+    expect(byTerm("  prawniczka ").term).toBe("magister prawa");
   });
 
-  it("covers both values the register actually holds today", () => {
-    expect(byTerm("nauczyciel")).toBeTruthy();
-    expect(byTerm("dyplomowany rolnik")).toBeTruthy();
+  it("covers every value the register actually holds today", () => {
+    // Read off the 2026-09-06 export. Each of these is somebody's `education`
+    // field, and a value that stops resolving is a person silently dropped
+    // from the pool - which is the whole supply of this game.
+    for (const value of [
+      "inżynier mechanik",
+      "nauczyciel",
+      "prawniczka",
+      "rolnik",
+      "politolog",
+      "dyplomowany rolnik",
+      "zootechnik",
+      "prawnik",
+      "adwokat",
+    ]) {
+      expect(educationLookup(index, value), value).toBeTruthy();
+    }
+  });
+
+  it("resolves the phrases a Wikipedia biography yields", () => {
+    // The 36 phrases proposed from plwiki for the people already in the pool
+    // are the next tranche of supply; a sample of the shapes they take.
+    for (const value of [
+      "magister prawa",
+      "lekarz medycyny",
+      "magister zootechniki",
+      "magister wychowania fizycznego",
+      "magister inżynier elektryk",
+      "licencjat administracji",
+      "doktor teologii",
+      "magister filologii polskiej",
+    ]) {
+      expect(educationLookup(index, value), value).toBeTruthy();
+    }
+  });
+
+  it("does not pretend to know what somebody does for a living", () => {
+    // "emeryt" and "bez zawodu" are the commonest answers in the candidate
+    // registers and neither is a formation. They must miss, so that the person
+    // drops out of the pool instead of being asked about.
+    expect(educationLookup(index, "emeryt")).toBeUndefined();
+    expect(educationLookup(index, "bez zawodu")).toBeUndefined();
   });
 });
 
