@@ -125,5 +125,58 @@
     "target": "sukspolka",
     "type": "seat",
     "revision_id": "rev-edge-suk-owns"
+  },
+  {
+    "source": "studiaewa",
+    "target": "2",
+    "type": "employed",
+    "name": "Rada Nadzorcza",
+    "revision_id": "rev-edge-studia-ewa-1",
+    "start_date": "2015-05-01",
+    "end_date": "2019-06-30"
+  },
+  {
+    "source": "studiaewa",
+    "target": "sukspolka",
+    "type": "employed",
+    "name": "Zarząd",
+    "revision_id": "rev-edge-studia-ewa-2",
+    "start_date": "2019-09-01"
+  },
+  {
+    "source": "studiaewa",
+    "target": "teryt22",
+    "type": "election",
+    "position": "Sejmik",
+    "party": "PO",
+    "revision_id": "rev-edge-studia-ewa-3",
+    "start_date": "2018-01-01"
+  },
+  {
+    "source": "studiajerzy",
+    "target": "studiawodociagi",
+    "type": "employed",
+    "name": "Prezes Zarządu",
+    "revision_id": "rev-edge-studia-jerzy-1",
+    "start_date": "2012-02-01",
+    "end_date": "2018-03-31"
+  },
+  {
+    "source": "studiajerzy",
+    "target": "sukspolka",
+    "type": "employed",
+    "name": "Rada Nadzorcza",
+    "revision_id": "rev-edge-studia-jerzy-2",
+    "start_date": "2018-04-01",
+    "end_date": "2021-12-31"
+  },
+  {
+    "source": "studiajerzy",
+    "target": "teryt10",
+    "type": "election",
+    "position": "Rada miasta",
+    "party": "PiS",
+    "revision_id": "rev-edge-studia-jerzy-3",
+    "start_date": "2014-01-01"
   }
 ]

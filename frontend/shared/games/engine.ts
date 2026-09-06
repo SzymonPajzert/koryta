@@ -97,3 +97,57 @@ export function pickDaily<T>(
   const sorted = [...pool].sort((a, b) => key(a).localeCompare(key(b)));
   return seededShuffle(sorted, rand).slice(0, count);
 }
+
+/** One item a day, dealt so that the whole pool goes round before anything
+ * comes back.
+ *
+ * `pickDaily` draws each day independently, which is right when the pool is
+ * large and the board is many items: a repeat is invisible inside sixteen
+ * names. It is wrong when the day IS the item and the pool is small. Nine
+ * candidates drawn independently repeat yesterday's answer about one day in
+ * nine, and show only six distinct people across nine days - and a player who
+ * gets the same person twice in a week does not conclude the pool is small,
+ * they conclude the game is broken.
+ *
+ * So the pool is dealt rather than drawn: shuffled once per cycle, then walked
+ * in order. Every item comes up exactly once per cycle, the order is different
+ * each time round, and the cycle boundary is checked so that the last of one
+ * lap and the first of the next are never the same item.
+ *
+ * `index` is the puzzle number, counting the game's first day as 1. Sorting
+ * first, as `pickDaily` does, keeps the deal off whatever order Firestore
+ * happened to return. Growing the pool reshuffles the future - which is
+ * correct: a schedule nobody can see has nothing to be stable for.
+ */
+export function pickRotating<T>(
+  pool: readonly T[],
+  key: (item: T) => string,
+  game: string,
+  index: number,
+): T | undefined {
+  if (pool.length === 0) return undefined;
+  const sorted = [...pool].sort((a, b) => key(a).localeCompare(key(b)));
+  const size = sorted.length;
+  const step = Math.max(index - 1, 0);
+  const position = step % size;
+  const cycle = Math.floor(step / size);
+
+  /** Two items cannot be dealt without a boundary repeat half the time, and
+   * the fix below would oscillate rather than resolve it, so a pool that small
+   * is simply dealt in the same order every lap - which alternates perfectly. */
+  if (size < 3) return sorted[position];
+
+  const lap = (n: number) =>
+    seededShuffle(sorted, mulberry32(hashSeed(`${game}#${n}`)));
+
+  const order = lap(cycle);
+  if (cycle > 0) {
+    const previous = lap(cycle - 1);
+    if (key(order[0]!) === key(previous[size - 1]!)) {
+      // Swapped for the whole lap, not just for its first day, or the item
+      // moved out of the way would be dealt twice.
+      [order[0], order[1]] = [order[1]!, order[0]!];
+    }
+  }
+  return order[position];
+}

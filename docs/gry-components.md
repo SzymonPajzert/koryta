@@ -26,8 +26,11 @@ odpowiedzi (przy kilkuset pozycjach lista jest wyszukiwarką, nie menu).
 
 - ✅ **Słownik z rankingiem** — `shared/games/education.ts` +
   `educationVocabulary.ts`. Każdy termin niesie `path` (ścieżka w drzewie
-  dziedzin) i `level`; bliskość to wspólny prefiks ścieżki plus odległość
-  poziomów. `educationRank` zwraca miejsce zgadnięcia w rankingu, jak w Contexto.
+  dziedzin) i `level`, a bliskość składa się z trzech sygnałów: wspólnego
+  prefiksu ścieżki (Wu-Palmer, a między gałęziami — ręcznie napisana tablica
+  `areaAffinities`), odległości poziomów i pokrycia trigramami samego terminu po
+  odjęciu słów poziomu („magister”, „technik”). `educationRank` zwraca miejsce
+  zgadnięcia w rankingu, jak w Contexto.
 - ✅ **Ranking po stronie serwera** — `/api/games/studia/guess`. Zapytanie na
   zgadnięcie, cache’owane po URL-u, dzięki czemu odpowiedź nigdy nie trafia do
   przeglądarki przed wygraną.
@@ -36,10 +39,16 @@ odpowiedzi (przy kilkuset pozycjach lista jest wyszukiwarką, nie menu).
 - ⬜ **Do wyjęcia przy drugiej takiej grze**: `GuessRankInput.vue` i
   `RankList.vue`. Świadomie jeszcze nie wyjęte — jedna gra to nie wzorzec, a
   druga powie, co jest naprawdę wspólne.
-- ⚠️ **Ograniczenie**: ranking z drzewa ma remisy, których embedding by nie miał
-  („adwokat” i „radca prawny” są dokładnie tak samo blisko „magistra prawa”).
-  Odpowiedź jest przypięta do #1, reszta remisów rozstrzygana alfabetycznie —
-  stabilnie, ale arbitralnie.
+- ⚠️ **Ograniczenie**: ranking z drzewa nadal ma remisy, których embedding by
+  nie miał („adwokat” i „radca prawny” są w drzewie dokładnie tak samo blisko
+  „magistra prawa”; różnicuje je dopiero trigramowa końcówka wagi). Odpowiedź
+  jest przypięta do #1, resztki remisów rozstrzygane alfabetycznie — stabilnie,
+  ale arbitralnie.
+- 📏 **Jakość rankingu jest testowana, nie deklarowana** —
+  `tests/games/educationVocabulary.test.ts` liczy całą macierz podobieństw i
+  pilnuje, żeby mediana największego remisu została poniżej 5% słownika. Pierwsza
+  wersja (sam prefiks + poziom) miała 51%, czyli połowa listy była
+  uszeregowana alfabetycznie, a nie po bliskości.
 
 ## Rodzina 2 — suwaki
 
@@ -100,9 +109,15 @@ tego wynika wprost:
 ## Czego brakuje po stronie danych
 
 - **„Po jakich studiach?”** stoi na `Person.education`. W eksporcie z
-  2026-09-02: 9 280 osób, 18 ma ten klucz, **2 mają niepustą wartość**. Gra jest
-  gotowa; pula nie istnieje. Po uzupełnieniu pola u kilkudziesięciu znanych osób
-  wystarczy zmienić `status` w rejestrze na `"live"`.
+  2026-09-06: 9 115 osób, **11 ma niepustą wartość**, z czego 9 ma też CV
+  wystarczająco długie (≥3 wpisy), żeby o nie zapytać. To mało — ale dzień to
+  jedna osoba, więc gra jest `"live"` na tej puli. Kluczowe jest `pickRotating`
+  w `engine.ts`: pula jest **rozdawana** po kolei, a nie losowana każdego dnia
+  niezależnie, więc dziewięć osób to dziewięć różnych dni, a nie dziewięć
+  losowań, które powtarzają się co dziewiąty dzień. Każde uzupełnienie pola u
+  kolejnej osoby wydłuża cykl i nie wymaga zmiany w kodzie.
+  Dla porównania: 638 opublikowanych osób ma już CV ≥3 wpisów i puste
+  `education` — to jest zapas, z którego pula rośnie.
 - **„Kiedy?”** stoi na parach z `shared/succession.ts`, ograniczonych do tych,
   gdzie obie osoby mają opublikowaną stronę — czyli do tego, co profil i tak
   pokazuje. Tych par jest rzędu 150, więc powtórki między dniami są pewne.

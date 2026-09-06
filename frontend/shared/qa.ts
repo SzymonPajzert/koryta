@@ -48,6 +48,28 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "gra-studia-po-jakich-studiach",
+    title: "Nowa gra: „Po jakich studiach?” — anonimowe CV i ranking bliskości",
+    description:
+      "Codzienna zagadka pod /gry/studia pokazuje czyjeś CV bez nazwisk i " +
+      "nazw pracodawców — sama branża, stanowisko i starty w wyborach — a " +
+      "gracz zgaduje, co ta osoba skończyła. Odpowiedzi nie ma w przeglądarce: " +
+      "każda próba to zapytanie do serwera, które wraca z miejscem w rankingu " +
+      "bliskości (jak w Contexto), paskiem i słowem od „zimno” do „trafione”. " +
+      "Zgadujesz do skutku, a wynikiem jest liczba prób.",
+    steps: [
+      "Wejdź na /gry/studia: widzisz oś „Anonimowe CV” z co najmniej trzema wpisami i pole „Co ta osoba skończyła?”. Nigdzie nie ma nazwiska ani nazwy firmy.",
+      "Wpisz coś oczywiście nietrafionego (np. „ksiądz katolicki”) i kliknij „Sprawdź”: pojawia się wiersz z numerem miejsca, paskiem bliskości i werdyktem „zimno”/„chłodno” oraz „N z M”.",
+      "Zgadnij coś z właściwej dziedziny (np. „radca prawny” zamiast „magister prawa”): wiersz ląduje wyraźnie wyżej niż poprzedni — o to chodzi w rankingu.",
+      "Trafiona odpowiedź kończy dzień: dopiero wtedy gra pokazuje termin, nazwisko osoby i link do jej profilu, oraz przycisk „Udostępnij wynik”.",
+      "Odśwież stronę w połowie gry: dotychczasowe próby zostają zapamiętane.",
+      "Sprawdź na telefonie (albo w oknie 375px): pasek bliskości i werdykt mieszczą się w jednej linii pod terminem, a długie terminy się zawijają.",
+      "Na /gry kafelek „Po jakich studiach?” nie ma już plakietki „wkrótce” i prowadzi do gry.",
+    ],
+    link: "/gry/studia",
+    area: "public",
+  },
+  {
     id: "gra-kiedy-suwak-lat",
     title: "Nowa gra: „Kiedy?” — sześć zmian na stanowiskach na osi lat",
     description:

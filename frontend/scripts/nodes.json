@@ -352,5 +352,27 @@
     "stats": {
       "nodeGroupSize": 1
     }
+  },
+  "studiaewa": {
+    "name": "Ewa Dyplomowana",
+    "type": "person",
+    "content": "Fixture: osoba z uzupełnionym wykształceniem, dla /gry/studia",
+    "education": "magister prawa",
+    "parties": ["PO"],
+    "revision_id": "rev-studia-ewa"
+  },
+  "studiajerzy": {
+    "name": "Jerzy Budowlany",
+    "type": "person",
+    "content": "Fixture: druga osoba z wykształceniem, żeby pula miała z czego losować",
+    "education": "tech.budowlany",
+    "parties": ["PiS"],
+    "revision_id": "rev-studia-jerzy"
+  },
+  "studiawodociagi": {
+    "name": "Wodociągi Testowe",
+    "type": "place",
+    "activity": ["36"],
+    "revision_id": "rev-studia-wodociagi"
   }
 }

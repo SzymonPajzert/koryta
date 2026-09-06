@@ -4,7 +4,7 @@ import { warsawToday } from "~~/server/utils/games";
 import { dailyStudiaTarget } from "~~/server/utils/studia";
 import {
   educationIndex,
-  educationKey,
+  educationLookup,
   educationRank,
   educationTemperature,
 } from "~~/shared/games/education";
@@ -26,14 +26,17 @@ const queryValidator = z.object({
   term: z.string().trim().min(1).max(200),
 });
 
+/** Built once. The vocabulary is a module constant, so rebuilding the index
+ * per request would be several thousand map writes to reach the same answer. */
+const index = educationIndex(educationVocabulary);
+
 export default authCachedEventHandler(async (event) => {
   const { date, term } = await getValidatedQuery(event, (query) =>
     queryValidator.parse(query),
   );
   const day = date ?? warsawToday();
 
-  const index = educationIndex(educationVocabulary);
-  const guess = index.get(educationKey(term));
+  const guess = educationLookup(index, term);
   if (!guess) {
     throw createError({
       statusCode: 404,

@@ -57,13 +57,17 @@ export const games: GameEntry[] = [
     title: "Po jakich studiach?",
     tagline:
       "Anonimowe CV — praca i starty w wyborach. Zgadnij, co ta osoba skończyła. Po każdej próbie mówimy, jak blisko jesteś; zgadujesz do skutku.",
-    firstDay: "2026-09-02",
-    // Built and playable, but listed as coming rather than live: the pool is
-    // people whose `education` is filled in, and on the 2026-09-02 export that
-    // is two of 9,280 - both of them occupations typed into the field rather
-    // than courses of study. The game needs no further work, only the field
-    // filled on enough well-known people; flip this to "live" then.
-    status: "soon",
+    firstDay: "2026-09-06",
+    // Live on a small pool, deliberately. A day is one person, and on the
+    // 2026-09-06 export nine people have an `education` that resolves and a CV
+    // of at least three entries - so this game has nine dailies in it before it
+    // starts over, against a register that already holds 638 published people
+    // with CVs that long and no education on file. `pickRotating` is what makes
+    // that a shipping decision rather than a bug: the pool is dealt round
+    // before anything comes back, so nine people are nine distinct days rather
+    // than nine draws that repeat one another every ninth day. Filling the
+    // field on more people lengthens the cycle and needs no code change.
+    status: "live",
   },
   {
     slug: "kiedy",
