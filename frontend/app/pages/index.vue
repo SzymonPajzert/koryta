@@ -143,6 +143,12 @@
       </v-col>
     </v-row>
   </HomeSection>
+  <!-- Above the feed, and it has to be: the feed is one card per posting and
+       this is what those postings add up to, which is the wrong way round if a
+       reader has to scroll past two hundred cards to reach it. -->
+  <HomeSection>
+    <HomeStoryClusters />
+  </HomeSection>
   <!-- Last on the page, and it has to be: the feed keeps growing as the reader
        scrolls, so anything below it is pushed further away every time it does. -->
   <HomeSection>

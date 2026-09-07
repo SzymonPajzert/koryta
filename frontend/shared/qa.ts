@@ -48,6 +48,27 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "historie-w-spolkach",
+    title: "Nowe posady układają się w historie",
+    description:
+      "Strona główna pokazywała każdą nową posadę osobno, więc żeby zobaczyć, " +
+      "że w jednym mieście zmieniło się pół obsady spółek miejskich, trzeba " +
+      "było przewinąć kilkadziesiąt kart i samemu to zauważyć. Teraz nad " +
+      "„Ostatnimi zatrudnieniami” są cztery karty z grupami zmian - miasto, " +
+      "branża albo grupa spółek - a pełna lista jest na /eksploruj/historie. " +
+      "Grupa trafia na listę tylko wtedy, gdy różni się od reszty kraju w tym " +
+      "samym okresie, a nie dlatego, że jest duża.",
+    steps: [
+      "Wejdź na stronę główną i przewiń do sekcji „Co układa się w historię” - ma być nad „Ostatnimi zatrudnieniami”.",
+      "Na karcie kliknij nazwisko: ma się otworzyć strona tej osoby.",
+      "Kliknij „Zobacz w tabeli” - tabela ma się otworzyć z filtrem tego miasta albo tej branży i posortowana po dacie zatrudnienia.",
+      "Wejdź na /eksploruj/historie i przełącz „Miasta” / „Branże” / „Grupy spółek” - lista ma się zawężać, a licznik pod filtrem ma pokazywać, ile zmian policzyliśmy i z jakiego okresu.",
+      "Zaloguj się i odśwież /eksploruj/historie: lista ma być dłuższa, a pod filtrem ma się pojawić zdanie o osobach, których strony nie są jeszcze opublikowane.",
+    ],
+    link: "/eksploruj/historie",
+    area: "public",
+  },
+  {
     id: "pomiar-tabeli-eksploruj",
     title: "Wiemy, co ludzie robią w tabeli",
     description:
