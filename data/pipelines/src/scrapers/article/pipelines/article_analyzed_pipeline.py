@@ -155,6 +155,9 @@ _ORG_ALIASES: dict[str, str] = {
     "polska 2050-td": "trzecia droga",
     "psl - trzecia droga": "trzecia droga",
     "trzecia droga: psl-polska 2050": "trzecia droga",
+    # PSP abbreviation and its genitive form
+    "państwowa straż pożarna": "państwowej straży pożarnej",
+    "panstwowa straz pozarna": "państwowej straży pożarnej",
 }
 # Legal-form suffixes stripped from an org before alias lookup.
 _LEGAL_SUFFIX_RE = re.compile(
@@ -169,10 +172,18 @@ def _canonical_org(org: str | None) -> str:
     suffix, party aliases, and known ministry renames — so ``Sejm``,
     ``Sejm RP`` and ``Sejm Rzeczypospolitej Polskiej`` count as one, and so do
     ``Orlen`` / ``PKN Orlen`` and ``PSL`` / ``Polskie Stronnictwo Ludowe``.
+    Also folds ``PSP`` → ``państwowa straż pożarna`` (e.g. ``PSP`` /
+    ``Komenda Wojewódzka PSP`` vs ``Państwowa Straż Pożarna``) and strips a
+    leading region adjective like ``śląska`` for komenda cases.
     """
     n = _norm(org)
     if not n:
         return n
+    # PSP abbreviation → full form (genitive, as used in "Komenda ... PSP")
+    n = re.sub(r"\bpsp\b", "państwowej straży pożarnej", n)
+    # Leading region adjective for komenda cases (e.g. "śląska komenda ...")
+    if n.startswith("śląska ") and "komenda" in n:
+        n = n.removeprefix("śląska ").strip()
     n = _LEGAL_SUFFIX_RE.sub("", n)
     if n.endswith(" rzeczypospolitej polskiej"):
         n = n[: -len(" rzeczypospolitej polskiej")]
@@ -208,12 +219,16 @@ _ROLE_ALIASES: dict[str, str] = {
     "koordynatorka": "koordynator",
     "rzecznik": "rzecznik",
     "rzeczniczka": "rzecznik",
+    "komendanta wojewódzkiego": "komendant wojewódzki",
+    "komendanta": "komendant",
 }
 
 
 def _canonical_role(role: str | None) -> str:
     """Fold role gender/inflection variants used for dedup keys."""
     r = _norm(role)
+    # Strip "pełniący obowiązki" / "p.o." prefix (e.g. "pełniący obowiązki komendanta wojewódzkiego")
+    r = re.sub(r"^(pełniący obowiązki|p\.o\.|p o)\s+", "", r)
     return _ROLE_ALIASES.get(r, r)
 
 
