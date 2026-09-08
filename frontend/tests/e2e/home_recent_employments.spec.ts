@@ -111,14 +111,22 @@ test.afterAll(async () => {
  * The last card already rendered is what gets scrolled to rather than a blind
  * wheel from wherever the mouse happens to be: the sentinel sits directly
  * below it, so this puts it in view whatever the feed's height has grown to.
+ *
+ * The feed only loads two pages by itself and then puts a button there, so that
+ * the page has a bottom and the footer can be reached. Past that, scrolling is
+ * not enough and this has to click.
  */
 async function loadUntil(page: Page, testId: string) {
+  const loadMore = page.getByRole("button", {
+    name: "Pokaż więcej zatrudnień",
+  });
   await expect(async () => {
     await page
       .locator('[data-testid^="recent-employment-"]')
       .last()
       .scrollIntoViewIfNeeded();
     await page.mouse.wheel(0, 2000);
+    if (await loadMore.isVisible()) await loadMore.click();
     await expect(page.getByTestId(testId)).toHaveCount(1, { timeout: 2000 });
   }).toPass({ timeout: 60_000 });
 }
