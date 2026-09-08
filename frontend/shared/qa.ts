@@ -56,7 +56,8 @@ export const QA_ITEMS: QaItem[] = [
       "ocena ekstrakcji to teraz jedna „Ocena”, komentarze zniknęły, a z " +
       "działań administratora zostały tylko opublikowane strony - reszta " +
       "kolejki jest w panelu admina. Słupki są też szersze, bo przy " +
-      "trzydziestu dniach odstęp między nimi był większy niż one same.",
+      "trzydziestu dniach odstęp między nimi był większy niż one same, a " +
+      "przerwy między kolorami w jednym słupku są o połowę cieńsze.",
     steps: [
       "Wejdź na /eksploruj/statystyki i spójrz na kafelki nad wykresem - ma ich być cztery, nie siedem.",
       "Na wykresie „Co się działo w bazie” słupki mają niemal stykać się bokami; przełącz zakres na 7 i 90 dni i sprawdź, że w obu wygląda to sensownie.",
