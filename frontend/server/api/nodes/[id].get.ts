@@ -51,19 +51,32 @@ export default authCachedEventHandler(async (event) => {
 });
 
 async function getLatestRevision(db: FirebaseFirestore.Firestore, id: string) {
-  const revisionDoc = (
-    await db
+  const [revisionSnapshot, stored] = await Promise.all([
+    db
       .collection("revisions")
       .where("node_id", "==", id)
       .orderBy("update_time", "desc")
       .limit(1)
-      .get()
-  ).docs[0];
+      .get(),
+    getEntity(db, id),
+  ]);
+  const revisionDoc = revisionSnapshot.docs[0];
   // TODO get rid of this, each node should have a revision
   if (!revisionDoc) {
-    return await getEntity(db, id);
+    return stored;
   }
-  return { id, ...revisionDoc.data().data };
+  // `published` off the document, not the revision. A revision is what the page
+  // should say; whether anybody may read it is the document's business, so
+  // `INTERNAL_FIELDS` strips the flag on the way in and it is simply absent
+  // here. Without this line every signed in reader - which is every reader who
+  // reaches this branch, `authFetch` asking for `latest` on their behalf - was
+  // handed `published: undefined` for a live page, and anything drawing a
+  // "szkic" badge off it marked the whole site a draft.
+  return {
+    id,
+    ...revisionDoc.data().data,
+    published: stored?.published === true,
+  };
 }
 
 /** The page, or the page it was merged into.

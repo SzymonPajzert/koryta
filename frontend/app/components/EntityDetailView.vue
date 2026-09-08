@@ -116,6 +116,7 @@
           :entity="entity"
           :type="type"
           :extra-locations="electionLocations"
+          @published="refreshNode()"
         />
 
         <div class="mt-4">

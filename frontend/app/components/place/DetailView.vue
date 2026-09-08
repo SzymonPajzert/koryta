@@ -56,6 +56,7 @@
           :company="company"
           :location="location"
           @submitted="proposals?.refresh()"
+          @published="refreshNode()"
         />
 
         <!-- Renders nothing until the reader has proposed something for this

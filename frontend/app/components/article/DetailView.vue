@@ -58,9 +58,12 @@
               </a>
               <span v-if="publishedDate">· {{ publishedDate }}</span>
               <span v-if="author">· {{ author }}</span>
-              <v-chip v-if="!isPublished" size="x-small" variant="tonal">
-                szkic
-              </v-chip>
+              <ChipDraftStatus
+                :published="isPublished"
+                :node-id="nodeId"
+                :node-name="article?.name"
+                @published="refreshNode()"
+              />
               <ArticleCaptureStatus v-if="capture" :capture="capture" />
             </div>
           </div>
