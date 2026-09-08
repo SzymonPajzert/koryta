@@ -138,7 +138,7 @@
 import { computed, ref, watch } from "vue";
 import { mdiEyeOffOutline } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
-import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
+import { edgeSideLabel, relationsPlural } from "~/composables/edges";
 import type {
   NodeRelation,
   NodeRelations,
@@ -201,8 +201,20 @@ const confirmLabel = computed(() =>
     : "Opublikuj tylko stronę",
 );
 
+/** What the row calls the relation, read from the page being published.
+ *
+ * A personal tie is named from both ends and the reviewer is standing at one of
+ * them - see `Edge.reverse_name`. Everything else reads the same either way and
+ * falls through to `name`. */
 function relationLabel(relation: NodeRelation): string {
-  return relation.name || edgeTypeLabels[relation.type] || relation.type;
+  return edgeSideLabel(
+    {
+      type: relation.type,
+      name: relation.name ?? undefined,
+      reverse_name: relation.reverse_name ?? undefined,
+    },
+    relation.direction,
+  );
 }
 
 function toggle(id: string) {

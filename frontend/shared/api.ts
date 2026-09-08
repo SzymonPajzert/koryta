@@ -438,6 +438,10 @@ const relationDate = z
  */
 export const edgeEditSchema = z.object({
   name: z.string().optional(),
+  /** The other half of a person-to-person relation's word - see
+   * `Edge.reverse_name`. Editable like `name`, and by the same people: it says
+   * what the relation claims, not who it joins. */
+  reverse_name: z.string().optional(),
   content: z.string().optional(),
   start_date: relationDate,
   end_date: relationDate,
@@ -451,6 +455,7 @@ export const edgeEditSchema = z.object({
   Pick<
     Edge,
     | "name"
+    | "reverse_name"
     | "content"
     | "start_date"
     | "end_date"

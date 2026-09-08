@@ -24,6 +24,8 @@
         <FormRelationDetailFields
           v-model="details"
           :real-type="edge?.type"
+          :source-name="ends.sourceName"
+          :target-name="ends.targetName"
           prefix="edit-relation"
         />
 
@@ -84,6 +86,7 @@ import { authRequest } from "~/composables/auth";
 import type { EdgeNode } from "~/composables/edges";
 import type { RelationDetails } from "~/components/form/RelationDetailFields.vue";
 import { relationDateRule } from "~/utils/relationDate";
+import { relationNeedsReverse } from "~~/shared/relations";
 import type { EdgeUpdated } from "~~/server/api/edges/update.post";
 
 const props = defineProps<{
@@ -117,8 +120,29 @@ const error = ref<string | null>(null);
 const details = ref<RelationDetails>(emptyDetails());
 
 function emptyDetails(): RelationDetails {
-  return { name: "", start_date: "", end_date: "", party: "", committee: "" };
+  return {
+    name: "",
+    reverse_name: "",
+    start_date: "",
+    end_date: "",
+    party: "",
+    committee: "",
+  };
 }
+
+/** Who is at each end of the relation, as the form has to label them.
+ *
+ * `richNode` is always the *other* end and `direction` says which end that
+ * leaves for the page this was opened from - see `EdgeNode`. Without the
+ * direction the two-sided fields would be labelled backwards on exactly half
+ * the rows, which is the bug they exist to fix. */
+const ends = computed(() => {
+  const other = props.edge?.richNode.name;
+  const subject = props.edge?.subjectName;
+  return props.edge?.direction === "incoming"
+    ? { sourceName: other, targetName: subject }
+    : { sourceName: subject, targetName: other };
+});
 
 /** The relation's own name, not the label the row prints.
  *
@@ -129,6 +153,7 @@ function detailsOf(edge: EdgeNode | undefined): RelationDetails {
   if (!edge) return emptyDetails();
   return {
     name: edge.name ?? "",
+    reverse_name: edge.reverse_name ?? "",
     start_date: edge.start_date ?? "",
     end_date: edge.end_date ?? "",
     party: edge.party ?? "",
@@ -160,7 +185,15 @@ const readyToSubmit = computed(
     !!props.edge?.id &&
     !saving.value &&
     relationDateRule(details.value.start_date) === true &&
-    relationDateRule(details.value.end_date) === true,
+    relationDateRule(details.value.end_date) === true &&
+    // The same rule the add form applies, and the reason this dialog is where
+    // most of the backlog gets cleared: opening a relation that predates
+    // `reverse_name` to change anything at all asks for the missing half.
+    !relationNeedsReverse({
+      type: props.edge.type,
+      name: details.value.name,
+      reverse_name: details.value.reverse_name,
+    }),
 );
 
 async function submit() {

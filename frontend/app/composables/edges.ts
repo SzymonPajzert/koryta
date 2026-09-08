@@ -12,9 +12,21 @@ export type EdgeNode = {
    * offering the value back for editing wants this one, or it would store the
    * fallback phrase as a real job title on the first save. */
   name?: string;
+  /** The relation's name read from the far end - see `Edge.reverse_name`. As
+   * stored, like `name`, and for the same reason: `label` has already chosen
+   * between the two. */
+  reverse_name?: string;
   source: string;
   target: string;
   id?: string;
+  /** Which end of the relation the node these rows were read from sits on:
+   * "outgoing" means it is the source. What decides which of the two names the
+   * row prints, and which way round the correction dialog labels them. */
+  direction?: "outgoing" | "incoming";
+  /** The name of the node these rows were read from, so a dialog can name both
+   * ends without the caller passing it down again. Absent where the local
+   * graph did not return the centre - see `useEdges`. */
+  subjectName?: string;
   traverse?: TraversePolicy;
   /** Article ids the relation is cited to, as the local graph returns them.
    * The names behind them are only fetched when somebody opens the sources
@@ -56,6 +68,22 @@ export const edgeTypeLabels: Record<string, string> = {
   tagged: "Dotyczy tematu",
 };
 
+/** What one row calls the relation, read from the end `direction` names.
+ *
+ * A `connection` is the only type whose word differs by end, and the only one
+ * that stores a second. Where it has none - every relation added before the
+ * field existed - this falls back to `name`, which is the behaviour that was
+ * wrong on one of the two pages and is what /admin/relacje works through.
+ */
+export function edgeSideLabel(
+  edge: Pick<Edge, "type" | "name" | "reverse_name">,
+  direction: "outgoing" | "incoming",
+): string {
+  const own =
+    direction === "incoming" ? edge.reverse_name || edge.name : edge.name;
+  return own || edgeTypeLabels[edge.type] || edge.type;
+}
+
 export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   const { user } = useAuthState();
   const { data: localData, refresh: refreshLocal } = await authFetch(
@@ -73,6 +101,15 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   const nodes = computed(() => localData.value?.nodes || {});
   const edges = computed(() => localData.value?.edges || []);
 
+  /** The page these rows belong to, as the local graph names it. The centre is
+   * in the node map the edges were filtered against, so no second lookup. */
+  const subjectName = computed(() => {
+    const id = toValue(nodeID);
+    return id ? nodes.value[id]?.name : undefined;
+  });
+
+  // The node this was asked about is the *target* of these, so each row is
+  // read backwards and prints the relation's reverse name where it has one.
   const sources = computed<EdgeNode[]>(() => {
     const id = toValue(nodeID);
     if (!id) return [];
@@ -80,7 +117,9 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
       .filter((e: Edge) => e.target == id && nodes.value[e.source])
       .map((e: Edge) => ({
         ...e,
-        label: e.name || edgeTypeLabels[e.type] || e.type,
+        label: edgeSideLabel(e, "incoming"),
+        direction: "incoming" as const,
+        subjectName: subjectName.value,
         richNode: {
           ...nodes.value[e.source],
           type: nodes.value[e.source]?.entityType,
@@ -94,7 +133,9 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
       .filter((e: Edge) => e.source == id && nodes.value[e.target])
       .map((e: Edge) => ({
         ...e,
-        label: e.name || edgeTypeLabels[e.type] || e.type,
+        label: edgeSideLabel(e, "outgoing"),
+        direction: "outgoing" as const,
+        subjectName: subjectName.value,
         richNode: {
           ...nodes.value[e.target],
           type: nodes.value[e.target]?.entityType,
@@ -104,16 +145,20 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
   const referencedIn = computed<EdgeNode[]>(() => {
     const id = toValue(nodeID);
     if (!id) return [];
-    return (edges.value || [])
-      .filter((e: Edge) => e.references?.includes(id))
-      .map((e: Edge) => ({
-        ...e,
-        label: e.name || edgeTypeLabels[e.type] || e.type,
-        richNode: {
-          ...nodes.value[e.source],
-          type: nodes.value[e.source]?.entityType,
-        } as Node, // We show source node for referenced edges
-      }));
+    return (
+      (edges.value || [])
+        .filter((e: Edge) => e.references?.includes(id))
+        // Neither end: this page is the article a relation is cited to, so it is
+        // read from the source's side, the way the relation itself is written.
+        .map((e: Edge) => ({
+          ...e,
+          label: edgeSideLabel(e, "outgoing"),
+          richNode: {
+            ...nodes.value[e.source],
+            type: nodes.value[e.source]?.entityType,
+          } as Node, // We show source node for referenced edges
+        }))
+    );
   });
 
   async function refresh() {

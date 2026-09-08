@@ -54,6 +54,11 @@ test.describe("Add a relation", () => {
     ).toBeVisible();
 
     await dialog.getByTestId("add-relation-name").locator("input").fill("żona");
+    // A personal tie is named from both ends - see `Edge.reverse_name` - and
+    // the form will not submit until it says both. The vocabulary offers the
+    // second word as a chip.
+    await expect(dialog.getByTestId("add-relation-submit")).toBeDisabled();
+    await dialog.getByTestId("add-relation-reverse-suggestion-mąż").click();
     await dialog.getByTestId("add-relation-submit").click();
     await expect(dialog).toBeHidden({ timeout: 30_000 });
 

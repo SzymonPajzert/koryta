@@ -2,6 +2,7 @@ import { computed, ref, type Ref } from "vue";
 import type { NodeType, Edge, Link } from "~~/shared/model";
 import { edgeTypeOptions, type edgeTypeExt } from "./useEdgeTypes";
 import { authRequest } from "./auth";
+import { relationNeedsReverse } from "~~/shared/relations";
 
 export type InternalEdge = Partial<Edge> & {
   direction?: "outgoing" | "incoming";
@@ -108,7 +109,18 @@ export function useEdgeEdit({
   );
 
   const readyToSubmit = computed(
-    () => !!sourceId.value && !!targetId.value && !isSelfEdge.value,
+    () =>
+      !!sourceId.value &&
+      !!targetId.value &&
+      !isSelfEdge.value &&
+      // A named person-to-person tie owes both of its readings - see
+      // `Edge.reverse_name`. The same rule `AddRelationDialog` applies, said
+      // here as well because this form writes through its own submit.
+      !relationNeedsReverse({
+        type: currentOption.value.realType,
+        name: newEdge.value.name,
+        reverse_name: newEdge.value.reverse_name,
+      }),
   );
 
   const edgeLabel = computed(() => currentOption.value.label);
@@ -130,6 +142,7 @@ export function useEdgeEdit({
           body: {
             edge_id: editedEdge,
             name: newEdge.value.name,
+            reverse_name: newEdge.value.reverse_name,
             content: newEdge.value.content,
             start_date: newEdge.value.start_date,
             end_date: newEdge.value.end_date,
@@ -153,6 +166,7 @@ export function useEdgeEdit({
           target: targetId.value,
           type: currentOption.value.realType,
           name: newEdge.value.name,
+          reverse_name: newEdge.value.reverse_name,
           content: newEdge.value.content,
           start_date: newEdge.value.start_date,
           end_date: newEdge.value.end_date,
@@ -260,6 +274,7 @@ function emptyEdge(direction?: "incoming" | "outgoing"): InternalEdge {
     type: "connection",
     target: "",
     name: "",
+    reverse_name: "",
     content: "",
     start_date: "",
     end_date: "",

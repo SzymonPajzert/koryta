@@ -73,6 +73,10 @@ export interface Edge {
   traverse?: TraversePolicy;
   content?: string;
   name?: string;
+  /** The relation's name read the other way round - see `Edge.reverse_name`.
+   * Carried through so the pages that draw a node's relations off the local
+   * graph can label each row from the end they are standing on. */
+  reverse_name?: string;
   references?: string[];
   visibility?: boolean;
   party?: string;

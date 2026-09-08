@@ -56,6 +56,40 @@
               data-testid="promote-fact-name"
             />
           </v-col>
+          <!-- A personal tie reads both ways and the site prints both, so the
+               promotion asks for the second word as well - see
+               `Edge.reverse_name`. The extracted fact only ever carries one of
+               them: the model is told to describe the object from the
+               subject's side. -->
+          <v-col v-if="rule.edgeType === 'connection'" cols="12" md="6">
+            <v-text-field
+              v-model="reverseName"
+              :label="reverseNameLabel"
+              placeholder="np. mąż"
+              density="compact"
+              hide-details="auto"
+              data-testid="promote-fact-reverse-name"
+            />
+          </v-col>
+          <v-col
+            v-if="reverseSuggestions.length > 0"
+            cols="12"
+            class="d-flex align-center flex-wrap ga-1"
+          >
+            <span class="text-caption text-medium-emphasis mr-1">
+              Podpowiedzi:
+            </span>
+            <v-chip
+              v-for="suggestion in reverseSuggestions"
+              :key="suggestion"
+              size="small"
+              variant="tonal"
+              :data-testid="`promote-fact-reverse-suggestion-${suggestion}`"
+              @click="reverseName = suggestion"
+            >
+              {{ suggestion }}
+            </v-chip>
+          </v-col>
           <v-col v-if="rule.edgeType === 'employed'" cols="6" md="3">
             <v-text-field
               v-model="startDate"
@@ -151,6 +185,10 @@ import { mdiArrowRight } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { factConnector, type FactEdgeRule } from "~/utils/extraction";
 import type { ExtractionFact, Link, NodeType } from "~~/shared/model";
+import {
+  relationNeedsReverse,
+  reverseRelationSuggestions,
+} from "~~/shared/relations";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -170,6 +208,7 @@ const open = computed({
 
 const target = ref<Link<NodeType> | undefined>(undefined);
 const name = ref("");
+const reverseName = ref("");
 const startDate = ref("");
 const endDate = ref("");
 const saving = ref(false);
@@ -186,9 +225,29 @@ const targetHint = computed(
     "nie podano",
 );
 
-const nameLabel = computed(() =>
-  props.rule.edgeType === "employed" ? "Stanowisko / rola" : "Rodzaj relacji",
+const nameLabel = computed(() => {
+  if (props.rule.edgeType === "employed") return "Stanowisko / rola";
+  // A personal tie: named as a pair either side of an arrow, so the two fields
+  // say which reading each of them is - see `FormRelationDetailFields`.
+  return target.value
+    ? `${props.fact.personNodeName} → ${target.value.name}`
+    : "Rodzaj relacji";
+});
+
+const reverseNameLabel = computed(() =>
+  target.value
+    ? `${target.value.name} → ${props.fact.personNodeName}`
+    : "A w drugą stronę",
 );
+
+/** What the other side is probably called, given the word the article used.
+ * Dropped once the field already says one of them. */
+const reverseSuggestions = computed(() => {
+  if (props.rule.edgeType !== "connection") return [];
+  return reverseRelationSuggestions(name.value).filter(
+    (option) => option !== reverseName.value,
+  );
+});
 
 function dateRule(value: string) {
   if (!value) return true;
@@ -200,7 +259,15 @@ const readyToSubmit = computed(
     !!target.value &&
     target.value.id !== props.fact.personNodeId &&
     dateRule(startDate.value) === true &&
-    dateRule(endDate.value) === true,
+    dateRule(endDate.value) === true &&
+    // Same rule as the hand-typed forms: a named personal tie owes both of its
+    // readings, or promoting a fact would quietly refill the queue this
+    // feature exists to empty.
+    !relationNeedsReverse({
+      type: props.rule.edgeType,
+      name: name.value,
+      reverse_name: reverseName.value,
+    }),
 );
 
 watch(open, (isOpen) => {
@@ -211,6 +278,7 @@ watch(open, (isOpen) => {
   // is the thing being recorded, and retyping it is where a promotion stops
   // being cheaper than the generic form.
   name.value = props.rule.label(props.fact);
+  reverseName.value = "";
   startDate.value = "";
   endDate.value = "";
 });
@@ -227,6 +295,7 @@ async function submit() {
         target: target.value!.id,
         type: props.rule.edgeType,
         name: name.value,
+        reverse_name: reverseName.value,
         start_date: startDate.value,
         end_date: endDate.value,
         references: props.fact.articleNodeId ? [props.fact.articleNodeId] : [],

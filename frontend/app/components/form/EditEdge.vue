@@ -78,6 +78,36 @@
           data-testid="edge-name-field"
         />
       </v-col>
+      <!-- The other reading of the same tie. Only a `connection` has one: see
+           `Edge.reverse_name`, and `FormRelationDetailFields`, which is the
+           same pair of fields in the dialog that replaced this form. -->
+      <v-col v-if="edgeType === 'connection'" cols="12" md="6">
+        <v-text-field
+          v-model="newEdge.reverse_name"
+          label="A w drugą stronę"
+          placeholder="np. mąż"
+          density="compact"
+          hide-details="auto"
+          data-testid="edge-reverse-name-field"
+        />
+      </v-col>
+      <v-col
+        v-if="reverseSuggestions.length > 0"
+        cols="12"
+        class="d-flex align-center flex-wrap ga-1"
+      >
+        <span class="text-caption text-medium-emphasis mr-1">Podpowiedzi:</span>
+        <v-chip
+          v-for="suggestion in reverseSuggestions"
+          :key="suggestion"
+          size="small"
+          variant="tonal"
+          :data-testid="`edge-reverse-suggestion-${suggestion}`"
+          @click="newEdge.reverse_name = suggestion"
+        >
+          {{ suggestion }}
+        </v-chip>
+      </v-col>
       <v-col cols="12" md="6">
         <v-text-field
           v-model="newEdge.content"
@@ -235,6 +265,7 @@ import {
   edgeTypeOptions,
 } from "~/composables/useEdgeTypes";
 import { parties, electionPositions, electionTerms } from "~~/shared/misc";
+import { reverseRelationSuggestions } from "~~/shared/relations";
 
 const props = defineProps<{
   nodeId: string;
@@ -291,7 +322,9 @@ const targetLabel = computed(() => currentOption.value?.targetLabel);
 
 /** The name field carries whatever the relation is called, and what that is
  * depends entirely on the relation: a job has a title, a tie between two people
- * has a word for it. */
+ * has a word for it - and for a `connection` that word is only half of it,
+ * naming the target as the source sees them. The field beside it names the
+ * source as the target sees them; see `Edge.reverse_name`. */
 const nameLabel = computed(() => {
   if (edgeType.value === "employed") return "Stanowisko / rola";
   if (edgeType.value === "connection") return "Rodzaj powiązania";
@@ -302,6 +335,15 @@ const namePlaceholder = computed(() => {
   if (edgeType.value === "employed") return "np. prezes zarządu";
   if (edgeType.value === "connection") return "np. żona, brat, wspólnik";
   return undefined;
+});
+
+/** What the other side is probably called, given what has been typed on this
+ * one. Empty once the field already says one of them. */
+const reverseSuggestions = computed(() => {
+  if (edgeType.value !== "connection") return [];
+  return reverseRelationSuggestions(newEdge.value.name).filter(
+    (option) => option !== newEdge.value.reverse_name,
+  );
 });
 
 defineExpose({

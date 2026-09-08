@@ -199,6 +199,7 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       traverse: edgeTraverse[edge.type],
       content: edge.content,
       name: edge.name,
+      reverse_name: edge.reverse_name,
       references: edge.references,
       visibility: edge.visibility,
       party: edge.party,

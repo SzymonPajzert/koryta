@@ -98,6 +98,17 @@ async function submit() {
   await flushPromises();
 }
 
+/** Types into one of the dialog's text fields, found by its testid. */
+async function type(testid: string, value: string) {
+  const input = document.querySelector(
+    `[data-testid="${testid}"] input`,
+  ) as HTMLInputElement | null;
+  if (!input) throw new Error(`no field ${testid}`);
+  input.value = value;
+  input.dispatchEvent(new Event("input"));
+  await flushPromises();
+}
+
 /** What reached /api/edges/create. */
 function created() {
   const call = mockAuthRequest.mock.calls.find(
@@ -226,6 +237,76 @@ describe("AddRelationDialog", () => {
 
     expect(wrapper.emitted("added")).toHaveLength(1);
     expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([false]);
+  });
+
+  describe("a tie between two people", () => {
+    it("names both readings, either side of an arrow", async () => {
+      // Polish would want a case in a sentence here and there is no declining
+      // an arbitrary surname, so the pair is shown either way round instead.
+      const wrapper = mountDialog();
+      await pick(wrapper, piotr);
+
+      expect(document.body.textContent).toContain("Jan Kowalski → Piotr W.");
+      expect(document.body.textContent).toContain("Piotr W. → Jan Kowalski");
+    });
+
+    it("will not store one word for both people", async () => {
+      // The bug this feature is about: "żona" typed on Jan's page used to be
+      // printed at him on Anna's too.
+      const wrapper = mountDialog();
+      await pick(wrapper, piotr);
+      await type("add-relation-name", "ojciec");
+
+      expect(submitButton().disabled).toBe(true);
+
+      await type("add-relation-reverse-name", "syn");
+      expect(submitButton().disabled).toBe(false);
+
+      await submit();
+      expect(created()).toMatchObject({
+        type: "connection",
+        name: "ojciec",
+        reverse_name: "syn",
+      });
+    });
+
+    it("offers the other side as chips to click", async () => {
+      const wrapper = mountDialog();
+      await pick(wrapper, piotr);
+      await type("add-relation-name", "żona");
+
+      const chip = document.querySelector(
+        '[data-testid="add-relation-reverse-suggestion-mąż"]',
+      ) as HTMLElement | null;
+      expect(chip).not.toBeNull();
+
+      chip!.click();
+      await flushPromises();
+      await submit();
+
+      expect(created()).toMatchObject({ name: "żona", reverse_name: "mąż" });
+    });
+
+    it("lets a nameless tie through, having nothing to reverse", async () => {
+      // With no word at all both pages print "Powiązanie z", which is already
+      // the same claim from either end.
+      const wrapper = mountDialog();
+      await pick(wrapper, piotr);
+
+      expect(submitButton().disabled).toBe(false);
+    });
+  });
+
+  it("does not ask an employment for a second reading", async () => {
+    // A job title reads the same on the person's page and the company's.
+    const wrapper = mountDialog();
+    await pick(wrapper, orlen);
+    await type("add-relation-name", "prezes zarządu");
+
+    expect(
+      document.querySelector('[data-testid="add-relation-reverse-name"]'),
+    ).toBeNull();
+    expect(submitButton().disabled).toBe(false);
   });
 
   it("forgets the last relation when it reopens", async () => {

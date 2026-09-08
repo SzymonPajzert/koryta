@@ -148,6 +148,26 @@ export type Node = PageBase<NodeType> & {
 
 export interface Edge extends PageBase<EdgeType> {
   name?: string;
+  /** What the relation is called read from the target back to the source.
+   *
+   * Only meaningful for `connection`, the person-to-person tie, and only
+   * because that type's word is a free-text noun rather than something the
+   * type itself decides. "żona" on an edge from Jan to Anna says Anna is Jan's
+   * wife; printed unchanged on Anna's page it said the same of Jan, which was
+   * simply false. `reverse_name` is "mąż", and each page prints the one that
+   * reads correctly from where it stands - see `useEdges`.
+   *
+   * Absent on every relation stored before the field existed, and on those the
+   * views fall back to `name` - the old, wrong-half-the-time behaviour, which
+   * is what /admin/relacje exists to work through. Absent for good on the other
+   * edge types: an `employed` prints the job title whichever end it is read
+   * from, and its two readings ("Zatrudniony/a w" / "zatrudniał/a") come off
+   * the type in `edgeTypeOptions`, not off the document.
+   *
+   * Not one of `edgeDocumentId`'s discriminators, deliberately: filling in the
+   * missing half of a relation must land on the document that is already there
+   * rather than forking a second one saying nearly the same thing. */
+  reverse_name?: string;
   source: string;
   label?: string; // a derivative of name, see graph/model.ts
   target: string;

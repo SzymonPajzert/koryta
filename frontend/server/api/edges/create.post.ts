@@ -17,6 +17,9 @@ const bodyValidator = z.object({
   source: z.string().min(1),
   target: z.string().min(1),
   name: z.string().optional(),
+  /** What the relation is called read from the target back to the source - see
+   * `Edge.reverse_name`. Only the person-to-person form sends one. */
+  reverse_name: z.string().optional(),
   content: z.string().optional(),
   text: z.string().optional(),
   start_date: z.string().nullable().optional(),
@@ -53,6 +56,7 @@ export default defineEventHandler(async (event) => {
     target: body.target,
     type: body.type,
     name: body.name || "",
+    reverse_name: body.reverse_name || "",
     content: body.content || body.text || "",
     start_date: body.start_date || null,
     end_date: body.end_date || null,
@@ -77,6 +81,10 @@ export default defineEventHandler(async (event) => {
   // undefined, null and "" alike, so the two agree on the id either way; this
   // just says so in the types. Every discriminator any edge type declares is
   // here - see `EDGE_SEMANTICS`.
+  // `reverse_name` is not among them and must not become one: it is the other
+  // half of the word `name` already carries, so an edge that gains one is the
+  // same claim stated in full, and hashing it into the id would fork a second
+  // document rather than complete the first.
   const edgeRef = db.collection("edges").doc(
     edgeDocumentId({
       source: revisionData.source,

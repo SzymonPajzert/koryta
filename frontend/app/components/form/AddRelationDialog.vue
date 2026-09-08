@@ -68,6 +68,8 @@
             v-if="choice"
             v-model="details"
             :real-type="option?.realType"
+            :source-name="ends.sourceName"
+            :target-name="ends.targetName"
             prefix="add-relation"
             class="mt-1"
           >
@@ -133,6 +135,7 @@ import {
 import { authRequest } from "~/composables/auth";
 import type { RelationDetails } from "~/components/form/RelationDetailFields.vue";
 import { relationDateRule } from "~/utils/relationDate";
+import { relationNeedsReverse } from "~~/shared/relations";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -164,7 +167,14 @@ const error = ref<string | null>(null);
 const details = ref<RelationDetails>(emptyDetails());
 
 function emptyDetails(): RelationDetails {
-  return { name: "", start_date: "", end_date: "", party: "", committee: "" };
+  return {
+    name: "",
+    reverse_name: "",
+    start_date: "",
+    end_date: "",
+    party: "",
+    committee: "",
+  };
 }
 
 const title = computed(() => props.title ?? "Dodaj powiązanie");
@@ -228,13 +238,33 @@ const option = computed(() =>
   choice.value ? edgeTypeOptions[choice.value.edgeTypeExt] : undefined,
 );
 
+/** Which name goes on which end, once a verb has been picked. The dialog is
+ * always opened on one of the two, and the direction of the chosen relation
+ * decides whether that is the source or the target. */
+const ends = computed(() => {
+  const outgoing = choice.value?.direction !== "incoming";
+  return {
+    sourceName: outgoing ? props.nodeName : other.value?.name,
+    targetName: outgoing ? other.value?.name : props.nodeName,
+  };
+});
+
 const readyToSubmit = computed(
   () =>
     !!other.value &&
     !!choice.value &&
     other.value.id !== props.nodeId &&
     relationDateRule(details.value.start_date) === true &&
-    relationDateRule(details.value.end_date) === true,
+    relationDateRule(details.value.end_date) === true &&
+    // A named personal tie has to say both of its readings or it would print
+    // the one word on both people's pages, which is the thing `reverse_name`
+    // exists to stop. An unnamed one is fine: it falls back to "Powiązanie z",
+    // which is already the same claim either way round.
+    !relationNeedsReverse({
+      type: option.value?.realType,
+      name: details.value.name,
+      reverse_name: details.value.reverse_name,
+    }),
 );
 
 /** A fresh dialog every time it opens: leaving the last relation in the fields
@@ -269,6 +299,7 @@ async function submit() {
         target: outgoing ? other.value!.id : props.nodeId,
         type: edgeTypeOptions[picked.edgeTypeExt].realType,
         name: details.value.name,
+        reverse_name: details.value.reverse_name,
         start_date: details.value.start_date,
         end_date: details.value.end_date,
         party: details.value.party,

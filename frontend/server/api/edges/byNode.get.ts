@@ -18,6 +18,10 @@ export type NodeRelation = {
   id: string;
   type: EdgeType;
   name: string | null;
+  /** What the relation says read the other way - see `Edge.reverse_name`. Only
+   * a `connection` ever has one, and it is what the row prints when this node
+   * is the target. */
+  reverse_name: string | null;
   /** Which end of the edge the node this was asked about sits on. */
   direction: "outgoing" | "incoming";
   otherId: string;
@@ -102,6 +106,10 @@ export default defineEventHandler(async (event): Promise<NodeRelations> => {
       id: edge.id,
       type: edge.type,
       name: typeof edge.name === "string" && edge.name ? edge.name : null,
+      reverse_name:
+        typeof edge.reverse_name === "string" && edge.reverse_name
+          ? edge.reverse_name
+          : null,
       direction: outgoing ? "outgoing" : "incoming",
       otherId,
       otherName,

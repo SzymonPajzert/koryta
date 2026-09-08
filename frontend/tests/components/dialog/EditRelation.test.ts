@@ -52,6 +52,24 @@ function employment(overrides: Partial<EdgeNode> = {}): EdgeNode {
   } as EdgeNode;
 }
 
+/** A person-to-person tie as `useEdges` hands it over. `direction` says which
+ * end the page it was read from sits on, which is what tells the form which of
+ * the two names goes on the left. */
+function connection(overrides: Partial<EdgeNode> = {}): EdgeNode {
+  return {
+    id: "e2",
+    type: "connection",
+    label: "żona",
+    name: "żona",
+    source: "jan",
+    target: "anna",
+    direction: "outgoing",
+    subjectName: "Jan Kowalski",
+    richNode: { id: "anna", type: "person", name: "Anna Kowalska" },
+    ...overrides,
+  } as EdgeNode;
+}
+
 function mountDialog(props: Record<string, unknown> = {}) {
   return mount(EditRelation, {
     props: {
@@ -133,10 +151,86 @@ describe("DialogEditRelation", () => {
     expect(sent()).toEqual({
       edge_id: "e1",
       name: "czlonek rady nadzorczej",
+      // Empty on an employment, and sent anyway: only a `connection` has a
+      // second reading, and the endpoint stores "" for every field the form
+      // left blank whatever the type - see `Edge.reverse_name`.
+      reverse_name: "",
       start_date: "2019-01-01",
       end_date: "",
       party: "",
       committee: "",
+    });
+  });
+
+  describe("a tie between two people", () => {
+    it("prefills both of the relation's readings", async () => {
+      mountDialog({
+        edge: connection({ reverse_name: "mąż" }),
+        edgeLabel: "Jan Kowalski - żona - Anna Kowalska",
+      });
+      await flushPromises();
+
+      expect(
+        (
+          byTestId("edit-relation-name").querySelector(
+            "input",
+          ) as HTMLInputElement
+        ).value,
+      ).toBe("żona");
+      expect(
+        (
+          byTestId("edit-relation-reverse-name").querySelector(
+            "input",
+          ) as HTMLInputElement
+        ).value,
+      ).toBe("mąż");
+    });
+
+    it("labels each field with the pair it is about", async () => {
+      mountDialog({
+        edge: connection(),
+        edgeLabel: "Jan Kowalski - żona - Anna Kowalska",
+      });
+      await flushPromises();
+
+      expect(document.body.textContent).toContain(
+        "Jan Kowalski → Anna Kowalska",
+      );
+      expect(document.body.textContent).toContain(
+        "Anna Kowalska → Jan Kowalski",
+      );
+    });
+
+    it("labels them the same way round when opened from the other page", async () => {
+      // The row on Anna's page is the same document read backwards, so the
+      // arrows still have to read source -> target - otherwise every second
+      // correction would be typed into the wrong field.
+      mountDialog({
+        edge: connection({
+          direction: "incoming",
+          subjectName: "Anna Kowalska",
+          richNode: { id: "jan", type: "person", name: "Jan Kowalski" },
+        }),
+        edgeLabel: "Anna Kowalska - żona - Jan Kowalski",
+      });
+      await flushPromises();
+
+      const body = document.body.textContent;
+      expect(body.indexOf("Jan Kowalski → Anna Kowalska")).toBeLessThan(
+        body.indexOf("Anna Kowalska → Jan Kowalski"),
+      );
+    });
+
+    it("will not save a relation that still names only one side", async () => {
+      mountDialog({
+        edge: connection(),
+        edgeLabel: "Jan Kowalski - żona - Anna Kowalska",
+      });
+      await flushPromises();
+
+      expect(
+        (byTestId("edit-relation-submit") as HTMLButtonElement).disabled,
+      ).toBe(true);
     });
   });
 

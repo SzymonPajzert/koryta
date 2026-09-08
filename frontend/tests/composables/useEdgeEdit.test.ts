@@ -49,6 +49,11 @@ describe("useEdgeEdit", () => {
     expect(readyToSubmit.value).toBe(false);
     layout.target.ref.value = { type: "person", id: "anna", name: "Anna" };
     newEdge.value.name = "żona";
+    // A named tie owes both of its readings - see `Edge.reverse_name`. Without
+    // the second word the form stays closed, because "żona" would otherwise be
+    // printed at Jan on Anna's page too.
+    expect(readyToSubmit.value).toBe(false);
+    newEdge.value.reverse_name = "mąż";
     expect(readyToSubmit.value).toBe(true);
 
     await processEdge();
@@ -60,9 +65,37 @@ describe("useEdgeEdit", () => {
         target: "anna",
         type: "connection",
         name: "żona",
+        reverse_name: "mąż",
       }),
     });
     expect(onUpdate).toHaveBeenCalled();
+  });
+
+  it("lets an unnamed connection through without a reverse", async () => {
+    // "Powiązanie z" is what a nameless tie falls back to on both pages, so it
+    // is already the same claim either way round and has nothing to reverse.
+    const { layout, readyToSubmit } = useEdgeEdit({
+      fixedNode: on("person", "jan"),
+      edgeType: "connection",
+      initialDirection: "outgoing",
+    });
+
+    layout.target.ref.value = { type: "person", id: "anna", name: "Anna" };
+    expect(readyToSubmit.value).toBe(true);
+  });
+
+  it("does not ask an employment for a reverse", async () => {
+    // Only `connection` reads differently at each end. An `employed` prints the
+    // job title whichever page it is on.
+    const { layout, newEdge, readyToSubmit } = useEdgeEdit({
+      fixedNode: on("person", "jan"),
+      edgeType: "employed",
+      initialDirection: "outgoing",
+    });
+
+    layout.target.ref.value = { type: "place", id: "spolka", name: "Spółka" };
+    newEdge.value.name = "prezes zarządu";
+    expect(readyToSubmit.value).toBe(true);
   });
 
   it("writes an employment from the employee's page", async () => {
@@ -312,13 +345,18 @@ describe("useEdgeEdit", () => {
 
     layout.target.ref.value = { type: "person", id: "anna", name: "Anna" };
     newEdge.value.name = "żona";
+    newEdge.value.reverse_name = "mąż";
     await processEdge();
 
     expect(authRequest).toHaveBeenCalledWith(
       "/api/edges/update",
       expect.objectContaining({
         method: "POST",
-        body: expect.objectContaining({ edge_id: "edge-1", name: "żona" }),
+        body: expect.objectContaining({
+          edge_id: "edge-1",
+          name: "żona",
+          reverse_name: "mąż",
+        }),
       }),
     );
     expect(error.value).toBeNull();
