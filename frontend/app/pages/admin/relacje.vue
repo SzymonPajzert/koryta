@@ -57,12 +57,17 @@
       </div>
     </v-card>
 
+    <!-- Stacked below `md` rather than scrolled sideways. A row here is two
+         names, a word, a text field and a handful of chips, which on a phone
+         is wider than the screen twice over - and the column that has to be
+         reachable is the last one, the one a sideways scroll hides. -->
     <v-data-table
       density="compact"
       item-value="id"
       :headers="headers"
       :items="rows"
       :loading="pending"
+      mobile-breakpoint="md"
       no-data-text="Każde powiązanie osobiste ma już obie strony."
       loading-text="Ładowanie..."
       items-per-page="-1"
