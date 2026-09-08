@@ -1,4 +1,5 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/logger";
 import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
 import type { ExtractionFact } from "~~/shared/model";
@@ -157,11 +158,71 @@ export default defineEventHandler(async (event) => {
     await batch.commit();
   }
 
+  const touchedPeople = new Set(
+    allDocs
+      .map((doc) => doc.personNodeId as string | undefined)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  const peopleUpdated = await updateFactCounts(db, touchedPeople);
+
   return {
     status: "ok",
     count: allDocs.length,
+    peopleUpdated,
   };
 });
+
+/** Bring `stats.factsCount` back in line on every person this batch named.
+ *
+ * The counter exists because /eksploruj/tabela offers „Liczba faktów” as a
+ * sort, and Firestore can only order by a field on the document it is ordering.
+ *
+ * Recounted rather than incremented by what was just written: an ingest that
+ * resends a batch is normal - the pipeline is re-runnable - and an increment
+ * would then double-count facts the table would go on showing until somebody
+ * ran /api/stats/computeNodes. A `count()` aggregation is billed as one read
+ * per thousand index entries, so recounting is also the cheaper of the two for
+ * everybody with fewer than a thousand facts, which is everybody.
+ *
+ * A person whose update fails is logged and skipped rather than failing the
+ * request: the facts themselves are already committed, and the count is
+ * recomputed wholesale by /api/stats/computeNodes.
+ */
+async function updateFactCounts(
+  db: FirebaseFirestore.Firestore,
+  personNodeIds: ReadonlySet<string>,
+): Promise<number> {
+  const ids = [...personNodeIds];
+  // Two round trips per person, so they go out in parallel - but not all at
+  // once: a nightly batch can name hundreds of people, and Firestore answers a
+  // flood of aggregations with RESOURCE_EXHAUSTED rather than with a queue.
+  const CONCURRENCY = 20;
+  let updated = 0;
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const chunk = ids.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      chunk.map(async (id) => {
+        try {
+          const count = await db
+            .collection("extractions")
+            .where("personNodeId", "==", id)
+            .count()
+            .get();
+          await db
+            .collection("nodes")
+            .doc(id)
+            .update({ "stats.factsCount": count.data().count });
+          updated++;
+        } catch (error) {
+          logger.error(`Could not update stats.factsCount for node ${id}`, {
+            error,
+          });
+        }
+      }),
+    );
+  }
+  return updated;
+}
 
 /** The person nodes behind a batch's `koryta_ids`, by id.
  *

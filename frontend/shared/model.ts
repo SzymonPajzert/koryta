@@ -76,6 +76,21 @@ type NodeEdgeStats = {
 export interface NodeStats {
   isApproved: boolean;
   notesCount: number;
+  /** Extracted facts the pipeline matched to this person - the documents in
+   * `extractions` whose `personNodeId` is this node.
+   *
+   * Denormalised because /eksploruj/tabela orders by it, and Firestore cannot
+   * order by a count it would have to take of another collection. Maintained by
+   * /api/ingest/extraction, which recounts every person a batch touched, and
+   * recomputed wholesale by /api/stats/computeNodes.
+   *
+   * Optional because a document written before this field existed does not
+   * carry it - and `orderBy` drops such a document rather than sorting it
+   * last, so a person missing the field is a person missing from the table
+   * under this sort. `scripts/migrate/backfill-facts-count.ts` writes it onto
+   * every person, zero included, for exactly that reason.
+   */
+  factsCount?: number;
   votes: {
     interesting?: number;
     quality?: number;

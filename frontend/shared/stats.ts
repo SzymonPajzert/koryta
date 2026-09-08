@@ -368,6 +368,11 @@ export function computeNodeStats(
   publicPlaceIds: ReadonlySet<string>,
   transitiveTargets: Record<string, string[]> = {},
   unpaidSeatPlaceIds: ReadonlySet<string> = new Set(),
+  /** Extracted facts matched to this node, counted by the caller - the facts
+   * live in a collection this module never reads. Zero rather than absent when
+   * there are none: the field has to be on the document for `orderBy
+   * stats.factsCount` to return the person at all. */
+  nodeFactsCount: number = 0,
 ): NodeStats {
   return {
     isApproved: nodeIsApproved,
@@ -375,6 +380,7 @@ export function computeNodeStats(
     notesCount: nodeNotes
       .map((n) => n.sources?.length || 0)
       .reduce((a, b) => a + b, 0),
+    factsCount: nodeFactsCount,
     votes: computeVoteStats(nodeVotes),
     edges: computeEdgeStats(
       nodeEdges,

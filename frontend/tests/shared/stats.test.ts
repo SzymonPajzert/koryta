@@ -541,5 +541,25 @@ describe("shared/stats.ts", () => {
       expect(stats.votes.quality).toBe(5);
       expect(stats.edges.all.targetNodeIds).toEqual(["t1", "region-XYZ"]);
     });
+
+    /** Zero rather than absent: /eksploruj/tabela orders by this field, and
+     * Firestore drops a document that does not carry it instead of sorting it
+     * last - so a person with no facts has to say so to stay in the table. */
+    it("carries the facts count, zero included", () => {
+      const empty = computeNodeStats(true, [], [], [], new Set());
+      expect(empty.factsCount).toBe(0);
+
+      const counted = computeNodeStats(
+        true,
+        [],
+        [],
+        [],
+        new Set(),
+        {},
+        new Set(),
+        4,
+      );
+      expect(counted.factsCount).toBe(4);
+    });
   });
 });

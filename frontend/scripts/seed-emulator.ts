@@ -161,6 +161,20 @@ async function seedDatabase() {
     seededEdges,
   );
 
+  // Facts per person, from the same fixture the extractions are seeded from.
+  // Computed here rather than written into nodes.json for the same reason the
+  // edge stats are: production keeps this counter through
+  // /api/ingest/extraction and /api/stats/computeNodes, and a fixture carrying
+  // it by hand would drift from the facts beside it - which for a sort means a
+  // table ordered by a number nothing on the page agrees with.
+  const factsByNodeId: Record<string, number> = {};
+  for (const fact of Object.values(extractions)) {
+    const personNodeId = (fact as { personNodeId?: string }).personNodeId;
+    if (personNodeId) {
+      factsByNodeId[personNodeId] = (factsByNodeId[personNodeId] ?? 0) + 1;
+    }
+  }
+
   for (const [id, node] of Object.entries(nodes)) {
     const nodeData = { ...node } as Record<string, unknown>;
     if (!nodeData.stats) nodeData.stats = {};
@@ -187,6 +201,12 @@ async function seedDatabase() {
     const seededEdgeStats = edgeStatsBySourceId[id];
     if (seededEdgeStats) {
       stats.edges = seededEdgeStats;
+    }
+    // On every person, zero included: `orderBy stats.factsCount` drops a
+    // document that lacks the field, so a seeded person without it would
+    // vanish from the table under that sort rather than sorting last.
+    if (nodeData.type === "person") {
+      stats.factsCount = factsByNodeId[id] ?? 0;
     }
     defaultPublished(nodeData);
     const ref = db.collection("nodes").doc(id);
