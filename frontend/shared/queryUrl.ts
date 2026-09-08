@@ -138,6 +138,11 @@ export const tableSortOptions = [
   },
   { key: "experience", title: "Lata pracy", sentence: "lat pracy" },
   { key: "notesCount", title: "Liczba notatek", sentence: "liczby notatek" },
+  {
+    key: "factsCount",
+    title: "Liczba faktów",
+    sentence: "liczby faktów",
+  },
   { key: "name", title: "Nazwisko", sentence: "nazwiska" },
   {
     key: "visibility",

@@ -154,6 +154,8 @@ export default defineEventHandler(async (event) => {
           : "stats.edges.approved.latestEmploymentStart";
       } else if (sortField === "notesCount") {
         sortField = "stats.notesCount";
+      } else if (sortField === "factsCount") {
+        sortField = "stats.factsCount";
       } else if (sortField === "visibility") {
         sortField = "stats.isApproved";
       } else if (sortField.startsWith("votes.")) {

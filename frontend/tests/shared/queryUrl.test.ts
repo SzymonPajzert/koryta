@@ -267,6 +267,15 @@ describe("describeQuery", () => {
     );
   });
 
+  it("names the facts sort in the sentence", () => {
+    // The key is what /api/nodes maps onto `stats.factsCount`; spelt any other
+    // way the sort answers with an empty table rather than an error, so the
+    // sentence and the link have to be built from the same list.
+    expect(describeQuery({ category: "szpitale", sortBy: "factsCount" })).toBe(
+      "Szpitale · wg liczby faktów",
+    );
+  });
+
   it("leaves out a sort key it has no Polish name for", () => {
     // Rather than pasting `wg stats.edges.all.experienceMonths` into a link
     // somebody is meant to want to click.

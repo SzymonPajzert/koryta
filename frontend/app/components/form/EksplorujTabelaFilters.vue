@@ -741,12 +741,13 @@ const sortOptions = computed(() =>
 );
 
 /** Shorter names for the button, which shares a 390px line with „Filtry”, the
- * chip rail and the row count; the menu keeps the full ones. Only the three
- * that do not fit - a key missing from here falls back to its own title. */
+ * chip rail and the row count; the menu keeps the full ones. Only the ones that
+ * do not fit - a key missing from here falls back to its own title. */
 const SORT_SHORT_TITLES: Record<string, string> = {
   latestEmploymentStart: "Zatrudnienie",
   "stats.votes.interesting": "Oceny",
   notesCount: "Notatki",
+  factsCount: "Fakty",
 };
 
 const sortKey = computed(() => sortBy.value?.[0]?.key);
