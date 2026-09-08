@@ -61,6 +61,7 @@ function buildNodeUpdateData(
   targetCounts: Record<string, Set<string>>,
   publicPlaceIds: ReadonlySet<string>,
   unpaidSeatPlaceIds: ReadonlySet<string>,
+  nodeFactsCount: number,
 ) {
   const transitiveTargets = calculateTransitiveTargets(
     nodeEdges,
@@ -76,6 +77,7 @@ function buildNodeUpdateData(
     publicPlaceIds,
     transitiveTargets,
     unpaidSeatPlaceIds,
+    nodeFactsCount,
   );
 
   stats.nodeGroupSize = nodeGroupSizeMap[node.id] || 0;
@@ -110,14 +112,24 @@ export default defineEventHandler(async (event) => {
 
   const db = getFirestore("koryta-pl");
 
-  const [nodesSnap, edgesSnap, notesSnap, votesSnap, revisionsSnap] =
-    await Promise.all([
-      db.collection("nodes").get(),
-      db.collection("edges").get(),
-      db.collection("notes").get(),
-      db.collection("votes").get(),
-      db.collection("revisions").get(),
-    ]);
+  const [
+    nodesSnap,
+    edgesSnap,
+    notesSnap,
+    votesSnap,
+    revisionsSnap,
+    extractionsSnap,
+  ] = await Promise.all([
+    db.collection("nodes").get(),
+    db.collection("edges").get(),
+    db.collection("notes").get(),
+    db.collection("votes").get(),
+    db.collection("revisions").get(),
+    // Only the id of the person each fact was matched to: the justification is
+    // a paragraph of prose and there is one per fact, so reading the documents
+    // whole would be the largest read in this handler to count them.
+    db.collection("extractions").select("personNodeId").get(),
+  ]);
 
   const nodes = nodesSnap.docs.map((doc) => ({
     id: doc.id,
@@ -149,6 +161,18 @@ export default defineEventHandler(async (event) => {
     // Extraction votes carry extractionId instead and don't belong to a node.
     (vote) => (vote.nodeId ? [vote.nodeId] : []),
   );
+
+  // Facts per person. `/api/ingest/extraction` keeps this counter current one
+  // batch at a time; here it is recomputed from the collection, which is what
+  // repairs a node whose ingest-time update failed - and what stops this
+  // handler from wiping the field, since it writes `stats` as a whole map.
+  const factsByNode: Record<string, number> = {};
+  for (const doc of extractionsSnap.docs) {
+    const personNodeId = doc.get("personNodeId") as string | undefined;
+    if (personNodeId) {
+      factsByNode[personNodeId] = (factsByNode[personNodeId] ?? 0) + 1;
+    }
+  }
 
   const revisionsByNode: Record<string, { id: string; data: Revision }[]> = {};
   for (const rev of revisions) {
@@ -314,6 +338,7 @@ export default defineEventHandler(async (event) => {
       targetCounts,
       publicPlaceIds,
       unpaidSeatPlaceIds,
+      factsByNode[node.id] ?? 0,
     );
 
     if (node.data.type === "region") {

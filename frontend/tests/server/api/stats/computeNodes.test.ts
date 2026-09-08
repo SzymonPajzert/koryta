@@ -8,6 +8,7 @@ const collections: Record<string, unknown[]> = {
   notes: [],
   votes: [],
   revisions: [],
+  extractions: [],
 };
 
 const statsDocSet = vi.fn();
@@ -15,10 +16,17 @@ const batchUpdate = vi.fn();
 const batchCommit = vi.fn();
 
 const mockDb = {
-  collection: (name: string) => ({
-    get: async () => ({ docs: collections[name] ?? [] }),
-    doc: () => ({ set: statsDocSet }),
-  }),
+  collection: (name: string) => {
+    const query = {
+      get: async () => ({ docs: collections[name] ?? [] }),
+      // `extractions` is read through a field mask - only the id of the person
+      // each fact was matched to - so the query object has to survive a
+      // `.select()` on the way to `.get()`.
+      select: () => query,
+      doc: () => ({ set: statsDocSet }),
+    };
+    return query;
+  },
   batch: () => ({ update: batchUpdate, commit: batchCommit }),
 };
 
@@ -101,5 +109,31 @@ describe("POST /api/stats/computeNodes", () => {
 
     expect(result).toMatchObject({ status: "success" });
     expect(statsDocSet).toHaveBeenCalled();
+  });
+
+  /** `stats` is written as one map, so a pass that did not count the facts
+   * would take `stats.factsCount` off every person - and /eksploruj/tabela's
+   * „Liczba faktów” sort drops a person who lacks the field rather than
+   * sorting them last, so the whole table would empty out behind it. */
+  it("recounts the extracted facts onto each person", async () => {
+    collections.nodes = [
+      { id: "person-1", data: () => ({ type: "person", name: "A" }) },
+      { id: "person-2", data: () => ({ type: "person", name: "B" }) },
+    ];
+    collections.extractions = [
+      { get: (field: string) => (field === "personNodeId" ? "person-1" : "") },
+      { get: (field: string) => (field === "personNodeId" ? "person-1" : "") },
+      { get: () => undefined },
+    ];
+
+    await handler({} as never);
+
+    const written = Object.fromEntries(
+      batchUpdate.mock.calls.map(([, data], index) => [
+        collections.nodes[index]!.id,
+        data.stats.factsCount,
+      ]),
+    );
+    expect(written).toEqual({ "person-1": 2, "person-2": 0 });
   });
 });

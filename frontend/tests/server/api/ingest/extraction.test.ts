@@ -7,6 +7,8 @@ const {
   mockCommit,
   mockCollection,
   mockGetAll,
+  mockFactCount,
+  mockNodeUpdate,
   nodesQuery,
   personNodes,
 } = vi.hoisted(() => {
@@ -28,11 +30,24 @@ const {
   // The graph the `koryta_ids` resolve against, keyed by node id; a test adds
   // whichever people its payload claims.
   const personNodes = new Map<string, Record<string, unknown>>();
+  // How many facts the collection holds for the person being recounted, and
+  // the write that puts that number on their node. Both belong to the
+  // `stats.factsCount` pass that runs after the facts are committed.
+  const mockFactCount = vi
+    .fn()
+    .mockResolvedValue({ data: () => ({ count: 0 }) });
+  const mockNodeUpdate = vi.fn().mockResolvedValue(undefined);
+  const factsQuery: any = {
+    where: vi.fn(() => factsQuery),
+    count: vi.fn(() => ({ get: mockFactCount })),
+  };
   const mockCollection = vi.fn((name: string) => ({
-    where: nodesQuery.where,
-    doc: vi.fn((id?: string) => ({
-      id: name === "nodes" ? id : "new-extraction-id",
-    })),
+    where: name === "extractions" ? factsQuery.where : nodesQuery.where,
+    doc: vi.fn((id?: string) =>
+      name === "nodes"
+        ? { id, update: (data: unknown) => mockNodeUpdate(id, data) }
+        : { id: "new-extraction-id" },
+    ),
   }));
   // getAll takes refs then an options object, and answers from `personNodes`.
   const mockGetAll = vi.fn(async (...args: any[]) => {
@@ -49,10 +64,16 @@ const {
     mockCommit,
     mockCollection,
     mockGetAll,
+    mockFactCount,
+    mockNodeUpdate,
     nodesQuery,
     personNodes,
   };
 });
+
+vi.mock("firebase-functions/logger", () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
 
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: () => ({
@@ -75,6 +96,8 @@ describe("api/ingest/extraction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     nodesQuery.get.mockResolvedValue({ docs: [] });
+    mockFactCount.mockResolvedValue({ data: () => ({ count: 0 }) });
+    mockNodeUpdate.mockResolvedValue(undefined);
     personNodes.clear();
   });
 
@@ -102,7 +125,7 @@ describe("api/ingest/extraction", () => {
 
     const result = await handler({} as any);
 
-    expect(result).toEqual({ status: "ok", count: 1 });
+    expect(result).toEqual({ status: "ok", count: 1, peopleUpdated: 0 });
     // Firestore cannot query for an absent field, so an unreviewed fact has to
     // carry humanVoted: false to be findable by the review flow.
     expect(mockBatchSet).toHaveBeenCalledWith(
@@ -178,7 +201,7 @@ describe("api/ingest/extraction", () => {
 
     const result = await handler({} as any);
 
-    expect(result).toEqual({ status: "ok", count: 1 });
+    expect(result).toEqual({ status: "ok", count: 1, peopleUpdated: 0 });
     expect(mockBatchSet).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -485,6 +508,85 @@ describe("api/ingest/extraction", () => {
 
       expect(mockGetAll).not.toHaveBeenCalled();
       expect(mockBatchSet.mock.calls[0]![1]).not.toHaveProperty("personNodeId");
+    });
+  });
+
+  describe("stats.factsCount", () => {
+    /** The counter /eksploruj/tabela's „Liczba faktów” sort orders by.
+     * Firestore can only order by a field on the document it is ordering, so
+     * the number has to be on the person. */
+    const batchAbout = (id: string, name: string, facts = 1) => ({
+      articles: [
+        {
+          url: "example.com/a",
+          domain: "example.com",
+          title: null,
+          publication_date: null,
+          tag: "v26",
+          koryta_ids: [id],
+          extracted_facts: Array.from({ length: facts }, () => ({
+            url: "example.com/a",
+            justification: "bo tak",
+            fact_type: "employment" as const,
+            person: name,
+            organization: "Orlen",
+          })),
+        },
+      ],
+    });
+
+    it("writes the recounted total onto every person the batch named", async () => {
+      personNodes.set("gajda-id", { name: "Piotr Gajda", type: "person" });
+      mockFactCount.mockResolvedValue({ data: () => ({ count: 7 }) });
+      mockReadBody.mockResolvedValue(batchAbout("gajda-id", "Piotr Gajda"));
+
+      const result = await handler({} as any);
+
+      expect(result).toEqual({ status: "ok", count: 1, peopleUpdated: 1 });
+      expect(mockNodeUpdate).toHaveBeenCalledWith("gajda-id", {
+        "stats.factsCount": 7,
+      });
+    });
+
+    /** Recounted, not incremented: the pipeline is re-runnable, so a resent
+     * batch would otherwise leave the table ordered by a number twice as big
+     * as the facts behind it. Two facts about one person are one recount. */
+    it("counts the collection once per person, not once per fact", async () => {
+      personNodes.set("gajda-id", { name: "Piotr Gajda", type: "person" });
+      mockFactCount.mockResolvedValue({ data: () => ({ count: 2 }) });
+      mockReadBody.mockResolvedValue(batchAbout("gajda-id", "Piotr Gajda", 2));
+
+      await handler({} as any);
+
+      expect(mockFactCount).toHaveBeenCalledTimes(1);
+      expect(mockNodeUpdate).toHaveBeenCalledTimes(1);
+      expect(mockNodeUpdate).toHaveBeenCalledWith("gajda-id", {
+        "stats.factsCount": 2,
+      });
+    });
+
+    it("touches nobody when no fact was matched to a person", async () => {
+      mockReadBody.mockResolvedValue(batchAbout("gajda-id", "Piotr Gajda"));
+
+      const result = await handler({} as any);
+
+      expect(result).toEqual({ status: "ok", count: 1, peopleUpdated: 0 });
+      expect(mockNodeUpdate).not.toHaveBeenCalled();
+    });
+
+    /** The facts are committed by the time the counter is written, so a failed
+     * update has to be a logged miscount rather than a failed ingest the
+     * pipeline would retry - and duplicate. /api/stats/computeNodes recomputes
+     * the field from the collection anyway. */
+    it("still reports success when the counter cannot be written", async () => {
+      personNodes.set("gajda-id", { name: "Piotr Gajda", type: "person" });
+      mockNodeUpdate.mockRejectedValue(new Error("NOT_FOUND"));
+      mockReadBody.mockResolvedValue(batchAbout("gajda-id", "Piotr Gajda"));
+
+      const result = await handler({} as any);
+
+      expect(result).toEqual({ status: "ok", count: 1, peopleUpdated: 0 });
+      expect(mockCommit).toHaveBeenCalledTimes(1);
     });
   });
 });

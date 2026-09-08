@@ -9,6 +9,7 @@ import {
   revisionChangesNothing,
   sameStoredValue,
   sanitizeFirestoreData,
+  withSeededNodeStats,
   withoutInternalFields,
 } from "../../../server/utils/revisions";
 import { skippedChangeFields } from "../../../shared/revisionChanges";
@@ -263,6 +264,35 @@ describe("createRevisionTransaction", () => {
     );
   });
 
+  describe("withSeededNodeStats", () => {
+    it("seeds a facts count on a person", () => {
+      // /eksploruj/tabela orders by it, and Firestore drops a document that
+      // lacks the ordered field rather than sorting it last.
+      const seeded = withSeededNodeStats({ type: "person", name: "A" });
+      expect(seeded.stats).toEqual({
+        nodeGroupSize: 0,
+        isApproved: false,
+        factsCount: 0,
+      });
+    });
+
+    it("seeds none on a company", () => {
+      // An extracted fact is matched to a person node and to nothing else, so
+      // a zero here would be a field written onto every company and region to
+      // state what is true of them by construction.
+      const seeded = withSeededNodeStats({ type: "place", name: "Orlen" });
+      expect(seeded.stats).toEqual({ nodeGroupSize: 0, isApproved: false });
+    });
+
+    it("leaves a count that has already been taken alone", () => {
+      const seeded = withSeededNodeStats({
+        type: "person",
+        stats: { factsCount: 9 },
+      });
+      expect((seeded.stats as { factsCount: number }).factsCount).toBe(9);
+    });
+  });
+
   describe("updating a document that already exists", () => {
     /** A published person as the export has them: the data a revision states,
      * and the fields the node owns and no revision carries. */
@@ -276,6 +306,7 @@ describe("createRevisionTransaction", () => {
       stats: {
         isApproved: true,
         notesCount: 2,
+        factsCount: 6,
         nodeGroupSize: 4,
         edges: { all: {}, approved: {} },
       },
@@ -365,7 +396,7 @@ describe("createRevisionTransaction", () => {
         parties: ["PiS"],
         revision_id: { id: "new-rev-id" },
         published: true,
-        stats: { nodeGroupSize: 0, isApproved: true },
+        stats: { nodeGroupSize: 0, isApproved: true, factsCount: 0 },
       });
     });
 
@@ -376,7 +407,14 @@ describe("createRevisionTransaction", () => {
       // a page nobody could search their way to. Zero says "not counted yet";
       // `computeNodes` replaces it with the real group size.
       const created = targetWrite({ automatic: true, published: false });
-      expect(created.stats).toEqual({ nodeGroupSize: 0, isApproved: false });
+      expect(created.stats).toEqual({
+        nodeGroupSize: 0,
+        isApproved: false,
+        // A person, so the counter /eksploruj/tabela's „Liczba faktów” sort
+        // orders by is seeded too: that `orderBy` drops a document without the
+        // field rather than sorting it last.
+        factsCount: 0,
+      });
     });
 
     it("fills in a counter an existing document is missing", () => {
@@ -391,6 +429,7 @@ describe("createRevisionTransaction", () => {
         isApproved: true,
         notesCount: 2,
         nodeGroupSize: 0,
+        factsCount: 0,
       });
     });
 

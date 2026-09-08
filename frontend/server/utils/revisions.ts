@@ -199,6 +199,14 @@ export function withSeededNodeStats(
   if (stats.nodeGroupSize === undefined) stats.nodeGroupSize = 0;
   if (stats.isApproved === undefined)
     stats.isApproved = pageIsPublic(targetData);
+  // People only, because an extracted fact is matched to a person node and to
+  // nothing else. /eksploruj/tabela orders by this one, and an `orderBy` drops
+  // a document that lacks the field instead of sorting it last - so a person
+  // ingested between two `computeNodes` runs would not be low down that table,
+  // they would be absent from it.
+  if (targetData.type === "person" && stats.factsCount === undefined) {
+    stats.factsCount = 0;
+  }
   return { ...targetData, stats };
 }
 
