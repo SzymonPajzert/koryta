@@ -101,6 +101,17 @@ const DIRECT_LABEL_LIMIT = 14;
 const COLUMN_WIDTH = "90%";
 const MAX_COLUMN_PX = 48;
 
+/** The surface-coloured line between two stacked segments of one day.
+ *
+ * `barPlotOptions` draws it 2px wide, which is the method's spacer and what
+ * every other chart on the site uses. This one is denser than they are - four
+ * bands on every column, 30 or 90 columns across - so the separators add up to
+ * a visible amount of the ink, and at 2px they read as part of the pattern
+ * rather than as the absence of one. 1px still separates, which is what the
+ * palette needs it for: two of these four hues are only allowed adjacent
+ * because a gap keeps them apart. Zero is not an option for that reason. */
+const SEGMENT_GAP_PX = 1;
+
 const hasData = computed(() => props.daily.some((day) => day.total > 0));
 
 const subtitle = computed(() => {
@@ -126,6 +137,7 @@ const options = computed(() => {
     chart: { ...base.chart, type: "bar", stacked: true },
     colors: activityKinds.map((kind) => activityColors[kind]),
     ...barPlotOptions(),
+    stroke: { ...barPlotOptions().stroke, width: SEGMENT_GAP_PX },
     plotOptions: {
       bar: {
         ...barPlotOptions().plotOptions.bar,
