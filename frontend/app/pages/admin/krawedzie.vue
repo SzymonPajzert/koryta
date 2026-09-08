@@ -98,7 +98,7 @@
             variant="text"
             :loading="pending"
             data-testid="edges-load-more"
-            @click="load(true)"
+            @click="reload(true)"
           >
             Wczytaj więcej
           </v-btn>
@@ -117,10 +117,8 @@ import { computed, ref } from "vue";
 import { mdiArrowLeft, mdiEarth } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
-import type {
-  UnpublishedEdgeRow,
-  UnpublishedEdges,
-} from "~~/server/api/edges/unpublished.get";
+import { useScannedQueue } from "~/composables/scannedQueue";
+import type { UnpublishedEdgeRow } from "~~/server/api/edges/unpublished.get";
 
 definePageMeta({
   middleware: "admin",
@@ -138,16 +136,19 @@ const headers = [
   { title: "Okres", key: "dates", sortable: false, width: 180 },
 ];
 
-const rows = ref<UnpublishedEdgeRow[]>([]);
+const { rows, nextCursor, scanned, truncated, pending, error, load } =
+  useScannedQueue<UnpublishedEdgeRow>("/api/edges/unpublished");
 const selected = ref<string[]>([]);
-const nextCursor = ref<string | null>(null);
-const scanned = ref(0);
-const truncated = ref(false);
-const pending = ref(false);
 const publishing = ref(false);
-const error = ref<string | null>(null);
 const notice = ref<string | null>(null);
 const noticeShown = ref(false);
+
+/** Re-reading the queue drops the selection with it: the ids in it would
+ * otherwise outlive the rows they were ticked on. */
+async function reload(more = false) {
+  await load(more);
+  if (!more) selected.value = [];
+}
 
 const allSelected = computed(
   () => rows.value.length > 0 && selected.value.length === rows.value.length,
@@ -159,36 +160,6 @@ function label(row: UnpublishedEdgeRow): string {
 
 function toggleAll() {
   selected.value = allSelected.value ? [] : rows.value.map((row) => row.id);
-}
-
-/** @param more whether to append the next page rather than start over. */
-async function load(more = false) {
-  // The endpoint only answers a caller carrying an admin token, which the
-  // server render has no way to present - it would spend a request on a 401.
-  if (import.meta.server) return;
-
-  pending.value = true;
-  error.value = null;
-  try {
-    const data = await authRequest<UnpublishedEdges>("/api/edges/unpublished", {
-      method: "GET",
-      query: {
-        limit: 50,
-        ...(more && nextCursor.value ? { cursor: nextCursor.value } : {}),
-      },
-    });
-    rows.value = more ? [...rows.value, ...data.edges] : data.edges;
-    if (!more) selected.value = [];
-    nextCursor.value = data.nextCursor;
-    scanned.value = more ? scanned.value + data.scanned : data.scanned;
-    truncated.value = data.truncated;
-  } catch (err) {
-    error.value =
-      (err as { data?: { message?: string } }).data?.message ||
-      "Nie udało się wczytać powiązań.";
-  } finally {
-    pending.value = false;
-  }
 }
 
 async function publishSelected() {
@@ -207,18 +178,18 @@ async function publishSelected() {
     }
     notice.value = `Opublikowano ${ids.length} ${relationsPlural(ids.length)}.`;
     noticeShown.value = true;
-    await load();
+    await reload();
   } catch (err) {
     error.value =
       (err as { data?: { message?: string } }).data?.message ||
       "Nie udało się opublikować powiązań.";
     // Whatever went through before the failure is already live, so the list
     // has to be re-read rather than patched.
-    await load();
+    await reload();
   } finally {
     publishing.value = false;
   }
 }
 
-onMounted(() => load());
+onMounted(() => reload());
 </script>
