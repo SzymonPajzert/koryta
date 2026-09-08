@@ -64,6 +64,12 @@ export const CLUSTER_METHOD_VERSION = 1;
  */
 export const MAX_AGE_HOURS = 24;
 
+/** How many companies an owner without a KRS number has to hold before it is
+ * treated as a bucket and subdivided by company-name stem. On the graph as it
+ * stands only `Skarb Państwa` (112) clears it; `NFOŚiGW` at 13 stays whole,
+ * and so does every ministry. */
+const BUCKET_OWNER_MIN_COMPANIES = 25;
+
 export interface ClusterStatsDoc {
   type: "employment_clusters";
   clusters: StoryCluster[];
@@ -250,6 +256,12 @@ export async function buildClusterHires(
   let unpaidSeats = 0;
   const isUnpaidSeat = (edge: Edge, company: Company): boolean => {
     if (!namesASupervisorySeat(edge.name)) return false;
+    /* Only where the register actually says what the organ is. An institution
+     * nobody has read the entry for is counted, which is the direction
+     * `bodyIsPaidPost` errs in too - "undefined is true, and that is the whole
+     * of the default". Reading an absent field as an unpaid seat would drop
+     * every supervisory seat at the 773 places with no `supervisoryOrgan`. */
+    if (!company.supervisoryOrgan) return false;
     return company.supervisoryOrgan !== "rada_nadzorcza";
   };
 
@@ -351,7 +363,23 @@ export async function buildClusterHires(
   /* Titles for every key the detector might group on. Regions and owners are
    * nodes and are named by their node; a sector is named by the site's own
    * vocabulary, so that a card says „Sport i rekreacja” rather than „sport”. */
-  const labels: ClusterLabels = { titles: {}, teryts: {} };
+  /* Owners that are an administration rather than a company. The register is
+   * the discriminator: `Skarb Państwa` and the ministries are place nodes
+   * carrying no KRS number, and every real holding carries one. Size cannot
+   * stand in for it - ORLEN owns 48 companies and PKP 28, and both are stories
+   * rather than buckets. */
+  const bucketOwners: string[] = [];
+  for (const [id, place] of Object.entries(places)) {
+    if (!ownersOf.size) break;
+    if ((place as Company).krsNumber) continue;
+    let owned = 0;
+    for (const [, owners] of resolvedOwners) {
+      if (owners.includes(id)) owned += 1;
+    }
+    if (owned > BUCKET_OWNER_MIN_COMPANIES) bucketOwners.push(id);
+  }
+
+  const labels: ClusterLabels = { titles: {}, teryts: {}, bucketOwners };
   for (const [id, region] of Object.entries(regions)) {
     if (region.name) labels.titles[id] = region.name;
     if (region.teryt) labels.teryts![id] = region.teryt;

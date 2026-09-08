@@ -57,7 +57,9 @@ export const QA_ITEMS: QaItem[] = [
       "„Ostatnimi zatrudnieniami” są cztery karty z grupami zmian - miasto, " +
       "branża albo grupa spółek - a pełna lista jest na /eksploruj/historie. " +
       "Grupa trafia na listę tylko wtedy, gdy różni się od reszty kraju w tym " +
-      "samym okresie, a nie dlatego, że jest duża.",
+      "samym okresie, a nie dlatego, że jest duża. Jedna z kart mówi nie o " +
+      "tym, która partia dostała posady, tylko ile z nowych osób w ogóle ma " +
+      "za sobą politykę - tak wygląda spółka dzielona między koalicjantów.",
     steps: [
       "Wejdź na stronę główną i przewiń do sekcji „Co układa się w historię” - ma być nad „Ostatnimi zatrudnieniami”.",
       "Na karcie kliknij nazwisko: ma się otworzyć strona tej osoby.",

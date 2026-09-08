@@ -115,8 +115,8 @@ export type ClusterHire = {
 
 export type ClusterKind = "region" | "sector" | "owner";
 
-/** The four ways a group can earn a place on the list. */
-export type ClusterChannel = "party" | "burst" | "sweep" | "local";
+/** The five ways a group can earn a place on the list. */
+export type ClusterChannel = "party" | "burst" | "sweep" | "local" | "density";
 
 /** The kinds of body that own a company, coarsest last. `spolka` is a company
  * owned by another company; `brak` is one the register gives no owner for. */
@@ -258,6 +258,27 @@ export type StoryCluster = {
    * separates a rollout from a group that happens to change boards often:
    * Polskie Radio's nine stations come to 1.0 against 0.2-0.5 everywhere else. */
   rolloutPerMonth: number;
+  /** How many of the cluster's hires nobody has published carry a party at
+   * all, against how many the same kind of owner produces nationally.
+   *
+   * The question „is this group being staffed with politicians”, which is not
+   * the question the party channel asks. A state holding under a coalition
+   * shares its seats out: the 249 people appointed across the PKP group in
+   * three years break down PSL 22, KO 18, PiS 17, Lewica 16 and 173 with no
+   * signal at all, so no party dominates and the purity test says nothing -
+   * while a quarter of the arrivals being political people is the whole story.
+   *
+   * Counted over the unpublished hires only, and against a rate computed the
+   * same way. `parties[]` covers 92% of published people and 14% of
+   * unpublished ones, so including the published half would measure how much
+   * of a group an editor has already worked rather than what the group did. */
+  density: number;
+  densityOf: number;
+  densityExpected: number;
+  densityP: number;
+  densityQ: number;
+  densityLift: number;
+  densityLiftLow: number;
   /** Hires by somebody who stood for election in the company's seat region,
    * and how many of them the national rate predicts. A channel in its own
    * right, not only a display field: eight of Chełm's twelve visible hires are
@@ -317,6 +338,10 @@ export type ClusterOptions = {
   /** How many local candidates a group needs before that channel is tested.
    * Three, for the reason `minSwept` is three. */
   minLocal?: number;
+  /** How many unpublished hires carrying a party a group needs before its
+   * political density is tested. Five: the rate being measured against is
+   * around a tenth, so four would be a group of forty saying very little. */
+  minDensity?: number;
   /** How many of a group's companies must have had two or more people arrive
    * on one day before its sweep rate is worth testing. Three: two related
    * companies changing board together is a coincidence a big enough register
@@ -328,9 +353,6 @@ export type ClusterOptions = {
    * that, which is what keeps `szpitale` - 1.25x on 3,815 spells, p=1e-14 - off
    * a list it has nothing to say on. */
   minLift?: number;
-  /** How many companies an owner may hold before its cluster is subdivided by
-   * company-name stem instead. */
-  ownerSplitAbove?: number;
   /** How much of the smaller of two clusters may be the same hires before the
    * weaker one is dropped as a second name for the same story. */
   maxOverlap?: number;
@@ -354,8 +376,8 @@ const DEFAULTS: Required<ClusterOptions> = {
   minPartyPeople: 3,
   minPartyCount: 4,
   minLocal: 3,
+  minDensity: 5,
   minSwept: 3,
-  ownerSplitAbove: 25,
   maxOverlap: 0.7,
   maxHiresPerCluster: 25,
   maxClusters: 60,
@@ -578,6 +600,7 @@ export function clusterScore(cluster: {
   burstLiftLow: number;
   sweepLiftLow: number;
   localLiftLow: number;
+  densityLiftLow: number;
   rolloutPerMonth: number;
   known: number;
   crew: unknown[];
@@ -592,13 +615,17 @@ export function clusterScore(cluster: {
     Math.max(0, cluster.sweepLiftLow - 1) *
     (1 + Math.min(cluster.rolloutPerMonth, 2));
   const localCandidacy = Math.max(0, cluster.localLiftLow - 1);
+  /* Weighted like the party lift, and for the same reason: it is a statement
+   * about who was hired rather than about how many, so an uneven crawl moves
+   * it least. */
+  const density = 2 * Math.max(0, cluster.densityLiftLow - 1);
   const crew = 1 + 0.25 * Math.min(cluster.crew.length, 4);
   /* Still a multiplier as well as a channel. A cluster carried by its party mix
    * reads very differently when the people in it also stood for election there,
    * and that is worth ranking up even where the rate itself is unremarkable. */
   const local =
     1 + 0.5 * (cluster.localCandidates / Math.max(cluster.known, 1));
-  return (2 * party + burst + sweep + localCandidacy) * crew * local;
+  return (2 * party + burst + sweep + localCandidacy + density) * crew * local;
 }
 
 function isoDaysBefore(iso: string, days: number): string {
@@ -835,12 +862,12 @@ function countBy<T>(items: T[], key: (item: T) => string | undefined) {
 function keysFor(
   hire: ClusterHire,
   kind: ClusterKind,
-  bigOwners: Set<string>,
+  bucketOwners: Set<string>,
 ): string[] {
   if (kind === "region") return hire.regionId ? [hire.regionId] : [];
   if (kind === "sector") return hire.categories;
   return (hire.ownerIds ?? []).map((owner) =>
-    bigOwners.has(owner)
+    bucketOwners.has(owner)
       ? `${owner}${OWNER_STEM_SEPARATOR}${companyNameStem(hire.companyName)}`
       : owner,
   );
@@ -918,6 +945,11 @@ export type ClusterLabels = {
   titles: Record<string, string>;
   /** TERYT codes, for those keys that name a region node. */
   teryts?: Record<string, string>;
+  /** Owner nodes that stand for an administration rather than a company -
+   * Skarb Państwa, a ministry - and so are subdivided by company-name stem
+   * instead of being a cluster in their own right. See the note where this is
+   * read, in `computeStoryClusters`. */
+  bucketOwners?: string[];
 };
 
 export function computeStoryClusters(
@@ -954,24 +986,23 @@ export function computeStoryClusters(
   const recent = dated.filter((h) => h.start >= windowStart);
   if (recent.length === 0) return [];
 
-  /* Owners holding more companies than any one story could be about. Skarb
-   * Państwa owns 112 of them and hires into 62 in a two-year window; a cluster
-   * headed „Skarb Państwa” says only that the state employs people. Those get
-   * subdivided by company-name stem, which is what turns the bucket into
-   * „Skarb Państwa / POLSKIE RADIO”. See `companyNameStem`. */
-  const companiesByOwner = new Map<string, Set<string>>();
-  for (const hire of dated) {
-    for (const owner of hire.ownerIds ?? []) {
-      const seenCompanies = companiesByOwner.get(owner) ?? new Set<string>();
-      seenCompanies.add(hire.companyId);
-      companiesByOwner.set(owner, seenCompanies);
-    }
-  }
-  const bigOwners = new Set(
-    Array.from(companiesByOwner)
-      .filter(([, companies]) => companies.size > opts.ownerSplitAbove)
-      .map(([owner]) => owner),
-  );
+  /* Which owners are a bucket rather than a company, and so have to be
+   * subdivided by company-name stem before they mean anything.
+   *
+   * The test is the KRS number, not the size. „Skarb Państwa” owns 112
+   * companies and hires into 62 of them in a two-year window; a cluster headed
+   * with its name says only that the state employs people, and splitting it by
+   * stem is what turns it into „Skarb Państwa / POLSKIE RADIO”. But it is the
+   * only owner of that size in the graph without a KRS number, and every real
+   * holding above the threshold has one - ORLEN with 48 companies, Agencja
+   * Rozwoju Przemysłu with 37, PGE with 35, TAURON with 29, PKP with 28
+   * counting through the chain. Splitting on size alone shattered all five:
+   * PKP became „PKP CARGO”, „PKP INTERCITY” and „CS NATURA” - which is the
+   * opposite of what the owner key is for, since a holding taking on 249
+   * people across its subsidiaries in three years is exactly the story it
+   * exists to find. `bucketOwners` is decided by the caller, which is the part
+   * that can see whether an owner is a company at all. */
+  const bucketOwners = new Set(labels.bucketOwners ?? []);
 
   /* An appointment act: everybody who took a seat at one company on one day.
    * A company where two or more arrived together has had its board changed
@@ -1036,6 +1067,27 @@ export function computeStoryClusters(
     if (hire.localCandidate) totals.local += 1;
     localStrata.set(tier, totals);
   }
+  /* The same, for political density: how often a hire nobody has published at
+   * this kind of owner carries a party at all. Unpublished only - see the
+   * `density` field. */
+  const densityStrata = new Map<
+    OwnerTier,
+    { hires: number; labelled: number }
+  >();
+  for (const hire of recent) {
+    if (hire.visible) continue;
+    const tier = hire.ownerTier ?? "brak";
+    const totals = densityStrata.get(tier) ?? { hires: 0, labelled: 0 };
+    totals.hires += 1;
+    if (partiesOf(hire).length > 0) totals.labelled += 1;
+    densityStrata.set(tier, totals);
+  }
+  const densityRate = (tier: OwnerTier | undefined): number => {
+    const totals = densityStrata.get(tier ?? "brak");
+    if (!totals || totals.hires === 0) return 0;
+    return totals.labelled / totals.hires;
+  };
+
   const localRate = (tier: OwnerTier | undefined): number => {
     const totals = localStrata.get(tier ?? "brak");
     if (!totals || totals.hires === 0) return 0;
@@ -1082,7 +1134,14 @@ export function computeStoryClusters(
     partyByTier.set(tier, counts);
   }
   /** The share of labelled hires in this hire's own stratum that carry `party`,
-   * falling back to the national share where the stratum is too thin to say. */
+   * falling back to the national share where the stratum is too thin to say.
+   *
+   * A cluster is counted in the stratum it is measured against, as it is in the
+   * national mix, and for the same reason: the effect it costs is bounded by
+   * how much of the stratum the cluster is, and on this graph the largest
+   * company-owned cluster is 142 hires against the stratum's 904. Worth
+   * revisiting if a stratum ever gets thin enough for one group to be most
+   * of it. */
   const partyRate = (tier: OwnerTier | undefined, party: string): number => {
     const labelled = labelledByTier.get(tier ?? "brak") ?? 0;
     if (labelled >= 20) {
@@ -1105,14 +1164,14 @@ export function computeStoryClusters(
      * of the burst test is the group's all-time volume, not its window. */
     const allByKey = new Map<string, number>();
     for (const hire of dated) {
-      for (const key of keysFor(hire, kind, bigOwners)) {
+      for (const key of keysFor(hire, kind, bucketOwners)) {
         allByKey.set(key, (allByKey.get(key) ?? 0) + 1);
       }
     }
 
     const recentByKey = new Map<string, ClusterHire[]>();
     for (const hire of recent) {
-      for (const key of keysFor(hire, kind, bigOwners)) {
+      for (const key of keysFor(hire, kind, bucketOwners)) {
         const bucket = recentByKey.get(key);
         if (bucket) bucket.push(hire);
         else recentByKey.set(key, [hire]);
@@ -1134,6 +1193,12 @@ export function computeStoryClusters(
       sweepExpected: number;
       swept: number;
       partyPUnpublished: number;
+      density: number;
+      densityOf: number;
+      densityP: number;
+      densityLift: number;
+      densityLiftLow: number;
+      densityExpected: number;
       localP: number;
       localLift: number;
       localLiftLow: number;
@@ -1327,9 +1392,38 @@ export function computeStoryClusters(
         }
       }
 
+      /* Political density, over the hires nobody has published. */
+      const draftRows = rows.filter((hire) => !hire.visible);
+      const density = draftRows.filter(
+        (hire) => partiesOf(hire).length > 0,
+      ).length;
+      let densityP = 1;
+      let densityLift = 0;
+      let densityLiftLow = 0;
+      let densityExpected = 0;
+      if (density >= opts.minDensity) {
+        const probabilities = draftRows.map((hire) =>
+          densityRate(hire.ownerTier),
+        );
+        densityExpected = probabilities.reduce((a, b) => a + b, 0);
+        if (densityExpected > 0) {
+          densityP = poissonBinomialTail(density, probabilities);
+          densityLift = density / densityExpected;
+          const variance = probabilities.reduce((a, p) => a + p * (1 - p), 0);
+          densityLiftLow =
+            Math.max(0, density - 1.96 * Math.sqrt(variance)) / densityExpected;
+        }
+      }
+
       tested.push({
         key,
         rows,
+        density,
+        densityOf: draftRows.length,
+        densityP,
+        densityLift,
+        densityLiftLow,
+        densityExpected,
         partyPUnpublished,
         localP,
         localLift,
@@ -1354,6 +1448,7 @@ export function computeStoryClusters(
     const burstQ = correctTested(tested.map((t) => t.burstP));
     const sweepQ = correctTested(tested.map((t) => t.sweepP));
     const localQ = correctTested(tested.map((t) => t.localP));
+    const densityQ = correctTested(tested.map((t) => t.densityP));
 
     tested.forEach((entry, index) => {
       const q = {
@@ -1361,6 +1456,7 @@ export function computeStoryClusters(
         burst: burstQ[index]!,
         sweep: sweepQ[index]!,
         local: localQ[index]!,
+        density: densityQ[index]!,
       };
       /* Both halves of each test have to hold: the correction says the effect
        * is unlikely to be noise, the lift says it is large enough to be worth
@@ -1373,11 +1469,14 @@ export function computeStoryClusters(
         q.sweep <= opts.maxQ && entry.sweepLiftLow >= opts.minLift;
       const byLocal =
         q.local <= opts.maxQ && entry.localLiftLow >= opts.minLift;
+      const byDensity =
+        q.density <= opts.maxQ && entry.densityLiftLow >= opts.minLift;
       const channels: ClusterChannel[] = [];
       if (byParty) channels.push("party");
       if (byBurst) channels.push("burst");
       if (bySweep) channels.push("sweep");
       if (byLocal) channels.push("local");
+      if (byDensity) channels.push("density");
       if (channels.length === 0) return;
       if (isNumberedFleet(entry.rows)) return;
       clusters.push(
@@ -1389,6 +1488,7 @@ export function computeStoryClusters(
           burstQ: q.burst,
           sweepQ: q.sweep,
           localQ: q.local,
+          densityQ: q.density,
           channels,
           sweptCompanies,
           maxHires: opts.maxHiresPerCluster,
@@ -1418,24 +1518,61 @@ export function computeStoryClusters(
  * exactly the case worth catching, and a Jaccard would score it 0.75 or 0.5
  * depending on how much bigger the region is.
  */
+/** How much of a smaller cluster has to sit inside a bigger one before it is
+ * read as a slice of it rather than as a story of its own. */
+const NESTED_OVERLAP = 0.9;
+
 function dropNearDuplicates(
   clusters: StoryCluster[],
   backing: Set<string>[],
   maxOverlap: number,
 ): StoryCluster[] {
-  const order = clusters
-    .map((cluster, index) => ({ cluster, index }))
-    .sort((a, b) => b.cluster.score - a.cluster.score);
+  /* Nesting first, then score. A holding and one of its subsidiaries are two
+   * clusters built from the same hires, and the subsidiary is contained in the
+   * parent completely - PKP Cargo's thirteen appointments are thirteen of the
+   * parent group's thirty-seven. Left to the score the slice won, because it is
+   * a denser set of the same rows, and „POLSKIE KOLEJE PAŃSTWOWE” - the group
+   * the story is actually about - disappeared from the list entirely. Where one
+   * cluster is essentially a subset of another, the larger is the one to keep
+   * whatever the two scored; where they merely overlap, the score decides. */
+  const sorted = clusters
+    .map((cluster, index) => ({ cluster, edges: backing[index]! }))
+    .sort((a, b) => {
+      if (b.edges.size !== a.edges.size) return b.edges.size - a.edges.size;
+      return b.cluster.score - a.cluster.score;
+    });
+  const byScore = [...sorted].sort((a, b) => b.cluster.score - a.cluster.score);
+
   const kept: { cluster: StoryCluster; edges: Set<string> }[] = [];
-  for (const { cluster, index } of order) {
-    const edges = backing[index]!;
+  const contained = (inner: Set<string>, outer: Set<string>): number => {
+    let shared = 0;
+    for (const edge of inner) if (outer.has(edge)) shared += 1;
+    return inner.size > 0 ? shared / inner.size : 0;
+  };
+  /* Anything essentially inside a bigger cluster is dropped up front, so that
+   * the score comparison below never sees a slice of something it already
+   * has. */
+  const nested = new Set<string>();
+  for (const inner of sorted) {
+    for (const outer of sorted) {
+      if (inner === outer || nested.has(outer.cluster.id)) continue;
+      if (outer.edges.size <= inner.edges.size) continue;
+      if (contained(inner.edges, outer.edges) >= NESTED_OVERLAP) {
+        nested.add(inner.cluster.id);
+        break;
+      }
+    }
+  }
+
+  for (const entry of byScore) {
+    if (nested.has(entry.cluster.id)) continue;
     const duplicate = kept.some((other) => {
       let shared = 0;
-      for (const edge of edges) if (other.edges.has(edge)) shared += 1;
-      const smaller = Math.min(edges.size, other.edges.size);
+      for (const edge of entry.edges) if (other.edges.has(edge)) shared += 1;
+      const smaller = Math.min(entry.edges.size, other.edges.size);
       return smaller > 0 && shared / smaller > maxOverlap;
     });
-    if (!duplicate) kept.push({ cluster, edges });
+    if (!duplicate) kept.push(entry);
   }
   return kept.map((entry) => entry.cluster);
 }
@@ -1467,6 +1604,13 @@ function buildCluster(input: {
   localLift: number;
   localLiftLow: number;
   localExpected: number;
+  density: number;
+  densityOf: number;
+  densityP: number;
+  densityQ: number;
+  densityLift: number;
+  densityLiftLow: number;
+  densityExpected: number;
   sweptCompanies: Set<string>;
   maxHires: number;
 }): StoryCluster {
@@ -1580,6 +1724,13 @@ function buildCluster(input: {
     rolloutPerMonth: round2(rolloutPerMonth),
     localCandidates: rows.filter((h) => h.localCandidate).length,
     localExpected: round2(input.localExpected),
+    density: input.density,
+    densityOf: input.densityOf,
+    densityExpected: round2(input.densityExpected),
+    densityP: input.densityP,
+    densityQ: input.densityQ,
+    densityLift: round2(input.densityLift),
+    densityLiftLow: round2(input.densityLiftLow),
     localP: input.localP,
     localQ: input.localQ,
     localLift: round2(input.localLift),

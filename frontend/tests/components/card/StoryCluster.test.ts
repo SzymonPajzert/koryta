@@ -40,6 +40,13 @@ function cluster(overrides: Partial<StoryCluster> = {}): StoryCluster {
     localQ: 0.2,
     localLift: 1.7,
     localLiftLow: 1.02,
+    density: 0,
+    densityOf: 0,
+    densityExpected: 0,
+    densityP: 1,
+    densityQ: 1,
+    densityLift: 0,
+    densityLiftLow: 0,
     partyPUnpublished: 0.004,
     partyIsEditorialArtifact: false,
     channels: ["party", "burst"],
@@ -119,6 +126,39 @@ describe("CardStoryCluster", () => {
     expect(text).toContain("W 6 z tych spółek wymieniono kilka osób naraz");
     expect(text).toContain("spodziewaliśmy się 2,81");
     expect(text).toContain("grupa spółek");
+  });
+
+  it("leads with political density where no party dominates", async () => {
+    const card = await mount(
+      cluster({
+        kind: "owner",
+        key: "pkp",
+        title: "POLSKIE KOLEJE PAŃSTWOWE",
+        subtitle: undefined,
+        nodeId: "pkp",
+        teryt: undefined,
+        known: 142,
+        visible: 2,
+        companies: 34,
+        dominantParty: "PSL",
+        dominantCount: 12,
+        labelled: 31,
+        partyQ: 1,
+        partyLiftLow: 0,
+        density: 29,
+        densityOf: 140,
+        densityExpected: 13.81,
+        densityQ: 0.0011,
+        densityLift: 2.1,
+        densityLiftLow: 1.6,
+        channels: ["burst", "density"],
+      }),
+    );
+    const text = card.text();
+    expect(text).toContain("142 zmiany w 34 spółkach");
+    expect(text).toContain("29 z 140");
+    expect(text).toContain("partię albo start w wyborach");
+    expect(text).toContain("dwa razy częściej");
   });
 
   it("links every hire to the person behind it", async () => {

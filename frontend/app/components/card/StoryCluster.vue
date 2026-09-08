@@ -146,6 +146,17 @@ const lede = computed(() => {
       `z takim samym właścicielem w całym kraju.`
     );
   }
+  /* Before the rollout and the burst, because where both hold this is the more
+   * particular claim: „a fifth of the people arriving here are political” says
+   * more than „there were more arrivals than usual”. */
+  if (c.channels.includes("density")) {
+    return (
+      `${changes}. ${c.density} z ${c.densityOf} osób, których stron jeszcze ` +
+      `nie opublikowaliśmy, ma za sobą partię albo start w wyborach — ` +
+      `${times(c.densityLift)} częściej niż w spółkach z takim samym ` +
+      `właścicielem.`
+    );
+  }
   if (c.channels.includes("sweep")) {
     return (
       `${changes}. W ${c.swept} z tych spółek wymieniono kilka osób naraz` +

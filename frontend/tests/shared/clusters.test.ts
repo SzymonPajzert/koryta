@@ -118,6 +118,35 @@ function background(): ClusterHire[] {
 
 const labels = { titles: {}, teryts: {} };
 
+/** Company-owned companies with an ordinary mix of parties.
+ *
+ * The stratified tests compare a group against others with the same kind of
+ * owner, and a stratum made up entirely of one cluster compares that cluster
+ * to itself. Real data does not have that problem - the `spolka` stratum holds
+ * 904 hires and the biggest cluster in it is 142 - but a fixture does. */
+function spolkaBackground(): ClusterHire[] {
+  const rows: ClusterHire[] = [];
+  for (let i = 0; i < 120; i++) {
+    rows.push(
+      hire({
+        edgeId: `sp${i}`,
+        personId: `spp${i}`,
+        companyId: `spc${i % 30}`,
+        companyName: `SPÓŁKA GRUPOWA ${town(i)} ${i % 30}`,
+        ownerIds: [`spowner${i % 10}`],
+        ownerTier: "spolka",
+        parties: [["PO", "PiS", "PSL", "SLD"][Math.floor(i / 2) % 4]!],
+        visible: false,
+        start:
+          i % 2 === 0
+            ? `2026-01-${String((i % 28) + 1).padStart(2, "0")}`
+            : "2021-01-05",
+      }),
+    );
+  }
+  return rows;
+}
+
 /** Spells at a cluster's companies from before the window.
  *
  * Without them the burst guard drops the group - a company whose whole recorded
@@ -424,8 +453,9 @@ describe("computeStoryClusters", () => {
   });
 
   it("names an owner group after the brand when the owner is a bucket", () => {
-    /* One owner with more companies than `ownerSplitAbove`, so its clusters are
-     * split by company-name stem: „POLSKIE RADIO”, owned by Skarb Państwa. */
+    /* An owner the caller marked as an administration rather than a company,
+     * so its clusters are split by company-name stem: „POLSKIE RADIO”, owned
+     * by Skarb Państwa. */
     const rows = [
       ...background(),
       ...history(
@@ -450,11 +480,137 @@ describe("computeStoryClusters", () => {
     }
     const clusters = computeStoryClusters(rows, TODAY, {
       titles: { skarb: "Skarb Państwa" },
+      bucketOwners: ["skarb"],
     });
     const radio = clusters.find((c) => c.title === "POLSKIE RADIO");
     expect(radio).toBeDefined();
     expect(radio!.subtitle).toBe("Skarb Państwa");
     expect(radio!.companies).toBe(8);
+  });
+
+  it("keeps a holding whole, however many companies it owns", () => {
+    /* Only an owner the caller marks as a bucket is split by name stem. Size
+     * cannot decide it: ORLEN owns 48 companies and PKP 28, and splitting them
+     * turned the PKP group into „PKP CARGO” and „PKP INTERCITY” - the opposite
+     * of what the owner key is for. */
+    const rows = [
+      ...background(),
+      ...spolkaBackground(),
+      ...history(
+        Array.from({ length: 30 }, (_, i) => `holdc${i}`),
+        "hold",
+      ),
+    ];
+    for (let i = 0; i < 30; i++) {
+      rows.push(
+        hire({
+          edgeId: `hold${i}`,
+          personId: `holdp${i}`,
+          companyId: `holdc${i}`,
+          companyName:
+            i < 10 ? `PKP CARGO ${town(i)}` : `PKP INTERCITY ${town(i)}`,
+          regionId: `terytH${i}`,
+          ownerIds: ["pkp"],
+          ownerTier: "spolka",
+          parties: ["PiS"],
+          start: `2026-05-0${(i % 8) + 1}`,
+        }),
+      );
+    }
+    const clusters = computeStoryClusters(rows, TODAY, {
+      titles: { pkp: "POLSKIE KOLEJE PAŃSTWOWE" },
+    });
+    expect(
+      clusters.find((c) => c.title === "POLSKIE KOLEJE PAŃSTWOWE"),
+    ).toBeDefined();
+    expect(clusters.filter((c) => c.subtitle)).toEqual([]);
+  });
+
+  it("does not let a subsidiary erase the group it belongs to", () => {
+    /* PKP Cargo's thirteen appointments are thirteen of the parent group's
+     * thirty-seven, so the slice scored higher and the group - which is what
+     * the story is about - vanished from the list. */
+    const rows = [
+      ...background(),
+      ...history(["subc0", "subc1", "subc2", "subc3"], "sub"),
+    ];
+    for (let i = 0; i < 12; i++) {
+      const inCargo = i < 5;
+      rows.push(
+        hire({
+          edgeId: `sub${i}`,
+          personId: `subp${i}`,
+          companyId: `subc${i % 4}`,
+          companyName: `SPÓŁKA GRUPY ${town(i)}`,
+          regionId: `terytSUB${i}`,
+          ownerIds: inCargo ? ["cargo", "parent"] : ["parent"],
+          ownerTier: "spolka",
+          parties: ["PiS"],
+          start: `2026-04-0${(i % 8) + 1}`,
+        }),
+      );
+    }
+    const clusters = computeStoryClusters(rows, TODAY, {
+      titles: { parent: "GRUPA", cargo: "CÓRKA" },
+    });
+    expect(clusters.map((c) => c.title)).toContain("GRUPA");
+    expect(clusters.map((c) => c.title)).not.toContain("CÓRKA");
+  });
+
+  it("finds a group being staffed with politicians of no particular party", () => {
+    /* The PKP shape: 249 appointments across a state holding in three years,
+     * breaking down PSL 22 / KO 18 / PiS 17 / Lewica 16 with 173 carrying no
+     * signal at all. No party dominates, so the purity test says nothing -
+     * while a quarter of the arrivals being political people is the story. */
+    const rows = [
+      ...background(),
+      ...history(
+        Array.from({ length: 12 }, (_, i) => `denc${i}`),
+        "den",
+      ),
+    ];
+    /* A stratum of company-owned companies where politics is rare, so the
+     * group has something to stand out against. */
+    for (let i = 0; i < 300; i++) {
+      rows.push(
+        hire({
+          edgeId: `plain${i}`,
+          personId: `plainp${i}`,
+          companyId: `plainc${i % 60}`,
+          companyName: `ZWYKŁA ${town(i)} ${i % 60}`,
+          ownerIds: [`plainowner${i % 20}`],
+          ownerTier: "spolka",
+          parties: i % 10 === 0 ? ["PO"] : [],
+          visible: false,
+          start: `2026-0${(i % 6) + 1}-1${i % 9}`,
+        }),
+      );
+    }
+    for (let i = 0; i < 40; i++) {
+      rows.push(
+        hire({
+          edgeId: `den${i}`,
+          personId: `denp${i}`,
+          companyId: `denc${i % 12}`,
+          companyName: `GRUPOWA ${town(i)} ${i % 12}`,
+          ownerIds: ["holding"],
+          ownerTier: "spolka",
+          // Four parties, none of them dominant, and a third of the arrivals.
+          parties:
+            i % 3 === 0 ? [["PO", "PiS", "PSL", "Nowa Lewica"][i % 4]!] : [],
+          visible: false,
+          start: `2026-0${(i % 6) + 1}-2${i % 8}`,
+        }),
+      );
+    }
+    const cluster = computeStoryClusters(rows, TODAY, {
+      titles: { holding: "GRUPA KOLEJOWA" },
+    }).find((c) => c.title === "GRUPA KOLEJOWA");
+    expect(cluster).toBeDefined();
+    expect(cluster!.channels).toContain("density");
+    // Not the party channel: no party holds enough of it.
+    expect(cluster!.channels).not.toContain("party");
+    expect(cluster!.densityLift).toBeGreaterThan(1.2);
   });
 
   it("drops the weaker of two clusters built from the same hires", () => {

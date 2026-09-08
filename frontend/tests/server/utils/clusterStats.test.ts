@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  buildClusterHires,
   CLUSTER_METHOD_VERSION,
   clusterStatsAreStale,
   ensureClusterStats,
@@ -139,6 +140,74 @@ describe("ensureClusterStats", () => {
     expect(await ensureClusterStats(db, NOW)).toEqual(doc);
     await vi.waitFor(() => expect(logged).toHaveBeenCalled());
     logged.mockRestore();
+  });
+});
+
+describe("what reaches the detector", () => {
+  it("counts a supervisory seat at a company whose organ nobody recorded", async () => {
+    /* 773 places carry no `supervisoryOrgan` at all. Reading that as "not a
+     * rada nadzorcza" dropped every supervisory seat at all of them - 901 in
+     * the window - which is the wrong direction: `bodyIsPaidPost` says an
+     * unread entry counts. */
+    mockFetchNodes.mockImplementation(async (type: string) => {
+      if (type === "person") {
+        return {
+          p1: { type: "person", name: "Jan Kowalski", published: true },
+        };
+      }
+      if (type === "place") {
+        return {
+          c1: { type: "place", name: "SPÓŁKA", published: true },
+          c2: {
+            type: "place",
+            name: "SZPITAL",
+            published: true,
+            supervisoryOrgan: "rada_spoleczna",
+          },
+        };
+      }
+      return {};
+    });
+    const edges = [
+      {
+        id: "e1",
+        type: "employed",
+        source: "p1",
+        target: "c1",
+        name: "Rada Nadzorcza",
+        start_date: "2026-05-01",
+      },
+      {
+        id: "e2",
+        type: "employed",
+        source: "p1",
+        target: "c2",
+        name: "Rada Nadzorcza",
+        start_date: "2026-05-01",
+      },
+    ];
+    const withEdges = {
+      collection: () => ({
+        doc: () => ({ get: mockDocGet, set: mockDocSet }),
+        where: (_f: string, _op: string, type: string) => {
+          const query = {
+            select: () => query,
+            get: async () => ({
+              docs:
+                type === "employed"
+                  ? edges.map((e) => ({ id: e.id, data: () => e }))
+                  : [],
+            }),
+          };
+          return query;
+        },
+      }),
+    } as unknown as FirebaseFirestore.Firestore;
+
+    const { hires, unpaidSeats } = await buildClusterHires(withEdges);
+
+    expect(hires.map((hire) => hire.companyId)).toEqual(["c1"]);
+    expect(unpaidSeats).toBe(1);
   });
 });
 
