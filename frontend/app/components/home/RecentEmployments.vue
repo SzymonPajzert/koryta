@@ -4,12 +4,18 @@
     subtitle="Kto ostatnio objął stanowisko. Kliknij, żeby zobaczyć stronę tej osoby."
   />
 
+  <!-- `mode` is not a constant: the feed loads a couple of pages on its own and
+       then asks. An unbounded intersect feed makes the page infinite, and
+       everything under it - the footer, which is where the contact address and
+       the source links live - is pushed further away every time the reader
+       scrolls towards it, so it can never be reached at all. -->
   <v-infinite-scroll
     v-if="employments.length > 0"
     class="employment-feed"
     data-testid="recent-employments"
     empty-text="To już wszystkie zatrudnienia, jakie znamy."
-    mode="intersect"
+    load-more-text="Pokaż więcej zatrudnień"
+    :mode="mode"
     @load="loadMore"
   >
     <div class="employment-feed__grid">
@@ -103,6 +109,30 @@ const employments = computed(() => [
 
 type LoadOptions = { done: (status: "ok" | "empty" | "error") => void };
 
+/** How many pages the feed fetches by itself before it starts asking.
+ *
+ * Two, so that scrolling past the first screen still feels like a feed, and the
+ * page still ends. */
+const AUTO_PAGES = 2;
+
+/** Requests one click is allowed to make before it gives up and returns.
+ *
+ * The endpoint stops scanning at a fixed budget and answers short rather than
+ * reading the whole collection, so a page can come back with no cards and a
+ * cursor - and a button that loads nothing looks broken. Bounded, because the
+ * same answer repeated is what an infinite feed used to do on its own, once per
+ * animation frame. */
+const MAX_REQUESTS_PER_LOAD = 3;
+
+const autoLoaded = ref(0);
+
+/** Automatic while the count is under the budget, a button after it. Reading
+ * it every render is what lets it change: Vuetify checks `mode` when it decides
+ * whether to draw the sentinel and again before it chains the next load. */
+const mode = computed(() =>
+  autoLoaded.value < AUTO_PAGES ? "intersect" : "manual",
+);
+
 /** The next page, once the reader has scrolled far enough to want one.
  *
  * Plain `$fetch` rather than `authFetch`, which is a `useFetch` and so cannot
@@ -116,16 +146,30 @@ async function loadMore({ done }: LoadOptions) {
     return;
   }
 
+  autoLoaded.value += 1;
+
   try {
-    const page = await $fetch<RecentEmployments>(ENDPOINT, {
-      query: { ...query.value, cursor: cursor.value },
-    });
-    more.value.push(...page.employments);
-    cursor.value = page.nextCursor;
     // A page can come back empty and still carry a cursor - the endpoint stops
     // scanning before it has filled one - so it is the cursor, not the count,
-    // that says whether there is anything behind it.
-    done(page.nextCursor ? "ok" : "empty");
+    // that says whether there is anything behind it. Asking again here rather
+    // than handing an empty page back is the difference between a slow load and
+    // one that appears to have done nothing.
+    for (let request = 0; request < MAX_REQUESTS_PER_LOAD; request++) {
+      const next: RecentEmployments = await $fetch<RecentEmployments>(
+        ENDPOINT,
+        {
+          query: { ...query.value, cursor: cursor.value },
+        },
+      );
+      more.value.push(...next.employments);
+      cursor.value = next.nextCursor;
+      if (!next.nextCursor) {
+        done("empty");
+        return;
+      }
+      if (next.employments.length > 0) break;
+    }
+    done("ok");
   } catch {
     done("error");
   }

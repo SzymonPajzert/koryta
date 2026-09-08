@@ -130,10 +130,53 @@ describe("HomeRecentEmployments", () => {
     // page is not the end of the feed - the cursor says whether it is.
     pages.first = { employments: [employment("a")], nextCursor: "c1" };
     pages.c1 = { employments: [], nextCursor: "c2" };
+    pages.c2 = { employments: [employment("b")], nextCursor: "c3" };
+
+    const wrapper = await mountFeed();
+
+    // One load, two requests: handing an empty page straight back would leave
+    // a button that visibly did nothing.
+    expect(await scrollToEnd(wrapper)).toBe("ok");
+    expect(asked).toEqual([null, "c1", "c2"]);
+    expect(wrapper.text()).toContain("Osoba b");
+  });
+
+  it("gives up on a run of empty pages rather than asking forever", async () => {
+    // Unbounded, this is what the feed used to do on its own, once every few
+    // animation frames, at several hundred document reads a time.
+    pages.first = { employments: [employment("a")], nextCursor: "c1" };
+    pages.c1 = { employments: [], nextCursor: "c2" };
+    pages.c2 = { employments: [], nextCursor: "c3" };
+    pages.c3 = { employments: [], nextCursor: "c4" };
+    pages.c4 = { employments: [], nextCursor: "c5" };
 
     const wrapper = await mountFeed();
 
     expect(await scrollToEnd(wrapper)).toBe("ok");
+    expect(asked).toEqual([null, "c1", "c2", "c3"]);
+  });
+
+  it("stops loading by itself after two pages, and offers a button instead", async () => {
+    // Otherwise the page has no bottom: every scroll towards the footer adds
+    // another screen of cards above it, so the footer is never reached.
+    pages.first = { employments: [employment("a")], nextCursor: "c1" };
+    pages.c1 = { employments: [employment("b")], nextCursor: "c2" };
+    pages.c2 = { employments: [employment("c")], nextCursor: "c3" };
+    pages.c3 = { employments: [employment("d")], nextCursor: "c4" };
+
+    const wrapper = await mountFeed();
+    const scroll = wrapper.findComponent({ name: "VInfiniteScroll" });
+    expect(scroll.props("mode")).toBe("intersect");
+
+    await scrollToEnd(wrapper);
+    expect(scroll.props("mode")).toBe("intersect");
+
+    await scrollToEnd(wrapper);
+    expect(scroll.props("mode")).toBe("manual");
+
+    // Still loads on request - it is a button now, not a stop.
+    expect(await scrollToEnd(wrapper)).toBe("ok");
+    expect(wrapper.text()).toContain("Osoba d");
   });
 
   it("says so when there is nothing to show at all", async () => {
