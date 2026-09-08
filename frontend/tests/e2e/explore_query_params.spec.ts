@@ -63,6 +63,39 @@ test.describe("Explore query parameters", () => {
     );
   });
 
+  /** The same hazard for the facts sort, which is the newest key in
+   * `tableSortOptions`: the api maps it onto `stats.factsCount`, and a key it
+   * failed to map would go into `orderBy` verbatim and drop every document -
+   * an empty table rather than an error. The order itself is asserted, not
+   * just that rows came back, because ordering by the wrong field would also
+   * return a full table.
+   *
+   * Signed in for the same reason the sort exists: the facts themselves are
+   * behind the login, and the seeded person the extraction fixture names is
+   * the only one with any. */
+  test("sorts on the linked factsCount key", async ({ page }) => {
+    test.setTimeout(120000);
+    await logIn(
+      page,
+      USERS.normal,
+      "/eksploruj/tabela?sortBy=factsCount&sortDesc=true",
+    );
+
+    const firstRow = page.locator("tbody tr").first();
+    await expect(
+      firstRow.locator(".text-primary.cursor-pointer").first(),
+    ).toBeVisible({ timeout: 60000 });
+    // Two facts in scripts/extractions.json name her and nobody else has one.
+    await expect(firstRow).toContainText("Anna Nowak");
+    await expect(firstRow).toContainText("2 fakty");
+    // „Fakty” has no column of its own, so the „Oceny” header is where the
+    // reader is told what the table is ordered by.
+    await expect(
+      page.getByRole("columnheader", { name: /Oceny/ }),
+    ).toContainText("liczba faktów");
+    expect(new URL(page.url()).searchParams.get("sortBy")).toBe("factsCount");
+  });
+
   test("keeps the filter in the url and drops it when cleared", async ({
     page,
   }) => {

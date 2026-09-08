@@ -60,7 +60,7 @@
          prints the title and nothing that says what the number counts. -->
     <template #[`header.stats.votes.interesting`]="{ column }">
       <ExploreTableColumnHeader
-        tooltip="Suma głosów społeczności i najwyższej oceny modelu. Kliknij liczbę, żeby zobaczyć, ile modeli oceniło tę osobę i ile osób na nią zagłosowało. W menu kolumny można sortować także po liczbie notatek."
+        tooltip="Suma głosów społeczności i najwyższej oceny modelu. Kliknij liczbę, żeby zobaczyć, ile modeli oceniło tę osobę i ile osób na nią zagłosowało. W menu kolumny można sortować także po liczbie notatek i po liczbie faktów wydobytych z artykułów."
         :column="column"
         :sort-by="sortBy"
         :sort-options="VOTES_SORT_OPTIONS"
@@ -351,15 +351,14 @@
          slot reads that as the zero votes it is. -->
     <template #[`item.stats.votes.interesting`]="{ item }">
       <VoteBreakdown :votes="item.stats?.votes" />
-      <!-- „Notatki” is one of the sorts this column's menu offers and has no
-           column of its own left to be read in, so the count sits under the
-           total rather than being orderable and invisible. Nothing at zero: a
-           second line on every row would make the table taller to print a
-           number that says what its absence already says. -->
-      <div v-if="item.stats?.notesCount" class="text-caption text-ink-neutral">
-        {{
-          polishCounting(item.stats.notesCount, "notatka", "notatki", "notatek")
-        }}
+      <!-- „Notatki” and „Fakty” are the other two sorts this column's menu
+           offers and neither has a column of its own left to be read in, so
+           the counts sit under the total rather than being orderable and
+           invisible. One line for both, and nothing at zero: a second line on
+           every row would make the table taller to print a number that says
+           what its absence already says. -->
+      <div v-if="countsCaption(item)" class="text-caption text-ink-neutral">
+        {{ countsCaption(item) }}
       </div>
     </template>
 
@@ -466,7 +465,27 @@ const EMPLOYMENT_SORT_OPTIONS = [
 const VOTES_SORT_OPTIONS = [
   { key: "stats.votes.interesting", sentence: "sumy ocen", short: "suma ocen" },
   { key: "notesCount", sentence: "liczby notatek", short: "liczba notatek" },
+  { key: "factsCount", sentence: "liczby faktów", short: "liczba faktów" },
 ];
+
+/** „3 notatki · 5 faktów”, dropping whichever of the two is zero and returning
+ * nothing when both are. `factsCount` is absent rather than zero on a person
+ * ingested before the counter existed - see `NodeStats.factsCount` - which
+ * reads the same way here. */
+function countsCaption(item: PersonRich): string {
+  const parts: string[] = [];
+  if (item.stats?.notesCount) {
+    parts.push(
+      polishCounting(item.stats.notesCount, "notatka", "notatki", "notatek"),
+    );
+  }
+  if (item.stats?.factsCount) {
+    parts.push(
+      polishCounting(item.stats.factsCount, "fakt", "fakty", "faktów"),
+    );
+  }
+  return parts.join(" · ");
+}
 
 const props = withDefaults(
   defineProps<{

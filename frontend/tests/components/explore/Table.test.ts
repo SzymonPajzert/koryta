@@ -397,6 +397,41 @@ describe("ExploreTable's absorbed columns", () => {
     expect(votes.text()).toBe("7");
     expect(votes.find(".text-caption").exists()).toBe(false);
   });
+
+  /** „Liczba faktów” is one of the sorts this column's menu offers, and the
+   * facts have no column of their own to be read in either - so the number
+   * shares the notes' line rather than adding a third. */
+  it("prints the notes and the facts on one line", async () => {
+    const wrapper = await mountTable({
+      headers: SORTABLE_HEADERS,
+      items: [
+        {
+          ...person(),
+          stats: { notesCount: 2, factsCount: 5, votes: { interesting: 7 } },
+        },
+      ],
+    });
+
+    expect(wrapper.findAll("tbody td")[2]!.get(".text-caption").text()).toBe(
+      "2 notatki · 5 faktów",
+    );
+  });
+
+  it("prints the facts alone for a person with no notes", async () => {
+    const wrapper = await mountTable({
+      headers: SORTABLE_HEADERS,
+      items: [
+        {
+          ...person(),
+          stats: { notesCount: 0, factsCount: 1, votes: { interesting: 7 } },
+        },
+      ],
+    });
+
+    expect(wrapper.findAll("tbody td")[2]!.get(".text-caption").text()).toBe(
+      "1 fakt",
+    );
+  });
 });
 
 /** The same party was a grey Vuetify pill in this table and its own colour
@@ -662,6 +697,17 @@ describe("ExploreTable's per-column sort menus", () => {
 
     // ...and no other column claims it.
     expect(headerCell(wrapper, "Oceny").find(".opacity-0").exists()).toBe(true);
+  });
+
+  it("marks Oceny as sorted by the facts count", async () => {
+    const wrapper = await mountTable({
+      headers: SORTABLE_HEADERS,
+      sortBy: [{ key: "factsCount", order: "desc" }],
+    });
+
+    const oceny = headerCell(wrapper, "Oceny");
+    expect(oceny.text()).toContain("liczba faktów");
+    expect(oceny.find(".opacity-0").exists()).toBe(false);
   });
 
   it("marks Oceny as sorted by the notes count", async () => {
