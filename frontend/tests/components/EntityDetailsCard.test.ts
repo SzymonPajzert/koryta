@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import EntityDetailsCard from "../../app/components/EntityDetailsCard.vue";
 import { useAuthState } from "~/composables/auth";
 import type { Person } from "../../shared/model";
@@ -63,11 +63,20 @@ describe("EntityDetailsCard", () => {
     const open = vi.fn();
     vi.stubGlobal("open", open);
 
+    // The button is a menu now, so the tabs are one item inside it rather than
+    // what the button itself does.
     const wrapper = await mountCard(true, ["Kraków"]);
     const explore = wrapper
       .findAll(".v-btn")
       .find((b) => b.text() === "Eksploruj");
     await explore!.trigger("click");
+    await nextTick();
+    const all = document.querySelector<HTMLElement>(
+      '[data-testid="person-search-all"]',
+    );
+    expect(all).not.toBeNull();
+    all!.click();
+    await nextTick();
 
     const opened = open.mock.calls.map((call) => decodeURIComponent(call[0]));
     expect(opened.some((url) => url.startsWith("https://rejestr.io/"))).toBe(
@@ -84,5 +93,18 @@ describe("EntityDetailsCard", () => {
     );
 
     vi.unstubAllGlobals();
+  });
+
+  it("marks an unpublished page as a draft, and says nothing on a live one", async () => {
+    const draft = await mountCard(false);
+    expect(draft.text()).toContain("szkic");
+
+    const live = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, published: true } as Person,
+        type: "person",
+      },
+    });
+    expect(live.text()).not.toContain("szkic");
   });
 });

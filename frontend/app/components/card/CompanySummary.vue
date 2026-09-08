@@ -16,6 +16,17 @@
           <v-icon :icon="mdiArrowRight" size="small" />
         </NuxtLink>
         <span v-else class="text-h6 text-wrap">{{ company.name }}</span>
+        <!-- Only where this card is the page's own heading. Linked, it is one
+             of a list of companies on somebody else's page, and a badge about
+             the state of a page you are not on belongs on the row that leads
+             there rather than on every card in the list. -->
+        <ChipDraftStatus
+          v-if="!linkToPage"
+          :published="company.published"
+          :node-id="company.id"
+          :node-name="company.name"
+          @published="emit('published')"
+        />
       </div>
 
       <div class="d-flex flex-wrap align-center ga-4 text-body-2">
@@ -159,7 +170,12 @@ const notesOpen = ref(false);
 
 const nodeId = computed(() => props.company.id ?? "");
 
-const emit = defineEmits<{ (e: "submitted", id: string): void }>();
+const emit = defineEmits<{
+  (e: "submitted", id: string): void;
+  /** The page went live from the badge beside the name; the page around this
+   * card holds the response the badge read and has to refetch it. */
+  (e: "published"): void;
+}>();
 
 const { user, isAdmin } = useAuthState();
 const { userNote, otherNotes } = useNotes(nodeId);

@@ -16,14 +16,13 @@
         </template>
         <v-card-title class="text-h5 font-weight-bold text-wrap">
           {{ topic?.name }}
-          <v-chip
-            v-if="!topicPublished"
-            size="x-small"
-            variant="tonal"
+          <ChipDraftStatus
+            :published="topicPublished"
+            :node-id="topicId"
+            :node-name="topic?.name"
             class="ml-2"
-          >
-            szkic
-          </v-chip>
+            @published="refresh()"
+          />
         </v-card-title>
         <v-card-subtitle v-if="topic?.description" class="text-wrap">
           {{ topic.description }}
@@ -139,7 +138,7 @@ const topicId = parseEntityUrlSlug(route.params.slug as string).id;
  * view and a curator would not see the story they are still assembling. */
 const latest = computed(() => !!user.value);
 
-const { data, status } = await authFetch<TopicDetail>(
+const { data, status, refresh } = await authFetch<TopicDetail>(
   `/api/topics/${topicId}`,
   { query: computed(() => ({ latest: latest.value })) },
 );

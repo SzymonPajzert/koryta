@@ -4,6 +4,16 @@
       <h2 class="text-h5 font-weight-bold mr-2">
         {{ entity?.name }}
       </h2>
+      <!-- Before the parties, because it is about the page rather than about
+           the person on it: whoever is reading this is the only kind of reader
+           who can be here at all while it shows. -->
+      <ChipDraftStatus
+        :published="entity?.published"
+        :node-id="entity?.id"
+        :node-name="entity?.name"
+        class="mr-2"
+        @published="emit('published')"
+      />
       <PartyChip
         v-for="party in personEntity?.parties"
         :key="party"
@@ -18,16 +28,18 @@
       <div class="d-none d-md-flex align-center ga-2">
         <template v-if="isAdmin && entity?.id">
           <!-- The table's "Eksploruj" icon, for the reader who arrived on the
-               page directly. It opens the same tabs - rejestr.io, Wikipedia
-               and a Google query per place the person is tied to - so that
-               checking somebody found through search costs the same one click
-               as checking somebody found through /eksploruj. -->
-          <ButtonIconAction
-            :icon="mdiOpenInNew"
-            label="Eksploruj"
-            :tooltip="SEARCH_ALL_TOOLTIP"
+               page directly: the same rejestr.io, Wikipedia and Google queries
+               it offers, so checking somebody found through search costs what
+               checking somebody found through /eksploruj does.
+               A menu rather than the table's straight-to-eight-tabs button.
+               On a row it is a scanning action - the reader has not looked at
+               this person yet and wants everything at once - while on the
+               person's own page they have just read the page and usually know
+               which one lookup is missing. -->
+          <ButtonPersonSearchMenu
+            :person="richPerson"
+            :extra-locations="extraLocations"
             data-testid="admin-explore-link"
-            @click="searchAll()"
           />
           <!-- Admins reach a person from a list - /eksploruj/tabela, a search
                result - and the revision list, which is where a page gets
@@ -129,9 +141,7 @@ import {
   mdiHistory,
   mdiMapMarkerRadiusOutline,
   mdiOfficeBuildingOutline,
-  mdiOpenInNew,
 } from "@mdi/js";
-import { toRef } from "vue";
 import type {
   Person,
   Company,
@@ -140,10 +150,6 @@ import type {
   PersonRich,
 } from "~~/shared/model";
 import { companyIdentifiers } from "~~/shared/identifiers";
-import {
-  SEARCH_ALL_TOOLTIP,
-  usePersonSearch,
-} from "~/composables/usePersonSearch";
 
 const props = withDefaults(
   defineProps<{
@@ -157,6 +163,10 @@ const props = withDefaults(
   }>(),
   { extraLocations: undefined },
 );
+
+/** The page went live from the badge above. The card holds no data of its own
+ * - the entity is handed to it - so the only thing it can do is say so. */
+const emit = defineEmits<{ published: [] }>();
 
 const { isAdmin } = useAuthState();
 
@@ -180,15 +190,8 @@ const personEntity = computed(() =>
   props.type === "person" ? (props.entity as Person) : undefined,
 );
 
-/** The node as the search composable wants it. A page loads a plain `Person`,
- * whose extra rich fields are simply absent - `usePersonSearch` reads them
+/** The node as the search menu wants it. A page loads a plain `Person`, whose
+ * extra rich fields are simply absent - `usePersonSearch` reads them
  * optionally, and `extraLocations` covers the one that matters here. */
 const richPerson = computed(() => personEntity.value as PersonRich | undefined);
-
-const { searchAll } = usePersonSearch(
-  richPerson,
-  undefined,
-  undefined,
-  toRef(props, "extraLocations"),
-);
 </script>
