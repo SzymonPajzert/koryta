@@ -13,6 +13,22 @@ const MAX_LOCATION_QUERIES = 6;
 export const SEARCH_ALL_TOOLTIP =
   "Otwiera wiele kart wyszukiwania jednocześnie. Upewnij się, że blokowanie okienek (pop-up) jest wyłączone.";
 
+/** One thing „eksploruj" would open, named so it can be offered on its own.
+ *
+ * `searchAll` opens every one of these, so a caller that lists them is listing
+ * exactly what the button does rather than a second guess at it - which is what
+ * went wrong the first time the drawer tried to reproduce the set and knew
+ * about the Google queries but not about the registers. */
+export type PersonSearchTarget = {
+  /** Stable within one person, for a `v-for` key. */
+  key: string;
+  /** What the entry says when it is offered by name. */
+  label: string;
+  /** Which service, for the icon beside it. */
+  source: "rejestr" | "wikipedia" | "google";
+  url: string;
+};
+
 export const usePersonSearch = (
   person: Ref<PersonRich | undefined> | PersonRich | undefined,
   region?: Ref<[string, string] | undefined> | [string, string] | undefined,
@@ -87,45 +103,83 @@ export const usePersonSearch = (
     return result;
   });
 
+  const googleUrl = (query: string) =>
+    `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+
   const searchInGoogle = (query?: string) => {
-    const searchQuery = encodeURIComponent(query || getQueryParts().join(" "));
-    window.open(`https://www.google.com/search?q=${searchQuery}`, "_blank");
+    window.open(googleUrl(query || getQueryParts().join(" ")), "_blank");
   };
 
-  const searchAll = () => {
-    if (!personRef.value?.name) return;
+  /** Everything „eksploruj" reaches for, in the order a searcher would try it:
+   * the registers that answer whether this is even the right person, then the
+   * queries that say what has been written about them.
+   *
+   * The page a person carries wins over a search for their name - that link was
+   * put there by somebody who had already found them, and `rejestr.io` will not
+   * necessarily find them again. Wikipedia without one is two queries rather
+   * than one, because the encyclopedia indexes „Jan Kowalski" and the register
+   * knows him as „Jan Maria Kowalski". */
+  const searchTargets = computed<PersonSearchTarget[]>(() => {
+    const person = personRef.value;
+    if (!person?.name) return [];
 
-    const name = encodeURIComponent(personRef.value.name);
+    const name = encodeURIComponent(person.name);
+    const targets: PersonSearchTarget[] = [
+      {
+        key: "rejestr",
+        label: person.rejestrIo ? "rejestr.io - strona osoby" : "rejestr.io",
+        source: "rejestr",
+        url: person.rejestrIo || `https://rejestr.io/krs?q=${name}`,
+      },
+    ];
 
-    const rejestrIo = personRef.value.rejestrIo;
-    const wikipedia = personRef.value.wikipedia;
-
-    if (rejestrIo) {
-      window.open(rejestrIo, "_blank");
+    if (person.wikipedia) {
+      targets.push({
+        key: "wikipedia",
+        label: "Wikipedia - strona osoby",
+        source: "wikipedia",
+        url: person.wikipedia,
+      });
     } else {
-      window.open(`https://rejestr.io/krs?q=${name}`, "_blank");
-    }
-
-    if (wikipedia) {
-      window.open(wikipedia, "_blank");
-    } else {
-      window.open(
-        `https://pl.wikipedia.org/wiki/Special:Search?search=${name}`,
-        "_blank",
-      );
-      window.open(
-        `https://pl.wikipedia.org/wiki/Special:Search?search=${nameWithoutMiddle.value}`,
-        "_blank",
-      );
+      targets.push({
+        key: "wikipedia",
+        label: `Wikipedia: ${person.name}`,
+        source: "wikipedia",
+        url: `https://pl.wikipedia.org/wiki/Special:Search?search=${name}`,
+      });
+      if (nameWithoutMiddle.value && nameWithoutMiddle.value !== person.name) {
+        targets.push({
+          key: "wikipedia-short",
+          label: `Wikipedia: ${nameWithoutMiddle.value}`,
+          source: "wikipedia",
+          url: `https://pl.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
+            nameWithoutMiddle.value,
+          )}`,
+        });
+      }
     }
 
     for (const query of queries.value) {
-      searchInGoogle(query);
+      targets.push({
+        key: `google:${query}`,
+        label: query,
+        source: "google",
+        url: googleUrl(query),
+      });
+    }
+
+    return targets;
+  });
+
+  const searchAll = () => {
+    for (const target of searchTargets.value) {
+      window.open(target.url, "_blank");
     }
   };
 
   return {
     queries,
+    searchTargets,
     getQueryParts,
     searchInGoogle,
     searchAll,
