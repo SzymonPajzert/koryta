@@ -87,7 +87,60 @@ describe("usePersonSearch", () => {
     expect(queries.value).toHaveLength(8);
 
     searchAll();
-    // Two more for rejestr.io and the two wikipedia spellings.
-    expect(open).toHaveBeenCalledTimes(11);
+    // One more for rejestr.io, one for wikipedia.
+    expect(open).toHaveBeenCalledTimes(10);
+  });
+
+  it("does not ask wikipedia the same question twice", () => {
+    // Two names have no middle one to drop, so the short spelling was the
+    // spelling - and `searchAll` opened the identical search in two tabs.
+    const { searchTargets } = usePersonSearch(person());
+    const wikipedia = searchTargets.value.filter(
+      (target) => target.source === "wikipedia",
+    );
+    expect(wikipedia).toHaveLength(1);
+  });
+
+  it("offers both spellings where they differ", () => {
+    const { searchTargets } = usePersonSearch(
+      person({ name: "Jan Maria Kowalski" }),
+    );
+    const wikipedia = searchTargets.value.filter(
+      (target) => target.source === "wikipedia",
+    );
+    expect(wikipedia.map((target) => target.label)).toEqual([
+      "Wikipedia: Jan Maria Kowalski",
+      "Wikipedia: Jan Kowalski",
+    ]);
+  });
+
+  it("prefers the pages somebody has already found over a search for them", () => {
+    const { searchTargets } = usePersonSearch(
+      person({
+        rejestrIo: "https://rejestr.io/osoby/1",
+        wikipedia: "https://pl.wikipedia.org/wiki/Jan_Kowalski",
+      }),
+    );
+    expect(searchTargets.value.map((target) => target.url)).toEqual([
+      "https://rejestr.io/osoby/1",
+      "https://pl.wikipedia.org/wiki/Jan_Kowalski",
+      "https://www.google.com/search?q=Jan%20Kowalski",
+      "https://www.google.com/search?q=Jan%20Kowalski%20PKW",
+    ]);
+  });
+
+  it("opens exactly what it offers", () => {
+    // The menu lists `searchTargets` and „otwórz wszystkie" opens them, so the
+    // two cannot drift apart the way the button and the drawer once did.
+    const open = vi.fn();
+    vi.stubGlobal("window", { open });
+
+    const { searchTargets, searchAll } = usePersonSearch(
+      person({ workLocations: ["Płock"] }),
+    );
+    searchAll();
+    expect(open.mock.calls.map((call) => call[0])).toEqual(
+      searchTargets.value.map((target) => target.url),
+    );
   });
 });
