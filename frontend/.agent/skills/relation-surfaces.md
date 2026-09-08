@@ -55,6 +55,34 @@ pending revision and waits in /admin/rewizje-krawedzi; an admin's is applied as
 it is written. `/api/edges/update` decides that, not the dialog - the dialog only
 says which of the two is about to happen.
 
+## A personal tie is named from both ends
+
+`connection` is the only edge type whose word is free text rather than
+something the type decides, and it is the only one read differently at each
+end: `name` says who the *target* is to the source, `reverse_name` who the
+*source* is to the target. Every other type reads the same either way - an
+`employed` prints the job title on the person's page and the company's, and
+its two phrasings ("Zatrudniony/a w" / "zatrudniał/a") come off
+`edgeTypeOptions`, not off the document.
+
+So a row's label is chosen per direction, in `edgeSideLabel`
+(`composables/edges.ts`), off `EdgeNode.direction`. Anything that builds an
+`EdgeNode` outside `useEdges` has to set that direction or half the rows will
+read backwards.
+
+Three forms write a `connection` - `AddRelationDialog`, `dialog/EditRelation`
+and `extraction/PromoteDialog` - and all three refuse to submit a named one
+that says only half of it (`relationNeedsReverse`). A relation with no name at
+all is fine: it falls back to "Powiązanie z", which is already the same claim
+from either end.
+
+Relations stored before the field existed fall back to `name` on both pages -
+the old, wrong-on-one-page behaviour. `/admin/relacje` is the queue that works
+them off, over `/api/edges/missingReverse` and `/api/edges/reverseNames`.
+`reverse_name` is deliberately **not** an `edgeDocumentId` discriminator:
+completing a relation must land on the document already there rather than
+forking a second one.
+
 **A relation's ends and its type are not editable anywhere.** `edgeEditSchema`
 leaves `source`, `target` and `type` off the allowlist on purpose: moving an end
 turns a wrong claim into a different claim, and the honest version of that is a
@@ -84,7 +112,12 @@ Do not paste the flow into a sixth place. `npm run check:duplication` reports
   went to a queue and an admin's did not.
 - `components/form/RelationDetailFields.vue` - the fields a relation is
   described by (role, dates, party, committee), shared by the add and the
-  correct dialogs so the same claim is typed the same way twice.
+  correct dialogs so the same claim is typed the same way twice. A
+  `connection` asks for two words rather than one - see "A personal tie
+  is named from both ends".
+- `shared/relations.ts` - the Polish vocabulary of personal ties and what each
+  one is called read the other way, plus `relationNeedsReverse`, the rule every
+  form that writes a `connection` gates on.
 - `utils/edgeSentence.ts` - one relation read as a sentence, for any dialog that
   is handed an edge id and has to tell the reader which row they clicked.
 - `utils/relationDate.ts` - the date rule both dialogs enforce, matching

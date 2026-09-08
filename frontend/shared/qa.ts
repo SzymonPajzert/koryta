@@ -48,6 +48,28 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "powiazanie-osobiste-z-dwoch-stron",
+    title: "Powiązanie między ludźmi ma teraz obie strony",
+    description:
+      "Powiązanie osobiste miało jedno słowo, a czyta się je z dwóch stron: " +
+      "„żona” wpisana przy Janie pokazywała się tak samo przy niej - czyli " +
+      "strona mówiła, że mąż jest własną żoną. Formularz pyta teraz o oba " +
+      "podpisy naraz i podpowiada ten drugi (żona → mąż, ojciec → syn albo " +
+      "córka), a każda strona pokazuje ten, który się na niej zgadza. " +
+      "Powiązania dodane wcześniej mają tylko jedno słowo i czekają w nowej " +
+      "kolejce w panelu admina.",
+    steps: [
+      "Zaloguj się, wejdź na stronę osoby i dodaj powiązanie do innej osoby.",
+      "Wpisz „żona” w pierwsze pole - pod drugim powinna pojawić się podpowiedź „mąż”.",
+      "Kliknij podpowiedź i zapisz.",
+      "Sprawdź „Historia powiązań” na obu stronach: przy jednej ma być „żona”, przy drugiej „mąż”.",
+      "Kliknij ołówek przy tym powiązaniu - oba pola mają być wypełnione tym, co zapisałeś/aś.",
+      "Jako admin wejdź w /admin/relacje i sprawdź, że starsze powiązania czekają tam z jednym słowem.",
+    ],
+    link: "/admin/relacje",
+    area: "contributor",
+  },
+  {
     id: "statystyki-mniej-rodzajow-zmian",
     title: "Wykres aktywności ma cztery rodzaje zmian zamiast siedmiu",
     description:

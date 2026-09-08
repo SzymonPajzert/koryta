@@ -364,19 +364,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import {
-  mdiGraphOutline,
+  mdiAccountHeartOutline,
+  mdiChartLine,
+  mdiCheckCircleOutline,
+  mdiChevronRight,
+  mdiClipboardCheckOutline,
+  mdiGestureTapButton,
   mdiHistory,
   mdiInboxArrowDown,
-  mdiVectorPolyline,
-  mdiNoteEditOutline,
-  mdiTextBoxSearchOutline,
-  mdiChartLine,
-  mdiClipboardCheckOutline,
-  mdiChevronRight,
-  mdiCheckCircleOutline,
-  mdiGestureTapButton,
-  mdiRefresh,
   mdiMessageAlertOutline,
+  mdiNoteEditOutline,
+  mdiRefresh,
+  mdiTextBoxSearchOutline,
+  mdiGraphOutline,
+  mdiVectorPolyline,
 } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { noteAdminTypeLabel, noteKindConfig } from "~/composables/notes";
@@ -409,6 +410,12 @@ const subpages = [
     to: "/admin/krawedzie",
     icon: mdiGraphOutline,
     desc: "Powiązania gotowe do publikacji - obie strony już opublikowane.",
+  },
+  {
+    title: "Powiązania osobiste",
+    to: "/admin/relacje",
+    icon: mdiAccountHeartOutline,
+    desc: "Relacje między ludźmi, które mówią, kim ktoś jest, tylko w jedną stronę.",
   },
   {
     title: "Rewizje krawędzi",
