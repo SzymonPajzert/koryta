@@ -207,8 +207,15 @@
                       opublikowaniu tej wersji.
                     </v-tooltip>
                   </nuxt-link>
-                  <div class="text-caption font-weight-mono text-grey mt-1">
-                    ID: {{ rev.id }}
+                  <!-- Full id on hover only: spelled out it is ~60
+                       monospace characters, which widened the column past the
+                       350px the comparison table gives it and pushed the
+                       header controls out of view. -->
+                  <div
+                    class="text-caption font-weight-mono text-grey mt-1 revision-id"
+                    :title="String(rev.id)"
+                  >
+                    ID: {{ shortRevisionId(rev.id) }}
                   </div>
                 </div>
               </th>
@@ -652,6 +659,17 @@ function revisionUser(rev: Record<string, unknown>): string | null {
   return typeof rev.update_user === "string" ? rev.update_user : null;
 }
 
+/** A proposal id reads `proposal_<nodeId>_<digest>`, and the node id is
+ * already printed in the page header - repeating it once per column bought
+ * nothing and cost the width. The digest is the part that tells two columns
+ * apart, so it is what stays. Revisions written by the pipelines get a plain
+ * 20-character Firestore id, which fits as it is. */
+function shortRevisionId(id: unknown): string {
+  const full = String(id);
+  const prefix = `proposal_${nodeId}_`;
+  return full.startsWith(prefix) ? `…${full.slice(prefix.length)}` : full;
+}
+
 function getRevisionData(data: unknown): Record<string, unknown> {
   if (data && typeof data === "object") {
     return data as Record<string, unknown>;
@@ -733,6 +751,14 @@ function differsFromApproved(rev: Record<string, unknown>, key: string) {
 }
 .comparison-table tbody tr td {
   border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+/* An id the shortening does not recognise still has to stay inside its column:
+   underscores are not break opportunities, so one long token would stretch the
+   table rather than wrap. Same for a serialised `sources` array, where a URL is
+   equally unbreakable. */
+.revision-id,
+.field-value pre {
+  overflow-wrap: anywhere;
 }
 .highlighted-revision {
   background: rgba(var(--v-theme-primary), 0.1) !important;
