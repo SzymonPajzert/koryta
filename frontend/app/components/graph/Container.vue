@@ -4,34 +4,72 @@
       <!-- No fold button. It defaulted to open and reset to open on every fresh
            document, so it never bought a returning reader the room it promised
            - it was one more control to read on the way to the graph. -->
-      <ul class="graph-panel__legend" data-testid="graph-legend">
-        <li v-for="item in legend" :key="item.key" class="graph-panel__key">
-          <svg
-            class="graph-panel__swatch"
-            viewBox="-12 -12 24 24"
-            width="17"
-            height="17"
-            aria-hidden="true"
-          >
-            <circle v-if="item.shape === 'circle'" r="11" :fill="item.color" />
-            <rect
-              v-else
-              x="-11"
-              y="-9"
+      <div class="graph-panel__legends">
+        <ul class="graph-panel__legend" data-testid="graph-legend">
+          <li v-for="item in legend" :key="item.key" class="graph-panel__key">
+            <svg
+              class="graph-panel__swatch"
+              viewBox="-12 -12 24 24"
+              width="17"
+              height="17"
+              aria-hidden="true"
+            >
+              <circle
+                v-if="item.shape === 'circle'"
+                r="11"
+                :fill="item.color"
+              />
+              <rect
+                v-else
+                x="-11"
+                y="-9"
+                width="22"
+                height="18"
+                rx="3"
+                :fill="item.color"
+              />
+              <path
+                :d="entityGlyph(item.entity)"
+                :fill="readableInk(item.color)"
+                transform="translate(-6.5 -6.5) scale(0.542)"
+              />
+            </svg>
+            {{ item.label }}
+          </li>
+        </ul>
+
+        <!-- What a dotted line means. The canvas has always drawn the kinds of
+             relation apart by colour and dash, and said so nowhere: a reader
+             wrote in to ask what separated a solid line from a dotted one. Its
+             own list rather than more entries in the one above, so a shape and
+             a line are not read as the same kind of answer. -->
+        <ul
+          v-if="edgeKeys.length > 0"
+          class="graph-panel__legend"
+          data-testid="graph-edge-legend"
+        >
+          <li v-for="item in edgeKeys" :key="item.key" class="graph-panel__key">
+            <svg
+              class="graph-panel__swatch"
+              viewBox="-12 -6 24 12"
               width="22"
-              height="18"
-              rx="3"
-              :fill="item.color"
-            />
-            <path
-              :d="entityGlyph(item.entity)"
-              :fill="readableInk(item.color)"
-              transform="translate(-6.5 -6.5) scale(0.542)"
-            />
-          </svg>
-          {{ item.label }}
-        </li>
-      </ul>
+              height="12"
+              aria-hidden="true"
+            >
+              <line
+                x1="-11"
+                y1="0"
+                x2="11"
+                y2="0"
+                :stroke="item.color"
+                :stroke-width="item.width"
+                :stroke-dasharray="item.dasharray"
+              />
+            </svg>
+            {{ item.label }}
+          </li>
+        </ul>
+      </div>
 
       <div class="graph-panel__controls">
         <v-btn
@@ -44,9 +82,9 @@
           @click="canvas?.fitView?.()"
         />
         <!-- Off by default: at two hops there are more labels than there is
-             room for them, and the colours and dashes already say which kind
-             of relation a line is. This is for the reader who wants it
-             spelled out. -->
+             room for them, and the legend to the left already names every line
+             style on the canvas. This is for the reader who wants a particular
+             line spelled out - an employment's job title, say. -->
         <v-btn
           class="text-none"
           data-testid="graph-edge-labels-toggle"
@@ -135,6 +173,7 @@ import {
 import { useGraph } from "~/composables/graph";
 import { entityGlyph } from "~/utils/entityIcon";
 import { graphNodeDestination, readableInk } from "~/utils/graphNode";
+import { edgeLegend } from "~~/shared/graph/edges";
 import { NODE_COLORS } from "~~/shared/graph/nodes";
 import { parties, partyColors } from "~~/shared/misc";
 
@@ -190,8 +229,8 @@ const { nodesFiltered, edgesFiltered, ready, omitted } = useGraph({
 });
 
 /** Whether each line says what kind of relation it is. Off by default: at two
- * hops there are more labels than there is room for, and the colours and dashes
- * already separate the kinds. Shared state rather than a plain ref, so a reader
+ * hops there are more labels than there is room for, and the legend names the
+ * line styles anyway. Shared state rather than a plain ref, so a reader
  * who turned them on keeps them on while moving between pages that draw a
  * graph, instead of having to ask again on every navigation. */
 const edgeLabels = useState("graph-edge-labels", () => false);
@@ -228,6 +267,12 @@ const partyKeys = computed(() => {
     label: names.join(" / "),
   }));
 });
+
+/** The line styles on the canvas right now, named - the answer to "why is that
+ * one dotted". Built from the edges the reader can see, for the reason
+ * `partyKeys` is: an institution's graph should not have to explain
+ * candidacies it does not draw. */
+const edgeKeys = computed(() => edgeLegend(edgesFiltered.value ?? []));
 
 /** What the legend explains, in the order a person page needs it: first what a
  * shape means, then what a colour does. The entity colours are the node
@@ -313,6 +358,21 @@ const selectedHref = computed(() => {
   min-height: 40px;
 }
 
+/* The legend is the half of the bar that grows; the controls keep the width
+   their buttons need. Wrapping the two lists in one box is what keeps the node
+   keys and the line keys next to each other: as bare flex children of the bar
+   they would each take half of it, and the nodes would sit alone on the left
+   with a gap where the parties are not. */
+.graph-panel__legends {
+  display: flex;
+  align-items: center;
+  /* Wider than the gap inside a list, so the shapes and the lines read as two
+     answers rather than one run-on row. */
+  gap: 22px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+}
+
 .graph-panel__legend {
   display: flex;
   align-items: center;
@@ -321,9 +381,6 @@ const selectedHref = computed(() => {
   list-style: none;
   padding: 0;
   margin: 0;
-  /* The legend is the half of the bar that grows; the controls keep the width
-     their buttons need. */
-  flex: 1 1 auto;
 }
 
 .graph-panel__key {

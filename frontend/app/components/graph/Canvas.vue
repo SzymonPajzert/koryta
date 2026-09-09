@@ -62,7 +62,7 @@
     <!-- v-network-graph only mounts its label layer when this slot is present
          (`"edge-label" in $slots`), so the `v-if` is what makes "off" cost
          nothing rather than draw empty text on every line. That is also why
-         the `edge.label` config beside EDGE_STYLE had no effect until now. -->
+         the `edge.label` config below had no effect until now. -->
     <template v-if="edgeLabels" #edge-label="slotProps">
       <v-edge-label
         v-bind="slotProps"
@@ -89,6 +89,7 @@ import type {
 } from "v-network-graph";
 import { useSimulationStore } from "@/stores/simulation";
 import type { Node as GraphNode, NodeStats, Edge } from "~~/shared/graph/model";
+import { edgeStyle } from "~~/shared/graph/edges";
 import { personLabel, wrapLabel } from "~/utils/graphLabel";
 import { entityGlyph } from "~/utils/entityIcon";
 import { graphNodeDestination, readableInk } from "~/utils/graphNode";
@@ -216,36 +217,6 @@ function glyphTransform(config: ShapeStyle, scale: number): string {
   return `translate(${-size / 2} ${-size / 2}) scale(${size / 24})`;
 }
 
-/** How each kind of relation is drawn.
- *
- * Employment is the site's subject, so it is the one solid line; everything
- * else is dashed, at a weight that says how much of a claim it is. Colour
- * alone would not do it - a reader who cannot separate the sage from the mauve
- * can still count the gaps in a dash. */
-type EdgeStyle = { color: string; width: number; dasharray?: string };
-
-/** What a relation nobody drew a line for looks like: the ones that hang off an
- * article rather than off a register entry. */
-const ASIDE: EdgeStyle = { color: "#9aa5ab", width: 1.4, dasharray: "2 4" };
-
-// Keyed by the edge type rather than by `string`, so adding one to
-// `shared/graph/model.ts` fails the typecheck here the way it already does at
-// `edgeLabel` in shared/graph/util.ts, instead of quietly drawing it as "zna".
-const EDGE_STYLE: Record<Edge["type"], EdgeStyle> = {
-  employed: { color: "#59707c", width: 2.2 },
-  connection: { color: "#8d6a9f", width: 2, dasharray: "7 4" },
-  owns: { color: "#6f8f5a", width: 1.8, dasharray: "3 3" },
-  // A seat is geography, not a claim about anybody, so it is drawn as faintly
-  // as the article-side relations - the same green as ownership, because they
-  // were one type until the register's shareholder lists arrived and a reader
-  // who remembers the old graph should still recognise the line.
-  seat: { color: "#6f8f5a", width: 1.2, dasharray: "2 5" },
-  election: { color: "#b98235", width: 1.8, dasharray: "1 4" },
-  mentions: ASIDE,
-  comment: ASIDE,
-  tagged: ASIDE,
-};
-
 /** What a line says when the labels are switched on.
  *
  * `edge.label` and not a table of our own: `shared/graph/util.ts` already
@@ -255,14 +226,6 @@ const EDGE_STYLE: Record<Edge["type"], EdgeStyle> = {
  * would be a second answer to the same question. */
 function edgeText(edge: Edge): string {
   return edge.label ?? "";
-}
-
-/** Falls back to the acquaintance style. The table above is exhaustive over the
- * declared union, but the type is read straight off a firestore document, and a
- * row written before a rename is not bound by it. */
-function edgeStyle(edge: Edge): EdgeStyle {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  return EDGE_STYLE[edge.type] ?? EDGE_STYLE.connection;
 }
 
 /** Opening a node's page, on a double click.
