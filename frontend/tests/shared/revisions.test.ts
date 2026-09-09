@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { computeRevisionsObj } from "../../shared/revisions";
+import {
+  computeRevisionsObj,
+  latestPublishableRevision,
+} from "../../shared/revisions";
 
 describe("computeRevisionsObj", () => {
   it("should return null if there are no revisions", () => {
@@ -61,5 +64,99 @@ describe("computeRevisionsObj", () => {
 
     const result = computeRevisionsObj(null, revisions);
     expect(result?.has_unapproved).toBe(true);
+  });
+});
+
+describe("latestPublishableRevision", () => {
+  const node = (extra: Record<string, unknown>) => ({
+    data: { name: "X" },
+    ...extra,
+  });
+
+  it("picks the newest revision", () => {
+    const result = latestPublishableRevision([
+      node({ id: "old", update_time: "2026-07-09T10:00:00Z" }),
+      node({ id: "new", update_time: "2026-07-09T12:00:00Z" }),
+    ]);
+
+    expect(result?.id).toBe("new");
+  });
+
+  it("reads a Firestore timestamp as readily as an ISO string", () => {
+    // Which one a revision carries depends on the writer, so comparing them
+    // raw ordered every timestamp above every string regardless of date.
+    const result = latestPublishableRevision([
+      node({ id: "iso", update_time: "2026-07-09T12:00:00Z" }),
+      node({
+        id: "stamp",
+        update_time: { toDate: () => new Date("2026-07-09T10:00:00Z") },
+      }),
+    ]);
+
+    expect(result?.id).toBe("iso");
+  });
+
+  it("skips a revision somebody turned down", () => {
+    // Publishing means showing the newest version anybody would stand behind,
+    // and a rejected one is precisely the version somebody would not.
+    const result = latestPublishableRevision([
+      node({ id: "kept", update_time: "2026-07-09T10:00:00Z" }),
+      node({
+        id: "rejected",
+        update_time: "2026-07-09T12:00:00Z",
+        status: "rejected",
+      }),
+    ]);
+
+    expect(result?.id).toBe("kept");
+  });
+
+  it("skips a proposal to remove the page", () => {
+    // `deleted` is not a field the node owns while it is still there, so
+    // applying this one would take the page down in the act of putting it up.
+    const result = latestPublishableRevision([
+      node({ id: "kept", update_time: "2026-07-09T10:00:00Z" }),
+      {
+        id: "removal",
+        update_time: "2026-07-09T12:00:00Z",
+        data: { name: "X", deleted: true },
+      },
+    ]);
+
+    expect(result?.id).toBe("kept");
+  });
+
+  it("skips a revision with nothing to apply, and edge revisions", () => {
+    const result = latestPublishableRevision([
+      node({ id: "kept", update_time: "2026-07-09T10:00:00Z" }),
+      { id: "empty", update_time: "2026-07-09T12:00:00Z" },
+      {
+        id: "edge",
+        update_time: "2026-07-09T13:00:00Z",
+        data: { source: "a", target: "b" },
+      },
+    ]);
+
+    expect(result?.id).toBe("kept");
+  });
+
+  it("has nothing to offer when every revision is unusable", () => {
+    const result = latestPublishableRevision([
+      node({ id: "rejected", status: "rejected" }),
+    ]);
+
+    expect(result).toBeNull();
+  });
+
+  it("breaks a tie the same way every time", () => {
+    // An ingest writes a batch within one millisecond; the button names a
+    // revision and the server approves one, and they have to be the same one.
+    const revisions = [
+      node({ id: "a", update_time: "2026-07-09T10:00:00Z" }),
+      node({ id: "b", update_time: "2026-07-09T10:00:00Z" }),
+    ];
+
+    expect(latestPublishableRevision(revisions)?.id).toBe("b");
+    expect(latestPublishableRevision([...revisions].reverse())?.id).toBe("b");
   });
 });

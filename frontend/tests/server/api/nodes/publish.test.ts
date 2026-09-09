@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { requireAdmin } from "../../../../server/utils/auth";
+import { notifyRevisionReviewed } from "../../../../server/utils/revisionNotifications";
 import handler from "../../../../server/api/nodes/publish.post";
 
 const mockBatchUpdate = vi.fn();
@@ -56,12 +57,18 @@ const mockDb = {
 
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: vi.fn(() => mockDb),
+  Timestamp: { now: () => "now" },
+  FieldValue: { delete: () => "DELETED" },
 }));
 
 vi.mock("firebase-admin/app", () => ({ getApp: vi.fn() }));
 
 vi.mock("../../../../server/utils/auth", () => ({
   requireAdmin: vi.fn().mockResolvedValue({ uid: "admin-uid", admin: true }),
+}));
+
+vi.mock("../../../../server/utils/revisionNotifications", () => ({
+  notifyRevisionReviewed: vi.fn(async () => "sent"),
 }));
 
 const { mockReadValidatedBody, mockCacheClear } = vi.hoisted(() => {
@@ -73,6 +80,9 @@ const { mockReadValidatedBody, mockCacheClear } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.defineEventHandler = (fn: any) => fn;
   globalThis.useStorage = () => ({ clear: mockCacheClear });
+  globalThis.useRuntimeConfig = () => ({
+    public: { siteUrl: "https://koryta.pl" },
+  });
   return { mockReadValidatedBody, mockCacheClear };
 });
 
@@ -128,7 +138,12 @@ describe("api/nodes/publish", () => {
       published: true,
     });
     expect(mockCommit).toHaveBeenCalled();
-    expect(result).toEqual({ id: "node-1", published: true, hiddenEdges: [] });
+    expect(result).toEqual({
+      id: "node-1",
+      published: true,
+      hiddenEdges: [],
+      approvedRevisionId: null,
+    });
   });
 
   it("files who published it, in the same commit as the change", async () => {
@@ -190,15 +205,147 @@ describe("api/nodes/publish", () => {
     expect(mockCommit).not.toHaveBeenCalled();
   });
 
-  it("refuses to publish a page with nothing approved to show", async () => {
-    // Publishing is about who may see the page, not about what it says - and
-    // an unapproved node has no snapshot anybody has agreed to serve.
+  it("refuses to publish a page with no revision at all", async () => {
+    // A node is a materialised copy of a revision, so one with none has no
+    // snapshot to serve and nothing publishing could approve on the way.
     stored["nodes/node-1"] = { name: "X" };
 
     await expect(handler({} as never)).rejects.toMatchObject({
       statusCode: 400,
     });
     expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("refuses when every revision the page has is unusable", async () => {
+    stored["nodes/node-1"] = { name: "X" };
+    stored["revisions/rev-rejected"] = {
+      node_id: "node-1",
+      status: "rejected",
+      data: { name: "X" },
+      update_time: "2026-07-09T10:00:00Z",
+    };
+
+    await expect(handler({} as never)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it("approves the newest revision for a page that has none approved", async () => {
+    // The refusal used to end here, and most pages are in this state: the
+    // ingests write a snapshot and nobody ever approves one by hand, so the
+    // reviewer who opened the page and clicked "Opublikuj" had no way forward
+    // from that screen. Publishing means showing what the page says now.
+    stored["nodes/node-1"] = { name: "X" };
+    stored["revisions/rev-old"] = {
+      node_id: "node-1",
+      data: { name: "Stara wersja" },
+      update_time: "2026-07-09T10:00:00Z",
+    };
+    stored["revisions/rev-new"] = {
+      node_id: "node-1",
+      data: { name: "Nowa wersja" },
+      update_time: "2026-07-09T12:00:00Z",
+    };
+
+    const result = await handler({} as never);
+
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      "nodes/node-1",
+      expect.objectContaining({ name: "Nowa wersja" }),
+    );
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      "revisions/rev-new",
+      expect.objectContaining({ status: "approved", review_user: "admin-uid" }),
+    );
+    expect(mockBatchUpdate).toHaveBeenCalledWith("nodes/node-1", {
+      published: true,
+    });
+    expect(result).toMatchObject({
+      published: true,
+      approvedRevisionId: "rev-new",
+    });
+  });
+
+  it("approves before it publishes, so a live page always points at something", async () => {
+    stored["nodes/node-1"] = { name: "X" };
+    stored["revisions/rev-1"] = {
+      node_id: "node-1",
+      data: { name: "X" },
+      update_time: "2026-07-09T10:00:00Z",
+    };
+
+    await handler({} as never);
+
+    // Two commits, in this order: the failure mode of the other order is a
+    // page readers can open that points at no approved version.
+    expect(mockCommit).toHaveBeenCalledTimes(2);
+    const setPaths = mockBatchSet.mock.calls.map((call) => call[0]);
+    expect(setPaths[0]).toBe("nodes/node-1");
+  });
+
+  it("tells the author their suggestion went live", async () => {
+    // The same message `/api/revisions/approve` sends. Somebody whose proposal
+    // is approved this way is owed it as much as one approved from the queue.
+    stored["nodes/node-1"] = { name: "X" };
+    stored["revisions/rev-1"] = {
+      node_id: "node-1",
+      data: { name: "X" },
+      update_user: "author-uid",
+      update_time: "2026-07-09T10:00:00Z",
+    };
+
+    await handler({} as never);
+
+    expect(notifyRevisionReviewed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        decision: "approved",
+        revisionId: "rev-1",
+        published: true,
+        reviewerUid: "admin-uid",
+      }),
+    );
+  });
+
+  it("leaves an approved page's revision alone", async () => {
+    // Approving the newest is the fallback for a page with no answer, never a
+    // silent overwrite of the version an admin chose on purpose.
+    stored["nodes/node-1"] = {
+      name: "X",
+      revision_id: { path: "revisions/r" },
+    };
+    stored["revisions/rev-newer"] = {
+      node_id: "node-1",
+      data: { name: "Nowsza" },
+      update_time: "2026-07-09T12:00:00Z",
+    };
+
+    const result = await handler({} as never);
+
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).toHaveBeenCalledWith("nodes/node-1", {
+      published: true,
+    });
+    expect(result).toMatchObject({ approvedRevisionId: null });
+  });
+
+  it("approves nothing when the page is being hidden", async () => {
+    stored["nodes/node-1"] = { name: "X", published: true };
+    stored["revisions/rev-1"] = {
+      node_id: "node-1",
+      data: { name: "X" },
+      update_time: "2026-07-09T10:00:00Z",
+    };
+    requestPublished(false);
+
+    const result = await handler({} as never);
+
+    expect(mockBatchUpdate).not.toHaveBeenCalledWith(
+      "revisions/rev-1",
+      expect.anything(),
+    );
+    expect(result).toMatchObject({ approvedRevisionId: null });
   });
 
   it("takes the page's published relations down with it", async () => {

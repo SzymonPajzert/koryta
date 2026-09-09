@@ -1,5 +1,5 @@
 import type { Timestamp } from "firebase-admin/firestore";
-import type { NodeRevisions } from "./model";
+import { revisionCollection, type NodeRevisions } from "./model";
 
 /**
  * A generic representation of a revision used for calculating the stats.
@@ -94,4 +94,49 @@ export function computeRevisionsObj(
     total: sortedRevisions.length,
     has_unapproved,
   };
+}
+
+/** A revision, as much of one as picking the newest usable one needs. */
+export interface RevisionCandidate {
+  id: string;
+  status?: unknown;
+  data?: unknown;
+  update_time?: unknown;
+  collection?: unknown;
+}
+
+/** The revision a page should be published with when none is approved.
+ *
+ * Most pages have never had a revision approved by hand, so "Opublikuj" used
+ * to refuse them; publishing one means showing what it says now, and that is
+ * its newest revision. Shared so that the button and `/api/nodes/publish`
+ * name the same revision - the screen tells the reviewer which version they
+ * are about to put in front of readers, and the server has to agree.
+ *
+ * Three kinds are passed over, because approving one would do something other
+ * than what the reviewer asked for: a revision somebody already turned down,
+ * a proposal to remove the page, and one with no data to apply. Edge
+ * revisions never belong to a node in the first place.
+ */
+export function latestPublishableRevision<T extends RevisionCandidate>(
+  revisions: T[],
+): T | null {
+  const usable = revisions.filter((revision) => {
+    const data = revision.data as Record<string, unknown> | undefined | null;
+    if (!data || typeof data !== "object") return false;
+    if (data.deleted) return false;
+    if (revision.status === "rejected") return false;
+    return revisionCollection(revision) === "nodes";
+  });
+
+  // Ties broken by id so that two revisions written in the same millisecond -
+  // an ingest writing a batch - resolve to the same one on both sides.
+  const sorted = [...usable].sort((a, b) => {
+    const timeA = normalizeUpdateTime(a.update_time) ?? "";
+    const timeB = normalizeUpdateTime(b.update_time) ?? "";
+    if (timeA !== timeB) return timeA < timeB ? 1 : -1;
+    return b.id.localeCompare(a.id);
+  });
+
+  return sorted[0] ?? null;
 }
