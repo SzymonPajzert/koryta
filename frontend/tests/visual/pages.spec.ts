@@ -20,6 +20,17 @@ const pages: {
   { name: "zrodla", path: "/zrodla" },
   { name: "o-nas", path: "/o-nas" },
   { name: "pomoc", path: "/pomoc" },
+  // The two legal documents, which had no baseline at all. Their content is
+  // markdown in frontend/content, so these are the most deterministic shots in
+  // the suite - no seed, no dates, no counts - and they are the only cover the
+  // `content-styles` rules in pages/plik/[name].vue have.
+  //
+  // Worth having a shot of each rather than one of either: the two rendered
+  // the same document for a while, because every /plik/* route shared one
+  // async-data key, and a single capture cannot tell that apart from working.
+  // tests/e2e/legal_pages.spec.ts is what guards the navigation itself.
+  { name: "plik-regulamin", path: "/plik/regulamin" },
+  { name: "plik-polityka-prywatnosci", path: "/plik/polityka_prywatnosci" },
   // Not a page: the path is deliberately unroutable, so this captures
   // app/error.vue's 404 branch. Keep it single-segment - two segments would
   // match pages/[seoType]/[slug].vue and render an entity instead.
