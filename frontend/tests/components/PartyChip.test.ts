@@ -53,7 +53,7 @@ describe("PartyChip", () => {
     expect(wrapper.find("div").exists()).toBe(false);
   });
 
-  /** `partyColors` names seven parties and the data has more - Razem is
+  /** `partyColors` names nine parties and the data has more - Razem is
    * commented out there. Those get no inline background at all: the string
    * "undefined" reaching the style attribute is what a plain lookup would
    * write there, and a caller that wants a fill for them paints one itself. */
