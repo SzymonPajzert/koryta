@@ -103,8 +103,8 @@ const region = ref<Powiat | undefined>(undefined);
 
 /** Dormant: every reader is on the `map` arm until the weights in
  * `shared/experiments.ts` move, so this resolves to what the page already did.
- * What it does today is record the arm, which is what makes the split readable
- * on a Growth plan when it is switched on. */
+ * With every weight on `map` the assignment does not even run - see
+ * `isExperimentLive` - so today this is exactly what the page did before. */
 const arm = useExperimentArm(HOME_DEFAULT_EXPERIMENT);
 watch(arm, (value) => {
   if (isPanel(value)) tab.value = value;

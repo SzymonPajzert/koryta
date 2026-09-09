@@ -118,6 +118,7 @@ import {
   submitFeedback,
 } from "~/composables/feedback";
 import { useAuthState } from "~/composables/auth";
+import { trackGoal } from "~/composables/analytics";
 import type { FeedbackContext, FeedbackKind } from "~~/shared/model";
 
 const open = defineModel<boolean>({ required: true });
@@ -177,6 +178,11 @@ const submit = async () => {
       },
       { attribute: signed.value },
     );
+
+    // After the call, so a report that never reached us is not counted as one
+    // that did. `kind` is the chip; the message is somebody's words and stays
+    // out of analytics entirely.
+    trackGoal("feedback:sent", { kind: kind.value });
 
     sent.value = true;
     message.value = "";

@@ -48,8 +48,9 @@
 
 <script lang="ts" setup>
 import { mdiAlertCircleOutline, mdiHome, mdiMapSearchOutline } from "@mdi/js";
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import type { NuxtError } from "#app";
+import { trackGoal } from "~/composables/analytics";
 
 const props = defineProps<{ error: NuxtError }>();
 
@@ -77,6 +78,14 @@ const devMessage = computed(() =>
 useSeoMeta({
   title: title.value,
   robots: "noindex, nofollow",
+});
+
+// On mount rather than at setup, because this renders on the server too and
+// the tracker is client-only. The url the reader asked for is the event's own
+// url, so the goal needs no property for it - only the status, which is what
+// separates a link to a page that no longer exists from something we broke.
+onMounted(() => {
+  trackGoal("error:shown", { status: String(statusCode.value ?? "unknown") });
 });
 
 // clearError tears down the error state before navigating; a plain

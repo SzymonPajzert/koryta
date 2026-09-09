@@ -48,6 +48,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "licznik-zgloszen-i-bledow",
+    title: "Liczymy kliknięcia w „Zgłoś” i trafienia na nieistniejącą stronę",
+    description:
+      "Nie było wiadomo ani czy ktokolwiek znajduje przycisk „Zgłoś” w rogu " +
+      "ekranu, ani jak często czytelnik trafia na „Nie ma takiej strony” - a " +
+      "adresy stron osób bywały psute przez nas i nikt tego nie widział. Oba " +
+      "zdarzenia są teraz liczone zbiorczo, bez ciasteczek i bez treści " +
+      "zgłoszenia. Nic się nie zmienia w tym, co widać.",
+    steps: [
+      "Kliknij „Zgłoś” w prawym dolnym rogu i wyślij zgłoszenie - dialog działa jak dotąd.",
+      "Wejdź na adres, którego nie ma (np. /nie-ma-takiej-strony) - strona błędu wygląda tak samo.",
+    ],
+    area: "public",
+  },
+  {
     id: "fakt-do-notatki",
     title: "Wydobyty fakt można przenieść do własnej notatki",
     description:

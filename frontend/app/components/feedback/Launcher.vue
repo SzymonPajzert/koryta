@@ -11,7 +11,7 @@
       class="feedback-fab"
       :size="mdAndUp ? 'default' : 'small'"
       aria-label="Zgłoś błąd lub pomysł"
-      @click="open = true"
+      @click="openDialog"
     >
       <span v-if="mdAndUp">Zgłoś</span>
     </v-btn>
@@ -24,9 +24,18 @@
 import { mdiMessageAlertOutline } from "@mdi/js";
 import { ref } from "vue";
 import { useDisplay } from "vuetify";
+import { trackGoal } from "~/composables/analytics";
 
 const { mdAndUp } = useDisplay();
 const open = ref(false);
+
+/** Counted on the button rather than on the dialog's `open` model, which the
+ * close button and the auto-close after a send write to as well - one reader
+ * opening the form once would otherwise be three events. */
+function openDialog() {
+  trackGoal("feedback:opened");
+  open.value = true;
+}
 </script>
 
 <style scoped>

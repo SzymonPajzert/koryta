@@ -8,6 +8,7 @@
 import {
   armPropertyName,
   assignArm,
+  isExperimentLive,
   type Experiment,
 } from "~~/shared/experiments";
 import { setGlobalProp, trackGoal } from "~/composables/analytics";
@@ -90,6 +91,12 @@ export function useExperimentArm<Id extends string>(
   const arm = ref(control) as Ref<Id>;
 
   onMounted(() => {
+    // Nothing to record while the split is dormant: `assignArm` would return
+    // the control arm every time, and reporting that costs an event per
+    // session plus a constant property on everything the reader does next.
+    // The ref is already on control, so this returns the same panel.
+    if (!isExperimentLive(experiment)) return;
+
     const id = sessionId();
     if (!id) return;
 

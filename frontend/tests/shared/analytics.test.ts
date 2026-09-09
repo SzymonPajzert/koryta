@@ -56,6 +56,7 @@ describe("the goal vocabulary", () => {
     // the number `tabela:open` exists to explain - goes to zero.
     const passive = ALL_GOALS.filter(isPassiveGoal).sort();
     expect(passive).toEqual([
+      "error:shown",
       "experiment:assigned",
       "tabela:no-results",
       "tabela:open",
