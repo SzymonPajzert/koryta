@@ -9,11 +9,17 @@
     >
       <v-row justify="center" align="center" class="w-100 h-100">
         <v-col cols="12" md="3" class="d-flex align-center justify-center">
-          <a
-            href="https://zrzutka.pl/rd7ssx/award/g3z29z/przypinka-z-podziekowaniami"
-            target="_blank"
+          <!-- To /pomoc, not to the zrzutka. This used to open a particular
+               reward on the fundraiser - a limited pin - which is spent, so
+               the first thing on the page sent a reader to a finished appeal.
+               /pomoc is where the current ask lives and stays right as it
+               changes. Same goal as the "Działaj z nami" button below, told
+               apart by `from`. -->
+          <NuxtLink
+            to="/pomoc"
             class="d-inline-block mb-8 mx-auto"
             style="width: 200px"
+            @click="trackGoal('cta:pomoc', { from: 'home-logo' })"
           >
             <NuxtImg
               width="200"
@@ -24,7 +30,7 @@
               preload
               alt="Koryta.pl logo"
             />
-          </a>
+          </NuxtLink>
         </v-col>
         <v-col cols="12" md="9">
           <h1 class="text-h5 text-sm-h3 text-md-h2 font-weight-bold lh-title">
