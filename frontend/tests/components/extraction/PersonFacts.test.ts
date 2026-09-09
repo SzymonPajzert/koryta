@@ -5,7 +5,7 @@ import { flushPromises } from "@vue/test-utils";
 import { clearNuxtData } from "#app";
 import { getQuery } from "h3";
 import PersonFacts from "../../../app/components/extraction/PersonFacts.vue";
-import type { ExtractionFact } from "../../../shared/model";
+import type { ExtractionFact, Note } from "../../../shared/model";
 
 const currentUser = ref<{ uid: string } | null>({ uid: "reader" });
 vi.mock("~/composables/auth", async (importOriginal) => ({
@@ -20,6 +20,18 @@ const { useVotes } = vi.hoisted(() => ({ useVotes: vi.fn() }));
 vi.mock("~/composables/votes", async (importOriginal) => ({
   ...(await importOriginal<typeof import("~/composables/votes")>()),
   useVotes,
+}));
+
+/** The reader's note, which „Dodaj do notatki” writes into. Stubbed because the
+ * real one reaches for a Firebase app this environment has none of; what the
+ * entry it writes looks like is `AddToNoteButton.test.ts`. */
+const userNote = ref<Note | null>(null);
+const { saveNote } = vi.hoisted(() => ({
+  saveNote: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("~/composables/notes", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/composables/notes")>()),
+  useNotes: () => ({ userNote, saveNote, otherNotes: ref([]) }),
 }));
 
 /** What the endpoint answers with, set by each test before it mounts. */
@@ -120,6 +132,18 @@ describe("ExtractionPersonFacts", () => {
 
     expect(section.findAll("[data-testid='verdict-buttons']")).toHaveLength(2);
     expect(useVotes).not.toHaveBeenCalled();
+  });
+
+  it("offers to move each fact into the reader's own note", async () => {
+    // What a verdict on its own leads to: „poprawny” is a number nobody reads
+    // back, while a note entry stands in the section above under the reader's
+    // name and is what the article promotion runs over.
+    response = { facts: [fact(), fact({ id: "fact-2" })], total: 2 };
+    const section = await mount();
+
+    const buttons = section.findAll("[data-testid='extraction-add-to-note']");
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]!.text()).toContain("Dodaj do notatki");
   });
 
   it("renders nothing at all when the person has no matched facts", async () => {

@@ -25,6 +25,8 @@
         Automatycznie wyszukane w prasie i przypisane do tej osoby po imieniu i
         nazwisku. Mogą być błędne - oceń je przyciskami przy każdej karcie, a
         jeśli fakt dotyczy kogoś innego, zgłoś to przyciskiem „To nie ta osoba”.
+        Fakt, który się potwierdza, możesz przenieść do swojej notatki
+        przyciskiem „Dodaj do notatki”.
       </p>
       <p v-else class="k-lead" data-testid="person-extractions-count">
         Znaleźliśmy
@@ -87,9 +89,15 @@
                  subscription per card, and this section mounts every card at
                  once rather than behind an expander the way /ekstrakcje does.
                  Both it and the card's own "To nie ta osoba" flag are single
-                 writes and open nothing. -->
+                 writes and open nothing.
+
+                 „Dodaj do notatki” does read a collection, but the same one on
+                 every card - this person's notes, which `NoteEditor` above has
+                 open anyway - so it is one target for the page rather than one
+                 per fact. -->
             <ExtractionCard :fact="fact" class="h-100" :muted="bucket.muted">
               <template #actions>
+                <ExtractionAddToNoteButton :fact="fact" :node-id="nodeId" />
                 <ExtractionQuickVerdict
                   v-if="fact.id"
                   :id="fact.id"
