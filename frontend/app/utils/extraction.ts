@@ -4,14 +4,17 @@ import type {
   NodeType,
 } from "~~/shared/model";
 
-const FACT_TYPE_LABELS: Record<ExtractionFactType, string> = {
+/** Exported so a filter can label the *types* rather than a fact: the chip row
+ * on a person's page names every kind of fact that person has, and there is no
+ * fact to hand it. `factTypeLabel` below stays the way a card asks. */
+export const FACT_TYPE_LABELS: Record<ExtractionFactType, string> = {
   employment: "Zatrudnienie",
   party_membership: "Członkostwo partyjne",
   personal_relation: "Relacja osobista",
   affair_involvement: "Rola w aferze",
 };
 
-const FACT_TYPE_COLORS: Record<ExtractionFactType, string> = {
+export const FACT_TYPE_COLORS: Record<ExtractionFactType, string> = {
   employment: "primary",
   party_membership: "secondary",
   personal_relation: "info",
@@ -133,4 +136,56 @@ export function factPromotionBlocker(fact: ExtractionFact): string {
     return "Członkostwo partyjne zapisujemy przy osobie, a nie jako powiązanie.";
   }
   return "Dla tego rodzaju faktu nie mamy jeszcze typu powiązania.";
+}
+
+// --- What readers have made of a fact ---
+
+/** The three things a reader can say about a fact.
+ *
+ * „poprawny" and „niepoprawny" are two ends of one vote category; „za mało
+ * informacji" is its own, because a reviewer who cannot decide has not thereby
+ * said the fact is wrong. Every surface that judges a fact - the review queue,
+ * the swipe deck and a person's page - offers exactly these three. */
+export type FactVerdict = "correct" | "incorrect" | "insufficient";
+
+/** Where a fact stands with the people who have looked at it. */
+export type FactReviewState = "confirmed" | "disputed" | "unreviewed";
+
+/** Read off the aggregate the fact document already carries, which is the
+ * whole point: `useVotes` opens a Firestore listener per card, and a person's
+ * page mounts every card at once. `Card.vue`'s `reportedWrongPerson` follows
+ * the same rule.
+ *
+ * `correct` is a *sum* of human verdicts (see `computeVoteStats`), so a
+ * negative one is a fact readers rejected rather than one nobody has read. Two
+ * readers who disagree cancel out to 0 and land back in `unreviewed`, which is
+ * the honest answer: the aggregate cannot say more than that people looked and
+ * did not settle it.
+ */
+export function factReviewState(fact: ExtractionFact): FactReviewState {
+  const votes = fact.stats?.votes as Record<string, unknown> | undefined;
+  const correct = numeric(votes?.correct);
+  if (correct < 0 || numeric(votes?.wrongPerson) > 0) return "disputed";
+  if (correct > 0) return "confirmed";
+  return "unreviewed";
+}
+
+/** How many people have voted on this fact.
+ *
+ * `humanCount` is absent on every aggregate written before the field existed,
+ * and `scripts/migrate/backfill-vote-human-count.ts` covered nodes only - so
+ * `humanVoted` is the fallback, and one voter is a better answer than none for
+ * a fact somebody demonstrably judged.
+ */
+export function factVoterCount(fact: ExtractionFact): number {
+  const votes = fact.stats?.votes;
+  const count = votes?.humanCount;
+  if (typeof count === "number" && count > 0) return count;
+  return votes?.humanVoted ? 1 : 0;
+}
+
+/** A vote category is only written once somebody has voted in it, so every
+ * read of the aggregate has to survive the field being absent. */
+function numeric(value: unknown): number {
+  return typeof value === "number" ? value : 0;
 }

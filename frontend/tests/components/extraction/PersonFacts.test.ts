@@ -13,6 +13,15 @@ vi.mock("~/composables/auth", async (importOriginal) => ({
   useAuthState: () => ({ user: currentUser }),
 }));
 
+/** The listener this section must never open. Spied rather than asserted on by
+ * component name: an auto-imported component answers to more than one, and a
+ * `findComponent` that never matches passes whatever the section renders. */
+const { useVotes } = vi.hoisted(() => ({ useVotes: vi.fn() }));
+vi.mock("~/composables/votes", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/composables/votes")>()),
+  useVotes,
+}));
+
 /** What the endpoint answers with, set by each test before it mounts. */
 let response: { facts: ExtractionFact[]; total: number } | null = {
   facts: [],
@@ -100,14 +109,17 @@ describe("ExtractionPersonFacts", () => {
     expect(cols[0]!.classes()).toContain("v-col-md-6");
   });
 
-  it("carries no vote buttons, so a long section opens no listeners", async () => {
-    // Each vote widget subscribes to the fact's vote document; this section
-    // mounts every card at once instead of behind an expander, so it omits
-    // them. The card's own wrong-person flag is a write, not a listener.
-    response = { facts: [fact()], total: 1 };
+  it("offers a verdict on every card, without opening a listener", async () => {
+    // A reader looking up one person should be able to judge what is said
+    // about them where it is shown. `ExtractionQuickVerdict` is a write and
+    // nothing else; `useVotes` - what the review queue's copy of this row is
+    // built on - subscribes to the fact's vote document, and this section
+    // mounts every card at once instead of behind an expander.
+    response = { facts: [fact(), fact({ id: "fact-2" })], total: 2 };
     const section = await mount();
 
-    expect(section.find(".extraction-actions").exists()).toBe(false);
+    expect(section.findAll("[data-testid='verdict-buttons']")).toHaveLength(2);
+    expect(useVotes).not.toHaveBeenCalled();
   });
 
   it("renders nothing at all when the person has no matched facts", async () => {
@@ -141,6 +153,138 @@ describe("ExtractionPersonFacts", () => {
     expect(
       section.find("[data-testid='person-extractions-hidden']").text(),
     ).toContain("40");
+  });
+
+  describe("what readers have made of the facts", () => {
+    it("puts what readers confirmed above what nobody has judged", async () => {
+      response = {
+        facts: [
+          fact({ id: "open", party: "Partia Niesprawdzona" }),
+          fact({
+            id: "confirmed",
+            party: "Partia Potwierdzona",
+            stats: {
+              votes: { correct: 2, humanVoted: true, humanCount: 2 },
+            } as ExtractionFact["stats"],
+          }),
+        ],
+        total: 2,
+      };
+      const section = await mount();
+
+      const cards = section.findAll(".extraction-card");
+      expect(cards).toHaveLength(2);
+      // Confirmed first, whatever order the endpoint sent them in.
+      expect(cards[0]!.text()).toContain("Partia Potwierdzona");
+      expect(cards[1]!.text()).toContain("Partia Niesprawdzona");
+      expect(cards[1]!.classes()).toContain("extraction-card--muted");
+      expect(
+        section.find("[data-testid='person-extractions-confirmed']").exists(),
+      ).toBe(true);
+      expect(
+        section.find("[data-testid='person-extractions-open']").exists(),
+      ).toBe(true);
+    });
+
+    it("draws no line when everything is on the same side of it", async () => {
+      // Almost every person's facts are entirely unjudged today, and a heading
+      // saying so over all of them is the lead paragraph again in small type.
+      response = { facts: [fact(), fact({ id: "fact-2" })], total: 2 };
+      const section = await mount();
+
+      expect(
+        section.find("[data-testid='person-extractions-open']").exists(),
+      ).toBe(false);
+      expect(section.find(".extraction-card").classes()).not.toContain(
+        "extraction-card--muted",
+      );
+    });
+
+    it("counts the people who voted on a fact", async () => {
+      response = {
+        facts: [
+          fact({
+            stats: {
+              votes: { correct: 2, humanVoted: true, humanCount: 2 },
+            } as ExtractionFact["stats"],
+          }),
+        ],
+        total: 1,
+      };
+      const section = await mount();
+
+      expect(
+        section.find("[data-testid='extraction-vote-count']").text(),
+      ).toContain("Potwierdzony");
+      expect(
+        section.find("[data-testid='extraction-vote-count']").text(),
+      ).toContain("2 głosy");
+    });
+
+    it("says nothing about votes on a fact nobody has read", async () => {
+      response = { facts: [fact()], total: 1 };
+      const section = await mount();
+
+      expect(
+        section.find("[data-testid='extraction-vote-count']").exists(),
+      ).toBe(false);
+    });
+  });
+
+  describe("filtering by type", () => {
+    it("offers no filter when every fact is of one kind", async () => {
+      response = {
+        facts: [fact(), fact({ id: "fact-2" })],
+        total: 2,
+      };
+      const section = await mount();
+
+      expect(
+        section.find("[data-testid='person-extractions-filter']").exists(),
+      ).toBe(false);
+    });
+
+    it("names each kind the person has, with how many of each", async () => {
+      response = {
+        facts: [
+          fact(),
+          fact({ id: "fact-2", fact_type: "personal_relation" }),
+          fact({ id: "fact-3", fact_type: "personal_relation" }),
+        ],
+        total: 3,
+      };
+      const section = await mount();
+
+      const filter = section.find("[data-testid='person-extractions-filter']");
+      expect(filter.exists()).toBe(true);
+      expect(filter.text()).toContain("Relacja osobista (2)");
+      expect(filter.text()).toContain("Członkostwo partyjne (1)");
+      expect(filter.text()).toContain("Wszystkie (3)");
+    });
+
+    it("keeps only the chosen kind, and gives the rest back", async () => {
+      response = {
+        facts: [
+          fact(),
+          fact({ id: "fact-2", fact_type: "personal_relation" }),
+          fact({ id: "fact-3", fact_type: "personal_relation" }),
+        ],
+        total: 3,
+      };
+      const section = await mount();
+
+      await section
+        .find("[data-testid='person-extractions-filter-personal_relation']")
+        .trigger("click");
+      await flushPromises();
+      expect(section.findAll(".extraction-card")).toHaveLength(2);
+
+      await section
+        .findAll("[data-testid='person-extractions-filter'] .v-chip")[0]!
+        .trigger("click");
+      await flushPromises();
+      expect(section.findAll(".extraction-card")).toHaveLength(3);
+    });
   });
 
   describe("logged out", () => {
