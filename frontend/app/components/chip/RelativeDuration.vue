@@ -22,6 +22,7 @@
 
 <script lang="ts" setup>
 import { computed } from "vue";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 
 const props = defineProps<{
   start: string | undefined;
@@ -30,18 +31,9 @@ const props = defineProps<{
   maxEnd: string | undefined;
 }>();
 
-const description = computed(() => {
-  // Both ends are optional - an edge entered through the editor may carry no
-  // date at all - so neither may be interpolated unguarded. "obecnie" is only
-  // right for the end: a missing start is unknown, not today.
-  if (!props.start && !props.end) {
-    return "";
-  }
-  if (props.start && props.end && props.start == props.end) {
-    return props.start;
-  }
-  return `${props.start ?? "?"} - ${props.end || "obecnie"}`;
-});
+// Shared with the phone layout of `card/EmploymentHistory.vue`, which shows the
+// period on its own where this bar will not fit.
+const description = computed(() => relationPeriodLabel(props.start, props.end));
 
 const parseDate = (d: string | undefined, fallback: number) => {
   if (!d) return fallback;
