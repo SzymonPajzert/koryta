@@ -16,6 +16,7 @@ const asked: { maxDepth?: unknown }[] = [];
 /** What the canvas is holding, for the tests that care what the legend makes of
  * it. Reset per test by `beforeEach`. */
 let nodes: Record<string, Record<string, unknown>> = {};
+let edges: Record<string, unknown>[] = [];
 
 vi.mock("~/composables/graph", () => {
   return {
@@ -23,7 +24,7 @@ vi.mock("~/composables/graph", () => {
       asked.push(opts);
       return {
         nodesFiltered: computed(() => nodes),
-        edgesFiltered: ref([]),
+        edgesFiltered: computed(() => edges),
         ready: ref(true),
         omitted: computed(() => 0),
       };
@@ -36,6 +37,7 @@ describe("GraphContainer unit tests", () => {
     vi.clearAllMocks();
     asked.length = 0;
     nodes = { "2": { name: "Orlen", type: "rect", color: "#6b7a83" } };
+    edges = [];
   });
 
   it("names what the reader picked, and offers its page", async () => {
@@ -121,6 +123,47 @@ describe("GraphContainer unit tests", () => {
     // The fold button defaulted to open and reset to open on every fresh
     // document, so it never bought back the room it promised.
     expect(component.find('[data-testid="graph-legend-toggle"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("names the line styles the canvas is actually drawing", async () => {
+    edges = [
+      { source: "1", target: "2", type: "employed" },
+      // Drawn the same grey dash, so they are one entry and not three - the
+      // legend would otherwise claim a distinction the canvas is not making.
+      { source: "3", target: "1", type: "mentions" },
+      { source: "4", target: "1", type: "comment" },
+    ];
+
+    const component = await mountSuspended(Container, {
+      global: { plugins: [vuetify], stubs: { GraphCanvas: true } },
+      props: { focusNodeId: "1" },
+    });
+
+    const legend = component.get('[data-testid="graph-edge-legend"]');
+    expect(legend.text()).toContain("Zatrudnienie");
+    expect(legend.text()).toContain("Wzmianka w artykule lub notatce");
+    // Nothing on this canvas is a seat or a candidacy, and a legend listing
+    // every relation the site knows would be longer than the graph.
+    expect(legend.text()).not.toContain("Siedziba");
+    expect(legend.text()).not.toContain("Kandydatura");
+
+    const lines = legend.findAll("line");
+    expect(lines).toHaveLength(2);
+    // The question the reader asked: employment is the one solid line, and
+    // everything else is dashed.
+    expect(lines[0]?.attributes("stroke-dasharray")).toBeUndefined();
+    expect(lines[1]?.attributes("stroke-dasharray")).toBe("2 4");
+  });
+
+  it("says nothing about lines when the canvas draws none", async () => {
+    const component = await mountSuspended(Container, {
+      global: { plugins: [vuetify], stubs: { GraphCanvas: true } },
+      props: { focusNodeId: "1" },
+    });
+
+    expect(component.find('[data-testid="graph-edge-legend"]').exists()).toBe(
       false,
     );
   });
