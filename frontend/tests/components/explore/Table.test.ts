@@ -68,6 +68,11 @@ const mountTable = (props: Record<string, unknown> = {}) =>
 
 type Wrapper = Awaited<ReturnType<typeof mountTable>>;
 
+/** `text()` is `textContent`, so it comes back with every newline the template
+ * is indented with. Any assertion that spans two elements - the pill's label
+ * and the date beside it - has to flatten it first. */
+const flat = (text: string) => text.replace(/\s+/g, " ").trim();
+
 const headerCell = (wrapper: Wrapper, title: string) => {
   const cell = wrapper
     .findAll("thead th")
@@ -97,8 +102,12 @@ describe("ExploreTable's merged person and history cells", () => {
     expect(historyCell.text()).toContain("Gdynia");
     // The date used to be a column of its own behind `hidden-sm-and-down`, so
     // a phone never saw it. It rides with the employers now, as a month and a
-    // year - the ISO day was precision nobody reads a table by.
-    expect(historyCell.text()).toContain("od marca 2019");
+    // year - the ISO day was precision nobody reads a table by - and it says
+    // which date it is, which a bare „od marca 2019” under a row of employers
+    // did not.
+    expect(flat(historyCell.text())).toContain(
+      "Ostatnie zatrudnienie od marca 2019",
+    );
   });
 
   /** Five e2e specs treat `a.text-primary.cursor-pointer` in the first row as
@@ -197,7 +206,9 @@ describe("ExploreTable's elections column", () => {
 
     // Employers and the date stay where they were...
     expect(cells[1]!.text()).toContain("FIRMA");
-    expect(cells[1]!.text()).toContain("od marca 2019");
+    expect(flat(cells[1]!.text())).toContain(
+      "Ostatnie zatrudnienie od marca 2019",
+    );
 
     // ...and the chips are in both places, each with the class that takes it
     // off the width the other one answers for.
@@ -233,11 +244,7 @@ describe("ExploreTable's absorbed columns", () => {
    * spans with an icon apiece, so `text()` comes back with the newlines the
    * template is indented with. */
   const facts = (wrapper: Wrapper) =>
-    wrapper
-      .get("tbody td .employment-facts")
-      .text()
-      .replace(/\s+/g, " ")
-      .trim();
+    flat(wrapper.get("tbody td .employment-facts").text());
 
   it("prints when the last job started and how long the person has worked", async () => {
     const wrapper = await mountTable({
@@ -245,12 +252,38 @@ describe("ExploreTable's absorbed columns", () => {
       items: [{ ...person(), experience: 11 }],
     });
 
-    expect(facts(wrapper)).toBe("od marca 2019 11 lat pracy");
-    // The label the owner read as ugly, and the ISO day behind it: „Ostatnie
-    // zatrudnienie: 2019-03-01 · 11 lat pracy” put twenty-one characters of
-    // prose in front of the only date in the cell.
-    expect(wrapper.text()).not.toContain("Ostatnie zatrudnienie");
+    expect(facts(wrapper)).toBe(
+      "Ostatnie zatrudnienie od marca 2019 11 lat pracy",
+    );
+    // The day stays behind the tooltip: „Ostatnie zatrudnienie: 2019-03-01 ·
+    // 11 lat pracy” was the old caption, and it is the ISO string, not the
+    // words, that a scanned row has no use for.
     expect(wrapper.text()).not.toContain("2019-03-01");
+  });
+
+  /** The reader who read the bare „od lipca 2026” as a fact about the row
+   * rather than about its newest job gets the words back - at the widths that
+   * have room for them. 390px is why they were cut, so the label carries the
+   * breakpoint and the date does not.
+   *
+   * On the class rather than on what is on screen, for the reason the
+   * elections chips above are: jsdom has no viewport, so a test that asked
+   * whether the label is visible would stay green with it on a phone. */
+  it("holds the label back to md and prints the date at every width", async () => {
+    const wrapper = await mountTable({
+      headers: SORTABLE_HEADERS,
+      items: [{ ...person(), experience: 11 }],
+    });
+
+    const label = wrapper.get("tbody td .meta-pill .d-md-inline");
+    expect(label.text()).toBe("Ostatnie zatrudnienie");
+    expect(label.classes()).toContain("d-none");
+
+    // The date is a text node of the pill itself, so there is no class that
+    // could take it off a width.
+    expect(flat(wrapper.get("tbody td .meta-pill").text())).toBe(
+      "Ostatnie zatrudnienie od marca 2019",
+    );
   });
 
   /** What the words became. An icon with no text alternative is a decoration,
@@ -326,7 +359,9 @@ describe("ExploreTable's absorbed columns", () => {
 
       // The whole caption, so that a tenth reappearing anywhere in it fails
       // here rather than only where the assertion happened to look.
-      expect(facts(wrapper)).toBe(`od marca 2019 ${expected}`);
+      expect(facts(wrapper)).toBe(
+        `Ostatnie zatrudnienie od marca 2019 ${expected}`,
+      );
     }
   });
 
@@ -352,7 +387,7 @@ describe("ExploreTable's absorbed columns", () => {
       items: [{ ...person(), latestEmploymentStart: "2019", experience: 0 }],
     });
 
-    expect(facts(wrapper)).toBe("od 2019");
+    expect(facts(wrapper)).toBe("Ostatnie zatrudnienie od 2019");
   });
 
   /** /eksploruj/nowe still draws a „Lata pracy” column, and the years are only
@@ -366,7 +401,7 @@ describe("ExploreTable's absorbed columns", () => {
       items: [{ ...person(), experience: 11 }],
     });
 
-    expect(facts(wrapper)).toBe("od marca 2019");
+    expect(facts(wrapper)).toBe("Ostatnie zatrudnienie od marca 2019");
     expect(wrapper.findAll("tbody td")[2]!.text()).toBe("11");
   });
 
