@@ -227,6 +227,27 @@ describe("/eksploruj/nowe", () => {
     expect(steps.text()).toContain("Jak to działa?");
   });
 
+  /** The long version, side by side rather than stacked. One column per step,
+   * left to right in the strip's order and carrying the strip's badges - a
+   * stacked list said nothing about which of the three numbers each paragraph
+   * belonged to. */
+  it("explains the three steps in columns, in the order of the strip", async () => {
+    const wrapper = await mountPage();
+
+    const steps = wrapper.get('[data-testid="explore-steps"]');
+    const details = steps.findAll("li.detail");
+    expect(details.map((detail) => detail.get(".detail__head").text())).toEqual(
+      ["1Eksploruj", "2Notatka", "3Głos"],
+    );
+    // Each column holds its own step's explanation, not just its heading.
+    expect(
+      details.map((detail) => detail.text().includes("Kliknij „Eksploruj”")),
+    ).toEqual([true, false, false]);
+    // The columns are not `li.step`: that class is the strip, and the
+    // assertion above it counts on there being exactly three of them.
+    expect(steps.findAll("li.step")).toHaveLength(3);
+  });
+
   /** The table spilled out of its card because it declared eleven columns
    * against a 1248px card, three of which this page already says elsewhere.
    * The list is asserted whole rather than by absence: a column added back
