@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { getStorage } from "firebase-admin/storage";
 import { getApp } from "firebase-admin/app";
+import { warsawDate } from "~~/shared/dates";
 
 /** The bucket the crawler writes to, and the only one the article pipelines
  * read. Spelled here exactly as `CRAWLED_BUCKET` in
@@ -121,16 +122,12 @@ export function crawlArchivePath(
 /** The Warsaw calendar date, which is what partitions the bucket.
  *
  * The crawler stamps `datetime.now(warsaw_tz)`; a UTC date would put anything
- * captured after 22:00 (23:00 in winter) in the previous day's partition. */
-export function warsawDate(now: Date = new Date()): string {
-  // en-CA gives YYYY-MM-DD, which is the format the partition uses.
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Warsaw",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-}
+ * captured after 22:00 (23:00 in winter) in the previous day's partition.
+ *
+ * Re-exported rather than defined here since /api/edges/anniversaries wanted
+ * the same answer: the implementation moved to `shared/dates`, which a request
+ * handler can import without dragging in `firebase-admin/storage`. */
+export { warsawDate };
 
 /** A time-ordered id, in the shape `uuid7str()` produces on the Python side.
  *
