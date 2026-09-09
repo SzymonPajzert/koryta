@@ -48,6 +48,37 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "graf-opisy-powiazan",
+    title: "Graf może podpisać każdą linię",
+    description:
+      "Kolory i kreski mówiły, jakiego rodzaju jest powiązanie, ale trzeba " +
+      "było znać legendę. Przycisk „Opisy powiązań” na pasku nad grafem " +
+      "wypisuje to wprost przy każdej linii - stanowisko, jeśli ktoś je " +
+      "wpisał, a jak nie, to rodzaj powiązania. Domyślnie wyłączone, bo przy " +
+      "dwóch krokach podpisów jest więcej niż miejsca; wybór trzyma się przy " +
+      "przechodzeniu między stronami.",
+    steps: [
+      "Wejdź na stronę osoby z grafem i sprawdź, że linie są bez podpisów.",
+      "Kliknij „Opisy powiązań” na pasku nad grafem - przy liniach mają pojawić się napisy typu „pracuje” czy „kandydował”.",
+      "Przejdź na stronę innej osoby: podpisy mają zostać włączone, a przycisk ma mówić „Ukryj opisy”.",
+    ],
+    area: "public",
+  },
+  {
+    id: "graf-legenda-bez-zwijania",
+    title: "Legenda grafu stoi na pasku na stałe",
+    description:
+      "Przycisk „Ukryj legendę” niczego nie załatwiał: legenda i tak była " +
+      "domyślnie rozwinięta, a po wejściu na stronę od nowa wracała " +
+      "rozwinięta mimo zwinięcia. Był to jeden przycisk więcej do " +
+      "przeczytania po drodze do grafu, więc go nie ma - legenda po prostu " +
+      "stoi na pasku.",
+    steps: [
+      "Otwórz stronę osoby z grafem i sprawdź, że legenda jest na pasku, a przycisku „Ukryj legendę” nie ma.",
+    ],
+    area: "public",
+  },
+  {
     id: "okragly-staz-w-instytucjach-publicznych",
     title: "Okrągły staż w instytucjach publicznych",
     description:
@@ -1483,7 +1514,7 @@ export const QA_ITEMS: QaItem[] = [
   },
   {
     id: "graf-legenda-kolorow-partii",
-    title: "Legenda grafu mówi, co znaczą kolory osób, i można ją schować",
+    title: "Legenda grafu mówi, co znaczą kolory osób",
     description:
       "W grafie kółko osoby jest pomalowane na kolor jej partii, ale legenda " +
       "nad płótnem tłumaczyła dotąd tylko kształty - więc niebieskie, " +
@@ -1491,9 +1522,8 @@ export const QA_ITEMS: QaItem[] = [
       "legenda wymienia partie, które faktycznie są na ekranie (nie całą " +
       "listę ośmiu), a niebieski jest podpisany jako osoba bez partii. Nowa " +
       "Lewica i SLD mają ten sam kolor - to ta sama partia po zmianie nazwy - " +
-      "więc stoją w jednej pozycji. Całą legendę można zwinąć przyciskiem " +
-      "„Ukryj legendę”, a wybór trzyma się przy przechodzeniu między " +
-      "stronami. Przy okazji: osoba z partii, dla której nie mamy koloru (np. " +
+      "więc stoją w jednej pozycji. Przy okazji: osoba z partii, dla której " +
+      "nie mamy koloru (np. " +
       "Razem), była rysowana na czarno - teraz jest niebieska jak reszta " +
       "bezpartyjnych. Podpisy osób w dalszym kręgu skracają drugie imię do " +
       "inicjału zamiast ucinać nazwisko: było „Sławomir Andrzej…”, jest " +
@@ -1502,8 +1532,6 @@ export const QA_ITEMS: QaItem[] = [
       "Wejdź na stronę osoby, która ma powiązania z politykami (np. /osoba/pawel-orlowski-hvMeVASGU0uBMuwSsRM0), i zjedź do grafu.",
       "Nad płótnem sprawdź legendę: po kształtach mają być kolory partii widocznych w grafie, każdy z nazwą partii.",
       "Sprawdź, że nie ma tam partii, której nikt na płótnie nie reprezentuje, a Nowa Lewica i SLD (jeśli obie są) stoją razem w jednej pozycji.",
-      "Kliknij „Ukryj legendę” - legenda znika, przycisk zmienia się w „Legenda”. Kliknij jeszcze raz - wraca.",
-      "Schowaj legendę i przejdź na stronę innej osoby - ma pozostać schowana.",
       "Sprawdź podpisy węzłów w drugim kroku: osoba z dwoma imionami ma być podpisana z nazwiskiem (np. „Sławomir A. Nowicki”), a nie uciętą po imionach.",
       "Sprawdź, że żaden węzeł osoby nie jest czarny.",
     ],
