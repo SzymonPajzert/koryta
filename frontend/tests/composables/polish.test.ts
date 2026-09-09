@@ -68,8 +68,8 @@ describe("polishCounting", () => {
   it("keeps the singular for a bare one only", () => {
     // The last digit is not the rule. „21 osoba” and „371 rocznica” are what
     // matching on it wrote, and the second of those is what found it - the
-    // count of anniversaries on /eksploruj/rocznice is in the low hundreds and
-    // lands on a 1 about a tenth of the time.
+    // count it was found on was in the low hundreds, which lands on a 1 about
+    // a tenth of the time.
     expect(polishCounting(1, "osoba", "osoby", "osób")).toBe("1 osoba");
     expect(polishCounting(21, "osoba", "osoby", "osób")).toBe("21 osób");
     expect(polishCounting(101, "osoba", "osoby", "osób")).toBe("101 osób");
