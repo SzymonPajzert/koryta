@@ -52,8 +52,12 @@ export const QA_ITEMS: QaItem[] = [
     title: "Rocznice pracy w instytucjach publicznych",
     description:
       "Nowa strona /eksploruj/rocznice pokazuje, komu z opublikowanych osób " +
-      "wypada rocznica objęcia stanowiska: miesiąc wstecz i miesiąc naprzód, " +
-      "w kolejności kalendarzowej, od minionych do nadchodzących. Każda karta " +
+      "wypada rocznica objęcia stanowiska: miesiąc wstecz i miesiąc naprzód. " +
+      "Przełącznik na górze wybiera połowę okna - „Nadchodzące” (domyślnie) " +
+      "albo „Minione” - i obie zaczynają się od dnia najbliższego dzisiaj. " +
+      "Jedna wspólna lista kalendarzowa tego nie dawała: rocznic w oknie jest " +
+      "kilkaset, więc pierwsza nadchodząca leżała dziewięć stron niżej. " +
+      "Każda karta " +
       "mówi, która to rocznica i jaki jest łączny staż tej osoby - suma lat " +
       "we wszystkich instytucjach publicznych, ta sama liczba, którą pokazuje " +
       "kolumna „Lata pracy”. Liczymy tylko miejsca, o których wiemy, że " +
@@ -62,9 +66,11 @@ export const QA_ITEMS: QaItem[] = [
       "samo. Wygląd i przewijanie są takie jak w „Ostatnich zatrudnieniach” " +
       "na stronie głównej.",
     steps: [
-      "Wejdź na /eksploruj/rocznice: ma być siatka kart, na desktopie dwie kolumny, i nagłówek z liczbą rocznic w tym okresie.",
-      "Przewiń w dół: dwie kolejne strony mają doładować się same, potem pojawia się przycisk „Pokaż więcej rocznic”.",
-      "Sprawdź kolejność: pierwsze karty to rocznice minione („12 dni temu”, szara belka z lewej), dalej „dzisiaj” i „za …” z zieloną belką i wyróżnioną datą.",
+      "Wejdź na /eksploruj/rocznice: ma być siatka kart, na desktopie dwie kolumny, przełącznik „Nadchodzące / Minione” z liczbami przy obu i podpis z liczbą rocznic w wybranej połowie.",
+      "Pierwsza karta ma być z dzisiaj albo z najbliższych dni („dzisiaj”, „jutro”, „za 3 dni”) - z zieloną belką z lewej i wyróżnioną datą. Nadchodzących nie trzeba szukać przewijaniem.",
+      "Kliknij „Minione”: lista ma się przeładować i zacząć od „wczoraj” albo najbliższego dnia wstecz, belki z lewej mają być szare, a w adresie ma się pojawić ?zakres=minione. Wróć na „Nadchodzące” - parametr znika.",
+      "Odśwież stronę z ?zakres=minione w adresie: ma zostać na minionych.",
+      "Przewiń w dół: dwie kolejne strony mają doładować się same, potem pojawia się przycisk „Pokaż więcej rocznic”. Po przełączeniu połowy licznik startuje od nowa - znów dwie strony same.",
       "Na karcie mają być dwie różne liczby: „N. rocznica” przy nazwisku (ta jedna posada) i „łącznie N lat pracy” na dole (cały staż). Żadna z nich nie może mieć kropki dziesiętnej.",
       "Kliknij kartę - ma prowadzić na stronę osoby, a data rozpoczęcia z dymka nad „N. rocznica” ma się zgadzać z zatrudnieniem na tej stronie.",
       "Link „Rocznice pracy” jest w stopce, w sekcji „O projekcie”.",

@@ -16,6 +16,32 @@
       należą do sektora publicznego.
     </p>
 
+    <!-- The two halves of the window, one click apart.
+         They started as one calendar-ordered feed running from a month back
+         into the month ahead, which read correctly and hid the half worth
+         looking at: there are six times as many cards in the window as fit on
+         a screen, so the first upcoming one sat nine pages down. -->
+    <v-btn-toggle
+      v-model="scope"
+      class="mb-4"
+      data-testid="anniversaries-scope"
+      density="compact"
+      divided
+      mandatory
+      variant="outlined"
+    >
+      <v-btn value="upcoming" class="text-none" data-testid="scope-upcoming">
+        Nadchodzące<span v-if="upcomingCount" class="ml-1 text-medium-emphasis"
+          >({{ upcomingCount }})</span
+        >
+      </v-btn>
+      <v-btn value="past" class="text-none" data-testid="scope-past">
+        Minione<span v-if="pastCount" class="ml-1 text-medium-emphasis"
+          >({{ pastCount }})</span
+        >
+      </v-btn>
+    </v-btn-toggle>
+
     <p
       v-if="total > 0"
       class="text-body-2 text-medium-emphasis mb-4"
@@ -80,6 +106,7 @@
 import { authFetch } from "~/composables/auth";
 import { polishCounting } from "~/composables/polish";
 import type {
+  AnniversaryScope,
   WorkAnniversary,
   WorkAnniversaries,
 } from "~~/server/api/edges/anniversaries.get";
@@ -101,14 +128,50 @@ useSeoMeta({
 });
 
 const route = useRoute();
+const router = useRouter();
+
+/** Which half of the window is on screen.
+ *
+ * Kept in the url rather than in a bare ref so that „the anniversaries that
+ * have just gone by” is a link somebody can send, and so a reload does not
+ * silently move them back to the other half. Upcoming is the default, and it
+ * is written as a query parameter only once the reader has chosen the other
+ * one - /eksploruj/rocznice and /eksploruj/rocznice?zakres=nadchodzace should
+ * not be two urls for one page.
+ *
+ * The parameter is Polish, like every other one the site puts in a url; the
+ * two values it takes are the endpoint's own, so nothing has to be translated
+ * on the way back out. */
+const SCOPE_PARAM = "zakres";
+
+const scope = computed<AnniversaryScope>({
+  get: () => (route.query[SCOPE_PARAM] === "minione" ? "past" : "upcoming"),
+  set: (value) => {
+    // Rebuilt without the key rather than `delete`d out of a copy: the
+    // parameter is dropped entirely for the default half, so that
+    // /eksploruj/rocznice stays the one url for it.
+    const { [SCOPE_PARAM]: _dropped, ...rest } = route.query;
+    const next =
+      value === "past" ? { ...rest, [SCOPE_PARAM]: "minione" } : rest;
+    // Replace rather than push: the toggle is a view of one page, and leaving
+    // an entry per flick of it would make the back button walk through them
+    // instead of leaving the page.
+    router.replace({ query: next });
+  },
+});
 
 /** `latest` is carried through from the page's own url rather than only being
  * added by `authFetch` for a signed in reader, because `authFetch` adds it in
  * the browser and the first page is rendered on the server. Without it there
  * is no way to ask for a list newer than the response cache, which is what
- * somebody checking that a publish landed actually wants. */
+ * somebody checking that a publish landed actually wants.
+ *
+ * `scope` is in here too, so switching the toggle refetches: `useFetch` watches
+ * a reactive `query` and reruns on it, which is also what resets the loaded
+ * pages below - the watcher on `data` clears them. */
 const query = computed(() => ({
   limit: PAGE_SIZE,
+  scope: scope.value,
   ...(route.query.latest === undefined ? {} : { latest: route.query.latest }),
 }));
 
@@ -129,11 +192,20 @@ const { data, status } = authFetch<WorkAnniversaries>(ENDPOINT, {
 const more = ref<WorkAnniversary[]>([]);
 const offset = ref<number | null>(null);
 
+/** How many pages this half has fetched by itself so far. Reset with the feed
+ * below, which is what makes the count per-half rather than per-visit. */
+const autoLoaded = ref(0);
+
 watch(
   data,
   () => {
     more.value = [];
     offset.value = data.value?.nextOffset ?? null;
+    // The other half is a fresh feed, not a continuation of this one, so it
+    // gets the same two automatic pages. Without this, a reader who had
+    // scrolled the upcoming half and then switched to the past one would meet
+    // „Pokaż więcej rocznic” on the first screen of it.
+    autoLoaded.value = 0;
   },
   { immediate: true },
 );
@@ -145,13 +217,26 @@ const anniversaries = computed(() => [
 
 const total = computed(() => data.value?.total ?? 0);
 
-/** „411 rocznic, w tym 190 jeszcze przed nami”, so the reader knows how long
- * the feed is before scrolling it - and, more to the point, that the half
- * worth waiting for is further down.
+/** The numbers on the two buttons.
  *
- * Both counts come off the response rather than off `anniversaries`, which is
- * only ever a prefix of the window: counted from the cards on screen, „jeszcze
- * przed nami” would read 0 until somebody had scrolled past today. */
+ * Plain computeds over the response, and they have to be: held in refs fed by
+ * a `watch`, they were 0 through the server render - a watcher's `immediate`
+ * run happens before `useAsyncData` settles, and Vue does not flush watchers
+ * again on the server - and correct on the client, so the `v-if` around them
+ * rendered nothing on one side and a span on the other. Vue called that out as
+ * a hydration mismatch.
+ *
+ * `useFetch` keeps the previous `data` while a refetch is in flight, so the
+ * labels do not blink back to nothing when the toggle is switched; the
+ * endpoint sends both counts whichever half was asked for, so the last
+ * response is always a complete answer for both buttons. */
+const upcomingCount = computed(() => data.value?.upcoming ?? 0);
+const pastCount = computed(() => data.value?.past ?? 0);
+
+/** „194 rocznice w najbliższym miesiącu”, „177 rocznic w minionym miesiącu”.
+ *
+ * The count is of the whole half, not of what has loaded, so it says how long
+ * the feed is before anybody scrolls it. */
 const summary = computed(() => {
   const counted = polishCounting(
     total.value,
@@ -159,10 +244,9 @@ const summary = computed(() => {
     "rocznice",
     "rocznic",
   );
-  const upcoming = data.value?.upcoming ?? 0;
-  return upcoming > 0
-    ? `${counted}, w tym ${upcoming} jeszcze przed nami`
-    : counted;
+  return scope.value === "past"
+    ? `${counted} w minionym miesiącu`
+    : `${counted} w najbliższym miesiącu`;
 });
 
 type LoadOptions = { done: (status: "ok" | "empty" | "error") => void };
@@ -172,8 +256,6 @@ type LoadOptions = { done: (status: "ok" | "empty" | "error") => void };
  * Two, so that scrolling past the first screen still feels like a feed, and
  * the page still ends. */
 const AUTO_PAGES = 2;
-
-const autoLoaded = ref(0);
 
 /** Automatic while the count is under the budget, a button after it. Reading
  * it every render is what lets it change: Vuetify checks `mode` when it
