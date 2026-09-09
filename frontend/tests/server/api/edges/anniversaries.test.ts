@@ -228,15 +228,54 @@ describe("api/edges/anniversaries", () => {
     expect((await call()).anniversaries[0]!.experienceYears).toBe(0);
   });
 
-  it("runs from the ones already past into the ones still to come", async () => {
+  it("opens the upcoming half on today and travels forwards", async () => {
     edges.past = employment({ start_date: "2010-08-20" });
     edges.todays = employment({ start_date: "2016-09-09" });
     edges.soon = employment({ start_date: "2001-10-01" });
 
-    const { anniversaries } = await call();
+    const { anniversaries, scope } = await call();
 
-    expect(anniversaries.map((a) => a.id)).toEqual(["past", "todays", "soon"]);
-    expect(anniversaries.map((a) => a.daysFromToday)).toEqual([-20, 0, 22]);
+    // Today is in this half, not the other one: it has not gone by.
+    expect(scope).toBe("upcoming");
+    expect(anniversaries.map((a) => a.id)).toEqual(["todays", "soon"]);
+    expect(anniversaries.map((a) => a.daysFromToday)).toEqual([0, 22]);
+  });
+
+  it("opens the past half on yesterday and travels backwards", async () => {
+    // Backwards, not from the far edge of the window: both halves start next
+    // to today, which is the card a reader is looking for in either
+    // direction.
+    edges.oldest = employment({ start_date: "2010-08-20" });
+    edges.recent = employment({ start_date: "2010-09-05" });
+    edges.todays = employment({ start_date: "2016-09-09" });
+    request({ scope: "past" });
+
+    const { anniversaries, scope } = await call();
+
+    expect(scope).toBe("past");
+    expect(anniversaries.map((a) => a.id)).toEqual(["recent", "oldest"]);
+    expect(anniversaries.map((a) => a.daysFromToday)).toEqual([-4, -20]);
+  });
+
+  it("counts both halves whichever one was asked for", async () => {
+    // The toggle labels both buttons, and neither count can be read off the
+    // cards on screen.
+    edges.past = employment({ start_date: "2010-08-20" });
+    edges.todays = employment({ start_date: "2016-09-09" });
+    edges.soon = employment({ start_date: "2001-10-01" });
+
+    const upcoming = await call();
+    expect(upcoming).toMatchObject({ total: 2, upcoming: 2, past: 1 });
+
+    request({ scope: "past" });
+    const past = await call();
+    expect(past).toMatchObject({ total: 1, upcoming: 2, past: 1 });
+  });
+
+  it("refuses a half it does not have", async () => {
+    request({ scope: "wszystkie" });
+
+    await expect(call()).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it("puts the longer service first when two fall on one day", async () => {
@@ -249,16 +288,32 @@ describe("api/edges/anniversaries", () => {
     ]);
   });
 
+  it("keeps that tie-break in the half that runs backwards", async () => {
+    // The past half used to be the calendar list reversed, which turned this
+    // over with it and opened a day on the shortest service rather than the
+    // longest.
+    edges.shorter = employment({ start_date: "2024-09-05" });
+    edges.longer = employment({ source: "jan", start_date: "2001-09-05" });
+    edges.earlier = employment({ start_date: "2001-09-01" });
+    request({ scope: "past" });
+
+    expect((await call()).anniversaries.map((a) => a.id)).toEqual([
+      "longer",
+      "shorter",
+      "earlier",
+    ]);
+  });
+
   it("reaches a month either way and no further", async () => {
     edges.inside = employment({ start_date: "2000-08-10" });
     edges.outside = employment({ start_date: "2000-08-09" });
     edges.ahead = employment({ start_date: "2000-10-09" });
     edges.tooFarAhead = employment({ start_date: "2000-10-10" });
 
-    expect((await call()).anniversaries.map((a) => a.id)).toEqual([
-      "inside",
-      "ahead",
-    ]);
+    expect((await call()).anniversaries.map((a) => a.id)).toEqual(["ahead"]);
+
+    request({ scope: "past" });
+    expect((await call()).anniversaries.map((a) => a.id)).toEqual(["inside"]);
   });
 
   it("is not an anniversary until a year has gone by", async () => {
@@ -276,6 +331,10 @@ describe("api/edges/anniversaries", () => {
   it("keeps a 29 February start on the 28th in a year without one", async () => {
     vi.setSystemTime(new Date("2026-03-01T10:00:00Z"));
     edges.leap = employment({ start_date: "2016-02-29" });
+    // The 28th of a 2026 that has no 29th fell yesterday, so this is the past
+    // half - which is the point of clamping rather than rolling forward: at
+    // 1 March it would have been today's.
+    request({ scope: "past" });
 
     const [row] = (await call()).anniversaries;
 
@@ -351,48 +410,51 @@ describe("api/edges/anniversaries", () => {
   });
 
   it("pages by offset without repeating or skipping", async () => {
+    // 1 to 5 September, so all five are behind today's 9th.
     for (let i = 0; i < 5; i++) {
       edges[`e${i}`] = employment({ start_date: `200${i}-09-0${i + 1}` });
     }
-    request({ limit: 2 });
+    request({ limit: 2, scope: "past" });
 
     const first = await call();
     expect(first.total).toBe(5);
     expect(first.anniversaries).toHaveLength(2);
     expect(first.nextOffset).toBe(2);
 
-    request({ limit: 2, offset: 2 });
+    request({ limit: 2, offset: 2, scope: "past" });
     const second = await call();
     expect(second.nextOffset).toBe(4);
 
-    request({ limit: 2, offset: 4 });
+    request({ limit: 2, offset: 4, scope: "past" });
     const third = await call();
     expect(third.anniversaries).toHaveLength(1);
     expect(third.nextOffset).toBeNull();
 
+    // Most recent first, and every row exactly once across the three pages.
     expect(
       [
         ...first.anniversaries,
         ...second.anniversaries,
         ...third.anniversaries,
       ].map((a) => a.id),
-    ).toEqual(["e0", "e1", "e2", "e3", "e4"]);
+    ).toEqual(["e4", "e3", "e2", "e1", "e0"]);
   });
 
-  it("counts the whole window, not the page on screen", async () => {
-    // The page prints „w tym N jeszcze przed nami”, and counted off the loaded
-    // cards that would read 0 until somebody had scrolled past today.
+  it("counts the whole half, not the page on screen", async () => {
+    // The page prints the size of the feed above it, and counted off the
+    // loaded cards that would only ever say „20”.
     edges.past = employment({ start_date: "2010-08-20" });
     edges.todays = employment({ start_date: "2016-09-09" });
     edges.soon = employment({ start_date: "2001-10-01" });
     request({ limit: 1 });
 
-    const { total, upcoming, anniversaries } = await call();
+    const { total, upcoming, past, anniversaries } = await call();
 
     expect(anniversaries).toHaveLength(1);
-    expect(total).toBe(3);
+    expect(total).toBe(2);
     // Today's counts as still to come - it is happening now.
     expect(upcoming).toBe(2);
+    expect(past).toBe(1);
   });
 
   it("asks Warsaw what day it is, not the server", async () => {

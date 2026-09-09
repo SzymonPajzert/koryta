@@ -56,15 +56,31 @@ export type WorkAnniversary = {
   experienceYears: number;
 };
 
+/** Which half of the window is being asked for.
+ *
+ * The two are separate feeds rather than one run of cards, and they have to
+ * be: there are about six times as many anniversaries in the window as fit on
+ * a screen, so a single calendar-ordered list buries the upcoming half behind
+ * nine pages of ones that have already happened. Whichever half a reader wants
+ * should be the first thing they see, not something they scroll to.
+ */
+export const anniversaryScopes = ["upcoming", "past"] as const;
+
+export type AnniversaryScope = (typeof anniversaryScopes)[number];
+
 export type WorkAnniversaries = {
   anniversaries: WorkAnniversary[];
-  /** How many the window holds in total, so the page can say so without
-   * scrolling to the end of the feed. */
+  /** Which half this page is a slice of, echoed so the toggle can be drawn
+   * from the response rather than trusted from the url. */
+  scope: AnniversaryScope;
+  /** How many the requested half holds, which is what its own feed ends at. */
   total: number;
-  /** How many of those have not happened yet, today's included. Counted here
-   * rather than off the loaded cards, which are only ever a prefix of the
-   * window and would undercount the half the reader has not scrolled to. */
+  /** How many have not happened yet, today's included, and how many already
+   * have. Both are sent whichever half was asked for, because the toggle
+   * labels both buttons and neither count can be read off the cards on
+   * screen. */
   upcoming: number;
+  past: number;
   /** Where the next page starts, or null once the feed is exhausted - which is
    * what stops the scroll asking for more. */
   nextOffset: number | null;
@@ -77,6 +93,9 @@ export type WorkAnniversaries = {
 const queryValidator = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   offset: z.coerce.number().int().min(0).default(0),
+  // Upcoming by default: the reader who has come to this page at all is
+  // likelier to be looking for the anniversary that has not happened yet.
+  scope: z.enum(anniversaryScopes).default("upcoming"),
 });
 
 /** How far either side of today the window reaches, in days.
@@ -317,25 +336,49 @@ const cachedAnniversaries = defineCachedFunction(
 
 /** Anniversaries of service in public institutions, for published people.
  *
- * Both halves of the window in one feed, in calendar order: the ones that have
- * just gone by, then today's, then the month ahead. A card is one post, so
- * somebody who took two jobs in the same fortnight years apart appears twice -
- * which is the honest answer, the two being different anniversaries at
- * different institutions.
+ * One half of the window per request, and each half opens on the day nearest
+ * today: the upcoming ones soonest first, the past ones most recent first. A
+ * card is one post, so somebody who took two jobs in the same fortnight years
+ * apart appears twice - which is the honest answer, the two being different
+ * anniversaries at different institutions.
+ *
+ * `cachedAnniversaries` holds the whole window in calendar order and both
+ * halves are cut from that one list, so switching the toggle costs a slice
+ * rather than a second scan.
  */
 async function anniversaries(event: H3Event): Promise<WorkAnniversaries> {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
   const today = warsawDate();
   const all = await cachedAnniversaries(today);
 
-  const page = all.slice(query.offset, query.offset + query.limit);
+  // Today belongs to the upcoming half. It has not gone by, and it is the one
+  // card on the page that is happening now - burying it under a month of ones
+  // that are over would be the whole bug this split exists to fix.
+  const upcoming = all.filter((item) => item.daysFromToday >= 0);
+  // Sorted backwards rather than `reverse()`d, so the half runs from yesterday
+  // towards the edge of the window while a single day still puts the longer
+  // service first. Reversing the whole list turned that tie-break over too and
+  // opened 8 September on a 6th anniversary above a 10th.
+  const past = all
+    .filter((item) => item.daysFromToday < 0)
+    .sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) ||
+        b.years - a.years ||
+        a.personName.localeCompare(b.personName, "pl"),
+    );
+
+  const scoped = query.scope === "past" ? past : upcoming;
+  const page = scoped.slice(query.offset, query.offset + query.limit);
   const next = query.offset + page.length;
 
   return {
     anniversaries: page,
-    total: all.length,
-    upcoming: all.filter((item) => item.daysFromToday >= 0).length,
-    nextOffset: next < all.length ? next : null,
+    scope: query.scope,
+    total: scoped.length,
+    upcoming: upcoming.length,
+    past: past.length,
+    nextOffset: next < scoped.length ? next : null,
     today,
   };
 }

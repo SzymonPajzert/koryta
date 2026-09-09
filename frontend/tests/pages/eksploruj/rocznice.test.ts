@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
-import { clearNuxtData } from "#app";
+import { clearNuxtData, useRouter } from "#app";
 import RocznicePage from "../../../app/pages/eksploruj/rocznice.vue";
 import type {
   WorkAnniversary,
@@ -15,17 +15,25 @@ let pages: Record<string, Response> = {};
  * twice for the same slice. */
 const asked: (string | null)[] = [];
 
+/** Every half the page asked for, in order, so a test can say the toggle
+ * refetched rather than filtering what was already on screen. */
+const askedScopes: string[] = [];
+
 registerEndpoint("/api/edges/anniversaries", (event) => {
-  const offset =
-    new URL(event.node.req.url ?? "/", "http://test").searchParams.get(
-      "offset",
-    ) ?? null;
+  const params = new URL(event.node.req.url ?? "/", "http://test").searchParams;
+  const offset = params.get("offset") ?? null;
+  const scope = params.get("scope") ?? "upcoming";
   asked.push(offset);
+  askedScopes.push(scope);
+  const key = offset === null ? `first:${scope}` : offset;
   return (
+    pages[key] ??
     pages[offset ?? "first"] ?? {
       anniversaries: [],
+      scope,
       total: 0,
       upcoming: 0,
+      past: 0,
       nextOffset: null,
       today: "2026-09-09",
     }
@@ -57,8 +65,10 @@ function anniversary(
 function response(fields: Partial<Response> = {}): Response {
   return {
     anniversaries: [],
+    scope: "upcoming",
     total: 0,
     upcoming: 0,
+    past: 0,
     nextOffset: null,
     today: "2026-09-09",
     ...fields,
@@ -72,8 +82,17 @@ function response(fields: Partial<Response> = {}): Response {
  * `mountSuspended` returns in, so the spinner is what is on screen until the
  * request lands.
  */
+/** Every wrapper this file has mounted, so `afterEach` can take them down.
+ *
+ * `mountSuspended` leaves a page mounted for the lifetime of the file, and
+ * this one watches the route: resetting the query in `beforeEach` made every
+ * still-live wrapper flip its half back and refetch, which showed up as a
+ * phantom first-page request in the *next* test's `asked`. */
+const mounted: { unmount: () => void }[] = [];
+
 async function mountPage() {
   const wrapper = await mountSuspended(RocznicePage);
+  mounted.push(wrapper);
   await vi.waitUntil(
     () =>
       wrapper.find('[data-testid="work-anniversaries"]').exists() ||
@@ -101,9 +120,18 @@ async function scrollToEnd(
 }
 
 describe("eksploruj/rocznice", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     asked.length = 0;
+    askedScopes.length = 0;
     pages = {};
+    // One Nuxt app serves the whole file, so the toggle's `?zakres=minione`
+    // outlives the test that clicked it and the next mount would open on the
+    // wrong half.
+    await useRouter().replace({ query: {} });
+  });
+
+  afterEach(() => {
+    while (mounted.length) mounted.pop()!.unmount();
     // One Nuxt app serves the whole file, so the first page the previous test
     // fetched is still in the payload and the next mount would re-serve it
     // without asking for anything.
@@ -126,34 +154,72 @@ describe("eksploruj/rocznice", () => {
     );
   });
 
-  it("counts the whole window rather than what has loaded", async () => {
-    // „w tym N jeszcze przed nami” read off the cards on screen would say 0
-    // until somebody had scrolled past today, which is most of the window.
+  it("opens on the upcoming half", async () => {
+    // The half a reader came for. In calendar order across the whole window it
+    // sat nine pages down, behind every anniversary that had already gone by.
     pages.first = response({
-      anniversaries: [anniversary("a", { daysFromToday: -12 })],
-      total: 411,
-      upcoming: 190,
+      anniversaries: [anniversary("a", { daysFromToday: 3 })],
+      total: 194,
+      upcoming: 194,
+      past: 177,
       nextOffset: 1,
     });
 
     const wrapper = await mountPage();
 
+    expect(askedScopes[0]).toBe("upcoming");
     expect(wrapper.find('[data-testid="anniversaries-summary"]').text()).toBe(
-      "411 rocznic, w tym 190 jeszcze przed nami",
+      "194 rocznice w najbliższym miesiącu",
     );
   });
 
-  it("says only the total when the whole window is behind us", async () => {
+  it("counts both halves on the toggle, not just the one on screen", async () => {
     pages.first = response({
-      anniversaries: [anniversary("a", { daysFromToday: -12 })],
-      total: 3,
-      upcoming: 0,
+      anniversaries: [anniversary("a", { daysFromToday: 3 })],
+      total: 194,
+      upcoming: 194,
+      past: 177,
     });
 
     const wrapper = await mountPage();
+    const toggle = wrapper.find('[data-testid="anniversaries-scope"]');
 
+    expect(toggle.text()).toContain("Nadchodzące");
+    expect(toggle.text()).toContain("(194)");
+    expect(toggle.text()).toContain("Minione");
+    expect(toggle.text()).toContain("(177)");
+  });
+
+  it("refetches the other half rather than filtering what is on screen", async () => {
+    // The two halves are different slices of a list the endpoint holds, and
+    // only the requested one is ever sent - so the toggle has to ask.
+    pages["first:upcoming"] = response({
+      anniversaries: [anniversary("soon", { daysFromToday: 3 })],
+      total: 1,
+      upcoming: 1,
+      past: 1,
+    });
+    pages["first:past"] = response({
+      anniversaries: [anniversary("gone", { daysFromToday: -3 })],
+      scope: "past",
+      total: 1,
+      upcoming: 1,
+      past: 1,
+    });
+
+    const wrapper = await mountPage();
+    expect(wrapper.text()).toContain("Osoba soon");
+
+    await wrapper.find('[data-testid="scope-past"]').trigger("click");
+    await vi.waitUntil(() => wrapper.text().includes("Osoba gone"), {
+      timeout: 2000,
+    });
+
+    expect(askedScopes).toEqual(["upcoming", "past"]);
+    // Replaced, not appended: the other half is a different feed.
+    expect(wrapper.text()).not.toContain("Osoba soon");
     expect(wrapper.find('[data-testid="anniversaries-summary"]').text()).toBe(
-      "3 rocznice",
+      "1 rocznica w minionym miesiącu",
     );
   });
 
