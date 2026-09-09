@@ -528,7 +528,21 @@ const currentGroups = computed(() => {
   return byRole(groups).map((group) => ({
     ...group,
     people: group.items
-      .sort((a, b) => (a.start || "9999").localeCompare(b.start || "9999"))
+      // Name, then edge id, once the dates tie. A board appointed in one
+      // resolution shares a start date to the day - the seeded Rada Nadzorcza
+      // is two people from 12 kwietnia 2024 - and `sort` is stable, so on a
+      // tie the order was simply the order the endpoint happened to return.
+      // That is not fixed: the mobile `instytucja-strona` baseline settled
+      // into one of two orderings run to run and failed on whichever it did
+      // not record, always by the same 13,220 pixels - two names swapped.
+      // The id is the last resort, so that two people of the same name still
+      // land somewhere rather than staying at the mercy of the response.
+      .sort(
+        (a, b) =>
+          (a.start || "9999").localeCompare(b.start || "9999") ||
+          a.personName.localeCompare(b.personName, "pl") ||
+          a.edgeId.localeCompare(b.edgeId),
+      )
       .map((post) => ({
         post,
         predecessor: predecessors.get(post.edgeId) ?? null,
