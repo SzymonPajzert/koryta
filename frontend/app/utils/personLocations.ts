@@ -1,4 +1,5 @@
 import type { PlaceRegion } from "~/utils/companyLocation";
+import type { ElectionRich } from "~~/shared/model";
 import { terytCoversPowiat } from "~~/shared/teryt";
 
 /** Why a place is on a person's map: they stood for election there, or they
@@ -13,6 +14,46 @@ export type PersonLocation = {
   /** Both, where someone stood for election in the town that employs them. */
   kinds: PersonLocationKind[];
 };
+
+/** The elections a person stood in, read off the edges around them.
+ *
+ * A node fetched by its id carries no `elections` - only the table builds
+ * those, and it builds them from the subgraph it fetches - so a page that
+ * holds one node and its relations reconstructs them here instead, the same
+ * way `useListWithStats` does. Earliest campaign first, as in the table.
+ *
+ * `teryt` is what puts the town on the map, and it is read through an `in`
+ * guard because `shared/model`'s `Node` does not declare it: the local graph
+ * spreads the whole region document into `richNode`, so a region carries one.
+ */
+export function electionsFromEdges(
+  edges: {
+    type?: string;
+    name?: string;
+    start_date?: string;
+    position?: string;
+    committee?: string;
+    richNode?: { name?: string } | null;
+  }[],
+): ElectionRich[] {
+  const elections: ElectionRich[] = [];
+
+  for (const edge of edges) {
+    const node = edge.richNode;
+    if (edge.type !== "election" || !node?.name) continue;
+    elections.push({
+      year: edge.start_date?.split("-")[0],
+      location: node.name,
+      teryt: "teryt" in node ? (node.teryt as string) : undefined,
+      position: edge.position || edge.name || "Wybory",
+      committee: edge.committee,
+    });
+  }
+
+  return elections.sort(
+    (a, b) => parseInt(a.year || "0", 10) - parseInt(b.year || "0", 10),
+  );
+}
 
 /** Every place a person is tied to, once each.
  *

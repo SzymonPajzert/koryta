@@ -115,7 +115,7 @@
           :key="sourcePath"
           :entity="entity"
           :type="type"
-          :extra-locations="electionLocations"
+          :extra-locations="searchLocations"
           @published="refreshNode()"
         />
 
@@ -147,6 +147,15 @@
             />
           </template>
           <template v-if="entity?.type === 'person'">
+            <!-- Where they stood for election and where they work, on one
+                 map. It comes before the rows for the same reason it does in
+                 the table's drawer: a career spent inside one powiat and one
+                 that criss-crosses the country read as the same list of
+                 employers, and only the map tells them apart. -->
+            <ChartPersonLocations
+              v-if="mapLocations.length"
+              :locations="mapLocations"
+            />
             <CardEmploymentHistory
               :edges="edges"
               :can-add="canAddRelations"
@@ -436,12 +445,15 @@ import {
 import { useAuthState, authFetch } from "@/composables/auth";
 import type {
   Person,
+  PersonRich,
   Company,
   Article,
   Region,
   NodeType,
   Revision,
 } from "~~/shared/model";
+import { usePersonPlaces } from "~/composables/personPlaces";
+import { electionsFromEdges } from "~/utils/personLocations";
 import { predecessorsByEdge } from "~/utils/succession";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
@@ -549,8 +561,7 @@ const successions = type === "person" ? usePersonSuccessions(node) : undefined;
 const predecessors = computed(() =>
   predecessorsByEdge(successions?.data.value?.posts ?? [], edges.value),
 );
-/** The towns this person stood for election in, off the edges the page already
- * holds.
+/** The elections this person stood in, off the edges the page already holds.
  *
  * The node itself carries no `elections`: those are reconstructed from a
  * subgraph, which only the table fetches. Without them the explore button in
@@ -559,11 +570,48 @@ const predecessors = computed(() =>
  * namesake in the country. Empty for anything that is not a person, which has
  * no election edges.
  */
+const personElections = computed(() => electionsFromEdges(edges.value));
 const electionLocations = computed(() =>
-  edges.value
-    .filter((edge) => edge.type === "election" && edge.richNode?.name)
-    .map((edge) => edge.richNode.name),
+  personElections.value.flatMap((election) =>
+    election.location ? [election.location] : [],
+  ),
 );
+
+// Where every company sits, which is what turns this person's employers into
+// shapes on the map below. Asked for only on a profile, and for a harder
+// reason than `successions` above: the answer is the whole region collection,
+// close to two megabytes of it, and no other kind of page draws the map. It is
+// client only, so the map ships from the server with the election shapes and
+// fills the work ones in on hydration.
+const seats = type === "person" ? useCompanyLocations() : undefined;
+
+/** The person as the map wants them. `usePersonPlaces` reads the elections off
+ * the node because the table has them on the row it built; here they come from
+ * the edges instead. */
+const mapPerson = computed(() =>
+  entity.value?.type === "person"
+    ? ({
+        ...(entity.value as Person),
+        elections: personElections.value,
+      } as PersonRich)
+    : undefined,
+);
+
+/** The same pipeline the table's drawer draws its map from, so a person looks
+ * the same whichever way the reader reached them. */
+const { mapLocations, workLocations } = usePersonPlaces(
+  mapPerson,
+  () => edges.value,
+  () => seats?.companyRegions.value,
+);
+
+/** Where to look this person up, for the search shortcut in the header: the
+ * towns they stood in, then the ones they have worked in. `usePersonSearch`
+ * wants both and the node carries neither, so the page hands both down. */
+const searchLocations = computed(() => [
+  ...electionLocations.value,
+  ...(workLocations.value ?? []),
+]);
 
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");

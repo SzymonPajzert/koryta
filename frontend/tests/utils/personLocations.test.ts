@@ -1,10 +1,97 @@
 import { describe, it, expect } from "vitest";
 import {
+  electionsFromEdges,
   locationKinds,
   locationsCovering,
   personLocations,
   unplaceableLocations,
 } from "~/utils/personLocations";
+
+describe("electionsFromEdges", () => {
+  it("reads the town, the year and the code off an election edge", () => {
+    expect(
+      electionsFromEdges([
+        {
+          type: "election",
+          start_date: "2018-10-21",
+          position: "Rada miasta",
+          committee: "KWW Kraków",
+          richNode: { name: "Kraków", teryt: "1261" },
+        },
+      ]),
+    ).toEqual([
+      {
+        year: "2018",
+        location: "Kraków",
+        teryt: "1261",
+        position: "Rada miasta",
+        committee: "KWW Kraków",
+      },
+    ]);
+  });
+
+  it("ignores every relation that is not a candidacy", () => {
+    expect(
+      electionsFromEdges([
+        { type: "employed", richNode: { name: "PKP Intercity" } },
+        { type: "connection", richNode: { name: "Jan Kowalski" } },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("drops a candidacy with no town to name", () => {
+    expect(
+      electionsFromEdges([{ type: "election", start_date: "2014-11-16" }]),
+    ).toEqual([]);
+  });
+
+  it("puts the earliest campaign first", () => {
+    const elections = electionsFromEdges([
+      {
+        type: "election",
+        start_date: "2018-10-21",
+        richNode: { name: "Sopot" },
+      },
+      {
+        type: "election",
+        start_date: "2010-11-21",
+        richNode: { name: "Gdynia" },
+      },
+    ]);
+    expect(elections.map((e) => e.location)).toEqual(["Gdynia", "Sopot"]);
+  });
+
+  it("falls back to the relation's own name, then to a bare Wybory", () => {
+    const elections = electionsFromEdges([
+      {
+        type: "election",
+        name: "Wybory do Sejmu",
+        richNode: { name: "Gdańsk" },
+      },
+      { type: "election", richNode: { name: "Sopot" } },
+    ]);
+    expect(elections.map((e) => e.position)).toEqual([
+      "Wybory do Sejmu",
+      "Wybory",
+    ]);
+  });
+
+  it("leaves the year and the code out where the edge has neither", () => {
+    expect(
+      electionsFromEdges([
+        { type: "election", richNode: { name: "Zagranica" } },
+      ]),
+    ).toEqual([
+      {
+        year: undefined,
+        location: "Zagranica",
+        teryt: undefined,
+        position: "Wybory",
+        committee: undefined,
+      },
+    ]);
+  });
+});
 
 describe("personLocations", () => {
   it("puts where they stood for election before where they work", () => {
