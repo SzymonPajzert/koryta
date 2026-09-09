@@ -96,3 +96,26 @@ export function monthYear(
   const year = parts.find((part) => part.type === "year")?.value;
   return month && year ? `${month} ${year}` : fallback;
 }
+
+/** The Warsaw calendar date, `YYYY-MM-DD`.
+ *
+ * Lived in `server/utils/crawledBucket.ts`, which is where the crawler needs
+ * it to partition a bucket; `/api/edges/anniversaries` needs the same answer
+ * to decide which day's anniversaries it is listing, and importing a module
+ * that pulls in `firebase-admin/storage` and half of `node:fs` to ask what day
+ * it is was the wrong dependency.
+ *
+ * The zone is the whole point. App Hosting runs in UTC, so between midnight
+ * and 02:00 Warsaw time a UTC date is still yesterday - which for a feed keyed
+ * on "today" means the page shows the wrong day's list for the first two hours
+ * of it.
+ */
+export function warsawDate(now: Date = new Date()): string {
+  // en-CA gives YYYY-MM-DD, which is the format every caller compares against.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
