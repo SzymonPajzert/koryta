@@ -8,6 +8,20 @@
           publicznie. Możesz przy okazji opublikować jej powiązania.
         </p>
 
+        <v-alert
+          v-if="autoApproveDate"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          data-testid="publish-auto-approve"
+        >
+          Ta strona nie ma zatwierdzonej rewizji, więc opublikujemy jej
+          najnowszą wersję, z {{ autoApproveDate }}. Żeby pokazać inną,
+          zatwierdź ją najpierw na
+          <NuxtLink :to="`/admin/rewizje/${nodeId}`">liście rewizji</NuxtLink>.
+        </v-alert>
+
         <div v-if="pending" class="text-center py-6">
           <v-progress-circular indeterminate />
         </div>
@@ -139,6 +153,10 @@ import { computed, ref, watch } from "vue";
 import { mdiEyeOffOutline } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
+import {
+  latestPublishableRevision,
+  normalizeUpdateTime,
+} from "~~/shared/revisions";
 import type {
   NodeRelation,
   NodeRelations,
@@ -152,8 +170,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update:modelValue": [value: boolean];
-  /** The node went live, along with this many relations. */
-  published: [payload: { relations: number }];
+  /** The node went live, along with this many relations - and, where it had no
+   * approved revision, by way of approving the one named here. */
+  published: [payload: { relations: number; approvedRevisionId?: string }];
   /** `nodePublished` is the whole reason this carries a payload rather than the
    * error alone: the two calls are not one transaction, so a refusal on the
    * second leaves the page live with none of its relations. The page has to be
@@ -167,6 +186,11 @@ const open = computed({
 });
 
 const relations = ref<NodeRelation[]>([]);
+/** When the page has nothing approved: the date of the version publishing will
+ * approve on the reviewer's behalf. Worked out here rather than passed in, so
+ * that every screen offering this dialog says it - the badge on a person's own
+ * page has no revision list of its own to consult. */
+const autoApproveDate = ref<string | null>(null);
 const selected = ref<string[]>([]);
 const pending = ref(false);
 const saving = ref(false);
@@ -201,6 +225,14 @@ const confirmLabel = computed(() =>
     : "Opublikuj tylko stronę",
 );
 
+/** Stamped the way `/admin/rewizje/[id]` heads its columns, so a reviewer who
+ * goes looking for the version named here can find the column it is. */
+function revisionDate(updateTime: unknown): string {
+  const iso = normalizeUpdateTime(updateTime);
+  if (!iso) return "nieznanej daty";
+  return new Date(iso).toLocaleString("pl-PL");
+}
+
 function relationLabel(relation: NodeRelation): string {
   return relation.name || edgeTypeLabels[relation.type] || relation.type;
 }
@@ -220,6 +252,10 @@ async function load() {
   loadError.value = false;
   relationsFailed.value = null;
   selected.value = [];
+  autoApproveDate.value = null;
+  // Not fatal either, and separately awaited for that reason: which version is
+  // about to go live is worth saying, but not worth refusing to publish over.
+  void loadAutoApprove();
   try {
     const data = await authRequest<NodeRelations>("/api/edges/byNode", {
       method: "GET",
@@ -237,6 +273,28 @@ async function load() {
   }
 }
 
+/** The same choice `/api/nodes/publish` will make, read from the same place
+ * `/admin/rewizje/[id]` reads its table from. */
+async function loadAutoApprove() {
+  try {
+    const data = await authRequest<{
+      revisions: (Record<string, unknown> & { id: string })[];
+      approvedRevisionId: string | null;
+    }>("/api/revisions/byNode", {
+      method: "GET",
+      query: { nodeId: props.nodeId },
+    });
+    if (data.approvedRevisionId) return;
+    const revision = latestPublishableRevision(data.revisions);
+    if (!revision) return;
+    autoApproveDate.value = revisionDate(revision.update_time);
+  } catch (error) {
+    // The publication itself will still say what it did, so a failure here
+    // costs a sentence rather than the action.
+    console.error("Failed to read revisions", error);
+  }
+}
+
 watch(
   () => props.modelValue,
   (isOpen) => {
@@ -250,11 +308,14 @@ async function confirm() {
   saving.value = true;
   relationsFailed.value = null;
   let nodePublished = false;
+  let approvedRevisionId: string | undefined;
   try {
-    await authRequest("/api/nodes/publish", {
-      body: { node_id: props.nodeId, published: true },
-    });
+    const result = await authRequest<{ approvedRevisionId?: string | null }>(
+      "/api/nodes/publish",
+      { body: { node_id: props.nodeId, published: true } },
+    );
     nodePublished = true;
+    approvedRevisionId = result.approvedRevisionId ?? undefined;
     if (selected.value.length > 0) {
       // /api/edges/publish refuses the batch as a whole, so one relation whose
       // other end went back to being a draft between the dialog opening and
@@ -265,7 +326,10 @@ async function confirm() {
         body: { edge_ids: selected.value, published: true },
       });
     }
-    emit("published", { relations: selected.value.length });
+    emit("published", {
+      relations: selected.value.length,
+      approvedRevisionId,
+    });
     open.value = false;
   } catch (error) {
     if (nodePublished && selected.value.length > 0) {

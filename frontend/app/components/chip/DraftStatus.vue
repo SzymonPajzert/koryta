@@ -109,7 +109,11 @@ const error = ref("");
 const errorShown = ref(false);
 
 /** No confirmation message: the badge is the confirmation. It says „szkic"
- * before the click and is gone after it, on the page the reviewer is reading. */
+ * before the click and is gone after it, on the page the reviewer is reading.
+ * Which version went live, where the page had none approved, the dialog says
+ * before the click rather than this saying it after - the caller refetches on
+ * `published`, and a message that outlives that redraw by a moment is not one
+ * anybody can rely on reading. */
 function onPublished() {
   justPublished.value = true;
   emit("published");
@@ -135,9 +139,9 @@ function onFailed({
   errorShown.value = true;
 }
 
-/** The server's own words where it gave any - a page with no approved revision
- * is refused with a sentence saying exactly that, and it is the refusal an
- * admin publishing from the page itself will hit most often. */
+/** The server's own words where it gave any - what is left to refuse a
+ * publication now is a page with no usable revision at all, and the sentence
+ * saying so is more use than "nie udało się". */
 function errorMessage(err: unknown): string {
   const data = (err as { data?: { message?: string } } | null)?.data;
   return (

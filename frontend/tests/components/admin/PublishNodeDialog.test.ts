@@ -60,14 +60,24 @@ const relation = (overrides: Partial<NodeRelation> = {}): NodeRelation => ({
   ...overrides,
 });
 
-/** The GET the dialog makes on open answers with this list; every POST it makes
- * afterwards succeeds. */
+/** What the node's revisions endpoint answers while a test says nothing about
+ * it: a page with a version already approved, which is the case where the
+ * dialog has nothing extra to say. */
+let revisionsResponse: {
+  revisions: Record<string, unknown>[];
+  approvedRevisionId: string | null;
+} = { revisions: [], approvedRevisionId: "rev-approved" };
+
+/** The two GETs the dialog makes on open answer with the list and the
+ * revisions; every POST it makes afterwards succeeds. */
 function serveRelations(relations: NodeRelation[]) {
   mockAuthRequest.mockImplementation(
-    async (url: string, opts: { method?: string } = {}) =>
-      opts.method === "GET"
+    async (url: string, opts: { method?: string } = {}) => {
+      if (url === "/api/revisions/byNode") return revisionsResponse;
+      return opts.method === "GET"
         ? { relations, nodePublished: false }
-        : { ok: true, url },
+        : { ok: true, url };
+    },
   );
 }
 
@@ -111,14 +121,20 @@ async function click(target: Element | null) {
 
 const confirmButton = () => el("publish-confirm") as HTMLElement;
 
+/** The calls that do something, in order. The revisions probe is left out: it
+ * only decides whether the dialog can name the version about to go live, and
+ * every assertion below is about what the confirm button sets in motion. */
 const requestedUrls = () =>
-  mockAuthRequest.mock.calls.map(([url]) => url as string);
+  mockAuthRequest.mock.calls
+    .map(([url]) => url as string)
+    .filter((url) => url !== "/api/revisions/byNode");
 
 let wrapper: ReturnType<typeof mountDialog> | undefined;
 
 describe("PublishNodeDialog.vue", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    revisionsResponse = { revisions: [], approvedRevisionId: "rev-approved" };
     serveRelations([]);
   });
 
@@ -453,6 +469,76 @@ describe("PublishNodeDialog.vue", () => {
     expect(wrapper.emitted("published")).toEqual([[{ relations: 2 }]]);
     expect(wrapper.emitted("failed")).toBeUndefined();
     expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([false]);
+  });
+
+  it("says which version it is about to publish when nothing is approved", async () => {
+    // The page is going live with a version nobody picked, so the dialog names
+    // it rather than leaving the reviewer to find out from the table after.
+    revisionsResponse = {
+      approvedRevisionId: null,
+      revisions: [
+        {
+          id: "rev-old",
+          data: { name: "Jan Kowalski" },
+          update_time: "2026-07-09T10:00:00Z",
+        },
+        {
+          id: "rev-new",
+          data: { name: "Jan Kowalski" },
+          update_time: "2026-08-12T10:00:00Z",
+        },
+      ],
+    };
+    serveRelations([]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(el("publish-auto-approve")?.textContent).toContain("12.08.2026");
+  });
+
+  it("says nothing about approving when every revision is unusable", async () => {
+    // Then there is no version to promise, and the publication will be refused
+    // outright - which the error says better than a date would.
+    revisionsResponse = {
+      approvedRevisionId: null,
+      revisions: [
+        {
+          id: "rev-rejected",
+          status: "rejected",
+          data: { name: "Jan Kowalski" },
+          update_time: "2026-08-12T10:00:00Z",
+        },
+      ],
+    };
+    serveRelations([]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(el("publish-auto-approve")).toBeNull();
+  });
+
+  it("says nothing about approving when the page already has a version", async () => {
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(el("publish-auto-approve")).toBeNull();
+  });
+
+  it("passes on the revision the server approved to get the page live", async () => {
+    mockAuthRequest.mockImplementation(
+      async (url: string, opts: { method?: string } = {}) =>
+        opts.method === "GET"
+          ? { relations: [], nodePublished: false }
+          : { approvedRevisionId: "rev-new" },
+    );
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(confirmButton());
+
+    expect(wrapper.emitted("published")).toEqual([
+      [{ relations: 0, approvedRevisionId: "rev-new" }],
+    ]);
   });
 
   it("stays open and reports the error when publishing fails", async () => {
