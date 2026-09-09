@@ -1,7 +1,17 @@
 <template>
   <v-card v-if="type == 'person'" width="100%" variant="flat">
-    <v-card-title class="px-0 d-flex">
-      <h2 class="text-h5 font-weight-bold mr-2">
+    <!-- `align-center`: without it the row is `align-items: stretch`, so the
+         h2 stretched to the height of the control block on the right and kept
+         its text at the top of that box, while PartyChip centres itself - two
+         alignments in one row, and the chip reading as if it had slipped.
+
+         `ga-2` rather than a margin on each child: two parties painted the
+         same red - Nowa Lewica and SLD are the same party renamed - ran into
+         one block with nothing between them. The gap is the same 8px `mr-2`
+         was, which is why it comes off the h2 and off ChipDraftStatus here
+         rather than being added on top of them. -->
+    <v-card-title class="px-0 d-flex align-center ga-2">
+      <h2 class="text-h5 font-weight-bold">
         {{ entity?.name }}
       </h2>
       <!-- Before the parties, because it is about the page rather than about
@@ -11,7 +21,6 @@
         :published="entity?.published"
         :node-id="entity?.id"
         :node-name="entity?.name"
-        class="mr-2"
         @published="emit('published')"
       />
       <PartyChip
