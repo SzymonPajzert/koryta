@@ -46,10 +46,12 @@ describe("partyDisplay", () => {
 
   it("greys a party the site has no chip for", () => {
     // PartyChip emits no background at all for an unknown key, so the caller
-    // has to decide the colour before anything is drawn.
-    const display = partyDisplay("Bezpartyjni Samorządowcy");
+    // has to decide the colour before anything is drawn. Kukiz'15 and not
+    // „Bezpartyjni Samorządowcy", which `shared/misc` colours since it became
+    // a party a reader can pick and filter by.
+    const display = partyDisplay("Kukiz'15");
     expect(display.known).toBe(false);
-    expect(display.label).toBe("Bezpartyjni Samorządowcy");
+    expect(display.label).toBe("Kukiz'15");
     expect(display.color).toBeTruthy();
   });
 
