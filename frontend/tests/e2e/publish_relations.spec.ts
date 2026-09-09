@@ -22,6 +22,11 @@ const ids = {
   hidden: `pub-hidden-${stamp}`,
   cascadeA: `pub-cascade-a-${stamp}`,
   cascadeB: `pub-cascade-b-${stamp}`,
+  unapproved: `pub-unapproved-${stamp}`,
+  // No hyphens: an entity url is `<slug>-<id>`, and the id is read back as
+  // everything after the last dash. This one is opened as a page, not just
+  // read out of Firestore, so it has to survive that round trip.
+  selfPublish: `pubselfpub${stamp}`,
 };
 
 /** Six nodes and four relations, laid out to exercise every case the publish
@@ -86,6 +91,46 @@ async function seed() {
     name: `kolejka-${stamp}`,
     published: false,
   });
+  // The state most pages are actually in: revisions, none of them approved,
+  // so the node points at no version at all.
+  batch.set(db.collection("nodes").doc(ids.unapproved), {
+    name: `Unapproved ${stamp}`,
+    type: "person",
+    published: false,
+    stats: { isApproved: false },
+  });
+  batch.set(db.collection("revisions").doc(`rev-old-${stamp}`), {
+    node_id: ids.unapproved,
+    collection: "nodes",
+    data: { name: `Unapproved ${stamp}`, type: "person", education: "stara" },
+    update_time: new Date(stamp - 60_000).toISOString(),
+    update_user: "pipeline",
+    update_automatic: true,
+  });
+  batch.set(db.collection("revisions").doc(`rev-new-${stamp}`), {
+    node_id: ids.unapproved,
+    collection: "nodes",
+    data: { name: `Unapproved ${stamp}`, type: "person", education: "nowa" },
+    update_time: new Date(stamp).toISOString(),
+    update_user: "pipeline",
+    update_automatic: true,
+  });
+
+  batch.set(db.collection("nodes").doc(ids.selfPublish), {
+    name: `Selfpublish ${stamp}`,
+    type: "person",
+    published: false,
+    stats: { isApproved: false, nodeGroupSize: 1 },
+  });
+  batch.set(db.collection("revisions").doc(`rev-self-${stamp}`), {
+    node_id: ids.selfPublish,
+    collection: "nodes",
+    data: { name: `Selfpublish ${stamp}`, type: "person" },
+    update_time: new Date(stamp).toISOString(),
+    update_user: "pipeline",
+    update_automatic: true,
+  });
+
   batch.set(db.collection("edges").doc(`edge-cascade-${stamp}`), {
     source: ids.cascadeA,
     target: ids.cascadeB,
@@ -184,6 +229,81 @@ test.describe("Publishing relations", () => {
     await expect(page.locator("body")).not.toContainText(`kolejka-${stamp}`, {
       timeout: 30_000,
     });
+  });
+
+  test("publishing a page with nothing approved approves its newest revision", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await logIn(page, USERS.admin, `/admin/rewizje/${ids.unapproved}`);
+
+    // This used to be a disabled button and a tooltip explaining the page
+    // needed an approved revision - said to the one person who would have had
+    // to approve one, on the screen where publishing happens.
+    const toggle = page.getByTestId("publish-toggle");
+    await expect(toggle).toBeEnabled({ timeout: 60_000 });
+    await toggle.click();
+
+    const dialog = page.getByTestId("publish-node-dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    // It says which version, because nobody chose it.
+    await expect(dialog.getByTestId("publish-auto-approve")).toBeVisible();
+
+    await dialog.getByTestId("publish-confirm").click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+
+    await expect
+      .poll(
+        async () => {
+          const node = await db.collection("nodes").doc(ids.unapproved).get();
+          const revision = node.data()?.revision_id as
+            { id?: string } | string | undefined;
+          return [
+            node.data()?.published,
+            typeof revision === "string" ? revision : revision?.id,
+            node.data()?.education,
+          ];
+        },
+        { timeout: 30_000 },
+      )
+      .toEqual([true, `rev-new-${stamp}`, "nowa"]);
+  });
+
+  test("an admin publishes an unapproved page from the page itself", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    // The screen where this was reported: the reviewer reads the person's page,
+    // decides, and clicks "Opublikuj" next to the „szkic" badge.
+    await logIn(page, USERS.admin, `/osoba/selfpublish-${ids.selfPublish}`);
+
+    await page.getByTestId("draft-status-publish").click();
+
+    const dialog = page.getByTestId("publish-node-dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    // The badge has no revision list of its own, so the dialog is what says
+    // which version is about to become the public one - and it says it here
+    // too, not only on /admin/rewizje.
+    await expect(dialog.getByTestId("publish-auto-approve")).toBeVisible({
+      timeout: 30_000,
+    });
+    await dialog.getByTestId("publish-confirm").click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+
+    await expect
+      .poll(
+        async () => {
+          const node = await db.collection("nodes").doc(ids.selfPublish).get();
+          const revision = node.data()?.revision_id as
+            { id?: string } | string | undefined;
+          return [
+            node.data()?.published,
+            typeof revision === "string" ? revision : revision?.id,
+          ];
+        },
+        { timeout: 30_000 },
+      )
+      .toEqual([true, `rev-self-${stamp}`]);
   });
 
   test("hiding a page hides the relations that lean on it", async ({

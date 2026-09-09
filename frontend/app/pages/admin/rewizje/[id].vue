@@ -29,19 +29,28 @@
           :color="published ? 'grey' : 'success'"
           size="small"
           :loading="publishPending"
-          :disabled="!published && !approvedRevisionId"
+          :disabled="!published && !canPublish"
           data-testid="publish-toggle"
           @click="published ? setPublished(false) : (publishDialog = true)"
         >
           {{ published ? "Ukryj" : "Opublikuj" }}
           <v-tooltip
-            v-if="!published && !approvedRevisionId"
+            v-if="!published && !canPublish"
             activator="parent"
             location="bottom"
             max-width="280"
           >
-            Strona potrzebuje zatwierdzonej rewizji, żeby można było ją
-            opublikować.
+            Ta strona nie ma żadnej rewizji, którą dałoby się zatwierdzić, więc
+            nie ma czego opublikować.
+          </v-tooltip>
+          <v-tooltip
+            v-else-if="!published && autoApproveRevision"
+            activator="parent"
+            location="bottom"
+            max-width="280"
+          >
+            Ta strona nie ma zatwierdzonej rewizji - opublikowanie zatwierdzi
+            najnowszą, z {{ formatDate(autoApproveRevision.update_time) }}.
           </v-tooltip>
         </v-btn>
       </div>
@@ -316,6 +325,7 @@ import { computed, ref, onMounted, nextTick, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ClientOnly } from "#components";
 import { relationsPlural } from "~/composables/edges";
+import { latestPublishableRevision } from "~~/shared/revisions";
 import {
   mdiArrowLeft,
   mdiEyeOutline,
@@ -431,11 +441,23 @@ async function onPublishFailed({
   }
 }
 
-async function onPublished({ relations }: { relations: number }) {
-  notice.value =
+async function onPublished({
+  relations,
+  approvedRevisionId: approved,
+}: {
+  relations: number;
+  approvedRevisionId?: string;
+}) {
+  const page =
     relations > 0
       ? `Opublikowano stronę i ${relations} ${relationsPlural(relations)}.`
       : "Opublikowano stronę.";
+  // The approval was not asked for in so many words, so it is said out loud -
+  // the reviewer clicked "publish" and a version of the page was chosen for
+  // them, and the table below is about to redraw with a new "Zatwierdzona".
+  notice.value = approved
+    ? `${page} Zatwierdzono przy tym jej najnowszą rewizję.`
+    : page;
   noticeShown.value = true;
   await load();
 }
@@ -499,6 +521,26 @@ const allRevisions = computed(() => {
     return timeB - timeA;
   });
 });
+
+/** The revision publishing would approve, where nothing is approved yet.
+ *
+ * The same choice `/api/nodes/publish` makes, made here so the button can say
+ * which version it is about to put in front of readers rather than leaving the
+ * reviewer to find out afterwards.
+ */
+const autoApproveRevision = computed(() => {
+  if (approvedRevisionId.value) return null;
+  return latestPublishableRevision(
+    allRevisions.value as (Record<string, unknown> & { id: string })[],
+  );
+});
+
+/** Whether there is anything to publish: an approved revision, or one that
+ * publishing would approve. A page whose only revisions are rejected or ask
+ * for its removal has neither. */
+const canPublish = computed(
+  () => Boolean(approvedRevisionId.value) || Boolean(autoApproveRevision.value),
+);
 
 /** Which columns to draw. A node the pipelines re-upload nightly carries
  * dozens of revisions saying the same thing, and every one of them is a
