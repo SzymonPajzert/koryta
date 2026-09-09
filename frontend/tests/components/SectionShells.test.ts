@@ -45,7 +45,8 @@ vi.mock("@plausible-analytics/tracker", () => ({
 
 /** Both sections are drawn through `PageSection` now, so what used to be a
  * private copy of the heading rules is the shared one: an `h3.text-h6` with
- * the section's icon in front of it, and the lead in a `k-lead` paragraph. */
+ * the section's icon in front of it, and the explanation either in a `k-lead`
+ * paragraph or behind the heading's „(i)”. */
 describe("sections drawn through PageSection", () => {
   it("cited notes: heading, count, lead and the note", async () => {
     const wrapper = await mountSuspended(ArticleCitedNotes, {
@@ -59,7 +60,11 @@ describe("sections drawn through PageSection", () => {
     expect(section.get("h3").text()).toBe("Notatki z innych stron");
     expect(section.find(".sec-head__icon").exists()).toBe(true);
     expect(section.get(".sec-head .v-chip").text()).toBe("1");
-    expect(section.get("p.k-lead").text()).toContain("Co czytelnicy zapisali");
+    // The lead moved behind the heading's „(i)”: two explanatory paragraphs
+    // stacked above the article's own notes is the bloat that got reported.
+    expect(section.find("p.k-lead").exists()).toBe(false);
+    await section.get("[data-testid='section-info']").trigger("click");
+    expect(document.body.textContent).toContain("Co czytelnicy zapisali");
     expect(section.text()).toContain("Jan Kowalski");
   });
 

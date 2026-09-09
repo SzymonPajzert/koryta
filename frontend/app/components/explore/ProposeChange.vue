@@ -26,6 +26,18 @@
       <slot />
     </div>
 
+    <!-- What the button above actually edits, because „mamy teraz w sidebarze
+         »zgłoś poprawkę« i »zaproponuj zmianę«, nie wiadomo co do tego służy i
+         po co są dwa” - and the two are genuinely different mechanisms
+         reaching different queues: this one files a revision on the record's
+         own fields, the note under it is free text an admin reads. Hidden once
+         a change has been submitted, so the panel says one thing at a time. -->
+    <p v-if="!submittedRevisionId" class="k-lead text-center">
+      Poprawia metryczkę: imię i nazwisko, partię, datę urodzenia, wykształcenie
+      i linki. Propozycja czeka na zatwierdzenie. Cokolwiek innego - opisz w
+      notatce niżej.
+    </p>
+
     <!-- `color` for the same reason as the button above: `type="info"` alone
          paints Vuetify's #2196f3 at 2.74:1 on its own wash. -->
     <v-alert

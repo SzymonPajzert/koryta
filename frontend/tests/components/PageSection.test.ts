@@ -46,6 +46,40 @@ describe("PageSection", () => {
     expect(withLead.get(".k-lead").text()).toBe("Wiesz więcej?");
   });
 
+  // The reader's complaint was not that the explanations are wrong but that
+  // they are long („robi straszny bloat na stronie”), so the shell has a place
+  // to put the half nobody has to read. No bubble where nothing was given, or
+  // every heading on the site grows a decoration that says nothing.
+  it("hides the rest of the explanation behind an info bubble", async () => {
+    expect(mountSection().find("[data-testid='section-info']").exists()).toBe(
+      false,
+    );
+
+    const withInfo = mountSection({
+      title: "Notatki",
+      info: "Notatki są publiczne.",
+    });
+    const bubble = withInfo.get("[data-testid='section-info']");
+    // Reachable without a mouse: the tooltip opens on click and on focus, and
+    // a bare `v-icon` is neither focusable nor named until it is told to be.
+    expect(bubble.attributes("tabindex")).toBe("0");
+    expect(bubble.attributes("aria-label")).toBe("Co to jest: Notatki");
+    await bubble.trigger("click");
+    expect(document.body.textContent).toContain("Notatki są publiczne.");
+  });
+
+  // The slot form, for an explanation that is a list rather than a sentence -
+  // the notes' three worked examples.
+  it("takes the info as a slot too", async () => {
+    const wrapper = mountSection(
+      { title: "Notatki" },
+      { info: "<ul><li>Źródło - „Artykuł z marca 2023”</li></ul>" },
+    );
+
+    await wrapper.get("[data-testid='section-info']").trigger("click");
+    expect(document.body.textContent).toContain("Artykuł z marca 2023");
+  });
+
   // The slot form is what the sections with two lead paragraphs use, each with
   // its own testid. It is rendered unwrapped on purpose - a `<p>` nested in a
   // `<p>` is closed by the parser at the inner opening tag.
