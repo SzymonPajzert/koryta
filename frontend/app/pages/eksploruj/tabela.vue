@@ -11,7 +11,13 @@
       :company-regions="companyRegions"
       @changed="refreshFocusedEdges()"
     />
-    <div class="pa-4">
+    <!-- `w-100`, because the layout's container is `fill-height` and therefore
+         a flex box (app/layouts/default.vue). A flex item sizes to its
+         max-content, so this page - which asked for `fullWidth` - stopped at
+         whatever the table happened to need and sat flush against the left
+         edge, leaving the rest of a wide window empty. Below about 1120px the
+         content already wants the whole width, so this changes nothing there. -->
+    <div class="pa-4 w-100">
       <!-- The whole chrome of this page, in one 44px bar (plus a 32px work row
            for a reader who is signed in). It carries the h1, the filters, a
            chip per filter that is narrowing the table, the row count, the sort

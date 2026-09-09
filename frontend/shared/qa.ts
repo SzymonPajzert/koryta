@@ -48,6 +48,33 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "tabela-na-calej-szerokosci",
+    title: "Tabela zajmuje całe okno, a nie lewą połowę",
+    description:
+      "Na szerokim monitorze /eksploruj/tabela kończyła się tam, gdzie " +
+      "kończyła się treść, i stała przyklejona do lewej krawędzi, a reszta " +
+      "okna była pusta. Strona prosi o pełną szerokość, ale nie brała jej. " +
+      "Teraz bierze. Poniżej ok. 1120px nic się nie zmienia.",
+    steps: [
+      "Otwórz /eksploruj/tabela w oknie szerszym niż 1400px i sprawdź, że pasek filtrów i tabela sięgają prawej krawędzi.",
+      "Zwęź okno poniżej 1120px i sprawdź, że układ wygląda jak wcześniej.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
+    id: "logo-prowadzi-do-pomocy",
+    title: "Logo na stronie głównej prowadzi do „Pomóż nam”",
+    description:
+      "Kliknięcie logo otwierało konkretną nagrodę na zrzutce - limitowaną " +
+      "przypinkę - która jest już nieaktualna. Teraz prowadzi na /pomoc, " +
+      "gdzie jest aktualna prośba.",
+    steps: [
+      "Wejdź na stronę główną na komputerze i kliknij logo po lewej - ma otworzyć /pomoc, a nie zrzutkę.",
+    ],
+    area: "public",
+  },
+  {
     id: "partie-wyrownane-z-nazwiskiem",
     title: "Chipy partii wyrównane z nazwiskiem i rozsunięte",
     description:
