@@ -14,33 +14,43 @@
     :icon="mdiNoteTextOutline"
     data-testid="note-editor"
   >
-    <!-- What to write, said with three written notes rather than with an
-         adjective. „Nie wiadomo trochę, jakie info tam wklejać” is what an
-         alpha tester said about the paragraph that stood here, which described
-         the notes („dodatkowe informacje”) without showing one. The examples
-         are `noteKindConfig`'s, so they are the same sentences the fields
-         themselves offer as placeholders. An article's page asks for a
-         snippet instead, and has no kinds to give examples of. -->
+    <!-- A question in the open, and everything else behind the heading's
+         „(i)”. What stood here was three sentences on an article and a
+         paragraph plus three worked examples on a person: „robi straszny
+         bloat na stronie” is how it was reported, and the remark was about
+         the site as a whole rather than about this section. None of it is
+         deleted - the examples are what an alpha tester was missing („Nie
+         wiadomo trochę, jakie info tam wklejać” about a prompt that had
+         none), and they are `noteKindConfig`'s, the same sentences the fields
+         offer as placeholders. Behind the same condition as the lead, so a
+         reader who has already written a note is not offered instructions for
+         writing one; an article asks for a snippet instead, and has no kinds
+         to give examples of. -->
+    <template v-if="user && !userNote && !isEditing" #info>
+      <template v-if="snippetOnly">
+        Zapisz fragment albo własny komentarz. Notatki są publiczne - w ten
+        sposób pomożesz innym zrozumieć, dlaczego ten tekst jest tu trzymany.
+      </template>
+      <template v-else>
+        <p class="mb-1">
+          Wklej tu, co udało Ci się znaleźć, razem z linkiem do źródła. Notatki
+          są publiczne i to z nich powstają kolejne powiązania w bazie - nie
+          musi to być nic odkrywczego.
+        </p>
+        <ul class="k-examples">
+          <li v-for="(config, value) in noteKindConfig" :key="value">
+            <strong>{{ config.title }}</strong> - „{{ config.example }}”
+          </li>
+        </ul>
+      </template>
+    </template>
+
     <template #lead>
       <template v-if="user && !userNote && !isEditing">
         <p v-if="snippetOnly" class="k-lead">
-          Co w tym artykule jest warte zapamiętania? Zapisz fragment albo własny
-          komentarz. Notatki są publiczne - w ten sposób pomożesz innym
-          zrozumieć, dlaczego ten tekst jest tu trzymany.
+          Co w tym artykule warto zapamiętać?
         </p>
-        <template v-else>
-          <p class="k-lead mb-1">
-            Wiesz więcej na temat {{ subject }}? Wklej tu, co udało Ci się
-            znaleźć, razem z linkiem do źródła. Notatki są publiczne i to z nich
-            powstają kolejne powiązania w bazie - nie musi to być nic
-            odkrywczego.
-          </p>
-          <ul class="k-lead k-examples">
-            <li v-for="(config, value) in noteKindConfig" :key="value">
-              <strong>{{ config.title }}</strong> - „{{ config.example }}”
-            </li>
-          </ul>
-        </template>
+        <p v-else class="k-lead">Wiesz więcej na temat {{ subject }}?</p>
       </template>
 
       <p v-if="!user && otherSources.length > 0" class="k-lead">
@@ -109,6 +119,13 @@
         >
           <v-icon start :icon="config.icon" />
           {{ config.addLabel }}
+          <!-- Three buttons whose labels are three verbs, and a reader could
+               not tell which of them - or of „Zaproponuj zmianę” above - their
+               case belongs to. The hint says so in the one place they are
+               looking. -->
+          <v-tooltip activator="parent" location="top" max-width="320">
+            {{ config.hint }}
+          </v-tooltip>
         </v-btn>
       </div>
 
@@ -379,7 +396,9 @@ const save = async () => {
 
 /* The three examples, as a list rather than as a sentence with semicolons in
    it: they are read by somebody looking for the one that matches what they
-   have, not read through. */
+   have, not read through. Scoped and still reaching them, because slot content
+   carries the scope of the component that wrote it even after Vuetify has
+   teleported the tooltip it now lives in. */
 .k-examples {
   padding-left: 1.1rem;
 }

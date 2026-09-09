@@ -48,6 +48,46 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "notatki-krotki-wstep-reszta-pod-i",
+    title: "Krótszy wstęp w „Notatkach”, reszta pod ikoną (i)",
+    description:
+      "Nad notatkami zostało jedno pytanie zamiast pięciu linijek prozy - " +
+      "cała instrukcja razem z trzema przykładami notatek jest teraz w " +
+      "dymku pod ikoną (i) przy nagłówku sekcji. Ten sam mechanizm " +
+      "dostała sekcja „Notatki z innych stron” na stronie artykułu, gdzie " +
+      "dwa akapity wstępu stały jeden nad drugim.",
+    steps: [
+      "Zaloguj się i otwórz /eksploruj/tabela, a potem kliknij nazwisko, żeby otworzyć panel boczny (albo wejdź na stronę dowolnej osoby).",
+      "W sekcji „Notatki” sprawdź, że pod nagłówkiem została jedna linijka: „Wiesz więcej na temat tej osoby?” - bez akapitu i bez listy przykładów.",
+      "Kliknij ikonę (i) obok nagłówka „Notatki”: w dymku ma się pokazać reszta wyjaśnienia i trzy przykładowe notatki. Sprawdź też, że ikona daje się złapać tabulatorem.",
+      "Otwórz stronę artykułu, przy którym są notatki z innych stron - sekcja „Notatki z innych stron” nie ma już akapitu wstępu, jego zdanie jest pod (i).",
+      "Dodaj własną notatkę i zapisz ją: wstęp razem z ikoną (i) znika, bo instrukcja nie jest już potrzebna.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "contributor",
+  },
+  {
+    id: "panel-mowi-czym-rozni-sie-poprawka-od-zmiany",
+    title: "Panel mówi, czym różni się poprawka od zmiany",
+    description:
+      "„Zaproponuj zmianę” ma teraz pod sobą zdanie o tym, które pola " +
+      "poprawia i że propozycja czeka na zatwierdzenie, a przycisk " +
+      "notatki, który wcześniej nazywał się „Zgłoś poprawkę”, nazywa się " +
+      "„Opisz błąd”. Każdy z trzech przycisków notatek ma dymek mówiący, " +
+      "do czego służy - dwie ścieżki trafiają do innych kolejek i teraz " +
+      "widać to na ekranie.",
+    steps: [
+      "Zaloguj się i otwórz /eksploruj/tabela, kliknij nazwisko, żeby otworzyć panel boczny.",
+      "Pod przyciskiem „Zaproponuj zmianę” przeczytaj nowe zdanie: poprawia metryczkę (imię i nazwisko, partia, data urodzenia, wykształcenie, linki), propozycja czeka na zatwierdzenie, cokolwiek innego - do notatki niżej.",
+      "Niżej, w sekcji „Notatki”, sprawdź, że środkowy przycisk nazywa się „Opisz błąd”, a nie „Zgłoś poprawkę”.",
+      "Najedź kursorem na „Dodaj źródło”, „Opisz błąd” i „Zgłoś brak” - każdy ma dymek mówiący, do czego służy; przy „Opisz błąd” dymek odsyła do „Zaproponuj zmianę” dla samej metryczki.",
+      "Wyślij propozycję zmiany: zdanie pod przyciskiem znika, zostaje potwierdzenie „Zaproponowano zmianę” z linkiem do podglądu.",
+      "Sprawdź to samo na /eksploruj/nowe, gdzie ten sam przycisk stoi w kolumnie obok notatek.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "contributor",
+  },
+  {
     id: "ocena-faktow-na-stronie-osoby",
     title: "Fakty można oceniać od razu na stronie osoby",
     description:
@@ -492,9 +532,9 @@ export const QA_ITEMS: QaItem[] = [
       "Najedź myszką na notatkę - ramka ma zzielenieć i pojawić się delikatny cień, tak samo jak przy najechaniu na kartę zmiany na stanowisku.",
       "Sprawdź adres źródła: ma być podpisany nazwą serwisu (np. „wyborcza.pl”), a nie uciętym w połowie długim linkiem. Kliknięcie otwiera oryginał w nowej karcie.",
       "Zwróć uwagę, że nagłówki „Historia powiązań”, „Zmiany na stanowisku”, „Notatki” i „Fakty z artykułów” zaczynają się teraz w jednej linii, jeden pod drugim.",
-      "Kliknij „Zgłoś poprawkę”, wpisz treść i zapisz. Dopiero w trybie edycji ma być widoczne pole do pisania razem z pytaniem pomocniczym; po zapisaniu wraca zwykły tekst.",
+      "Kliknij „Opisz błąd”, wpisz treść i zapisz. Dopiero w trybie edycji ma być widoczne pole do pisania razem z pytaniem pomocniczym; po zapisaniu wraca zwykły tekst.",
       "Kliknij „Edytuj”, potem „Anuluj” - notatka ma wrócić do poprzedniej treści.",
-      "Trzy przyciski dodawania („Dodaj źródło”, „Zgłoś poprawkę”, „Zgłoś brak”) mają być w jednym rzędzie i bez kolorowych obwódek, tak jak „Dodaj” w „Historii powiązań”.",
+      "Trzy przyciski dodawania („Dodaj źródło”, „Opisz błąd”, „Zgłoś brak”) mają być w jednym rzędzie i bez kolorowych obwódek, tak jak „Dodaj” w „Historii powiązań”.",
       "To samo sprawdź na stronie spółki (/instytucja/...), artykułu i tematu, w panelu bocznym otwieranym z /eksploruj/tabela oraz na /eksploruj/nowe - notatki rysuje wszędzie ten sam komponent.",
       "Na telefonie: notatki mają iść jedna pod drugą na całą szerokość, tak jak powiązania nad nimi.",
     ],
@@ -1757,7 +1797,7 @@ export const QA_ITEMS: QaItem[] = [
       "niej każdy wpis.",
     steps: [
       "Na dowolnej stronie osoby lub instytucji dodaj notatkę przyciskiem " +
-        "„Zgłoś poprawkę” (albo „Zgłoś brak”) i zapisz ją.",
+        "„Opisz błąd” (albo „Zgłoś brak”) i zapisz ją.",
       "Wejdź na /admin - kafelek „Notatki wymagające działania” liczy nowe " +
         "zgłoszenie i pokazuje je na liście z chipem „Do poprawy”.",
       "Kliknij „Przejdź do notatek” - tabela otwiera się z filtrem " +

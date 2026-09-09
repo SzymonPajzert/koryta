@@ -53,6 +53,25 @@ describe("ExploreProposeChange", () => {
     ).toBeLessThan(AA_TEXT);
   });
 
+  /** „Mamy teraz w sidebarze »zgłoś poprawkę« i »zaproponuj zmianę«, nie
+   * wiadomo co do tego służy i po co są dwa”. Both stay - one files a revision
+   * on the record's own fields, the other is free text an admin reads - so
+   * this one says which fields it covers, and gets out of the way once a
+   * change has been submitted. */
+  it("says which fields the proposed change covers", async () => {
+    const wrapper = await mount();
+
+    const caption = wrapper.get("p.k-lead");
+    expect(caption.text()).toContain("Poprawia metryczkę");
+    expect(caption.text()).toContain("notatce niżej");
+
+    const dialog = wrapper.findComponent({ name: "DialogProposeEditNode" });
+    dialog.vm.$emit("submitted", "rev-1");
+    await nextTick();
+
+    expect(wrapper.find("p.k-lead").exists()).toBe(false);
+  });
+
   /** The confirmation a reader gets after submitting a change, and the link in
    * it is the only way to see what they submitted. It was `text-primary` on a
    * tinted alert: 1.63:1. */

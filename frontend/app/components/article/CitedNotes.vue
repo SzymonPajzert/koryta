@@ -1,12 +1,17 @@
 <template>
   <!-- The same shell as the "Notatki" directly under it, so the two halves of
        the readers' section read as one thing. The count sits where a section's
-       controls go. -->
+       controls go.
+
+       `info` rather than `lead`: this was the upper of two explanatory
+       paragraphs stacked on an article's page, and the heading already says
+       what the section is. The sentence is now behind the „(i)” for whoever
+       wonders where the notes came from. -->
   <PageSection
     v-if="notes.length > 0"
     title="Notatki z innych stron"
     :icon="mdiNoteMultipleOutline"
-    lead="Co czytelnicy zapisali o tym artykule przy osobach i spółkach, których dotyczy."
+    info="Co czytelnicy zapisali o tym artykule przy osobach i spółkach, których dotyczy."
     data-testid="article-cited-notes"
   >
     <template #actions>

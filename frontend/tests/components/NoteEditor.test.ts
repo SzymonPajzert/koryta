@@ -118,6 +118,50 @@ describe("NoteEditor", () => {
     });
   });
 
+  // Half a sentence on the page and the rest behind the heading's „(i)”:
+  // „tekst który wyjaśnia o co chodzi (...) robi straszny bloat na stronie”.
+  // Nothing was deleted - the examples an alpha tester was missing are one
+  // click away rather than five lines of the page.
+  it("leaves one question on the page and the instructions in the bubble", async () => {
+    (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
+    (useNotes as any).mockReturnValue({
+      userNote: ref(null),
+      otherNotes: ref([]),
+      saveNote: vi.fn(),
+    });
+
+    const wrapper = await mountSuspended(NoteEditor, {
+      props: { nodeId: "node-123" },
+    });
+
+    expect(wrapper.get("p.k-lead").text()).toBe(
+      "Wiesz więcej na temat tej osoby?",
+    );
+    expect(wrapper.text()).not.toContain("Wklej tu");
+
+    await wrapper.get("[data-testid='section-info']").trigger("click");
+    expect(document.body.textContent).toContain("Wklej tu, co udało Ci się");
+    expect(document.body.textContent).toContain("To imiennik");
+  });
+
+  // The bubble goes with the lead it belongs to: somebody who has written a
+  // note is not still being told how to write one.
+  it("drops the bubble once the reader has a note of their own", async () => {
+    (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
+    (useNotes as any).mockReturnValue({
+      userNote: ref({ sources: [{ url: "", note: "moja", kind: "source" }] }),
+      otherNotes: ref([]),
+      saveNote: vi.fn(),
+    });
+
+    const wrapper = await mountSuspended(NoteEditor, {
+      props: { nodeId: "node-123" },
+    });
+
+    expect(wrapper.find("p.k-lead").exists()).toBe(false);
+    expect(wrapper.find("[data-testid='section-info']").exists()).toBe(false);
+  });
+
   it("offers an entry point for each note kind", async () => {
     (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
     (useNotes as any).mockReturnValue({
@@ -130,8 +174,36 @@ describe("NoteEditor", () => {
       props: { nodeId: "node-123" },
     });
 
-    expect(wrapper.text()).toContain("Zgłoś poprawkę");
+    expect(wrapper.text()).toContain("Opisz błąd");
     expect(wrapper.text()).toContain("Zgłoś brak");
+  });
+
+  // „Nie wiadomo co do tego służy i po co są dwa”, about this button standing
+  // under „Zaproponuj zmianę” in the side panel. Its label no longer repeats
+  // that one, and hovering it says which queue it writes to.
+  it("says what the correction button is for", async () => {
+    (useAuthState as any).mockReturnValue({ user: ref({ uid: "test-user" }) });
+    (useNotes as any).mockReturnValue({
+      userNote: ref(null),
+      otherNotes: ref([]),
+      saveNote: vi.fn(),
+    });
+
+    const wrapper = await mountSuspended(NoteEditor, {
+      props: { nodeId: "node-123" },
+    });
+
+    expect(wrapper.text()).not.toContain("Zgłoś poprawkę");
+
+    const correction = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("Opisz błąd"));
+    await correction?.trigger("mouseenter");
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(
+        "opisz to własnymi słowami, przeczyta to redakcja",
+      ),
+    );
   });
 
   it("records the kind chosen when adding an entry", async () => {
@@ -149,7 +221,7 @@ describe("NoteEditor", () => {
 
     const addChangeBtn = wrapper
       .findAll("button")
-      .find((b) => b.text().includes("Zgłoś poprawkę"));
+      .find((b) => b.text().includes("Opisz błąd"));
     await addChangeBtn?.trigger("click");
 
     const saveBtn = wrapper

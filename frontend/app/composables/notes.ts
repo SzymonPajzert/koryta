@@ -24,8 +24,8 @@ import { withArticleIds } from "~/utils/notePromotion";
 import type { Note, NoteEntryKind } from "~~/shared/model";
 
 /** How each note entry kind presents itself: the label on its chip, the button
- * that creates one, the prompt above the text area - and one written note of
- * that kind, as an example.
+ * that creates one, the tooltip under that button, the prompt above the text
+ * area - and one written note of that kind, as an example.
  *
  * The example is not decoration. „Nie wiadomo trochę, jakie info tam wklejać”
  * is how an alpha tester put it, and a prompt phrased as a question does not
@@ -38,6 +38,12 @@ export const noteKindConfig: Record<
   {
     title: string;
     addLabel: string;
+    /** What this button does, for somebody deciding between it and the two
+     * beside it. „Nie wiadomo co do tego służy i po co są dwa” was reported
+     * about „Zgłoś poprawkę” standing under „Zaproponuj zmianę” in the side
+     * panel - the two write to different queues, and nothing on screen said
+     * so. */
+    hint: string;
     prompt: string;
     /** A note of this kind, written out. Stored without the „np.” that a
      * placeholder wants in front of it, so the same sentence can also be listed
@@ -50,6 +56,7 @@ export const noteKindConfig: Record<
   source: {
     title: "Źródło",
     addLabel: "Dodaj źródło",
+    hint: "Link do artykułu albo dokumentu i jedno zdanie, co w nim jest.",
     prompt: "Co ciekawego jest w tym źródle?",
     example:
       "Artykuł z marca 2023: został prezesem dwa miesiące po wyborach, " +
@@ -59,7 +66,14 @@ export const noteKindConfig: Record<
   },
   change_request: {
     title: "Do poprawy",
-    addLabel: "Zgłoś poprawkę",
+    // „Zgłoś poprawkę”, as this read, was one verb away from „Zaproponuj
+    // zmianę” in the same panel, and that button's label is what six e2e and
+    // cypress specs click. So this one moved.
+    addLabel: "Opisz błąd",
+    hint:
+      "Coś w danych jest nie tak - opisz to własnymi słowami, przeczyta to " +
+      "redakcja. Samą metryczkę (imię, partia, data urodzenia, linki) " +
+      "poprawisz od razu przez „Zaproponuj zmianę”.",
     prompt: "Co jest nie tak i jak powinno być?",
     example:
       "To imiennik - w radzie nadzorczej siedzi inny Jan Kowalski. Radny z " +
@@ -70,6 +84,7 @@ export const noteKindConfig: Record<
   missing: {
     title: "Brakuje danych",
     addLabel: "Zgłoś brak",
+    hint: "Czegoś tu nie ma - napisz czego i skąd to wiadomo.",
     prompt: "Czego tu brakuje?",
     example:
       "Brakuje pracy w spółce wodociągowej 2019-2021, widać ją w KRS pod " +
