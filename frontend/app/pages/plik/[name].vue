@@ -1,15 +1,26 @@
 <script setup lang="ts">
 const route = useRoute();
-const name = route.params.name as string;
-const { data: file } = await useAsyncData(() =>
-  queryCollection("content")
-    .path("/" + name)
-    .first(),
+const name = computed(() => String(route.params.name));
+
+/** Keyed by the file being read, and it has to be.
+ *
+ * Without a key Nuxt derives one from the call site, which is the same for
+ * every /plik/* route - so all of them shared one entry. The page component is
+ * remounted on a param change, but under Suspense the outgoing page is still
+ * mounted while the incoming one runs setup, so `nuxtApp._asyncData[key]` is
+ * already there with status "success" and the handler is skipped outright.
+ * Clicking „Polityka prywatności" in the footer while on „Regulamin" changed
+ * the url and left the regulamin on the screen, tab title and all. */
+const { data: file } = await useAsyncData(
+  () => `content:${name.value}`,
+  () => queryCollection("content").path(`/${name.value}`).first(),
 );
 
+// Getters, so the tab title follows the document rather than being captured
+// once - the same staleness as above, one layer up.
 useSeoMeta({
-  title: file.value?.title,
-  description: file.value?.description,
+  title: () => file.value?.title,
+  description: () => file.value?.description,
 });
 </script>
 
