@@ -1,6 +1,7 @@
 import { getFirestore, FieldPath } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
+import { fetchEdgeEndpointNodes } from "~~/server/utils/edgeNodes";
 import { pageIsPublic } from "~~/shared/model";
 import { displayRole } from "~~/shared/companyBodies";
 import type { Company, Edge, Person } from "~~/shared/model";
@@ -131,7 +132,7 @@ async function recentEmployments(event: H3Event): Promise<RecentEmployments> {
       id: doc.id,
       ...(doc.data() as Edge),
     }));
-    const nodes = await fetchEndpointNodes(db, edges);
+    const nodes = await fetchEdgeEndpointNodes(db, edges);
 
     // The cursor follows what was examined rather than what was returned, so
     // that filling the page halfway through a batch does not skip the rest of
@@ -184,37 +185,6 @@ async function recentEmployments(event: H3Event): Promise<RecentEmployments> {
     nextCursor:
       exhausted || !cursor ? null : `${cursor.startDate}|${cursor.id}`,
   };
-}
-
-/** Every node an edge in `edges` touches, in one round trip per 100 ids.
- *
- * `resolveEdgeEndpoints` answers the same question for the publish dialog, but
- * only in terms of name and published-or-not. A card also needs the person's
- * parties and the company's ownership, so this keeps the documents.
- */
-async function fetchEndpointNodes(
-  db: FirebaseFirestore.Firestore,
-  edges: { source?: string; target?: string }[],
-): Promise<Map<string, Person | Company>> {
-  const ids = new Set<string>();
-  for (const edge of edges) {
-    if (edge.source) ids.add(edge.source);
-    if (edge.target) ids.add(edge.target);
-  }
-
-  const nodes = new Map<string, Person | Company>();
-  const list = Array.from(ids);
-  for (let i = 0; i < list.length; i += 100) {
-    const refs = list
-      .slice(i, i + 100)
-      .map((id) => db.collection("nodes").doc(id));
-    const snaps = await db.getAll(...refs);
-    for (const snap of snaps) {
-      if (!snap.exists) continue;
-      nodes.set(snap.id, { id: snap.id, ...snap.data() } as Person | Company);
-    }
-  }
-  return nodes;
 }
 
 /** Fifteen minutes rather than the six hours `authCachedEventHandler` defaults
