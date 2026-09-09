@@ -5,15 +5,27 @@
        follows. -->
   <div class="py-4 px-0 pa-sm-4 w-100">
     <h1 class="text-h5 text-sm-h4 mb-2">
-      Rocznice pracy w instytucjach publicznych
+      Okrągły staż w instytucjach publicznych
     </h1>
 
     <p class="text-body-2 text-medium-emphasis mb-4">
-      Kto właśnie obchodzi rocznicę objęcia stanowiska - miesiąc wstecz i
-      miesiąc naprzód. Przy każdej osobie podajemy jej łączny staż, czyli sumę
-      lat przepracowanych we wszystkich instytucjach publicznych, jakie znamy.
-      Liczymy tylko opublikowane strony i tylko miejsca, o których wiemy, że
-      należą do sektora publicznego.
+      Komu w tym miesiącu - wstecz albo naprzód - łączny staż w instytucjach
+      publicznych wypada równo: 10 lat, 15 lat, 24 lata. Liczymy sumę wszystkich
+      stanowisk, a nie rocznicę jednego z nich, więc równoległe posady liczą się
+      raz, a przerwy w karierze przesuwają datę na później. Bierzemy pod uwagę
+      tylko opublikowane strony i tylko miejsca, o których wiemy, że należą do
+      sektora publicznego.
+    </p>
+
+    <!-- Said once, not on every card. A date still ahead of us can only be
+         reached in a post nobody has closed, so the caveat holds for the whole
+         upcoming half and for nothing in the past one - printed per card it
+         would say no more than the toggle above already does. -->
+    <p
+      v-if="scope === 'upcoming'"
+      class="text-body-2 text-medium-emphasis mb-4"
+    >
+      Daty w przyszłości zakładają, że osoba pozostanie na stanowisku.
     </p>
 
     <!-- The two halves of the window, one click apart.
@@ -24,7 +36,7 @@
     <v-btn-toggle
       v-model="scope"
       class="mb-4"
-      data-testid="anniversaries-scope"
+      data-testid="milestones-scope"
       density="compact"
       divided
       mandatory
@@ -45,7 +57,7 @@
     <p
       v-if="total > 0"
       class="text-body-2 text-medium-emphasis mb-4"
-      data-testid="anniversaries-summary"
+      data-testid="milestones-summary"
     >
       {{ summary }}
     </p>
@@ -53,8 +65,8 @@
     <v-alert
       v-if="status === 'error'"
       class="mb-4"
-      data-testid="anniversaries-error"
-      text="Nie udało się pobrać rocznic. Spróbuj odświeżyć stronę."
+      data-testid="milestones-error"
+      text="Nie udało się pobrać danych. Spróbuj odświeżyć stronę."
       type="error"
       variant="tonal"
     />
@@ -64,19 +76,19 @@
          and pushes the footer further away every time the reader scrolls
          towards it. Two pages automatically, a button after that. -->
     <v-infinite-scroll
-      v-else-if="anniversaries.length > 0"
-      class="anniversary-feed"
-      data-testid="work-anniversaries"
-      empty-text="To już wszystkie rocznice z tego okresu."
-      load-more-text="Pokaż więcej rocznic"
+      v-else-if="milestones.length > 0"
+      class="milestone-feed"
+      data-testid="service-milestones"
+      empty-text="To już wszystkie okrągłe staże z tego okresu."
+      load-more-text="Pokaż więcej"
       :mode="mode"
       @load="loadMore"
     >
-      <div class="anniversary-feed__grid">
-        <CardAnniversary
-          v-for="anniversary in anniversaries"
-          :key="anniversary.id"
-          :anniversary
+      <div class="milestone-feed__grid">
+        <CardServiceMilestone
+          v-for="milestone in milestones"
+          :key="milestone.id"
+          :milestone
         />
       </div>
     </v-infinite-scroll>
@@ -94,8 +106,8 @@
          stack. -->
     <v-alert
       v-else
-      data-testid="work-anniversaries-empty"
-      text="W tym miesiącu nie wypada żadna rocznica, o której byśmy wiedzieli."
+      data-testid="service-milestones-empty"
+      text="W tym miesiącu nikomu, o kim wiemy, nie wypada okrągły staż."
       type="info"
       variant="tonal"
     />
@@ -106,25 +118,25 @@
 import { authFetch } from "~/composables/auth";
 import { polishCounting } from "~/composables/polish";
 import type {
-  AnniversaryScope,
-  WorkAnniversary,
-  WorkAnniversaries,
-} from "~~/server/api/edges/anniversaries.get";
+  MilestoneScope,
+  ServiceMilestone,
+  ServiceMilestones,
+} from "~~/server/api/edges/serviceMilestones.get";
 
 /** How many cards a page carries. Two columns on a desktop, so an even number
  * leaves no half row behind while the next one is loading. */
 const PAGE_SIZE = 20;
 
-const ENDPOINT = "/api/edges/anniversaries";
+const ENDPOINT = "/api/edges/serviceMilestones";
 
 /** The `useAsyncData` key the first page is stored under, and so what the
  * server hands the browser in the payload. */
-const FIRST_PAGE_KEY = "work-anniversaries";
+const FIRST_PAGE_KEY = "service-milestones";
 
 useSeoMeta({
-  title: "Rocznice pracy w instytucjach publicznych - koryta.pl",
+  title: "Okrągły staż w instytucjach publicznych - koryta.pl",
   description:
-    "Kto obchodzi rocznicę objęcia stanowiska w instytucji publicznej - miesiąc wstecz i miesiąc naprzód - i ile lat przepracował w nich łącznie.",
+    "Komu łączny staż we wszystkich instytucjach publicznych wypada równo - 10, 15, 24 lata - w tym miesiącu wstecz albo naprzód.",
 });
 
 const route = useRoute();
@@ -132,11 +144,11 @@ const router = useRouter();
 
 /** Which half of the window is on screen.
  *
- * Kept in the url rather than in a bare ref so that „the anniversaries that
- * have just gone by” is a link somebody can send, and so a reload does not
+ * Kept in the url rather than in a bare ref so that „the ones that have just
+ * gone by” is a link somebody can send, and so a reload does not
  * silently move them back to the other half. Upcoming is the default, and it
  * is written as a query parameter only once the reader has chosen the other
- * one - /eksploruj/rocznice and /eksploruj/rocznice?zakres=nadchodzace should
+ * one - /eksploruj/staz and /eksploruj/staz?zakres=nadchodzace should
  * not be two urls for one page.
  *
  * The parameter is Polish, like every other one the site puts in a url; the
@@ -144,12 +156,12 @@ const router = useRouter();
  * on the way back out. */
 const SCOPE_PARAM = "zakres";
 
-const scope = computed<AnniversaryScope>({
+const scope = computed<MilestoneScope>({
   get: () => (route.query[SCOPE_PARAM] === "minione" ? "past" : "upcoming"),
   set: (value) => {
     // Rebuilt without the key rather than `delete`d out of a copy: the
     // parameter is dropped entirely for the default half, so that
-    // /eksploruj/rocznice stays the one url for it.
+    // /eksploruj/staz stays the one url for it.
     const { [SCOPE_PARAM]: _dropped, ...rest } = route.query;
     const next =
       value === "past" ? { ...rest, [SCOPE_PARAM]: "minione" } : rest;
@@ -178,7 +190,7 @@ const query = computed(() => ({
 // Not awaited, and still server rendered: Nuxt settles every `useAsyncData`
 // before it serialises the page. The difference is on a client-side navigation
 // into this route, where awaiting would hold the whole page on this fetch.
-const { data, status } = authFetch<WorkAnniversaries>(ENDPOINT, {
+const { data, status } = authFetch<ServiceMilestones>(ENDPOINT, {
   query,
   // Named rather than left to key on the url: `useFetch` aborts the earlier
   // call when a second one lands on the same key, so an unnamed one ties this
@@ -189,7 +201,7 @@ const { data, status } = authFetch<WorkAnniversaries>(ENDPOINT, {
 /** The pages after the first. The first stays in `data` so that a refetch -
  * which is what signing in triggers, `authFetch` adding `latest` to the query
  * - replaces it instead of being appended to what is already on screen. */
-const more = ref<WorkAnniversary[]>([]);
+const more = ref<ServiceMilestone[]>([]);
 const offset = ref<number | null>(null);
 
 /** How many pages this half has fetched by itself so far. Reset with the feed
@@ -204,14 +216,14 @@ watch(
     // The other half is a fresh feed, not a continuation of this one, so it
     // gets the same two automatic pages. Without this, a reader who had
     // scrolled the upcoming half and then switched to the past one would meet
-    // „Pokaż więcej rocznic” on the first screen of it.
+    // „Pokaż więcej” on the first screen of it.
     autoLoaded.value = 0;
   },
   { immediate: true },
 );
 
-const anniversaries = computed(() => [
-  ...(data.value?.anniversaries ?? []),
+const milestones = computed(() => [
+  ...(data.value?.milestones ?? []),
   ...more.value,
 ]);
 
@@ -233,20 +245,25 @@ const total = computed(() => data.value?.total ?? 0);
 const upcomingCount = computed(() => data.value?.upcoming ?? 0);
 const pastCount = computed(() => data.value?.past ?? 0);
 
-/** „194 rocznice w najbliższym miesiącu”, „177 rocznic w minionym miesiącu”.
+/** „26 osób z okrągłym stażem w najbliższym miesiącu”.
+ *
+ * Counted in people rather than in milestones, and that is exact rather than a
+ * simplification: two consecutive milestones are a year of *service* apart and
+ * service accrues at most a day a day, so nobody can appear twice inside a
+ * window two months wide. `milestonesInWindow` has a test pinning it.
+ *
+ * Phrased without a verb on purpose. Polish agreement puts „194 osoby osiągną”
+ * against „26 osób osiągnie” - the numeral picks the verb as well as the noun,
+ * and `polishCounting` only knows about the noun. A phrase avoids inventing a
+ * second rule to get wrong.
  *
  * The count is of the whole half, not of what has loaded, so it says how long
  * the feed is before anybody scrolls it. */
 const summary = computed(() => {
-  const counted = polishCounting(
-    total.value,
-    "rocznica",
-    "rocznice",
-    "rocznic",
-  );
-  return scope.value === "past"
-    ? `${counted} w minionym miesiącu`
-    : `${counted} w najbliższym miesiącu`;
+  const counted = polishCounting(total.value, "osoba", "osoby", "osób");
+  const when =
+    scope.value === "past" ? "w minionym miesiącu" : "w najbliższym miesiącu";
+  return `${counted} z okrągłym stażem ${when}`;
 });
 
 type LoadOptions = { done: (status: "ok" | "empty" | "error") => void };
@@ -269,7 +286,7 @@ const mode = computed(() =>
  *
  * Plain `$fetch` rather than `authFetch`, which is a `useFetch` and so cannot
  * be called for a page somebody asked for by scrolling. Nothing is lost by it:
- * the endpoint answers with published anniversaries whoever asks, and `latest`
+ * the endpoint answers with published milestones whoever asks, and `latest`
  * would only skip the response cache.
  *
  * No retry loop, unlike the home page's feed: that one asks again because its
@@ -285,10 +302,10 @@ async function loadMore({ done }: LoadOptions) {
   autoLoaded.value += 1;
 
   try {
-    const next: WorkAnniversaries = await $fetch<WorkAnniversaries>(ENDPOINT, {
+    const next: ServiceMilestones = await $fetch<ServiceMilestones>(ENDPOINT, {
       query: { ...query.value, offset: offset.value },
     });
-    more.value.push(...next.anniversaries);
+    more.value.push(...next.milestones);
     offset.value = next.nextOffset;
     done(next.nextOffset === null ? "empty" : "ok");
   } catch {
@@ -301,7 +318,7 @@ async function loadMore({ done }: LoadOptions) {
 /* The infinite scroll makes its root a scroll container, and a v-row's
    negative margins would hang 12px past it and raise a horizontal scrollbar
    inside the page. A grid with a gap owes nothing to the edges. */
-.anniversary-feed__grid {
+.milestone-feed__grid {
   display: grid;
   gap: 16px;
   grid-template-columns: 1fr;
@@ -312,7 +329,7 @@ async function loadMore({ done }: LoadOptions) {
    no viewport to answer with: the composable says "small" while rendering and
    the real width only on hydration, which is a layout that visibly jumps. */
 @media (min-width: 960px) {
-  .anniversary-feed__grid {
+  .milestone-feed__grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }

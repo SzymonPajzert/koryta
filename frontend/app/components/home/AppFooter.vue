@@ -67,7 +67,7 @@ const sections = [
       { title: "O nas", link: "/o-nas" },
       { title: "Tematy", link: "/tematy" },
       { title: "Rady szpitali", link: "/eksploruj/szpitale" },
-      { title: "Rocznice pracy", link: "/eksploruj/rocznice" },
+      { title: "Okrągły staż", link: "/eksploruj/staz" },
       { title: "Źródła", link: "/zrodla" },
       // The app bar only carries this above 960px and the home page only
       // above 960px, so on a phone the footer is the whole of how somebody
