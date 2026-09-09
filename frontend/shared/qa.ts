@@ -48,6 +48,31 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "rocznice-pracy-w-instytucjach-publicznych",
+    title: "Rocznice pracy w instytucjach publicznych",
+    description:
+      "Nowa strona /eksploruj/rocznice pokazuje, komu z opublikowanych osób " +
+      "wypada rocznica objęcia stanowiska: miesiąc wstecz i miesiąc naprzód, " +
+      "w kolejności kalendarzowej, od minionych do nadchodzących. Każda karta " +
+      "mówi, która to rocznica i jaki jest łączny staż tej osoby - suma lat " +
+      "we wszystkich instytucjach publicznych, ta sama liczba, którą pokazuje " +
+      "kolumna „Lata pracy”. Liczymy tylko miejsca, o których wiemy, że " +
+      "należą do sektora publicznego, i pomijamy rady społeczne szpitali, bo " +
+      "za zasiadanie w nich nikt nie płaci - więc staż i rocznica mówią to " +
+      "samo. Wygląd i przewijanie są takie jak w „Ostatnich zatrudnieniach” " +
+      "na stronie głównej.",
+    steps: [
+      "Wejdź na /eksploruj/rocznice: ma być siatka kart, na desktopie dwie kolumny, i nagłówek z liczbą rocznic w tym okresie.",
+      "Przewiń w dół: dwie kolejne strony mają doładować się same, potem pojawia się przycisk „Pokaż więcej rocznic”.",
+      "Sprawdź kolejność: pierwsze karty to rocznice minione („12 dni temu”, szara belka z lewej), dalej „dzisiaj” i „za …” z zieloną belką i wyróżnioną datą.",
+      "Na karcie mają być dwie różne liczby: „N. rocznica” przy nazwisku (ta jedna posada) i „łącznie N lat pracy” na dole (cały staż). Żadna z nich nie może mieć kropki dziesiętnej.",
+      "Kliknij kartę - ma prowadzić na stronę osoby, a data rozpoczęcia z dymka nad „N. rocznica” ma się zgadzać z zatrudnieniem na tej stronie.",
+      "Link „Rocznice pracy” jest w stopce, w sekcji „O projekcie”.",
+    ],
+    link: "/eksploruj/rocznice",
+    area: "public",
+  },
+  {
     id: "publikacja-zatwierdza-najnowsza-rewizje",
     title: "„Opublikuj” działa na stronie bez zatwierdzonej rewizji",
     description:
