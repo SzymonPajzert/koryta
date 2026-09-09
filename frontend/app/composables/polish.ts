@@ -22,7 +22,13 @@ function nominativeNoun(
   // dopełniacz dla naście
   if (n > 10 && n < 20) return form_genitive;
   if (n1 > 1 && n1 < 5) return form_plural;
-  if (n1 === 1) return form_singular;
+  // Only a bare one takes the singular. This used to be `n1 === 1`, which is
+  // the rule for the *last digit* rather than for the number, and it wrote
+  // „21 osoba”, „101 osoba” and - the one that found it - „371 rocznica” on
+  // /eksploruj/rocznice. `polishCountingGenitive` has said so in its own
+  // docstring since it was written: everything but a bare one takes the
+  // plural, „21 osób” included.
+  if (Math.abs(number) === 1) return form_singular;
   return form_genitive;
 }
 

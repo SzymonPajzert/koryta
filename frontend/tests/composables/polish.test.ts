@@ -63,3 +63,26 @@ describe("polishNumber", () => {
     expect(polishNumber(645)).toBe("645");
   });
 });
+
+describe("polishCounting", () => {
+  it("keeps the singular for a bare one only", () => {
+    // The last digit is not the rule. „21 osoba” and „371 rocznica” are what
+    // matching on it wrote, and the second of those is what found it - the
+    // count of anniversaries on /eksploruj/rocznice is in the low hundreds and
+    // lands on a 1 about a tenth of the time.
+    expect(polishCounting(1, "osoba", "osoby", "osób")).toBe("1 osoba");
+    expect(polishCounting(21, "osoba", "osoby", "osób")).toBe("21 osób");
+    expect(polishCounting(101, "osoba", "osoby", "osób")).toBe("101 osób");
+    expect(polishCounting(371, "rocznica", "rocznice", "rocznic")).toBe(
+      "371 rocznic",
+    );
+  });
+
+  it("still counts the forms every other digit takes", () => {
+    expect(polishCounting(2, "osoba", "osoby", "osób")).toBe("2 osoby");
+    expect(polishCounting(22, "osoba", "osoby", "osób")).toBe("22 osoby");
+    expect(polishCounting(5, "osoba", "osoby", "osób")).toBe("5 osób");
+    expect(polishCounting(11, "osoba", "osoby", "osób")).toBe("11 osób");
+    expect(polishCounting(0, "osoba", "osoby", "osób")).toBe("0 osób");
+  });
+});
