@@ -6,15 +6,10 @@
     max-width="400"
     rounded="lg"
   >
-    <v-card-title> Analizuj powiązania </v-card-title>
+    <v-card-title>{{ emptyState.title }}</v-card-title>
     <v-card-text>
-      <span class="d-none d-md-inline"
-        >Wybierz region z mapy po lewej stronie, by zobaczyć powiązane
-        osoby.</span
-      >
-      <span class="d-md-none"
-        >Wybierz region z mapy na górze, by zobaczyć powiązane osoby.</span
-      >
+      <span class="d-none d-md-inline">{{ emptyState.wide }}</span>
+      <span class="d-md-none">{{ emptyState.narrow }}</span>
     </v-card-text>
   </v-card>
   <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400" rounded="lg">
@@ -98,7 +93,38 @@ import { useListWithStats } from "~/composables/entity/listWithStats";
 import { polishCounting } from "~/composables/polish";
 import type { Query } from "~~/server/api/nodes/index.get";
 
-const props = defineProps<{ region: Powiat | undefined }>();
+const props = defineProps<{
+  region: Powiat | undefined;
+  /** Which explorer panel this card is standing next to. It is mounted in both,
+   * so without this it told a reader on the party treemap to pick a region off
+   * a map that is not on the screen. */
+  panel?: "map" | "parties";
+}>();
+
+/** What the card says before a region has been picked.
+ *
+ * The party panel gets its own copy rather than the map's, and it says what
+ * clicking actually does: the treemap pushes to /eksploruj/tabela?party=…, so
+ * this card is never filled from that panel and promising it would be a
+ * second lie in place of the first.
+ *
+ * The map wording is byte-for-byte what it was - tests/e2e/map_stats.spec.ts
+ * waits for "Wybierz region z mapy" to disappear as its proof that a powiat
+ * was picked. */
+const emptyState = computed(() =>
+  props.panel === "parties"
+    ? {
+        title: "Przejdź do tabeli",
+        wide: "Kliknij partię na wykresie po lewej stronie, by zobaczyć jej ludzi w tabeli.",
+        narrow:
+          "Kliknij partię na wykresie na górze, by zobaczyć jej ludzi w tabeli.",
+      }
+    : {
+        title: "Analizuj powiązania",
+        wide: "Wybierz region z mapy po lewej stronie, by zobaczyć powiązane osoby.",
+        narrow: "Wybierz region z mapy na górze, by zobaczyć powiązane osoby.",
+      },
+);
 function subtitle(person: Partial<PersonRich>) {
   if (person.experience) {
     return `${person.experience} lat pracy`;
