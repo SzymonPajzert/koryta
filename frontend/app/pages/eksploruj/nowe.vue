@@ -189,13 +189,28 @@
         <v-expand-transition>
           <div v-if="showInstructions" class="px-3 pb-3">
             <v-divider class="mb-3" />
+            <!-- The long version reads across, in the same order and with the
+                 same badges as the strip above it. Stacked under one another
+                 the three paragraphs said nothing about which badge each one
+                 explained, so the reader matched them up by counting. Not
+                 `step`/`step--done`: those classes are how the strip is
+                 asserted in tests/pages/eksploruj/nowe.test.ts, and reusing
+                 them here would double every match. -->
             <ol class="steps__detail">
               <li
-                v-for="step in steps"
+                v-for="(step, index) in steps"
                 :key="step.key"
-                :class="{ 'text-medium-emphasis': step.done }"
+                class="detail"
+                :class="{ 'detail--done': step.done }"
               >
-                <strong>{{ step.label }}.</strong> {{ step.hint }}
+                <div class="detail__head">
+                  <span class="step__badge">
+                    <v-icon v-if="step.done" :icon="mdiCheck" size="14" />
+                    <template v-else>{{ index + 1 }}</template>
+                  </span>
+                  <strong>{{ step.label }}</strong>
+                </div>
+                {{ step.hint }}
               </li>
             </ol>
             <p class="text-caption text-medium-emphasis mb-0 mt-2">
@@ -703,7 +718,19 @@ const { workLocations, mapLocations } = usePersonPlaces(
    to be read, and it sits above the fold on a phone. */
 .lede {
   line-height: 1.6;
-  max-width: 78ch;
+}
+
+/* Two columns from the md breakpoint up, rather than one 78ch column with half
+   the page empty beside it - „tekst w instrukcji ma ograniczoną szerokość, inną
+   niż okno i wygląda to dziwnie”. The cap was there to keep a readable measure,
+   and a column of this page's 1300px is still about the 78ch it used to be, so
+   the paragraph now reaches the same edges as the cards above and below it
+   without any line getting longer. */
+@media (min-width: 960px) {
+  .lede {
+    column-count: 2;
+    column-gap: 40px;
+  }
 }
 
 /* ---- the three steps ---- */
@@ -752,7 +779,8 @@ const { workLocations, mapLocations } = usePersonPlaces(
   width: 22px;
 }
 
-.step--done .step__badge {
+.step--done .step__badge,
+.detail--done .step__badge {
   background: rgb(var(--v-theme-success));
   color: rgb(var(--v-theme-on-success));
 }
@@ -761,16 +789,35 @@ const { workLocations, mapLocations } = usePersonPlaces(
   color: rgba(var(--v-theme-on-surface), 0.55);
 }
 
+/* One column per step, side by side in the strip's order. `auto-fit` rather
+   than a fixed three: the panel is open by default, so it has to survive a
+   375px phone as well as a 1300px page, and the columns fold to two and then
+   to one on their own. `min(240px, 100%)` keeps that fold from overflowing a
+   card narrower than a column's minimum. The numbering lives in the badges
+   now, hence no list marker and no room reserved for one. */
 .steps__detail {
   color: rgba(var(--v-theme-on-surface), 0.7);
+  display: grid;
   font-size: 0.8125rem;
+  gap: 12px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   line-height: 1.55;
+  list-style: none;
   margin: 0;
-  max-width: 78ch;
-  padding-left: 1.25rem;
+  padding: 0;
 }
 
-.steps__detail li + li {
-  margin-top: 4px;
+.detail__head {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.87);
+  display: flex;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+/* Fades with the step it explains, the same way the strip's label does. */
+.detail--done,
+.detail--done .detail__head {
+  color: rgba(var(--v-theme-on-surface), 0.55);
 }
 </style>
