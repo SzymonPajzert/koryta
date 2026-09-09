@@ -1,11 +1,33 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { registerEndpoint } from "@nuxt/test-utils/runtime";
 import OmniSearch from "../../app/components/OmniSearch.vue";
 import { defineComponent, h, Suspense, nextTick } from "vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import { createRouter, createMemoryHistory } from "vue-router";
+
+/** What /api/search answers with, set per test.
+ *
+ * Served rather than stubbed: the component calls Nuxt's auto-imported
+ * `$fetch`, which the `vi.stubGlobal` below never intercepts. */
+let searched: { id: string; name: string; type: string }[] = [];
+registerEndpoint("/api/search", () => searched);
+
+// The menu is a real overlay here, and Vuetify measures it on open.
+global.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+global.visualViewport = {
+  width: 1024,
+  height: 768,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  dispatchEvent: () => true,
+} as unknown as VisualViewport;
 
 const vuetify = createVuetify({
   components,
@@ -45,6 +67,11 @@ vi.stubGlobal("useAuthState", () => ({
 }));
 
 describe("OmniSearch", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    searched = [];
+  });
+
   // Setup Router
   const router = createRouter({
     history: createMemoryHistory(),
@@ -114,6 +141,103 @@ describe("OmniSearch", () => {
     expect(filter("PO", "PO")).toBe(true);
     expect(filter("PiS", "PO")).toBe(false);
     expect(filter("Anna Nowak", "Andrzej Namysło")).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  /** The register name that started this: 97 characters, and the search box
+   * used to show the first 40 of them. */
+  const LONG_NAME =
+    "SAMODZIELNY PUBLICZNY ZAKŁAD OPIEKI ZDROWOTNEJ WOJEWÓDZKI SZPITAL SPECJALISTYCZNY NR 3 W RYBNIKU";
+
+  const mountSearch = () =>
+    mount(
+      defineComponent({
+        render() {
+          return h(Suspense, null, {
+            default: () => h(OmniSearch),
+            fallback: () => h("div", "fallback"),
+          });
+        },
+      }),
+      // Attached, because the menu is teleported: detached, the rows exist
+      // nowhere this test could read them.
+      { global: { plugins: [vuetify, router] }, attachTo: document.body },
+    );
+
+  /** Types a query and waits out the 300ms debounce that gates the results.
+   *
+   * Real time rather than fake timers: the debounce is @vueuse's
+   * `refDebounced`, which vitest's clock does not drive - the search would
+   * never run and the menu would stay on the client-side entries. */
+  const searchFor = async (
+    wrapper: ReturnType<typeof mountSearch>,
+    term: string,
+  ) => {
+    // Focused first: the menu is what carries the rows, and VAutocomplete only
+    // opens it for a field that has focus.
+    await wrapper.find("input").trigger("focus");
+    await wrapper.find("input").setValue(term);
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+  };
+
+  const rows = () =>
+    Array.from(document.querySelectorAll<HTMLElement>(".v-list-item"));
+
+  it("shows a long name in full instead of clipping it", async () => {
+    // Vuetify clips `.v-list-item-title` to one line with an ellipsis, and the
+    // index is full of 90-character register names - so every hospital's row
+    // read the same „SAMODZIELNY PUBLICZNY ZAKŁAD OPIEKI ZDROWOTNEJ…” and no
+    // two of them could be told apart.
+    searched = [{ id: "szpital-1", name: LONG_NAME, type: "place" }];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "szpital");
+
+    const title = document.querySelector(".v-list-item-title");
+    expect(title?.textContent.trim()).toBe(LONG_NAME);
+    expect(title?.classList.contains("text-wrap")).toBe(true);
+    // The row used to carry a 400px cap as well, which cut a wrapped name off
+    // just as effectively as the ellipsis did.
+    expect(rows()[0]?.style.maxWidth).toBe("");
+
+    wrapper.unmount();
+  });
+
+  it("writes the name once per row", async () => {
+    // The slot still spreads Vuetify's own item props, `title` among them. Left
+    // in, VListItem renders its title element as well as the one written here
+    // and the name shows up twice in the row.
+    searched = [{ id: "szpital-1", name: LONG_NAME, type: "place" }];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "szpital");
+
+    const row = rows().find((el) => el.textContent.includes(LONG_NAME));
+    expect(row?.querySelectorAll(".v-list-item-title")).toHaveLength(1);
+
+    wrapper.unmount();
+  });
+
+  it("keeps a party's subtitle under its name", async () => {
+    // Handed to VListItem as the `subtitle` prop it would render above a name
+    // that comes from the default slot, leaving „Partia” on top of „PO”.
+    searched = [];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "PO");
+
+    const party = rows().find(
+      (el) =>
+        el.querySelector(".v-list-item-title")?.textContent.trim() === "PO",
+    );
+    const lines = Array.from(
+      party?.querySelectorAll(".v-list-item-title, .v-list-item-subtitle") ??
+        [],
+    ).map((el) => el.textContent.trim());
+    expect(lines).toEqual(["PO", "Partia"]);
 
     wrapper.unmount();
   });

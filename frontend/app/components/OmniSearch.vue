@@ -23,16 +23,31 @@
       :loading="loading"
       single-line
       variant="solo-filled"
+      :menu-props="menuProps"
       @click:clear="nodeGroupPicked = null"
     >
+      <!-- The name is written as a child element rather than handed over as
+           the `title` prop, because Vuetify clips `.v-list-item-title` to one
+           line with an ellipsis and half the index is register names 90
+           characters long - every hospital's row read „SAMODZIELNY PUBLICZNY
+           ZAKŁAD OPIEKI ZDROWOTNEJ WOJEWÓDZKI SZPITAL…”, which tells two of
+           them apart in no way at all. `itemProps` still carries `title`, so it
+           is dropped here: left in, VListItem renders its own title element too
+           and the name appears twice. The subtitle follows for the same reason
+           - as a prop it would render above the name, not under it. -->
       <template #item="{ props: itemProps, item }">
         <v-list-item
           v-bind="itemProps"
-          :subtitle="item.raw?.subtitle"
-          :title="item.raw.title"
-          max-width="400px"
+          :title="undefined"
           :prepend-icon="item.raw.icon"
-        />
+        >
+          <v-list-item-title class="text-wrap">
+            {{ item.raw.title }}
+          </v-list-item-title>
+          <v-list-item-subtitle v-if="item.raw?.subtitle" class="text-wrap">
+            {{ item.raw.subtitle }}
+          </v-list-item-subtitle>
+        </v-list-item>
       </template>
       <template #no-data>
         <v-list-item v-if="!search">
@@ -102,6 +117,14 @@ const props = defineProps<{
   width?: string;
 }>();
 const { width = "300px" } = props;
+
+/** How wide the results menu may get.
+ *
+ * The menu is at least as wide as the field, and with the rows wrapping rather
+ * than clipped it would otherwise stretch to whatever the viewport allows - a
+ * full-width sheet hanging off a 300px field. 520px is a 90-character register
+ * name in two lines, and on a phone the overlay clamps to the viewport anyway. */
+const menuProps = { maxWidth: 520 };
 
 const loading = ref(false);
 const search = ref();
