@@ -48,34 +48,32 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
-    id: "rocznice-pracy-w-instytucjach-publicznych",
-    title: "Rocznice pracy w instytucjach publicznych",
+    id: "okragly-staz-w-instytucjach-publicznych",
+    title: "Okrągły staż w instytucjach publicznych",
     description:
-      "Nowa strona /eksploruj/rocznice pokazuje, komu z opublikowanych osób " +
-      "wypada rocznica objęcia stanowiska: miesiąc wstecz i miesiąc naprzód. " +
-      "Przełącznik na górze wybiera połowę okna - „Nadchodzące” (domyślnie) " +
-      "albo „Minione” - i obie zaczynają się od dnia najbliższego dzisiaj. " +
-      "Jedna wspólna lista kalendarzowa tego nie dawała: rocznic w oknie jest " +
-      "kilkaset, więc pierwsza nadchodząca leżała dziewięć stron niżej. " +
-      "Każda karta " +
-      "mówi, która to rocznica i jaki jest łączny staż tej osoby - suma lat " +
-      "we wszystkich instytucjach publicznych, ta sama liczba, którą pokazuje " +
-      "kolumna „Lata pracy”. Liczymy tylko miejsca, o których wiemy, że " +
-      "należą do sektora publicznego, i pomijamy rady społeczne szpitali, bo " +
-      "za zasiadanie w nich nikt nie płaci - więc staż i rocznica mówią to " +
-      "samo. Wygląd i przewijanie są takie jak w „Ostatnich zatrudnieniach” " +
-      "na stronie głównej.",
+      "Nowa strona /eksploruj/staz pokazuje, komu łączny staż w instytucjach " +
+      "publicznych wypada równo - 10 lat, 15 lat, 24 lata - w tym miesiącu " +
+      "wstecz albo naprzód. To nie jest rocznica objęcia jednego stanowiska: " +
+      "sumujemy wszystkie posady, więc równoległe liczą się raz, a przerwy w " +
+      "karierze przesuwają datę na później. Ktoś, kto zaczął w 2010, miał " +
+      "trzy lata przerwy i wrócił, osiąga dziesięć lat pracy w 2023, a nie w " +
+      "2020. Przełącznik „Nadchodzące / Minione” wybiera połowę okna, obie " +
+      "zaczynają się od dnia najbliższego dzisiaj. Liczymy tylko " +
+      "opublikowane strony i tylko miejsca, o których wiemy, że należą do " +
+      "sektora publicznego; pomijamy rady społeczne szpitali, bo za " +
+      "zasiadanie w nich nikt nie płaci. Wygląd i przewijanie są takie jak w " +
+      "„Ostatnich zatrudnieniach” na stronie głównej.",
     steps: [
-      "Wejdź na /eksploruj/rocznice: ma być siatka kart, na desktopie dwie kolumny, przełącznik „Nadchodzące / Minione” z liczbami przy obu i podpis z liczbą rocznic w wybranej połowie.",
-      "Pierwsza karta ma być z dzisiaj albo z najbliższych dni („dzisiaj”, „jutro”, „za 3 dni”) - z zieloną belką z lewej i wyróżnioną datą. Nadchodzących nie trzeba szukać przewijaniem.",
-      "Kliknij „Minione”: lista ma się przeładować i zacząć od „wczoraj” albo najbliższego dnia wstecz, belki z lewej mają być szare, a w adresie ma się pojawić ?zakres=minione. Wróć na „Nadchodzące” - parametr znika.",
-      "Odśwież stronę z ?zakres=minione w adresie: ma zostać na minionych.",
-      "Przewiń w dół: dwie kolejne strony mają doładować się same, potem pojawia się przycisk „Pokaż więcej rocznic”. Po przełączeniu połowy licznik startuje od nowa - znów dwie strony same.",
-      "Na karcie mają być dwie różne liczby: „N. rocznica” przy nazwisku (ta jedna posada) i „łącznie N lat pracy” na dole (cały staż). Żadna z nich nie może mieć kropki dziesiętnej.",
-      "Kliknij kartę - ma prowadzić na stronę osoby, a data rozpoczęcia z dymka nad „N. rocznica” ma się zgadzać z zatrudnieniem na tej stronie.",
-      "Link „Rocznice pracy” jest w stopce, w sekcji „O projekcie”.",
+      "Wejdź na /eksploruj/staz: ma być siatka kart, na desktopie dwie kolumny, przełącznik „Nadchodzące / Minione” z liczbami przy obu i podpis w rodzaju „26 osób z okrągłym stażem w najbliższym miesiącu”.",
+      "Pierwsza karta ma być z dzisiaj albo z najbliższych dni - zielona belka z lewej i wyróżniona data. Ma tam być też zdanie, że daty w przyszłości zakładają pozostanie na stanowisku.",
+      "Na karcie: „N lat pracy” przy nazwisku (łączny staż, nie staż na tym jednym stanowisku), stanowisko zajmowane tego dnia, i chip „w N instytucjach”. Liczba lat ma być całkowita.",
+      "Znajdź kartę z chipem „z N okresów” - to osoba z przerwą w karierze. Wejdź na jej stronę i sprawdź, że data na karcie jest późniejsza niż rocznica pierwszego zatrudnienia, mniej więcej o długość przerwy.",
+      "Kliknij „Minione”: lista ma się przeładować i zacząć od „wczoraj” albo najbliższego dnia wstecz, belki mają być szare, a w adresie ma się pojawić ?zakres=minione. Wróć na „Nadchodzące” - parametr znika.",
+      "Przewiń w dół: dwie kolejne strony mają doładować się same, potem pojawia się przycisk „Pokaż więcej”. Po przełączeniu połowy licznik startuje od nowa.",
+      "Nikt nie może pojawić się na liście dwa razy - kolejne okrągłe staże dzieli rok przepracowany, więc w oknie dwóch miesięcy mieści się najwyżej jeden.",
+      "Link „Okrągły staż” jest w stopce, w sekcji „O projekcie”.",
     ],
-    link: "/eksploruj/rocznice",
+    link: "/eksploruj/staz",
     area: "public",
   },
   {
