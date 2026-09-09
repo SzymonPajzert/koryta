@@ -67,7 +67,7 @@
           <v-tab value="parties">Partie</v-tab>
         </v-tabs>
 
-        <CardPeopleList :region="region" />
+        <CardPeopleList :region="region" :panel="tab" />
       </v-col>
     </v-row>
   </v-container>
