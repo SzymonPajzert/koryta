@@ -48,6 +48,96 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "ocena-faktow-na-stronie-osoby",
+    title: "Fakty można oceniać od razu na stronie osoby",
+    description:
+      "Karty w sekcji „Fakty z artykułów” dostały te same trzy przyciski " +
+      "oceny co kolejka /ekstrakcje - Niepoprawny, Za mało informacji, " +
+      "Poprawny - więc kogoś, kogo interesuje jedna osoba, nie trzeba już " +
+      "odsyłać do kolejki. Pod spodem jest inny mechanizm niż na " +
+      "/ekstrakcje: pojedynczy zapis bez nasłuchu Firestore, bo ta sekcja " +
+      "montuje wszystkie karty naraz, a nie po kilka za rozwijaczem.",
+    steps: [
+      "Zaloguj się i wejdź na stronę osoby z dopasowanymi faktami (na seedzie: /osoba/anna-nowak-3).",
+      "Przy każdej karcie, w dolnym pasku, mają być trzy okrągłe przyciski: czerwony krzyżyk, żółty znak zapytania i zielony ptaszek.",
+      "Kliknij zielony ptaszek - ma się podświetlić (wypełnić) i zostać podświetlony.",
+      "Kliknij go drugi raz - podświetlenie ma zgasnąć (to cofnięcie oceny).",
+      "Kliknij żółty znak zapytania, a potem zielony ptaszek - ma zostać podświetlony tylko ptaszek, nie oba naraz.",
+      "Przycisk „To nie ta osoba” przy nazwisku ma nadal działać niezależnie od oceny.",
+      "Odśwież stronę po minucie (odpowiedź jest cache'owana 60 s) - oceniony fakt ma się nadal pokazywać jako oceniony.",
+    ],
+    link: "/osoba/anna-nowak-3",
+    area: "contributor",
+  },
+  {
+    id: "fakty-potwierdzone-na-gorze",
+    title: "Potwierdzone fakty na górze, reszta pod nimi i wyszarzona",
+    description:
+      "Sekcja „Fakty z artykułów” dzieli się teraz na dwa bloki: to, co " +
+      "czytelnicy potwierdzili, idzie na górę, a to, czego nikt jeszcze " +
+      "nie sprawdził (i to, co zakwestionowano), ląduje pod spodem na " +
+      "szarym tle. Każda karta, na której ktoś już głosował, ma dodatkowo " +
+      "mały znacznik z liczbą głosów - „Potwierdzony · 2 głosy”, " +
+      "„Zakwestionowany · 1 głos”; karta, na którą nikt nie głosował, nie " +
+      "pokazuje nic, żeby nie robić kolumny zer.",
+    steps: [
+      "Zaloguj się i wejdź na stronę osoby z kilkoma faktami (na seedzie: /osoba/anna-nowak-3).",
+      "Oceń jeden z faktów jako poprawny (zielony ptaszek) i odczekaj minutę - odpowiedź jest cache'owana 60 s.",
+      "Odśwież stronę: oceniony fakt ma być w bloku „POTWIERDZONE PRZEZ CZYTELNIKÓW” na górze, a reszta pod nagłówkiem „JESZCZE NIESPRAWDZONE”.",
+      "Karty w drugim bloku mają mieć szare tło, ale tekst cytatu ma dalej być czytelny.",
+      "Na potwierdzonej karcie ma być zielony znacznik „Potwierdzony · 1 głos”.",
+      "Jeśli żaden fakt nie jest jeszcze oceniony, nagłówków bloków ma nie być w ogóle - jedna zwykła lista, tak jak wcześniej.",
+    ],
+    link: "/osoba/anna-nowak-3",
+    area: "public",
+  },
+  {
+    id: "filtr-typu-faktow-na-stronie-osoby",
+    title: "Filtr typu faktów na stronie osoby",
+    description:
+      "Nad kartami w sekcji „Fakty z artykułów” pojawił się rządek chipów " +
+      "z typami faktów, które ta osoba faktycznie ma, i liczbą każdego z " +
+      "nich - dzięki temu można obejrzeć same relacje rodzinne albo samo " +
+      "zatrudnienie obok siebie. Filtrowanie dzieje się w przeglądarce, " +
+      "na już pobranych faktach, więc nie kosztuje ani jednego " +
+      "dodatkowego zapytania; rządek nie pokazuje się wcale, gdy " +
+      "wszystkie fakty są jednego typu.",
+    steps: [
+      "Zaloguj się i wejdź na stronę osoby, która ma fakty co najmniej dwóch typów (na seedzie: /osoba/anna-nowak-3 ma zatrudnienie i członkostwo partyjne).",
+      "Nad kartami ma być rządek chipów: „Wszystkie (N)”, a dalej np. „Zatrudnienie (1)”, „Członkostwo partyjne (1)”.",
+      "Kliknij chip „Członkostwo partyjne” - mają zostać tylko karty tego typu, a liczba w chipie ma się zgadzać z liczbą kart.",
+      "Kliknij „Wszystkie” - mają wrócić wszystkie karty.",
+      "Wejdź na stronę osoby, której wszystkie fakty są jednego typu - rządka chipów ma nie być w ogóle.",
+    ],
+    link: "/osoba/anna-nowak-3",
+    area: "public",
+  },
+  {
+    id: "link-do-cytatu-w-artykule",
+    title: "Link z cytatu częściej trafia w podświetlony fragment artykułu",
+    description:
+      "Link z cytatu na karcie faktu buduje teraz kilka zapasowych " +
+      "zaczepień zamiast jednego: obok całego zakresu „od-do” dokłada " +
+      "pojedyncze zdania cytatu, więc podświetlenie działa też tam, gdzie " +
+      "scraper skleił śródtytuł z akapitem (przypadek rmf24.pl) - " +
+      "fragment tekstu nie może przekroczyć granicy bloku i cały zakres " +
+      "przepadał po cichu. Dodatkowo cytat jest teraz czyszczony ze " +
+      "spacji przed przecinkiem i kropką, którą zostawia tokenizer " +
+      "potoku, a przy cytacie doszedł przycisk kopiowania - na wypadek " +
+      "gdy przeglądarka otworzy artykuł w karcie w tle (ctrl+klik) i w " +
+      "ogóle nie zastosuje podświetlenia.",
+    steps: [
+      "Zaloguj się i wejdź na stronę osoby z faktami albo na /ekstrakcje.",
+      "Najedź na blok z cytatem - w prawym górnym rogu ma się uwyraźnić przycisk kopiowania.",
+      "Podpis nad cytatem ma brzmieć „Zobacz cytat na <domena>”, a nie „Zobacz artykuł”.",
+      "Kliknij cytat zwykłym kliknięciem - artykuł ma się otworzyć w nowej karcie i przewinąć do podświetlonego fragmentu.",
+      "Kliknij cytat z ctrl (karta w tle) - jeśli przeglądarka nie podświetli fragmentu, kliknij przycisk kopiowania, przejdź do artykułu i wklej cytat w Ctrl+F: ma się znaleźć.",
+      "Ikona przycisku ma na dwie sekundy zmienić się w ptaszka po skopiowaniu.",
+    ],
+    link: "/ekstrakcje",
+    area: "contributor",
+  },
+  {
     id: "regulamin-i-polityka-to-dwie-strony",
     title: "„Polityka prywatności” pokazuje politykę, a nie regulamin",
     description:
@@ -1647,7 +1737,7 @@ export const QA_ITEMS: QaItem[] = [
       "Zaloguj się i wejdź na stronę osoby, która ma dopasowane fakty (na seedzie: /osoba/anna-nowak-3).",
       "Zjedź na dół, pod graf powiązań - ma być nagłówek „Fakty z artykułów” i karty faktów.",
       "Na szerokim ekranie karty mają stać po dwie w rzędzie, na wąskim jedna pod drugą.",
-      "Sprawdź, że karta ma przycisk „To nie ta osoba”, a nie ma przycisków oceny (Błędny/Nie wiem/Dobry) - ocenia się na /ekstrakcje.",
+      "Sprawdź, że karta ma przycisk „To nie ta osoba”. (Przyciski oceny doszły później - patrz „Fakty można oceniać od razu na stronie osoby”.)",
       "Wyloguj się i odśwież tę samą stronę - ma zostać nagłówek, zdanie „Znaleźliśmy N faktów…”, rozmazany podgląd i przycisk logowania.",
       "Otwórz źródło tej wylogowanej strony (Ctrl+U) i poszukaj treści faktu - nie ma go tam być.",
       "Kliknij „Zaloguj się lub załóż konto” i zaloguj się - ma cię odesłać z powrotem na stronę tej samej osoby, już z faktami.",

@@ -61,8 +61,10 @@ test("a signed in reader gets the cards, two to a row", async ({ page }) => {
   const graph = await page.locator("[data-testid='graph-panel']").boundingBox();
   expect((await section.boundingBox())!.y).toBeGreaterThan(graph!.y);
 
-  // The flag stays (a single write); the vote buttons do not (a subscription
-  // each, and this section mounts every card at once).
+  // Both controls are single writes now. The flag always was; judging a fact
+  // arrived here as `ExtractionQuickVerdict`, which writes once with
+  // `castVoteOnce` and opens no Firestore listener - a subscription per card
+  // is what had kept vote UI off a section that mounts every card at once.
   //
   // Either label, because both are that one control: `extraction_person_match`
   // runs first, flags `seed-open-party` and takes it back, and the taking back
@@ -75,7 +77,14 @@ test("a signed in reader gets the cards, two to a row", async ({ page }) => {
       name: /To nie ta osoba|Zgłoszono złe dopasowanie/,
     }),
   ).toBeVisible();
-  await expect(section.locator(".extraction-actions")).toHaveCount(0);
+  // One actions row per seeded card, and the three verdicts in it - this is
+  // the whole of what "let me judge a fact where it stands" asked for.
+  await expect(section.locator(".extraction-actions")).toHaveCount(2);
+  await expect(
+    // `exact`, because the role name match is a substring by default and
+    // "Niepoprawny fakt" ends in this one.
+    cards.first().getByRole("button", { name: "Poprawny fakt", exact: true }),
+  ).toBeVisible();
 
   // The locked state must be gone once there is somebody to show them to.
   await expect(
