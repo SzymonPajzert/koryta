@@ -30,7 +30,13 @@
           <v-icon :icon="entityIcon(edge.richNode.type)" />
         </template>
 
-        <v-list-item-title class="text-subtitle-2 font-weight-bold text-wrap">
+        <!-- `title` because the phone clamps this to two lines: a registry
+             name runs to sixty characters and the ellipsis has to leave the
+             full one somewhere. -->
+        <v-list-item-title
+          class="text-subtitle-2 font-weight-bold text-wrap"
+          :title="edge.richNode.name"
+        >
           {{ edge.richNode.name }}
         </v-list-item-title>
 
@@ -46,6 +52,16 @@
             {{ committeeOf(edge) }}
           </span>
           <ChipPublicCompany :company="asCompany(edge)" />
+          <!-- Last, where the bar sits on a wide screen. On a phone the bar is
+               a 200px track in a 210px column, clipped at both ends, and the
+               dates it captions are the only part of it that survives the
+               width - so below md the row prints them and drops the track. -->
+          <span
+            v-if="isDated(edge)"
+            class="d-md-none text-caption text-medium-emphasis"
+          >
+            {{ relationPeriodLabel(edge.start_date, edge.end_date) }}
+          </span>
         </div>
 
         <!-- Who sat here before. A `v-for` over nought or one so the lookup is
@@ -89,15 +105,6 @@
           <span class="history-row__rail-gap">
             {{ gapLabel(predecessor.gapDays) }}
           </span>
-        </div>
-
-        <div v-if="isDated(edge)" class="d-md-none mt-2 pb-2">
-          <ChipRelativeDuration
-            :start="edge.start_date"
-            :end="edge.end_date"
-            :min-start="minStart"
-            :max-end="maxEnd"
-          />
         </div>
 
         <template #append>
@@ -188,6 +195,7 @@ import {
   mdiTrashCanOutline,
 } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
 import type { Company } from "~~/shared/model";
@@ -413,5 +421,31 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
   font-size: 0.6875rem;
   line-height: 1.6;
   padding: 0 6px;
+}
+
+/* ---- on a phone ---- */
+
+/* Five relations used to fill a whole screen, because a 375px row leaves the
+   text about 210px and spends every one of them wrapping. Both rules here buy
+   that width back rather than shrinking the type. */
+@media (max-width: 599.98px) {
+  /* 56px of the row goes on an icon that says „this leads to a company" - which
+     the company name below it says already. Kept above sm, where it is the one
+     thing telling an employment row from a candidacy at a glance and the width
+     is free. Hiding the slot collapses its grid column, spacer and all. */
+  .history-row :deep(.v-list-item__prepend) {
+    display: none;
+  }
+
+  /* Two lines and an ellipsis: a registry name runs to sixty characters, and
+     wrapping one costs more of the screen than the rest of the row together.
+     The `title` attribute on the element keeps the whole name reachable. */
+  .history-row :deep(.v-list-item-title) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.3;
+  }
 }
 </style>
