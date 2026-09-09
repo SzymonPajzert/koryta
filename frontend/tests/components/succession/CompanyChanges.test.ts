@@ -221,6 +221,39 @@ describe("SuccessionCompanyChanges", () => {
     expect(composition.text()).toContain("Krzysztof Durkalec");
   });
 
+  it("orders a board appointed on one day by name, whatever order it arrives in", async () => {
+    // A board appointed in one resolution shares a start date to the day, so
+    // the date alone cannot order it. `sort` is stable, so before this the
+    // order was whatever the endpoint happened to return - and the mobile
+    // `instytucja-strona` baseline settled into one of two orderings run to
+    // run, failing on whichever it had not recorded by the same 13,220 pixels.
+    const names = ["Danuta Obejmująca", "Cezary Obejmujący"];
+    const seen: string[][] = [];
+
+    for (const order of [names, [...names].reverse()]) {
+      response = {
+        successions: [],
+        current: order.map((name) => post(name, { role: "Rada Nadzorcza" })),
+        hidden: 0,
+      };
+
+      const wrapper = await mountChanges();
+      // By where each name falls in the rendered text rather than by a class:
+      // the only thing under test is which of the two comes first, and this
+      // fixture gives the section nothing else to say (no predecessors).
+      const text = wrapper.get('[data-testid="successions-current"]').text();
+      seen.push(names.map((name) => String(text.indexOf(name))));
+      expect(text).toContain("Cezary Obejmujący");
+      expect(text).toContain("Danuta Obejmująca");
+    }
+
+    // Cezary above Danuta - alphabetical in Polish collation - and the same
+    // whichever order the endpoint listed them in.
+    for (const positions of seen) {
+      expect(Number(positions[1])).toBeLessThan(Number(positions[0]));
+    }
+  });
+
   it("says nobody holds an open post rather than heading an empty grid", async () => {
     response = {
       successions: turnover("2024-04-12", [
