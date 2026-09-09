@@ -262,14 +262,21 @@
               </v-tooltip>
             </span>
           </div>
-          <!-- Two facts, two icons, no label. „Ostatnie zatrudnienie:” put
-               twenty-one characters of prose in front of the only date in the
-               cell and then joined it to the years of work with a „·”, as if
-               the two were the same kind of thing - one is when the newest job
-               started, the other is a total over a career. A calendar and a
-               briefcase say which is which in 13px apiece, which is what
-               leaves both of them on a 390px row, and the `title` carries the
-               words for anybody who needs them.
+          <!-- Two facts, two icons, and from md up the date says in words
+               which fact it is. Cutting the label was a width decision -
+               „Ostatnie zatrudnienie:” put twenty-one characters of prose in
+               front of the only date in the cell - but a reader then took the
+               bare „od lipca 2026” for something about the row as a whole
+               rather than for the start of its newest job, which is the only
+               thing this pill has ever meant. The words are back at the
+               widths that have room for them, spelled the way the column's
+               own sort menu spells them (`EMPLOYMENT_SORT_OPTIONS`), and a
+               390px row - the width that forced the cut - still gets the icon
+               and the `title` alone.
+               The two are not joined by a „·”, as if they were the same kind
+               of thing - one is when the newest job started, the other is a
+               total over a career. A calendar and a briefcase say which is
+               which in 13px apiece.
                `mdiCalendarBlankOutline` is the icon card/Employment.vue
                already puts in front of an employment date, so this is the
                site's existing sign for "this is when the job ran" rather than
@@ -290,6 +297,7 @@
               :title="employmentStartTitle(item)"
             >
               <v-icon :icon="mdiCalendarBlankOutline" size="13" />
+              <span class="d-none d-md-inline">Ostatnie zatrudnienie</span>
               {{ employmentStartLabel(item) }}
             </span>
             <span
@@ -749,6 +757,13 @@ a.person-name:focus-visible {
   gap: 4px;
   padding: 1px 6px;
   white-space: nowrap;
+  /* `nowrap` keeps „od marca 2019” from breaking across lines; the label in
+   * front of it must not be held to the same unit. Together they are a third
+   * of the cell's width, and a nowrap pill that long is a floor the whole
+   * table has to be laid out over - which is what tests/e2e/nowe_table_fits
+   * measures. Wrapping between the two costs a line only where the width was
+   * not there anyway. */
+  flex-wrap: wrap;
 }
 
 /* Which row the pointer is on, and the last thing painting a whole row: the
