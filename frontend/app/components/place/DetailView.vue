@@ -105,7 +105,7 @@
             @remove="openRemove"
           />
           <CardEmploymentHistory
-            :edges="edges"
+            :edges="historyEdges"
             :company="company"
             :can-add="canAddRelations"
             :can-cite="canAddRelations"
@@ -292,6 +292,25 @@ const owners = computed(() =>
 );
 const subsidiaries = computed(() =>
   targets.value.filter((e) => e.type === "owns" && e.richNode.type === "place"),
+);
+
+/** What "Historia powiązań" carries: the relations the two lists above have not
+ * already drawn. Every ownership edge used to appear on this page twice - once
+ * under „Właściciele" or „Spółki zależne", and again as a history row - so a
+ * company with a parent and ten subsidiaries printed all eleven, then printed
+ * the same eleven underneath.
+ *
+ * Excluding exactly what was rendered, rather than filtering the history by
+ * type: `subsidiaries` only takes an outgoing `owns` whose far end is a place,
+ * so dropping `owns` wholesale would take an outgoing `owns` to something that
+ * is not a place off the page altogether. Identity works as the key because
+ * both lists and `edges` read the same cached `sources`/`targets` computeds
+ * from `useEdges`, so they hold the same objects. */
+const listedAbove = computed(
+  () => new Set([...owners.value, ...subsidiaries.value]),
+);
+const historyEdges = computed(() =>
+  edges.value.filter((e) => !listedAbove.value.has(e)),
 );
 
 /** Where the institution sits, read off the region that owns it.
