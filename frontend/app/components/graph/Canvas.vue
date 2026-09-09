@@ -58,6 +58,19 @@
         />
       </g>
     </template>
+
+    <!-- v-network-graph only mounts its label layer when this slot is present
+         (`"edge-label" in $slots`), so the `v-if` is what makes "off" cost
+         nothing rather than draw empty text on every line. That is also why
+         the `edge.label` config beside EDGE_STYLE had no effect until now. -->
+    <template v-if="edgeLabels" #edge-label="slotProps">
+      <v-edge-label
+        v-bind="slotProps"
+        :text="edgeText(slotProps.edge)"
+        align="center"
+        vertical-align="above"
+      />
+    </template>
   </v-network-graph>
 
   <div v-else class="d-flex justify-center" width="100%">
@@ -93,6 +106,9 @@ const props = defineProps<{
   edges: Edge[];
   ready: boolean;
   focusNodeId?: string;
+  /** Draw what kind of relation each line is, along the line. Off unless the
+   * reader asked for it on the bar above. */
+  edgeLabels?: boolean;
 }>();
 
 const simulationStore = useSimulationStore();
@@ -229,6 +245,17 @@ const EDGE_STYLE: Record<Edge["type"], EdgeStyle> = {
   comment: ASIDE,
   tagged: ASIDE,
 };
+
+/** What a line says when the labels are switched on.
+ *
+ * `edge.label` and not a table of our own: `shared/graph/util.ts` already
+ * settles this as `edge.name ?? edgeLabel[edge.type]`, so a relation somebody
+ * named - an employment's job title - says that, and an unnamed one falls back
+ * to the same word the rest of the site uses for its kind. A second table here
+ * would be a second answer to the same question. */
+function edgeText(edge: Edge): string {
+  return edge.label ?? "";
+}
 
 /** Falls back to the acquaintance style. The table above is exhaustive over the
  * declared union, but the type is read straight off a firestore document, and a

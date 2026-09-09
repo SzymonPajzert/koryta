@@ -111,20 +111,35 @@ describe("GraphContainer unit tests", () => {
     expect(swatches).toContain("#D40E20");
   });
 
-  it("folds the legend away and back", async () => {
+  it("stands the legend in the bar with nothing to fold it away", async () => {
     const component = await mountSuspended(Container, {
       global: { plugins: [vuetify], stubs: { GraphCanvas: true } },
       props: { focusNodeId: "1" },
     });
 
-    const toggle = component.get('[data-testid="graph-legend-toggle"]');
-
     expect(component.find('[data-testid="graph-legend"]').exists()).toBe(true);
-    await toggle.trigger("click");
-    expect(component.find('[data-testid="graph-legend"]').exists()).toBe(false);
-    expect(component.text()).toContain("Legenda");
+    // The fold button defaulted to open and reset to open on every fresh
+    // document, so it never bought back the room it promised.
+    expect(component.find('[data-testid="graph-legend-toggle"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("asks the canvas for edge labels only once the reader does", async () => {
+    const component = await mountSuspended(Container, {
+      global: { plugins: [vuetify], stubs: { GraphCanvas: true } },
+      props: { focusNodeId: "1" },
+    });
+
+    const canvas = component.findComponent({ name: "GraphCanvas" });
+    const toggle = component.get('[data-testid="graph-edge-labels-toggle"]');
+
+    // Off to begin with: at two hops there are more labels than there is room.
+    expect(canvas.props("edgeLabels")).toBe(false);
+    expect(toggle.text()).toContain("Opisy powiązań");
 
     await toggle.trigger("click");
-    expect(component.find('[data-testid="graph-legend"]').exists()).toBe(true);
+    expect(canvas.props("edgeLabels")).toBe(true);
+    expect(toggle.text()).toContain("Ukryj opisy");
   });
 });

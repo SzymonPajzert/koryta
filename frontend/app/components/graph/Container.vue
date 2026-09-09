@@ -1,61 +1,37 @@
 <template>
   <div class="graph-panel" data-testid="graph-panel">
     <div class="graph-panel__bar">
-      <div class="graph-panel__legendbox">
-        <!-- Closable, because with the party colours in it this is the longest
-             thing on the bar, and a reader who has already learnt them wants
-             the room back rather than the lesson again on every page. -->
-        <v-btn
-          class="text-none"
-          data-testid="graph-legend-toggle"
-          size="small"
-          variant="text"
-          density="comfortable"
-          :append-icon="legendOpen ? mdiChevronUp : mdiChevronDown"
-          :aria-expanded="legendOpen"
-          aria-controls="graph-legend"
-          :text="legendOpen ? 'Ukryj legendę' : 'Legenda'"
-          @click="legendOpen = !legendOpen"
-        />
-
-        <ul
-          v-if="legendOpen"
-          id="graph-legend"
-          class="graph-panel__legend"
-          data-testid="graph-legend"
-        >
-          <li v-for="item in legend" :key="item.key" class="graph-panel__key">
-            <svg
-              class="graph-panel__swatch"
-              viewBox="-12 -12 24 24"
-              width="17"
-              height="17"
-              aria-hidden="true"
-            >
-              <circle
-                v-if="item.shape === 'circle'"
-                r="11"
-                :fill="item.color"
-              />
-              <rect
-                v-else
-                x="-11"
-                y="-9"
-                width="22"
-                height="18"
-                rx="3"
-                :fill="item.color"
-              />
-              <path
-                :d="entityGlyph(item.entity)"
-                :fill="readableInk(item.color)"
-                transform="translate(-6.5 -6.5) scale(0.542)"
-              />
-            </svg>
-            {{ item.label }}
-          </li>
-        </ul>
-      </div>
+      <!-- No fold button. It defaulted to open and reset to open on every fresh
+           document, so it never bought a returning reader the room it promised
+           - it was one more control to read on the way to the graph. -->
+      <ul class="graph-panel__legend" data-testid="graph-legend">
+        <li v-for="item in legend" :key="item.key" class="graph-panel__key">
+          <svg
+            class="graph-panel__swatch"
+            viewBox="-12 -12 24 24"
+            width="17"
+            height="17"
+            aria-hidden="true"
+          >
+            <circle v-if="item.shape === 'circle'" r="11" :fill="item.color" />
+            <rect
+              v-else
+              x="-11"
+              y="-9"
+              width="22"
+              height="18"
+              rx="3"
+              :fill="item.color"
+            />
+            <path
+              :d="entityGlyph(item.entity)"
+              :fill="readableInk(item.color)"
+              transform="translate(-6.5 -6.5) scale(0.542)"
+            />
+          </svg>
+          {{ item.label }}
+        </li>
+      </ul>
 
       <div class="graph-panel__controls">
         <v-btn
@@ -66,6 +42,22 @@
           aria-label="Dopasuj widok"
           title="Dopasuj widok"
           @click="canvas?.fitView?.()"
+        />
+        <!-- Off by default: at two hops there are more labels than there is
+             room for them, and the colours and dashes already say which kind
+             of relation a line is. This is for the reader who wants it
+             spelled out. -->
+        <v-btn
+          class="text-none"
+          data-testid="graph-edge-labels-toggle"
+          size="small"
+          variant="text"
+          density="comfortable"
+          :prepend-icon="mdiTagTextOutline"
+          :color="edgeLabels ? 'primary' : undefined"
+          :aria-pressed="edgeLabels"
+          :text="edgeLabels ? 'Ukryj opisy' : 'Opisy powiązań'"
+          @click="edgeLabels = !edgeLabels"
         />
         <!-- Only a neighbourhood has a reach to choose. A topic's or an
              article's layout is the whole story it was asked for. -->
@@ -90,6 +82,7 @@
         :edges="edgesFiltered || []"
         :ready="ready"
         :focus-node-id="focusNodeId"
+        :edge-labels="edgeLabels"
         @select="selectedId = $event"
       />
     </div>
@@ -135,10 +128,9 @@
 import { ref } from "vue";
 import {
   mdiArrowRight,
-  mdiChevronDown,
-  mdiChevronUp,
   mdiFitToScreenOutline,
   mdiPlusCircleOutline,
+  mdiTagTextOutline,
 } from "@mdi/js";
 import { useGraph } from "~/composables/graph";
 import { entityGlyph } from "~/utils/entityIcon";
@@ -197,10 +189,12 @@ const { nodesFiltered, edgesFiltered, ready, omitted } = useGraph({
   expandedNodes,
 });
 
-/** Whether the legend is unfolded. Shared state rather than a plain ref, so
- * that closing it holds while the reader moves between pages that draw a graph
- * instead of springing open again on every navigation. */
-const legendOpen = useState("graph-legend-open", () => true);
+/** Whether each line says what kind of relation it is. Off by default: at two
+ * hops there are more labels than there is room for, and the colours and dashes
+ * already separate the kinds. Shared state rather than a plain ref, so a reader
+ * who turned them on keeps them on while moving between pages that draw a
+ * graph, instead of having to ask again on every navigation. */
+const edgeLabels = useState("graph-edge-labels", () => false);
 
 /** The party colours standing on the canvas right now, in the order
  * `shared/misc` lists the parties.
@@ -319,16 +313,6 @@ const selectedHref = computed(() => {
   min-height: 40px;
 }
 
-.graph-panel__legendbox {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  /* The legend is the half of the bar that grows; the controls keep the width
-     their buttons need. */
-  flex: 1 1 auto;
-}
-
 .graph-panel__legend {
   display: flex;
   align-items: center;
@@ -337,6 +321,9 @@ const selectedHref = computed(() => {
   list-style: none;
   padding: 0;
   margin: 0;
+  /* The legend is the half of the bar that grows; the controls keep the width
+     their buttons need. */
+  flex: 1 1 auto;
 }
 
 .graph-panel__key {
