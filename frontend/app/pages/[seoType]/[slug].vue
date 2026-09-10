@@ -48,6 +48,19 @@ if (status.value === "success" && data.value?.node?.name) {
       await navigateTo(expectedUrl, { replace: true });
     }
   }
+} else if (status.value === "error" && import.meta.server) {
+  // Say 404 in the status line, not only in the heading.
+  //
+  // `/api/nodes/:id` throws 404 both for an id that resolves to nothing and for
+  // a page nobody has published, and the detail views render "Strona
+  // nieznaleziona" for either - but the response went out as 200, carrying a
+  // canonical pointing at itself. That is a soft 404: Google files the url as a
+  // real page and keeps recrawling it. A lowercased document id is the way to
+  // reach one by accident, and Search Console had them.
+  //
+  // Server only. On the client the navigation has already happened and there is
+  // no status line left to set; the view says the same thing either way.
+  setResponseStatus(useRequestEvent()!, 404);
 }
 
 // The head is EntityDetailView's - it is the one that knows whether the node
