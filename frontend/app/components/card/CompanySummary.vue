@@ -100,12 +100,20 @@
         </DialogProposeEditNode>
       </div>
 
+      <!-- `flex-1-1-100`, not `w-100`: Vuetify gives `.v-alert` `flex: 1 1`,
+           so its flex basis is 0 whatever `width` says, and `overflow: hidden`
+           makes it a scroll container - which zeroes its automatic minimum
+           size too. Both together mean it never breaks onto its own line: it
+           stayed on the buttons' row and grew into whatever was left of it,
+           which was one word wide, so "Zaproponowano zmianę" wrapped four
+           characters at a time and stretched the card. A 100% basis is what
+           actually makes it wrap. -->
       <v-alert
         v-if="submittedRevisionId && previewUrl"
         type="info"
         variant="tonal"
         density="compact"
-        class="w-100"
+        class="flex-1-1-100"
         data-testid="propose-confirmation"
       >
         {{
