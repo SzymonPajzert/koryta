@@ -120,21 +120,51 @@ export function wantsLatest(event: H3Event): boolean {
  * /api/graph/local/[id] hand-rolled this first and says the same thing in its
  * own words; anything new should reach for this instead. Logged out traffic,
  * which is nearly all of it, still gets the cache.
+ *
+ * `editorMaxAge` buys some of the cache back. `latest=true` was meant as an
+ * editor's escape hatch, but `authFetch` puts it on *every* request a signed in
+ * reader makes (app/composables/auth.ts), so for anyone logged in the hatch is
+ * permanently open and none of these handlers is ever cached at all. That cost
+ * 111,000 Firestore reads in a 28 hour sample, most of it one person browsing.
+ *
+ * Set it on a handler where `latest` means "count the drafts too" rather than
+ * "show me the row I just wrote": an aggregate over the whole corpus does not
+ * visibly move when its author saves one edge, so serving it from a few minutes
+ * ago is not the failure the paragraph above describes. Leave it unset - the
+ * default - anywhere an editor reads back their own write, which is most
+ * places. The editor's answer is cached under its own key either way, because
+ * `latest=true` is part of the request URL nitro keys on, so it never collides
+ * with the approved-only one the public gets.
  */
 export function editorFreshCachedEventHandler<T>(
   handler: EventHandler<EventHandlerRequest, Promise<T>>,
-  options = {},
+  options: { editorMaxAge?: number } & Record<string, unknown> = {},
 ) {
-  const cachedHandler = authCachedEventHandler(handler, options);
+  const { editorMaxAge, ...cacheOptions } = options;
+  const cachedHandler = authCachedEventHandler(handler, cacheOptions);
+  const editorHandler = editorMaxAge
+    ? defineCachedEventHandler(handler, {
+        ...cacheOptions,
+        swr: true,
+        maxAge: editorMaxAge,
+      })
+    : undefined;
 
   return defineEventHandler(async (event: H3Event) => {
     if (wantsLatest(event)) {
+      // `no-store` either way, and set after the handler has resolved so that
+      // the `s-maxage` a cached handler emits does not survive it. The server
+      // side cache is ours to drop - every write path clears `nitro:handlers` -
+      // and Cloud CDN's copy is not, so an editor's answer must never reach it.
+      const result = editorHandler
+        ? await editorHandler(event)
+        : await handler(event);
       setResponseHeader(
         event,
         "Cache-Control",
         "no-store, no-cache, must-revalidate",
       );
-      return handler(event);
+      return result;
     }
     return cachedHandler(event);
   });
