@@ -30,6 +30,7 @@
     "test:playwright:ci": "node -e \"fs.rmSync('.nuxt/cache/nitro',{recursive:true,force:true})\" && cross-env PLAYWRIGHT_SERVER_COMMAND='npm run dev:build' playwright test --project=chromium",
     "test": "npm run test:ci && npm run test:e2e",
     "check:duplication": "jscpd app server --ignore app/coverage",
+    "check:progress-counts": "firebase emulators:exec --project demo-koryta-pl --only firestore \"npx tsx scripts/check-progress-counts.ts\"",
     "check:firestore-logging": "firebase emulators:exec --project demo-koryta-pl --only firestore \"npx tsx scripts/check-firestore-logging.ts\"",
     "quick-check": "npx prettier --write . && npx prettier --check . && npm run test:ci && npm run typecheck && npx eslint && npm run check:duplication && npm run test:playwright:ci",
     "quick-check:failsafe": "npx prettier --write . || true && npx prettier --check . || true && npm run test:ci || true && npm run typecheck || true && npx eslint || true && npm run check:duplication || true && npm run test:playwright:ci || true"
