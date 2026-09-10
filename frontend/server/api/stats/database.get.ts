@@ -159,7 +159,14 @@ export default defineCachedEventHandler(
       comments: commentCount,
     };
   },
-  { name: "stats-database", maxAge: 600, swr: true },
+  // Six hours, up from ten minutes. This is a census of the whole database -
+  // every person, every note, every vote read - and it was 325,248 Firestore
+  // reads in 28 hours across 106 calls, 16% of everything the site read. The
+  // page it feeds is a snapshot of a corpus that a day's crawling moves by
+  // fractions of a percent, and `generatedAt` is in the response precisely so
+  // that it can say how old the numbers are. Nobody is waiting on this the way
+  // they wait on a page they just edited.
+  { name: "stats-database", maxAge: 21600, swr: true },
 );
 
 async function count(query: Query): Promise<number> {

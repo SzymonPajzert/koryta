@@ -218,4 +218,18 @@ export default editorFreshCachedEventHandler(
       wojewodztwoNames,
     });
   },
+  {
+    // Five minutes for a signed in reader, rather than nothing at all. This was
+    // 47,056 Firestore reads in 28 hours across 272 `latest=true` calls - one
+    // person reloading /eksploruj/szpitale, paying a scan of every place, every
+    // hospital edge and every person on it each time, because `authFetch` marks
+    // every request an editor makes as wanting the latest.
+    //
+    // The publish-and-reload case the note above is about still works: every
+    // write path clears `nitro:handlers`, so the answer an admin is owed is
+    // recomputed the moment they publish rather than waiting out this maxAge.
+    // What it stops is the *second* identical load, which no write separates
+    // from the first.
+    editorMaxAge: 300,
+  },
 );

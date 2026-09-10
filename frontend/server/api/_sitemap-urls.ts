@@ -24,24 +24,40 @@ import { type NodeType, pageIsPublic } from "~~/shared/model";
  */
 const SITEMAP_NODE_TYPES: readonly NodeType[] = ["person", "article", "place"];
 
-export default defineEventHandler(async () => {
-  const urls: { loc: string; lastmod?: string }[] = [];
+/** Six hours because this reads every person and every article node - 4,919
+ * documents a call, measured - and it is crawlers that ask for it. Uncached it
+ * was 118,055 Firestore reads in 28 hours across 24 requests, 6% of everything
+ * the site read, to answer a question whose answer changes when somebody
+ * publishes a page and at no other time.
+ *
+ * `fetchNodes` has an hour-long cache of its own, but only per Cloud Run
+ * instance, and a sitemap fetch is exactly the request most likely to land on
+ * a cold one. */
+export default defineCachedEventHandler(
+  async () => {
+    const urls: { loc: string; lastmod?: string }[] = [];
 
-  const nodesSnapshots = await Promise.all(
-    SITEMAP_NODE_TYPES.map((type) => fetchNodes(type)),
-  );
+    const nodesSnapshots = await Promise.all(
+      SITEMAP_NODE_TYPES.map((type) => fetchNodes(type)),
+    );
 
-  nodesSnapshots.forEach((nodesSnapshot) => {
-    Object.entries(nodesSnapshot).forEach(([id, data]) => {
-      if (pageIsPublic(data) && data.name) {
-        if (SITEMAP_NODE_TYPES.includes(data.type)) {
-          urls.push({
-            loc: generateEntityUrl(data.type, id, data.name),
-          });
+    nodesSnapshots.forEach((nodesSnapshot) => {
+      Object.entries(nodesSnapshot).forEach(([id, data]) => {
+        if (pageIsPublic(data) && data.name) {
+          if (SITEMAP_NODE_TYPES.includes(data.type)) {
+            urls.push({
+              loc: generateEntityUrl(data.type, id, data.name),
+            });
+          }
         }
-      }
+      });
     });
-  });
 
-  return urls;
-});
+    return urls;
+  },
+  {
+    name: "sitemap-urls",
+    maxAge: 21600,
+    swr: true,
+  },
+);
