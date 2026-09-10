@@ -109,13 +109,21 @@ export function generateNodeUrl(node: Node): string | undefined {
     case "place":
       return generateEntityUrl(node.type, node.id, node.name);
 
-    case "region": {
-      if (node.id == "teryt1261") {
-        return "/region/krakow-teryt1261";
-      }
-      const teryt = node.id.replace("teryt", "");
-      return `/eksploruj/tabela?teryt=${teryt}`;
-    }
+    // A region has a page of its own again.
+    //
+    // Every region but Krakow used to answer with `/eksploruj/tabela?teryt=…`
+    // instead, so the url `/region/<slug>-teryt…` only ever 302ed - into a page
+    // robots.txt disallows and that renders nothing server side. Google ranked
+    // the redirects anyway: `/region/powiat-polkowicki-teryt0216` drew 76
+    // impressions at position 4.43 in the three months to 2026-09-10, pointing
+    // at a destination it was never allowed to fetch.
+    //
+    // The generic region branch of `EntityDetailView` renders the relations a
+    // region actually has. It is not the statistics page Krakow gets - see
+    // `useRegionStatistics`, which is still mock data - so this makes the url
+    // honest rather than making the page rich.
+    case "region":
+      return generateEntityUrl(node.type, node.id, node.name);
 
     // A type the front end does not know about yet keeps whatever url it was
     // reached by, rather than being sent somewhere wrong.

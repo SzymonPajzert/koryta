@@ -42,6 +42,11 @@ test.describe("OmniSearch", () => {
 
     // Click the item
     await opoleItem.click();
+
+    // Straight to the table, and not to the region's own page even though
+    // regions have one now: `/api/search` answers a region with a `query`, so
+    // OmniSearch routes on that rather than on `generateNodeUrl`. Filtering
+    // the table is what somebody typing a region name is asking for.
     await expect(page).toHaveURL(/.*\/eksploruj\/tabela\?.*teryt=1661/);
 
     // Same as above: the region is named by its chip on the query bar, not by

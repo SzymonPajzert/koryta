@@ -3,15 +3,14 @@ import { type NodeType, pageIsPublic } from "~~/shared/model";
 
 /** Node types whose entity page renders a page of its own.
  *
- * `region` is deliberately absent. A region has no page of its own:
- * app/composables/slugs.ts `generateNodeUrl` sends every one to
- * `/eksploruj/tabela?teryt=...`, and app/pages/[seoType]/[slug].vue then
- * redirects there on the server - so listing them advertised URLs that exist
- * only to bounce a crawler into the heaviest response on the site, and one
- * robots.txt blocks besides. None of them could ever rank, because the page
- * they land on renders no markup. The one region with a real page, teryt1261,
- * is reachable from the homepage and from the explore table, so dropping the
- * type here does not hide it.
+ * `region` is deliberately absent, and no longer because it has no page - as
+ * of this commit every region renders one. It is absent because most of them
+ * would be thin: over a 60-region sample of the 1,389 published on 2026-09-10
+ * the median region had 2 relations and 68% had three or fewer. Advertising
+ * 1,389 near-empty pages is how a site ends up in "Strona zeskanowana, ale
+ * jeszcze nie zindeksowana", which already holds 235 urls. The handful that
+ * are substantial - a wojewodztwo, a city like Warszawa with 758 - Google
+ * already finds and already ranks, which is the whole reason the page exists.
  *
  * `place` was absent for the same reason until 2026-08-26, when companies got
  * their page back, and then stayed absent because putting the URLs in was a

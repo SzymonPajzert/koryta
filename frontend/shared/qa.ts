@@ -48,6 +48,25 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "strony-regionow",
+    title: "Każdy region ma własną stronę",
+    description:
+      "Adres w rodzaju /region/powiat-polkowicki-teryt0216 przerzucał do tej " +
+      "pory na tabelę odfiltrowaną po tym regionie. Teraz otwiera stronę " +
+      "regionu: instytucje z siedzibą w regionie, regiony składowe i - to " +
+      "nowość - listę osób, które w tym regionie kandydowały w wyborach. " +
+      "Przycisk „Eksploruj region” nadal prowadzi do tabeli. Strona statystyk " +
+      "Krakowa zostaje bez zmian.",
+    steps: [
+      "Wejdź na stronę osoby i kliknij region w sekcji „Historia powiązań”.",
+      "Powinieneś wylądować na /region/... i zobaczyć stronę, a nie tabelę.",
+      "Sprawdź, że jest sekcja „Kandydowali w tym regionie” z osobami (w dużym mieście będzie ich sporo).",
+      "Kliknij „Eksploruj region” - to ma otworzyć tabelę odfiltrowaną po tym regionie.",
+    ],
+    link: "/region/krakow-teryt1261",
+    area: "public",
+  },
+  {
     id: "person-birth-date-from-register",
     title: "Daty urodzenia z rejestru trafiają na strony osób",
     description:

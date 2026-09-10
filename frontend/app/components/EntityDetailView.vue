@@ -142,6 +142,23 @@
             <CardConnectionList
               :edges="subsidiaries"
               title="Spółki zależne"
+              :limit="REGION_LIST_LIMIT"
+              :more-href="regionTableUrl"
+              :can-remove="canRemoveRelations"
+              @remove="openRemove"
+            />
+            <!-- Who stood for election here. The largest thing a region knows
+                 about people - 172 of Warszawa's 758 relations, against the 1
+                 that reaches "Część regionu" - and until now the page dropped
+                 every one of them: `owners` keeps only `owns` off the same
+                 side of the graph. It is also the only part of a region page
+                 that is about people at all, which is what somebody searching
+                 a powiat is after. -->
+            <CardConnectionList
+              :edges="candidates"
+              title="Kandydowali w tym regionie"
+              :limit="REGION_LIST_LIMIT"
+              :more-href="regionTableUrl"
               :can-remove="canRemoveRelations"
               @remove="openRemove"
             />
@@ -565,6 +582,32 @@ const electionLocations = computed(() =>
     .map((edge) => edge.richNode.name),
 );
 
+/** How many rows a region's relation lists render.
+ *
+ * Warszawa has 758 relations - 573 institutions seated in it and 172 people
+ * who stood for election there - and a row costs about 4 KB of html, so
+ * rendering them whole would put that page over 3 MB. Its subgraph is already
+ * 1.43 MB of json before any of that. 50 is enough to fill a screen and to
+ * show that the list is not the whole story; "Eksploruj region" and the link
+ * under each list lead to the table, which is what reads a region at length.
+ *
+ * Only regions are capped. The largest company or person on the site has
+ * relations in the tens.
+ */
+const REGION_LIST_LIMIT = 50;
+
+/** The table filtered to this region, where the rows past the cap can be read.
+ *
+ * Undefined when the node carries no `teryt` - the table filters on that and
+ * nothing else, so without one the link would be `?teryt=undefined` and would
+ * quietly answer with every region at once. `CardConnectionList` then states
+ * the count without linking it. */
+const regionTableUrl = computed(() =>
+  regionTeryt.value
+    ? `/eksploruj/tabela?teryt=${regionTeryt.value}`
+    : undefined,
+);
+
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");
 });
@@ -577,6 +620,17 @@ const subsidiaries = computed(() => {
   return targets.value.filter(
     (e) =>
       (e.type === "owns" || e.type === "seat") && e.richNode.type == "place",
+  );
+});
+/** People who stood for election in this region.
+ *
+ * An election edge runs from the person to the place they stood in, so the
+ * region is on the receiving end of it and these come off `sources` - the same
+ * side "Część regionu" reads, which is why filtering that list to `owns` hid
+ * them. */
+const candidates = computed(() => {
+  return sources.value.filter(
+    (e) => e.type === "election" && e.richNode.type === "person",
   );
 });
 

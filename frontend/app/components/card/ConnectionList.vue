@@ -17,7 +17,7 @@
     <v-card v-if="edges.length > 0">
       <v-list density="compact">
         <v-list-item
-          v-for="edge in edgesSorted"
+          v-for="edge in edgesShown"
           :key="edge.richNode.id"
           :to="nodeLinkUrl(edge.richNode)"
           :prepend-icon="entityIcon(edge.richNode.type)"
@@ -51,6 +51,17 @@
           </template>
         </v-list-item>
       </v-list>
+      <!-- What the cap left out. A link rather than a "show more", because the
+           rows past the cap are the ones nobody scrolls to, and the table is
+           the surface built for reading a region at length. -->
+      <v-card-text v-if="hiddenCount > 0" class="pt-0">
+        <NuxtLink v-if="moreHref" :to="moreHref" class="text-caption">
+          … i {{ hiddenCount }} {{ relationsPlural(hiddenCount) }} więcej
+        </NuxtLink>
+        <span v-else class="text-caption text-medium-emphasis">
+          … i {{ hiddenCount }} {{ relationsPlural(hiddenCount) }} więcej
+        </span>
+      </v-card-text>
     </v-card>
   </div>
 </template>
@@ -61,8 +72,9 @@ import { mdiPlus, mdiTrashCanOutline } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
 import { edgeCompany, type EdgeNode } from "~~/app/composables/edges";
 import { nodeLinkUrl } from "~/composables/slugs";
+import { relationsPlural } from "~/composables/edges";
 
-const { edges, title, canRemove } = defineProps<{
+const { edges, title, canRemove, limit } = defineProps<{
   title: string;
   edges: EdgeNode[];
   /** Whether this section offers adding a relation of its own kind. */
@@ -73,6 +85,17 @@ const { edges, title, canRemove } = defineProps<{
   /** Whether each row offers taking the relation off the graph outright, which
    * is an administrator's decision and nobody else's. */
   canRemove?: boolean;
+  /** Most rows to render, if the list should not be rendered whole.
+   *
+   * A region is why this exists. Warszawa has 758 relations and every one of
+   * them would reach the markup: at the ~4 KB of html a row costs - measured
+   * across three prod company pages of 8, 15 and 24 relations - that page
+   * would go out at about 3 MB. Absent by default, so a person or a company
+   * still renders every relation it has; none of them comes near that.
+   */
+  limit?: number;
+  /** Where the rows past `limit` can be read instead. */
+  moreHref?: string;
 }>();
 
 const emit = defineEmits<{ add: []; remove: [edge: EdgeNode] }>();
@@ -94,4 +117,11 @@ const edgesSorted = computed(() => {
     return (a.richNode.name || "").localeCompare(b.richNode.name || "");
   });
 });
+
+const edgesShown = computed(() =>
+  limit === undefined ? edgesSorted.value : edgesSorted.value.slice(0, limit),
+);
+const hiddenCount = computed(
+  () => edgesSorted.value.length - edgesShown.value.length,
+);
 </script>
