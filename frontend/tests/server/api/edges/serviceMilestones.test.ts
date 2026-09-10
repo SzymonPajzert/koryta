@@ -398,6 +398,16 @@ describe("api/edges/serviceMilestones", () => {
     expect(fieldMasks[0]).not.toContain("stats");
   });
 
+  it("carries the employer's sectors through to the card", async () => {
+    // Stored as a sanitized map, because a node written before 2026-07-28 is.
+    nodes.orlen!.categories = { "0": "energetyka" };
+    edges.e1 = employment();
+
+    const { milestones } = await call();
+
+    expect(milestones[0]!.companyCategories).toEqual(["energetyka"]);
+  });
+
   it("pages by offset without repeating or skipping", async () => {
     for (let i = 0; i < 5; i++) {
       nodes[`p${i}`] = { name: `Osoba ${i}`, type: "person", published: true };

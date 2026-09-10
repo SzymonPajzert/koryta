@@ -40,6 +40,7 @@
           {{ period }}
         </span>
         <ChipPublicCompany :company="company" />
+        <ChipCompanyCategories :company="company" />
         <PartyChip
           v-for="party in employment.parties"
           :key="party"
@@ -86,14 +87,15 @@ const initials = computed(() =>
     .join(""),
 );
 
-/** `ChipPublicCompany` reads the whole company because a caller may be holding
- * something that is not one. Here it always is, so this is only the two flags
- * it actually looks at, put back into the shape it expects. */
+/** The company chips read the whole company because a caller may be holding
+ * something that is not one. Here it always is, so this is only the fields they
+ * actually look at, put back into the shape they expect. */
 const company = computed<Company>(() => ({
   type: "place",
   name: props.employment.companyName,
   isPublic: props.employment.companyIsPublic,
   isPublicSource: props.employment.companyIsPublicSource,
+  categories: props.employment.companyCategories,
 }));
 
 /** Whether the post is still held, which is what tints the date. A spell that

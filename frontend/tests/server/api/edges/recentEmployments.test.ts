@@ -187,6 +187,27 @@ describe("api/edges/recentEmployments", () => {
     });
   });
 
+  it("carries the employer's sectors through to the card", async () => {
+    // Stored as a sanitized map, because a node written before 2026-07-28 is:
+    // the card reads a plain array, so the unwrapping has to happen here.
+    nodes.orlen!.categories = { "0": "energetyka", "1": "koleje" };
+    edges.e1 = employment();
+
+    const { employments } = await call();
+
+    expect(employments[0]!.companyCategories).toEqual(["energetyka", "koleje"]);
+  });
+
+  it("says nothing about the sector of a company filed under none", async () => {
+    edges.e1 = employment();
+
+    const { employments } = await call();
+
+    // Omitted rather than an empty array, so twenty cards do not each carry a
+    // key that means nothing.
+    expect(employments[0]).not.toHaveProperty("companyCategories");
+  });
+
   it("puts the most recently begun spell on top", async () => {
     edges.old = employment({ start_date: "2019-05-01" });
     edges.newest = employment({ source: "jan", start_date: "2026-02-01" });

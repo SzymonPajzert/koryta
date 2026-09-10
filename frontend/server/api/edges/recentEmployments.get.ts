@@ -2,7 +2,7 @@ import { getFirestore, FieldPath } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
 import { fetchEdgeEndpointNodes } from "~~/server/utils/edgeNodes";
-import { pageIsPublic } from "~~/shared/model";
+import { asArray, pageIsPublic } from "~~/shared/model";
 import { displayRole } from "~~/shared/companyBodies";
 import type { Company, Edge, Person } from "~~/shared/model";
 import type { H3Event } from "h3";
@@ -28,6 +28,10 @@ export type RecentEmployment = {
    * flags mean nothing on their own - see `publicSectorKnown`. */
   companyIsPublic?: boolean;
   companyIsPublicSource?: "manual";
+  /** The sectors the company is filed under, for `ChipCompanyCategories`.
+   * Already unwrapped from the sanitized-array form, and omitted rather than
+   * sent empty - most companies have none, and this is twenty cards. */
+  companyCategories?: string[];
   /** The role, as the edge names it - except that a supervisory seat is named
    * after the organ the company actually has, which the edge cannot be: see
    * `displayRole`. Null where nobody recorded one. */
@@ -156,6 +160,8 @@ async function recentEmployments(event: H3Event): Promise<RecentEmployments> {
       if (person?.type !== "person" || company?.type !== "place") continue;
       if (!pageIsPublic(person) || !pageIsPublic(company)) continue;
 
+      const categories = asArray<string>((company as Company).categories);
+
       employments.push({
         id: edge.id,
         personId: edge.source,
@@ -165,6 +171,7 @@ async function recentEmployments(event: H3Event): Promise<RecentEmployments> {
         companyName: company.name,
         companyIsPublic: (company as Company).isPublic,
         companyIsPublicSource: (company as Company).isPublicSource,
+        ...(categories.length ? { companyCategories: categories } : {}),
         role:
           typeof edge.name === "string"
             ? (displayRole(edge.name, company as Company) ?? null)
