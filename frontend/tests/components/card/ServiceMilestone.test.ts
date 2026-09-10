@@ -23,9 +23,9 @@ function milestone(fields: Partial<ServiceMilestone> = {}): ServiceMilestone {
   };
 }
 
-const mount = (fields: Partial<ServiceMilestone> = {}) =>
+const mount = (fields: Partial<ServiceMilestone> = {}, festive = false) =>
   mountSuspended(ServiceMilestoneCard, {
-    props: { milestone: milestone(fields) },
+    props: { milestone: milestone(fields), festive },
   });
 
 describe("CardServiceMilestone", () => {
@@ -134,5 +134,50 @@ describe("CardServiceMilestone", () => {
 
   it("shows the parties the person is filed under", async () => {
     expect((await mount({ parties: ["PiS"] })).text()).toContain("PiS");
+  });
+
+  describe("the festive variant", () => {
+    it("is off unless it is asked for", async () => {
+      // /eksploruj/staz draws twenty of these in a grid, where confetti on
+      // every one of them is wallpaper rather than a celebration.
+      const card = await mount();
+
+      expect(card.find(".milestone-card--festive").exists()).toBe(false);
+      expect(card.find(".milestone-card__confetti").exists()).toBe(false);
+    });
+
+    it("puts confetti and a popper on the card when it is", async () => {
+      const card = await mount({}, true);
+
+      expect(card.find(".milestone-card--festive").exists()).toBe(true);
+      expect(card.findAll(".milestone-card__confetti span")).toHaveLength(6);
+      expect(card.find(".milestone-card__popper").exists()).toBe(true);
+    });
+
+    it("says nothing extra to a screen reader", async () => {
+      // The card already reads „10 lat pracy”; a decoration that announced
+      // itself would only get in the way of that.
+      const card = await mount({}, true);
+
+      expect(
+        card.find(".milestone-card__confetti").attributes("aria-hidden"),
+      ).toBe("true");
+    });
+
+    it("keeps its flare on a day that has gone by", async () => {
+      // Every card in the home feed is one - it is a feed of what has
+      // happened - so the dimming a past milestone gets on /eksploruj/staz
+      // would take the flare off all of them.
+      const card = await mount({ daysFromToday: -6 }, true);
+
+      expect(card.find(".milestone-card--past").exists()).toBe(false);
+      expect(card.find(".milestone-card--festive").exists()).toBe(true);
+    });
+
+    it("still dims a past milestone when it is not festive", async () => {
+      const card = await mount({ daysFromToday: -6 });
+
+      expect(card.find(".milestone-card--past").exists()).toBe(true);
+    });
   });
 });
