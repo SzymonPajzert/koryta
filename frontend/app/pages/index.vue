@@ -151,8 +151,10 @@
   </HomeSection>
   <!-- Last on the page, and it has to be: the feed keeps growing as the reader
        scrolls, so anything below it is pushed further away every time it does. -->
+  <!-- Everything the site has just learned, in one date-ordered list: posts
+       taken up, round numbers of years served, and whatever gets found next. -->
   <HomeSection>
-    <HomeRecentEmployments />
+    <HomeEventFeed />
   </HomeSection>
 </template>
 
