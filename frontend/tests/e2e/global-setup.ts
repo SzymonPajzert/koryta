@@ -52,6 +52,10 @@ const LOGGED_IN_ROUTES = [
   "/admin/rewizje/warmup",
   // The QA changelog, whose spec starts writing a verdict as soon as it lands.
   "/qa",
+  // The succession explorer, which asserts on a candidate card within seconds
+  // of landing - cold, the vite compile would eat that wait and read as an
+  // empty chain rather than as an uncompiled route.
+  "/eksploruj/sukcesje/danuta-obejmujaca-sukdanuta",
   // The edit form, in both the shapes the specs open it in. It is the worst
   // offender: `string-similarity` is only reachable from AlreadyExisting.vue,
   // so the first spec to open the form makes vite discover a new dependency

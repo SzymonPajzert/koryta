@@ -169,6 +169,33 @@
               :relation-count="edges.length"
               class="mt-4"
             />
+
+            <!-- ...and when it renders nothing, the way into the explorer on
+                 its own. The button lives in that section's heading, so it
+                 vanishes with the section - for exactly the people the
+                 explorer is most use to, since a person the one-to-one pairing
+                 could not match is the person whose seat the all-candidates
+                 rule still has names for. Quiet on purpose: a dashed note, not
+                 a call to action. What it leads to is an unpublished tool that
+                 answers with possibilities rather than with the record. -->
+            <div v-if="successionsEmpty" class="px-2 mt-4">
+              <p
+                class="k-note text-caption text-medium-emphasis d-flex align-center ga-2"
+              >
+                <v-icon :icon="mdiFamilyTree" size="15" />
+                <span>
+                  Nie dobraliśmy tej osobie żadnej zmiany na stanowisku.
+                  <NuxtLink
+                    :to="successionChainUrl"
+                    class="link-plain"
+                    data-testid="person-successions-explore-empty"
+                  >
+                    Zobacz łańcuch następstw
+                  </NuxtLink>
+                  - pokazujemy tam wszystkich, którzy pasują datami.
+                </span>
+              </p>
+            </div>
           </template>
           <v-row v-else>
             <v-col
@@ -419,6 +446,7 @@
 <script setup lang="ts">
 import {
   mdiArrowRight,
+  mdiFamilyTree,
   mdiFormatListBulleted,
   mdiGraphOutline,
   mdiHome,
@@ -443,6 +471,7 @@ import type {
   Revision,
 } from "~~/shared/model";
 import { predecessorsByEdge } from "~/utils/succession";
+import { createSlug } from "~/composables/slugs";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
@@ -548,6 +577,42 @@ const edges = computed(() => [...sources.value, ...targets.value]);
 const successions = type === "person" ? usePersonSuccessions(node) : undefined;
 const predecessors = computed(() =>
   predecessorsByEdge(successions?.data.value?.posts ?? [], edges.value),
+);
+
+/** Whether "Zmiany na stanowisku" will draw nothing at all.
+ *
+ * That section hides itself whole when the one-to-one pairing matched nobody
+ * and nothing was withheld (`v-else-if="!empty"` in
+ * `SuccessionPersonChanges`), which takes the "Zobacz łańcuch" button in its
+ * heading down with it. So the page offers the explorer itself in that case,
+ * and only in that case - two entry points never appear at once.
+ *
+ * Read off `successions` above rather than from a request of its own. That is
+ * the same `usePersonSuccessions(node)` the section calls, and its explicit
+ * `person-successions-<id>` key is the whole reason two callers on this page
+ * are one `useAsyncData` entry; asking again here - even through the same
+ * composable under a different key - would either double the traffic or abort
+ * the request the section is awaiting.
+ *
+ * Gated on `success` rather than on "no posts yet": the answer is also empty
+ * while it is still in flight, and an offer that shows for a beat and is then
+ * replaced by the section reads as a page changing its mind. On `error` the
+ * section draws its own "nie udało się wczytać" note, which is not something
+ * to answer with a link.
+ */
+const successionsEmpty = computed(
+  () =>
+    successions?.status.value === "success" &&
+    !successions.data.value?.posts.length &&
+    !successions.data.value?.hidden,
+);
+
+/** Where that offer points: the same `<slug>-<id>` tail every entity url
+ * carries, because the explorer reads the id back off the end of it with
+ * `parseEntityUrlSlug`. Built the same way as the button inside the section,
+ * so the two never disagree about where the page is. */
+const successionChainUrl = computed(
+  () => `/eksploruj/sukcesje/${createSlug(entity.value?.name ?? "")}-${node}`,
 );
 /** The towns this person stood for election in, off the edges the page already
  * holds.

@@ -48,6 +48,49 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "lancuch-nastepstw-na-stanowisku",
+    title: "Łańcuch następstw na stanowisku",
+    description:
+      "Nowa strona /eksploruj/sukcesje pokazuje jedną osobę pośrodku, po " +
+      "lewej wszystkich, po których mogła objąć stanowisko, po prawej " +
+      "wszystkich, którzy mogli objąć je po niej. W sekcji „Zmiany na " +
+      "stanowisku” dobieramy pary jeden do jednego, żeby nie twierdzić " +
+      "więcej, niż wiadomo - tutaj robimy odwrotnie: nie wybieramy jednej " +
+      "odpowiedzi i wypisujemy wszystkie osoby, które pasują datami. Obie " +
+      "kolumny zbierają kandydatów ze wszystkich stanowisk danej osoby " +
+      "naraz, więc instytucja i funkcja są podpisane przy każdym nazwisku, a " +
+      "nie nad kolumną. Kliknięcie dowolnej osoby rozwija ją tak samo, więc " +
+      "łańcuch rośnie dalej. Nad kolumnami rysujemy to, co już rozwinięto: " +
+      "kropka to jedna osoba, a strzałka biegnie od poprzednika do następcy, " +
+      "czyli w tę stronę, w którą przechodziło stanowisko. Rysunek pokazuje " +
+      "wyłącznie osoby otwarte w kolumnach - rośnie razem z nimi i nie dopytuje " +
+      "o nic serwera. Strona jest tylko dla zalogowanych: większość " +
+      "osób w rejestrze nie ma jeszcze opublikowanej strony, więc bez " +
+      "zalogowania byłaby prawie pusta. Nie linkujemy jej ze stopki i nie " +
+      "trafia do wyszukiwarek.",
+    steps: [
+      "Wejdź na stronę osoby, która ma sekcję „Zmiany na stanowisku” - np. /osoba/ryszard-grobelny-3c3mCzgebz0sSxfC5nJT - i kliknij „Zobacz łańcuch” obok nagłówka sekcji.",
+      "Adres ma się zmienić na /eksploruj/sukcesje/ryszard-grobelny-3c3mCzgebz0sSxfC5nJT, a osoba ma stać pośrodku. Identyfikator na końcu jest wrażliwy na wielkość liter.",
+      "Po lewej ma być Tadeusz Rozpara (Związek Miast Polskich, Zarząd, „tego samego dnia”), po prawej Tomasz Jacek Lewandowski (Międzynarodowe Targi Poznańskie, Rada Nadzorcza, „po 23 dniach przerwy”). To dwie różne instytucje w tych samych dwóch kolumnach - tak ma być.",
+      "W lewej kolumnie ma być sześć osób z tego samego dnia, a nad nimi zdanie, że rejestr nie zapisuje, po kim konkretnie ta osoba objęła stanowisko.",
+      "Na dole ma być lista stanowisk tej osoby. Przy MEETCORE ma stać, że w rejestrze nie ma funkcji dla tego wpisu, więc nie da się go z nikim zestawić.",
+      "Nad kolumnami ma być rysunek łańcucha. Zanim cokolwiek zostanie rozwinięte, jest na nim jedna kropka - osoba z adresu - a pod rysunkiem zdanie, żeby rozwinąć kogoś w kolumnach niżej.",
+      "Kliknij „Rozwiń” przy dowolnej osobie z lewej albo z prawej: dochodzi kolejna kolumna z jej własnymi poprzednikami i następcami, a przycisk zmienia się w „Zwiń”.",
+      "Po rozwinięciu osoby z lewej strony na rysunku ma przybyć kropka po lewej, a strzałka ma biec od niej do osoby ze środka: od poprzednika do następcy, nigdy odwrotnie. Po rozwinięciu kogoś z prawej strzałka ma biec od środka na prawo.",
+      "Strzałki do sześciu osób z tego samego dnia w Związku Miast Polskich mają być przerywane, a pod rysunkiem ma stać, że rejestr nie zapisuje, kto dokładnie kogo zastąpił. Strzałka do Międzynarodowych Targów Poznańskich (jedna osoba, „po 23 dniach przerwy”) ma być ciągła.",
+      "Rozwiń kilka osób naraz: żadne dwie kropki w jednej kolumnie nie mogą na siebie nachodzić, a nazwiska pod nimi mają być czytelne. Rysunek nie może się animować ani drgać po dorysowaniu kolejnej osoby.",
+      "Kliknij „Zwiń” przy rozwiniętej osobie: jej kropka i strzałka mają zniknąć z rysunku razem z kolumną, bez odświeżania strony.",
+      "Zaraz po kliknięciu „Rozwiń” nowa kropka ma być przerywana i podpisana „wczytujemy…”, a po chwili wypełniona i podpisana nazwiskiem - to dwa różne stany, nie błąd.",
+      "Rozwiń kogoś, kto prowadzi z powrotem do osoby z początku łańcucha: przy jej nazwisku ma być „już w łańcuchu” zamiast przycisku.",
+      "Zwęź okno do szerokości telefonu (375 px): cała strona nie może przewijać się na boki - kolumny mają przewijać się wewnątrz swojego pola, a rysunek ma się zmieścić w szerokości ekranu (skaluje się, zamiast wystawać).",
+      "Wyloguj się i wejdź na ten sam adres: ma być przekierowanie na /login, a po zalogowaniu powrót na tę stronę.",
+      "Sprawdź, że w /robots.txt jest linia z /eksploruj/sukcesje i że tego adresu nie ma w /sitemap.xml.",
+      "Wejdź na stronę osoby, która tej sekcji NIE ma, bo nic się nie dobrało - np. /osoba/jan-kowalski-1: pod historią powiązań ma być cichy dopisek „Nie dobraliśmy tej osobie żadnej zmiany na stanowisku” z odnośnikiem „Zobacz łańcuch następstw”. Na osobie, która tę sekcję ma, tego dopisku nie może być - te dwa wejścia nigdy nie pokazują się naraz.",
+    ],
+    link: "/eksploruj/sukcesje/ryszard-grobelny-3c3mCzgebz0sSxfC5nJT",
+    area: "contributor",
+  },
+  {
     id: "fakt-do-notatki",
     title: "Wydobyty fakt można przenieść do własnej notatki",
     description:

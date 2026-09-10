@@ -97,13 +97,13 @@ export type PersonSuccessions = {
 /** How many companies one `in` filter may name. Firestore's limit is 30, and
  * the query is a disjunction of equalities behind the scenes - each one served
  * by the `(target, type)` composite index that already exists. */
-const COMPANY_CHUNK = 30;
+export const COMPANY_CHUNK = 30;
 
 /** The most employment edges one company query will read. A backstop rather
  * than a budget: the largest board in the register holds 42 spells, so this is
  * five times the worst case, and it is here so that a mis-typed id cannot walk
  * the collection. */
-const SPELLS_PER_COMPANY = 200;
+export const SPELLS_PER_COMPANY = 200;
 
 /** Every employment edge at these companies, in one round trip per 30 of them.
  *
@@ -114,7 +114,7 @@ const SPELLS_PER_COMPANY = 200;
  * different question, and that one is still answered the way the rest of the
  * site answers it: see `canName`.
  */
-async function employmentEdges(
+export async function employmentEdges(
   db: FirebaseFirestore.Firestore,
   companyIds: string[],
 ): Promise<(Edge & { id: string })[]> {
@@ -142,7 +142,7 @@ async function employmentEdges(
  * length: the endpoints have to be read to name them, and a card that only
  * held ids would cost a request per row.
  */
-async function endpointNodes(
+export async function endpointNodes(
   db: FirebaseFirestore.Firestore,
   ids: Iterable<string>,
 ): Promise<Map<string, Person | Company>> {
@@ -174,7 +174,7 @@ async function endpointNodes(
  * fraction of the handovers and an editor sees all of them. That is what
  * `hidden` counts.
  */
-function canName(
+export function canName(
   node: Person | Company | undefined,
   showUnapproved: boolean,
 ): node is Person | Company {
@@ -200,7 +200,7 @@ function side(
 
 /** The spells at each company, keyed by company id, plus the lookup a caller
  * needs to turn a matched spell back into the edge and person behind it. */
-function spellsByCompany(edges: (Edge & { id: string })[]) {
+export function spellsByCompany(edges: (Edge & { id: string })[]) {
   const byCompany = new Map<string, SuccessionSpell[]>();
   const edgeById = new Map<string, Edge & { id: string }>();
   for (const edge of edges) {

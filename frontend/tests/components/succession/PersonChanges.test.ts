@@ -3,6 +3,7 @@ import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { clearNuxtData } from "#app";
 import { getQuery } from "h3";
+import { VBtn } from "vuetify/components";
 import PersonChanges from "../../../app/components/succession/PersonChanges.vue";
 import type {
   PersonSuccession,
@@ -141,6 +142,39 @@ describe("SuccessionPersonChanges", () => {
     expect(
       wrapper.find('[data-testid="succession-predecessor"]').exists(),
     ).toBe(false);
+  });
+
+  it("offers the chain explorer from the heading", async () => {
+    response = {
+      posts: [
+        post({
+          predecessor: side("Hubert Grzegorczyk", { end: "2024-05-16" }),
+        }),
+      ],
+      hidden: 0,
+    };
+
+    const wrapper = await mountChanges();
+
+    const explore = wrapper.get('[data-testid="person-successions-explore"]');
+    expect(explore.text()).toContain("Zobacz łańcuch");
+
+    // Read off the prop rather than off the rendered `href`. `v-btn` resolves
+    // `to` through `resolveDynamicComponent("RouterLink")`, which answers with
+    // the bare string in this environment - so the anchor comes out with no
+    // `href` at all, whatever `to` says. Everything this assertion is actually
+    // about is in the prop: `parseEntityUrlSlug` takes the id to be the last
+    // dash-separated segment, so the slug has to sit in front of the id and
+    // the id itself must carry no dash. That the browser really navigates
+    // there is `tests/e2e/sukcesje.spec.ts`'s job.
+    const button = wrapper
+      .findAllComponents(VBtn)
+      .find(
+        (btn) => btn.attributes("data-testid") === "person-successions-explore",
+      );
+    expect(button?.props("to")).toBe(
+      "/eksploruj/sukcesje/marzena-slomka-marzena",
+    );
   });
 
   it("says how much of the history the section covers", async () => {

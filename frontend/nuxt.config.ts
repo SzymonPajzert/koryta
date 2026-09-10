@@ -149,6 +149,20 @@ export default defineNuxtConfig({
       // has no indexable content to lose, and every entity URL 301s into it
       // with its own ?krs=/?teryt=. That is the bulk of the crawl budget.
       "/eksploruj/tabela",
+      // The succession chain, which is for signed in readers only and names
+      // people whose pages are not published yet.
+      //
+      // Here rather than in the page's own `definePageMeta({ robots: false })`,
+      // which is set too but cannot work on this route: @nuxtjs/robots stores
+      // page meta in a map keyed by `page.path` and looks it up by the exact
+      // request path, so the entry it holds is "/eksploruj/sukcesje/:slug()"
+      // and no real request ever equals that. Every other `robots: false` page
+      // on the site is a static path, which is why nobody has hit it before.
+      // A disallow line prefix-matches, so it covers every slug, and the
+      // module derives the noindex meta tag and the X-Robots-Tag header from
+      // the same rule - which is the part that keeps the page out of a search
+      // index even where the crawler ignores robots.txt.
+      "/eksploruj/sukcesje",
     ],
   },
   plausible: {
@@ -375,6 +389,11 @@ export default defineNuxtConfig({
         "@vue/devtools-core",
         "@vue/devtools-kit",
         "@vueuse/core",
+        // The succession graph settles its layout with d3-force at render
+        // time, so this is discovered on the first visit to a chain page
+        // rather than at boot - the same mid-run restart the entry below
+        // guards against, just reached from a different page.
+        "d3-force",
         "v-network-graph",
         // The layout engine is a separate entry point, imported only once the
         // graph store loads. Discovering it mid-run restarts the optimizer,

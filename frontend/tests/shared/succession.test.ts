@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   gapLabel,
   spellDate,
+  successionCandidatesForPerson,
   successionsAtCompany,
   MAX_GAP_DAYS,
   MAX_OVERLAP_DAYS,
+  MAX_SEAT_GROUP,
   type SuccessionSpell,
 } from "../../shared/succession";
 
@@ -265,6 +267,279 @@ describe("successionsAtCompany", () => {
     ];
 
     expect(handovers(spells)).toEqual(handovers([...spells].reverse()));
+  });
+});
+
+/** The register's own dates, moved by a number of days.
+ *
+ * Written out rather than hard-coding the answer, because the whole point of
+ * the boundary tests below is which side of `MAX_GAP_DAYS` a date falls on,
+ * and a reader checking a literal like "2024-08-10" by hand would have to do
+ * this arithmetic anyway. */
+function plus(day: string, days: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/** Who the rule names on one side, as person ids in the order it returned
+ * them - the order being half of what these tests are about. */
+function named(candidacies: { other: SuccessionSpell }[]): string[] {
+  return candidacies.map((candidacy) => candidacy.other.personId);
+}
+
+describe("successionCandidatesForPerson", () => {
+  it("gives one joiner every leaver a same-day board change allows", () => {
+    // The divergence from the greedy rule, pinned on purpose and in one test
+    // so that neither can be changed without reading the other. The page that
+    // names a single predecessor still gets two pairs out of these four
+    // spells; the page that draws a chain gets both leavers on one side of
+    // one person, because the register does not say which chair was whose.
+    const board = [
+      spell("odchodzi-a", "2018-01-01", "2024-04-12"),
+      spell("odchodzi-b", "2018-01-01", "2024-04-12"),
+      spell("wchodzi", "2024-04-12", null),
+      spell("tez-wchodzi", "2024-04-12", null),
+    ];
+
+    const { predecessors, successors } = successionCandidatesForPerson(
+      board,
+      "wchodzi",
+    );
+
+    expect(named(predecessors)).toEqual(["odchodzi-a", "odchodzi-b"]);
+    expect(predecessors.map((c) => c.gapDays)).toEqual([0, 0]);
+    expect(predecessors.map((c) => c.batchSize)).toEqual([2, 2]);
+    // Still in post, so nobody has taken the seat off them yet.
+    expect(successors).toEqual([]);
+
+    expect(successionsAtCompany(board)).toHaveLength(2);
+  });
+
+  it("hands back the whole batch Związek Miast Polskich filed in one day", () => {
+    // The shape this feature exists for, from the register: six members of the
+    // Zarząd struck off on 4 June 2003, Ryszard Grobelny entered the same day,
+    // and twelve years later four people entered on the day he left. The
+    // greedy rule picks one name out of each batch; here all of them stand.
+    const zmp = [
+      ...[
+        "zabieglinski",
+        "barzowski",
+        "jedlinski",
+        "uszok",
+        "rozpara",
+        "kaczmarek",
+      ].map((id) => spell(id, "2001-12-06", "2003-06-04", "Zarząd")),
+      spell("grobelny", "2003-06-04", "2015-06-01", "Zarząd"),
+      ...["karakula", "pluta", "choma", "szynkowski"].map((id) =>
+        spell(id, "2015-06-01", null, "Zarząd"),
+      ),
+    ];
+
+    const { posts, predecessors, successors } = successionCandidatesForPerson(
+      zmp,
+      "grobelny",
+    );
+
+    expect(posts.map((post) => post.personId)).toEqual(["grobelny"]);
+    // Sorted on the register's own facts and then the node id - never on the
+    // edge ids, because every gap here is zero and the tie-break is the whole
+    // of the order.
+    expect(named(predecessors)).toEqual([
+      "barzowski",
+      "jedlinski",
+      "kaczmarek",
+      "rozpara",
+      "uszok",
+      "zabieglinski",
+    ]);
+    expect(predecessors.every((c) => c.gapDays === 0)).toBe(true);
+    expect(predecessors.every((c) => c.batchSize === 6)).toBe(true);
+    expect(named(successors)).toEqual([
+      "choma",
+      "karakula",
+      "pluta",
+      "szynkowski",
+    ]);
+    expect(successors.every((c) => c.batchSize === 4)).toBe(true);
+  });
+
+  it("keeps the same window as the greedy rule, either side of it", () => {
+    const focus = spell("grobelny", "2004-04-13", "2016-08-16");
+    const candidates = (day: string) =>
+      named(
+        successionCandidatesForPerson(
+          [focus, spell("inny", day, null)],
+          "grobelny",
+        ).successors,
+      );
+
+    // Międzynarodowe Targi Poznańskie: the one successor the register allows
+    // him, entered three weeks after he was struck off.
+    const lewandowski = successionCandidatesForPerson(
+      [focus, spell("lewandowski", plus("2016-08-16", 23), null)],
+      "grobelny",
+    );
+    expect(named(lewandowski.successors)).toEqual(["lewandowski"]);
+    expect(lewandowski.successors[0]!.gapDays).toBe(23);
+
+    expect(candidates(plus("2016-08-16", MAX_GAP_DAYS))).toEqual(["inny"]);
+    expect(candidates(plus("2016-08-16", MAX_GAP_DAYS + 1))).toEqual([]);
+    expect(candidates(plus("2016-08-16", -MAX_OVERLAP_DAYS))).toEqual(["inny"]);
+    expect(candidates(plus("2016-08-16", -MAX_OVERLAP_DAYS - 1))).toEqual([]);
+  });
+
+  it("returns a post whose role nobody recorded, with nobody either side", () => {
+    // "We found nobody" and "we cannot look" are different facts, and a page
+    // that drops the second tells a reader the post does not exist.
+    const spells = [
+      spell("grobelny", "2010-01-01", "2020-01-01", null),
+      spell("ktos-inny", "2020-01-01", null, null),
+      spell("grobelny", "2005-01-01", "2009-01-01", "Zarząd"),
+      spell("nastepca", "2009-01-01", null, "Zarząd"),
+    ];
+
+    const { posts, predecessors, successors } = successionCandidatesForPerson(
+      spells,
+      "grobelny",
+    );
+
+    expect(posts.map((post) => post.role)).toEqual([null, "Zarząd"]);
+    expect(predecessors).toEqual([]);
+    // Two unrecorded roles at one company are not evidence of one seat, so the
+    // only candidate is the one in the seat the register did name.
+    expect(named(successors)).toEqual(["nastepca"]);
+  });
+
+  it("does not let somebody succeed themselves", () => {
+    const { posts, predecessors, successors } = successionCandidatesForPerson(
+      [
+        spell("grobelny", "2016-01-01", "2020-04-12"),
+        spell("grobelny", "2020-04-12", null),
+      ],
+      "grobelny",
+    );
+
+    expect(posts).toHaveLength(2);
+    expect(predecessors).toEqual([]);
+    expect(successors).toEqual([]);
+  });
+
+  it("counts the same filing recorded twice as one post and one candidate", () => {
+    const own = spell("grobelny", "2003-06-04", "2015-06-01", "Zarząd");
+    const leaver = spell("rozpara", "2001-12-06", "2003-06-04", "Zarząd");
+
+    const { posts, predecessors } = successionCandidatesForPerson(
+      [
+        own,
+        { ...own, id: "kopia-wlasna" },
+        leaver,
+        { ...leaver, id: "kopia-cudza" },
+      ],
+      "grobelny",
+    );
+
+    expect(posts).toHaveLength(1);
+    expect(named(predecessors)).toEqual(["rozpara"]);
+    expect(predecessors[0]!.batchSize).toBe(1);
+  });
+
+  it("points every candidacy at a post that is in the list", () => {
+    // The trap behind this one: `seatGroups` fingerprints a spell on (person,
+    // role, start) with no end date and keeps whichever copy Firestore handed
+    // back first - 200 duplicate fingerprints in the register, 170 of them
+    // disagreeing about `end_date`. A caller that took the focus person's own
+    // spell from somewhere else and then looked it up by edge id would find
+    // the copy that lost, and report nothing for a perfectly real edge. So the
+    // posts and the candidacies are cut from the same list, and `own` is an
+    // object out of `posts` rather than an id to resolve.
+    const first = {
+      id: "edge-pierwszy",
+      personId: "grobelny",
+      role: "Zarząd",
+      start: "2003-06-04",
+      end: "2015-06-01",
+    } as SuccessionSpell;
+    const second: SuccessionSpell = {
+      ...first,
+      id: "edge-odrzucony",
+      end: "2015-06-02",
+    };
+
+    const { posts, predecessors } = successionCandidatesForPerson(
+      [first, second, spell("rozpara", "2001-12-06", "2003-06-04", "Zarząd")],
+      "grobelny",
+    );
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.id).toBe("edge-pierwszy");
+    expect(predecessors).toHaveLength(1);
+    expect(posts).toContain(predecessors[0]!.own);
+  });
+
+  it("names the same person on both sides when the register does", () => {
+    // Left the seat just before this person took it and came back to it just
+    // after they left. Two different filings, both real, and a chain that
+    // refused the second would be hiding the more interesting one.
+    const { predecessors, successors } = successionCandidatesForPerson(
+      [
+        spell("wraca", "2005-01-01", "2010-01-01"),
+        spell("grobelny", "2010-01-01", "2015-01-01"),
+        spell("wraca", "2015-01-01", null),
+      ],
+      "grobelny",
+    );
+
+    expect(named(predecessors)).toEqual(["wraca"]);
+    expect(named(successors)).toEqual(["wraca"]);
+  });
+
+  it("does not depend on the order the edges came back in", () => {
+    const spells = [
+      spell("odchodzi-a", "2018-01-01", "2024-04-12"),
+      spell("odchodzi-b", "2019-01-01", "2024-04-12"),
+      spell("grobelny", "2024-04-12", "2025-01-01"),
+      spell("wchodzi", "2025-01-01", null),
+    ];
+
+    const forwards = successionCandidatesForPerson(spells, "grobelny");
+    const backwards = successionCandidatesForPerson(
+      [...spells].reverse(),
+      "grobelny",
+    );
+
+    expect(named(backwards.predecessors)).toEqual(named(forwards.predecessors));
+    expect(named(backwards.successors)).toEqual(named(forwards.successors));
+    expect(backwards.posts.map((post) => post.id)).toEqual(
+      forwards.posts.map((post) => post.id),
+    );
+  });
+
+  it("abandons a seat group too large to be a board", () => {
+    // Without the one-to-one cap the match is quadratic in the size of a
+    // group, and the same backstop the greedy rule uses is what keeps a data
+    // error from turning into tens of thousands of links. It has never fired
+    // on real data - the largest group in the register is 42.
+    // One short of the cap, plus the person the page is about, is exactly the
+    // cap and still answered.
+    const crowd = Array.from({ length: MAX_SEAT_GROUP - 1 }, (_, i) =>
+      spell(`odchodzi${i}`, "2018-01-01", "2024-04-12"),
+    );
+    const focus = spell("grobelny", "2024-04-12", null);
+
+    expect(
+      successionCandidatesForPerson([...crowd, focus], "grobelny").predecessors,
+    ).toHaveLength(MAX_SEAT_GROUP - 1);
+    expect(
+      successionCandidatesForPerson(
+        [
+          ...crowd,
+          spell("odchodzi-nadmiarowy", "2018-01-01", "2024-04-12"),
+          focus,
+        ],
+        "grobelny",
+      ).predecessors,
+    ).toEqual([]);
   });
 });
 

@@ -17,6 +17,19 @@
     :icon="mdiSwapVertical"
     data-testid="person-successions"
   >
+    <template #actions>
+      <v-btn
+        :to="exploreUrl"
+        :prepend-icon="mdiFamilyTree"
+        variant="text"
+        size="small"
+        class="text-none"
+        data-testid="person-successions-explore"
+      >
+        Zobacz łańcuch
+      </v-btn>
+    </template>
+
     <template #lead>
       <p class="k-lead" data-testid="person-successions-coverage">
         {{ coverage }}
@@ -120,10 +133,11 @@
 import {
   mdiAlertCircleOutline,
   mdiArrowRight,
+  mdiFamilyTree,
   mdiOfficeBuildingOutline,
   mdiSwapVertical,
 } from "@mdi/js";
-import { generateEntityUrl } from "~/composables/slugs";
+import { createSlug, generateEntityUrl } from "~/composables/slugs";
 import { gapLabel } from "~~/shared/succession";
 import { shortDate } from "~~/shared/dates";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
@@ -140,6 +154,14 @@ const props = defineProps<{
    * know, and then the line says how many were matched and no more. */
   relationCount?: number;
 }>();
+
+/** The same `<slug>-<id>` tail every entity url carries, because the explorer
+ * parses it back with `parseEntityUrlSlug` - which takes the id to be the last
+ * dash-separated segment. Built from `createSlug` rather than by rewriting
+ * `generateEntityUrl`'s output, so a change to the slug rules reaches both. */
+const exploreUrl = computed(
+  () => `/eksploruj/sukcesje/${createSlug(props.personName)}-${props.personId}`,
+);
 
 /** What a role nobody recorded is called. The pairing drops spells with no
  * role, so this should never be reached - it is here so that a hand-made edge
