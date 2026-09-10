@@ -6,9 +6,15 @@ import { getFirestore, FieldPath } from "firebase-admin/firestore";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 
-/** That the home page's employment feed reaches past its first page, orders on
- * the day a post was taken, and sends a click to the person rather than the
+/** That the home page's event feed reaches past its first page, orders on the
+ * day a post was taken, and sends a click to the person rather than the
  * institution.
+ *
+ * Only the employment half of the feed. The anniversaries interleaved into it
+ * are computed from a window a month either side of *today*, so a spec that
+ * seeded one would be asserting on a date that moves - which is why the
+ * ordering checks below name the cards this spec seeded rather than reading
+ * whatever is at the top of the feed.
  *
  * It seeds its own people because the emulator fixtures hold two published
  * employments between them - enough to draw the section, nowhere near enough
@@ -118,7 +124,7 @@ test.afterAll(async () => {
  */
 async function loadUntil(page: Page, testId: string) {
   const loadMore = page.getByRole("button", {
-    name: "Pokaż więcej zatrudnień",
+    name: "Pokaż więcej",
   });
   await expect(async () => {
     await page
@@ -143,7 +149,7 @@ function seededCards(page: Page) {
 // would be the one this spec set up.
 test.describe.configure({ mode: "serial" });
 
-test.describe("Home - ostatnie zatrudnienia", () => {
+test.describe("Home - kanał wydarzeń", () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
@@ -159,12 +165,17 @@ test.describe("Home - ostatnie zatrudnienia", () => {
   });
 
   test("puts the most recently begun spell on top", async ({ page }) => {
-    const feed = page.getByTestId("recent-employments");
+    const feed = page.getByTestId("home-event-feed");
     await expect(feed).toBeVisible({ timeout: 30_000 });
 
-    // These carry the newest start dates in the database, so they are also the
-    // top of the feed as a whole.
-    await expect(feed.locator(".v-card").first()).toContainText(personName(0));
+    // These carry the newest start dates in the database, so index 0 is the
+    // first employment in the feed. Not the first card in it: an anniversary
+    // dated after the newest employment sorts above every one of them, and
+    // whether there is one today is a property of the fixtures' dates against
+    // the calendar rather than of anything this spec controls.
+    await expect(
+      page.locator('[data-testid^="recent-employment-"]').first(),
+    ).toContainText(personName(0));
 
     // And among themselves they descend by start date rather than arriving in
     // whatever order Firestore happened to return.
@@ -199,7 +210,7 @@ test.describe("Home - ostatnie zatrudnienia", () => {
   test("scrolling reaches a spell that the first page did not carry", async ({
     page,
   }) => {
-    const feed = page.getByTestId("recent-employments");
+    const feed = page.getByTestId("home-event-feed");
     await expect(feed).toBeVisible({ timeout: 30_000 });
 
     // Seeded past a page on purpose: with fewer rows than this the paged
@@ -218,7 +229,7 @@ test.describe("Home - ostatnie zatrudnienia", () => {
     // Anna Nowak's spell at Orlen is seeded with `revision_id: null` and the
     // newest start date in the fixtures, so a feed that forgot to filter on
     // `published` would put her first rather than not at all.
-    const feed = page.getByTestId("recent-employments");
+    const feed = page.getByTestId("home-event-feed");
     await expect(feed).toBeVisible({ timeout: 30_000 });
 
     await loadUntil(page, `recent-employment-${edgeId(COUNT - 1)}`);
