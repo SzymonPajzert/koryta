@@ -1,5 +1,5 @@
 <template>
-  <v-app-bar>
+  <v-app-bar :height="APP_BAR_HEIGHT">
     <NuxtLink to="/">
       <NuxtImg
         class="mx-2"
@@ -52,7 +52,7 @@
       </ClientOnly>
     </template>
   </v-app-bar>
-  <v-main class="d-flex flex-column">
+  <v-main class="d-flex flex-column" :style="ssrLayoutTop">
     <ClientOnly>
       <v-toolbar
         v-if="user"
@@ -142,7 +142,9 @@ import {
 import { computed, ref } from "vue";
 import { useAuthState } from "@/composables/auth";
 import { useDisplay } from "vuetify";
+import { APP_BAR_HEIGHT, useSsrLayoutTop } from "~/composables/appBar";
 
+const ssrLayoutTop = useSsrLayoutTop();
 const { mdAndUp } = useDisplay();
 const { user, userConfig, logout, isAdmin } = useAuthState();
 const route = useRoute();
