@@ -104,7 +104,6 @@ const options = computed(() => {
       bar: {
         ...barPlotOptions().plotOptions.bar,
         distributed: true,
-        columnWidth: "72%",
         // Above the cap, not buried in the fill: the value has to stay legible
         // on a short bar and on a tall one alike.
         dataLabels: { position: "top" },

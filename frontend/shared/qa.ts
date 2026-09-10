@@ -48,6 +48,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "statystyki-szersze-slupki-ocen",
+    title: "Szersze słupki na wykresach ocen",
+    description:
+      "Wykresy „Oddane oceny” i „Rozkład ocen” na dole /eksploruj/statystyki " +
+      "zostawiały między słupkami prawie tyle pustego miejsca, co same " +
+      "słupki. Mają teraz taki odstęp jak wykres aktywności nad nimi - " +
+      "wartość jest wspólna dla wszystkich wykresów słupkowych.",
+    steps: [
+      "Wejdź na /eksploruj/statystyki i zjedź na sam dół - na obu wykresach słupki mają niemal stykać się bokami.",
+      "Zwęź okno do szerokości telefonu i sprawdź, że liczby nad słupkami nadal się mieszczą.",
+    ],
+    link: "/eksploruj/statystyki",
+    area: "public",
+  },
+  {
     id: "fakt-do-notatki",
     title: "Wydobyty fakt można przenieść do własnej notatki",
     description:

@@ -144,7 +144,6 @@ const options = computed(() => {
     plotOptions: {
       bar: {
         ...barPlotOptions().plotOptions.bar,
-        columnWidth: "62%",
         // Five columns, so the running total fits on every cap.
         dataLabels: {
           total: {
