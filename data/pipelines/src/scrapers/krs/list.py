@@ -225,7 +225,7 @@ def extract_people(ctx: Context):
     return DataFrame.from_records([dataclasses.asdict(d) for d in outputs])
 
 
-def is_owned_by_queried(item: dict) -> bool:
+def is_owned_by_queried(item: dict, unknown: typing.Counter[str] | None = None) -> bool:
     """Whether this rejestr.io entry is a company the queried one owns.
 
     Every connection is looked at, not just the first. A company can be tied to
@@ -235,10 +235,13 @@ def is_owned_by_queried(item: dict) -> bool:
     else happened to be listed first. `propagate_is_public` walks these edges,
     so a dropped one is a company that does not inherit being public.
     """
-    return any(
-        QueryRelation.from_rejestrio(conn).is_child()
+    # Not `any(...)`, which would stop at the first ownership edge and leave the
+    # rest of the connections uncounted.
+    children = [
+        QueryRelation.from_rejestrio(conn).is_child(unknown)
         for conn in item.get("krs_powiazania_kwerendowane", [])
-    )
+    ]
+    return any(children)
 
 
 class CompaniesKRS(Pipeline[KrsCompany]):
@@ -258,6 +261,7 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         self.companies: dict[str, KrsCompany] = {}
         self.company_sources: dict[str, set[Source]] = {}
         self.awaiting_relations: dict[str, list[tuple[str, str]]] = {}
+        self.unknown_relations: typing.Counter[str] = collections.Counter()
 
     @property
     def output_class(self) -> Type:
@@ -367,7 +371,9 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 self.add_company_source(c.krs, blob_name)
 
                 if "aktualnosc_aktualne" in blob_name:
-                    if parent is not None and is_owned_by_queried(item):
+                    if parent is not None and is_owned_by_queried(
+                        item, self.unknown_relations
+                    ):
                         self.add_relation(parent.id, c.krs)
 
         elif "/org" in blob_name:
@@ -456,6 +462,13 @@ class CompaniesKRS(Pipeline[KrsCompany]):
 
         for blob_name, data in self.iterate_blobs(ctx, "rejestr.io"):
             self.process_rejestrio_blob(blob_name, data, postal_codes)
+
+        if self.unknown_relations:
+            # A kind of connection between two companies that neither
+            # PARENT_RELATION nor IGNORED_PARENT knows. It is read as "not
+            # ownership", which is the safe reading, but if it turns out to be
+            # one it is a company that will not inherit being public.
+            print(f"Unclassified rejestr.io relations: {dict(self.unknown_relations)}")
 
         for blob_name, data in self.iterate_blobs(ctx, "api-krs.ms.gov.pl"):
             self.process_api_krs_blob(blob_name, data, postal_codes)
