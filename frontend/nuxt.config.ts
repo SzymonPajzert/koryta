@@ -155,17 +155,27 @@ export default defineNuxtConfig({
     // Prevent tracking on localhost
     ignoredHostnames: ["localhost"],
 
-    // Send events to our own origin, which nitro forwards to plausible.io. The
-    // tracker itself is already first-party - @nuxtjs/plausible bundles
-    // @plausible-analytics/tracker rather than loading a remote script - so the
-    // event endpoint was the only thing left for a blocklist to match, and the
-    // audience is 69% mobile and Polish, where blocking is common. Every number
-    // the dashboard has ever shown is a floor because of it.
+    // `proxy: true` is deliberately absent. It shipped on 2026-09-09 to put the
+    // event endpoint on our own origin - the tracker is already first-party,
+    // so that endpoint was the last thing a blocklist could match, and the
+    // audience is 69% mobile and Polish where blocking is common.
     //
-    // The cost is that each event becomes a request to the Cloud Run container
-    // instead of to plausible.io. At 15k pageviews a quarter that is noise next
-    // to what rendering a page costs, and the handler does no rendering.
-    proxy: true,
+    // It stopped every single event. Plausible recorded nothing from the
+    // moment that build went live until it was reverted: not one pageview,
+    // against 30-40 a day the week before. Proxying moves the connection from
+    // the reader's browser to the Cloud Run container, so Plausible's edge
+    // sees Google's egress IP and classifies the event as datacenter traffic -
+    // and their ingest drops those. The module does forward the reader's
+    // address in `X-Forwarded-For`, but the classification is made from the
+    // address that opened the connection, not from that header.
+    //
+    // Nothing about this is visible from the client: `/api/event` answers 202
+    // for an event it is about to discard, which is documented behaviour
+    // (plausible.io/docs/proxy/introduction). The only way to see it is to
+    // send an event and then read the site's realtime visitor count back.
+    //
+    // Do not re-enable this without that check, and without a way to hand
+    // Plausible the reader's IP as the connecting address.
 
     // Counts clicks that leave the site as one "Outbound Link: Click" goal,
     // with the url as a property - which on a Business plan is a breakdown
