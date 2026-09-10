@@ -2,7 +2,7 @@ import { getFirestore, FieldPath } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
 import { fetchEdgeEndpointNodes } from "~~/server/utils/edgeNodes";
-import { pageIsPublic } from "~~/shared/model";
+import { asArray, pageIsPublic } from "~~/shared/model";
 import {
   bodyIsPaidPost,
   displayRole,
@@ -51,6 +51,10 @@ export type ServiceMilestone = {
   /** Enough of the company for `ChipPublicCompany` to decide what to say. */
   companyIsPublic?: boolean;
   companyIsPublicSource?: "manual";
+  /** The sectors the company is filed under, for `ChipCompanyCategories`.
+   * Already unwrapped from the sanitized-array form, and omitted rather than
+   * sent empty. */
+  companyCategories?: string[];
   /** The role, named after the organ the institution actually has - see
    * `displayRole`. Null where nobody recorded one. */
   role: string | null;
@@ -132,6 +136,11 @@ const NODE_FIELDS = [
   "isPublic",
   "isPublicSource",
   "supervisoryBody",
+  // Only the card needs this, and only for the handful of nodes a milestone
+  // lands on - but the mask is applied to the whole scan, so every node carries
+  // it. A short array of slugs, against the `activity` blob and the `stats`
+  // block this list still leaves behind.
+  "categories",
 ];
 
 /** Whether this post counts towards the service the site reports.
@@ -204,6 +213,7 @@ function collect(
       if (!carrying) continue;
       const company = nodes.get(carrying.target);
       if (company?.type !== "place") continue;
+      const categories = asArray<string>((company as Company).categories);
 
       rows.push({
         id: `${personId}:${years}`,
@@ -217,6 +227,7 @@ function collect(
         companyName: company.name,
         companyIsPublic: (company as Company).isPublic,
         companyIsPublicSource: (company as Company).isPublicSource,
+        ...(categories.length ? { companyCategories: categories } : {}),
         role:
           typeof carrying.name === "string"
             ? (displayRole(carrying.name, company as Company) ?? null)
