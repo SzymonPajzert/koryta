@@ -48,6 +48,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "brakujaca-strona-zwraca-404",
+    title: "Nieistniejąca strona zwraca 404",
+    description:
+      "Adres z nieistniejącym lub niezatwierdzonym identyfikatorem pokazywał " +
+      "„Strona nieznaleziona”, ale serwer odpowiadał kodem 200 - dla " +
+      "wyszukiwarek wyglądało to jak zwykła, istniejąca strona. Teraz " +
+      "odpowiedź ma kod 404. Dla czytelnika nic się nie zmienia.",
+    steps: [
+      "Otwórz adres osoby i zepsuj końcówkę identyfikatora, np. zamień ją na same małe litery.",
+      "Strona ma nadal pokazywać „Strona nieznaleziona”.",
+      "W narzędziach deweloperskich, w zakładce Sieć, pierwsze żądanie ma mieć status 404.",
+    ],
+    area: "public",
+  },
+  {
     id: "linki-relacji-bez-przekierowania",
     title: "Linki w kartach powiązań prowadzą prosto do strony",
     description:
