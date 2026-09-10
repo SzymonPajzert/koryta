@@ -64,7 +64,13 @@
           >
             {{ committeeOf(edge) }}
           </span>
-          <ChipPublicCompany :company="asCompany(edge)" />
+          <ChipPublicCompany :company="edgeCompany(edge)" />
+          <!-- Which sector the employer belongs to, so a career reads as the
+               shape it has - three railways and a water utility - rather than
+               four registry names the reader has to recognise one by one. Draws
+               nothing where the row is not a company, or where nobody has filed
+               one under a sector. -->
+          <ChipCompanyCategories :company="edgeCompany(edge)" />
           <!-- Last, where the bar sits on a wide screen. On a phone the bar is
                a 200px track in a 210px column, clipped at both ends, and the
                dates it captions are the only part of it that survives the
@@ -292,12 +298,12 @@ const maxEnd = computed(() => {
 /** Whose organ decides what a row's role is called.
  *
  * The row holds one end of the relation and the page holds the other, so which
- * of the two is the institution depends on whose page this is. `asCompany`
+ * of the two is the institution depends on whose page this is. `edgeCompany`
  * answers it for a person's rows; `company` is a company page telling this card
  * about itself, because there the far end is a person and the row alone cannot
  * say. */
 function roleOwner(edge: EdgeNode): Company | undefined {
-  return asCompany(edge) ?? props.company;
+  return edgeCompany(edge) ?? props.company;
 }
 
 /** What the row calls the relation.
@@ -346,13 +352,6 @@ function committeeOf(edge: EdgeNode): string | undefined {
  * span nobody recorded, so they get the label and nothing else. */
 function isDated(edge: EdgeNode): boolean {
   return !!(edge.start_date || edge.end_date);
-}
-
-/** The company behind an edge, when the edge leads to one at all. */
-function asCompany(edge: EdgeNode): Company | undefined {
-  return edge.richNode.type === "place"
-    ? (edge.richNode as Company)
-    : undefined;
 }
 
 /** The person behind an edge, when the edge leads to one at all. */

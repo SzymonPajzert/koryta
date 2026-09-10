@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import ShortNode from "../../../app/components/card/ShortNode.vue";
+import ChipCompanyCategories from "../../../app/components/chip/CompanyCategories.vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
@@ -20,7 +21,7 @@ describe("ShortNode", () => {
 
   it("links straight at the node's own page, not the /entity/ redirect", () => {
     const wrapper = mount(ShortNode, {
-      global: { plugins: [vuetify] },
+      global: { plugins: [vuetify], components: { ChipCompanyCategories } },
       props: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         edge: edge as unknown as any,
@@ -50,5 +51,39 @@ describe("ShortNode", () => {
 
     const card = wrapper.findComponent({ name: "VCard" });
     expect(card.props("to")).toBe("/entity/gadget/123");
+  });
+
+  it("names the sector where the card is about a company", () => {
+    const wrapper = mount(ShortNode, {
+      global: { plugins: [vuetify], components: { ChipCompanyCategories } },
+      props: {
+        edge: {
+          richNode: {
+            id: "456",
+            type: "place",
+            name: "PKP Intercity",
+            categories: ["koleje"],
+          },
+          label: "Spółka zależna",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as unknown as any,
+      },
+    });
+
+    expect(wrapper.text()).toContain("Koleje");
+  });
+
+  it("says nothing about the sector of a person", () => {
+    const wrapper = mount(ShortNode, {
+      global: { plugins: [vuetify], components: { ChipCompanyCategories } },
+      props: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        edge: edge as unknown as any,
+      },
+    });
+
+    expect(
+      wrapper.findComponent({ name: "ChipCompanyCategories" }).text(),
+    ).toBe("");
   });
 });

@@ -80,6 +80,55 @@ describe("CardEmploymentHistory", () => {
 /** Whose organ names the seat. Both directions of the same rename, because
  * the card is drawn on a person's page and on an institution's and reads the
  * institution off a different end of the row in each. */
+describe("EmploymentHistory sectors", () => {
+  it("names the sector of an employer and links to the rest of it", async () => {
+    const wrapper = await render([
+      edge({
+        richNode: {
+          id: "place",
+          type: "place",
+          name: "PKP Intercity",
+          categories: ["koleje"],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      }),
+    ]);
+
+    expect(wrapper.text()).toContain("Koleje");
+    const chip = wrapper
+      .findAllComponents({ name: "VChip" })
+      .find((c) => c.text() === "Koleje");
+    expect(chip?.props("to")).toBe("/eksploruj/tabela?category=koleje");
+  });
+
+  it("says nothing for an employer filed under no sector", async () => {
+    const wrapper = await render([edge({})]);
+
+    expect(
+      wrapper.findComponent({ name: "ChipCompanyCategories" }).text(),
+    ).toBe("");
+  });
+
+  it("says nothing for a row whose other end is not a company", async () => {
+    // A candidacy points at a region, and `categories` there would be whatever
+    // the region document happens to carry.
+    const wrapper = await render([
+      edge({
+        type: "election",
+        richNode: {
+          id: "teryt1261",
+          type: "region",
+          name: "Kraków",
+          categories: ["koleje"],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      }),
+    ]);
+
+    expect(wrapper.text()).not.toContain("Koleje");
+  });
+});
+
 describe("EmploymentHistory supervisory seats", () => {
   /** A row as an institution's page draws it: the far end is the person. */
   function seat(fields: Partial<EdgeNode> = {}): EdgeNode {
