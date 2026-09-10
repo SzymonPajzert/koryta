@@ -358,6 +358,34 @@ describe("api/edges/serviceMilestones", () => {
     expect(past.milestones[0]!.daysFromToday).toBe(-20);
   });
 
+  it("answers `recent` with today and everything behind it, newest first", async () => {
+    // What the home page's feed asks for. It runs backwards from today, so a
+    // date still ahead of us would sort above every card around it and read
+    // as news.
+    nodes.ewa = { name: "Ewa Zaradna", type: "person", published: true };
+    edges.today = employment();
+    edges.past = employment({ source: "jan", start_date: "2016-08-20" });
+    edges.ahead = employment({
+      source: "ewa",
+      target: "pkp",
+      start_date: "2016-10-01",
+    });
+
+    request({ scope: "recent" });
+    const recent = await call();
+
+    expect(recent.milestones.map((m) => m.personName)).toEqual([
+      "Anna Nowak",
+      "Jan Kowalski",
+    ]);
+    expect(recent.milestones.map((m) => m.daysFromToday)).toEqual([0, -20]);
+    // A different question, not a third piece of the partition, so the two
+    // counts the toggle on /eksploruj/staz labels itself with are unchanged -
+    // and today is still in both `recent` and `upcoming`.
+    expect(recent).toMatchObject({ scope: "recent", total: 2, upcoming: 2 });
+    expect(recent.past).toBe(1);
+  });
+
   it("reads only the node fields it draws with", async () => {
     // It has to fetch every node the published employments touch, and the
     // result sits in nitro's in-memory cache.
