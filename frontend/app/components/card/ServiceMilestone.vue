@@ -3,15 +3,42 @@
     :to="personUrl"
     :data-testid="`service-milestone-${milestone.id}`"
     class="milestone-card h-100"
-    :class="{ 'milestone-card--past': past }"
+    :class="{
+      'milestone-card--past': past && !festive,
+      'milestone-card--festive': festive,
+    }"
     flat
     rounded="lg"
   >
+    <!-- Confetti, drawn rather than imaged: six absolutely positioned squares
+         over a warm wash. `aria-hidden` because it says nothing - the card
+         already reads „13 lat pracy” to a screen reader, and a decoration that
+         announced itself would only get in the way of that. -->
+    <div v-if="festive" class="milestone-card__confetti" aria-hidden="true">
+      <span v-for="n in 6" :key="n" :class="`milestone-card__bit--${n}`" />
+    </div>
+
     <div class="milestone-card__body">
       <div class="d-flex align-start ga-3">
-        <v-avatar class="milestone-card__avatar" color="primary" size="40">
-          <span class="text-body-2 font-weight-bold">{{ initials }}</span>
-        </v-avatar>
+        <!-- The initials keep their circle when the card is festive; the
+             popper is hung off it rather than replacing them, because the
+             reader is still being shown a person and two letters are the only
+             portrait this site has. -->
+        <div class="milestone-card__portrait">
+          <v-avatar
+            class="milestone-card__avatar"
+            :color="festive ? 'surface-warning' : 'primary'"
+            size="40"
+          >
+            <span class="text-body-2 font-weight-bold">{{ initials }}</span>
+          </v-avatar>
+          <v-icon
+            v-if="festive"
+            :icon="mdiPartyPopper"
+            class="milestone-card__popper"
+            size="16"
+          />
+        </div>
 
         <div class="milestone-card__who">
           <div class="milestone-card__name text-subtitle-1 font-weight-bold">
@@ -98,6 +125,7 @@ import {
   mdiCalendarStar,
   mdiCallSplit,
   mdiOfficeBuildingOutline,
+  mdiPartyPopper,
 } from "@mdi/js";
 import { generateEntityUrl } from "~/composables/slugs";
 import { polishCounting } from "~/composables/polish";
@@ -105,7 +133,23 @@ import { longDate } from "~~/shared/dates";
 import type { Company } from "~~/shared/model";
 import type { ServiceMilestone } from "~~/server/api/edges/serviceMilestones.get";
 
-const props = defineProps<{ milestone: ServiceMilestone }>();
+const props = withDefaults(
+  defineProps<{
+    milestone: ServiceMilestone;
+    /** Draw it as the celebration it is: confetti, a party popper on the
+     * initials and the amber palette, instead of the site's usual sage.
+     *
+     * Off by default, and /eksploruj/staz leaves it off. Twenty of these in a
+     * grid is not a celebration, it is wallpaper - and that page's own job is
+     * to be read as a list, with the accent bar carrying the one distinction
+     * it makes (still to come, or already gone by). The home feed is where the
+     * flare earns its keep: there the card has to hold its own beside a column
+     * of appointments, and it is the only thing on the page that is good news
+     * for somebody. */
+    festive?: boolean;
+  }>(),
+  { festive: false },
+);
 
 /** The person, not the company - the same choice `CardEmployment` makes, and
  * for the same reason: the card is about a post, but the reader clicking it
@@ -323,5 +367,195 @@ const company = computed<Company>(() => ({
   background: rgba(var(--v-theme-primary), 0.22);
   color: rgba(var(--v-theme-on-surface), 0.87);
   font-weight: 600;
+}
+
+/* --- The festive variant ------------------------------------------------
+ *
+ * Amber throughout, and amber for a reason beyond taste: `ink.warning` on
+ * `surface.warning` is the one pairing in shared/colors.ts that reads as a
+ * celebration and has already been measured (5.54:1), so the flare costs the
+ * card nothing in legibility. Sage is the site's own colour and is what every
+ * other card on the home page is wearing - a celebration painted in it would
+ * not be visible as one.
+ */
+.milestone-card--festive {
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      rgba(var(--v-theme-surface-warning), 0.85) 0%,
+      rgba(var(--v-theme-surface-warning), 0) 62%
+    ),
+    rgb(var(--v-theme-surface));
+  border-color: rgba(var(--v-theme-ink-warning), 0.35);
+}
+
+.milestone-card--festive::before {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--v-theme-ink-warning)) 0%,
+    rgb(var(--v-theme-secondary)) 50%,
+    rgb(var(--v-theme-primary)) 100%
+  );
+}
+
+.milestone-card--festive:hover {
+  border-color: rgba(var(--v-theme-ink-warning), 0.9);
+}
+
+/* The circle has to establish a containing block for the popper hanging off
+   its corner, and hold its width against a long name beside it. */
+.milestone-card__portrait {
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.milestone-card--festive .milestone-card__avatar {
+  border: 1px solid rgba(var(--v-theme-ink-warning), 0.4);
+  color: rgb(var(--v-theme-ink-warning));
+}
+
+.milestone-card__popper {
+  background: rgb(var(--v-theme-surface));
+  border-radius: 50%;
+  bottom: -3px;
+  color: rgb(var(--v-theme-ink-warning));
+  padding: 2px;
+  position: absolute;
+  right: -5px;
+}
+
+.milestone-card--festive .milestone-card__years {
+  background: rgb(var(--v-theme-surface-warning));
+  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-ink-warning), 0.35);
+  color: rgb(var(--v-theme-ink-warning));
+}
+
+/* The date pill goes warm too. Without this the card is amber everywhere the
+   eye lands first and grey at „6 dni temu”, which is the line that says why
+   the confetti is there at all. */
+.milestone-card--festive .milestone-card__when {
+  background: rgba(var(--v-theme-surface-warning), 0.75);
+  color: rgb(var(--v-theme-ink-warning));
+  font-weight: 600;
+}
+
+/* Six squares scattered across the top of the card, sized and placed by hand
+   rather than generated: there are six of them, they never move, and a loop in
+   the template with per-index custom properties would be more machinery than
+   the six declarations below.
+
+   `overflow: hidden` on the card is what crops the ones that hang off the top,
+   which is what makes them read as thrown rather than as arranged.
+
+   Colours are the site's own - sage, blush and the three inks - so the card
+   still belongs to koryta.pl with confetti on it. */
+.milestone-card__confetti {
+  height: 76px;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.milestone-card__confetti span {
+  border-radius: 1px;
+  height: 7px;
+  position: absolute;
+  width: 7px;
+}
+
+.milestone-card__bit--1 {
+  background: rgb(var(--v-theme-primary));
+  left: 18%;
+  top: 6px;
+  transform: rotate(24deg);
+}
+
+.milestone-card__bit--2 {
+  background: rgb(var(--v-theme-secondary));
+  height: 5px;
+  left: 34%;
+  top: 26px;
+  transform: rotate(-38deg);
+  width: 5px;
+}
+
+.milestone-card__bit--3 {
+  background: rgb(var(--v-theme-ink-warning));
+  left: 52%;
+  top: 4px;
+  transform: rotate(12deg);
+}
+
+.milestone-card__bit--4 {
+  background: rgb(var(--v-theme-ink-info));
+  height: 5px;
+  left: 68%;
+  top: 30px;
+  transform: rotate(-16deg);
+  width: 5px;
+}
+
+.milestone-card__bit--5 {
+  background: rgb(var(--v-theme-ink-danger));
+  left: 81%;
+  top: 10px;
+  transform: rotate(42deg);
+}
+
+.milestone-card__bit--6 {
+  background: rgb(var(--v-theme-primary));
+  height: 5px;
+  left: 92%;
+  top: 34px;
+  transform: rotate(-28deg);
+  width: 5px;
+}
+
+/* Motion only where it was not asked to stop. The confetti drifts down once,
+   on mount, and then holds - a loop would turn the home page into something
+   that has to be looked away from, and there can be a dozen of these cards on
+   it at once. */
+@media (prefers-reduced-motion: no-preference) {
+  .milestone-card__confetti span {
+    animation: milestone-confetti 620ms ease-out both;
+  }
+
+  .milestone-card__bit--2 {
+    animation-delay: 90ms;
+  }
+
+  .milestone-card__bit--3 {
+    animation-delay: 40ms;
+  }
+
+  .milestone-card__bit--4 {
+    animation-delay: 150ms;
+  }
+
+  .milestone-card__bit--5 {
+    animation-delay: 70ms;
+  }
+
+  .milestone-card__bit--6 {
+    animation-delay: 190ms;
+  }
+}
+
+/* Translation only, and no `rotate` in the keyframes: each bit carries its own
+   `transform: rotate(...)` above, and animating `transform` here would
+   overwrite it and leave every square axis-aligned. */
+@keyframes milestone-confetti {
+  from {
+    opacity: 0;
+    translate: 0 -22px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
 }
 </style>
