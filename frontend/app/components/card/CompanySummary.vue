@@ -1,5 +1,5 @@
 <template>
-  <v-card variant="outlined">
+  <v-card variant="outlined" data-testid="company-summary">
     <v-card-text class="d-flex flex-wrap align-center ga-4">
       <div class="d-flex align-center ga-2 mr-auto">
         <v-icon :icon="mdiOfficeBuildingOutline" class="flex-shrink-0" />
