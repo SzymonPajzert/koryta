@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { buildStructuralFilterOps } from "~~/server/utils/nodeFilters";
+import {
+  combineProgressCounts,
+  scanProgress,
+  zeroProgress,
+  type ProgressStats,
+} from "~~/server/utils/progressStats";
 
 const queryValidator = z.object({
   party: z.string().optional(),
@@ -15,29 +21,11 @@ const queryValidator = z.object({
   minVotes: z.coerce.number().optional(),
 });
 
-export type ProgressStats = {
-  /** People matching the structural filters, regardless of status. */
-  total: number;
-  /** Published (approved) people. */
-  approved: number;
-  /** Not published yet, but already looked at: voted on or annotated.
-   *
-   * Deliberately not "or has a revision waiting for approval". Every person
-   * the scrapers ingest arrives as an unapproved revision, so
-   * `revisions.has_unapproved` is set on all 5190 unpublished people and on
-   * none of the published ones - counting it would restate `toCheck` under a
-   * second name. Only 30 of those 5190 have a hand-written latest revision,
-   * and telling them apart costs a read of every one of the revisions. If
-   * that number is ever wanted, /api/admin/summary already computes it as
-   * `unapprovedManual`. */
-  reviewed: number;
-  /** Not published and untouched by the community. */
-  toCheck: number;
-  /** People at least one human voted on. */
-  withVotes: number;
-  /** People with at least one note. */
-  withNotes: number;
-};
+// Re-exported because the components fetching this endpoint import the type
+// from it - see app/composables/stats/useStats.ts. The definition, and the
+// arithmetic behind every one of these numbers, lives in
+// server/utils/progressStats.ts.
+export type { ProgressStats };
 
 /** What the counters below read, on top of whatever the filters ask for. */
 const COUNTER_FIELDS = [
@@ -45,6 +33,80 @@ const COUNTER_FIELDS = [
   "stats.votes.humanVoted",
   "stats.notesCount",
 ];
+
+/** The same six counters, without reading a single person document.
+ *
+ * Only correct when nothing but `type == person` narrows the set, because
+ * every predicate here has to be one Firestore can answer - which is why the
+ * filtered path below still scans.
+ *
+ * An aggregation is billed one read per 1,000 index entries it scans, so a
+ * `count()` over 9,302 people costs ten reads rather than 9,302. Four of them
+ * plus one projected read of the people who carry a note - 444 notes exist in
+ * the whole database, so that is a few hundred documents - answers the lot for
+ * around 40 reads. The scan this replaces was 38% of every Firestore read the
+ * site made.
+ *
+ * Every predicate is positive on purpose. `stats.isApproved` is absent on any
+ * person no revision has written since the trigger in functions/src/nodes.ts
+ * started maintaining it, and a Firestore equality filter does not match a
+ * document that lacks the field - see `nodeOwnedFields` in
+ * server/utils/revisions.ts, which exists because of that. So the unapproved
+ * side of each counter is derived by subtraction from a total, never asked for
+ * with `== false`.
+ *
+ * Returns null when Firestore has no index for one of the queries, which is
+ * what the caller falls back to the scan for: firestore.indexes.json is
+ * deployed by hand, so this file can be live before the indexes it needs are.
+ */
+async function countProgress(
+  db: FirebaseFirestore.Firestore,
+): Promise<ProgressStats | null> {
+  const people = db.collection("nodes").where("type", "==", "person");
+
+  try {
+    const [total, approved, voted, votedApproved, noted] = await Promise.all([
+      people.count().get(),
+      people.where("stats.isApproved", "==", true).count().get(),
+      people.where("stats.votes.humanVoted", "==", true).count().get(),
+      people
+        .where("stats.votes.humanVoted", "==", true)
+        .where("stats.isApproved", "==", true)
+        .count()
+        .get(),
+      // Read as documents rather than counted, because the three counters a
+      // note contributes to - withNotes, and whether its person is already
+      // approved or already voted on - would otherwise be four more
+      // aggregations and four more composite indexes. There are only a few
+      // hundred of these documents.
+      people
+        .where("stats.notesCount", ">", 0)
+        .select("stats.isApproved", "stats.votes.humanVoted")
+        .get(),
+    ]);
+
+    return combineProgressCounts({
+      total: total.data().count,
+      approved: approved.data().count,
+      voted: voted.data().count,
+      votedAndApproved: votedApproved.data().count,
+      noted: noted.docs.map((doc) => ({
+        isApproved: doc.get("stats.isApproved") === true,
+        humanVoted: doc.get("stats.votes.humanVoted") === true,
+      })),
+    });
+  } catch (error) {
+    if ((error as { code?: number }).code === 9) {
+      console.warn(
+        "[stats/progress] falling back to the scan - a composite index this " +
+          "needs is not deployed yet:",
+        (error as Error).message,
+      );
+      return null;
+    }
+    throw error;
+  }
+}
 
 /** Aggregate tagging-progress counts for the people matching the current
  * table filters. Status filters (visibility, hideVoted) are deliberately not
@@ -60,21 +122,19 @@ export default defineCachedEventHandler(
     );
     const db = getFirestore("koryta-pl");
 
-    const zero: ProgressStats = {
-      total: 0,
-      approved: 0,
-      reviewed: 0,
-      toCheck: 0,
-      withVotes: 0,
-      withNotes: 0,
-    };
-
     const { ops, fields, empty } = await buildStructuralFilterOps(
       db,
       { ...query, type: "person" },
       "all",
     );
-    if (empty) return zero;
+    if (empty) return zeroProgress;
+
+    // Nothing but the type op, i.e. no filters at all - which is where the
+    // reads were. `countProgress` answers it without reading a person.
+    if (ops.length === 1) {
+      const counted = await countProgress(db);
+      if (counted) return counted;
+    }
 
     // Fetch all people once and filter in memory: the counts need several
     // overlapping predicates, and the in-memory ops never hit missing-index
@@ -99,21 +159,7 @@ export default defineCachedEventHandler(
       nodes = op.applyMem(nodes);
     }
 
-    const stats = { ...zero, total: nodes.length };
-    for (const node of nodes) {
-      const isApproved = node.stats?.isApproved === true;
-      const hasVotes = node.stats?.votes?.humanVoted === true;
-      const hasNotes = (node.stats?.notesCount ?? 0) > 0;
-
-      if (isApproved) stats.approved++;
-      else if (hasVotes || hasNotes) stats.reviewed++;
-      else stats.toCheck++;
-
-      if (hasVotes) stats.withVotes++;
-      if (hasNotes) stats.withNotes++;
-    }
-
-    return stats;
+    return scanProgress(nodes);
   },
   { maxAge: 300, swr: true },
 );
