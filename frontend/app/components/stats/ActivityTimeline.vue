@@ -86,20 +86,25 @@ const props = defineProps<{
 /** Past this many columns a value on every cap is noise rather than a label. */
 const DIRECT_LABEL_LIMIT = 14;
 
-/** How much of a day's slot the column fills, and how wide it may ever get.
+/** How much of a day's slot the column fills.
  *
- * Both are wider than `barPlotOptions` gives a bar by default (60% of the slot,
- * 24px), and deliberately. The shared numbers are the mark spec for a chart of a
- * handful of named categories, where a thin mark with air around it reads as one
- * thing per band. Here the bands are consecutive days: the axis is a stretch of
- * time and the columns are supposed to read as a series across it, which at 30
- * days and full width they stopped doing - a 24px cap against a 37px slot puts a
- * third of the width between neighbours, and the eye reads scattered pins rather
- * than a shape. 90% leaves the 2px surface gap that separates them and nothing
- * more; the cap is what keeps a 7-day window, where a slot is 157px, from
- * drawing slabs. */
+ * Wider than the 85% `barPlotOptions` gives a bar, and deliberately. The shared
+ * number is the mark spec for a chart of a handful of named categories, where a
+ * little air around each mark reads as one thing per band. Here the bands are
+ * consecutive days: the axis is a stretch of time and the columns are supposed
+ * to read as a series across it, which at 30 days and full width they stopped
+ * doing - the eye read scattered pins rather than a shape. 90% leaves the 2px
+ * surface gap that separates them and nothing more.
+ *
+ * The price is the 7-day window, where a full-width slot is ~157px and the
+ * columns are drawn as slabs. A `maxBarThickness: 48` was written here against
+ * exactly that, and never did anything: it is Chart.js's option, not one
+ * ApexCharts reads, and this library has no absolute cap at all. Capping it for
+ * real means a px `columnWidth` (ApexCharts takes one when the string has no
+ * `%`), which then has to come back to a percentage below `sm` or seven 48px
+ * columns overlap on a phone. Left as it is: the slabs are legible, and the
+ * range this chart is opened on is 30 days. */
 const COLUMN_WIDTH = "90%";
-const MAX_COLUMN_PX = 48;
 
 /** The surface-coloured line between two stacked segments of one day.
  *
@@ -142,7 +147,6 @@ const options = computed(() => {
       bar: {
         ...barPlotOptions().plotOptions.bar,
         columnWidth: COLUMN_WIDTH,
-        maxBarThickness: MAX_COLUMN_PX,
         // The running total on the cap, but only while the columns are far
         // enough apart for it to be read.
         dataLabels: {

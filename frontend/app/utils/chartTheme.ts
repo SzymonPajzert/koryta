@@ -122,8 +122,26 @@ export function baseChartOptions() {
   };
 }
 
-/** Bar geometry the method fixes: capped thickness, a 4px rounded data end, and
- * a 2px gap in the surface colour doing the separating instead of a border. */
+/** How much of its slot a column fills - the whole of the thickness rule, since
+ * a percentage is the only handle ApexCharts gives.
+ *
+ * There was a `maxBarThickness: 24` next to it for a while, the cap the method
+ * asks for. ApexCharts has no such option - it is Chart.js's - so it was never
+ * read and the percentage was doing the work by itself, at 60%: two fifths of
+ * every slot painted as air, which on the five-bucket and ten-step charts of
+ * /eksploruj/statystyki put more gap between neighbours than a separation needs.
+ * 85% leaves the 2px surface gap that separates them and a little more.
+ *
+ * Nothing caps a bar drawn this way, so the container does it instead: every
+ * page carrying one of these is 1200px wide at most (the layout's default -
+ * `fullWidth` pages have no bar chart), which across two columns is a plot of
+ * about 465px, so five categories are ~79px of bar. Fewer categories than that,
+ * or a full-width page, and the columns are slabs - either wants its own
+ * narrower percentage. */
+const COLUMN_FILL = "85%";
+
+/** Bar geometry the method fixes: a 4px rounded data end, and a 2px gap in the
+ * surface colour doing the separating instead of a border. */
 export function barPlotOptions(options: { horizontal?: boolean } = {}) {
   return {
     plotOptions: {
@@ -132,8 +150,7 @@ export function barPlotOptions(options: { horizontal?: boolean } = {}) {
         borderRadius: 4,
         borderRadiusApplication: "end" as const,
         borderRadiusWhenStacked: "last" as const,
-        columnWidth: "60%",
-        maxBarThickness: 24,
+        columnWidth: COLUMN_FILL,
       },
     },
     stroke: { show: true, width: 2, colors: [ink.surface] },
