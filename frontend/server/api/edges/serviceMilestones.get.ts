@@ -68,20 +68,29 @@ export type ServiceMilestone = {
   projected: boolean;
 };
 
-/** Which half of the window is being asked for. */
-export const milestoneScopes = ["upcoming", "past"] as const;
+/** Which slice of the window is being asked for.
+ *
+ * `upcoming` and `past` are the two halves /eksploruj/staz toggles between and
+ * they partition the window: today counts as upcoming, being the one day that
+ * has not gone by. `recent` is the two of them the other way round - today and
+ * everything behind it, newest first - which is not a half but the shape a
+ * reverse-chronological feed of things that have *happened* needs. The home
+ * page merges it into its own feed, where a date still ahead of us would sort
+ * above every card around it and read as news. */
+export const milestoneScopes = ["upcoming", "past", "recent"] as const;
 
 export type MilestoneScope = (typeof milestoneScopes)[number];
 
 export type ServiceMilestones = {
   milestones: ServiceMilestone[];
-  /** Which half this page is a slice of, echoed so the toggle can be drawn
+  /** Which slice this page is taken from, echoed so the toggle can be drawn
    * from the response rather than trusted from the url. */
   scope: MilestoneScope;
-  /** How many the requested half holds, which is what its own feed ends at. */
+  /** How many the requested slice holds, which is what its own feed ends at. */
   total: number;
-  /** Both halves' sizes, sent whichever one was asked for, because the toggle
-   * labels both buttons and neither can be read off the cards on screen. */
+  /** Both halves' sizes, sent whichever slice was asked for, because the
+   * toggle labels both buttons and neither can be read off the cards on
+   * screen. */
   upcoming: number;
   past: number;
   /** Where the next page starts, or null once the feed is exhausted. */
@@ -307,8 +316,9 @@ const cachedMilestones = defineCachedFunction(
 
 /** Whole years of service in public institutions, reached this month or next.
  *
- * One half of the window per request, each opening on the day nearest today:
- * the upcoming ones soonest first, the past ones most recent first.
+ * One slice of the window per request, each opening on the day nearest today:
+ * the upcoming ones soonest first, the past and the recent ones most recent
+ * first.
  */
 async function serviceMilestones(event: H3Event): Promise<ServiceMilestones> {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
@@ -330,7 +340,26 @@ async function serviceMilestones(event: H3Event): Promise<ServiceMilestones> {
         a.personName.localeCompare(b.personName, "pl"),
     );
 
-  const scoped = query.scope === "past" ? past : upcoming;
+  // Today and everything behind it, ordered like `past` and with today's cards
+  // in front. Overlaps both halves on purpose - it is a different question,
+  // not a third piece of the same partition - so `upcoming` and `past` below
+  // stay the counts the toggle labels itself with whichever scope was asked
+  // for.
+  const recent = all
+    .filter((item) => item.daysFromToday <= 0)
+    .sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) ||
+        b.years - a.years ||
+        a.personName.localeCompare(b.personName, "pl"),
+    );
+
+  const scoped =
+    query.scope === "past"
+      ? past
+      : query.scope === "recent"
+        ? recent
+        : upcoming;
   const page = scoped.slice(query.offset, query.offset + query.limit);
   const next = query.offset + page.length;
 
