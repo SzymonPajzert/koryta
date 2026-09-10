@@ -16,6 +16,11 @@
         <span v-if="edge.term" class="text-caption">({{ edge.term }})</span>
       </div>
       <div>{{ edge.label }}</div>
+      <!-- Which sector the institution belongs to, where the card is about one.
+           These cards are the catch-all grid of related entities, so the label
+           above is often only „powiązanie” - the sector is the one thing on the
+           card that says what the reader is being sent to. -->
+      <ChipCompanyCategories :company="edgeCompany(edge)" class="my-1" />
       <div v-if="edge.start_date || edge.end_date" class="text-caption">
         {{ edge.start_date }} - {{ edge.end_date || "obecnie" }}
       </div>
@@ -42,7 +47,7 @@
 
 <script setup lang="ts">
 import { mdiTrashCanOutline } from "@mdi/js";
-import type { EdgeNode } from "~/composables/edges";
+import { edgeCompany, type EdgeNode } from "~/composables/edges";
 import { entityIcon } from "~/utils/entityIcon";
 import { nodeLinkUrl } from "~/composables/slugs";
 

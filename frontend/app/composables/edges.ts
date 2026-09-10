@@ -1,4 +1,10 @@
-import type { Node, Edge, EdgeType, ElectionPosition } from "~~/shared/model";
+import type {
+  Node,
+  Company,
+  Edge,
+  EdgeType,
+  ElectionPosition,
+} from "~~/shared/model";
 import type { TraversePolicy } from "~~/shared/graph/model";
 
 export type EdgeNode = {
@@ -30,6 +36,20 @@ export type EdgeNode = {
   term?: string;
   by_election?: boolean;
 };
+
+/** The row's other end, where that end is a company at all.
+ *
+ * `richNode` is the whole node document - see the spread in `useEdges` below -
+ * so a caller that gets a company back has its categories and its public-sector
+ * flags without a second fetch. Every chip that takes a company takes one that
+ * may be undefined, which is what makes this safe to call on a row that turns
+ * out to be a region or a person.
+ */
+export function edgeCompany(edge: EdgeNode): Company | undefined {
+  return edge.richNode.type === "place"
+    ? (edge.richNode as Company)
+    : undefined;
+}
 
 /** "1 powiązanie", "2 powiązania", "5 powiązań".
  *

@@ -29,6 +29,13 @@
             </span>
           </v-list-item-title>
 
+          <!-- Which sector the institution belongs to. The rows here are a
+               company's owners and subsidiaries, or a region's institutions,
+               and the sector is what tells a reader apart two registry names
+               that differ by one word. Draws nothing for a row that is not a
+               company. -->
+          <ChipCompanyCategories :company="edgeCompany(edge)" />
+
           <!-- Admins only. The row is a link to the other end, so this stops
                the click rather than letting it navigate away. -->
           <template v-if="edge.id && canRemove" #append>
@@ -52,7 +59,7 @@
 import { computed } from "vue";
 import { mdiPlus, mdiTrashCanOutline } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
-import type { EdgeNode } from "~~/app/composables/edges";
+import { edgeCompany, type EdgeNode } from "~~/app/composables/edges";
 import { nodeLinkUrl } from "~/composables/slugs";
 
 const { edges, title, canRemove } = defineProps<{
