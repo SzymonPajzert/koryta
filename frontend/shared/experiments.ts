@@ -123,6 +123,21 @@ export const EXPERIMENTS = {
 
 export type ExperimentId = keyof typeof EXPERIMENTS;
 
+/** Whether `experiment` actually splits anybody.
+ *
+ * One weighted arm is not an experiment: every reader is handed the same thing,
+ * so an assignment answers no question and is not free. It costs an
+ * `experiment:assigned` event per session - on `/`, which is 73% of the site's
+ * entrances - and pins the arm as a property on every event after it, a column
+ * with one value forever. Both are billed, and a spike day is 700 of them.
+ *
+ * The registry ships dormant by design (above), so this is the state it is in
+ * today and the one it returns to between splits; the machinery stays wired
+ * either way, and moving a weight is still all it takes to start one. */
+export function isExperimentLive(experiment: Experiment): boolean {
+  return experiment.arms.filter((arm) => arm.weight > 0).length >= 2;
+}
+
 /** The property name an experiment's arm is reported under.
  *
  * Keyed by experiment rather than a single `arm` property, so two experiments

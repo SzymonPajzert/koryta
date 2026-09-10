@@ -5,6 +5,7 @@ import {
   armPropertyName,
   assignArm,
   hashToUnitInterval,
+  isExperimentLive,
   type Experiment,
 } from "../../shared/experiments";
 
@@ -94,6 +95,43 @@ describe("assignArm", () => {
       (id) => assignArm(evenSplit, id) !== assignArm(other, id),
     ).length;
     expect(differing / ids.length).toBeGreaterThan(0.5);
+  });
+});
+
+describe("isExperimentLive", () => {
+  it("calls one weighted arm dormant", () => {
+    // The whole point of the guard: a split with a single arm is what the
+    // registry ships, and assigning readers to it costs an event each and a
+    // constant property on everything they do afterwards.
+    expect(isExperimentLive(HOME_DEFAULT_EXPERIMENT)).toBe(false);
+  });
+
+  it("calls two weighted arms live", () => {
+    expect(
+      isExperimentLive({
+        id: "two",
+        question: "?",
+        arms: [
+          { id: "a", weight: 1, description: "a" },
+          { id: "b", weight: 1, description: "b" },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores arms that are declared but off", () => {
+    // `gry` is declared with no weight, and a declaration is not a split.
+    expect(
+      isExperimentLive({
+        id: "declared",
+        question: "?",
+        arms: [
+          { id: "a", weight: 1, description: "a" },
+          { id: "b", weight: 0, description: "b" },
+          { id: "c", weight: 0, description: "c" },
+        ],
+      }),
+    ).toBe(false);
   });
 });
 

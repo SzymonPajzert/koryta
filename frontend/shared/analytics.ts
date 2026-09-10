@@ -174,6 +174,39 @@ export const GOALS = {
     props: [],
   },
 
+  // --- Feedback ----------------------------------------------------------
+  // The launcher sits in the default layout, so it is on every page, and what
+  // it collects is the site's own correction loop - somebody works through the
+  // queue daily. Nothing counted it, which left two very different situations
+  // looking identical from the dashboard: a widget nobody can find, and a
+  // widget everybody finds and nobody has anything to say to.
+  "feedback:opened": {
+    description:
+      "Reader opened the „Zgłoś” dialog. Against `feedback:sent` this is the form's completion rate; against the page's visitors it is whether the button is findable at all - it is an icon with no label below 960px. The page it was opened from is the event's own url.",
+    props: [],
+  },
+  "feedback:sent": {
+    description:
+      "Reader submitted a report. `kind` is the chip they picked, so the split between a broken page, wrong data and an idea is readable without opening the queue - and a spike in one kind after a deploy names what broke.",
+    props: ["kind"],
+  },
+
+  // --- Errors ------------------------------------------------------------
+  // A 404 here is rarely a typo: entity urls end in a Firestore document id
+  // and are minted by us, shared, and linked from elsewhere. When the seo
+  // module was lowercasing canonicals, every person page advertised a url that
+  // rendered „Nie ma takiej strony” - visible in Search Console eventually,
+  // and invisible to the analytics the whole time.
+  "error:shown": {
+    description:
+      "The error page rendered. Filter the dashboard to this goal and read the page list: a url that 404s repeatedly is a link somebody is actually following - a stale canonical, a shared address, a page that moved. `status` separates a missing page from a broken one.",
+    props: ["status"],
+    // Fires because a page rendered. Nobody navigates to an error on purpose,
+    // and counting it as engagement would mean the worst outcome on the site
+    // improves the bounce rate.
+    passive: true,
+  },
+
   // --- Experiments -------------------------------------------------------
   "experiment:assigned": {
     description:
