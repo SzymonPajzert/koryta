@@ -339,6 +339,18 @@ export default defineNuxtConfig({
     "/": { swr: 3600 },
     "/admin/**": { ssr: false },
 
+    // `/lista` was removed in "Remove /lista, and point what linked to it at
+    // the table", and 404ed from then on - but it kept ranking. Search Console
+    // still had it drawing 140 impressions at position 7.34 in the three months
+    // to 2026-09-10, the fifth largest of any url on the site.
+    //
+    // The homepage, rather than `/eksploruj/tabela` the removal pointed
+    // everything else at: the table is `Disallow`ed below and renders nothing
+    // server side, so redirecting there would retire the url rather than move
+    // it. The homepage now ends with the people most recently employed
+    // somewhere, which is what a reader arriving on "lista" is after.
+    "/lista": { redirect: { to: "/", statusCode: 301 } },
+
     // Nitro only injects a Cache-Control route rule for public assets mounted
     // under a sub-path (it zeroes maxAge for anything at the site root), so
     // these ship with no Cache-Control at all and Cloud CDN re-fetches them
