@@ -124,6 +124,24 @@ export function generateNodeUrl(node: Node): string | undefined {
   }
 }
 
+/** Where a link to `node` should point, with `/entity/:type/:id` as the floor.
+ *
+ * `generateNodeUrl` answers `undefined` for a type the front end has no page
+ * for, and a relation card rendering one still has to link somewhere; the
+ * `/entity/` url is that somewhere, because `entity-slug` middleware resolves
+ * the id and forwards it.
+ *
+ * The point is that it is the floor and not the default. Relation cards used to
+ * build that url unconditionally, from a node whose `name` they were rendering
+ * one line further down - so every row on a person's page was a 302 out to the
+ * url the sitemap already advertises. Search Console had 2,372 pages parked in
+ * "Strona zawiera przekierowanie" on 2026-09-10 and was ranking 13 `/entity/`
+ * urls in place of the pages they point at.
+ */
+export function nodeLinkUrl(node: Node): string {
+  return generateNodeUrl(node) ?? `/entity/${node.type}/${node.id}`;
+}
+
 export function parseEntityUrlSlug(slugWithId: string): {
   slug: string;
   id: string;

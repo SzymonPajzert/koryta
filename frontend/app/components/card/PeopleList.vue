@@ -30,7 +30,7 @@
         link
         :title="person.name"
         :subtitle="subtitle(person)"
-        :to="`/entity/person/${person.id}`"
+        :to="generateEntityUrl('person', person.id!, person.name)"
       >
         <template #append>
           <!-- A flex row, not a plain div: inline layout stood the chevron on
@@ -92,6 +92,7 @@ import type { PersonRich } from "~~/shared/model";
 import { useListWithStats } from "~/composables/entity/listWithStats";
 import { polishCounting } from "~/composables/polish";
 import type { Query } from "~~/server/api/nodes/index.get";
+import { generateEntityUrl } from "~/composables/slugs";
 
 const props = defineProps<{
   region: Powiat | undefined;
