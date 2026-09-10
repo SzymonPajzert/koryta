@@ -22,8 +22,13 @@ IGNORED_PARENT = {
     "KRS_RECEIVER",  # The company is probably liquidated
     "KRS_GENERAL_PARTNER",  # The company is probably liquidated
     "KRS_RESTRUCTURIZATOR",  # The company is probably liquidated
-    "KRS_CREATED",  # this company has created the other company
-    "KRS_ACQUIRED",  # todo I'm not sure
+    # "Sposob powstania" - the entity this company arose from, or that arose
+    # from it. A predecessor does not own its successor, and the one KRS_CREATED
+    # edge in the crawl says so: EXATEL S.A. -> TELBANK S.A., dated 2004-11-09,
+    # the merger EXATEL came out of. TELBANK has not existed since.
+    "KRS_CREATED",
+    "KRS_CREATOR",
+    "KRS_ACQUIRED",  # Never seen in a crawl; kept in case rejestr.io writes it.
 }
 
 
@@ -41,7 +46,21 @@ class QueryRelation:
             direction=dict["kierunek"],
         )
 
-    def is_child(self):
+    def is_child(self, unknown: "typing.Counter[str] | None" = None) -> bool:
+        """Whether the queried company owns the one this relation points at.
+
+        ``kierunek`` is the *other* company's role, not the queried one's: PKP
+        PLK's feed lists the rail-freight EZIG it belongs to as PASYWNY, and the
+        EZIG's feed lists PKP PLK as AKTYWNY. So a PASYWNY shareholding is one
+        where the queried company is the shareholder, and the other company is
+        its child.
+
+        A relation nobody has classified is not a child. It used to raise, and
+        `process_rejestrio_blob` does not catch it, so a single word rejestr.io
+        had not used before ended the whole company run - which is how
+        KRS_CREATED came to be listed above. `posts_held` makes the same choice
+        for the same reason: count it, drop it, and let the run finish.
+        """
         if self.direction == "AKTYWNY":
             return False
 
@@ -49,9 +68,11 @@ class QueryRelation:
             return False
 
         if self.relation not in PARENT_RELATION:
-            raise ValueError(f"Unknown type: {self.relation} {self.direction}")
+            if unknown is not None:
+                unknown[str(self.relation)] += 1
+            return False
 
-        return self.direction == "PASYWNY" and self.relation in PARENT_RELATION
+        return self.direction == "PASYWNY"
 
 
 class CompanyGraph:
