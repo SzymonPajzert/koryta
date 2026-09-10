@@ -2,7 +2,7 @@
   <v-card
     :key="edge.richNode.id"
     :prepend-icon="entityIcon(edge.richNode.type)"
-    :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
+    :to="nodeLinkUrl(edge.richNode)"
   >
     <template #title>{{ edge.richNode.name }}</template>
     <template #subtitle>
@@ -44,6 +44,7 @@
 import { mdiTrashCanOutline } from "@mdi/js";
 import type { EdgeNode } from "~/composables/edges";
 import { entityIcon } from "~/utils/entityIcon";
+import { nodeLinkUrl } from "~/composables/slugs";
 
 const { edge, canRemove } = defineProps<{
   edge: EdgeNode;

@@ -22,7 +22,7 @@
       <v-list-item
         v-for="edge in edgesSorted"
         :key="edge.id"
-        :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
+        :to="nodeLinkUrl(edge.richNode)"
         class="history-row mt-1"
         rounded
       >
@@ -200,6 +200,7 @@ import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
 import type { Company } from "~~/shared/model";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
+import { nodeLinkUrl } from "~/composables/slugs";
 
 /** Whoever held a seat before the spell an edge records, as the successions
  * endpoint names them, plus how many seats changed hands that day. */

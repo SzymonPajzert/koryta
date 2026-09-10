@@ -19,7 +19,7 @@
         <v-list-item
           v-for="edge in edgesSorted"
           :key="edge.richNode.id"
-          :to="`/entity/${edge.richNode.type}/${edge.richNode.id}`"
+          :to="nodeLinkUrl(edge.richNode)"
           :prepend-icon="entityIcon(edge.richNode.type)"
         >
           <v-list-item-title>
@@ -53,6 +53,7 @@ import { computed } from "vue";
 import { mdiPlus, mdiTrashCanOutline } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
 import type { EdgeNode } from "~~/app/composables/edges";
+import { nodeLinkUrl } from "~/composables/slugs";
 
 const { edges, title, canRemove } = defineProps<{
   title: string;

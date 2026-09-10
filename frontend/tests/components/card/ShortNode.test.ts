@@ -18,7 +18,7 @@ describe("ShortNode", () => {
     label: "Developer",
   };
 
-  it("renders correctly and passes 'to' prop", () => {
+  it("links straight at the node's own page, not the /entity/ redirect", () => {
     const wrapper = mount(ShortNode, {
       global: { plugins: [vuetify] },
       props: {
@@ -29,9 +29,26 @@ describe("ShortNode", () => {
 
     const card = wrapper.findComponent({ name: "VCard" });
     expect(card.exists()).toBe(true);
-    expect(card.props("to")).toBe("/entity/person/123");
+    // The url `_sitemap-urls` advertises, so a crawler following this link
+    // lands on the page rather than on a 302 to it.
+    expect(card.props("to")).toBe("/osoba/alice-123");
     expect(card.text()).toContain("Alice");
     expect(card.text()).toContain("Developer");
     expect(card.text()).toContain("Bio");
+  });
+  it("falls back to /entity/ for a type with no page of its own", () => {
+    const wrapper = mount(ShortNode, {
+      global: { plugins: [vuetify] },
+      props: {
+        edge: {
+          ...edge,
+          richNode: { ...edge.richNode, type: "gadget" },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as unknown as any,
+      },
+    });
+
+    const card = wrapper.findComponent({ name: "VCard" });
+    expect(card.props("to")).toBe("/entity/gadget/123");
   });
 });
