@@ -48,6 +48,22 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "stopka-ma-kontakt",
+    title: "W stopce jest wreszcie „Kontakt”",
+    description:
+      "Stopka opisywana była jako miejsce, w którym stoi adres kontaktowy, i " +
+      "nie było w niej ani słowa „Kontakt”, ani adresu - kto go szukał, " +
+      "scrollował na sam dół i nic nie znajdował. Teraz w „O projekcie” jest " +
+      "link prowadzący prosto do sekcji kontaktowej na stronie „O nas”.",
+    steps: [
+      "Przewiń stronę główną na sam dół.",
+      "W kolumnie „O projekcie” ma być pozycja „Kontakt”.",
+      "Kliknij ją - otworzy się /o-nas i przewinie do sekcji z adresem kontakt@koryta.pl.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "fakty-tylko-dla-zalogowanych",
     title: "Wydobyte fakty widzi tylko zalogowany czytelnik",
     description:
@@ -600,12 +616,12 @@ export const QA_ITEMS: QaItem[] = [
       "stopka - a w niej kontakt, źródła i linki do podstron - uciekała w dół " +
       "za każdym razem, gdy ktoś do niej scrollował, i nie dało się jej " +
       "dojść. Teraz feed dociąga sam dwie strony, a potem pokazuje przycisk " +
-      "„Pokaż więcej zatrudnień”. Przy okazji przestaje pytać w kółko, kiedy " +
+      "„Pokaż więcej”. Przy okazji przestaje pytać w kółko, kiedy " +
       "serwer odpowiada pustą stroną - to potrafiło się kręcić bez końca, po " +
       "kilkaset odczytów bazy na obrót.",
     steps: [
       "Wejdź na stronę główną i przewiń na sam dół.",
-      "Feed dociągnie się dwa razy sam, a potem pojawi się przycisk „Pokaż więcej zatrudnień”.",
+      "Feed dociągnie się dwa razy sam, a potem pojawi się przycisk „Pokaż więcej”.",
       "Przewiń niżej - widać stopkę.",
       "Kliknij przycisk: dochodzą kolejne karty, a przycisk wraca pod nimi.",
     ],

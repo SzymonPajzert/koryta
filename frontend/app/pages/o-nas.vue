@@ -372,7 +372,10 @@
     </section>
 
     <!-- Kontakt -->
-    <section class="text-center py-10 mb-8 border rounded-xl bg-grey-lighten-4">
+    <section
+      id="kontakt"
+      class="text-center py-10 mb-8 border rounded-xl bg-grey-lighten-4"
+    >
       <h2 class="text-h4 font-weight-bold mb-4">
         Dołącz do naszej społeczności
       </h2>
