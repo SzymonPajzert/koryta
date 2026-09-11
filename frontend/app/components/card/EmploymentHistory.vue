@@ -364,23 +364,18 @@ function asPerson(edge: EdgeNode): Person | undefined {
 
 /** The parties of the person a row leads to.
  *
- * On a person's page a `connection` row otherwise says only "Powiązanie z" and
- * a name, and which party the other person is in is the first thing a reader
- * wants to know about somebody they are told this one is connected to - it is
- * what the rest of the site puts next to a name everywhere else a list of
- * people is drawn. Read off the far end's node, unlike `partyOf` above: this is
- * an affiliation the other person's page asserts, not a claim this relation
- * makes.
+ * This list was the last one on the site that named a person without them. A
+ * `connection` row on somebody's page said only "Powiązanie z" and a name; on a
+ * company's page the same rows are the board, and "Obecny skład" and "Kto kogo
+ * zastąpił" directly above them - `succession/CompanyChanges.vue` - chip every
+ * name they print, as does the graph below, which colours a node by party.
  *
- * Nothing on a company's list, where `company` is set: there every row is a
- * person, so a chip on each would be a column rather than a highlight, and the
- * board's politics is what the region statistics and /eksploruj are for.
- *
- * Through `asArray` because a node written before 2026-07-28 stores its
- * `parties` as `{"0": "PiS"}` rather than as an array - see `asArray`.
+ * Read off the far end's node, unlike `partyOf` above: this is an affiliation
+ * the other person's page asserts, not a claim the relation makes. Through
+ * `asArray` because a node written before 2026-07-28 stores its `parties` as
+ * `{"0": "PiS"}` rather than as an array - see `asArray`.
  */
 function partiesOf(edge: EdgeNode): string[] {
-  if (props.company) return [];
   return asArray<string>(asPerson(edge)?.parties);
 }
 
