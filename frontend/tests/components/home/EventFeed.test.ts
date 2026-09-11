@@ -213,27 +213,25 @@ describe("HomeEventFeed", () => {
     expect(asked).toEqual([null, "c1", "c2", "c3"]);
   });
 
-  it("stops loading by itself after two pages, and offers a button instead", async () => {
+  it("never loads a page by itself - it is a button from the first one", async () => {
     // Otherwise the page has no bottom: every scroll towards the footer adds
     // another screen of cards above it, so the footer is never reached.
     pages.first = { employments: [employment("a")], nextCursor: "c1" };
     pages.c1 = { employments: [employment("b")], nextCursor: "c2" };
     pages.c2 = { employments: [employment("c")], nextCursor: "c3" };
-    pages.c3 = { employments: [employment("d")], nextCursor: "c4" };
 
     const wrapper = await mountFeed();
     const scroll = wrapper.findComponent({ name: "VInfiniteScroll" });
-    expect(scroll.props("mode")).toBe("intersect");
-
-    await scrollToEnd(wrapper);
-    expect(scroll.props("mode")).toBe("intersect");
-
-    await scrollToEnd(wrapper);
     expect(scroll.props("mode")).toBe("manual");
 
-    // Still loads on request - it is a button now, not a stop.
+    // A button, not a stop: it still loads, and it stays a button after.
     expect(await scrollToEnd(wrapper)).toBe("ok");
-    expect(wrapper.text()).toContain("Osoba d");
+    expect(wrapper.text()).toContain("Osoba b");
+    expect(scroll.props("mode")).toBe("manual");
+
+    expect(await scrollToEnd(wrapper)).toBe("ok");
+    expect(wrapper.text()).toContain("Osoba c");
+    expect(scroll.props("mode")).toBe("manual");
   });
 
   it("says so when there is nothing to show at all", async () => {
