@@ -241,12 +241,21 @@ function updatedPerson(
   const stored = withoutInternalFields(storedDoc);
   const learned: Record<string, unknown> = {};
 
-  const storedParties = Array.isArray(stored.parties)
-    ? (stored.parties as string[])
-    : [];
-  const parties = [...new Set([...storedParties, ...(body.parties ?? [])])];
-  parties.sort();
-  if (parties.length > storedParties.length) learned.parties = parties;
+  // A set union, so the pipelines can only ever add a party they have found -
+  // never silently drop one the register stopped listing. That also means they
+  // cannot be allowed near a list somebody curated by hand: a union undoes a
+  // removal on the very next run, which is how SLD came back onto a published
+  // page an hour after a reviewer took it off. `partiesSource` is the same
+  // marker `isPublicSource` is for a company, written by
+  // `/api/revisions/create` when a person proposal states `parties`.
+  if (stored.partiesSource !== "manual") {
+    const storedParties = Array.isArray(stored.parties)
+      ? (stored.parties as string[])
+      : [];
+    const parties = [...new Set([...storedParties, ...(body.parties ?? [])])];
+    parties.sort();
+    if (parties.length > storedParties.length) learned.parties = parties;
+  }
 
   if (body.content) learned.content = body.content;
   if (body.wikipedia) learned.wikipedia = body.wikipedia;

@@ -874,6 +874,61 @@ describe("api/ingest/person", () => {
 
       expect(result).toMatchObject({ person: "updated" });
     });
+
+    it("leaves a hand-curated list of parties alone", async () => {
+      // The union can only widen, so before `partiesSource` a reviewer who
+      // removed a party got it back on the next run - there was no way to say
+      // "not this one". The marker is what /api/revisions/create stamps when a
+      // person proposal states `parties` at all.
+      personExists({
+        name: "Test Person",
+        type: "person",
+        parties: ["PO"],
+        partiesSource: "manual",
+      });
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        parties: ["SLD"],
+        companies: [],
+        elections: [],
+      });
+
+      const result = await handler({} as any);
+
+      expect(createRevisionTransaction).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ person: "unchanged" });
+    });
+
+    it("still learns the other fields on a person whose parties are pinned", async () => {
+      // The marker pins one field, not the whole node.
+      personExists({
+        name: "Test Person",
+        type: "person",
+        parties: ["PO"],
+        partiesSource: "manual",
+      });
+      mockReadBody.mockResolvedValue({
+        name: "Test Person",
+        parties: ["SLD"],
+        wikipedia: "https://pl.wikipedia.org/wiki/Test",
+        companies: [],
+        elections: [],
+      });
+
+      await handler({} as any);
+
+      expect(createRevisionTransaction).toHaveBeenCalledWith(
+        mockDb,
+        expect.anything(),
+        expect.objectContaining({ uid: "test-user-id" }),
+        expect.anything(),
+        expect.objectContaining({
+          parties: ["PO"],
+          wikipedia: "https://pl.wikipedia.org/wiki/Test",
+        }),
+        expect.objectContaining({ automatic: true }),
+      );
+    });
   });
 });
 

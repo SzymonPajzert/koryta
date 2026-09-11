@@ -83,6 +83,16 @@ export default defineEventHandler(async (event) => {
     if (dataFields.categories !== undefined) {
       dataFields.categoriesSource = "manual";
     }
+
+    // A person's parties, on the same terms. `ingest/person` unions what it
+    // was handed into what is stored, so without this a removal is undone by
+    // the next run - SLD came back onto a published page 59 minutes after a
+    // reviewer took it off. `undefined` rather than truthiness again: an empty
+    // array is somebody saying "no party", and it has to pin the field as
+    // firmly as a list does.
+    if (dataFields.parties !== undefined) {
+      dataFields.partiesSource = "manual";
+    }
   }
 
   // User-submitted fields override the base node fields. Sanitized here rather

@@ -175,6 +175,70 @@ describe("api/revisions/create, place edits", () => {
     expect(writtenRevision().data).not.toHaveProperty("categoriesSource");
   });
 
+  it("marks a person's parties as decided by hand", async () => {
+    // `ingest/person` unions the parties it was handed into the stored ones,
+    // so without the marker a removal is undone by the next nightly run.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Edward Delewicz",
+      parties: ["SLD", "Nowoczesna"],
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "delewicz",
+      name: "Edward Delewicz",
+      parties: ["Nowoczesna"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      parties: ["Nowoczesna"],
+      partiesSource: "manual",
+    });
+  });
+
+  it("pins an emptied party list as firmly as a filled one", async () => {
+    // "This person is in no party" is an answer, and it is the one the union
+    // is least able to represent on its own.
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Edward Delewicz",
+      parties: ["SLD"],
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "delewicz",
+      name: "Edward Delewicz",
+      parties: [],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({
+      parties: [],
+      partiesSource: "manual",
+    });
+  });
+
+  it("does not claim a person set parties they never mentioned", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "person",
+      name: "Edward Delewicz",
+      parties: ["SLD"],
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "delewicz",
+      name: "Edward Delewicz Jr",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    expect(writtenRevision().data).toMatchObject({ parties: ["SLD"] });
+    expect(writtenRevision().data).not.toHaveProperty("partiesSource");
+  });
+
   it("rejects a category the site does not offer", async () => {
     vi.mocked(baseNodeFields).mockResolvedValueOnce({
       type: "place",
