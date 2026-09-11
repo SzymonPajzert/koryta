@@ -4,18 +4,19 @@
     subtitle="Ostatnie stanowiska i okrągłe staże, od najświeższego. Kliknij kafelek, żeby zobaczyć stronę tej osoby."
   />
 
-  <!-- `mode` is not a constant: the feed loads a couple of pages on its own and
-       then asks. An unbounded intersect feed makes the page infinite, and
-       everything under it - the footer, which is where the contact address and
-       the source links live - is pushed further away every time the reader
-       scrolls towards it, so it can never be reached at all. -->
+  <!-- Always a button, never an intersect sentinel. An auto-loading feed makes
+       the page infinite, and everything under it - the footer, which is where
+       the contact address and the source links live - is pushed further away
+       every time the reader scrolls towards it, so it can never be reached at
+       all. Asking from the first page is also the cheaper default: a reader who
+       scrolls past the first screen on their way somewhere else costs nothing. -->
   <v-infinite-scroll
     v-if="items.length > 0"
     class="event-feed"
     data-testid="home-event-feed"
     empty-text="To już wszystko, co wiemy."
     load-more-text="Pokaż więcej"
-    :mode="mode"
+    mode="manual"
     @load="loadMore"
   >
     <div class="event-feed__grid">
@@ -212,12 +213,6 @@ const items = computed(() =>
 
 type LoadOptions = { done: (status: "ok" | "empty" | "error") => void };
 
-/** How many pages the feed fetches by itself before it starts asking.
- *
- * Two, so that scrolling past the first screen still feels like a feed, and the
- * page still ends. */
-const AUTO_PAGES = 2;
-
 /** Requests one click is allowed to make before it gives up and returns.
  *
  * The endpoint stops scanning at a fixed budget and answers short rather than
@@ -227,24 +222,14 @@ const AUTO_PAGES = 2;
  * animation frame. */
 const MAX_REQUESTS_PER_LOAD = 3;
 
-const autoLoaded = ref(0);
-
-/** Automatic while the count is under the budget, a button after it. Reading
- * it every render is what lets it change: Vuetify checks `mode` when it decides
- * whether to draw the sentinel and again before it chains the next load. */
-const mode = computed(() =>
-  autoLoaded.value < AUTO_PAGES ? "intersect" : "manual",
-);
-
-/** The next page of employments, once the reader has scrolled far enough to
- * want one.
+/** The next page of employments, once the reader has asked for one.
  *
  * Only the employments page. The milestones came whole and are already placed;
  * scrolling reaches further back in time, and there is nothing behind the
  * window they were computed over.
  *
  * Plain `$fetch` rather than `authFetch`, which is a `useFetch` and so cannot
- * be called for a page somebody asked for by scrolling. Nothing is lost by it:
+ * be called for a page somebody asked for with a click. Nothing is lost by it:
  * the endpoint answers with published employments whoever asks, and `latest`
  * would only skip the response cache.
  */
@@ -253,8 +238,6 @@ async function loadMore({ done }: LoadOptions) {
     done("empty");
     return;
   }
-
-  autoLoaded.value += 1;
 
   try {
     // A page can come back empty and still carry a cursor - the endpoint stops

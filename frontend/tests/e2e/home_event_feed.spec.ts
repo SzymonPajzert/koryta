@@ -111,16 +111,14 @@ test.afterAll(async () => {
   await batch.commit();
 });
 
-/** Scrolls until `testId` is in the document, which is what the sentinel at
- * the end of the feed reacts to.
+/** Clicks „Pokaż więcej” until `testId` is in the document.
  *
- * The last card already rendered is what gets scrolled to rather than a blind
- * wheel from wherever the mouse happens to be: the sentinel sits directly
- * below it, so this puts it in view whatever the feed's height has grown to.
- *
- * The feed only loads two pages by itself and then puts a button there, so that
- * the page has a bottom and the footer can be reached. Past that, scrolling is
- * not enough and this has to click.
+ * The feed never loads a page by itself - it is a button from the first one, so
+ * that the page has a bottom and the footer can be reached - so scrolling alone
+ * never gets there. The scroll is still here to bring the button into view: the
+ * last card already rendered is what gets scrolled to rather than a blind wheel
+ * from wherever the mouse happens to be, since the button sits directly below
+ * it whatever the feed's height has grown to.
  */
 async function loadUntil(page: Page, testId: string) {
   const loadMore = page.getByRole("button", {
