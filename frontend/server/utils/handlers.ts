@@ -1,5 +1,6 @@
 import { getQuery } from "h3";
 import type { EventHandler, H3Event } from "h3";
+import { getOptionalUser } from "~~/server/utils/auth";
 
 async function eventIsAuthenticated(_event?: H3Event): Promise<boolean> {
   return false;
@@ -38,6 +39,60 @@ export function authCachedEventHandler<T>(
     }
 
     // Public / Unauthenticated. Use cache.
+    return cachedHandler(event);
+  });
+}
+
+/** Whether this request carries a signed-in reader.
+ *
+ * `getOptionalUser` rather than `getUser`: these are routes that answer a
+ * logged out caller too, so a missing token is an answer and not a 401.
+ */
+export async function eventHasUser(event: H3Event): Promise<boolean> {
+  return !!(await getOptionalUser(event).catch(() => null));
+}
+
+/** `authCachedEventHandler`, for a route that must serve a logged out reader
+ * something narrower than it serves an editor.
+ *
+ * A handler cannot make that decision by itself. `authCachedEventHandler`
+ * holds one six-hour entry per url and - with `eventIsAuthenticated` stubbed
+ * to false above - hands it to everybody, so the first signed-in response
+ * would be cached under that url and served to the next crawler. The decision
+ * has to happen before the cache is consulted, which is what this does: it
+ * resolves the reader, sends a signed-in one to the uncached handler, and puts
+ * the answer on `event.context.hasUser` so the handler can narrow what it
+ * reads for everyone else. Logged out traffic, which is nearly all of it,
+ * still shares one cache entry.
+ *
+ * Deliberately not a fix to `eventIsAuthenticated` itself: restoring that
+ * would verify a token on every request to every endpoint that uses the
+ * wrapper, and drop the cache for every signed-in one.
+ */
+export function readerAwareCachedEventHandler<T>(
+  handler: EventHandler<EventHandlerRequest, Promise<T>>,
+  options = {},
+) {
+  const cachedHandler = defineCachedEventHandler(handler, {
+    swr: true,
+    maxAge: 21600, // 6 hours
+    ...options,
+    // This wrapper decides before the cache is reached, so the cached path is
+    // only ever taken by a caller with no user - there is nothing to bypass.
+    shouldBypassCache: async () => false,
+  });
+
+  return defineEventHandler(async (event: H3Event) => {
+    const hasUser = await eventHasUser(event);
+    event.context.hasUser = hasUser;
+    if (hasUser) {
+      setResponseHeader(
+        event,
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate",
+      );
+      return handler(event);
+    }
     return cachedHandler(event);
   });
 }

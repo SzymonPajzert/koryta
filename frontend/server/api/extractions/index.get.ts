@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
-import { authCachedEventHandler } from "~~/server/utils/handlers";
+import { readerAwareCachedEventHandler } from "~~/server/utils/handlers";
 import { toExtractionFact } from "~~/server/utils/extractions";
 import type { ExtractionFact } from "~~/shared/model";
 
@@ -47,15 +47,28 @@ const queryValidator = z.object({
    * source, and for a crawler indexing unverified machine claims against a
    * named person's canonical url. So the facts must not be sent at all, and
    * this skips the read that would fetch them.
+   *
+   * The page sets it for a logged out reader, but a query flag is the caller's
+   * to leave off - so the handler forces it below when there is no user rather
+   * than trusting this. Kept settable so a signed-in caller can ask for the
+   * count alone and skip the page read.
    */
   countOnly: z.coerce.boolean().default(false),
 });
 
-export default authCachedEventHandler(
+export default readerAwareCachedEventHandler(
   async (event) => {
     const query = await getValidatedQuery(event, (q) =>
       queryValidator.parse(q),
     );
+
+    // What the `countOnly` comment above promises, enforced. These are
+    // unreviewed machine claims about named people, so a caller with no user
+    // is told how many there are and never what they say - whatever they
+    // asked for. `readerAwareCachedEventHandler` resolves the reader before
+    // the cache, so the entry this fills can only ever be served to another
+    // logged out caller.
+    const countOnly = query.countOnly || event.context.hasUser !== true;
 
     const db = getFirestore(getApp(), "koryta-pl");
 
@@ -95,7 +108,7 @@ export default authCachedEventHandler(
     // Count and nothing else. Returned before the page read rather than
     // alongside it, so a caller that only says how many there are never causes
     // the documents to be fetched at all.
-    if (query.countOnly) {
+    if (countOnly) {
       const only = await firestoreQuery.count().get();
       return { facts: [], total: only.data().count };
     }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import handler from "../../../server/api/extractions/index.get";
+import rawHandler from "../../../server/api/extractions/index.get";
 
 const { mockCollection, extractionsQuery, votesQuery } = vi.hoisted(() => {
   globalThis.getValidatedQuery = async (event: any, parser: any) =>
@@ -39,8 +39,14 @@ vi.mock("firebase-admin/firestore", () => ({
 vi.mock("firebase-admin/app", () => ({ getApp: () => ({}) }));
 // Unwrap the Nitro cache layer so the handler can be called directly.
 vi.mock("~~/server/utils/handlers", () => ({
-  authCachedEventHandler: (fn: any) => fn,
+  readerAwareCachedEventHandler: (fn: any) => fn,
 }));
+
+// The wrapper resolves the reader and leaves the answer on the event; called
+// directly there is nobody to do that. Every test below the gate's own speaks
+// for a signed-in one, which is what the route used to serve everybody.
+const handler = (event: any) =>
+  (rawHandler as any)({ context: { hasUser: true }, ...event });
 
 function factDoc(id: string, createdAt: unknown, data: object = {}) {
   return {
@@ -244,5 +250,58 @@ describe("GET /api/extractions", () => {
     // page of facts must not read the votes collection at all.
     expect(mockCollection).not.toHaveBeenCalledWith("votes");
     expect(votesQuery.get).not.toHaveBeenCalled();
+  });
+  // A logged out caller gets the count and never the sentences. The endpoint
+  // said so in a comment for months while serving them anyway - `countOnly` is
+  // a query flag, and a crawler has no reason to set it.
+  describe("a caller with no user", () => {
+    it("is answered with the count and no facts, whatever it asked for", async () => {
+      extractionsQuery.docs = [
+        factDoc("f1", timestamp("2026-07-27T10:00:00.000Z")),
+      ];
+      extractionsQuery.total = 742;
+
+      const result = (await (rawHandler as any)({
+        query: { personNodeId: "p1" },
+        context: { hasUser: false },
+      })) as { facts: unknown[]; total: number };
+
+      expect(result.facts).toEqual([]);
+      expect(result.total).toBe(742);
+    });
+
+    it("never reads the documents it would have to redact", async () => {
+      await (rawHandler as any)({
+        query: {},
+        context: { hasUser: false },
+      });
+      expect(extractionsQuery.offset).not.toHaveBeenCalled();
+      expect(extractionsQuery.limit).not.toHaveBeenCalled();
+    });
+
+    it("cannot reach the grouped-by-article shape either", async () => {
+      extractionsQuery.docs = [
+        factDoc("f1", timestamp("2026-07-27T10:00:00.000Z")),
+      ];
+
+      const result = (await (rawHandler as any)({
+        query: { groupBy: "article" },
+        context: { hasUser: false },
+      })) as { facts?: unknown[]; articles?: object };
+
+      expect(result.articles).toBeUndefined();
+      expect(result.facts).toEqual([]);
+    });
+
+    it("is what a context nobody resolved a reader onto means", async () => {
+      // Only `readerAwareCachedEventHandler` sets `hasUser`. If the route is
+      // ever mounted behind a wrapper that does not, it has to fail closed
+      // rather than read the absence as "signed in".
+      const result = (await (rawHandler as any)({
+        query: {},
+        context: {},
+      })) as { facts: unknown[] };
+      expect(result.facts).toEqual([]);
+    });
   });
 });
