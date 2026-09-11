@@ -69,6 +69,12 @@ const sections = [
       { title: "Rady szpitali", link: "/eksploruj/szpitale" },
       { title: "Okrągły staż", link: "/eksploruj/staz" },
       { title: "Źródła", link: "/zrodla" },
+      // EventFeed bounds the home feed so a reader can reach "the footer,
+      // which is where the contact address and the source links live", and
+      // the qa entry for it says the same - but there was no way to the
+      // address from here, so somebody hunting for „kontakt" scrolled to the
+      // bottom and found nothing.
+      { title: "Kontakt", link: "/o-nas#kontakt" },
       // The app bar only carries this above 960px and the home page only
       // above 960px, so on a phone the footer is the whole of how somebody
       // finds their way to helping.
