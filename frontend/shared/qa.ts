@@ -48,6 +48,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "brak-powiazan-bez-naglowka",
+    title: "Pusta „Historia powiązań” znika zamiast stać nad niczym",
+    description:
+      "Nagłówek „Historia powiązań” rysował się zawsze, więc strona bez ani " +
+      "jednego powiązania pokazywała sam nagłówek i pustkę pod nim. Teraz " +
+      "sekcja po prostu się nie pojawia; zalogowany redaktor widzi ją nadal, " +
+      "bo to w niej stoi przycisk „Dodaj”.",
+    steps: [
+      "Wyloguj się i otwórz stronę encji, która nie ma żadnych powiązań.",
+      "Nie ma już nagłówka „Historia powiązań”.",
+      "Zaloguj się i odśwież - nagłówek wraca razem z przyciskiem „Dodaj”.",
+    ],
+    area: "public",
+  },
+  {
     id: "stopka-ma-kontakt",
     title: "W stopce jest wreszcie „Kontakt”",
     description:

@@ -324,4 +324,23 @@ describe("EmploymentHistory sources", () => {
 
     expect(wrapper.emitted("sources")?.[0]?.[0]).toMatchObject({ id: "e1" });
   });
+  // The heading used to open unconditionally, so a page whose only relations
+  // were de-duplicated away drew the heading over nothing.
+  it("renders nothing at all when there is no relation and no way to add one", async () => {
+    const wrapper = await render([]);
+    expect(wrapper.text()).not.toContain("Historia powiązań");
+    expect(wrapper.find('[data-testid="relations-history"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("keeps the empty heading for an editor, because Dodaj lives in it", async () => {
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: { edges: [], canAdd: true },
+    });
+    expect(wrapper.text()).toContain("Historia powiązań");
+    expect(
+      wrapper.find('[data-testid="add-relation-employment"]').exists(),
+    ).toBe(true);
+  });
 });

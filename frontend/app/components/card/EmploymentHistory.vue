@@ -1,5 +1,14 @@
 <template>
-  <v-list class="px-2" variant="flat" data-testid="relations-history">
+  <!-- Nothing at all when there is nothing to list and no way to add one:
+       after the de-duplication fix a company whose only relations were its own
+       still drew the heading over an empty list. An editor keeps it, because
+       „Dodaj" lives in it. Same guard ConnectionList has carried all along. -->
+  <v-list
+    v-if="edges.length > 0 || canAdd"
+    class="px-2"
+    variant="flat"
+    data-testid="relations-history"
+  >
     <div class="d-flex align-center justify-space-between mb-2">
       <h3 class="text-h6">Historia powiązań</h3>
       <!-- Outlined rather than `variant="text" color="primary"`: sage ink on
