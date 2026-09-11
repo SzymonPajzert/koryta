@@ -59,12 +59,19 @@
       </g>
     </template>
 
-    <!-- v-network-graph only mounts its label layer when this slot is present
-         (`"edge-label" in $slots`), so the `v-if` is what makes "off" cost
-         nothing rather than draw empty text on every line. That is also why
-         the `edge.label` config below had no effect until now. -->
-    <template v-if="edgeLabels" #edge-label="slotProps">
+    <!-- v-network-graph decides its layer list in a computed whose only test
+         is `"edge-label" in $slots`, and that computed does not track the
+         slots object - so a `v-if` here decided the question once, at first
+         mount, when the toggle is off. Switching "Opisy powiązań" on then
+         flipped a prop over a layer that had never been mounted, and no text
+         ever appeared.
+
+         The slot is therefore always declared and the guard moved inside it:
+         the layer exists from the start, and "off" still draws nothing rather
+         than empty text on every line. -->
+    <template #edge-label="slotProps">
       <v-edge-label
+        v-if="edgeLabels"
         v-bind="slotProps"
         :text="edgeText(slotProps.edge)"
         align="center"

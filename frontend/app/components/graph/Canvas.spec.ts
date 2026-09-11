@@ -143,4 +143,47 @@ describe("GraphCanvas", () => {
       component.find(".v-ng-node-label .v-ng-text-background").exists(),
     ).toBe(true);
   });
+  // The regression this pins. v-network-graph builds its layer list in a
+  // computed whose only test is `"edge-label" in $slots`, and that computed
+  // does not track the slots object - so declaring the slot behind
+  // `v-if="edgeLabels"` dropped the layer at first mount and no later toggle
+  // could bring it back. The feature shipped and had never drawn anything.
+  it("mounts the edge-label layer even with the labels switched off", async () => {
+    const component = await mountSuspended(GraphCanvas, {
+      props: {
+        nodes: twoPeople,
+        edges: [{ source: "p1", target: "p2", type: "connection" }],
+        ready: true,
+        focusNodeId: "p1",
+        edgeLabels: false,
+      },
+      global: { plugins: [vuetify] },
+    });
+
+    expect(component.find(".v-ng-layer-edge-labels").exists()).toBe(true);
+    // Off still draws no text: the guard moved inside the slot.
+    expect(component.text()).not.toContain("Powiązanie");
+  });
+
+  it("draws the label text once the reader switches the labels on", async () => {
+    const component = await mountSuspended(GraphCanvas, {
+      props: {
+        nodes: twoPeople,
+        edges: [
+          { source: "p1", target: "p2", type: "connection", label: "Znajomi" },
+        ],
+        ready: true,
+        focusNodeId: "p1",
+        edgeLabels: false,
+      },
+      global: { plugins: [vuetify] },
+    });
+
+    await component.setProps({ edgeLabels: true });
+    await component.vm.$nextTick();
+
+    expect(component.find(".v-ng-layer-edge-labels").text()).toContain(
+      "Znajomi",
+    );
+  });
 });
