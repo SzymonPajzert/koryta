@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import handler from "../../../server/api/extractions/[id].get";
+import rawHandler from "../../../server/api/extractions/[id].get";
 
 const { doc, docRef, routerParam } = vi.hoisted(() => {
   const routerParam: { id: string | undefined } = { id: "f1" };
@@ -22,8 +22,14 @@ vi.mock("firebase-admin/firestore", () => ({
 vi.mock("firebase-admin/app", () => ({ getApp: () => ({}) }));
 // Unwrap the Nitro cache layer so the handler can be called directly.
 vi.mock("~~/server/utils/handlers", () => ({
-  authCachedEventHandler: (fn: any) => fn,
+  readerAwareCachedEventHandler: (fn: any) => fn,
 }));
+
+// The wrapper puts the resolved reader on the event; called directly there is
+// nobody to do that, and every test but the gate's own speaks for a signed-in
+// one.
+const handler = (event: any) =>
+  (rawHandler as any)({ context: { hasUser: true }, ...event });
 
 describe("GET /api/extractions/[id]", () => {
   beforeEach(() => {
@@ -73,6 +79,21 @@ describe("GET /api/extractions/[id]", () => {
     routerParam.id = undefined;
     await expect(handler({} as any)).rejects.toMatchObject({
       statusCode: 400,
+    });
+  });
+  // The list endpoint answers a logged out caller with a count; there is no
+  // count of one, so this route simply refuses. Its only caller sits behind
+  // the `auth` middleware, so nothing legitimate loses a route.
+  it("401s a caller with no user, before it reads anything", async () => {
+    await expect(
+      (rawHandler as any)({ context: { hasUser: false } }),
+    ).rejects.toMatchObject({ statusCode: 401 });
+    expect(docRef).not.toHaveBeenCalled();
+  });
+
+  it("treats an unresolved context as no user rather than as a reader", async () => {
+    await expect((rawHandler as any)({ context: {} })).rejects.toMatchObject({
+      statusCode: 401,
     });
   });
 });
