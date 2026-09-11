@@ -48,6 +48,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "partia-osoby-w-historii-powiazan",
+    title: "Partia osoby, z którą ktoś jest powiązany",
+    description:
+      "W „Historii powiązań” na stronie osoby wiersz prowadzący do innego " +
+      "człowieka podawał tylko imię i nazwisko. Teraz obok nazwiska widać " +
+      "partię tej osoby - tak samo jak w tabeli i na jej własnej stronie.",
+    steps: [
+      "Wejdź na stronę osoby, która ma powiązanie z inną osobą.",
+      "W sekcji „Historia powiązań” znajdź wiersz „Powiązanie z” - obok nazwiska powinna być kolorowa plakietka z partią.",
+      "Wiersz prowadzący do spółki albo do osoby bez partii wygląda jak dotąd.",
+    ],
+    area: "public",
+  },
+  {
     id: "potwierdzenie-propozycji-na-calej-szerokosci",
     title: "Potwierdzenie zaproponowanej zmiany mieści się w karcie spółki",
     description:

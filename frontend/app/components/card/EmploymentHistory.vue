@@ -53,6 +53,10 @@
           <span class="text-caption text-medium-emphasis text-wrap">
             {{ edgeLabel(edge) }}
           </span>
+          <!-- Whose party the person at the other end is in. Never collides
+               with the candidacy chip below: that one only shows on `election`
+               rows, whose far end is a place. -->
+          <PartyChip v-for="party in partiesOf(edge)" :key="party" :party />
           <PartyChip v-if="partyOf(edge)" :party="partyOf(edge)!" />
           <span
             v-if="committeeOf(edge)"
@@ -207,7 +211,7 @@ import { entityIcon } from "~/utils/entityIcon";
 import { relationPeriodLabel } from "~/utils/relationPeriod";
 import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
-import type { Company } from "~~/shared/model";
+import { asArray, type Company, type Person } from "~~/shared/model";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~/composables/slugs";
 
@@ -349,6 +353,35 @@ function asCompany(edge: EdgeNode): Company | undefined {
   return edge.richNode.type === "place"
     ? (edge.richNode as Company)
     : undefined;
+}
+
+/** The person behind an edge, when the edge leads to one at all. */
+function asPerson(edge: EdgeNode): Person | undefined {
+  return edge.richNode.type === "person"
+    ? (edge.richNode as Person)
+    : undefined;
+}
+
+/** The parties of the person a row leads to.
+ *
+ * On a person's page a `connection` row otherwise says only "Powiązanie z" and
+ * a name, and which party the other person is in is the first thing a reader
+ * wants to know about somebody they are told this one is connected to - it is
+ * what the rest of the site puts next to a name everywhere else a list of
+ * people is drawn. Read off the far end's node, unlike `partyOf` above: this is
+ * an affiliation the other person's page asserts, not a claim this relation
+ * makes.
+ *
+ * Nothing on a company's list, where `company` is set: there every row is a
+ * person, so a chip on each would be a column rather than a highlight, and the
+ * board's politics is what the region statistics and /eksploruj are for.
+ *
+ * Through `asArray` because a node written before 2026-07-28 stores its
+ * `parties` as `{"0": "PiS"}` rather than as an array - see `asArray`.
+ */
+function partiesOf(edge: EdgeNode): string[] {
+  if (props.company) return [];
+  return asArray<string>(asPerson(edge)?.parties);
 }
 
 /** The predecessor of one row, as nought or one of them.
