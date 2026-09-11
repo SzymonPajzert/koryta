@@ -280,6 +280,82 @@ describe("EmploymentHistory", () => {
   });
 });
 
+/** A relation whose far end is another human being, as `useEdges` hands it over.
+ * The only kind of row on a person's page that names one. */
+function acquaintance(person: Record<string, unknown> = {}) {
+  return {
+    id: "e2",
+    type: "connection",
+    label: "Powiązanie z",
+    source: "person1",
+    target: "person2",
+    richNode: { id: "person2", type: "person", name: "Anna Nowak", ...person },
+  };
+}
+
+describe("EmploymentHistory connections", () => {
+  it("names the party of the person a relation leads to", () => {
+    const wrapper = mountHistory([acquaintance({ parties: ["PiS"] })]);
+
+    expect(wrapper.text()).toContain("Anna Nowak");
+    expect(wrapper.findComponent(PartyChip).props("party")).toBe("PiS");
+  });
+
+  it("names every party of somebody who has changed one", () => {
+    const wrapper = mountHistory([
+      acquaintance({ parties: ["SLD", "Nowa Lewica"] }),
+    ]);
+
+    expect(
+      wrapper.findAllComponents(PartyChip).map((chip) => chip.props("party")),
+    ).toEqual(["SLD", "Nowa Lewica"]);
+  });
+
+  it("reads a `parties` that was stored as a numbered-key object", () => {
+    // What `sanitizeFirestoreData` wrote until 2026-07-28, and still the shape
+    // of any nested array - see `asArray`.
+    const wrapper = mountHistory([acquaintance({ parties: { 0: "PO" } })]);
+
+    expect(wrapper.findComponent(PartyChip).props("party")).toBe("PO");
+  });
+
+  it("says nothing about a person with no party", () => {
+    const wrapper = mountHistory([acquaintance()]);
+
+    expect(wrapper.text()).toContain("Powiązanie z");
+    expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
+  });
+
+  it("leaves a relation to a company alone", () => {
+    // `parties` cannot be on a company, but the guard is on the node type
+    // rather than on the field, so a stray one must not paint a chip.
+    const wrapper = mountHistory([
+      { ...acquaintance(), richNode: { id: "p", type: "place", name: "PKP" } },
+    ]);
+
+    expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
+  });
+
+  it("leaves a company's own list of people unchipped", () => {
+    // There every row is a person, so a chip on each would be a column rather
+    // than a highlight.
+    const wrapper = mount(EmploymentHistory, {
+      global: {
+        plugins: [vuetify],
+        components: { PartyChip, ChipPublicCompany, ChipRelativeDuration },
+      },
+      props: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        edges: [acquaintance({ parties: ["PiS"] })] as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        company: { id: "pkp", type: "place", name: "PKP" } as any,
+      },
+    });
+
+    expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
+  });
+});
+
 /** The per-row citation button: how many articles a claim rests on, and the way
  * into changing that. */
 describe("EmploymentHistory sources", () => {
