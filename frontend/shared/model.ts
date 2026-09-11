@@ -299,6 +299,18 @@ export const destinationAddText: Record<NodeType, string> = {
 export interface Person extends Omit<Node, "type"> {
   type: "person";
   parties?: string[];
+  /** Where `parties` came from, so an ingest does not overwrite a human.
+   *
+   * `ingest/person` merges the parties it was handed into the stored ones as a
+   * set union, which can only widen - so a reviewer who removed a party had it
+   * back within the hour, and there was no way to say "not this one". This is
+   * the same escape hatch `isPublicSource` and `categoriesSource` are for
+   * companies, and it is set by `/api/revisions/create` whenever a person
+   * proposal states `parties` at all.
+   *
+   * Absent means the pipelines wrote it, which is the case for every value
+   * predating this marker - including any party a human had already removed. */
+  partiesSource?: "manual";
   birthDate?: string;
   /** Education, as a line of prose rather than a code: the useful answer is
    * sometimes a degree ("magister inżynierii środowiska") and sometimes a
