@@ -336,23 +336,25 @@ describe("EmploymentHistory connections", () => {
     expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
   });
 
-  it("leaves a company's own list of people unchipped", () => {
-    // There every row is a person, so a chip on each would be a column rather
-    // than a highlight.
+  it("chips the people on a company's own list too", () => {
+    // There every row is a person - the board - and "Obecny skład" directly
+    // above this card already names the party of each of them.
     const wrapper = mount(EmploymentHistory, {
       global: {
         plugins: [vuetify],
         components: { PartyChip, ChipPublicCompany, ChipRelativeDuration },
       },
       props: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        edges: [acquaintance({ parties: ["PiS"] })] as any,
+        edges: [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { ...acquaintance({ parties: ["PiS"] }), type: "employed" } as any,
+        ],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         company: { id: "pkp", type: "place", name: "PKP" } as any,
       },
     });
 
-    expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
+    expect(wrapper.findComponent(PartyChip).props("party")).toBe("PiS");
   });
 });
 

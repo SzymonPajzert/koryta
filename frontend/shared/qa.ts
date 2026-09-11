@@ -51,12 +51,14 @@ export const QA_ITEMS: QaItem[] = [
     id: "partia-osoby-w-historii-powiazan",
     title: "Partia osoby, z którą ktoś jest powiązany",
     description:
-      "W „Historii powiązań” na stronie osoby wiersz prowadzący do innego " +
-      "człowieka podawał tylko imię i nazwisko. Teraz obok nazwiska widać " +
-      "partię tej osoby - tak samo jak w tabeli i na jej własnej stronie.",
+      "„Historia powiązań” była ostatnim miejscem na stronie, w którym " +
+      "człowiek był wymieniony bez partii - na stronie osoby wiersz " +
+      "„Powiązanie z” podawał samo imię i nazwisko, a na stronie instytucji " +
+      "cały skład, choć „Obecny skład” tuż wyżej partie pokazuje. Teraz " +
+      "plakietka z partią jest w obu miejscach.",
     steps: [
-      "Wejdź na stronę osoby, która ma powiązanie z inną osobą.",
-      "W sekcji „Historia powiązań” znajdź wiersz „Powiązanie z” - obok nazwiska powinna być kolorowa plakietka z partią.",
+      "Wejdź na stronę osoby, która ma powiązanie z inną osobą - w sekcji „Historia powiązań” obok nazwiska ma być kolorowa plakietka z partią.",
+      "Wejdź na stronę instytucji - w „Historii powiązań” partie mają się zgadzać z tymi w „Obecnym składzie” wyżej.",
       "Wiersz prowadzący do spółki albo do osoby bez partii wygląda jak dotąd.",
     ],
     area: "public",
