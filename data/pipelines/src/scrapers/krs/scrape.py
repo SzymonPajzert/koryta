@@ -1,7 +1,7 @@
 import argparse
 import json
 import typing
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import date, timedelta
 from enum import Enum
 from functools import cached_property
@@ -766,6 +766,15 @@ def public_krs_ids(companies: pd.DataFrame) -> set[str]:
     return set(str(krs).zfill(10) for krs in public)
 
 
+@dataclass
+class CostBreakdown:
+    subjects: int
+    public: int
+    calls: int
+    cost: float
+    head: list[str]
+
+
 def cost_breakdown(
     queries: typing.Iterable[RejestrIOQuery],
     public_krs: set[str] | None = None,
@@ -783,7 +792,7 @@ def cost_breakdown(
     owned; a person feed has no company and never counts towards it.
     """
     public_krs = public_krs or set()
-    tally: dict[str, dict[str, float]] = {}
+    tally: dict[str, CostBreakdown] = {}
     free_only = 0
     for query in queries:
         calls = query.paid_calls()
@@ -792,17 +801,15 @@ def cost_breakdown(
             continue
         row = tally.setdefault(
             query.primary_reason,
-            {"subjects": 0, "public": 0, "calls": 0, "cost": 0.0, "head": []},
+            CostBreakdown(subjects=0, public=0, calls=0, cost=0.0, head=[]),
         )
-        row["subjects"] += 1
-        row["calls"] += calls
-        row["cost"] += query.cost()
-        if len(row["head"]) < 5:
-            row["head"].append(
-                query.krs.id if query.krs is not None else query.person.id
-            )
+        row.subjects += 1
+        row.calls += calls
+        row.cost += query.cost()
+        if len(row.head) < 5:
+            row.head.append(query.krs.id if query.krs is not None else query.person.id)
         if query.krs is not None and query.krs.id in public_krs:
-            row["public"] += 1
+            row.public += 1
 
     lines = [
         "",
@@ -810,18 +817,18 @@ def cost_breakdown(
         "",
         f"  {'reason':<24}{'subjects':>10}{'public':>9}{'calls':>8}{'PLN':>10}",
     ]
-    order = sorted(tally, key=lambda reason: -tally[reason]["cost"])
+    order = sorted(tally, key=lambda reason: -tally[reason].cost)
     for reason in order:
         row = tally[reason]
         lines.append(
-            f"  {reason:<24}{int(row['subjects']):>10}{int(row['public']):>9}"
-            f"{int(row['calls']):>8}{row['cost']:>10.2f}"
+            f"  {reason:<24}{int(row.subjects):>10}{int(row.public):>9}"
+            f"{int(row.calls):>8}{row.cost:>10.2f}"
         )
-        lines.append(f"    {', '.join(row['head'])}")
+        lines.append(f"    {', '.join(row.head)}")
     total = (
         {
-            key: sum(row[key] for row in tally.values())
-            for key in ("subjects", "public", "calls", "cost")
+            field.name: sum(getattr(row, field.name) for row in tally.values())
+            for field in fields(CostBreakdown)
         }
         if tally
         else {"subjects": 0, "public": 0, "calls": 0, "cost": 0.0}

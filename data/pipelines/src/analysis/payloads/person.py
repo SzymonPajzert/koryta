@@ -9,7 +9,7 @@ from functools import cached_property
 import numpy as np
 import pandas as pd
 
-from analysis.extract import Extract, press_list_evidence
+from analysis.extract import Extract
 from analysis.payloads.election import get_election_type
 from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
 from analysis.utils.elections import candidacy_teryt
@@ -235,7 +235,7 @@ class PeoplePayloads(Pipeline[Person]):
 
         companies = _extract_companies(row)
         elections = _extract_elections(row)
-        sources, content, party = _hardcoded_sources_content_parties(row)
+        sources, content, party = [], "", []
         # The two hardcoded lists name a few hundred people between them; the
         # committees name everybody who ever stood for one. Both are evidence,
         # so keep both.
@@ -303,15 +303,6 @@ def _iso_date(value: typing.Any) -> str | None:
         )
     parsed = pd.to_datetime(value, errors="coerce")
     return None if pd.isna(parsed) else parsed.date().isoformat()
-
-
-press_lists = press_list_evidence()
-
-
-def _hardcoded_sources_content_parties(
-    row: pd.Series,
-):
-    return press_lists(row)
 
 
 def _extract_companies(row: pd.Series) -> list[Company]:
