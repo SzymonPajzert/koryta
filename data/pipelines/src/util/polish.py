@@ -85,7 +85,101 @@ def parse_name(pkw_name: str, format: PkwFormat):
     return first_name, middle_name, last_name
 
 
+#: Words that stay lowercase when a shouted name is put back into case. A
+#: nobiliary particle is part of the surname rather than a word of its own
+#: ("Piotr van der Coghen"), and `vel` is how the registers write an alias
+#: ("Jan Kowalski vel Kuropatwa"); capitalising either of them spells the name
+#: wrong. In first position there is nothing for the particle to hang off - a
+#: name that begins with one is being shown on its own - so it is capitalised
+#: like any other word.
+#:
+#: Only a shouted word is looked up here, which is what keeps "Jolanta Den" and
+#: "Maria Du Vall" - real koryta.pl people whose surname *is* one of these words
+#: - out of it: their capital is a choice somebody made, and nothing below
+#: touches a word that carries a choice.
+NAME_PARTICLES = frozenset(
+    {
+        "van",
+        "von",
+        "der",
+        "den",
+        "de",
+        "del",
+        "della",
+        "di",
+        "da",
+        "do",
+        "dos",
+        "du",
+        "la",
+        "le",
+        "el",
+        "ten",
+        "ter",
+        "vel",
+        "zu",
+    }
+)
 
+#: What separates two parts of one word, each of which is capitalised on its
+#: own: a double-barrelled surname (Hardie-Douglas) and the elided article of
+#: D'Obyrn or O'Brien. Both spellings of the apostrophe occur in the registers.
+NAME_PART_SEPARATORS = "-'\u2019"
+
+
+def _capitalize_shouted(part: str) -> str:
+    """One part of a shouted word - `GRADZIUK`, or the `NOWAK` of `KOWALSKA-NOWAK`.
+
+    The part holds no lowercase letter, so lowering everything after the first
+    one loses nothing: there was no case in it to lose.
+    """
+    letters = [index for index, char in enumerate(part) if char.isalpha()]
+    if not letters:
+        return part
+    first = letters[0]
+    return part[:first] + part[first].upper() + part[first + 1 :].lower()
+
+
+def format_person_name(name: str) -> str:
+    """A person's name with any word that shouts put back into case.
+
+    The sources do not agree on case. PKW shouts every surname by convention -
+    its listings spell a candidate "KOPCZYŃSKI Andrzej Jacek" - and some of what
+    the company register returns arrives in full capitals too: five people have
+    a koryta.pl page named "MAŁGORZATA GRADZIUK" or the like, sitting in the
+    same listings as the properly capitalised majority.
+
+    A word holding even one lowercase letter is left exactly as it is, whatever
+    it looks like. Its case is a spelling somebody chose - `McDonald`, `Du Vall`
+    and the lowercased `hardie-douglas` alike - and this is not a proofreader:
+    it undoes shouting, and nothing else. Which is also what makes it different
+    from `str.title()`, whose flattening of `van der Coghen` to `Van Der Coghen`
+    is exactly the kind of guess that is not wanted.
+
+    Whitespace is left alone for the same reason, so the transformation is only
+    ever the case of a word: the name comes back the shape it went in.
+
+    Idempotent: a name with nothing left shouting is returned unchanged, which
+    is what lets the invariant be stated as ``format_person_name(name) == name``.
+    """
+    position = -1
+
+    def word(match) -> str:
+        nonlocal position
+        position += 1
+        item = match.group(0)
+        if any(char.islower() for char in item):
+            return item
+        if position > 0 and item.lower() in NAME_PARTICLES:
+            return item.lower()
+        return "".join(
+            piece if piece in NAME_PART_SEPARATORS else _capitalize_shouted(piece)
+            for piece in re.split(f"([{NAME_PART_SEPARATORS}])", item)
+        )
+
+    # Substituting word by word rather than splitting and rejoining is what
+    # leaves the whitespace between them as it was.
+    return re.sub(r"\S+", word, name)
 
 
 def parse_polish_date(date_string: str) -> Optional[date]:

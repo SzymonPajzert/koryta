@@ -8,6 +8,7 @@ import pytest
 from entities.composite import Person
 from koryta import setup_context
 from pipelines import PeoplePayloads
+from util.polish import format_person_name
 
 
 @pytest.fixture
@@ -56,6 +57,29 @@ def test_non_empty_wikipedia(outputs_df):
     )
     some_wiki_entries = len(has_wiki_entries[has_wiki_entries])
     assert some_wiki_entries > 0
+
+
+@pytest.mark.parametrize("outputs_df", [("3061"), ("3063"), ("3064")], indirect=True)
+def test_names_are_capitalised(outputs_df):
+    """No payload names a person the way a register shouts the name.
+
+    `map_person_payload` takes the name from whichever of `name`, `full_name`,
+    `krs_name` and `base_full_name` is filled, and those columns disagree on
+    case: the PKW-merged `full_name` shouts the surname, and some of what the
+    company register returns is in full capitals. The payload's `name` is what
+    the ingest calls the node, so anything not fixed here reads as shouting on
+    the person's page.
+    """
+    misformatted = [
+        name
+        for name in outputs_df["name"]
+        if isinstance(name, str) and format_person_name(name) != name
+    ]
+
+    assert not misformatted, (
+        f"{len(misformatted)} of {len(outputs_df)} payloads carry a name that is "
+        f"not in the capitalised form: {misformatted[:10]}"
+    )
 
 
 @pytest.mark.skip(reason="TODO mapping to list is failing")
