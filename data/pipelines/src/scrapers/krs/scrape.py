@@ -714,10 +714,33 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         return KRSSet(KRS(krs) for krs in series.tolist())
 
     def already_scraped_companies(self, ctx: Context) -> KRSSet:
+        """Companies whose rejestr.io connections are already in the bucket.
+
+        Only the two krs-powiazania calls count as having scraped a company,
+        because they are the only ones that put people on it. This used to be
+        every KRS with any blob at all, and the free api-krs register entry is
+        a blob: a company first met in somebody's person feed was subtracted
+        from the queue as soon as `scrape_krs_free` fetched its odpis, so the
+        paid call that would have given it people was never issued. `scrape_krs`
+        reprocesses this pipeline between its two phases, so phase 1 could
+        disqualify a company before phase 2 read the list - and permanently,
+        since the odpis stays in the bucket and every later run drops it again.
+
+        KRS 0001243843 (LUBELSKIE KOLEJE, owned by wojewodztwo lubelskie) is
+        one of those: named in a person feed crawled 2026-08-24, odpis fetched
+        2026-08-27, no connections ever. It has no row in `person_krs`, so
+        `PeoplePayloads --krs 0001243843` has nobody to emit - while the
+        register entry we do hold masks every name it lists.
+
+        Letting these back in buys nothing twice: `save_org_connections`
+        filters per method, so a company that already has its odpis is asked
+        only for the rejestr.io calls it is missing.
+        """
         scraped = self.already_scraped.read_or_process(ctx)
         if scraped is None or scraped.empty:
             return KRSSet()
-        return KRSSet(KRS(id=str(krs).zfill(10)) for krs in scraped["krs"].unique())
+        connections = scraped[scraped["method"].isin(ORG_CONNECTION_METHODS)]
+        return KRSSet(KRS(id=str(krs).zfill(10)) for krs in connections["krs"].unique())
 
     def companies_to_scrape(self, ctx: Context) -> KRSSet:
         self.hardcoded_companies.process(ctx)

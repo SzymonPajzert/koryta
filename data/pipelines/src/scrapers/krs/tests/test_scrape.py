@@ -5,6 +5,7 @@ import pandas as pd
 from scrapers.krs.scrape import (
     KRSScraped,
     QueryType,
+    ScrapeRejestrIO,
     compute_refresh_cutoff_date,
     filter_paid_by_people_changes,
 )
@@ -135,3 +136,73 @@ def test_the_org_lookup_is_billed_too_and_still_waits():
         {"0000000001": "2026-05-27"},
     )
     assert kept.empty
+
+
+def _scraped(*rows: tuple[str, str]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [{"krs": krs, "method": method, "date": "2026-08-27"} for krs, method in rows]
+    )
+
+
+class _StubScraped:
+    """Stands in for the KRSAlreadyScraped dependency, which lists the bucket."""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+
+    def read_or_process(self, ctx):
+        return self.df
+
+
+def _with_scraped(df: pd.DataFrame) -> ScrapeRejestrIO:
+    scraper = ScrapeRejestrIO()
+    # Through __dict__ because that is where `Pipeline.__init__` puts a source,
+    # and the stub is not a KRSAlreadyScraped.
+    scraper.__dict__["already_scraped"] = _StubScraped(df)
+    return scraper
+
+
+def test_the_free_register_entry_does_not_count_as_scraped():
+    """The api-krs odpis says nothing about who works there.
+
+    Counting it left a company discovered in a person's feed subtracted from
+    the queue the moment `scrape_krs_free` fetched its entry, so the paid call
+    that would have given it people was never issued - and never would be,
+    since the odpis stays in the bucket. KRS 0001243843 sat in exactly that
+    state with no row in `person_krs`.
+    """
+    scraper = _with_scraped(
+        _scraped(("0001243843", QueryType.API_KRS_ODPIS_AKTUALNY_P.value))
+    )
+
+    assert len(scraper.already_scraped_companies(None)) == 0
+
+
+def test_a_company_with_its_connections_stays_out_of_the_queue():
+    scraper = _with_scraped(
+        _scraped(
+            ("0000607833", QueryType.API_KRS_ODPIS_AKTUALNY_P.value),
+            ("0000607833", QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE.value),
+        )
+    )
+
+    assert "0000607833" in scraper.already_scraped_companies(None)
+
+
+def test_the_org_lookup_is_not_a_connections_call():
+    """`rejestrio_org` is bought, but it is the company's own entry.
+
+    It carries no connections, so a company that has only that one still has
+    nobody on it and is still worth the krs-powiazania pair.
+    """
+    scraper = _with_scraped(_scraped(("0000000001", QueryType.REJESTRIO_ORG.value)))
+
+    assert len(scraper.already_scraped_companies(None)) == 0
+
+
+def test_a_krs_read_as_a_number_is_padded_back():
+    scraper = _with_scraped(
+        _scraped(("4324", QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE.value))
+    )
+
+    assert "0000004324" in scraper.already_scraped_companies(None)
