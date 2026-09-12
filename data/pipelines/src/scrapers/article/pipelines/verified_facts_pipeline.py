@@ -28,8 +28,8 @@ from scrapers.article.pipelines.incremental import IncrementalJsonlPipeline
 from scrapers.article.pipelines.pipeline_utils import llm_model
 from scrapers.stores import LLM, VERSIONED_DIR, Context, LLMRequest
 
-VERIFY_VERSION = 9
-MAX_TOKENS = 4000
+VERIFY_VERSION = 10
+MAX_TOKENS = 256
 TEMPERATURE = 0.0
 
 _INPUT_FILE = Path(VERSIONED_DIR) / "article_facts" / "article_facts.jsonl"
@@ -223,9 +223,10 @@ span. Judge form as well as grounding:
 _JUDGE_PROMPT = (
     "You label an extracted fact using this rulebook. Judge ONLY from the "
     "justification span; never use world knowledge or text outside it. Reply "
-    "with a single compact JSON object and nothing else: "
-    '{{"label": "correct|incorrect|insufficient", "reason": "..."}}.\n\n'
-    "RULEBOOK:\n{rules}\n\n"
+    "with one compact JSON object and nothing else (no thinking, no "
+    "explanation beyond the reason field): "
+    '{{"label": "correct|incorrect|insufficient", "reason": "short"}}.\n\n'
+    "RULEBOOK (summary):\n{rules}\n\n"
     "FACT (JSON):\n{fact}"
 )
 
@@ -338,7 +339,7 @@ def _judge_request(fact: dict[str, Any], model: str) -> LLMRequest:
         max_tokens=MAX_TOKENS,
         temperature=TEMPERATURE,
         model=model,
-        enable_thinking=True,
+        enable_thinking=False,
     )
 
 

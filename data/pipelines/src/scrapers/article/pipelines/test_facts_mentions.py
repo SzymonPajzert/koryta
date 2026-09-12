@@ -7,8 +7,7 @@ import pytest
 
 from scrapers.article.pipelines.article_analyzed_pipeline import _koryta_ids_by_url
 from scrapers.article.pipelines.facts_pipeline import (
-    _extractable_records,
-    _filter_to_mentioned,
+    _iter_extractable_records,
     _mentioned_people_by_url,
 )
 
@@ -132,7 +131,9 @@ def _write_scores(tmp_path: Path) -> Path:
 
 def test_extractable_records_without_mentions_includes_all_scored(tmp_path):
     # Empty mentions -> every scored+parsed article is extracted with no hint.
-    records = _extractable_records(_write_parsed(tmp_path), _write_scores(tmp_path), {})
+    records = list(
+        _iter_extractable_records(_write_parsed(tmp_path), _write_scores(tmp_path), {})
+    )
     urls = {r["url"]: r for r in records}
     assert set(urls) == {"a.pl/1", "b.pl/2"}
     assert urls["b.pl/2"]["people_mentioned"] == []  # zero score still included
@@ -143,8 +144,10 @@ def test_extractable_records_without_mentions_includes_all_scored(tmp_path):
 
 def test_extractable_records_mentions_add_hint_without_gate(tmp_path):
     mentioned = {"b.pl/2": [("Jan Kowalski", "k1")]}
-    records = _extractable_records(
-        _write_parsed(tmp_path), _write_scores(tmp_path), mentioned
+    records = list(
+        _iter_extractable_records(
+            _write_parsed(tmp_path), _write_scores(tmp_path), mentioned
+        )
     )
     urls = {r["url"]: r for r in records}
     # The mention file listing only 'b.pl/2' must NOT drop 'a.pl/1'.
@@ -153,11 +156,20 @@ def test_extractable_records_mentions_add_hint_without_gate(tmp_path):
     assert urls["b.pl/2"]["people_mentioned"] == ["Jan Kowalski"]
 
 
-def test_filter_to_mentioned_is_a_real_gate():
-    # The --article-facts-require-mentions behavior: only mentioned URLs survive.
-    records = [{"url": "a.pl/1"}, {"url": "b.pl/2"}, {"url": "c.pl/3"}]
+def test_extractable_records_only_mentioned_is_a_real_gate(tmp_path):
+    # The --article-facts-require-mentions behavior: only mentioned URLs survive
+    # (scored + mentioned), and it is applied while reading -- not after a
+    # full-corpus dict was built.
     mentioned = {"b.pl/2": [("Jan Kowalski", "k1")]}
-    filtered = _filter_to_mentioned(records, mentioned)
+    records = list(
+        _iter_extractable_records(
+            _write_parsed(tmp_path),
+            _write_scores(tmp_path),
+            mentioned,
+            only_mentioned=True,
+        )
+    )
+    urls = {r["url"]: r for r in records}
     # A URL only exists as a key once it has at least one confirmed (yes) row.
-    assert [r["url"] for r in filtered] == ["b.pl/2"]
-
+    assert set(urls) == {"b.pl/2"}
+    assert urls["b.pl/2"]["people_mentioned"] == ["Jan Kowalski"]

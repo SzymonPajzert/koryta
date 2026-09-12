@@ -185,6 +185,15 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         help="Parallel workers for article parsing pipelines.",
     )
     parser.add_argument(
+        "--koryciarski-scorer",
+        choices=["llm", "ml"],
+        default="llm",
+        help="Scorer for ArticleKoryciarskiScores. 'llm' (default) calls the "
+        "LLM; 'ml' scores article content with the trained TF-IDF + logistic "
+        "regression models (no LLM, fast), stamping rows with "
+        "model=koryciarski_content_ml.",
+    )
+    parser.add_argument(
         "--article-facts-min-koryciarski-score",
         type=int,
         default=None,
@@ -290,6 +299,10 @@ def llm_api_key() -> str | None:
 
 def article_workers() -> int:
     return _args().article_workers
+
+
+def koryciarski_scorer() -> str:
+    return _args().koryciarski_scorer
 
 
 def article_tag() -> str | None:

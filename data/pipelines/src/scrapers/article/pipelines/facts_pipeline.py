@@ -5,7 +5,7 @@ import re
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import pandas as pd
 from tqdm import tqdm
@@ -303,21 +303,15 @@ class ArticleExtractedFacts(IncrementalJsonlPipeline[ArticleFacts]):
         if require_mentions and not _MENTIONS_FILE.exists():
             raise FileNotFoundError(_MENTIONS_FILE)
         mentioned = (
-            _mentioned_people_by_url(_MENTIONS_FILE)
-            if _MENTIONS_FILE.exists()
-            else {}
+            _mentioned_people_by_url(_MENTIONS_FILE) if _MENTIONS_FILE.exists() else {}
         )
-        records = _extractable_records(
+        min_score = article_facts_min_koryciarski_score()
+        records = _iter_extractable_records(
             _PARSED_FILE,
             _SCORES_FILE,
             mentioned,
+            only_mentioned=require_mentions,
         )
-        # Must be a real gate: with the flag set, extract only articles with at
-        # least one confirmed mention, so downstream koryta_ids are never empty
-        # for an analyzed record.
-        if require_mentions:
-            records = _filter_to_mentioned(records, mentioned)
-        min_score = article_facts_min_koryciarski_score()
         asyncio.run(
             _extract_records(
                 ctx,
@@ -391,21 +385,24 @@ def _mentioned_people_by_url(path: Path) -> dict[str, list[tuple[str, str]]]:
     return by_url
 
 
-def _filter_to_mentioned(
-    records: list[dict[str, Any]],
-    mentioned: dict[str, list[tuple[str, str]]],
-) -> list[dict[str, Any]]:
-    """Keep only records whose URL has at least one confirmed mention."""
-    return [r for r in records if r["url"] in mentioned]
-
-
-def _extractable_records(
+def _iter_extractable_records(
     parsed_path: Path,
     scores_path: Path,
     mentioned: dict[str, list[tuple[str, str]]],
-) -> list[dict[str, Any]]:
+    *,
+    only_mentioned: bool = False,
+) -> Iterator[dict[str, Any]]:
+    """Stream scored/mentioned parse rows instead of building the whole list.
+
+    The parsed file is append-only and URLs repeat across re-runs, but the
+    repeats carry the same ``article_content_hash`` (ArticleParsed re-emits
+    reused rows verbatim), so scoring the first occurrence of a (url, hash)
+    pair equals scoring the latest. Feeding rows to the LLM pool as they are
+    read lets scoring overlap the multi-minute file scan instead of running
+    after it.
+    """
     article_scores = _article_scores_by_url(scores_path)
-    latest: dict[str, dict[str, Any]] = {}
+    seen: set[tuple[str, str]] = set()
     with parsed_path.open("r", encoding="utf-8") as handle:
         for line in tqdm(handle, desc="Reading parsed articles", unit="row"):
             raw = line.strip()
@@ -418,27 +415,28 @@ def _extractable_records(
             url = row.get("url")
             if not isinstance(url, str) or url not in article_scores:
                 continue
+            if only_mentioned and url not in mentioned:
+                continue
             if row.get("parse_status") != "ok":
                 continue
             content_hash = row.get("article_content_hash")
             content = row.get("article_content")
-            if (
+            if not (
                 isinstance(content_hash, str)
                 and isinstance(content, str)
                 and content.strip()
             ):
-                # Keep only the fields fact extraction needs — dropping
-                # outbound_urls (63% of the row) and other columns keeps memory
-                # bounded on the 20GB parsed file. people_mentioned is an
-                # optional hint, empty when the url has no confirmed mentions.
-                latest[url] = {
-                    "url": url,
-                    "article_content_hash": content_hash,
-                    "article_content": content,
-                    "koryciarski_llm_score": article_scores[url],
-                    "people_mentioned": [name for name, _ in mentioned.get(url, [])],
-                }
-    return list(latest.values())
+                continue
+            if (url, content_hash) in seen:
+                continue
+            seen.add((url, content_hash))
+            yield {
+                "url": url,
+                "article_content_hash": content_hash,
+                "article_content": content,
+                "koryciarski_llm_score": article_scores[url],
+                "people_mentioned": [name for name, _ in mentioned.get(url, [])],
+            }
 
 
 def _article_scores_by_url(path: Path) -> dict[str, int]:
@@ -479,7 +477,7 @@ def _score_from_row(row: dict[str, Any]) -> int | None:
 
 async def _extract_records(
     ctx: Context,
-    records: list[dict[str, Any]],
+    records: Iterator[dict[str, Any]],
     existing: dict[str, dict[str, Any]],
     *,
     model: str,
@@ -487,21 +485,28 @@ async def _extract_records(
 ) -> None:
     await LLM.from_context(ctx).check_health()
     pending: dict[int, dict[str, Any]] = {}
-    uncached = _filter_uncached_fact_records(
-        _emit_cached_facts(ctx, records, existing, model),
-        min_score,
-    )
+    cached_count = 0
+    skipped_min_score = 0
 
+    # Rows stream in while the file is read, so the exact uncached total is
+    # unknown up front -- the bar shows an indeterminate count instead.
     with tqdm(
-        total=len(uncached),
-        desc="Extracting article facts",
-        unit="article",
-        dynamic_ncols=True,
-        mininterval=1.0,
-        smoothing=0.05,
+        desc="Extracting article facts", unit="article", dynamic_ncols=True
     ) as bar:
         async with LLM.from_context(ctx).response_pool() as pool:
-            for record in uncached:
+            for record in records:
+                cached = existing.get(str(record["url"]))
+                if _cache_valid(cached, record, model):
+                    assert cached is not None
+                    _emit_facts(ctx, _facts_row_from_cache(cached))
+                    cached_count += 1
+                    continue
+                if min_score is not None and not _record_meets_min_score(
+                    record, min_score
+                ):
+                    skipped_min_score += 1
+                    continue
+
                 while pool.is_full():
                     request_id, response = await pool.get_response()
                     _emit_fact_response(
@@ -525,49 +530,18 @@ async def _extract_records(
                 )
                 bar.update(1)
 
-
-def _filter_uncached_fact_records(
-    records: list[dict[str, Any]],
-    min_score: int | None,
-) -> list[dict[str, Any]]:
-    if min_score is None:
-        return records
-    filtered = [
-        record for record in records if _record_meets_min_score(record, min_score)
-    ]
-    skipped = len(records) - len(filtered)
-    if skipped:
+    if cached_count:
+        print(f"Reused cached article facts: {cached_count}")
+    if skipped_min_score:
         print(
-            "Skipped uncached article facts below koryciarski score "
-            f"{min_score}: {skipped}"
+            "Skipped article facts below koryciarski score "
+            f"{min_score}: {skipped_min_score}"
         )
-    return filtered
 
 
 def _record_meets_min_score(record: dict[str, Any], min_score: int) -> bool:
     score = _score_from_row(record)
     return score is not None and score >= min_score
-
-
-def _emit_cached_facts(
-    ctx: Context,
-    records: list[dict[str, Any]],
-    existing: dict[str, dict[str, Any]],
-    model: str,
-) -> list[dict[str, Any]]:
-    uncached: list[dict[str, Any]] = []
-    cached_count = 0
-    for record in records:
-        cached = existing.get(str(record["url"]))
-        if _cache_valid(cached, record, model):
-            assert cached is not None
-            _emit_facts(ctx, _facts_row_from_cache(cached))
-            cached_count += 1
-            continue
-        uncached.append(record)
-    if cached_count:
-        print(f"Reused cached article facts: {cached_count}")
-    return uncached
 
 
 def _emit_fact_response(

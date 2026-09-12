@@ -36,14 +36,18 @@ def party(person, party, **extra):
 
 
 def test_canonical_party_aliases_fold():
-    assert _canonical_party("PiS") == "Prawo i Sprawiedliwość"
-    assert _canonical_party("Prawo i Sprawiedliwość") == "Prawo i Sprawiedliwość"
-    assert _canonical_party("PSL-Koalicja Polska") == "Polskie Stronnictwo Ludowe"
-    assert _canonical_party("po") == "Platforma Obywatelska"
+    assert _canonical_party("PiS") == "prawo i sprawiedliwosc"
+    assert _canonical_party("Prawo i Sprawiedliwość") == "prawo i sprawiedliwosc"
+    assert _canonical_party("prawo i sprawiedliwosc") == "prawo i sprawiedliwosc"
+    assert _canonical_party("PSL-Koalicja Polska") == "polskie stronnictwo ludowe"
+    assert _canonical_party("po") == "platforma obywatelska"
+    assert _canonical_party("Platforma Obywatelska") == "platforma obywatelska"
 
 
 def test_canonical_party_unknown_passes_through():
+    # Diacritics are folded: "polska 2050" regardless of input spelling.
     assert _canonical_party("Polska 2050") == "polska 2050"
+    assert _canonical_party("Polski 2050") == "polski 2050"
 
 
 def test_canonical_party_empty():
@@ -55,8 +59,17 @@ def test_canonical_party_empty():
 
 
 def test_canonical_org_folds_legal_suffix():
-    assert _canonical_org("KGHM Polska Miedź S.A.") == "kghm polska miedź"
-    assert _canonical_org("Tauron Polska Energia SA") == "tauron polska energia"
+    assert _canonical_org("Warszawskie Zakłady Naprawcze S.A.") == (
+        "warszawskie zaklady naprawcze"
+    )
+    assert _canonical_org("Tauron Polska Energia SA") == "tauron"
+
+
+def test_canonical_org_folds_extended_legal_suffix():
+    assert _canonical_org("Bayer Construct Zrt.") == "bayer construct"
+    assert _canonical_org("KGHM Polska Miedź S.A.") == "kghm"
+    assert _canonical_org("Lotos-Biopaliwa sp. z o.o.") == "lotos biopaliwa"
+    assert _canonical_org("PZU S.A.") == "pzu"
 
 
 def test_canonical_org_folds_rp_suffix():
@@ -67,21 +80,317 @@ def test_canonical_org_folds_rp_suffix():
 
 def test_canonical_org_folds_party_alias_in_org_slot():
     assert _canonical_org("PSL") == "polskie stronnictwo ludowe"
-    assert _canonical_org("Polskie Stronnictwo Ludowe") == "polskie stronnictwo ludowe"
+    assert _canonical_org("Polskie Stronnictwo Ludowe") == (
+        "polskie stronnictwo ludowe"
+    )
 
 
 def test_canonical_org_folds_ministry_rename():
     assert _canonical_org("Ministerstwo Klimatu") == (
-        "ministerstwo klimatu i środowiska"
+        "ministerstwo klimatu i srodowiska"
     )
     assert _canonical_org("Ministerstwo Środowiska") == (
-        "ministerstwo klimatu i środowiska"
+        "ministerstwo klimatu i srodowiska"
     )
 
 
 def test_canonical_org_folds_brand_variant():
     assert _canonical_org("PKN Orlen") == "orlen"
     assert _canonical_org("Orlen") == "orlen"
+    assert _canonical_org("Grupa Orlen") == "orlen"
+    assert _canonical_org("Polski Koncern Naftowy ORLEN S.A.") == "orlen"
+    assert _canonical_org("Polskiego Koncernu Naftowego Orlen SA") == "orlen"
+    assert _canonical_org("Rada Nadzorcza PKN Orlen") == "rada nadzorcza orlen"
+    assert _canonical_org("Rada Nadzorcza Orlenu") == "rada nadzorcza orlen"
+
+
+def test_canonical_org_folds_city_office():
+    assert _canonical_org("Urząd Miasta Krakowa") == "urzad miasto krakow"
+    assert _canonical_org("Urząd Miejski w Krakowie") == "urzad miasto krakow"
+    assert _canonical_org("Urząd Prezydenta Miasta Krakowa") == "urzad miasto krakow"
+    assert _canonical_org("Urząd Miejski w Pcimiu") == "urzad miasto pcim"
+    assert _canonical_org("Urząd Gminy Pcim") == "urzad miasto pcim"
+    assert _canonical_org("Urząd Gminy w Pcim") == "urzad miasto pcim"
+    assert _canonical_org("Miejski Urząd Pracy w Lublinie") == "urzad pracy lublin"
+    assert _canonical_org("Urząd Pracy w Lublinie") == "urzad pracy lublin"
+    # Different towns stay separate even for the same role on one person.
+    assert _canonical_org("Urząd Miejski w Świebodzinie") != _canonical_org(
+        "Urząd Miejski w Braniewie"
+    )
+
+
+def test_canonical_org_folds_municipal_unit_spellings():
+    # The commune as a unit and as its office are the same municipality and
+    # fold to the same city-stamped canonical; the city stays in the key so a
+    # person who served two towns keeps distinct facts.
+    assert _canonical_org("Gmina Pokrzywnica") == "urzad miasto pokrzywnic"
+    assert _canonical_org("Urząd Gminy Pokrzywnica") == "urzad miasto pokrzywnic"
+    assert _canonical_org("Urząd Gminy w Pokrzywnicy") == "urzad miasto pokrzywnic"
+    assert _canonical_org("Miasto i Gmina Halinów") == "urzad miasto halinow"
+    assert _canonical_org("Gmina i Miasto Żnin") == "urzad miasto znin"
+    assert _canonical_org("Gmina Halinów") == "urzad miasto halinow"
+    assert _canonical_org("Urząd Miejski w Halinowie") == "urzad miasto halinow"
+    assert _canonical_org("Miasto Żnin") == "urzad miasto znin"
+
+
+def test_canonical_org_city_office_same_fact_all_spellings():
+    # The exact case from the data: one wójt, three org spellings -> one key.
+    keys = {
+        _canonical_org(o)
+        for o in (
+            "Gmina Pokrzywnica",
+            "Urząd Gminy Pokrzywnica",
+            "Urząd Gminy w Pokrzywnicy",
+        )
+    }
+    assert keys == {"urzad miasto pokrzywnic"}
+
+
+def test_canonical_org_folds_warsaw():
+    assert _canonical_org("Urząd m.st. Warszawy") == "urzad miasta stolecznego warszawy"
+    assert _canonical_org("Urząd Miejski m.st. Warszawy") == (
+        "urzad miasta stolecznego warszawy"
+    )
+    assert _canonical_org("Miasto Stołeczne Warszawa") == (
+        "urzad miasta stolecznego warszawy"
+    )
+    assert _canonical_org("Rada Warszawy") == "rada miasta stolecznego warszawy"
+    assert _canonical_org("Rada m.st. Warszawy") == "rada miasta stolecznego warszawy"
+
+
+def test_canonical_org_folds_voivodeship_office():
+    assert _canonical_org("Małopolski Urząd Wojewódzki w Krakowie") == (
+        "urzad wojewodzki"
+    )
+    assert _canonical_org("Urząd Wojewódzki w Krakowie") == "urzad wojewodzki"
+    assert _canonical_org("Urząd Wojewody Małopolskiego") == "urzad wojewodzki"
+    assert _canonical_org("Małopolski Urząd Marszałkowski") == "urzad marszalkowski"
+    assert _canonical_org("Urząd Marszałkowski Województwa Małopolskiego") == (
+        "urzad marszalkowski"
+    )
+
+
+def test_canonical_org_folds_county_government():
+    # County vs its office vs its board — one government, same person.
+    assert _canonical_org("Powiat Gryfiński") == "starostwo powiatowe"
+    assert _canonical_org("Starostwo Powiatowe w Gryfinie") == "starostwo powiatowe"
+    assert _canonical_org("Starostwo Powiatu Gryfińskiego") == "starostwo powiatowe"
+    assert _canonical_org("Zarząd Powiatu Wołomińskiego") == "starostwo powiatowe"
+    assert _canonical_org("Starostwo Powiatowe w Wołominie") == "starostwo powiatowe"
+
+
+def test_canonical_org_folds_housing_cooperative():
+    # SM, Spółdzielnia Mieszkaniowa and Spółdzielnia forms of one co-op.
+    assert _canonical_org("SM „Jaskółka”") == "spoldzielnia jaskolka"
+    assert _canonical_org("Spółdzielnia Mieszkaniowa „Jaskółka”") == (
+        "spoldzielnia jaskolka"
+    )
+    assert _canonical_org("Spółdzielnia Mieszkaniowa Jaskółka w Tarnowie") == (
+        "spoldzielnia jaskolka"
+    )
+    assert _canonical_org("Spółdzielnia „Jaskółka”") == "spoldzielnia jaskolka"
+    # An "S.M." dotted spelling folds too.
+    assert _canonical_org("S.M. Jaskółka") == "spoldzielnia jaskolka"
+
+
+def test_canonical_org_we_connective_and_bare_county_seat():
+    # "we Wrocławiu" and a bare seat fold just like "w Gryfinie".
+    assert _canonical_org("Starostwo Powiatowe we Wrocławiu") == "starostwo powiatowe"
+    assert _canonical_org("Starostwo Powiatowe Wrocław") == "starostwo powiatowe"
+    assert _canonical_org("Starostwo Powiatu Gryfińskiego") == "starostwo powiatowe"
+
+
+def test_canonical_org_folds_solectwo():
+    assert _canonical_org("Sołectwo Laseczno") == "solectwo"
+    assert _canonical_org("Urząd Sołectwa Laseczno") == "solectwo"
+    assert _canonical_org("Rada Sołecka Laseczna") == "solectwo"
+
+
+def test_canonical_org_folds_named_cultural_venue():
+    assert _canonical_org("Teatr Nowy im. K. Dejmka w Łodzi") == "teatr nowy"
+    assert _canonical_org("Teatr Nowy w Łodzi") == "teatr nowy"
+    assert _canonical_org("Teatr Nowego im. K. Dejmka w Łodzi") == "teatr nowy"
+    assert _canonical_org("Teatr Nowy") == "teatr nowy"
+
+
+def test_canonical_org_folds_rzeczpospolitej_misspelling():
+    assert _canonical_org("Sejm Rzeczpospolitej Polskiej") == "sejm"
+
+
+def test_canonical_org_arimr_any_word_order():
+    assert _canonical_org(
+        "Agencja Modernizacji i Restrukturyzacji Rolnictwa"
+    ) == "agencja restrukturyzacji i modernizacji rolnictwa"
+    assert _canonical_org("Agencja Rozwoju i Modernizacji Rolnictwa") == (
+        "agencja restrukturyzacji i modernizacji rolnictwa"
+    )
+    assert _canonical_org("Agencja Restrukturyzacji i Rolnictwa") == (
+        "agencja restrukturyzacji i modernizacji rolnictwa"
+    )
+    assert _canonical_org("ARiMR") == (
+        "agencja restrukturyzacji i modernizacji rolnictwa"
+    )
+
+
+def test_canonical_org_folds_company_forms_v2():
+    assert _canonical_org("Energia SA") == "energa"
+    assert _canonical_org("Energi SA") == "energa"
+    assert _canonical_org("Globe Trade Centre") == "globe trade center"
+    assert _canonical_org("GTC") == "globe trade center"
+    assert _canonical_org("Europarlament") == "parlament europejski"
+    assert _canonical_org("Europejski Parlament Europejski") == (
+        "parlament europejski"
+    )
+    assert _canonical_org("Rada Nadzorcza Spółki Energa") == "rada nadzorcza energa"
+    assert _canonical_org("Rada Nadzorcza Grupy Energa") == "rada nadzorcza energa"
+    assert _canonical_org("Służby Kontrwywiadu Wojskowego") == (
+        "sluzba kontrwywiadu wojskowego"
+    )
+
+
+def test_smolensk_committee_by_date_only():
+    assert _canonical_org(
+        "Podkomisja ds. ponownego zbadania wypadku lotniczego z dnia "
+        "10 kwietnia 2010 r."
+    ) == "podkomisja ds. katastrofy smolenskiej"
+
+
+def test_bare_town_org_folds_for_municipal_head():
+    # "burmistrz @ Kisielice" == "burmistrz @ Urząd Miejski w Kisielicach".
+    a = _fact_key(
+        {"fact_type": "employment", "organization": "Kisielice", "role": "burmistrz"},
+        person_name="tomasz koprowiak",
+    )
+    b = _fact_key(
+        {
+            "fact_type": "employment",
+            "organization": "Urząd Miejski w Kisielicach",
+            "role": "burmistrz",
+        },
+        person_name="tomasz koprowiak",
+    )
+    assert a == b
+    # A company with a non-municipal role is untouched.
+    c = _fact_key(
+        {"fact_type": "employment", "organization": "Orlen", "role": "prezes"},
+        person_name="jan",
+    )
+    assert c[2] == "orlen"
+
+
+def test_canonical_org_folds_resort_and_zak():
+    assert _canonical_org("Resort Aktywów Państwowych") == (
+        "ministerstwo aktywow panstwowych"
+    )
+    assert _canonical_org("Ministerstwo Aktywów Państwowych") == (
+        "ministerstwo aktywow panstwowych"
+    )
+    assert _canonical_org("Grupa Azoty ZAK") == "zaklady azotowe kedzierzyn"
+    assert _canonical_org("Zakłady Azotowe „Kędzierzyn”") == (
+        "zaklady azotowe kedzierzyn"
+    )
+    assert _canonical_org("Grupa Azoty Zakłady Azotowe Kędzierzyn S.A.") == (
+        "zaklady azotowe kedzierzyn"
+    )
+    assert _canonical_org("Polskie Radio PiK") == "radio pik"
+    assert _canonical_org("Radio PiK") == "radio pik"
+
+
+def test_canonical_role_folds_podsekretarz_and_resort_heads():
+    assert _canonical_role("Podsekretarz Stanu") == "wiceminister"
+    assert _canonical_role("podsekretarz") == "wiceminister"
+    # "szef resortu" / "wiceszef resortu" are the minister / wiceminister.
+    assert _canonical_role("szef", "ministerstwo aktywow panstwowych") == "minister"
+    assert _canonical_role("wiceszef", "ministerstwo aktywow panstwowych") == (
+        "wiceminister"
+    )
+    # Outside a ministry the loose role keeps its own canonical.
+    assert _canonical_role("szef") == "szef"
+
+
+def test_canonical_role_folds_senior_and_council_forms():
+    assert _canonical_role("marszałek-senior") == "marszalek senior"
+    assert _canonical_role("radna") == "radny"
+    assert _canonical_role("radni") == "radny"
+    assert _canonical_role("viceprzewodniczący") == "wiceprzewodniczacy"
+    assert _canonical_role("współprowadzący program") == "wspolprowadzacy"
+
+
+def test_canonical_org_folds_city_council():
+    assert _canonical_org("Rada Miasta Krakowa") == "rada miasta krakow"
+    assert _canonical_org("Rada Miejska w Szczecinie") == "rada miasta szczecin"
+    assert _canonical_org("Rada Miasta") == "rada miasta"
+    assert _canonical_org("Rada Gminna w Pcimiu") == "rada miasta pcim"
+    assert _canonical_org("Rada Gminy w Pcimiu") == "rada miasta pcim"
+
+
+def test_canonical_org_folds_sejmik():
+    assert _canonical_org("Sejmik Małopolski") == "sejmik wojewodztwa malopolskiego"
+    assert _canonical_org("Sejmik Województwa Małopolskiego") == (
+        "sejmik wojewodztwa malopolskiego"
+    )
+
+
+def test_canonical_org_folds_designators_and_seats():
+    assert _canonical_org("Spółka Dorzecze Białej") == "dorzecze bialej"
+    assert _canonical_org("Grupa Azoty Puławy") == "azoty pulawy"
+    assert _canonical_org("Koncern Energetyczny „Energa” SA") == "energa"
+    assert _canonical_org("Miejski Ośrodek Sportu i Rekreacji w Radomiu") == (
+        "osrodek sportu i rekreacji"
+    )
+    assert _canonical_org("Wojewódzki Fundusz Ochrony Środowiska i G.O. w Łodzi") == (
+        "wojewodzki fundusz ochrony srodowiska i g.o."
+    )
+    # Non-municipal orgs keep their seat (they are distinct across cities).
+    assert _canonical_org("Bank Spółdzielczy w Gnieźnie") == (
+        "bank spoldzielczy w gnieznie"
+    )
+
+
+def test_canonical_org_folds_council_caucus():
+    assert _canonical_org("Klub Radnych PiS") == "klub prawa i sprawiedliwosci"
+    assert _canonical_org("Klub Parlamentarny PiS") == (
+        "klub prawa i sprawiedliwosci"
+    )
+    assert _canonical_org("Klub Radnych Lewica") == "klub lewica"
+
+
+def test_canonical_org_folds_smolensk_committee():
+    assert _canonical_org(
+        "Zespół Parlamentarny ds. Zbadania Przyczyn Katastrofy TU-154M"
+    ) == "zespol ds. katastrofy smolenskiej"
+    assert _canonical_org(
+        "parlamentarny zespół ds. wyjaśnienia tragedii smoleńskiej"
+    ) == "zespol ds. katastrofy smolenskiej"
+    assert _canonical_org("Podkomisja Smoleńska") == (
+        "podkomisja ds. katastrofy smolenskiej"
+    )
+    assert _canonical_org("Sejmowa Komisja Smoleńska") == (
+        "komisja ds. katastrofy smolenskiej"
+    )
+
+
+def test_canonical_org_folds_hospital_variants():
+    assert _canonical_org("Szpital Specjalistyczny im. S. Żeromskiego w Krakowie") == (
+        "szpital im. zeromskiego"
+    )
+    assert _canonical_org("Szpital im. Stefana Żeromskiego SPZOZ") == (
+        "szpital im. zeromskiego"
+    )
+    assert _canonical_org("szpital im. Żeromskiego w Krakowie") == (
+        "szpital im. zeromskiego"
+    )
+
+
+def test_canonical_org_folds_company_forms():
+    assert _canonical_org("Grupa PZU") == "pzu"
+    assert _canonical_org("PZU SA") == "pzu"
+    assert _canonical_org("Tauron Polska Energia") == "tauron"
+    assert _canonical_org("PGE Polska Grupa Energetyczna") == "pge"
+    assert _canonical_org("PKP Polskie Linie Kolejowe") == "pkp plk"
+    assert _canonical_org("PKP PLK") == "pkp plk"
+    assert _canonical_org("Bank PKO BP") == "pko bank polski"
+    assert _canonical_org("Poczta Polska Spółka Akcyjna") == "poczta polska"
 
 
 # --- _canonical_role ------------------------------------------------------- #
@@ -90,10 +399,48 @@ def test_canonical_org_folds_brand_variant():
 def test_canonical_role_folds_gender_and_form():
     assert _canonical_role("minister") == "minister"
     assert _canonical_role("ministra") == "minister"
-    assert _canonical_role("poseł") == "poseł"
-    assert _canonical_role("posłanka") == "poseł"
+    assert _canonical_role("poseł") == "posel"
+    assert _canonical_role("posłanka") == "posel"
     assert _canonical_role("prezes zarządu") == "prezes"
     assert _canonical_role("szefowa") == "szef"
+
+
+def test_canonical_role_folds_more_gender_variants():
+    assert _canonical_role("dyrektorka") == "dyrektor"
+    assert _canonical_role("prezeska") == "prezes"
+    assert _canonical_role("wiceprzewodnicząca") == "wiceprzewodniczacy"
+    assert _canonical_role("wiceprzewodniczący") == "wiceprzewodniczacy"
+
+
+def test_canonical_role_folds_acting_and_genitive():
+    assert _canonical_role("pełniący obowiązki prezesa") == "prezes"
+    assert _canonical_role("p.o. prezydenta") == "prezydent"
+    assert _canonical_role("prezesa") == "prezes"
+    assert _canonical_role("dyrektora") == "dyrektor"
+    assert _canonical_role("burmistrza") == "burmistrz"
+
+
+def test_canonical_role_folds_ordinal_qualifiers():
+    assert _canonical_role("I zastępca prezydenta") == "zastepca prezydenta"
+    assert _canonical_role("pierwszy wicepremier") == "wicepremier"
+    assert _canonical_role("drugi wicewojewoda") == "wicewojewoda"
+
+
+def test_canonical_role_drops_org_scope_redundancy():
+    # "komendant wojewódzki" in a wojewódzka komenda is the same as "komendant".
+    assert _canonical_role(
+        "komendant wojewódzki", "komenda wojewodzka panstwowej strazy pozarnej"
+    ) == "komendant"
+    # "zastępca prezydenta miasta" at an "urzad miasto" is "zastępca prezydenta".
+    assert _canonical_role("zastępca prezydenta miasta", "urzad miasto") == (
+        "zastepca prezydenta"
+    )
+    # "członek rady" at a supervisory board == "członek rady nadzorczej".
+    assert _canonical_role("członek rady", "rada nadzorcza pzu") == (
+        "czlonek rady nadzorczej"
+    )
+    # Roles without the org keep their full form.
+    assert _canonical_role("komendant wojewódzki") == "komendant wojewodzki"
 
 
 # --- _fact_key ------------------------------------------------------------ #
