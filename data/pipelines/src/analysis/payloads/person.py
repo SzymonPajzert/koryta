@@ -10,10 +10,9 @@ import pandas as pd
 
 from analysis.extract import Extract, press_list_evidence
 from analysis.payloads.election import get_election_type
-from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot
+from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person
-from scrapers.koryta.download import KorytaPeople
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
 
@@ -27,6 +26,7 @@ class PeoplePayloads(Pipeline[Person]):
     volatile = True
 
     people: Extract
+    _snapshot: SiteSnapshot | None = None
 
     @cached_property
     def args(self):
@@ -94,6 +94,17 @@ class PeoplePayloads(Pipeline[Person]):
             )
         )
 
+    def site_snapshot(self, ctx: Context) -> SiteSnapshot:
+        """The export both filters read, read once.
+
+        `--on-koryta` and `--only-changed` are usually passed together and ask
+        the same snapshot two different questions, so reading it per filter
+        would download the nodes and edges of the export twice.
+        """
+        if self._snapshot is None:
+            self._snapshot = SiteSnapshot.read(ctx, self.args.koryta_date)
+        return self._snapshot
+
     def only_changed(self, ctx: Context, people: list[Person]) -> list[Person]:
         """The payloads that would write something, and a note of what.
 
@@ -102,7 +113,7 @@ class PeoplePayloads(Pipeline[Person]):
         other, and a run that drops nine payloads in ten should say so where
         the rest of the pipeline's reporting is.
         """
-        snapshot = SiteSnapshot.read(ctx, self.args.koryta_date)
+        snapshot = self.site_snapshot(ctx)
 
         changed = []
         reasons: typing.Counter[str] = collections.Counter()
@@ -136,18 +147,20 @@ class PeoplePayloads(Pipeline[Person]):
     def only_on_koryta(self, ctx: Context, payloads: list[Person]) -> list[Person]:
         """The payloads for people who already have a page, and only those.
 
-        `/api/ingest/person` finds its target with a single
-        `where("name", "==", payload.name).limit(1)` and creates a new person
-        when that misses, so every payload naming somebody the site does not
-        have is a new node rather than an update. Of the 101,413 payloads
-        `--all` emits, 4,383 match - submitting the lot to restate 4,383
-        candidacies would take the collection from 6,115 people to ~103,000.
+        `/api/ingest/person` creates a new node whenever `lookupPersonDoc`
+        misses, so every payload it cannot resolve is a person added rather than
+        restated. Of the 101,413 payloads `--all` emits, 4,383 match -
+        submitting the lot would take the collection from 6,115 people to
+        ~103,000.
+
+        Asking whether the *name* is on the site, which is what this did, is a
+        looser question than the one the ingest asks, and the gap is not
+        academic: the lookup also requires the page's register link to agree
+        with the payload's, and every one of the 105 people the 2026-09-12 run
+        created was a name the site already had, on a page carrying a different
+        link.
         """
-        # TODO this should be a field and dependency
-        submitted_df = KorytaPeople(self.args.koryta_date).read_or_process(ctx)
-        names = submitted_df["full_name"].dropna().tolist()
-        print(f"{len(names)} people already have a page on koryta.pl")
-        return matching_one_page(payloads, names)
+        return matching_one_page(payloads, self.site_snapshot(ctx))
 
     def map_person_payload(self, ctx: Context, row: pd.Series) -> Person:
         def get_scalar(key):
@@ -286,38 +299,60 @@ def _extract_elections(row: pd.Series) -> list[Election]:
     return elections
 
 
-def matching_one_page(payloads: list[Person], on_koryta: list[str]) -> list[Person]:
-    """The payloads a name identifies one person on both sides of.
+def identified_by(snapshot: SiteSnapshot, payload: typing.Mapping) -> bool:
+    """Whether `person_for` would resolve this payload by something that is an
+    identity, rather than falling back to the name.
 
-    The ingest joins a payload to a page by an exact match on `name` and
-    nothing else, so a name is only usable as an identifier where it names one
-    person in the payloads *and* one page on the site. Where it names several,
-    every candidacy PKW ever recorded for any of them lands on one page - the
-    "osoby zostały złączone" complaint, made worse rather than answered.
-
-    Dropped rather than resolved: which of four Piotr Mrozińskis a page is
-    about is not a question the payloads can answer, and a wrong candidacy on
-    a real page is a worse outcome than a missing one. They are reported so the
-    count is visible, because it is the part of the backlog this run leaves.
+    The first two branches of `lookupPersonDoc`, in its order: the node id, then
+    the register link. A name is not on that list - it is what 170 people are
+    filed under two pages each by.
     """
-    pages = collections.Counter(on_koryta)
+    koryta_id = field(payload, "korytaId")
+    if koryta_id is not None and snapshot.people_by_id.get(str(koryta_id)):
+        return True
+    register = field(payload, "rejestrIo")
+    return register is not None and bool(snapshot.people.get(str(register)))
+
+
+def matching_one_page(payloads: list[Person], snapshot: SiteSnapshot) -> list[Person]:
+    """The payloads the ingest would land on a page rather than create.
+
+    `SiteSnapshot.person_for` is `lookupPersonDoc` transcribed, so it is the
+    only thing that can answer this: the ingest resolves by node id, then by
+    register link, and only then by name - and a page whose register link
+    *disagrees* with the payload's is not a match at all, however the two names
+    are spelled.
+
+    The name fallback is the one branch that can still pool two people onto one
+    page, and it only fires where neither side has a register link to go on.
+    There a name has to serve as the identifier, so it is trusted only where it
+    names one person in the payloads *and* one page on the site. Where it names
+    several the payload is dropped rather than resolved: which of four Piotr
+    Mrozińskis a page is about is not a question the payloads can answer, and a
+    wrong candidacy on a real page is a worse outcome than a missing one. Both
+    counts are reported, because they are the part of the backlog a run leaves.
+    """
     candidates = collections.Counter(person.name for person in payloads)
 
-    result = [
-        person
-        for person in payloads
-        if pages[person.name] == 1 and candidates[person.name] == 1
-    ]
+    result: list[Person] = []
+    created = 0
+    ambiguous: set[str] = set()
+    for person in payloads:
+        payload = asdict(person)
+        stored = snapshot.person_for(payload)
+        if stored is None:
+            created += 1
+        elif identified_by(snapshot, payload):
+            result.append(person)
+        elif candidates[person.name] == 1 and snapshot.people_named[person.name] == 1:
+            result.append(person)
+        else:
+            ambiguous.add(person.name)
 
-    ambiguous = {
-        person.name
-        for person in payloads
-        if pages[person.name] >= 1
-        and (pages[person.name] > 1 or candidates[person.name] > 1)
-    }
     print(
-        f"{len(result)} of {len(payloads)} payloads name somebody with a page; "
-        f"{len(ambiguous)} names left alone as several people share them"
+        f"{len(result)} of {len(payloads)} payloads land on a page the site "
+        f"already has; {created} would be created by the ingest and are "
+        f"dropped, {len(ambiguous)} names left alone as several people share them"
     )
     return result
 
