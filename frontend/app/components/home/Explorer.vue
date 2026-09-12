@@ -19,7 +19,7 @@
             <ChartPolandMap @click="pickRegion" />
           </v-tabs-window-item>
           <v-tabs-window-item value="graph">
-            <HomeHeading title="Stanowiska w czasie" center />
+            <HomeHeading title="Zmiany na stanowiskach" center />
             <HomeTimeline :grouping="grouping" :range="range" />
           </v-tabs-window-item>
         </v-tabs-window>

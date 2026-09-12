@@ -161,7 +161,7 @@ const subtitle = computed(() => {
       ? `${formatCount(coverage.posts)} stanowisk`
       : `${formatCount(coverage.posts)} z ${formatCount(posts)} stanowisk`;
 
-  return `${what} - ${formatCount(coverage.people)} osób i ${counted} opisanych na koryta.pl. To stan naszej bazy, a nie pełny rejestr; ostatnie miesiące bywają niepełne.`;
+  return `${what} - ${formatCount(coverage.people)} osób i ${counted} opisanych na koryta.pl. To stan naszej bazy, a nie pełny rejestr; dołącz do projektu by pomóc nam ją uzupełnić.`;
 });
 
 /** The months the picked range covers, as indexes into the response's arrays.
