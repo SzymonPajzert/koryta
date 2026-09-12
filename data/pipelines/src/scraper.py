@@ -11,7 +11,7 @@ from tqdm import tqdm
 from conductor import setup_context
 from scrapers.kmgp.people import PeopleKMGP
 from scrapers.krs.columns import ISO_DATE_LENGTH
-from scrapers.krs.scrape import ScrapeRejestrIO
+from scrapers.krs.scrape import ScrapeRejestrIO, cost_breakdown, public_krs_ids
 from scrapers.krs.updates import KRSUpdates
 from scrapers.stores import Context, ProcessPolicy, RejestrIO
 
@@ -173,6 +173,14 @@ def scrape_krs_paid(sleep_time=0.2):
     ctx, _ = setup_context([RejestrIO], policy=ProcessPolicy(REFRESH_PIPELINES))
     pipeline = ScrapeRejestrIO()
     queries = list(pipeline.read_or_process_list(ctx))
+
+    # What the bill is made of, not just what it comes to. Every query carries
+    # the reason it exists, and the reasons are not worth the same money: a
+    # refresh re-buys a company we already hold, a person feed is one name, and
+    # a newly discovered public company is the thing the site is for.
+    print(
+        cost_breakdown(queries, public_krs_ids(pipeline.companies.read_or_process(ctx)))
+    )
 
     cost = sum(q.cost() for q in queries)
     print(f"Will cost: {cost} PLN")

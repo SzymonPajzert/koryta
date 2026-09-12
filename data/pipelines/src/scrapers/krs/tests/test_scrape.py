@@ -2,12 +2,24 @@ from datetime import date
 
 import pandas as pd
 
+from entities.company import KRS
+from entities.person import RejestrIOKey
 from scrapers.krs.scrape import (
+    ORG_CONNECTION_METHODS,
+    REASON_INTERESTING_PERSON,
+    REASON_MISSING_NAME,
+    REASON_OWNED,
+    REASON_PERSON_FEED,
+    REASON_REFRESH,
+    REASON_UNRECORDED,
     KRSScraped,
     QueryType,
+    RejestrIOQuery,
     ScrapeRejestrIO,
     compute_refresh_cutoff_date,
+    cost_breakdown,
     filter_paid_by_people_changes,
+    save_org_connections,
 )
 
 
@@ -206,3 +218,128 @@ def test_a_krs_read_as_a_number_is_padded_back():
     )
 
     assert "0000004324" in scraper.already_scraped_companies(None)
+
+
+def test_refresh_outranks_the_reason_the_company_was_discovered():
+    """Both are true, and only one of them is what the money buys."""
+    query = RejestrIOQuery(
+        krs=KRS("0000000110"),
+        queries=[QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE],
+        reasons=[REASON_OWNED, REASON_PERSON_FEED, REASON_REFRESH],
+    )
+
+    assert query.primary_reason == REASON_REFRESH
+
+
+def test_a_query_nobody_explained_is_still_counted():
+    query = RejestrIOQuery(
+        krs=KRS("0000000110"),
+        queries=[QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE],
+    )
+
+    assert query.primary_reason == REASON_UNRECORDED
+
+
+def test_the_breakdown_rows_add_up_to_the_bill():
+    """A company with two reasons is one row, or the report overstates.
+
+    The number under it is what the run is about to spend, so it has to be the
+    same number the confirmation prompt prints.
+    """
+    queries = [
+        RejestrIOQuery(
+            krs=KRS("0001243843"),
+            queries=[
+                QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE,
+                QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_HISTORYCZNE,
+            ],
+            reasons=[REASON_OWNED, REASON_PERSON_FEED],
+        ),
+        RejestrIOQuery(
+            krs=KRS("0000000110"),
+            queries=[QueryType.REJESTRIO_ORG_KRS_POWIAZANIA_AKTUALNE],
+            reasons=[REASON_REFRESH],
+        ),
+        # Free only: no rejestr.io call, so nothing to attribute.
+        RejestrIOQuery(
+            krs=KRS("0000000111"),
+            queries=[QueryType.API_KRS_ODPIS_AKTUALNY_P],
+            reasons=[REASON_MISSING_NAME],
+        ),
+    ]
+
+    report = cost_breakdown(queries, public_krs={"0001243843"})
+    total = [line for line in report.splitlines() if "TOTAL" in line][0]
+
+    assert total.split() == ["TOTAL", "2", "1", "3", "0.15"]
+    assert f"{sum(q.cost() for q in queries):.2f}" == "0.15"
+    assert "1 of the queries carry no paid call" in report
+
+
+def test_the_breakdown_files_a_person_feed_under_its_own_reason():
+    report = cost_breakdown(
+        [
+            RejestrIOQuery(
+                person=RejestrIOKey(id="808738"),
+                queries=[QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE],
+                reasons=[REASON_INTERESTING_PERSON],
+            )
+        ],
+        public_krs=set(),
+    )
+    row = [line for line in report.splitlines() if REASON_INTERESTING_PERSON in line][0]
+
+    # A person has no company, so it never counts towards the public column.
+    assert row.split() == [REASON_INTERESTING_PERSON, "1", "0", "1", "0.05"]
+
+
+def test_the_reason_the_caller_recorded_reaches_the_query():
+    queries = list(
+        save_org_connections(
+            already_scraped_krs=pd.DataFrame(columns=["krs", "method", "date"]),
+            needs_refresh_krs=pd.DataFrame(
+                columns=["krs", "method", "date", "update_date"]
+            ),
+            already_scraped_people={},
+            connections=[KRS("0001243843")],
+            names=[],
+            people=[],
+            company_reasons={"0001243843": {REASON_PERSON_FEED}},
+        )
+    )
+
+    assert [query.reasons for query in queries] == [[REASON_PERSON_FEED]]
+
+
+def test_a_company_due_a_refresh_says_so():
+    """The refresh is decided here, so it is recorded here.
+
+    Nothing upstream knows about it: `companies_to_scrape` only says how the
+    company was found, and the same company can be both found and stale.
+    """
+    krs, method = "0000000110", ORG_CONNECTION_METHODS[0]
+    queries = list(
+        save_org_connections(
+            already_scraped_krs=pd.DataFrame(
+                [{"krs": krs, "method": method, "date": "2026-07-01"}]
+            ),
+            needs_refresh_krs=pd.DataFrame(
+                [
+                    {
+                        "krs": krs,
+                        "method": method,
+                        "date": "2026-07-01",
+                        "update_date": "2026-08-01",
+                    }
+                ]
+            ),
+            already_scraped_people={},
+            connections=[],
+            names=[],
+            people=[],
+            company_reasons={krs: {REASON_OWNED}},
+        )
+    )
+
+    assert [query.reasons for query in queries] == [[REASON_OWNED, REASON_REFRESH]]
+    assert queries[0].primary_reason == REASON_REFRESH
