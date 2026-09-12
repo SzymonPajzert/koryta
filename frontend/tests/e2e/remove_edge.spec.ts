@@ -169,6 +169,31 @@ test.describe("Removing a relation", () => {
     await seed();
   });
 
+  /** ...and take it back out when the file is done.
+   *
+   * `beforeEach` restores the fixture for this spec's own retries, so nothing
+   * ever removed it, and `ids.queued` is built to sort first in the review
+   * queue: a score above every seeded person and a `latestEmploymentStart` in
+   * 2030. `/eksploruj/nowe` shows one person at a time, so left behind it holds
+   * that row for every spec that runs after this one - which is what hid
+   * `Nowa Osoba Testowa` from vote_breakdown.spec.ts, on a queue that spec
+   * opens unfiltered.
+   *
+   * The whole fixture rather than the queued page alone: the other three are
+   * this spec's too, and a delete of a document a test already removed is a
+   * no-op rather than an error.
+   */
+  test.afterAll(async () => {
+    const batch = db.batch();
+    for (const id of Object.values(ids)) {
+      batch.delete(db.collection("nodes").doc(id));
+    }
+    for (const id of Object.values(edges)) {
+      batch.delete(db.collection("edges").doc(id));
+    }
+    await batch.commit();
+  });
+
   test("an admin removes one and it stays gone at both ends", async ({
     page,
   }) => {
