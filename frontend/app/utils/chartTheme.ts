@@ -1,3 +1,4 @@
+import plLocale from "apexcharts/dist/locales/pl.json";
 import type { ActivityKind } from "~~/shared/activity";
 
 /**
@@ -88,6 +89,13 @@ const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 export function baseChartOptions() {
   return {
     chart: {
+      // Apexcharts names months and days itself, out of a built-in English
+      // locale, and no `Intl` call anywhere else in the app can reach that -
+      // so a datetime axis on a Polish site read „Jan \'22, Jul \'22”. The
+      // package ships the translation; this is what selects it. Charts on a
+      // category axis are unaffected, their labels being strings we pass in.
+      locales: [plLocale],
+      defaultLocale: "pl",
       fontFamily: FONT_FAMILY,
       toolbar: { show: false },
       zoom: { enabled: false },
