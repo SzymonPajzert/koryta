@@ -38,13 +38,23 @@
 
         <!-- The side panel is the map's result list, and the chart's controls.
              Both are "what you do next with this panel", so they take the same
-             column rather than the chart growing a control strip of its own. -->
+             column rather than the chart growing a control strip of its own.
+
+             `v-show` on the list, not `v-if`. `CardPeopleList` awaits its data
+             in `setup`, which makes it an async component: Vue can only commit
+             one inside a `<Suspense>`, and the page's boundary has long since
+             resolved by the time a reader clicks a tab. Destroyed and
+             re-created it therefore came back as nothing at all - the column
+             was empty after map -> wykres -> map. Kept mounted and merely
+             hidden, it never suspends twice. It was never behind a `v-if`
+             before this panel existed either: it stood in this column whichever
+             panel was open, so this also restores what it used to cost. -->
         <HomeTimelineControls
           v-if="tab === 'graph'"
           v-model:grouping="grouping"
           v-model:range="range"
         />
-        <CardPeopleList v-else :region="region" />
+        <CardPeopleList v-show="tab !== 'graph'" :region="region" />
       </v-col>
     </v-row>
   </v-container>

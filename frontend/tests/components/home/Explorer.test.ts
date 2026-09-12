@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { flushPromises } from "@vue/test-utils";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import Explorer from "../../../app/components/home/Explorer.vue";
 import { brand, contrastRatio, themeColors } from "../../../shared/colors";
@@ -130,6 +131,29 @@ describe("HomeExplorer", () => {
       trackGoal.mock.invocationCallOrder[0]!,
     );
     expect(wrapper.text()).toContain("Mapa koryciarstwa");
+  });
+
+  it("never re-creates the side card, only hides it", async () => {
+    // The regression, and why it is asserted as identity rather than presence.
+    // The card used to sit behind a `v-else`, so opening the chart panel
+    // destroyed it and coming back built a new one - and `CardPeopleList`
+    // awaits its data in `setup`. Re-created after the page's `<Suspense>` has
+    // settled, it came back as nothing at all and the column was empty.
+    //
+    // A presence check cannot see this: any stub renders on a fresh instance
+    // just as happily. Holding the instance is what pins "it was never torn
+    // down", which is the property the fix actually provides.
+    const wrapper = await mount();
+    const before = wrapper.findComponent({ name: "CardPeopleList" });
+    expect(before.exists()).toBe(true);
+
+    await tabs(wrapper, "Wykres")[0]!.trigger("click");
+    await tabs(wrapper, "Mapa")[0]!.trigger("click");
+    await flushPromises();
+
+    const after = wrapper.findComponent({ name: "CardPeopleList" });
+    expect(after.exists()).toBe(true);
+    expect(after.vm).toBe(before.vm);
   });
 
   it("keeps the underline, both strips and the panel on one tab", async () => {
