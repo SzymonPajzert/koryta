@@ -28,11 +28,15 @@ describe("parties", () => {
 });
 
 describe("partyColors", () => {
-  /** Two invariants at once. A colour for a name `parties` does not offer
-   * paints nothing, because only a listed party can be picked, filtered on or
-   * named in the graph legend; and `chart/TreemapParty.vue` pairs `parties`
-   * with `Object.values(partyColors)` by index, so a fill added out of order
-   * would draw one party's name on another's colour. */
+  /** A colour for a name `parties` does not offer paints nothing, because only
+   * a listed party can be picked, filtered on or named in the graph legend.
+   *
+   * The order used to matter for a second reason - `chart/TreemapParty.vue`
+   * paired `parties` with `Object.values(partyColors)` by index - and that
+   * component went with the home page's party panel. Every remaining reader
+   * looks a fill up by name, so this now guards tidiness rather than a bug
+   * waiting to happen. Worth keeping: the next index-pairing caller would be
+   * right to assume it. */
   it("colours listed parties only, in the order the list has them", () => {
     expect(Object.keys(partyColors)).toEqual(
       parties.filter((party) => party in partyColors),

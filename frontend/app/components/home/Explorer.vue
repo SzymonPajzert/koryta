@@ -9,7 +9,6 @@
           @update:model-value="selectTab"
         >
           <v-tab value="map">Mapa</v-tab>
-          <v-tab value="parties">Partie</v-tab>
           <v-tab value="graph">Wykres</v-tab>
         </v-tabs>
       </v-col>
@@ -18,41 +17,6 @@
           <v-tabs-window-item value="map">
             <HomeHeading title="Mapa koryciarstwa" center />
             <ChartPolandMap @click="pickRegion" />
-          </v-tabs-window-item>
-          <v-tabs-window-item value="parties">
-            <HomeHeading title="Podział na partie" center />
-            <v-card
-              class="py-4"
-              color="surface-variant"
-              variant="tonal"
-              rounded="lg"
-            >
-              <v-card-title>
-                <h2 class="text-h5 font-weight-bold">
-                  Łącznie
-                  {{
-                    polishCounting(
-                      approved,
-                      "koryciarz",
-                      "koryciarze",
-                      "koryciarzy",
-                    )
-                  }}
-                </h2>
-              </v-card-title>
-              <v-card-text>
-                <ClientOnly>
-                  <LazyChartTreemapParty
-                    @select="
-                      trackGoal('home-explorer:pick', {
-                        panel: 'parties',
-                        value: $event,
-                      })
-                    "
-                  />
-                </ClientOnly>
-              </v-card-text>
-            </v-card>
           </v-tabs-window-item>
           <v-tabs-window-item value="graph">
             <HomeHeading title="Stanowiska w czasie" center />
@@ -69,28 +33,24 @@
           @update:model-value="selectTab"
         >
           <v-tab value="map">Mapa</v-tab>
-          <v-tab value="parties">Partie</v-tab>
           <v-tab value="graph">Wykres</v-tab>
         </v-tabs>
 
-        <!-- The side panel is the map's and the treemap's result list, and the
-             chart's controls. Both are "what you do next with this panel", so
-             they take the same column rather than the chart growing a control
-             strip of its own. -->
+        <!-- The side panel is the map's result list, and the chart's controls.
+             Both are "what you do next with this panel", so they take the same
+             column rather than the chart growing a control strip of its own. -->
         <HomeTimelineControls
           v-if="tab === 'graph'"
           v-model:grouping="grouping"
           v-model:range="range"
         />
-        <CardPeopleList v-else :region="region" :panel="listPanel" />
+        <CardPeopleList v-else :region="region" />
       </v-col>
     </v-row>
   </v-container>
 </template>
 
 <script lang="ts" setup>
-import { polishCounting } from "@/composables/polish";
-import { useStats } from "~/composables/stats/useStats";
 import { trackGoal } from "~/composables/analytics";
 import { useExperimentArm } from "~/composables/experiments";
 import { HOME_DEFAULT_EXPERIMENT } from "~~/shared/experiments";
@@ -100,8 +60,6 @@ import type { TimelineGrouping } from "~~/server/api/stats/homeTimeline.get";
 
 import type { Powiat } from "@/composables/entity/regions";
 
-const { approved } = useStats();
-
 /** The panels this component actually renders.
  *
  * `home-default` also declares a `gry` arm, for the games hub that lives on
@@ -109,7 +67,7 @@ const { approved } = useStats();
  * weight today and cannot be assigned, but a weight is one number in a registry
  * and a blank window on the home page is a worse failure than an unhonoured
  * experiment. Anything unrecognised stays on the map. */
-const PANELS = ["map", "parties", "graph"] as const;
+const PANELS = ["map", "graph"] as const;
 type Panel = (typeof PANELS)[number];
 
 function isPanel(value: unknown): value is Panel {
@@ -124,15 +82,6 @@ const region = ref<Powiat | undefined>(undefined);
  * left, so neither is the other's parent. */
 const range = ref<TimelineRange>("all");
 const grouping = ref<TimelineGrouping>("party");
-
-/** `tab`, narrowed to the two panels the people list knows about.
- *
- * The list is only mounted for those two - the chart panel has the controls in
- * its place - so the fallback is unreachable; it is here because `tab` is typed
- * over all three and the card's prop is not. */
-const listPanel = computed<"map" | "parties">(() =>
-  tab.value === "parties" ? "parties" : "map",
-);
 
 // Counted separately from `home-explorer:tab`, and separately from each other:
 // what a reader reaches for once they are on the chart is a different question
@@ -162,8 +111,10 @@ function selectTab(value: unknown) {
   trackGoal("home-explorer:tab", { tab: value });
 }
 
-/** The map's conversion, under the same goal as the treemap's so that `panel`
- * compares the two directly - which is the question the tab strip poses.
+/** The map's conversion. `panel` is still on the goal even though the map is
+ * the only panel that reports one: the chart panel's equivalent is the two
+ * settings it records, and a shared goal keeps the comparison possible if a
+ * third panel ever arrives.
  *
  * Keyed by teryt rather than name, which is optional on a Powiat. 380 values is
  * a long breakdown but a legitimate one, and it is the only place the site

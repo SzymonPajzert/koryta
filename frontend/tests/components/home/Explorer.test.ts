@@ -25,23 +25,17 @@ const mount = () =>
   mountSuspended(Explorer, {
     global: {
       stubs: {
-        // The map is an svg of 380 powiaty, the treemap needs apexcharts and
-        // the list needs firestore. None of them is what is under test here.
-        //
-        // Both names for the treemap: the template asks for the `Lazy` variant,
-        // and stubbing only that one leaves apexcharts to render into a
-        // detached happy-dom node and reject with "Element not found" - after
-        // the assertions have passed, so the suite stays green and the run
-        // exits 1.
+        // The map is an svg of 380 powiaty, the chart needs apexcharts and both
+        // side cards need firestore. None of them is what is under test here.
         ChartPolandMap: true,
-        ChartTreemapParty: true,
-        LazyChartTreemapParty: true,
         CardPeopleList: true,
+        HomeTimeline: true,
+        HomeTimelineControls: true,
       },
     },
   });
 
-/** Both breakpoints render a tab strip bound to the same value, so "the Partie
+/** Both breakpoints render a tab strip bound to the same value, so "the Wykres
  * tab" is two elements. Clicking either has to do the same thing - and firing
  * twice for one reader is exactly the bug the controlled model-value guards
  * against. */
@@ -59,6 +53,15 @@ describe("HomeExplorer", () => {
     const wrapper = await mount();
 
     expect(wrapper.text()).toContain("Mapa koryciarstwa");
+    expect(wrapper.text()).not.toContain("Stanowiska w czasie");
+  });
+
+  it("has no Partie tab", async () => {
+    // The treemap panel was removed; the tab strip is the only thing that could
+    // still offer it.
+    const wrapper = await mount();
+
+    expect(tabs(wrapper, "Partie")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("Podział na partie");
   });
 
@@ -93,14 +96,14 @@ describe("HomeExplorer", () => {
     expect(wrapper.text()).toContain("Mapa koryciarstwa");
   });
 
-  it("counts a switch to the party treemap, and back", async () => {
+  it("counts a switch to the chart, and back", async () => {
     const wrapper = await mount();
 
-    await tabs(wrapper, "Partie")[0]!.trigger("click");
+    await tabs(wrapper, "Wykres")[0]!.trigger("click");
     expect(trackGoal).toHaveBeenCalledWith("home-explorer:tab", {
-      tab: "parties",
+      tab: "graph",
     });
-    expect(wrapper.text()).toContain("Podział na partie");
+    expect(wrapper.text()).toContain("Stanowiska w czasie");
 
     trackGoal.mockClear();
     await tabs(wrapper, "Mapa")[0]!.trigger("click");

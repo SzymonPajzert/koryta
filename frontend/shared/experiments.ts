@@ -15,8 +15,8 @@
  *
  * Before spending traffic on the split, read `home-explorer:tab` broken down by
  * `tab`, and `home-explorer:pick` broken down by `panel` (`shared/analytics.ts`).
- * The tab strip is already switchable, so how many people open the treemap at
- * all - and what each panel converts once opened - is observable for free, at
+ * The tab strip is already switchable, so how many people leave the panel they
+ * landed on - and what each panel converts once opened - is observable for free, at
  * full sample size, with no arm to divide by. An experiment is only worth
  * running if those numbers are ambiguous.
  *
@@ -85,11 +85,16 @@ export type Experiment<Id extends string = string> = {
 /** Which panel the home page opens on.
  *
  * All the weight is on `map`, which is what `HomeExplorer` has always defaulted
- * to, so this changes nothing until somebody moves it. `gry` is declared with
- * no weight and no implementation: the games hub lives on the `gry-games`
- * branch, and naming the arm here is what keeps the eventual three-way split
- * from being a redesign - see `useExperiment`, which falls back to the first
- * arm for anything it does not recognise. */
+ * to, so this changes nothing until somebody moves it.
+ *
+ * `parties` was the second arm and went with its panel: the treemap was removed
+ * from the tab strip, and an arm naming a panel that no longer exists is a trap
+ * rather than a placeholder. `graph` replaces it and names the panel that took
+ * its tab. `gry` is different again - declared with no weight and no
+ * implementation, because the games hub lives on the `gry-games` branch, and
+ * naming the arm here is what keeps the eventual three-way split from being a
+ * redesign. See `assignArm`, which falls back to the first arm for anything it
+ * does not recognise. */
 export const HOME_DEFAULT_EXPERIMENT = {
   id: "home-default",
   question:
@@ -101,9 +106,10 @@ export const HOME_DEFAULT_EXPERIMENT = {
       description: "Mapa koryciarstwa, the panel the page opens on today.",
     },
     {
-      id: "parties",
+      id: "graph",
       weight: 0,
-      description: "Podział na partie, the treemap that is currently a tab.",
+      description:
+        "Stanowiska w czasie, the timeline of how many people each party, województwo or sector had in post.",
     },
     {
       id: "gry",
