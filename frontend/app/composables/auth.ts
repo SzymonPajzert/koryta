@@ -180,14 +180,25 @@ export const authFetch = createUseFetch({
       // TODO don't auto add latest here
       options.query = { ...options.query, latest: true };
 
-      // Attach auth token to requests that are not GET or HEAD.
-      const method = (unref(options.method) || "GET").toUpperCase();
-      if (method !== "GET" && method !== "HEAD") {
-        const token = await user.value.getIdToken();
-        const headers = new Headers(unref(options.headers) || {});
-        headers.set("Authorization", `Bearer ${token}`);
-        options.headers = headers;
-      }
+      // Every method, GET included. It used to be writes only, which left a
+      // reading route with no way to tell a signed-in caller from a crawler
+      // except the `latest` flag above - and a flag is the caller's to set, so
+      // it can say "I am signed in" without being. `/api/extractions` is the
+      // route that needs the difference: unreviewed machine claims about named
+      // people are served to a reader and withheld from everyone else, and
+      // with no token to verify it withheld them from everybody.
+      //
+      // Safe to widen because of who reads it. The handlers that ask for the
+      // caller at all - `getOptionalUser`, `getUser` - are every one of them
+      // uncached `defineEventHandler`s, so a signed-in answer cannot be filled
+      // into a shared cache entry; `authCachedEventHandler` caches but never
+      // looks at the header (`eventIsAuthenticated` is stubbed to false); and
+      // `readerAwareCachedEventHandler` exists precisely to resolve the reader
+      // before the cache is consulted. No route rule caches /api either.
+      const token = await user.value.getIdToken();
+      const headers = new Headers(unref(options.headers) || {});
+      headers.set("Authorization", `Bearer ${token}`);
+      options.headers = headers;
     }
   },
 });
