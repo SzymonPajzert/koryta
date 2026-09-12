@@ -792,11 +792,15 @@ def cost_breakdown(
             continue
         row = tally.setdefault(
             query.primary_reason,
-            {"subjects": 0, "public": 0, "calls": 0, "cost": 0.0},
+            {"subjects": 0, "public": 0, "calls": 0, "cost": 0.0, "head": []},
         )
         row["subjects"] += 1
         row["calls"] += calls
         row["cost"] += query.cost()
+        if len(row["head"]) < 5:
+            row["head"].append(
+                query.krs.id if query.krs is not None else query.person.id
+            )
         if query.krs is not None and query.krs.id in public_krs:
             row["public"] += 1
 
@@ -813,6 +817,7 @@ def cost_breakdown(
             f"  {reason:<24}{int(row['subjects']):>10}{int(row['public']):>9}"
             f"{int(row['calls']):>8}{row['cost']:>10.2f}"
         )
+        lines.append(f"    {', '.join(row['head'])}")
     total = (
         {
             key: sum(row[key] for row in tally.values())
