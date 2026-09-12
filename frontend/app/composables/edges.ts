@@ -4,6 +4,7 @@ import type {
   Edge,
   EdgeType,
   ElectionPosition,
+  Person,
 } from "~~/shared/model";
 import type { TraversePolicy } from "~~/shared/graph/model";
 
@@ -48,6 +49,18 @@ export type EdgeNode = {
 export function edgeCompany(edge: EdgeNode): Company | undefined {
   return edge.richNode.type === "place"
     ? (edge.richNode as Company)
+    : undefined;
+}
+
+/** The row's other end, where that end is a person at all.
+ *
+ * `edgeCompany`'s counterpart, and true of `richNode` for the same reason: the
+ * whole node document is there, so the parties a card wants to chip come with
+ * the row rather than costing a fetch per name.
+ */
+export function edgePerson(edge: EdgeNode): Person | undefined {
+  return edge.richNode.type === "person"
+    ? (edge.richNode as Person)
     : undefined;
 }
 
