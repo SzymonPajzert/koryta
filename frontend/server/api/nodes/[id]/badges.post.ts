@@ -1,6 +1,7 @@
 import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { recordAudit } from "~~/server/utils/audit";
 import { badges, type BadgeId } from "~~/shared/badges";
 import { z } from "zod";
 
@@ -65,7 +66,7 @@ export type BadgeModerationResult = {
  *
  * # Why this is a field path and not a document write
  *
- * `nodeRef.update(new FieldPath("badgeModeration", badgeId), …)` writes one key
+ * `update(nodeRef, new FieldPath("badgeModeration", badgeId), …)` writes one key
  * of the map. Reading the map, changing a key and writing it back would lose
  * the other verdicts whenever two admins act on the same person inside one
  * round trip - two badges on one person is the normal case, not a rare one, and
@@ -80,16 +81,20 @@ export type BadgeModerationResult = {
  * catalogue's own comment forbids dots in an id for exactly this reason; this
  * is the same rule enforced where it is cheap to enforce.
  *
- * # Why there is no audit entry
+ * # Why the write goes through a batch
  *
- * `recordAudit` takes an `AuditAction` from a closed union in shared/audit.ts,
- * which has no member for this and is not a file this change may touch. The
- * console line below is what is left: it is in the container logs next to every
- * other admin action, which is not the append-only record the `audit`
- * collection is, and a follow-up that adds a „badge” action there should
- * replace it. `badgeModeration` itself carries no uid and no timestamp - the
- * type is `Record<string, "approved" | "hidden">` and stays that way - so
- * without one of the two, nothing says who hid a badge.
+ * One field of one document is a write `nodeRef.update` can do by itself, and
+ * it did. The batch is here for the second write: this is a decision about
+ * whether a public label stands next to a living person's name, and
+ * `badgeModeration` records only the answer - the type is `Record<string,
+ * "approved" | "hidden">` and stays that way, so it carries no uid and no
+ * timestamp, and a cleared verdict leaves the map entirely. What was left was a
+ * `console.info` in the container logs, which rotate away, so within weeks
+ * nothing said who hid a badge or when.
+ *
+ * So the verdict and the `audit` row naming its author commit together, the way
+ * `recordAudit` requires of every caller: the half-way state - a badge hidden
+ * with nobody named for it - is the one the log exists to rule out.
  */
 export default defineEventHandler(
   async (event): Promise<BadgeModerationResult> => {
@@ -127,7 +132,9 @@ export default defineEventHandler(
       });
     }
 
-    await nodeRef.update(
+    const batch = db.batch();
+    batch.update(
+      nodeRef,
       new FieldPath("badgeModeration", body.badgeId),
       // Deleted rather than written as `null`: `visibleBadges` compares the
       // value against "approved" and "hidden" and treats everything else as „no
@@ -137,6 +144,22 @@ export default defineEventHandler(
       // cleared a ruling” for anybody reading the raw data.
       body.verdict === null ? FieldValue.delete() : body.verdict,
     );
+    recordAudit(
+      db,
+      {
+        action: "badge",
+        collection: "nodes",
+        target_id: id,
+        user: user.uid,
+        // Both, because neither is readable off the node afterwards: the
+        // document holds the latest verdict per badge and no history, and a
+        // cleared one is not in it at all. `body.verdict` is passed through
+        // including its `null` - see the field's comment in shared/audit.ts.
+        badge: { id: body.badgeId, verdict: body.verdict },
+      },
+      batch,
+    );
+    await batch.commit();
 
     // The map as the document now holds it, rebuilt from the copy read above
     // rather than read back: a second `get` would cost a read to learn what
@@ -152,11 +175,6 @@ export default defineEventHandler(
         Object.entries(previous).filter(([key]) => key !== body.badgeId),
       );
     if (body.verdict !== null) moderation[body.badgeId] = body.verdict;
-
-    console.info(
-      `Badge ${body.badgeId} on nodes/${id} set to ` +
-        `${body.verdict ?? "undecided"} by=${user.uid}`,
-    );
 
     // Every cached answer that carries this person - their own page above all -
     // was computed before the verdict and would go on showing the badge, or go

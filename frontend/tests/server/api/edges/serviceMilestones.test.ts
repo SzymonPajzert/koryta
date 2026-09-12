@@ -387,14 +387,30 @@ describe("api/edges/serviceMilestones", () => {
   });
 
   it("reads only the node fields it draws with", async () => {
-    // It has to fetch every node the published employments touch, and the
-    // result sits in nitro's in-memory cache.
+    // It has to fetch every node the published employments touch - ~2,500
+    // documents against the 3,047 published `employed` edges of 2026-09-09 -
+    // and the result sits in nitro's in-memory cache. Masking changes no read
+    // count, since Firestore bills a document rather than a field; what it
+    // keeps down is the size of that cached copy.
     edges.e1 = employment();
 
     await call();
 
     expect(fieldMasks.length).toBeGreaterThan(0);
     expect(fieldMasks[0]).toContain("isPublic");
+    // The two inputs `publicBadgeIds` takes, each as its own narrow path, and
+    // the `stats` block never as a whole: it also holds the per-category vote
+    // aggregates and the activity counters, which no card draws, and that
+    // block is most of what the mask exists to leave behind.
+    //
+    // Three lines rather than the single `not.toContain("stats")` this test
+    // made before the badges existed. `toContain` on an array compares
+    // elements literally, so the moment the mask gained "stats.badges" that
+    // line went on passing without saying anything about it - and a mask that
+    // had dropped both badge paths, which is how the endpoint would silently
+    // stop sending badges at all, is precisely what it could not see.
+    expect(fieldMasks[0]).toContain("stats.badges");
+    expect(fieldMasks[0]).toContain("badgeModeration");
     expect(fieldMasks[0]).not.toContain("stats");
   });
 
@@ -406,6 +422,74 @@ describe("api/edges/serviceMilestones", () => {
     const { milestones } = await call();
 
     expect(milestones[0]!.companyCategories).toEqual(["energetyka"]);
+  });
+
+  /** Which odznaki reach the card.
+   *
+   * /eksploruj/staz and the home page's „Co nowego” feed are both served to a
+   * logged-out visitor and to Google, so these responses are the only badge
+   * surface anybody sees without an account. The rule itself is `visibleBadges`
+   * and lives in shared/badges.ts, tested in tests/shared/badges.test.ts; these
+   * say the endpoint asks for the public slice of it and nothing wider. The
+   * same four cases are made against /api/edges/recentEmployments, because the
+   * home feed merges the two lists and one of them leaking would look exactly
+   * like the other doing it.
+   *
+   * The fake `getAll` above hands back the whole fixture whatever mask it was
+   * given, so these say nothing about the two badge fields being *asked* for -
+   * that half is „reads only the node fields it draws with”, and without it a
+   * mask that had dropped them would leave every test here green while the
+   * live endpoint sent no badges at all.
+   */
+  describe("odznaki", () => {
+    beforeEach(() => {
+      // Ten years to the day, so there is exactly one card to read the badges
+      // off - the same milestone the first test in this file pins.
+      edges.e1 = employment({ start_date: "2016-09-09" });
+    });
+
+    it("carries a badge the public is allowed to see", async () => {
+      // „Społecznik” is the one entry in the catalogue that needs no editor -
+      // it states the type of an organ rather than characterising anybody - so
+      // three net votes is the whole gate it has to pass.
+      nodes.anna!.stats = { badges: { spolecznik: { up: 3, down: 0 } } };
+
+      expect((await call()).milestones[0]!.badges).toEqual(["spolecznik"]);
+    });
+
+    it("says nothing about a badge one reader has proposed", async () => {
+      nodes.anna!.stats = { badges: { spolecznik: { up: 1, down: 0 } } };
+
+      // Two things at once. One reader's opinion about a named person is not
+      // something a logged-out visitor may be shown at all - that is the
+      // „proposal” state, signed-in only - and the key is omitted rather than
+      // sent empty, like `companyCategories`: almost nobody has a badge, and
+      // the feed is twenty cards.
+      expect((await call()).milestones[0]).not.toHaveProperty("badges");
+    });
+
+    it("drops a badge an editor ruled out, whatever the count", async () => {
+      // Five readers, and it still does not appear: an editor's „no” outranks
+      // any number of them, which is the only thing that can be said to a
+      // person who objects to a chip on their own page.
+      nodes.anna!.stats = { badges: { spolecznik: { up: 5, down: 0 } } };
+      nodes.anna!.badgeModeration = { spolecznik: "hidden" };
+
+      expect((await call()).milestones[0]).not.toHaveProperty("badges");
+    });
+
+    it("waits for an editor on a badge that characterises somebody", async () => {
+      // Three readers are enough for the count and not for publication.
+      // „Omnibus” is `requiresApproval`, so until somebody rules on it the chip
+      // is „awaiting” - visible to signed-in readers on the person's own page,
+      // and never in this response, which anybody can fetch.
+      nodes.anna!.stats = { badges: { omnibus: { up: 3, down: 0 } } };
+
+      expect((await call()).milestones[0]).not.toHaveProperty("badges");
+
+      nodes.anna!.badgeModeration = { omnibus: "approved" };
+      expect((await call()).milestones[0]!.badges).toEqual(["omnibus"]);
+    });
   });
 
   it("pages by offset without repeating or skipping", async () => {

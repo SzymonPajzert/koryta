@@ -5,12 +5,20 @@
        The policy is the notes' policy, word for word: „Notes on a person are
        unreviewed claims about a named individual, so a reader has to be logged
        in to see them” (EntityDetailView.vue, above `NoteEditor`). A badge is
-       the same kind of claim and then some - „Kot na cztery nogi” and „W czepku
-       urodzony” are characterisations of a living person that nobody has
-       reviewed, sitting on their canonical, indexed url - and this section
-       shows the whole catalogue on everybody, including the four badges nobody
-       has proposed. `visibleBadges` would show a logged-out visitor none of
-       them; the offer to vote must not show them either.
+       the same kind of claim and then some - the satirical and interpretive
+       entries characterise a living person and nobody has reviewed them,
+       sitting on their canonical, indexed url - and this section shows the
+       whole catalogue on everybody, including the badges nobody has proposed.
+       `visibleBadges` would show a logged-out visitor none of them; the offer
+       to vote must not show them either.
+
+       No badge title anywhere in this template's comments, deliberately. A
+       comment before the root element is its own vnode, so it is emitted even
+       on the logged-out path where `PageSection` draws nothing - and template
+       comments survive dev SSR, though a production build strips them. Quoting
+       a title here would therefore put it in `view-source` on every person
+       page in development, which is exactly what
+       `tests/e2e/person_badges.spec.ts` asserts against.
 
        Inside rather than at the mount point, which is where `NoteEditor`'s
        lives, because that gate is a condition another surface can forget to
@@ -242,7 +250,7 @@
             Ukryj
           </v-btn>
           <!-- Not offered on a page that is two people or a merged duplicate:
-               clearing „hidden” on a badge that needs no editor (`Społecznik`)
+               clearing „hidden” on the one badge that needs no editor
                publishes it again, and publishing anything on such a page is the
                move the read-only mode exists to prevent. Hiding stays, see the
                comment on `readOnly`. -->
@@ -285,12 +293,17 @@
  * together would mean one component whose every element is behind a different
  * condition.
  *
- * The counts it shows are this reader's arithmetic, not the endpoint's - see
- * `tallies`. That is not an optimisation; it is the only way the number can be
- * right after a click, because `/api/nodes/[id]` is served from a six-hour
- * cache to signed-in readers too (server/utils/handlers.ts:5-7).
+ * The counts it shows come from `/api/nodes/[id]/badges` - a narrow, uncached
+ * read of the two fields a badge is made of - with this reader's own clicks
+ * added on top until that endpoint has caught up with them. Neither half is an
+ * optimisation. The props carry `stats.badges` off `/api/nodes/[id]`, which is
+ * served from a six-hour cache to signed-in readers too
+ * (server/utils/handlers.ts:5-7), so they are the wrong number after any vote;
+ * and the endpoint cannot answer before `onVoteWritten` has recounted, so the
+ * click needs an answer of its own in the meantime. See `adoptBadges` for the
+ * one rule that keeps the two from being counted twice.
  */
-import { computed, ref, toRef } from "vue";
+import { computed, ref, toRef, watch } from "vue";
 import {
   mdiCheckDecagramOutline,
   mdiEyeOffOutline,
@@ -311,6 +324,7 @@ import {
 import { useBadgeVotes } from "~/composables/badges";
 import { authRequest, useAuthState } from "~/composables/auth";
 import type { BadgeModerationResult } from "~~/server/api/nodes/[id]/badges.post";
+import type { NodeBadges } from "~~/server/api/nodes/[id]/badges.get";
 
 const props = defineProps<{
   /** The person this section votes on. The vote lands in
@@ -353,27 +367,38 @@ const error = ref("");
 const errorShown = ref(false);
 const moderating = ref<string | null>(null);
 
-/** This reader's clicks, as a correction to the counts the page arrived with.
+/** What `/api/nodes/[id]/badges` last answered, or null before the first
+ * answer - in which case the props are what there is to draw.
  *
- * The person page's `stats.badges` comes off `/api/nodes/[id]`, an
- * `authCachedEventHandler` whose `eventIsAuthenticated` is stubbed to
- * `return false` (server/utils/handlers.ts:5-7) - so every signed-in reader is
- * served the same entry, up to six hours old, and refreshing after a vote does
- * not show it. The vote *document* is live (vuefire listens to it), so the
- * arrows are always right; the counter next to them would be the only number on
- * the site that contradicts the button beside it.
+ * The props come off `/api/nodes/[id]`, an `authCachedEventHandler` whose
+ * `eventIsAuthenticated` is stubbed to `return false`
+ * (server/utils/handlers.ts:5-7), so every signed-in reader is served the same
+ * entry for up to six hours: they are the right number on a page nobody has
+ * voted on and stale on every other. The vote *document* is live (vuefire
+ * listens to it), so the arrows are always right, which is precisely what made
+ * the stale counter next to them the one number on the site that contradicts
+ * the button beside it.
+ */
+const serverBadges = ref<NodeBadges | null>(null);
+
+/** This reader's clicks, as a correction to the counts above.
  *
- * A delta rather than a refetch, because there is nothing to refetch: the write
- * goes to Firestore, the tally is recomputed by `onVoteWritten` onto the node,
- * and the only way back to the browser is the cached endpoint. A delta also
- * survives a second click - withdrawing takes the same value back off.
+ * Still needed with the endpoint in place, and for a reason the endpoint cannot
+ * fix: the vote is written to Firestore by the client, and `stats.badges` is
+ * recounted from the `votes` collection by `onVoteWritten`, a trigger that runs
+ * *after* that write returns. Between the click and the trigger there is no
+ * source anywhere that knows the new count, so the click has to be its own
+ * answer. A delta also survives a second click - withdrawing takes the same
+ * value back off.
  */
 const voteDelta = ref<Record<string, { up: number; down: number }>>({});
 
-/** An editor's verdicts as this session has changed them, over the ones the
- * page was given. `null` means „cleared”, which is different from absent: the
- * key has to be able to beat the prop it is overlaying. Same cache, same
- * reason as `voteDelta`. */
+/** An editor's verdicts as this session has changed them, over whichever of
+ * the props and the endpoint's answer is underneath. `null` means „cleared”,
+ * which is different from absent: the key has to be able to beat the value it
+ * is overlaying. The same job `voteDelta` does for the counts, except that
+ * `badges.post.ts` replies with the map it wrote - so this needs no confirming
+ * round trip and is simply the newest thing the page knows. */
 const localModeration = ref<Record<string, "approved" | "hidden" | null>>({});
 
 /** True where a badge would land on the wrong human.
@@ -417,34 +442,178 @@ const readOnlyNote = computed(() => {
   return "";
 });
 
-/** The counts as this reader should see them: what the endpoint said, plus what
- * they have done since the page loaded.
+/** The counts the delta is measured against: the endpoint's answer once there
+ * is one, the props until then.
  *
- * Clamped at zero. The delta assumes the cached tally already counts the vote
- * this reader is changing, which is true whenever the cache is newer than their
- * last vote and wrong when it is older - and „-1 przeciw” is a worse way to be
- * wrong than „0 przeciw”. The next cache miss replaces the whole thing with the
- * trigger's own count either way.
+ * All or nothing between the two, deliberately - not a per-badge fallback. A
+ * badge missing from a fresh answer is a badge at zero (its proposer withdrew,
+ * or `computeBadgeStats` never wrote it), and reaching back to the six-hour-old
+ * prop for those would resurrect exactly the badges that have just gone away.
+ */
+function baseTally(id: string): BadgeTally {
+  const stored = serverBadges.value
+    ? serverBadges.value.badges[id]
+    : props.stats?.[id];
+  return { up: Number(stored?.up) || 0, down: Number(stored?.down) || 0 };
+}
+
+/** The counts as this reader should see them: the freshest base we have, plus
+ * what they have done that the base does not know about yet.
+ *
+ * Clamped at zero. The delta assumes the base already counts the vote this
+ * reader is changing, which is true whenever the base is newer than their last
+ * vote and wrong when it is older - and „-1 przeciw” is a worse way to be wrong
+ * than „0 przeciw”.
  */
 const tallies = computed<Record<string, BadgeTally>>(() => {
   const merged: Record<string, BadgeTally> = {};
   for (const definition of catalogue) {
-    const base = props.stats?.[definition.id];
+    const base = baseTally(definition.id);
     const delta = voteDelta.value[definition.id];
-    const up = Math.max(0, (Number(base?.up) || 0) + (delta?.up ?? 0));
-    const down = Math.max(0, (Number(base?.down) || 0) + (delta?.down ?? 0));
+    const up = Math.max(0, base.up + (delta?.up ?? 0));
+    const down = Math.max(0, base.down + (delta?.down ?? 0));
     if (up || down) merged[definition.id] = { up, down };
   }
   return merged;
 });
 
+/** Take the endpoint's answer, and drop every delta it has caught up with.
+ *
+ * This is the one place the counter can be made to say two, and it is worth
+ * spelling out how. `voteDelta` is not a number to display - it is a correction
+ * to a base that does not know about this reader's click yet. The moment a
+ * fetched base does know, the correction has to go, or the vote is counted once
+ * by `computeBadgeStats` and once more here, and one click reads „2 za”. The
+ * answer therefore **replaces** the delta; it is never added to it.
+ *
+ * Which is also why the answer cannot simply clear the deltas on arrival.
+ * `stats.badges` is recomputed by `onVoteWritten` *after* the write this
+ * component awaited, so the fetch that follows a vote usually lands before the
+ * trigger has finished and answers with the pre-vote tally. Clearing on arrival
+ * would snap the counter back to the old number a few hundred milliseconds
+ * after the click - the very failure this endpoint was added to fix, only
+ * faster.
+ *
+ * So a delta is dropped when the answer agrees with what the reader is already
+ * being shown, i.e. when base + delta is what the server now counts, and kept -
+ * along with the base it was measured against - when it does not. Every delta
+ * is re-examined on every answer and not just the badge that was voted on,
+ * because a vote on one badge fetches the tallies of all five, and a delta left
+ * on a badge the server has meanwhile caught up with is precisely the double.
+ *
+ * A badge the reader has an unconfirmed click on stays pinned to its old base
+ * even if the answer moved for somebody else's vote: the two are
+ * indistinguishable from here - the endpoint returns counts, never who voted -
+ * and being one behind for a moment is better than the counter jumping about
+ * under a reader who has just clicked. The next mount rebases it.
+ */
+function adoptBadges(fresh: NodeBadges) {
+  const pinned: [string, { up: number; down: number }][] = [];
+  const bases: Record<string, BadgeTally> = { ...fresh.badges };
+
+  for (const [id, delta] of Object.entries(voteDelta.value)) {
+    // A withdrawn vote leaves { up: 0, down: 0 } behind, which corrects
+    // nothing and must not pin the badge for the rest of the session.
+    if (!delta.up && !delta.down) continue;
+    const base = baseTally(id);
+    const shown = fresh.badges[id];
+    const confirmed =
+      (Number(shown?.up) || 0) === base.up + delta.up &&
+      (Number(shown?.down) || 0) === base.down + delta.down;
+    if (!confirmed) {
+      pinned.push([id, delta]);
+      bases[id] = base;
+    }
+  }
+
+  // Both assignments after the loop, which reads `baseTally` - it answers off
+  // `serverBadges`, so replacing that first would compare each delta against
+  // the very answer it is being judged by.
+  voteDelta.value = Object.fromEntries(pinned);
+  serverBadges.value = { badges: bases, moderation: fresh.moderation };
+}
+
+/** Ask the endpoint where this person's badges stand.
+ *
+ * `authRequest`, never `authFetch` - see the note on `setVerdict` below: the
+ * second call to one url aborts the first, and this one is called on mount and
+ * again after every vote, on the same url every time.
+ *
+ * A failure is swallowed on purpose. Everything here is a *freshness* upgrade
+ * over props the page already rendered from, so the worst outcome of a refused
+ * or unreachable request is the counter this component had before the endpoint
+ * existed. A red snackbar over that would report a problem the reader has no
+ * move to make about, on a page that looks entirely fine.
+ */
+async function refreshBadges() {
+  const nodeId = props.nodeId;
+  try {
+    const fresh = await authRequest<NodeBadges>(`/api/nodes/${nodeId}/badges`, {
+      method: "GET",
+    });
+    // The reader may have walked to another person while this was in flight -
+    // the page is a client-side navigation away from any of the people named on
+    // it - and adopting an answer about somebody else would put one person's
+    // counts under another's name.
+    if (nodeId !== props.nodeId) return;
+    adoptBadges(fresh);
+  } catch (err) {
+    console.debug("Nie udało się odświeżyć odznak", err);
+  }
+}
+
+/** Load the tallies once the reader is known, and reload them when the page
+ * changes person under us.
+ *
+ * Watched rather than fetched in `onMounted`, because `user` is resolved
+ * asynchronously by firebase (`useCurrentUser`) and is normally still null when
+ * this component mounts - a fetch there would be a guaranteed 401. Client only:
+ * on the server there is no signed-in reader to fetch for, the section renders
+ * nothing for anybody else, and `authRequest` waits on an auth state that SSR
+ * never resolves.
+ *
+ * The `nodeId` half is not hypothetical. `/osoba/[slug]` reuses this component
+ * across a client-side navigation between two people - which is what
+ * `useBadgeVotes(toRef(props, "nodeId"))` follows for the same reason - and a
+ * tally or a pending delta carried over from the previous person would be
+ * counts from one page displayed under another's name.
+ *
+ * `loadedFor` rather than the watcher's own previous value, which is typed as
+ * present and is `undefined` on an `immediate` run: reading `[1]` off it would
+ * throw on the very first call, and the lint rule that forbids guarding a
+ * non-nullable value is what makes that impossible to paper over.
+ */
+let loadedFor: string | null = null;
+
+watch(
+  [user, () => props.nodeId],
+  ([signedIn, nodeId]) => {
+    if (loadedFor !== null && loadedFor !== nodeId) {
+      serverBadges.value = null;
+      voteDelta.value = {};
+      localModeration.value = {};
+    }
+    if (!signedIn || !import.meta.client) return;
+    loadedFor = nodeId;
+    void refreshBadges();
+  },
+  { immediate: true },
+);
+
 const moderation = computed<Record<string, "approved" | "hidden">>(() => {
-  // Anything this session has ruled on is dropped from the props first, so a
+  // The endpoint's answer where there is one, for the same reason as the
+  // tallies: the props are up to six hours old, so a badge an editor hid this
+  // morning would still be offered two arrows here. `localModeration` on top of
+  // both - it is only ever set from the server's own reply to this session's
+  // write, so it is at least as new as any answer that was already in flight.
+  //
+  // Anything this session has ruled on is dropped from the base first, so a
   // cleared verdict (`null`) really disappears instead of being re-added by the
-  // stale copy underneath it. Filtering rather than `delete`ing a computed key,
-  // which the lint rule forbids.
+  // copy underneath it. Filtering rather than `delete`ing a computed key, which
+  // the lint rule forbids.
+  const base = serverBadges.value?.moderation ?? props.moderation ?? {};
   const merged: Record<string, "approved" | "hidden"> = Object.fromEntries(
-    Object.entries(props.moderation ?? {}).filter(
+    Object.entries(base).filter(
       ([id]) => localModeration.value[id] === undefined,
     ),
   );
@@ -594,6 +763,13 @@ async function onVote(id: string, value: 1 | -1) {
     if (next > 0) delta.up += 1;
     if (next < 0) delta.down += 1;
     voteDelta.value = { ...voteDelta.value, [id]: delta };
+
+    // And then the real number, so that a reload shows it rather than the
+    // six-hour-old one this reader has just contradicted. Awaited after the
+    // delta, never instead of it: the trigger that recounts `stats.badges` has
+    // not necessarily run yet, and `adoptBadges` is what decides which of the
+    // two answers is the one to keep.
+    await refreshBadges();
   } catch (err) {
     // `write` propagates a rules rejection now (app/composables/votes.ts), and
     // a PERMISSION_DENIED nobody is shown is the one failure a bug report

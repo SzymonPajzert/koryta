@@ -170,11 +170,19 @@
               class="mt-4"
             />
             <!-- Directly under the record the badges are voted off. Every
-                 badge in the catalogue is a reading of the rows above -
-                 „Omnibus” counts the employers in „Historia powiązań”,
-                 „Zmiana barw” the committees - so the section that asks the
-                 reader to judge comes after the evidence rather than before
-                 it.
+                 badge in the catalogue is a reading of the rows above - one
+                 counts the employers in „Historia powiązań”, another the
+                 committees - so the section that asks the reader to judge
+                 comes after the evidence rather than before it.
+
+                 No badge title in this comment, deliberately. A template
+                 comment is stripped from a production build but survives dev
+                 SSR, so anything written here is in `view-source` while
+                 developing - and `tests/e2e/person_badges.spec.ts` asserts
+                 that the title of an unseconded badge appears nowhere in the
+                 html of a logged out page. Naming one here made that spec
+                 pass under `dev:build` and fail under `dev:local`, which is
+                 the worst way for an assertion to be wrong.
 
                  It draws nothing for a logged out reader: the gate is inside
                  the component, the same policy `NoteEditor` states below

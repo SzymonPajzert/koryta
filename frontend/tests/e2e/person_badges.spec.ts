@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { logIn, USERS } from "./helpers/auth";
+import { badges } from "../../shared/badges";
 
 /** Odznaki on a person's page: who may see which badge, and what a click does.
  *
@@ -103,15 +104,21 @@ test.describe("Odznaki osób", () => {
     await page.reload();
     await expect(section).toBeVisible({ timeout: 30_000 });
 
-    // The vote survived, and the button knows it without the endpoint's help:
-    // the vote document is read live from Firestore by vuefire, which is what
-    // makes the arrows right even while the cached counter beside them is not.
-    // Nothing is asserted about the tally here on purpose - it is served from
-    // the same six-hour entry as before the vote, and pinning a number to it
-    // would make this spec a clock.
+    // The vote survived, and so did the number beside it. The button alone
+    // would have been true before the tallies got their own endpoint: the vote
+    // document is read live from Firestore by vuefire, so the arrows were
+    // always right, while `/api/nodes/[id]` served the counter from a six-hour
+    // entry and reported „0 za” to the very reader who had just voted. The
+    // optimistic overlay covered that until the page was reloaded, and then
+    // the reader watched their own vote disappear.
+    //
+    // This is the assertion that pins the fix, so it is worth saying what it
+    // would take to break it without the arrows noticing: serving the section
+    // from the node payload again, or caching `/api/nodes/[id]/badges`.
     await expect(up).toHaveAttribute("aria-pressed", "true", {
       timeout: 30_000,
     });
+    await expect(tally).toHaveText("1 za / 0 przeciw");
 
     // A second click on the same arrow is a withdrawal, not a second vote.
     await expect(up).toBeEnabled({ timeout: 30_000 });
@@ -153,14 +160,28 @@ test.describe("Odznaki osób", () => {
     // publishes them to view-source and to a crawler, which for an unseconded
     // claim about a named person is the whole risk.
     //
-    // „Omnibus”, the title, and not the id: the bare `omnibus` key *is* in the
-    // payload, because `stats.badges` travels with the document a logged out
-    // reader is entitled to (it is what draws a public chip). The tally is
-    // public arithmetic; the sentence it stands for is what must not be here.
+    // Titles, not ids: the bare `omnibus` key *is* in the payload, because
+    // `stats.badges` travels with the document a logged out reader is entitled
+    // to (it is what draws a public chip). The tally is public arithmetic; the
+    // sentence it stands for is what must not be here.
+    //
+    // Every title in the catalogue rather than only the proposed one, because
+    // the two ways this leaks are not the chip. A template comment quoting a
+    // title survives dev SSR (a production build strips it), and a comment
+    // before a component's root element is emitted even when the component
+    // draws nothing - so the first version of this page published two titles
+    // that nobody had proposed, on every person, and an assertion naming one
+    // badge went green against `dev:build` while red against `dev:local`.
     await expect(
       page.locator("[data-testid='badge-chip-omnibus']"),
     ).toHaveCount(0);
-    expect(await page.content()).not.toContain("Omnibus");
+    const html = await page.content();
+    for (const badge of badges) {
+      expect(
+        html,
+        `„${badge.title}” leaked to a logged out page`,
+      ).not.toContain(badge.title);
+    }
   });
 
   test("three readers put the chip in front of everybody", async ({ page }) => {

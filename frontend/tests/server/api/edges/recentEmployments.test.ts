@@ -208,6 +208,65 @@ describe("api/edges/recentEmployments", () => {
     expect(employments[0]).not.toHaveProperty("companyCategories");
   });
 
+  /** Which odznaki reach the card.
+   *
+   * The home page's „Co nowego” feed is served to a logged-out visitor and to
+   * Google, so this response is the only badge surface anybody sees without an
+   * account - and the „proposal” and „awaiting” states exist precisely so that
+   * what readers are still arguing about does not appear there under a named
+   * person's name. The rule itself is `visibleBadges`, tested in
+   * tests/shared/badges.test.ts; these say the endpoint asks for the public
+   * slice of it and nothing wider.
+   */
+  describe("odznaki", () => {
+    it("carries a badge the public is allowed to see", async () => {
+      // „Społecznik” is the one entry in the catalogue that needs no editor -
+      // it states the type of an organ rather than characterising anybody - so
+      // three net votes is the whole gate it has to pass.
+      nodes.anna!.stats = { badges: { spolecznik: { up: 3, down: 0 } } };
+      edges.e1 = employment();
+
+      expect((await call()).employments[0]!.badges).toEqual(["spolecznik"]);
+    });
+
+    it("says nothing about a badge one reader has proposed", async () => {
+      nodes.anna!.stats = { badges: { spolecznik: { up: 1, down: 0 } } };
+      edges.e1 = employment();
+
+      // Two things at once. One reader's opinion about a named person is not
+      // something a logged-out visitor may be shown at all - that is the
+      // „proposal” state, signed-in only - and the key is omitted rather than
+      // sent empty, like `companyCategories` above: almost nobody has a badge,
+      // and this is twenty cards.
+      expect((await call()).employments[0]).not.toHaveProperty("badges");
+    });
+
+    it("drops a badge an editor ruled out, whatever the count", async () => {
+      // Five readers, and it still does not appear: an editor's „no” outranks
+      // any number of them, which is the only thing that can be said to a
+      // person who objects to a chip on their own page.
+      nodes.anna!.stats = { badges: { spolecznik: { up: 5, down: 0 } } };
+      nodes.anna!.badgeModeration = { spolecznik: "hidden" };
+      edges.e1 = employment();
+
+      expect((await call()).employments[0]).not.toHaveProperty("badges");
+    });
+
+    it("waits for an editor on a badge that characterises somebody", async () => {
+      // Three readers are enough for the count and not for publication.
+      // „Omnibus” is `requiresApproval`, so until somebody rules on it the chip
+      // is „awaiting” - visible to signed-in readers on the person's own page,
+      // and never in this response, which anybody can fetch.
+      nodes.anna!.stats = { badges: { omnibus: { up: 3, down: 0 } } };
+      edges.e1 = employment();
+
+      expect((await call()).employments[0]).not.toHaveProperty("badges");
+
+      nodes.anna!.badgeModeration = { omnibus: "approved" };
+      expect((await call()).employments[0]!.badges).toEqual(["omnibus"]);
+    });
+  });
+
   it("puts the most recently begun spell on top", async () => {
     edges.old = employment({ start_date: "2019-05-01" });
     edges.newest = employment({ source: "jan", start_date: "2026-02-01" });
