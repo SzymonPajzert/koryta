@@ -8,17 +8,13 @@
  * is spike-driven rather than steady: one Facebook post lands 700 people in an
  * afternoon and whichever arm it happens to weight is the one that "wins".
  *
- * So the registry below ships **dormant** - `home-default` gives every reader
- * the map, exactly what the site does today, and the only thing the experiment
- * machinery does is exist. Turning it on is changing the weights, and the goals
- * are already registered so no data is lost to a forgotten dashboard step.
- *
- * Before spending traffic on the split, read `home-explorer:tab` broken down by
- * `tab`, and `home-explorer:pick` broken down by `panel` (`shared/analytics.ts`).
- * The tab strip is already switchable, so how many people leave the panel they
- * landed on - and what each panel converts once opened - is observable for free, at
- * full sample size, with no arm to divide by. An experiment is only worth
- * running if those numbers are ambiguous.
+ * The registry shipped **dormant** for exactly that reason, and `home-default`
+ * is now **live**: `map` and `graph` carry equal weight. Read the result with
+ * the traffic in mind. Six readers per arm per day is not a fortnight's
+ * experiment; expect to leave it running for months before the difference
+ * between the arms outgrows the noise a single Facebook post puts into it, and
+ * prefer `home-explorer:tab` and the two `home-timeline:*` goals - which need
+ * no arm to divide by - for anything they can answer on their own.
  *
  * ## The arm is a property, not a goal
  *
@@ -47,22 +43,32 @@
  *    later visits in a different bucket from their first, which is noise. A
  *    session is the unit the numbers are actually reported in.
  *
- * ## The one thing to fix before activating
+ * ## How the flash was dealt with, and what it cost
  *
  * `routeRules` caches `/` with `swr: 3600` (`nuxt.config.ts`), so the server
  * renders the home page once an hour and hands the same html to everybody. The
- * arm therefore cannot be decided server-side as things stand, and is resolved
- * after hydration - which means a reader in a non-default arm sees the map for
- * a frame before the tab switches. Control has no such swap, so the flash is an
- * asymmetry between the arms and would bias the very comparison being run.
+ * arm cannot be decided server-side as things stand - the session id lives in
+ * `sessionStorage`, and the cookie that would let the server see it is the one
+ * thing the stickiness note above rules out - so it is resolved after
+ * hydration. Committing the server render to a panel would therefore mean one
+ * arm painting the other's panel for a frame and then swapping while the
+ * control sat still: an asymmetry between the arms in the very thing being
+ * compared.
  *
- * Two ways out when the time comes, neither free:
- *   - drop `swr` on `/`, and pay a full render per request on a container that
- *     runs at `minInstances: 0`; or
- *   - keep `swr` and vary the cache key on an arm header set by a server
- *     middleware, which is one cache entry per arm and no flash, but puts the
- *     assignment on the server where it has to agree with the client's.
- * Deciding that is part of activating the experiment, not of shipping this.
+ * `HomeExplorer` renders **neither** panel until the arm is known, behind a
+ * placeholder of the map panel's height. Both arms pass through it, so the
+ * comparison is between the panels rather than between one panel and one panel
+ * plus a swap. The price is that the map is no longer server-rendered on `/`,
+ * which is paid by every reader and not only by the ones in an arm.
+ *
+ * The two alternatives, if that price turns out to be the wrong one:
+ *   - drop `swr` on `/` and render per request, which does not help on its own
+ *     - the server still has no way to know the arm - but is the prerequisite
+ *     for the next one;
+ *   - vary the cache key on an arm header set by a server middleware, which is
+ *     one cache entry per arm and no placeholder, but moves the assignment to
+ *     the server where it has to agree with the client's and depends on the CDN
+ *     honouring the `Vary`.
  */
 
 /** One arm of an experiment. `weight` is relative, not a percentage - the
@@ -84,17 +90,19 @@ export type Experiment<Id extends string = string> = {
 
 /** Which panel the home page opens on.
  *
- * All the weight is on `map`, which is what `HomeExplorer` has always defaulted
- * to, so this changes nothing until somebody moves it.
+ * `map` and `graph` are split evenly. `map` is first, and so the control that
+ * `assignArm` falls back to: it is what the page has always opened on, and a
+ * reader whose storage is unavailable should get the familiar page rather than
+ * the one being tested.
  *
- * `parties` was the second arm and went with its panel: the treemap was removed
- * from the tab strip, and an arm naming a panel that no longer exists is a trap
- * rather than a placeholder. `graph` replaces it and names the panel that took
- * its tab. `gry` is different again - declared with no weight and no
- * implementation, because the games hub lives on the `gry-games` branch, and
+ * The `parties` arm went with its panel - the treemap was removed from the tab
+ * strip, and an arm naming a panel that no longer exists is a trap rather than
+ * a placeholder. `gry` is different: it is declared with no weight and no
+ * implementation because the games hub lives on the `gry-games` branch, and
  * naming the arm here is what keeps the eventual three-way split from being a
- * redesign. See `assignArm`, which falls back to the first arm for anything it
- * does not recognise. */
+ * redesign - see `assignArm`, which falls back to the first arm for anything it
+ * does not recognise, and `HomeExplorer`, which stays on the map for a panel it
+ * cannot render. */
 export const HOME_DEFAULT_EXPERIMENT = {
   id: "home-default",
   question:
@@ -103,11 +111,12 @@ export const HOME_DEFAULT_EXPERIMENT = {
     {
       id: "map",
       weight: 1,
-      description: "Mapa koryciarstwa, the panel the page opens on today.",
+      description:
+        "Mapa koryciarstwa, the panel the page has always opened on.",
     },
     {
       id: "graph",
-      weight: 0,
+      weight: 1,
       description:
         "Stanowiska w czasie, the timeline of how many people each party, województwo or sector had in post.",
     },

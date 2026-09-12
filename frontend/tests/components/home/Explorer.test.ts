@@ -3,7 +3,12 @@ import { flushPromises } from "@vue/test-utils";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import Explorer from "../../../app/components/home/Explorer.vue";
 import { brand, contrastRatio, themeColors } from "../../../shared/colors";
-import { HOME_DEFAULT_EXPERIMENT } from "../../../shared/experiments";
+import { SESSION_KEY } from "../../../app/composables/experiments";
+import {
+  assignArm,
+  HOME_DEFAULT_EXPERIMENT,
+  type HomeDefaultArm,
+} from "../../../shared/experiments";
 
 /** Mocked at the composable rather than at the tracker, so the assertions are
  * about which goal the explorer decided to fire. Whether the plausible plugin
@@ -48,18 +53,66 @@ const tabs = (wrapper: Awaited<ReturnType<typeof mount>>, label: string) =>
 const underlined = (wrapper: Awaited<ReturnType<typeof mount>>) =>
   wrapper.findAll(".v-tab--selected").map((tab) => tab.text());
 
+/** A session id that lands in `arm`.
+ *
+ * Searched rather than written down: the assignment is a pure function of the
+ * id, but which id falls where depends on the weights, and a literal would have
+ * to be re-found every time somebody rebalances them.
+ */
+function sessionFor(arm: HomeDefaultArm): string {
+  for (let i = 0; i < 10_000; i += 1) {
+    const id = `test-session-${i}`;
+    if (assignArm(HOME_DEFAULT_EXPERIMENT, id) === arm) return id;
+  }
+  throw new Error(`no session id in range hashes to the ${arm} arm`);
+}
+
+/** Puts this session in `arm` before the component reads it. */
+function joinArm(arm: HomeDefaultArm) {
+  sessionStorage.setItem(SESSION_KEY, sessionFor(arm));
+}
+
 beforeEach(() => {
   trackGoal.mockClear();
   setGlobalProp.mockClear();
   sessionStorage.clear();
+  // The control, so a test that is not about the split gets the panel the
+  // page has always opened on.
+  joinArm("map");
 });
 
 describe("HomeExplorer", () => {
-  it("opens on the map while the experiment is dormant", async () => {
+  it("opens on the map for a reader in the map arm", async () => {
     const wrapper = await mount();
 
     expect(wrapper.text()).toContain("Mapa koryciarstwa");
     expect(wrapper.text()).not.toContain("Zmiany na stanowiskach");
+  });
+
+  it("opens on the chart for a reader in the graph arm", async () => {
+    joinArm("graph");
+
+    const wrapper = await mount();
+
+    expect(wrapper.text()).toContain("Zmiany na stanowiskach");
+    expect(wrapper.text()).not.toContain("Mapa koryciarstwa");
+  });
+
+  it("settles on a panel even when sessionStorage is unavailable", async () => {
+    // The one way a reader could be stranded on the placeholder: Safari in
+    // private mode has historically thrown on write, `useExperimentArm` gives
+    // up, and nothing else would ever release it. They get the control.
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage is full");
+    });
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage is unavailable");
+    });
+
+    const wrapper = await mount();
+
+    expect(wrapper.text()).toContain("Mapa koryciarstwa");
+    vi.restoreAllMocks();
   });
 
   it("paints the selected tab in something a reader can see", async () => {

@@ -75,9 +75,12 @@ export const QA_ITEMS: QaItem[] = [
       "tamtejszych instytucjach, przy branżach - osoby ze stanowiskami w " +
       "szpitalach, wodociągach i tak dalej. Linie, a nie słupki jedne na " +
       "drugich: kto pasuje do dwóch grup, liczy się w obu, więc linie się nie " +
-      "sumują.",
+      "sumują. Dodatkowo połowa czytelników ląduje od razu na wykresie, a " +
+      "połowa na mapie - to test, który z nich lepiej działa.",
     steps: [
       "Wejdź na stronę główną. Zakładki nad eksploratorem mają być dwie: „Mapa” i „Wykres”. „Partie” ma już nie być.",
+      "Odśwież stronę kilka razy w nowym oknie prywatnym - czasem powinna otworzyć się mapa, czasem wykres. To losowanie testu A/B, po jednym na sesję.",
+      "W tej samej sesji odświeżaj dalej - panel startowy ma się już nie zmieniać.",
       "Kliknij „Wykres”. Po prawej, w miejscu listy osób, ma się pokazać karta „Ustawienia wykresu” z zakresem czasu i podziałem.",
       "Zostaw podział „Partie”: PiS ma wyprzedzić PO w 2016 roku, dojść do szczytu w 2022 i spaść po 2024. Kolory linii mają być te same co żetony partii przy nazwiskach.",
       "Przełącz podział na „Województwa” - linii ma być osiem, w tym jedna szara „Pozostałe województwa”, a mazowieckie ma być najwyżej.",

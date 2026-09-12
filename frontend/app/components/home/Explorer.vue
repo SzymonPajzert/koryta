@@ -13,7 +13,17 @@
         </v-tabs>
       </v-col>
       <v-col cols="12" md="8">
-        <v-tabs-window :model-value="tab">
+        <!-- Nothing is drawn until the arm is known, and the placeholder is the
+             whole reason the split can be measured at all: `/` is served from a
+             shared `swr` cache, so the html cannot vary per reader and the arm
+             is resolved on mount. Committing to a panel server-side would mean
+             one arm painting the other's panel for a frame and then swapping,
+             while the control sat still - an asymmetry between the arms in the
+             very thing being compared. A placeholder both arms pass through is
+             symmetric. It costs the map its server render; see
+             `shared/experiments.ts`. -->
+        <div v-if="!armKnown" class="explorer-placeholder" />
+        <v-tabs-window v-else :model-value="tab">
           <v-tabs-window-item value="map">
             <HomeHeading title="Mapa koryciarstwa" center />
             <ChartPolandMap @click="pickRegion" />
@@ -48,13 +58,20 @@
              was empty after map -> wykres -> map. Kept mounted and merely
              hidden, it never suspends twice. It was never behind a `v-if`
              before this panel existed either: it stood in this column whichever
-             panel was open, so this also restores what it used to cost. -->
+             panel was open, so this also restores what it used to cost.
+
+             Both wait on `armKnown`, for the same reason the window does. `tab`
+             already holds the control while the arm is being worked out, so
+             without it this column would draw the map's card for everybody and
+             then swap it for the controls in front of half of them - putting
+             back, one column to the right, exactly the asymmetry the
+             placeholder is there to remove. -->
         <HomeTimelineControls
-          v-if="tab === 'graph'"
+          v-if="armKnown && tab === 'graph'"
           v-model:grouping="grouping"
           v-model:range="range"
         />
-        <CardPeopleList v-show="tab !== 'graph'" :region="region" />
+        <CardPeopleList v-show="armKnown && tab !== 'graph'" :region="region" />
       </v-col>
     </v-row>
   </v-container>
@@ -94,7 +111,17 @@ function isPanel(value: unknown): value is Panel {
   return PANELS.includes(value as Panel);
 }
 
-const tab = ref<Panel>("map");
+const tab = ref<Panel>(PANELS[0]);
+
+/** False until the experiment has said which panel this reader gets.
+ *
+ * A separate flag rather than `tab = null`, which is what this was first
+ * written as: the strips are `v-model`-bound, and a Vuetify tab group bound to
+ * null does not stay unselected - `mandatory` makes it pick its first tab and
+ * write that back, which would both commit the render to the control and count
+ * a switch nobody made. The panel is always a real one; what waits is whether
+ * the window is drawn at all. */
+const armKnown = ref(false);
 const region = ref<Powiat | undefined>(undefined);
 
 /** The chart's two settings, held here rather than in either component that
@@ -109,13 +136,20 @@ const grouping = ref<TimelineGrouping>("party");
 watch(grouping, (value) => trackGoal("home-timeline:grouping", { value }));
 watch(range, (value) => trackGoal("home-timeline:range", { value }));
 
-/** Dormant: every reader is on the `map` arm until the weights in
- * `shared/experiments.ts` move, so this resolves to what the page already did.
- * What it does today is record the arm, which is what makes the split readable
- * on a Growth plan when it is switched on. */
+/** Live: `map` and `graph` carry equal weight, so this is what decides which
+ * panel a reader lands on.
+ *
+ * Two hooks. The watcher catches an assignment that differs from the control -
+ * `useExperimentArm` starts *on* the control and only writes when it differs -
+ * and `onMounted` releases the placeholder either way, so a reader in the
+ * control arm is not left looking at it. */
 const arm = useExperimentArm(HOME_DEFAULT_EXPERIMENT);
 watch(arm, (value) => {
   if (isPanel(value)) tab.value = value;
+});
+onMounted(() => {
+  if (isPanel(arm.value)) tab.value = arm.value;
+  armKnown.value = true;
 });
 
 /** Counts a switch. It does not perform one - `v-model` already did.
@@ -157,3 +191,22 @@ function pickRegion(picked: Powiat) {
   trackGoal("home-explorer:pick", { panel: "map", value: picked.teryt });
 }
 </script>
+
+<style scoped>
+/* Sized off the map panel, which is the control and the taller of the two.
+   A ratio rather than a height because the map is an SVG that scales with the
+   column: measured, the panel is 775px tall in a 776px column at 1280, 594 in
+   600 at 960 and 366 in 342 at 390 - square to within a few percent all the way
+   down, which one `min-height` could not have tracked.
+
+   The chart panel does not scale the same way - 523px at both 1280 and 960,
+   563 at 390 - so the reservation is close for the map arm and out by up to
+   250px for the chart arm, shrinking on a desktop and growing on a phone. That
+   is the residual the placeholder does not fix. Closing it would mean giving
+   both panels one height, which is a design decision about the explorer rather
+   than about the experiment - and the tab strip already jumps by that much
+   today when a reader switches panels by hand. */
+.explorer-placeholder {
+  aspect-ratio: 1;
+}
+</style>

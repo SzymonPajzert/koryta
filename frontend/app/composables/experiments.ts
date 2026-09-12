@@ -15,8 +15,13 @@ import { setGlobalProp, trackGoal } from "~/composables/analytics";
 /** Where the per-session id lives. One key for the whole site: the id
  * identifies the session, not the experiment, so two experiments running at
  * once assign independently (the experiment id is hashed in with it) while
- * still describing the same reader. */
-const SESSION_KEY = "koryta:session";
+ * still describing the same reader.
+ *
+ * Exported so a test can pin an arm by seeding it. The assignment is a pure
+ * function of this id, which is the whole reason `hashToUnitInterval` exists -
+ * writing a known id here is how a test gets a known arm without stubbing the
+ * registry. */
+export const SESSION_KEY = "koryta:session";
 
 /** Prefix for the "already reported this arm" flag, one per experiment. */
 const REPORTED_PREFIX = "koryta:exp-reported:";

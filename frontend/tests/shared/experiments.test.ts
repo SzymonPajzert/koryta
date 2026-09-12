@@ -98,16 +98,37 @@ describe("assignArm", () => {
 });
 
 describe("the registry", () => {
-  it("ships dormant", () => {
-    // The guard on accidentally deploying a live split. Activating an
-    // experiment means changing this test in the same commit, which is where
-    // the decision gets reviewed.
+  it("runs only the splits somebody signed off", () => {
+    // The guard on accidentally deploying a live split, and it still is one:
+    // an experiment not named here has to be dormant - all its weight on its
+    // first, control arm - so activating one means adding it to this list in
+    // the same commit, which is where the decision gets reviewed.
+    const activated: Record<string, string[]> = {
+      // Live since the party treemap was dropped and the timeline took its tab:
+      // which of the two remaining panels a first-time reader should land on.
+      "home-default": ["map", "graph"],
+    };
+
     for (const experiment of Object.values(EXPERIMENTS)) {
-      const live = experiment.arms.filter((arm) => arm.weight > 0);
-      expect(
-        live.map((arm) => arm.id),
-        experiment.id,
-      ).toEqual([experiment.arms[0]!.id]);
+      const weighted = experiment.arms
+        .filter((arm) => arm.weight > 0)
+        .map((arm) => arm.id);
+      expect(weighted, experiment.id).toEqual(
+        activated[experiment.id] ?? [experiment.arms[0]!.id],
+      );
+    }
+  });
+
+  it("keeps the control weighted and first in a live experiment", () => {
+    // `assignArm` falls back to the first arm for an unknown id, an unusable
+    // weight or unavailable storage, so the first arm has to be both the
+    // familiar page and one the split actually uses. An experiment whose
+    // control carried no weight would hand every fallback reader an arm nobody
+    // else is in.
+    for (const experiment of Object.values(EXPERIMENTS)) {
+      const weighted = experiment.arms.filter((arm) => arm.weight > 0);
+      if (weighted.length < 2) continue;
+      expect(experiment.arms[0]!.weight, experiment.id).toBeGreaterThan(0);
     }
   });
 
@@ -132,8 +153,9 @@ describe("the registry", () => {
   it("keeps the home arms the panels the explorer can render", () => {
     // `gry` is declared for the games hub on another branch, so this is the
     // reminder that HomeExplorer only implements two of the three. `parties`
-    // was the second and went with the treemap panel: an arm naming a panel
-    // that no longer exists would have sent its readers to a blank window.
+    // was the third and went with the treemap panel: an arm naming a panel that
+    // no longer exists would have sent its readers to a blank window, which
+    // `isPanel` catches but only by putting them back on the control.
     expect(HOME_DEFAULT_EXPERIMENT.arms.map((arm) => arm.id)).toEqual([
       "map",
       "graph",
