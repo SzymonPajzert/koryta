@@ -75,7 +75,6 @@ def payload(**overrides):
         "parties": ["PiS"],
         "wikipedia": None,
         "rejestrIo": "https://rejestr.io/osoby/123",
-        "autoapprove": False,
     }
     base.update(overrides)
     return base

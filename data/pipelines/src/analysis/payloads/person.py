@@ -8,7 +8,7 @@ from functools import cached_property
 import numpy as np
 import pandas as pd
 
-from analysis.extract import Extract, check_auto_approved
+from analysis.extract import Extract, press_list_evidence
 from analysis.payloads.election import get_election_type
 from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot
 from analysis.utils.elections import candidacy_teryt
@@ -176,7 +176,7 @@ class PeoplePayloads(Pipeline[Person]):
 
         companies = _extract_companies(row)
         elections = _extract_elections(row)
-        count, sources, content, party = _hardcoded_sources_content_parties(row)
+        sources, content, party = _hardcoded_sources_content_parties(row)
         # The two hardcoded lists name a few hundred people between them; the
         # committees name everybody who ever stood for one. Both are evidence,
         # so keep both.
@@ -211,19 +211,16 @@ class PeoplePayloads(Pipeline[Person]):
             wikipedia=wikipedia_url,
             rejestrIo=rejestrIo,
             korytaId=koryta_id,
-            autoapprove=count > 0,
         )
 
 
-auto_approved = check_auto_approved()
+press_lists = press_list_evidence()
 
 
 def _hardcoded_sources_content_parties(
     row: pd.Series,
 ):
-    result = []
-    result = auto_approved(row)
-    return result
+    return press_lists(row)
 
 
 def _extract_companies(row: pd.Series) -> list[Company]:
