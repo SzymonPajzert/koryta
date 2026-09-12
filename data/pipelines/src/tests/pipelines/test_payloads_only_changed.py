@@ -419,12 +419,19 @@ def mock_ctx():
     return ctx
 
 
-def _people_payloads(only_changed: bool) -> PeoplePayloads:
+def _people_payloads(
+    only_changed: bool = False,
+    on_koryta: bool = False,
+    not_on_koryta: bool = False,
+) -> PeoplePayloads:
     pipeline = Pipeline.create(PeoplePayloads)
     pipeline.people = _FixedPipeline(EXTRACTED_PEOPLE)  # type: ignore[assignment]
     # The flags come off the process's own argv, which a test does not have.
     pipeline.__dict__["args"] = SimpleNamespace(
-        only_changed=only_changed, on_koryta=False, koryta_date=None
+        only_changed=only_changed,
+        on_koryta=on_koryta,
+        not_on_koryta=not_on_koryta,
+        koryta_date=None,
     )
     return pipeline
 
@@ -451,6 +458,32 @@ def test_the_pipeline_drops_the_payloads_the_site_already_holds(mock_ctx, monkey
     )
 
     result = _people_payloads(only_changed=True).process(mock_ctx)
+
+    assert list(result["name"]) == ["Anna Nowak"]
+
+
+def test_the_pipeline_keeps_only_the_people_the_site_has(mock_ctx, monkeypatch):
+    snapshot = SiteSnapshot(nodes(), edges())
+    monkeypatch.setattr(
+        SiteSnapshot, "read", classmethod(lambda cls, ctx, date=None: snapshot)
+    )
+
+    result = _people_payloads(on_koryta=True).process(mock_ctx)
+
+    assert list(result["name"]) == ["Jan Kowalski"]
+
+
+def test_the_pipeline_keeps_only_the_people_the_site_lacks(mock_ctx, monkeypatch):
+    """The same path as `--on-koryta`, read the other way round. End to end
+    because the two flags are only each other's complement if they resolve a
+    payload to a page by the same fields, and nothing but a run over a real
+    payload checks that."""
+    snapshot = SiteSnapshot(nodes(), edges())
+    monkeypatch.setattr(
+        SiteSnapshot, "read", classmethod(lambda cls, ctx, date=None: snapshot)
+    )
+
+    result = _people_payloads(not_on_koryta=True).process(mock_ctx)
 
     assert list(result["name"]) == ["Anna Nowak"]
 
