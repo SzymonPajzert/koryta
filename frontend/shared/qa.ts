@@ -48,24 +48,29 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
-    id: "home-party-timeline",
-    title: "Wykres stanowisk według partii na stronie głównej",
+    id: "home-timeline-panel",
+    title: "Trzeci panel na stronie głównej: wykres stanowisk w czasie",
     description:
-      "Nad sekcją „Co nowego” stoi teraz wykres: ile osób z każdej partii " +
-      "zajmowało w danym miesiącu stanowisko opisane na koryta.pl. Widać na " +
-      "nim, jak PiS wyprzedza PO w 2016 roku i jak oddaje stanowiska po 2023. " +
-      "Linie, a nie słupki jedne na drugich - kto jest zapisany do dwóch " +
-      "partii, liczy się w obu, więc linie się nie sumują.",
+      "Obok „Mapy” i „Partii” jest teraz „Wykres”: ile osób zajmowało w danym " +
+      "miesiącu stanowisko opisane na koryta.pl. W panelu po prawej wybiera " +
+      "się zakres czasu i podział - na partie, na województwa albo na branże. " +
+      "Podział decyduje, czym jest jedna linia: przy województwach linia " +
+      "„mazowieckie” liczy osoby ze stanowiskami w tamtejszych instytucjach, " +
+      "przy branżach - osoby ze stanowiskami w szpitalach, wodociągach i tak " +
+      "dalej. Linie, a nie słupki jedne na drugich: kto pasuje do dwóch " +
+      "grup, liczy się w obu, więc linie się nie sumują.",
     steps: [
-      "Wejdź na stronę główną i przewiń do wykresu „Kto trzyma stanowiska” - ma być NAD sekcją „Co nowego”, nie pod nią.",
-      "Sprawdź kolory linii: PO pomarańczowa, PiS granatowy, PSL miętowy - te same co żetony partii przy nazwiskach.",
-      "Najedź myszą na dowolny miesiąc - ma wyskoczyć chmurka z nazwą miesiąca i liczbą osób dla każdej partii naraz, nie tylko dla jednej.",
-      "Przełącz zakres na „5 lat”, „10 lat” i „Wszystko” - wykres ma się zawężać i rozszerzać, a przy „Wszystko” sięgać 2001 roku.",
-      "Kliknij ikonę tabeli w prawym górnym rogu kafelka - te same liczby mają się pokazać jako tabela, po jednym wierszu na rok, a ostatni wiersz ma być bieżącym miesiącem.",
-      "Wróć na wykres ikoną obok - ma się narysować od nowa, a nie zostać pusty.",
-      "Kliknij nazwę partii w legendzie pod wykresem - jej linia ma zniknąć, a pozostałe zachować swoje kolory.",
+      "Na stronie głównej kliknij zakładkę „Wykres” - obok „Mapa” i „Partie”, nad kafelkami eksploratora.",
+      "Po prawej, w miejscu listy osób, ma się pokazać karta „Ustawienia wykresu” z zakresem czasu i podziałem.",
+      "Zostaw podział „Partie”: PiS ma wyprzedzić PO w 2016 roku, dojść do szczytu w 2022 i spaść po 2024. Kolory linii mają być te same co żetony partii przy nazwiskach.",
+      "Przełącz podział na „Województwa” - linii ma być osiem, w tym jedna szara „Pozostałe województwa”, a mazowieckie ma być najwyżej.",
+      "Przełącz na „Branże” - w podpisie pod tytułem ma się pojawić uwaga, że części stanowisk nie umiemy przypisać do branży. To prawda: branżę zna około 4 na 10.",
+      "Przełączaj podział tam i z powrotem - wykres ma się przerysowywać od razu, bez ładowania.",
+      "Zmień zakres na „5 lat” i „10 lat” - lata na dolnej osi mają się zmieniać razem z wykresem, a nie zostawać te same.",
+      "Najedź myszą na dowolny miesiąc - chmurka ma wymienić wszystkie linie naraz, z polską nazwą miesiąca.",
+      "Kliknij ikonę tabeli w prawym górnym rogu - te same liczby jako tabela, po jednym wierszu na rok, ostatni wiersz to bieżący miesiąc.",
       "Sprawdź marzec i kwiecień 2026 - linie mają iść dalej gładko. Gdyby w tym miejscu spadały o połowę, to błąd: w bazie jest 205 stanowisk z datą końca 2026-03-18, czyli datą zaciągnięcia danych, a nie datą odejścia.",
-      "Zwęź okno do szerokości telefonu - wykres ma się zmieścić, a przełącznik wykres/tabela zniknąć.",
+      "Zwęź okno do szerokości telefonu - zakładki mają być nad wykresem, ustawienia pod nim, a przełącznik wykres/tabela ma zniknąć.",
     ],
     link: "/",
     area: "public",

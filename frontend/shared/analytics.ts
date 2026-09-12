@@ -80,6 +80,20 @@ export const GOALS = {
       "Reader clicked through from one of the home explorer's panels into the data - a powiat on the map, a party in the treemap. One goal for both, so `panel` compares them directly: this is each panel's conversion rate.",
     props: ["panel", "value"],
   },
+  // The chart panel's two controls, counted apart from `home-explorer:tab` and
+  // from each other. Opening the panel and then changing what it shows are
+  // different acts: the first says the tab strip was noticed, the second says
+  // the chart was read closely enough to ask it a second question.
+  "home-timeline:grouping": {
+    description:
+      "Reader re-split the home timeline. `value` is `party`, `region` or `category` - which of the three cuts anybody actually wants, and so which one should be the default.",
+    props: ["value"],
+  },
+  "home-timeline:range": {
+    description:
+      "Reader changed the home timeline's time range. `value` is `5`, `10` or `all`. Whether the twenty-five year default is read as too much.",
+    props: ["value"],
+  },
 
   // --- Search -----------------------------------------------------------
   // OmniSearch is the first thing on a phone and the site has no idea whether

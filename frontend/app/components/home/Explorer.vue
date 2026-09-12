@@ -10,6 +10,7 @@
         >
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="parties">Partie</v-tab>
+          <v-tab value="graph">Wykres</v-tab>
         </v-tabs>
       </v-col>
       <v-col cols="12" md="8">
@@ -53,6 +54,10 @@
               </v-card-text>
             </v-card>
           </v-tabs-window-item>
+          <v-tabs-window-item value="graph">
+            <HomeHeading title="Stanowiska w czasie" center />
+            <HomeTimeline :grouping="grouping" :range="range" />
+          </v-tabs-window-item>
         </v-tabs-window>
       </v-col>
       <v-col cols="12" md="4">
@@ -65,9 +70,19 @@
         >
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="parties">Partie</v-tab>
+          <v-tab value="graph">Wykres</v-tab>
         </v-tabs>
 
-        <CardPeopleList :region="region" :panel="tab" />
+        <!-- The side panel is the map's and the treemap's result list, and the
+             chart's controls. Both are "what you do next with this panel", so
+             they take the same column rather than the chart growing a control
+             strip of its own. -->
+        <HomeTimelineControls
+          v-if="tab === 'graph'"
+          v-model:grouping="grouping"
+          v-model:range="range"
+        />
+        <CardPeopleList v-else :region="region" :panel="listPanel" />
       </v-col>
     </v-row>
   </v-container>
@@ -80,6 +95,9 @@ import { trackGoal } from "~/composables/analytics";
 import { useExperimentArm } from "~/composables/experiments";
 import { HOME_DEFAULT_EXPERIMENT } from "~~/shared/experiments";
 
+import type { TimelineRange } from "~/composables/homeTimeline";
+import type { TimelineGrouping } from "~~/server/api/stats/homeTimeline.get";
+
 import type { Powiat } from "@/composables/entity/regions";
 
 const { approved } = useStats();
@@ -91,7 +109,7 @@ const { approved } = useStats();
  * weight today and cannot be assigned, but a weight is one number in a registry
  * and a blank window on the home page is a worse failure than an unhonoured
  * experiment. Anything unrecognised stays on the map. */
-const PANELS = ["map", "parties"] as const;
+const PANELS = ["map", "parties", "graph"] as const;
 type Panel = (typeof PANELS)[number];
 
 function isPanel(value: unknown): value is Panel {
@@ -100,6 +118,27 @@ function isPanel(value: unknown): value is Panel {
 
 const tab = ref<Panel>("map");
 const region = ref<Powiat | undefined>(undefined);
+
+/** The chart's two settings, held here rather than in either component that
+ * uses them: the controls are in the right hand column and the chart is in the
+ * left, so neither is the other's parent. */
+const range = ref<TimelineRange>("all");
+const grouping = ref<TimelineGrouping>("party");
+
+/** `tab`, narrowed to the two panels the people list knows about.
+ *
+ * The list is only mounted for those two - the chart panel has the controls in
+ * its place - so the fallback is unreachable; it is here because `tab` is typed
+ * over all three and the card's prop is not. */
+const listPanel = computed<"map" | "parties">(() =>
+  tab.value === "parties" ? "parties" : "map",
+);
+
+// Counted separately from `home-explorer:tab`, and separately from each other:
+// what a reader reaches for once they are on the chart is a different question
+// from whether they got there at all.
+watch(grouping, (value) => trackGoal("home-timeline:grouping", { value }));
+watch(range, (value) => trackGoal("home-timeline:range", { value }));
 
 /** Dormant: every reader is on the `map` arm until the weights in
  * `shared/experiments.ts` move, so this resolves to what the page already did.
