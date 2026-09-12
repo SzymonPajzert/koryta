@@ -81,11 +81,12 @@ export function partyAliasesOf(canonical: string): string[] {
  * two poles - tests/components/PartyChip.test.ts measures every entry here so
  * that a new colour cannot arrive unreadable.
  *
- * Keep the keys in the order `parties` uses: `chart/TreemapParty.vue` walks
- * `parties` and `Object.values` of this map by the same index, so a fill added
- * out of order would put one party's name on another's colour. That is why the
- * two names below sit after Razem's commented-out line rather than in front of
- * it. */
+ * The keys are kept in the order `parties` uses. Nothing now pairs the two by
+ * index - `chart/TreemapParty.vue` did, and went with the home page's party
+ * panel - so a fill out of order no longer puts one party's name on another's
+ * colour. It stays a lookup keyed by name, and the order stays tidy: that is
+ * why the two names below sit after Razem's commented-out line rather than in
+ * front of it. */
 export const partyColors: Record<string, string> = {
   PO: "#fca241",
   PiS: "#073b76",

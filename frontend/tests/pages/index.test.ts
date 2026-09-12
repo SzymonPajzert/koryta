@@ -42,7 +42,6 @@ describe("IndexPage", () => {
           },
           CardCallToAction: true,
           "omni-search-fake": true,
-          ChartTreemapParty: true,
           CardHomeItem: {
             template: '<div><slot name="header"></slot><slot></slot></div>',
           },

@@ -131,10 +131,12 @@ describe("the registry", () => {
 
   it("keeps the home arms the panels the explorer can render", () => {
     // `gry` is declared for the games hub on another branch, so this is the
-    // reminder that HomeExplorer only implements two of the three.
+    // reminder that HomeExplorer only implements two of the three. `parties`
+    // was the second and went with the treemap panel: an arm naming a panel
+    // that no longer exists would have sent its readers to a blank window.
     expect(HOME_DEFAULT_EXPERIMENT.arms.map((arm) => arm.id)).toEqual([
       "map",
-      "parties",
+      "graph",
       "gry",
     ]);
   });

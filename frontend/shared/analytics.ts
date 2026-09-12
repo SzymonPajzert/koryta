@@ -65,19 +65,19 @@ type GoalSpec = {
 export const GOALS = {
   // --- The home page explorer -------------------------------------------
   // These exist to answer one question without splitting traffic: of the
-  // people who land on `/` - 73% of all entrances - does anybody go to the
-  // party treemap, and does either panel send them anywhere? The tab strip is
-  // already there and already switchable, so the answer is observable as soon
-  // as it is measured. Only then is an experiment on the *default* tab worth
-  // the traffic it would cost.
+  // people who land on `/` - 73% of all entrances - does anybody leave the map
+  // for the other panel, and does either panel send them anywhere? The tab
+  // strip is already there and already switchable, so the answer is observable
+  // at full sample size, with no arm to divide by. `home-default` now splits
+  // the *default* panel on top of that; these stay the cheaper measurement.
   "home-explorer:tab": {
     description:
-      "Reader switched the home explorer's panel. Break down by `tab` for how many people ever open the treemap - the whole case for or against making it the default.",
+      "Reader switched the home explorer's panel. Break down by `tab` for how many people ever leave the panel they landed on - and, filtered by `arm:home-default`, whether the arm they were put in is the one they wanted.",
     props: ["tab"],
   },
   "home-explorer:pick": {
     description:
-      "Reader clicked through from one of the home explorer's panels into the data - a powiat on the map, a party in the treemap. One goal for both, so `panel` compares them directly: this is each panel's conversion rate.",
+      "Reader clicked through from the home explorer into the data - today only a powiat on the map, the treemap that was the other half of this goal having been removed. `panel` is kept so a second panel that converts can be compared against it directly.",
     props: ["panel", "value"],
   },
   // The chart panel's two controls, counted apart from `home-explorer:tab` and

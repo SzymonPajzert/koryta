@@ -96,36 +96,24 @@ import { generateEntityUrl } from "~/composables/slugs";
 
 const props = defineProps<{
   region: Powiat | undefined;
-  /** Which explorer panel this card is standing next to. It is mounted in both,
-   * so without this it told a reader on the party treemap to pick a region off
-   * a map that is not on the screen. */
-  panel?: "map" | "parties";
 }>();
 
 /** What the card says before a region has been picked.
  *
- * The party panel gets its own copy rather than the map's, and it says what
- * clicking actually does: the treemap pushes to /eksploruj/tabela?party=…, so
- * this card is never filled from that panel and promising it would be a
- * second lie in place of the first.
+ * One wording now: the card used to be mounted beside the party treemap too and
+ * needed a second one there, because telling a reader to pick a region off a
+ * map that was not on the screen was a lie. That panel is gone, and the chart
+ * panel that replaced it puts its own controls in this column rather than this
+ * card.
  *
- * The map wording is byte-for-byte what it was - tests/e2e/map_stats.spec.ts
- * waits for "Wybierz region z mapy" to disappear as its proof that a powiat
- * was picked. */
-const emptyState = computed(() =>
-  props.panel === "parties"
-    ? {
-        title: "Przejdź do tabeli",
-        wide: "Kliknij partię na wykresie po lewej stronie, by zobaczyć jej ludzi w tabeli.",
-        narrow:
-          "Kliknij partię na wykresie na górze, by zobaczyć jej ludzi w tabeli.",
-      }
-    : {
-        title: "Analizuj powiązania",
-        wide: "Wybierz region z mapy po lewej stronie, by zobaczyć powiązane osoby.",
-        narrow: "Wybierz region z mapy na górze, by zobaczyć powiązane osoby.",
-      },
-);
+ * Byte-for-byte what it was - tests/e2e/map_stats.spec.ts waits for "Wybierz
+ * region z mapy" to disappear as its proof that a powiat was picked. */
+const emptyState = {
+  title: "Analizuj powiązania",
+  wide: "Wybierz region z mapy po lewej stronie, by zobaczyć powiązane osoby.",
+  narrow: "Wybierz region z mapy na górze, by zobaczyć powiązane osoby.",
+};
+
 function subtitle(person: Partial<PersonRich>) {
   if (person.experience) {
     return `${person.experience} lat pracy`;
