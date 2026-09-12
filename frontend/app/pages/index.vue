@@ -149,6 +149,14 @@
       </v-col>
     </v-row>
   </HomeSection>
+  <!-- Above the feed, and it has to be above it rather than below: the feed
+       grows as the reader scrolls, so nothing under it is ever reached. The two
+       answer the same question at two scales - the feed is who took a post this
+       week, this is what a decade of that adds up to - so the shape comes
+       first and the examples follow it. -->
+  <HomeSection>
+    <HomePartyTimeline />
+  </HomeSection>
   <!-- Last on the page, and it has to be: the feed keeps growing as the reader
        scrolls, so anything below it is pushed further away every time it does. -->
   <!-- Everything the site has just learned, in one date-ordered list: posts
