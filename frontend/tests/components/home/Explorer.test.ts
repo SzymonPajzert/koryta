@@ -43,6 +43,10 @@ const mount = () =>
 const tabs = (wrapper: Awaited<ReturnType<typeof mount>>, label: string) =>
   wrapper.findAll(".v-tab").filter((tab) => tab.text() === label);
 
+/** Which tab each strip is underlining. Two entries, one per breakpoint. */
+const underlined = (wrapper: Awaited<ReturnType<typeof mount>>) =>
+  wrapper.findAll(".v-tab--selected").map((tab) => tab.text());
+
 beforeEach(() => {
   trackGoal.mockClear();
   setGlobalProp.mockClear();
@@ -126,6 +130,38 @@ describe("HomeExplorer", () => {
       trackGoal.mock.invocationCallOrder[0]!,
     );
     expect(wrapper.text()).toContain("Mapa koryciarstwa");
+  });
+
+  it("keeps the underline, both strips and the panel on one tab", async () => {
+    // The bug this guards. The strip used to be `:model-value` plus a handler
+    // that wrote the emitted value back, and the handler could refuse it - so
+    // the strip underlined „Mapa” while the window showed „Wykres”, and the
+    // click back was then a no-op: the strip already thought „Mapa” was
+    // selected, so it had nothing new to emit and the reader was stuck.
+    //
+    // Asserted on the way out *and* on the way back, because the wedge only
+    // shows itself on the return trip.
+    const wrapper = await mount();
+    expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
+
+    await tabs(wrapper, "Wykres")[0]!.trigger("click");
+    expect(underlined(wrapper)).toEqual(["Wykres", "Wykres"]);
+    expect(wrapper.text()).toContain("Stanowiska w czasie");
+
+    await tabs(wrapper, "Mapa")[0]!.trigger("click");
+    expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
+    expect(wrapper.text()).toContain("Mapa koryciarstwa");
+  });
+
+  it("follows a click on either breakpoint's strip", async () => {
+    // Both strips are bound to the same panel, and only one is on screen at a
+    // time - so a click on the second has to move the first.
+    const wrapper = await mount();
+
+    await tabs(wrapper, "Wykres")[1]!.trigger("click");
+
+    expect(underlined(wrapper)).toEqual(["Wykres", "Wykres"]);
+    expect(wrapper.text()).toContain("Stanowiska w czasie");
   });
 
   it("counts a switch to the chart, and back", async () => {

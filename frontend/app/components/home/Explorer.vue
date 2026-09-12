@@ -3,10 +3,10 @@
     <v-row>
       <v-col cols="12" class="d-md-none pb-0">
         <v-tabs
-          :model-value="tab"
+          v-model="tab"
           :color="TAB_COLOUR"
           grow
-          @update:model-value="selectTab"
+          @update:model-value="countSwitch"
         >
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="graph">Wykres</v-tab>
@@ -26,11 +26,11 @@
       </v-col>
       <v-col cols="12" md="4">
         <v-tabs
-          :model-value="tab"
+          v-model="tab"
           :color="TAB_COLOUR"
           grow
           class="d-none d-md-flex"
-          @update:model-value="selectTab"
+          @update:model-value="countSwitch"
         >
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="graph">Wykres</v-tab>
@@ -108,16 +108,29 @@ watch(arm, (value) => {
   if (isPanel(value)) tab.value = value;
 });
 
-/** Explicitly controlled rather than `v-model`, so that a switch made by the
- * reader is distinguishable from one made by the experiment.
+/** Counts a switch. It does not perform one - `v-model` already did.
  *
- * With `v-model` the bound ref is already updated by the time a sibling
- * `@update:model-value` listener runs, so there is nothing left to compare
- * against and no way to tell an echo from a click - and there are two tab
- * strips here, one per breakpoint, bound to the same value. */
-function selectTab(value: unknown) {
-  if (!isPanel(value) || value === tab.value) return;
-  tab.value = value;
+ * This used to be `:model-value` plus a handler that wrote the emitted value
+ * back, so that a switch made by the reader could be told from one made by the
+ * experiment: with `v-model` the ref is already updated by the time a sibling
+ * `@update:model-value` listener runs, so there was nothing left to compare
+ * against.
+ *
+ * That round trip is gone, because it put the strip's state and `tab` in two
+ * places that could disagree - and the handler could *refuse* a value, which
+ * left the strip underlining one panel while the window showed another, and no
+ * later click could recover it: the strip had nothing new to emit. Vuetify owns
+ * the selection now, so the underline and the window cannot come apart.
+ *
+ * Telling the two apart survives the change without the comparison. A `v-tabs`
+ * only emits when it changed the value itself, which is a reader clicking it;
+ * `tab` moving because the experiment assigned a panel updates the prop and
+ * emits nothing. So the emission *is* the signal, and both strips are bound to
+ * the same ref - the one that was not clicked syncs from the prop silently, so
+ * one reader is still one goal.
+ */
+function countSwitch(value: unknown) {
+  if (!isPanel(value)) return;
   trackGoal("home-explorer:tab", { tab: value });
 }
 
