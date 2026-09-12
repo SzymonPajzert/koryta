@@ -15,26 +15,20 @@ test.describe("Home", () => {
       .toBeGreaterThanOrEqual(4);
   });
 
-  test("the table card leads to the table", async ({ page }) => {
-    const card = page.locator(".v-card").filter({ hasText: "TABELA POWIĄZAŃ" });
-    await expect(card).toHaveAttribute("href", "/eksploruj/tabela");
+  // „Przeglądaj osoby” and its two cards are gone, so the queue is reached from
+  // the call to action now. The table has no card of its own on the home page
+  // any more - the search box's „Lista wszystkich osób” is its entry point, and
+  // that belongs to OmniSearch's own specs.
+  test("the call to action leads to the queue", async ({ page }) => {
+    const cta = page
+      .getByTestId("home-help-cta")
+      .getByRole("link", { name: "Sprawdź pierwszą osobę" });
+    await expect(cta).toHaveAttribute("href", "/eksploruj/nowe");
 
-    // The card is in the markup before Vue attaches its router link, so an
+    // The link is in the markup before Vue attaches its router link, so an
     // early click navigates nowhere. Retry until one takes.
     await expect(async () => {
-      await card.click();
-      await page.waitForURL(/\/eksploruj\/tabela/, { timeout: 2000 });
-    }).toPass({ timeout: 30_000 });
-  });
-
-  test("the 'PRZEGLĄDAJ NOWE' card leads to the unpublished people", async ({
-    page,
-  }) => {
-    const card = page.locator(".v-card").filter({ hasText: "PRZEGLĄDAJ NOWE" });
-    await expect(card).toHaveAttribute("href", "/eksploruj/nowe");
-
-    await expect(async () => {
-      await card.click();
+      await cta.click();
       await page.waitForURL(/\/eksploruj\/nowe/, { timeout: 2000 });
     }).toPass({ timeout: 30_000 });
   });
