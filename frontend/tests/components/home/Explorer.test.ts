@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import Explorer from "../../../app/components/home/Explorer.vue";
+import { brand, contrastRatio, themeColors } from "../../../shared/colors";
 import { HOME_DEFAULT_EXPERIMENT } from "../../../shared/experiments";
 
 /** Mocked at the composable rather than at the tracker, so the assertions are
@@ -54,6 +55,37 @@ describe("HomeExplorer", () => {
 
     expect(wrapper.text()).toContain("Mapa koryciarstwa");
     expect(wrapper.text()).not.toContain("Stanowiska w czasie");
+  });
+
+  it("paints the selected tab in something a reader can see", async () => {
+    // The regression this guards: the strip was `color="primary"`, which is
+    // #a8c79f - a pale sage meant as a fill, and 1.85:1 as text on the white
+    // panel the explorer sits on. Being *lighter* than the rgba(0,0,0,.87) the
+    // unselected tabs carry, it made a clicked tab look faded rather than
+    // chosen, so the strip answered a click by looking less selected.
+    //
+    // Asserted as a property rather than as a hex: whichever token the strip
+    // uses has to clear AA on white, so a future re-theme cannot quietly put a
+    // fill back in a text slot.
+    const wrapper = await mount();
+
+    const selected = wrapper.find(".v-tab--selected");
+    expect(selected.exists()).toBe(true);
+
+    const token = selected
+      .classes()
+      .find((name) => name.startsWith("text-"))
+      ?.replace(/^text-/, "");
+    expect(token, "the selected tab carries no colour class").toBeDefined();
+
+    // The brand fills are in the lookup on purpose. They are what the strip
+    // used to ask for, and resolving them is what makes the regression fail on
+    // the contrast line - the thing that is actually wrong - rather than on an
+    // unrecognised token.
+    const palette: Record<string, string> = { ...themeColors, ...brand };
+    const hex = palette[token!];
+    expect(hex, `${token} is not a colour this test knows`).toBeDefined();
+    expect(contrastRatio(hex!, "#ffffff")).toBeGreaterThanOrEqual(4.5);
   });
 
   it("has no Partie tab", async () => {

@@ -4,7 +4,7 @@
       <v-col cols="12" class="d-md-none pb-0">
         <v-tabs
           :model-value="tab"
-          color="primary"
+          :color="TAB_COLOUR"
           grow
           @update:model-value="selectTab"
         >
@@ -27,7 +27,7 @@
       <v-col cols="12" md="4">
         <v-tabs
           :model-value="tab"
-          color="primary"
+          :color="TAB_COLOUR"
           grow
           class="d-none d-md-flex"
           @update:model-value="selectTab"
@@ -59,6 +59,16 @@ import type { TimelineRange } from "~/composables/homeTimeline";
 import type { TimelineGrouping } from "~~/server/api/stats/homeTimeline.get";
 
 import type { Powiat } from "@/composables/entity/regions";
+
+/** What the selected tab is painted in.
+ *
+ * Not `primary`. That token is #a8c79f, a pale sage meant as a *fill*, and
+ * `shared/colors.ts` measures it at 1.85:1 as text on white - lighter than the
+ * rgba(0,0,0,.87) the unselected tabs carry. So selecting a tab made its label
+ * fade out and drew a 2px underline nobody could see: the strip answered a
+ * click by looking less selected, not more. `ink.sage` is the dark companion
+ * that module exists to provide, 6.43:1 on this white panel. */
+const TAB_COLOUR = "ink-sage";
 
 /** The panels this component actually renders.
  *
