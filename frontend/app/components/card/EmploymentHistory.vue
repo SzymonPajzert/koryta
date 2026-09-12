@@ -217,7 +217,7 @@ import { entityIcon } from "~/utils/entityIcon";
 import { relationPeriodLabel } from "~/utils/relationPeriod";
 import { gapLabel } from "~~/shared/succession";
 import { displayRole } from "~~/shared/companyBodies";
-import { asArray, type Company, type Person } from "~~/shared/model";
+import { asArray, type Company } from "~~/shared/model";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~/composables/slugs";
 
@@ -354,13 +354,6 @@ function isDated(edge: EdgeNode): boolean {
   return !!(edge.start_date || edge.end_date);
 }
 
-/** The person behind an edge, when the edge leads to one at all. */
-function asPerson(edge: EdgeNode): Person | undefined {
-  return edge.richNode.type === "person"
-    ? (edge.richNode as Person)
-    : undefined;
-}
-
 /** The parties of the person a row leads to.
  *
  * This list was the last one on the site that named a person without them. A
@@ -375,7 +368,7 @@ function asPerson(edge: EdgeNode): Person | undefined {
  * `{"0": "PiS"}` rather than as an array - see `asArray`.
  */
 function partiesOf(edge: EdgeNode): string[] {
-  return asArray<string>(asPerson(edge)?.parties);
+  return asArray<string>(edgePerson(edge)?.parties);
 }
 
 /** The predecessor of one row, as nought or one of them.
