@@ -9,6 +9,7 @@ from functools import cached_property
 import pandas as pd
 from tqdm import tqdm
 
+from analysis.extract import is_public
 from analysis.interesting import Companies
 from analysis.people import PeopleMerged
 from entities.company import KRS
@@ -45,11 +46,45 @@ class QueryType(Enum):
     )
 
 
+#: Why a query is in the list, which is the only thing that explains the bill.
+#: A KRS reaches `save_org_connections` through one of several doors and the
+#: query itself does not say which, so `cost_breakdown` cannot group by
+#: anything but this.
+REASON_HARDCODED = "hardcoded"
+REASON_PERSON_FEED = "person_feed"
+REASON_OWNED = "owned"
+REASON_REFRESH = "refresh"
+REASON_MISSING_NAME = "missing_name"
+REASON_MISSING_REGISTER_ENTRY = "missing_register_entry"
+REASON_INTERESTING_PERSON = "interesting_person"
+#: A query whose caller recorded nothing. Reported rather than dropped, so the
+#: rows of the breakdown always add up to what is about to be spent.
+REASON_UNRECORDED = "unrecorded"
+
+#: Which reason a query is filed under when it carries several, most specific
+#: first. A refresh outranks every discovery reason: the company is on file
+#: either way, and what is being bought is the newer copy.
+REASON_PRECEDENCE = (
+    REASON_REFRESH,
+    REASON_HARDCODED,
+    REASON_PERSON_FEED,
+    REASON_OWNED,
+    REASON_MISSING_NAME,
+    REASON_MISSING_REGISTER_ENTRY,
+    REASON_INTERESTING_PERSON,
+    REASON_UNRECORDED,
+)
+
+
 @dataclass
 class RejestrIOQuery:
     krs: KRS | None = None
     person: RejestrIOKey | None = None
     queries: list[QueryType] = field(default_factory=lambda: [])
+    #: Why this query exists, in the words of `REASON_PRECEDENCE`. Carried on
+    #: the query rather than worked out again later, because by the time the
+    #: bill is printed the sources that chose the company are gone.
+    reasons: list[str] = field(default_factory=lambda: [])
 
     def __post_init__(self):
         if self.krs is None and self.person is None:
@@ -60,6 +95,24 @@ class RejestrIOQuery:
         """Calculate the cost of this query based on which APIs it will call."""
         calls = [q for q in self.queries if q.value.startswith("rejestrio")]
         return len(calls) * 0.05
+
+    def paid_calls(self) -> int:
+        """How many rejestr.io calls this query is, which is what is billed."""
+        return len([q for q in self.queries if q.value.startswith("rejestrio")])
+
+    @property
+    def primary_reason(self) -> str:
+        """The one reason this query is filed under in the breakdown.
+
+        A company can arrive through more than one door - owned by a starter
+        and named in a person's feed - and a row per reason would add up to
+        more than the bill. `REASON_PRECEDENCE` picks one, so the report
+        totals what is about to be spent.
+        """
+        for reason in REASON_PRECEDENCE:
+            if reason in self.reasons:
+                return reason
+        return REASON_UNRECORDED
 
     def urls(self, only_free=False) -> typing.Iterable[str]:
         if QueryType.API_KRS_ODPIS_AKTUALNY_P in self.queries:
@@ -573,9 +626,22 @@ def save_org_connections(
     connections: typing.Iterable[KRS],
     names: typing.Iterable[KRS],
     people: typing.Iterable[RejestrIOKey],
+    company_reasons: dict[str, set[str]] | None = None,
+    person_reasons: dict[str, set[str]] | None = None,
 ) -> typing.Iterable[RejestrIOQuery]:
+    """Every query owed, each carrying why it is owed.
+
+    The reasons come from the caller because that is where they are known:
+    this function is handed four sets of subjects and nothing that says which
+    door any of them came through. Passing none leaves the queries unexplained
+    rather than unissued - `cost_breakdown` files those under
+    `REASON_UNRECORDED` so the bill still adds up.
+    """
+    company_reasons = company_reasons or {}
+    person_reasons = person_reasons or {}
     con_list = list(connections)
     con_refresh = needs_refresh_krs["krs"].unique().tolist()
+    refresh_ids = set(str(krs) for krs in con_refresh)
     # Join KRS ids with the ones that needs a refresh.
     connections = set(con_list) | set(KRS(krs) for krs in con_refresh)
 
@@ -630,6 +696,9 @@ def save_org_connections(
             QueryType(q) for q in already_scraped["method"].get(krs.id, [])
         ]
         answered = settled.get(krs.id, set())
+        reasons = set(company_reasons.get(krs.id, set()))
+        if krs.id in refresh_ids:
+            reasons.add(REASON_REFRESH)
         query = RejestrIOQuery(
             krs=krs,
             queries=[
@@ -642,6 +711,7 @@ def save_org_connections(
                 ]
                 if q not in connections_methods and q not in answered
             ],
+            reasons=sorted(reasons),
         )
         if len(list(query.urls())) > 0:
             # If there's nothing to query, don't send it
@@ -654,7 +724,11 @@ def save_org_connections(
         answered = settled.get(krs.id, set())
         queries = [q for q in API_KRS_METHODS if q not in answered]
         if queries:
-            yield RejestrIOQuery(krs=krs, queries=queries)
+            yield RejestrIOQuery(
+                krs=krs,
+                queries=queries,
+                reasons=sorted(company_reasons.get(krs.id, set())),
+            )
 
     people_to_fetch = 0
     for person in people:
@@ -664,12 +738,99 @@ def save_org_connections(
         query = RejestrIOQuery(
             person=person,
             queries=[q for q in PEOPLE_QUERIES if q not in people_methods],
+            reasons=sorted(
+                person_reasons.get(str(person.id), {REASON_INTERESTING_PERSON})
+            ),
         )
         if len(list(query.urls())) > 0:
             people_to_fetch += 1
             yield query
 
     print(f"People: {len(people)} of interest, {people_to_fetch} not yet scraped")
+
+
+def public_krs_ids(companies: pd.DataFrame) -> set[str]:
+    """The KRS ids the register puts in public hands, for the cost report.
+
+    Missing column reads as "nobody", not as "everybody": the split is there
+    to say how much of a bill is spent on the companies the site is about, and
+    a frame built before `CompaniesKRS` wrote `is_public` cannot answer that.
+    """
+    if "krs" not in companies.columns or "is_public" not in companies.columns:
+        print(
+            "WARNING: no is_public column on the company data, so the cost "
+            "breakdown cannot split public from private."
+        )
+        return set()
+    public = companies.loc[is_public(companies["is_public"]), "krs"]
+    return set(str(krs).zfill(10) for krs in public)
+
+
+def cost_breakdown(
+    queries: typing.Iterable[RejestrIOQuery],
+    public_krs: set[str] | None = None,
+) -> str:
+    """What is about to be spent, grouped by why each query exists.
+
+    A total is not a decision. The run buys connections for companies nobody
+    has asked about yet, re-buys them for companies whose entry moved, and
+    buys person feeds - and those are worth different amounts depending on the
+    week. Printed before the confirmation prompt so the answer to "press enter
+    to spend 53 PLN" is informed by which of those the 53 PLN is.
+
+    One row per query, filed under `primary_reason`, so the rows total the
+    bill. The public count is companies `CompaniesKRS` marks as publicly
+    owned; a person feed has no company and never counts towards it.
+    """
+    public_krs = public_krs or set()
+    tally: dict[str, dict[str, float]] = {}
+    free_only = 0
+    for query in queries:
+        calls = query.paid_calls()
+        if calls == 0:
+            free_only += 1
+            continue
+        row = tally.setdefault(
+            query.primary_reason,
+            {"subjects": 0, "public": 0, "calls": 0, "cost": 0.0},
+        )
+        row["subjects"] += 1
+        row["calls"] += calls
+        row["cost"] += query.cost()
+        if query.krs is not None and query.krs.id in public_krs:
+            row["public"] += 1
+
+    lines = [
+        "",
+        "Paid rejestr.io calls, by why the subject is in the queue:",
+        "",
+        f"  {'reason':<24}{'subjects':>10}{'public':>9}{'calls':>8}{'PLN':>10}",
+    ]
+    order = sorted(tally, key=lambda reason: -tally[reason]["cost"])
+    for reason in order:
+        row = tally[reason]
+        lines.append(
+            f"  {reason:<24}{int(row['subjects']):>10}{int(row['public']):>9}"
+            f"{int(row['calls']):>8}{row['cost']:>10.2f}"
+        )
+    total = (
+        {
+            key: sum(row[key] for row in tally.values())
+            for key in ("subjects", "public", "calls", "cost")
+        }
+        if tally
+        else {"subjects": 0, "public": 0, "calls": 0, "cost": 0.0}
+    )
+    lines.append(
+        f"  {'TOTAL':<24}{int(total['subjects']):>10}{int(total['public']):>9}"
+        f"{int(total['calls']):>8}{total['cost']:>10.2f}"
+    )
+    lines.append("")
+    lines.append(
+        f"  {free_only} of the queries carry no paid call (free api-krs only)."
+    )
+    lines.append("")
+    return "\n".join(lines)
 
 
 class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
@@ -686,6 +847,12 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
     koryta_votes: KorytaVotes
     koryta_people: KorytaPeople
     person_coverage: PersonFeedCoverage
+
+    #: Why each company is in the queue, keyed by KRS id, and why each person
+    #: is. Filled by `companies_to_scrape` and `people_to_scrape`, read by
+    #: `process` on its way to the query that gets paid for.
+    company_reasons: dict[str, set[str]]
+    person_reasons: dict[str, set[str]]
 
     @property
     def output_class(self):
@@ -712,6 +879,10 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
 
     def series_to_set(self, series) -> KRSSet:
         return KRSSet(KRS(krs) for krs in series.tolist())
+
+    def _record_reason(self, krs_id: str, reason: str) -> None:
+        """Note one reason a company is in the queue. A company can have several."""
+        self.company_reasons.setdefault(krs_id, set()).add(reason)
 
     def already_scraped_companies(self, ctx: Context) -> KRSSet:
         """Companies whose rejestr.io connections are already in the bucket.
@@ -743,10 +914,21 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         return KRSSet(KRS(id=str(krs).zfill(10)) for krs in connections["krs"].unique())
 
     def companies_to_scrape(self, ctx: Context) -> KRSSet:
+        """The companies worth a rejestr.io query, and why each one is here.
+
+        The why goes on `self.company_reasons` rather than into the return
+        value, which stays the set every caller already expects. It is what
+        the cost breakdown groups by: a KRS on its own cannot say whether it
+        was bought because somebody curated it, because an interesting person
+        turned out to sit on its board, or because something else owns it.
+        """
+        self.company_reasons = {}
         self.hardcoded_companies.process(ctx)
         already_scraped = self.already_scraped_companies(ctx)
 
         starters = KRSSet(self.hardcoded_companies.all_companies_krs.values())
+        for krs in starters:
+            self._record_reason(krs.id, REASON_HARDCODED)
 
         for blob_name, blob in ctx.io.read_many(
             CloudStorage(prefix="hostname=rejestr.io")
@@ -759,6 +941,9 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                             krs_num = item.get("numery", {}).get("krs")
                             if krs_num:
                                 starters.add(KRS(id=str(krs_num).zfill(10)))
+                                self._record_reason(
+                                    str(krs_num).zfill(10), REASON_PERSON_FEED
+                                )
                 except Exception as e:
                     print(f"Error parsing {blob_name}: {e}")
 
@@ -770,6 +955,8 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
             children = KRSSet(
                 KRS(krs) for krs in graph.all_descendants(set(s.id for s in starters))
             )
+            for krs in children:
+                self._record_reason(krs.id, REASON_OWNED)
         else:
             children = starters
 
@@ -829,10 +1016,13 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         return results
 
     def people_to_scrape(self, ctx: Context) -> set[RejestrIOKey]:
+        self.person_reasons = {}
         scraped_people = set(
             RejestrIOKey(id=person_id)
             for person_id in self.hardcoded_people.read_or_process(ctx)["id"].to_list()
         )
+        for person in scraped_people:
+            self.person_reasons.setdefault(str(person.id), set()).add(REASON_HARDCODED)
 
         koryta_votes_df = self.koryta_votes.read_or_process(ctx)
         koryta_people_df = self.koryta_people.read_or_process(ctx)
@@ -861,6 +1051,9 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                 rejestr_ids = row.get("rejestrio_id", [])
                 if len(rejestr_ids) > 0:
                     scraped_people.add(RejestrIOKey(id=str(rejestr_ids[0])))
+                    self.person_reasons.setdefault(str(rejestr_ids[0]), set()).add(
+                        REASON_INTERESTING_PERSON
+                    )
 
         people_krs_df = self.people.read_or_process(ctx)
         for _, row in people_krs_df.iterrows():
@@ -869,21 +1062,38 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                 rejestrio_id = row.get("id")
                 if rejestrio_id:
                     scraped_people.add(RejestrIOKey(id=str(rejestrio_id)))
+                    self.person_reasons.setdefault(str(rejestrio_id), set()).add(
+                        REASON_INTERESTING_PERSON
+                    )
 
         print(f"People to scrape: {len(scraped_people)} {get_head(scraped_people, 10)}")
         return scraped_people
 
     def process(self, ctx: Context):
+        # Each source is named before the call rather than inline, so the
+        # reason it stands for can be recorded against the companies it
+        # chose. Same order as before: `companies_to_scrape` resets the
+        # reasons, and the rest add to them.
+        connections = self.companies_to_scrape(ctx)
+        missing_names = self.companies_without_names(ctx)
+        for krs in missing_names:
+            self._record_reason(krs.id, REASON_MISSING_NAME)
+        missing_entries = self.companies_without_register_entry(ctx)
+        for krs in missing_entries:
+            self._record_reason(krs.id, REASON_MISSING_REGISTER_ENTRY)
+        people = self.people_to_scrape(ctx)
+
         for url in save_org_connections(
             already_scraped_krs=self.already_scraped.latest_scrapes(ctx),
             needs_refresh_krs=self.needs_refresh.read_or_process(ctx),
             already_scraped_people=get_osoby_scraped(
                 ctx, self.person_coverage.people_to_refetch(ctx)
             ),
-            connections=self.companies_to_scrape(ctx),
-            names=self.companies_without_names(ctx)
-            | self.companies_without_register_entry(ctx),
-            people=self.people_to_scrape(ctx),
+            connections=connections,
+            names=missing_names | missing_entries,
+            people=people,
+            company_reasons=self.company_reasons,
+            person_reasons=self.person_reasons,
         ):
             ctx.io.output_entity(url)
 
