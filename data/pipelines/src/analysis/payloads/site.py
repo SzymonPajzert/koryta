@@ -246,6 +246,11 @@ class SiteSnapshot:
         self.people_by_id: dict[str, dict] = {}
         #: People by name, for the ones the site has no register link for.
         self.people_by_name: dict[str, dict] = {}
+        #: How many person nodes carry each name. `people_by_name` keeps the
+        #: first, because that is what `limit(1)` does, so the count of the
+        #: others would otherwise be lost - and a name shared by two pages is
+        #: exactly where the name fallback must not be trusted.
+        self.people_named: typing.Counter[str] = Counter()
         self.companies: dict[str, str] = {}
         #: The same companies as `self.companies`, whole rather than by id.
         #: `CompaniesPayloads` compares fields; the person payload only ever
@@ -278,6 +283,7 @@ class SiteSnapshot:
                     # the fallback only fires for somebody with no register
                     # link at all.
                     self.people_by_name.setdefault(str(node["name"]), node)
+                    self.people_named[str(node["name"])] += 1
             elif node_type == "place" and "krsNumber" in node:
                 self.companies.setdefault(str(node["krsNumber"]), node_id)
                 self.company_nodes.setdefault(str(node["krsNumber"]), node)
