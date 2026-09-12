@@ -32,6 +32,12 @@
     </v-card-item>
 
     <v-card-text :class="{ 'stats-card--stale': loading }">
+      <!-- Above both views, because a control that narrows what is charted
+           narrows what is tabulated too - a range picker that only applied to
+           the picture would leave the table answering a different question. -->
+      <div v-if="$slots.controls" class="mb-3">
+        <slot name="controls" />
+      </div>
       <!-- v-show, not v-if: apexcharts measures its container on mount and
            would come back zero-width after a round trip through the table. -->
       <div v-show="view === 'chart'">
