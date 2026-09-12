@@ -132,6 +132,27 @@ test.describe("Correcting a relation", () => {
     await seed();
   });
 
+  /** ...and taken back out when the file is done, for the reason the score
+   * above is chosen so carefully: a queue fixture is not private to its spec.
+   * `ids.queued` carries a `latestEmploymentStart` of 2030-06-01, so while it
+   * exists it is the first row of *every* queue wide enough to include it -
+   * and `/eksploruj/nowe` shows one person at a time. vote_breakdown.spec.ts
+   * opens that queue unfiltered and expects the seeded `Nowa Osoba Testowa`.
+   *
+   * Deleting is idempotent, so this is safe whatever the tests above did to
+   * the documents. See the same hook in remove_edge.spec.ts.
+   */
+  test.afterAll(async () => {
+    const batch = db.batch();
+    for (const id of Object.values(ids)) {
+      batch.delete(db.collection("nodes").doc(id));
+    }
+    for (const id of Object.values(edges)) {
+      batch.delete(db.collection("edges").doc(id));
+    }
+    await batch.commit();
+  });
+
   test("an admin fixes a job title and it sticks", async ({ page }) => {
     test.setTimeout(180_000);
     await logIn(page, USERS.admin, `/entity/person/${ids.worker}`);
