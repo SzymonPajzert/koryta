@@ -139,6 +139,42 @@ def test_election_without_a_committee_sends_none(mock_ctx):
     assert elections[0].committee is None
 
 
+def test_a_shouted_register_name_is_capitalised(mock_ctx):
+    """A name a register records in capitals is not what the node is called.
+
+    The columns the name is taken from disagree on case - the PKW-merged one
+    shouts the surname by convention, and some of what the company register
+    returns is in full capitals - and the payload's `name` is what the ingest
+    names the node, so a shouted spelling used to reach the site verbatim and
+    sit next to properly capitalised namesakes.
+    """
+    pipeline = Pipeline.create(PeoplePayloads)
+    pipeline.people = MockPipeline(
+        [
+            {
+                "full_name": "MAŁGORZATA GRADZIUK",
+                "krs_name": "MAŁGORZATA GRADZIUK",
+                "rejestrio_id": ["123"],
+                "employment": [],
+                "elections": [],
+            },
+            {
+                "full_name": "Piotr van der Coghen",
+                "krs_name": "Piotr van der Coghen",
+                "rejestrio_id": ["456"],
+                "employment": [],
+                "elections": [],
+            },
+        ]
+    )
+
+    result_df = pipeline.process(mock_ctx)
+
+    # The particle stays lowercase: it is part of the surname, and this is a
+    # capitalisation rather than a `str.title()`.
+    assert list(result_df["name"]) == ["Małgorzata Gradziuk", "Piotr van der Coghen"]
+
+
 def test_upload_payloads_region_shape(mock_ctx):
     pipeline = Pipeline.create(RegionPayloads)
 

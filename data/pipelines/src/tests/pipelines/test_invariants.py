@@ -30,6 +30,7 @@ import collections
 import pytest
 
 from scrapers.koryta.snapshot import is_reference, reference_id
+from util.polish import format_person_name
 
 #: Every test here reads the production export rather than a fixture, which is
 #: what `e2e` marks: a test that needs state this repository does not carry.
@@ -773,6 +774,49 @@ def test_every_article_has_an_approved_revision(articles):
         f"{len(stuck)} articles have no approved revision, so they are invisible "
         f"and there is no way to approve them from the UI - up from the "
         f"{UNAPPROVED} known ones. Sample IDs: {sample(stuck)}"
+    )
+
+
+def test_person_names_are_capitalised(nodes):
+    """A person node is named the way the site shows a name, not the way a
+    register recorded it.
+
+    `PeoplePayloads` used to pass whichever of its name columns was filled
+    straight through, and those columns disagree on case - the PKW-merged one
+    shouts the surname by convention, and some of what the company register
+    returns is in full capitals - so "MAŁGORZATA GRADZIUK" got a page next to
+    the properly capitalised namesakes she shares a listing with. Nothing fails
+    on it: the name is only ever displayed, and `nameChunksLower` is lowercased
+    before it is indexed, so search still finds her. It just reads as shouting.
+
+    Only shouting is asked about, because only shouting is unambiguous. Three
+    further names read oddly - one typed flat (`jerzy hardie-douglas`), one
+    whose elided article stayed lowercase (`D'obyrn`) and one that kept the
+    whitespace it was created with - and all three are left to whoever typed
+    them, exactly as `format_person_name` leaves them.
+
+    Only person nodes are asked. A company is named as the register names it and
+    "PKP CARGO S.A." is its own spelling, not a mistake.
+    """
+    # The five people uploaded in full capitals before `format_person_name` was
+    # added to the pipeline. All five are unpublished. They go once the ingest
+    # next runs over them - it writes the formatted name now - and so does this
+    # budget.
+    MISFORMATTED = 5
+
+    misformatted = [
+        (document["id"], document["name"])
+        for document in nodes
+        if document.get("type") == "person"
+        and isinstance(document.get("name"), str)
+        and document["name"].strip()
+        and format_person_name(document["name"]) != document["name"]
+    ]
+
+    assert len(misformatted) <= MISFORMATTED, (
+        f"{len(misformatted)} person nodes are not named in the capitalised form "
+        f"the pipeline writes, up from the {MISFORMATTED} known ones. "
+        f"Sample: {sample(misformatted)}"
     )
 
 

@@ -16,6 +16,7 @@ from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
+from util.polish import format_person_name
 
 #: How many unrecognised committees to name when reporting what the party
 #: mapping is missing. Enough to act on, short enough to read.
@@ -223,6 +224,14 @@ class PeoplePayloads(Pipeline[Person]):
             or get_name("base_full_name")
             or "Unknown Payload"
         )
+        # Whichever column wins the fallback above is what the ingest names the
+        # node, and the columns disagree on case: the PKW-merged `full_name` is
+        # a shouted surname by convention and some of what the company register
+        # returns is in full capitals. Five people have a page that shouts their
+        # name because of it. `format_person_name` leaves a name already in the
+        # capitalised form untouched, so this renames nobody else.
+        if isinstance(name, str):
+            name = format_person_name(name)
 
         companies = _extract_companies(row)
         elections = _extract_elections(row)
