@@ -92,56 +92,6 @@
   <HomeSection>
     <HomeExplorer />
   </HomeSection>
-  <!-- Desktop only, for now. Both cards are a screen tall on a phone and both
-       lead somewhere the search bar already offers - "Lista wszystkich osób"
-       is its first entry, and it is the first thing on the page now. -->
-  <HomeSection class="d-none d-md-block">
-    <v-row>
-      <v-col cols="12" class="pa-0">
-        <HomeHeading class="scroll-topic" title="Przeglądaj osoby" center />
-      </v-col>
-      <v-col cols="12" sm="6">
-        <v-card
-          to="/eksploruj/tabela"
-          hover
-          class="h-100 pa-4"
-          color="surface-variant"
-          variant="tonal"
-          rounded="lg"
-        >
-          <v-list-item :append-icon="mdiTable">
-            <template #title>
-              <strong>TABELA POWIĄZAŃ</strong>
-            </template>
-          </v-list-item>
-          <v-card-text class="text-body-1">
-            Przeglądaj pełną bazę w formie interaktywnej tabeli i samodzielnie
-            badaj powiązania między osobami, regionami i stanowiskami.
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" sm="6">
-        <v-card
-          to="/eksploruj/nowe"
-          hover
-          class="h-100 pa-4"
-          color="surface-variant"
-          variant="tonal"
-          rounded="lg"
-        >
-          <v-list-item :append-icon="mdiLayersSearchOutline">
-            <template #title>
-              <strong>PRZEGLĄDAJ NOWE</strong>
-            </template>
-          </v-list-item>
-          <v-card-text class="text-body-1">
-            Znajdź osoby, które nie są jeszcze opublikowane na naszej stronie.
-            Aktualnie jest ich jeszcze {{ toCheck }}.
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-  </HomeSection>
   <!-- No `v-row`/`v-col` around it: the call to action is a card of its own
        now rather than centred loose text, and the old nest stacked five
        paddings - this row, HomeSection's container, and the component's own. -->
@@ -158,8 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { mdiChevronRight, mdiLayersSearchOutline, mdiTable } from "@mdi/js";
-import { useStats } from "~/composables/stats/useStats";
+import { mdiChevronRight } from "@mdi/js";
 import { trackGoal } from "~/composables/analytics";
 import { SOCIAL_CARD } from "~/composables/entitySeo";
 
@@ -183,8 +132,6 @@ definePageMeta({
   fullWidth: true,
   hideSearch: true,
 });
-
-const { toCheck } = useStats();
 </script>
 
 <style scoped>
@@ -208,17 +155,6 @@ const { toCheck } = useStats();
 @media (min-width: 960px) {
   .home-actions :deep(.v-input) {
     max-width: 66%;
-  }
-}
-
-.scroll-topic {
-  scroll-margin-top: 100px; /* Adjust this value based on header height */
-  /* For mobile you might want less, or use a media query */
-}
-
-@media (max-width: 600px) {
-  .scroll-topic {
-    scroll-margin-top: 80px;
   }
 }
 </style>

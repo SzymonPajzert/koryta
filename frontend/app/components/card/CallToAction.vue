@@ -13,7 +13,7 @@
          hour of `swr`, so whatever it renders is what the next reader gets. -->
     <div class="d-flex flex-column flex-md-row ga-6 ga-md-8 align-md-center">
       <div class="cta__say">
-        <div class="sec-head">
+        <div class="sec-head mb-2">
           <v-icon
             :icon="mdiAccountSearchOutline"
             size="18"
@@ -31,14 +31,14 @@
           </InfoBubble>
         </div>
 
-        <p v-if="total" class="text-body-2 cta__lead">
+        <p v-if="total" class="text-body-2 cta__lead mb-0">
           Wiemy, kto ma posadę w publicznej spółce albo instytucji. To, czy
           dostał ją po znajomości, musi sprawdzić człowiek - a sprawdziliśmy
           dopiero {{ polishNumber(checked) }} z
           {{ polishCountingGenitive(total, "osoby", "osób") }}.
         </p>
 
-        <div class="d-flex flex-wrap align-center ga-3 mt-4">
+        <div class="d-flex flex-wrap align-center ga-2 mt-5">
           <v-btn
             :append-icon="mdiArrowRight"
             color="ink-info"
@@ -74,7 +74,7 @@
              of the primary button: /eksploruj/nowe carries `middleware: "auth"`,
              and this section used to sit under a page that promised the
              opposite. -->
-        <p class="text-caption text-medium-emphasis mt-3 mb-0">
+        <p class="text-caption text-medium-emphasis cta__fine mt-4 mb-0">
           Sprawdzanie wymaga konta - zakładasz je w niecałą minutę, a po
           zalogowaniu wracasz prosto do kolejki. Zgłoszenie błędu nie wymaga
           konta. Możesz nas też
@@ -230,17 +230,26 @@ onMounted(() => {
   max-width: 62ch;
 }
 
+/* The small print is two lines of 12px; at Vuetify's caption line-height they
+   set solid. */
+.cta__fine {
+  line-height: 1.6;
+}
+
 /* Only once the two are side by side. In the column the wrapper falls back to
    on a phone, `flex-basis` is a *height*, so a 320px basis on the bar left
    200px of empty tint under a legend three lines tall. */
 @media (min-width: 960px) {
   .cta__say {
-    flex: 1 1 420px;
+    flex: 1 1 auto;
   }
 
+  /* Narrow, and allowed to shrink but not grow. It holds a 12px bar and three
+     legend rows; at the 460px it used to take, the three buttons beside it had
+     nowhere to sit and wrapped, leaving „Wszystkie sposoby pomocy” alone on a
+     second line looking like an afterthought rather than a third option. */
   .cta__bar {
-    flex: 1 1 320px;
-    max-width: 460px;
+    flex: 0 1 320px;
   }
 }
 </style>
