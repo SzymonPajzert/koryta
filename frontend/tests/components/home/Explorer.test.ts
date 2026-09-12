@@ -59,7 +59,7 @@ describe("HomeExplorer", () => {
     const wrapper = await mount();
 
     expect(wrapper.text()).toContain("Mapa koryciarstwa");
-    expect(wrapper.text()).not.toContain("Stanowiska w czasie");
+    expect(wrapper.text()).not.toContain("Zmiany na stanowiskach");
   });
 
   it("paints the selected tab in something a reader can see", async () => {
@@ -170,7 +170,7 @@ describe("HomeExplorer", () => {
 
     await tabs(wrapper, "Wykres")[0]!.trigger("click");
     expect(underlined(wrapper)).toEqual(["Wykres", "Wykres"]);
-    expect(wrapper.text()).toContain("Stanowiska w czasie");
+    expect(wrapper.text()).toContain("Zmiany na stanowiskach");
 
     await tabs(wrapper, "Mapa")[0]!.trigger("click");
     expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
@@ -185,7 +185,7 @@ describe("HomeExplorer", () => {
     await tabs(wrapper, "Wykres")[1]!.trigger("click");
 
     expect(underlined(wrapper)).toEqual(["Wykres", "Wykres"]);
-    expect(wrapper.text()).toContain("Stanowiska w czasie");
+    expect(wrapper.text()).toContain("Zmiany na stanowiskach");
   });
 
   it("counts a switch to the chart, and back", async () => {
@@ -195,7 +195,7 @@ describe("HomeExplorer", () => {
     expect(trackGoal).toHaveBeenCalledWith("home-explorer:tab", {
       tab: "graph",
     });
-    expect(wrapper.text()).toContain("Stanowiska w czasie");
+    expect(wrapper.text()).toContain("Zmiany na stanowiskach");
 
     trackGoal.mockClear();
     await tabs(wrapper, "Mapa")[0]!.trigger("click");
