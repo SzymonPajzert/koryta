@@ -500,6 +500,26 @@ describe("applyRevision", () => {
     );
   });
 
+  it("keeps an editor's badge verdict across an approval", async () => {
+    // `badgeModeration` is a decision about the page, not a statement the page
+    // makes, so it lives on the node and never inside a revision. Approving
+    // anybody's later edit writes the revision over the document with `set`, so
+    // without `nodeOwnedFields` carrying it back an editor's „hidden” would be
+    // undone by the next accepted spelling fix - and the badge it blocked would
+    // go public on its own. Re-ingest takes the same path, through
+    // `createRevisionTransaction`'s `stored`.
+    const written = await approveOver(
+      {
+        badgeModeration: { omnibus: "approved", spolecznik: "hidden" },
+      },
+      { name: "Krystian Probierz" },
+    );
+    expect(written.badgeModeration).toEqual({
+      omnibus: "approved",
+      spolecznik: "hidden",
+    });
+  });
+
   it("applies a removal, which states `deleted` in its own data", async () => {
     const written = await approveOver(
       { published: true },
@@ -532,6 +552,23 @@ describe("withoutInternalFields", () => {
         visibility: true,
       }),
     ).toEqual({ type: "election", committee: "KW PiS" });
+  });
+
+  it("keeps the badge verdict out of what a revision states", () => {
+    // The other half of the carry tested under `applyRevision`. The ingest
+    // endpoints build a revision by layering their payload over the stored
+    // document (`updatedPerson` in server/api/ingest/person.post.ts:241), so a
+    // field not stripped here is copied into revision data - where it would
+    // freeze one moment's verdict into history, show up as a proposed change on
+    // /admin/rewizje/[id], and let approving an old revision restore a
+    // moderation state an editor has since changed.
+    expect(
+      withoutInternalFields({
+        type: "person",
+        name: "Krystian Probierz",
+        badgeModeration: { omnibus: "approved" },
+      }),
+    ).toEqual({ type: "person", name: "Krystian Probierz" });
   });
 });
 

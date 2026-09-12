@@ -169,6 +169,30 @@
               :relation-count="edges.length"
               class="mt-4"
             />
+            <!-- Directly under the record the badges are voted off. Every
+                 badge in the catalogue is a reading of the rows above -
+                 „Omnibus” counts the employers in „Historia powiązań”,
+                 „Zmiana barw” the committees - so the section that asks the
+                 reader to judge comes after the evidence rather than before
+                 it.
+
+                 It draws nothing for a logged out reader: the gate is inside
+                 the component, the same policy `NoteEditor` states below
+                 („unreviewed claims about a named individual”) and for the
+                 same reason. The chips a logged out reader may see are drawn
+                 in the header by `BadgePersonRow`.
+
+                 `needs_split` and `merged_into` come straight off the node and
+                 put the section in read-only mode: a page that is two people,
+                 or a duplicate whose relations moved, would hand the badge to
+                 the wrong human. -->
+            <BadgePersonSection
+              :node-id="node"
+              :stats="personEntity?.stats?.badges"
+              :moderation="personEntity?.badgeModeration"
+              :needs-split="!!personEntity?.needs_split"
+              :merged-into="personEntity?.merged_into"
+            />
           </template>
           <v-row v-else>
             <v-col
@@ -514,6 +538,20 @@ const entity = computed(() => {
   }
   return response.value?.node;
 });
+
+/** The entity as a person, for the fields only a person has.
+ *
+ * `entity` is a union of four page types and the template cannot narrow it -
+ * which is why the succession row above casts inline - but `badgeModeration`
+ * lives on `Person` alone (shared/model.ts:362), so reading it off the union is
+ * a TS2339 rather than `undefined`. One computed, the same shape
+ * `EntityDetailsCard` uses for the same reason, instead of four casts in the
+ * markup. Undefined on a company or a region, which is exactly what the badge
+ * section is given on a page it is not mounted on anyway.
+ */
+const personEntity = computed(() =>
+  entity.value?.type === "person" ? (entity.value as Person) : undefined,
+);
 
 const regionTeryt = computed(() => {
   if (entity.value && entity.value.type === "region") {

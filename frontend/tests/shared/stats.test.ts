@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   calculateExperience,
   computeVoteStats,
+  computeBadgeStats,
   computeEdgeStats,
   computeNodeStats,
 } from "~~/shared/stats";
@@ -212,6 +213,168 @@ describe("shared/stats.ts", () => {
       ] as unknown as VoteDocument[]);
 
       expect(stats.lastVotedAt).toBe("2026-01-01T00:00:00.000Z");
+    });
+  });
+
+  describe("badge votes in computeVoteStats", () => {
+    /** `humanVoted` is what /eksploruj/nowe filters the unreviewed queue by and
+     * what the progress bar counts. Handing out a badge is a game, not a
+     * review, so a reader working through the catalogue must not be able to
+     * mark a thousand people as looked-at without a single verdict. */
+    it("does not let a badge-only document mark the page as reviewed", () => {
+      const stats = computeVoteStats([
+        {
+          userUid: "aB3xYz",
+          categoryVotes: { "badge:omnibus": 1 },
+          updatedAt: "2026-09-12T00:00:00.000Z",
+        },
+      ] as unknown as VoteDocument[]);
+
+      expect(stats.humanVoted).toBe(false);
+      expect(stats.humanCount).toBeUndefined();
+      expect(stats.lastVotedAt).toBeUndefined();
+    });
+
+    it("still counts a reader who did both", () => {
+      // The badge rides along in the same document as the verdict - one
+      // document per (node, user) - so a mixed document is somebody who did
+      // review the page, and it has to keep saying so.
+      const stats = computeVoteStats([
+        {
+          userUid: "aB3xYz",
+          categoryVotes: { interesting: 3, "badge:omnibus": 1 },
+          updatedAt: "2026-09-12T00:00:00.000Z",
+        },
+      ] as unknown as VoteDocument[]);
+
+      expect(stats.humanVoted).toBe(true);
+      expect(stats.humanCount).toBe(1);
+      expect(stats.lastVotedAt).toBe("2026-09-12T00:00:00.000Z");
+    });
+
+    /** The `saveCommentOnce` path writes `categoryVotes: {}` when a comment
+     * arrives before any verdict (app/composables/votes.ts), and that document
+     * set `humanVoted` before badges existed. Somebody leaving a comment has
+     * looked at the page, so it still has to - which is why the badge-only test
+     * is `keys.length > 0 && every(...)` rather than `every(...)` alone. */
+    it("leaves the comment-only document exactly as it was", () => {
+      const stats = computeVoteStats([
+        {
+          userUid: "aB3xYz",
+          categoryVotes: {},
+          comment: "sprawdzone",
+          updatedAt: "2026-09-12T00:00:00.000Z",
+        },
+      ] as unknown as VoteDocument[]);
+
+      expect(stats.humanVoted).toBe(true);
+      expect(stats.humanCount).toBe(1);
+    });
+
+    it("keeps a badge out of the summed vote aggregate", () => {
+      // This loop adds up whatever key it is handed - see the `other: 7` case
+      // above - so a badge left in would become a sixth axis carrying -5..5
+      // arithmetic the badge threshold is not built for.
+      const stats = computeVoteStats([
+        {
+          userUid: "aB3xYz",
+          categoryVotes: { interesting: 2, "badge:omnibus": 1 },
+        },
+      ] as unknown as VoteDocument[]);
+
+      expect(stats["badge:omnibus"]).toBeUndefined();
+      expect(stats.interesting).toBe(2);
+    });
+  });
+
+  describe("computeBadgeStats", () => {
+    /** The defence of the whole feature. The rules let a signed-in client write
+     * any value in -5..5, so if the tally summed values one account could clear
+     * a three-person threshold alone by typing a bigger number. Counted by
+     * sign, one document is one voice - and a document is one person, because
+     * `ownsVoteTarget` in firestore.rules pins its id to the author's uid. */
+    it("counts people, not the numbers they wrote", () => {
+      const tallies = computeBadgeStats([
+        { userUid: "aB3xYz", categoryVotes: { "badge:omnibus": 5 } },
+      ] as unknown as VoteDocument[]);
+
+      expect(tallies.omnibus).toEqual({ up: 1, down: 0 });
+    });
+
+    it("splits the voters into the two sides", () => {
+      const tallies = computeBadgeStats([
+        { userUid: "aB3xYz", categoryVotes: { "badge:omnibus": 1 } },
+        { userUid: "cD4wVu", categoryVotes: { "badge:omnibus": 1 } },
+        { userUid: "eF5tSr", categoryVotes: { "badge:omnibus": -3 } },
+      ] as unknown as VoteDocument[]);
+
+      expect(tallies.omnibus).toEqual({ up: 2, down: 1 });
+    });
+
+    /** Withdrawal is an explicit 0 rather than a `deleteField()`, so that one
+     * badge can be dropped without touching the rest of the map under the
+     * `{ merge: true }` every vote in this app is written with. */
+    it("treats a withdrawn vote as neither side", () => {
+      const tallies = computeBadgeStats([
+        { userUid: "aB3xYz", categoryVotes: { "badge:omnibus": 0 } },
+      ] as unknown as VoteDocument[]);
+
+      expect(tallies.omnibus).toBeUndefined();
+      expect(tallies).toEqual({});
+    });
+
+    it("ignores a robot's vote", () => {
+      // No model writes badges today; this is about what happens when one does.
+      // A badge threshold counts people, and neither a scoring model nor a
+      // migration script is one.
+      const tallies = computeBadgeStats([
+        { userUid: "pipeline-pagerank", categoryVotes: { "badge:omnibus": 1 } },
+        {
+          userUid: "migration:merge-duplicate-people",
+          categoryVotes: { "badge:omnibus": 1 },
+        },
+        { userUid: "aB3xYz", categoryVotes: { "badge:omnibus": 1 } },
+      ] as unknown as VoteDocument[]);
+
+      expect(tallies.omnibus).toEqual({ up: 1, down: 0 });
+    });
+
+    /** `categoryVotes` is a free-form map a signed-in reader writes to
+     * directly, so `badge:whatever-they-typed` reaches Firestore whatever the
+     * UI offers. This is the one gate between that and a counter on a named
+     * person's public document, and it belongs here rather than at render
+     * time. */
+    it("drops a badge id nobody put in the catalogue", () => {
+      const tallies = computeBadgeStats([
+        { userUid: "aB3xYz", categoryVotes: { "badge:zlodziej": 1 } },
+      ] as unknown as VoteDocument[]);
+
+      expect(tallies).toEqual({});
+    });
+
+    it("ignores the five vote axes sharing the map", () => {
+      const tallies = computeBadgeStats([
+        {
+          userUid: "aB3xYz",
+          categoryVotes: { interesting: 5, quality: -2, "badge:spolecznik": 1 },
+        },
+      ] as unknown as VoteDocument[]);
+
+      expect(tallies).toEqual({ spolecznik: { up: 1, down: 0 } });
+    });
+
+    it("counts one reader's two badges separately", () => {
+      const tallies = computeBadgeStats([
+        {
+          userUid: "aB3xYz",
+          categoryVotes: { "badge:omnibus": 1, "badge:zmiana-barw": -1 },
+        },
+      ] as unknown as VoteDocument[]);
+
+      expect(tallies).toEqual({
+        omnibus: { up: 1, down: 0 },
+        "zmiana-barw": { up: 0, down: 1 },
+      });
     });
   });
 
@@ -560,6 +723,33 @@ describe("shared/stats.ts", () => {
         4,
       );
       expect(counted.factsCount).toBe(4);
+    });
+
+    /** /api/stats/computeNodes hands this straight to
+     * `batch.update(nodeRef, { stats, revisions })`, and a top-level `stats`
+     * key in an `update` replaces the whole map - so a build that left the
+     * badges out would erase every counter on every node on its first run.
+     * The empty map matters for the same reason: it is what takes a withdrawn
+     * badge off the node instead of leaving a stale chip behind. */
+    it("carries the badge tally, empty map included", () => {
+      const empty = computeNodeStats(true, [], [], [], new Set());
+      expect(empty.badges).toEqual({});
+
+      const voted = computeNodeStats(
+        true,
+        [],
+        [],
+        [
+          {
+            userUid: "aB3xYz",
+            categoryVotes: { "badge:spolecznik": 1 },
+          },
+        ] as unknown as VoteDocument[],
+        new Set(),
+      );
+      expect(voted.badges).toEqual({ spolecznik: { up: 1, down: 0 } });
+      // And the badge did not leak into the vote aggregate on the way.
+      expect(voted.votes.humanVoted).toBe(false);
     });
   });
 });

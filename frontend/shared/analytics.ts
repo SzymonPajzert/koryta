@@ -188,6 +188,41 @@ export const GOALS = {
     props: [],
   },
 
+  // --- Odznaki, on a person's page ---------------------------------------
+  // The first number on the site a reader moves by clicking, and the first
+  // claim about a named living person that readers rather than the pipeline or
+  // an editor put on a page. Both of those make "is this worth having" an
+  // empirical question, and these three are how it gets answered: how many
+  // people ever propose anything at all, how often a proposal is disputed, and
+  // how often somebody takes their own vote back.
+  //
+  // Three goals rather than one carrying a `direction` property, because the
+  // three want different denominators (`badgeGoal`, app/composables/badges.ts).
+  // A proposal is measured against the readers who saw the section, opposition
+  // against the proposals it answers, and a withdrawal is the only one of the
+  // three that is not a first-time act - folded into one goal, the three would
+  // share a total that means nothing.
+  //
+  // `badge` is a closed set of five ids and cannot become anything else:
+  // `vote()` refuses an id `badgeById` does not know before it writes, so no
+  // reader's typing can reach this property. That is what makes it a property
+  // in the sense this file means - a breakdown with five rows, not a list.
+  "osoba:badge-proposed": {
+    description:
+      "Reader voted a badge up on a person - which is the same act as proposing one, there being no separate „zaproponuj”. Break down by `badge` for which of the five the catalogue is actually for; the ones nobody ever picks are the ones to retire.",
+    props: ["badge"],
+  },
+  "osoba:badge-opposed": {
+    description:
+      "Reader voted a badge down on a person („Nie zgadzam się”). Against `osoba:badge-proposed` for the same `badge`, this is the measurement `requiresApproval` was guessed at from: a badge readers never dispute does not need an editor standing between its third vote and the chip.",
+    props: ["badge"],
+  },
+  "osoba:badge-withdrawn": {
+    description:
+      "Reader clicked the arrow they had already clicked and took their own vote back off a badge. The only goal here that is not a first-time act: it counts people who changed their mind, which is the cheapest signal that a badge is read as claiming something other than what it says.",
+    props: ["badge"],
+  },
+
   // --- Experiments -------------------------------------------------------
   "experiment:assigned": {
     description:

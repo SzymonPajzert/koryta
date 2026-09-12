@@ -26,6 +26,8 @@ marked ``e2e`` and deselected by default. Run it with::
 """
 
 import collections
+import re
+from pathlib import Path
 
 import pytest
 
@@ -87,7 +89,72 @@ STATE_EDGE_TYPES = {"owns", "mentions", "comment", "source"}
 # string, which is what a form leaves behind, and none holds a value.
 DATED_EDGE_TYPES = ("employed", "election")
 
-VOTE_CATEGORIES = {"interesting", "quality", "correct", "insufficient"}
+# The axes a person can vote on, which is the `VoteCategory` union in
+# `frontend/shared/model.ts` and the keys of `voteCategoryConfig` in
+# `frontend/app/composables/votes.ts`.
+#
+# `wrongPerson` was missing here, and had been since it was added to the union:
+# this list was written when there were four. Nothing failed, because the test
+# only fires on votes actually cast - a category the frontend does offer, that
+# this file calls unknown, reads as red the first time somebody uses it, which
+# is precisely backwards. Kept as a set of four it would now fail on every
+# "to nie ta osoba" flag from the extraction review flow.
+VOTE_CATEGORIES = {
+    "interesting",
+    "quality",
+    "correct",
+    "insufficient",
+    "wrongPerson",
+}
+
+#: What marks a `categoryVotes` key as a vote for a badge rather than for one of
+#: the axes above: `BADGE_KEY_PREFIX` in `frontend/shared/badges.ts`.
+BADGE_KEY_PREFIX = "badge:"
+
+#: The catalogue itself, in the file that owns it. This test suite lives at
+#: data/pipelines/src/tests/pipelines/, so five levels up is the repository.
+BADGES_TS = Path(__file__).resolve().parents[5] / "frontend" / "shared" / "badges.ts"
+
+
+def badge_ids() -> set[str]:
+    """The badge ids the frontend knows, read out of the TypeScript that owns them.
+
+    Read rather than copied, on purpose. Every other constant in this file is a
+    transcription kept in step by hand, and that is tolerable for lists that
+    change once a year - `NODE_TYPES` has gained one member since it was
+    written. The badge catalogue is meant to grow: a copy here would be stale
+    the first time somebody adds one, and the symptom would be this test calling
+    a perfectly good badge unknown, i.e. a red build for a correct change, which
+    teaches people to edit the assertion.
+
+    The parse is deliberately narrow - the `id:` lines inside the
+    `export const badges = [...]` literal and nothing else, since `BadgeDefinition`
+    above it also declares an `id` field - and it raises rather than returning an
+    empty set if it finds nothing. An empty catalogue would make every `badge:`
+    key unknown and fail the invariant for the wrong reason.
+    """
+    source = BADGES_TS.read_text(encoding="utf-8")
+    start = source.index("export const badges = [")
+    end = source.index("] as const", start)
+    ids = set(re.findall(r'id:\s*"([^"]+)"', source[start:end]))
+    assert ids, f"no badge ids found in {BADGES_TS}"
+    return ids
+
+
+def is_known_vote_key(key: str, badges: set[str]) -> bool:
+    """Whether `categoryVotes[key]` is something the frontend reads back.
+
+    Two namespaces share the map: the five vote axes, summed into `stats.votes`
+    by `computeVoteStats`, and `badge:<id>` keys, tallied into `stats.badges` by
+    `computeBadgeStats` - which drops any id that is not in the catalogue. So an
+    unknown badge id fails in the same way as a misspelled category: the vote is
+    stored, counted by nothing and shown nowhere, with no error anywhere on the
+    path.
+    """
+    if key.startswith(BADGE_KEY_PREFIX):
+        return key[len(BADGE_KEY_PREFIX) :] in badges
+    return key in VOTE_CATEGORIES
+
 
 EXTRACTION_FACT_TYPES = {
     "employment",
@@ -421,16 +488,21 @@ def test_vote_targets_exist(votes, node_ids, snapshot):
 
 
 def test_vote_categories_are_known(votes):
-    """`categoryVotes` decides which counters `stats.votes` grows.
+    """`categoryVotes` decides which counters `stats.votes` and `stats.badges` grow.
 
     An unknown category is summed into the aggregate all the same, where nothing
-    reads it, so a typo silently produces a counter no page shows.
+    reads it, so a typo silently produces a counter no page shows. A `badge:`
+    key with an id outside the catalogue fails one step earlier and just as
+    quietly: `computeBadgeStats` skips it, so the vote exists, the voter sees
+    their arrow lit from their own document, and the badge it was meant for
+    never moves.
     """
+    badges = badge_ids()
     unknown = collections.Counter(
         category
         for vote in votes
         for category in (vote.get("categoryVotes") or {})
-        if category not in VOTE_CATEGORIES
+        if not is_known_vote_key(category, badges)
     )
 
     assert not unknown, f"Votes use categories the frontend ignores: {dict(unknown)}"

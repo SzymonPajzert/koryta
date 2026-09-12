@@ -95,6 +95,75 @@ service cloud.firestore {
           && voteId == data.nodeId + '_' + data.userUid;
     }
 
+    // The document id a person's own vote has to be filed under: the target it
+    // is about, an underscore, and the caller's uid - the `${targetId}_${uid}`
+    // every writer in the app already builds (`useVotes`, `castVoteOnce` and
+    // `saveCommentOnce` in app/composables/votes.ts all address exactly that
+    // document).
+    //
+    // The human branch below used to check only `voteId.matches('.*_' + uid)`,
+    // which pins the suffix and says nothing about the front. That left one
+    // signed-in reader able to write `a_<uid>`, `b_<uid>` and `c_<uid>`, each
+    // carrying `nodeId: "n1"`, because nothing else tied the id to the body.
+    // Aggregation is per document and not per uid - `computeVoteStats` and
+    // `computeBadgeStats` in shared/stats.ts walk the vote documents of a node
+    // one at a time - so those three documents count as three voters. On the
+    // -5..5 axes that inflates a counter; for a badge it is the whole
+    // mechanism, since `BADGE_PUBLIC_THRESHOLD` (shared/badges.ts) is three
+    // *different people* net of the ones who disagree, and this is how one
+    // person hands themselves a badge on somebody else's page.
+    //
+    // Equality rather than a suffix match is what makes it one document per
+    // (target, person): the id is derivable from the body, so a second one
+    // cannot exist. Both id fields are accepted because a vote targets a node
+    // or an extraction and the writer sets whichever one applies.
+    function ownsVoteTarget(voteId, d, uid) {
+      return (d.nodeId is string && voteId == d.nodeId + '_' + uid)
+          || (d.extractionId is string && voteId == d.extractionId + '_' + uid);
+    }
+
+    // What a person's `categoryVotes` may contain at all.
+    //
+    // The range is the one the UI already clamps to (`Math.max(-5,
+    // Math.min(5, ...))` in castVote) and the one every reader assumes: a
+    // single `interesting: 1e9` would pin a person to the top of the
+    // "minimum votes" sort on /eksploruj/tabela, and a single `badge:x: 5`
+    // would clear a three-person badge threshold by itself if badges were
+    // summed - which is exactly why `computeBadgeStats` counts `Math.sign`
+    // instead of the value. Belt and braces: the aggregate refuses to be
+    // pumped, and the write that would pump it never lands.
+    //
+    // The key cap is `MAX_VOTE_KEYS` in shared/badges.ts. `onVoteWritten`
+    // re-reads *every* vote document on the node and rewrites its `stats` on
+    // each write, so a ten-thousand-key map is not paid once by the person who
+    // wrote it - it is paid again on every later vote by anybody, forever.
+    // Five vote categories plus five badges is ten keys today.
+    //
+    // The badge catalogue itself is deliberately NOT spelled out here. Rules
+    // are deployed by hand in this project (frontend/SETUP.md), so every new
+    // badge would mean a rules deploy on top of the code deploy, plus a test
+    // keeping two copies of the catalogue in step - and the failure mode of
+    // that drift is a silent PERMISSION_DENIED on a vote for a badge the UI
+    // happily offers. The catalogue is enforced in `computeBadgeStats`
+    // (shared/stats.ts), which drops unknown ids before anything reaches
+    // `stats.badges` on the public node document, so an unknown `badge:` key
+    // can sit in the writer's own vote document and change nothing.
+    //
+    // With `merge: true` - which is how all three writers write -
+    // `request.resource.data` is the document *after* the merge, so this sees
+    // the whole map rather than the one key being set. That is the intended
+    // reading (a bad key cannot be smuggled in beside a good one), with one
+    // consequence worth stating: a document that somehow holds an out-of-range
+    // value would block every subsequent vote by its owner until it is
+    // repaired. Nothing writes such a value today - the models do, and they
+    // write under their own uids through the datascience branch below, which
+    // this does not touch.
+    function saneVote(d) {
+      return d.categoryVotes is map
+          && d.categoryVotes.keys().size() <= 40
+          && d.categoryVotes.values().hasOnly([-5,-4,-3,-2,-1,0,1,2,3,4,5]);
+    }
+
     // Feedback is written by anyone, including signed-out visitors, and read
     // only by admins - neither of which is expressible here. Everything goes
     // through /api/feedback/* with the admin SDK, so the client SDK is shut
@@ -113,9 +182,27 @@ service cloud.firestore {
 
     match /votes/{voteId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null
-          && voteId.matches('.*_' + request.auth.uid)
-          && request.resource.data.userUid == request.auth.uid;
+      allow create, update: if request.auth != null
+          && request.resource.data.userUid == request.auth.uid
+          && ownsVoteTarget(voteId, request.resource.data, request.auth.uid)
+          && saneVote(request.resource.data);
+
+      // A delete is judged on the document as stored, because a delete carries
+      // no payload: `request.resource` is null, so the old combined rule -
+      // which read `request.resource.data.userUid` - could never be true and
+      // no client has ever been able to delete a vote. Reading `resource.data`
+      // is the line finally meaning what it says, and it grants nothing new to
+      // the app: no code path in the frontend deletes a vote document (a
+      // retracted vote is an explicit 0, never a deleteField), so this only
+      // lets a person remove their own opinion about somebody.
+      //
+      // `saneVote` is deliberately not asked of a delete. Removing a document
+      // that holds a value outside the range is a repair, and requiring the
+      // document to be valid before it may be deleted would make it exactly
+      // the one nobody can clean up.
+      allow delete: if request.auth != null
+          && resource.data.userUid == request.auth.uid
+          && ownsVoteTarget(voteId, resource.data, request.auth.uid);
 
       // Nobody signs in as a scoring model, so the check above can never cover
       // the pipeline's own scores - they are uploaded by whoever runs

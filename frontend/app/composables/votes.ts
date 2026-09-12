@@ -172,69 +172,148 @@ export function scoreModelLabel(uid: string): string {
  * id field is set, so the id itself never needs inspecting. */
 export type VoteTarget = "node" | "extraction";
 
-export function useVotes(
+/** The one vote document this reader owns for this target, and the only place
+ * in the app that writes it.
+ *
+ * `votes/${targetId}_${uid}` is a single document per (target, reader) - the
+ * shape firestore.rules pins the document id to, so „one person, one vote” is
+ * enforced by a rule rather than by convention - and everything a reader can
+ * say about a target lives in its `categoryVotes` map: the five `VoteCategory`
+ * axes, and since the badges a `badge:<id>` key per badge (shared/badges.ts).
+ *
+ * Pulled out of `useVotes` because badge voting reads and writes that same
+ * document. Two composables each calling `useDocument` on one id would be two
+ * Firestore listeners for one document - paid twice on a page that already
+ * mounts one vote control per category - and free to disagree for as long as
+ * one of them has seen a write the other has not, which on a toggle control
+ * looks like an arrow springing back. It also keeps the `setDoc` in one place:
+ * `npm run check:duplication` (jscpd) would count a second copy of this write
+ * as a clone, and it would be right to.
+ */
+export function useVoteDocument(
   targetId: MaybeRef<string>,
-  category: VoteCategory,
   target: VoteTarget = "node",
 ) {
   const { user } = useAuthState();
-  const firebaseApp = useFirebaseApp();
-  const db = getFirestore(firebaseApp, "koryta-pl");
-  const config = voteCategoryConfig[category];
+  // Named explicitly, like every other client call site. `useFirestore()` is
+  // `getFirestore(app)` with no database id, i.e. `(default)` - a database this
+  // project does not use, whose rules are not deployed and which the emulator
+  // plugin never connects. See the same note in composables/auth.ts.
+  const db = getFirestore(useFirebaseApp(), "koryta-pl");
+  const router = useRouter();
+  const route = useRoute();
 
   const idValue = computed(() => toValue(targetId));
 
-  const voteNodeUserRef = computed(() => {
-    if (!user.value) return null;
-    return doc(db, "votes", `${idValue.value}_${user.value.uid}`);
-  });
-  const voteNodeUserDoc = useDocument(voteNodeUserRef);
+  /** Null exactly when nobody is signed in - the document id carries the uid,
+   * so before there is a user there is no document to read. `useDocument`
+   * takes null to mean „no document” and opens no listener for it. */
+  const documentRef = computed(() =>
+    user.value ? doc(db, "votes", `${idValue.value}_${user.value.uid}`) : null,
+  );
+  const voteDocument = useDocument<VoteDocument>(documentRef);
 
-  const userCategoryVotes = computed(() => {
-    return voteNodeUserDoc.value?.categoryVotes || {};
-  });
+  /** What this reader has said about this target, keyed the way the document
+   * stores it. Never undefined, so a caller may index it before the first
+   * snapshot has arrived. */
+  const categoryVotes = computed<Record<string, number>>(
+    () => voteDocument.value?.categoryVotes || {},
+  );
 
-  const router = useRouter();
-  const route = useRoute();
-  const loading = ref(false);
-
-  // Expose function to cast or toggle a vote
-  const castVote = async (value: number) => {
+  /** Merge `patch` into this reader's `categoryVotes`, or send them to /login.
+   *
+   * Returns false when there was no user: nothing was written and the caller
+   * has been redirected. Returns true when the write landed, and throws
+   * whatever Firestore threw otherwise - which is the point of the `await`.
+   * `castVote` used to fire the `setDoc` and drop the promise, so a rules
+   * rejection was a click that did nothing, reported nowhere, on a page that
+   * went on showing the old number. The rules over this document are being
+   * tightened right now (a cap on how many keys one `categoryVotes` may carry,
+   * `MAX_VOTE_KEYS` in shared/badges.ts), and a silent PERMISSION_DENIED is the
+   * one failure nobody could diagnose from a bug report.
+   *
+   * Every write carries the whole identifying set rather than only the patch,
+   * however certain we are that the document already exists. `onVoteWritten`
+   * re-reads every vote on the node and hands them to `computeVoteStats`
+   * (shared/stats.ts), which reads `categoryVotes` without a guard: one
+   * document created by a merge that carried only the patch would throw inside
+   * the trigger and stop the aggregate for the *whole person* updating, for
+   * every voter, until somebody noticed.
+   */
+  async function write(patch: Record<string, number>): Promise<boolean> {
     if (!user.value) {
       router.push({
         path: "/login",
         query: { redirect: route.fullPath },
       });
-      return;
+      return false;
     }
 
-    loading.value = true;
-    const currentVote = userCategoryVotes.value[category] ?? 0;
-    const newValue = Math.max(-5, Math.min(5, currentVote + value));
-
-    if (newValue === currentVote) {
-      loading.value = false;
-      return;
-    }
-
-    setDoc(
+    await setDoc(
       doc(db, "votes", `${idValue.value}_${user.value.uid}`),
       {
         [target === "extraction" ? "extractionId" : "nodeId"]: idValue.value,
         userUid: user.value.uid,
-        categoryVotes: {
-          [category]: newValue,
-        },
+        categoryVotes: patch,
         updatedAt: new Date().toISOString(),
       } as VoteDocument,
-      // Use merge:true to preserve existing votes
+      // merge:true, so a verdict in one category - or on one badge - leaves
+      // every other key of the map alone. Firestore merges the nested map key
+      // by key, which is what makes a per-key patch safe here.
       { merge: true },
     );
-    loading.value = false;
+    return true;
+  }
+
+  return { voteDocument, categoryVotes, write, user };
+}
+
+export function useVotes(
+  targetId: MaybeRef<string>,
+  category: VoteCategory,
+  target: VoteTarget = "node",
+) {
+  const { categoryVotes, write, user } = useVoteDocument(targetId, target);
+  const config = voteCategoryConfig[category];
+  const loading = ref(false);
+
+  /** Move this reader's verdict in `category` by `value`, clamped to the -5..5
+   * the rules allow, and resolve once Firestore has taken it.
+   *
+   * It used to resolve as soon as the write was *started*: `setDoc` was called
+   * and its promise dropped, so a rejected write was a click that changed
+   * nothing and said nothing. It now propagates, which is a real change in
+   * behaviour and the only one in this refactor - `button/vote/Number.vue`
+   * awaits this before it emits `voted`, so a failed write no longer counts as
+   * a review. That is the point: the rules over this document are being
+   * tightened, and an error the app swallows is one no bug report can describe.
+   */
+  const castVote = async (value: number) => {
+    loading.value = true;
+    try {
+      const currentVote = categoryVotes.value[category] ?? 0;
+      const newValue = Math.max(-5, Math.min(5, currentVote + value));
+
+      // Nothing to write once the scale is at its end. `&& user.value` keeps
+      // the signed-out path bit for bit what it was before this was rewritten
+      // around `write`: a reader with no votes at all sits at 0, so `castVote(0)`
+      // would otherwise return here instead of reaching `write` and being sent
+      // to /login. Nothing calls it with 0 today - button/vote/Number.vue
+      // passes ±1 - but the redirect is the only thing a logged-out click does,
+      // and losing it in a refactor that promised no behaviour change is not
+      // worth the saved line.
+      if (newValue === currentVote && user.value) return;
+
+      await write({ [category]: newValue });
+    } finally {
+      // In a `finally` because `write` now propagates: an arrow left disabled
+      // forever is how a rules rejection would present to a reader.
+      loading.value = false;
+    }
   };
 
   return {
-    userCategoryVotes,
+    userCategoryVotes: categoryVotes,
     config,
     loading,
     castVote,

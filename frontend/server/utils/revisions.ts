@@ -112,6 +112,18 @@ export const INTERNAL_FIELDS = new Set([
   "visibility",
   "merged_into", // where a duplicate page's readers are sent, see utils/merge
   "needs_split", // an admin's note that the page is two people, see nodes/split
+  // An editor's verdict on the badges readers voted onto this person - see
+  // `Person.badgeModeration` in shared/model.ts. It is a decision *about* the
+  // page, not a statement the page makes, so it belongs here on both counts.
+  // Keeping it out of revision data is what makes an editor's "hidden" stick:
+  // `applyRevision` writes the revision over the document with `set` and layers
+  // `nodeOwnedFields(stored)` back on top, so approving anybody's later edit -
+  // or a nightly re-ingest of the person, which is the same path - carries the
+  // verdict across instead of deleting it. A field left out of this set does
+  // get deleted that way: that is exactly how re-ingest erased `stats` and took
+  // re-ingested people out of every listing (see the `nodeOwnedFields` comment
+  // below).
+  "badgeModeration",
   "nameChunksLower", // used for search indexing
 ]);
 

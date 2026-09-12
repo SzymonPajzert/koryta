@@ -4,7 +4,7 @@ import { nodeTypes, pageIsPublic } from "~~/shared/model";
 import { authCachedEventHandler } from "~~/server/utils/handlers";
 import { resolveMergedNode } from "~~/server/utils/merge";
 import { z } from "zod";
-import type { Node } from "~~/shared/model";
+import type { Node, Person } from "~~/shared/model";
 
 const queryValidator = z.object({
   latest: z.string().optional(),
@@ -76,6 +76,28 @@ async function getLatestRevision(db: FirebaseFirestore.Firestore, id: string) {
     id,
     ...revisionDoc.data().data,
     published: stored?.published === true,
+    // The same argument as `published`, for the two fields the badges are made
+    // of. An aggregate belongs to the document - `stats.badges` is recounted by
+    // the votes trigger from the `votes` collection, and `badgeModeration` is an
+    // editor's verdict about the page - so `INTERNAL_FIELDS` strips both out of
+    // revision data and neither is in `revisionDoc` to spread in.
+    //
+    // Without these two lines the badges would be invisible to precisely the
+    // people who vote on them and to nobody else: `authFetch` puts
+    // `latest: true` on every request a signed-in reader makes
+    // (app/composables/auth.ts:181), so every signed-in reader arrives on this
+    // branch, and `visibleBadges` needs the tallies to draw anything at all. A
+    // proposal-state chip is shown *only* to signed-in readers, so it would
+    // have had no audience whatsoever.
+    //
+    // Free: `stored` is the other half of the `Promise.all` above, already
+    // fetched for `published`, so this adds no Firestore read.
+    stats: stored?.stats,
+    // Cast because `badgeModeration` is declared on `Person`, not on `PageBase`
+    // - only people wear badges - while `getEntity` answers about any node type.
+    // Reading it off a company simply yields `undefined`, which is what
+    // `visibleBadges` treats as „nobody has ruled on anything”.
+    badgeModeration: (stored as Person | undefined)?.badgeModeration,
   };
 }
 

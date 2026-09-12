@@ -115,6 +115,14 @@
           :party
           class="text-caption"
         />
+        <!-- Same placement and the same reasoning as `CardEmployment`: last in
+             the row, fed with the already-filtered `ids` from
+             /api/edges/serviceMilestones rather than with raw tallies, and
+             unconditional because `BadgePersonRow` carries its own `v-if` and
+             renders nothing at all when the list is absent - which it is for
+             almost every person, and this card sits in the same home feed the
+             `home` visual baseline photographs. -->
+        <BadgePersonRow :ids="milestone.badges" />
       </div>
     </div>
   </v-card>

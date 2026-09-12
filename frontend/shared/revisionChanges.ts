@@ -69,6 +69,11 @@ export const skippedChangeFields = new Set([
   "visibility",
   "merged_into",
   "needs_split",
+  // An editor's verdict on this person's reader-awarded badges. In
+  // `INTERNAL_FIELDS`, so the assertion below the list requires it here too -
+  // and it would read as noise anyway: it is a decision about the page, never
+  // something a revision proposes.
+  "badgeModeration",
   "nameChunksLower",
 ]);
 

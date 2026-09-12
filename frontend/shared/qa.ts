@@ -48,6 +48,47 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "odznaki-osob",
+    title: "Odznaki, które osobom nadają czytelnicy",
+    description:
+      "Na stronie każdej osoby jest nowa sekcja „Odznaki”: pięć etykiet, " +
+      "które czytelnicy przyznają głosowaniem - 🐈 „Kot na cztery nogi” " +
+      "(stanął do wyborów, przegrał, a posadę w instytucji publicznej " +
+      "dostał w tym samym albo następnym roku), 🥄 „W czepku urodzony” " +
+      "(bliski krewny też pełnił funkcję publiczną), 🚌 „Omnibus” (trzy " +
+      "instytucje z branż, których nic nie łączy), 🤲 „Społecznik” " +
+      "(zasiada w organie, za który się nie płaci) i 🎨 „Zmiana barw” " +
+      "(startował z list dwóch różnych ugrupowań). Zgłoszenie osoby do " +
+      "odznaki jest po prostu głosem na tę odznakę - nie ma osobnego " +
+      "„zaproponuj”. Odznaka staje się widoczna dla wszystkich dopiero " +
+      "wtedy, gdy poprze ją trzech różnych zalogowanych ludzi (netto: za " +
+      "minus przeciw); wcześniej widzą ją tylko zalogowani. Cztery z " +
+      "pięciu - 🐈, 🥄, 🚌 i 🎨 - czekają dodatkowo na zatwierdzenie " +
+      "redakcji, więc same trzy głosy niezalogowanemu ich nie pokażą; 🤲 " +
+      "„Społecznik” zatwierdzenia nie wymaga, bo to sprawdzenie w danych, " +
+      "a nie interpretacja. Odznaka nie jest zarzutem ani ustaleniem " +
+      "redakcji i celowo nie trafia do tytułu strony, do opisu w Google " +
+      "ani do mapy witryny.",
+    steps: [
+      "Zaloguj się i wejdź na stronę dowolnej osoby (na seedzie: /osoba/krzysztof-wojcik-5). Zaraz pod „Historią powiązań” ma być sekcja „Odznaki”.",
+      "Wierszy ma być pięć, zawsze w tej samej kolejności: 🐈 Kot na cztery nogi, 🥄 W czepku urodzony, 🚌 Omnibus, 🤲 Społecznik, 🎨 Zmiana barw. Przy każdym jest, co dokładnie twierdzi i czego poszukać, zanim się kliknie.",
+      "Kliknij „Popieram” przy 🚌 Omnibus - na osobie, na której nikt jeszcze nie głosował: przycisk ma się wypełnić na zielono, bilans obok zmienić na „1 za / 0 przeciw”, a napis po prawej na „Propozycja — brakuje jeszcze 2 głosów” (na seedzie jeden głos na Omnibusa już jest, więc tam zostanie „brakuje jeszcze jednego głosu”).",
+      "Kliknij „Popieram” po raz drugi - to jest wycofanie głosu: przycisk gaśnie, bilans wraca do „0 za / 0 przeciw”, a napis do „Nikt jeszcze nie zgłosił”.",
+      "Kliknij „Nie zgadzam się” przy tej samej odznace - ma się podświetlić na czerwono zamiast zielonego, a nie oba naraz.",
+      "Odśwież stronę: wypełniony przycisk ma zostać wypełniony. Liczby przy nim mogą przez chwilę pokazywać stan sprzed Twojego głosu - odpowiedź strony osoby jest cache'owana do 6 godzin, dlatego własny głos jest doliczany w przeglądarce.",
+      "Znajdź osobę, którą trzech różnych ludzi zgłosiło do 🤲 Społecznika (na seedzie: /osoba/piotr-wisniewski-4) - przy nazwisku, obok znaczników partii, ma być wypełniony chip „🤲 Społecznik”, a w sekcji status „Widoczna dla wszystkich”.",
+      "Wyloguj się (albo otwórz to samo w oknie prywatnym): sekcji „Odznaki” ma nie być w ogóle, ale chip 🤲 Społecznik przy nazwisku ma zostać.",
+      "Na tej samej stronie, wylogowany, sprawdź osobę z odznaką zgłoszoną przez jedną osobę (na seedzie: 🚌 Omnibus na /osoba/krzysztof-wojcik-5) - tego chipa nie ma być ani na stronie, ani w źródle strony.",
+      "Podejrzyj źródło strony osoby z odznaką i poszukaj <title> oraz og:description - nazwa odznaki nie ma się w nich pojawić. Nie ma jej też w /sitemap.xml.",
+      "Jako admin wejdź na stronę osoby, której odznaka zebrała trzy głosy i wymaga zatwierdzenia - w jej wierszu jest „Zatwierdź do publikacji”. Po kliknięciu status ma się zmienić na „Widoczna dla wszystkich”.",
+      "Jako admin kliknij „Ukryj” przy dowolnej odznace: chip ma zniknąć wszystkim, a w sekcji ma zostać wiersz z napisem „Zablokowana przez redakcję” i przyciskiem „Przywróć”.",
+      "Na stronie głównej w „Co nowego” i na „Staż” - kafelek osoby z publiczną odznaką ma ten sam chip obok nazwiska; kafelek osoby bez odznak ma wyglądać jak dotąd, bez pustego odstępu.",
+      "Wejdź na stronę osoby oznaczonej jako „dwie osoby na jednej stronie” albo scaloną z inną - zamiast przycisków ma być wyjaśnienie, dlaczego głosowanie jest tam wyłączone.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
     id: "home-explorer-tab-highlight",
     title: "Widać, która zakładka eksploratora jest wybrana",
     description:

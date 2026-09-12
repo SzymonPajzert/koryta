@@ -4,6 +4,7 @@ import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
 import { fetchEdgeEndpointNodes } from "~~/server/utils/edgeNodes";
 import { asArray, pageIsPublic } from "~~/shared/model";
 import { displayRole } from "~~/shared/companyBodies";
+import { publicBadgeIds } from "~~/shared/badges";
 import type { Company, Edge, Person } from "~~/shared/model";
 import type { H3Event } from "h3";
 import { z } from "zod";
@@ -22,6 +23,19 @@ export type RecentEmployment = {
   personName: string;
   /** Parties the person is filed under, for the chips on the card. */
   parties: string[];
+  /** Odznaki this person carries, as bare catalogue ids (no `badge:` prefix),
+   * for `BadgePersonRow`.
+   *
+   * Only the ones in state "public": these cards are served to a logged-out
+   * visitor and to Google, and the two other states - a proposal below the
+   * threshold, and one over it that no editor has approved - are by definition
+   * one or three readers' unreviewed opinion about a named person. That filter
+   * is `publicBadgeIds`, never a comparison written out here: the rule has four
+   * outcomes and shared/badges.ts is the one place it is decided.
+   *
+   * Omitted rather than sent empty, like `companyCategories` above and for the
+   * same reason - almost nobody has a badge, and this is twenty cards. */
+  badges?: string[];
   companyId: string;
   companyName: string;
   /** Enough of the company for `ChipPublicCompany` to decide what to say. Both
@@ -161,12 +175,27 @@ async function recentEmployments(event: H3Event): Promise<RecentEmployments> {
       if (!pageIsPublic(person) || !pageIsPublic(company)) continue;
 
       const categories = asArray<string>((company as Company).categories);
+      // Free: `fetchEdgeEndpointNodes` is called above with no field mask, so
+      // it has already read the whole person document (server/utils/edgeNodes.ts
+      // - `fieldMask` omitted means `db.getAll(...refs)`), and Firestore bills a
+      // document rather than a field. Both inputs are therefore in memory
+      // already; the badges cost this endpoint zero additional reads and only
+      // the bytes of a short array of slugs in nitro's cached result.
+      //
+      // `stats` lives on `PageBase` and needs no cast; `badgeModeration` lives
+      // on `Person` (shared/model.ts:362), and the map holds `Person | Company`,
+      // so that one does - the same cast `parties` below already makes.
+      const badges = publicBadgeIds(
+        person.stats?.badges,
+        (person as Person).badgeModeration,
+      );
 
       employments.push({
         id: edge.id,
         personId: edge.source,
         personName: person.name,
         parties: (person as Person).parties ?? [],
+        ...(badges.length ? { badges } : {}),
         companyId: edge.target,
         companyName: company.name,
         companyIsPublic: (company as Company).isPublic,

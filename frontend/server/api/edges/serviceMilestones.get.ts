@@ -8,6 +8,7 @@ import {
   displayRole,
   namesASupervisorySeat,
 } from "~~/shared/companyBodies";
+import { publicBadgeIds } from "~~/shared/badges";
 import { warsawDate } from "~~/shared/dates";
 import {
   dayIso,
@@ -37,6 +38,15 @@ export type ServiceMilestone = {
   personName: string;
   /** Parties the person is filed under, for the chips on the card. */
   parties: string[];
+  /** Odznaki this person carries, as bare catalogue ids (no `badge:` prefix),
+   * for `BadgePersonRow`.
+   *
+   * Only the ones in state "public", via `publicBadgeIds`: /eksploruj/staz and
+   * the home feed are both served to a logged-out visitor, and the „proposal”
+   * and „awaiting” states exist precisely so that what readers are still
+   * arguing about does not appear under a named person in public. Omitted
+   * rather than sent empty, like `companyCategories` below. */
+  badges?: string[];
   /** The whole number of years reached. At least 1. */
   years: number;
   /** The day it is reached, ISO. */
@@ -138,9 +148,22 @@ const NODE_FIELDS = [
   "supervisoryBody",
   // Only the card needs this, and only for the handful of nodes a milestone
   // lands on - but the mask is applied to the whole scan, so every node carries
-  // it. A short array of slugs, against the `activity` blob and the `stats`
-  // block this list still leaves behind.
+  // it. A short array of slugs, against the `activity` blob and the rest of the
+  // `stats` block this list still leaves behind.
   "categories",
+  // The two inputs `publicBadgeIds` takes. A field path rather than a bare
+  // "stats": the mask is what keeps this endpoint's cached result small, and
+  // `stats` also holds the per-category vote aggregates and the counters, none
+  // of which a card draws. Asking for a path that no document has is not an
+  // error in Firestore - it comes back absent, which is the normal state here,
+  // since `computeBadgeStats` only writes `stats.badges` once somebody has
+  // voted and `badgeModeration` only exists where an editor has ruled.
+  //
+  // Masking changes no read count - Firestore bills a document, not a field
+  // (server/utils/edgeNodes.ts says the same) - so these two cost this scan of
+  // ~2,500 nodes nothing but the bytes they occupy in nitro's in-memory cache.
+  "stats.badges",
+  "badgeModeration",
 ];
 
 /** Whether this post counts towards the service the site reports.
@@ -190,6 +213,17 @@ function collect(
     );
     if (merged.length === 0) continue;
 
+    // Once per person rather than once per milestone: `milestonesInWindow` can
+    // yield two rows for one career when the window straddles an anniversary,
+    // and the badges are a fact about the person, not about the date.
+    // `badgeModeration` lives on `Person` (shared/model.ts:362) while the map
+    // holds `Person | Company`, hence the cast - the same one `parties` makes
+    // below. Both fields are in the mask above, so this reads memory only.
+    const badges = publicBadgeIds(
+      person.stats?.badges,
+      (person as Person).badgeModeration,
+    );
+
     for (const { years, day } of milestonesInWindow(merged, from, to)) {
       // Which post carried them over the line. Longest-running first, so a
       // seat taken up that morning does not outrank the job they have held
@@ -220,6 +254,7 @@ function collect(
         personId,
         personName: person.name,
         parties: (person as Person).parties ?? [],
+        ...(badges.length ? { badges } : {}),
         years,
         date: dayIso(day),
         daysFromToday: day - today,

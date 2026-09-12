@@ -6,9 +6,10 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 import { generateChunksLower } from "../shared/search";
-import { computeEdgeStats } from "../shared/stats";
+import { computeBadgeStats, computeEdgeStats } from "../shared/stats";
+import { badgeKey } from "../shared/badges";
 import { bodyIsPaidPost } from "../shared/companyBodies";
-import type { Edge } from "../shared/model";
+import type { Edge, VoteDocument } from "../shared/model";
 
 import nodes from "./nodes.json";
 import edges from "./edges.json";
@@ -140,6 +141,17 @@ async function seedDatabase() {
     // would leave every note any earlier run had made sitting on the page
     // under the fixtures below.
     "notes",
+    // The one collection the specs themselves write to most - a verdict on a
+    // person, a verdict on an extracted fact, and now a badge - and the one
+    // that was never cleared, so every earlier run's opinions were still
+    // sitting on the seeded people. For the counters that mattered until now
+    // that was untidy; for badges it is a broken fixture, because the tally is
+    // a count of *documents* and a stray one from last week moves a badge
+    // across the three-vote line that decides whether a logged out reader sees
+    // it at all. The badge specs then pass or fail depending on how many times
+    // the emulator has been used, which is the kind of test nobody trusts
+    // twice.
+    "votes",
   ];
   for (const col of collections) {
     const docs = await db.collection(col).listDocuments();
@@ -175,6 +187,100 @@ async function seedDatabase() {
     }
   }
 
+  // Badge votes, so a fresh emulator carries both states of odznaki without
+  // anybody having to click them into existence first.
+  //
+  // A badge is a key in an ordinary vote document - `badge:<id>` in
+  // `categoryVotes`, in `votes/${nodeId}_${uid}` - and nothing else
+  // (shared/badges.ts). There is no badge collection to seed and no counter to
+  // write by hand; the tally below is computed from these four documents by the
+  // same function the trigger uses.
+  //
+  // Two people, chosen for what they are *not* in. Piotr Wiśniewski (4) has one
+  // `connection` edge and Krzysztof Wójcik (5) has none at all, so neither can
+  // reach the home page's „Co nowego” feed or /eksploruj/staz - both of which
+  // draw a chip next to a name with a public badge, and both of which are
+  // photographed by `tests/visual`. `home.png` drifts on clean main already
+  // (a chip in it would be attributed to whoever regenerated the baseline
+  // next), and a fixture must not be the reason a visual test has to be
+  // reshot.
+  //
+  // Three voters on Społecznik and one on Omnibus, because those are the two
+  // states worth having a fixture for:
+  //
+  //   - Społecznik is the one badge in the catalogue with
+  //     `requiresApproval: false`, so three net votes make it public outright -
+  //     the only seeded chip a logged out reader (or a crawler) can see.
+  //   - Omnibus stands at 1 of 3, which is the „proposal” state: visible to
+  //     signed-in readers only, invisible to everybody else, and never in the
+  //     feed. Seeding one of each is what lets `person_badges.spec.ts` check
+  //     that the two audiences really are different.
+  //
+  // Three *different* uids, not one document with a bigger number: the
+  // threshold counts documents by `Math.sign`, so a single account cannot cross
+  // it however it votes (`computeBadgeStats`, shared/stats.ts). None of them is
+  // a seeded account, for the same reason the notes above are written by
+  // `seed-notes-author` - a vote of the test user's own would show up in the
+  // spec as already cast, and „Popieram” would arrive pressed.
+  //
+  // `updatedAt` is deliberately old. /eksploruj/statystyki reads this
+  // collection twice: once for the totals, and once through
+  // `collectActivityEvents` for the rolling activity window, which is keyed on
+  // this very field. A recent stamp would put four events into a window that
+  // moves every day, and `statystyki.png` - whose stability rests on the seed
+  // containing nothing dated recently (tests/visual/pages.spec.ts) - would
+  // start drifting daily like `home.png` does. The totals on that page do
+  // change by four votes either way; that baseline is red on clean main and
+  // wants reshooting for other reasons.
+  const seededBadgeVotes: Record<string, VoteDocument> = {
+    "4_seed-badge-voter-a": {
+      nodeId: "4",
+      userUid: "seed-badge-voter-a",
+      categoryVotes: { [badgeKey("spolecznik")]: 1 },
+      updatedAt: "2023-03-14T10:20:00.000Z",
+    },
+    "4_seed-badge-voter-b": {
+      nodeId: "4",
+      userUid: "seed-badge-voter-b",
+      categoryVotes: { [badgeKey("spolecznik")]: 1 },
+      updatedAt: "2023-03-15T08:05:00.000Z",
+    },
+    "4_seed-badge-voter-c": {
+      nodeId: "4",
+      userUid: "seed-badge-voter-c",
+      categoryVotes: { [badgeKey("spolecznik")]: 1 },
+      updatedAt: "2023-03-16T19:41:00.000Z",
+    },
+    "5_seed-badge-voter-a": {
+      nodeId: "5",
+      userUid: "seed-badge-voter-a",
+      categoryVotes: { [badgeKey("omnibus")]: 1 },
+      updatedAt: "2023-03-14T10:22:00.000Z",
+    },
+  };
+
+  /** `stats.badges` for the people voted on above, computed rather than
+   * written into the fixture - the same argument as `stats.edges` and
+   * `nameChunksLower` above, and here it is the difference between the seed and
+   * production rather than a convenience. In production this field is only ever
+   * written by `onVoteWritten` (functions/src/votes.ts) from
+   * `computeBadgeStats`, which counts *documents by sign*; a hand-written
+   * `{ up: 3 }` would still draw a chip if the rule underneath it had changed
+   * to something the four documents no longer add up to, and the seeded site
+   * would be the last place to show it. */
+  const badgeStatsByNodeId: Record<
+    string,
+    ReturnType<typeof computeBadgeStats>
+  > = {};
+  const allBadgeVotes = Object.values(seededBadgeVotes);
+  for (const vote of allBadgeVotes) {
+    const votedNodeId = vote.nodeId;
+    if (!votedNodeId || badgeStatsByNodeId[votedNodeId]) continue;
+    badgeStatsByNodeId[votedNodeId] = computeBadgeStats(
+      allBadgeVotes.filter((other) => other.nodeId === votedNodeId),
+    );
+  }
+
   for (const [id, node] of Object.entries(nodes)) {
     const nodeData = { ...node } as Record<string, unknown>;
     if (!nodeData.stats) nodeData.stats = {};
@@ -207,6 +313,15 @@ async function seedDatabase() {
     // vanish from the table under that sort rather than sorting last.
     if (nodeData.type === "person") {
       stats.factsCount = factsByNodeId[id] ?? 0;
+    }
+    // Only where somebody voted, exactly as in production: `computeBadgeStats`
+    // writes no key for a person nobody has badged, and `visibleBadges` reads a
+    // missing field as „no badges”. Seeding an empty map everywhere would be
+    // the one state the fixture could not then reproduce - a person whose
+    // `stats.badges` has never been written at all, which is nearly everybody.
+    const seededBadgeStats = badgeStatsByNodeId[id];
+    if (seededBadgeStats) {
+      stats.badges = seededBadgeStats;
     }
     defaultPublished(nodeData);
     const ref = db.collection("nodes").doc(id);
@@ -263,6 +378,17 @@ async function seedDatabase() {
     batch.set(ref, note);
   }
 
+  // The document id is `${nodeId}_${uid}`, which is not a convention here but
+  // the thing the rules check: `ownsVoteTarget` (firestore.rules) lets a reader
+  // write only the document whose id is their own uid glued to the target they
+  // name in it. A seeded document under any other id would be one no client
+  // could ever update - the reader's next click would create a second document
+  // beside it and be counted twice.
+  for (const [id, vote] of Object.entries(seededBadgeVotes)) {
+    const ref = db.collection("votes").doc(id);
+    batch.set(ref, vote);
+  }
+
   for (const [id, fact] of Object.entries(extractions)) {
     const ref = db.collection("extractions").doc(id);
     // The fixture carries an ISO string because JSON has no timestamp; the
@@ -283,6 +409,7 @@ async function seedDatabase() {
     (await db.collection("extractions").get()).docs.length,
     "extractions",
   );
+  console.log((await db.collection("votes").get()).docs.length, "votes");
 }
 
 async function seedAuth() {

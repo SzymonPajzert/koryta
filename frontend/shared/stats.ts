@@ -1,6 +1,8 @@
 import type { NodeStats, VoteDocument, Note, Edge } from "./model";
 import { pageIsPublic } from "./model";
 import { namesASupervisorySeat } from "./companyBodies";
+import type { BadgeTally } from "./badges";
+import { badgeIdFromKey, isBadgeKey, isKnownBadge } from "./badges";
 
 export function calculateExperience(edges: Edge[]): number {
   const intervals: { start: number; end: number }[] = [];
@@ -180,7 +182,27 @@ export function computeVoteStats(
 
   for (const v of nodeVotes) {
     const fromPipeline = isPipelineUid(v.userUid);
-    if (!fromPipeline) {
+
+    // A document whose every key is a badge is somebody playing with the
+    // catalogue, not somebody reviewing the page, and it must not be able to
+    // set `humanVoted`. That flag is what /eksploruj/nowe filters the
+    // unreviewed queue by and what the progress bar counts, so a reader who
+    // hands out three badges on three people would take three pages out of the
+    // backlog without a single verdict being recorded - and nothing downstream
+    // could tell those pages from reviewed ones.
+    //
+    // `keys.length > 0 &&` is what keeps this bit-for-bit identical on every
+    // document that exists today. Nothing has a `badge:` key yet, so any
+    // document with votes fails `every` on its first key and takes the old
+    // path; the only other shape in the collection is the empty
+    // `categoryVotes: {}` that `saveCommentOnce` writes when a comment arrives
+    // before any verdict (app/composables/votes.ts), and an empty map has
+    // length 0, so it goes on setting `humanVoted` exactly as before. Somebody
+    // leaving a comment has looked at the page.
+    const keys = Object.keys(v.categoryVotes);
+    const badgeOnly = keys.length > 0 && keys.every(isBadgeKey);
+
+    if (!fromPipeline && !badgeOnly) {
       aggregatedVotes.humanVoted = true;
       if (v.userUid) humans.add(v.userUid);
       if (v.updatedAt) {
@@ -192,6 +214,14 @@ export function computeVoteStats(
     }
 
     for (const [category, value] of Object.entries(v.categoryVotes)) {
+      // Badges are counted by `computeBadgeStats` into their own field, and
+      // must never reach the sum below. This loop adds up whatever key it is
+      // handed - `tests/shared/stats.test.ts` has it summing a category called
+      // `other` to 7 - so without this a `badge:omnibus` key would land in
+      // `stats.votes` as a sixth axis, with the -5..5 arithmetic that makes one
+      // account worth five people.
+      if (isBadgeKey(category)) continue;
+
       if (fromPipeline) {
         const best = pipelineBest[category];
         pipelineBest[category] =
@@ -228,6 +258,73 @@ export function computeVoteStats(
   }
 
   return aggregatedVotes;
+}
+
+/** How many people proposed each badge on this node, and how many disputed it.
+ *
+ * The one place a reader's private vote document turns into a field of the
+ * node's public document, which is why both filters live here rather than at
+ * render time: whatever is written here is what every unauthenticated reader
+ * of the node gets, and a check in a Vue component protects nothing.
+ *
+ * Two rules, and each of them is load-bearing:
+ *
+ *   - **`Math.sign`, never the value.** `computeVoteStats` sums, and the rules
+ *     let a signed-in client write anything in -5..5 into `categoryVotes`. So
+ *     one account writing `{"badge:omnibus": 5}` would clear a threshold meant
+ *     to take three different people, alone, by typing a bigger number. Counted
+ *     by sign, one document is one voice: `up` and `down` are counts of
+ *     documents, and a document is one person by construction, since
+ *     `ownsVoteTarget` in firestore.rules pins its id to the author's uid. This is the whole
+ *     defence of the feature, not a detail of the aggregation.
+ *   - **The catalogue is the allow-list.** `categoryVotes` is a free-form map a
+ *     reader writes to directly, so `badge:whatever-they-typed` reaches
+ *     Firestore no matter what the UI offers. `isKnownBadge` is what stops an
+ *     invented label becoming a counter on a named person's public document.
+ *
+ * A 0 is a withdrawn vote and counts for neither side. Withdrawal is stored as
+ * an explicit 0 rather than a `deleteField()` so that one badge can be dropped
+ * without touching the rest of the map, and so `{ merge: true }` - which is how
+ * every vote in this app is written - can express it at all.
+ *
+ * `isAutomatedUid` rather than `isPipelineUid`: this counts *people*, and
+ * neither a scoring model nor a migration script is one. `computeVoteStats`
+ * asks the narrower question because it genuinely wants the models' verdicts;
+ * here there is nothing a robot could contribute. No model writes badges today,
+ * so the two are equivalent on current data - this is about what happens when
+ * one does.
+ */
+export function computeBadgeStats(
+  nodeVotes: VoteDocument[],
+): Record<string, BadgeTally> {
+  const tallies: Record<string, BadgeTally> = {};
+
+  for (const v of nodeVotes) {
+    if (isAutomatedUid(v.userUid)) continue;
+
+    for (const [key, value] of Object.entries(v.categoryVotes)) {
+      if (!isBadgeKey(key)) continue;
+
+      const id = badgeIdFromKey(key);
+      if (!isKnownBadge(id)) continue;
+
+      // `Number(value) || 0` before the sign, because the value arrives off a
+      // client-written document and a string "1" or a null would otherwise make
+      // `Math.sign` return NaN and land in neither branch - a vote silently
+      // lost rather than rejected.
+      const sign = Math.sign(Number(value) || 0);
+      if (sign === 0) continue;
+
+      const tally = (tallies[id] ??= { up: 0, down: 0 });
+      if (sign > 0) {
+        tally.up += 1;
+      } else {
+        tally.down += 1;
+      }
+    }
+  }
+
+  return tallies;
 }
 
 /** Keeps only employment the site counts: a paid post, in a place the public
@@ -382,6 +479,18 @@ export function computeNodeStats(
       .reduce((a, b) => a + b, 0),
     factsCount: nodeFactsCount,
     votes: computeVoteStats(nodeVotes),
+    // Recomputed here as well as in the `onVoteWritten` trigger, and not
+    // optional. /api/stats/computeNodes hands the return value straight to
+    // `batch.update(nodeRef, { stats, revisions })`
+    // (server/api/stats/computeNodes.post.ts:354), and a top-level `stats` key
+    // in an `update` replaces the whole map - so a build that left this out
+    // would erase every badge counter on every node on the first run, and the
+    // counts would only come back one person at a time, as somebody voted.
+    //
+    // An empty map is written on purpose when there are no badge votes: that is
+    // what takes the last withdrawn vote off the node instead of leaving a
+    // stale counter behind.
+    badges: computeBadgeStats(nodeVotes),
     edges: computeEdgeStats(
       nodeEdges,
       publicPlaceIds,

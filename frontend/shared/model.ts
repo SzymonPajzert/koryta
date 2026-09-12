@@ -1,5 +1,6 @@
 import type { Timestamp } from "firebase-admin/firestore";
 import type { QaCheckStatus } from "./qa";
+import type { BadgeTally } from "./badges";
 import type { SupervisoryOrgan } from "./companyOrgans";
 
 type PageBase<PageType> = {
@@ -112,6 +113,26 @@ export interface NodeStats {
     models?: Record<string, number>;
     [key: string]: unknown;
   };
+  /** How many people proposed each reader-awarded badge on this node, and how
+   * many disputed it, keyed by `BadgeDefinition.id`.
+   *
+   * Its own field rather than a few more keys inside `votes`, and the reason is
+   * arithmetic, not tidiness. `computeVoteStats` *sums* the values it is handed
+   * and the rules allow -5..5, so a single account writing 5 would clear a
+   * three-person threshold by itself - the one thing the threshold exists to
+   * prevent. `computeBadgeStats` counts `Math.sign` instead, one document at a
+   * time, so one person is at most one vote however hard they lean on the
+   * keyboard. Two fields is what keeps the two arithmetics from meeting.
+   *
+   * A map of `{up, down}` rather than a single net number so that a chip can
+   * show what it is made of, and so that a badge at 0 from 4-vs-4 is
+   * distinguishable from one nobody has ever voted on.
+   *
+   * Optional: written only by `computeBadgeStats` (via `computeNodeStats` and
+   * the `onVoteWritten` trigger), so a node nobody has voted a badge on simply
+   * has no field. Readers go through `visibleBadges`, which treats absent as
+   * empty. */
+  badges?: Record<string, BadgeTally>;
   edges: {
     all: NodeEdgeStats;
     approved: NodeEdgeStats;
@@ -321,6 +342,24 @@ export interface Person extends Omit<Node, "type"> {
   rejestrIo?: string;
   /** Profile on ktomaco.pl, another public registry of company connections. */
   ktomaco?: string;
+  /** An editor's decision about one reader-awarded badge on this person, keyed
+   * by `BadgeDefinition.id`: "approved" lets it out to the public once the
+   * votes are there, "hidden" stops it reaching anybody at all.
+   *
+   * A map rather than two arrays, for two reasons. There are three states and
+   * an array can only carry two - a badge nobody has ruled on yet is absent,
+   * which is what „czeka na zatwierdzenie redakcji” means, and that is
+   * different from approved and from blocked. And arrays in this database are
+   * not reliably arrays: `sanitizeFirestoreData` rewrote every nested array it
+   * saw until 2026-07-28, so documents come back as `{"0": "omnibus"}`, against
+   * which `array-contains` matches nothing *and does not raise* - a blocked
+   * badge would quietly go public. See `asArray` further down this file for the
+   * same trap.
+   *
+   * Absent on nearly every person, and that is the normal state: only badges
+   * whose `requiresApproval` is true need the "approved" half at all, and
+   * "hidden" is for the ones an editor took down. */
+  badgeModeration?: Record<string, "approved" | "hidden">;
 }
 
 export interface ElectionRich {

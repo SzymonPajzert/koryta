@@ -28,6 +28,19 @@
         :key="party"
         :party="party"
       />
+      <!-- After the parties, because a party is what the person is on the
+           record and a badge is what readers say about them - the harder claim
+           reads last. Whole rows are absent on nearly everybody: `stats.badges`
+           is written only once a vote exists, and the row renders nothing at
+           all when no badge clears the bar, so this costs the other people
+           neither a chip nor a gap. `signedIn` decides whether proposals and
+           badges awaiting an editor are shown; the rule itself lives in
+           `visibleBadges` (shared/badges.ts). -->
+      <BadgePersonRow
+        :stats="personEntity?.stats?.badges"
+        :moderation="personEntity?.badgeModeration"
+        :signed-in="!!user"
+      />
       <v-spacer />
       <!-- One row of controls, in the order they escalate: the two an admin
            gets, then the change anybody may propose, then how interesting the
@@ -177,7 +190,13 @@ const props = withDefaults(
  * - the entity is handed to it - so the only thing it can do is say so. */
 const emit = defineEmits<{ published: [] }>();
 
-const { isAdmin } = useAuthState();
+// `user` alongside `isAdmin` for the badge row: a proposal - one reader's
+// unreviewed opinion about a named person - is shown to signed-in readers only,
+// and „signed in” here means any account, not an admin one. `user` is
+// `useCurrentUser()`, so it is `undefined` while Firebase is still resolving
+// the session and `null` when there is none; both coerce to false, which is the
+// right answer during the wait.
+const { isAdmin, user } = useAuthState();
 
 const company = computed(() =>
   props.type === "place" ? (props.entity as Company) : undefined,

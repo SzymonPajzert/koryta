@@ -55,7 +55,12 @@ globalThis.getValidatedQuery = (async (_event: unknown, validate: any) =>
 
 const call = () =>
   handler({} as never) as unknown as Promise<{
-    node: { name: string; published?: boolean };
+    node: {
+      name: string;
+      published?: boolean;
+      stats?: Record<string, unknown>;
+      badgeModeration?: Record<string, string>;
+    };
   }>;
 
 describe("GET /api/nodes/[id]", () => {
@@ -104,6 +109,23 @@ describe("GET /api/nodes/[id]", () => {
     const node = (await call()).node;
     expect(node.name).toBe("Anna Nowak");
     expect(node.published).toBe(true);
+  });
+
+  it("carries the document's badge tallies onto that revision", async () => {
+    // The badges would otherwise be invisible to exactly the people who vote on
+    // them. `stats.badges` is an aggregate the votes trigger recounts from the
+    // `votes` collection, so `INTERNAL_FIELDS` keeps it off every revision -
+    // and `authFetch` puts `latest: true` on every request a signed-in reader
+    // makes (app/composables/auth.ts:181), which lands all of them on this
+    // branch. Anonymous readers, who go the other way, would have been the only
+    // ones to see a chip; a „proposal” chip is shown to signed-in readers only,
+    // so it would have had no audience at all.
+    nodes["person-1"]!.stats = { badges: { omnibus: { up: 4, down: 1 } } };
+    nodes["person-1"]!.badgeModeration = { omnibus: "approved" };
+    query = { latest: "true" };
+    const node = (await call()).node;
+    expect(node.stats).toEqual({ badges: { omnibus: { up: 4, down: 1 } } });
+    expect(node.badgeModeration).toEqual({ omnibus: "approved" });
   });
 
   it("hides a draft from a reader who did not ask for the latest", async () => {

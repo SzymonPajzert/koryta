@@ -47,6 +47,22 @@
           :party
           class="text-caption"
         />
+        <!-- Last in the row, and after the party chips, because the badges are
+             the softest claim on the card: the institution and the party are
+             facts the pipeline imported, an odznaka is what readers voted.
+
+             `ids` and not `stats`, so the card never re-derives the visibility
+             rule: /api/edges/recentEmployments already ran `publicBadgeIds`,
+             and this feed is served to logged-out visitors, for whom a proposal
+             must not render at all.
+
+             Unconditional in the template on purpose - `BadgePersonRow` puts a
+             `v-if` on its own root, so an absent or empty `badges` renders no
+             element whatsoever and adds no `ga-2` gap to this row. That is what
+             keeps the `home` visual baseline untouched for the ~all people who
+             have no badge; a wrapper div here would move every card on the home
+             page by 8px. -->
+        <BadgePersonRow :ids="employment.badges" />
       </div>
     </div>
   </v-card>
