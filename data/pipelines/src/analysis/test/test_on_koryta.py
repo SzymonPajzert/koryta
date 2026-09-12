@@ -1,11 +1,17 @@
-"""Which payloads a re-ingest may submit without creating anybody new."""
+"""Which payloads a re-ingest may submit without creating anybody new,
+and which it may submit *because* they would create somebody."""
 
 import sys
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
-from analysis.payloads.person import PeoplePayloads, matching_one_page
+from analysis.payloads.person import (
+    PeoplePayloads,
+    matching_one_page,
+    missing_from_koryta,
+)
 from analysis.payloads.site import SiteSnapshot
 from entities.composite import Person
 
@@ -166,3 +172,118 @@ def test_the_export_is_read_once_for_both_filters():
             pipeline.only_changed(None, [])
 
     read.assert_called_once()
+
+
+def test_somebody_without_a_page_is_kept_by_the_inverse():
+    snapshot = site(("1", "Anna Nowak", None))
+    kept = missing_from_koryta([payload("Jan Kowalski")], snapshot)
+    assert names(kept) == ["Jan Kowalski"]
+
+
+def test_somebody_with_a_page_is_dropped_by_the_inverse():
+    snapshot = site(("1", "Jan Kowalski", None))
+    assert missing_from_koryta([payload("Jan Kowalski")], snapshot) == []
+
+
+def test_an_empty_site_keeps_everybody():
+    payloads = [payload("Jan Kowalski"), payload("Anna Nowak")]
+    assert names(missing_from_koryta(payloads, site())) == [
+        "Jan Kowalski",
+        "Anna Nowak",
+    ]
+
+
+def test_the_two_filters_partition_the_payloads():
+    """Same lookup, complementary halves - minus the names neither trusts."""
+    snapshot = site(("1", "Jan Kowalski", None), ("2", "Anna Nowak", None))
+    payloads = [payload("Jan Kowalski"), payload("Zofia Lis")]
+    kept = names(matching_one_page(payloads, snapshot))
+    missing = names(missing_from_koryta(payloads, snapshot))
+    assert kept == ["Jan Kowalski"]
+    assert missing == ["Zofia Lis"]
+    assert sorted(kept + missing) == sorted(names(payloads))
+
+
+def test_the_same_name_on_a_different_link_is_somebody_new():
+    """The 105 pages the 2026-09-12 run created: the site has the name, on a
+    page whose register link disagrees, so the ingest reads a second human.
+    That is the payload this filter is for."""
+    snapshot = site(("1", "Tomasz Kowalski", "https://rejestr.io/osoby/421303"))
+    kept = missing_from_koryta(
+        [payload("Tomasz Kowalski", register="https://rejestr.io/osoby/1238531")],
+        snapshot,
+    )
+    assert names(kept) == ["Tomasz Kowalski"]
+
+
+def test_a_page_with_no_link_is_matched_by_name_and_dropped():
+    snapshot = site(("1", "Jan Kowalski", None))
+    assert (
+        missing_from_koryta(
+            [payload("Jan Kowalski", register="https://rejestr.io/osoby/1")], snapshot
+        )
+        == []
+    )
+
+
+def test_the_node_id_is_a_page_however_the_name_reads():
+    snapshot = site(("abc", "Jan Kowalski", None))
+    assert missing_from_koryta([payload("Jan Nowak", koryta_id="abc")], site()) != []
+    assert missing_from_koryta([payload("Jan Nowak", koryta_id="abc")], snapshot) == []
+
+
+def test_two_unlinked_namesakes_would_collapse_and_are_dropped():
+    """The second upload's name fallback finds the page the first one created."""
+    payloads = [payload("Piotr Mroziński"), payload("Piotr Mroziński")]
+    assert missing_from_koryta(payloads, site()) == []
+
+
+def test_two_namesakes_are_kept_once_both_carry_a_link():
+    """Two links disagree, so the second upload creates rather than lands."""
+    payloads = [
+        payload("Piotr Mroziński", register="https://rejestr.io/osoby/1"),
+        payload("Piotr Mroziński", register="https://rejestr.io/osoby/2"),
+    ]
+    assert len(missing_from_koryta(payloads, site())) == 2
+
+
+def test_one_namesake_without_a_link_costs_the_whole_group():
+    """The unlinked one lands on whichever page went up first; there is no
+    saying which of the three the merged page would be about."""
+    payloads = [
+        payload("Piotr Mroziński", register="https://rejestr.io/osoby/1"),
+        payload("Piotr Mroziński", register="https://rejestr.io/osoby/2"),
+        payload("Piotr Mroziński"),
+    ]
+    assert missing_from_koryta(payloads, site()) == []
+
+
+def test_an_ambiguous_name_costs_nobody_else_their_payload_either():
+    payloads = [
+        payload("Piotr Mroziński"),
+        payload("Piotr Mroziński"),
+        payload("Jan Kowalski"),
+    ]
+    assert names(missing_from_koryta(payloads, site())) == ["Jan Kowalski"]
+
+
+def test_the_inverse_reads_the_same_snapshot_as_the_other_filters():
+    payloads = [payload("Jan Kowalski"), payload("Anna Nowak")]
+    snapshot = site(("1", "Jan Kowalski", None))
+    with patch.object(sys, "argv", ["koryta", "PeoplePayloads", "--all"]):
+        with patch.object(SiteSnapshot, "read", return_value=snapshot) as read:
+            pipeline = PeoplePayloads()
+            missing = pipeline.not_on_koryta(None, payloads)
+            pipeline.only_on_koryta(None, payloads)
+
+    read.assert_called_once_with(None, None)
+    assert names(missing) == ["Anna Nowak"]
+
+
+def test_asking_for_both_halves_is_an_error():
+    """They are disjoint, so a run passing both would upload nothing and say
+    nothing about why."""
+    argv = ["koryta", "PeoplePayloads", "--all", "--on-koryta", "--not-on-koryta"]
+    with patch.object(sys, "argv", argv):
+        with pytest.raises(ValueError, match="disjoint"):
+            PeoplePayloads().args

@@ -43,6 +43,16 @@ class PeoplePayloads(Pipeline[Person]):
             action=argparse.BooleanOptionalAction,
         )
         parser.add_argument(
+            "--not-on-koryta",
+            help="The inverse of --on-koryta: emit payloads only for the "
+            "people the ingest would *create*, so a run adds the query's "
+            "missing people rather than restating the ones already stored. "
+            "Pair it with --all for the same reason.",
+            default=False,
+            required=False,
+            action=argparse.BooleanOptionalAction,
+        )
+        parser.add_argument(
             "--only-changed",
             help="Emit only the people whose payload would write something "
             "koryta.pl does not already hold. The rest are uploads that end in "
@@ -55,12 +65,21 @@ class PeoplePayloads(Pipeline[Person]):
         parser.add_argument(
             "--koryta-date",
             help="Date (YYYY-MM-DD) of the koryta.pl export to read: who has a "
-            "page for --on-koryta, and what they hold for --only-changed. "
-            "Defaults to the latest available export.",
+            "page for --on-koryta and --not-on-koryta, and what they hold for "
+            "--only-changed. Defaults to the latest available export.",
             default=None,
             required=False,
         )
-        return parser.parse_known_args()[0]
+        args = parser.parse_known_args()[0]
+        if args.on_koryta and args.not_on_koryta:
+            # Caught here rather than left to produce an empty run: the two
+            # select disjoint halves of the same query, so passing both asks
+            # for nobody and a silent zero reads like the query was wrong.
+            raise ValueError(
+                "--on-koryta and --not-on-koryta select disjoint halves of the "
+                "same query; passing both asks for nobody."
+            )
+        return args
 
     @property
     def output_class(self) -> typing.Type:
@@ -71,6 +90,8 @@ class PeoplePayloads(Pipeline[Person]):
         result = [self.map_person_payload(ctx, row) for _, row in people_df.iterrows()]
         if self.args.on_koryta:
             result = self.only_on_koryta(ctx, result)
+        if self.args.not_on_koryta:
+            result = self.not_on_koryta(ctx, result)
         unmapped: typing.Counter[str] = collections.Counter()
         for person in result:
             unmapped.update(unmapped_committees(person.elections))
@@ -161,6 +182,21 @@ class PeoplePayloads(Pipeline[Person]):
         link.
         """
         return matching_one_page(payloads, self.site_snapshot(ctx))
+
+    def not_on_koryta(self, ctx: Context, payloads: list[Person]) -> list[Person]:
+        """The payloads for people who have no page yet, and only those.
+
+        The other half of `only_on_koryta`, off the same lookup: where that one
+        keeps what `lookupPersonDoc` resolves, this keeps what it misses, which
+        is precisely the set the ingest would add. It is how a query becomes an
+        upload of the people it names that koryta.pl does not have - the 105 of
+        the 2026-09-12 run were exactly this, submitted by accident.
+
+        A page whose register link disagrees with the payload's is a miss, so
+        somebody is "not on koryta" here even where the site has their name.
+        That is the ingest's own reading: two links are two humans.
+        """
+        return missing_from_koryta(payloads, self.site_snapshot(ctx))
 
     def map_person_payload(self, ctx: Context, row: pd.Series) -> Person:
         def get_scalar(key):
@@ -353,6 +389,51 @@ def matching_one_page(payloads: list[Person], snapshot: SiteSnapshot) -> list[Pe
         f"{len(result)} of {len(payloads)} payloads land on a page the site "
         f"already has; {created} would be created by the ingest and are "
         f"dropped, {len(ambiguous)} names left alone as several people share them"
+    )
+    return result
+
+
+def missing_from_koryta(payloads: list[Person], snapshot: SiteSnapshot) -> list[Person]:
+    """The payloads the ingest would create a page for rather than land.
+
+    `person_for` missing is the whole test - it is `lookupPersonDoc`, and a
+    miss there is what makes the ingest call `createNode`. So this is exactly
+    the complement of `matching_one_page`'s first branch, and the two filters
+    cannot disagree about who is on the site.
+
+    What has to be guarded is the run creating a collapsed page by itself. The
+    payloads are uploaded one after another, so the second of two namesakes is
+    looked up against a site that already holds the first, and there the name
+    fallback fires: it lands on the page just created unless *both* sides carry
+    a register link and the two disagree. A name several payloads share is
+    therefore only safe where every one of them has a link; otherwise the group
+    is dropped whole, because which of them the merged page would be about is
+    not a question the payloads can answer.
+
+    Namesakes the site already has separate pages for are not this case - those
+    payloads resolve, so they never reach here.
+    """
+    unlinked_names = {
+        person.name for person in payloads if field(asdict(person), "rejestrIo") is None
+    }
+    candidates = collections.Counter(person.name for person in payloads)
+
+    result: list[Person] = []
+    stored_count = 0
+    ambiguous: set[str] = set()
+    for person in payloads:
+        if snapshot.person_for(asdict(person)) is not None:
+            stored_count += 1
+        elif candidates[person.name] > 1 and person.name in unlinked_names:
+            ambiguous.add(person.name)
+        else:
+            result.append(person)
+
+    print(
+        f"{len(result)} of {len(payloads)} payloads name somebody the site "
+        f"does not have; {stored_count} already have a page and are dropped, "
+        f"{len(ambiguous)} names left alone as several payloads share them "
+        f"with no register link to tell them apart"
     )
     return result
 
