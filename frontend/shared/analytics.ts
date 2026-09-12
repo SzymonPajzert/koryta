@@ -119,8 +119,29 @@ export const GOALS = {
   },
   "cta:community": {
     description:
-      "Reader clicked through to Slack, Discord, Facebook or the GitHub issue tracker.",
+      "Reader clicked through to Slack, Facebook or GitHub. `to` is a stable slug rather than the card's title, so rewording a card does not split its history.",
     props: ["to"],
+  },
+  // The three below exist because every `cta:*` goal above was a numerator with
+  // no denominator and no breakdown: they could say somebody clicked, never how
+  // many were asked or which of the site's own tasks they took.
+  "pomoc:path": {
+    description:
+      "Reader picked one of the six self-sort paths at the top of /pomoc. The breakdown by `path` is the page's whole reason to exist - it says which audience actually turns up, which is not answerable from an outbound-link count.",
+    props: ["path"],
+  },
+  "cta:task": {
+    description:
+      "Reader started one of the contribution tasks the site hands out itself, rather than an outbound link. `task` is which one, `from` is which surface offered it - until now two of the three quick actions on the help page fired nothing at all, because their handler was guarded on the external href they do not have.",
+    props: ["task", "from"],
+  },
+  "cta:shown": {
+    description:
+      "The help call to action was scrolled into view. The denominator every cta:* goal has been missing - the section sits well below the fold on „/”, so the page's visitor count is not one.",
+    props: ["surface"],
+    // Fires from an IntersectionObserver, not from a click. Interactive, it
+    // would un-bounce every reader who scrolls past it.
+    passive: true,
   },
 
   // --- /eksploruj/tabela -------------------------------------------------
@@ -202,6 +223,44 @@ export const ALL_GOALS: AnalyticsGoal[] = (
 export function isPassiveGoal(goal: AnalyticsGoal): boolean {
   return "passive" in GOALS[goal] && GOALS[goal].passive === true;
 }
+
+// --- the help funnel ----------------------------------------------------
+
+/** The six paths a reader can pick themselves into at the top of /pomoc.
+ *
+ * Closed, and typed, because the value is also the anchor the tile scrolls to:
+ * a path that does not match a section id scrolls nowhere, and the breakdown
+ * would name a section that is not on the page. */
+export const HELP_PATHS = [
+  "minuta",
+  "wiem-cos",
+  "sprawdzanie",
+  "zespol",
+  "pieniadze",
+  "kod",
+] as const;
+export type HelpPath = (typeof HELP_PATHS)[number];
+
+/** Every task the site can hand a reader itself, for `cta:task`'s `task`.
+ *
+ * The distinction that earns this its own goal: these end on a page of ours
+ * with the reader able to do the thing, where `cta:volunteer-form`,
+ * `cta:donate` and `cta:community` all end on somebody else's domain. */
+export const HELP_TASKS = [
+  "kolejka",
+  "fakty",
+  "fakty-osoby",
+  "qa",
+  "zrodla",
+  "dodaj-osobe",
+  "dodaj-spolke",
+  "zglos",
+  "tabela",
+  "udostepnij",
+  "kontakt",
+  "narzedzia",
+] as const;
+export type HelpTask = (typeof HELP_TASKS)[number];
 
 // --- search -------------------------------------------------------------
 

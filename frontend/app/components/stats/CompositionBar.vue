@@ -115,6 +115,20 @@ const visible = computed(() => props.segments.filter((s) => s.value > 0));
   font-variant-numeric: tabular-nums;
 }
 
+/* The 9% threshold above is a proportion, and a proportion is not a width: on a
+   375px phone a segment can clear it and still be ~45px wide, which is less
+   than the four tabular figures printed inside it. The legend under the bar
+   carries every number anyway, so on a phone the bar is only the shape.
+
+   A media query rather than `useDisplay()`, because the breakpoint composable
+   resolves to the desktop default during SSR and the numbers would appear in
+   the server's markup and vanish on hydration. */
+@media (max-width: 599px) {
+  .composition-bar__value {
+    display: none;
+  }
+}
+
 .composition-bar__dot {
   display: inline-block;
   width: 10px;

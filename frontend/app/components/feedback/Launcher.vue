@@ -22,11 +22,13 @@
 
 <script setup lang="ts">
 import { mdiMessageAlertOutline } from "@mdi/js";
-import { ref } from "vue";
 import { useDisplay } from "vuetify";
+import { useFeedbackDialog } from "~/composables/feedbackDialog";
 
 const { mdAndUp } = useDisplay();
-const open = ref(false);
+// Shared, so „Zgłoś błąd albo podrzuć pomysł” on the home call to action and
+// the card on /pomoc open this dialog rather than a second one of their own.
+const open = useFeedbackDialog();
 </script>
 
 <style scoped>
