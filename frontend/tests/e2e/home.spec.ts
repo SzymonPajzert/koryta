@@ -40,7 +40,10 @@ test.describe("Home", () => {
   });
 
   test("the call to action leads to pomoc", async ({ page }) => {
-    const cta = page.getByRole("link", { name: "Działaj z nami" }).first();
+    // By testid, not by accessible name: „Działaj z nami” is also the app bar's
+    // label, `.first()` is DOM order, and the app bar comes first - so this was
+    // green for anything the home page itself did with the button.
+    const cta = page.getByTestId("home-cta");
     await expect(cta).toHaveAttribute("href", "/pomoc");
 
     await expect(async () => {

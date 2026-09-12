@@ -142,12 +142,11 @@
       </v-col>
     </v-row>
   </HomeSection>
+  <!-- No `v-row`/`v-col` around it: the call to action is a card of its own
+       now rather than centred loose text, and the old nest stacked five
+       paddings - this row, HomeSection's container, and the component's own. -->
   <HomeSection>
-    <v-row>
-      <v-col cols="12" class="text-center">
-        <CardCallToAction />
-      </v-col>
-    </v-row>
+    <CardCallToAction />
   </HomeSection>
   <!-- Last on the page, and it has to be: the feed keeps growing as the reader
        scrolls, so anything below it is pushed further away every time it does. -->
