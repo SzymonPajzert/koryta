@@ -57,7 +57,6 @@ class Person:
     #: could work it out. The site's own key, so the ingest does not have to
     #: infer who this is - see `lookupPersonDoc`.
     korytaId: str | None = None
-    autoapprove: bool = False
 
 
 @dataclass

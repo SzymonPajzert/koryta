@@ -125,7 +125,6 @@ class Implied:
             "parties": _as_list(node.get("parties")),
             "wikipedia": node.get("wikipedia"),
             "rejestrIo": node.get("rejestrIo"),
-            "autoapprove": False,
         }
 
     def company(self, node: dict) -> dict:

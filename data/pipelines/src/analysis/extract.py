@@ -17,36 +17,44 @@ from scrapers.map.teryt import Teryt
 from scrapers.stores import Context, Pipeline
 
 
-def check_auto_approved():
+def press_list_evidence():
+    """What the two hardcoded press lists say about a person, if anything.
+
+    Evidence only. This used to also return a count that `PeoplePayloads` turned
+    into `autoapprove`, which `/api/ingest/person` reads as `published` for a
+    node it is creating - so a hit here put a brand-new page live unreviewed. The
+    match is `"<first> <last>"` as a plain string against a few hundred names,
+    with no register link and no birth date behind it, which is nowhere near
+    enough to publish on: it named a second Tomasz Kowalski in the 2026-09-12
+    run. The lists stay because what they say is worth saying; deciding who is
+    published is not their job.
+    """
     tlustekoty_content = {line[0]: line[1] for line in tlustekoty}
     listawsty_content = {line[0]: line[1] for line in listawstydu}
 
-    def check_row(row) -> tuple[int, list[str], str, list[str]]:
+    def check_row(row) -> tuple[list[str], str, list[str]]:
         full_name = row["krs_name"]
         first_name = full_name.split(" ")[0]
         last_name = full_name.split(" ")[-1]
         name = f"{first_name} {last_name}"
 
-        count = 0
         content = ""
         sources = []
         parties = []
         if name in tlustekoty_content:
-            count += 1
             content += tlustekoty_content[name]
             sources.append(
                 "https://www.psl.pl/mamy-liste-357tlustych-kotow-z-pis-w-spolkach-skarbu-panstwa"
             )
             parties.append("PiS")
         if name in listawsty_content:
-            count += 1
             content += listawsty_content[name]
             sources.append(
                 "https://www.pb.pl/lista-wstydu-platformy-obywatelskiej-691425"
             )
             parties.append("PO")
 
-        return count, sources, content, parties
+        return sources, content, parties
 
     return check_row
 
@@ -543,14 +551,22 @@ details."
 
         return check
 
-    def auto_approved_func(self):
+    def press_listed_func(self):
+        """How many of the two press lists name this person, for `--approved`.
+
+        A selection criterion, not a publishing one: it decides who the run
+        looks at, and `press_list_evidence` no longer says anything about who
+        goes live. One source is appended per list that names them, so the
+        length of that list is the count this used to be handed directly.
+        """
         if not self.approved:
             return lambda row: 0
 
-        func = check_auto_approved()
+        func = press_list_evidence()
 
         def check(row):
-            return func(row)[0]
+            sources, _, _ = func(row)
+            return len(sources)
 
         return check
 
@@ -562,7 +578,7 @@ details."
 
         relevant_employment = people["employment"].apply(self.relevant_employment(ctx))
         relevant_elections = people["elections"].apply(self.relevant_elections())
-        auto_approved = people.apply(self.auto_approved_func(), axis=1)
+        press_listed = people.apply(self.press_listed_func(), axis=1)
         # TODO handle a condition here that --all can be just used as
         # a placeholder but it doesn't disable all the filters
         # Every flag that narrows what counts has to be named here, or --all
@@ -592,7 +608,7 @@ details."
 
         # TODO control if we want to have both of them or one of them satisfied
         relevant = (
-            relevant_employment * relevant_elections + auto_approved + use_all
+            relevant_employment * relevant_elections + press_listed + use_all
         ) > 0
 
         if self.rejestrio_id:
