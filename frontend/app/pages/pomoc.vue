@@ -2,14 +2,17 @@
   <div class="pomoc">
     <!-- Header -->
     <h1 class="text-h4 font-weight-bold mb-2">Jak możesz pomóc</h1>
-    <p class="text-body-1 text-medium-emphasis mb-1">
+    <p class="text-body-1 text-medium-emphasis pomoc__measure mb-4">
       Koryta.pl prowadzą ochotnicy - po godzinach i bez sponsorów. Niżej jest
       wszystko, co można przy tym robić: od jednej minuty do stałej współpracy.
       <NuxtLink to="/o-nas" class="text-ink-info"
         >Dowiedz się więcej o projekcie</NuxtLink
       >.
     </p>
-    <p v-if="total" class="text-body-2 text-medium-emphasis mb-1">
+    <p
+      v-if="total"
+      class="text-body-2 text-medium-emphasis pomoc__measure mb-1"
+    >
       Sprawdziliśmy {{ polishNumber(checked) }} z
       {{ polishCountingGenitive(total, "osoby", "osób") }}. Reszty nikt jeszcze
       nie sprawdzał.
@@ -17,7 +20,7 @@
     <!-- The answer to „czy muszę mieć konto?”, put where it decides whether a
          reader scrolls at all. The page used to promise „nie potrzebujesz
          konta” directly above two links that both carry the auth middleware. -->
-    <p class="text-caption text-medium-emphasis mb-6">
+    <p class="text-caption text-medium-emphasis pomoc__measure mb-8">
       Przy każdej rzeczy piszemy, czego wymaga: nic, konta albo wpłaty. Konto
       zakładasz w niecałą minutę, a po zalogowaniu wracasz dokładnie w to
       miejsce, z którego klikasz.
@@ -57,7 +60,7 @@
           kogoś, kto zna temat lepiej niż my.
         </InfoBubble>
       </div>
-      <p class="text-body-2 text-medium-emphasis mb-3">
+      <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
         Nic z tego nie wymaga konta.
       </p>
       <v-row>
@@ -108,7 +111,7 @@
           nic nie pojawia się na stronie samo.
         </InfoBubble>
       </div>
-      <p class="text-body-2 text-medium-emphasis mb-3">
+      <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
         Najbardziej brakuje nam wiedzy lokalnej - kto u Ciebie dostał posadę i
         po kim.
       </p>
@@ -184,7 +187,7 @@
           publikujesz: oceny i notatki układają kolejkę, a publikuje redakcja.
         </InfoBubble>
       </div>
-      <p class="text-body-2 text-medium-emphasis mb-3">
+      <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
         To jest główna praca projektu i tu najbardziej brakuje rąk.
       </p>
       <div class="k-note mb-4 d-flex flex-wrap align-center ga-3">
@@ -233,7 +236,7 @@
           ankiecie odzywamy się z konkretnym zadaniem, a nie z listą obowiązków.
         </InfoBubble>
       </div>
-      <p class="text-body-2 text-medium-emphasis mb-3">
+      <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
         Jeśli chcesz robić coś regularnie, a nie tylko przy okazji.
       </p>
       <v-row>
@@ -313,7 +316,7 @@
           które przetwarzają artykuły. Nikt tu nie bierze pensji.
         </InfoBubble>
       </div>
-      <p class="text-body-2 text-medium-emphasis mb-3">
+      <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
         Nie mamy sponsorów ani żadnej partii za plecami. Utrzymujemy się z
         wpłat.
       </p>
@@ -370,7 +373,7 @@
           nas tak samo.
         </InfoBubble>
       </div>
-      <p class="text-body-2 text-medium-emphasis mb-3">
+      <p class="text-body-2 text-medium-emphasis pomoc__measure mb-3">
         Cały serwis i pipeline danych są otwarte.
       </p>
       <v-row>
@@ -709,6 +712,14 @@ const openNewsletter = () => {
 </script>
 
 <style scoped>
+/* A measure, not a width. The sheet this page is drawn in is 1200px, and a
+   line of 16px body copy that wide runs to about 140 characters - twice what
+   is comfortable, and the reason the header read as one grey block rather than
+   three separate facts. */
+.pomoc__measure {
+  max-width: 78ch;
+}
+
 .pomoc__section {
   margin-top: 40px;
   /* Clear of the sticky app bar, so a tile's anchor does not land the heading
