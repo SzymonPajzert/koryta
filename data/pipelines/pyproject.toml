@@ -235,6 +235,9 @@ max-branches = 15
 "src/scripts/text_gemini_on_ner.py" = ["PLR0402"]
 "src/scrapers/article/hardcoded/listawstydupo.py" = ["E501"]
 "src/scrapers/article/hardcoded/kazdymusigdziespracowac.py" = ["E501"]
+# A hardcoded table of 361 recipients, one per line. Wrapping the long
+# registered names would make the rows harder to read, not easier.
+"src/scrapers/krs/sponsorship_nips.py" = ["E501"]
 "src/stores/storage.py" = ["PLR0402"]
 
 [tool.pytest.ini_options]
