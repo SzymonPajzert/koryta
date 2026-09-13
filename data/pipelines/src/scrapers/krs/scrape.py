@@ -1,7 +1,7 @@
 import argparse
 import json
 import typing
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from enum import Enum
 from functools import cached_property
@@ -99,6 +99,18 @@ class RejestrIOQuery:
     def paid_calls(self) -> int:
         """How many rejestr.io calls this query is, which is what is billed."""
         return len([q for q in self.queries if q.value.startswith("rejestrio")])
+
+    @property
+    def subject_id(self) -> str:
+        """The KRS number or rejestr.io person id this query is about.
+
+        `__post_init__` refuses a query that has neither, so one of the two is
+        always there.
+        """
+        if self.krs is not None:
+            return self.krs.id
+        assert self.person is not None
+        return self.person.id
 
     @property
     def primary_reason(self) -> str:
@@ -807,7 +819,7 @@ def cost_breakdown(
         row.calls += calls
         row.cost += query.cost()
         if len(row.head) < 5:
-            row.head.append(query.krs.id if query.krs is not None else query.person.id)
+            row.head.append(query.subject_id)
         if query.krs is not None and query.krs.id in public_krs:
             row.public += 1
 
@@ -825,17 +837,13 @@ def cost_breakdown(
             f"{int(row.calls):>8}{row.cost:>10.2f}"
         )
         lines.append(f"    {', '.join(row.head)}")
-    total = (
-        {
-            field.name: sum(getattr(row, field.name) for row in tally.values())
-            for field in fields(CostBreakdown)
-        }
-        if tally
-        else {"subjects": 0, "public": 0, "calls": 0, "cost": 0.0}
-    )
+    # Only the counted fields: `head` is a sample of ids, not something that
+    # adds up, and summing it here used to raise on the first row.
+    rows = list(tally.values())
     lines.append(
-        f"  {'TOTAL':<24}{int(total['subjects']):>10}{int(total['public']):>9}"
-        f"{int(total['calls']):>8}{total['cost']:>10.2f}"
+        f"  {'TOTAL':<24}{sum(r.subjects for r in rows):>10}"
+        f"{sum(r.public for r in rows):>9}{sum(r.calls for r in rows):>8}"
+        f"{sum(r.cost for r in rows):>10.2f}"
     )
     lines.append("")
     lines.append(

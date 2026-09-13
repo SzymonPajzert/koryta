@@ -42,5 +42,7 @@ def test_the_gcs_client_asks_for_scopes(monkeypatch: pytest.MonkeyPatch):
 
     _make_gcs_client()
 
-    assert asked.get("scopes"), "google.auth.default() was called without scopes"
-    assert set(asked["scopes"]) == set(expected)  # type: ignore[arg-type]
+    scopes = asked.get("scopes")
+    assert scopes, "google.auth.default() was called without scopes"
+    assert isinstance(scopes, (list, tuple, set))
+    assert set(scopes) == set(expected)

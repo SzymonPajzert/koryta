@@ -13,7 +13,7 @@ from analysis.extract import Extract
 from analysis.payloads.election import get_election_type
 from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, field
 from analysis.utils.elections import candidacy_teryt
-from entities.composite import Company, Election, Person
+from entities.composite import Company, Election, Person, Source
 from scrapers.pkw.elections import parties_of_committee
 from scrapers.stores import Context, Pipeline
 from util.polish import format_person_name
@@ -235,11 +235,12 @@ class PeoplePayloads(Pipeline[Person]):
 
         companies = _extract_companies(row)
         elections = _extract_elections(row)
-        sources, content, party = [], "", []
-        # The two hardcoded lists name a few hundred people between them; the
-        # committees name everybody who ever stood for one. Both are evidence,
-        # so keep both.
-        party = sorted(set(party) | set(parties_from_committees(elections)))
+        # The press lists used to supply these two; nothing does now.
+        sources: list[Source] = []
+        content = ""
+        # The committees name everybody who ever stood for one, which is the
+        # only party evidence left once the hardcoded lists are gone.
+        party = sorted(set(parties_from_committees(elections)))
 
         wiki_name = get_scalar("wiki_name")
         wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
