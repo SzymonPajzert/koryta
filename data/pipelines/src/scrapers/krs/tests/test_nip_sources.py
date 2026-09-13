@@ -9,10 +9,12 @@ row.
 import pytest
 
 from scrapers.krs.nip_sources import (
+    Recipient,
     from_spreadsheet,
     money,
     read_nips,
     summarise,
+    total_paid,
 )
 
 REAL_ROWS = [
@@ -149,3 +151,17 @@ def test_summarise_counts_the_invalid_nips(tmp_path):
     # 5231844247 is one of the 6 in the real lists that fails its check digit.
     assert "checksum-invalid   " in report
     assert report.count("\n") == 4
+
+
+def test_total_paid_sums_the_aggregate_not_the_rows():
+    """`Recipient.paid` is already summed, so this must not re-derive it."""
+    recipients = [
+        Recipient("9710723801", "Fundacja A", 298900.00, 3),
+        Recipient("7743294391", "Fundacja B", 257500.00, 9),
+    ]
+    assert total_paid(recipients) == 556400.00
+
+
+def test_total_paid_of_nothing_is_zero():
+    """A worklist with nothing left on it prints 0, not a crash."""
+    assert total_paid([]) == 0.0

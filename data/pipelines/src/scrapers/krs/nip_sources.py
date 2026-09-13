@@ -55,6 +55,29 @@ class NipRow:
     is_buyer: bool = False
 
 
+@dataclass(frozen=True)
+class Recipient:
+    """One body that took money from a source, aggregated across its rows.
+
+    `NipRow` is one line of a register; this is one counterparty, with every
+    line it appeared on already summed. The distinction matters to anything
+    that orders a run by value -- a body with six small contracts outranks one
+    with a single larger contract, and only the aggregate says so.
+    """
+
+    nip: str
+    #: The registered name as the source wrote it, trimmed of the address.
+    #: Kept because it is what a human will search rejestr.io with.
+    name: str
+    #: Zloty across every row this body appeared on.
+    paid: float
+    contracts: int
+
+
+def total_paid(recipients: typing.Iterable[Recipient]) -> float:
+    return sum(r.paid for r in recipients)
+
+
 def read_nips(text: str) -> list[str]:
     """Every distinct NIP in a cell, labelled form preferred over bare.
 
