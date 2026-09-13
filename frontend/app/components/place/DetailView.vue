@@ -91,18 +91,22 @@
             title="Właściciele"
             :can-add="canAddRelations"
             :can-remove="canRemoveRelations"
+            :subject-published="subjectPublished"
             add-testid="owners"
             @add="openAdd(['owns_parent'], 'Dodaj właściciela')"
             @remove="openRemove"
+            @published="refreshEdges()"
           />
           <CardConnectionList
             :edges="subsidiaries"
             title="Spółki zależne"
             :can-add="canAddRelations"
             :can-remove="canRemoveRelations"
+            :subject-published="subjectPublished"
             add-testid="subsidiaries"
             @add="openAdd(['owns_child'], 'Dodaj spółkę zależną')"
             @remove="openRemove"
+            @published="refreshEdges()"
           />
           <CardEmploymentHistory
             :edges="historyEdges"
@@ -111,10 +115,12 @@
             :can-cite="canAddRelations"
             :can-correct="canEditRelations"
             :can-remove="canRemoveRelations"
+            :subject-published="subjectPublished"
             @add="openAdd(['employed'], 'Dodaj osobę pracującą tutaj')"
             @sources="openSources"
             @edit="openEdit"
             @remove="openRemove"
+            @published="refreshEdges()"
           />
         </div>
 
@@ -282,6 +288,10 @@ const company = computed<Company | undefined>(() => {
   }
   return node;
 });
+
+/** Whether the page itself is live, which is what decides whether one of its
+ * relations may be - see the same computed on `EntityDetailView`. */
+const subjectPublished = computed(() => company.value?.published === true);
 
 const { sources, targets, refresh: refreshEdges } = await useEdges(nodeId);
 const edges = computed(() => [...sources.value, ...targets.value]);
