@@ -28,6 +28,12 @@ export type EdgeNode = {
    * dialog - here it is the count that matters, so a claim with nothing behind
    * it can be told apart from one that is sourced. */
   references?: string[];
+  /** Whether the relation is on the public site, as the local graph answers it
+   * - `pageIsPublic` of the stored edge, carried through `getEdges`. Only ever
+   * false for a signed in reader: the same endpoint drops unpublished relations
+   * before anyone else sees them. Read by `ChipEdgeDraftStatus`, which is what
+   * marks such a row and offers an admin the way to publish it. */
+  visibility?: boolean;
   start_date?: string;
   end_date?: string;
   party?: string;
@@ -50,6 +56,24 @@ export function edgeCompany(edge: EdgeNode): Company | undefined {
   return edge.richNode.type === "place"
     ? (edge.richNode as Company)
     : undefined;
+}
+
+/** Whether a relation could go live right now: the rule `/api/edges/publish`
+ * enforces is that neither end is still a draft.
+ *
+ * Answered from what a row already holds - the far end is `richNode`, and the
+ * page the rows belong to is the caller's own subject, which it passes in. A
+ * caller that does not know its subject's state leaves it undefined and gets
+ * `true`, which offers the action and lets the endpoint refuse it: the check
+ * here only exists so that the common case - a draft page, whose every relation
+ * is unpublishable until the page itself goes live - does not draw a row of
+ * buttons that can only fail.
+ */
+export function edgeIsPublishable(
+  edge: EdgeNode,
+  subjectPublished?: boolean,
+): boolean {
+  return subjectPublished !== false && edge.richNode.visibility !== false;
 }
 
 /** The row's other end, where that end is a person at all.
