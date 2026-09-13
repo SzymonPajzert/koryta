@@ -254,8 +254,12 @@
             :edges="focusedEdges"
             :can-correct="canEditRelations"
             :can-remove="canRemoveRelations"
+            :subject-published="
+              focusedPerson.published ?? focusedPerson.visibility
+            "
             @edit="openEdit"
             @remove="openRemove"
+            @published="refreshFocusedEdges()"
           />
           <div v-else class="pa-2">
             <div class="sec-head mb-1">

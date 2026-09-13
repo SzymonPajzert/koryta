@@ -35,6 +35,16 @@
                that differ by one word. Draws nothing for a row that is not a
                company. -->
           <ChipCompanyCategories :company="edgeCompany(edge)" />
+          <!-- Whether the relation itself is live, and an admin's way to make
+               it so. Beside the sector chip rather than in the append slot: the
+               append slot is where the controls that take something away
+               live. -->
+          <ChipEdgeDraftStatus
+            :edge-id="edge.id"
+            :published="edge.visibility"
+            :publishable="edgeIsPublishable(edge, subjectPublished)"
+            @published="emit('published')"
+          />
 
           <!-- Admins only. The row is a link to the other end, so this stops
                the click rather than letting it navigate away. -->
@@ -59,10 +69,14 @@
 import { computed } from "vue";
 import { mdiPlus, mdiTrashCanOutline } from "@mdi/js";
 import { entityIcon } from "~/utils/entityIcon";
-import { edgeCompany, type EdgeNode } from "~~/app/composables/edges";
+import {
+  edgeCompany,
+  edgeIsPublishable,
+  type EdgeNode,
+} from "~~/app/composables/edges";
 import { nodeLinkUrl } from "~/composables/slugs";
 
-const { edges, title, canRemove } = defineProps<{
+const { edges, title, canRemove, subjectPublished } = defineProps<{
   title: string;
   edges: EdgeNode[];
   /** Whether this section offers adding a relation of its own kind. */
@@ -73,9 +87,17 @@ const { edges, title, canRemove } = defineProps<{
   /** Whether each row offers taking the relation off the graph outright, which
    * is an administrator's decision and nobody else's. */
   canRemove?: boolean;
+  /** Whether the page these relations hang off is itself published. See the
+   * same prop on `CardEmploymentHistory`. */
+  subjectPublished?: boolean;
 }>();
 
-const emit = defineEmits<{ add: []; remove: [edge: EdgeNode] }>();
+const emit = defineEmits<{
+  add: [];
+  remove: [edge: EdgeNode];
+  /** A row went live; the caller refetches if it draws the relation twice. */
+  published: [];
+}>();
 
 function getPeopleCount(edge: EdgeNode) {
   const stats = edge.richNode.stats as

@@ -64,6 +64,59 @@ describe("CardEmploymentHistory", () => {
     expect(wrapper.find('[data-testid="edge-remove-e1"]').exists()).toBe(false);
   });
 
+  it("hands each row's publication state to the badge that draws it", async () => {
+    // What decides whether the badge offers „Opublikuj" is the rule
+    // /api/edges/publish enforces - neither end still a draft - and the row is
+    // where both halves of it are known: the far end off `richNode`, the near
+    // one off the page this list belongs to.
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [
+          edge({
+            visibility: false,
+            richNode: {
+              id: "place",
+              type: "place",
+              name: "PKP",
+              visibility: true,
+            },
+          }),
+        ],
+        subjectPublished: true,
+      },
+    });
+
+    const badge = wrapper.findComponent({ name: "ChipEdgeDraftStatus" });
+    expect(badge.props()).toMatchObject({
+      edgeId: "e1",
+      published: false,
+      publishable: true,
+    });
+  });
+
+  it("does not offer publishing a relation whose far end is a draft", async () => {
+    const wrapper = await mountSuspended(EmploymentHistory, {
+      props: {
+        edges: [
+          edge({
+            visibility: false,
+            richNode: {
+              id: "place",
+              type: "place",
+              name: "PKP",
+              visibility: false,
+            },
+          }),
+        ],
+        subjectPublished: true,
+      },
+    });
+
+    expect(
+      wrapper.findComponent({ name: "ChipEdgeDraftStatus" }).props(),
+    ).toMatchObject({ publishable: false });
+  });
+
   it("asks the page to remove the row an admin clicked", async () => {
     const wrapper = await mountSuspended(EmploymentHistory, {
       props: { edges: [edge({})], canRemove: true },
