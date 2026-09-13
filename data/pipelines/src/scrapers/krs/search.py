@@ -39,7 +39,10 @@ the same courtesy `scrapers.krs.scrape` shows api-krs.
 
 import base64
 import random
+import re
+import time
 import typing
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import requests
@@ -77,6 +80,174 @@ _NO_KRS = "0000000000"
 
 class OdpisUnavailable(RuntimeError):
     """The service did not return a document for this KRS."""
+
+
+#: The search request's body, with every field the app sends. Sent whole rather
+#: than trimmed to the one field in use: the service rejects a body it does not
+#: recognise, and which fields are optional is not documented anywhere.
+def _search_body(
+    nip: str | None = None,
+    regon: str | None = None,
+    name: str | None = None,
+    exact_name: bool = False,
+    page_size: int = 100,
+) -> dict:
+    return {
+        "rejestr": ["P", "S"],
+        "podmiot": {
+            "krs": None,
+            "nip": nip,
+            "regon": regon,
+            "nazwa": name,
+            "wojewodztwo": None,
+            "powiat": None,
+            "gmina": None,
+            "miejscowosc": None,
+            "dokladnaNazwa": exact_name,
+        },
+        "status": {
+            "czyOpp": None,
+            "czyWpisDotyczacyPostepowaniaUpadlosciowego": None,
+            "dataPrzyznaniaStatutuOppOd": None,
+            "dataPrzyznaniaStatutuOppDo": None,
+        },
+        "paginacja": {
+            "liczbaElementowNaStronie": page_size,
+            "maksymalnaLiczbaWynikow": page_size,
+            "numerStrony": 1,
+        },
+    }
+
+
+@dataclass(frozen=True)
+class SearchHit:
+    """One subject the search matched."""
+
+    krs: str
+    name: str
+    city: str
+    #: ``"P"`` or ``"S"`` -- which register holds it, so the odpis fetch can go
+    #: straight there instead of asking both.
+    register: str
+    is_opp: bool = False
+    in_bankruptcy: bool = False
+
+
+def parse_search(payload: dict) -> list[SearchHit]:
+    """``listaPodmiotow`` as `SearchHit`s.
+
+    ``numer`` arrives **unpadded** -- 597986, not 0000597986 -- and every other
+    part of this package keys on the ten-digit form, so it is padded here
+    rather than at each call site.
+    """
+    hits: list[SearchHit] = []
+    seen: set[str] = set()
+    for item in payload.get("listaPodmiotow") or []:
+        if not isinstance(item, dict):
+            continue
+        number = only_digits(item.get("numer"))
+        if not number or number.rjust(10, "0") in seen:
+            continue
+        seen.add(number.rjust(10, "0"))
+        hits.append(
+            SearchHit(
+                krs=number.rjust(10, "0"),
+                name=str(item.get("nazwa") or ""),
+                city=str(item.get("miejscowosc") or ""),
+                register=str(item.get("typRejestru") or ""),
+                is_opp=bool(item.get("czyOPP")),
+                in_bankruptcy=bool(item.get("czyUpadlosc")),
+            )
+        )
+    return hits
+
+
+def search_subjects(
+    nip: str | None = None,
+    regon: str | None = None,
+    name: str | None = None,
+    exact_name: bool = False,
+    session: typing.Any | None = None,
+    timeout: float = 60.0,
+) -> list[SearchHit]:
+    """Search the register by NIP, REGON or name.
+
+    **This is the NIP-to-KRS channel.** Neither `api-krs` nor rejestr.io can
+    start from a NIP, and the Ministry of Finance's wykaz -- the other way in --
+    holds only VAT-registered entities, so it cannot see a foundation below the
+    VAT threshold at all. This endpoint is the register's own search, so it sees
+    everything the register does, in both `P` and `S`, for free.
+
+    **One row per register queried, not per subject.** Asking both `P` and `S`
+    returns a subject registered in both *twice*, with the same ``numer`` and a
+    different ``typRejestru`` -- KRS 0000907937 comes back as two rows. Reading
+    the row count as a subject count therefore rejects exactly the entities
+    that are in both registers, which is most fundacje that also trade. So the
+    rows are deduplicated on the KRS number, keeping the first register seen.
+    """
+    body = _search_body(
+        nip=nip, regon=regon, name=name, exact_name=exact_name
+    )
+    response = (session or requests).post(
+        f"{SEARCH_API_URL}wyszukiwarka/krs",
+        json=body,
+        # The body carries no top-level `krs`, so the app's interceptor uses
+        # its placeholder -- which is what a non-digit argument selects here.
+        headers=auth_headers(""),
+        timeout=timeout,
+    )
+    if response.status_code == 200:
+        return parse_search(response.json())
+    if response.status_code in (400, 404):
+        return []
+    raise OdpisUnavailable(
+        f"search {nip or regon or name}: HTTP {response.status_code}"
+    )
+
+
+#: How long to wait before believing a zero-hit answer, and how many times.
+#: The service answers a throttled request with HTTP 200 and an empty
+#: ``listaPodmiotow`` -- the same shape as "no such NIP" -- so a negative is
+#: only trustworthy after it survives a pause. Measured: a first pass at 1 s
+#: reported 4 foundations absent that all resolved on a 1.5 s retry.
+EMPTY_RETRY_DELAYS = (3.0, 8.0)
+
+
+def search_nip_confirmed(
+    nip: str, session: typing.Any | None = None
+) -> list[SearchHit]:
+    """Search by NIP, and re-ask before accepting an empty answer.
+
+    Returns as soon as anything is found. An empty result is retried on the
+    `EMPTY_RETRY_DELAYS` schedule and only then believed, because throttling
+    and absence are the same response and the difference decides whether a
+    company is missing or simply unregistered.
+    """
+    hits = search_subjects(nip=only_digits(nip), session=session)
+    if hits:
+        return hits
+    for delay in EMPTY_RETRY_DELAYS:
+        time.sleep(delay)
+        hits = search_subjects(nip=only_digits(nip), session=session)
+        if hits:
+            return hits
+    return []
+
+
+def krs_for_nip(nip: str, session: typing.Any | None = None) -> SearchHit | None:
+    """The one subject holding this NIP, or None.
+
+    None for both "no such NIP" and "genuinely more than one subject" -- a
+    caller that wants to tell those apart should use `search_subjects` and
+    look. Two rows for one KRS are already collapsed by `parse_search`, so
+    this does not reject a subject merely for being in both registers.
+    """
+    hits = search_subjects(nip=only_digits(nip), session=session)
+    return hits[0] if len(hits) == 1 else None
+
+
+def only_digits(value: typing.Any) -> str:
+    return re.sub(r"\D", "", str(value or ""))
 
 
 def pad_krs(krs: str) -> str:

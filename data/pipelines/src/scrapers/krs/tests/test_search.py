@@ -15,6 +15,7 @@ import pytest
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
+from scrapers.krs import search
 from scrapers.krs.search import (
     SECRET_KEY,
     auth_headers,
@@ -152,5 +153,82 @@ def test_auth_headers_uses_the_placeholder_krs_for_an_encrypted_body():
     assert not encrypted.isdigit()
 
     headers = auth_headers(encrypted)
+    assert set(headers) == {"x-api-key", "apiKey"}
+    assert len(headers["apiKey"]) == 512
+
+
+# ---------------------------------------------------------------------------
+# The NIP search -- the channel that turns a NIP into a KRS number.
+# ---------------------------------------------------------------------------
+
+
+def test_a_subject_in_both_registers_is_one_hit_not_two():
+    """`rejestr: ["P","S"]` returns a row per register, not per subject.
+
+    KRS 0000907937 (Fundacja "Bez Granic") comes back twice, same `numer`,
+    different `typRejestru`. Reading the row count as a subject count rejects
+    exactly the entities that are in both registers -- which was the bug that
+    made this search look like it could not find the very foundation it was
+    written for.
+    """
+    payload = {
+        "liczbaPodmiotow": 2,
+        "listaPodmiotow": [
+            {
+                "numer": "907937",
+                "nazwa": 'FUNDACJA "BEZ GRANIC"',
+                "miejscowosc": "SOCZEWKA",
+                "typRejestru": "P",
+            },
+            {
+                "numer": "907937",
+                "nazwa": 'FUNDACJA "BEZ GRANIC"',
+                "miejscowosc": "SOCZEWKA",
+                "typRejestru": "S",
+            },
+        ],
+    }
+    hits = search.parse_search(payload)
+    assert len(hits) == 1
+    assert hits[0].krs == "0000907937"
+    # The first register seen wins; both are the same subject either way.
+    assert hits[0].register == "P"
+
+
+def test_the_krs_number_is_padded_back_to_ten_digits():
+    """The service returns `numer` unpadded -- 597986, not 0000597986."""
+    payload = {"listaPodmiotow": [{"numer": "597986", "typRejestru": "S"}]}
+    assert search.parse_search(payload)[0].krs == "0000597986"
+
+
+def test_two_genuinely_different_subjects_stay_two_hits():
+    payload = {
+        "listaPodmiotow": [
+            {"numer": "907937", "typRejestru": "S"},
+            {"numer": "159572", "typRejestru": "S"},
+        ]
+    }
+    assert len(search.parse_search(payload)) == 2
+
+
+def test_a_search_with_no_results_is_empty_not_an_error():
+    assert search.parse_search({"liczbaPodmiotow": 0, "listaPodmiotow": []}) == []
+    assert search.parse_search({}) == []
+
+
+def test_the_search_body_puts_the_nip_where_the_app_puts_it():
+    """The app sends every field; the service rejects a body it does not know."""
+    body = search._search_body(nip="7743261776")
+    assert body["podmiot"]["nip"] == "7743261776"
+    assert body["podmiot"]["krs"] is None
+    # Both registers, or a fundacja in S is missed.
+    assert body["rejestr"] == ["P", "S"]
+    assert set(body) == {"rejestr", "podmiot", "status", "paginacja"}
+
+
+def test_the_search_token_uses_the_placeholder_krs():
+    """The body carries no top-level `krs`, so the interceptor's placeholder
+    applies -- the same path an encrypted `krs` takes."""
+    headers = auth_headers("")
     assert set(headers) == {"x-api-key", "apiKey"}
     assert len(headers["apiKey"]) == 512
