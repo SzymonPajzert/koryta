@@ -38,14 +38,24 @@ import collections
 import datetime
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from scrapers.krs import nip_lookup, nip_sources, odpis_pdf, people_match, search
 from stores.config import VERSIONED_DIR
+from stores.storage import Client as CloudStorageClient
 from util import pesel as pesel_util
+
+#: The artifact name, in the shared cache and under versioned/. Fixed rather
+#: than derived from the source, so two runs over different spreadsheets
+#: publish successive versions of one dataset instead of a family of
+#: near-identical ones.
+ARTIFACT = "krs_odpis_people"
 
 #: `stores.config.VERSIONED_DIR` is a str, so every use here goes through Path.
 VERSIONED = Path(VERSIONED_DIR)
@@ -91,7 +101,7 @@ def gather_rows(args) -> tuple[list[nip_sources.NipRow], list[nip_sources.NipRow
     return [nip_sources.NipRow(nips=[nip_lookup.only_digits(n)]) for n in args.nip], []
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--spreadsheet", help="a published spend list, as CSV")
@@ -132,7 +142,24 @@ def main() -> None:
         action="store_true",
         help="stop after NIP-to-KRS, fetching no odpisy",
     )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help=(
+            f"also write versioned/{ARTIFACT}/{ARTIFACT}.jsonl and upload it "
+            f"to the shared cache"
+        ),
+    )
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
+
+    # The salt and USERNAME both live in data/pipelines/.env, which is
+    # gitignored; every other entry point here reads it the same way.
+    load_dotenv()
 
     salt = os.environ.get(pesel_util.SALT_ENV)
     if not salt:
@@ -195,8 +222,44 @@ def main() -> None:
 
     if args.out:
         write_output(args.out, people, company_by_krs, results)
+    if args.publish:
+        publish(people, company_by_krs, results)
     if args.show:
         show(people, results)
+
+
+def publish(people, company_by_krs, results) -> None:
+    """Put the artifact where every other checkout can read it.
+
+    The same layout the pipelines use --
+    ``versioned/<name>/<name>.jsonl`` locally, and
+    ``filename=<name>/user=<u>/datetime=<t>/backup.tar.gz`` in the shared
+    bucket -- so seeding it elsewhere is the ordinary gcloud-cp-and-untar
+    recipe rather than something special.
+
+    Safe to publish because no PESEL is in it: the number is decoded to a birth
+    date and a sex and dropped, and what stands in for it is an HMAC under
+    KORYTA_PESEL_SALT. That is checked here rather than trusted, because this
+    is the one step that makes the data leave the machine.
+    """
+    directory = VERSIONED / ARTIFACT
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{ARTIFACT}.jsonl"
+    write_output(path, people, company_by_krs, results)
+
+    leaked = 0
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if re.search(r"\b\d{11}\b", line):
+                leaked += 1
+    if leaked:
+        raise AssertionError(
+            f"{leaked} rows of {path} hold an 11-digit run. Refusing to "
+            f"upload: a PESEL must never leave this machine."
+        )
+    print(f"checked {path.name}: no 11-digit run in any row")
+
+    CloudStorageClient().upload_backup_from_path(ARTIFACT, str(path))
 
 
 def pick_companies(
