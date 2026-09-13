@@ -131,19 +131,25 @@
               :edges="owners"
               title="Część regionu"
               :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
               @remove="openRemove"
+              @published="refreshEdges()"
             />
             <CardConnectionList
               :edges="subregions"
               title="Regiony"
               :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
               @remove="openRemove"
+              @published="refreshEdges()"
             />
             <CardConnectionList
               :edges="subsidiaries"
               title="Spółki zależne"
               :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
               @remove="openRemove"
+              @published="refreshEdges()"
             />
           </template>
           <template v-if="entity?.type === 'person'">
@@ -153,11 +159,13 @@
               :can-cite="canAddRelations"
               :can-correct="canEditRelations"
               :can-remove="canRemoveRelations"
+              :subject-published="subjectPublished"
               :predecessors="predecessors"
               @add="openAdd(undefined, 'Dodaj powiązanie')"
               @sources="openSources"
               @edit="openEdit"
               @remove="openRemove"
+              @published="refreshEdges()"
             />
             <!-- The rows above only hint at a handover; this states it, and
                  says how much of the history it covers. It renders nothing at
@@ -188,7 +196,9 @@
               <CardShortNode
                 :edge="edge"
                 :can-remove="canRemoveRelations"
+                :subject-published="subjectPublished"
                 @remove="openRemove"
+                @published="refreshEdges()"
               />
             </v-col>
           </v-row>
@@ -211,7 +221,9 @@
               <CardShortNode
                 :edge="edge"
                 :can-remove="canRemoveRelations"
+                :subject-published="subjectPublished"
                 @remove="openRemove"
+                @published="refreshEdges()"
               />
             </v-col>
           </v-row>
@@ -514,6 +526,12 @@ const entity = computed(() => {
   }
   return response.value?.node;
 });
+
+/** Whether the page itself is live, which is what decides whether one of its
+ * relations may be. A draft's relations cannot be published at all - and do not
+ * need to be from here, since the „Opublikuj" dialog on the draft badge
+ * publishes them along with the page. */
+const subjectPublished = computed(() => entity.value?.published === true);
 
 const regionTeryt = computed(() => {
   if (entity.value && entity.value.type === "region") {

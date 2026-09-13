@@ -79,8 +79,10 @@
         :edges="edges"
         :can-correct="canEditRelations"
         :can-remove="canRemoveRelations"
+        :subject-published="node.published ?? node.visibility"
         @edit="openEdit"
         @remove="openRemove"
+        @published="emit('changed')"
       />
 
       <DialogEditRelationHost

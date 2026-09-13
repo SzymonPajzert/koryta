@@ -71,6 +71,16 @@
                nothing where the row is not a company, or where nobody has filed
                one under a sector. -->
           <ChipCompanyCategories :company="edgeCompany(edge)" />
+          <!-- Whether the relation itself is live. Among the chips rather than
+               among the buttons on the right: it says what the row *is*, the
+               way the sector and the party do, and the one control it carries
+               belongs next to the words that explain it. -->
+          <ChipEdgeDraftStatus
+            :edge-id="edge.id"
+            :published="edge.visibility"
+            :publishable="isPublishable(edge)"
+            @published="emit('published')"
+          />
           <!-- Last, where the bar sits on a wide screen. On a phone the bar is
                a 200px track in a 210px column, clipped at both ends, and the
                dates it captions are the only part of it that survives the
@@ -244,6 +254,12 @@ const props = defineProps<{
   /** Whether each row offers taking the relation off the graph outright, which
    * is an administrator's decision and nobody else's. */
   canRemove?: boolean;
+  /** Whether the page these relations hang off is itself published. Decides
+   * whether an unpublished row offers an admin the way to publish it - a
+   * relation to a draft page cannot go live, and the draft's own „Opublikuj"
+   * dialog carries its relations along anyway. Left undefined where the surface
+   * does not know; see `edgeIsPublishable`. */
+  subjectPublished?: boolean;
   /** The institution this list belongs to, on the page that *is* one.
    *
    * A person's page has a different company on every row and reads it off the
@@ -266,7 +282,16 @@ const emit = defineEmits<{
   sources: [edge: EdgeNode];
   edit: [edge: EdgeNode];
   remove: [edge: EdgeNode];
+  /** A row went live. The badge hides itself, so a caller that draws the same
+   * relation only here need not listen; the ones that also draw it in a graph
+   * refetch on this. */
+  published: [];
 }>();
+
+/** Whether the row's „Opublikuj" is offered, for this list's subject. */
+function isPublishable(edge: EdgeNode): boolean {
+  return edgeIsPublishable(edge, props.subjectPublished);
+}
 
 /** How many articles a relation is cited to. An edge that predates
  * `references`, or one the graph returned without it, counts as none rather
