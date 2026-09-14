@@ -26,6 +26,21 @@ from util.firestore import Firestore
 #: makes in `analysis/payloads/person.py`.
 UNPLACED_REPORTED = 20
 
+#: Contracts per request to `/api/ingest/contracts`. The register's first
+#: window alone is 149,683 of them, and the per-entity path here sleeps 0.3 s
+#: between requests - 12.5 hours of sleep before counting the requests
+#: themselves. At 200 a batch that is 749 requests. The ceiling is the ingest's
+#: own `.max(500)` on the array; 200 keeps a failed batch small enough to read
+#: in the error message and a request body around 165 KB (measured: a cleaned
+#: payload averages 846 bytes over the first 20,000 contracts of the register).
+CONTRACT_BATCH = 200
+
+#: How many unresolved NIPs to name in the closing report. That list is the
+#: point of the counter - it is how somebody decides which institution to add
+#: to koryta.pl next - and 20 is the same trade `UNPLACED_REPORTED` makes:
+#: enough to act on, short enough to read at the end of a 749-request run.
+UNRESOLVED_NIPS_REPORTED = 20
+
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, o):
@@ -37,11 +52,14 @@ class NumpyEncoder(json.JSONEncoder):
 class Args:
     endpoint: str
     submit: bool
-    type: typing.Literal["person", "company", "region", "score", "extraction"]
+    type: typing.Literal[
+        "person", "company", "region", "score", "extraction", "contract"
+    ]
     database: str
     limit: int | None
     offset: int | None
     model: str | None
+    skip_unlinked: bool
 
 
 def parse_args() -> Args:
@@ -54,8 +72,26 @@ def parse_args() -> Args:
     parser.add_argument("--submit", action="store_true", help="Submit data to the API")
     parser.add_argument(
         "--type",
-        choices=["person", "company", "region", "score", "extraction", "computeNodes"],
+        choices=[
+            "person",
+            "company",
+            "region",
+            "score",
+            "extraction",
+            "contract",
+            "computeNodes",
+        ],
         help="Entity type to query",
+    )
+    parser.add_argument(
+        "--skip-unlinked",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="For --type contract: ask the ingest to keep only the contracts "
+        "with at least one end on a company koryta.pl already has. 13,333 of "
+        "the register's 149,683 are, touching 825 companies, so the default "
+        "stores 9% of what it is offered. --no-skip-unlinked stores all of it, "
+        "which is 149,683 documents nothing on the site can currently reach.",
     )
     parser.add_argument(
         "--database", type=str, default="koryta-pl", help="Firebase Database ID"
@@ -119,6 +155,8 @@ class Uploader:
             return CompanyUploader(args)
         if args.type == "extraction":
             return ExtractionUploader(args)
+        if args.type == "contract":
+            return ContractUploader(args)
         if args.type == "score":
             return ScoreUploader(args)
         if args.type == "computeNodes":
@@ -507,6 +545,180 @@ class ExtractionUploader(Uploader):
             f"\nUpload complete. Articles: {len(articles)}, Facts: {fact_count}",
             file=sys.stderr,
         )
+
+
+class ContractUploader(Uploader):
+    """Uploads public contracts from `ContractsPayloads` to the site.
+
+    The only batching uploader besides `ExtractionUploader`, and the only one
+    where batching is not a nicety: the first six weeks of the Centralny
+    Rejestr Umow are 149,683 contracts, and the per-entity path posts one
+    request each with a 0.3 s sleep between them - 12.5 hours of sleeping
+    before anything else is counted. At `CONTRACT_BATCH` a request that is 749
+    requests, and no sleep: the ingest writes through a `bulkWriter` and is
+    idempotent per contract, so the rate this can go at is the server's to
+    decide and not this file's to guess.
+
+    `skipUnlinked` is the other half of the arrangement. The register is a
+    national one and this site describes 825 of its 12,858 contracting
+    institutions, so the ingest is asked to keep only the 13,333 contracts with
+    at least one end on a company koryta.pl has and to report the rest as
+    `skipped`. It is sent explicitly on every batch: the endpoint defaults it
+    to false, because storing the whole register is a defensible choice and not
+    one an uploader should make by omission.
+
+    What did not resolve comes back as `unresolvedNips`, summed here across the
+    run and printed at the end. That list, ordered by how often a NIP came
+    back, is the answer to "which institution should we add next", and this is
+    the only place it exists - the endpoint recomputes it per batch and keeps
+    nothing.
+    """
+
+    def __init__(self, args: Args):
+        super().__init__(args)
+        #: `written`/`skipped`/`linked`/`bothLinked`, summed over every batch.
+        #: Per-batch they say nothing; the run's totals are what can be checked
+        #: against the measured 13,333 linked and 825 companies.
+        self.counters: collections.Counter[str] = collections.Counter()
+        #: NIPs the site has no company for, by how many batches named them -
+        #: see `count_unresolved` for why that is not a contract count.
+        self.unresolved: collections.Counter[str] = collections.Counter()
+
+    @typing.override
+    def submit_results(self, entities):
+        url = f"{self.args.endpoint}/api/ingest/contracts"
+        # Cleaned, unlike `ExtractionUploader`'s articles, which cannot be:
+        # `cruContractSchema` is `nullish` throughout, so a key that is absent
+        # and a key that is null mean the same thing to it. The payload carries
+        # every field as a key even where the register said nothing - that is
+        # what keeps the pipeline's DataFrame columns stable - and dropping the
+        # nulls again here takes 22% off the wire, measured over the first
+        # 20,000 contracts: 846 bytes a payload against 1,084.
+        contracts = [clean_payload(e) for e in entities if e is not None]
+        batches = [
+            contracts[start : start + CONTRACT_BATCH]
+            for start in range(0, len(contracts), CONTRACT_BATCH)
+        ]
+        self.total = len(contracts)
+        self.success_count = 0
+
+        print(
+            f"Uploading {self.total} contracts to {url} in {len(batches)} "
+            f"batches of up to {CONTRACT_BATCH}"
+            f"{'' if self.args.skip_unlinked else ', keeping unlinked ones'}",
+            file=sys.stderr,
+        )
+        for batch in tqdm(batches):
+            try:
+                self.submit_batch(url, batch)
+                self.success_count += len(batch)
+            except Exception as error:
+                # One rejected batch must not take the other 748 with it. The
+                # ingest is idempotent per contract, so a batch that failed can
+                # simply be re-sent with `--offset`.
+                print(
+                    f"Batch starting {batch[0].get('id_umowy')}: {error}",
+                    file=sys.stderr,
+                )
+
+        failures = self.total - self.success_count
+        print(
+            f"\nUpload complete. Contracts: {self.success_count}, "
+            f"in failed batches: {failures}",
+            file=sys.stderr,
+        )
+        self.report()
+
+    def submit_batch(self, url: str, batch: list[dict]) -> None:
+        resp = requests.post(
+            url,
+            data=json.dumps(
+                {"contracts": batch, "skipUnlinked": self.args.skip_unlinked},
+                cls=NumpyEncoder,
+            ),
+            headers=self.headers,
+        )
+        if resp.status_code not in [200, 201]:
+            # Truncated: a rejected batch of 200 contracts can answer with a zod
+            # issue per field per contract, and a megabyte of it on stderr
+            # buries every other line of the run.
+            raise Exception(f"API error: {resp.status_code} - {resp.text[:1000]}")
+        self.count_batch(resp)
+
+    def count_batch(self, resp: requests.Response) -> None:
+        """Add one response's counters to the run's.
+
+        Read defensively, the same way `count_unplaced` is: a body that is not
+        JSON, or a site deployed before a counter existed, means "nothing to
+        report" rather than an exception in the middle of 749 requests that are
+        otherwise succeeding.
+        """
+        try:
+            body = resp.json()
+        except ValueError:
+            return
+        if not isinstance(body, dict):
+            return
+        for name in ("written", "skipped", "linked", "bothLinked"):
+            value = body.get(name)
+            if isinstance(value, int) and not isinstance(value, bool):
+                self.counters[name] += value
+        self.count_unresolved(body.get("unresolvedNips"))
+
+    def count_unresolved(self, unresolved) -> None:
+        """Tally the NIPs the ingest could not place.
+
+        The ingest answers with a bare list, deduplicated within the batch
+        (`Array.from(unresolved)`), so what this counts is batches and not
+        contracts. That still ranks: the mirror is ordered by a UUID, so an
+        institution's contracts are spread evenly over the 749 batches of a
+        full run and a NIP on 400 contracts lands in far more of them than one
+        on three. Read the number as a lower bound on contracts, not as one.
+
+        A list of `{nip, count}` objects and a NIP-to-count map are accepted
+        too, so that the day the endpoint starts counting properly this file
+        does not have to be the thing that notices.
+        """
+        if isinstance(unresolved, dict):
+            items = unresolved.items()
+        elif isinstance(unresolved, list):
+            items = [self._unresolved_entry(entry) for entry in unresolved]
+        else:
+            return
+        for nip, count in items:
+            if nip and isinstance(count, int) and not isinstance(count, bool):
+                self.unresolved[str(nip)] += count
+
+    @staticmethod
+    def _unresolved_entry(entry) -> tuple[typing.Any, int]:
+        if isinstance(entry, dict):
+            count = entry.get("count", 1)
+            return entry.get("nip") or entry.get("regon"), (
+                count if isinstance(count, int) else 1
+            )
+        return entry, 1
+
+    @typing.override
+    def report(self) -> None:
+        if self.counters:
+            print(
+                "\n"
+                + "  ".join(
+                    f"{name}: {self.counters[name]}"
+                    for name in ("written", "skipped", "linked", "bothLinked")
+                ),
+                file=sys.stderr,
+            )
+        if not self.unresolved:
+            return
+        print(
+            f"\n{len(self.unresolved)} NIPs on these contracts have no company "
+            "on koryta.pl. Adding the ones at the top is what turns the most "
+            "contracts into something the site can say anything about:",
+            file=sys.stderr,
+        )
+        for nip, count in self.unresolved.most_common(UNRESOLVED_NIPS_REPORTED):
+            print(f"  {count:6d}  {nip}", file=sys.stderr)
 
 
 class ComputeNodesUploader(Uploader):
