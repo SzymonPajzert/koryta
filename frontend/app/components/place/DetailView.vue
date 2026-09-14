@@ -118,6 +118,18 @@
           />
         </div>
 
+        <!-- Directly under the board, and not six sections down after the
+             graph and the press cuttings, because „and here is what that board
+             spends" only reads as a sentence next to the board. It renders
+             nothing at all for the five companies in six that have no contracts
+             in the window we hold. -->
+        <ContractCompanySection
+          :key="nodeId"
+          :node-id="nodeId"
+          :company-name="company.name"
+          class="mt-6"
+        />
+
         <!-- One hop by default, unlike a person's page: a company's own
              relations are already a board's worth of names, and the second ring
              is every other seat each of them holds. It is a click away in the
