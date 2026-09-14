@@ -29,6 +29,104 @@
       ]
     },
     {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "linked",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "signedSort",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "linked",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "valueSort",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "bothLinked",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "signedSort",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "bothLinked",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "valueSort",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "nodeIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "valueSort",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "buyerNodeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "valueSort",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "supplierNodeIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "valueSort",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "edges",
       "queryScope": "COLLECTION",
       "fields": [
@@ -883,5 +981,76 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "subject",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "valueNote",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "number",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "buyer",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "suppliers",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "amendments",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "subjectRedaction",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "valueRedaction",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "publishedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "endsAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "sourceId",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "openEnded",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "hasIndividual",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "contracts",
+      "fieldPath": "detailsUnavailable",
+      "indexes": []
+    }
+  ]
 }

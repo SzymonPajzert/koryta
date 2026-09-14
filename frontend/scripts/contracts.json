@@ -1,0 +1,323 @@
+[
+  {
+    "id_umowy": "a1b2c3d4-0001-4aaa-9bbb-000000000001",
+    "zrodlo": "umowa",
+    "status_umowy": "Aktywna",
+    "numer_umowy": "WZT.526.60.2026",
+    "brak_numeru_umowy": false,
+    "data_zawarcia_umowy": "2026-07-04",
+    "data_zakonczenia_umowy": "2026-12-31",
+    "umowa_na_czas_nieoznaczony": false,
+    "przedmiot_umowy": "Dostawa paliw płynnych do pojazdów służbowych zakładu w okresie od lipca do grudnia 2026 roku",
+    "wartosc_przedmiotu": 1234567.89,
+    "opis_wartosci_przedmiotu": "Wartość szacunkowa; rozliczenie według cen z dnia tankowania.",
+    "finansowana_ze_srodkow": true,
+    "zmiany_umowy": [],
+    "zamawiajacy_nazwa": "WOJEWÓDZKI ZAKŁAD TESTOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "zamawiajacy_nip": "1132316427",
+    "zamawiajacy_regon": "00030170100000",
+    "zamawiajacy_regon9": "000301701",
+    "liczba_stron": 2,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": ["000301701", "1132316427", "610188201", "7740001454"],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "WOJEWÓDZKI ZAKŁAD TESTOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        "nip": "1132316427",
+        "regon": "00030170100000",
+        "regon9": "000301701",
+        "kraj": "PL",
+        "miejscowosc": "Warszawa",
+        "wojewodztwo": "MAZOWIECKIE"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "ORLEN SPÓŁKA AKCYJNA",
+        "nip": "7740001454",
+        "regon": "61018820100000",
+        "regon9": "610188201",
+        "kraj": "PL",
+        "miejscowosc": "Płock",
+        "wojewodztwo": "MAZOWIECKIE"
+      }
+    ],
+    "data_publikacji": "2026-07-08",
+    "data_modyfikacji": "2026-07-08"
+  },
+  {
+    "id_umowy": "a1b2c3d4-0002-4aaa-9bbb-000000000002",
+    "zrodlo": "umowa",
+    "status_umowy": "Aktywna",
+    "numer_umowy": null,
+    "brak_numeru_umowy": true,
+    "data_zawarcia_umowy": "2026-07-15",
+    "umowa_na_czas_nieoznaczony": true,
+    "przedmiot_umowy": "Serwis aparatury diagnostycznej",
+    "wartosc_przedmiotu": null,
+    "niejawnosc_wartosci_przedmiotu": {
+      "zakres": "Wartość przedmiotu umowy",
+      "podstawa": "art. 5 ust. 2 ustawy o dostępie do informacji publicznej",
+      "komentarz": "Tajemnica przedsiębiorstwa wykonawcy.",
+      "organ_lub_osoba_wylaczajaca": "Dyrektor Szpitala"
+    },
+    "zmiany_umowy": [],
+    "zamawiajacy_nazwa": "SAMODZIELNY PUBLICZNY WIELOSPECJALISTYCZNY ZAKŁAD OPIEKI ZDROWOTNEJ MINISTERSTWA SPRAW WEWNĘTRZNYCH I ADMINISTRACJI",
+    "zamawiajacy_nip": "9542752600",
+    "zamawiajacy_regon": "27043744300000",
+    "zamawiajacy_regon9": "270437443",
+    "liczba_stron": 2,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": ["123456785", "270437443", "5260250274", "9542752600"],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "SAMODZIELNY PUBLICZNY WIELOSPECJALISTYCZNY ZAKŁAD OPIEKI ZDROWOTNEJ MINISTERSTWA SPRAW WEWNĘTRZNYCH I ADMINISTRACJI",
+        "nip": "9542752600",
+        "regon": "27043744300000",
+        "regon9": "270437443",
+        "kraj": "PL",
+        "miejscowosc": "Katowice",
+        "wojewodztwo": "ŚLĄSKIE"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "FIRMA TESTOWA SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        "nip": "5260250274",
+        "regon": "12345678500000",
+        "regon9": "123456785",
+        "kraj": "PL",
+        "miejscowosc": "Kraków",
+        "wojewodztwo": "MAŁOPOLSKIE"
+      }
+    ],
+    "data_publikacji": "2026-07-20"
+  },
+  {
+    "id_umowy": "a1b2c3d4-0003-4aaa-9bbb-000000000003",
+    "zrodlo": "umowa",
+    "status_umowy": "Nieaktywna",
+    "numer_umowy": "WZT.272.11.2026",
+    "brak_numeru_umowy": false,
+    "data_zawarcia_umowy": "2026-07-21",
+    "data_zakonczenia_umowy": "2026-08-31",
+    "umowa_na_czas_nieoznaczony": false,
+    "przedmiot_umowy": "Usługi pocztowe w obrocie krajowym i zagranicznym",
+    "wartosc_przedmiotu": 45000,
+    "niejawnosc_wartosci_przedmiotu": {
+      "zakres": "Wartość przedmiotu umowy",
+      "podstawa": "art. 11 ust. 2 ustawy o zwalczaniu nieuczciwej konkurencji",
+      "organ_lub_osoba_wylaczajaca": "Prezes Zarządu"
+    },
+    "zmiany_umowy": [
+      {
+        "rodzaj_zmiany": "Aneks",
+        "data_zmiany": "2026-08-01",
+        "komentarz": "Przedłużenie terminu realizacji."
+      },
+      {
+        "rodzaj_zmiany": "Wygaśnięcie umowy",
+        "data_zmiany": "2026-08-31"
+      }
+    ],
+    "zamawiajacy_nazwa": "WOJEWÓDZKI ZAKŁAD TESTOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "zamawiajacy_nip": "1132316427",
+    "zamawiajacy_regon9": "000301701",
+    "liczba_stron": 2,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": ["000301701", "1132316427", "012626003", "5213017228"],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "WOJEWÓDZKI ZAKŁAD TESTOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        "nip": "1132316427",
+        "regon9": "000301701",
+        "kraj": "PL",
+        "miejscowosc": "Warszawa"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "POCZTA POLSKA SPÓŁKA AKCYJNA",
+        "nip": "5213017228",
+        "regon9": "012626003",
+        "kraj": "PL",
+        "miejscowosc": "Warszawa"
+      }
+    ],
+    "data_publikacji": "2026-07-24"
+  },
+  {
+    "id_umowy": "a1b2c3d4-0004-4aaa-9bbb-000000000004",
+    "zrodlo": "umowa",
+    "status_umowy": "Aktywna",
+    "numer_umowy": "ORL/2026/0044",
+    "brak_numeru_umowy": false,
+    "data_zawarcia_umowy": "2026-07-28",
+    "przedmiot_umowy": null,
+    "niejawnosc_przedmiotu": {
+      "zakres": "Przedmiot umowy",
+      "podstawa": "art. 5 ust. 1 ustawy o dostępie do informacji publicznej",
+      "komentarz": "Informacja niejawna o klauzuli „zastrzeżone”.",
+      "organ_lub_osoba_wylaczajaca": "Pełnomocnik ds. ochrony informacji niejawnych"
+    },
+    "wartosc_przedmiotu": 0,
+    "opis_wartosci_przedmiotu": "Umowa nieodpłatna.",
+    "zmiany_umowy": [],
+    "zamawiajacy_nazwa": "ORLEN SPÓŁKA AKCYJNA",
+    "zamawiajacy_nip": "7740001454",
+    "zamawiajacy_regon9": "610188201",
+    "liczba_stron": 2,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": ["147078011", "610188201", "6342805313", "7740001454"],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "ORLEN SPÓŁKA AKCYJNA",
+        "nip": "7740001454",
+        "regon9": "610188201",
+        "kraj": "PL",
+        "miejscowosc": "Płock"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "BIURO OCHRONY MIENIA I OSÓB SPÓŁKA KOMANDYTOWA",
+        "nip": "6342805313",
+        "regon9": "147078011",
+        "kraj": "PL",
+        "miejscowosc": "Katowice"
+      }
+    ],
+    "data_publikacji": "2026-08-03"
+  },
+  {
+    "id_umowy": "a1b2c3d4-0005-4aaa-9bbb-000000000005",
+    "zrodlo": "umowa",
+    "status_umowy": "Aktywna",
+    "numer_umowy": "WZT.UD.2026.7",
+    "brak_numeru_umowy": false,
+    "data_zawarcia_umowy": "2026-08-03",
+    "data_zakonczenia_umowy": "2026-08-05",
+    "przedmiot_umowy": "Rola aktorska podczas egzaminów wstępnych",
+    "wartosc_przedmiotu": 600,
+    "zmiany_umowy": [],
+    "zamawiajacy_nazwa": "WOJEWÓDZKI ZAKŁAD TESTOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "zamawiajacy_nip": "1132316427",
+    "zamawiajacy_regon9": "000301701",
+    "liczba_stron": 2,
+    "ma_osobe_fizyczna": true,
+    "identyfikatory": ["000301701", "1132316427"],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "WOJEWÓDZKI ZAKŁAD TESTOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        "nip": "1132316427",
+        "regon9": "000301701",
+        "kraj": "PL",
+        "miejscowosc": "Warszawa"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Osoba fizyczna",
+        "imie": "Marek",
+        "nazwisko": "Nieujawniany",
+        "kraj": "PL",
+        "miejscowosc": "Warszawa"
+      }
+    ],
+    "data_publikacji": "2026-08-06"
+  },
+  {
+    "id_umowy": "a1b2c3d4-0006-4aaa-9bbb-000000000006",
+    "zrodlo": "umowa",
+    "status_umowy": "Aktywna",
+    "numer_umowy": "WZT.272.19.2026",
+    "brak_numeru_umowy": false,
+    "data_zawarcia_umowy": "2026-08-10",
+    "umowa_na_czas_nieoznaczony": false,
+    "przedmiot_umowy": "Budowa punktu ładowania pojazdów elektrycznych wraz z przyłączem energetycznym i drogą dojazdową",
+    "wartosc_przedmiotu": 9999.5,
+    "zmiany_umowy": [],
+    "zamawiajacy_nazwa": "WOJEWÓDZKI ZAKŁAD TESTOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+    "zamawiajacy_nip": "1132316427",
+    "zamawiajacy_regon9": "000301701",
+    "liczba_stron": 4,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": [
+      "000301701",
+      "1132316427",
+      "360899987",
+      "5252344078",
+      "610188201",
+      "7740001454"
+    ],
+    "strony": [
+      {
+        "kolejnosc": 0,
+        "rodzaj": "JSFP",
+        "nazwa": "WOJEWÓDZKI ZAKŁAD TESTOWY SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+        "nip": "1132316427",
+        "regon9": "000301701",
+        "kraj": "PL",
+        "miejscowosc": "Warszawa"
+      },
+      {
+        "kolejnosc": 1,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "ORLEN SPÓŁKA AKCYJNA",
+        "nip": "7740001454",
+        "regon9": "610188201",
+        "czy_konsorcjum": true,
+        "kraj": "PL",
+        "miejscowosc": "Płock"
+      },
+      {
+        "kolejnosc": 2,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": "ZAKŁAD ROBÓT DROGOWYCH I MOSTOWYCH SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ SPÓŁKA KOMANDYTOWA",
+        "nip": "5252344078",
+        "regon9": "360899987",
+        "czy_konsorcjum": true,
+        "kraj": "PL",
+        "miejscowosc": "Radom"
+      },
+      {
+        "kolejnosc": 3,
+        "rodzaj": "Przedsiębiorca",
+        "nazwa": null,
+        "czy_konsorcjum": true,
+        "kraj": "PL",
+        "niejawnosc": {
+          "zakres": "Strona umowy",
+          "podstawa": "art. 5 ust. 2 ustawy o dostępie do informacji publicznej",
+          "organ_lub_osoba_wylaczajaca": "Zarząd"
+        }
+      }
+    ],
+    "data_publikacji": "2026-08-11"
+  },
+  {
+    "id_umowy": "a1b2c3d4-0007-4aaa-9bbb-000000000007",
+    "zrodlo": "wynik",
+    "status_umowy": "Aktywna",
+    "data_zawarcia_umowy": null,
+    "przedmiot_umowy": null,
+    "wartosc_przedmiotu": null,
+    "zmiany_umowy": [],
+    "liczba_stron": 0,
+    "ma_osobe_fizyczna": false,
+    "identyfikatory": [],
+    "strony": [],
+    "data_publikacji": "2026-08-07",
+    "detale_blad": "Rejestr zwrócił błąd 500 przy pobieraniu szczegółów umowy.",
+    "detale_niedostepne_od": "2026-09-13"
+  }
+]

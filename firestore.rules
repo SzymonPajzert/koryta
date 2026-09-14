@@ -66,6 +66,38 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Public contracts mirrored from a register. Every document here is public
+    // information and the site shows all of it, but not from the browser: the
+    // collection has ~150 000 documents, the queries that make it usable need
+    // composite indexes and cursors, and /api/contracts is what holds the
+    // shared cache in front of them. Closed on both sides for the same reason
+    // `mail` above is - so that a client read is a decision somebody makes on
+    // purpose rather than one this file forgot to prevent.
+    //
+    // Note that the *contracts* being world-readable is not in tension with
+    // this. What is gated in this feature is the people half - who we believe
+    // sits on the board of the company that took the money - and that lives on
+    // `edges`, is decided per reader in the endpoint, and never reaches a
+    // contract document.
+    match /contracts/{contractId} {
+      allow read, write: if false;
+    }
+
+    // What one company's contracts add up to - one document per touched
+    // company, precomputed at ingest so that the „Umowy publiczne" section on a
+    // company page costs one read on the 4 103 companies that have none.
+    // Closed on both sides for the same reasons `contracts` is: /api/contracts
+    // serves it with the rows it describes, and a client that could write it
+    // could put any number it liked under an institution's name.
+    //
+    // Safe to precompute at all only because it holds no person data. The
+    // people half of this feature is resolved live on every request, so
+    // unpublishing somebody takes effect at once; a name baked in here would
+    // outlive the unpublish in a CDN entry nothing in this repo can purge.
+    match /contractStats/{nodeId} {
+      allow read, write: if false;
+    }
+
     match /extractions/{extractionId} {
       allow read: if request.auth != null && request.auth.token.datascience == true;
       allow write: if false;

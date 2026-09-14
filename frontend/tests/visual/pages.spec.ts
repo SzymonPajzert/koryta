@@ -90,7 +90,7 @@ const pages: {
     // that a table filtered on a dozen of them still starts above the fold.
     // The seed has exactly three places, which is the threshold.
     name: "instytucje-zwiniete",
-    path: "/eksploruj/tabela?place=2&place=company-empty&place=chain-company",
+    path: "/eksploruj/tabela?place=2&place=companyempty&place=chain-company",
     settled: ["Wybrane firmy (3)"],
     // Desktop only, for the reason the single institution above is.
     viewports: ["visual-desktop"],
@@ -99,7 +99,7 @@ const pages: {
     // The other half of that card: the summaries are not in the document at
     // all until this button puts them there.
     name: "instytucje-rozwiniete",
-    path: "/eksploruj/tabela?place=2&place=company-empty&place=chain-company",
+    path: "/eksploruj/tabela?place=2&place=companyempty&place=chain-company",
     settled: ["Wybrane firmy (3)"],
     act: async (page) => {
       await page.getByRole("button", { name: "Pokaż szczegóły" }).click();
