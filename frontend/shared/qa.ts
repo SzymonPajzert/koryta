@@ -59,6 +59,25 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "umowy-publiczne",
+    title: "Umowy publiczne z Centralnego Rejestru Umów",
+    description:
+      "Nowa strona /umowy z umowami z CRU, sekcja «Umowy publiczne» na " +
+      "stronie instytucji i widok /eksploruj/umowy dla zalogowanych, który " +
+      "pokazuje, kogo znamy we władzach instytucji z tych umów.",
+    steps: [
+      "Wejdź na /umowy i sprawdź, że nad listą jest liczba umów i okres, z którego pochodzą.",
+      "Przełącz «Największe kwoty» i sprawdź, że kolejność się zmienia, a adres strony zapamiętuje wybór.",
+      "Kliknij «Szczegóły umowy» w dowolnym wierszu - powinien rozwinąć się numer, pełny przedmiot i strony.",
+      "Zwęź okno do szerokości telefonu (375px) i przewiń /umowy do końca: strona nie może dać się przesuwać na boki, nawet przy nazwach instytucji pisanych wielkimi literami.",
+      "Otwórz stronę instytucji, która ma umowy, i sprawdź sekcję «Umowy publiczne»; na instytucji bez umów sekcji nie powinno być wcale.",
+      "Wyloguj się i na stronie instytucji sprawdź, że pod umowami są tylko osoby opublikowane, a resztę zapowiada baner «Zaloguj się».",
+      "Zaloguj się i wejdź na /eksploruj/umowy - przy osobach nieopublikowanych powinien być chip «szkic» i przerywana ramka.",
+    ],
+    link: "/umowy",
+    area: "public",
+  },
+  {
     id: "aktywnosc-wykres-30-dni",
     title: "Na górze Aktywności jest wykres ostatnich 30 dni",
     description:

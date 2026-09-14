@@ -151,6 +151,16 @@ export default defineNuxtConfig({
       // has no indexable content to lose, and every entity URL 301s into it
       // with its own ?krs=/?teryt=. That is the bulk of the crawl budget.
       "/eksploruj/tabela",
+      // Also `<ClientOnly>` from the h1 down, so there is no indexable content
+      // to lose - and unlike the table it names people we have not published
+      // yet to a signed-in reader. The gate itself is server side, on the
+      // verified token; this only keeps a crawler from spending budget on a
+      // page that renders nothing for it.
+      //
+      // Listed explicitly because „like its siblings" is not a rule that holds
+      // here: /eksploruj/tabela is today the only disallowed explore route -
+      // /nowe, /staz, /szpitale and /statystyki are all crawlable.
+      "/eksploruj/umowy",
     ],
   },
   plausible: {
@@ -357,6 +367,14 @@ export default defineNuxtConfig({
   routeRules: {
     "/": { swr: 3600 },
     "/admin/**": { ssr: false },
+
+    // Matched to the `maxAge: 60` on /api/contracts, deliberately and not by
+    // coincidence: the page server-renders the coverage headline out of the
+    // same document the rows come from, and nothing in this repo can purge the
+    // Cloud CDN copy of either. With the default rule the html would outlive
+    // the API's minute and the „stan na ..." line at the foot would disagree
+    // with the rows above it, for as long as the CDN felt like.
+    "/umowy": { swr: 60 },
 
     // `/lista` was removed in "Remove /lista, and point what linked to it at
     // the table", and 404ed from then on - but it kept ranking. Search Console
