@@ -397,7 +397,7 @@ def fetch(args) -> None:
 def _resolved(args) -> list[tuple[nip_sources.Recipient, str]]:
     ctx, _ = setup_context()
     recipients = recipients_for(args)
-    mapping = _mapping(cached_answers(ctx), recipients)
+    mapping = _mapping(cached_answers(ctx), recipients, known_for(args))
     pairs = [(r, mapping[r.nip]) for r in recipients if r.nip in mapping]
     print(
         f"# {len(pairs)} of {len(recipients)} have a KRS in the bucket; "
@@ -410,7 +410,7 @@ def _resolved(args) -> list[tuple[nip_sources.Recipient, str]]:
 def worklist(args) -> None:
     ctx, _ = setup_context()
     recipients = recipients_for(args)
-    mapping = _mapping(cached_answers(ctx), recipients)
+    mapping = _mapping(cached_answers(ctx), recipients, known_for(args))
     missing = [r for r in recipients if r.nip not in mapping]
 
     writer = csv.writer(sys.stdout)
