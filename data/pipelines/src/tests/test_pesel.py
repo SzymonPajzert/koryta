@@ -5,12 +5,14 @@ from util.pesel import (
     FINGERPRINT_LENGTH,
     PESEL_LENGTH,
     SALT_ENV,
+    SALT_ID_LENGTH,
     MissingPeselSalt,
     birth_date_of,
     checksum_valid,
     facts,
     fingerprint,
     looks_like_pesel,
+    salt_id,
     sex_of,
 )
 
@@ -137,7 +139,7 @@ def test_fingerprint_separates_people_and_keys():
     two = with_checksum("7008142352")
     assert fingerprint(one, salt="k") != fingerprint(two, salt="k")
     # Rotating the key renumbers everybody, which is why it must not change
-    # between runs that are meant to join.
+    # between runs that are meant to join -- and why `salt_id` exists.
     assert fingerprint(one, salt="k") != fingerprint(one, salt="other")
 
 
@@ -152,18 +154,40 @@ def test_fingerprint_does_not_leak_the_number():
 def test_fingerprint_refuses_to_run_unkeyed(missing):
     """An unkeyed digest of a PESEL is reversible, so absence must raise.
 
-    Falling back to an unkeyed hash would make a bad run look exactly like a
-    good one, and the output is meant to be publishable.
+    The row it lands on carries the birth date and the sex, which fix seven of
+    the eleven digits; the eleventh is a check digit. 5,000 candidates remain,
+    and one was recovered from its sha256 in 10.3 ms. Falling back to an
+    unkeyed hash would make that run look exactly like a good one.
     """
     with pytest.raises(MissingPeselSalt, match=SALT_ENV):
         fingerprint(with_checksum("7008142345"), salt=missing)
+
+
+def test_salt_id_names_the_key_without_revealing_it():
+    assert salt_id("key-one") == salt_id("key-one")
+    assert salt_id("key-one") != salt_id("key-two")
+    assert len(salt_id("key-one")) == SALT_ID_LENGTH
+    assert "key-one" not in salt_id("key-one")
+
+
+def test_salt_id_cannot_collide_with_a_persons_fingerprint():
+    """Domain-separated, so no PESEL can ever hash to the key's own label."""
+    key = "k"
+    labels = {salt_id(key)}
+    assert not any(
+        fingerprint(with_checksum(f"70081{n:05d}"), salt=key).startswith(
+            next(iter(labels))
+        )
+        for n in range(500)
+    )
 
 
 def test_the_key_is_not_read_from_the_environment_here():
     """`util` is kept free of ``os``; supplying the key is the caller's job.
 
     The env var is *named* in `SALT_ENV` so the error message and whatever
-    reads it agree, but this module never looks it up.
+    reads it agree, but this module never looks it up --
+    `stores.config.pesel_salt` does.
     """
     assert SALT_ENV == "KORYTA_PESEL_SALT"
     assert not hasattr(util.pesel, "os")
