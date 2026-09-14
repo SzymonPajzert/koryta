@@ -44,12 +44,19 @@ import csv
 import json
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import asdict
+from pathlib import Path
 
 from conductor import setup_context
 from scrapers.krs import search, sponsorship_nips
+from scrapers.krs.nip_lookup import nip_valid
 from scrapers.stores import CloudStorage, Context
 from scrapers.stores.file import DownloadableFile
+from stores.config import VERSIONED_DIR
+
+#: `stores.config.VERSIONED_DIR` is a str, so every use here goes through Path.
+VERSIONED = Path(VERSIONED_DIR)
 
 #: Where a NIP search is filed in the crawl bucket. Not a real route -- the
 #: search is a POST and its body is not in the URL -- but it identifies the
@@ -120,9 +127,60 @@ def _mapping(cached: dict[str, dict], recipients) -> dict[str, str]:
     return out
 
 
+def cru_recipients(limit: int | None) -> list[sponsorship_nips.Recipient]:
+    """Every CRU counterparty whose own name states a KRS legal form.
+
+    The whole register is 61,453 distinct NIPs, but two thirds of those are
+    sole traders, spolki cywilne and budget units -- none of which are in KRS,
+    so asking about them buys nothing. `cru_company_overlap`'s KRS_FORM/CIVIL
+    pair is the repo's existing rule for reading the legal form out of a name,
+    and it cuts the crawl to 18,364 with 9.57 bn PLN behind them.
+
+    Ordered by the contract value attributed to the party, richest first, for
+    the same reason the sponsorship list is: a run stopped halfway has covered
+    the money.
+    """
+    from scripts.cru_company_overlap import CIVIL, KRS_FORM  # noqa: PLC0415
+
+    totals: dict[str, dict] = {}
+    path = VERSIONED / "cru_umowy" / "cru_umowy.jsonl"
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            record = json.loads(line)
+            value = record.get("wartosc_przedmiotu") or 0.0
+            suppliers = [
+                s for s in record.get("strony", []) if s.get("kolejnosc", 0) != 0
+            ]
+            share = value / len(suppliers) if suppliers else 0.0
+            for strona in record.get("strony", []):
+                nip = "".join(c for c in (strona.get("nip") or "") if c.isdigit())
+                if len(nip) != 10 or not nip_valid(nip):
+                    continue
+                entry = totals.setdefault(
+                    nip, {"name": strona.get("nazwa") or "", "paid": 0.0, "n": 0}
+                )
+                entry["n"] += 1
+                if strona.get("kolejnosc", 0) != 0:
+                    entry["paid"] += share
+
+    chosen = [
+        sponsorship_nips.Recipient(nip, e["name"], e["paid"], e["n"])
+        for nip, e in totals.items()
+        if KRS_FORM.search(e["name"]) and not CIVIL.search(e["name"])
+    ]
+    chosen.sort(key=lambda r: (-r.paid, r.nip))
+    return chosen[:limit] if limit else chosen
+
+
+def recipients_for(args) -> Sequence[sponsorship_nips.Recipient]:
+    if getattr(args, "cru", False):
+        return cru_recipients(args.limit)
+    return sponsorship_nips.by_value(args.limit)
+
+
 def resolve(args) -> None:
     ctx, _ = setup_context()
-    recipients = sponsorship_nips.by_value(args.limit)
+    recipients = recipients_for(args)
 
     cached = {} if args.refresh else cached_answers(ctx)
     print(f"{len(cached)} NIPs already answered in the bucket", file=sys.stderr)
@@ -219,7 +277,7 @@ def fetch(args) -> None:
     from scrapers.stores import RejestrIO  # noqa: PLC0415
 
     ctx, _ = setup_context([RejestrIO])
-    recipients = sponsorship_nips.by_value(args.limit)
+    recipients = recipients_for(args)
     mapping = _mapping(cached_answers(ctx), recipients)
     pairs = [(r, mapping[r.nip]) for r in recipients if r.nip in mapping]
 
@@ -273,7 +331,7 @@ def fetch(args) -> None:
 
 def _resolved(args) -> list[tuple[sponsorship_nips.Recipient, str]]:
     ctx, _ = setup_context()
-    recipients = sponsorship_nips.by_value(args.limit)
+    recipients = recipients_for(args)
     mapping = _mapping(cached_answers(ctx), recipients)
     pairs = [(r, mapping[r.nip]) for r in recipients if r.nip in mapping]
     print(
@@ -286,7 +344,7 @@ def _resolved(args) -> list[tuple[sponsorship_nips.Recipient, str]]:
 
 def worklist(args) -> None:
     ctx, _ = setup_context()
-    recipients = sponsorship_nips.by_value(args.limit)
+    recipients = recipients_for(args)
     mapping = _mapping(cached_answers(ctx), recipients)
     missing = [r for r in recipients if r.nip not in mapping]
 
@@ -384,10 +442,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-ask only the NIPs whose stored answer found nothing",
     )
+    node.add_argument(
+        "--cru",
+        action="store_true",
+        help="take NIPs from the CRU register instead of the hardcoded list",
+    )
     node.set_defaults(func=resolve)
 
     node = sub.add_parser("worklist", help="NIPs still without a KRS, as CSV")
     node.add_argument("--limit", type=int, help="only the richest N")
+    node.add_argument("--cru", action="store_true", help="use the CRU register")
     node.set_defaults(func=worklist)
 
     node = sub.add_parser("fetch", help="actually buy the connection lists")
@@ -397,6 +461,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-buy lists already in the bucket (costs money for nothing)",
     )
+    node.add_argument("--cru", action="store_true", help="use the CRU register")
     node.add_argument("--yes", action="store_true", help="skip the confirmation")
     node.add_argument("--sleep", type=float, default=0.2, help="seconds between calls")
     node.set_defaults(func=fetch)
@@ -407,6 +472,7 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         node = sub.add_parser(name, help=helptext)
         node.add_argument("--limit", type=int, help="only the richest N")
+        node.add_argument("--cru", action="store_true", help="use the CRU register")
         node.add_argument(
             "--with-org-record",
             action="store_true",

@@ -60,7 +60,13 @@ API_KEY = "TopSecretApiKey"
 
 #: Seconds between requests. The register is not paginated per person, so one
 #: company is one request and this is the whole rate limit.
-REQUEST_INTERVAL = 1.0
+#:
+#: 0.5 rather than 1.0 on the strength of a soak: 280 known-good NIPs at this
+#: interval answered in 0.73 s each with 0 empty results, and 20 more at 0.4 s
+#: likewise. Halving it halves an 18,309-NIP run from ~6 h to ~3 h. It stays a
+#: deliberate delay rather than none at all -- this is a government service
+#: nobody had to ask for access to.
+REQUEST_INTERVAL = 0.5
 
 # Constants of the token generator, read off TokenEncoderService in the bundle.
 # The positions are arbitrary and have no structure to recover -- they are a
@@ -205,12 +211,25 @@ def search_subjects(
     )
 
 
-#: How long to wait before believing a zero-hit answer, and how many times.
-#: The service answers a throttled request with HTTP 200 and an empty
-#: ``listaPodmiotow`` -- the same shape as "no such NIP" -- so a negative is
-#: only trustworthy after it survives a pause. Measured: a first pass at 1 s
-#: reported 4 foundations absent that all resolved on a 1.5 s retry.
-EMPTY_RETRY_DELAYS = (3.0, 8.0)
+#: How long to wait before re-asking a zero-hit answer, and how many times.
+#:
+#: **Kept small deliberately, because the reason this was added turned out to be
+#: wrong.** A first pass appeared to report four foundations absent that then
+#: resolved on retry, which looked like throttling. It was not: `krs_for_nip`
+#: was rejecting any NIP whose subject sits in *both* registers, because
+#: ``rejestr: ["P","S"]`` returns one row per register and the row count was
+#: being read as a subject count. Fixing `parse_search` fixed those four.
+#:
+#: Soaked afterwards to check: 280 known-good NIPs at a 0.5 s interval,
+#: sustained 0.73 s per NIP, **0 empty answers**. And 20 more at 0.4 s, also 0.
+#: So there is no evidence of throttling at any rate this code uses, and an
+#: 11-second penalty per miss would have added ~22 hours to an 18,309-NIP run
+#: where roughly a third of the answers are legitimately empty.
+#:
+#: One short retry is still worth having -- a transient 200-with-empty-body is
+#: cheap to rule out and expensive to mistake for "not in KRS" -- but the
+#: schedule is now an insurance premium, not a correction for a measured fault.
+EMPTY_RETRY_DELAYS = (1.0,)
 
 
 def search_nip_confirmed(
@@ -218,10 +237,10 @@ def search_nip_confirmed(
 ) -> list[SearchHit]:
     """Search by NIP, and re-ask before accepting an empty answer.
 
-    Returns as soon as anything is found. An empty result is retried on the
-    `EMPTY_RETRY_DELAYS` schedule and only then believed, because throttling
-    and absence are the same response and the difference decides whether a
-    company is missing or simply unregistered.
+    Returns as soon as anything is found. An empty result is re-asked once on
+    the `EMPTY_RETRY_DELAYS` schedule before being believed -- see that
+    constant for why the schedule is short, and for the measurement that says
+    a longer one buys nothing.
     """
     hits = search_subjects(nip=only_digits(nip), session=session)
     if hits:
