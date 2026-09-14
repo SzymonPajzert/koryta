@@ -27,8 +27,6 @@ an ISO ``YYYY-MM-DD`` string because ``tozsamosc.data_urodzenia`` is -- all
 comparison site convert.
 """
 
-import hashlib
-import hmac
 from dataclasses import dataclass
 from datetime import date
 
@@ -134,49 +132,51 @@ def facts(pesel: str | None) -> PeselFacts | None:
     return PeselFacts(birth_date=birth_date, sex=sex)
 
 
-#: Where a caller is expected to keep the key. Named here so the message and
-#: the docs agree with whatever reads it, but deliberately *not* read here:
-#: `scrapers`, `util` and `entities` are kept free of ``os`` so they stay pure
-#: and testable, and the environment is the caller's business.
-SALT_ENV = "KORYTA_PESEL_SALT"
+class PersonIds:
+    """A run-local number per distinct PESEL, and nothing else about it.
 
-#: Characters of hex kept. 128 bits is far past what 108k people need to avoid
-#: a collision, and a truncated digest is easier to eyeball in a diff.
-FINGERPRINT_LENGTH = 32
+    This is what stands in for the number in the output, and it is deliberately
+    **not** stable between runs.
 
+    A stable identifier would have to be a keyed hash, which means a key that
+    has to be kept, kept secret, and kept the same forever -- and a key that
+    ships anywhere near the data protects nothing at all. Measured against the
+    artifact this pipeline writes: the row already carries ``birth_date`` and
+    ``sex``, which fix seven of the eleven digits, and the eleventh is a check
+    digit over the other ten. That leaves 5,000 candidates, so an unkeyed
+    digest of a PESEL is recoverable in about 10 ms per person -- 62 seconds
+    for a 6,188-row artifact.
 
-class MissingPeselSalt(RuntimeError):
-    """`SALT_ENV` is unset, so no fingerprint can be computed."""
+    A counter has no such preimage: it is assigned in first-seen order and says
+    only "these rows are the same human". Over the 2026-09-13 artifact that is
+    worth 11 people whom (first name, surname, birth date) splits -- married
+    names, a double-barrelled surname recorded both ways, two typed-wrong
+    surnames -- and one pair of strangers who share a name and a birthday that
+    it keeps apart.
 
-
-def fingerprint(pesel: str, salt: str | None) -> str:
-    """A stable, non-reversible identifier for the person this PESEL names.
-
-    **HMAC, and a secret key, both on purpose.** A PESEL has about 10^10
-    possible values and far fewer plausible ones -- six of its digits are a
-    birth date, one is a sex, and the last is determined by the rest -- so a
-    *published* digest of one is reversible by enumeration in seconds,
-    whichever hash is used. A plain ``sha256(salt + pesel)`` with a salt that
-    ships alongside the data is therefore no protection at all; what protects
-    it is that the key is not in the artifact. HMAC rather than concatenation
-    because that is the construction whose security argument covers using a
-    hash as a keyed function.
-
-    The result is stable for as long as the key is, which is what makes it
-    usable as a join key across runs -- and what makes rotating the key a
-    decision about the whole dataset rather than a routine one.
-
-    Raises rather than falling back to an unkeyed digest when the key is
-    absent: a run that quietly produced reversible fingerprints would be
-    indistinguishable from a good one, and the artifact is meant to be
-    publishable.
+    What it cannot do is join one artifact to the next. Rebuild instead: the
+    odpisy are kept, so a rebuild is a re-parse rather than a re-crawl.
     """
-    if not salt:
-        raise MissingPeselSalt(
-            f"{SALT_ENV} is not set. It keys the PESEL fingerprints, and "
-            f"without it they would be reversible by enumeration. Set it to a "
-            f"long random string, keep it out of the repo, and keep it stable "
-            f"-- changing it renumbers every person in the output."
-        )
-    digest = hmac.new(salt.encode("utf-8"), pesel.encode("ascii"), hashlib.sha256)
-    return digest.hexdigest()[:FINGERPRINT_LENGTH]
+
+    def __init__(self) -> None:
+        self._seen: dict[str, int] = {}
+
+    def of(self, pesel: str | None) -> int | None:
+        """The number for this PESEL, assigning the next one if it is new."""
+        if not pesel:
+            return None
+        return self._seen.setdefault(pesel, len(self._seen) + 1)
+
+    def __len__(self) -> int:
+        """How many distinct people have been seen."""
+        return len(self._seen)
+
+    def __bool__(self) -> bool:
+        """Always true. A registry that has seen nobody is still a registry.
+
+        Without this, `__len__` makes a fresh one falsy, and every caller
+        spells the "was one passed?" check as ``if person_ids`` -- which then
+        silently assigns no numbers at all for the first document, and for
+        every document if none of them holds a PESEL.
+        """
+        return True

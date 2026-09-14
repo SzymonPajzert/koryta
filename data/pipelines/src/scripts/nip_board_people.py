@@ -8,11 +8,10 @@ The whole chain, in one place:
 3. fetch each company's *odpis pełny* and read out everyone who has ever sat on
    its board, supervisory board or held its proxy, with the organ, the
    function, and whether they still hold the seat;
-4. decode each PESEL to a birth date and sex, replace it with a keyed
-   fingerprint, and match the person against `PeopleMerged` on name plus full
-   birth date.
+4. decode each PESEL to a birth date and sex, replace it with a run-local
+   person number, and match the person against `PeopleMerged` on name plus
+   full birth date.
 
-    export KORYTA_PESEL_SALT=...
     uv run python src/scripts/nip_board_people.py \\
         --spreadsheet "$HOME/2026.xlsx - 2026.csv" --limit-companies 20 \\
         --out /tmp/board-people.jsonl
@@ -20,10 +19,12 @@ The whole chain, in one place:
     uv run python src/scripts/nip_board_people.py --nip 6791862817 --show
 
 **Nothing here writes a PESEL.** It is decoded in memory and dropped; the
-output carries the birth date, the sex and an HMAC fingerprint, which is what
-makes the artifact publishable. `util.pesel.fingerprint` refuses to run without
-a key rather than falling back to an unkeyed digest, because a digest of an
-11-digit number with a known salt is reversible by enumeration.
+output carries the birth date, the sex and a `person_seq` assigned in
+first-seen order, which is what makes the artifact publishable. The number is
+a counter rather than a digest on purpose: with the birth date and sex in the
+same row only 5,000 PESELs are possible, so any published hash of one --
+keyed with anything the reader could also have -- is recoverable in about
+10 ms. See `util.pesel.PersonIds`, including what a run-local id cannot do.
 
 **Two budgets are spent, and neither is ours.** The wykaz allows 100 requests a
 day of 30 NIPs each; `--max-mf-requests` caps what this run will use and the
@@ -37,9 +38,7 @@ import argparse
 import collections
 import datetime
 import json
-import os
 import re
-import sys
 import time
 import typing
 from dataclasses import asdict, replace
@@ -193,7 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def from_search_bucket(args, rows, nips, salt) -> None:
+def from_search_bucket(args, rows, nips, person_ids) -> None:
     """Run the odpis half against the answers the register's search left us.
 
     The wykaz could not see these at all; the register's own search could, and
@@ -231,7 +230,7 @@ def from_search_bucket(args, rows, nips, salt) -> None:
         f"have a KRS number ({from_known:,} of them from companies_merged)"
     )
     people, company_by_krs, results = fetch_and_match(
-        args, resolutions, salt, known_names
+        args, resolutions, person_ids, known_names
     )
     if args.out:
         write_output(args.out, people, company_by_krs, results)
@@ -254,13 +253,9 @@ def main() -> None:
     # gitignored; every other entry point here reads it the same way.
     load_dotenv()
 
-    salt = os.environ.get(pesel_util.SALT_ENV)
-    if not salt:
-        sys.exit(
-            f"{pesel_util.SALT_ENV} is not set. It keys the PESEL "
-            f"fingerprints; without it they would be reversible. Set it to a "
-            f"long random string and keep it stable between runs."
-        )
+    # One registry for the whole run, so a person sitting on two companies'
+    # boards carries one number across both documents.
+    person_ids = pesel_util.PersonIds()
 
     date = args.date or datetime.date.today().isoformat()
 
@@ -276,7 +271,7 @@ def main() -> None:
             print(f"    {row.source_row}: {row.party_text[:90]}")
 
     if args.from_search_bucket:
-        from_search_bucket(args, rows, nips, salt)
+        from_search_bucket(args, rows, nips, person_ids)
         return
 
     # ------------------------------------------------------------ NIP -> KRS
@@ -314,7 +309,7 @@ def main() -> None:
         return
 
     people, company_by_krs, results = fetch_and_match(
-        args, resolutions, salt, known_names
+        args, resolutions, person_ids, known_names
     )
 
     if args.out:
@@ -335,9 +330,9 @@ def publish(people, company_by_krs, results) -> None:
     recipe rather than something special.
 
     Safe to publish because no PESEL is in it: the number is decoded to a birth
-    date and a sex and dropped, and what stands in for it is an HMAC under
-    KORYTA_PESEL_SALT. That is checked here rather than trusted, because this
-    is the one step that makes the data leave the machine.
+    date and a sex and dropped, and what stands in for it is a counter that has
+    no preimage. That is checked here rather than trusted, because this is the
+    one step that makes the data leave the machine.
     """
     directory = VERSIONED / ARTIFACT
     directory.mkdir(parents=True, exist_ok=True)
@@ -382,7 +377,7 @@ def pick_companies(
 def fetch_odpisy(
     krs_numbers: list[str],
     company_by_krs: dict[str, nip_lookup.NipResolution],
-    salt: str,
+    person_ids: pesel_util.PersonIds,
     ctx=None,
     reparse_only: bool = False,
 ) -> tuple[list[odpis_pdf.OdpisPerson], list[str], set[str]]:
@@ -433,7 +428,7 @@ def fetch_odpisy(
         read_count += 1
         text = odpis_pdf.extract_text(content)
         unread_rubryki |= odpis_pdf.unread_person_rubryki(text)
-        people.extend(odpis_pdf.parse_people(text, krs, salt=salt))
+        people.extend(odpis_pdf.parse_people(text, krs, person_ids=person_ids))
         name = (company_by_krs[krs].name or "")[:40]
         print(
             f"  {index}/{len(krs_numbers)} {'cache' if from_bucket else 'fetch'} "
@@ -479,7 +474,7 @@ def report_people(
             print(f"    {rubryka!r}")
 
 
-def fetch_and_match(args, resolutions, salt, known_names=None):
+def fetch_and_match(args, resolutions, person_ids, known_names=None):
     krs_numbers, company_by_krs = pick_companies(args, resolutions)
     # A resolution that came from the local cache carries no name, so fill it
     # from `companies_merged` -- otherwise the progress line and the output's
@@ -493,7 +488,7 @@ def fetch_and_match(args, resolutions, salt, known_names=None):
     print(f"ODPISY  ({len(krs_numbers):,} companies, ~{len(krs_numbers)}s)")
     ctx, _ = setup_context()
     people, failures, unread_rubryki = fetch_odpisy(
-        krs_numbers, company_by_krs, salt, ctx=ctx,
+        krs_numbers, company_by_krs, person_ids, ctx=ctx,
         reparse_only=getattr(args, 'reparse_only', False),
     )
 
