@@ -46,6 +46,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from conductor import setup_context
 from scrapers.krs import nip_lookup, nip_sources, odpis_pdf, people_match, search
 from stores.config import VERSIONED_DIR
 from stores.storage import Client as CloudStorageClient
@@ -59,6 +60,34 @@ ARTIFACT = "krs_odpis_people"
 
 #: `stores.config.VERSIONED_DIR` is a str, so every use here goes through Path.
 VERSIONED = Path(VERSIONED_DIR)
+
+
+def resolutions_from_bucket() -> dict[str, nip_lookup.NipResolution]:
+    """The search answers already in the bucket, as `NipResolution`s.
+
+    Shaped like the wykaz's output so everything downstream -- company
+    selection, the odpis fetch, the match -- runs unchanged. The name comes
+    from the hardcoded list rather than from the search, because that is the
+    name the spreadsheet used and so the one a reader will recognise.
+    """
+    from scrapers.krs import sponsorship_nips  # noqa: PLC0415
+    from scripts.sponsorship_rejestrio import (  # noqa: PLC0415
+        _mapping,
+        cached_answers,
+    )
+
+    ctx, _ = setup_context()
+    by_nip = {r.nip: r for r in sponsorship_nips.UNRESOLVED}
+    mapping = _mapping(cached_answers(ctx), sponsorship_nips.UNRESOLVED)
+    return {
+        nip: nip_lookup.NipResolution(
+            nip=nip,
+            krs=krs,
+            name=by_nip[nip].name if nip in by_nip else None,
+            source="search",
+        )
+        for nip, krs in mapping.items()
+    }
 
 
 def load_known_nip_to_krs(
@@ -108,6 +137,14 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--cru", nargs="?", const="", help="the cru_umowy artifact")
     source.add_argument("--nip-list", help="a file of NIPs, one per line")
     source.add_argument("--nip", nargs="+", default=[], help="NIPs on the command line")
+    source.add_argument(
+        "--from-search-bucket",
+        action="store_true",
+        help=(
+            "take the KRS numbers the register's own search already resolved "
+            "into the crawl bucket, skipping the wykaz entirely"
+        ),
+    )
 
     parser.add_argument("--cru-limit", type=int, help="stop after N CRU party rows")
     parser.add_argument(
@@ -181,6 +218,24 @@ def main() -> None:
         print(f"\n  rows whose NIP could not be read ({len(unreadable)}), first 5:")
         for row in unreadable[:5]:
             print(f"    {row.source_row}: {row.party_text[:90]}")
+
+    if args.from_search_bucket:
+        # The wykaz could not see these at all; the register's own search
+        # could, and its answers are already in the bucket. So the whole
+        # NIP-to-KRS stage is skipped and its output reconstructed.
+        resolutions = resolutions_from_bucket()
+        print("\n" + "=" * 72)
+        print(f"FROM THE SEARCH BUCKET  {len(resolutions)} companies")
+        people, company_by_krs, results = fetch_and_match(
+            args, resolutions, salt, {}
+        )
+        if args.out:
+            write_output(args.out, people, company_by_krs, results)
+        if args.publish:
+            publish(people, company_by_krs, results)
+        if args.show:
+            show(people, results)
+        return
 
     # ------------------------------------------------------------ NIP -> KRS
     known, known_names = load_known_nip_to_krs(
