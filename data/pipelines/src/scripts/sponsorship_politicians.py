@@ -67,12 +67,17 @@ VERSIONED = Path(VERSIONED_DIR)
 #: finding about them.
 OFFICE_TYPES = frozenset({"samorządu", "sejmu", "senatu", "europarlamentu"})
 
-#: Samorząd years whose `candidacy_success` is actually populated. Everywhere
-#: else the flag is null, so "did not win" and "nobody recorded a result" are
-#: the same value -- which is why `result` below is three-way rather than a
-#: boolean, and why a shortlist built on a boolean would have quietly meant
-#: "won in 2010 or 2024".
-YEARS_WITH_RESULTS = frozenset({"2010", "2024"})
+#: What `candidacy_success` says when PKW recorded an outcome at all. It is
+#: null for most of the samorząd elections it publishes -- 1994, 1998, 2006 and
+#: 2014 entirely, 2002 and 2018 for all but a few percent -- so "FALSE" and
+#: "no value" are different facts and only the first is a defeat. That is why
+#: `result` is three-way rather than a boolean: a shortlist built on the
+#: boolean quietly meant "won where a result was recorded".
+#:
+#: Tested per row and not per year. Gating on a list of years would call a 2018
+#: candidacy with a recorded FALSE "unknown", and would print a caveat naming
+#: two years that is not what the data says.
+RECORDED = frozenset({"TRUE", "FALSE"})
 
 #: Roles that mean the person owns or runs the body, as opposed to merely
 #: sitting on a board of twenty.
@@ -83,15 +88,24 @@ RUNS_RE = re.compile(
     re.I,
 )
 
-#: A deputy to one of those, which the register writes every way there is:
-#: WICEPREZES, WICE PREZES, WICE-PREZES, V-CE PREZES, I/II WICEPREZES,
-#: ZASTĘPCA PREZESA, Z-CA PREZESA. Only PREZES is qualified, because that is
-#: the only head word the deputy forms attach to in the data -- "ZASTĘPCA
-#: NACZELNIKA" is a fire brigade's second officer, not a deputy chief
-#: executive, and counting it would put 7 more people in a list about who
-#: controls a funded body.
+#: A deputy to one of those. The register writes it every way there is, and
+#: the list below is the forms that actually occur: WICEPREZES, WICE PREZES,
+#: WICE-PREZES, WIZEPREZES, VICEPREZES, VICE PREZES, V-CE PREZES, W-CE PREZES,
+#: V-PREZES, I/II WICEPREZES, ZASTĘPCA PREZESA, Z-CA PREZESA.
+#:
+#: Getting this wrong is not symmetric. A form the pattern misses but `RUNS_RE`
+#: matches -- "VICE PREZES D/S FINANSOWYCH", "W-CE PREZES D/S BRD" -- is
+#: published as *running* the body, which is the claim this whole distinction
+#: exists to avoid; 10 seats read that way before these forms were added.
+#:
+#: Only PREZES is qualified, because that is the only head word the deputy
+#: forms attach to here. "ZASTĘPCA NACZELNIKA" is a fire brigade's second
+#: officer, not a deputy chief executive, and admitting it would put 99 more
+#: seats into a list about who controls a funded body.
 DEPUTY_RE = re.compile(
-    r"(WICE|V-?\s?CE|ZAST[ĘE]P\w*|Z-?\s?CA)[\s.,/()-]*PREZES", re.I
+    r"\b(?:WICE|WIZE|VICE|ZAST[ĘE]PC\w*|[VWZ][-\s.]?C[AE]|V(?=[-\s]))"
+    r"[-\s.,/()]*PREZES",
+    re.I,
 )
 
 #: A body that is part of the state or a local authority -- its board being
@@ -267,12 +281,12 @@ def candidacy_result(same_powiat) -> str:
     """Won, lost, or nobody recorded an outcome.
 
     Three values rather than a boolean because PKW leaves `candidacy_success`
-    null for five of the eight samorzad elections, so a False there says
-    nothing about how the person did -- see `YEARS_WITH_RESULTS`.
+    null for most of the samorzad elections it publishes, so an absent flag
+    says nothing about how the person did -- see `RECORDED`.
     """
     if any(c.get("candidacy_success") == "TRUE" for c in same_powiat):
         return "won"
-    if any(str(c.get("election_year")) in YEARS_WITH_RESULTS for c in same_powiat):
+    if any(str(c.get("candidacy_success")) in RECORDED for c in same_powiat):
         return "lost"
     return "unknown"
 
@@ -462,7 +476,7 @@ def report(companies, people, comp_csv, people_csv, no_powiat=()) -> None:
     print(f"{'  who only deputise for whoever does':<44}{len(deputies):>8,}")
     print(
         f"{'  with a RECORDED win, body not public':<44}{len(strong):>8,}"
-        "   (only 2010 and 2024 record results)"
+        "   (PKW records an outcome for a minority of years)"
     )
     if no_powiat:
         print(
