@@ -95,24 +95,41 @@ def read_nips(text: str) -> list[str]:
     return seen
 
 
+#: One amount in a cell: an optional minus, then a single run of digits with
+#: spaces, dots and commas inside it. Anchored to one run on purpose --
+#: cleaning the whole cell instead glues an annotation's digits onto the
+#: figure, so ``"1 200,00 zł (2 faktury)"`` read as 1,200,002.00: a
+#: thousandfold overstatement that looks like a plausible amount and would top
+#: any ordering by value.
+AMOUNT_RE = re.compile(r"(?P<sign>-)?\s*(?P<number>\d[\d\s.,]*\d|\d)")
+
+
 def money(value: str | None) -> float | None:
     """A złoty amount as written in a spreadsheet: ``"  49 571,72 zł "``.
 
-    Both separators occur in the same file, so the rule is: strip everything
-    that is not a digit or a separator, treat the *last* separator as the
-    decimal point and every earlier one as a thousands group. Guessing from
-    the character alone gets ``1,500`` wrong one way or the other.
+    Both separators occur in the same file, so the rule inside the run is:
+    treat the *last* separator as the decimal point and every earlier one as a
+    thousands group. Guessing from the character alone gets ``1,500`` wrong one
+    way or the other.
+
+    A leading minus is kept. These lists carry korekty, and dropping the sign
+    turns a correction into a payment of the same size -- which is worse than
+    reading nothing, because it is counted twice.
     """
     if not value:
         return None
-    cleaned = re.sub(r"[^\d,.]", "", value)
+    match = AMOUNT_RE.search(value)
+    if not match:
+        return None
+    cleaned = re.sub(r"[^\d,.]", "", match.group("number"))
     if not cleaned:
         return None
-    match = re.search(r"[,.](\d{1,2})$", cleaned)
-    if match:
-        whole = re.sub(r"\D", "", cleaned[: match.start()])
-        return float(f"{whole or 0}.{match.group(1)}")
-    return float(re.sub(r"\D", "", cleaned) or 0)
+    sign = -1.0 if match.group("sign") else 1.0
+    decimal = re.search(r"[,.](\d{1,2})$", cleaned)
+    if decimal:
+        whole = re.sub(r"\D", "", cleaned[: decimal.start()])
+        return sign * float(f"{whole or 0}.{decimal.group(1)}")
+    return sign * float(re.sub(r"\D", "", cleaned) or 0)
 
 
 def from_spreadsheet(
