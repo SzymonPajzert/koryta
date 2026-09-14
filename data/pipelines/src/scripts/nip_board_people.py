@@ -41,11 +41,13 @@ import os
 import re
 import sys
 import time
+import typing
 from dataclasses import asdict, replace
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+from conductor import setup_context
 from scrapers.krs import nip_lookup, nip_sources, odpis_pdf, people_match, search
 from stores.config import VERSIONED_DIR
 from stores.storage import Client as CloudStorageClient
@@ -59,6 +61,41 @@ ARTIFACT = "krs_odpis_people"
 
 #: `stores.config.VERSIONED_DIR` is a str, so every use here goes through Path.
 VERSIONED = Path(VERSIONED_DIR)
+
+
+def resolutions_from_bucket(
+    recipients: typing.Sequence[nip_sources.Recipient],
+) -> dict[str, nip_lookup.NipResolution]:
+    """The search answers already in the bucket, as `NipResolution`s.
+
+    Shaped like the wykaz's output so everything downstream -- company
+    selection, the odpis fetch, the match -- runs unchanged.
+
+    The population is an argument rather than a list this module knows about,
+    because the two channels have to agree on it: whatever `resolve` searched
+    for is what has answers on file here, and a mismatch reads as "the search
+    found nothing" rather than as the two halves disagreeing.
+
+    The name is carried from the source rather than taken from the search,
+    because the source's name is the one a reader will recognise.
+    """
+    from scripts.sponsorship_rejestrio import (  # noqa: PLC0415
+        _mapping,
+        cached_answers,
+    )
+
+    ctx, _ = setup_context()
+    by_nip = {r.nip: r for r in recipients}
+    mapping = _mapping(cached_answers(ctx), recipients)
+    return {
+        nip: nip_lookup.NipResolution(
+            nip=nip,
+            krs=krs,
+            name=by_nip[nip].name or None if nip in by_nip else None,
+            source="search",
+        )
+        for nip, krs in mapping.items()
+    }
 
 
 def load_known_nip_to_krs(
@@ -108,6 +145,14 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--cru", nargs="?", const="", help="the cru_umowy artifact")
     source.add_argument("--nip-list", help="a file of NIPs, one per line")
     source.add_argument("--nip", nargs="+", default=[], help="NIPs on the command line")
+    source.add_argument(
+        "--from-search-bucket",
+        action="store_true",
+        help=(
+            "take the KRS numbers the register's own search already resolved "
+            "into the crawl bucket, skipping the wykaz entirely"
+        ),
+    )
 
     parser.add_argument("--cru-limit", type=int, help="stop after N CRU party rows")
     parser.add_argument(
@@ -181,6 +226,32 @@ def main() -> None:
         print(f"\n  rows whose NIP could not be read ({len(unreadable)}), first 5:")
         for row in unreadable[:5]:
             print(f"    {row.source_row}: {row.party_text[:90]}")
+
+    if args.from_search_bucket:
+        # The wykaz could not see these at all; the register's own search
+        # could, and its answers are already in the bucket. So the whole
+        # NIP-to-KRS stage is skipped and its output reconstructed.
+        # The source's own name for each body, kept so a printed answer is
+        # recognisable; the search does not carry one.
+        named: dict[str, str] = {}
+        for row in rows:
+            for nip in row.nips:
+                named.setdefault(nip, row.party_text)
+        resolutions = resolutions_from_bucket(
+            [nip_sources.Recipient(nip, name, 0.0, 0) for nip, name in named.items()]
+        )
+        print("\n" + "=" * 72)
+        print(f"FROM THE SEARCH BUCKET  {len(resolutions)} companies")
+        people, company_by_krs, results = fetch_and_match(
+            args, resolutions, salt, {}
+        )
+        if args.out:
+            write_output(args.out, people, company_by_krs, results)
+        if args.publish:
+            publish(people, company_by_krs, results)
+        if args.show:
+            show(people, results)
+        return
 
     # ------------------------------------------------------------ NIP -> KRS
     known, known_names = load_known_nip_to_krs(
