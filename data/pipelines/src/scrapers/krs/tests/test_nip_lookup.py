@@ -249,3 +249,30 @@ def test_a_missing_artifact_is_not_an_error(tmp_path):
     # fall back to asking, not crash.
     assert known_from_companies_merged(tmp_path / "nope.jsonl") == ({}, {})
     assert known_from_companies_merged(None) == ({}, {})
+
+
+def test_the_result_keeps_the_order_the_caller_asked_in():
+    """Callers truncate this, so the order has to be theirs, not the sources'.
+
+    `resolve` fills its dict in two passes -- cached and invalid NIPs first,
+    then whatever the wykaz answered -- and `nip_board_people --limit-companies`
+    slices the result. Left in fill order, a capped run covers every company we
+    already held plus a prefix of the rest, rather than the head of the
+    population the caller ordered by contract value.
+    """
+    asked = ["5260005468", "5730003841", "8262224957"]
+    out = resolve(
+        asked,
+        date="2026-09-14",
+        known={"5730003841": "0000000002"},
+        opener=opener_for(
+            wykaz(
+                [
+                    subject("5260005468", "0000000001"),
+                    subject("8262224957", "0000000003"),
+                ]
+            )
+        ),
+    )
+    assert list(out) == asked
+    assert [out[nip].source for nip in asked] == ["mf", "cache", "mf"]

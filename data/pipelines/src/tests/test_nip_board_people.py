@@ -101,3 +101,68 @@ def source_args(**kwargs) -> argparse.Namespace:
 )
 def test_has_source(args, expected):
     assert nip_board_people.has_source(args) is expected
+
+
+def test_a_cached_pair_keeps_its_place_in_the_population_order():
+    """The bug this exists for: appending the fallbacks reorders the run.
+
+    `pick_companies` truncates on `--limit-companies`, so a resolution dict
+    ordered [every search hit] ++ [every companies_merged pair] makes a capped
+    run cut by where the KRS came from rather than by the order the population
+    was built in. On the real CRU population that dropped POLREGIO -- the
+    largest counterparty in the register -- because its search answer has two
+    hits and only `companies_merged` could settle it.
+    """
+    nips = ["1111111111", "2222222222", "3333333333"]
+    from_bucket = {
+        "1111111111": nip_board_people.nip_lookup.NipResolution(
+            nip="1111111111", krs="0000000001", source="search"
+        ),
+        "3333333333": nip_board_people.nip_lookup.NipResolution(
+            nip="3333333333", krs="0000000003", source="search"
+        ),
+    }
+    merged = nip_board_people.merge_resolutions(
+        nips, from_bucket, {"2222222222": "0000000002"}
+    )
+    assert list(merged) == nips
+    assert [r.source for r in merged.values()] == ["search", "cache", "search"]
+
+
+def test_the_bucket_wins_where_both_can_answer():
+    """A search answer is the register replying today; a held pair is older."""
+    from_bucket = {
+        "1111111111": nip_board_people.nip_lookup.NipResolution(
+            nip="1111111111", krs="0000000001", source="search"
+        )
+    }
+    merged = nip_board_people.merge_resolutions(
+        ["1111111111"], from_bucket, {"1111111111": "0000009999"}
+    )
+    assert merged["1111111111"].krs == "0000000001"
+
+
+def test_a_nip_neither_source_can_answer_is_absent():
+    merged = nip_board_people.merge_resolutions(["1111111111"], {}, {})
+    assert merged == {}
+
+
+def test_a_repeated_nip_is_resolved_once():
+    """`distinct_nips` dedups, but merge_resolutions must not depend on it."""
+    from_bucket = {
+        "1111111111": nip_board_people.nip_lookup.NipResolution(
+            nip="1111111111", krs="0000000001", source="search"
+        )
+    }
+    merged = nip_board_people.merge_resolutions(
+        ["1111111111", "1111111111"], from_bucket, {}
+    )
+    assert list(merged) == ["1111111111"]
+
+
+def test_the_name_reaches_a_cached_resolution_too():
+    merged = nip_board_people.merge_resolutions(
+        ["1111111111"], {}, {"1111111111": "0000000002"}, {"1111111111": "POLREGIO"}
+    )
+    assert merged["1111111111"].name == "POLREGIO"
+    assert merged["1111111111"].source == "cache"

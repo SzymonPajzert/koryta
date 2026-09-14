@@ -232,6 +232,10 @@ def resolve(
     Stops at `max_requests` rather than pressing on, because overrunning the
     cap locks the IP out for the rest of the day and would cost the *next* run
     too. What was not reached simply has no entry, so a later run picks it up.
+
+    The result keeps `nips` order, whichever source answered each one. Callers
+    truncate it -- `nip_board_people --limit-companies` does -- and the order
+    they passed is the one they meant.
     """
     known = known or {}
     out: dict[str, NipResolution] = {}
@@ -267,4 +271,10 @@ def resolve(
         if progress:
             progress(index + 1, len(batches))
 
-    return out
+    # Re-emitted in the order the caller asked, because the loops above fill
+    # `out` in two passes -- every cached and invalid NIP first, then whatever
+    # the wykaz answered. A caller that truncates this (`--limit-companies`
+    # does) would otherwise cut by where the answer came from rather than by
+    # the order it chose, and that order is usually the one that matters:
+    # `nip_sources.from_cru` sorts by attributed contract value.
+    return {nip: out[nip] for nip in (only_digits(raw) for raw in nips) if nip in out}

@@ -8,9 +8,9 @@ The whole chain, in one place:
 3. fetch each company's *odpis pełny* and read out everyone who has ever sat on
    its board, supervisory board or held its proxy, with the organ, the
    function, and whether they still hold the seat;
-4. decode each PESEL to a birth date and sex, replace it with a run-local
-   person number, and match the person against `PeopleMerged` on name plus
-   full birth date.
+4. decode each PESEL to a birth date and sex, replace it with a keyed
+   fingerprint, and match the person against `PeopleMerged` on name plus full
+   birth date.
 
     uv run python src/scripts/nip_board_people.py \\
         --spreadsheet "$HOME/2026.xlsx - 2026.csv" --limit-companies 20 \\
@@ -19,12 +19,20 @@ The whole chain, in one place:
     uv run python src/scripts/nip_board_people.py --nip 6791862817 --show
 
 **Nothing here writes a PESEL.** It is decoded in memory and dropped; the
-output carries the birth date, the sex and a `person_seq` assigned in
-first-seen order, which is what makes the artifact publishable. The number is
-a counter rather than a digest on purpose: with the birth date and sex in the
-same row only 5,000 PESELs are possible, so any published hash of one --
-keyed with anything the reader could also have -- is recoverable in about
-10 ms. See `util.pesel.PersonIds`, including what a run-local id cannot do.
+output carries the birth date, the sex and an HMAC fingerprint, which is what
+makes the artifact publishable. An unkeyed digest would not: the row also
+carries the birth date and sex, which leave 5,000 candidate numbers, and one
+was recovered from its sha256 in 10.3 ms.
+
+**The key lives in `~/.config/koryta/pesel-salt`, outside every checkout.** It
+used to live in `data/pipelines/.env`, which is per-worktree -- so when the
+workspace holding it was deleted, so was the only thing that could reproduce
+the fingerprints of 6,188 already-published people. A run refuses to start
+without a key rather than minting one, because a silently-new key produces
+fingerprints indistinguishable from the old ones that join to nothing;
+`--new-salt` is how you ask for one on purpose, and every row carries
+`salt_id` so two artifacts can be told apart. `--keep-pesel` writes the
+numbers themselves to a separate local file, which `--publish` refuses.
 
 **Two budgets are spent, and neither is ours.** The wykaz allows 100 requests a
 day of 30 NIPs each; `--max-mf-requests` caps what this run will use and the
@@ -39,6 +47,7 @@ import collections
 import datetime
 import json
 import re
+import sys
 import time
 import typing
 from dataclasses import asdict, replace
@@ -49,6 +58,7 @@ from dotenv import load_dotenv
 from conductor import setup_context
 from scrapers.krs import nip_lookup, nip_sources, odpis_pdf, people_match, search
 from scripts import odpis_store
+from stores import config
 from stores.config import VERSIONED_DIR
 from stores.storage import Client as CloudStorageClient
 from util import pesel as pesel_util
@@ -188,6 +198,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--show", action="store_true", help="print each person")
     parser.add_argument(
+        "--new-salt",
+        action="store_true",
+        help=(
+            "mint a PESEL key when this machine has none. A new key renumbers "
+            "every person, so anything published under the old one stops "
+            "joining -- find the old key before reaching for this"
+        ),
+    )
+    parser.add_argument(
+        "--keep-pesel",
+        help=(
+            "also write fingerprint->PESEL to this local file, for offline "
+            "work. Refused together with --publish"
+        ),
+    )
+    parser.add_argument(
         "--current-only",
         action="store_true",
         help="only people who still hold the seat",
@@ -213,7 +239,45 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def from_search_bucket(args, rows, nips, person_ids) -> None:
+def merge_resolutions(
+    nips: typing.Sequence[str],
+    from_bucket: dict[str, nip_lookup.NipResolution],
+    known: typing.Mapping[str, str],
+    names: typing.Mapping[str, str] | None = None,
+) -> dict[str, nip_lookup.NipResolution]:
+    """The two sources of a KRS number, in the order the population names them.
+
+    **One pass over `nips`, not two dicts merged**, and that is the whole point.
+    Filling from the bucket and then appending the `companies_merged` pairs
+    leaves a dict ordered [every search hit] ++ [every cached pair], and
+    `pick_companies` truncates on `--limit-companies` in exactly that order --
+    so a capped run cuts by *where the KRS came from* rather than by value.
+
+    Measured on the CRU population: a NIP falls back to `companies_merged`
+    whenever `_krs_of` returns None, which includes every multi-hit search
+    answer -- and a group filed in both registers has two hits. POLREGIO, the
+    largest counterparty in the register at 1.16 bn PLN, is one of those, so
+    the appended form put it at position ~13,800 and a cap of 2,000 dropped it,
+    together with 8 more of the top 2,000 and 1.32 bn PLN of their money.
+
+    The bucket wins where both answer: it is the register replying about this
+    NIP today, against a pair recorded whenever the company was last crawled.
+    """
+    names = names or {}
+    resolutions: dict[str, nip_lookup.NipResolution] = {}
+    for nip in nips:
+        if nip in resolutions:
+            continue
+        if nip in from_bucket:
+            resolutions[nip] = from_bucket[nip]
+        elif nip in known:
+            resolutions[nip] = nip_lookup.NipResolution(
+                nip=nip, krs=known[nip], name=names.get(nip) or None, source="cache"
+            )
+    return resolutions
+
+
+def from_search_bucket(args, rows, nips, salt, pesel_sink=None) -> None:
     """Run the odpis half against the answers the register's search left us.
 
     The wykaz could not see these at all; the register's own search could, and
@@ -225,7 +289,7 @@ def from_search_bucket(args, rows, nips, person_ids) -> None:
         for nip in row.nips:
             if row.party_text:
                 names.setdefault(nip, row.party_text)
-    resolutions = resolutions_from_bucket(nips, names)
+    from_bucket = resolutions_from_bucket(nips, names)
 
     # The same pairs `resolve` refuses to spend a request on. Without them this
     # stage would silently drop every company we already hold -- 1,512 of the
@@ -236,14 +300,8 @@ def from_search_bucket(args, rows, nips, person_ids) -> None:
         if args.companies_merged
         else VERSIONED / "companies_merged" / "companies_merged.jsonl"
     )
-    from_known = 0
-    for nip in nips:
-        if nip in resolutions or nip not in known:
-            continue
-        resolutions[nip] = nip_lookup.NipResolution(
-            nip=nip, krs=known[nip], name=names.get(nip) or None, source="cache"
-        )
-        from_known += 1
+    resolutions = merge_resolutions(nips, from_bucket, known, names)
+    from_known = sum(1 for r in resolutions.values() if r.source == "cache")
 
     print("\n" + "=" * 72)
     print(
@@ -251,12 +309,14 @@ def from_search_bucket(args, rows, nips, person_ids) -> None:
         f"have a KRS number ({from_known:,} of them from companies_merged)"
     )
     people, company_by_krs, results = fetch_and_match(
-        args, resolutions, person_ids, known_names
+        args, resolutions, salt, known_names, pesel_sink
     )
     if args.out:
-        write_output(args.out, people, company_by_krs, results)
+        write_output(args.out, people, company_by_krs, results, salt)
+    if args.keep_pesel and pesel_sink:
+        write_pesel_table(args.keep_pesel, pesel_sink)
     if args.publish:
-        publish(people, company_by_krs, results)
+        publish(people, company_by_krs, results, salt)
     if args.show:
         show(people, results)
 
@@ -275,9 +335,24 @@ def main() -> None:
     # gitignored; every other entry point here reads it the same way.
     load_dotenv()
 
-    # One registry for the whole run, so a person sitting on two companies'
-    # boards carries one number across both documents.
-    person_ids = pesel_util.PersonIds()
+    salt = config.pesel_salt(create=args.new_salt)
+    if not salt:
+        sys.exit(
+            f"No PESEL key. It keys the fingerprints, and without it they "
+            f"would be reversible by enumeration.\n"
+            f"  expected in {config.PESEL_SALT_FILE}, or ${pesel_util.SALT_ENV}\n"
+            f"  pass --new-salt to mint one -- but a NEW key renumbers every "
+            f"person, so anything already published under the old one stops "
+            f"joining. Find the old key first."
+        )
+    if args.new_salt:
+        print(f"minted a new PESEL key in {config.PESEL_SALT_FILE}")
+    print(f"PESEL key salt_id {pesel_util.salt_id(salt)}")
+
+    # Filled only when asked for, and never written to the published artifact.
+    pesel_sink: dict[str, str] | None = {} if args.keep_pesel else None
+    if args.keep_pesel and args.publish:
+        sys.exit("--keep-pesel and --publish are mutually exclusive.")
 
     date = args.date or datetime.date.today().isoformat()
 
@@ -293,7 +368,7 @@ def main() -> None:
             print(f"    {row.source_row}: {row.party_text[:90]}")
 
     if args.from_search_bucket:
-        from_search_bucket(args, rows, nips, person_ids)
+        from_search_bucket(args, rows, nips, salt, pesel_sink)
         return
 
     # ------------------------------------------------------------ NIP -> KRS
@@ -331,18 +406,20 @@ def main() -> None:
         return
 
     people, company_by_krs, results = fetch_and_match(
-        args, resolutions, person_ids, known_names
+        args, resolutions, salt, known_names, pesel_sink
     )
 
     if args.out:
-        write_output(args.out, people, company_by_krs, results)
+        write_output(args.out, people, company_by_krs, results, salt)
+    if args.keep_pesel and pesel_sink:
+        write_pesel_table(args.keep_pesel, pesel_sink)
     if args.publish:
-        publish(people, company_by_krs, results)
+        publish(people, company_by_krs, results, salt)
     if args.show:
         show(people, results)
 
 
-def publish(people, company_by_krs, results) -> None:
+def publish(people, company_by_krs, results, salt=None) -> None:
     """Put the artifact where every other checkout can read it.
 
     The same layout the pipelines use --
@@ -352,14 +429,14 @@ def publish(people, company_by_krs, results) -> None:
     recipe rather than something special.
 
     Safe to publish because no PESEL is in it: the number is decoded to a birth
-    date and a sex and dropped, and what stands in for it is a counter that has
-    no preimage. That is checked here rather than trusted, because this is the
-    one step that makes the data leave the machine.
+    date and a sex and dropped, and what stands in for it is an HMAC under a
+    key that stays on this machine. That is checked here rather than trusted,
+    because this is the one step that makes the data leave the machine.
     """
     directory = VERSIONED / ARTIFACT
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{ARTIFACT}.jsonl"
-    write_output(path, people, company_by_krs, results)
+    write_output(path, people, company_by_krs, results, salt)
 
     leaked = 0
     with path.open(encoding="utf-8") as handle:
@@ -388,20 +465,27 @@ def pick_companies(
             krs_numbers.append(resolution.krs)
 
     if args.limit_companies:
-        skipped = max(len(krs_numbers) - args.limit_companies, 0)
+        skipped = krs_numbers[args.limit_companies :]
         krs_numbers = krs_numbers[: args.limit_companies]
         if skipped:
-            # A silent truncation reads as "covered everything".
-            print(f"\n  --limit-companies: {skipped:,} companies NOT fetched")
+            # A silent truncation reads as "covered everything". Naming the
+            # first few says where the cut actually fell, which a count alone
+            # does not -- and the cut is only meaningful if this list is in
+            # the order the source meant, so it is worth being able to see it.
+            print(f"\n  --limit-companies: {len(skipped):,} companies NOT fetched")
+            for krs in skipped[:5]:
+                resolution = company_by_krs[krs]
+                print(f"      first dropped: {krs}  {(resolution.name or '')[:50]}")
     return krs_numbers, company_by_krs
 
 
 def fetch_odpisy(
     krs_numbers: list[str],
     company_by_krs: dict[str, nip_lookup.NipResolution],
-    person_ids: pesel_util.PersonIds,
+    salt: str,
     ctx=None,
     reparse_only: bool = False,
+    pesel_sink: dict[str, str] | None = None,
 ) -> tuple[list[odpis_pdf.OdpisPerson], list[str], set[str]]:
     """Read every company's odpis, from the bucket where one is already stored.
 
@@ -450,7 +534,9 @@ def fetch_odpisy(
         read_count += 1
         text = odpis_pdf.extract_text(content)
         unread_rubryki |= odpis_pdf.unread_person_rubryki(text)
-        people.extend(odpis_pdf.parse_people(text, krs, person_ids=person_ids))
+        people.extend(
+            odpis_pdf.parse_people(text, krs, salt=salt, pesel_sink=pesel_sink)
+        )
         name = (company_by_krs[krs].name or "")[:40]
         print(
             f"  {index}/{len(krs_numbers)} {'cache' if from_bucket else 'fetch'} "
@@ -496,7 +582,7 @@ def report_people(
             print(f"    {rubryka!r}")
 
 
-def fetch_and_match(args, resolutions, person_ids, known_names=None):
+def fetch_and_match(args, resolutions, salt, known_names=None, pesel_sink=None):
     krs_numbers, company_by_krs = pick_companies(args, resolutions)
     # A resolution that came from the local cache carries no name, so fill it
     # from `companies_merged` -- otherwise the progress line and the output's
@@ -510,7 +596,7 @@ def fetch_and_match(args, resolutions, person_ids, known_names=None):
     print(f"ODPISY  ({len(krs_numbers):,} companies, ~{len(krs_numbers)}s)")
     ctx, _ = setup_context()
     people, failures, unread_rubryki = fetch_odpisy(
-        krs_numbers, company_by_krs, person_ids, ctx=ctx,
+        krs_numbers, company_by_krs, salt, ctx=ctx, pesel_sink=pesel_sink,
         reparse_only=getattr(args, 'reparse_only', False),
     )
 
@@ -536,11 +622,19 @@ def fetch_and_match(args, resolutions, person_ids, known_names=None):
     return people, company_by_krs, results
 
 
-def write_output(path, people, company_by_krs, results) -> None:
+def write_output(path, people, company_by_krs, results, salt=None) -> None:
+    """The artifact, one person-seat per line.
+
+    `salt_id` goes on every row rather than into a sidecar, because rows get
+    sliced, concatenated and re-uploaded -- and a fingerprint whose key nobody
+    can name is a join waiting to pair unrelated people.
+    """
     by_person = {id(result.person): result for result in results}
+    key = pesel_util.salt_id(salt) if salt else None
     with open(path, "w", encoding="utf-8") as handle:
         for person in people:
             record = asdict(person)
+            record["salt_id"] = key
             record["current"] = person.current
             record["full_name"] = person.full_name
             company = company_by_krs.get(person.krs)
@@ -552,6 +646,21 @@ def write_output(path, people, company_by_krs, results) -> None:
             record["rejestrio_id"] = list(matched.rejestrio_id) if matched else None
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     print(f"\nwrote {len(people):,} people to {path}")
+
+
+def write_pesel_table(path, sink: dict[str, str]) -> None:
+    """The fingerprint-to-PESEL lookup `--keep-pesel` asks for.
+
+    A separate file from the artifact, and deliberately not a column on it:
+    `OdpisPerson` has nowhere to put a PESEL, so nothing that walks the people
+    can carry one into `publish`. This file stays on this machine.
+    """
+    with open(path, "w", encoding="utf-8") as handle:
+        for digest, pesel in sink.items():
+            handle.write(
+                json.dumps({"pesel_fingerprint": digest, "pesel": pesel}) + "\n"
+            )
+    print(f"wrote {len(sink):,} PESELs to {path} -- KEEP THIS LOCAL")
 
 
 def show(people, results) -> None:
