@@ -100,12 +100,13 @@ def read_nips(text: str) -> list[str]:
     return seen
 
 
-#: One amount in a cell: an optional minus, then a single run of digits with
-#: spaces, dots and commas inside it. Anchored to one run on purpose --
-#: cleaning the whole cell instead glues an annotation's digits onto the
-#: figure, so ``"1 200,00 zł (2 faktury)"`` read as 1,200,002.00: a
-#: thousandfold overstatement that looks like a plausible amount and would top
-#: any ordering by value.
+#: One amount in a cell: an optional minus, then a run of digits with spaces,
+#: dots and commas inside it. Cleaning the whole cell instead glues an
+#: annotation's digits onto the figure, so ``"1 200,00 zł (2 faktury)"`` read
+#: as 1,200,002.00 -- a thousandfold overstatement that looks like a plausible
+#: amount. The *longest* run is taken rather than the first, because an
+#: annotation can lead as easily as it can trail: ``"2 faktury na 1 200,00"``
+#: begins with a number that is not the amount.
 AMOUNT_RE = re.compile(r"(?P<sign>-)?\s*(?P<number>\d[\d\s.,]*\d|\d)")
 
 
@@ -119,13 +120,16 @@ def money(value: str | None) -> float | None:
 
     A leading minus is kept. These lists carry korekty, and dropping the sign
     turns a correction into a payment of the same size -- which is worse than
-    reading nothing, because it is counted twice.
+    reading nothing, because it lands on the wrong side of a sum.
     """
     if not value:
         return None
-    match = AMOUNT_RE.search(value)
-    if not match:
+    # Longest by digit count, and the earliest of any tie, so a cell with one
+    # number reads exactly as it did before this was a choice at all.
+    matches = list(AMOUNT_RE.finditer(value))
+    if not matches:
         return None
+    match = max(matches, key=lambda m: sum(c.isdigit() for c in m.group("number")))
     cleaned = re.sub(r"[^\d,.]", "", match.group("number"))
     if not cleaned:
         return None

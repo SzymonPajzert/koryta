@@ -93,6 +93,10 @@ def test_the_same_nip_twice_in_a_cell_is_one_nip():
         # plus a stray 2 read as 1,200,002.00.
         ("1 200,00 zł (2 faktury)", 1200.00),
         ("20 000,00 zł - 2 transze", 20000.00),
+        # An annotation leads as readily as it trails, so the first number in
+        # the cell is not reliably the amount -- the longest run is.
+        ("2 faktury na 1 200,00 zł", 1200.00),
+        ("poz. 3: 49 571,72 zł", 49571.72),
         ("brak", None),
     ],
 )
