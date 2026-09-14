@@ -56,7 +56,7 @@ from pathlib import Path
 
 from conductor import setup_context
 from scrapers.krs import nip_sources, rejestrio, search
-from scrapers.krs.nip_lookup import nip_valid
+from scrapers.krs.nip_lookup import known_from_companies_merged, nip_valid
 from scrapers.stores import CloudStorage, Context
 from scrapers.stores.file import DownloadableFile
 from stores.config import VERSIONED_DIR
@@ -141,12 +141,44 @@ def _krs_of(payload: dict) -> str | None:
     return None
 
 
-def _mapping(cached: dict[str, dict], recipients) -> dict[str, str]:
+def known_for(args) -> dict[str, str]:
+    """NIP-to-KRS pairs we already hold, so the ministry is not asked for them.
+
+    A pair from `companies_merged` is an answer, so every mode reads them --
+    otherwise `resolve` would report a company settled and `queries` would omit
+    it. It is deliberately *not* written into the bucket: it is not a search
+    answer, and filing it as one would tell a later reader the register said
+    something it never said.
+
+    `resolve --refresh` drops them by not calling this; `fetch --refresh` is a
+    different flag about re-buying connection lists, which is why the decision
+    is the caller's rather than a `refresh` test in here.
+    """
+    known, _ = known_from_companies_merged(
+        Path(args.companies_merged)
+        if getattr(args, "companies_merged", None)
+        else VERSIONED / "companies_merged" / "companies_merged.jsonl"
+    )
+    return known
+
+
+def _mapping(
+    cached: dict[str, dict], recipients, known: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Every recipient whose KRS is settled, from the bucket or from what we hold.
+
+    The bucket wins where both answer: it is the register's own reply to this
+    NIP, while `companies_merged` is a pair recorded whenever that company was
+    last crawled.
+    """
     wanted = {r.nip for r in recipients}
     out = {}
     for nip, payload in cached.items():
         if nip in wanted and (krs := _krs_of(payload)):
             out[nip] = krs
+    for nip, krs in (known or {}).items():
+        if nip in wanted:
+            out.setdefault(nip, krs)
     return out
 
 
@@ -211,6 +243,15 @@ def resolve(args) -> None:
     cached = {} if args.refresh else cached_answers(ctx)
     print(f"{len(cached)} NIPs already answered in the bucket", file=sys.stderr)
 
+    known = {} if args.refresh else known_for(args)
+    free = [r for r in recipients if r.nip not in cached and r.nip in known]
+    if free:
+        print(
+            f"{len(free)} already resolved by companies_merged, not asked "
+            f"({nip_sources.total_paid(free):,.0f} PLN)",
+            file=sys.stderr,
+        )
+
     if args.retry_empty:
         # A stored zero-hit answer may be a throttled request rather than a
         # real absence -- the service returns the same thing for both. Dropping
@@ -222,7 +263,7 @@ def resolve(args) -> None:
 
     fetched, failed = 0, 0
     for index, recipient in enumerate(recipients, 1):
-        if recipient.nip in cached:
+        if recipient.nip in cached or recipient.nip in known:
             continue
         try:
             hits = search.search_nip_confirmed(recipient.nip)
@@ -252,9 +293,12 @@ def resolve(args) -> None:
         time.sleep(search.REQUEST_INTERVAL)
     print(" " * 100, end="\r")
 
-    mapping = _mapping(cached, recipients)
+    mapping = _mapping(cached, recipients, known)
     unresolved = [r for r in recipients if r.nip not in mapping]
-    print(f"fetched {fetched} searches ({failed} failed), {len(cached)} on file")
+    print(
+        f"fetched {fetched} searches ({failed} failed), {len(cached)} on file, "
+        f"{len(free)} free from companies_merged"
+    )
     print(f"resolved to one KRS number: {len(mapping)} of {len(recipients)}")
     print(
         f"still unresolved: {len(unresolved)}, "
@@ -304,7 +348,7 @@ def fetch(args) -> None:
 
     ctx, _ = setup_context([RejestrIO])
     recipients = recipients_for(args)
-    mapping = _mapping(cached_answers(ctx), recipients)
+    mapping = _mapping(cached_answers(ctx), recipients, known_for(args))
     pairs = [(r, mapping[r.nip]) for r in recipients if r.nip in mapping]
 
     bought = set() if args.refresh else already_bought(ctx)
@@ -473,6 +517,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--cru",
         action="store_true",
         help="take NIPs from the CRU register instead of the hardcoded list",
+    )
+    node.add_argument(
+        "--companies-merged",
+        help="NIP->KRS pairs we already hold; default versioned/companies_merged",
     )
     node.set_defaults(func=resolve)
 

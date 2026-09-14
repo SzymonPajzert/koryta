@@ -8,12 +8,15 @@ for** -- so reading them positionally silently attributes each company's KRS to
 a different NIP.
 """
 
+import json
+
 import pytest
 
 from scrapers.krs.nip_lookup import (
     MF_BATCH_SIZE,
     MfQuotaExhausted,
     fetch_mf_batch,
+    known_from_companies_merged,
     nip_valid,
     parse_mf_response,
     resolve,
@@ -198,3 +201,51 @@ def test_the_request_cap_stops_the_run_rather_than_overrunning():
 )
 def test_nip_validity(nip, expected):
     assert nip_valid(nip) is expected
+
+
+def merged(tmp_path, *rows):
+    path = tmp_path / "companies_merged.jsonl"
+    path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_pairs_we_already_hold_are_read_back(tmp_path):
+    path = merged(
+        tmp_path,
+        {"nip": "5262557278", "krs": "123456", "name": "POLREGIO"},
+    )
+    known, names = known_from_companies_merged(path)
+    # Zero-filled, because that is how every other KRS in this pipeline is
+    # written and a half-padded key never matches.
+    assert known == {"5262557278": "0000123456"}
+    assert names == {"0000123456": "POLREGIO"}
+
+
+def test_a_row_with_no_krs_or_a_short_nip_is_skipped(tmp_path):
+    path = merged(
+        tmp_path,
+        {"nip": "5262557278", "krs": None, "name": "no krs"},
+        {"nip": "12345", "krs": "1", "name": "short nip"},
+        {"krs": "2", "name": "no nip"},
+    )
+    assert known_from_companies_merged(path) == ({}, {})
+
+
+def test_the_first_row_wins_so_a_rerun_is_stable(tmp_path):
+    path = merged(
+        tmp_path,
+        {"nip": "5262557278", "krs": "111", "name": "first"},
+        {"nip": "5262557278", "krs": "222", "name": "second"},
+    )
+    known, _ = known_from_companies_merged(path)
+    assert known == {"5262557278": "0000000111"}
+
+
+def test_a_missing_artifact_is_not_an_error(tmp_path):
+    # The file is a pipeline output; a checkout that has not built it should
+    # fall back to asking, not crash.
+    assert known_from_companies_merged(tmp_path / "nope.jsonl") == ({}, {})
+    assert known_from_companies_merged(None) == ({}, {})

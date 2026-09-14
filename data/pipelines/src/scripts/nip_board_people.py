@@ -103,33 +103,6 @@ def resolutions_from_bucket(
     return resolutions
 
 
-def load_known_nip_to_krs(
-    path: Path | None,
-) -> tuple[dict[str, str], dict[str, str]]:
-    """NIP-to-KRS pairs from companies we already hold.
-
-    Free, and it is the first thing to try: every row here is a wykaz request
-    not spent. `companies_merged` carries a NIP for about 93% of its
-    KRS-bearing rows, which on the CRU population covered 1,678 of 61,453
-    counterparties -- small in share, but the largest and most-contracted ones.
-    """
-    if path is None or not path.is_file():
-        return {}, {}
-    known: dict[str, str] = {}
-    names: dict[str, str] = {}
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            row = json.loads(line)
-            nip = nip_lookup.only_digits(row.get("nip"))
-            krs = nip_lookup.only_digits(row.get("krs"))
-            if len(nip) == 10 and krs:
-                padded = krs.rjust(10, "0")
-                known.setdefault(nip, padded)
-                if row.get("name"):
-                    names.setdefault(padded, str(row["name"]))
-    return known, names
-
-
 def has_source(args) -> bool:
     """Whether the run was given a population of its own."""
     return bool(args.spreadsheet or args.nip_list or args.nip) or args.cru is not None
@@ -233,12 +206,33 @@ def from_search_bucket(args, rows, nips, salt) -> None:
             if row.party_text:
                 names.setdefault(nip, row.party_text)
     resolutions = resolutions_from_bucket(nips, names)
+
+    # The same pairs `resolve` refuses to spend a request on. Without them this
+    # stage would silently drop every company we already hold -- 1,512 of the
+    # CRU population, and 29.9% of its money -- because they are exactly the
+    # ones the search was never asked about.
+    known, known_names = nip_lookup.known_from_companies_merged(
+        Path(args.companies_merged)
+        if args.companies_merged
+        else VERSIONED / "companies_merged" / "companies_merged.jsonl"
+    )
+    from_known = 0
+    for nip in nips:
+        if nip in resolutions or nip not in known:
+            continue
+        resolutions[nip] = nip_lookup.NipResolution(
+            nip=nip, krs=known[nip], name=names.get(nip) or None, source="cache"
+        )
+        from_known += 1
+
     print("\n" + "=" * 72)
     print(
-        f"FROM THE SEARCH BUCKET  {len(resolutions):,} of {len(nips):,} "
-        f"NIPs have a single-hit answer on file"
+        f"FROM THE SEARCH BUCKET  {len(resolutions):,} of {len(nips):,} NIPs "
+        f"have a KRS number ({from_known:,} of them from companies_merged)"
     )
-    people, company_by_krs, results = fetch_and_match(args, resolutions, salt, {})
+    people, company_by_krs, results = fetch_and_match(
+        args, resolutions, salt, known_names
+    )
     if args.out:
         write_output(args.out, people, company_by_krs, results)
     if args.publish:
@@ -286,7 +280,7 @@ def main() -> None:
         return
 
     # ------------------------------------------------------------ NIP -> KRS
-    known, known_names = load_known_nip_to_krs(
+    known, known_names = nip_lookup.known_from_companies_merged(
         Path(args.companies_merged)
         if args.companies_merged
         else VERSIONED / "companies_merged" / "companies_merged.jsonl"
