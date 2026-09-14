@@ -446,6 +446,86 @@ describe("api/ingest/company", () => {
     );
   });
 
+  it("stores the identifiers a register of public spending keys on", async () => {
+    // CRU, and every other published spend list, names a company by NIP and
+    // carries no KRS number at all. Without these on the node a contract has
+    // nothing to attach to - see `shared/contracts.ts`.
+    mockReadBody.mockResolvedValue({
+      krs: "0000343124",
+      name: "PGE Dystrybucja",
+      nip: "9462593855",
+      regon: "060552840",
+    });
+    mockGet.mockResolvedValue({ empty: true, docs: [] });
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      expect.anything(),
+      expect.objectContaining({
+        nipNumber: "9462593855",
+        regonNumber: "060552840",
+      }),
+      expect.objectContaining({ automatic: true }),
+    );
+  });
+
+  it("rejects a NIP that fails its check digit rather than mis-joining contracts", async () => {
+    // A wrong NIP does not fail loudly - it attaches another company's
+    // contracts to this one.
+    mockReadBody.mockResolvedValue({
+      krs: "0000343124",
+      name: "PGE Dystrybucja",
+      nip: "9462593856",
+    });
+    mockGet.mockResolvedValue({ empty: true, docs: [] });
+
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("leaves stored identifiers alone when the payload states none", async () => {
+    // The revision is written to the node wholesale, so a payload from a
+    // pipeline that predates these fields must not clear them.
+    mockReadBody.mockResolvedValue({
+      krs: "0000343124",
+      name: "PGE Dystrybucja",
+    });
+    mockGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: "existing-id",
+          ref: mockRef,
+          data: () => ({
+            name: "PGE Dystrybucja",
+            type: "place",
+            krsNumber: "0000343124",
+            nipNumber: "9462593855",
+            published: true,
+          }),
+        },
+      ],
+    });
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      1,
+      mockDb,
+      expect.anything(),
+      caller,
+      expect.anything(),
+      expect.objectContaining({ nipNumber: "9462593855" }),
+      expect.objectContaining({ automatic: true }),
+    );
+  });
+
   it("clears the organ when the payload says the form has none worth naming", async () => {
     // The empty string is the pipelines saying they read `formaPrawna` and it
     // is an ordinary company, which has to be able to undo a value written
