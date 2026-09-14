@@ -29,6 +29,8 @@ caller needs to tell "not in KRS" from "not asked yet", so `NipResolution`
 records which source answered.
 """
 
+import json
+import pathlib
 import re
 import time
 import typing
@@ -178,6 +180,39 @@ def fetch_mf_batch(
         )
     response.raise_for_status()
     return parse_mf_response(response.json())
+
+
+def known_from_companies_merged(
+    path: "pathlib.Path | None",
+) -> tuple[dict[str, str], dict[str, str]]:
+    """NIP-to-KRS pairs, and KRS-to-name, from companies we already hold.
+
+    Free, offline, and the first thing to try: every row here is a wykaz
+    request not spent and a search request not made. `companies_merged` carries
+    a NIP for about 93% of its KRS-bearing rows -- 15,402 pairs, of which 1,512
+    fall in the 18,364 KRS-form CRU counterparties and carry 29.9% of their
+    9.57 bn PLN. Small in share, large in money, which is why asking the
+    ministry about them again is the expensive kind of waste.
+
+    A missing file is not an error: the artifact is a pipeline output, and a
+    checkout that has not built it should degrade to asking rather than fail.
+    """
+    known: dict[str, str] = {}
+    names: dict[str, str] = {}
+    if path is None or not path.is_file():
+        return known, names
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            row = json.loads(line)
+            nip = only_digits(row.get("nip"))
+            krs = only_digits(row.get("krs"))
+            if len(nip) != 10 or not krs:
+                continue
+            padded = krs.rjust(10, "0")
+            known.setdefault(nip, padded)
+            if row.get("name"):
+                names.setdefault(padded, str(row["name"]))
+    return known, names
 
 
 def resolve(
