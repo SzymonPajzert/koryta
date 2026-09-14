@@ -234,11 +234,11 @@ class OdpisPerson:
     #: record cannot carry it even by accident.
     birth_date: str | None
     sex: str | None
-    #: HMAC of the PESEL under the caller's key, or None when no key was given.
-    #: Stands in for the number as a join key across runs: stable, and safe to
-    #: publish in a way a digest of the number itself would not be. See
-    #: `util.pesel.fingerprint`.
-    pesel_fingerprint: str | None
+    #: A number standing in for the PESEL, unique to the person **within this
+    #: run only** -- see `util.pesel.PersonIds` for why it is not stable
+    #: between runs. None when the register gave no PESEL, and None when no
+    #: `PersonIds` was passed.
+    person_seq: int | None
     #: Whether the identifier field held a PESEL at all. False both for a seat
     #: held by another company and for a person the register has no PESEL for;
     #: `is_company` separates those.
@@ -420,14 +420,15 @@ def _identifier(value: str) -> tuple[str | None, bool]:
 
 
 def parse_people(
-    text: str, krs: str, salt: str | None = None
+    text: str, krs: str, person_ids: "pesel_util.PersonIds | None" = None
 ) -> list[OdpisPerson]:
     """Every person the odpis names, in document order.
 
-    :param salt: key for `util.pesel.fingerprint`. Omit it and the records
-        carry a birth date and a sex but no fingerprint -- enough to match
-        against `PeopleMerged`, which is what most callers want. The PESEL is
-        dropped either way.
+    :param person_ids: a run-wide `util.pesel.PersonIds`, so that one human
+        holding seats at several companies carries one number across every
+        document of the run. Omit it and the records carry a birth date and a
+        sex but no `person_seq` -- enough to match against `PeopleMerged`,
+        which is what most callers want. The PESEL is dropped either way.
     """
     people: list[OdpisPerson] = []
 
@@ -487,10 +488,8 @@ def parse_people(
                     funkcja=funkcja.value if funkcja and funkcja.value else None,
                     birth_date=facts.birth_date if facts else None,
                     sex=facts.sex if facts else None,
-                    pesel_fingerprint=(
-                        pesel_util.fingerprint(pesel, salt)
-                        if pesel and salt
-                        else None
+                    person_seq=(
+                        person_ids.of(pesel) if person_ids is not None else None
                     ),
                     has_pesel=pesel is not None,
                     is_company=is_company,
@@ -539,6 +538,6 @@ def unread_person_rubryki(text: str) -> set[str]:
 
 
 def parse_pdf(
-    content: bytes, krs: str, salt: str | None = None
+    content: bytes, krs: str, person_ids: "pesel_util.PersonIds | None" = None
 ) -> list[OdpisPerson]:
-    return parse_people(extract_text(content), krs, salt=salt)
+    return parse_people(extract_text(content), krs, person_ids=person_ids)
