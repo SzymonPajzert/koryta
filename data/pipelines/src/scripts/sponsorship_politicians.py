@@ -57,12 +57,42 @@ from stores.config import VERSIONED_DIR
 VERSIONED = Path(VERSIONED_DIR)
 
 #: Election types that mean "held or sought public office".
+#:
+#: In practice only ``samorządu`` is reachable. `index_pkw` needs a
+#: `birth_year`, which PKW derives from an age column that the Sejm, Senate and
+#: European-Parliament files do not publish -- so 50,718 Sejm, 2,993 Senate and
+#: 6,339 EP candidacies carry none and are dropped. The set still names them
+#: because the filter is about intent, but a national politician who has never
+#: stood locally is invisible to this join and that is a coverage limit, not a
+#: finding about them.
 OFFICE_TYPES = frozenset({"samorządu", "sejmu", "senatu", "europarlamentu"})
+
+#: Samorząd years whose `candidacy_success` is actually populated. Everywhere
+#: else the flag is null, so "did not win" and "nobody recorded a result" are
+#: the same value -- which is why `result` below is three-way rather than a
+#: boolean, and why a shortlist built on a boolean would have quietly meant
+#: "won in 2010 or 2024".
+YEARS_WITH_RESULTS = frozenset({"2010", "2024"})
 
 #: Roles that mean the person owns or runs the body, as opposed to merely
 #: sitting on a board of twenty.
 OWNS = frozenset({"wspolnik", "jedyny_akcjonariusz"})
-RUNS_RE = re.compile(r"PREZES|JEDNOOSOBOW|W[ŁL]A[ŚS]CICIEL|KOMPLEMENTARIUSZ", re.I)
+RUNS_RE = re.compile(
+    r"\bPREZES\w*|JEDNOOSOBOW|W[ŁL]A[ŚS]CICIEL|KOMPLEMENTARIUSZ"
+    r"|DYREKTOR\s+GENERALNY|\bKIEROWNIK",
+    re.I,
+)
+
+#: A deputy to one of those, which the register writes every way there is:
+#: WICEPREZES, WICE PREZES, WICE-PREZES, V-CE PREZES, I/II WICEPREZES,
+#: ZASTĘPCA PREZESA, Z-CA PREZESA. Only PREZES is qualified, because that is
+#: the only head word the deputy forms attach to in the data -- "ZASTĘPCA
+#: NACZELNIKA" is a fire brigade's second officer, not a deputy chief
+#: executive, and counting it would put 7 more people in a list about who
+#: controls a funded body.
+DEPUTY_RE = re.compile(
+    r"(WICE|V-?\s?CE|ZAST[ĘE]P\w*|Z-?\s?CA)[\s.,/()-]*PREZES", re.I
+)
 
 #: A body that is part of the state or a local authority -- its board being
 #: political appointees is how such a body is staffed, not a finding.
@@ -86,11 +116,24 @@ POSTAL_RE = re.compile(r"\b(\d{2})\s*[-–]\s*(\d{3})\b")
 
 
 def control(row: dict) -> str:
+    """Whether the seat means the person owns, runs or only deputises.
+
+    The deputy test comes first and is independent of `RUNS_RE`, because the
+    two sets barely overlap: `\\bPREZES` does not match WICEPREZES at all, so
+    without this branch 60 deputies were simply invisible, while "V-CE PREZES
+    ZARZĄDU" did match and was published as running the body. They are kept
+    rather than dropped -- a deputy of a body taking public money is worth
+    seeing -- but labelled, so `controls` reads `deputy:` and nobody has to
+    infer it from the funkcja.
+    """
     if row.get("role") in OWNS:
         return "owns"
-    if row.get("role") == "reprezentacja" and RUNS_RE.search(row.get("funkcja") or ""):
-        return "runs"
-    return ""
+    if row.get("role") != "reprezentacja":
+        return ""
+    funkcja = row.get("funkcja") or ""
+    if DEPUTY_RE.search(funkcja):
+        return "deputy"
+    return "runs" if RUNS_RE.search(funkcja) else ""
 
 
 def powiat_of(teryt) -> str:
@@ -206,9 +249,9 @@ def write_people(path: Path, people: dict) -> None:
             handle,
             fieldnames=[
                 "name", "birth_date", "sex", "seats", "bodies", "paid_total",
-                "controls", "candidacies", "in_powiat", "won", "last_year",
-                "last_type", "party", "pkw_birth_year", "year_off_by",
-                "public_body_only",
+                "controls", "candidacies", "in_powiat", "won", "result",
+                "last_year", "last_type", "party", "pkw_birth_year",
+                "year_off_by", "public_body_only",
             ],
         )
         writer.writeheader()
@@ -222,6 +265,7 @@ def write_people(path: Path, people: dict) -> None:
 
 def accumulate(rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name):
     """Fold the seats into per-company and per-person records."""
+    no_powiat: list[tuple[str, str]] = []
     companies: dict[str, dict] = {}
     people: dict[tuple, dict] = {}
 
@@ -262,14 +306,20 @@ def accumulate(rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name)
         ]
         if not candidates:
             continue
-        # Without a seat powiat there is nothing to corroborate against, so the
-        # row is kept but flagged rather than counted as a match.
+        # Without a seat powiat there is nothing to corroborate against, so
+        # the row cannot be counted as a match -- it is counted as untestable
+        # below instead, which is what the report has to say out loud.
         same_powiat = [
             c
             for c in candidates
             if seat_powiat and powiat_of(c.get("teryt_candidacy")) == seat_powiat
         ]
         if not same_powiat:
+            if not seat_powiat:
+                # The comment used to claim these were "kept but flagged". They
+                # were not -- a bare continue dropped them. Counted now, so the
+                # report can say how much it could not test.
+                no_powiat.append((krs, row.get("full_name") or row["surname"]))
             continue
 
         best = max(
@@ -279,7 +329,16 @@ def accumulate(rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name)
                 str(c.get("election_year")),
             ),
         )
-        won = any(c.get("candidacy_success") == "TRUE" for c in same_powiat)
+        if any(c.get("candidacy_success") == "TRUE" for c in same_powiat):
+            result = "won"
+        elif any(
+            str(c.get("election_year")) in YEARS_WITH_RESULTS for c in same_powiat
+        ):
+            result = "lost"
+        else:
+            # Stood, and PKW recorded no outcome for that election at all.
+            result = "unknown"
+        won = result == "won"
         company["politicians"] += 1
         if won:
             company["elected"] += 1
@@ -301,6 +360,7 @@ def accumulate(rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name)
                 "candidacies": len(candidates),
                 "in_powiat": len(same_powiat),
                 "won": won,
+                "result": result,
                 "last_year": best.get("election_year"),
                 "last_type": best.get("election_type"),
                 "party": best.get("party") or "",
@@ -318,7 +378,7 @@ def accumulate(rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name)
         if not company["public"]:
             person["public_body_only"] = False
 
-    return companies, people
+    return companies, people, no_powiat
 
 
 def main() -> None:
@@ -344,7 +404,7 @@ def main() -> None:
     for path in args.people:
         rows += [json.loads(line) for line in Path(path).open(encoding="utf-8")]
 
-    companies, people = accumulate(
+    companies, people, no_powiat = accumulate(
         rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name
     )
 
@@ -355,10 +415,10 @@ def main() -> None:
     people_csv = out / "politicians_people.csv"
     write_people(people_csv, people)
 
-    report(companies, people, comp_csv, people_csv)
+    report(companies, people, comp_csv, people_csv, no_powiat)
 
 
-def report(companies, people, comp_csv, people_csv) -> None:
+def report(companies, people, comp_csv, people_csv, no_powiat=()) -> None:
     with_pol = [c for c in companies.values() if c["politicians"]]
     controllers = [p for p in people.values() if p["controls"]]
     strong = [p for p in controllers if p["won"] and not p["public_body_only"]]
@@ -372,12 +432,23 @@ def report(companies, people, comp_csv, people_csv) -> None:
     )
     print(f"{'distinct politicians sitting':<44}{len(people):>8,}")
     print(f"{'  who own or run the body':<44}{len(controllers):>8,}")
-    print(f"{'  and won the candidacy, body not public':<44}{len(strong):>8,}")
+    print(
+        f"{'  with a RECORDED win, body not public':<44}{len(strong):>8,}"
+        "   (only 2010 and 2024 record results)"
+    )
+    if no_powiat:
+        print(
+            f"{'  seats untestable, company has no powiat':<44}"
+            f"{len(no_powiat):>8,}"
+        )
     print(f"\nwrote {comp_csv}")
     print(f"wrote {people_csv}")
 
     print("\n" + "=" * 74)
-    print(f"SHORTLIST: elected, controls a non-public funded body ({len(strong)})")
+    print(
+        f"SHORTLIST: recorded win, owns or runs a non-public funded body "
+        f"({len(strong)})"
+    )
     print("=" * 74)
     for person in sorted(strong, key=lambda p: -p["paid_total"]):
         print(
