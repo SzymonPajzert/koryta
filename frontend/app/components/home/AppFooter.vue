@@ -66,6 +66,14 @@ const sections = [
     items: [
       { title: "O nas", link: "/o-nas" },
       { title: "Tematy", link: "/tematy" },
+      // Before the two explore pages that were already here, because it is the
+      // page that lists them and everything else in that section - the table,
+      // the statistics, the new pages - and because the app bar carries no
+      // link to /eksploruj at any width: it has Tematy, O nas and „Działaj
+      // z nami" and nothing else, so without this row the section is reachable
+      // only from the home page.
+      { title: "Eksploruj", link: "/eksploruj" },
+      { title: "Umowy publiczne", link: "/eksploruj/umowy" },
       { title: "Rady szpitali", link: "/eksploruj/szpitale" },
       { title: "Okrągły staż", link: "/eksploruj/staz" },
       { title: "Źródła", link: "/zrodla" },

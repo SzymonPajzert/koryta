@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { logIn, USERS } from "./helpers/auth";
 
-/** The five things about public contracts that only a browser can settle.
+/** The things about public contracts that only a browser can settle.
  *
  * Everything else about this feature is covered where it is cheaper: the gate
  * itself in `tests/server/contracts.test.ts`, the eleven rendering branches in
@@ -54,14 +54,14 @@ const PUBLISHED_PERSON = "Jan Kowalski";
  * out reader. */
 const DRAFT_LINK_PERSON = "Anna Nowak";
 
-test.describe("/umowy on a phone", () => {
+test.describe("/eksploruj/umowy on a phone", () => {
   test.use({ viewport: PHONE });
 
   test("does not scroll sideways, with a 62-character registry name on screen", async ({
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto("/umowy", { waitUntil: "load" });
+    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
 
     await expect(page.getByTestId("umowy-headline")).toBeVisible({
       timeout: 60_000,
@@ -109,12 +109,12 @@ test.describe("/umowy on a phone", () => {
   });
 });
 
-test.describe("/umowy", () => {
+test.describe("/eksploruj/umowy", () => {
   test("keeps the chosen ordering in the url, and across a reload", async ({
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto("/umowy", { waitUntil: "load" });
+    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
     await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
       timeout: 60_000,
     });
@@ -126,8 +126,8 @@ test.describe("/umowy", () => {
     // a `v-if` on `useDisplay()` would render the phone half into the SSR html
     // for everybody.
     // Clicked until it takes, which is `waitForLoginFormHydrated`'s idiom and
-    // is here for the same reason. `/umowy` is server-rendered, so the toggle
-    // is on screen and clickable while it is still inert markup with no
+    // is here for the same reason. The default mode is server-rendered, so the
+    // toggle is on screen and clickable while it is still inert markup with no
     // listener attached; the click then does nothing and the url never moves.
     // There is no marker that says „hydrated" - `v-btn--active` is in the
     // server's html too, on whichever option is the default - so the only
@@ -167,7 +167,7 @@ test.describe("/umowy", () => {
 
   test("appends rows rather than replacing them", async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto("/umowy", { waitUntil: "load" });
+    await page.goto("/eksploruj/umowy", { waitUntil: "load" });
     await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
       timeout: 60_000,
     });
@@ -218,7 +218,17 @@ test.describe("the Umowy publiczne section on an institution", () => {
     await expect(page.getByTestId("company-contracts")).toHaveCount(0);
     // The heading and not just the rows: an empty section with a title is still
     // a section, on five company pages in six.
-    expect(await page.content()).not.toContain("Umowy publiczne");
+    //
+    // The heading element, not the string. Two things make a substring search
+    // wrong here: the footer carries an „Umowy publiczne" link to
+    // /eksploruj/umowy on every page of the site now, and it is rendered
+    // *inside* `<main>` in this layout - so neither `page.content()` nor a
+    // `main` scope excludes it. `PageSection` draws its title as an `<h3>`
+    // (`app/components/PageSection.vue:5`), which is the thing whose absence
+    // this case is actually about.
+    await expect(
+      page.getByRole("heading", { name: "Umowy publiczne" }),
+    ).toHaveCount(0);
   });
 
   test("is there, with its coverage sentence, on a company that has them", async ({
@@ -271,18 +281,56 @@ test.describe("the Umowy publiczne section on an institution", () => {
   });
 });
 
-test.describe("/eksploruj/umowy", () => {
-  test("sends a logged out visitor to the login page", async ({ page }) => {
+test.describe("/eksploruj/umowy and its signed-in modes", () => {
+  // This assertion is the inverse of the one it replaces. Until 2026-09-14 this
+  // url was the signed-in view alone and `middleware: "auth"` bounced everybody
+  // else to /login; the public list then moved onto it as the default mode, and
+  // the whole point of the feature is that a stranger arriving from a search
+  // result reads the register without an account.
+  test("serves a logged out visitor the register rather than the login page", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
     await page.goto("/eksploruj/umowy", { waitUntil: "load" });
 
-    await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
+    await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(page).not.toHaveURL(/\/login/);
+    // No mode switch either: „Ludzie" and „Obie strony" name people we have not
+    // published, so to a logged out reader they are two chips leading nowhere.
+    await expect(page.getByTestId("umowy-tryb")).toHaveCount(0);
+  });
+
+  test("answers a logged out ?tryb=ludzie with the public list, and corrects the url", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/eksploruj/umowy?tryb=ludzie", { waitUntil: "load" });
+
+    // The contract list, not an empty page and not /login. A typed or shared
+    // `?tryb=` is somebody who wanted contracts either way.
+    await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
+      timeout: 60_000,
+    });
+    // Corrected back to the default rather than left saying „ludzie" over a
+    // list of contracts. `replace`, so the back button leaves the page instead
+    // of walking into the correction again.
+    await expect(page).toHaveURL(/\/eksploruj\/umowy$/, { timeout: 30_000 });
+
+    // On `page.content()` and deliberately not on visibility, for the reason
+    // the company-page case gives: a name withheld by CSS is still a name in a
+    // response this repo cannot purge from the CDN.
+    expect(await page.content()).not.toContain(DRAFT_LINK_PERSON);
   });
 
   test("states the cap above the fold for a signed-in reader", async ({
     page,
   }) => {
     test.setTimeout(120_000);
-    await logIn(page, USERS.normal, "/eksploruj/umowy");
+    // Straight into the mode, because „umowy" is now what this url renders by
+    // default to everybody.
+    await logIn(page, USERS.normal, "/eksploruj/umowy?tryb=ludzie");
 
     // A truncated list that prints a register-wide total without saying it is
     // truncated is a lie about coverage, on the surface where publishing
@@ -291,5 +339,35 @@ test.describe("/eksploruj/umowy", () => {
       timeout: 60_000,
     });
     await expect(page.getByTestId("umowy-osoby-legend")).toContainText("szkic");
+  });
+
+  test("switches modes from the chips, and says so in the url", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await logIn(page, USERS.normal, "/eksploruj/umowy");
+
+    // The chip group exists only once firebase has restored the session, so by
+    // the time it is visible Vue is running and a single click takes - unlike
+    // the sort toggle above, which is in the server's html and inert until
+    // hydration.
+    const modes = page.getByTestId("umowy-tryb");
+    await expect(modes).toBeVisible({ timeout: 60_000 });
+
+    await modes.locator(".v-chip", { hasText: "Ludzie" }).click();
+
+    // A mode is a view somebody sends to somebody else, so it lives in the url -
+    // and the default stays out of it, which is why this is the only one of the
+    // three that can be asserted on.
+    await expect(page).toHaveURL(/[?&]tryb=ludzie/, { timeout: 30_000 });
+    await expect(page.getByTestId("umowy-osoby-legend")).toBeVisible({
+      timeout: 60_000,
+    });
+
+    await modes.locator(".v-chip", { hasText: "Umowy" }).click();
+    await expect(page).toHaveURL(/\/eksploruj\/umowy$/, { timeout: 30_000 });
+    await expect(page.locator(CONTRACT_ROW).first()).toBeVisible({
+      timeout: 60_000,
+    });
   });
 });
