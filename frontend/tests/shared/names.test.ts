@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizePersonName } from "../../shared/names";
+import { companyShortName, normalizePersonName } from "../../shared/names";
 
 describe("normalizePersonName", () => {
   it("ignores case and diacritics", () => {
@@ -34,5 +34,55 @@ describe("normalizePersonName", () => {
 
   it("has no key for a name made only of punctuation", () => {
     expect(normalizePersonName("—")).toBe("");
+  });
+});
+
+describe("companyShortName", () => {
+  it("abbreviates the legal form a register spells out", () => {
+    expect(
+      companyShortName("URTICA SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ"),
+    ).toBe("URTICA sp. z o.o.");
+    expect(companyShortName("POCZTA POLSKA SPÓŁKA AKCYJNA")).toBe(
+      "POCZTA POLSKA S.A.",
+    );
+    expect(companyShortName("ZAKŁAD USŁUG SPÓŁKA JAWNA")).toBe(
+      "ZAKŁAD USŁUG sp.j.",
+    );
+  });
+
+  it("takes the longest form first, so a compound one is not half-matched", () => {
+    // Ends with "SPÓŁKA KOMANDYTOWA" too; matching that first would leave the
+    // spelled-out "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ" in the name.
+    expect(
+      companyShortName(
+        "CLIMAMEDIC SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ SPÓŁKA KOMANDYTOWA",
+      ),
+    ).toBe("CLIMAMEDIC sp. z o.o. sp.k.");
+  });
+
+  it("drops the punctuation that belonged to the suffix", () => {
+    expect(companyShortName("AB, SPÓŁKA AKCYJNA")).toBe("AB S.A.");
+    expect(companyShortName("AB - SPÓŁKA AKCYJNA")).toBe("AB S.A.");
+  });
+
+  it("leaves a name that is only a legal form alone", () => {
+    expect(companyShortName("SPÓŁKA AKCYJNA")).toBe("SPÓŁKA AKCYJNA");
+  });
+
+  it("leaves everything else exactly as the register wrote it", () => {
+    // The site's own company nodes are ALL CAPS from the same registers, so
+    // lowercasing here would make a contract row the odd one out.
+    expect(companyShortName("UNIWERSYTET WARSZAWSKI")).toBe(
+      "UNIWERSYTET WARSZAWSKI",
+    );
+    expect(
+      companyShortName('"NOWA ERA" SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ'),
+    ).toBe('"NOWA ERA" sp. z o.o.');
+  });
+
+  it("survives an absent name", () => {
+    expect(companyShortName(null)).toBe("");
+    expect(companyShortName(undefined)).toBe("");
+    expect(companyShortName("   ")).toBe("");
   });
 });
