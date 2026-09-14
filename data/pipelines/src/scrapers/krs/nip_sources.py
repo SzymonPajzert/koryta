@@ -49,6 +49,11 @@ class NipRow:
     party_text: str = ""
     subject: str = ""
     amount: float | None = None
+    #: The contract's value attributed to this party: the whole value split
+    #: evenly across its suppliers. The party's own figure, as opposed to
+    #: `amount`, which is the contract's -- a 10 m PLN contract with five
+    #: suppliers does not make each of them a 10 m PLN counterparty.
+    share: float | None = None
     source_row: str = ""
     #: Set when the party is a public body rather than a supplier. For CRU
     #: this is ``kolejnosc == 0``; a spreadsheet does not say.
@@ -170,18 +175,32 @@ def from_spreadsheet(
 
 
 def from_cru(
-    path: Path, suppliers_only: bool = True, limit: int | None = None
+    path: Path,
+    suppliers_only: bool = True,
+    limit: int | None = None,
+    order_by_value: bool = False,
 ) -> list[NipRow]:
     """Parties to public contracts, from the `CruUmowy` artifact.
 
     Defaults to suppliers, i.e. everyone but ``strony[0]``: position 0 is the
     contracting public body, and including it would mix "who was paid" with
     "who paid" in one list.
+
+    `order_by_value` sorts the rows so that every party appears in descending
+    order of the money attributed to it across the whole register. That is what
+    makes a capped run meaningful: the odpis stage is one request per company,
+    so a run stopped at 2,000 covers the 2,000 biggest counterparties rather
+    than whichever ones the file happened to list first. `limit` still caps the
+    *read*, so the two are not usually combined.
     """
     rows: list[NipRow] = []
     with path.open(encoding="utf-8") as handle:
         for line in handle:
             record = json.loads(line)
+            value = record.get("wartosc_przedmiotu") or 0.0
+            suppliers = sum(
+                1 for s in record.get("strony", []) if s.get("kolejnosc", 0) != 0
+            )
             for strona in record.get("strony", []):
                 is_buyer = strona.get("kolejnosc") == 0
                 if suppliers_only and is_buyer:
@@ -195,13 +214,43 @@ def from_cru(
                         party_text=strona.get("nazwa") or "",
                         subject=(record.get("przedmiot_umowy") or "")[:200],
                         amount=record.get("wartosc_przedmiotu"),
+                        share=(
+                            value / suppliers
+                            if suppliers and not is_buyer
+                            else 0.0
+                        ),
                         source_row=str(record.get("id_umowy")),
                         is_buyer=is_buyer,
                     )
                 )
             if limit and len(rows) >= limit:
                 break
+    if order_by_value:
+        totals = attributed_value(rows)
+        # By NIP and not by row, so every row of one counterparty stays
+        # together: `distinct_nips` reads first-seen order, and interleaving
+        # would make the cut fall in the middle of a company's contracts.
+        def rank(row: NipRow) -> tuple[float, list[str]]:
+            return -max((totals.get(n, 0.0) for n in row.nips), default=0.0), row.nips
+
+        rows.sort(key=rank)
     return rows
+
+
+def attributed_value(rows: typing.Iterable[NipRow]) -> dict[str, float]:
+    """Total contract value attributed to each NIP across these rows.
+
+    One definition, used both to order the population and to price it, so a
+    report and the run it describes cannot disagree about what a counterparty
+    was paid.
+    """
+    totals: dict[str, float] = {}
+    for row in rows:
+        if row.is_buyer:
+            continue
+        for nip in row.nips:
+            totals[nip] = totals.get(nip, 0.0) + (row.share or 0.0)
+    return totals
 
 
 def from_list(path: Path) -> list[NipRow]:

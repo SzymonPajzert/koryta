@@ -49,7 +49,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from conductor import setup_context
-from scrapers.krs import search, sponsorship_nips
+from scrapers.krs import nip_sources, search, sponsorship_nips
 from scrapers.krs.nip_lookup import known_from_companies_merged, nip_valid
 from scrapers.stores import CloudStorage, Context
 from scrapers.stores.file import DownloadableFile
@@ -174,26 +174,21 @@ def cru_recipients(limit: int | None) -> list[sponsorship_nips.Recipient]:
     """
     from scripts.cru_company_overlap import CIVIL, KRS_FORM  # noqa: PLC0415
 
-    totals: dict[str, dict] = {}
     path = VERSIONED / "cru_umowy" / "cru_umowy.jsonl"
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            record = json.loads(line)
-            value = record.get("wartosc_przedmiotu") or 0.0
-            suppliers = [
-                s for s in record.get("strony", []) if s.get("kolejnosc", 0) != 0
-            ]
-            share = value / len(suppliers) if suppliers else 0.0
-            for strona in record.get("strony", []):
-                nip = "".join(c for c in (strona.get("nip") or "") if c.isdigit())
-                if len(nip) != 10 or not nip_valid(nip):
-                    continue
-                entry = totals.setdefault(
-                    nip, {"name": strona.get("nazwa") or "", "paid": 0.0, "n": 0}
-                )
-                entry["n"] += 1
-                if strona.get("kolejnosc", 0) != 0:
-                    entry["paid"] += share
+    # Buyers included, because `n` counts every contract a NIP appears on --
+    # `nip_sources.attributed_value` is what decides which side was paid.
+    rows = nip_sources.from_cru(path, suppliers_only=False)
+    paid = nip_sources.attributed_value(rows)
+
+    totals: dict[str, dict] = {}
+    for row in rows:
+        for nip in row.nips:
+            if not nip_valid(nip):
+                continue
+            entry = totals.setdefault(
+                nip, {"name": row.party_text, "paid": paid.get(nip, 0.0), "n": 0}
+            )
+            entry["n"] += 1
 
     chosen = [
         sponsorship_nips.Recipient(nip, e["name"], e["paid"], e["n"])
