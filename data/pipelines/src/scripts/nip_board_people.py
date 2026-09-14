@@ -65,38 +65,42 @@ VERSIONED = Path(VERSIONED_DIR)
 
 
 def resolutions_from_bucket(
-    recipients: typing.Sequence[nip_sources.Recipient],
+    nips: typing.Sequence[str], names: dict[str, str] | None = None
 ) -> dict[str, nip_lookup.NipResolution]:
-    """The search answers already in the bucket, as `NipResolution`s.
+    """The search answers already in the bucket, for this run's NIPs.
 
     Shaped like the wykaz's output so everything downstream -- company
     selection, the odpis fetch, the match -- runs unchanged.
 
     The population is an argument rather than a list this module knows about,
-    because the two channels have to agree on it: whatever `resolve` searched
-    for is what has answers on file here, and a mismatch reads as "the search
-    found nothing" rather than as the two halves disagreeing.
+    which is what kept the two halves of the chain apart: `sponsorship_rejestrio
+    resolve --cru` can answer all 18,364 KRS-form CRU NIPs through the
+    register's own free search, and a fixed list here would read back only the
+    ones it knew about, leaving the wykaz -- 3,000 NIPs a day, so 7 calendar
+    days -- as the only CRU route.
 
-    The name is carried from the source rather than taken from the search,
-    because the source's name is the one a reader will recognise.
+    Returned in the order the source named them, not the order the bucket
+    lists them: `pick_companies` truncates on `--limit-companies`, so a bucket
+    ordering would make a capped run cover an arbitrary subset of the source
+    rather than its head.
     """
     from scripts.sponsorship_rejestrio import (  # noqa: PLC0415
-        _mapping,
+        _krs_of,
         cached_answers,
     )
 
     ctx, _ = setup_context()
-    by_nip = {r.nip: r for r in recipients}
-    mapping = _mapping(cached_answers(ctx), recipients)
-    return {
-        nip: nip_lookup.NipResolution(
-            nip=nip,
-            krs=krs,
-            name=by_nip[nip].name or None if nip in by_nip else None,
-            source="search",
-        )
-        for nip, krs in mapping.items()
-    }
+    cached = cached_answers(ctx)
+    names = names or {}
+    resolutions: dict[str, nip_lookup.NipResolution] = {}
+    for nip in nips:
+        payload = cached.get(nip)
+        krs = _krs_of(payload) if payload else None
+        if krs:
+            resolutions[nip] = nip_lookup.NipResolution(
+                nip=nip, krs=krs, name=names.get(nip) or None, source="search"
+            )
+    return resolutions
 
 
 def load_known_nip_to_krs(
@@ -126,10 +130,18 @@ def load_known_nip_to_krs(
     return known, names
 
 
+def has_source(args) -> bool:
+    """Whether the run was given a population of its own."""
+    return bool(args.spreadsheet or args.nip_list or args.nip) or args.cru is not None
+
+
 def gather_rows(args) -> tuple[list[nip_sources.NipRow], list[nip_sources.NipRow]]:
     if args.spreadsheet:
         return nip_sources.from_spreadsheet(Path(args.spreadsheet))
-    if args.cru:
+    if args.cru is not None:
+        # `--cru` takes an optional path, so the bare flag is the empty string
+        # -- falsy, which made `if args.cru:` fall through to the `--nip`
+        # branch and read nothing at all.
         path = Path(args.cru)
         if not path.is_file():
             path = VERSIONED / "cru_umowy" / "cru_umowy.jsonl"
@@ -141,12 +153,16 @@ def gather_rows(args) -> tuple[list[nip_sources.NipRow], list[nip_sources.NipRow
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    source = parser.add_mutually_exclusive_group(required=True)
+    source = parser.add_mutually_exclusive_group()
     source.add_argument("--spreadsheet", help="a published spend list, as CSV")
     source.add_argument("--cru", nargs="?", const="", help="the cru_umowy artifact")
     source.add_argument("--nip-list", help="a file of NIPs, one per line")
     source.add_argument("--nip", nargs="+", default=[], help="NIPs on the command line")
-    source.add_argument(
+
+    # Not a source: it says where the KRS numbers come from, which is a
+    # different question from which NIPs to ask about. Combines with any
+    # source, so the CRU population reaches the free channel too.
+    parser.add_argument(
         "--from-search-bucket",
         action="store_true",
         help=(
@@ -204,9 +220,41 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def from_search_bucket(args, rows, nips, salt) -> None:
+    """Run the odpis half against the answers the register's search left us.
+
+    The wykaz could not see these at all; the register's own search could, and
+    its answers are already in the bucket. So the whole NIP-to-KRS stage is
+    skipped and its output reconstructed.
+    """
+    names: dict[str, str] = {}
+    for row in rows:
+        for nip in row.nips:
+            if row.party_text:
+                names.setdefault(nip, row.party_text)
+    resolutions = resolutions_from_bucket(nips, names)
+    print("\n" + "=" * 72)
+    print(
+        f"FROM THE SEARCH BUCKET  {len(resolutions):,} of {len(nips):,} "
+        f"NIPs have a single-hit answer on file"
+    )
+    people, company_by_krs, results = fetch_and_match(args, resolutions, salt, {})
+    if args.out:
+        write_output(args.out, people, company_by_krs, results)
+    if args.publish:
+        publish(people, company_by_krs, results)
+    if args.show:
+        show(people, results)
+
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    if not has_source(args):
+        parser.error(
+            "a source is required: --spreadsheet, --cru, --nip-list or --nip"
+        )
 
     # The salt and USERNAME both live in data/pipelines/.env, which is
     # gitignored; every other entry point here reads it the same way.
@@ -234,29 +282,7 @@ def main() -> None:
             print(f"    {row.source_row}: {row.party_text[:90]}")
 
     if args.from_search_bucket:
-        # The wykaz could not see these at all; the register's own search
-        # could, and its answers are already in the bucket. So the whole
-        # NIP-to-KRS stage is skipped and its output reconstructed.
-        # The source's own name for each body, kept so a printed answer is
-        # recognisable; the search does not carry one.
-        named: dict[str, str] = {}
-        for row in rows:
-            for nip in row.nips:
-                named.setdefault(nip, row.party_text)
-        resolutions = resolutions_from_bucket(
-            [nip_sources.Recipient(nip, name, 0.0, 0) for nip, name in named.items()]
-        )
-        print("\n" + "=" * 72)
-        print(f"FROM THE SEARCH BUCKET  {len(resolutions)} companies")
-        people, company_by_krs, results = fetch_and_match(
-            args, resolutions, salt, {}
-        )
-        if args.out:
-            write_output(args.out, people, company_by_krs, results)
-        if args.publish:
-            publish(people, company_by_krs, results)
-        if args.show:
-            show(people, results)
+        from_search_bucket(args, rows, nips, salt)
         return
 
     # ------------------------------------------------------------ NIP -> KRS
