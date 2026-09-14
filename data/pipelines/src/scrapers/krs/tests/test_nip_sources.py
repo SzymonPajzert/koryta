@@ -78,6 +78,15 @@ def test_the_same_nip_twice_in_a_cell_is_one_nip():
         ("3 600,00 zł", 3600.00),
         ("", None),
         (None, None),
+        # A korekta. Cleaning the whole cell dropped the minus, so a
+        # correction was counted as a payment of the same size.
+        ("-1 500,00 zł", -1500.00),
+        ("- 1 500,00", -1500.00),
+        # An annotated cell. Its digits used to join the figure: "1 200,00"
+        # plus a stray 2 read as 1,200,002.00.
+        ("1 200,00 zł (2 faktury)", 1200.00),
+        ("20 000,00 zł - 2 transze", 20000.00),
+        ("brak", None),
     ],
 )
 def test_money_reads_both_separator_conventions(written, expected):
