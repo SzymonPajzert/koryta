@@ -114,7 +114,7 @@
 import { mdiTuneVariant } from "@mdi/js";
 import type { ContractScope, ContractSort } from "~/composables/contracts";
 
-/** The two controls `/umowy` offers, and nothing else.
+/** The two controls `/eksploruj/umowy` offers, and nothing else.
  *
  * Two parameters, six combinations, six cache entries, one canonical url. There
  * is deliberately no search box - Firestore cannot do substring matching over

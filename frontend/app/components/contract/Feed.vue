@@ -140,7 +140,7 @@ const rows = computed<ContractRowType[]>(() => [
 
 /** How many people this reader is not being shown, across everything loaded.
  *
- * Zero on `/umowy` today, because `/api/contracts` attaches no person data to
+ * Zero on `/eksploruj/umowy` today, because `/api/contracts` attaches no person data to
  * anybody - which is what keeps a page of 20 rows at ~21 billed reads. The sum
  * is computed anyway rather than hardcoded to zero: the day any list route
  * starts attaching people, the banner is already right, and a zero written in
@@ -158,7 +158,7 @@ const hiddenPeople = computed(() =>
 const showLoginBanner = computed(() => !user.value && hiddenPeople.value > 0);
 
 /** A titled feed with nothing in it draws nothing - not the heading, not the
- * note. The untitled one on `/umowy` still shows its empty state, because there
+ * note. The untitled one on `/eksploruj/umowy` still shows its empty state, because there
  * the empty state is the answer to a filter the reader just set and has to be
  * able to undo. */
 const visible = computed(

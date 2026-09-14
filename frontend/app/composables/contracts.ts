@@ -10,7 +10,7 @@ import type {
 
 /** Every request the contracts feature makes, in one place.
  *
- * Four surfaces read these routes - `/umowy`, the „Umowy publiczne" section on
+ * Four surfaces read these routes - `/eksploruj/umowy`, the „Umowy publiczne" section on
  * an institution page, the expanded row, and `/eksploruj/umowy` - and three of
  * them take the same `sort`/`zakres`/`nodeId`/`rola` quartet. Hand-built query
  * strings at four call sites is how `zakres=nasze` and `zakres=Nasze` end up
@@ -56,7 +56,7 @@ export const COMPANY_PAGE_SIZE = 5;
 /** The query parameter an expanded row writes itself into.
  *
  * Shared with the page so that both agree on the spelling: the row adds it and
- * the page drops it whenever a filter changes. It is never canonical - `/umowy`
+ * the page drops it whenever a filter changes. It is never canonical - `/eksploruj/umowy`
  * advertises itself bare whatever this says - so it is a citable link rather
  * than a crawl target.
  */
@@ -122,7 +122,7 @@ export interface ContractPeopleResponse {
 /** The query as the endpoint takes it, with every default left out.
  *
  * Dropping defaults rather than spelling them out is what keeps the six filter
- * combinations of `/umowy` to six cache entries: `?sort=data` and no `sort` at
+ * combinations of `/eksploruj/umowy` to six cache entries: `?sort=data` and no `sort` at
  * all are the same answer, and behind a CDN this repo cannot purge, two
  * spellings of one answer is two copies going stale independently.
  */
@@ -255,8 +255,20 @@ export interface ContractPeopleQuery {
  * The signed-in, people-oriented view of the same contracts.
  *
  * Answers a logged out reader with counts and nothing else - the gate is the
- * verified token on the server, not this composable - so it is safe to mount
- * behind the `auth` middleware without a second check here.
+ * verified token on the server, not this composable.
+ *
+ * **Nothing calls this today, and that is deliberate rather than an oversight.**
+ * `/eksploruj/umowy` loads those rows with `authRequest` from a watcher
+ * instead, because a `useFetch` fires at registration and cannot be held back:
+ * one here would run the 30-institution, roughly 500-read people query for
+ * every signed-in reader sitting on the public contract list, which is now that
+ * page's default mode and most of its traffic. It would also make SSR await a
+ * request whose output lives inside `<ClientOnly>`.
+ *
+ * Kept rather than deleted because the shape is right and the query-parameter
+ * defaults below are the ones the endpoint validates against; what it needs
+ * before it can be used again is an `immediate: false` plus an `execute()` the
+ * caller drives. Delete it instead if that day does not come.
  */
 export function useContractPeople(
   query: MaybeRefOrGetter<ContractPeopleQuery> = {},
