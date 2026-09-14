@@ -150,17 +150,18 @@ export default defineNuxtConfig({
       // Renders nothing server-side (the whole template is <ClientOnly>), so it
       // has no indexable content to lose, and every entity URL 301s into it
       // with its own ?krs=/?teryt=. That is the bulk of the crawl budget.
-      "/eksploruj/tabela",
-      // Also `<ClientOnly>` from the h1 down, so there is no indexable content
-      // to lose - and unlike the table it names people we have not published
-      // yet to a signed-in reader. The gate itself is server side, on the
-      // verified token; this only keeps a crawler from spending budget on a
-      // page that renders nothing for it.
       //
-      // Listed explicitly because „like its siblings" is not a rule that holds
-      // here: /eksploruj/tabela is today the only disallowed explore route -
-      // /nowe, /staz, /szpitale and /statystyki are all crawlable.
-      "/eksploruj/umowy",
+      // The only disallowed explore route - the rest of /eksploruj (/nowe,
+      // /staz, /szpitale, /statystyki, /umowy and the index itself) is
+      // crawlable, so „like its siblings" is not a rule to reason from here.
+      // /eksploruj/umowy was listed too until the public contract list became
+      // its default mode on 2026-09-14: the rows, the coverage headline and the
+      // h1 now server-render for everybody, and only the signed-in modes stay
+      // `<ClientOnly>`. Hiding it would cost the contracts feature the only
+      // indexed url it has, since /instytucja/ is still absent from the live
+      // sitemap. The people half was never protected by this line anyway - it
+      // is gated server side on the verified token.
+      "/eksploruj/tabela",
     ],
   },
   plausible: {
@@ -374,7 +375,23 @@ export default defineNuxtConfig({
     // Cloud CDN copy of either. With the default rule the html would outlive
     // the API's minute and the „stan na ..." line at the foot would disagree
     // with the rows above it, for as long as the CDN felt like.
-    "/umowy": { swr: 60 },
+    "/eksploruj/umowy": { swr: 60 },
+
+    // The contracts list lived at /umowy for a day before it moved under
+    // /eksploruj with the rest of the explore surface. Nothing is deployed yet,
+    // so no live link breaks - but the path was already in the sitemap handler
+    // and in the QA entry, and one line here is cheaper than either of those
+    // pointing at a 404.
+    "/umowy": { redirect: { to: "/eksploruj/umowy", statusCode: 301 } },
+
+    // An hour on a page that is newly in the sitemap, because its index reads
+    // /api/stats/database - 16.5% of every Firestore read the site made over a
+    // measured 28 hours. That endpoint caches for 6 hours, but per Cloud Run
+    // instance and in memory, and with `maxInstances: 10` in apphosting.yaml a
+    // crawler working through the explore routes is exactly the traffic that
+    // spreads over cold instances and pays the full scan once per instance.
+    // Edge caching the html is what keeps that at one computation an hour.
+    "/eksploruj": { swr: 3600 },
 
     // `/lista` was removed in "Remove /lista, and point what linked to it at
     // the table", and 404ed from then on - but it kept ranking. Search Console

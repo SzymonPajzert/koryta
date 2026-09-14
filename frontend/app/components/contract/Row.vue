@@ -249,7 +249,7 @@ function amendmentLabel(amendment: ContractAmendment): string {
  *
  * Whatever the feed already had, then whatever the expanded row fetched. The
  * public list attaches none of this - a page of 20 rows would cost ~350 billed
- * reads instead of ~21 on the most crawled surface on the site - so on `/umowy`
+ * reads instead of ~21 on the most crawled surface on the site - so on `/eksploruj/umowy`
  * this answers nothing until somebody taps „Szczegóły umowy".
  */
 function peopleFor(party: ContractParty): ContractPartyPeople | undefined {
@@ -280,7 +280,7 @@ async function loadDetail() {
  *
  * `replace`, not `push`: a reader opening four rows on their way down the page
  * should not have to press back four times. The canonical stays the bare
- * `/umowy` whatever this says, so the parameter is a citable link rather than a
+ * `/eksploruj/umowy` whatever this says, so the parameter is a citable link rather than a
  * fifth crawl target for the same 149 683 rows.
  */
 function toggle() {

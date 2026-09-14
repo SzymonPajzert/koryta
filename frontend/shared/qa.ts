@@ -62,19 +62,23 @@ export const QA_ITEMS: QaItem[] = [
     id: "umowy-publiczne",
     title: "Umowy publiczne z Centralnego Rejestru Umów",
     description:
-      "Nowa strona /umowy z umowami z CRU, sekcja «Umowy publiczne» na " +
-      "stronie instytucji i widok /eksploruj/umowy dla zalogowanych, który " +
-      "pokazuje, kogo znamy we władzach instytucji z tych umów.",
+      "Umowy z CRU na /eksploruj/umowy - dla wszystkich lista samych umów, a " +
+      "dla zalogowanych dodatkowo widok osób, czyli kogo znamy we władzach " +
+      "instytucji z tych umów. Do tego sekcja «Umowy publiczne» na stronie " +
+      "instytucji i nowa strona /eksploruj, która zbiera wszystkie sposoby " +
+      "przeglądania danych w jednym miejscu.",
     steps: [
-      "Wejdź na /umowy i sprawdź, że nad listą jest liczba umów i okres, z którego pochodzą.",
+      "Wejdź na /eksploruj i sprawdź, że są tam odnośniki do wszystkich sposobów przeglądania danych - tabeli, statystyk, rad szpitali, okrągłego stażu i umów.",
+      "Wejdź na /eksploruj/umowy i sprawdź, że nad listą jest liczba umów i okres, z którego pochodzą.",
       "Przełącz «Największe kwoty» i sprawdź, że kolejność się zmienia, a adres strony zapamiętuje wybór.",
       "Kliknij «Szczegóły umowy» w dowolnym wierszu - powinien rozwinąć się numer, pełny przedmiot i strony.",
-      "Zwęź okno do szerokości telefonu (375px) i przewiń /umowy do końca: strona nie może dać się przesuwać na boki, nawet przy nazwach instytucji pisanych wielkimi literami.",
+      "Wyloguj się i wejdź na /eksploruj/umowy: ma się otworzyć lista umów, bez przełącznika «Ludzie» i «Obie strony».",
+      "Zaloguj się, wróć na /eksploruj/umowy i przełącz na «Ludzie», a potem na «Obie strony» - przy osobach nieopublikowanych powinien być chip «szkic» i przerywana ramka.",
+      "Zwęź okno do szerokości telefonu (375px) i przewiń /eksploruj/umowy do końca: strona nie może dać się przesuwać na boki, nawet przy nazwach instytucji pisanych wielkimi literami.",
       "Otwórz stronę instytucji, która ma umowy, i sprawdź sekcję «Umowy publiczne»; na instytucji bez umów sekcji nie powinno być wcale.",
       "Wyloguj się i na stronie instytucji sprawdź, że pod umowami są tylko osoby opublikowane, a resztę zapowiada baner «Zaloguj się».",
-      "Zaloguj się i wejdź na /eksploruj/umowy - przy osobach nieopublikowanych powinien być chip «szkic» i przerywana ramka.",
     ],
-    link: "/umowy",
+    link: "/eksploruj/umowy",
     area: "public",
   },
   {
