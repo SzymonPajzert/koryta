@@ -135,14 +135,22 @@ def facts(pesel: str | None) -> PeselFacts | None:
 
 
 #: Where a caller is expected to keep the key. Named here so the message and
-#: the docs agree with whatever reads it, but deliberately *not* read here:
-#: `scrapers`, `util` and `entities` are kept free of ``os`` so they stay pure
-#: and testable, and the environment is the caller's business.
+#: whatever reads it agree, but deliberately *not* read here: `scrapers`,
+#: `util` and `entities` are kept free of ``os``, and where a machine keeps its
+#: secrets is the caller's business -- see `stores.config.pesel_salt`.
 SALT_ENV = "KORYTA_PESEL_SALT"
 
 #: Characters of hex kept. 128 bits is far past what 108k people need to avoid
 #: a collision, and a truncated digest is easier to eyeball in a diff.
 FINGERPRINT_LENGTH = 32
+
+#: Characters of `salt_id`. Short because it is a label, not a secret, and it
+#: is repeated on every row.
+SALT_ID_LENGTH = 12
+
+#: Domain separation, so `salt_id` cannot collide with the fingerprint of some
+#: PESEL under the same key.
+_SALT_ID_MESSAGE = b"koryta-pesel-salt-id"
 
 
 class MissingPeselSalt(RuntimeError):
@@ -152,19 +160,21 @@ class MissingPeselSalt(RuntimeError):
 def fingerprint(pesel: str, salt: str | None) -> str:
     """A stable, non-reversible identifier for the person this PESEL names.
 
-    **HMAC, and a secret key, both on purpose.** A PESEL has about 10^10
-    possible values and far fewer plausible ones -- six of its digits are a
-    birth date, one is a sex, and the last is determined by the rest -- so a
-    *published* digest of one is reversible by enumeration in seconds,
-    whichever hash is used. A plain ``sha256(salt + pesel)`` with a salt that
-    ships alongside the data is therefore no protection at all; what protects
-    it is that the key is not in the artifact. HMAC rather than concatenation
-    because that is the construction whose security argument covers using a
-    hash as a keyed function.
+    **HMAC, and a secret key, both on purpose.** The row this ends up on also
+    carries the birth date and the sex, which fix seven of the eleven digits,
+    and the eleventh is a check digit over the other ten. That leaves 5,000
+    candidates: a target PESEL was recovered from its unkeyed sha256 in 10.3 ms
+    on this machine, so a *published* digest of one is reversible by
+    enumeration whichever hash is used. A key that ships alongside the data is
+    therefore no protection at all; what protects it is that the key is not in
+    the artifact. HMAC rather than concatenation because that is the
+    construction whose security argument covers using a hash as a keyed
+    function.
 
-    The result is stable for as long as the key is, which is what makes it
-    usable as a join key across runs -- and what makes rotating the key a
-    decision about the whole dataset rather than a routine one.
+    The result is stable for as long as the key is, which is what makes it a
+    join key across runs -- and what makes losing the key a decision about the
+    whole dataset rather than a routine one. `salt_id` is how a reader tells
+    which key an artifact was made with.
 
     Raises rather than falling back to an unkeyed digest when the key is
     absent: a run that quietly produced reversible fingerprints would be
@@ -173,10 +183,26 @@ def fingerprint(pesel: str, salt: str | None) -> str:
     """
     if not salt:
         raise MissingPeselSalt(
-            f"{SALT_ENV} is not set. It keys the PESEL fingerprints, and "
-            f"without it they would be reversible by enumeration. Set it to a "
-            f"long random string, keep it out of the repo, and keep it stable "
-            f"-- changing it renumbers every person in the output."
+            f"{SALT_ENV} is not set and no key file was found. It keys the "
+            f"PESEL fingerprints, and without it they would be reversible by "
+            f"enumeration."
         )
     digest = hmac.new(salt.encode("utf-8"), pesel.encode("ascii"), hashlib.sha256)
     return digest.hexdigest()[:FINGERPRINT_LENGTH]
+
+
+def salt_id(salt: str) -> str:
+    """A public label for the key itself, recorded on every row.
+
+    Two artifacts whose `salt_id` differs were keyed differently, so their
+    fingerprints name different things and joining them pairs unrelated people.
+    Without this the mismatch is invisible: the fingerprints still look like
+    fingerprints, and the join still returns rows.
+
+    Safe to publish. It is an HMAC of a fixed string under a key of 256 random
+    bits, so it has no preimage worth finding and says nothing about any
+    person -- unlike a digest of a PESEL, which is the whole reason the key
+    exists.
+    """
+    digest = hmac.new(salt.encode("utf-8"), _SALT_ID_MESSAGE, hashlib.sha256)
+    return digest.hexdigest()[:SALT_ID_LENGTH]
