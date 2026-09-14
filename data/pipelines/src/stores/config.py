@@ -18,6 +18,53 @@ def backup_disabled() -> bool:
     load_dotenv()
     return os.getenv("DISABLE_BACKUP", "").strip().lower() in {"1", "true", "yes"}
 
+#: Where the PESEL key lives when the environment does not carry it.
+#: **Outside every checkout, deliberately.** The first one was kept in
+#: ``data/pipelines/.env``, which is per-worktree -- so when the agent
+#: workspace that held it was torn down the key went with it, and with it the
+#: only thing that could reproduce the fingerprints of 6,188 already-published
+#: people. ``~/.config`` survives every worktree teardown and every `jj
+#: workspace forget`.
+PESEL_SALT_FILE = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+    "koryta",
+    "pesel-salt",
+)
+
+
+def pesel_salt(create: bool = False) -> str | None:
+    """The key for `util.pesel.fingerprint`, or None if this machine has none.
+
+    ``KORYTA_PESEL_SALT`` wins, so a one-off run can be keyed without touching
+    the file; otherwise `PESEL_SALT_FILE` is read.
+
+    `create` mints one and is never the default. A run that silently generated
+    a key would produce fingerprints that look exactly like the previous run's
+    and join to nothing -- which is the failure this whole arrangement exists
+    to make impossible. The caller asks for it explicitly and says so out loud;
+    `util.pesel.salt_id` is then what proves on every row which key was used.
+    """
+    load_dotenv()
+    from_env = os.getenv("KORYTA_PESEL_SALT", "").strip()
+    if from_env:
+        return from_env
+    if os.path.exists(PESEL_SALT_FILE):
+        salt = open(PESEL_SALT_FILE, encoding="utf-8").read().strip()
+        if salt:
+            return salt
+    if not create:
+        return None
+    import secrets  # noqa: PLC0415 - only needed on the one run that mints
+
+    salt = secrets.token_hex(32)
+    os.makedirs(os.path.dirname(PESEL_SALT_FILE), mode=0o700, exist_ok=True)
+    # Written 0600 before anything goes in it, so it is never briefly readable.
+    handle = os.open(PESEL_SALT_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(salt + "\n")
+    return salt
+
+
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(_current_dir))

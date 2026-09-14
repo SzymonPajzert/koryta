@@ -234,11 +234,11 @@ class OdpisPerson:
     #: record cannot carry it even by accident.
     birth_date: str | None
     sex: str | None
-    #: A number standing in for the PESEL, unique to the person **within this
-    #: run only** -- see `util.pesel.PersonIds` for why it is not stable
-    #: between runs. None when the register gave no PESEL, and None when no
-    #: `PersonIds` was passed.
-    person_seq: int | None
+    #: HMAC of the PESEL under the caller's key, or None when no key was
+    #: given. Stands in for the number as a join key across runs: stable for as
+    #: long as the key is, and safe to publish in a way a digest of the number
+    #: itself would not be. See `util.pesel.fingerprint`.
+    pesel_fingerprint: str | None
     #: Whether the identifier field held a PESEL at all. False both for a seat
     #: held by another company and for a person the register has no PESEL for;
     #: `is_company` separates those.
@@ -419,16 +419,38 @@ def _identifier(value: str) -> tuple[str | None, bool]:
     return None, False
 
 
+def _fingerprint(
+    pesel: str | None, salt: str | None, sink: dict[str, str] | None
+) -> str | None:
+    """The fingerprint, and the one place a PESEL can be handed to a caller.
+
+    `sink` exists so `--keep-pesel` can build a local lookup table without the
+    number ever becoming a field on `OdpisPerson`. That distinction is the
+    reason a PESEL cannot reach the published artifact by accident: the record
+    has nowhere to put one.
+    """
+    if not pesel or not salt:
+        return None
+    digest = pesel_util.fingerprint(pesel, salt)
+    if sink is not None:
+        sink[digest] = pesel
+    return digest
+
+
 def parse_people(
-    text: str, krs: str, person_ids: "pesel_util.PersonIds | None" = None
+    text: str,
+    krs: str,
+    salt: str | None = None,
+    pesel_sink: dict[str, str] | None = None,
 ) -> list[OdpisPerson]:
     """Every person the odpis names, in document order.
 
-    :param person_ids: a run-wide `util.pesel.PersonIds`, so that one human
-        holding seats at several companies carries one number across every
-        document of the run. Omit it and the records carry a birth date and a
-        sex but no `person_seq` -- enough to match against `PeopleMerged`,
-        which is what most callers want. The PESEL is dropped either way.
+    :param salt: key for `util.pesel.fingerprint`. Omit it and the records
+        carry a birth date and a sex but no fingerprint -- enough to match
+        against `PeopleMerged`, which is what most callers want.
+    :param pesel_sink: filled with ``fingerprint -> PESEL`` when given. The
+        only route by which a PESEL leaves this function, and it never reaches
+        an `OdpisPerson`; whatever a caller does with it must stay local.
     """
     people: list[OdpisPerson] = []
 
@@ -488,9 +510,7 @@ def parse_people(
                     funkcja=funkcja.value if funkcja and funkcja.value else None,
                     birth_date=facts.birth_date if facts else None,
                     sex=facts.sex if facts else None,
-                    person_seq=(
-                        person_ids.of(pesel) if person_ids is not None else None
-                    ),
+                    pesel_fingerprint=_fingerprint(pesel, salt, pesel_sink),
                     has_pesel=pesel is not None,
                     is_company=is_company,
                     entry_added=surname.added,
@@ -538,6 +558,11 @@ def unread_person_rubryki(text: str) -> set[str]:
 
 
 def parse_pdf(
-    content: bytes, krs: str, person_ids: "pesel_util.PersonIds | None" = None
+    content: bytes,
+    krs: str,
+    salt: str | None = None,
+    pesel_sink: dict[str, str] | None = None,
 ) -> list[OdpisPerson]:
-    return parse_people(extract_text(content), krs, person_ids=person_ids)
+    return parse_people(
+        extract_text(content), krs, salt=salt, pesel_sink=pesel_sink
+    )
