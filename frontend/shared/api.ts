@@ -90,11 +90,32 @@ export const companyRequestSchema = z.object({
    * sides ship: `z.object` is not strict, so an unknown key is dropped silently
    * with a 200, exactly as `committee` was below. */
   supervisory_organ: z.enum(supervisoryOrgans).optional(),
+  /** The company's tax identifier, ten digits.
+   *
+   * Added for the contracts feature, and it is the whole of it: every register
+   * of public spending identifies a company by NIP, CRU carries no KRS number
+   * anywhere, and until this field existed the site's only way to write one was
+   * a human proposal through `companyEditSchema`. Five of 4 928 company nodes
+   * had a NIP when this was added, which is why
+   * `scripts/migrate/backfill-company-nip.ts` exists alongside it: this makes
+   * every *future* ingest carry the key, the migration supplies it for the
+   * companies already here.
+   *
+   * Normalised and check-digit validated rather than taken on trust, for the
+   * one reason that matters here - a wrong NIP does not fail, it attaches
+   * somebody else's contracts to this company. */
+  nip: identifierField(normalizeNip, isValidNip, "NIP"),
+  /** The statistical identifier, nine or fourteen digits. The fallback join
+   * key: CRU states one on some parties that give no NIP, and a body outside
+   * KRS may have this and nothing else. */
+  regon: identifierField(normalizeRegon, isValidRegon, "REGON"),
 });
 
 export type CompanyRequest = {
   krs: string;
   name: string;
+  nip?: string;
+  regon?: string;
   owners?: string[];
   owner_teryts?: string[];
   owner_skarb_panstwa?: boolean;
