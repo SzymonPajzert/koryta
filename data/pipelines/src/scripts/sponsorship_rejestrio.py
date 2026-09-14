@@ -50,13 +50,19 @@ import csv
 import json
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 
 from conductor import setup_context
 from scrapers.krs import nip_sources, rejestrio, search
+from scrapers.krs.nip_lookup import nip_valid
 from scrapers.stores import CloudStorage, Context
 from scrapers.stores.file import DownloadableFile
+from stores.config import VERSIONED_DIR
+
+#: `stores.config.VERSIONED_DIR` is a str, so every use here goes through Path.
+VERSIONED = Path(VERSIONED_DIR)
 
 #: Where a NIP search is filed in the crawl bucket. Not a real route -- the
 #: search is a POST and its body is not in the URL -- but it identifies the
@@ -76,20 +82,21 @@ _NIP_SEGMENT = "/wyszukiwarka/krs/nip/"
 REJESTRIO_PREFIX = "hostname=rejestr.io"
 
 
-def recipients_for(args) -> list[nip_sources.Recipient]:
-    """The bodies this run is about, in the order the source named them.
+def nip_list_recipients(path: Path, limit: int | None) -> list[nip_sources.Recipient]:
+    """A file of NIPs, one per line, as the population.
 
-    A plain NIP list says nothing about who was paid what, so `name` is empty
-    and `paid` is zero. Everything downstream prints those rather than deciding
-    on them, so a richer source can fill them in without changing a line here.
+    A plain list says nothing about who was paid what, so `name` is empty and
+    `paid` is zero. Everything downstream prints those rather than deciding on
+    them, so a source that does know fills them in without changing a line here
+    -- which is what `cru_recipients` is.
     """
-    rows = nip_sources.from_list(Path(args.nip_list))
+    rows = nip_sources.from_list(path)
     seen: dict[str, None] = {}
     for row in rows:
         for nip in row.nips:
             seen.setdefault(nip, None)
     chosen = [nip_sources.Recipient(nip, "", 0.0, 0) for nip in seen]
-    return chosen[: args.limit] if args.limit else chosen
+    return chosen[:limit] if limit else chosen
 
 
 def cached_answers(ctx: Context) -> dict[str, dict]:
@@ -141,6 +148,60 @@ def _mapping(cached: dict[str, dict], recipients) -> dict[str, str]:
         if nip in wanted and (krs := _krs_of(payload)):
             out[nip] = krs
     return out
+
+
+def cru_recipients(limit: int | None) -> list[nip_sources.Recipient]:
+    """Every CRU counterparty whose own name states a KRS legal form.
+
+    The whole register is 61,453 distinct NIPs, but two thirds of those are
+    sole traders, spolki cywilne and budget units -- none of which are in KRS,
+    so asking about them buys nothing. `cru_company_overlap`'s KRS_FORM/CIVIL
+    pair is the repo's existing rule for reading the legal form out of a name,
+    and it cuts the crawl to 18,364 with 9.57 bn PLN behind them.
+
+    Ordered by the contract value attributed to the party, richest first: a run
+    stopped halfway has then covered the money rather than an arbitrary prefix
+    of the register.
+    """
+    from scripts.cru_company_overlap import CIVIL, KRS_FORM  # noqa: PLC0415
+
+    totals: dict[str, dict] = {}
+    path = VERSIONED / "cru_umowy" / "cru_umowy.jsonl"
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            record = json.loads(line)
+            value = record.get("wartosc_przedmiotu") or 0.0
+            suppliers = [
+                s for s in record.get("strony", []) if s.get("kolejnosc", 0) != 0
+            ]
+            share = value / len(suppliers) if suppliers else 0.0
+            for strona in record.get("strony", []):
+                nip = "".join(c for c in (strona.get("nip") or "") if c.isdigit())
+                if len(nip) != 10 or not nip_valid(nip):
+                    continue
+                entry = totals.setdefault(
+                    nip, {"name": strona.get("nazwa") or "", "paid": 0.0, "n": 0}
+                )
+                entry["n"] += 1
+                if strona.get("kolejnosc", 0) != 0:
+                    entry["paid"] += share
+
+    chosen = [
+        nip_sources.Recipient(nip, e["name"], e["paid"], e["n"])
+        for nip, e in totals.items()
+        if KRS_FORM.search(e["name"]) and not CIVIL.search(e["name"])
+    ]
+    chosen.sort(key=lambda r: (-r.paid, r.nip))
+    return chosen[:limit] if limit else chosen
+
+
+def recipients_for(args) -> Sequence[nip_sources.Recipient]:
+    """Whichever population the run named. Exactly one of them is required."""
+    if getattr(args, "cru", False):
+        return cru_recipients(args.limit)
+    if not getattr(args, "nip_list", None):
+        raise SystemExit("give a population: --cru or --nip-list")
+    return nip_list_recipients(Path(args.nip_list), args.limit)
 
 
 def resolve(args) -> None:
@@ -396,9 +457,7 @@ def build_parser() -> argparse.ArgumentParser:
     node = sub.add_parser(
         "resolve", help="search each NIP and store the answer in the bucket"
     )
-    node.add_argument(
-        "--nip-list", required=True, help="a file of NIPs, one per line"
-    )
+    node.add_argument("--nip-list", help="a file of NIPs, one per line")
     node.add_argument("--limit", type=int, help="only the first N")
     node.add_argument(
         "--refresh",
@@ -410,25 +469,28 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-ask only the NIPs whose stored answer found nothing",
     )
+    node.add_argument(
+        "--cru",
+        action="store_true",
+        help="take NIPs from the CRU register instead of the hardcoded list",
+    )
     node.set_defaults(func=resolve)
 
     node = sub.add_parser("worklist", help="NIPs still without a KRS, as CSV")
-    node.add_argument(
-        "--nip-list", required=True, help="a file of NIPs, one per line"
-    )
-    node.add_argument("--limit", type=int, help="only the first N")
+    node.add_argument("--nip-list", help="a file of NIPs, one per line")
+    node.add_argument("--cru", action="store_true", help="use the CRU register")
+    node.add_argument("--limit", type=int, help="only the richest N")
     node.set_defaults(func=worklist)
 
     node = sub.add_parser("fetch", help="actually buy the connection lists")
-    node.add_argument(
-        "--nip-list", required=True, help="a file of NIPs, one per line"
-    )
+    node.add_argument("--nip-list", help="a file of NIPs, one per line")
     node.add_argument("--limit", type=int, help="only the first N")
     node.add_argument(
         "--refresh",
         action="store_true",
         help="re-buy lists already in the bucket (costs money for nothing)",
     )
+    node.add_argument("--cru", action="store_true", help="use the CRU register")
     node.add_argument("--yes", action="store_true", help="skip the confirmation")
     node.add_argument("--sleep", type=float, default=0.2, help="seconds between calls")
     node.set_defaults(func=fetch)
@@ -438,10 +500,9 @@ def build_parser() -> argparse.ArgumentParser:
         ("queries", queries, "the same as RejestrIOQuery objects, priced"),
     ):
         node = sub.add_parser(name, help=helptext)
-        node.add_argument(
-            "--nip-list", required=True, help="a file of NIPs, one per line"
-        )
-        node.add_argument("--limit", type=int, help="only the first N")
+        node.add_argument("--nip-list", help="a file of NIPs, one per line")
+        node.add_argument("--cru", action="store_true", help="use the CRU register")
+        node.add_argument("--limit", type=int, help="only the richest N")
         node.add_argument(
             "--with-org-record",
             action="store_true",

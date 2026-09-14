@@ -49,6 +49,7 @@ from dotenv import load_dotenv
 
 from conductor import setup_context
 from scrapers.krs import nip_lookup, nip_sources, odpis_pdf, people_match, search
+from scripts import odpis_store
 from stores.config import VERSIONED_DIR
 from stores.storage import Client as CloudStorageClient
 from util import pesel as pesel_util
@@ -186,6 +187,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--resolve-only",
         action="store_true",
         help="stop after NIP-to-KRS, fetching no odpisy",
+    )
+    parser.add_argument(
+        "--reparse-only",
+        action="store_true",
+        help="parse only the odpisy already in the bucket; fetch nothing",
     )
     parser.add_argument(
         "--publish",
@@ -357,16 +363,44 @@ def fetch_odpisy(
     krs_numbers: list[str],
     company_by_krs: dict[str, nip_lookup.NipResolution],
     salt: str,
+    ctx=None,
+    reparse_only: bool = False,
 ) -> tuple[list[odpis_pdf.OdpisPerson], list[str], set[str]]:
+    """Read every company's odpis, from the bucket where one is already stored.
+
+    Storing the PDFs is what makes a parser fix a re-parse instead of a
+    re-crawl -- see `scripts.odpis_store`, and the two parser bugs that each
+    cost a full re-fetch because the documents had been discarded.
+    """
     people: list[odpis_pdf.OdpisPerson] = []
     failures: list[str] = []
     unread_rubryki: set[str] = set()
 
+    stored: dict[str, str] = {}
+    if ctx is not None:
+        stored = odpis_store.stored_odpisy(ctx, full=True)
+        print(f"  {len(stored):,} odpisy already in the bucket")
+    if reparse_only and not stored:
+        print("  [warn] --reparse-only but nothing is stored")
+
+    fetched_count = 0
+    read_count = 0
     for index, krs in enumerate(krs_numbers, 1):
-        if index > 1:
+        from_bucket = krs in stored
+        if not from_bucket and reparse_only:
+            continue
+        if not from_bucket and fetched_count:
             time.sleep(search.REQUEST_INTERVAL)
+        fetched: tuple[str, bytes] | None
         try:
-            fetched = search.fetch_odpis_pdf_either(krs, full=True)
+            if from_bucket:
+                fetched = ("?", odpis_store.read_stored(ctx, stored[krs]))
+            elif ctx is not None:
+                fetched = odpis_store.fetch_and_store(ctx, krs, full=True)
+                fetched_count += 1
+            else:
+                fetched = search.fetch_odpis_pdf_either(krs, full=True)
+                fetched_count += 1
         except Exception as error:  # noqa: BLE001
             # One unreadable company must not end a crawl of hundreds; the
             # count is reported instead.
@@ -376,17 +410,27 @@ def fetch_odpisy(
             failures.append(f"{krs}: no odpis in either register")
             continue
         _, content = fetched
+        read_count += 1
         text = odpis_pdf.extract_text(content)
         unread_rubryki |= odpis_pdf.unread_person_rubryki(text)
         people.extend(odpis_pdf.parse_people(text, krs, salt=salt))
-        name = (company_by_krs[krs].name or "")[:44]
+        name = (company_by_krs[krs].name or "")[:40]
         print(
-            f"  {index}/{len(krs_numbers)} {krs} {name:<44} "
-            f"{len(people):>5} people so far",
+            f"  {index}/{len(krs_numbers)} {'cache' if from_bucket else 'fetch'} "
+            f"{krs} {name:<40} {len(people):>5} people so far",
             end="\r",
             flush=True,
         )
-    print(" " * 100, end="\r")
+    print(" " * 110, end="\r")
+    skipped = len(krs_numbers) - read_count - len(failures)
+    # Counted rather than inferred from the input length: --reparse-only
+    # skips whatever is not stored, and reporting those as read would
+    # overstate coverage by exactly the companies nobody has fetched yet.
+    print(
+        f"  read {read_count:,} odpisy ({fetched_count:,} fetched, "
+        f"{read_count - fetched_count:,} from the bucket)"
+        + (f", {skipped:,} not stored and skipped" if skipped else "")
+    )
     return people, failures, unread_rubryki
 
 
@@ -427,8 +471,10 @@ def fetch_and_match(args, resolutions, salt, known_names=None):
 
     print("\n" + "=" * 72)
     print(f"ODPISY  ({len(krs_numbers):,} companies, ~{len(krs_numbers)}s)")
+    ctx, _ = setup_context()
     people, failures, unread_rubryki = fetch_odpisy(
-        krs_numbers, company_by_krs, salt
+        krs_numbers, company_by_krs, salt, ctx=ctx,
+        reparse_only=getattr(args, 'reparse_only', False),
     )
 
     if args.current_only:
