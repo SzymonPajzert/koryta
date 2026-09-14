@@ -117,7 +117,16 @@ def gather_rows(args) -> tuple[list[nip_sources.NipRow], list[nip_sources.NipRow
         path = Path(args.cru)
         if not path.is_file():
             path = VERSIONED / "cru_umowy" / "cru_umowy.jsonl"
-        return nip_sources.from_cru(path, limit=args.cru_limit), []
+        # Ordered by attributed contract value, always. The odpis stage is one
+        # request per company, so every CRU run is capped in practice -- and a
+        # cap on file order covers a slice of the alphabet while a cap on
+        # value covers the money. `pick_companies` truncates in this order.
+        return (
+            nip_sources.from_cru(
+                path, limit=args.cru_limit, order_by_value=True
+            ),
+            [],
+        )
     if args.nip_list:
         return nip_sources.from_list(Path(args.nip_list)), []
     return [nip_sources.NipRow(nips=[nip_lookup.only_digits(n)]) for n in args.nip], []
