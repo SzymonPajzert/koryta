@@ -235,7 +235,7 @@ def write_companies(path: Path, companies: dict) -> None:
             fieldnames=[
                 "krs", "nip", "name", "town", "powiat", "paid", "contracts",
                 "public", "people", "sitting", "politicians", "elected",
-                "controllers",
+                "controllers", "deputies",
             ],
         )
         writer.writeheader()
@@ -263,6 +263,40 @@ def write_people(path: Path, people: dict) -> None:
 
 
 
+def candidacy_result(same_powiat) -> str:
+    """Won, lost, or nobody recorded an outcome.
+
+    Three values rather than a boolean because PKW leaves `candidacy_success`
+    null for five of the eight samorzad elections, so a False there says
+    nothing about how the person did -- see `YEARS_WITH_RESULTS`.
+    """
+    if any(c.get("candidacy_success") == "TRUE" for c in same_powiat):
+        return "won"
+    if any(str(c.get("election_year")) in YEARS_WITH_RESULTS for c in same_powiat):
+        return "lost"
+    return "unknown"
+
+
+def new_company(krs, row, nip, seat_powiat, nip_town, paid, contracts) -> dict:
+    """A company's counters, before any of its seats have been read."""
+    return {
+        "krs": krs,
+        "nip": nip,
+        "name": row.get("company_name") or "",
+        "town": nip_town.get(nip, ""),
+        "powiat": seat_powiat,
+        "paid": paid.get(nip, 0.0),
+        "contracts": contracts.get(nip, 0),
+        "public": bool(PUBLIC_RE.search(row.get("company_name") or "")),
+        "people": 0,
+        "sitting": 0,
+        "politicians": 0,
+        "elected": 0,
+        "controllers": 0,
+        "deputies": 0,
+    }
+
+
 def accumulate(rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name):
     """Fold the seats into per-company and per-person records."""
     no_powiat: list[tuple[str, str]] = []
@@ -275,21 +309,7 @@ def accumulate(rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name)
         seat_powiat = nip_powiat.get(nip, "")
         company = companies.setdefault(
             krs,
-            {
-                "krs": krs,
-                "nip": nip,
-                "name": row.get("company_name") or "",
-                "town": nip_town.get(nip, ""),
-                "powiat": seat_powiat,
-                "paid": paid.get(nip, 0.0),
-                "contracts": contracts.get(nip, 0),
-                "public": bool(PUBLIC_RE.search(row.get("company_name") or "")),
-                "people": 0,
-                "sitting": 0,
-                "politicians": 0,
-                "elected": 0,
-                "controllers": 0,
-            },
+            new_company(krs, row, nip, seat_powiat, nip_town, paid, contracts),
         )
         company["people"] += 1
         if not row.get("current"):
@@ -329,21 +349,15 @@ def accumulate(rows, krs_to_nip, nip_powiat, nip_town, paid, contracts, by_name)
                 str(c.get("election_year")),
             ),
         )
-        if any(c.get("candidacy_success") == "TRUE" for c in same_powiat):
-            result = "won"
-        elif any(
-            str(c.get("election_year")) in YEARS_WITH_RESULTS for c in same_powiat
-        ):
-            result = "lost"
-        else:
-            # Stood, and PKW recorded no outcome for that election at all.
-            result = "unknown"
+        result = candidacy_result(same_powiat)
         won = result == "won"
         company["politicians"] += 1
         if won:
             company["elected"] += 1
         how = control(row)
-        if how:
+        if how == "deputy":
+            company["deputies"] += 1
+        elif how:
             company["controllers"] += 1
 
         pkey = (key[0], key[1], row["birth_date"])
@@ -420,7 +434,20 @@ def main() -> None:
 
 def report(companies, people, comp_csv, people_csv, no_powiat=()) -> None:
     with_pol = [c for c in companies.values() if c["politicians"]]
-    controllers = [p for p in people.values() if p["controls"]]
+    # A deputy is not a controller. `controls` keeps the deputy seats because
+    # they are worth seeing, so the test is on the label rather than on the
+    # set being non-empty -- otherwise a third of the shortlist below is
+    # somebody who stands in for whoever runs the body.
+    controllers = [
+        p
+        for p in people.values()
+        if any(not c.startswith("deputy:") for c in p["controls"])
+    ]
+    deputies = [
+        p
+        for p in people.values()
+        if p not in controllers and any(c.startswith("deputy:") for c in p["controls"])
+    ]
     strong = [p for p in controllers if p["won"] and not p["public_body_only"]]
 
     print("=" * 74)
@@ -432,6 +459,7 @@ def report(companies, people, comp_csv, people_csv, no_powiat=()) -> None:
     )
     print(f"{'distinct politicians sitting':<44}{len(people):>8,}")
     print(f"{'  who own or run the body':<44}{len(controllers):>8,}")
+    print(f"{'  who only deputise for whoever does':<44}{len(deputies):>8,}")
     print(
         f"{'  with a RECORDED win, body not public':<44}{len(strong):>8,}"
         "   (only 2010 and 2024 record results)"
