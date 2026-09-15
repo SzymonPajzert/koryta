@@ -166,3 +166,51 @@ def test_the_name_reaches_a_cached_resolution_too():
     )
     assert merged["1111111111"].name == "POLREGIO"
     assert merged["1111111111"].source == "cache"
+
+
+def resolve_only_args(**kwargs) -> argparse.Namespace:
+    defaults: dict[str, object] = {
+        "companies_merged": "/nonexistent/companies_merged.jsonl",
+        "resolve_only": True,
+        "out": None,
+        "keep_pesel": None,
+        "publish": False,
+        "show": False,
+    }
+    return argparse.Namespace(**{**defaults, **kwargs})
+
+
+def test_resolve_only_fetches_no_odpisy_from_the_search_bucket(bucket, monkeypatch):
+    """The wykaz path returned on `--resolve-only`; this one fell through it.
+
+    So the flag that exists to say "where does this stand, fetch nothing"
+    started a ~4 h crawl of the register instead -- on the CRU population,
+    14,967 companies at one request each.
+    """
+    bucket["1111111111"] = answer("1111111111", "0000000001")
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("--resolve-only must not reach the odpis stage")
+
+    monkeypatch.setattr(nip_board_people, "fetch_and_match", refuse)
+    nip_board_people.from_search_bucket(
+        resolve_only_args(), rows=[], nips=["1111111111"], salt="k"
+    )
+
+
+def test_without_resolve_only_the_search_bucket_path_does_fetch(bucket, monkeypatch):
+    """The guard must not be the whole path: the default is still to fetch."""
+    bucket["1111111111"] = answer("1111111111", "0000000001")
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        nip_board_people,
+        "fetch_and_match",
+        lambda args, resolutions, *rest: calls.append(resolutions) or ([], {}, []),
+    )
+    nip_board_people.from_search_bucket(
+        resolve_only_args(resolve_only=False),
+        rows=[],
+        nips=["1111111111"],
+        salt="k",
+    )
+    assert [list(c) for c in calls] == [["1111111111"]]
