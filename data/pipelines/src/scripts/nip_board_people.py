@@ -531,6 +531,7 @@ def main() -> None:
     resolutions.update(add_named_entries(args, resolutions, known_nip_by_krs(known)))
 
     if args.resolve_only:
+        report_odpis_cost(resolutions)
         return
 
     people, company_by_krs, results = fetch_and_match(
@@ -590,14 +591,25 @@ def report_resolution(nips, resolutions: dict[str, nip_lookup.NipResolution]) ->
     the run will make N+1,300 requests is how a paced crawl overruns the window
     somebody left for it.
     """
-    entries = {krs for r in resolutions.values() for krs in r.krs_entries}
-    superseded = len(entries) - len(resolutions)
     # Only the resolutions that came from a NIP can answer "how many of the
     # NIPs are still unresolved". `--also-krs` entries are in the same dict and
     # are not NIPs, so counting them here printed a negative: -167 on a run
     # that named 251 entries.
     from_nip = sum(1 for r in resolutions.values() if r.source != "krs-list")
     print(f"  no KRS number yet            {len(nips) - from_nip:>8,}")
+    report_odpis_cost(resolutions)
+
+
+def report_odpis_cost(resolutions: dict[str, nip_lookup.NipResolution]) -> None:
+    """What the fetch will cost, on whichever path asked.
+
+    Both paths take `--resolve-only` and only one of them said this, so the
+    same flag priced the run or did not depending on where the KRS numbers came
+    from -- and the wykaz path is the one whose own report is about NIPs alone,
+    so it was the one missing it.
+    """
+    entries = {krs for r in resolutions.values() for krs in r.krs_entries}
+    superseded = len(entries) - len(resolutions)
     print(f"  odpisy to fetch              {len(entries):>8,}", end="")
     if superseded:
         print(f"  ({superseded:,} superseded entries)", end="")
