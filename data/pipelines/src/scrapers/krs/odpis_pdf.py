@@ -132,13 +132,38 @@ def fold(text: str) -> str:
 #: compared.
 ROLE_BY_RUBRYKA: tuple[tuple[str, str], ...] = (
     ("organ uprawniony do reprezentacji", "reprezentacja"),
+    # A partnership has no zarzad, so its form titles Dzial 2 Rubryka 1
+    # differently and the sp. z o.o./SA prefix above finds nobody in it. This
+    # is the *only* place a spolka jawna's or komandytowa's controllers appear:
+    # found by `unread_person_rubryki` in 2 of 28 stored odpisy -- the three
+    # SZPANSCY partners of KRS 0000157870, and CLIMAMEDIC sp. z o.o. with
+    # PANEK at KRS 0000352529, a sp.k. whose general partner is a company.
+    ("uprawnieni do reprezentowania spolki", "reprezentacja"),
     ("organ nadzoru", "nadzor"),
     ("prokurenci", "prokurent"),
+    # A spolka komandytowa's general partners: personally liable and normally
+    # entitled to represent, so not the same thing as `wspolnik`. The JSON side
+    # names partners separately too (`wspolnicyPartnerzy` -> wspolnik_partner).
+    ("dane komplementariuszy", "komplementariusz"),
+    # A branch of a foreign company files two person-bearing rubryki: the
+    # foreign parent's own board, and whoever represents it here. They are
+    # different claims -- the first runs the company abroad, the second runs
+    # the Polish oddzial -- so they keep different roles, and `osoba_pz`
+    # matches what `PERSON_PATHS` already calls the second in the JSON.
+    ("organ uprawniony do reprezentowania zagranicznego", "reprezentacja_pz"),
+    ("osoby reprezentujace zagranicznego przedsiebiorce", "osoba_pz"),
     ("pelnomocnicy", "pelnomocnik"),
     ("dane jedynego akcjonariusza", "jedyny_akcjonariusz"),
     ("jedyny akcjonariusz", "jedyny_akcjonariusz"),
     ("wspolnicy", "wspolnik"),
     ("dane wspolnikow", "wspolnik"),
+    # A spolka partnerska's partners -- the doctors, lawyers and architects the
+    # form exists for. Found by `unread_person_rubryki` over the 3,161 odpisy
+    # stored on 2026-09-18, and named for the JSON side's `wspolnicyPartnerzy`
+    # rather than folded into `wspolnik`: a partner answers personally for
+    # their own professional acts and not for their partners', which is the
+    # whole point of the form and is not what being a wspolnik means.
+    ("dane partnerow", "wspolnik_partner"),
     ("komitet zalozycielski", "komitet_zalozycielski"),
     ("kurator", "kurator"),
     ("likwidacja", "likwidator"),
